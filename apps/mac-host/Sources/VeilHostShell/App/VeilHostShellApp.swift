@@ -39,12 +39,29 @@ struct VeilHostShellApp: App {
         }
         .commands {
             CommandGroup(after: .appInfo) {
-                Button("Refresh Agent") {
+                Button("Refresh All") {
                     Task {
-                        await model.load()
+                        async let hostLoad: Void = model.load()
+                        async let vmLoad: Void = vmModel.load()
+                        _ = await (hostLoad, vmLoad)
                     }
                 }
                 .keyboardShortcut("r", modifiers: [.command])
+
+                Button("Refresh Runtime") {
+                    Task {
+                        await vmModel.load()
+                    }
+                }
+                .keyboardShortcut("r", modifiers: [.command, .shift])
+
+                Button("Start VM") {
+                    Task {
+                        await vmModel.start()
+                    }
+                }
+                .keyboardShortcut("b", modifiers: [.command])
+                .disabled(!vmModel.canStart || vmModel.phase == .loading)
 
                 Button("Launch Notepad") {
                     Task {

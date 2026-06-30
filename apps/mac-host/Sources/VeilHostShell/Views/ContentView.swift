@@ -29,19 +29,38 @@ struct ContentView: View {
                 } label: {
                     Label("Refresh", systemImage: "arrow.clockwise")
                 }
-                .help("Refresh Windows agent status")
-                .disabled(model.phase == .loading || model.phase == .launching)
+                .help("Refresh host and Control Center status")
+                .disabled(isRefreshing)
 
-                Button {
-                    Task {
-                        await model.launchSelectedApp()
+                switch selectedSection {
+                case .vm:
+                    Button {
+                        Task {
+                            await vmModel.start()
+                        }
+                    } label: {
+                        Label("Start VM", systemImage: "power")
                     }
-                } label: {
-                    Label("Launch", systemImage: "play.fill")
+                    .help("Start the configured Windows 11 Arm VM")
+                    .disabled(!vmModel.canStart || vmModel.phase == .loading)
+                case .apps:
+                    Button {
+                        Task {
+                            await model.launchSelectedApp()
+                        }
+                    } label: {
+                        Label("Launch App", systemImage: "play.fill")
+                    }
+                    .help("Launch the selected Windows app")
+                    .disabled(!model.canLaunchSelectedApp)
+                case .agent, .launch:
+                    EmptyView()
                 }
-                .help("Launch the selected Windows app")
-                .disabled(!model.canLaunchSelectedApp)
             }
         }
+    }
+
+    private var isRefreshing: Bool {
+        model.phase == .loading || model.phase == .launching || vmModel.phase == .loading
     }
 }
