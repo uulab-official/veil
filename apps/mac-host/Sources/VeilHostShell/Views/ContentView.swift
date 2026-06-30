@@ -8,16 +8,12 @@ struct ContentView: View {
 
     var body: some View {
         NavigationSplitView {
-            List(selection: $selectedSection) {
-                Label("Windows Apps", systemImage: "square.grid.2x2")
-                    .tag(ShellSection.apps)
-                Label("Agent", systemImage: "network")
-                    .tag(ShellSection.agent)
-                Label("VM Runtime", systemImage: "desktopcomputer")
-                    .tag(ShellSection.vm)
-                Label("Last Launch", systemImage: "macwindow.on.rectangle")
-                    .tag(ShellSection.launch)
+            List(ShellSection.allCases, id: \.self, selection: $selectedSection) { section in
+                Label(section.title, systemImage: section.symbolName)
+                    .tag(section)
             }
+            .listStyle(.sidebar)
+            .navigationTitle("Veil")
             .navigationSplitViewColumnWidth(min: 180, ideal: 220)
         } detail: {
             DetailView(model: model, vmModel: vmModel, selectedSection: selectedSection)
@@ -48,11 +44,4 @@ struct ContentView: View {
             }
         }
     }
-}
-
-enum ShellSection: String, Hashable {
-    case apps
-    case agent
-    case vm
-    case launch
 }

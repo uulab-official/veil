@@ -6,37 +6,54 @@ struct LaunchView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("Last Launch")
-                .font(.headline)
-
             if let result {
-                Grid(alignment: .leading, horizontalSpacing: 18, verticalSpacing: 10) {
-                    MetricRow(label: "App", value: result.window.title)
-                    MetricRow(label: "Window", value: result.window.windowId)
-                    MetricRow(label: "Process", value: String(result.launch.processId))
-                    MetricRow(label: "State", value: result.window.state)
-                    MetricRow(label: "Bounds", value: "\(result.window.bounds.width)x\(result.window.bounds.height)")
+                ShellPanel {
+                    HStack {
+                        ShellPanelHeader(
+                            title: result.window.title,
+                            subtitle: "The Windows app accepted launch and reported a window.",
+                            symbolName: "macwindow.on.rectangle"
+                        )
+
+                        Spacer()
+
+                        StatusPill(
+                            title: result.launch.accepted ? "Accepted" : "Rejected",
+                            symbolName: result.launch.accepted ? "checkmark.circle.fill" : "xmark.circle",
+                            tint: result.launch.accepted ? .green : .orange
+                        )
+                    }
+                }
+
+                ShellPanel {
+                    ShellPanelHeader(
+                        title: "Window",
+                        subtitle: "Agent-reported window identity and placement.",
+                        symbolName: "rectangle.inset.filled"
+                    )
+
+                    Grid(alignment: .leading, horizontalSpacing: 18, verticalSpacing: 10) {
+                        ShellMetricRow(label: "Window ID", value: result.window.windowId, monospaced: true)
+                        ShellMetricRow(label: "Process", value: String(result.launch.processId), monospaced: true)
+                        ShellMetricRow(label: "State", value: result.window.state)
+                        ShellMetricRow(label: "Bounds", value: boundsText(for: result.window.bounds), monospaced: true)
+                        ShellMetricRow(label: "Focused", value: result.window.focused ? "Yes" : "No")
+                    }
                 }
             } else {
-                ContentUnavailableView(
-                    "Nothing Launched",
-                    systemImage: "macwindow.on.rectangle",
-                    description: Text("Launch Notepad to verify the host-to-agent app flow.")
-                )
+                ShellPanel {
+                    ContentUnavailableView(
+                        "Nothing Launched",
+                        systemImage: "macwindow.on.rectangle",
+                        description: Text("Launch Notepad to verify the host-to-agent app flow.")
+                    )
+                    .frame(maxWidth: .infinity, minHeight: 260)
+                }
             }
         }
     }
-}
 
-private struct MetricRow: View {
-    var label: String
-    var value: String
-
-    var body: some View {
-        GridRow {
-            Text(label)
-                .foregroundStyle(.secondary)
-            Text(value)
-        }
+    private func boundsText(for bounds: WindowBounds) -> String {
+        "\(bounds.width)x\(bounds.height) @ \(bounds.x),\(bounds.y)"
     }
 }

@@ -8,39 +8,77 @@ struct VMRuntimeView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            HStack {
-                Text("VM Runtime")
-                    .font(.headline)
-
-                Spacer()
-
-                Button {
-                    Task {
-                        await model.load()
-                    }
-                } label: {
-                    Label("Refresh", systemImage: "arrow.clockwise")
-                }
-                .disabled(model.phase == .loading)
-            }
-
             if let snapshot = model.snapshot {
-                Grid(alignment: .leading, horizontalSpacing: 18, verticalSpacing: 10) {
-                    MetricRow(label: "Status", value: model.statusText)
-                    MetricRow(label: "Capability", value: model.capabilitySummary)
-                    MetricRow(label: "Architecture", value: snapshot.architecture)
-                    MetricRow(label: "macOS 15+", value: snapshot.minimumOSSupported ? "Yes" : "No")
-                    MetricRow(label: "Profile", value: snapshot.profileName ?? "Not configured")
-                    MetricRow(label: "Installer Media", value: snapshot.installerMediaPath ?? "Not selected")
-                    MetricRow(label: "Virtual Disk", value: snapshot.virtualDiskPath ?? "Not selected")
-                    MetricRow(label: "Detail", value: snapshot.detail)
+                ShellPanel {
+                    HStack(alignment: .center) {
+                        ShellPanelHeader(
+                            title: "Runtime Status",
+                            subtitle: snapshot.detail,
+                            symbolName: "desktopcomputer"
+                        )
+
+                        Spacer()
+
+                        StatusPill(
+                            title: runtimeTitle(for: snapshot.state),
+                            symbolName: runtimeSymbol(for: snapshot.state),
+                            tint: runtimeTint(for: snapshot.state)
+                        )
+                    }
+
+                    Grid(alignment: .leading, horizontalSpacing: 18, verticalSpacing: 10) {
+                        ShellMetricRow(label: "Status", value: model.statusText)
+                        ShellMetricRow(label: "Capability", value: model.capabilitySummary)
+                        ShellMetricRow(label: "Architecture", value: snapshot.architecture, monospaced: true)
+                        ShellMetricRow(label: "macOS 15+", value: snapshot.minimumOSSupported ? "Yes" : "No")
+                    }
+                }
+
+                ShellPanel {
+                    ShellPanelHeader(
+                        title: "Windows 11 Arm Profile",
+                        subtitle: "Configure the VM profile before boot orchestration is enabled.",
+                        symbolName: "rectangle.stack.badge.person.crop"
+                    )
+
+                    Grid(alignment: .leading, horizontalSpacing: 18, verticalSpacing: 10) {
+                        ShellMetricRow(label: "Profile", value: snapshot.profileName ?? "Not configured")
+                        ShellMetricRow(label: "Installer Media", value: snapshot.installerMediaPath ?? "Not selected", monospaced: true)
+                        ShellMetricRow(label: "Virtual Disk", value: snapshot.virtualDiskPath ?? "Not selected", monospaced: true)
+                    }
+
+                    HStack(spacing: 8) {
+                        if snapshot.state == .notConfigured {
+                            createDefaultProfileButton
+                        }
+
+                        if snapshot.profileName != nil {
+                            Button {
+                                pathPicker = .installerMedia
+                            } label: {
+                                Label("Select Installer", systemImage: "opticaldisc")
+                            }
+                            .disabled(model.phase == .loading)
+
+                            Button {
+                                pathPicker = .virtualDisk
+                            } label: {
+                                Label("Select Disk", systemImage: "externaldrive")
+                            }
+                            .disabled(model.phase == .loading)
+                        }
+
+                        Spacer()
+                    }
                 }
 
                 if !snapshot.installationSteps.isEmpty {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Windows Setup")
-                            .font(.subheadline)
-                            .fontWeight(.semibold)
+                    ShellPanel(spacing: 10) {
+                        ShellPanelHeader(
+                            title: "Windows Setup",
+                            subtitle: "Profile readiness steps for Arm Windows installation.",
+                            symbolName: "checklist"
+                        )
 
                         ForEach(snapshot.installationSteps) { step in
                             InstallationStepRow(step: step)
@@ -49,10 +87,12 @@ struct VMRuntimeView: View {
                 }
 
                 if !snapshot.preflightChecks.isEmpty {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Preflight")
-                            .font(.subheadline)
-                            .fontWeight(.semibold)
+                    ShellPanel(spacing: 10) {
+                        ShellPanelHeader(
+                            title: "Preflight",
+                            subtitle: "Local checks that must pass before VM start.",
+                            symbolName: "stethoscope"
+                        )
 
                         ForEach(snapshot.preflightChecks) { check in
                             PreflightCheckRow(check: check)
@@ -60,7 +100,7 @@ struct VMRuntimeView: View {
                     }
                 }
 
-                VStack(alignment: .leading, spacing: 10) {
+                ShellPanel {
                     if let errorMessage = model.errorMessage {
                         Label(errorMessage, systemImage: "exclamationmark.triangle")
                             .foregroundStyle(.orange)
@@ -81,27 +121,19 @@ struct VMRuntimeView: View {
                         } label: {
                             Label("Start VM", systemImage: "play.circle")
                         }
+                        .buttonStyle(.borderedProminent)
                         .disabled(!model.canStart || model.phase == .loading)
 
-                        if snapshot.state == .notConfigured {
-                            createDefaultProfileButton
-                        }
-
-                        if snapshot.profileName != nil {
-                            Button {
-                                pathPicker = .installerMedia
-                            } label: {
-                                Label("Select Installer", systemImage: "opticaldisc")
+                        Button {
+                            Task {
+                                await model.load()
                             }
-                            .disabled(model.phase == .loading)
-
-                            Button {
-                                pathPicker = .virtualDisk
-                            } label: {
-                                Label("Select Disk", systemImage: "externaldrive")
-                            }
-                            .disabled(model.phase == .loading)
+                        } label: {
+                            Label("Refresh", systemImage: "arrow.clockwise")
                         }
+                        .disabled(model.phase == .loading)
+
+                        Spacer()
                     }
                 }
                 .fileImporter(
@@ -119,17 +151,23 @@ struct VMRuntimeView: View {
                     handlePathImport(result)
                 }
             } else if let errorMessage = model.errorMessage {
-                ContentUnavailableView(
-                    "VM Runtime Unavailable",
-                    systemImage: "desktopcomputer.trianglebadge.exclamationmark",
-                    description: Text(errorMessage)
-                )
+                ShellPanel {
+                    ContentUnavailableView(
+                        "VM Runtime Unavailable",
+                        systemImage: "desktopcomputer.trianglebadge.exclamationmark",
+                        description: Text(errorMessage)
+                    )
+                    .frame(maxWidth: .infinity, minHeight: 260)
+                }
             } else {
-                ContentUnavailableView(
-                    "VM Runtime Not Loaded",
-                    systemImage: "desktopcomputer",
-                    description: Text("Refresh to inspect local VM runtime capabilities.")
-                )
+                ShellPanel {
+                    ContentUnavailableView(
+                        "VM Runtime Not Loaded",
+                        systemImage: "desktopcomputer",
+                        description: Text("Refresh to inspect local VM runtime capabilities.")
+                    )
+                    .frame(maxWidth: .infinity, minHeight: 260)
+                }
             }
         }
     }
@@ -143,6 +181,57 @@ struct VMRuntimeView: View {
             Label("Create Default Profile", systemImage: "plus.circle")
         }
         .disabled(model.phase == .loading)
+    }
+
+    private func runtimeTitle(for state: VMRuntimeState) -> String {
+        switch state {
+        case .unsupported:
+            "Unsupported"
+        case .notConfigured:
+            "Not Configured"
+        case .stopped:
+            "Stopped"
+        case .starting:
+            "Starting"
+        case .running:
+            "Running"
+        case .suspended:
+            "Suspended"
+        case .failed:
+            "Failed"
+        }
+    }
+
+    private func runtimeSymbol(for state: VMRuntimeState) -> String {
+        switch state {
+        case .unsupported:
+            "xmark.octagon"
+        case .notConfigured:
+            "wrench.and.screwdriver"
+        case .stopped:
+            "stop.circle"
+        case .starting:
+            "arrow.triangle.2.circlepath"
+        case .running:
+            "play.circle.fill"
+        case .suspended:
+            "pause.circle"
+        case .failed:
+            "exclamationmark.triangle.fill"
+        }
+    }
+
+    private func runtimeTint(for state: VMRuntimeState) -> Color {
+        switch state {
+        case .unsupported, .failed:
+            .orange
+        case .notConfigured, .stopped, .suspended:
+            .secondary
+        case .starting:
+            .blue
+        case .running:
+            .green
+        }
     }
 
     private func handlePathImport(_ result: Result<[URL], any Error>) {
@@ -268,19 +357,6 @@ private struct InstallationStepRow: View {
             .secondary
         case .blocked:
             .orange
-        }
-    }
-}
-
-private struct MetricRow: View {
-    var label: String
-    var value: String
-
-    var body: some View {
-        GridRow {
-            Text(label)
-                .foregroundStyle(.secondary)
-            Text(value)
         }
     }
 }
