@@ -9,11 +9,22 @@ public protocol HostDashboardService: Sendable {
 public struct HostOverview: Codable, Equatable, Sendable {
     public var health: AgentHealthResponse
     public var apps: [WindowsApp]
+    public var connectionMode: HostConnectionMode
 
-    public init(health: AgentHealthResponse, apps: [WindowsApp]) {
+    public init(
+        health: AgentHealthResponse,
+        apps: [WindowsApp],
+        connectionMode: HostConnectionMode = .agent
+    ) {
         self.health = health
         self.apps = apps
+        self.connectionMode = connectionMode
     }
+}
+
+public enum HostConnectionMode: String, Codable, Equatable, Sendable {
+    case agent
+    case demo
 }
 
 public enum HostDashboardPhase: Equatable, Sendable {
@@ -32,6 +43,7 @@ public final class HostDashboardModel {
     public private(set) var apps: [WindowsApp] = []
     public private(set) var lastLaunch: NotepadLaunchResult?
     public private(set) var errorMessage: String?
+    public private(set) var connectionMode: HostConnectionMode = .agent
     public var selectedAppId: String?
 
     private let service: any HostDashboardService
@@ -48,9 +60,13 @@ public final class HostDashboardModel {
             "Connecting to Windows agent"
         case .connected:
             if let lastLaunch {
-                "Launched \(lastLaunch.window.title)"
+                connectionMode == .demo
+                    ? "Demo launched \(lastLaunch.window.title)"
+                    : "Launched \(lastLaunch.window.title)"
             } else if let health {
-                "Connected to Windows agent \(health.agentVersion)"
+                connectionMode == .demo
+                    ? "Demo mode: Windows agent unavailable"
+                    : "Connected to Windows agent \(health.agentVersion)"
             } else {
                 "Connected"
             }
@@ -81,6 +97,7 @@ public final class HostDashboardModel {
             let overview = try await service.loadOverview()
             health = overview.health
             apps = overview.apps
+            connectionMode = overview.connectionMode
             selectDefaultAppIfNeeded()
             phase = .connected
         } catch {
@@ -113,6 +130,7 @@ public final class HostDashboardModel {
             let result = try await service.launchNotepad()
             health = result.health
             apps = result.apps
+            connectionMode = result.connectionMode
             selectedAppId = result.window.appId
             lastLaunch = result
             phase = .connected

@@ -10,13 +10,26 @@ struct DetailView: View {
         VStack(alignment: .leading, spacing: 18) {
             HeaderView(model: model)
 
+            if model.connectionMode == .demo {
+                Label(
+                    "Demo mode is showing built-in sample app data because no Windows agent is connected.",
+                    systemImage: "play.rectangle"
+                )
+                .foregroundStyle(.secondary)
+                .font(.callout)
+            }
+
             Divider()
 
             switch selectedSection {
             case .apps:
                 AppsView(apps: model.apps, selectedAppId: $model.selectedAppId)
             case .agent:
-                AgentView(health: model.health, errorMessage: model.errorMessage)
+                AgentView(
+                    health: model.health,
+                    connectionMode: model.connectionMode,
+                    errorMessage: model.errorMessage
+                )
             case .vm:
                 VMRuntimeView(model: vmModel)
             case .launch:

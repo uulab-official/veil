@@ -26,6 +26,21 @@ public struct NotepadLaunchResult: Codable, Equatable, Sendable {
     public var apps: [WindowsApp]
     public var launch: AppLaunchResponse
     public var window: WindowCreatedEvent
+    public var connectionMode: HostConnectionMode
+
+    public init(
+        health: AgentHealthResponse,
+        apps: [WindowsApp],
+        launch: AppLaunchResponse,
+        window: WindowCreatedEvent,
+        connectionMode: HostConnectionMode = .agent
+    ) {
+        self.health = health
+        self.apps = apps
+        self.launch = launch
+        self.window = window
+        self.connectionMode = connectionMode
+    }
 }
 
 public struct VeilHostClient: HostDashboardService, Sendable {

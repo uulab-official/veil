@@ -3,6 +3,7 @@ import VeilHostCore
 
 struct AgentView: View {
     var health: AgentHealthResponse?
+    var connectionMode: HostConnectionMode
     var errorMessage: String?
 
     var body: some View {
@@ -12,6 +13,7 @@ struct AgentView: View {
 
             if let health {
                 Grid(alignment: .leading, horizontalSpacing: 18, verticalSpacing: 10) {
+                    MetricRow(label: "Mode", value: connectionMode == .demo ? "Demo" : "Agent")
                     MetricRow(label: "Version", value: health.agentVersion)
                     MetricRow(label: "OS", value: health.os)
                     MetricRow(label: "User", value: health.session.user)

@@ -20,6 +20,7 @@ struct HostDashboardModelTests {
         #expect(model.selectedApp?.name == "Notepad")
         #expect(model.canLaunchSelectedApp)
         #expect(model.statusText == "Connected to Windows agent 0.1.0")
+        #expect(model.connectionMode == .agent)
         #expect(model.errorMessage == nil)
     }
 
@@ -95,6 +96,8 @@ struct HostDashboardModelTests {
         #expect(model.phase == .connected)
         #expect(model.errorMessage == nil)
         #expect(model.health?.agentVersion == "demo-0.1.0")
+        #expect(model.connectionMode == .demo)
+        #expect(model.statusText == "Demo mode: Windows agent unavailable")
         #expect(model.apps.map(\.id).contains("winapp_notepad"))
         #expect(model.canLaunchSelectedApp)
     }
@@ -114,7 +117,8 @@ struct HostDashboardModelTests {
         #expect(model.phase == .connected)
         #expect(model.errorMessage == nil)
         #expect(model.lastLaunch?.window.title == "Untitled - Notepad")
-        #expect(model.statusText == "Launched Untitled - Notepad")
+        #expect(model.connectionMode == .demo)
+        #expect(model.statusText == "Demo launched Untitled - Notepad")
     }
 
     @Test("does not hide primary agent protocol failures behind demo fallback")

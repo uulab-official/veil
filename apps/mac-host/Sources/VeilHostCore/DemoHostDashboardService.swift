@@ -55,7 +55,11 @@ public struct DemoHostDashboardService: HostDashboardService, Sendable {
     public init() {}
 
     public func loadOverview() async throws -> HostOverview {
-        HostOverview(health: .demo, apps: [.demoNotepad, .demoCalculator])
+        HostOverview(
+            health: .demo,
+            apps: [.demoNotepad, .demoCalculator],
+            connectionMode: .demo
+        )
     }
 
     public func launchNotepad() async throws -> NotepadLaunchResult {
@@ -63,7 +67,8 @@ public struct DemoHostDashboardService: HostDashboardService, Sendable {
             health: .demo,
             apps: [.demoNotepad, .demoCalculator],
             launch: .demoNotepad,
-            window: .demoNotepad
+            window: .demoNotepad,
+            connectionMode: .demo
         )
     }
 }
