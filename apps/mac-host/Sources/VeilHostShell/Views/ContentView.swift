@@ -4,6 +4,7 @@ import VeilHostCore
 struct ContentView: View {
     @Bindable var model: HostDashboardModel
     @Bindable var vmModel: VMRuntimeModel
+    var startVMAction: () -> Void
     @SceneStorage("selectedSection") private var selectedSection: ShellSection = .vm
 
     var body: some View {
@@ -16,7 +17,12 @@ struct ContentView: View {
             .navigationTitle("Veil")
             .navigationSplitViewColumnWidth(min: 180, ideal: 220)
         } detail: {
-            DetailView(model: model, vmModel: vmModel, selectedSection: selectedSection)
+            DetailView(
+                model: model,
+                vmModel: vmModel,
+                selectedSection: selectedSection,
+                startVMAction: startVMAction
+            )
         }
         .toolbar {
             ToolbarItemGroup {
@@ -34,11 +40,7 @@ struct ContentView: View {
 
                 switch selectedSection {
                 case .vm:
-                    Button {
-                        Task {
-                            await vmModel.start()
-                        }
-                    } label: {
+                    Button(action: startVMAction) {
                         Label("Start VM", systemImage: "power")
                     }
                     .help("Start the configured Windows 11 Arm VM")

@@ -8,6 +8,23 @@ public protocol VMRuntimeService: Sendable {
     func start() async throws -> VMRuntimeSnapshot
 }
 
+public protocol VMRuntimeBooting: Sendable {
+    func runtimeState() async -> VMRuntimeState?
+    func start(profile: VMProfile) async throws -> VMRuntimeState
+}
+
+public struct UnavailableVMRuntimeBooter: VMRuntimeBooting {
+    public init() {}
+
+    public func runtimeState() async -> VMRuntimeState? {
+        nil
+    }
+
+    public func start(profile: VMProfile) async throws -> VMRuntimeState {
+        throw VMRuntimeError.bootNotImplemented
+    }
+}
+
 public enum VMRuntimeState: String, Codable, Equatable, Sendable {
     case unsupported
     case notConfigured
@@ -110,6 +127,7 @@ public struct VMPreflightCheck: Codable, Equatable, Identifiable, Sendable {
 public enum VMRuntimeError: Error, LocalizedError, Equatable, Sendable {
     case capabilityProbeFailed
     case bootNotImplemented
+    case bootPrerequisitesMissing
 
     public var errorDescription: String? {
         switch self {
@@ -117,6 +135,8 @@ public enum VMRuntimeError: Error, LocalizedError, Equatable, Sendable {
             "Unable to inspect VM runtime capabilities."
         case .bootNotImplemented:
             "VM boot is not implemented yet."
+        case .bootPrerequisitesMissing:
+            "Installer media, virtual disk, shared folder, and preflight checks must be ready before starting Windows."
         }
     }
 }
@@ -266,13 +286,16 @@ public final class VMRuntimeModel {
 public struct LocalVMRuntimeService: VMRuntimeService {
     private let profileStore: any VMProfileStore
     private let defaultHomeDirectory: URL
+    private let bootRunner: any VMRuntimeBooting
 
     public init(
         profileStore: any VMProfileStore = JSONVMProfileStore(),
-        defaultHomeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser
+        defaultHomeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser,
+        bootRunner: any VMRuntimeBooting = UnavailableVMRuntimeBooter()
     ) {
         self.profileStore = profileStore
         self.defaultHomeDirectory = defaultHomeDirectory
+        self.bootRunner = bootRunner
     }
 
     public func loadSnapshot() async throws -> VMRuntimeSnapshot {
@@ -290,8 +313,10 @@ public struct LocalVMRuntimeService: VMRuntimeService {
                 installationSteps: installationSteps,
                 preflightChecks: preflightChecks
             )
+            let runtimeState = await bootRunner.runtimeState()
+            let state = runtimeState ?? .stopped
             return VMRuntimeSnapshot(
-                state: .stopped,
+                state: state,
                 virtualizationAvailable: true,
                 architecture: architecture,
                 minimumOSSupported: true,
@@ -301,9 +326,11 @@ public struct LocalVMRuntimeService: VMRuntimeService {
                 installationSteps: installationSteps,
                 preflightChecks: preflightChecks,
                 bootReady: bootPathReadiness.isReady,
-                detail: bootPathReadiness.isReady
-                    ? "Ready to boot when VM boot support lands."
-                    : bootPathReadiness.detail
+                detail: runtimeState.map(Self.runtimeDetail(for:)) ?? (
+                    bootPathReadiness.isReady
+                        ? "Ready to start Windows."
+                        : bootPathReadiness.detail
+                )
             )
         }
 
@@ -373,8 +400,17 @@ public struct LocalVMRuntimeService: VMRuntimeService {
     }
 
     public func start() async throws -> VMRuntimeSnapshot {
-        _ = try await loadSnapshot()
-        throw VMRuntimeError.bootNotImplemented
+        let snapshot = try await loadSnapshot()
+        guard snapshot.bootReady else {
+            throw VMRuntimeError.bootPrerequisitesMissing
+        }
+
+        guard let profile = try await profileStore.load() else {
+            throw VMRuntimeError.bootPrerequisitesMissing
+        }
+
+        _ = try await bootRunner.start(profile: profile)
+        return try await loadSnapshot()
     }
 
     private static func hostArchitecture() -> String {
@@ -392,6 +428,25 @@ public struct LocalVMRuntimeService: VMRuntimeService {
             .appendingPathComponent("Virtual Machines", isDirectory: true)
             .appendingPathComponent("Veil", isDirectory: true)
             .appendingPathComponent("\(profile.name).img")
+    }
+
+    private static func runtimeDetail(for state: VMRuntimeState) -> String {
+        switch state {
+        case .starting:
+            "Windows VM is starting."
+        case .running:
+            "Windows VM is running."
+        case .suspended:
+            "Windows VM is suspended."
+        case .failed:
+            "Windows VM failed."
+        case .stopped:
+            "Windows VM is stopped."
+        case .notConfigured:
+            "No Windows VM profile has been created."
+        case .unsupported:
+            "Veil requires macOS 15+ on Apple Silicon."
+        }
     }
 
     private static func bootPathReadiness(
@@ -417,7 +472,7 @@ public struct LocalVMRuntimeService: VMRuntimeService {
             return (false, "VM profile needs attention before boot.")
         }
 
-        return (true, "Ready to boot when VM boot support lands.")
+        return (true, "Ready to start Windows.")
     }
 
     private static func fileValidationDetail(path: String, label: String) -> String? {

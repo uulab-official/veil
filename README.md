@@ -139,11 +139,17 @@ If no external agent is listening at `VEIL_AGENT_URL` or `ws://127.0.0.1:18444`,
 
 The app list supports selection. The current fake-agent harness can only launch Notepad, so other app ids are shown but blocked from launch until generic app launch support lands.
 
-The shell also includes a VM Runtime panel. That panel is a capability, profile-status, disk-preparation, and start-request boundary for the future Virtualization.framework implementation; it does not boot Windows yet.
+The shell also includes a VM Runtime panel. That panel is a capability, profile-status, disk-preparation, and Virtualization.framework boot spike for Windows 11 Arm.
 
-The VM Runtime panel can create a default local Windows 11 Arm profile and a blank sparse virtual disk at `~/Virtual Machines/Veil/Windows 11 Arm.img`. This writes local configuration and an empty VM disk file only; it does not install Windows, include Windows media, or bypass licensing.
+The VM Runtime panel can create a default local Windows 11 Arm profile and a blank sparse virtual disk at `~/Virtual Machines/Veil/Windows 11 Arm.img`. The boot spike keeps EFI variables and the generic machine identifier next to that disk as `Windows 11 Arm.efi` and `Windows 11 Arm.machine-id`. This writes local configuration and empty VM state files only; it does not install Windows, include Windows media, or bypass licensing.
 
-The profile can reference a user-provided installer image and virtual disk path, or use Veil's default blank disk file. Veil checks that the stored paths still point to local files, that the macOS shared folder exists, and that the profile targets Windows Arm with usable CPU, memory, and disk settings before marking the profile boot-ready. Pressing Start currently exercises the service boundary and reports that VM boot is not implemented yet. It does not validate Windows media contents or boot Windows yet.
+The profile can reference a user-provided installer image and virtual disk path, or use Veil's default blank disk file. Veil checks that the stored paths still point to local files, that the macOS shared folder exists, and that the profile targets Windows Arm with usable CPU, memory, and disk settings before marking the profile boot-ready. Pressing Start now builds a local `VZVirtualMachine`, starts it through Apple's Virtualization.framework, and opens a console window. It still does not validate Windows media contents, automate Windows installation, include Windows media, or bypass licensing.
+
+The bundled run script signs the local app bundle with the `com.apple.security.virtualization` entitlement required by Virtualization.framework:
+
+```bash
+./script/build_and_run.sh
+```
 
 ## Open Source Principles
 

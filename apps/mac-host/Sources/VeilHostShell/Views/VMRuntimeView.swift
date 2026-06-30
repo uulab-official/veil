@@ -4,6 +4,7 @@ import VeilHostCore
 
 struct VMRuntimeView: View {
     @Bindable var model: VMRuntimeModel
+    var startVMAction: () -> Void
     @State private var pathPicker: PathPicker?
 
     var body: some View {
@@ -14,11 +15,7 @@ struct VMRuntimeView: View {
                     statusText: model.statusText,
                     canStart: model.canStart,
                     isLoading: model.phase == .loading,
-                    startAction: {
-                        Task {
-                            await model.start()
-                        }
-                    },
+                    startAction: startVMAction,
                     refreshAction: {
                         Task {
                             await model.load()
@@ -33,11 +30,7 @@ struct VMRuntimeView: View {
                     snapshot: snapshot,
                     canStart: model.canStart,
                     isLoading: model.phase == .loading,
-                    startAction: {
-                        Task {
-                            await model.start()
-                        }
-                    },
+                    startAction: startVMAction,
                     refreshAction: {
                         Task {
                             await model.load()
@@ -304,7 +297,7 @@ private struct QuickActionsPanel: View {
 
                 ControlActionTile(
                     title: "Configure",
-                    detail: "Settings unlock with boot support.",
+                    detail: "Advanced VM settings follow the boot spike.",
                     symbolName: "slider.horizontal.3",
                     tint: .blue,
                     state: .planned
@@ -417,7 +410,7 @@ private struct ControlCenterHero: View {
                             Label("Configure", systemImage: "slider.horizontal.3")
                         }
                         .disabled(true)
-                        .help("Configuration panels will unlock as VM boot support lands.")
+                        .help("Advanced configuration panels will follow the boot spike.")
                     }
                 }
             }
@@ -432,7 +425,7 @@ private struct ResourcePlanPanel: View {
         ShellPanel(spacing: 12) {
             ShellPanelHeader(
                 title: "Resource Plan",
-                subtitle: "The VM resource model Veil will apply as boot support matures.",
+                subtitle: "The VM resource model Veil applies and hardens through the boot spike.",
                 symbolName: "gauge.with.dots.needle.50percent"
             )
 

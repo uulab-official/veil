@@ -5,6 +5,7 @@ import VeilHostCore
 @main
 struct VeilHostShellApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+    private let vmConsolePresenter = VMConsoleWindowPresenter(bootRunner: VirtualizationVMRuntimeBooter.shared)
     @State private var model = HostDashboardModel(
         service: FallbackHostDashboardService(
             primary: VeilHostClient(
@@ -16,11 +17,17 @@ struct VeilHostShellApp: App {
             primaryEndpointDescription: Self.agentURLString
         )
     )
-    @State private var vmModel = VMRuntimeModel(service: LocalVMRuntimeService())
+    @State private var vmModel = VMRuntimeModel(
+        service: LocalVMRuntimeService(bootRunner: VirtualizationVMRuntimeBooter.shared)
+    )
 
     var body: some Scene {
         WindowGroup("Veil", id: "main") {
-            ContentView(model: model, vmModel: vmModel)
+            ContentView(
+                model: model,
+                vmModel: vmModel,
+                startVMAction: startVMAndShowConsole
+            )
                 .frame(minWidth: 1040, idealWidth: 1180, minHeight: 680, idealHeight: 760)
                 .task {
                     async let hostLoad: Void = model.load()
@@ -56,9 +63,7 @@ struct VeilHostShellApp: App {
                 .keyboardShortcut("r", modifiers: [.command, .shift])
 
                 Button("Start VM") {
-                    Task {
-                        await vmModel.start()
-                    }
+                    startVMAndShowConsole()
                 }
                 .keyboardShortcut("b", modifiers: [.command])
                 .disabled(!vmModel.canStart || vmModel.phase == .loading)
@@ -75,6 +80,16 @@ struct VeilHostShellApp: App {
 
     private static var agentURLString: String {
         ProcessInfo.processInfo.environment["VEIL_AGENT_URL"] ?? "ws://127.0.0.1:18444"
+    }
+
+    private func startVMAndShowConsole() {
+        Task { @MainActor in
+            await vmModel.start()
+
+            if vmModel.snapshot?.state == .running || vmModel.snapshot?.state == .starting {
+                vmConsolePresenter.showConsoleIfAvailable()
+            }
+        }
     }
 }
 

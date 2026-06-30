@@ -132,7 +132,7 @@ struct VMRuntimeModelTests {
                 installerMediaPath: "/Users/test/Downloads/Windows.iso",
                 virtualDiskPath: "/Users/test/Virtual Machines/Windows.vhdx",
                 bootReady: true,
-                detail: "Ready to boot when VM boot support lands."
+                detail: "Ready to start Windows."
             )
         )
         let model = VMRuntimeModel(service: service)

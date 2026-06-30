@@ -15,6 +15,7 @@ APP_CONTENTS="$APP_BUNDLE/Contents"
 APP_MACOS="$APP_CONTENTS/MacOS"
 APP_BINARY="$APP_MACOS/$APP_EXECUTABLE"
 INFO_PLIST="$APP_CONTENTS/Info.plist"
+ENTITLEMENTS="$PACKAGE_DIR/VeilHostShell.entitlements"
 
 pkill -x "$APP_EXECUTABLE" >/dev/null 2>&1 || true
 
@@ -46,6 +47,9 @@ cat >"$INFO_PLIST" <<PLIST
 </dict>
 </plist>
 PLIST
+
+codesign --force --sign - --entitlements "$ENTITLEMENTS" "$APP_BINARY" >/dev/null
+codesign --force --sign - --entitlements "$ENTITLEMENTS" "$APP_BUNDLE" >/dev/null
 
 open_app() {
   /usr/bin/open -n "$APP_BUNDLE"

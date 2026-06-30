@@ -1,0 +1,45 @@
+import AppKit
+import Virtualization
+import VeilHostCore
+
+@MainActor
+final class VMConsoleWindowPresenter {
+    private let bootRunner: VirtualizationVMRuntimeBooter
+    private var window: NSWindow?
+
+    init(bootRunner: VirtualizationVMRuntimeBooter) {
+        self.bootRunner = bootRunner
+    }
+
+    func showConsoleIfAvailable() {
+        guard let virtualMachine = bootRunner.activeVirtualMachine else {
+            return
+        }
+
+        let consoleView = VZVirtualMachineView()
+        consoleView.virtualMachine = virtualMachine
+        consoleView.capturesSystemKeys = true
+        consoleView.automaticallyReconfiguresDisplay = true
+
+        if let window {
+            window.contentView = consoleView
+            window.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+            return
+        }
+
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 1080, height: 720),
+            styleMask: [.titled, .closable, .miniaturizable, .resizable],
+            backing: .buffered,
+            defer: false
+        )
+        window.title = "Windows 11 Arm"
+        window.contentMinSize = NSSize(width: 800, height: 520)
+        window.contentView = consoleView
+        window.center()
+        window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+        self.window = window
+    }
+}

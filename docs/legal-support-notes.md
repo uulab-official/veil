@@ -19,6 +19,8 @@ The local VM profile stored by the host app is configuration. The host may creat
 
 Installer media and virtual disk paths in the local profile are local references. Veil may validate that those references still point to local files and may create an empty disk file for later VM use. Storing, checking, or creating those local resources does not imply Veil distributes Windows media, creates a licensed Windows installation, or validates whether a selected file is suitable for Windows installation.
 
+Starting a local virtual machine with user-provided installer media and a blank disk is a VM lifecycle feature. It must not be described as Windows distribution, Windows activation, Windows support from Microsoft, or official Apple endorsement.
+
 ## Microsoft Support Position
 
 Microsoft's public support page for Windows 11 on Apple Silicon Macs currently points users to Windows 365 Cloud PCs or Parallels Desktop when a Windows PC is not available:

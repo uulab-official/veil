@@ -22,10 +22,12 @@ The first three are local host prerequisites. The guest agent step remains pendi
 - Default profile creation creates the macOS shared folder at `~/Veil Shared`.
 - Installer media is a user-selected local file.
 - The virtual disk can be user-selected or created as a blank sparse disk at `~/Virtual Machines/Veil/Windows 11 Arm.img`.
+- The boot spike stores EFI variables and the generic machine identifier next to the virtual disk so repeated boots keep stable VM identity.
 - The runtime snapshot reports structured setup steps so the UI can show what is complete, blocked, or pending.
 - The runtime snapshot reports preflight checks for guest OS, CPU, memory, and disk size.
 - A profile becomes boot-ready only when installer media, virtual disk, shared folder, and preflight checks all pass.
-- Pressing Start still exercises the service boundary only; it does not boot Windows yet.
+- Pressing Start builds a `VZVirtualMachine`, starts it through Apple's Virtualization.framework, and opens a console window.
+- Start requires a locally signed app bundle with the `com.apple.security.virtualization` entitlement.
 
 ## Preflight Checks
 
