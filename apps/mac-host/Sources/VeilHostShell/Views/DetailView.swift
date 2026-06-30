@@ -12,7 +12,7 @@ struct DetailView: View {
 
             if model.connectionMode == .demo {
                 Label(
-                    "Demo mode is showing built-in sample app data because no Windows agent is connected.",
+                    model.connectionDetail ?? "Demo mode is showing built-in sample app data because no Windows agent is connected.",
                     systemImage: "play.rectangle"
                 )
                 .foregroundStyle(.secondary)
@@ -28,6 +28,7 @@ struct DetailView: View {
                 AgentView(
                     health: model.health,
                     connectionMode: model.connectionMode,
+                    connectionDetail: model.connectionDetail,
                     errorMessage: model.errorMessage
                 )
             case .vm:

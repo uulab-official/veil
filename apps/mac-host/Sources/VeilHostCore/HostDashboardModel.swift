@@ -10,15 +10,18 @@ public struct HostOverview: Codable, Equatable, Sendable {
     public var health: AgentHealthResponse
     public var apps: [WindowsApp]
     public var connectionMode: HostConnectionMode
+    public var connectionDetail: String?
 
     public init(
         health: AgentHealthResponse,
         apps: [WindowsApp],
-        connectionMode: HostConnectionMode = .agent
+        connectionMode: HostConnectionMode = .agent,
+        connectionDetail: String? = nil
     ) {
         self.health = health
         self.apps = apps
         self.connectionMode = connectionMode
+        self.connectionDetail = connectionDetail
     }
 }
 
@@ -44,6 +47,7 @@ public final class HostDashboardModel {
     public private(set) var lastLaunch: NotepadLaunchResult?
     public private(set) var errorMessage: String?
     public private(set) var connectionMode: HostConnectionMode = .agent
+    public private(set) var connectionDetail: String?
     public var selectedAppId: String?
 
     private let service: any HostDashboardService
@@ -98,6 +102,7 @@ public final class HostDashboardModel {
             health = overview.health
             apps = overview.apps
             connectionMode = overview.connectionMode
+            connectionDetail = overview.connectionDetail
             selectDefaultAppIfNeeded()
             phase = .connected
         } catch {
@@ -131,6 +136,7 @@ public final class HostDashboardModel {
             health = result.health
             apps = result.apps
             connectionMode = result.connectionMode
+            connectionDetail = result.connectionDetail
             selectedAppId = result.window.appId
             lastLaunch = result
             phase = .connected

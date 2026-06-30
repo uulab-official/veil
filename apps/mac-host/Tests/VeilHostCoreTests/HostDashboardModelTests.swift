@@ -87,7 +87,8 @@ struct HostDashboardModelTests {
     func loadsDemoOverviewWhenPrimaryAgentIsUnavailable() async throws {
         let service = FallbackHostDashboardService(
             primary: FakeDashboardService(error: URLError(.cannotConnectToHost)),
-            fallback: DemoHostDashboardService()
+            fallback: DemoHostDashboardService(),
+            primaryEndpointDescription: "ws://127.0.0.1:18444"
         )
         let model = HostDashboardModel(service: service)
 
@@ -98,6 +99,7 @@ struct HostDashboardModelTests {
         #expect(model.health?.agentVersion == "demo-0.1.0")
         #expect(model.connectionMode == .demo)
         #expect(model.statusText == "Demo mode: Windows agent unavailable")
+        #expect(model.connectionDetail == "No Windows agent reachable at ws://127.0.0.1:18444. Showing built-in demo data.")
         #expect(model.apps.map(\.id).contains("winapp_notepad"))
         #expect(model.canLaunchSelectedApp)
     }
@@ -107,7 +109,8 @@ struct HostDashboardModelTests {
     func launchesDemoNotepadWhenPrimaryAgentIsUnavailable() async throws {
         let service = FallbackHostDashboardService(
             primary: FakeDashboardService(error: URLError(.cannotConnectToHost)),
-            fallback: DemoHostDashboardService()
+            fallback: DemoHostDashboardService(),
+            primaryEndpointDescription: "ws://127.0.0.1:18444"
         )
         let model = HostDashboardModel(service: service)
 
@@ -118,6 +121,7 @@ struct HostDashboardModelTests {
         #expect(model.errorMessage == nil)
         #expect(model.lastLaunch?.window.title == "Untitled - Notepad")
         #expect(model.connectionMode == .demo)
+        #expect(model.connectionDetail == "No Windows agent reachable at ws://127.0.0.1:18444. Showing built-in demo data.")
         #expect(model.statusText == "Demo launched Untitled - Notepad")
     }
 
@@ -126,7 +130,8 @@ struct HostDashboardModelTests {
     func doesNotHidePrimaryAgentProtocolFailuresBehindDemoFallback() async throws {
         let service = FallbackHostDashboardService(
             primary: FakeDashboardService(error: VeilHostError.notepadMissing),
-            fallback: DemoHostDashboardService()
+            fallback: DemoHostDashboardService(),
+            primaryEndpointDescription: "ws://127.0.0.1:18444"
         )
         let model = HostDashboardModel(service: service)
 

@@ -3,10 +3,16 @@ import Foundation
 public struct FallbackHostDashboardService: HostDashboardService, Sendable {
     private let primary: any HostDashboardService
     private let fallback: any HostDashboardService
+    private let primaryEndpointDescription: String
 
-    public init(primary: any HostDashboardService, fallback: any HostDashboardService) {
+    public init(
+        primary: any HostDashboardService,
+        fallback: any HostDashboardService,
+        primaryEndpointDescription: String = "configured Windows agent"
+    ) {
         self.primary = primary
         self.fallback = fallback
+        self.primaryEndpointDescription = primaryEndpointDescription
     }
 
     public func loadOverview() async throws -> HostOverview {
@@ -17,7 +23,9 @@ public struct FallbackHostDashboardService: HostDashboardService, Sendable {
                 throw error
             }
 
-            return try await fallback.loadOverview()
+            var overview = try await fallback.loadOverview()
+            overview.connectionDetail = fallbackDetail
+            return overview
         }
     }
 
@@ -29,8 +37,14 @@ public struct FallbackHostDashboardService: HostDashboardService, Sendable {
                 throw error
             }
 
-            return try await fallback.launchNotepad()
+            var result = try await fallback.launchNotepad()
+            result.connectionDetail = fallbackDetail
+            return result
         }
+    }
+
+    private var fallbackDetail: String {
+        "No Windows agent reachable at \(primaryEndpointDescription). Showing built-in demo data."
     }
 
     private func shouldUseFallback(for error: any Error) -> Bool {

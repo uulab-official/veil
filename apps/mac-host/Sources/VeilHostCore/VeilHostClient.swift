@@ -27,19 +27,22 @@ public struct NotepadLaunchResult: Codable, Equatable, Sendable {
     public var launch: AppLaunchResponse
     public var window: WindowCreatedEvent
     public var connectionMode: HostConnectionMode
+    public var connectionDetail: String?
 
     public init(
         health: AgentHealthResponse,
         apps: [WindowsApp],
         launch: AppLaunchResponse,
         window: WindowCreatedEvent,
-        connectionMode: HostConnectionMode = .agent
+        connectionMode: HostConnectionMode = .agent,
+        connectionDetail: String? = nil
     ) {
         self.health = health
         self.apps = apps
         self.launch = launch
         self.window = window
         self.connectionMode = connectionMode
+        self.connectionDetail = connectionDetail
     }
 }
 

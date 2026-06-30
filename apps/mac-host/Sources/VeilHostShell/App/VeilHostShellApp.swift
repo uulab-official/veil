@@ -9,10 +9,11 @@ struct VeilHostShellApp: App {
         service: FallbackHostDashboardService(
             primary: VeilHostClient(
                 transport: URLSessionWebSocketTransport(
-                    url: URL(string: ProcessInfo.processInfo.environment["VEIL_AGENT_URL"] ?? "ws://127.0.0.1:18444")!
+                    url: URL(string: Self.agentURLString)!
                 )
             ),
-            fallback: DemoHostDashboardService()
+            fallback: DemoHostDashboardService(),
+            primaryEndpointDescription: Self.agentURLString
         )
     )
     @State private var vmModel = VMRuntimeModel(service: LocalVMRuntimeService())
@@ -44,6 +45,10 @@ struct VeilHostShellApp: App {
                 .keyboardShortcut(.return, modifiers: [.command])
             }
         }
+    }
+
+    private static var agentURLString: String {
+        ProcessInfo.processInfo.environment["VEIL_AGENT_URL"] ?? "ws://127.0.0.1:18444"
     }
 }
 
