@@ -1,0 +1,6 @@
+{
+  "type": "error",
+  "requestId": "req_003",
+  "code": "app_not_found",
+  "message": "No app exists for id winapp_unknown"
+}

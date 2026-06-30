@@ -1,0 +1,12 @@
+{
+  "name": "@veil/protocol",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/messages.mjs"
+  },
+  "scripts": {
+    "test": "node --test"
+  }
+}

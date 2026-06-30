@@ -1,0 +1,14 @@
+{
+  "name": "@veil/fake-host",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "launch:notepad": "node src/launch-notepad.mjs",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "@veil/protocol": "file:../../packages/protocol",
+    "ws": "^8.18.0"
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "type": "app.list.response",
+  "requestId": "req_002",
+  "apps": [
+    {
+      "id": "winapp_notepad",
+      "name": "Notepad",
+      "exePath": "C:\\Windows\\System32\\notepad.exe",
+      "publisher": "Microsoft",
+      "iconId": "icon_notepad"
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "type": "window.created",
+  "windowId": "hwnd:0003029A",
+  "processId": 4912,
+  "appId": "winapp_notepad",
+  "title": "Untitled - Notepad",
+  "bounds": {
+    "x": 10,
+    "y": 10,
+    "width": 1280,
+    "height": 800
+  },
+  "state": "normal",
+  "focused": true
+}

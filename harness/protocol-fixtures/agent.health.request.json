@@ -1,0 +1,5 @@
+{
+  "type": "agent.health.request",
+  "requestId": "req_001",
+  "protocolVersion": 1
+}

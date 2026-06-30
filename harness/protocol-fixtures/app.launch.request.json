@@ -1,0 +1,6 @@
+{
+  "type": "app.launch.request",
+  "requestId": "req_003",
+  "appId": "winapp_notepad",
+  "args": []
+}

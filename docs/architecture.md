@@ -1,0 +1,115 @@
+# Architecture
+
+## System Shape
+
+```text
+macOS Host App <---- protocol ----> Windows Guest Agent
+      |
+      +---- Virtualization.framework VM lifecycle
+      +---- AppKit NSWindow per guest HWND
+      +---- Metal or AV rendering path
+      +---- macOS pasteboard, files, Dock, notifications
+```
+
+Veil has three primary responsibilities:
+
+1. Manage the VM lifecycle enough to support app runtime behavior.
+2. Mirror specific guest windows into host windows.
+3. Bridge user intent: input, clipboard, files, app launch, and app state.
+
+## macOS Host
+
+Preferred stack:
+
+- Swift
+- SwiftUI for shell UI
+- AppKit for per-app windows and responder-chain behavior
+- Virtualization.framework for VM lifecycle
+- Metal or AVSampleBufferDisplayLayer for frame rendering
+
+Responsibilities:
+
+- create, start, stop, suspend, and resume the VM,
+- maintain the guest-agent connection,
+- show a Windows app launcher,
+- create one macOS window per tracked guest window,
+- translate keyboard and pointer events,
+- sync clipboard data with clear user expectations,
+- expose a narrow shared folder,
+- store user settings and VM profiles.
+
+## Windows Guest Agent
+
+MVP stack:
+
+- C#/.NET 8
+- Win32 P/Invoke
+- WebSocket server
+- Windows Graphics Capture spike
+
+Possible later stack:
+
+- Rust for high-risk capture/input/protocol modules where memory layout and performance matter.
+
+Responsibilities:
+
+- list installed apps,
+- launch apps,
+- track top-level windows and `HWND` metadata,
+- capture window frames,
+- receive input events,
+- update and observe the Windows clipboard,
+- report health and app lifecycle events.
+
+## Protocol Package
+
+The protocol is a product boundary. It should be easy to test without booting a real VM.
+
+MVP transport:
+
+```text
+Host connects to ws://guest-ip:18444
+JSON messages
+requestId for request/response correlation
+windowId represented as hwnd:<hex>
+```
+
+Later transports:
+
+- vsock if Windows guest support is proven,
+- gRPC if schema and streaming needs become stable,
+- binary frame channels for capture data.
+
+## Window Bridge
+
+Target mapping:
+
+```text
+Windows HWND 1개 = macOS NSWindow 1개
+```
+
+The host owns macOS window chrome and focus. The guest owns app content and app semantics. The protocol must make focus, bounds, state, and close behavior explicit.
+
+## Capture Strategy
+
+MVP capture order:
+
+1. MJPEG or PNG frame stream for correctness.
+2. H.264 stream for lower bandwidth.
+3. Dirty-region and cursor-layer optimization.
+4. GPU-aware texture path if the earlier steps prove the product loop.
+
+## Security Boundaries
+
+- Guest messages are untrusted until parsed and validated.
+- Clipboard sync must avoid invisible data surprises.
+- Shared folder access must default to a narrow directory.
+- Input injection must follow focused-window ownership.
+- Host never accepts arbitrary guest file paths as host paths.
+
+## Open Feasibility Questions
+
+- Whether the chosen Virtualization.framework path can reliably boot and operate Windows 11 Arm for the project target.
+- Best capture mechanism for app-window-only streaming at acceptable latency.
+- Correct mapping of macOS focus, IME, keyboard layout, and accessibility behavior to Windows.
+- Legal/support wording for Windows-on-Apple-Silicon distribution.

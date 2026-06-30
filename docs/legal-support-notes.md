@@ -1,0 +1,50 @@
+# Legal and Support Notes
+
+This document is not legal advice. It exists to keep product and README wording honest.
+
+## Windows Distribution
+
+Veil must not bundle:
+
+- Windows installers,
+- Windows images,
+- product keys,
+- activation workarounds,
+- proprietary Parallels components,
+- closed-source guest tools from other virtualization products.
+
+The project should use a bring-your-own Windows model until a different distribution path is explicitly reviewed.
+
+## Microsoft Support Position
+
+Microsoft's public support page for Windows 11 on Apple Silicon Macs currently points users to Windows 365 Cloud PCs or Parallels Desktop when a Windows PC is not available:
+
+- https://support.microsoft.com/en-us/windows/experience/platform-variants/options-for-using-windows-11-with-mac-computers-with-apple-m1-m2-and-m3-chips
+
+Project wording should avoid saying Veil is Microsoft-authorized unless that becomes true.
+
+## Apple Virtualization.framework
+
+Relevant Apple documentation:
+
+- Virtualization framework: https://developer.apple.com/documentation/virtualization
+- `VZVirtualMachine`: https://developer.apple.com/documentation/virtualization/vzvirtualmachine
+- Shared directories: https://developer.apple.com/documentation/virtualization/shared-directories
+- Clipboard sharing: https://developer.apple.com/documentation/virtualization/clipboard-sharing
+
+Important wording rule:
+
+- It is safe to say Veil researches use of Apple's Virtualization.framework for VM lifecycle.
+- Do not imply Apple endorses Veil or officially supports every intended Windows guest flow.
+
+## Trademark Wording
+
+- Windows is a Microsoft product.
+- macOS, Mac, and Apple Silicon are Apple products.
+- Parallels Desktop is a Parallels product.
+
+Use product names only to describe compatibility goals or market context.
+
+## Contributor Rule
+
+Any PR that changes public claims about Windows support, Apple support, licensing, or distribution must update this file.

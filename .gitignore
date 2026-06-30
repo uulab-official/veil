@@ -1,0 +1,34 @@
+# macOS
+.DS_Store
+
+# Xcode / Swift
+DerivedData/
+*.xcuserdata/
+*.xcuserstate
+.build/
+
+# .NET
+bin/
+obj/
+TestResults/
+
+# Node
+node_modules/
+npm-debug.log*
+
+# Logs and local runtime state
+*.log
+.env
+.env.*
+local/
+tmp/
+
+# VM artifacts
+*.vhdx
+*.iso
+*.ipsw
+*.dmg
+*.vmem
+*.vmsave
+*.qcow2
+*.img

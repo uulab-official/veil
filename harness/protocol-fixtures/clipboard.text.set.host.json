@@ -1,0 +1,7 @@
+{
+  "type": "clipboard.text.set",
+  "requestId": "req_004",
+  "origin": "host",
+  "sequence": 42,
+  "text": "hello from macOS"
+}

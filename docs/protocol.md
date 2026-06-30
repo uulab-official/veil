@@ -1,0 +1,216 @@
+# Host/Guest Protocol
+
+## MVP Transport
+
+```text
+WebSocket
+Default guest port: 18444
+Encoding: UTF-8 JSON for control messages
+Frame payloads: separate stream or base64 only for early harness spikes
+```
+
+The protocol must remain testable without a real VM. Every stable message should have a fixture in `harness/protocol-fixtures`.
+
+Executable protocol helpers live in `packages/protocol`. Harness tools should import that package instead of duplicating message type strings or structured error shapes.
+
+## Envelope
+
+```json
+{
+  "type": "agent.health.request",
+  "requestId": "req_001",
+  "protocolVersion": 1
+}
+```
+
+Rules:
+
+- `type` is required.
+- `requestId` is required for request/response messages.
+- Events do not require `requestId`.
+- Unknown message types must return a structured error.
+
+## Health
+
+Request:
+
+```json
+{
+  "type": "agent.health.request",
+  "requestId": "req_001",
+  "protocolVersion": 1
+}
+```
+
+Response:
+
+```json
+{
+  "type": "agent.health.response",
+  "requestId": "req_001",
+  "protocolVersion": 1,
+  "agentVersion": "0.1.0",
+  "os": "windows-arm64",
+  "session": {
+    "interactive": true,
+    "user": "veil-user"
+  },
+  "capabilities": {
+    "appList": true,
+    "appLaunch": true,
+    "windowTracking": true,
+    "windowCapture": false,
+    "input": false,
+    "clipboardText": false
+  }
+}
+```
+
+## App List
+
+Request:
+
+```json
+{
+  "type": "app.list.request",
+  "requestId": "req_002",
+  "protocolVersion": 1
+}
+```
+
+Response:
+
+```json
+{
+  "type": "app.list.response",
+  "requestId": "req_002",
+  "apps": [
+    {
+      "id": "winapp_notepad",
+      "name": "Notepad",
+      "exePath": "C:\\Windows\\System32\\notepad.exe",
+      "publisher": "Microsoft",
+      "iconId": "icon_notepad"
+    }
+  ]
+}
+```
+
+## App Launch
+
+Request:
+
+```json
+{
+  "type": "app.launch.request",
+  "requestId": "req_003",
+  "appId": "winapp_notepad",
+  "args": []
+}
+```
+
+Response:
+
+```json
+{
+  "type": "app.launch.response",
+  "requestId": "req_003",
+  "accepted": true,
+  "processId": 4912
+}
+```
+
+## Window Created
+
+Event:
+
+```json
+{
+  "type": "window.created",
+  "windowId": "hwnd:0003029A",
+  "processId": 4912,
+  "appId": "winapp_notepad",
+  "title": "Untitled - Notepad",
+  "bounds": {
+    "x": 10,
+    "y": 10,
+    "width": 1280,
+    "height": 800
+  },
+  "state": "normal",
+  "focused": true
+}
+```
+
+## Input Mouse
+
+Event from host to guest:
+
+```json
+{
+  "type": "input.mouse",
+  "windowId": "hwnd:0003029A",
+  "event": "leftDown",
+  "x": 240,
+  "y": 130,
+  "modifiers": []
+}
+```
+
+Allowed mouse events:
+
+- `leftDown`
+- `leftUp`
+- `rightDown`
+- `rightUp`
+- `move`
+- `scroll`
+
+## Input Key
+
+Event from host to guest:
+
+```json
+{
+  "type": "input.key",
+  "windowId": "hwnd:0003029A",
+  "event": "keyDown",
+  "key": "c",
+  "windowsVirtualKey": 67,
+  "modifiers": ["ctrl"]
+}
+```
+
+The host maps macOS command shortcuts to Windows control shortcuts for app windows.
+
+## Clipboard Text
+
+Host to guest:
+
+```json
+{
+  "type": "clipboard.text.set",
+  "requestId": "req_004",
+  "origin": "host",
+  "sequence": 42,
+  "text": "hello from macOS"
+}
+```
+
+Guest to host uses the same shape with `"origin": "guest"`.
+
+Loop prevention rule:
+
+- Receivers remember the latest `(origin, sequence)` pair.
+- A clipboard update caused by a remote message must not be echoed back as a new local change.
+
+## Error
+
+```json
+{
+  "type": "error",
+  "requestId": "req_003",
+  "code": "app_not_found",
+  "message": "No app exists for id winapp_unknown"
+}
+```

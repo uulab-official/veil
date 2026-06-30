@@ -1,0 +1,88 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+
+import { createSession } from "../src/session.mjs";
+
+test("responds to agent health requests with fixture capability data", async () => {
+  const session = createSession();
+
+  const replies = await session.handle({
+    type: "agent.health.request",
+    requestId: "req_001",
+    protocolVersion: 1
+  });
+
+  assert.equal(replies.length, 1);
+  assert.equal(replies[0].type, "agent.health.response");
+  assert.equal(replies[0].requestId, "req_001");
+  assert.equal(replies[0].capabilities.appLaunch, true);
+});
+
+test("launches Notepad and emits a tracked window event", async () => {
+  const session = createSession();
+
+  const replies = await session.handle({
+    type: "app.launch.request",
+    requestId: "req_003",
+    appId: "winapp_notepad",
+    args: []
+  });
+
+  assert.equal(replies.length, 2);
+  assert.equal(replies[0].type, "app.launch.response");
+  assert.equal(replies[0].accepted, true);
+  assert.equal(replies[1].type, "window.created");
+  assert.equal(replies[1].windowId, "hwnd:0003029A");
+});
+
+test("returns the fixture app list", async () => {
+  const session = createSession();
+
+  const replies = await session.handle({
+    type: "app.list.request",
+    requestId: "req_002",
+    protocolVersion: 1
+  });
+
+  assert.equal(replies.length, 1);
+  assert.equal(replies[0].type, "app.list.response");
+  assert.equal(replies[0].apps[0].id, "winapp_notepad");
+});
+
+test("returns a structured error for unknown apps", async () => {
+  const session = createSession();
+
+  const replies = await session.handle({
+    type: "app.launch.request",
+    requestId: "req_bad",
+    appId: "winapp_unknown",
+    args: []
+  });
+
+  assert.deepEqual(replies, [
+    {
+      type: "error",
+      requestId: "req_bad",
+      code: "app_not_found",
+      message: "No app exists for id winapp_unknown"
+    }
+  ]);
+});
+
+test("returns a structured error for unknown message types", async () => {
+  const session = createSession();
+
+  const replies = await session.handle({
+    type: "made.up.request",
+    requestId: "req_unknown"
+  });
+
+  assert.deepEqual(replies, [
+    {
+      type: "error",
+      requestId: "req_unknown",
+      code: "unknown_message_type",
+      message: "Unsupported message type made.up.request"
+    }
+  ]);
+});

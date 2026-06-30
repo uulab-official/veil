@@ -1,0 +1,19 @@
+{
+  "type": "agent.health.response",
+  "requestId": "req_001",
+  "protocolVersion": 1,
+  "agentVersion": "0.1.0",
+  "os": "windows-arm64",
+  "session": {
+    "interactive": true,
+    "user": "veil-user"
+  },
+  "capabilities": {
+    "appList": true,
+    "appLaunch": true,
+    "windowTracking": true,
+    "windowCapture": false,
+    "input": false,
+    "clipboardText": false
+  }
+}
