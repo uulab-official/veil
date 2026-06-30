@@ -193,8 +193,7 @@ public struct LocalVMRuntimeService: VMRuntimeService {
         let profile = try await profileStore.load()
 
         if virtualizationAvailable, let profile {
-            let bootReady = profile.installerMediaPath?.isEmpty == false &&
-                profile.virtualDiskPath?.isEmpty == false
+            let bootPathReadiness = Self.bootPathReadiness(for: profile)
             return VMRuntimeSnapshot(
                 state: .stopped,
                 virtualizationAvailable: true,
@@ -203,10 +202,10 @@ public struct LocalVMRuntimeService: VMRuntimeService {
                 profileName: profile.name,
                 installerMediaPath: profile.installerMediaPath,
                 virtualDiskPath: profile.virtualDiskPath,
-                bootReady: bootReady,
-                detail: bootReady
+                bootReady: bootPathReadiness.isReady,
+                detail: bootPathReadiness.isReady
                     ? "Ready to boot when VM boot support lands."
-                    : "Installer media and virtual disk paths are required before boot."
+                    : bootPathReadiness.detail
             )
         }
 
@@ -244,5 +243,35 @@ public struct LocalVMRuntimeService: VMRuntimeService {
         #else
         return "unknown"
         #endif
+    }
+
+    private static func bootPathReadiness(for profile: VMProfile) -> (isReady: Bool, detail: String) {
+        guard let installerMediaPath = profile.installerMediaPath, !installerMediaPath.isEmpty,
+              let virtualDiskPath = profile.virtualDiskPath, !virtualDiskPath.isEmpty else {
+            return (false, "Installer media and virtual disk paths are required before boot.")
+        }
+
+        if let detail = fileValidationDetail(path: installerMediaPath, label: "Installer media") {
+            return (false, detail)
+        }
+
+        if let detail = fileValidationDetail(path: virtualDiskPath, label: "Virtual disk") {
+            return (false, detail)
+        }
+
+        return (true, "Ready to boot when VM boot support lands.")
+    }
+
+    private static func fileValidationDetail(path: String, label: String) -> String? {
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory) else {
+            return "\(label) path does not exist."
+        }
+
+        if isDirectory.boolValue {
+            return "\(label) path must reference a file."
+        }
+
+        return nil
     }
 }

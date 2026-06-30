@@ -17,7 +17,7 @@ The project should use a bring-your-own Windows model until a different distribu
 
 The local VM profile stored by the host app is configuration only. It must not be described as a Windows installer, activation flow, license grant, or disk image creator until those separate implementation and legal questions are explicitly handled.
 
-Installer media and virtual disk paths in the local profile are user-provided references. Storing those paths does not imply Veil distributes Windows media, creates a licensed Windows installation, or validates whether a selected file is suitable for Windows installation.
+Installer media and virtual disk paths in the local profile are user-provided references. Veil may validate that those references still point to local files. Storing or checking those paths does not imply Veil distributes Windows media, creates a licensed Windows installation, or validates whether a selected file is suitable for Windows installation.
 
 ## Microsoft Support Position
 
