@@ -12,13 +12,16 @@ struct VeilHostShellApp: App {
             )
         )
     )
+    @State private var vmModel = VMRuntimeModel(service: LocalVMRuntimeService())
 
     var body: some Scene {
         WindowGroup("Veil", id: "main") {
-            ContentView(model: model)
+            ContentView(model: model, vmModel: vmModel)
                 .frame(minWidth: 920, minHeight: 560)
                 .task {
-                    await model.load()
+                    async let hostLoad: Void = model.load()
+                    async let vmLoad: Void = vmModel.load()
+                    _ = await (hostLoad, vmLoad)
                 }
         }
         .commands {

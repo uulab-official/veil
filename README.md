@@ -144,6 +144,8 @@ That script builds `veil-host-shell`, stages `dist/Veil.app`, and launches it as
 
 The app list supports selection. The current fake-agent harness can only launch Notepad, so other app ids are shown but blocked from launch until generic app launch support lands.
 
+The shell also includes a VM Runtime panel. That panel is a capability and profile-status boundary for the future Virtualization.framework implementation; it does not create or boot Windows yet.
+
 ## Open Source Principles
 
 - No bundled Windows images, product keys, or proprietary Parallels assets.

@@ -3,6 +3,7 @@ import VeilHostCore
 
 struct ContentView: View {
     @Bindable var model: HostDashboardModel
+    @Bindable var vmModel: VMRuntimeModel
     @SceneStorage("selectedSection") private var selectedSection: ShellSection = .apps
 
     var body: some View {
@@ -12,18 +13,22 @@ struct ContentView: View {
                     .tag(ShellSection.apps)
                 Label("Agent", systemImage: "network")
                     .tag(ShellSection.agent)
+                Label("VM Runtime", systemImage: "desktopcomputer")
+                    .tag(ShellSection.vm)
                 Label("Last Launch", systemImage: "macwindow.on.rectangle")
                     .tag(ShellSection.launch)
             }
             .navigationSplitViewColumnWidth(min: 180, ideal: 220)
         } detail: {
-            DetailView(model: model, selectedSection: selectedSection)
+            DetailView(model: model, vmModel: vmModel, selectedSection: selectedSection)
         }
         .toolbar {
             ToolbarItemGroup {
                 Button {
                     Task {
-                        await model.load()
+                        async let hostLoad: Void = model.load()
+                        async let vmLoad: Void = vmModel.load()
+                        _ = await (hostLoad, vmLoad)
                     }
                 } label: {
                     Label("Refresh", systemImage: "arrow.clockwise")
@@ -48,5 +53,6 @@ struct ContentView: View {
 enum ShellSection: String, Hashable {
     case apps
     case agent
+    case vm
     case launch
 }

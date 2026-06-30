@@ -104,6 +104,8 @@ The shell opens a macOS window with agent status, app list, and launch controls.
 
 The fake agent currently accepts launch requests only for `winapp_notepad`. The SwiftUI shell keeps that limit visible by disabling unsupported launches at the model boundary.
 
+The VM Runtime section does not depend on the fake agent. It reports local host capability and whether a Windows VM profile has been configured.
+
 ## Fixture Policy
 
 Fixtures are part of the protocol contract. When a protocol message changes, update both `docs/protocol.md` and the matching fixture here.

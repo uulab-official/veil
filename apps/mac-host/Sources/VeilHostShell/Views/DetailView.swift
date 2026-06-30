@@ -3,6 +3,7 @@ import VeilHostCore
 
 struct DetailView: View {
     @Bindable var model: HostDashboardModel
+    @Bindable var vmModel: VMRuntimeModel
     var selectedSection: ShellSection
 
     var body: some View {
@@ -16,6 +17,8 @@ struct DetailView: View {
                 AppsView(apps: model.apps, selectedAppId: $model.selectedAppId)
             case .agent:
                 AgentView(health: model.health, errorMessage: model.errorMessage)
+            case .vm:
+                VMRuntimeView(model: vmModel)
             case .launch:
                 LaunchView(result: model.lastLaunch)
             }
