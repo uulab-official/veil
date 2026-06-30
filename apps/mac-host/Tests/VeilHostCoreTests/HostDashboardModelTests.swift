@@ -15,6 +15,9 @@ struct HostDashboardModelTests {
         #expect(model.phase == .connected)
         #expect(model.health?.agentVersion == "0.1.0")
         #expect(model.apps.map(\.id) == ["winapp_notepad"])
+        #expect(model.selectedAppId == "winapp_notepad")
+        #expect(model.selectedApp?.name == "Notepad")
+        #expect(model.canLaunchSelectedApp)
         #expect(model.statusText == "Connected to Windows agent 0.1.0")
         #expect(model.errorMessage == nil)
     }
@@ -30,6 +33,8 @@ struct HostDashboardModelTests {
         #expect(model.phase == .connected)
         #expect(model.lastLaunch?.launch.processId == 4912)
         #expect(model.lastLaunch?.window.windowId == "hwnd:0003029A")
+        #expect(model.selectedAppId == "winapp_notepad")
+        #expect(model.canLaunchSelectedApp)
         #expect(model.statusText == "Launched Untitled - Notepad")
     }
 
@@ -42,12 +47,50 @@ struct HostDashboardModelTests {
         await model.load()
 
         #expect(model.phase == .failed)
-        #expect(model.errorMessage == "notepadMissing")
+        #expect(model.errorMessage == "Notepad is not available from the Windows agent.")
+        #expect(model.canLaunchSelectedApp == false)
+    }
+
+    @Test("does not launch when no app is selected")
+    @MainActor
+    func doesNotLaunchWithoutSelection() async throws {
+        let service = FakeDashboardService()
+        let model = HostDashboardModel(service: service)
+
+        await model.launchSelectedApp()
+
+        #expect(model.phase == .failed)
+        #expect(model.errorMessage == "Select an app before launching.")
+        #expect(service.launchCount == 0)
+    }
+
+    @Test("does not launch unsupported selected apps")
+    @MainActor
+    func doesNotLaunchUnsupportedSelectedApps() async throws {
+        let service = FakeDashboardService(apps: [.calculator])
+        let model = HostDashboardModel(service: service)
+
+        await model.load()
+        await model.launchSelectedApp()
+
+        #expect(model.selectedAppId == "winapp_calculator")
+        #expect(model.canLaunchSelectedApp == false)
+        #expect(model.phase == .failed)
+        #expect(model.errorMessage == "The current harness can only launch Notepad.")
+        #expect(service.launchCount == 0)
     }
 }
 
-private struct FakeDashboardService: HostDashboardService {
+@MainActor
+private final class FakeDashboardService: HostDashboardService {
     var error: (any Error)?
+    var apps: [WindowsApp]
+    private(set) var launchCount = 0
+
+    init(error: (any Error)? = nil, apps: [WindowsApp] = [.notepad]) {
+        self.error = error
+        self.apps = apps
+    }
 
     func loadOverview() async throws -> HostOverview {
         if let error {
@@ -56,7 +99,7 @@ private struct FakeDashboardService: HostDashboardService {
 
         return HostOverview(
             health: .fixture,
-            apps: [.notepad]
+            apps: apps
         )
     }
 
@@ -65,9 +108,10 @@ private struct FakeDashboardService: HostDashboardService {
             throw error
         }
 
+        launchCount += 1
         return NotepadLaunchResult(
             health: .fixture,
-            apps: [.notepad],
+            apps: apps,
             launch: .fixture,
             window: .notepad
         )
@@ -103,6 +147,16 @@ private extension WindowsApp {
             exePath: "C:\\Windows\\System32\\notepad.exe",
             publisher: "Microsoft",
             iconId: "icon_notepad"
+        )
+    }
+
+    static var calculator: WindowsApp {
+        WindowsApp(
+            id: "winapp_calculator",
+            name: "Calculator",
+            exePath: "C:\\Windows\\System32\\calc.exe",
+            publisher: "Microsoft",
+            iconId: "icon_calculator"
         )
     }
 }

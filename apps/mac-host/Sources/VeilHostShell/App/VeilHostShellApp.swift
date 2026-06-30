@@ -1,8 +1,10 @@
+import AppKit
 import SwiftUI
 import VeilHostCore
 
 @main
 struct VeilHostShellApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var model = HostDashboardModel(
         service: VeilHostClient(
             transport: URLSessionWebSocketTransport(
@@ -36,5 +38,12 @@ struct VeilHostShellApp: App {
                 .keyboardShortcut(.return, modifiers: [.command])
             }
         }
+    }
+}
+
+final class AppDelegate: NSObject, NSApplicationDelegate {
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        NSApp.setActivationPolicy(.regular)
+        NSApp.activate(ignoringOtherApps: true)
     }
 }

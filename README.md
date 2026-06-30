@@ -142,6 +142,8 @@ For the Codex desktop Run button, use:
 
 That script builds `veil-host-shell`, stages `dist/Veil.app`, and launches it as a macOS app bundle.
 
+The app list supports selection. The current fake-agent harness can only launch Notepad, so other app ids are shown but blocked from launch until generic app launch support lands.
+
 ## Open Source Principles
 
 - No bundled Windows images, product keys, or proprietary Parallels assets.

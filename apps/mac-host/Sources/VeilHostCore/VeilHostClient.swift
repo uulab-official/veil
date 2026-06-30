@@ -4,9 +4,21 @@ public protocol HostTransport: Sendable {
     func send(_ message: Data, expectedReplies: Int) async throws -> [Data]
 }
 
-public enum VeilHostError: Error, Equatable, Sendable {
+public enum VeilHostError: Error, Equatable, LocalizedError, Sendable {
     case notepadMissing
     case missingReply(String)
+    case unsupportedHarnessApp
+
+    public var errorDescription: String? {
+        switch self {
+        case .notepadMissing:
+            "Notepad is not available from the Windows agent."
+        case .missingReply(let context):
+            "The Windows agent did not return the expected reply: \(context)."
+        case .unsupportedHarnessApp:
+            "The current harness can only launch Notepad."
+        }
+    }
 }
 
 public struct NotepadLaunchResult: Codable, Equatable, Sendable {

@@ -33,13 +33,13 @@ struct ContentView: View {
 
                 Button {
                     Task {
-                        await model.launchNotepad()
+                        await model.launchSelectedApp()
                     }
                 } label: {
-                    Label("Launch Notepad", systemImage: "play.fill")
+                    Label("Launch", systemImage: "play.fill")
                 }
-                .help("Launch Notepad through the guest agent")
-                .disabled(model.phase == .loading || model.phase == .launching)
+                .help("Launch the selected Windows app")
+                .disabled(!model.canLaunchSelectedApp)
             }
         }
     }

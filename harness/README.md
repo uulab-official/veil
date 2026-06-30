@@ -102,6 +102,8 @@ swift run veil-host-shell
 
 The shell opens a macOS window with agent status, app list, and launch controls. The Codex Run button uses `./script/build_and_run.sh`, which stages and opens `dist/Veil.app`.
 
+The fake agent currently accepts launch requests only for `winapp_notepad`. The SwiftUI shell keeps that limit visible by disabling unsupported launches at the model boundary.
+
 ## Fixture Policy
 
 Fixtures are part of the protocol contract. When a protocol message changes, update both `docs/protocol.md` and the matching fixture here.

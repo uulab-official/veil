@@ -13,7 +13,7 @@ struct DetailView: View {
 
             switch selectedSection {
             case .apps:
-                AppsView(apps: model.apps)
+                AppsView(apps: model.apps, selectedAppId: $model.selectedAppId)
             case .agent:
                 AgentView(health: model.health, errorMessage: model.errorMessage)
             case .launch:

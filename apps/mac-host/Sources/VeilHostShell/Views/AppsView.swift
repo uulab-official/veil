@@ -3,6 +3,7 @@ import VeilHostCore
 
 struct AppsView: View {
     var apps: [WindowsApp]
+    @Binding var selectedAppId: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -16,7 +17,7 @@ struct AppsView: View {
                     description: Text("Refresh the agent to load available Windows apps.")
                 )
             } else {
-                Table(apps) {
+                Table(apps, selection: $selectedAppId) {
                     TableColumn("Name") { app in
                         Text(app.name)
                     }

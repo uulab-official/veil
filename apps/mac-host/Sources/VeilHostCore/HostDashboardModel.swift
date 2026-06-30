@@ -32,6 +32,7 @@ public final class HostDashboardModel {
     public private(set) var apps: [WindowsApp] = []
     public private(set) var lastLaunch: NotepadLaunchResult?
     public private(set) var errorMessage: String?
+    public var selectedAppId: String?
 
     private let service: any HostDashboardService
 
@@ -60,6 +61,18 @@ public final class HostDashboardModel {
         }
     }
 
+    public var selectedApp: WindowsApp? {
+        guard let selectedAppId else {
+            return nil
+        }
+
+        return apps.first { $0.id == selectedAppId }
+    }
+
+    public var canLaunchSelectedApp: Bool {
+        selectedApp?.id == "winapp_notepad" && phase != .loading && phase != .launching
+    }
+
     public func load() async {
         phase = .loading
         errorMessage = nil
@@ -68,11 +81,28 @@ public final class HostDashboardModel {
             let overview = try await service.loadOverview()
             health = overview.health
             apps = overview.apps
+            selectDefaultAppIfNeeded()
             phase = .connected
         } catch {
-            errorMessage = String(describing: error)
+            errorMessage = userMessage(for: error)
             phase = .failed
         }
+    }
+
+    public func launchSelectedApp() async {
+        guard selectedApp != nil else {
+            errorMessage = "Select an app before launching."
+            phase = .failed
+            return
+        }
+
+        guard canLaunchSelectedApp else {
+            errorMessage = userMessage(for: VeilHostError.unsupportedHarnessApp)
+            phase = .failed
+            return
+        }
+
+        await launchNotepad()
     }
 
     public func launchNotepad() async {
@@ -83,11 +113,29 @@ public final class HostDashboardModel {
             let result = try await service.launchNotepad()
             health = result.health
             apps = result.apps
+            selectedAppId = result.window.appId
             lastLaunch = result
             phase = .connected
         } catch {
-            errorMessage = String(describing: error)
+            errorMessage = userMessage(for: error)
             phase = .failed
         }
+    }
+
+    private func selectDefaultAppIfNeeded() {
+        if let selectedAppId, apps.contains(where: { $0.id == selectedAppId }) {
+            return
+        }
+
+        selectedAppId = apps.first?.id
+    }
+
+    private func userMessage(for error: any Error) -> String {
+        if let localized = error as? LocalizedError,
+           let description = localized.errorDescription {
+            return description
+        }
+
+        return String(describing: error)
     }
 }
