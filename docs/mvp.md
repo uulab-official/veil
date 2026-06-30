@@ -14,6 +14,7 @@ Acceptance criteria:
 - The host reports Windows installer, virtual disk, shared folder, and guest-agent setup steps.
 - The host reports preflight checks for Windows Arm, CPU, memory, and disk settings.
 - The VM can be started from the host app through Virtualization.framework.
+- The active VM can be stopped from the host app.
 - The host opens a visible VM console for the boot spike.
 - The host can show basic VM status: stopped, starting, running, suspended, failed.
 - VM configuration is stored locally.

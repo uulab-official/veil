@@ -26,7 +26,8 @@ struct VeilHostShellApp: App {
             ContentView(
                 model: model,
                 vmModel: vmModel,
-                startVMAction: startVMAndShowConsole
+                startVMAction: startVMAndShowConsole,
+                stopVMAction: stopVMAndCloseConsole
             )
                 .frame(minWidth: 1040, idealWidth: 1180, minHeight: 680, idealHeight: 760)
                 .task {
@@ -68,6 +69,12 @@ struct VeilHostShellApp: App {
                 .keyboardShortcut("b", modifiers: [.command])
                 .disabled(!vmModel.canStart || vmModel.phase == .loading)
 
+                Button("Stop VM") {
+                    stopVMAndCloseConsole()
+                }
+                .keyboardShortcut(".", modifiers: [.command])
+                .disabled(!vmModel.canStop || vmModel.phase == .loading)
+
                 Button("Launch Notepad") {
                     Task {
                         await model.launchNotepad()
@@ -88,6 +95,16 @@ struct VeilHostShellApp: App {
 
             if vmModel.snapshot?.state == .running || vmModel.snapshot?.state == .starting {
                 vmConsolePresenter.showConsoleIfAvailable()
+            }
+        }
+    }
+
+    private func stopVMAndCloseConsole() {
+        Task { @MainActor in
+            await vmModel.stop()
+
+            if vmModel.snapshot?.state == .stopped {
+                vmConsolePresenter.closeConsole()
             }
         }
     }

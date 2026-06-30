@@ -5,6 +5,7 @@ import VeilHostCore
 struct VMRuntimeView: View {
     @Bindable var model: VMRuntimeModel
     var startVMAction: () -> Void
+    var stopVMAction: () -> Void
     @State private var pathPicker: PathPicker?
 
     var body: some View {
@@ -14,8 +15,10 @@ struct VMRuntimeView: View {
                     snapshot: snapshot,
                     statusText: model.statusText,
                     canStart: model.canStart,
+                    canStop: model.canStop,
                     isLoading: model.phase == .loading,
                     startAction: startVMAction,
+                    stopAction: stopVMAction,
                     refreshAction: {
                         Task {
                             await model.load()
@@ -29,8 +32,10 @@ struct VMRuntimeView: View {
                 QuickActionsPanel(
                     snapshot: snapshot,
                     canStart: model.canStart,
+                    canStop: model.canStop,
                     isLoading: model.phase == .loading,
                     startAction: startVMAction,
+                    stopAction: stopVMAction,
                     refreshAction: {
                         Task {
                             await model.load()
@@ -245,8 +250,10 @@ struct VMRuntimeView: View {
 private struct QuickActionsPanel: View {
     var snapshot: VMRuntimeSnapshot
     var canStart: Bool
+    var canStop: Bool
     var isLoading: Bool
     var startAction: () -> Void
+    var stopAction: () -> Void
     var refreshAction: () -> Void
     var createDiskAction: () -> Void
 
@@ -266,14 +273,14 @@ private struct QuickActionsPanel: View {
                 spacing: 10
             ) {
                 ControlActionTile(
-                    title: "Start",
-                    detail: canStart ? "Boot the configured Windows machine." : "Complete setup before booting.",
-                    symbolName: "power",
-                    tint: .green,
-                    state: canStart ? .ready : .blocked,
-                    action: startAction
+                    title: canStop ? "Stop" : "Start",
+                    detail: canStop ? "Shut down the running VM process." : (canStart ? "Boot the configured Windows machine." : "Complete setup before booting."),
+                    symbolName: canStop ? "stop.fill" : "power",
+                    tint: canStop ? .orange : .green,
+                    state: (canStart || canStop) ? .ready : .blocked,
+                    action: canStop ? stopAction : startAction
                 )
-                .disabled(!canStart || isLoading)
+                .disabled((!canStart && !canStop) || isLoading)
 
                 ControlActionTile(
                     title: "Refresh",
@@ -327,8 +334,10 @@ private struct ControlCenterHero: View {
     var snapshot: VMRuntimeSnapshot
     var statusText: String
     var canStart: Bool
+    var canStop: Bool
     var isLoading: Bool
     var startAction: () -> Void
+    var stopAction: () -> Void
     var refreshAction: () -> Void
     var runtimeTitle: String
     var runtimeSymbol: String
@@ -388,7 +397,13 @@ private struct ControlCenterHero: View {
                     }
 
                     HStack(spacing: 8) {
-                        if canStart {
+                        if canStop {
+                            Button(action: stopAction) {
+                                Label("Stop", systemImage: "stop.fill")
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .disabled(isLoading)
+                        } else if canStart {
                             Button(action: startAction) {
                                 Label("Start", systemImage: "power")
                             }

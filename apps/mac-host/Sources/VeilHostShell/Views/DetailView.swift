@@ -6,6 +6,7 @@ struct DetailView: View {
     @Bindable var vmModel: VMRuntimeModel
     var selectedSection: ShellSection
     var startVMAction: () -> Void
+    var stopVMAction: () -> Void
 
     var body: some View {
         ScrollView {
@@ -23,7 +24,11 @@ struct DetailView: View {
                         errorMessage: model.errorMessage
                     )
                 case .vm:
-                    VMRuntimeView(model: vmModel, startVMAction: startVMAction)
+                    VMRuntimeView(
+                        model: vmModel,
+                        startVMAction: startVMAction,
+                        stopVMAction: stopVMAction
+                    )
                 case .launch:
                     LaunchView(result: model.lastLaunch)
                 }

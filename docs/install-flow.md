@@ -27,6 +27,7 @@ The first three are local host prerequisites. The guest agent step remains pendi
 - The runtime snapshot reports preflight checks for guest OS, CPU, memory, and disk size.
 - A profile becomes boot-ready only when installer media, virtual disk, shared folder, and preflight checks all pass.
 - Pressing Start builds a `VZVirtualMachine`, starts it through Apple's Virtualization.framework, and opens a console window.
+- Pressing Stop stops the active VM process and closes the console window.
 - Start requires a locally signed app bundle with the `com.apple.security.virtualization` entitlement.
 
 ## Preflight Checks

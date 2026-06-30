@@ -200,6 +200,57 @@ struct VMRuntimeModelTests {
         #expect(service.startCount == 1)
     }
 
+    @Test("stops runtime through the service boundary")
+    @MainActor
+    func stopsRuntimeThroughServiceBoundary() async throws {
+        let service = FakeVMRuntimeService(
+            stoppedSnapshot: VMRuntimeSnapshot(
+                state: .stopped,
+                virtualizationAvailable: true,
+                architecture: "arm64",
+                minimumOSSupported: true,
+                profileName: "Windows 11 Arm",
+                installerMediaPath: "/Users/test/Downloads/Windows.iso",
+                virtualDiskPath: "/Users/test/Virtual Machines/Windows.vhdx",
+                bootReady: true,
+                detail: "Windows VM is stopped."
+            )
+        )
+        let model = VMRuntimeModel(service: service)
+
+        await model.stop()
+
+        #expect(model.phase == .loaded)
+        #expect(model.snapshot?.state == .stopped)
+        #expect(model.statusText == "VM stopped")
+        #expect(service.stopCount == 1)
+    }
+
+    @Test("reports stop availability for running VMs")
+    @MainActor
+    func reportsStopAvailabilityForRunningVMs() async throws {
+        let model = VMRuntimeModel(
+            service: FakeVMRuntimeService(
+                snapshot: VMRuntimeSnapshot(
+                    state: .running,
+                    virtualizationAvailable: true,
+                    architecture: "arm64",
+                    minimumOSSupported: true,
+                    profileName: "Windows 11 Arm",
+                    installerMediaPath: "/Users/test/Downloads/Windows.iso",
+                    virtualDiskPath: "/Users/test/Virtual Machines/Windows.vhdx",
+                    bootReady: true,
+                    detail: "Windows VM is running."
+                )
+            )
+        )
+
+        await model.load()
+
+        #expect(model.canStop)
+        #expect(model.canStart == false)
+    }
+
     @Test("stores start errors")
     @MainActor
     func storesStartErrors() async throws {
@@ -219,12 +270,14 @@ private final class FakeVMRuntimeService: VMRuntimeService {
     var diskSnapshot: VMRuntimeSnapshot?
     var updatedSnapshot: VMRuntimeSnapshot?
     var startedSnapshot: VMRuntimeSnapshot?
+    var stoppedSnapshot: VMRuntimeSnapshot?
     var error: (any Error)?
     private(set) var updatedInstallerMediaPath: String?
     private(set) var updatedVirtualDiskPath: String?
     private(set) var createCount = 0
     private(set) var createDiskCount = 0
     private(set) var startCount = 0
+    private(set) var stopCount = 0
 
     init(
         snapshot: VMRuntimeSnapshot? = nil,
@@ -232,6 +285,7 @@ private final class FakeVMRuntimeService: VMRuntimeService {
         diskSnapshot: VMRuntimeSnapshot? = nil,
         updatedSnapshot: VMRuntimeSnapshot? = nil,
         startedSnapshot: VMRuntimeSnapshot? = nil,
+        stoppedSnapshot: VMRuntimeSnapshot? = nil,
         error: (any Error)? = nil
     ) {
         self.snapshot = snapshot
@@ -239,6 +293,7 @@ private final class FakeVMRuntimeService: VMRuntimeService {
         self.diskSnapshot = diskSnapshot
         self.updatedSnapshot = updatedSnapshot
         self.startedSnapshot = startedSnapshot
+        self.stoppedSnapshot = stoppedSnapshot
         self.error = error
     }
 
@@ -293,5 +348,16 @@ private final class FakeVMRuntimeService: VMRuntimeService {
         let startedSnapshot = try #require(startedSnapshot)
         snapshot = startedSnapshot
         return startedSnapshot
+    }
+
+    func stop() async throws -> VMRuntimeSnapshot {
+        if let error {
+            throw error
+        }
+
+        stopCount += 1
+        let stoppedSnapshot = try #require(stoppedSnapshot)
+        snapshot = stoppedSnapshot
+        return stoppedSnapshot
     }
 }

@@ -109,7 +109,7 @@ Exit criteria:
 
 ## Current Next Step
 
-The protocol harness is now executable from JavaScript, the Swift host probe, and the SwiftUI host shell. The shell also has a VM Runtime status boundary, local boot-path checks, shared-folder preparation, default sparse-disk creation, a setup-step checklist, profile preflight checks, and a Virtualization.framework boot spike that opens a VM console. The next implementation step is the v0.1/v0.2 overlap:
+The protocol harness is now executable from JavaScript, the Swift host probe, and the SwiftUI host shell. The shell also has a VM Runtime status boundary, local boot-path checks, shared-folder preparation, default sparse-disk creation, a setup-step checklist, profile preflight checks, and a Virtualization.framework boot spike that opens and stops a VM console. The next implementation step is the v0.1/v0.2 overlap:
 
 1. Harden the Virtualization.framework boot spike against real Windows 11 Arm installer variants.
 2. Add deeper validation for selected installer media and virtual disk paths, including file format and bootability checks proven by the spike.

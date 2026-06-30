@@ -42,4 +42,9 @@ final class VMConsoleWindowPresenter {
         NSApp.activate(ignoringOtherApps: true)
         self.window = window
     }
+
+    func closeConsole() {
+        window?.close()
+        window = nil
+    }
 }

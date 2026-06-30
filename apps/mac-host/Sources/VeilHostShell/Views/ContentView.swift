@@ -5,6 +5,7 @@ struct ContentView: View {
     @Bindable var model: HostDashboardModel
     @Bindable var vmModel: VMRuntimeModel
     var startVMAction: () -> Void
+    var stopVMAction: () -> Void
     @SceneStorage("selectedSection") private var selectedSection: ShellSection = .vm
 
     var body: some View {
@@ -21,7 +22,8 @@ struct ContentView: View {
                 model: model,
                 vmModel: vmModel,
                 selectedSection: selectedSection,
-                startVMAction: startVMAction
+                startVMAction: startVMAction,
+                stopVMAction: stopVMAction
             )
         }
         .toolbar {
@@ -40,11 +42,19 @@ struct ContentView: View {
 
                 switch selectedSection {
                 case .vm:
-                    Button(action: startVMAction) {
-                        Label("Start VM", systemImage: "power")
+                    if vmModel.canStop {
+                        Button(action: stopVMAction) {
+                            Label("Stop VM", systemImage: "stop.fill")
+                        }
+                        .help("Stop the running Windows 11 Arm VM")
+                        .disabled(vmModel.phase == .loading)
+                    } else {
+                        Button(action: startVMAction) {
+                            Label("Start VM", systemImage: "power")
+                        }
+                        .help("Start the configured Windows 11 Arm VM")
+                        .disabled(!vmModel.canStart || vmModel.phase == .loading)
                     }
-                    .help("Start the configured Windows 11 Arm VM")
-                    .disabled(!vmModel.canStart || vmModel.phase == .loading)
                 case .apps:
                     Button {
                         Task {

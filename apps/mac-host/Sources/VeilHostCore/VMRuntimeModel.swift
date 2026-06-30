@@ -6,11 +6,13 @@ public protocol VMRuntimeService: Sendable {
     func createDefaultVirtualDisk() async throws -> VMRuntimeSnapshot
     func updateProfilePaths(installerMediaPath: String?, virtualDiskPath: String?) async throws -> VMRuntimeSnapshot
     func start() async throws -> VMRuntimeSnapshot
+    func stop() async throws -> VMRuntimeSnapshot
 }
 
 public protocol VMRuntimeBooting: Sendable {
     func runtimeState() async -> VMRuntimeState?
     func start(profile: VMProfile) async throws -> VMRuntimeState
+    func stop() async throws -> VMRuntimeState
 }
 
 public struct UnavailableVMRuntimeBooter: VMRuntimeBooting {
@@ -22,6 +24,10 @@ public struct UnavailableVMRuntimeBooter: VMRuntimeBooting {
 
     public func start(profile: VMProfile) async throws -> VMRuntimeState {
         throw VMRuntimeError.bootNotImplemented
+    }
+
+    public func stop() async throws -> VMRuntimeState {
+        .stopped
     }
 }
 
@@ -196,6 +202,14 @@ public final class VMRuntimeModel {
             (snapshot.state == .stopped || snapshot.state == .suspended)
     }
 
+    public var canStop: Bool {
+        guard let snapshot else {
+            return false
+        }
+
+        return snapshot.state == .running || snapshot.state == .suspended
+    }
+
     public var capabilitySummary: String {
         guard let snapshot else {
             return "VM runtime capabilities not loaded"
@@ -266,6 +280,19 @@ public final class VMRuntimeModel {
 
         do {
             snapshot = try await service.start()
+            phase = .loaded
+        } catch {
+            errorMessage = userMessage(for: error)
+            phase = .failed
+        }
+    }
+
+    public func stop() async {
+        phase = .loading
+        errorMessage = nil
+
+        do {
+            snapshot = try await service.stop()
             phase = .loaded
         } catch {
             errorMessage = userMessage(for: error)
@@ -410,6 +437,11 @@ public struct LocalVMRuntimeService: VMRuntimeService {
         }
 
         _ = try await bootRunner.start(profile: profile)
+        return try await loadSnapshot()
+    }
+
+    public func stop() async throws -> VMRuntimeSnapshot {
+        _ = try await bootRunner.stop()
         return try await loadSnapshot()
     }
 

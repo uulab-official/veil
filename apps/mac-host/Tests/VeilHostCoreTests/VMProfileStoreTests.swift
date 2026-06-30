@@ -297,6 +297,34 @@ struct VMProfileStoreTests {
         #expect(bootRunner.startedProfile?.virtualDiskPath == diskURL.path)
     }
 
+    @Test("local runtime stops a running profile")
+    func localRuntimeStopsRunningProfile() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let installerURL = directory.appendingPathComponent("Windows.iso")
+        let diskURL = directory.appendingPathComponent("Windows.vhdx")
+        let sharedFolderURL = directory.appendingPathComponent("Veil Shared", isDirectory: true)
+        try Data("installer".utf8).write(to: installerURL)
+        try Data("disk".utf8).write(to: diskURL)
+        try FileManager.default.createDirectory(at: sharedFolderURL, withIntermediateDirectories: true)
+        let store = JSONVMProfileStore(directory: directory)
+        var profile = VMProfile.defaultWindows11Arm(createdAt: Date(timeIntervalSince1970: 1_782_752_400))
+        profile.installerMediaPath = installerURL.path
+        profile.virtualDiskPath = diskURL.path
+        profile.sharedFolderPath = sharedFolderURL.path
+        try await store.save(profile)
+        let bootRunner = FakeVMRuntimeBooter(startState: .running, currentState: .running)
+
+        let service = LocalVMRuntimeService(profileStore: store, bootRunner: bootRunner)
+
+        let snapshot = try await service.stop()
+
+        #expect(snapshot.state == .stopped)
+        #expect(snapshot.detail == "Windows VM is stopped.")
+        #expect(bootRunner.stopCount == 1)
+    }
+
     @Test("local runtime start rejects profiles that are not boot ready")
     func localRuntimeStartRejectsProfilesThatAreNotBootReady() async throws {
         let directory = FileManager.default.temporaryDirectory
@@ -319,6 +347,7 @@ private final class FakeVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
     var startState: VMRuntimeState
     var currentState: VMRuntimeState?
     private(set) var startCount = 0
+    private(set) var stopCount = 0
     private(set) var startedProfile: VMProfile?
 
     init(startState: VMRuntimeState, currentState: VMRuntimeState? = nil) {
@@ -335,5 +364,11 @@ private final class FakeVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
         startedProfile = profile
         currentState = startState
         return startState
+    }
+
+    func stop() async throws -> VMRuntimeState {
+        stopCount += 1
+        currentState = .stopped
+        return .stopped
     }
 }

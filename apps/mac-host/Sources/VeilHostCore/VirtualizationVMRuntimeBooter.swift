@@ -23,6 +23,10 @@ public final class VirtualizationVMRuntimeBooter: VMRuntimeBooting, @unchecked S
         try await startOnMainActor(profile: profile)
     }
 
+    public func stop() async throws -> VMRuntimeState {
+        try await stopOnMainActor()
+    }
+
     @MainActor
     private func startOnMainActor(profile: VMProfile) async throws -> VMRuntimeState {
         guard let activeVirtualMachine else {
@@ -48,6 +52,31 @@ public final class VirtualizationVMRuntimeBooter: VMRuntimeBooting, @unchecked S
         }
 
         return Self.runtimeState(from: activeVirtualMachine.state) ?? .failed
+    }
+
+    @MainActor
+    private func stopOnMainActor() async throws -> VMRuntimeState {
+        guard let activeVirtualMachine else {
+            return .stopped
+        }
+
+        if activeVirtualMachine.state == .stopped {
+            return .stopped
+        }
+
+        if activeVirtualMachine.canStop {
+            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, any Error>) in
+                activeVirtualMachine.stop { error in
+                    if let error {
+                        continuation.resume(throwing: error)
+                    } else {
+                        continuation.resume()
+                    }
+                }
+            }
+        }
+
+        return Self.runtimeState(from: activeVirtualMachine.state) ?? .stopped
     }
 
     private func makeConfiguration(for profile: VMProfile) throws -> VZVirtualMachineConfiguration {
