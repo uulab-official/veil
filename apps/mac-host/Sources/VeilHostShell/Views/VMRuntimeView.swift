@@ -9,131 +9,94 @@ struct VMRuntimeView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             if let snapshot = model.snapshot {
-                ShellPanel {
-                    HStack(alignment: .center) {
-                        ShellPanelHeader(
-                            title: "Runtime Status",
-                            subtitle: snapshot.detail,
-                            symbolName: "desktopcomputer"
-                        )
-
-                        Spacer()
-
-                        StatusPill(
-                            title: runtimeTitle(for: snapshot.state),
-                            symbolName: runtimeSymbol(for: snapshot.state),
-                            tint: runtimeTint(for: snapshot.state)
-                        )
-                    }
-
-                    Grid(alignment: .leading, horizontalSpacing: 18, verticalSpacing: 10) {
-                        ShellMetricRow(label: "Status", value: model.statusText)
-                        ShellMetricRow(label: "Capability", value: model.capabilitySummary)
-                        ShellMetricRow(label: "Architecture", value: snapshot.architecture, monospaced: true)
-                        ShellMetricRow(label: "macOS 15+", value: snapshot.minimumOSSupported ? "Yes" : "No")
-                    }
-                }
-
-                ShellPanel {
-                    ShellPanelHeader(
-                        title: "Windows 11 Arm Profile",
-                        subtitle: "Configure the VM profile before boot orchestration is enabled.",
-                        symbolName: "rectangle.stack.badge.person.crop"
-                    )
-
-                    Grid(alignment: .leading, horizontalSpacing: 18, verticalSpacing: 10) {
-                        ShellMetricRow(label: "Profile", value: snapshot.profileName ?? "Not configured")
-                        ShellMetricRow(label: "Installer Media", value: snapshot.installerMediaPath ?? "Not selected", monospaced: true)
-                        ShellMetricRow(label: "Virtual Disk", value: snapshot.virtualDiskPath ?? "Not selected", monospaced: true)
-                    }
-
-                    HStack(spacing: 8) {
-                        if snapshot.state == .notConfigured {
-                            createDefaultProfileButton
+                ControlCenterHero(
+                    snapshot: snapshot,
+                    statusText: model.statusText,
+                    canStart: model.canStart,
+                    isLoading: model.phase == .loading,
+                    startAction: {
+                        Task {
+                            await model.start()
                         }
+                    },
+                    refreshAction: {
+                        Task {
+                            await model.load()
+                        }
+                    },
+                    runtimeTitle: runtimeTitle(for: snapshot.state),
+                    runtimeSymbol: runtimeSymbol(for: snapshot.state),
+                    runtimeTint: runtimeTint(for: snapshot.state)
+                )
 
-                        if snapshot.profileName != nil {
-                            Button {
+                HStack(alignment: .top, spacing: 14) {
+                    VStack(alignment: .leading, spacing: 14) {
+                        SetupAssistantPanel(
+                            snapshot: snapshot,
+                            createProfileAction: {
+                                Task {
+                                    await model.createDefaultProfile()
+                                }
+                            },
+                            selectInstallerAction: {
                                 pathPicker = .installerMedia
-                            } label: {
-                                Label("Select Installer", systemImage: "opticaldisc")
-                            }
-                            .disabled(model.phase == .loading)
-
-                            Button {
+                            },
+                            selectDiskAction: {
                                 pathPicker = .virtualDisk
-                            } label: {
-                                Label("Select Disk", systemImage: "externaldrive")
+                            },
+                            isLoading: model.phase == .loading
+                        )
+
+                        if !snapshot.installationSteps.isEmpty {
+                            ShellPanel(spacing: 10) {
+                                ShellPanelHeader(
+                                    title: "Windows Setup",
+                                    subtitle: "Profile readiness steps for Arm Windows installation.",
+                                    symbolName: "checklist"
+                                )
+
+                                ForEach(snapshot.installationSteps) { step in
+                                    InstallationStepRow(step: step)
+                                }
                             }
-                            .disabled(model.phase == .loading)
-                        }
-
-                        Spacer()
-                    }
-                }
-
-                if !snapshot.installationSteps.isEmpty {
-                    ShellPanel(spacing: 10) {
-                        ShellPanelHeader(
-                            title: "Windows Setup",
-                            subtitle: "Profile readiness steps for Arm Windows installation.",
-                            symbolName: "checklist"
-                        )
-
-                        ForEach(snapshot.installationSteps) { step in
-                            InstallationStepRow(step: step)
                         }
                     }
-                }
 
-                if !snapshot.preflightChecks.isEmpty {
-                    ShellPanel(spacing: 10) {
-                        ShellPanelHeader(
-                            title: "Preflight",
-                            subtitle: "Local checks that must pass before VM start.",
-                            symbolName: "stethoscope"
-                        )
+                    VStack(alignment: .leading, spacing: 14) {
+                        MacIntegrationPanel(snapshot: snapshot)
 
-                        ForEach(snapshot.preflightChecks) { check in
-                            PreflightCheckRow(check: check)
+                        if !snapshot.preflightChecks.isEmpty {
+                            ShellPanel(spacing: 10) {
+                                ShellPanelHeader(
+                                    title: "Preflight",
+                                    subtitle: "Local checks that must pass before VM start.",
+                                    symbolName: "stethoscope"
+                                )
+
+                                ForEach(snapshot.preflightChecks) { check in
+                                    PreflightCheckRow(check: check)
+                                }
+                            }
                         }
                     }
                 }
 
                 ShellPanel {
+                    HStack(alignment: .firstTextBaseline, spacing: 10) {
+                        Image(systemName: model.canStart ? "checkmark.circle.fill" : "exclamationmark.triangle")
+                            .foregroundStyle(model.canStart ? .green : .orange)
+
+                        Text(model.canStart ? "Windows 11 Arm is ready for the next boot milestone." : "VM start is disabled until the Windows 11 Arm profile, installer media, and virtual disk are ready.")
+                            .foregroundStyle(.secondary)
+                            .font(.callout)
+
+                        Spacer()
+                    }
+
                     if let errorMessage = model.errorMessage {
                         Label(errorMessage, systemImage: "exclamationmark.triangle")
                             .foregroundStyle(.orange)
                             .font(.callout)
-                    }
-
-                    if !model.canStart {
-                        Text("VM start is disabled until a Windows 11 Arm profile, installer media, and virtual disk path are configured.")
-                            .foregroundStyle(.secondary)
-                            .font(.callout)
-                    }
-
-                    HStack {
-                        Button {
-                            Task {
-                                await model.start()
-                            }
-                        } label: {
-                            Label("Start VM", systemImage: "play.circle")
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .disabled(!model.canStart || model.phase == .loading)
-
-                        Button {
-                            Task {
-                                await model.load()
-                            }
-                        } label: {
-                            Label("Refresh", systemImage: "arrow.clockwise")
-                        }
-                        .disabled(model.phase == .loading)
-
-                        Spacer()
                     }
                 }
                 .fileImporter(
@@ -170,17 +133,6 @@ struct VMRuntimeView: View {
                 }
             }
         }
-    }
-
-    private var createDefaultProfileButton: some View {
-        Button {
-            Task {
-                await model.createDefaultProfile()
-            }
-        } label: {
-            Label("Create Default Profile", systemImage: "plus.circle")
-        }
-        .disabled(model.phase == .loading)
     }
 
     private func runtimeTitle(for state: VMRuntimeState) -> String {
@@ -262,6 +214,255 @@ struct VMRuntimeView: View {
                     installerMediaPath: currentInstaller,
                     virtualDiskPath: path
                 )
+            }
+        }
+    }
+}
+
+private struct ControlCenterHero: View {
+    var snapshot: VMRuntimeSnapshot
+    var statusText: String
+    var canStart: Bool
+    var isLoading: Bool
+    var startAction: () -> Void
+    var refreshAction: () -> Void
+    var runtimeTitle: String
+    var runtimeSymbol: String
+    var runtimeTint: Color
+
+    var body: some View {
+        ShellPanel(spacing: 16) {
+            HStack(alignment: .top, spacing: 18) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(
+                            LinearGradient(
+                                colors: [.blue, .cyan],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                    VStack(spacing: 8) {
+                        Image(systemName: "display")
+                            .font(.system(size: 34, weight: .semibold))
+                        Text("11")
+                            .font(.title.weight(.bold))
+                    }
+                    .foregroundStyle(.white)
+                }
+                .frame(width: 104, height: 104)
+
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(alignment: .firstTextBaseline) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Windows 11 Arm")
+                                .font(.title2.weight(.semibold))
+                            Text(statusText)
+                                .font(.callout)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(2)
+                        }
+
+                        Spacer()
+
+                        StatusPill(title: runtimeTitle, symbolName: runtimeSymbol, tint: runtimeTint)
+                    }
+
+                    LazyVGrid(
+                        columns: [
+                            GridItem(.adaptive(minimum: 150), spacing: 10)
+                        ],
+                        alignment: .leading,
+                        spacing: 10
+                    ) {
+                        DashboardStat(title: "Architecture", value: snapshot.architecture, symbolName: "cpu", tint: .blue)
+                        DashboardStat(title: "Runtime", value: snapshot.virtualizationAvailable ? "Available" : "Unavailable", symbolName: "bolt.horizontal", tint: snapshot.virtualizationAvailable ? .green : .orange)
+                        DashboardStat(title: "Boot Ready", value: snapshot.bootReady ? "Ready" : "Blocked", symbolName: snapshot.bootReady ? "checkmark.seal" : "lock", tint: snapshot.bootReady ? .green : .orange)
+                    }
+
+                    HStack(spacing: 8) {
+                        if canStart {
+                            Button(action: startAction) {
+                                Label("Start", systemImage: "power")
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .disabled(isLoading)
+                        } else {
+                            Button(action: startAction) {
+                                Label("Start", systemImage: "power")
+                            }
+                            .disabled(true)
+                        }
+
+                        Button(action: refreshAction) {
+                            Label("Refresh", systemImage: "arrow.clockwise")
+                        }
+                        .disabled(isLoading)
+
+                        Button {} label: {
+                            Label("Configure", systemImage: "slider.horizontal.3")
+                        }
+                        .disabled(true)
+                        .help("Configuration panels will unlock as VM boot support lands.")
+                    }
+                }
+            }
+        }
+    }
+}
+
+private struct SetupAssistantPanel: View {
+    var snapshot: VMRuntimeSnapshot
+    var createProfileAction: () -> Void
+    var selectInstallerAction: () -> Void
+    var selectDiskAction: () -> Void
+    var isLoading: Bool
+
+    private var items: [SetupItem] {
+        [
+            SetupItem(
+                title: "VM Profile",
+                detail: snapshot.profileName ?? "Create a default Windows 11 Arm profile.",
+                symbolName: "rectangle.stack.badge.person.crop",
+                isComplete: snapshot.profileName != nil
+            ),
+            SetupItem(
+                title: "Installer Media",
+                detail: snapshot.installerMediaPath ?? "Select Windows 11 Arm installer media.",
+                symbolName: "opticaldisc",
+                isComplete: snapshot.installerMediaPath != nil
+            ),
+            SetupItem(
+                title: "Virtual Disk",
+                detail: snapshot.virtualDiskPath ?? "Select or create the virtual disk path.",
+                symbolName: "externaldrive",
+                isComplete: snapshot.virtualDiskPath != nil
+            ),
+            SetupItem(
+                title: "Preflight",
+                detail: snapshot.bootReady ? "All local checks are passing." : snapshot.detail,
+                symbolName: "checklist",
+                isComplete: snapshot.bootReady
+            )
+        ]
+    }
+
+    private var completedCount: Int {
+        items.filter(\.isComplete).count
+    }
+
+    var body: some View {
+        ShellPanel(spacing: 12) {
+            ShellPanelHeader(
+                title: "Install Assistant",
+                subtitle: "A compact path from profile creation to Windows 11 Arm boot readiness.",
+                symbolName: "wand.and.stars"
+            )
+
+            SetupProgressBar(completed: completedCount, total: items.count)
+
+            ForEach(items) { item in
+                SetupItemRow(item: item)
+            }
+
+            HStack(spacing: 8) {
+                if snapshot.profileName == nil {
+                    Button(action: createProfileAction) {
+                        Label("Create Profile", systemImage: "plus.circle")
+                    }
+                    .disabled(isLoading)
+                }
+
+                Button(action: selectInstallerAction) {
+                    Label("Installer", systemImage: "opticaldisc")
+                }
+                .disabled(snapshot.profileName == nil || isLoading)
+
+                Button(action: selectDiskAction) {
+                    Label("Disk", systemImage: "externaldrive")
+                }
+                .disabled(snapshot.profileName == nil || isLoading)
+
+                Spacer()
+            }
+        }
+    }
+}
+
+private struct MacIntegrationPanel: View {
+    var snapshot: VMRuntimeSnapshot
+
+    var body: some View {
+        ShellPanel(spacing: 12) {
+            ShellPanelHeader(
+                title: "Mac Integration",
+                subtitle: "The Coherence-style bridge Veil is building toward.",
+                symbolName: "macwindow"
+            )
+
+            IntegrationStatusRow(
+                title: "Windows Apps on Mac",
+                detail: "Launch flow is wired through the agent protocol.",
+                symbolName: "app",
+                state: .partial
+            )
+            IntegrationStatusRow(
+                title: "Window Tracking",
+                detail: "Agent window events can identify launched app windows.",
+                symbolName: "rectangle.3.group",
+                state: .partial
+            )
+            IntegrationStatusRow(
+                title: "Clipboard",
+                detail: "Protocol support exists; shell controls are still planned.",
+                symbolName: "doc.on.clipboard",
+                state: .planned
+            )
+            IntegrationStatusRow(
+                title: "Shared Folders",
+                detail: snapshot.profileName == nil ? "Create a profile to prepare shared folder paths." : "Profile owns the future shared folder boundary.",
+                symbolName: "folder",
+                state: snapshot.profileName == nil ? .blocked : .planned
+            )
+            IntegrationStatusRow(
+                title: "Seamless App Mode",
+                detail: "Parallels-style app blending will follow VM boot and window capture.",
+                symbolName: "rectangle.on.rectangle",
+                state: snapshot.bootReady ? .planned : .blocked
+            )
+        }
+    }
+}
+
+private struct SetupItem: Identifiable {
+    var id: String { title }
+    var title: String
+    var detail: String
+    var symbolName: String
+    var isComplete: Bool
+}
+
+private struct SetupItemRow: View {
+    var item: SetupItem
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 10) {
+            Image(systemName: item.isComplete ? "checkmark.circle.fill" : "circle")
+                .foregroundStyle(item.isComplete ? .green : .secondary)
+                .frame(width: 22)
+
+            Image(systemName: item.symbolName)
+                .foregroundStyle(item.isComplete ? .green : .blue)
+                .frame(width: 24)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(item.title)
+                    .font(.callout.weight(.semibold))
+                Text(item.detail)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                    .textSelection(.enabled)
             }
         }
     }

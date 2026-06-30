@@ -147,6 +147,154 @@ struct CapabilityPill: View {
     }
 }
 
+struct DashboardStat: View {
+    var title: String
+    var value: String
+    var symbolName: String
+    var tint: Color = .blue
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: symbolName)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(tint)
+                .frame(width: 28, height: 28)
+                .background(tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Text(value)
+                    .font(.callout.weight(.semibold))
+                    .lineLimit(1)
+            }
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .strokeBorder(Color.secondary.opacity(0.16), lineWidth: 1)
+        }
+    }
+}
+
+struct SetupProgressBar: View {
+    var completed: Int
+    var total: Int
+
+    private var fraction: Double {
+        guard total > 0 else {
+            return 0
+        }
+
+        return Double(completed) / Double(total)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text("Setup Progress")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Text("\(completed)/\(total)")
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
+
+            GeometryReader { proxy in
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(.secondary.opacity(0.16))
+                    Capsule()
+                        .fill(fraction == 1 ? Color.green : Color.blue)
+                        .frame(width: max(8, proxy.size.width * fraction))
+                }
+            }
+            .frame(height: 7)
+        }
+    }
+}
+
+struct IntegrationStatusRow: View {
+    var title: String
+    var detail: String
+    var symbolName: String
+    var state: IntegrationState
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 10) {
+            Image(systemName: symbolName)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(state.tint)
+                .frame(width: 28, height: 28)
+                .background(state.tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.callout.weight(.semibold))
+                Text(detail)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
+
+            Spacer()
+
+            StatusPill(title: state.title, symbolName: state.symbolName, tint: state.tint)
+        }
+        .padding(.vertical, 2)
+    }
+}
+
+enum IntegrationState {
+    case ready
+    case partial
+    case planned
+    case blocked
+
+    var title: String {
+        switch self {
+        case .ready:
+            "Ready"
+        case .partial:
+            "Partial"
+        case .planned:
+            "Planned"
+        case .blocked:
+            "Blocked"
+        }
+    }
+
+    var symbolName: String {
+        switch self {
+        case .ready:
+            "checkmark.circle.fill"
+        case .partial:
+            "circle.lefthalf.filled"
+        case .planned:
+            "clock"
+        case .blocked:
+            "exclamationmark.circle"
+        }
+    }
+
+    var tint: Color {
+        switch self {
+        case .ready:
+            .green
+        case .partial:
+            .blue
+        case .planned:
+            .secondary
+        case .blocked:
+            .orange
+        }
+    }
+}
+
 extension HostDashboardPhase {
     var displayTitle: String {
         switch self {
