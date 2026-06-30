@@ -63,11 +63,52 @@ struct VMRuntimeModelTests {
         #expect(model.phase == .failed)
         #expect(model.errorMessage == "Unable to inspect VM runtime capabilities.")
     }
+
+    @Test("creates default profile and refreshes runtime state")
+    @MainActor
+    func createsDefaultProfileAndRefreshesRuntimeState() async throws {
+        let service = FakeVMRuntimeService(
+            snapshot: VMRuntimeSnapshot(
+                state: .notConfigured,
+                virtualizationAvailable: true,
+                architecture: "arm64",
+                minimumOSSupported: true,
+                profileName: nil,
+                detail: "No Windows VM profile has been created."
+            ),
+            createdSnapshot: VMRuntimeSnapshot(
+                state: .stopped,
+                virtualizationAvailable: true,
+                architecture: "arm64",
+                minimumOSSupported: true,
+                profileName: "Windows 11 Arm",
+                detail: "Ready to boot when VM boot support lands."
+            )
+        )
+        let model = VMRuntimeModel(service: service)
+
+        await model.createDefaultProfile()
+
+        #expect(model.phase == .loaded)
+        #expect(model.snapshot?.state == .stopped)
+        #expect(model.snapshot?.profileName == "Windows 11 Arm")
+        #expect(model.canStart)
+        #expect(service.createCount == 1)
+    }
 }
 
-private struct FakeVMRuntimeService: VMRuntimeService {
+@MainActor
+private final class FakeVMRuntimeService: VMRuntimeService {
     var snapshot: VMRuntimeSnapshot?
+    var createdSnapshot: VMRuntimeSnapshot?
     var error: (any Error)?
+    private(set) var createCount = 0
+
+    init(snapshot: VMRuntimeSnapshot? = nil, createdSnapshot: VMRuntimeSnapshot? = nil, error: (any Error)? = nil) {
+        self.snapshot = snapshot
+        self.createdSnapshot = createdSnapshot
+        self.error = error
+    }
 
     func loadSnapshot() async throws -> VMRuntimeSnapshot {
         if let error {
@@ -75,5 +116,16 @@ private struct FakeVMRuntimeService: VMRuntimeService {
         }
 
         return try #require(snapshot)
+    }
+
+    func createDefaultProfile() async throws -> VMRuntimeSnapshot {
+        if let error {
+            throw error
+        }
+
+        createCount += 1
+        let createdSnapshot = try #require(createdSnapshot)
+        snapshot = createdSnapshot
+        return createdSnapshot
     }
 }

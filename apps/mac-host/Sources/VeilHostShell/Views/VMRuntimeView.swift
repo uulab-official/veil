@@ -33,9 +33,22 @@ struct VMRuntimeView: View {
                 }
 
                 if !model.canStart {
-                    Text("VM start is disabled until a Windows 11 Arm profile is configured.")
-                        .foregroundStyle(.secondary)
-                        .font(.callout)
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("VM start is disabled until a Windows 11 Arm profile is configured.")
+                            .foregroundStyle(.secondary)
+                            .font(.callout)
+
+                        if snapshot.state == .notConfigured {
+                            Button {
+                                Task {
+                                    await model.createDefaultProfile()
+                                }
+                            } label: {
+                                Label("Create Default Profile", systemImage: "plus.circle")
+                            }
+                            .disabled(model.phase == .loading)
+                        }
+                    }
                 }
             } else if let errorMessage = model.errorMessage {
                 ContentUnavailableView(

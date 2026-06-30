@@ -15,6 +15,8 @@ Veil must not bundle:
 
 The project should use a bring-your-own Windows model until a different distribution path is explicitly reviewed.
 
+The local VM profile stored by the host app is configuration only. It must not be described as a Windows installer, activation flow, license grant, or disk image creator until those separate implementation and legal questions are explicitly handled.
+
 ## Microsoft Support Position
 
 Microsoft's public support page for Windows 11 on Apple Silicon Macs currently points users to Windows 365 Cloud PCs or Parallels Desktop when a Windows PC is not available:

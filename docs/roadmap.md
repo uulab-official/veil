@@ -107,6 +107,6 @@ Exit criteria:
 The protocol harness is now executable from JavaScript, the Swift host probe, and the SwiftUI host shell. The shell also has a VM Runtime status boundary. The next implementation step is the v0.1/v0.2 overlap:
 
 1. Start a Virtualization.framework VM boot spike behind the `VMRuntimeService` boundary.
-2. Add a persisted local VM profile model.
+2. Add virtual disk and installer-media path fields to the persisted profile.
 3. Keep the fake-agent path available so UI and protocol work stay testable without Windows.
 4. Validate the actual Windows 11 Arm VM path separately.

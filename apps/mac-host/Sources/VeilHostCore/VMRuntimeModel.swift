@@ -2,6 +2,7 @@ import Foundation
 
 public protocol VMRuntimeService: Sendable {
     func loadSnapshot() async throws -> VMRuntimeSnapshot
+    func createDefaultProfile() async throws -> VMRuntimeSnapshot
 }
 
 public enum VMRuntimeState: String, Codable, Equatable, Sendable {
@@ -126,6 +127,19 @@ public final class VMRuntimeModel {
         }
     }
 
+    public func createDefaultProfile() async {
+        phase = .loading
+        errorMessage = nil
+
+        do {
+            snapshot = try await service.createDefaultProfile()
+            phase = .loaded
+        } catch {
+            errorMessage = userMessage(for: error)
+            phase = .failed
+        }
+    }
+
     private func userMessage(for error: any Error) -> String {
         if let localized = error as? LocalizedError,
            let description = localized.errorDescription {
@@ -137,7 +151,11 @@ public final class VMRuntimeModel {
 }
 
 public struct LocalVMRuntimeService: VMRuntimeService {
-    public init() {}
+    private let profileStore: any VMProfileStore
+
+    public init(profileStore: any VMProfileStore = JSONVMProfileStore()) {
+        self.profileStore = profileStore
+    }
 
     public func loadSnapshot() async throws -> VMRuntimeSnapshot {
         let architecture = Self.hostArchitecture()
@@ -145,6 +163,18 @@ public struct LocalVMRuntimeService: VMRuntimeService {
             OperatingSystemVersion(majorVersion: 15, minorVersion: 0, patchVersion: 0)
         )
         let virtualizationAvailable = architecture == "arm64" && minimumOSSupported
+        let profile = try await profileStore.load()
+
+        if virtualizationAvailable, let profile {
+            return VMRuntimeSnapshot(
+                state: .stopped,
+                virtualizationAvailable: true,
+                architecture: architecture,
+                minimumOSSupported: true,
+                profileName: profile.name,
+                detail: "Ready to boot when VM boot support lands."
+            )
+        }
 
         return VMRuntimeSnapshot(
             state: virtualizationAvailable ? .notConfigured : .unsupported,
@@ -156,6 +186,12 @@ public struct LocalVMRuntimeService: VMRuntimeService {
                 ? "No Windows VM profile has been created."
                 : "Veil requires macOS 15+ on Apple Silicon."
         )
+    }
+
+    public func createDefaultProfile() async throws -> VMRuntimeSnapshot {
+        let profile = VMProfile.defaultWindows11Arm()
+        try await profileStore.save(profile)
+        return try await loadSnapshot()
     }
 
     private static func hostArchitecture() -> String {

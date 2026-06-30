@@ -146,6 +146,8 @@ The app list supports selection. The current fake-agent harness can only launch 
 
 The shell also includes a VM Runtime panel. That panel is a capability and profile-status boundary for the future Virtualization.framework implementation; it does not create or boot Windows yet.
 
+The VM Runtime panel can create a default local Windows 11 Arm profile. This writes configuration only to the user's Application Support directory; it does not create a disk image, install Windows, include Windows media, or bypass licensing.
+
 ## Open Source Principles
 
 - No bundled Windows images, product keys, or proprietary Parallels assets.
