@@ -16,7 +16,7 @@ public struct NotepadLaunchResult: Codable, Equatable, Sendable {
     public var window: WindowCreatedEvent
 }
 
-public struct VeilHostClient: Sendable {
+public struct VeilHostClient: HostDashboardService, Sendable {
     private let transport: any HostTransport
     private let encoder: JSONEncoder
     private let decoder: JSONDecoder
@@ -32,15 +32,9 @@ public struct VeilHostClient: Sendable {
     }
 
     public func launchNotepad() async throws -> NotepadLaunchResult {
-        let health: AgentHealthResponse = try await request(
-            AgentHealthRequest(requestId: "req_health")
-        )
+        let overview = try await loadOverview()
 
-        let appList: AppListResponse = try await request(
-            AppListRequest(requestId: "req_apps")
-        )
-
-        guard appList.apps.contains(where: { $0.id == "winapp_notepad" }) else {
+        guard overview.apps.contains(where: { $0.id == "winapp_notepad" }) else {
             throw VeilHostError.notepadMissing
         }
 
@@ -54,11 +48,23 @@ public struct VeilHostClient: Sendable {
         }
 
         return try NotepadLaunchResult(
-            health: health,
-            apps: appList.apps,
+            health: overview.health,
+            apps: overview.apps,
             launch: decoder.decode(AppLaunchResponse.self, from: launchReplies[0]),
             window: decoder.decode(WindowCreatedEvent.self, from: launchReplies[1])
         )
+    }
+
+    public func loadOverview() async throws -> HostOverview {
+        let health: AgentHealthResponse = try await request(
+            AgentHealthRequest(requestId: "req_health")
+        )
+
+        let appList: AppListResponse = try await request(
+            AppListRequest(requestId: "req_apps")
+        )
+
+        return HostOverview(health: health, apps: appList.apps)
     }
 
     private func request<Request: Encodable, Response: Decodable>(_ message: Request) async throws -> Response {

@@ -115,6 +115,33 @@ swift run veil-host-probe
 
 Expected output is a JSON launch result with Notepad app metadata and a `window.created` event.
 
+## macOS Host Shell
+
+The first SwiftUI shell shows agent status, Windows app metadata, and the latest Notepad launch event.
+
+Terminal 1:
+
+```bash
+cd harness/fake-agent
+npm start
+```
+
+Terminal 2:
+
+```bash
+cd apps/mac-host
+swift test
+swift run veil-host-shell
+```
+
+For the Codex desktop Run button, use:
+
+```bash
+./script/build_and_run.sh
+```
+
+That script builds `veil-host-shell`, stages `dist/Veil.app`, and launches it as a macOS app bundle.
+
 ## Open Source Principles
 
 - No bundled Windows images, product keys, or proprietary Parallels assets.

@@ -104,9 +104,9 @@ Exit criteria:
 
 ## Current Next Step
 
-The protocol harness is now executable from both JavaScript and Swift. The next implementation step is the v0.1/v0.2 overlap:
+The protocol harness is now executable from JavaScript, the Swift host probe, and the SwiftUI host shell. The next implementation step is the v0.1/v0.2 overlap:
 
-1. Turn `apps/mac-host` from a CLI probe into a minimal SwiftUI shell.
-2. Show fake-agent health and app list in the host UI.
-3. Add a launch button that calls the existing `VeilHostClient.launchNotepad()` flow.
+1. Add a real VM status panel beside the fake-agent status.
+2. Start a Virtualization.framework VM boot spike behind a separate service boundary.
+3. Keep the fake-agent path available so UI and protocol work stay testable without Windows.
 4. Validate the actual Windows 11 Arm VM path separately.

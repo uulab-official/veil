@@ -84,6 +84,24 @@ swift run veil-host-probe
 
 Expected: pretty-printed JSON includes Notepad app metadata and `window.created` for `hwnd:0003029A`.
 
+## SwiftUI Host Shell Smoke Test
+
+Terminal 1:
+
+```bash
+cd harness/fake-agent
+npm start
+```
+
+Terminal 2:
+
+```bash
+cd apps/mac-host
+swift run veil-host-shell
+```
+
+The shell opens a macOS window with agent status, app list, and launch controls. The Codex Run button uses `./script/build_and_run.sh`, which stages and opens `dist/Veil.app`.
+
 ## Fixture Policy
 
 Fixtures are part of the protocol contract. When a protocol message changes, update both `docs/protocol.md` and the matching fixture here.

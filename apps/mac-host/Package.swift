@@ -15,6 +15,10 @@ let package = Package(
         .executable(
             name: "veil-host-probe",
             targets: ["VeilHostProbe"]
+        ),
+        .executable(
+            name: "veil-host-shell",
+            targets: ["VeilHostShell"]
         )
     ],
     targets: [
@@ -23,6 +27,10 @@ let package = Package(
         ),
         .executableTarget(
             name: "VeilHostProbe",
+            dependencies: ["VeilHostCore"]
+        ),
+        .executableTarget(
+            name: "VeilHostShell",
             dependencies: ["VeilHostCore"]
         ),
         .testTarget(

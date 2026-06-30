@@ -68,7 +68,7 @@ public struct AppListResponse: Codable, Equatable, Sendable {
     public var apps: [WindowsApp]
 }
 
-public struct WindowsApp: Codable, Equatable, Sendable {
+public struct WindowsApp: Codable, Equatable, Identifiable, Sendable {
     public var id: String
     public var name: String
     public var exePath: String
