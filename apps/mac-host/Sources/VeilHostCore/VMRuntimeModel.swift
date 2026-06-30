@@ -25,6 +25,7 @@ public struct VMRuntimeSnapshot: Codable, Equatable, Sendable {
     public var profileName: String?
     public var installerMediaPath: String?
     public var virtualDiskPath: String?
+    public var installationSteps: [VMInstallationStep]
     public var bootReady: Bool
     public var detail: String
 
@@ -36,6 +37,7 @@ public struct VMRuntimeSnapshot: Codable, Equatable, Sendable {
         profileName: String?,
         installerMediaPath: String? = nil,
         virtualDiskPath: String? = nil,
+        installationSteps: [VMInstallationStep] = [],
         bootReady: Bool = false,
         detail: String
     ) {
@@ -46,8 +48,34 @@ public struct VMRuntimeSnapshot: Codable, Equatable, Sendable {
         self.profileName = profileName
         self.installerMediaPath = installerMediaPath
         self.virtualDiskPath = virtualDiskPath
+        self.installationSteps = installationSteps
         self.bootReady = bootReady
         self.detail = detail
+    }
+}
+
+public enum VMInstallationStepState: String, Codable, Equatable, Sendable {
+    case complete
+    case pending
+    case blocked
+}
+
+public struct VMInstallationStep: Codable, Equatable, Identifiable, Sendable {
+    public var id: String
+    public var title: String
+    public var detail: String
+    public var state: VMInstallationStepState
+
+    public init(
+        id: String,
+        title: String,
+        detail: String,
+        state: VMInstallationStepState
+    ) {
+        self.id = id
+        self.title = title
+        self.detail = detail
+        self.state = state
     }
 }
 
@@ -196,9 +224,14 @@ public final class VMRuntimeModel {
 
 public struct LocalVMRuntimeService: VMRuntimeService {
     private let profileStore: any VMProfileStore
+    private let defaultHomeDirectory: URL
 
-    public init(profileStore: any VMProfileStore = JSONVMProfileStore()) {
+    public init(
+        profileStore: any VMProfileStore = JSONVMProfileStore(),
+        defaultHomeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser
+    ) {
         self.profileStore = profileStore
+        self.defaultHomeDirectory = defaultHomeDirectory
     }
 
     public func loadSnapshot() async throws -> VMRuntimeSnapshot {
@@ -210,7 +243,8 @@ public struct LocalVMRuntimeService: VMRuntimeService {
         let profile = try await profileStore.load()
 
         if virtualizationAvailable, let profile {
-            let bootPathReadiness = Self.bootPathReadiness(for: profile)
+            let installationSteps = Self.installationSteps(for: profile)
+            let bootPathReadiness = Self.bootPathReadiness(installationSteps: installationSteps)
             return VMRuntimeSnapshot(
                 state: .stopped,
                 virtualizationAvailable: true,
@@ -219,6 +253,7 @@ public struct LocalVMRuntimeService: VMRuntimeService {
                 profileName: profile.name,
                 installerMediaPath: profile.installerMediaPath,
                 virtualDiskPath: profile.virtualDiskPath,
+                installationSteps: installationSteps,
                 bootReady: bootPathReadiness.isReady,
                 detail: bootPathReadiness.isReady
                     ? "Ready to boot when VM boot support lands."
@@ -239,7 +274,11 @@ public struct LocalVMRuntimeService: VMRuntimeService {
     }
 
     public func createDefaultProfile() async throws -> VMRuntimeSnapshot {
-        let profile = VMProfile.defaultWindows11Arm()
+        let profile = VMProfile.defaultWindows11Arm(homeDirectory: defaultHomeDirectory)
+        try FileManager.default.createDirectory(
+            atPath: profile.sharedFolderPath,
+            withIntermediateDirectories: true
+        )
         try await profileStore.save(profile)
         return try await loadSnapshot()
     }
@@ -267,18 +306,20 @@ public struct LocalVMRuntimeService: VMRuntimeService {
         #endif
     }
 
-    private static func bootPathReadiness(for profile: VMProfile) -> (isReady: Bool, detail: String) {
-        guard let installerMediaPath = profile.installerMediaPath, !installerMediaPath.isEmpty,
-              let virtualDiskPath = profile.virtualDiskPath, !virtualDiskPath.isEmpty else {
-            return (false, "Installer media and virtual disk paths are required before boot.")
-        }
+    private static func bootPathReadiness(installationSteps: [VMInstallationStep]) -> (isReady: Bool, detail: String) {
+        for step in installationSteps where step.id != "guest-agent" && step.state != .complete {
+            if step.id == "windows-installer" || step.id == "virtual-disk" {
+                let missingPathDetails = [
+                    "Select a Windows 11 Arm installer before setup can continue.",
+                    "Select a virtual disk file before setup can continue."
+                ]
 
-        if let detail = fileValidationDetail(path: installerMediaPath, label: "Installer media") {
-            return (false, detail)
-        }
+                if missingPathDetails.contains(step.detail) {
+                    return (false, "Installer media and virtual disk paths are required before boot.")
+                }
+            }
 
-        if let detail = fileValidationDetail(path: virtualDiskPath, label: "Virtual disk") {
-            return (false, detail)
+            return (false, step.detail)
         }
 
         return (true, "Ready to boot when VM boot support lands.")
@@ -295,5 +336,75 @@ public struct LocalVMRuntimeService: VMRuntimeService {
         }
 
         return nil
+    }
+
+    private static func installationSteps(for profile: VMProfile) -> [VMInstallationStep] {
+        let installerState = fileStepState(
+            path: profile.installerMediaPath,
+            missingDetail: "Select a Windows 11 Arm installer before setup can continue.",
+            validationLabel: "Installer media"
+        )
+        let diskState = fileStepState(
+            path: profile.virtualDiskPath,
+            missingDetail: "Select a virtual disk file before setup can continue.",
+            validationLabel: "Virtual disk"
+        )
+        let sharedFolderState = directoryStepState(path: profile.sharedFolderPath)
+
+        return [
+            VMInstallationStep(
+                id: "windows-installer",
+                title: "Windows 11 Arm installer",
+                detail: installerState.detail ?? "User-provided installer media is ready.",
+                state: installerState.state
+            ),
+            VMInstallationStep(
+                id: "virtual-disk",
+                title: "Virtual disk",
+                detail: diskState.detail ?? "User-provided virtual disk path is ready.",
+                state: diskState.state
+            ),
+            VMInstallationStep(
+                id: "shared-folder",
+                title: "macOS shared folder",
+                detail: sharedFolderState.detail ?? "Shared folder is ready for host and guest file exchange.",
+                state: sharedFolderState.state
+            ),
+            VMInstallationStep(
+                id: "guest-agent",
+                title: "Veil guest agent",
+                detail: "Install the guest agent inside Windows after the VM boot spike lands.",
+                state: .pending
+            )
+        ]
+    }
+
+    private static func fileStepState(
+        path: String?,
+        missingDetail: String,
+        validationLabel: String
+    ) -> (state: VMInstallationStepState, detail: String?) {
+        guard let path, !path.isEmpty else {
+            return (.blocked, missingDetail)
+        }
+
+        if let detail = fileValidationDetail(path: path, label: validationLabel) {
+            return (.blocked, detail)
+        }
+
+        return (.complete, nil)
+    }
+
+    private static func directoryStepState(path: String) -> (state: VMInstallationStepState, detail: String?) {
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory) else {
+            return (.blocked, "Create the macOS shared folder before Windows setup can continue.")
+        }
+
+        guard isDirectory.boolValue else {
+            return (.blocked, "Shared folder path must reference a directory.")
+        }
+
+        return (.complete, nil)
     }
 }

@@ -36,6 +36,18 @@ struct VMRuntimeView: View {
                     MetricRow(label: "Detail", value: snapshot.detail)
                 }
 
+                if !snapshot.installationSteps.isEmpty {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Windows Setup")
+                            .font(.subheadline)
+                            .fontWeight(.semibold)
+
+                        ForEach(snapshot.installationSteps) { step in
+                            InstallationStepRow(step: step)
+                        }
+                    }
+                }
+
                 VStack(alignment: .leading, spacing: 10) {
                     if let errorMessage = model.errorMessage {
                         Label(errorMessage, systemImage: "exclamationmark.triangle")
@@ -164,6 +176,48 @@ private enum PathPicker: Identifiable {
             "installerMedia"
         case .virtualDisk:
             "virtualDisk"
+        }
+    }
+}
+
+private struct InstallationStepRow: View {
+    var step: VMInstallationStep
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Image(systemName: symbolName)
+                .foregroundStyle(symbolColor)
+                .frame(width: 18)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(step.title)
+                Text(step.detail)
+                    .foregroundStyle(.secondary)
+                    .font(.caption)
+            }
+        }
+        .font(.callout)
+    }
+
+    private var symbolName: String {
+        switch step.state {
+        case .complete:
+            "checkmark.circle.fill"
+        case .pending:
+            "clock"
+        case .blocked:
+            "exclamationmark.circle"
+        }
+    }
+
+    private var symbolColor: Color {
+        switch step.state {
+        case .complete:
+            .green
+        case .pending:
+            .secondary
+        case .blocked:
+            .orange
         }
     }
 }

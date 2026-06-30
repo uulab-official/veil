@@ -38,6 +38,12 @@ Responsibilities:
 - expose a narrow shared folder,
 - store user settings and VM profiles.
 
+## Windows Arm Install Flow
+
+Veil treats Windows setup as a staged runtime prerequisite rather than a generic VM wizard. The host profile tracks installer media, virtual disk, and a narrow macOS shared folder before VM boot work begins. The guest agent remains a separate pending step until Windows can boot and run an installer inside the guest.
+
+See [Windows Arm install flow](install-flow.md) for the user-facing setup sequence and non-goals.
+
 ## Windows Guest Agent
 
 MVP stack:
