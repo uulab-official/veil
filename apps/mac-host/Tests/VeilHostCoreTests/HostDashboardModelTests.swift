@@ -116,6 +116,23 @@ struct HostDashboardModelTests {
         #expect(model.lastLaunch?.window.title == "Untitled - Notepad")
         #expect(model.statusText == "Launched Untitled - Notepad")
     }
+
+    @Test("does not hide primary agent protocol failures behind demo fallback")
+    @MainActor
+    func doesNotHidePrimaryAgentProtocolFailuresBehindDemoFallback() async throws {
+        let service = FallbackHostDashboardService(
+            primary: FakeDashboardService(error: VeilHostError.notepadMissing),
+            fallback: DemoHostDashboardService()
+        )
+        let model = HostDashboardModel(service: service)
+
+        await model.load()
+
+        #expect(model.phase == .failed)
+        #expect(model.errorMessage == "Notepad is not available from the Windows agent.")
+        #expect(model.health == nil)
+        #expect(model.apps.isEmpty)
+    }
 }
 
 @MainActor

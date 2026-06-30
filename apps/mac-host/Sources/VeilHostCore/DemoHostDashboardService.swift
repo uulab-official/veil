@@ -13,6 +13,10 @@ public struct FallbackHostDashboardService: HostDashboardService, Sendable {
         do {
             return try await primary.loadOverview()
         } catch {
+            guard shouldUseFallback(for: error) else {
+                throw error
+            }
+
             return try await fallback.loadOverview()
         }
     }
@@ -21,7 +25,28 @@ public struct FallbackHostDashboardService: HostDashboardService, Sendable {
         do {
             return try await primary.launchNotepad()
         } catch {
+            guard shouldUseFallback(for: error) else {
+                throw error
+            }
+
             return try await fallback.launchNotepad()
+        }
+    }
+
+    private func shouldUseFallback(for error: any Error) -> Bool {
+        guard let urlError = error as? URLError else {
+            return false
+        }
+
+        switch urlError.code {
+        case .cannotConnectToHost,
+             .cannotFindHost,
+             .networkConnectionLost,
+             .notConnectedToInternet,
+             .timedOut:
+            return true
+        default:
+            return false
         }
     }
 }

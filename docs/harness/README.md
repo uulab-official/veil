@@ -27,7 +27,7 @@ Current executable pieces:
 - `harness/fake-host`: a CLI simulator for the future macOS host flow.
 - `packages/protocol`: shared protocol constants and validation helpers.
 
-The macOS host shell also includes an internal demo agent fallback. If the WebSocket agent is unavailable, the app still loads demo Windows app metadata and can run the Notepad demo launch flow. Use the external fake agent when testing the transport boundary itself.
+The macOS host shell also includes an internal demo agent fallback. If the WebSocket agent is unavailable, the app still loads demo Windows app metadata and can run the Notepad demo launch flow. The fallback is limited to network availability errors; protocol and agent errors remain visible. Use the external fake agent when testing the transport boundary itself.
 
 ## First Scenario: Launch Notepad
 
