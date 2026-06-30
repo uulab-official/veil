@@ -148,6 +148,8 @@ The shell also includes a VM Runtime panel. That panel is a capability and profi
 
 The VM Runtime panel can create a default local Windows 11 Arm profile. This writes configuration only to the user's Application Support directory; it does not create a disk image, install Windows, include Windows media, or bypass licensing.
 
+The profile can reference a user-provided installer image and virtual disk path. Veil treats these as local paths only; validation, disk creation, and boot orchestration are later VM-runtime work.
+
 ## Open Source Principles
 
 - No bundled Windows images, product keys, or proprietary Parallels assets.

@@ -10,6 +10,8 @@ public struct VMProfile: Codable, Equatable, Identifiable, Sendable {
     public var autoStart: Bool
     public var suspendOnQuit: Bool
     public var sharedFolderPath: String
+    public var installerMediaPath: String?
+    public var virtualDiskPath: String?
     public var createdAt: Date
 
     public init(
@@ -22,6 +24,8 @@ public struct VMProfile: Codable, Equatable, Identifiable, Sendable {
         autoStart: Bool,
         suspendOnQuit: Bool,
         sharedFolderPath: String,
+        installerMediaPath: String? = nil,
+        virtualDiskPath: String? = nil,
         createdAt: Date
     ) {
         self.id = id
@@ -33,6 +37,8 @@ public struct VMProfile: Codable, Equatable, Identifiable, Sendable {
         self.autoStart = autoStart
         self.suspendOnQuit = suspendOnQuit
         self.sharedFolderPath = sharedFolderPath
+        self.installerMediaPath = installerMediaPath
+        self.virtualDiskPath = virtualDiskPath
         self.createdAt = createdAt
     }
 

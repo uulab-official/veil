@@ -12,11 +12,14 @@ struct VMRuntimeModelTests {
                 snapshot: VMRuntimeSnapshot(
                     state: .notConfigured,
                     virtualizationAvailable: true,
-                    architecture: "arm64",
-                    minimumOSSupported: true,
-                    profileName: nil,
-                    detail: "No Windows VM profile has been created."
-                )
+                architecture: "arm64",
+                minimumOSSupported: true,
+                profileName: nil,
+                installerMediaPath: nil,
+                virtualDiskPath: nil,
+                bootReady: false,
+                detail: "No Windows VM profile has been created."
+            )
             )
         )
 
@@ -40,6 +43,9 @@ struct VMRuntimeModelTests {
                     architecture: "x86_64",
                     minimumOSSupported: false,
                     profileName: nil,
+                    installerMediaPath: nil,
+                    virtualDiskPath: nil,
+                    bootReady: false,
                     detail: "Veil requires macOS 15+ on Apple Silicon."
                 )
             )
@@ -74,6 +80,9 @@ struct VMRuntimeModelTests {
                 architecture: "arm64",
                 minimumOSSupported: true,
                 profileName: nil,
+                installerMediaPath: nil,
+                virtualDiskPath: nil,
+                bootReady: false,
                 detail: "No Windows VM profile has been created."
             ),
             createdSnapshot: VMRuntimeSnapshot(
@@ -82,7 +91,10 @@ struct VMRuntimeModelTests {
                 architecture: "arm64",
                 minimumOSSupported: true,
                 profileName: "Windows 11 Arm",
-                detail: "Ready to boot when VM boot support lands."
+                installerMediaPath: nil,
+                virtualDiskPath: nil,
+                bootReady: false,
+                detail: "Installer media and virtual disk paths are required before boot."
             )
         )
         let model = VMRuntimeModel(service: service)
@@ -92,8 +104,49 @@ struct VMRuntimeModelTests {
         #expect(model.phase == .loaded)
         #expect(model.snapshot?.state == .stopped)
         #expect(model.snapshot?.profileName == "Windows 11 Arm")
-        #expect(model.canStart)
+        #expect(model.canStart == false)
         #expect(service.createCount == 1)
+    }
+
+    @Test("updates profile paths and refreshes boot readiness")
+    @MainActor
+    func updatesProfilePathsAndRefreshesBootReadiness() async throws {
+        let service = FakeVMRuntimeService(
+            snapshot: VMRuntimeSnapshot(
+                state: .stopped,
+                virtualizationAvailable: true,
+                architecture: "arm64",
+                minimumOSSupported: true,
+                profileName: "Windows 11 Arm",
+                installerMediaPath: nil,
+                virtualDiskPath: nil,
+                bootReady: false,
+                detail: "Installer media and virtual disk paths are required before boot."
+            ),
+            updatedSnapshot: VMRuntimeSnapshot(
+                state: .stopped,
+                virtualizationAvailable: true,
+                architecture: "arm64",
+                minimumOSSupported: true,
+                profileName: "Windows 11 Arm",
+                installerMediaPath: "/Users/test/Downloads/Windows.iso",
+                virtualDiskPath: "/Users/test/Virtual Machines/Windows.vhdx",
+                bootReady: true,
+                detail: "Ready to boot when VM boot support lands."
+            )
+        )
+        let model = VMRuntimeModel(service: service)
+
+        await model.updateProfilePaths(
+            installerMediaPath: "/Users/test/Downloads/Windows.iso",
+            virtualDiskPath: "/Users/test/Virtual Machines/Windows.vhdx"
+        )
+
+        #expect(model.phase == .loaded)
+        #expect(model.snapshot?.bootReady == true)
+        #expect(model.canStart)
+        #expect(service.updatedInstallerMediaPath == "/Users/test/Downloads/Windows.iso")
+        #expect(service.updatedVirtualDiskPath == "/Users/test/Virtual Machines/Windows.vhdx")
     }
 }
 
@@ -101,12 +154,21 @@ struct VMRuntimeModelTests {
 private final class FakeVMRuntimeService: VMRuntimeService {
     var snapshot: VMRuntimeSnapshot?
     var createdSnapshot: VMRuntimeSnapshot?
+    var updatedSnapshot: VMRuntimeSnapshot?
     var error: (any Error)?
+    private(set) var updatedInstallerMediaPath: String?
+    private(set) var updatedVirtualDiskPath: String?
     private(set) var createCount = 0
 
-    init(snapshot: VMRuntimeSnapshot? = nil, createdSnapshot: VMRuntimeSnapshot? = nil, error: (any Error)? = nil) {
+    init(
+        snapshot: VMRuntimeSnapshot? = nil,
+        createdSnapshot: VMRuntimeSnapshot? = nil,
+        updatedSnapshot: VMRuntimeSnapshot? = nil,
+        error: (any Error)? = nil
+    ) {
         self.snapshot = snapshot
         self.createdSnapshot = createdSnapshot
+        self.updatedSnapshot = updatedSnapshot
         self.error = error
     }
 
@@ -127,5 +189,17 @@ private final class FakeVMRuntimeService: VMRuntimeService {
         let createdSnapshot = try #require(createdSnapshot)
         snapshot = createdSnapshot
         return createdSnapshot
+    }
+
+    func updateProfilePaths(installerMediaPath: String?, virtualDiskPath: String?) async throws -> VMRuntimeSnapshot {
+        if let error {
+            throw error
+        }
+
+        updatedInstallerMediaPath = installerMediaPath
+        updatedVirtualDiskPath = virtualDiskPath
+        let updatedSnapshot = try #require(updatedSnapshot)
+        snapshot = updatedSnapshot
+        return updatedSnapshot
     }
 }

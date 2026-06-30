@@ -3,6 +3,7 @@ import Foundation
 public protocol VMRuntimeService: Sendable {
     func loadSnapshot() async throws -> VMRuntimeSnapshot
     func createDefaultProfile() async throws -> VMRuntimeSnapshot
+    func updateProfilePaths(installerMediaPath: String?, virtualDiskPath: String?) async throws -> VMRuntimeSnapshot
 }
 
 public enum VMRuntimeState: String, Codable, Equatable, Sendable {
@@ -21,6 +22,9 @@ public struct VMRuntimeSnapshot: Codable, Equatable, Sendable {
     public var architecture: String
     public var minimumOSSupported: Bool
     public var profileName: String?
+    public var installerMediaPath: String?
+    public var virtualDiskPath: String?
+    public var bootReady: Bool
     public var detail: String
 
     public init(
@@ -29,6 +33,9 @@ public struct VMRuntimeSnapshot: Codable, Equatable, Sendable {
         architecture: String,
         minimumOSSupported: Bool,
         profileName: String?,
+        installerMediaPath: String? = nil,
+        virtualDiskPath: String? = nil,
+        bootReady: Bool = false,
         detail: String
     ) {
         self.state = state
@@ -36,6 +43,9 @@ public struct VMRuntimeSnapshot: Codable, Equatable, Sendable {
         self.architecture = architecture
         self.minimumOSSupported = minimumOSSupported
         self.profileName = profileName
+        self.installerMediaPath = installerMediaPath
+        self.virtualDiskPath = virtualDiskPath
+        self.bootReady = bootReady
         self.detail = detail
     }
 }
@@ -102,6 +112,7 @@ public final class VMRuntimeModel {
         return snapshot.virtualizationAvailable &&
             snapshot.minimumOSSupported &&
             snapshot.profileName != nil &&
+            snapshot.bootReady &&
             (snapshot.state == .stopped || snapshot.state == .suspended)
     }
 
@@ -140,6 +151,22 @@ public final class VMRuntimeModel {
         }
     }
 
+    public func updateProfilePaths(installerMediaPath: String?, virtualDiskPath: String?) async {
+        phase = .loading
+        errorMessage = nil
+
+        do {
+            snapshot = try await service.updateProfilePaths(
+                installerMediaPath: installerMediaPath,
+                virtualDiskPath: virtualDiskPath
+            )
+            phase = .loaded
+        } catch {
+            errorMessage = userMessage(for: error)
+            phase = .failed
+        }
+    }
+
     private func userMessage(for error: any Error) -> String {
         if let localized = error as? LocalizedError,
            let description = localized.errorDescription {
@@ -166,13 +193,20 @@ public struct LocalVMRuntimeService: VMRuntimeService {
         let profile = try await profileStore.load()
 
         if virtualizationAvailable, let profile {
+            let bootReady = profile.installerMediaPath?.isEmpty == false &&
+                profile.virtualDiskPath?.isEmpty == false
             return VMRuntimeSnapshot(
                 state: .stopped,
                 virtualizationAvailable: true,
                 architecture: architecture,
                 minimumOSSupported: true,
                 profileName: profile.name,
-                detail: "Ready to boot when VM boot support lands."
+                installerMediaPath: profile.installerMediaPath,
+                virtualDiskPath: profile.virtualDiskPath,
+                bootReady: bootReady,
+                detail: bootReady
+                    ? "Ready to boot when VM boot support lands."
+                    : "Installer media and virtual disk paths are required before boot."
             )
         }
 
@@ -190,6 +224,14 @@ public struct LocalVMRuntimeService: VMRuntimeService {
 
     public func createDefaultProfile() async throws -> VMRuntimeSnapshot {
         let profile = VMProfile.defaultWindows11Arm()
+        try await profileStore.save(profile)
+        return try await loadSnapshot()
+    }
+
+    public func updateProfilePaths(installerMediaPath: String?, virtualDiskPath: String?) async throws -> VMRuntimeSnapshot {
+        var profile = try await profileStore.load() ?? VMProfile.defaultWindows11Arm()
+        profile.installerMediaPath = installerMediaPath
+        profile.virtualDiskPath = virtualDiskPath
         try await profileStore.save(profile)
         return try await loadSnapshot()
     }
