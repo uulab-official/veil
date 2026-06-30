@@ -20,7 +20,8 @@ The first three are local host prerequisites. The guest agent step remains pendi
 ## Current Host Behavior
 
 - Default profile creation creates the macOS shared folder at `~/Veil Shared`.
-- Installer media and virtual disk paths are user-selected local files.
+- Installer media is a user-selected local file.
+- The virtual disk can be user-selected or created as a blank sparse disk at `~/Virtual Machines/Veil/Windows 11 Arm.img`.
 - The runtime snapshot reports structured setup steps so the UI can show what is complete, blocked, or pending.
 - The runtime snapshot reports preflight checks for guest OS, CPU, memory, and disk size.
 - A profile becomes boot-ready only when installer media, virtual disk, shared folder, and preflight checks all pass.

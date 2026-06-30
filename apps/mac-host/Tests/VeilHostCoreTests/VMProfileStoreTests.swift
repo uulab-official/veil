@@ -174,6 +174,59 @@ struct VMProfileStoreTests {
         #expect(snapshot.installationSteps.first { $0.id == "shared-folder" }?.state == .complete)
     }
 
+    @Test("creates default virtual disk file and updates profile")
+    func createsDefaultVirtualDiskFileAndUpdatesProfile() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let homeDirectory = directory.appendingPathComponent("Home", isDirectory: true)
+        let store = JSONVMProfileStore(directory: directory)
+        let service = LocalVMRuntimeService(
+            profileStore: store,
+            defaultHomeDirectory: homeDirectory
+        )
+
+        let snapshot = try await service.createDefaultVirtualDisk()
+        let profile = try #require(await store.load())
+        let diskPath = try #require(profile.virtualDiskPath)
+        var isDirectory: ObjCBool = false
+
+        #expect(diskPath == homeDirectory
+            .appendingPathComponent("Virtual Machines", isDirectory: true)
+            .appendingPathComponent("Veil", isDirectory: true)
+            .appendingPathComponent("Windows 11 Arm.img").path)
+        #expect(FileManager.default.fileExists(atPath: diskPath, isDirectory: &isDirectory))
+        #expect(isDirectory.boolValue == false)
+        #expect(snapshot.virtualDiskPath == diskPath)
+        #expect(snapshot.installationSteps.first { $0.id == "virtual-disk" }?.state == .complete)
+    }
+
+    @Test("default virtual disk creation preserves an existing configured disk")
+    func defaultVirtualDiskCreationPreservesExistingConfiguredDisk() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let existingDiskURL = directory.appendingPathComponent("Existing.vhdx")
+        try Data("existing".utf8).write(to: existingDiskURL)
+        let homeDirectory = directory.appendingPathComponent("Home", isDirectory: true)
+        let store = JSONVMProfileStore(directory: directory)
+        var profile = VMProfile.defaultWindows11Arm(homeDirectory: homeDirectory)
+        profile.virtualDiskPath = existingDiskURL.path
+        try await store.save(profile)
+        let service = LocalVMRuntimeService(
+            profileStore: store,
+            defaultHomeDirectory: homeDirectory
+        )
+
+        let snapshot = try await service.createDefaultVirtualDisk()
+        let storedProfile = try #require(await store.load())
+        let attributes = try FileManager.default.attributesOfItem(atPath: existingDiskURL.path)
+        let fileSize = try #require(attributes[.size] as? UInt64)
+
+        #expect(storedProfile.virtualDiskPath == existingDiskURL.path)
+        #expect(snapshot.virtualDiskPath == existingDiskURL.path)
+        #expect(fileSize == UInt64(Data("existing".utf8).count))
+    }
+
     @Test("local runtime is not boot ready when stored paths are missing")
     func localRuntimeRejectsMissingBootPaths() async throws {
         let directory = FileManager.default.temporaryDirectory

@@ -149,6 +149,31 @@ struct VMRuntimeModelTests {
         #expect(service.updatedVirtualDiskPath == "/Users/test/Virtual Machines/Windows.vhdx")
     }
 
+    @Test("creates default virtual disk through the service boundary")
+    @MainActor
+    func createsDefaultVirtualDiskThroughServiceBoundary() async throws {
+        let service = FakeVMRuntimeService(
+            diskSnapshot: VMRuntimeSnapshot(
+                state: .stopped,
+                virtualizationAvailable: true,
+                architecture: "arm64",
+                minimumOSSupported: true,
+                profileName: "Windows 11 Arm",
+                installerMediaPath: nil,
+                virtualDiskPath: "/Users/test/Virtual Machines/Veil/Windows 11 Arm.img",
+                bootReady: false,
+                detail: "Select a Windows 11 Arm installer before setup can continue."
+            )
+        )
+        let model = VMRuntimeModel(service: service)
+
+        await model.createDefaultVirtualDisk()
+
+        #expect(model.phase == .loaded)
+        #expect(model.snapshot?.virtualDiskPath == "/Users/test/Virtual Machines/Veil/Windows 11 Arm.img")
+        #expect(service.createDiskCount == 1)
+    }
+
     @Test("starts runtime through the service boundary")
     @MainActor
     func startsRuntimeThroughServiceBoundary() async throws {
@@ -191,23 +216,27 @@ struct VMRuntimeModelTests {
 private final class FakeVMRuntimeService: VMRuntimeService {
     var snapshot: VMRuntimeSnapshot?
     var createdSnapshot: VMRuntimeSnapshot?
+    var diskSnapshot: VMRuntimeSnapshot?
     var updatedSnapshot: VMRuntimeSnapshot?
     var startedSnapshot: VMRuntimeSnapshot?
     var error: (any Error)?
     private(set) var updatedInstallerMediaPath: String?
     private(set) var updatedVirtualDiskPath: String?
     private(set) var createCount = 0
+    private(set) var createDiskCount = 0
     private(set) var startCount = 0
 
     init(
         snapshot: VMRuntimeSnapshot? = nil,
         createdSnapshot: VMRuntimeSnapshot? = nil,
+        diskSnapshot: VMRuntimeSnapshot? = nil,
         updatedSnapshot: VMRuntimeSnapshot? = nil,
         startedSnapshot: VMRuntimeSnapshot? = nil,
         error: (any Error)? = nil
     ) {
         self.snapshot = snapshot
         self.createdSnapshot = createdSnapshot
+        self.diskSnapshot = diskSnapshot
         self.updatedSnapshot = updatedSnapshot
         self.startedSnapshot = startedSnapshot
         self.error = error
@@ -230,6 +259,17 @@ private final class FakeVMRuntimeService: VMRuntimeService {
         let createdSnapshot = try #require(createdSnapshot)
         snapshot = createdSnapshot
         return createdSnapshot
+    }
+
+    func createDefaultVirtualDisk() async throws -> VMRuntimeSnapshot {
+        if let error {
+            throw error
+        }
+
+        createDiskCount += 1
+        let diskSnapshot = try #require(diskSnapshot)
+        snapshot = diskSnapshot
+        return diskSnapshot
     }
 
     func updateProfilePaths(installerMediaPath: String?, virtualDiskPath: String?) async throws -> VMRuntimeSnapshot {

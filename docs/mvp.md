@@ -10,6 +10,7 @@ Acceptance criteria:
 
 - A macOS host app can create or load a VM profile.
 - Default profile creation prepares the macOS shared folder.
+- The host can create a blank default virtual disk file for the profile.
 - The host reports Windows installer, virtual disk, shared folder, and guest-agent setup steps.
 - The host reports preflight checks for Windows Arm, CPU, memory, and disk settings.
 - The VM can be started from the host app.

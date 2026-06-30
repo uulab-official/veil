@@ -3,6 +3,7 @@ import Foundation
 public protocol VMRuntimeService: Sendable {
     func loadSnapshot() async throws -> VMRuntimeSnapshot
     func createDefaultProfile() async throws -> VMRuntimeSnapshot
+    func createDefaultVirtualDisk() async throws -> VMRuntimeSnapshot
     func updateProfilePaths(installerMediaPath: String?, virtualDiskPath: String?) async throws -> VMRuntimeSnapshot
     func start() async throws -> VMRuntimeSnapshot
 }
@@ -210,6 +211,19 @@ public final class VMRuntimeModel {
         }
     }
 
+    public func createDefaultVirtualDisk() async {
+        phase = .loading
+        errorMessage = nil
+
+        do {
+            snapshot = try await service.createDefaultVirtualDisk()
+            phase = .loaded
+        } catch {
+            errorMessage = userMessage(for: error)
+            phase = .failed
+        }
+    }
+
     public func updateProfilePaths(installerMediaPath: String?, virtualDiskPath: String?) async {
         phase = .loading
         errorMessage = nil
@@ -315,8 +329,43 @@ public struct LocalVMRuntimeService: VMRuntimeService {
         return try await loadSnapshot()
     }
 
+    public func createDefaultVirtualDisk() async throws -> VMRuntimeSnapshot {
+        var profile = try await profileStore.load() ?? VMProfile.defaultWindows11Arm(homeDirectory: defaultHomeDirectory)
+        if profile.virtualDiskPath != nil {
+            return try await loadSnapshot()
+        }
+
+        let diskURL = defaultVirtualDiskURL(for: profile)
+
+        try FileManager.default.createDirectory(
+            atPath: profile.sharedFolderPath,
+            withIntermediateDirectories: true
+        )
+        try FileManager.default.createDirectory(
+            at: diskURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+
+        if !FileManager.default.fileExists(atPath: diskURL.path) {
+            let didCreateDisk = FileManager.default.createFile(atPath: diskURL.path, contents: nil)
+            guard didCreateDisk else {
+                throw CocoaError(.fileWriteUnknown)
+            }
+        }
+
+        let fileHandle = try FileHandle(forWritingTo: diskURL)
+        defer {
+            try? fileHandle.close()
+        }
+        try fileHandle.truncate(atOffset: UInt64(profile.diskGB) * 1_024 * 1_024 * 1_024)
+
+        profile.virtualDiskPath = diskURL.path
+        try await profileStore.save(profile)
+        return try await loadSnapshot()
+    }
+
     public func updateProfilePaths(installerMediaPath: String?, virtualDiskPath: String?) async throws -> VMRuntimeSnapshot {
-        var profile = try await profileStore.load() ?? VMProfile.defaultWindows11Arm()
+        var profile = try await profileStore.load() ?? VMProfile.defaultWindows11Arm(homeDirectory: defaultHomeDirectory)
         profile.installerMediaPath = installerMediaPath
         profile.virtualDiskPath = virtualDiskPath
         try await profileStore.save(profile)
@@ -336,6 +385,13 @@ public struct LocalVMRuntimeService: VMRuntimeService {
         #else
         return "unknown"
         #endif
+    }
+
+    private func defaultVirtualDiskURL(for profile: VMProfile) -> URL {
+        defaultHomeDirectory
+            .appendingPathComponent("Virtual Machines", isDirectory: true)
+            .appendingPathComponent("Veil", isDirectory: true)
+            .appendingPathComponent("\(profile.name).img")
     }
 
     private static func bootPathReadiness(

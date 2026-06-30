@@ -42,6 +42,11 @@ struct VMRuntimeView: View {
                         Task {
                             await model.load()
                         }
+                    },
+                    createDiskAction: {
+                        Task {
+                            await model.createDefaultVirtualDisk()
+                        }
                     }
                 )
 
@@ -59,6 +64,11 @@ struct VMRuntimeView: View {
                             },
                             selectDiskAction: {
                                 pathPicker = .virtualDisk
+                            },
+                            createDiskAction: {
+                                Task {
+                                    await model.createDefaultVirtualDisk()
+                                }
                             },
                             isLoading: model.phase == .loading
                         )
@@ -245,6 +255,7 @@ private struct QuickActionsPanel: View {
     var isLoading: Bool
     var startAction: () -> Void
     var refreshAction: () -> Void
+    var createDiskAction: () -> Void
 
     var body: some View {
         ShellPanel(spacing: 12) {
@@ -280,6 +291,16 @@ private struct QuickActionsPanel: View {
                     action: refreshAction
                 )
                 .disabled(isLoading)
+
+                ControlActionTile(
+                    title: "Create Disk",
+                    detail: snapshot.virtualDiskPath == nil ? "Create the default 128 GB sparse disk." : "Default disk path is configured.",
+                    symbolName: "internaldrive",
+                    tint: .indigo,
+                    state: snapshot.profileName == nil ? .blocked : (snapshot.virtualDiskPath == nil ? .ready : .partial),
+                    action: createDiskAction
+                )
+                .disabled(snapshot.profileName == nil || snapshot.virtualDiskPath != nil || isLoading)
 
                 ControlActionTile(
                     title: "Configure",
@@ -448,6 +469,7 @@ private struct SetupAssistantPanel: View {
     var createProfileAction: () -> Void
     var selectInstallerAction: () -> Void
     var selectDiskAction: () -> Void
+    var createDiskAction: () -> Void
     var isLoading: Bool
 
     private var items: [SetupItem] {
@@ -514,6 +536,13 @@ private struct SetupAssistantPanel: View {
                     Label("Disk", systemImage: "externaldrive")
                 }
                 .disabled(snapshot.profileName == nil || isLoading)
+
+                if snapshot.profileName != nil && snapshot.virtualDiskPath == nil {
+                    Button(action: createDiskAction) {
+                        Label("Create Disk", systemImage: "internaldrive")
+                    }
+                    .disabled(isLoading)
+                }
 
                 Spacer()
             }

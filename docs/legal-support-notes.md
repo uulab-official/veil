@@ -15,9 +15,9 @@ Veil must not bundle:
 
 The project should use a bring-your-own Windows model until a different distribution path is explicitly reviewed.
 
-The local VM profile stored by the host app is configuration only. It must not be described as a Windows installer, activation flow, license grant, or disk image creator until those separate implementation and legal questions are explicitly handled.
+The local VM profile stored by the host app is configuration. The host may create a blank virtual disk file for a user-owned VM, but it must not be described as a Windows installer, activation flow, license grant, or Windows image provider.
 
-Installer media and virtual disk paths in the local profile are user-provided references. Veil may validate that those references still point to local files. Storing or checking those paths does not imply Veil distributes Windows media, creates a licensed Windows installation, or validates whether a selected file is suitable for Windows installation.
+Installer media and virtual disk paths in the local profile are local references. Veil may validate that those references still point to local files and may create an empty disk file for later VM use. Storing, checking, or creating those local resources does not imply Veil distributes Windows media, creates a licensed Windows installation, or validates whether a selected file is suitable for Windows installation.
 
 ## Microsoft Support Position
 
