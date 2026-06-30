@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 
 @testable import VeilHostCore
@@ -78,6 +79,42 @@ struct HostDashboardModelTests {
         #expect(model.phase == .failed)
         #expect(model.errorMessage == "The current harness can only launch Notepad.")
         #expect(service.launchCount == 0)
+    }
+
+    @Test("loads demo overview when primary agent is unavailable")
+    @MainActor
+    func loadsDemoOverviewWhenPrimaryAgentIsUnavailable() async throws {
+        let service = FallbackHostDashboardService(
+            primary: FakeDashboardService(error: URLError(.cannotConnectToHost)),
+            fallback: DemoHostDashboardService()
+        )
+        let model = HostDashboardModel(service: service)
+
+        await model.load()
+
+        #expect(model.phase == .connected)
+        #expect(model.errorMessage == nil)
+        #expect(model.health?.agentVersion == "demo-0.1.0")
+        #expect(model.apps.map(\.id).contains("winapp_notepad"))
+        #expect(model.canLaunchSelectedApp)
+    }
+
+    @Test("launches demo Notepad when primary agent is unavailable")
+    @MainActor
+    func launchesDemoNotepadWhenPrimaryAgentIsUnavailable() async throws {
+        let service = FallbackHostDashboardService(
+            primary: FakeDashboardService(error: URLError(.cannotConnectToHost)),
+            fallback: DemoHostDashboardService()
+        )
+        let model = HostDashboardModel(service: service)
+
+        await model.load()
+        await model.launchSelectedApp()
+
+        #expect(model.phase == .connected)
+        #expect(model.errorMessage == nil)
+        #expect(model.lastLaunch?.window.title == "Untitled - Notepad")
+        #expect(model.statusText == "Launched Untitled - Notepad")
     }
 }
 

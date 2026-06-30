@@ -6,10 +6,13 @@ import VeilHostCore
 struct VeilHostShellApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var model = HostDashboardModel(
-        service: VeilHostClient(
-            transport: URLSessionWebSocketTransport(
-                url: URL(string: ProcessInfo.processInfo.environment["VEIL_AGENT_URL"] ?? "ws://127.0.0.1:18444")!
-            )
+        service: FallbackHostDashboardService(
+            primary: VeilHostClient(
+                transport: URLSessionWebSocketTransport(
+                    url: URL(string: ProcessInfo.processInfo.environment["VEIL_AGENT_URL"] ?? "ws://127.0.0.1:18444")!
+                )
+            ),
+            fallback: DemoHostDashboardService()
         )
     )
     @State private var vmModel = VMRuntimeModel(service: LocalVMRuntimeService())
