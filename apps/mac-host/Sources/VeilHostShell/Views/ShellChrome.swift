@@ -14,7 +14,7 @@ enum ShellSection: String, CaseIterable, Hashable {
         case .agent:
             "Agent"
         case .vm:
-            "VM Runtime"
+            "Control Center"
         case .launch:
             "Last Launch"
         }
@@ -27,7 +27,7 @@ enum ShellSection: String, CaseIterable, Hashable {
         case .agent:
             "Connection, session, and protocol capabilities"
         case .vm:
-            "Windows 11 Arm profile and boot readiness"
+            "Windows 11 Arm machine, setup, and Mac integration"
         case .launch:
             "Most recent host-to-agent launch result"
         }
@@ -40,7 +40,7 @@ enum ShellSection: String, CaseIterable, Hashable {
         case .agent:
             "network"
         case .vm:
-            "desktopcomputer"
+            "rectangle.stack"
         case .launch:
             "macwindow.on.rectangle"
         }

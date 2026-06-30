@@ -63,6 +63,8 @@ struct VMRuntimeView: View {
                     }
 
                     VStack(alignment: .leading, spacing: 14) {
+                        MachineSummaryPanel(snapshot: snapshot)
+
                         MacIntegrationPanel(snapshot: snapshot)
 
                         if !snapshot.preflightChecks.isEmpty {
@@ -278,6 +280,9 @@ private struct ControlCenterHero: View {
                         DashboardStat(title: "Architecture", value: snapshot.architecture, symbolName: "cpu", tint: .blue)
                         DashboardStat(title: "Runtime", value: snapshot.virtualizationAvailable ? "Available" : "Unavailable", symbolName: "bolt.horizontal", tint: snapshot.virtualizationAvailable ? .green : .orange)
                         DashboardStat(title: "Boot Ready", value: snapshot.bootReady ? "Ready" : "Blocked", symbolName: snapshot.bootReady ? "checkmark.seal" : "lock", tint: snapshot.bootReady ? .green : .orange)
+                        DashboardStat(title: "Profile", value: snapshot.profileName == nil ? "Missing" : "Configured", symbolName: "person.crop.rectangle.stack", tint: snapshot.profileName == nil ? .orange : .green)
+                        DashboardStat(title: "Installer", value: snapshot.installerMediaPath == nil ? "Missing" : "Selected", symbolName: "opticaldisc", tint: snapshot.installerMediaPath == nil ? .orange : .green)
+                        DashboardStat(title: "Disk", value: snapshot.virtualDiskPath == nil ? "Missing" : "Selected", symbolName: "externaldrive", tint: snapshot.virtualDiskPath == nil ? .orange : .green)
                     }
 
                     HStack(spacing: 8) {
@@ -386,6 +391,46 @@ private struct SetupAssistantPanel: View {
                 Spacer()
             }
         }
+    }
+}
+
+private struct MachineSummaryPanel: View {
+    var snapshot: VMRuntimeSnapshot
+
+    var body: some View {
+        ShellPanel(spacing: 12) {
+            HStack(alignment: .center) {
+                ShellPanelHeader(
+                    title: "Machine Summary",
+                    subtitle: "Control Center identity and managed resources.",
+                    symbolName: "rectangle.stack"
+                )
+
+                Spacer()
+
+                StatusPill(
+                    title: snapshot.profileName == nil ? "New" : "Managed",
+                    symbolName: snapshot.profileName == nil ? "plus.circle" : "checkmark.circle.fill",
+                    tint: snapshot.profileName == nil ? .secondary : .green
+                )
+            }
+
+            Grid(alignment: .leading, horizontalSpacing: 18, verticalSpacing: 10) {
+                ShellMetricRow(label: "Machine", value: "Windows 11 Arm")
+                ShellMetricRow(label: "Profile", value: snapshot.profileName ?? "Not configured")
+                ShellMetricRow(label: "Installer", value: resourceName(from: snapshot.installerMediaPath), monospaced: snapshot.installerMediaPath != nil)
+                ShellMetricRow(label: "Disk", value: resourceName(from: snapshot.virtualDiskPath), monospaced: snapshot.virtualDiskPath != nil)
+                ShellMetricRow(label: "Runtime", value: snapshot.detail)
+            }
+        }
+    }
+
+    private func resourceName(from path: String?) -> String {
+        guard let path, !path.isEmpty else {
+            return "Not selected"
+        }
+
+        return URL(fileURLWithPath: path).lastPathComponent
     }
 }
 
