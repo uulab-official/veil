@@ -144,11 +144,11 @@ That script builds `veil-host-shell`, stages `dist/Veil.app`, and launches it as
 
 The app list supports selection. The current fake-agent harness can only launch Notepad, so other app ids are shown but blocked from launch until generic app launch support lands.
 
-The shell also includes a VM Runtime panel. That panel is a capability and profile-status boundary for the future Virtualization.framework implementation; it does not create or boot Windows yet.
+The shell also includes a VM Runtime panel. That panel is a capability, profile-status, and start-request boundary for the future Virtualization.framework implementation; it does not create or boot Windows yet.
 
 The VM Runtime panel can create a default local Windows 11 Arm profile. This writes configuration only to the user's Application Support directory; it does not create a disk image, install Windows, include Windows media, or bypass licensing.
 
-The profile can reference a user-provided installer image and virtual disk path. Veil checks that the stored paths still point to local files before marking the profile boot-ready. It does not validate Windows media contents, create a disk image, or boot Windows yet.
+The profile can reference a user-provided installer image and virtual disk path. Veil checks that the stored paths still point to local files before marking the profile boot-ready. Pressing Start currently exercises the service boundary and reports that VM boot is not implemented yet. It does not validate Windows media contents, create a disk image, or boot Windows yet.
 
 ## Open Source Principles
 

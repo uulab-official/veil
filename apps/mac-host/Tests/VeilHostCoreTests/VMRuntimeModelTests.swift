@@ -148,6 +148,43 @@ struct VMRuntimeModelTests {
         #expect(service.updatedInstallerMediaPath == "/Users/test/Downloads/Windows.iso")
         #expect(service.updatedVirtualDiskPath == "/Users/test/Virtual Machines/Windows.vhdx")
     }
+
+    @Test("starts runtime through the service boundary")
+    @MainActor
+    func startsRuntimeThroughServiceBoundary() async throws {
+        let service = FakeVMRuntimeService(
+            startedSnapshot: VMRuntimeSnapshot(
+                state: .starting,
+                virtualizationAvailable: true,
+                architecture: "arm64",
+                minimumOSSupported: true,
+                profileName: "Windows 11 Arm",
+                installerMediaPath: "/Users/test/Downloads/Windows.iso",
+                virtualDiskPath: "/Users/test/Virtual Machines/Windows.vhdx",
+                bootReady: true,
+                detail: "VM boot requested."
+            )
+        )
+        let model = VMRuntimeModel(service: service)
+
+        await model.start()
+
+        #expect(model.phase == .loaded)
+        #expect(model.snapshot?.state == .starting)
+        #expect(model.statusText == "VM starting")
+        #expect(service.startCount == 1)
+    }
+
+    @Test("stores start errors")
+    @MainActor
+    func storesStartErrors() async throws {
+        let model = VMRuntimeModel(service: FakeVMRuntimeService(error: VMRuntimeError.bootNotImplemented))
+
+        await model.start()
+
+        #expect(model.phase == .failed)
+        #expect(model.errorMessage == "VM boot is not implemented yet.")
+    }
 }
 
 @MainActor
@@ -155,20 +192,24 @@ private final class FakeVMRuntimeService: VMRuntimeService {
     var snapshot: VMRuntimeSnapshot?
     var createdSnapshot: VMRuntimeSnapshot?
     var updatedSnapshot: VMRuntimeSnapshot?
+    var startedSnapshot: VMRuntimeSnapshot?
     var error: (any Error)?
     private(set) var updatedInstallerMediaPath: String?
     private(set) var updatedVirtualDiskPath: String?
     private(set) var createCount = 0
+    private(set) var startCount = 0
 
     init(
         snapshot: VMRuntimeSnapshot? = nil,
         createdSnapshot: VMRuntimeSnapshot? = nil,
         updatedSnapshot: VMRuntimeSnapshot? = nil,
+        startedSnapshot: VMRuntimeSnapshot? = nil,
         error: (any Error)? = nil
     ) {
         self.snapshot = snapshot
         self.createdSnapshot = createdSnapshot
         self.updatedSnapshot = updatedSnapshot
+        self.startedSnapshot = startedSnapshot
         self.error = error
     }
 
@@ -201,5 +242,16 @@ private final class FakeVMRuntimeService: VMRuntimeService {
         let updatedSnapshot = try #require(updatedSnapshot)
         snapshot = updatedSnapshot
         return updatedSnapshot
+    }
+
+    func start() async throws -> VMRuntimeSnapshot {
+        if let error {
+            throw error
+        }
+
+        startCount += 1
+        let startedSnapshot = try #require(startedSnapshot)
+        snapshot = startedSnapshot
+        return startedSnapshot
     }
 }

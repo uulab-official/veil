@@ -121,4 +121,26 @@ struct VMProfileStoreTests {
         #expect(snapshot.bootReady == false)
         #expect(snapshot.detail == "Installer media path must reference a file.")
     }
+
+    @Test("local runtime start reports that VM boot is not implemented")
+    func localRuntimeStartReportsBootNotImplemented() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let installerURL = directory.appendingPathComponent("Windows.iso")
+        let diskURL = directory.appendingPathComponent("Windows.vhdx")
+        try Data("installer".utf8).write(to: installerURL)
+        try Data("disk".utf8).write(to: diskURL)
+        let store = JSONVMProfileStore(directory: directory)
+        var profile = VMProfile.defaultWindows11Arm(createdAt: Date(timeIntervalSince1970: 1_782_752_400))
+        profile.installerMediaPath = installerURL.path
+        profile.virtualDiskPath = diskURL.path
+        try await store.save(profile)
+
+        let service = LocalVMRuntimeService(profileStore: store)
+
+        await #expect(throws: VMRuntimeError.bootNotImplemented) {
+            try await service.start()
+        }
+    }
 }

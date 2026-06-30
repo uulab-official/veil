@@ -37,6 +37,12 @@ struct VMRuntimeView: View {
                 }
 
                 VStack(alignment: .leading, spacing: 10) {
+                    if let errorMessage = model.errorMessage {
+                        Label(errorMessage, systemImage: "exclamationmark.triangle")
+                            .foregroundStyle(.orange)
+                            .font(.callout)
+                    }
+
                     if !model.canStart {
                         Text("VM start is disabled until a Windows 11 Arm profile, installer media, and virtual disk path are configured.")
                             .foregroundStyle(.secondary)
@@ -44,6 +50,15 @@ struct VMRuntimeView: View {
                     }
 
                     HStack {
+                        Button {
+                            Task {
+                                await model.start()
+                            }
+                        } label: {
+                            Label("Start VM", systemImage: "play.circle")
+                        }
+                        .disabled(!model.canStart || model.phase == .loading)
+
                         if snapshot.state == .notConfigured {
                             createDefaultProfileButton
                         }

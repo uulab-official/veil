@@ -4,6 +4,7 @@ public protocol VMRuntimeService: Sendable {
     func loadSnapshot() async throws -> VMRuntimeSnapshot
     func createDefaultProfile() async throws -> VMRuntimeSnapshot
     func updateProfilePaths(installerMediaPath: String?, virtualDiskPath: String?) async throws -> VMRuntimeSnapshot
+    func start() async throws -> VMRuntimeSnapshot
 }
 
 public enum VMRuntimeState: String, Codable, Equatable, Sendable {
@@ -52,11 +53,14 @@ public struct VMRuntimeSnapshot: Codable, Equatable, Sendable {
 
 public enum VMRuntimeError: Error, LocalizedError, Equatable, Sendable {
     case capabilityProbeFailed
+    case bootNotImplemented
 
     public var errorDescription: String? {
         switch self {
         case .capabilityProbeFailed:
             "Unable to inspect VM runtime capabilities."
+        case .bootNotImplemented:
+            "VM boot is not implemented yet."
         }
     }
 }
@@ -167,6 +171,19 @@ public final class VMRuntimeModel {
         }
     }
 
+    public func start() async {
+        phase = .loading
+        errorMessage = nil
+
+        do {
+            snapshot = try await service.start()
+            phase = .loaded
+        } catch {
+            errorMessage = userMessage(for: error)
+            phase = .failed
+        }
+    }
+
     private func userMessage(for error: any Error) -> String {
         if let localized = error as? LocalizedError,
            let description = localized.errorDescription {
@@ -233,6 +250,11 @@ public struct LocalVMRuntimeService: VMRuntimeService {
         profile.virtualDiskPath = virtualDiskPath
         try await profileStore.save(profile)
         return try await loadSnapshot()
+    }
+
+    public func start() async throws -> VMRuntimeSnapshot {
+        _ = try await loadSnapshot()
+        throw VMRuntimeError.bootNotImplemented
     }
 
     private static func hostArchitecture() -> String {
