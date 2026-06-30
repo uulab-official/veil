@@ -26,6 +26,7 @@ public struct VMRuntimeSnapshot: Codable, Equatable, Sendable {
     public var installerMediaPath: String?
     public var virtualDiskPath: String?
     public var installationSteps: [VMInstallationStep]
+    public var preflightChecks: [VMPreflightCheck]
     public var bootReady: Bool
     public var detail: String
 
@@ -38,6 +39,7 @@ public struct VMRuntimeSnapshot: Codable, Equatable, Sendable {
         installerMediaPath: String? = nil,
         virtualDiskPath: String? = nil,
         installationSteps: [VMInstallationStep] = [],
+        preflightChecks: [VMPreflightCheck] = [],
         bootReady: Bool = false,
         detail: String
     ) {
@@ -49,6 +51,7 @@ public struct VMRuntimeSnapshot: Codable, Equatable, Sendable {
         self.installerMediaPath = installerMediaPath
         self.virtualDiskPath = virtualDiskPath
         self.installationSteps = installationSteps
+        self.preflightChecks = preflightChecks
         self.bootReady = bootReady
         self.detail = detail
     }
@@ -71,6 +74,30 @@ public struct VMInstallationStep: Codable, Equatable, Identifiable, Sendable {
         title: String,
         detail: String,
         state: VMInstallationStepState
+    ) {
+        self.id = id
+        self.title = title
+        self.detail = detail
+        self.state = state
+    }
+}
+
+public enum VMPreflightCheckState: String, Codable, Equatable, Sendable {
+    case passed
+    case failed
+}
+
+public struct VMPreflightCheck: Codable, Equatable, Identifiable, Sendable {
+    public var id: String
+    public var title: String
+    public var detail: String
+    public var state: VMPreflightCheckState
+
+    public init(
+        id: String,
+        title: String,
+        detail: String,
+        state: VMPreflightCheckState
     ) {
         self.id = id
         self.title = title
@@ -244,7 +271,11 @@ public struct LocalVMRuntimeService: VMRuntimeService {
 
         if virtualizationAvailable, let profile {
             let installationSteps = Self.installationSteps(for: profile)
-            let bootPathReadiness = Self.bootPathReadiness(installationSteps: installationSteps)
+            let preflightChecks = Self.preflightChecks(for: profile)
+            let bootPathReadiness = Self.bootPathReadiness(
+                installationSteps: installationSteps,
+                preflightChecks: preflightChecks
+            )
             return VMRuntimeSnapshot(
                 state: .stopped,
                 virtualizationAvailable: true,
@@ -254,6 +285,7 @@ public struct LocalVMRuntimeService: VMRuntimeService {
                 installerMediaPath: profile.installerMediaPath,
                 virtualDiskPath: profile.virtualDiskPath,
                 installationSteps: installationSteps,
+                preflightChecks: preflightChecks,
                 bootReady: bootPathReadiness.isReady,
                 detail: bootPathReadiness.isReady
                     ? "Ready to boot when VM boot support lands."
@@ -306,7 +338,10 @@ public struct LocalVMRuntimeService: VMRuntimeService {
         #endif
     }
 
-    private static func bootPathReadiness(installationSteps: [VMInstallationStep]) -> (isReady: Bool, detail: String) {
+    private static func bootPathReadiness(
+        installationSteps: [VMInstallationStep],
+        preflightChecks: [VMPreflightCheck]
+    ) -> (isReady: Bool, detail: String) {
         for step in installationSteps where step.id != "guest-agent" && step.state != .complete {
             if step.id == "windows-installer" || step.id == "virtual-disk" {
                 let missingPathDetails = [
@@ -320,6 +355,10 @@ public struct LocalVMRuntimeService: VMRuntimeService {
             }
 
             return (false, step.detail)
+        }
+
+        if preflightChecks.contains(where: { $0.state == .failed }) {
+            return (false, "VM profile needs attention before boot.")
         }
 
         return (true, "Ready to boot when VM boot support lands.")
@@ -406,5 +445,42 @@ public struct LocalVMRuntimeService: VMRuntimeService {
         }
 
         return (.complete, nil)
+    }
+
+    private static func preflightChecks(for profile: VMProfile) -> [VMPreflightCheck] {
+        [
+            VMPreflightCheck(
+                id: "guest-os",
+                title: "Windows Arm guest",
+                detail: profile.os == "windows-arm64"
+                    ? "Configured for Windows 11 Arm."
+                    : "Only Windows 11 Arm profiles are supported on Apple Silicon.",
+                state: profile.os == "windows-arm64" ? .passed : .failed
+            ),
+            VMPreflightCheck(
+                id: "cpu",
+                title: "CPU allocation",
+                detail: profile.cpuCount >= 2
+                    ? "\(profile.cpuCount) virtual CPUs configured."
+                    : "At least 2 virtual CPUs are required.",
+                state: profile.cpuCount >= 2 ? .passed : .failed
+            ),
+            VMPreflightCheck(
+                id: "memory",
+                title: "Memory allocation",
+                detail: profile.memoryMB >= 4096
+                    ? "\(profile.memoryMB) MB memory configured."
+                    : "At least 4096 MB memory is required.",
+                state: profile.memoryMB >= 4096 ? .passed : .failed
+            ),
+            VMPreflightCheck(
+                id: "disk-size",
+                title: "Disk size",
+                detail: profile.diskGB >= 64
+                    ? "\(profile.diskGB) GB virtual disk configured."
+                    : "At least 64 GB disk capacity is required.",
+                state: profile.diskGB >= 64 ? .passed : .failed
+            )
+        ]
     }
 }

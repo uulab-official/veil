@@ -48,6 +48,18 @@ struct VMRuntimeView: View {
                     }
                 }
 
+                if !snapshot.preflightChecks.isEmpty {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Preflight")
+                            .font(.subheadline)
+                            .fontWeight(.semibold)
+
+                        ForEach(snapshot.preflightChecks) { check in
+                            PreflightCheckRow(check: check)
+                        }
+                    }
+                }
+
                 VStack(alignment: .leading, spacing: 10) {
                     if let errorMessage = model.errorMessage {
                         Label(errorMessage, systemImage: "exclamationmark.triangle")
@@ -176,6 +188,44 @@ private enum PathPicker: Identifiable {
             "installerMedia"
         case .virtualDisk:
             "virtualDisk"
+        }
+    }
+}
+
+private struct PreflightCheckRow: View {
+    var check: VMPreflightCheck
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Image(systemName: symbolName)
+                .foregroundStyle(symbolColor)
+                .frame(width: 18)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(check.title)
+                Text(check.detail)
+                    .foregroundStyle(.secondary)
+                    .font(.caption)
+            }
+        }
+        .font(.callout)
+    }
+
+    private var symbolName: String {
+        switch check.state {
+        case .passed:
+            "checkmark.circle.fill"
+        case .failed:
+            "xmark.circle"
+        }
+    }
+
+    private var symbolColor: Color {
+        switch check.state {
+        case .passed:
+            .green
+        case .failed:
+            .red
         }
     }
 }

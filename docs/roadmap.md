@@ -7,6 +7,7 @@ Veil aims for Parallels-class coherence, but the roadmap is deliberately staged 
 - macOS host shell.
 - VM profile storage.
 - Windows Arm install readiness checklist.
+- VM profile preflight checks.
 - Shared folder preparation.
 - Start, stop, suspend, resume states.
 - Basic VM display surface for debugging.
@@ -15,6 +16,7 @@ Veil aims for Parallels-class coherence, but the roadmap is deliberately staged 
 Exit criteria:
 
 - A contributor can see which local setup prerequisites are blocking Windows boot.
+- A contributor can see which profile settings are invalid before boot.
 - A contributor can start a guest VM from the host app.
 - Failure states are visible and debuggable.
 
@@ -107,7 +109,7 @@ Exit criteria:
 
 ## Current Next Step
 
-The protocol harness is now executable from JavaScript, the Swift host probe, and the SwiftUI host shell. The shell also has a VM Runtime status boundary, local boot-path checks, shared-folder preparation, a setup-step checklist, and a start-request service boundary. The next implementation step is the v0.1/v0.2 overlap:
+The protocol harness is now executable from JavaScript, the Swift host probe, and the SwiftUI host shell. The shell also has a VM Runtime status boundary, local boot-path checks, shared-folder preparation, a setup-step checklist, profile preflight checks, and a start-request service boundary. The next implementation step is the v0.1/v0.2 overlap:
 
 1. Replace the local start-request stub with a Virtualization.framework VM boot spike behind the `VMRuntimeService` boundary.
 2. Add deeper validation for selected installer media and virtual disk paths, including the boot spike's actual Virtualization.framework requirements.

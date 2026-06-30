@@ -22,8 +22,20 @@ The first three are local host prerequisites. The guest agent step remains pendi
 - Default profile creation creates the macOS shared folder at `~/Veil Shared`.
 - Installer media and virtual disk paths are user-selected local files.
 - The runtime snapshot reports structured setup steps so the UI can show what is complete, blocked, or pending.
-- A profile becomes boot-ready only when installer media, virtual disk, and shared folder are all valid local paths.
+- The runtime snapshot reports preflight checks for guest OS, CPU, memory, and disk size.
+- A profile becomes boot-ready only when installer media, virtual disk, shared folder, and preflight checks all pass.
 - Pressing Start still exercises the service boundary only; it does not boot Windows yet.
+
+## Preflight Checks
+
+Before the VM boot implementation lands, Veil already blocks obviously invalid profiles:
+
+- Guest OS must be `windows-arm64`.
+- CPU allocation must be at least 2 virtual CPUs.
+- Memory allocation must be at least 4096 MB.
+- Disk size must be at least 64 GB.
+
+These checks are deliberately conservative. They catch configuration mistakes before the future Virtualization.framework boot path tries to build or start a VM.
 
 ## Later Boot Flow
 
@@ -31,6 +43,8 @@ The first three are local host prerequisites. The guest agent step remains pendi
 Create or load VM profile
 ↓
 Validate Windows installer, virtual disk, and shared folder
+↓
+Run profile preflight checks
 ↓
 Create Virtualization.framework configuration
 ↓
