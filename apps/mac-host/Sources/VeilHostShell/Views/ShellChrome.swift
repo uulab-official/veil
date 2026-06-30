@@ -7,6 +7,10 @@ enum ShellSection: String, CaseIterable, Hashable {
     case vm
     case launch
 
+    static var sidebarOrder: [ShellSection] {
+        [.vm, .apps, .agent, .launch]
+    }
+
     var title: String {
         switch self {
         case .apps:

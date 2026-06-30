@@ -4,11 +4,11 @@ import VeilHostCore
 struct ContentView: View {
     @Bindable var model: HostDashboardModel
     @Bindable var vmModel: VMRuntimeModel
-    @SceneStorage("selectedSection") private var selectedSection: ShellSection = .apps
+    @SceneStorage("selectedSection") private var selectedSection: ShellSection = .vm
 
     var body: some View {
         NavigationSplitView {
-            List(ShellSection.allCases, id: \.self, selection: $selectedSection) { section in
+            List(ShellSection.sidebarOrder, id: \.self, selection: $selectedSection) { section in
                 Label(section.title, systemImage: section.symbolName)
                     .tag(section)
             }
