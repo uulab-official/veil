@@ -29,6 +29,22 @@ struct VMRuntimeView: View {
                     runtimeTint: runtimeTint(for: snapshot.state)
                 )
 
+                QuickActionsPanel(
+                    snapshot: snapshot,
+                    canStart: model.canStart,
+                    isLoading: model.phase == .loading,
+                    startAction: {
+                        Task {
+                            await model.start()
+                        }
+                    },
+                    refreshAction: {
+                        Task {
+                            await model.load()
+                        }
+                    }
+                )
+
                 HStack(alignment: .top, spacing: 14) {
                     VStack(alignment: .leading, spacing: 14) {
                         SetupAssistantPanel(
@@ -64,6 +80,8 @@ struct VMRuntimeView: View {
 
                     VStack(alignment: .leading, spacing: 14) {
                         MachineSummaryPanel(snapshot: snapshot)
+
+                        ResourcePlanPanel(snapshot: snapshot)
 
                         MacIntegrationPanel(snapshot: snapshot)
 
@@ -221,6 +239,76 @@ struct VMRuntimeView: View {
     }
 }
 
+private struct QuickActionsPanel: View {
+    var snapshot: VMRuntimeSnapshot
+    var canStart: Bool
+    var isLoading: Bool
+    var startAction: () -> Void
+    var refreshAction: () -> Void
+
+    var body: some View {
+        ShellPanel(spacing: 12) {
+            ShellPanelHeader(
+                title: "Quick Actions",
+                subtitle: "Control Center actions stay visible while unavailable features remain gated.",
+                symbolName: "square.grid.3x2"
+            )
+
+            LazyVGrid(
+                columns: [
+                    GridItem(.adaptive(minimum: 170), spacing: 10)
+                ],
+                alignment: .leading,
+                spacing: 10
+            ) {
+                ControlActionTile(
+                    title: "Start",
+                    detail: canStart ? "Boot the configured Windows machine." : "Complete setup before booting.",
+                    symbolName: "power",
+                    tint: .green,
+                    state: canStart ? .ready : .blocked,
+                    action: startAction
+                )
+                .disabled(!canStart || isLoading)
+
+                ControlActionTile(
+                    title: "Refresh",
+                    detail: "Reload runtime capability and profile state.",
+                    symbolName: "arrow.clockwise",
+                    tint: .blue,
+                    state: isLoading ? .partial : .ready,
+                    action: refreshAction
+                )
+                .disabled(isLoading)
+
+                ControlActionTile(
+                    title: "Configure",
+                    detail: "Settings unlock with boot support.",
+                    symbolName: "slider.horizontal.3",
+                    tint: .blue,
+                    state: .planned
+                )
+
+                ControlActionTile(
+                    title: "Snapshots",
+                    detail: "Checkpoints follow persistent VM boot.",
+                    symbolName: "camera.metering.matrix",
+                    tint: .purple,
+                    state: .planned
+                )
+
+                ControlActionTile(
+                    title: "Shared Folders",
+                    detail: snapshot.profileName == nil ? "Create a profile before sharing." : "Profile boundary is ready.",
+                    symbolName: "folder",
+                    tint: .teal,
+                    state: snapshot.profileName == nil ? .blocked : .planned
+                )
+            }
+        }
+    }
+}
+
 private struct ControlCenterHero: View {
     var snapshot: VMRuntimeSnapshot
     var statusText: String
@@ -312,6 +400,45 @@ private struct ControlCenterHero: View {
                     }
                 }
             }
+        }
+    }
+}
+
+private struct ResourcePlanPanel: View {
+    var snapshot: VMRuntimeSnapshot
+
+    var body: some View {
+        ShellPanel(spacing: 12) {
+            ShellPanelHeader(
+                title: "Resource Plan",
+                subtitle: "The VM resource model Veil will apply as boot support matures.",
+                symbolName: "gauge.with.dots.needle.50percent"
+            )
+
+            ResourcePlanRow(
+                title: "CPU",
+                value: snapshot.virtualizationAvailable ? "Apple Virtualization.framework on \(snapshot.architecture)" : "Host virtualization unavailable",
+                symbolName: "cpu",
+                state: snapshot.virtualizationAvailable ? .ready : .blocked
+            )
+            ResourcePlanRow(
+                title: "Memory",
+                value: "Automatic allocation profile planned for Windows 11 Arm.",
+                symbolName: "memorychip",
+                state: .planned
+            )
+            ResourcePlanRow(
+                title: "Display",
+                value: "Retina-scaled desktop and seamless app windows are planned.",
+                symbolName: "display",
+                state: .planned
+            )
+            ResourcePlanRow(
+                title: "Storage",
+                value: snapshot.virtualDiskPath == nil ? "Select a virtual disk before boot readiness." : "Virtual disk path selected.",
+                symbolName: "internaldrive",
+                state: snapshot.virtualDiskPath == nil ? .blocked : .partial
+            )
         }
     }
 }

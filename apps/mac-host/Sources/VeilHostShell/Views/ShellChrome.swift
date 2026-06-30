@@ -180,6 +180,80 @@ struct DashboardStat: View {
     }
 }
 
+struct ControlActionTile: View {
+    var title: String
+    var detail: String
+    var symbolName: String
+    var tint: Color
+    var state: IntegrationState
+    var action: () -> Void = {}
+
+    var body: some View {
+        Button(action: action) {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(alignment: .center, spacing: 10) {
+                    Image(systemName: symbolName)
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(state == .blocked || state == .planned ? .secondary : tint)
+                        .frame(width: 30, height: 30)
+                        .background((state == .blocked || state == .planned ? Color.secondary : tint).opacity(0.12), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(title)
+                            .font(.callout.weight(.semibold))
+                            .foregroundStyle(.primary)
+                        Text(detail)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                    }
+                }
+
+                StatusPill(title: state.title, symbolName: state.symbolName, tint: state.tint)
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, minHeight: 104, alignment: .topLeading)
+            .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .strokeBorder(Color.secondary.opacity(0.16), lineWidth: 1)
+            }
+        }
+        .buttonStyle(.plain)
+        .disabled(state == .blocked || state == .planned)
+    }
+}
+
+struct ResourcePlanRow: View {
+    var title: String
+    var value: String
+    var symbolName: String
+    var state: IntegrationState
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 10) {
+            Image(systemName: symbolName)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(state.tint)
+                .frame(width: 28, height: 28)
+                .background(state.tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.callout.weight(.semibold))
+                Text(value)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
+
+            Spacer()
+
+            StatusPill(title: state.title, symbolName: state.symbolName, tint: state.tint)
+        }
+    }
+}
+
 struct SetupProgressBar: View {
     var completed: Int
     var total: Int
