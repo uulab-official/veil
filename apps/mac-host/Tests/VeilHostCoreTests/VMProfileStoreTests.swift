@@ -163,7 +163,12 @@ struct VMProfileStoreTests {
     func runtimeProviderProbeReportsQEMUProvider() {
         let probe = VMRuntimeProviderProbe(
             environment: ["VEIL_QEMU_SYSTEM_AARCH64": "/opt/veil/bin/qemu-system-aarch64"],
-            fileExists: { path in path == "/opt/veil/bin/qemu-system-aarch64" }
+            fileExists: { path in path == "/opt/veil/bin/qemu-system-aarch64" },
+            executableVersion: { path in
+                path == "/opt/veil/bin/qemu-system-aarch64"
+                    ? "qemu-system-aarch64 version 8.2.0"
+                    : nil
+            }
         )
 
         let providers = probe.localProviders(
@@ -178,6 +183,28 @@ struct VMProfileStoreTests {
         #expect(qemu?.isServerBacked == false)
         #expect(qemu?.status == .active)
         #expect(qemu?.executablePath == "/opt/veil/bin/qemu-system-aarch64")
+        #expect(qemu?.executableVersion == "qemu-system-aarch64 version 8.2.0")
+    }
+
+    @Test("runtime provider probe reports QEMU version")
+    func runtimeProviderProbeReportsQEMUVersion() {
+        let probe = VMRuntimeProviderProbe(
+            environment: ["VEIL_QEMU_SYSTEM_AARCH64": "/opt/homebrew/bin/qemu-system-aarch64"],
+            fileExists: { path in path == "/opt/homebrew/bin/qemu-system-aarch64" },
+            executableVersion: { path in
+                path == "/opt/homebrew/bin/qemu-system-aarch64"
+                    ? "qemu-system-aarch64 version 9.2.4\nCopyright (c) 2003-2025 Fabrice Bellard and the QEMU Project developers"
+                    : nil
+            }
+        )
+
+        let providers = probe.localProviders(
+            architecture: "arm64",
+            minimumOSSupported: true
+        )
+        let qemu = providers.first { $0.kind == .qemuHypervisor }
+
+        #expect(qemu?.executableVersion == "qemu-system-aarch64 version 9.2.4")
     }
 
     @Test("runtime provider probe marks QEMU planned when executable is missing")

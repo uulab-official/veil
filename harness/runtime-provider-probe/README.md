@@ -20,3 +20,5 @@ Validate live CLI output:
 cd apps/mac-host
 swift run veil-vmctl providers --json | node ../../harness/runtime-provider-probe/src/validate-provider-output.mjs
 ```
+
+Expected output: `provider output valid`. When QEMU/HVF is detected, Veil records the first line from `qemu-system-aarch64 --version` as `executableVersion`. If QEMU is not installed, the provider remains `planned` and no version field is emitted.

@@ -15,6 +15,10 @@ test("validates the Apple and QEMU local provider fixture", async () => {
     "qemuHypervisor"
   ]);
   assert.equal(validated.every((provider) => provider.isServerBacked === false), true);
+  assert.equal(
+    validated.find((provider) => provider.kind === "qemuHypervisor")?.executableVersion,
+    "qemu-system-aarch64 version 9.2.4"
+  );
 });
 
 test("rejects provider output that implies a server-backed VM", () => {

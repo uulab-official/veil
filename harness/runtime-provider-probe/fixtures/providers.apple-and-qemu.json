@@ -13,6 +13,7 @@
     "detail": "qemu-system-aarch64 found locally for UTM-style Windows compatibility experiments.",
     "displayName": "QEMU/HVF",
     "executablePath": "/opt/homebrew/bin/qemu-system-aarch64",
+    "executableVersion": "qemu-system-aarch64 version 9.2.4",
     "isServerBacked": false,
     "kind": "qemuHypervisor",
     "mode": "Local compatibility provider",

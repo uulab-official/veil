@@ -63,6 +63,7 @@ public struct VMRuntimeProviderSummary: Codable, Equatable, Sendable {
     public var status: VMRuntimeProviderStatus
     public var detail: String
     public var executablePath: String?
+    public var executableVersion: String?
 
     public init(
         kind: VMRuntimeProviderKind,
@@ -72,7 +73,8 @@ public struct VMRuntimeProviderSummary: Codable, Equatable, Sendable {
         isServerBacked: Bool,
         status: VMRuntimeProviderStatus,
         detail: String,
-        executablePath: String? = nil
+        executablePath: String? = nil,
+        executableVersion: String? = nil
     ) {
         self.kind = kind
         self.displayName = displayName
@@ -82,6 +84,7 @@ public struct VMRuntimeProviderSummary: Codable, Equatable, Sendable {
         self.status = status
         self.detail = detail
         self.executablePath = executablePath
+        self.executableVersion = executableVersion
     }
 }
 
@@ -95,13 +98,16 @@ public struct VMRuntimeProviderProbe: Sendable {
 
     private let environment: [String: String]
     private let fileExists: @Sendable (String) -> Bool
+    private let executableVersion: @Sendable (String) -> String?
 
     public init(
         environment: [String: String] = ProcessInfo.processInfo.environment,
-        fileExists: @escaping @Sendable (String) -> Bool = { FileManager.default.fileExists(atPath: $0) }
+        fileExists: @escaping @Sendable (String) -> Bool = { FileManager.default.fileExists(atPath: $0) },
+        executableVersion: @escaping @Sendable (String) -> String? = Self.qemuVersionOutput(executablePath:)
     ) {
         self.environment = environment
         self.fileExists = fileExists
+        self.executableVersion = executableVersion
     }
 
     public func localProviders(
@@ -145,7 +151,8 @@ public struct VMRuntimeProviderProbe: Sendable {
                 isServerBacked: false,
                 status: .active,
                 detail: "qemu-system-aarch64 found locally for UTM-style Windows compatibility experiments.",
-                executablePath: executablePath
+                executablePath: executablePath,
+                executableVersion: Self.firstVersionLine(from: executableVersion(executablePath))
             )
         }
 
@@ -168,6 +175,47 @@ public struct VMRuntimeProviderProbe: Sendable {
         }
 
         return Self.defaultQEMUExecutablePaths.first(where: fileExists)
+    }
+
+    private static func firstVersionLine(from output: String?) -> String? {
+        output?
+            .split(whereSeparator: \.isNewline)
+            .first
+            .map(String.init)?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    public static func qemuVersionOutput(executablePath: String) -> String? {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: executablePath)
+        process.arguments = ["--version"]
+
+        let outputPipe = Pipe()
+        process.standardOutput = outputPipe
+        process.standardError = Pipe()
+
+        do {
+            try process.run()
+        } catch {
+            return nil
+        }
+
+        let deadline = Date().addingTimeInterval(2)
+        while process.isRunning, Date() < deadline {
+            Thread.sleep(forTimeInterval: 0.05)
+        }
+
+        if process.isRunning {
+            process.terminate()
+            return nil
+        }
+
+        guard process.terminationStatus == 0 else {
+            return nil
+        }
+
+        let data = outputPipe.fileHandleForReading.readDataToEndOfFile()
+        return String(data: data, encoding: .utf8)
     }
 }
 

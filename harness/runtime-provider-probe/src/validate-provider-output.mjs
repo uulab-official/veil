@@ -56,6 +56,10 @@ export function validateProvider(provider) {
   if (provider.executablePath !== undefined) {
     requireString(provider.executablePath, "executablePath");
   }
+
+  if (provider.executableVersion !== undefined) {
+    requireString(provider.executableVersion, "executableVersion");
+  }
 }
 
 function requireString(value, fieldName) {

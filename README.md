@@ -162,6 +162,8 @@ cd apps/mac-host
 swift run veil-vmctl providers --json
 ```
 
+When `qemu-system-aarch64` is available locally, the provider JSON includes its executable path and version line. If it is not installed, QEMU/HVF remains a planned local provider.
+
 Validate that output with the harness:
 
 ```bash

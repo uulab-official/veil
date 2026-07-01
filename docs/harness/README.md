@@ -41,6 +41,7 @@ swift run veil-vmctl providers --json | node ../../harness/runtime-provider-prob
 ```
 
 The command must not launch, stop, or mutate a VM. It only reports local provider candidates.
+When QEMU/HVF is detected locally, the JSON includes `executablePath` and `executableVersion`; otherwise QEMU/HVF remains a `planned` provider.
 
 ## First Scenario: Launch Notepad
 
