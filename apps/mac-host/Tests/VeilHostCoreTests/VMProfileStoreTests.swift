@@ -498,8 +498,15 @@ struct VMProfileStoreTests {
         profile.sharedFolderPath = sharedFolderURL.path
         try await store.save(profile)
         let bootRunner = FakeVMRuntimeBooter(startState: .running)
+        let reportStore = JSONVMRuntimeBootReportStore(
+            directory: directory.appendingPathComponent("Reports", isDirectory: true)
+        )
 
-        let service = LocalVMRuntimeService(profileStore: store, bootRunner: bootRunner)
+        let service = LocalVMRuntimeService(
+            profileStore: store,
+            bootRunner: bootRunner,
+            bootReportStore: reportStore
+        )
 
         let snapshot = try await service.start()
 

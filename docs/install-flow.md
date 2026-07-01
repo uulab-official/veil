@@ -30,6 +30,7 @@ The first three are local host prerequisites. The guest agent step remains pendi
 - The runtime snapshot reports preflight checks for installer media, guest OS, CPU, memory, and disk size.
 - A profile becomes boot-ready only when installer media, virtual disk, shared folder, and preflight checks all pass.
 - Pressing Start builds a `VZVirtualMachine`, starts it through Apple's Virtualization.framework, and opens a console window.
+- While the VM is running, Show Console reopens the `VZVirtualMachineView` window if the user closes it.
 - `./script/build_and_run.sh --start-vm` launches the signed app bundle with the prepared profile and starts the VM automatically.
 - Pressing Stop stops the active VM process and closes the console window.
 - Each Start attempt records a metadata-only boot report with timestamps, result, resulting runtime state, selected profile, planned devices, and error text when startup fails.
@@ -51,6 +52,15 @@ Before the VM boot implementation lands, Veil already blocks obviously invalid p
 - Disk size must be at least 64 GB.
 
 These checks are deliberately conservative. They catch configuration mistakes before the future Virtualization.framework boot path tries to build or start a VM.
+
+## Windows Display Reality Check
+
+The v0.1 boot spike can create and start a `VZVirtualMachine`, attach ISO and disk storage, and open Apple's `VZVirtualMachineView`. That is not the same as a UTM-grade Windows installer path. Apple's public Virtualization documentation focuses on Linux and macOS guest flows, and Windows 11 Arm installer display/driver behavior through the Apple Virtio graphics path must be proven with real media before Veil can claim reliable Windows setup.
+
+References:
+
+- Apple: [Running Linux in a Virtual Machine](https://developer.apple.com/documentation/virtualization/running-linux-in-a-virtual-machine)
+- Apple: [Running macOS in a virtual machine on Apple silicon](https://developer.apple.com/documentation/virtualization/running-macos-in-a-virtual-machine-on-apple-silicon)
 
 ## Later Boot Flow
 

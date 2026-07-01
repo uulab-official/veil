@@ -6,6 +6,7 @@ struct ContentView: View {
     @Bindable var vmModel: VMRuntimeModel
     var startVMAction: () -> Void
     var stopVMAction: () -> Void
+    var showVMConsoleAction: () -> Void
     @SceneStorage("selectedSection") private var selectedSection: ShellSection = .vm
 
     var body: some View {
@@ -23,7 +24,8 @@ struct ContentView: View {
                 vmModel: vmModel,
                 selectedSection: selectedSection,
                 startVMAction: startVMAction,
-                stopVMAction: stopVMAction
+                stopVMAction: stopVMAction,
+                showVMConsoleAction: showVMConsoleAction
             )
         }
         .toolbar {
@@ -42,6 +44,14 @@ struct ContentView: View {
 
                 switch selectedSection {
                 case .vm:
+                    if canShowVMConsole {
+                        Button(action: showVMConsoleAction) {
+                            Label("Show Console", systemImage: "display")
+                        }
+                        .help("Open the Windows VM console")
+                        .disabled(vmModel.phase == .loading)
+                    }
+
                     if vmModel.canStop {
                         Button(action: stopVMAction) {
                             Label("Stop VM", systemImage: "stop.fill")
@@ -74,5 +84,9 @@ struct ContentView: View {
 
     private var isRefreshing: Bool {
         model.phase == .loading || model.phase == .launching || vmModel.phase == .loading
+    }
+
+    private var canShowVMConsole: Bool {
+        vmModel.snapshot?.state == .running || vmModel.snapshot?.state == .starting
     }
 }

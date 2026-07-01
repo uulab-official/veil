@@ -3,12 +3,13 @@ import Virtualization
 import VeilHostCore
 
 @MainActor
-final class VMConsoleWindowPresenter {
+final class VMConsoleWindowPresenter: NSObject, NSWindowDelegate {
     private let bootRunner: VirtualizationVMRuntimeBooter
     private var window: NSWindow?
 
     init(bootRunner: VirtualizationVMRuntimeBooter) {
         self.bootRunner = bootRunner
+        super.init()
     }
 
     func showConsoleIfAvailable() {
@@ -35,6 +36,8 @@ final class VMConsoleWindowPresenter {
             defer: false
         )
         window.title = "Windows 11 Arm"
+        window.delegate = self
+        window.isReleasedWhenClosed = false
         window.contentMinSize = NSSize(width: 800, height: 520)
         window.contentView = consoleView
         window.center()
@@ -46,5 +49,11 @@ final class VMConsoleWindowPresenter {
     func closeConsole() {
         window?.close()
         window = nil
+    }
+
+    func windowWillClose(_ notification: Notification) {
+        if notification.object as? NSWindow === window {
+            window = nil
+        }
     }
 }

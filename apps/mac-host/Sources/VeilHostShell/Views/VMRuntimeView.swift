@@ -6,6 +6,7 @@ struct VMRuntimeView: View {
     @Bindable var model: VMRuntimeModel
     var startVMAction: () -> Void
     var stopVMAction: () -> Void
+    var showVMConsoleAction: () -> Void
     @State private var pathPicker: PathPicker?
 
     var body: some View {
@@ -19,6 +20,7 @@ struct VMRuntimeView: View {
                     isLoading: model.phase == .loading,
                     startAction: startVMAction,
                     stopAction: stopVMAction,
+                    consoleAction: showVMConsoleAction,
                     refreshAction: {
                         Task {
                             await model.load()
@@ -36,6 +38,7 @@ struct VMRuntimeView: View {
                     isLoading: model.phase == .loading,
                     startAction: startVMAction,
                     stopAction: stopVMAction,
+                    consoleAction: showVMConsoleAction,
                     refreshAction: {
                         Task {
                             await model.load()
@@ -284,6 +287,7 @@ private struct QuickActionsPanel: View {
     var isLoading: Bool
     var startAction: () -> Void
     var stopAction: () -> Void
+    var consoleAction: () -> Void
     var refreshAction: () -> Void
     var prepareAction: () -> Void
     var createDiskAction: () -> Void
@@ -313,6 +317,16 @@ private struct QuickActionsPanel: View {
                     action: canStop ? stopAction : startAction
                 )
                 .disabled((!canStart && !canStop) || isLoading)
+
+                ControlActionTile(
+                    title: "Console",
+                    detail: canShowConsole ? "Open the Windows installer display." : "Console appears after the VM starts.",
+                    symbolName: "display",
+                    tint: .blue,
+                    state: canShowConsole ? .ready : .blocked,
+                    action: consoleAction
+                )
+                .disabled(!canShowConsole || isLoading)
 
                 ControlActionTile(
                     title: "Prepare VM",
@@ -380,6 +394,10 @@ private struct QuickActionsPanel: View {
             }
         }
     }
+
+    private var canShowConsole: Bool {
+        snapshot.state == .running || snapshot.state == .starting
+    }
 }
 
 private struct ControlCenterHero: View {
@@ -390,6 +408,7 @@ private struct ControlCenterHero: View {
     var isLoading: Bool
     var startAction: () -> Void
     var stopAction: () -> Void
+    var consoleAction: () -> Void
     var refreshAction: () -> Void
     var runtimeTitle: String
     var runtimeSymbol: String
@@ -468,6 +487,13 @@ private struct ControlCenterHero: View {
                             .disabled(true)
                         }
 
+                        if canShowConsole {
+                            Button(action: consoleAction) {
+                                Label("Console", systemImage: "display")
+                            }
+                            .disabled(isLoading)
+                        }
+
                         Button(action: refreshAction) {
                             Label("Refresh", systemImage: "arrow.clockwise")
                         }
@@ -482,6 +508,10 @@ private struct ControlCenterHero: View {
                 }
             }
         }
+    }
+
+    private var canShowConsole: Bool {
+        snapshot.state == .running || snapshot.state == .starting
     }
 }
 
@@ -517,7 +547,7 @@ private struct DevicePlanPanel: View {
                 )
                 ResourcePlanRow(
                     title: "Graphics",
-                    value: "\(deviceSummary.graphics.widthInPixels)x\(deviceSummary.graphics.heightInPixels) Virtio scanout.",
+                    value: "\(deviceSummary.graphics.widthInPixels)x\(deviceSummary.graphics.heightInPixels) Apple Virtio scanout; Windows installer display is still experimental.",
                     symbolName: "display",
                     state: .partial
                 )

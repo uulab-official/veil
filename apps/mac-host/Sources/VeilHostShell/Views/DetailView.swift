@@ -7,6 +7,7 @@ struct DetailView: View {
     var selectedSection: ShellSection
     var startVMAction: () -> Void
     var stopVMAction: () -> Void
+    var showVMConsoleAction: () -> Void
 
     var body: some View {
         ScrollView {
@@ -27,7 +28,8 @@ struct DetailView: View {
                     VMRuntimeView(
                         model: vmModel,
                         startVMAction: startVMAction,
-                        stopVMAction: stopVMAction
+                        stopVMAction: stopVMAction,
+                        showVMConsoleAction: showVMConsoleAction
                     )
                 case .launch:
                     LaunchView(result: model.lastLaunch)

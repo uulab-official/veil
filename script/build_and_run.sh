@@ -13,9 +13,11 @@ DIST_DIR="$ROOT_DIR/dist"
 APP_BUNDLE="$DIST_DIR/$BUNDLE_NAME.app"
 APP_CONTENTS="$APP_BUNDLE/Contents"
 APP_MACOS="$APP_CONTENTS/MacOS"
+APP_RESOURCES="$APP_CONTENTS/Resources"
 APP_BINARY="$APP_MACOS/$APP_EXECUTABLE"
 INFO_PLIST="$APP_CONTENTS/Info.plist"
 ENTITLEMENTS="$PACKAGE_DIR/VeilHostShell.entitlements"
+APP_ICON="$APP_RESOURCES/VeilAppIcon.icns"
 
 pkill -x "$APP_EXECUTABLE" >/dev/null 2>&1 || true
 
@@ -23,9 +25,10 @@ swift build --package-path "$PACKAGE_DIR" --product "$APP_EXECUTABLE"
 BUILD_BINARY="$(swift build --package-path "$PACKAGE_DIR" --show-bin-path)/$APP_EXECUTABLE"
 
 rm -rf "$APP_BUNDLE"
-mkdir -p "$APP_MACOS"
+mkdir -p "$APP_MACOS" "$APP_RESOURCES"
 cp "$BUILD_BINARY" "$APP_BINARY"
 chmod +x "$APP_BINARY"
+swift "$ROOT_DIR/script/generate_app_icon.swift" "$APP_ICON"
 
 cat >"$INFO_PLIST" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -38,6 +41,8 @@ cat >"$INFO_PLIST" <<PLIST
   <string>$BUNDLE_ID</string>
   <key>CFBundleName</key>
   <string>$BUNDLE_NAME</string>
+  <key>CFBundleIconFile</key>
+  <string>VeilAppIcon</string>
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>LSMinimumSystemVersion</key>
@@ -77,6 +82,7 @@ case "$MODE" in
     open_app
     sleep 1
     pgrep -x "$APP_EXECUTABLE" >/dev/null
+    test -f "$APP_ICON"
     ;;
   *)
     echo "usage: $0 [run|--start-vm|--debug|--logs|--telemetry|--verify]" >&2

@@ -18,6 +18,8 @@ UTM is the quality benchmark for VM setup depth, diagnostics, and open-source op
 - Typed Virtualization.framework device summary.
 - Start, stop, suspend, resume states.
 - Basic VM display surface for debugging.
+- Reopenable VM console action while the machine is running.
+- Documented Windows installer display risk for Apple's Virtio graphics path.
 - Documentation for Windows media and license boundaries.
 
 Exit criteria:
@@ -30,6 +32,7 @@ Exit criteria:
 - A contributor can inspect the latest Start attempt result and startup error without sharing Windows media or disk contents.
 - A contributor can inspect planned boot devices before starting the VM.
 - A contributor can start a guest VM from the host app.
+- A contributor can reopen the VM console after closing it.
 - Failure states are visible and debuggable.
 
 ## v0.2: Guest Agent
@@ -124,6 +127,7 @@ Exit criteria:
 The protocol harness is now executable from JavaScript, the Swift host probe, and the SwiftUI host shell. The shell also has a VM Runtime status boundary, one-click VM preparation, adaptive host-sized resource caps, local boot-path checks, installer media role validation, shared-folder preparation, default sparse-disk creation, a setup-step checklist, profile preflight checks, metadata-only diagnostics export, latest boot-attempt reporting, a typed Virtualization.framework device summary, and a Virtualization.framework boot spike that opens and stops a VM console. The next implementation step is the v0.1/v0.2 overlap:
 
 1. Harden the Virtualization.framework boot spike against real Windows 11 Arm installer variants.
-2. Add deeper validation for selected installer media and virtual disk paths, including file format and bootability checks proven by the spike.
-3. Keep the fake-agent path available so UI and protocol work stay testable without Windows.
-4. Validate the actual Windows 11 Arm VM path separately.
+2. Decide whether the reliable Windows path stays on Apple Virtualization.framework or needs a UTM-style QEMU/Hypervisor backend for installer display and device compatibility.
+3. Add deeper validation for selected installer media and virtual disk paths, including file format and bootability checks proven by the spike.
+4. Keep the fake-agent path available so UI and protocol work stay testable without Windows.
+5. Validate the actual Windows 11 Arm VM path separately.
