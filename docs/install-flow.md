@@ -58,6 +58,17 @@ These checks are deliberately conservative. They catch configuration mistakes be
 
 The v0.1 boot spike can create and start a `VZVirtualMachine`, attach ISO and disk storage, and open Apple's `VZVirtualMachineView`. That is not the same as a UTM-grade Windows installer path. Apple's public Virtualization documentation focuses on Linux and macOS guest flows, and Windows 11 Arm installer display/driver behavior through the Apple Virtio graphics path must be proven with real media before Veil can claim reliable Windows setup.
 
+The QEMU/HVF compatibility spike has progressed past static planning: on July 1, 2026, a local Homebrew QEMU 11.0.2 install was validated with `qemu-system-aarch64`, Arm EDK2 firmware at `/opt/homebrew/share/qemu/edk2-aarch64-code.fd`, the user-provided `Win11_25H2_Korean_Arm64_v2.iso`, and a separate sparse QEMU test disk. The ISO contains `efi/boot/bootaa64.efi` and macOS reports it as an AArch64 EFI application.
+
+Current QEMU boot evidence:
+
+- QEMU can start the local device graph with HVF, Arm UEFI, lock-safe read-only ISO media, writable raw system disk, NAT networking, Cocoa/ramfb graphics, USB input, and serial logging.
+- When the same ISO is already attached to another VM, QEMU needs the file-driver form `file.locking=off` for read-only ISO reuse.
+- The current boot attempts reach Arm UEFI and map the installer ISO as `FS0`, but Windows Setup does not yet start automatically; UEFI reports a boot image timeout and falls back to the EDK II shell.
+- `virt,highmem=off` with more than 3 GB memory fails under HVF because address space is limited. A 3 GB `highmem=off` attempt reaches UEFI but still does not start Windows Setup.
+
+This means Veil can now distinguish "QEMU is missing" from "QEMU and the ISO are present, but the Windows Setup boot recipe is not proven." The next QEMU milestone is a repeatable launch harness that sends boot prompt input, captures serial logs and screenshots, and commits the first recipe that reliably reaches the Windows Setup UI.
+
 References:
 
 - Apple: [Running Linux in a Virtual Machine](https://developer.apple.com/documentation/virtualization/running-linux-in-a-virtual-machine)

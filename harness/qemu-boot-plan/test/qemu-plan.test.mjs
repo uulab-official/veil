@@ -33,12 +33,21 @@ describe("QEMU boot plan harness", () => {
     const plan = {
       ...fixture,
       arguments: fixture.arguments.map((argument) =>
-        argument.startsWith("if=none,id=installer")
-          ? "if=none,id=installer,media=disk,file=/Users/test/Downloads/Win11.iso"
+        argument.includes("id=installer")
+          ? "driver=raw,file.driver=file,file.locking=off,file.filename=/Users/test/Downloads/Win11.iso,if=none,id=installer,media=disk"
           : argument
       )
     };
 
     assert.throws(() => validateQEMUPlan(plan), /read-only cdrom/);
+  });
+
+  it("rejects plans without declared Arm UEFI firmware", () => {
+    const plan = {
+      ...fixture,
+      arguments: fixture.arguments.filter((argument) => argument !== "-bios" && argument !== fixture.firmwarePath)
+    };
+
+    assert.throws(() => validateQEMUPlan(plan), /-bios/);
   });
 });

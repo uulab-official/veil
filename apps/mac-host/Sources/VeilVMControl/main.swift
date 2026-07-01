@@ -206,11 +206,27 @@ struct VeilVMControl {
             .first { $0.kind == .qemuHypervisor }
         let executablePath = qemuProvider?.executablePath
             ?? VMRuntimeProviderProbe.defaultQEMUExecutablePaths[0]
+        let firmwarePath = qemuFirmwarePath()
         let planner = QEMUWindowsBootPlanner(
             executablePath: executablePath,
-            isExecutableAvailable: qemuProvider?.status == .active && qemuProvider?.executablePath != nil
+            isExecutableAvailable: qemuProvider?.status == .active && qemuProvider?.executablePath != nil,
+            firmwarePath: firmwarePath ?? defaultQEMUFirmwarePaths[0],
+            isFirmwareAvailable: firmwarePath != nil
         )
         return try planner.makePlan(for: profile)
+    }
+
+    private static var defaultQEMUFirmwarePaths: [String] {
+        [
+            "/opt/homebrew/share/qemu/edk2-aarch64-code.fd",
+            "/usr/local/share/qemu/edk2-aarch64-code.fd",
+            "/opt/local/share/qemu/edk2-aarch64-code.fd"
+        ]
+    }
+
+    private static func qemuFirmwarePath() -> String? {
+        let fileManager = FileManager.default
+        return defaultQEMUFirmwarePaths.first { fileManager.fileExists(atPath: $0) }
     }
 
     private static func shellQuoted(_ value: String) -> String {

@@ -7,6 +7,7 @@ const REQUIRED_CHECK_IDS = [
   "installer-media",
   "system-disk",
   "qemu-executable",
+  "uefi-firmware",
   "hvf-plan"
 ];
 

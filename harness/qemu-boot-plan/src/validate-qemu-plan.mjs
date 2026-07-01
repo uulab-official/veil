@@ -4,6 +4,8 @@ import { fileURLToPath } from "node:url";
 const REQUIRED_SEQUENCES = [
   ["-machine", "virt,highmem=on"],
   ["-accel", "hvf"],
+  ["-bios"],
+  ["-boot", "order=d"],
   ["-cpu", "host"],
   ["-netdev", "user,id=net0"],
   ["-device", "virtio-net-pci,netdev=net0"],
@@ -12,7 +14,9 @@ const REQUIRED_SEQUENCES = [
 
 const REQUIRED_DEVICES = [
   "usb-storage,drive=installer",
+  "qemu-xhci,id=usb0",
   "virtio-blk-pci,drive=system",
+  "ramfb",
   "virtio-gpu-pci",
   "usb-kbd",
   "usb-tablet"
@@ -26,6 +30,7 @@ export function validateQEMUPlan(plan) {
   requireString(plan.kind, "kind");
   requireString(plan.provider, "provider");
   requireString(plan.executablePath, "executablePath");
+  requireString(plan.firmwarePath, "firmwarePath");
   requireString(plan.summary, "summary");
 
   if (plan.kind !== "qemuWindowsArmBootPlan") {
@@ -42,6 +47,10 @@ export function validateQEMUPlan(plan) {
 
   if (typeof plan.isExecutableAvailable !== "boolean") {
     throw new TypeError("QEMU plan field 'isExecutableAvailable' must be a boolean.");
+  }
+
+  if (typeof plan.isFirmwareAvailable !== "boolean") {
+    throw new TypeError("QEMU plan field 'isFirmwareAvailable' must be a boolean.");
   }
 
   if (!Array.isArray(plan.arguments) || plan.arguments.length === 0) {
@@ -72,12 +81,25 @@ export function validateQEMUPlan(plan) {
     }
   }
 
-  const driveArguments = plan.arguments.filter((argument) => argument.startsWith("if=none,"));
+  const driveArguments = plan.arguments.filter((argument) => argument.includes("if=none,"));
+  const biosIndex = plan.arguments.indexOf("-bios");
   const installerDrive = driveArguments.find((argument) => argument.includes("id=installer"));
   const systemDrive = driveArguments.find((argument) => argument.includes("id=system"));
 
+  if (biosIndex === -1 || plan.arguments[biosIndex + 1] !== plan.firmwarePath) {
+    throw new TypeError("QEMU plan must attach the declared Arm UEFI firmware with -bios.");
+  }
+
+  if (!plan.firmwarePath.endsWith("edk2-aarch64-code.fd")) {
+    throw new TypeError("QEMU plan firmware must point to edk2-aarch64-code.fd.");
+  }
+
   if (!installerDrive || !installerDrive.includes("media=cdrom") || !installerDrive.includes("readonly=on")) {
     throw new TypeError("QEMU plan must attach installer media as a read-only cdrom drive.");
+  }
+
+  if (!installerDrive.includes("file.locking=off")) {
+    throw new TypeError("QEMU installer media must disable file locking for read-only ISO reuse.");
   }
 
   if (!systemDrive || !systemDrive.includes("format=raw")) {

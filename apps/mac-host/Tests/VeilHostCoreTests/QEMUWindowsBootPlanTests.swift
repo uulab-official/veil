@@ -15,23 +15,31 @@ struct QEMUWindowsBootPlanTests {
 
         let planner = QEMUWindowsBootPlanner(
             executablePath: "/opt/homebrew/bin/qemu-system-aarch64",
-            isExecutableAvailable: true
+            isExecutableAvailable: true,
+            firmwarePath: "/opt/homebrew/share/qemu/edk2-aarch64-code.fd",
+            isFirmwareAvailable: true
         )
 
         let plan = try planner.makePlan(for: profile)
 
         #expect(plan.executablePath == "/opt/homebrew/bin/qemu-system-aarch64")
         #expect(plan.isExecutableAvailable)
+        #expect(plan.firmwarePath == "/opt/homebrew/share/qemu/edk2-aarch64-code.fd")
+        #expect(plan.isFirmwareAvailable)
         #expect(plan.arguments.containsSequence(["-machine", "virt,highmem=on"]))
         #expect(plan.arguments.containsSequence(["-accel", "hvf"]))
+        #expect(plan.arguments.containsSequence(["-bios", "/opt/homebrew/share/qemu/edk2-aarch64-code.fd"]))
+        #expect(plan.arguments.containsSequence(["-boot", "order=d"]))
         #expect(plan.arguments.containsSequence(["-cpu", "host"]))
         #expect(plan.arguments.containsSequence(["-smp", "8"]))
         #expect(plan.arguments.containsSequence(["-m", "12288M"]))
-        #expect(plan.arguments.contains("if=none,id=installer,media=cdrom,readonly=on,file=/Users/test/Downloads/Win11_25H2_Korean_Arm64_v2.iso"))
+        #expect(plan.arguments.contains("driver=raw,file.driver=file,file.locking=off,file.filename=/Users/test/Downloads/Win11_25H2_Korean_Arm64_v2.iso,if=none,id=installer,media=cdrom,readonly=on"))
         #expect(plan.arguments.contains("if=none,id=system,format=raw,file=/Users/test/Virtual Machines/Veil/Windows 11 Arm.img"))
         #expect(plan.arguments.containsSequence(["-netdev", "user,id=net0"]))
         #expect(plan.arguments.containsSequence(["-device", "virtio-net-pci,netdev=net0"]))
         #expect(plan.arguments.containsSequence(["-display", "cocoa"]))
+        #expect(plan.arguments.containsSequence(["-device", "qemu-xhci,id=usb0"]))
+        #expect(plan.arguments.contains("ramfb"))
         #expect(plan.arguments.contains("virtio-gpu-pci"))
         #expect(plan.arguments.contains("usb-kbd"))
         #expect(plan.arguments.contains("usb-tablet"))
@@ -45,7 +53,9 @@ struct QEMUWindowsBootPlanTests {
 
         let planner = QEMUWindowsBootPlanner(
             executablePath: "/opt/homebrew/bin/qemu-system-aarch64",
-            isExecutableAvailable: true
+            isExecutableAvailable: true,
+            firmwarePath: "/opt/homebrew/share/qemu/edk2-aarch64-code.fd",
+            isFirmwareAvailable: true
         )
 
         #expect(throws: QEMUWindowsBootPlanError.missingInstallerMedia) {
@@ -61,7 +71,9 @@ struct QEMUWindowsBootPlanTests {
 
         let planner = QEMUWindowsBootPlanner(
             executablePath: "/opt/homebrew/bin/qemu-system-aarch64",
-            isExecutableAvailable: false
+            isExecutableAvailable: false,
+            firmwarePath: "/opt/homebrew/share/qemu/edk2-aarch64-code.fd",
+            isFirmwareAvailable: true
         )
 
         let plan = try planner.makePlan(for: profile)
@@ -78,7 +90,9 @@ struct QEMUWindowsBootPlanTests {
 
         let planner = QEMUWindowsBootPlanner(
             executablePath: "/opt/homebrew/bin/qemu-system-aarch64",
-            isExecutableAvailable: true
+            isExecutableAvailable: true,
+            firmwarePath: "/opt/homebrew/share/qemu/edk2-aarch64-code.fd",
+            isFirmwareAvailable: true
         )
         let plan = try planner.makePlan(for: profile)
         let doctor = QEMUWindowsReadinessDoctor(
@@ -86,6 +100,7 @@ struct QEMUWindowsBootPlanTests {
                 path == "/Users/test/Downloads/Win11_25H2_Korean_Arm64_v2.iso"
                     || path == "/Users/test/Virtual Machines/Veil/Windows 11 Arm.img"
                     || path == "/opt/homebrew/bin/qemu-system-aarch64"
+                    || path == "/opt/homebrew/share/qemu/edk2-aarch64-code.fd"
             }
         )
 
@@ -98,6 +113,7 @@ struct QEMUWindowsBootPlanTests {
             "installer-media",
             "system-disk",
             "qemu-executable",
+            "uefi-firmware",
             "hvf-plan"
         ])
         #expect(report.checks.allSatisfy { $0.state == .passed })
@@ -112,13 +128,16 @@ struct QEMUWindowsBootPlanTests {
 
         let planner = QEMUWindowsBootPlanner(
             executablePath: "/opt/homebrew/bin/qemu-system-aarch64",
-            isExecutableAvailable: false
+            isExecutableAvailable: false,
+            firmwarePath: "/opt/homebrew/share/qemu/edk2-aarch64-code.fd",
+            isFirmwareAvailable: true
         )
         let plan = try planner.makePlan(for: profile)
         let doctor = QEMUWindowsReadinessDoctor(
             fileExists: { path in
                 path == "/Users/test/Downloads/Win11_25H2_Korean_Arm64_v2.iso"
                     || path == "/Users/test/Virtual Machines/Veil/Windows 11 Arm.img"
+                    || path == "/opt/homebrew/share/qemu/edk2-aarch64-code.fd"
             }
         )
 
@@ -129,6 +148,37 @@ struct QEMUWindowsBootPlanTests {
         #expect(qemuCheck.state == .blocked)
         #expect(qemuCheck.detail == "qemu-system-aarch64 is not available at /opt/homebrew/bin/qemu-system-aarch64.")
         #expect(report.nextActions.contains("Install QEMU with Homebrew or set VEIL_QEMU_SYSTEM_AARCH64 to the local qemu-system-aarch64 path."))
+    }
+
+    @Test("doctor blocks when UEFI firmware is missing")
+    func doctorBlocksWhenFirmwareIsMissing() throws {
+        var profile = VMProfile.defaultWindows11Arm(createdAt: Date(timeIntervalSince1970: 1_782_752_400))
+        profile.installerMediaPath = "/Users/test/Downloads/Win11_25H2_Korean_Arm64_v2.iso"
+        profile.virtualDiskPath = "/Users/test/Virtual Machines/Veil/Windows 11 Arm.img"
+
+        let planner = QEMUWindowsBootPlanner(
+            executablePath: "/opt/homebrew/bin/qemu-system-aarch64",
+            isExecutableAvailable: true,
+            firmwarePath: "/opt/homebrew/share/qemu/edk2-aarch64-code.fd",
+            isFirmwareAvailable: false
+        )
+        let plan = try planner.makePlan(for: profile)
+        let doctor = QEMUWindowsReadinessDoctor(
+            fileExists: { path in
+                path == "/Users/test/Downloads/Win11_25H2_Korean_Arm64_v2.iso"
+                    || path == "/Users/test/Virtual Machines/Veil/Windows 11 Arm.img"
+                    || path == "/opt/homebrew/bin/qemu-system-aarch64"
+            }
+        )
+
+        let report = doctor.makeReport(profile: profile, plan: plan)
+        let firmwareCheck = try #require(report.checks.first { $0.id == "uefi-firmware" })
+
+        #expect(plan.warnings.contains("QEMU Arm UEFI firmware is not available at /opt/homebrew/share/qemu/edk2-aarch64-code.fd. Install QEMU from Homebrew or point Veil at an edk2-aarch64-code.fd file."))
+        #expect(report.overallState == .blocked)
+        #expect(firmwareCheck.state == .blocked)
+        #expect(firmwareCheck.detail == "Arm UEFI firmware is not available at /opt/homebrew/share/qemu/edk2-aarch64-code.fd.")
+        #expect(report.nextActions.contains("Install QEMU from Homebrew or point Veil at edk2-aarch64-code.fd before launching Windows setup."))
     }
 }
 

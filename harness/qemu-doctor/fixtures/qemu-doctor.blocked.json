@@ -25,6 +25,12 @@
       "title": "QEMU executable"
     },
     {
+      "detail": "Arm UEFI firmware is available at /opt/homebrew/share/qemu/edk2-aarch64-code.fd.",
+      "id": "uefi-firmware",
+      "state": "passed",
+      "title": "Arm UEFI firmware"
+    },
+    {
       "detail": "QEMU command plan enables HVF acceleration and local devices.",
       "id": "hvf-plan",
       "state": "passed",

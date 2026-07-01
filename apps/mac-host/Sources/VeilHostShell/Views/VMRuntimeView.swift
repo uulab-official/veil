@@ -107,6 +107,8 @@ struct VMRuntimeView: View {
                     VStack(alignment: .leading, spacing: 14) {
                         MachineSummaryPanel(snapshot: snapshot)
 
+                        RuntimeProvidersPanel(snapshot: snapshot)
+
                         ResourcePlanPanel(snapshot: snapshot)
 
                         DevicePlanPanel(snapshot: snapshot)
@@ -802,6 +804,70 @@ private struct MachineSummaryPanel: View {
         }
 
         return String(format: "%.1f", gigabytes)
+    }
+}
+
+private struct RuntimeProvidersPanel: View {
+    var snapshot: VMRuntimeSnapshot
+
+    var body: some View {
+        ShellPanel(spacing: 12) {
+            ShellPanelHeader(
+                title: "Runtime Providers",
+                subtitle: "Local engines available for the Windows boot path.",
+                symbolName: "bolt.horizontal"
+            )
+
+            if snapshot.runtimeProviders.isEmpty {
+                ResourcePlanRow(
+                    title: "Providers",
+                    value: "Refresh runtime status to inspect local providers.",
+                    symbolName: "questionmark.circle",
+                    state: .planned
+                )
+            } else {
+                ForEach(snapshot.runtimeProviders, id: \.kind) { provider in
+                    ResourcePlanRow(
+                        title: provider.displayName,
+                        value: providerDetail(provider),
+                        symbolName: symbolName(for: provider),
+                        state: state(for: provider)
+                    )
+                }
+            }
+        }
+    }
+
+    private func providerDetail(_ provider: VMRuntimeProviderSummary) -> String {
+        if let executableVersion = provider.executableVersion {
+            return "\(provider.mode), \(provider.acceleration), \(executableVersion)"
+        }
+
+        if let executablePath = provider.executablePath {
+            return "\(provider.mode), \(provider.acceleration), \(URL(fileURLWithPath: executablePath).lastPathComponent)"
+        }
+
+        return "\(provider.mode), \(provider.acceleration)"
+    }
+
+    private func symbolName(for provider: VMRuntimeProviderSummary) -> String {
+        switch provider.kind {
+        case .appleVirtualization:
+            "apple.logo"
+        case .qemuHypervisor:
+            "shippingbox"
+        }
+    }
+
+    private func state(for provider: VMRuntimeProviderSummary) -> IntegrationState {
+        switch provider.status {
+        case .active:
+            .ready
+        case .planned:
+            .planned
+        case .unavailable:
+            .blocked
+        }
     }
 }
 

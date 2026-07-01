@@ -20,6 +20,8 @@ public struct QEMUWindowsBootPlan: Codable, Equatable, Sendable {
     public var isServerBacked: Bool
     public var executablePath: String
     public var isExecutableAvailable: Bool
+    public var firmwarePath: String?
+    public var isFirmwareAvailable: Bool
     public var summary: String
     public var arguments: [String]
     public var warnings: [String]
@@ -30,6 +32,8 @@ public struct QEMUWindowsBootPlan: Codable, Equatable, Sendable {
         isServerBacked: Bool = false,
         executablePath: String,
         isExecutableAvailable: Bool,
+        firmwarePath: String? = nil,
+        isFirmwareAvailable: Bool = false,
         summary: String,
         arguments: [String],
         warnings: [String]
@@ -39,6 +43,8 @@ public struct QEMUWindowsBootPlan: Codable, Equatable, Sendable {
         self.isServerBacked = isServerBacked
         self.executablePath = executablePath
         self.isExecutableAvailable = isExecutableAvailable
+        self.firmwarePath = firmwarePath
+        self.isFirmwareAvailable = isFirmwareAvailable
         self.summary = summary
         self.arguments = arguments
         self.warnings = warnings
@@ -48,13 +54,19 @@ public struct QEMUWindowsBootPlan: Codable, Equatable, Sendable {
 public struct QEMUWindowsBootPlanner: Sendable {
     private let executablePath: String
     private let isExecutableAvailable: Bool
+    private let firmwarePath: String?
+    private let isFirmwareAvailable: Bool
 
     public init(
         executablePath: String,
-        isExecutableAvailable: Bool
+        isExecutableAvailable: Bool,
+        firmwarePath: String? = nil,
+        isFirmwareAvailable: Bool = false
     ) {
         self.executablePath = executablePath
         self.isExecutableAvailable = isExecutableAvailable
+        self.firmwarePath = firmwarePath
+        self.isFirmwareAvailable = isFirmwareAvailable
     }
 
     public func makePlan(for profile: VMProfile) throws -> QEMUWindowsBootPlan {
@@ -76,28 +88,46 @@ public struct QEMUWindowsBootPlanner: Sendable {
             )
         }
 
-        let arguments = [
+        if let firmwarePath, !isFirmwareAvailable {
+            warnings.append(
+                "QEMU Arm UEFI firmware is not available at \(firmwarePath). Install QEMU from Homebrew or point Veil at an edk2-aarch64-code.fd file."
+            )
+        }
+
+        var arguments = [
             "-name", profile.name,
             "-machine", "virt,highmem=on",
-            "-accel", "hvf",
+            "-accel", "hvf"
+        ]
+
+        if let firmwarePath {
+            arguments.append(contentsOf: ["-bios", firmwarePath])
+        }
+
+        arguments.append(contentsOf: [
+            "-boot", "order=d",
             "-cpu", "host",
             "-smp", "\(cpuCount)",
             "-m", "\(memoryMB)M",
-            "-drive", "if=none,id=installer,media=cdrom,readonly=on,file=\(installerMediaPath)",
+            "-drive", "driver=raw,file.driver=file,file.locking=off,file.filename=\(installerMediaPath),if=none,id=installer,media=cdrom,readonly=on",
+            "-device", "qemu-xhci,id=usb0",
             "-device", "usb-storage,drive=installer",
             "-drive", "if=none,id=system,format=raw,file=\(virtualDiskPath)",
             "-device", "virtio-blk-pci,drive=system",
             "-netdev", "user,id=net0",
             "-device", "virtio-net-pci,netdev=net0",
             "-display", "cocoa",
+            "-device", "ramfb",
             "-device", "virtio-gpu-pci",
             "-device", "usb-kbd",
             "-device", "usb-tablet"
-        ]
+        ])
 
         return QEMUWindowsBootPlan(
             executablePath: executablePath,
             isExecutableAvailable: isExecutableAvailable,
+            firmwarePath: firmwarePath,
+            isFirmwareAvailable: isFirmwareAvailable,
             summary: "Dry-run QEMU/HVF command plan for \(profile.name). Veil does not execute this plan yet.",
             arguments: arguments,
             warnings: warnings
@@ -182,6 +212,7 @@ public struct QEMUWindowsReadinessDoctor: Sendable {
             installerMediaCheck(profile),
             systemDiskCheck(profile),
             qemuExecutableCheck(plan),
+            uefiFirmwareCheck(plan),
             hvfPlanCheck(plan)
         ]
         let overallState: QEMUWindowsReadinessState = checks.contains { $0.state == .blocked }
@@ -321,6 +352,42 @@ public struct QEMUWindowsReadinessDoctor: Sendable {
         )
     }
 
+    private func uefiFirmwareCheck(_ plan: QEMUWindowsBootPlan?) -> QEMUWindowsReadinessCheck {
+        guard let plan else {
+            return QEMUWindowsReadinessCheck(
+                id: "uefi-firmware",
+                title: "Arm UEFI firmware",
+                state: .blocked,
+                detail: "QEMU command plan is unavailable."
+            )
+        }
+
+        guard let firmwarePath = plan.firmwarePath else {
+            return QEMUWindowsReadinessCheck(
+                id: "uefi-firmware",
+                title: "Arm UEFI firmware",
+                state: .blocked,
+                detail: "No Arm UEFI firmware path is configured."
+            )
+        }
+
+        guard plan.isFirmwareAvailable, fileExists(firmwarePath) else {
+            return QEMUWindowsReadinessCheck(
+                id: "uefi-firmware",
+                title: "Arm UEFI firmware",
+                state: .blocked,
+                detail: "Arm UEFI firmware is not available at \(firmwarePath)."
+            )
+        }
+
+        return QEMUWindowsReadinessCheck(
+            id: "uefi-firmware",
+            title: "Arm UEFI firmware",
+            state: .passed,
+            detail: "Arm UEFI firmware is available at \(firmwarePath)."
+        )
+    }
+
     private func nextActions(for checks: [QEMUWindowsReadinessCheck]) -> [String] {
         var actions: [String] = []
 
@@ -338,6 +405,10 @@ public struct QEMUWindowsReadinessDoctor: Sendable {
 
         if checks.first(where: { $0.id == "qemu-executable" })?.state == .blocked {
             actions.append("Install QEMU with Homebrew or set VEIL_QEMU_SYSTEM_AARCH64 to the local qemu-system-aarch64 path.")
+        }
+
+        if checks.first(where: { $0.id == "uefi-firmware" })?.state == .blocked {
+            actions.append("Install QEMU from Homebrew or point Veil at edk2-aarch64-code.fd before launching Windows setup.")
         }
 
         if checks.first(where: { $0.id == "hvf-plan" })?.state == .blocked {
