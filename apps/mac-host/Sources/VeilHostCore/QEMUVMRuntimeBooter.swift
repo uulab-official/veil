@@ -7,18 +7,22 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
     private let planBuilder: @Sendable (VMProfile) throws -> QEMUWindowsBootPlan
     private let processRunner: @Sendable (Process) throws -> Void
     private let frontmostRunner: @Sendable () -> Void
+    private let bootKeySender: @Sendable (URL) -> Void
     private var process: Process?
+    private var monitorSocketURL: URL?
 
     public init(
         diagnosticsDirectory: URL = QEMUVMRuntimeBooter.defaultDiagnosticsDirectory(),
         planBuilder: @escaping @Sendable (VMProfile) throws -> QEMUWindowsBootPlan = QEMUVMRuntimeBooter.makePlan(for:),
         processRunner: @escaping @Sendable (Process) throws -> Void = { try $0.run() },
-        frontmostRunner: @escaping @Sendable () -> Void = QEMUVMRuntimeBooter.bringQEMUToFront
+        frontmostRunner: @escaping @Sendable () -> Void = QEMUVMRuntimeBooter.bringQEMUToFront,
+        bootKeySender: @escaping @Sendable (URL) -> Void = QEMUVMRuntimeBooter.sendWindowsInstallerBootKey
     ) {
         self.diagnosticsDirectory = diagnosticsDirectory
         self.planBuilder = planBuilder
         self.processRunner = processRunner
         self.frontmostRunner = frontmostRunner
+        self.bootKeySender = bootKeySender
     }
 
     public func runtimeState() async -> VMRuntimeState? {
@@ -44,15 +48,21 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
         let logURL = try processLogURL()
         FileManager.default.createFile(atPath: logURL.path, contents: nil)
         let logHandle = try FileHandle(forWritingTo: logURL)
+        let monitorSocketURL = Self.monitorSocketURL()
 
         let process = Process()
         process.executableURL = URL(fileURLWithPath: plan.executablePath)
-        process.arguments = plan.arguments
+        process.arguments = plan.arguments + [
+            "-monitor",
+            "unix:\(monitorSocketURL.path),server,nowait"
+        ]
         process.standardOutput = logHandle
         process.standardError = logHandle
         try processRunner(process)
         self.process = process
+        self.monitorSocketURL = monitorSocketURL
         frontmostRunner()
+        scheduleWindowsInstallerBootKeySend(monitorSocketURL: monitorSocketURL)
         return .running
     }
 
@@ -67,6 +77,10 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
         }
 
         self.process = nil
+        if let monitorSocketURL {
+            try? FileManager.default.removeItem(at: monitorSocketURL)
+        }
+        self.monitorSocketURL = nil
         return .stopped
     }
 
@@ -114,6 +128,38 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
         process.standardOutput = nil
         process.standardError = nil
         try? process.run()
+    }
+
+    public static func sendWindowsInstallerBootKey(monitorSocketURL: URL) {
+        guard FileManager.default.fileExists(atPath: monitorSocketURL.path) else {
+            return
+        }
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/sh")
+        process.arguments = [
+            "-c",
+            "printf 'sendkey spc\\n' | /usr/bin/nc -U \"$0\"",
+            monitorSocketURL.path
+        ]
+        process.standardOutput = nil
+        process.standardError = nil
+        try? process.run()
+    }
+
+    private func scheduleWindowsInstallerBootKeySend(monitorSocketURL: URL) {
+        let bootKeySender = self.bootKeySender
+        Task.detached {
+            for _ in 0..<12 {
+                try? await Task.sleep(for: .seconds(1))
+                bootKeySender(monitorSocketURL)
+            }
+        }
+    }
+
+    private static func monitorSocketURL() -> URL {
+        URL(fileURLWithPath: "/tmp")
+            .appendingPathComponent("vq-\(UUID().uuidString.prefix(8)).sock")
     }
 
     private static func hostArchitecture() -> String {

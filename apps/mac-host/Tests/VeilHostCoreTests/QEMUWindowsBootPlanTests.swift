@@ -313,7 +313,8 @@ struct QEMUWindowsBootPlanTests {
                 capture.executablePath = process.executableURL?.path
                 capture.arguments = process.arguments ?? []
             },
-            frontmostRunner: {}
+            frontmostRunner: {},
+            bootKeySender: { _ in }
         )
 
         let state = try await booter.start(profile: profile)
@@ -321,6 +322,8 @@ struct QEMUWindowsBootPlanTests {
         #expect(state == .running)
         #expect(capture.executablePath == qemuURL.path)
         #expect(capture.arguments.containsSequence(["-display", "cocoa"]))
+        #expect(capture.arguments.contains("-monitor"))
+        #expect(capture.arguments.contains { $0.hasPrefix("unix:") && $0.hasSuffix(",server,nowait") })
         #expect(capture.arguments.contains("driver=raw,file.driver=file,file.locking=off,file.filename=\(autoInstallURL.path),if=none,id=autounattend,media=cdrom,readonly=on"))
     }
 }

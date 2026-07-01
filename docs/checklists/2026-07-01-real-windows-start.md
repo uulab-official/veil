@@ -26,12 +26,15 @@ Goal: keep the main Veil experience pointed at real local Windows boot and conso
 - [x] Generate and attach `VeilAutoInstall.iso` as setup-readable automatic install media in local runtime plans.
 - [x] Route the main app Start action to the local QEMU/HVF console when QEMU is available.
 - [x] Verify the app-launched QEMU console opens a real foreground `QEMU Windows 11 Arm` Cocoa window.
-- [x] Verify the app-launched console currently reaches UEFI Shell, not Windows Setup.
-- [x] Test USB storage, SCSI CD-ROM, and virtio-blk installer attachment variants; all still fall back to UEFI Shell on the current local machine.
+- [x] Verify the app-launched console previously reached UEFI Shell instead of Windows Setup before boot-key input was automated.
+- [x] Test USB storage, SCSI CD-ROM, and virtio-blk installer attachment variants; without boot-key input they all fell back to UEFI Shell on the current local machine.
+- [x] Identify the Windows ISO boot timeout cause: Windows installer boot waits for a key press and falls back when no key is sent.
+- [x] Add a short QEMU monitor socket and automatically send boot key input after VM start.
+- [x] Verify the app-launched QEMU console reaches the Korean Windows 11 Setup product-key screen.
 
 ## Next
 
-- [ ] Adjust the QEMU boot recipe so the Windows ISO reaches Windows Boot Manager instead of falling back to UEFI Shell.
+- [ ] Improve `Autounattend.xml` so Windows Setup skips the product-key page without bundling a key.
 - [ ] Replace the static setup preview with a real VM screenshot once QEMU reaches Windows Setup.
 - [ ] Add a QEMU screenshot/screencapture harness so boot failures can be compared visually, not only through serial text.
 - [ ] Add recovery copy for common boot failures: bad ISO attachment, unsupported device model, EFI state, and disk format issues.
