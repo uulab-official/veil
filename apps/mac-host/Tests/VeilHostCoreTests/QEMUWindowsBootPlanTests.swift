@@ -180,6 +180,86 @@ struct QEMUWindowsBootPlanTests {
         #expect(firmwareCheck.detail == "Arm UEFI firmware is not available at /opt/homebrew/share/qemu/edk2-aarch64-code.fd.")
         #expect(report.nextActions.contains("Install QEMU from Homebrew or point Veil at edk2-aarch64-code.fd before launching Windows setup."))
     }
+
+    @Test("smoke analyzer reports UEFI shell fallback with boot timeout evidence")
+    func smokeAnalyzerReportsUEFIShellFallback() {
+        let serialOutput = """
+        BdsDxe: starting Boot0001 "UEFI QEMU QEMU USB HARDDRIVE 1-0000:00:01.0-1"
+        Error: Image at 001BC344000 start failed: Time out
+        BdsDxe: failed to start Boot0001 "UEFI QEMU QEMU USB HARDDRIVE 1-0000:00:01.0-1": Time out
+        UEFI Interactive Shell v2.2
+        Shell>
+        """
+
+        let report = QEMUWindowsBootSmokeAnalyzer.makeReport(
+            durationSeconds: 45,
+            processOutput: "",
+            serialOutput: serialOutput,
+            didRemainRunningUntilTimeout: true,
+            serialLogPath: "/tmp/serial.log",
+            processLogPath: "/tmp/process.log"
+        )
+
+        #expect(report.outcome == .uefiShell)
+        #expect(report.evidence.contains("boot-image-timeout"))
+        #expect(report.evidence.contains("uefi-shell"))
+        #expect(report.detail == "QEMU reached Arm UEFI, but Windows Setup did not start and firmware fell back to the EDK II shell.")
+    }
+
+    @Test("smoke analyzer reports argument failures before firmware")
+    func smokeAnalyzerReportsArgumentFailure() {
+        let report = QEMUWindowsBootSmokeAnalyzer.makeReport(
+            durationSeconds: 5,
+            processOutput: "qemu-system-aarch64: -accel hvf: Addressing limited to 32 bits",
+            serialOutput: "",
+            didRemainRunningUntilTimeout: false,
+            serialLogPath: "/tmp/serial.log",
+            processLogPath: "/tmp/process.log"
+        )
+
+        #expect(report.outcome == .argumentFailure)
+        #expect(report.evidence == ["qemu-argument-error"])
+    }
+
+    @Test("smoke analyzer ignores expected timeout termination text")
+    func smokeAnalyzerIgnoresExpectedTerminationText() {
+        let report = QEMUWindowsBootSmokeAnalyzer.makeReport(
+            durationSeconds: 25,
+            processOutput: "qemu-system-aarch64: terminating on signal 15 from pid 4766",
+            serialOutput: "Error: Image at 0027C344000 start failed: Time out\nUEFI Interactive Shell v2.2\nShell>",
+            didRemainRunningUntilTimeout: true,
+            serialLogPath: "/tmp/serial.log",
+            processLogPath: "/tmp/process.log"
+        )
+
+        #expect(report.outcome == .uefiShell)
+        #expect(report.evidence == ["boot-image-timeout", "uefi-shell"])
+    }
+
+    @Test("smoke planner converts the interactive plan into a headless bounded smoke run")
+    func smokePlannerBuildsHeadlessArguments() throws {
+        var profile = VMProfile.defaultWindows11Arm(createdAt: Date(timeIntervalSince1970: 1_782_752_400))
+        profile.installerMediaPath = "/Users/test/Downloads/Win11_25H2_Korean_Arm64_v2.iso"
+        profile.virtualDiskPath = "/Users/test/Virtual Machines/Veil/Windows 11 Arm.img"
+        let plan = try QEMUWindowsBootPlanner(
+            executablePath: "/opt/homebrew/bin/qemu-system-aarch64",
+            isExecutableAvailable: true,
+            firmwarePath: "/opt/homebrew/share/qemu/edk2-aarch64-code.fd",
+            isFirmwareAvailable: true
+        ).makePlan(for: profile)
+
+        let arguments = QEMUWindowsBootSmokePlanner().makeArguments(
+            from: plan,
+            serialLogPath: "/tmp/veil-qemu-smoke.serial.log"
+        )
+
+        #expect(arguments.contains("-snapshot"))
+        #expect(arguments.containsSequence(["-display", "none"]))
+        #expect(arguments.containsSequence(["-serial", "file:/tmp/veil-qemu-smoke.serial.log"]))
+        #expect(arguments.containsSequence(["-monitor", "none"]))
+        #expect(arguments.contains("driver=raw,file.driver=file,file.locking=off,file.filename=/Users/test/Virtual Machines/Veil/Windows 11 Arm.img,if=none,id=system"))
+        #expect(!arguments.contains("cocoa"))
+    }
 }
 
 private extension [String] {

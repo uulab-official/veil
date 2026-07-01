@@ -23,7 +23,7 @@ enum VMControlError: Error, LocalizedError {
         }
     }
 
-    private static let usage = "Usage: veil-vmctl prepare --installer /path/to/Windows.iso | veil-vmctl providers [--json] | veil-vmctl qemu-plan [--json] | veil-vmctl qemu-doctor [--json]"
+    private static let usage = "Usage: veil-vmctl prepare --installer /path/to/Windows.iso | veil-vmctl providers [--json] | veil-vmctl qemu-plan [--json] | veil-vmctl qemu-doctor [--json] | veil-vmctl qemu-smoke [--json] [--seconds 45]"
 }
 
 struct VMControlArguments {
@@ -32,6 +32,7 @@ struct VMControlArguments {
         case providers(json: Bool)
         case qemuPlan(json: Bool)
         case qemuDoctor(json: Bool)
+        case qemuSmoke(json: Bool, seconds: Int)
     }
 
     var command: Command
@@ -53,6 +54,11 @@ struct VMControlArguments {
             return VMControlArguments(command: .qemuDoctor(json: arguments.contains("--json")))
         }
 
+        if command == "qemu-smoke" {
+            let seconds = secondsArgument(from: arguments) ?? 45
+            return VMControlArguments(command: .qemuSmoke(json: arguments.contains("--json"), seconds: seconds))
+        }
+
         guard command == "prepare" else {
             throw VMControlError.unsupportedCommand(command)
         }
@@ -63,6 +69,15 @@ struct VMControlArguments {
         }
 
         return VMControlArguments(command: .prepare(installerPath: arguments[installerFlagIndex + 1]))
+    }
+
+    private static func secondsArgument(from arguments: [String]) -> Int? {
+        guard let secondsFlagIndex = arguments.firstIndex(of: "--seconds"),
+              arguments.indices.contains(secondsFlagIndex + 1) else {
+            return nil
+        }
+
+        return Int(arguments[secondsFlagIndex + 1])
     }
 }
 
@@ -96,6 +111,8 @@ struct VeilVMControl {
             try await printQEMUPlan(json: json)
         case .qemuDoctor(let json):
             try await printQEMUDoctor(json: json)
+        case .qemuSmoke(let json, let seconds):
+            try await printQEMUSmoke(json: json, seconds: seconds)
         }
     }
 
@@ -193,6 +210,93 @@ struct VeilVMControl {
         for action in report.nextActions {
             print("  - \(action)")
         }
+    }
+
+    private static func printQEMUSmoke(json: Bool, seconds: Int) async throws {
+        guard let profile = try await JSONVMProfileStore().load() else {
+            throw VMControlError.missingProfileForQEMUPlan
+        }
+
+        let boundedSeconds = min(max(seconds, 5), 120)
+        let plan = try makeQEMUPlan(for: profile)
+        let logDirectory = diagnosticsDirectory()
+            .appendingPathComponent("QEMU Smoke", isDirectory: true)
+        try FileManager.default.createDirectory(
+            at: logDirectory,
+            withIntermediateDirectories: true
+        )
+        let stamp = ISO8601DateFormatter()
+            .string(from: Date())
+            .replacingOccurrences(of: ":", with: "-")
+        let serialLogURL = logDirectory.appendingPathComponent("qemu-smoke-\(stamp).serial.log")
+        let processLogURL = logDirectory.appendingPathComponent("qemu-smoke-\(stamp).process.log")
+        let arguments = QEMUWindowsBootSmokePlanner().makeArguments(
+            from: plan,
+            serialLogPath: serialLogURL.path
+        )
+
+        let processOutput = try runBoundedQEMU(
+            executablePath: plan.executablePath,
+            arguments: arguments,
+            seconds: boundedSeconds,
+            processLogURL: processLogURL
+        )
+        let serialOutput = (try? String(contentsOf: serialLogURL, encoding: .utf8)) ?? ""
+        let report = QEMUWindowsBootSmokeAnalyzer.makeReport(
+            durationSeconds: boundedSeconds,
+            processOutput: processOutput.output,
+            serialOutput: serialOutput,
+            didRemainRunningUntilTimeout: processOutput.didRemainRunningUntilTimeout,
+            serialLogPath: serialLogURL.path,
+            processLogPath: processLogURL.path
+        )
+
+        if json {
+            let data = try JSONEncoder.veilDiagnostics.encode(report)
+            print(String(decoding: data, as: UTF8.self))
+            return
+        }
+
+        print("QEMU/HVF smoke: \(report.outcome.rawValue)")
+        print(report.detail)
+        print("Evidence: \(report.evidence.joined(separator: ", "))")
+        print("Serial log: \(report.serialLogPath)")
+        print("Process log: \(report.processLogPath)")
+    }
+
+    private static func runBoundedQEMU(
+        executablePath: String,
+        arguments: [String],
+        seconds: Int,
+        processLogURL: URL
+    ) throws -> (output: String, didRemainRunningUntilTimeout: Bool) {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: executablePath)
+        process.arguments = arguments
+
+        let outputPipe = Pipe()
+        process.standardOutput = outputPipe
+        process.standardError = outputPipe
+
+        try process.run()
+
+        let deadline = Date().addingTimeInterval(TimeInterval(seconds))
+        while process.isRunning, Date() < deadline {
+            Thread.sleep(forTimeInterval: 0.25)
+        }
+
+        let didRemainRunningUntilTimeout = process.isRunning
+        if process.isRunning {
+            process.terminate()
+        }
+        process.waitUntilExit()
+
+        let data = outputPipe.fileHandleForReading.readDataToEndOfFile()
+        try data.write(to: processLogURL, options: [.atomic])
+        return (
+            String(data: data, encoding: .utf8) ?? "",
+            didRemainRunningUntilTimeout
+        )
     }
 
     private static func makeQEMUPlan(for profile: VMProfile) throws -> QEMUWindowsBootPlan {

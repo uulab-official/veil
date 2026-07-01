@@ -431,6 +431,183 @@ public struct QEMUWindowsReadinessDoctor: Sendable {
     }
 }
 
+public enum QEMUWindowsBootSmokeOutcome: String, Codable, Equatable, Sendable {
+    case windowsBootStarted
+    case uefiShell
+    case bootImageTimeout
+    case argumentFailure
+    case runningNoDecision
+    case exitedEarly
+}
+
+public struct QEMUWindowsBootSmokeReport: Codable, Equatable, Sendable {
+    public var kind: String
+    public var provider: String
+    public var outcome: QEMUWindowsBootSmokeOutcome
+    public var durationSeconds: Int
+    public var detail: String
+    public var evidence: [String]
+    public var serialLogPath: String
+    public var processLogPath: String
+
+    public init(
+        kind: String = "qemuWindowsArmBootSmokeReport",
+        provider: String = "QEMU/HVF",
+        outcome: QEMUWindowsBootSmokeOutcome,
+        durationSeconds: Int,
+        detail: String,
+        evidence: [String],
+        serialLogPath: String,
+        processLogPath: String
+    ) {
+        self.kind = kind
+        self.provider = provider
+        self.outcome = outcome
+        self.durationSeconds = durationSeconds
+        self.detail = detail
+        self.evidence = evidence
+        self.serialLogPath = serialLogPath
+        self.processLogPath = processLogPath
+    }
+}
+
+public enum QEMUWindowsBootSmokeAnalyzer {
+    public static func makeReport(
+        durationSeconds: Int,
+        processOutput: String,
+        serialOutput: String,
+        didRemainRunningUntilTimeout: Bool,
+        serialLogPath: String,
+        processLogPath: String
+    ) -> QEMUWindowsBootSmokeReport {
+        let combinedOutput = "\(processOutput)\n\(serialOutput)"
+        var evidence: [String] = []
+
+        if processOutput.contains("qemu-system-aarch64:"),
+           !processOutput.contains("terminating on signal") {
+            evidence.append("qemu-argument-error")
+            return QEMUWindowsBootSmokeReport(
+                outcome: .argumentFailure,
+                durationSeconds: durationSeconds,
+                detail: "QEMU exited before firmware boot because the command line or local resources failed validation.",
+                evidence: evidence,
+                serialLogPath: serialLogPath,
+                processLogPath: processLogPath
+            )
+        }
+
+        if combinedOutput.localizedCaseInsensitiveContains("Windows Boot Manager")
+            || combinedOutput.localizedCaseInsensitiveContains("Windows Setup") {
+            evidence.append("windows-boot-text")
+            return QEMUWindowsBootSmokeReport(
+                outcome: .windowsBootStarted,
+                durationSeconds: durationSeconds,
+                detail: "QEMU reached Windows boot text during the bounded smoke run.",
+                evidence: evidence,
+                serialLogPath: serialLogPath,
+                processLogPath: processLogPath
+            )
+        }
+
+        if combinedOutput.contains("Time out") || combinedOutput.contains("failed to start Boot") {
+            evidence.append("boot-image-timeout")
+        }
+
+        if combinedOutput.contains("UEFI Interactive Shell") || combinedOutput.contains("Shell>") {
+            evidence.append("uefi-shell")
+            return QEMUWindowsBootSmokeReport(
+                outcome: .uefiShell,
+                durationSeconds: durationSeconds,
+                detail: "QEMU reached Arm UEFI, but Windows Setup did not start and firmware fell back to the EDK II shell.",
+                evidence: evidence,
+                serialLogPath: serialLogPath,
+                processLogPath: processLogPath
+            )
+        }
+
+        if evidence.contains("boot-image-timeout") {
+            return QEMUWindowsBootSmokeReport(
+                outcome: .bootImageTimeout,
+                durationSeconds: durationSeconds,
+                detail: "Arm UEFI attempted the installer boot image, but it timed out before Windows Setup appeared.",
+                evidence: evidence,
+                serialLogPath: serialLogPath,
+                processLogPath: processLogPath
+            )
+        }
+
+        if didRemainRunningUntilTimeout {
+            evidence.append("qemu-running")
+            return QEMUWindowsBootSmokeReport(
+                outcome: .runningNoDecision,
+                durationSeconds: durationSeconds,
+                detail: "QEMU stayed alive for the bounded smoke run, but serial output did not prove Windows Setup or UEFI shell state.",
+                evidence: evidence,
+                serialLogPath: serialLogPath,
+                processLogPath: processLogPath
+            )
+        }
+
+        evidence.append("qemu-exited")
+        return QEMUWindowsBootSmokeReport(
+            outcome: .exitedEarly,
+            durationSeconds: durationSeconds,
+            detail: "QEMU exited before the bounded smoke run could classify Windows boot progress.",
+            evidence: evidence,
+            serialLogPath: serialLogPath,
+            processLogPath: processLogPath
+        )
+    }
+}
+
+public struct QEMUWindowsBootSmokePlanner: Sendable {
+    public init() {}
+
+    public func makeArguments(
+        from plan: QEMUWindowsBootPlan,
+        serialLogPath: String
+    ) -> [String] {
+        var arguments = plan.arguments.map { argument in
+            Self.lockSafeSystemDriveArgument(argument)
+        }
+
+        if let displayIndex = arguments.firstIndex(of: "-display"),
+           arguments.indices.contains(displayIndex + 1) {
+            arguments[displayIndex + 1] = "none"
+        } else {
+            arguments.append(contentsOf: ["-display", "none"])
+        }
+
+        if !arguments.contains("-snapshot") {
+            arguments.append("-snapshot")
+        }
+
+        arguments.append(contentsOf: [
+            "-serial", "file:\(serialLogPath)",
+            "-monitor", "none"
+        ])
+
+        return arguments
+    }
+
+    private static func lockSafeSystemDriveArgument(_ argument: String) -> String {
+        guard argument.contains("id=system"),
+              argument.contains("format=raw"),
+              let fileRange = argument.range(of: "file=") else {
+            return argument
+        }
+
+        let prefix = argument[..<fileRange.lowerBound]
+        let path = argument[fileRange.upperBound...]
+        let pathString = String(path)
+        guard prefix.contains("if=none,") else {
+            return argument
+        }
+
+        return "driver=raw,file.driver=file,file.locking=off,file.filename=\(pathString),if=none,id=system"
+    }
+}
+
 private extension [String] {
     func containsSequence(_ sequence: [String]) -> Bool {
         guard !sequence.isEmpty, count >= sequence.count else {

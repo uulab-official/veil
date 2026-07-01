@@ -69,6 +69,7 @@ harness/
                      JSON validator for local VM provider output
   qemu-boot-plan/    JSON validator for dry-run QEMU/HVF Windows boot plans
   qemu-doctor/       JSON validator for QEMU/HVF readiness reports
+  qemu-smoke/        JSON validator for bounded QEMU/HVF boot smoke reports
 docs/
   architecture.md    System boundaries and component design
   mvp.md             MVP acceptance criteria
@@ -199,6 +200,20 @@ swift run veil-vmctl qemu-doctor --json | node ../../harness/qemu-doctor/src/val
 ```
 
 The doctor checks the stored VM profile, installer ISO, writable system disk, local QEMU executable, Arm UEFI firmware, and HVF command plan. It is read-only and does not launch QEMU.
+
+Run a bounded QEMU/HVF boot smoke test with serial logging:
+
+```bash
+swift run veil-vmctl qemu-smoke --json --seconds 25
+```
+
+Validate it with:
+
+```bash
+swift run veil-vmctl qemu-smoke --json --seconds 25 | node ../../harness/qemu-smoke/src/validate-qemu-smoke.mjs
+```
+
+The smoke command runs QEMU headlessly in snapshot mode and writes logs under `~/Downloads/Veil Diagnostics/QEMU Smoke`. Current evidence on the test Mac reaches Arm UEFI and falls back to EDK II shell; Windows Setup is not proven yet.
 
 You can prepare the local VM profile from a downloaded Windows 11 Arm ISO without clicking through the shell:
 

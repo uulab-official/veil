@@ -13,6 +13,7 @@ harness/
 ├─ runtime-provider-probe/ Validates local VM provider JSON output
 ├─ qemu-boot-plan/         Validates dry-run QEMU/HVF Windows boot plan JSON
 ├─ qemu-doctor/            Validates QEMU/HVF readiness report JSON
+├─ qemu-smoke/             Validates bounded QEMU/HVF boot smoke report JSON
 ├─ protocol-fixtures/      JSON messages used by tests and docs
 └─ scenarios/              scripted end-to-end protocol flows
 ```
@@ -162,6 +163,24 @@ swift run veil-vmctl qemu-doctor --json | node ../../harness/qemu-doctor/src/val
 ```
 
 Expected output: `qemu doctor valid`. The report checks profile, installer media, system disk, QEMU executable, and HVF plan status, and must include recovery guidance whenever blocked.
+
+## QEMU Smoke Harness
+
+The QEMU smoke harness validates the bounded boot report from a real headless QEMU run.
+
+```bash
+cd harness/qemu-smoke
+npm test
+```
+
+Validate live host output:
+
+```bash
+cd apps/mac-host
+swift run veil-vmctl qemu-smoke --json --seconds 25 | node ../../harness/qemu-smoke/src/validate-qemu-smoke.mjs
+```
+
+Expected current output on the test Mac: `qemu smoke valid`; the JSON currently reports `uefiShell`, which means QEMU reaches Arm UEFI but Windows Setup is not proven.
 
 ## Fixture Policy
 

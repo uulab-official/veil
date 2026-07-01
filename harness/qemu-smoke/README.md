@@ -1,0 +1,20 @@
+# QEMU Smoke Harness
+
+This harness validates `veil-vmctl qemu-smoke --json` output.
+
+The smoke command launches QEMU/HVF headlessly for a bounded time, uses snapshot mode, writes serial and process logs under `~/Downloads/Veil Diagnostics/QEMU Smoke`, and classifies the boot evidence. It is meant to prove whether the current recipe reaches Windows Setup, UEFI shell, or an earlier QEMU failure.
+
+Run fixture tests:
+
+```bash
+npm test
+```
+
+Validate live host output:
+
+```bash
+cd ../../apps/mac-host
+swift run veil-vmctl qemu-smoke --json --seconds 25 | node ../../harness/qemu-smoke/src/validate-qemu-smoke.mjs
+```
+
+Expected current output on the test Mac: `qemu smoke valid` with `outcome: "uefiShell"`.

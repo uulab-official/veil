@@ -18,6 +18,7 @@ harness/
 ├─ runtime-provider-probe/ JSON shape validation for local VM providers
 ├─ qemu-boot-plan/         JSON shape validation for dry-run QEMU/HVF boot plans
 ├─ qemu-doctor/            JSON shape validation for QEMU/HVF readiness reports
+├─ qemu-smoke/             JSON shape validation for bounded QEMU/HVF boot smoke reports
 ├─ protocol-fixtures/      JSON fixtures for every stable message
 └─ scenarios/              scripted flows such as launch-notepad and clipboard-sync
 ```
@@ -31,6 +32,7 @@ Current executable pieces:
 - `harness/runtime-provider-probe`: a JSON validator for serverless local runtime provider output.
 - `harness/qemu-boot-plan`: a JSON validator for dry-run QEMU/HVF Windows Arm boot plans.
 - `harness/qemu-doctor`: a JSON validator for QEMU/HVF readiness reports and next actions.
+- `harness/qemu-smoke`: a JSON validator for bounded QEMU/HVF boot smoke reports.
 - `packages/protocol`: shared protocol constants and validation helpers.
 
 The macOS host shell also includes an internal demo agent fallback. If the WebSocket agent is unavailable, the app still loads demo Windows app metadata and can run the Notepad demo launch flow. The header and Agent view label this as Demo mode and include the unreachable endpoint. The fallback is limited to network availability errors; protocol and agent errors remain visible. Use the external fake agent when testing the transport boundary itself.
@@ -68,6 +70,17 @@ swift run veil-vmctl qemu-doctor --json | node ../../harness/qemu-doctor/src/val
 ```
 
 The report includes named checks for VM profile, installer media, system disk, QEMU executable, and HVF command plan. Blocked reports must include next actions that a contributor can follow without guessing.
+
+## QEMU Smoke Scenario
+
+The QEMU smoke command runs the current QEMU/HVF boot recipe headlessly for a bounded duration and classifies serial/process output.
+
+```bash
+cd apps/mac-host
+swift run veil-vmctl qemu-smoke --json --seconds 25 | node ../../harness/qemu-smoke/src/validate-qemu-smoke.mjs
+```
+
+The command uses snapshot mode and records logs under `~/Downloads/Veil Diagnostics/QEMU Smoke`. It is allowed to start a local QEMU process for the requested bounded duration, then terminate it for classification.
 
 ## First Scenario: Launch Notepad
 

@@ -1,0 +1,13 @@
+{
+  "detail": "QEMU reached Arm UEFI, but Windows Setup did not start and firmware fell back to the EDK II shell.",
+  "durationSeconds": 25,
+  "evidence": [
+    "boot-image-timeout",
+    "uefi-shell"
+  ],
+  "kind": "qemuWindowsArmBootSmokeReport",
+  "outcome": "uefiShell",
+  "processLogPath": "/Users/test/Downloads/Veil Diagnostics/QEMU Smoke/qemu-smoke.process.log",
+  "provider": "QEMU/HVF",
+  "serialLogPath": "/Users/test/Downloads/Veil Diagnostics/QEMU Smoke/qemu-smoke.serial.log"
+}
