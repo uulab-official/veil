@@ -12,6 +12,7 @@ harness/
 ├─ fake-host/              CLI client that sends host messages
 ├─ runtime-provider-probe/ Validates local VM provider JSON output
 ├─ qemu-boot-plan/         Validates dry-run QEMU/HVF Windows boot plan JSON
+├─ qemu-doctor/            Validates QEMU/HVF readiness report JSON
 ├─ protocol-fixtures/      JSON messages used by tests and docs
 └─ scenarios/              scripted end-to-end protocol flows
 ```
@@ -143,6 +144,24 @@ swift run veil-vmctl qemu-plan --json | node ../../harness/qemu-boot-plan/src/va
 ```
 
 Expected output: `qemu plan valid`. The command is read-only: it must not launch QEMU, start a VM, stop a VM, or mutate installer/disk files.
+
+## QEMU Doctor Harness
+
+The QEMU doctor harness validates readiness reports for the local QEMU/HVF path.
+
+```bash
+cd harness/qemu-doctor
+npm test
+```
+
+Validate live host output:
+
+```bash
+cd apps/mac-host
+swift run veil-vmctl qemu-doctor --json | node ../../harness/qemu-doctor/src/validate-qemu-doctor.mjs
+```
+
+Expected output: `qemu doctor valid`. The report checks profile, installer media, system disk, QEMU executable, and HVF plan status, and must include recovery guidance whenever blocked.
 
 ## Fixture Policy
 

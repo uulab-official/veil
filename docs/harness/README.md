@@ -17,6 +17,7 @@ harness/
 ├─ fake-host/              CLI client that sends host messages to the agent
 ├─ runtime-provider-probe/ JSON shape validation for local VM providers
 ├─ qemu-boot-plan/         JSON shape validation for dry-run QEMU/HVF boot plans
+├─ qemu-doctor/            JSON shape validation for QEMU/HVF readiness reports
 ├─ protocol-fixtures/      JSON fixtures for every stable message
 └─ scenarios/              scripted flows such as launch-notepad and clipboard-sync
 ```
@@ -29,6 +30,7 @@ Current executable pieces:
 - `harness/fake-host`: a CLI simulator for the future macOS host flow.
 - `harness/runtime-provider-probe`: a JSON validator for serverless local runtime provider output.
 - `harness/qemu-boot-plan`: a JSON validator for dry-run QEMU/HVF Windows Arm boot plans.
+- `harness/qemu-doctor`: a JSON validator for QEMU/HVF readiness reports and next actions.
 - `packages/protocol`: shared protocol constants and validation helpers.
 
 The macOS host shell also includes an internal demo agent fallback. If the WebSocket agent is unavailable, the app still loads demo Windows app metadata and can run the Notepad demo launch flow. The header and Agent view label this as Demo mode and include the unreachable endpoint. The fallback is limited to network availability errors; protocol and agent errors remain visible. Use the external fake agent when testing the transport boundary itself.
@@ -55,6 +57,17 @@ swift run veil-vmctl qemu-plan --json | node ../../harness/qemu-boot-plan/src/va
 ```
 
 The command must not launch QEMU, start a VM, stop a VM, or mutate local VM files. It only validates the dry-run plan shape: local provider, HVF acceleration, installer ISO as read-only cdrom media, writable system disk, NAT networking, Cocoa display, graphics, and input devices.
+
+## QEMU Doctor Scenario
+
+The QEMU doctor gives contributors a single readiness report before the QEMU execution layer exists.
+
+```bash
+cd apps/mac-host
+swift run veil-vmctl qemu-doctor --json | node ../../harness/qemu-doctor/src/validate-qemu-doctor.mjs
+```
+
+The report includes named checks for VM profile, installer media, system disk, QEMU executable, and HVF command plan. Blocked reports must include next actions that a contributor can follow without guessing.
 
 ## First Scenario: Launch Notepad
 

@@ -68,6 +68,7 @@ harness/
   runtime-provider-probe/
                      JSON validator for local VM provider output
   qemu-boot-plan/    JSON validator for dry-run QEMU/HVF Windows boot plans
+  qemu-doctor/       JSON validator for QEMU/HVF readiness reports
 docs/
   architecture.md    System boundaries and component design
   mvp.md             MVP acceptance criteria
@@ -184,6 +185,20 @@ swift run veil-vmctl qemu-plan --json | node ../../harness/qemu-boot-plan/src/va
 ```
 
 This is a planning boundary only. It does not prove Windows will boot, and it does not start QEMU yet.
+
+Run the local QEMU/HVF doctor to get UTM/Parallels-style readiness checks and next actions:
+
+```bash
+swift run veil-vmctl qemu-doctor --json
+```
+
+Validate it with:
+
+```bash
+swift run veil-vmctl qemu-doctor --json | node ../../harness/qemu-doctor/src/validate-qemu-doctor.mjs
+```
+
+The doctor checks the stored VM profile, installer ISO, writable system disk, local QEMU executable, and HVF command plan. It is read-only and does not launch QEMU.
 
 You can prepare the local VM profile from a downloaded Windows 11 Arm ISO without clicking through the shell:
 

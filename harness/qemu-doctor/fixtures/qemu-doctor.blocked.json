@@ -1,0 +1,41 @@
+{
+  "checks": [
+    {
+      "detail": "Windows 11 Arm targets windows-arm64 with 7 CPU cores and 9216 MB memory.",
+      "id": "vm-profile",
+      "state": "passed",
+      "title": "VM profile"
+    },
+    {
+      "detail": "Installer ISO is available at /Users/test/Downloads/Win11_25H2_Korean_Arm64_v2.iso.",
+      "id": "installer-media",
+      "state": "passed",
+      "title": "Installer media"
+    },
+    {
+      "detail": "Writable system disk is available at /Users/test/Virtual Machines/Veil/Windows 11 Arm.img.",
+      "id": "system-disk",
+      "state": "passed",
+      "title": "System disk"
+    },
+    {
+      "detail": "qemu-system-aarch64 is not available at /opt/homebrew/bin/qemu-system-aarch64.",
+      "id": "qemu-executable",
+      "state": "blocked",
+      "title": "QEMU executable"
+    },
+    {
+      "detail": "QEMU command plan enables HVF acceleration and local devices.",
+      "id": "hvf-plan",
+      "state": "passed",
+      "title": "HVF command plan"
+    }
+  ],
+  "isServerBacked": false,
+  "kind": "qemuWindowsArmReadinessReport",
+  "nextActions": [
+    "Install QEMU with Homebrew or set VEIL_QEMU_SYSTEM_AARCH64 to the local qemu-system-aarch64 path."
+  ],
+  "overallState": "blocked",
+  "provider": "QEMU/HVF"
+}

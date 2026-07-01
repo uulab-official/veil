@@ -23,7 +23,7 @@ enum VMControlError: Error, LocalizedError {
         }
     }
 
-    private static let usage = "Usage: veil-vmctl prepare --installer /path/to/Windows.iso | veil-vmctl providers [--json] | veil-vmctl qemu-plan [--json]"
+    private static let usage = "Usage: veil-vmctl prepare --installer /path/to/Windows.iso | veil-vmctl providers [--json] | veil-vmctl qemu-plan [--json] | veil-vmctl qemu-doctor [--json]"
 }
 
 struct VMControlArguments {
@@ -31,6 +31,7 @@ struct VMControlArguments {
         case prepare(installerPath: String)
         case providers(json: Bool)
         case qemuPlan(json: Bool)
+        case qemuDoctor(json: Bool)
     }
 
     var command: Command
@@ -46,6 +47,10 @@ struct VMControlArguments {
 
         if command == "qemu-plan" {
             return VMControlArguments(command: .qemuPlan(json: arguments.contains("--json")))
+        }
+
+        if command == "qemu-doctor" {
+            return VMControlArguments(command: .qemuDoctor(json: arguments.contains("--json")))
         }
 
         guard command == "prepare" else {
@@ -89,6 +94,8 @@ struct VeilVMControl {
             try printProviders(json: json)
         case .qemuPlan(let json):
             try await printQEMUPlan(json: json)
+        case .qemuDoctor(let json):
+            try await printQEMUDoctor(json: json)
         }
     }
 
@@ -145,21 +152,7 @@ struct VeilVMControl {
             throw VMControlError.missingProfileForQEMUPlan
         }
 
-        let qemuProvider = VMRuntimeProviderProbe()
-            .localProviders(
-                architecture: hostArchitecture(),
-                minimumOSSupported: ProcessInfo.processInfo.isOperatingSystemAtLeast(
-                    OperatingSystemVersion(majorVersion: 15, minorVersion: 0, patchVersion: 0)
-                )
-            )
-            .first { $0.kind == .qemuHypervisor }
-        let executablePath = qemuProvider?.executablePath
-            ?? VMRuntimeProviderProbe.defaultQEMUExecutablePaths[0]
-        let planner = QEMUWindowsBootPlanner(
-            executablePath: executablePath,
-            isExecutableAvailable: qemuProvider?.status == .active && qemuProvider?.executablePath != nil
-        )
-        let plan = try planner.makePlan(for: profile)
+        let plan = try makeQEMUPlan(for: profile)
 
         if json {
             let data = try JSONEncoder.veilDiagnostics.encode(plan)
@@ -175,6 +168,49 @@ struct VeilVMControl {
                 print("  - \(warning)")
             }
         }
+    }
+
+    private static func printQEMUDoctor(json: Bool) async throws {
+        let profile = try await JSONVMProfileStore().load()
+        let plan = try? profile.map(makeQEMUPlan(for:))
+        let report = QEMUWindowsReadinessDoctor().makeReport(
+            profile: profile,
+            plan: plan
+        )
+
+        if json {
+            let data = try JSONEncoder.veilDiagnostics.encode(report)
+            print(String(decoding: data, as: UTF8.self))
+            return
+        }
+
+        print("QEMU/HVF readiness: \(report.overallState.rawValue)")
+        for check in report.checks {
+            print("\(check.title): \(check.state.rawValue)")
+            print("  \(check.detail)")
+        }
+        print("Next actions:")
+        for action in report.nextActions {
+            print("  - \(action)")
+        }
+    }
+
+    private static func makeQEMUPlan(for profile: VMProfile) throws -> QEMUWindowsBootPlan {
+        let qemuProvider = VMRuntimeProviderProbe()
+            .localProviders(
+                architecture: hostArchitecture(),
+                minimumOSSupported: ProcessInfo.processInfo.isOperatingSystemAtLeast(
+                    OperatingSystemVersion(majorVersion: 15, minorVersion: 0, patchVersion: 0)
+                )
+            )
+            .first { $0.kind == .qemuHypervisor }
+        let executablePath = qemuProvider?.executablePath
+            ?? VMRuntimeProviderProbe.defaultQEMUExecutablePaths[0]
+        let planner = QEMUWindowsBootPlanner(
+            executablePath: executablePath,
+            isExecutableAvailable: qemuProvider?.status == .active && qemuProvider?.executablePath != nil
+        )
+        return try planner.makePlan(for: profile)
     }
 
     private static func shellQuoted(_ value: String) -> String {
