@@ -23,6 +23,9 @@ Goal: keep the main Veil experience pointed at real local Windows boot and conso
 - [x] Use icon-only secondary controls with tooltips so the primary action stays focused on installing Windows.
 - [x] Remove scrolling from the primary Windows setup screen.
 - [x] Make the primary setup action a large Play control, with secondary actions reduced to icon buttons.
+- [x] Split the pre-install setup process from the post-install Windows start launcher.
+- [x] Add a `windowsInstalled` runtime snapshot flag so the UI can switch to the one-click launcher only after setup.
+- [x] Make the post-install launcher fill the full primary panel with the blue Windows display surface.
 - [x] Ensure the primary ready-state action calls the real VM start path.
 - [x] Open the VM Console through `VZVirtualMachineView` when a local display is available.
 - [x] Rename visible progress from automatic-install simulation to VM console handoff.
@@ -50,3 +53,4 @@ Goal: keep the main Veil experience pointed at real local Windows boot and conso
 - [ ] Add recovery copy for common boot failures: bad ISO attachment, unsupported device model, EFI state, and disk format issues.
 - [ ] Convert the console handoff timer into real runtime state events.
 - [ ] After Windows reaches the desktop, install and auto-start the Veil guest agent.
+- [ ] Set `windowsInstalled` from a real guest-agent or boot-completion signal instead of manual profile state.

@@ -147,6 +147,21 @@ struct VMProfileStoreTests {
         ])
     }
 
+    @Test("local runtime reports installed Windows state from profile")
+    func localRuntimeReportsInstalledWindowsState() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let store = JSONVMProfileStore(directory: directory)
+        var profile = VMProfile.defaultWindows11Arm(createdAt: Date(timeIntervalSince1970: 1_782_752_400))
+        profile.windowsInstalled = true
+        try await store.save(profile)
+
+        let service = LocalVMRuntimeService(profileStore: store)
+        let snapshot = try await service.loadSnapshot()
+
+        #expect(snapshot.windowsInstalled)
+    }
+
     @Test("local runtime reports local runtime provider")
     func localRuntimeReportsLocalRuntimeProvider() async throws {
         let directory = FileManager.default.temporaryDirectory

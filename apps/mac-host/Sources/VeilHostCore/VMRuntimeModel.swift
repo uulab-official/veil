@@ -239,6 +239,7 @@ public struct VMRuntimeSnapshot: Codable, Equatable, Sendable {
     public var preflightChecks: [VMPreflightCheck]
     public var deviceSummary: VMRuntimeDeviceSummary?
     public var bootReady: Bool
+    public var windowsInstalled: Bool
     public var detail: String
 
     public init(
@@ -261,6 +262,7 @@ public struct VMRuntimeSnapshot: Codable, Equatable, Sendable {
         preflightChecks: [VMPreflightCheck] = [],
         deviceSummary: VMRuntimeDeviceSummary? = nil,
         bootReady: Bool = false,
+        windowsInstalled: Bool = false,
         detail: String
     ) {
         self.state = state
@@ -282,6 +284,7 @@ public struct VMRuntimeSnapshot: Codable, Equatable, Sendable {
         self.preflightChecks = preflightChecks
         self.deviceSummary = deviceSummary
         self.bootReady = bootReady
+        self.windowsInstalled = windowsInstalled
         self.detail = detail
     }
 }
@@ -928,6 +931,7 @@ public struct LocalVMRuntimeService: VMRuntimeService {
                 preflightChecks: preflightChecks,
                 deviceSummary: Self.deviceSummary(for: profile),
                 bootReady: bootPathReadiness.isReady,
+                windowsInstalled: profile.windowsInstalled == true,
                 detail: runtimeState.map(Self.runtimeDetail(for:)) ?? (
                     bootPathReadiness.isReady
                         ? "Ready to start Windows."

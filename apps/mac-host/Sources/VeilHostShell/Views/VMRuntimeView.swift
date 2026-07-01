@@ -971,26 +971,110 @@ private struct WindowsSetupDisplayPanel: View {
 
     var body: some View {
         ShellPanel(spacing: 0) {
-            VStack(spacing: 0) {
-                launcherStage
-                Divider()
-                launcherFooter
+            if snapshot.windowsInstalled {
+                installedLauncherStage
+            } else {
+                VStack(spacing: 0) {
+                    installProcessStage
+                    Divider()
+                    launcherFooter
+                }
             }
         }
         .padding(0)
     }
 
-    private var launcherStage: some View {
-        VStack(spacing: 14) {
-            machineDisplay
-                .frame(maxWidth: .infinity)
-                .aspectRatio(16 / 7.7, contentMode: .fit)
-                .frame(minHeight: 330)
+    private var installedLauncherStage: some View {
+        machineDisplay
+            .frame(maxWidth: .infinity, minHeight: 486)
+    }
 
-            processStrip
+    private var installProcessStage: some View {
+        HStack(alignment: .center, spacing: 24) {
+            VStack(alignment: .leading, spacing: 18) {
+                VStack(alignment: .leading, spacing: 7) {
+                    Text("Install Windows 11")
+                        .font(.system(size: 32, weight: .semibold))
+                        .lineLimit(1)
+                    Text(installProcessSubtitle)
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
+
+                processStrip
+
+                if installSimulation.phase != .idle {
+                    AssistantProgressStrip(simulation: installSimulation)
+                        .frame(maxWidth: 480)
+                }
+
+                HStack(spacing: 10) {
+                    Button(action: primaryAction) {
+                        Label(installPrimaryTitle, systemImage: primarySymbol)
+                            .frame(minWidth: 150)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(primaryDisabled)
+
+                    Button(action: prepareAction) {
+                        Label("Prepare", systemImage: "wand.and.stars")
+                    }
+                    .disabled(isLoading || snapshot.state == .running || snapshot.state == .starting)
+
+                    Button(action: selectInstallerAction) {
+                        Label("Choose ISO", systemImage: "opticaldisc")
+                    }
+                    .disabled(isLoading || snapshot.state == .running || snapshot.state == .starting)
+                }
+            }
+
+            Spacer(minLength: 0)
+
+            installPreview
+                .frame(width: 300, height: 230)
         }
         .padding(22)
         .frame(maxWidth: .infinity, minHeight: 394, alignment: .center)
+    }
+
+    private var installPreview: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color(nsColor: .controlBackgroundColor).opacity(0.82),
+                            Color(nsColor: .windowBackgroundColor).opacity(0.72)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+
+            VStack(spacing: 14) {
+                Image(systemName: "display.and.arrow.down")
+                    .font(.system(size: 46, weight: .semibold))
+                    .foregroundStyle(.blue)
+                    .frame(width: 84, height: 84)
+                    .background(.blue.opacity(0.12), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+
+                VStack(spacing: 4) {
+                    Text("Windows Setup")
+                        .font(.title3.weight(.semibold))
+                    Text("Install once. The next screen becomes the Windows launcher.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .lineLimit(2)
+                }
+            }
+            .padding(24)
+        }
+        .overlay {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .strokeBorder(.quaternary, lineWidth: 1)
+        }
     }
 
     private var machineDisplay: some View {
@@ -1116,6 +1200,30 @@ private struct WindowsSetupDisplayPanel: View {
         default:
             primaryHint
         }
+    }
+
+    private var installProcessSubtitle: String {
+        if snapshot.bootReady {
+            return "Open the Windows installer, complete setup, then return here to start Windows."
+        }
+
+        if discoveredInstallerName != nil {
+            return "Veil found Windows media. Prepare the local VM before opening setup."
+        }
+
+        return "Choose a Windows 11 Arm ISO to prepare the local VM installation."
+    }
+
+    private var installPrimaryTitle: String {
+        if canStop {
+            return "Stop Setup"
+        }
+
+        if canStart {
+            return installSimulation.phase == .running ? "Opening..." : "Install Windows"
+        }
+
+        return snapshot.profileName == nil ? "Prepare VM" : "Continue Setup"
     }
 
     private struct CompactLauncherStep: View {
@@ -1336,7 +1444,9 @@ private struct WindowsSetupDisplayPanel: View {
             ),
             LauncherMetadataItem(
                 title: "Windows",
-                value: snapshot.state == .running ? "Running" : "Start",
+                value: snapshot.windowsInstalled
+                    ? (snapshot.state == .running ? "Running" : "Start")
+                    : (snapshot.bootReady ? "Install" : "Setup"),
                 symbolName: "play.rectangle",
                 tint: snapshot.state == .running ? .green : .blue
             ),
@@ -1354,6 +1464,10 @@ private struct WindowsSetupDisplayPanel: View {
     }
 
     private var machineSubtitle: String {
+        if snapshot.windowsInstalled {
+            return "Ready to run on this Mac"
+        }
+
         if snapshot.bootReady {
             return "Press play to open the Windows display"
         }
@@ -1389,6 +1503,10 @@ private struct WindowsSetupDisplayPanel: View {
             return "Stop Windows"
         }
 
+        if snapshot.windowsInstalled {
+            return "Start Windows"
+        }
+
         if canStart {
             return installSimulation.phase == .running ? "Starting..." : "Start Windows"
         }
@@ -1411,6 +1529,10 @@ private struct WindowsSetupDisplayPanel: View {
     private var primaryHint: String {
         if canStop {
             return "Stop the current local Windows VM."
+        }
+
+        if snapshot.windowsInstalled {
+            return "Open the Windows display."
         }
 
         if canStart {

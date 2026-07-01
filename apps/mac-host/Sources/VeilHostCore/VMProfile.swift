@@ -48,6 +48,7 @@ public struct VMProfile: Codable, Equatable, Identifiable, Sendable {
     public var sharedFolderPath: String
     public var installerMediaPath: String?
     public var virtualDiskPath: String?
+    public var windowsInstalled: Bool?
     public var createdAt: Date
 
     public init(
@@ -62,6 +63,7 @@ public struct VMProfile: Codable, Equatable, Identifiable, Sendable {
         sharedFolderPath: String,
         installerMediaPath: String? = nil,
         virtualDiskPath: String? = nil,
+        windowsInstalled: Bool? = nil,
         createdAt: Date
     ) {
         self.id = id
@@ -75,6 +77,7 @@ public struct VMProfile: Codable, Equatable, Identifiable, Sendable {
         self.sharedFolderPath = sharedFolderPath
         self.installerMediaPath = installerMediaPath
         self.virtualDiskPath = virtualDiskPath
+        self.windowsInstalled = windowsInstalled
         self.createdAt = createdAt
     }
 
