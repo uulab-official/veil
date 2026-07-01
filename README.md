@@ -147,6 +147,8 @@ The profile can reference a user-provided installer image and virtual disk path,
 
 The VM Runtime panel can export a local diagnostics JSON bundle to `~/Downloads/Veil Diagnostics`. The bundle includes host metadata, runtime snapshot, setup steps, preflight checks, and the stored VM profile. It records file paths for troubleshooting but never copies installer media, virtual disk contents, product keys, or Windows data.
 
+The runtime snapshot also exposes a typed device plan inspired by UTM's configuration model: EFI boot, generic platform identity, installer media, writable system disk, NAT networking, Virtio graphics, USB keyboard, pointer, and entropy. The shell shows this before Start so configuration mistakes are visible while Windows media is still being prepared.
+
 The bundled run script signs the local app bundle with the `com.apple.security.virtualization` entitlement required by Virtualization.framework:
 
 ```bash

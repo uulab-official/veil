@@ -106,6 +106,8 @@ struct VMRuntimeView: View {
 
                         ResourcePlanPanel(snapshot: snapshot)
 
+                        DevicePlanPanel(snapshot: snapshot)
+
                         MacIntegrationPanel(snapshot: snapshot)
 
                         if !snapshot.preflightChecks.isEmpty {
@@ -480,6 +482,67 @@ private struct ControlCenterHero: View {
                 }
             }
         }
+    }
+}
+
+private struct DevicePlanPanel: View {
+    var snapshot: VMRuntimeSnapshot
+
+    var body: some View {
+        ShellPanel(spacing: 12) {
+            ShellPanelHeader(
+                title: "Device Plan",
+                subtitle: "Virtualization.framework devices Veil will attach at boot.",
+                symbolName: "cpu"
+            )
+
+            if let deviceSummary = snapshot.deviceSummary {
+                ResourcePlanRow(
+                    title: "Boot",
+                    value: "\(deviceSummary.platform) platform with \(deviceSummary.bootLoader) boot.",
+                    symbolName: "power",
+                    state: .ready
+                )
+                ResourcePlanRow(
+                    title: "Storage",
+                    value: storageValue(for: deviceSummary.storageDevices),
+                    symbolName: "externaldrive.connected.to.line.below",
+                    state: snapshot.virtualDiskPath == nil ? .blocked : .partial
+                )
+                ResourcePlanRow(
+                    title: "Network",
+                    value: "\(deviceSummary.networkMode) shared networking.",
+                    symbolName: "network",
+                    state: .ready
+                )
+                ResourcePlanRow(
+                    title: "Graphics",
+                    value: "\(deviceSummary.graphics.widthInPixels)x\(deviceSummary.graphics.heightInPixels) Virtio scanout.",
+                    symbolName: "display",
+                    state: .partial
+                )
+                ResourcePlanRow(
+                    title: "Input",
+                    value: deviceSummary.inputDevices.joined(separator: ", "),
+                    symbolName: "keyboard",
+                    state: .ready
+                )
+            } else {
+                ResourcePlanRow(
+                    title: "Devices",
+                    value: "Create a VM profile to inspect the boot device plan.",
+                    symbolName: "rectangle.stack.badge.plus",
+                    state: .blocked
+                )
+            }
+        }
+    }
+
+    private func storageValue(for storageDevices: [VMRuntimeStorageDeviceSummary]) -> String {
+        let readableDevices = storageDevices.map { device in
+            "\(device.role): \(device.attachment)\(device.readOnly ? " read-only" : " writable")"
+        }
+        return readableDevices.joined(separator: "; ")
     }
 }
 

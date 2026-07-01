@@ -137,6 +137,41 @@ struct VMProfileStoreTests {
         ])
     }
 
+    @Test("local runtime reports virtualization device summary")
+    func localRuntimeReportsVirtualizationDeviceSummary() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let installerURL = directory.appendingPathComponent("Windows.iso")
+        let diskURL = directory.appendingPathComponent("Windows.img")
+        let sharedFolderURL = directory.appendingPathComponent("Veil Shared", isDirectory: true)
+        try Data("installer".utf8).write(to: installerURL)
+        try Data("disk".utf8).write(to: diskURL)
+        try FileManager.default.createDirectory(at: sharedFolderURL, withIntermediateDirectories: true)
+        let store = JSONVMProfileStore(directory: directory)
+        var profile = VMProfile.defaultWindows11Arm(createdAt: Date(timeIntervalSince1970: 1_782_752_400))
+        profile.installerMediaPath = installerURL.path
+        profile.virtualDiskPath = diskURL.path
+        profile.sharedFolderPath = sharedFolderURL.path
+        try await store.save(profile)
+
+        let service = LocalVMRuntimeService(profileStore: store)
+        let snapshot = try await service.loadSnapshot()
+        let devices = try #require(snapshot.deviceSummary)
+
+        #expect(devices.platform == "Generic")
+        #expect(devices.bootLoader == "EFI")
+        #expect(devices.networkMode == "NAT")
+        #expect(devices.graphics.widthInPixels == 1440)
+        #expect(devices.graphics.heightInPixels == 900)
+        #expect(devices.inputDevices == ["USB keyboard", "USB screen-coordinate pointer"])
+        #expect(devices.entropyDevice == "Virtio entropy")
+        #expect(devices.storageDevices.map(\.role) == ["installer", "system-disk"])
+        #expect(devices.storageDevices.map(\.attachment) == ["USB mass storage", "Virtio block"])
+        #expect(devices.storageDevices.map(\.readOnly) == [true, false])
+        #expect(devices.storageDevices.map(\.path) == [installerURL.path, diskURL.path])
+    }
+
     @Test("prepare default VM applies injected adaptive resource plan")
     func prepareDefaultVMAppliesInjectedAdaptiveResourcePlan() async throws {
         let directory = FileManager.default.temporaryDirectory

@@ -153,7 +153,7 @@ public final class VirtualizationVMRuntimeBooter: VMRuntimeBooting, @unchecked S
 
         let installerDevice = VZUSBMassStorageDeviceConfiguration(attachment: installerAttachment)
         let diskDevice = VZVirtioBlockDeviceConfiguration(attachment: diskAttachment)
-        diskDevice.blockDeviceIdentifier = "veil-system-disk"
+        diskDevice.blockDeviceIdentifier = VMRuntimeDeviceDefaults.systemDiskIdentifier
         return [installerDevice, diskDevice]
     }
 
@@ -176,7 +176,10 @@ public final class VirtualizationVMRuntimeBooter: VMRuntimeBooting, @unchecked S
     private func graphicsDevice() -> VZVirtioGraphicsDeviceConfiguration {
         let graphics = VZVirtioGraphicsDeviceConfiguration()
         graphics.scanouts = [
-            VZVirtioGraphicsScanoutConfiguration(widthInPixels: 1440, heightInPixels: 900)
+            VZVirtioGraphicsScanoutConfiguration(
+                widthInPixels: VMRuntimeDeviceDefaults.graphicsWidthInPixels,
+                heightInPixels: VMRuntimeDeviceDefaults.graphicsHeightInPixels
+            )
         ]
         return graphics
     }

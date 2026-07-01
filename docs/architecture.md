@@ -48,10 +48,13 @@ See [Windows Arm install flow](install-flow.md) for the user-facing setup sequen
 
 UTM is the open-source benchmark for a serious Mac VM host: it has a mature VM library, device settings, guest support documentation, and recovery guidance. Veil should match that level of setup clarity and operational diagnostics while keeping a narrower product goal. Veil is not trying to become a general QEMU manager. It should instead make the Windows App Runtime path reliable enough that users know which exact prerequisite blocks boot, which file role is wrong, and what recovery step is next.
 
+The UTM source separates Apple virtualization settings into typed configuration sections such as system, virtualization, shared directories, displays, drives, networks, and serial devices. Veil should follow that structural lesson without adopting UTM's full QEMU surface: every boot-facing device should have a typed summary that can be shown in the shell, written to diagnostics, and compared against the actual Virtualization.framework configuration.
+
 Near-term quality bars:
 
 - distinguish installer media from boot disks before Start is enabled,
 - produce structured preflight checks for every local boot prerequisite,
+- expose the planned Virtualization.framework devices before Start is enabled,
 - make VM metadata, resource caps, and selected files visible in the host shell,
 - keep fake-agent and fake-host harnesses so agent work remains testable without Windows,
 - add diagnostics bundles before developer-preview distribution.

@@ -56,6 +56,7 @@ public struct VMRuntimeSnapshot: Codable, Equatable, Sendable {
     public var virtualDiskPath: String?
     public var installationSteps: [VMInstallationStep]
     public var preflightChecks: [VMPreflightCheck]
+    public var deviceSummary: VMRuntimeDeviceSummary?
     public var bootReady: Bool
     public var detail: String
 
@@ -72,6 +73,7 @@ public struct VMRuntimeSnapshot: Codable, Equatable, Sendable {
         virtualDiskPath: String? = nil,
         installationSteps: [VMInstallationStep] = [],
         preflightChecks: [VMPreflightCheck] = [],
+        deviceSummary: VMRuntimeDeviceSummary? = nil,
         bootReady: Bool = false,
         detail: String
     ) {
@@ -87,9 +89,68 @@ public struct VMRuntimeSnapshot: Codable, Equatable, Sendable {
         self.virtualDiskPath = virtualDiskPath
         self.installationSteps = installationSteps
         self.preflightChecks = preflightChecks
+        self.deviceSummary = deviceSummary
         self.bootReady = bootReady
         self.detail = detail
     }
+}
+
+public struct VMRuntimeStorageDeviceSummary: Codable, Equatable, Sendable {
+    public var role: String
+    public var attachment: String
+    public var path: String?
+    public var readOnly: Bool
+
+    public init(role: String, attachment: String, path: String?, readOnly: Bool) {
+        self.role = role
+        self.attachment = attachment
+        self.path = path
+        self.readOnly = readOnly
+    }
+}
+
+public struct VMRuntimeGraphicsSummary: Codable, Equatable, Sendable {
+    public var widthInPixels: Int
+    public var heightInPixels: Int
+
+    public init(widthInPixels: Int, heightInPixels: Int) {
+        self.widthInPixels = widthInPixels
+        self.heightInPixels = heightInPixels
+    }
+}
+
+public struct VMRuntimeDeviceSummary: Codable, Equatable, Sendable {
+    public var platform: String
+    public var bootLoader: String
+    public var storageDevices: [VMRuntimeStorageDeviceSummary]
+    public var networkMode: String
+    public var graphics: VMRuntimeGraphicsSummary
+    public var inputDevices: [String]
+    public var entropyDevice: String
+
+    public init(
+        platform: String,
+        bootLoader: String,
+        storageDevices: [VMRuntimeStorageDeviceSummary],
+        networkMode: String,
+        graphics: VMRuntimeGraphicsSummary,
+        inputDevices: [String],
+        entropyDevice: String
+    ) {
+        self.platform = platform
+        self.bootLoader = bootLoader
+        self.storageDevices = storageDevices
+        self.networkMode = networkMode
+        self.graphics = graphics
+        self.inputDevices = inputDevices
+        self.entropyDevice = entropyDevice
+    }
+}
+
+public enum VMRuntimeDeviceDefaults {
+    public static let systemDiskIdentifier = "veil-system-disk"
+    public static let graphicsWidthInPixels = 1440
+    public static let graphicsHeightInPixels = 900
 }
 
 public enum VMInstallationStepState: String, Codable, Equatable, Sendable {
@@ -454,6 +515,7 @@ public struct LocalVMRuntimeService: VMRuntimeService {
                 virtualDiskPath: profile.virtualDiskPath,
                 installationSteps: installationSteps,
                 preflightChecks: preflightChecks,
+                deviceSummary: Self.deviceSummary(for: profile),
                 bootReady: bootPathReadiness.isReady,
                 detail: runtimeState.map(Self.runtimeDetail(for:)) ?? (
                     bootPathReadiness.isReady
@@ -727,6 +789,34 @@ public struct LocalVMRuntimeService: VMRuntimeService {
                 state: .pending
             )
         ]
+    }
+
+    private static func deviceSummary(for profile: VMProfile) -> VMRuntimeDeviceSummary {
+        VMRuntimeDeviceSummary(
+            platform: "Generic",
+            bootLoader: "EFI",
+            storageDevices: [
+                VMRuntimeStorageDeviceSummary(
+                    role: "installer",
+                    attachment: "USB mass storage",
+                    path: profile.installerMediaPath,
+                    readOnly: true
+                ),
+                VMRuntimeStorageDeviceSummary(
+                    role: "system-disk",
+                    attachment: "Virtio block",
+                    path: profile.virtualDiskPath,
+                    readOnly: false
+                )
+            ],
+            networkMode: "NAT",
+            graphics: VMRuntimeGraphicsSummary(
+                widthInPixels: VMRuntimeDeviceDefaults.graphicsWidthInPixels,
+                heightInPixels: VMRuntimeDeviceDefaults.graphicsHeightInPixels
+            ),
+            inputDevices: ["USB keyboard", "USB screen-coordinate pointer"],
+            entropyDevice: "Virtio entropy"
+        )
     }
 
     private static func fileStepState(
