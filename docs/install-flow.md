@@ -1,6 +1,6 @@
 # Windows Arm Install Flow
 
-Veil's install flow is designed around a bring-your-own Windows 11 Arm model. The product goal is not to hide licensing or media ownership. The goal is to make the setup path explicit, recoverable, and ready for the later Virtualization.framework boot implementation.
+Veil's install flow is designed around a bring-your-own Windows 11 Arm model. The product goal is not to hide licensing or media ownership. The goal is to make the setup path explicit, recoverable, and ready for a local runtime provider implementation.
 
 ## Product Intent
 
@@ -26,6 +26,7 @@ The first three are local host prerequisites. The guest agent step remains pendi
 - Installer media is a user-selected local file.
 - The virtual disk can be user-selected or created as a blank sparse disk at `~/Virtual Machines/Veil/Windows 11 Arm.img`.
 - The boot spike stores EFI variables and the generic machine identifier next to the virtual disk so repeated boots keep stable VM identity.
+- The current local runtime provider is Apple Virtualization. A UTM-style QEMU/HVF provider is a local, serverless compatibility option under evaluation.
 - The runtime snapshot reports structured setup steps so the UI can show what is complete, blocked, or pending.
 - The runtime snapshot reports preflight checks for installer media, guest OS, CPU, memory, and disk size.
 - A profile becomes boot-ready only when installer media, virtual disk, shared folder, and preflight checks all pass.
@@ -37,7 +38,7 @@ The first three are local host prerequisites. The guest agent step remains pendi
 - Export Diagnostics writes a JSON bundle with host metadata, the runtime snapshot, setup steps, preflight checks, the stored VM profile, and the latest boot report to a user-selected diagnostics directory.
 - Start requires a locally signed app bundle with the `com.apple.security.virtualization` entitlement.
 
-The adaptive resource profile is an initial configuration policy, not live VM hot-resizing. Virtualization.framework can use host memory on demand under the configured VM memory cap, and future work can add app-specific profiles, suspend/resume policy, and telemetry-driven adjustments once the real Windows path is stable.
+The adaptive resource profile is an initial configuration policy, not live VM hot-resizing. The local runtime provider can use host memory on demand under the configured VM memory cap, and future work can add app-specific profiles, suspend/resume policy, and telemetry-driven adjustments once the real Windows path is stable.
 
 Diagnostics bundles and boot reports are metadata only. They may include local file paths, VM device roles, runtime state, and startup error text so maintainers can understand setup state, but they must not copy Windows installer media, virtual disk bytes, product keys, or guest user data.
 
@@ -51,7 +52,7 @@ Before the VM boot implementation lands, Veil already blocks obviously invalid p
 - Memory allocation must be at least 4096 MB.
 - Disk size must be at least 64 GB.
 
-These checks are deliberately conservative. They catch configuration mistakes before the future Virtualization.framework boot path tries to build or start a VM.
+These checks are deliberately conservative. They catch configuration mistakes before the local runtime provider tries to build or start a VM.
 
 ## Windows Display Reality Check
 
@@ -71,7 +72,7 @@ Validate Windows installer, virtual disk, and shared folder
 ↓
 Run profile preflight checks
 ↓
-Create Virtualization.framework configuration
+Create local runtime provider configuration
 ↓
 Boot Windows 11 Arm
 ↓

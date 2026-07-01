@@ -4,6 +4,8 @@ Windows apps. Mac experience.
 
 Veil is an open-source research and product effort to make Windows apps feel like native macOS windows on Apple Silicon Macs. The goal is not to build a generic VM manager. The goal is a Windows App Runtime for macOS: boot a Windows 11 Arm VM in the background, launch one Windows app, mirror that app window into a macOS `NSWindow`, and bridge input, clipboard, and files.
 
+Veil is designed to run without a cloud or server VM backend. Like UTM, the VM layer is local to the Mac: profile files, disks, EFI state, and the runtime provider all live on the user's machine.
+
 ## Project Status
 
 Veil is at the architecture and feasibility stage.
@@ -28,7 +30,7 @@ Veil.app
 ├─ macOS Host
 │  ├─ SwiftUI shell
 │  ├─ AppKit window manager
-│  ├─ Virtualization.framework VM manager
+│  ├─ local VM runtime provider
 │  ├─ Metal renderer
 │  ├─ input bridge
 │  ├─ clipboard bridge
@@ -139,7 +141,7 @@ If no external agent is listening at `VEIL_AGENT_URL` or `ws://127.0.0.1:18444`,
 
 The app list supports selection. The current fake-agent harness can only launch Notepad, so other app ids are shown but blocked from launch until generic app launch support lands.
 
-The shell also includes a VM Runtime panel. That panel is a capability, profile-status, disk-preparation, and Virtualization.framework boot spike for Windows 11 Arm.
+The shell also includes a VM Runtime panel. That panel is a capability, profile-status, disk-preparation, and local runtime provider boot spike for Windows 11 Arm. The current active provider is Apple Virtualization; a UTM-style QEMU/HVF provider remains under evaluation for Windows installer compatibility.
 
 The VM Runtime panel can prepare a default local Windows 11 Arm VM in one step: profile, shared folder, and blank sparse virtual disk at `~/Virtual Machines/Veil/Windows 11 Arm.img`. During preparation Veil applies an adaptive resource profile from the current Mac: half of available CPU cores up to a safe cap, 25% of physical memory rounded to a conservative VM cap, and a 128 GB default sparse disk. Virtualization.framework still allocates memory on demand under that configured cap; Veil does not claim live hot-resizing yet. The boot spike keeps EFI variables and the generic machine identifier next to that disk as `Windows 11 Arm.efi` and `Windows 11 Arm.machine-id`. This writes local configuration and empty VM state files only; it does not install Windows, include Windows media, or bypass licensing.
 

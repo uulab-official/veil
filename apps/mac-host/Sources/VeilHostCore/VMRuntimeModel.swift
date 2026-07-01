@@ -43,6 +43,45 @@ public enum VMRuntimeState: String, Codable, Equatable, Sendable {
     case failed
 }
 
+public enum VMRuntimeProviderKind: String, Codable, Equatable, Sendable {
+    case appleVirtualization
+    case qemuHypervisor
+}
+
+public enum VMRuntimeProviderStatus: String, Codable, Equatable, Sendable {
+    case active
+    case planned
+    case unavailable
+}
+
+public struct VMRuntimeProviderSummary: Codable, Equatable, Sendable {
+    public var kind: VMRuntimeProviderKind
+    public var displayName: String
+    public var mode: String
+    public var acceleration: String
+    public var isServerBacked: Bool
+    public var status: VMRuntimeProviderStatus
+    public var detail: String
+
+    public init(
+        kind: VMRuntimeProviderKind,
+        displayName: String,
+        mode: String,
+        acceleration: String,
+        isServerBacked: Bool,
+        status: VMRuntimeProviderStatus,
+        detail: String
+    ) {
+        self.kind = kind
+        self.displayName = displayName
+        self.mode = mode
+        self.acceleration = acceleration
+        self.isServerBacked = isServerBacked
+        self.status = status
+        self.detail = detail
+    }
+}
+
 public struct VMRuntimeSnapshot: Codable, Equatable, Sendable {
     public var state: VMRuntimeState
     public var virtualizationAvailable: Bool
@@ -54,6 +93,7 @@ public struct VMRuntimeSnapshot: Codable, Equatable, Sendable {
     public var diskGB: Int?
     public var installerMediaPath: String?
     public var virtualDiskPath: String?
+    public var runtimeProvider: VMRuntimeProviderSummary?
     public var installationSteps: [VMInstallationStep]
     public var preflightChecks: [VMPreflightCheck]
     public var deviceSummary: VMRuntimeDeviceSummary?
@@ -71,6 +111,7 @@ public struct VMRuntimeSnapshot: Codable, Equatable, Sendable {
         diskGB: Int? = nil,
         installerMediaPath: String? = nil,
         virtualDiskPath: String? = nil,
+        runtimeProvider: VMRuntimeProviderSummary? = nil,
         installationSteps: [VMInstallationStep] = [],
         preflightChecks: [VMPreflightCheck] = [],
         deviceSummary: VMRuntimeDeviceSummary? = nil,
@@ -87,6 +128,7 @@ public struct VMRuntimeSnapshot: Codable, Equatable, Sendable {
         self.diskGB = diskGB
         self.installerMediaPath = installerMediaPath
         self.virtualDiskPath = virtualDiskPath
+        self.runtimeProvider = runtimeProvider
         self.installationSteps = installationSteps
         self.preflightChecks = preflightChecks
         self.deviceSummary = deviceSummary
@@ -433,6 +475,11 @@ public final class VMRuntimeModel {
             return "VM runtime capabilities not loaded"
         }
 
+        if let runtimeProvider = snapshot.runtimeProvider {
+            let availability = snapshot.virtualizationAvailable ? "available" : "unavailable"
+            return "\(runtimeProvider.displayName) local provider \(availability) on \(snapshot.architecture)"
+        }
+
         let availability = snapshot.virtualizationAvailable ? "available" : "unavailable"
         return "Virtualization.framework \(availability) on \(snapshot.architecture)"
     }
@@ -606,6 +653,10 @@ public struct LocalVMRuntimeService: VMRuntimeService {
                 diskGB: profile.diskGB,
                 installerMediaPath: profile.installerMediaPath,
                 virtualDiskPath: profile.virtualDiskPath,
+                runtimeProvider: Self.appleVirtualizationProvider(
+                    status: .active,
+                    virtualizationAvailable: virtualizationAvailable
+                ),
                 installationSteps: installationSteps,
                 preflightChecks: preflightChecks,
                 deviceSummary: Self.deviceSummary(for: profile),
@@ -624,6 +675,10 @@ public struct LocalVMRuntimeService: VMRuntimeService {
             architecture: architecture,
             minimumOSSupported: minimumOSSupported,
             profileName: nil,
+            runtimeProvider: Self.appleVirtualizationProvider(
+                status: virtualizationAvailable ? .active : .unavailable,
+                virtualizationAvailable: virtualizationAvailable
+            ),
             detail: virtualizationAvailable
                 ? "No Windows VM profile has been created."
                 : "Veil requires macOS 15+ on Apple Silicon."
@@ -826,6 +881,23 @@ public struct LocalVMRuntimeService: VMRuntimeService {
         case .unsupported:
             "Veil requires macOS 15+ on Apple Silicon."
         }
+    }
+
+    private static func appleVirtualizationProvider(
+        status: VMRuntimeProviderStatus,
+        virtualizationAvailable: Bool
+    ) -> VMRuntimeProviderSummary {
+        VMRuntimeProviderSummary(
+            kind: .appleVirtualization,
+            displayName: "Apple Virtualization",
+            mode: "Local VM runtime",
+            acceleration: "Apple Hypervisor",
+            isServerBacked: false,
+            status: status,
+            detail: virtualizationAvailable
+                ? "Runs locally inside Veil.app with no server VM backend."
+                : "Requires macOS 15+ on Apple Silicon."
+        )
     }
 
     private static func bootReport(

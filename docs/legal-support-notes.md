@@ -21,6 +21,10 @@ Installer media and virtual disk paths in the local profile are local references
 
 Starting a local virtual machine with user-provided installer media and a blank disk is a VM lifecycle feature. It must not be described as Windows distribution, Windows activation, Windows support from Microsoft, or official Apple endorsement.
 
+## Serverless Runtime Wording
+
+Veil's VM execution layer is a local runtime provider. Product and architecture docs should not describe this as a cloud backend, hosted Windows backend, or server VM backend. If QEMU/HVF is added later, it is still a local runtime provider launched by the macOS app, not a remote service.
+
 ## Microsoft Support Position
 
 Microsoft's public support page for Windows 11 on Apple Silicon Macs currently points users to Windows 365 Cloud PCs or Parallels Desktop when a Windows PC is not available:

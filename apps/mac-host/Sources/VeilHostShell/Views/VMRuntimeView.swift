@@ -460,7 +460,7 @@ private struct ControlCenterHero: View {
                         spacing: 10
                     ) {
                         DashboardStat(title: "Architecture", value: snapshot.architecture, symbolName: "cpu", tint: .blue)
-                        DashboardStat(title: "Runtime", value: snapshot.virtualizationAvailable ? "Available" : "Unavailable", symbolName: "bolt.horizontal", tint: snapshot.virtualizationAvailable ? .green : .orange)
+                        DashboardStat(title: "Provider", value: providerName(for: snapshot), symbolName: "bolt.horizontal", tint: snapshot.virtualizationAvailable ? .green : .orange)
                         DashboardStat(title: "Boot Ready", value: snapshot.bootReady ? "Ready" : "Blocked", symbolName: snapshot.bootReady ? "checkmark.seal" : "lock", tint: snapshot.bootReady ? .green : .orange)
                         DashboardStat(title: "Profile", value: snapshot.profileName == nil ? "Missing" : "Configured", symbolName: "person.crop.rectangle.stack", tint: snapshot.profileName == nil ? .orange : .green)
                         DashboardStat(title: "Installer", value: snapshot.installerMediaPath == nil ? "Missing" : "Selected", symbolName: "opticaldisc", tint: snapshot.installerMediaPath == nil ? .orange : .green)
@@ -513,6 +513,10 @@ private struct ControlCenterHero: View {
     private var canShowConsole: Bool {
         snapshot.state == .running || snapshot.state == .starting
     }
+
+    private func providerName(for snapshot: VMRuntimeSnapshot) -> String {
+        snapshot.runtimeProvider?.displayName ?? (snapshot.virtualizationAvailable ? "Local" : "Unavailable")
+    }
 }
 
 private struct DevicePlanPanel: View {
@@ -522,7 +526,7 @@ private struct DevicePlanPanel: View {
         ShellPanel(spacing: 12) {
             ShellPanelHeader(
                 title: "Device Plan",
-                subtitle: "Virtualization.framework devices Veil will attach at boot.",
+                subtitle: "Local runtime devices Veil will attach at boot.",
                 symbolName: "cpu"
             )
 
@@ -623,7 +627,7 @@ private struct ResourcePlanPanel: View {
             return "Adaptive CPU profile will be applied during VM preparation."
         }
 
-        return "\(cpuCount) vCPU configured on Apple Virtualization.framework."
+        return "\(cpuCount) vCPU configured on the local runtime provider."
     }
 
     private var memoryValue: String {

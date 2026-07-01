@@ -2,7 +2,9 @@
 
 Veil aims for Parallels-class coherence, but the roadmap is deliberately staged around proofs that can be tested.
 
-UTM is the quality benchmark for VM setup depth, diagnostics, and open-source operational maturity. Veil should not clone UTM's broad QEMU device surface; it should match the reliability bar for the narrower Windows App Runtime path.
+UTM is the quality benchmark for local VM setup depth, diagnostics, and open-source operational maturity. Veil should not clone UTM's broad QEMU device surface; it should match the reliability bar for the narrower Windows App Runtime path.
+
+Veil does not have a cloud or server VM backend. Its VM layer is a local runtime provider boundary inside the macOS app.
 
 ## v0.1: VM Boot
 
@@ -15,7 +17,7 @@ UTM is the quality benchmark for VM setup depth, diagnostics, and open-source op
 - Shared folder preparation.
 - Local diagnostics bundle export.
 - Last boot attempt report in diagnostics.
-- Typed Virtualization.framework device summary.
+- Typed local runtime provider device summary.
 - Start, stop, suspend, resume states.
 - Basic VM display surface for debugging.
 - Reopenable VM console action while the machine is running.
@@ -124,10 +126,10 @@ Exit criteria:
 
 ## Current Next Step
 
-The protocol harness is now executable from JavaScript, the Swift host probe, and the SwiftUI host shell. The shell also has a VM Runtime status boundary, one-click VM preparation, adaptive host-sized resource caps, local boot-path checks, installer media role validation, shared-folder preparation, default sparse-disk creation, a setup-step checklist, profile preflight checks, metadata-only diagnostics export, latest boot-attempt reporting, a typed Virtualization.framework device summary, and a Virtualization.framework boot spike that opens and stops a VM console. The next implementation step is the v0.1/v0.2 overlap:
+The protocol harness is now executable from JavaScript, the Swift host probe, and the SwiftUI host shell. The shell also has a VM Runtime status boundary, one-click VM preparation, adaptive host-sized resource caps, local boot-path checks, installer media role validation, shared-folder preparation, default sparse-disk creation, a setup-step checklist, profile preflight checks, metadata-only diagnostics export, latest boot-attempt reporting, a typed local runtime provider device summary, and an Apple Virtualization boot spike that opens and stops a VM console. The next implementation step is the v0.1/v0.2 overlap:
 
 1. Harden the Virtualization.framework boot spike against real Windows 11 Arm installer variants.
-2. Decide whether the reliable Windows path stays on Apple Virtualization.framework or needs a UTM-style QEMU/Hypervisor backend for installer display and device compatibility.
+2. Decide whether the reliable Windows path stays on Apple Virtualization.framework or needs a UTM-style local QEMU/HVF provider for installer display and device compatibility.
 3. Add deeper validation for selected installer media and virtual disk paths, including file format and bootability checks proven by the spike.
 4. Keep the fake-agent path available so UI and protocol work stay testable without Windows.
 5. Validate the actual Windows 11 Arm VM path separately.

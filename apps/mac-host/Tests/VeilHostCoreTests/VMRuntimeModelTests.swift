@@ -60,6 +60,39 @@ struct VMRuntimeModelTests {
         #expect(model.capabilitySummary == "Virtualization.framework unavailable on x86_64")
     }
 
+    @Test("load capability summary uses local runtime provider wording")
+    @MainActor
+    func loadCapabilitySummaryUsesLocalRuntimeProvider() async throws {
+        let model = VMRuntimeModel(
+            service: FakeVMRuntimeService(
+                snapshot: VMRuntimeSnapshot(
+                    state: .stopped,
+                    virtualizationAvailable: true,
+                    architecture: "arm64",
+                    minimumOSSupported: true,
+                    profileName: "Windows 11 Arm",
+                    installerMediaPath: nil,
+                    virtualDiskPath: nil,
+                    runtimeProvider: VMRuntimeProviderSummary(
+                        kind: .appleVirtualization,
+                        displayName: "Apple Virtualization",
+                        mode: "Local VM runtime",
+                        acceleration: "Apple Hypervisor",
+                        isServerBacked: false,
+                        status: .active,
+                        detail: "Runs locally in Veil.app."
+                    ),
+                    bootReady: false,
+                    detail: "Installer media and virtual disk paths are required before boot."
+                )
+            )
+        )
+
+        await model.load()
+
+        #expect(model.capabilitySummary == "Apple Virtualization local provider available on arm64")
+    }
+
     @Test("stores service errors")
     @MainActor
     func storesServiceErrors() async throws {

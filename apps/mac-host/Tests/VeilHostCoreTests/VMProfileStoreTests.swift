@@ -137,6 +137,28 @@ struct VMProfileStoreTests {
         ])
     }
 
+    @Test("local runtime reports local runtime provider")
+    func localRuntimeReportsLocalRuntimeProvider() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let store = JSONVMProfileStore(directory: directory)
+        let profile = VMProfile.defaultWindows11Arm(
+            createdAt: Date(timeIntervalSince1970: 1_782_752_400),
+            homeDirectory: directory.appendingPathComponent("Home", isDirectory: true)
+        )
+        try await store.save(profile)
+
+        let service = LocalVMRuntimeService(profileStore: store)
+        let snapshot = try await service.loadSnapshot()
+        let provider = try #require(snapshot.runtimeProvider)
+
+        #expect(provider.kind == .appleVirtualization)
+        #expect(provider.displayName == "Apple Virtualization")
+        #expect(provider.acceleration == "Apple Hypervisor")
+        #expect(provider.isServerBacked == false)
+        #expect(provider.status == .active)
+    }
+
     @Test("local runtime reports virtualization device summary")
     func localRuntimeReportsVirtualizationDeviceSummary() async throws {
         let directory = FileManager.default.temporaryDirectory

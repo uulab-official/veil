@@ -5,7 +5,7 @@
 ```text
 macOS Host App <---- protocol ----> Windows Guest Agent
       |
-      +---- Virtualization.framework VM lifecycle
+      +---- local VM runtime provider
       +---- AppKit NSWindow per guest HWND
       +---- Metal or AV rendering path
       +---- macOS pasteboard, files, Dock, notifications
@@ -24,7 +24,7 @@ Preferred stack:
 - Swift
 - SwiftUI for shell UI
 - AppKit for per-app windows and responder-chain behavior
-- Virtualization.framework for VM lifecycle
+- local VM runtime provider for VM lifecycle
 - Metal or AVSampleBufferDisplayLayer for frame rendering
 
 Responsibilities:
@@ -38,6 +38,15 @@ Responsibilities:
 - expose a narrow shared folder,
 - store user settings and VM profiles.
 
+## Serverless Local Runtime
+
+Veil should not require a cloud service or remote VM backend to run Windows apps. The host app owns a local runtime provider boundary that can be implemented by Apple Virtualization, QEMU/HVF, or another local engine if the project proves it is needed. This is the UTM-like part of the architecture: VM execution remains a local Mac concern, while Veil's product layer focuses on app-window coherence instead of generic VM management.
+
+Current provider status:
+
+- Apple Virtualization: active feasibility provider for profile, disk, EFI, console, and boot attempts.
+- QEMU/HVF: planned local provider candidate for UTM-grade Windows installer/device compatibility if Apple Virtualization is not enough.
+
 ## Windows Arm Install Flow
 
 Veil treats Windows setup as a staged runtime prerequisite rather than a generic VM wizard. The host profile tracks installer media, virtual disk, and a narrow macOS shared folder before VM boot work begins. The guest agent remains a separate pending step until Windows can boot and run an installer inside the guest.
@@ -48,13 +57,18 @@ See [Windows Arm install flow](install-flow.md) for the user-facing setup sequen
 
 UTM is the open-source benchmark for a serious Mac VM host: it has a mature VM library, device settings, guest support documentation, and recovery guidance. Veil should match that level of setup clarity and operational diagnostics while keeping a narrower product goal. Veil is not trying to become a general QEMU manager. It should instead make the Windows App Runtime path reliable enough that users know which exact prerequisite blocks boot, which file role is wrong, and what recovery step is next.
 
-The UTM source separates Apple virtualization settings into typed configuration sections such as system, virtualization, shared directories, displays, drives, networks, and serial devices. Veil should follow that structural lesson without adopting UTM's full QEMU surface: every boot-facing device should have a typed summary that can be shown in the shell, written to diagnostics, and compared against the actual Virtualization.framework configuration.
+References:
+
+- UTM Documentation: [What is UTM?](https://docs.getutm.app/)
+- UTM GitHub: [utmapp/UTM](https://github.com/utmapp/UTM)
+
+The UTM source separates virtualization settings into typed configuration sections such as system, virtualization, shared directories, displays, drives, networks, and serial devices. Veil should follow that structural lesson without adopting UTM's full generic VM surface: every boot-facing device should have a typed summary that can be shown in the shell, written to diagnostics, and compared against the actual local provider configuration.
 
 Near-term quality bars:
 
 - distinguish installer media from boot disks before Start is enabled,
 - produce structured preflight checks for every local boot prerequisite,
-- expose the planned Virtualization.framework devices before Start is enabled,
+- expose the planned local runtime devices before Start is enabled,
 - make VM metadata, resource caps, and selected files visible in the host shell,
 - keep fake-agent and fake-host harnesses so agent work remains testable without Windows,
 - add diagnostics bundles before developer-preview distribution.
@@ -130,7 +144,7 @@ MVP capture order:
 
 ## Open Feasibility Questions
 
-- Whether the chosen Virtualization.framework path can reliably boot and operate Windows 11 Arm for the project target.
+- Whether Apple Virtualization can reliably boot and operate Windows 11 Arm for the project target, or whether Veil needs a local QEMU/HVF provider.
 - Best capture mechanism for app-window-only streaming at acceptable latency.
 - Correct mapping of macOS focus, IME, keyboard layout, and accessibility behavior to Windows.
 - Legal/support wording for Windows-on-Apple-Silicon distribution.
