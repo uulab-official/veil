@@ -10,6 +10,8 @@ Goal: make the prepared Windows VM path feel like a Parallels-style automatic in
 - [x] Disabled refresh while the simulation is running to keep the card state stable.
 - [x] Added a reset affordance after the simulation completes.
 - [x] Kept the simulation separate from real VM start and Windows licensing/distribution claims.
+- [x] Removed the sidebar from the VM shell so install progress owns the screen.
+- [x] Enlarged the automatic install progress panel with a visual phase timeline.
 
 ## Still Open
 

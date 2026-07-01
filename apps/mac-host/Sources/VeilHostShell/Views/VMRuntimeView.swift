@@ -369,7 +369,7 @@ private struct SimpleRuntimePanel: View {
 
     var body: some View {
         ShellPanel(spacing: 20) {
-            HStack(alignment: .center, spacing: 22) {
+            HStack(alignment: installSimulation.phase == .idle ? .center : .top, spacing: 22) {
                 MachineBadge()
 
                 VStack(alignment: .leading, spacing: 14) {
@@ -389,9 +389,9 @@ private struct SimpleRuntimePanel: View {
                         StatusPill(title: runtimeTitle, symbolName: runtimeSymbol, tint: runtimeTint)
                     }
 
-                    setupStrip
-
-                    if installSimulation.phase != .idle {
+                    if installSimulation.phase == .idle {
+                        setupStrip
+                    } else {
                         InstallSimulationProgressView(
                             simulation: installSimulation,
                             resetAction: resetSimulationAction
@@ -573,25 +573,28 @@ private struct InstallSimulationProgressView: View {
     var resetAction: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .firstTextBaseline) {
                 Label(title, systemImage: symbolName)
-                    .font(.callout.weight(.semibold))
+                    .font(.headline.weight(.semibold))
                     .foregroundStyle(tint)
 
                 Spacer()
 
                 Text("\(Int(simulation.progress * 100))%")
-                    .font(.caption.monospacedDigit())
+                    .font(.callout.monospacedDigit().weight(.semibold))
                     .foregroundStyle(.secondary)
             }
 
             ProgressView(value: simulation.progress)
                 .tint(tint)
+                .controlSize(.large)
+
+            stepTimeline
 
             HStack(alignment: .firstTextBaseline, spacing: 10) {
                 Text(simulation.currentStep)
-                    .font(.caption)
+                    .font(.callout)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
 
@@ -608,10 +611,21 @@ private struct InstallSimulationProgressView: View {
             }
         }
         .padding(12)
+        .frame(maxWidth: .infinity, minHeight: 128, alignment: .leading)
         .background(tint.opacity(0.08), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .strokeBorder(tint.opacity(0.16), lineWidth: 1)
+        }
+    }
+
+    private var stepTimeline: some View {
+        HStack(spacing: 7) {
+            ForEach(InstallSimulationState.steps.indices, id: \.self) { index in
+                Capsule()
+                    .fill(index <= simulation.stepIndex || simulation.phase == .complete ? tint : Color.secondary.opacity(0.22))
+                    .frame(height: 6)
+            }
         }
     }
 
