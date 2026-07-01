@@ -12,6 +12,7 @@ Goal: keep the main Veil experience pointed at real local Windows boot and conso
 - [x] Make the custom header draggable while preserving macOS traffic-light controls.
 - [x] Add a macOS menu bar item so Veil can be reopened and controlled from the top system bar.
 - [x] Fill the whole window and custom titlebar with one continuous product backdrop.
+- [x] Replace the translucent system-looking header with a Discord-style custom dark titlebar surface.
 - [x] Model the visible setup process as Get Windows, Prepare, Install, and Connect instead of a developer checklist.
 - [x] Keep ISO, disk, runtime provider, and guest-agent details visible only as compact status metadata on the first screen.
 - [x] Remove developer-style status badges from the first screen so the VM card reads like a product launcher.

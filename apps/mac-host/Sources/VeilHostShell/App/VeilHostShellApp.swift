@@ -319,6 +319,8 @@ private enum MainWindowChrome {
         window.titlebarAppearsTransparent = true
         window.styleMask.insert(.fullSizeContentView)
         window.toolbar = nil
+        window.isOpaque = false
+        window.backgroundColor = .clear
     }
 
     private static func compact(_ window: NSWindow) {

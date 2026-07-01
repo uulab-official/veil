@@ -54,9 +54,9 @@ private struct VeilWindowBackdrop: View {
         ZStack {
             LinearGradient(
                 colors: [
-                    Color(nsColor: .windowBackgroundColor),
-                    Color(red: 0.07, green: 0.09, blue: 0.12),
-                    Color(red: 0.03, green: 0.15, blue: 0.22)
+                    Color(red: 0.075, green: 0.078, blue: 0.086),
+                    Color(red: 0.095, green: 0.098, blue: 0.108),
+                    Color(red: 0.060, green: 0.063, blue: 0.071)
                 ],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
@@ -65,7 +65,7 @@ private struct VeilWindowBackdrop: View {
             VStack(spacing: 0) {
                 LinearGradient(
                     colors: [
-                        Color.white.opacity(0.08),
+                        Color.white.opacity(0.045),
                         Color.clear
                     ],
                     startPoint: .top,
@@ -75,16 +75,6 @@ private struct VeilWindowBackdrop: View {
 
                 Spacer()
             }
-
-            HStack(spacing: 0) {
-                Rectangle()
-                    .fill(Color.cyan.opacity(0.07))
-                    .frame(maxWidth: .infinity)
-                Rectangle()
-                    .fill(Color.green.opacity(0.045))
-                    .frame(maxWidth: .infinity)
-            }
-            .blendMode(.screen)
         }
     }
 }
@@ -118,12 +108,22 @@ private struct VeilWindowHeader: View {
             .disabled(isRefreshing)
             .help("Refresh")
         }
+        .padding(.leading, 0)
         .padding(.trailing, 14)
-        .frame(height: 52)
-        .background(.ultraThinMaterial)
+        .frame(height: 54)
+        .background(
+            LinearGradient(
+                colors: [
+                    Color(red: 0.110, green: 0.113, blue: 0.122),
+                    Color(red: 0.083, green: 0.086, blue: 0.095)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+        )
         .overlay(alignment: .bottom) {
             Rectangle()
-                .fill(.white.opacity(0.08))
+                .fill(.white.opacity(0.065))
                 .frame(height: 1)
         }
         .contentShape(Rectangle())
