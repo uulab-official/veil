@@ -8,5 +8,5 @@
 - [x] Keep validation conservative and avoid claiming full Windows ISO bootability proof.
 - [x] Update architecture, install flow, roadmap, and README documentation.
 - [ ] Validate real Windows 11 Arm ISO boot behavior on Apple Virtualization.framework.
-- [ ] Add diagnostics bundle export for failed boots and user bug reports.
+- [x] Add diagnostics bundle export for failed boots and user bug reports.
 - [ ] Add import flow for pre-existing Windows disk images only after file-format support is proven.

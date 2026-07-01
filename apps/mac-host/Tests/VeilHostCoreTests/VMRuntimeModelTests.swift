@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 
 @testable import VeilHostCore
@@ -287,6 +288,22 @@ struct VMRuntimeModelTests {
         #expect(model.phase == .failed)
         #expect(model.errorMessage == "VM boot is not implemented yet.")
     }
+
+    @Test("exports diagnostics through the service boundary")
+    @MainActor
+    func exportsDiagnosticsThroughServiceBoundary() async throws {
+        let outputURL = URL(fileURLWithPath: "/tmp/veil-vm-diagnostics.json")
+        let directory = URL(fileURLWithPath: "/tmp/VeilDiagnostics", isDirectory: true)
+        let service = FakeVMRuntimeService(diagnosticsURL: outputURL)
+        let model = VMRuntimeModel(service: service)
+
+        await model.exportDiagnostics(to: directory)
+
+        #expect(model.phase == .loaded)
+        #expect(model.diagnosticsURL == outputURL)
+        #expect(model.errorMessage == nil)
+        #expect(service.diagnosticsDirectory == directory)
+    }
 }
 
 @MainActor
@@ -298,6 +315,7 @@ private final class FakeVMRuntimeService: VMRuntimeService {
     var updatedSnapshot: VMRuntimeSnapshot?
     var startedSnapshot: VMRuntimeSnapshot?
     var stoppedSnapshot: VMRuntimeSnapshot?
+    var diagnosticsURL: URL?
     var error: (any Error)?
     private(set) var updatedInstallerMediaPath: String?
     private(set) var updatedVirtualDiskPath: String?
@@ -306,6 +324,7 @@ private final class FakeVMRuntimeService: VMRuntimeService {
     private(set) var prepareCount = 0
     private(set) var startCount = 0
     private(set) var stopCount = 0
+    private(set) var diagnosticsDirectory: URL?
 
     init(
         snapshot: VMRuntimeSnapshot? = nil,
@@ -315,6 +334,7 @@ private final class FakeVMRuntimeService: VMRuntimeService {
         updatedSnapshot: VMRuntimeSnapshot? = nil,
         startedSnapshot: VMRuntimeSnapshot? = nil,
         stoppedSnapshot: VMRuntimeSnapshot? = nil,
+        diagnosticsURL: URL? = nil,
         error: (any Error)? = nil
     ) {
         self.snapshot = snapshot
@@ -324,6 +344,7 @@ private final class FakeVMRuntimeService: VMRuntimeService {
         self.updatedSnapshot = updatedSnapshot
         self.startedSnapshot = startedSnapshot
         self.stoppedSnapshot = stoppedSnapshot
+        self.diagnosticsURL = diagnosticsURL
         self.error = error
     }
 
@@ -400,5 +421,14 @@ private final class FakeVMRuntimeService: VMRuntimeService {
         let stoppedSnapshot = try #require(stoppedSnapshot)
         snapshot = stoppedSnapshot
         return stoppedSnapshot
+    }
+
+    func exportDiagnostics(to directory: URL) async throws -> URL {
+        if let error {
+            throw error
+        }
+
+        diagnosticsDirectory = directory
+        return try #require(diagnosticsURL)
     }
 }

@@ -187,6 +187,47 @@ struct VMProfileStoreTests {
         #expect(installerCheck.detail == "Select a bootable ISO installer for Windows setup. VHDX files should be used as disk images, not installer media.")
     }
 
+    @Test("exports diagnostic bundle without media contents")
+    func exportsDiagnosticBundleWithoutMediaContents() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let diagnosticsDirectory = directory.appendingPathComponent("Diagnostics", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let installerURL = directory.appendingPathComponent("Windows.iso")
+        let diskURL = directory.appendingPathComponent("Windows.img")
+        let sharedFolderURL = directory.appendingPathComponent("Veil Shared", isDirectory: true)
+        try Data("secret installer bytes".utf8).write(to: installerURL)
+        try Data("secret disk bytes".utf8).write(to: diskURL)
+        try FileManager.default.createDirectory(at: sharedFolderURL, withIntermediateDirectories: true)
+        let store = JSONVMProfileStore(directory: directory)
+        var profile = VMProfile.defaultWindows11Arm(createdAt: Date(timeIntervalSince1970: 1_782_752_400))
+        profile.installerMediaPath = installerURL.path
+        profile.virtualDiskPath = diskURL.path
+        profile.sharedFolderPath = sharedFolderURL.path
+        try await store.save(profile)
+        let service = LocalVMRuntimeService(
+            profileStore: store,
+            diagnosticDate: { Date(timeIntervalSince1970: 1_782_838_800) }
+        )
+
+        let outputURL = try await service.exportDiagnostics(to: diagnosticsDirectory)
+        let data = try Data(contentsOf: outputURL)
+        let bundle = try JSONDecoder.veilDiagnostics.decode(VMRuntimeDiagnosticBundle.self, from: data)
+        let json = String(decoding: data, as: UTF8.self)
+
+        #expect(outputURL.deletingLastPathComponent() == diagnosticsDirectory)
+        #expect(outputURL.lastPathComponent == "veil-vm-diagnostics-2026-06-30T17-00-00Z.json")
+        #expect(bundle.generatedAt == Date(timeIntervalSince1970: 1_782_838_800))
+        #expect(bundle.snapshot.profileName == "Windows 11 Arm")
+        #expect(bundle.profile?.installerMediaPath == installerURL.path)
+        #expect(bundle.profile?.virtualDiskPath == diskURL.path)
+        #expect(bundle.host.architecture == "arm64")
+        #expect(bundle.host.processorCount >= 1)
+        #expect(bundle.host.physicalMemoryBytes > 0)
+        #expect(!json.contains("secret installer bytes"))
+        #expect(!json.contains("secret disk bytes"))
+    }
+
     @Test("local runtime is not boot ready when VM profile resources are invalid")
     func localRuntimeRejectsInvalidProfileResources() async throws {
         let directory = FileManager.default.temporaryDirectory

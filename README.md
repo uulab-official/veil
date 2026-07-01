@@ -145,6 +145,8 @@ The VM Runtime panel can prepare a default local Windows 11 Arm VM in one step: 
 
 The profile can reference a user-provided installer image and virtual disk path, or use Veil's default blank disk file. Veil checks that the stored paths still point to local files, that installer media looks like a bootable ISO instead of a disk-image import, that the macOS shared folder exists, and that the profile targets Windows Arm with usable CPU, memory, and disk settings before marking the profile boot-ready. Pressing Start now builds a local `VZVirtualMachine`, starts it through Apple's Virtualization.framework, and opens a console window. Pressing Stop stops the active VM process and closes the console. It still does not validate Windows media contents, automate Windows installation, include Windows media, or bypass licensing.
 
+The VM Runtime panel can export a local diagnostics JSON bundle to `~/Downloads/Veil Diagnostics`. The bundle includes host metadata, runtime snapshot, setup steps, preflight checks, and the stored VM profile. It records file paths for troubleshooting but never copies installer media, virtual disk contents, product keys, or Windows data.
+
 The bundled run script signs the local app bundle with the `com.apple.security.virtualization` entitlement required by Virtualization.framework:
 
 ```bash

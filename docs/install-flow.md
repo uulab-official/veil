@@ -30,9 +30,12 @@ The first three are local host prerequisites. The guest agent step remains pendi
 - A profile becomes boot-ready only when installer media, virtual disk, shared folder, and preflight checks all pass.
 - Pressing Start builds a `VZVirtualMachine`, starts it through Apple's Virtualization.framework, and opens a console window.
 - Pressing Stop stops the active VM process and closes the console window.
+- Export Diagnostics writes a JSON bundle with host metadata, the runtime snapshot, setup steps, preflight checks, and the stored VM profile to a user-selected diagnostics directory.
 - Start requires a locally signed app bundle with the `com.apple.security.virtualization` entitlement.
 
 The adaptive resource profile is an initial configuration policy, not live VM hot-resizing. Virtualization.framework can use host memory on demand under the configured VM memory cap, and future work can add app-specific profiles, suspend/resume policy, and telemetry-driven adjustments once the real Windows path is stable.
+
+Diagnostics bundles are metadata only. They may include local file paths so maintainers can understand setup state, but they must not copy Windows installer media, virtual disk bytes, product keys, or guest user data.
 
 ## Preflight Checks
 
@@ -81,3 +84,4 @@ Enable app launcher and coherence windows
 - Creating a licensed Windows installation for the user.
 - Claiming Microsoft or Apple endorsement.
 - Fully validating the contents or bootability of a Windows installer image before the VM boot spike proves the exact requirements.
+- Copying Windows media, virtual disk contents, or product keys into diagnostics bundles.

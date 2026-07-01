@@ -8,6 +8,7 @@ public protocol VMRuntimeService: Sendable {
     func updateProfilePaths(installerMediaPath: String?, virtualDiskPath: String?) async throws -> VMRuntimeSnapshot
     func start() async throws -> VMRuntimeSnapshot
     func stop() async throws -> VMRuntimeSnapshot
+    func exportDiagnostics(to directory: URL) async throws -> URL
 }
 
 public protocol VMRuntimeBooting: Sendable {
@@ -140,6 +141,61 @@ public struct VMPreflightCheck: Codable, Equatable, Identifiable, Sendable {
     }
 }
 
+public struct VMRuntimeDiagnosticHost: Codable, Equatable, Sendable {
+    public var architecture: String
+    public var processorCount: Int
+    public var physicalMemoryBytes: UInt64
+    public var operatingSystemVersion: String
+
+    public init(
+        architecture: String,
+        processorCount: Int,
+        physicalMemoryBytes: UInt64,
+        operatingSystemVersion: String
+    ) {
+        self.architecture = architecture
+        self.processorCount = processorCount
+        self.physicalMemoryBytes = physicalMemoryBytes
+        self.operatingSystemVersion = operatingSystemVersion
+    }
+}
+
+public struct VMRuntimeDiagnosticBundle: Codable, Equatable, Sendable {
+    public var generatedAt: Date
+    public var host: VMRuntimeDiagnosticHost
+    public var snapshot: VMRuntimeSnapshot
+    public var profile: VMProfile?
+
+    public init(
+        generatedAt: Date,
+        host: VMRuntimeDiagnosticHost,
+        snapshot: VMRuntimeSnapshot,
+        profile: VMProfile?
+    ) {
+        self.generatedAt = generatedAt
+        self.host = host
+        self.snapshot = snapshot
+        self.profile = profile
+    }
+}
+
+public extension JSONEncoder {
+    static var veilDiagnostics: JSONEncoder {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        encoder.dateEncodingStrategy = .iso8601
+        return encoder
+    }
+}
+
+public extension JSONDecoder {
+    static var veilDiagnostics: JSONDecoder {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return decoder
+    }
+}
+
 public enum VMRuntimeError: Error, LocalizedError, Equatable, Sendable {
     case capabilityProbeFailed
     case bootNotImplemented
@@ -170,6 +226,7 @@ public final class VMRuntimeModel {
     public private(set) var phase: VMRuntimePhase = .idle
     public private(set) var snapshot: VMRuntimeSnapshot?
     public private(set) var errorMessage: String?
+    public private(set) var diagnosticsURL: URL?
 
     private let service: any VMRuntimeService
 
@@ -323,6 +380,19 @@ public final class VMRuntimeModel {
         }
     }
 
+    public func exportDiagnostics(to directory: URL) async {
+        phase = .loading
+        errorMessage = nil
+
+        do {
+            diagnosticsURL = try await service.exportDiagnostics(to: directory)
+            phase = .loaded
+        } catch {
+            errorMessage = userMessage(for: error)
+            phase = .failed
+        }
+    }
+
     private func userMessage(for error: any Error) -> String {
         if let localized = error as? LocalizedError,
            let description = localized.errorDescription {
@@ -338,17 +408,20 @@ public struct LocalVMRuntimeService: VMRuntimeService {
     private let defaultHomeDirectory: URL
     private let bootRunner: any VMRuntimeBooting
     private let resourcePlan: VMResourcePlan?
+    private let diagnosticDate: @Sendable () -> Date
 
     public init(
         profileStore: any VMProfileStore = JSONVMProfileStore(),
         defaultHomeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser,
         bootRunner: any VMRuntimeBooting = UnavailableVMRuntimeBooter(),
-        resourcePlan: VMResourcePlan? = nil
+        resourcePlan: VMResourcePlan? = nil,
+        diagnosticDate: @escaping @Sendable () -> Date = Date.init
     ) {
         self.profileStore = profileStore
         self.defaultHomeDirectory = defaultHomeDirectory
         self.bootRunner = bootRunner
         self.resourcePlan = resourcePlan
+        self.diagnosticDate = diagnosticDate
     }
 
     public func loadSnapshot() async throws -> VMRuntimeSnapshot {
@@ -492,6 +565,27 @@ public struct LocalVMRuntimeService: VMRuntimeService {
         return try await loadSnapshot()
     }
 
+    public func exportDiagnostics(to directory: URL) async throws -> URL {
+        let generatedAt = diagnosticDate()
+        let snapshot = try await loadSnapshot()
+        let profile = try await profileStore.load()
+        let bundle = VMRuntimeDiagnosticBundle(
+            generatedAt: generatedAt,
+            host: Self.diagnosticHost(),
+            snapshot: snapshot,
+            profile: profile
+        )
+
+        try FileManager.default.createDirectory(
+            at: directory,
+            withIntermediateDirectories: true
+        )
+        let outputURL = directory.appendingPathComponent(Self.diagnosticFileName(for: generatedAt))
+        let data = try JSONEncoder.veilDiagnostics.encode(bundle)
+        try data.write(to: outputURL, options: [.atomic])
+        return outputURL
+    }
+
     private static func hostArchitecture() -> String {
         #if arch(arm64)
         return "arm64"
@@ -500,6 +594,24 @@ public struct LocalVMRuntimeService: VMRuntimeService {
         #else
         return "unknown"
         #endif
+    }
+
+    private static func diagnosticHost() -> VMRuntimeDiagnosticHost {
+        let operatingSystemVersion = ProcessInfo.processInfo.operatingSystemVersion
+        return VMRuntimeDiagnosticHost(
+            architecture: hostArchitecture(),
+            processorCount: ProcessInfo.processInfo.processorCount,
+            physicalMemoryBytes: ProcessInfo.processInfo.physicalMemory,
+            operatingSystemVersion: "\(operatingSystemVersion.majorVersion).\(operatingSystemVersion.minorVersion).\(operatingSystemVersion.patchVersion)"
+        )
+    }
+
+    private static func diagnosticFileName(for date: Date) -> String {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime]
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        let timestamp = formatter.string(from: date).replacingOccurrences(of: ":", with: "-")
+        return "veil-vm-diagnostics-\(timestamp).json"
     }
 
     private func defaultVirtualDiskURL(for profile: VMProfile) -> URL {

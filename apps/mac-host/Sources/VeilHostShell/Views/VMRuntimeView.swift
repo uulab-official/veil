@@ -50,6 +50,11 @@ struct VMRuntimeView: View {
                         Task {
                             await model.createDefaultVirtualDisk()
                         }
+                    },
+                    diagnosticsAction: {
+                        Task {
+                            await model.exportDiagnostics(to: diagnosticsDirectory())
+                        }
                     }
                 )
 
@@ -135,6 +140,13 @@ struct VMRuntimeView: View {
                         Label(errorMessage, systemImage: "exclamationmark.triangle")
                             .foregroundStyle(.orange)
                             .font(.callout)
+                    }
+
+                    if let diagnosticsURL = model.diagnosticsURL {
+                        Label("Diagnostics saved to \(diagnosticsURL.path)", systemImage: "doc.text.magnifyingglass")
+                            .foregroundStyle(.secondary)
+                            .font(.callout)
+                            .textSelection(.enabled)
                     }
                 }
                 .fileImporter(
@@ -255,6 +267,12 @@ struct VMRuntimeView: View {
             }
         }
     }
+
+    private func diagnosticsDirectory() -> URL {
+        let downloads = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first
+            ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Downloads", isDirectory: true)
+        return downloads.appendingPathComponent("Veil Diagnostics", isDirectory: true)
+    }
 }
 
 private struct QuickActionsPanel: View {
@@ -267,6 +285,7 @@ private struct QuickActionsPanel: View {
     var refreshAction: () -> Void
     var prepareAction: () -> Void
     var createDiskAction: () -> Void
+    var diagnosticsAction: () -> Void
 
     var body: some View {
         ShellPanel(spacing: 12) {
@@ -322,6 +341,16 @@ private struct QuickActionsPanel: View {
                     action: createDiskAction
                 )
                 .disabled(snapshot.profileName == nil || snapshot.virtualDiskPath != nil || isLoading)
+
+                ControlActionTile(
+                    title: "Diagnostics",
+                    detail: "Export profile, preflight, and host metadata for troubleshooting.",
+                    symbolName: "doc.text.magnifyingglass",
+                    tint: .orange,
+                    state: .ready,
+                    action: diagnosticsAction
+                )
+                .disabled(isLoading)
 
                 ControlActionTile(
                     title: "Configure",
