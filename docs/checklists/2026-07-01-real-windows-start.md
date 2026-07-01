@@ -10,6 +10,7 @@ Goal: keep the main Veil experience pointed at real local Windows boot and conso
 - [x] Replace the native window title with a custom Veil header that matches the focused setup launcher.
 - [x] Keep runtime status and refresh in the custom header so the main screen stays simple.
 - [x] Make the custom header draggable while preserving macOS traffic-light controls.
+- [x] Add a macOS menu bar item so Veil can be reopened and controlled from the top system bar.
 - [x] Remove the pre-install Windows Apps bridge panel from the first runtime screen.
 - [x] Replace the internal runtime card with a production-style Windows Setup Assistant surface.
 - [x] Keep advanced setup, preflight, provider, resource, and device information behind the Details toggle.

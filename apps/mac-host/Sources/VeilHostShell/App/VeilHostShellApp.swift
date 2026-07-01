@@ -24,7 +24,7 @@ struct VeilHostShellApp: App {
     @State private var consoleMessage: String?
 
     var body: some Scene {
-        WindowGroup("Veil", id: "main") {
+        Window("Veil", id: "main") {
             ContentView(
                 model: model,
                 vmModel: vmModel,
@@ -97,6 +97,18 @@ struct VeilHostShellApp: App {
                 .keyboardShortcut(.return, modifiers: [.command])
             }
         }
+
+        MenuBarExtra("Veil", systemImage: menuBarSymbolName) {
+            VeilMenuBarMenu(
+                vmModel: vmModel,
+                activateMainWindowAction: activateMainWindow,
+                startVMAction: startVMAndShowConsole,
+                stopVMAction: stopVMAndCloseConsole,
+                showVMConsoleAction: showVMConsole,
+                refreshRuntimeAction: refreshRuntime
+            )
+        }
+        .menuBarExtraStyle(.menu)
     }
 
     private static var agentURLString: String {
@@ -109,6 +121,7 @@ struct VeilHostShellApp: App {
 
     private func startVMAndShowConsole() {
         Task { @MainActor in
+            activateMainWindow()
             consoleMessage = "Opening the local QEMU Windows console."
             await vmModel.start()
 
@@ -126,6 +139,7 @@ struct VeilHostShellApp: App {
 
     private func stopVMAndCloseConsole() {
         Task { @MainActor in
+            activateMainWindow()
             await vmModel.stop()
 
             if vmModel.snapshot?.state == .stopped {
@@ -156,6 +170,7 @@ struct VeilHostShellApp: App {
     }
 
     private func showVMConsole() {
+        activateMainWindow()
         if vmRuntimeBooter.showConsoleIfRunning() {
             consoleMessage = "QEMU Console is open. If it lands in UEFI Shell, the Windows boot recipe still needs work."
         } else {
@@ -163,8 +178,33 @@ struct VeilHostShellApp: App {
         }
     }
 
+    private func refreshRuntime() {
+        Task {
+            await vmModel.load()
+        }
+    }
+
+    private func activateMainWindow() {
+        Task { @MainActor in
+            MainWindowChrome.showMainWindow()
+        }
+    }
+
     private var canShowVMConsole: Bool {
         vmModel.snapshot?.state == .running || vmModel.snapshot?.state == .starting
+    }
+
+    private var menuBarSymbolName: String {
+        switch vmModel.snapshot?.state {
+        case .running:
+            "display"
+        case .starting:
+            "arrow.triangle.2.circlepath"
+        case .failed, .unsupported:
+            "exclamationmark.triangle"
+        default:
+            "play.rectangle"
+        }
     }
 }
 
@@ -174,8 +214,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
         DispatchQueue.main.async {
-            self.configureMainWindowChrome()
-            self.compactMainWindowIfNeeded()
+            MainWindowChrome.configureAndCompactMainWindow()
         }
     }
 
@@ -189,24 +228,100 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.applicationIconImage = icon
     }
 
-    @MainActor
-    private func configureMainWindowChrome() {
-        guard let window = NSApp.windows.first(where: { $0.title == "Veil" }) else {
+}
+
+private struct VeilMenuBarMenu: View {
+    @Environment(\.openWindow) private var openWindow
+
+    var vmModel: VMRuntimeModel
+    var activateMainWindowAction: () -> Void
+    var startVMAction: () -> Void
+    var stopVMAction: () -> Void
+    var showVMConsoleAction: () -> Void
+    var refreshRuntimeAction: () -> Void
+
+    var body: some View {
+        Button("Open Veil", systemImage: "macwindow") {
+            openMainWindow()
+        }
+
+        Divider()
+
+        Button("Start Windows", systemImage: "play.fill") {
+            openMainWindow()
+            startVMAction()
+        }
+        .disabled(!vmModel.canStart || vmModel.phase == .loading)
+
+        Button("Show Console", systemImage: "display") {
+            openMainWindow()
+            showVMConsoleAction()
+        }
+        .disabled(!canShowVMConsole)
+
+        Button("Stop Windows", systemImage: "stop.fill") {
+            openMainWindow()
+            stopVMAction()
+        }
+        .disabled(!vmModel.canStop || vmModel.phase == .loading)
+
+        Divider()
+
+        Button("Refresh Runtime", systemImage: "arrow.clockwise") {
+            refreshRuntimeAction()
+        }
+        .disabled(vmModel.phase == .loading)
+
+        Divider()
+
+        Button("Quit Veil", systemImage: "power") {
+            NSApp.terminate(nil)
+        }
+    }
+
+    private var canShowVMConsole: Bool {
+        vmModel.snapshot?.state == .running || vmModel.snapshot?.state == .starting
+    }
+
+    private func openMainWindow() {
+        openWindow(id: "main")
+        activateMainWindowAction()
+        DispatchQueue.main.async {
+            MainWindowChrome.showMainWindow()
+        }
+    }
+}
+
+@MainActor
+private enum MainWindowChrome {
+    static func configureAndCompactMainWindow() {
+        guard let window = mainWindow else {
             return
         }
 
+        configure(window)
+        compact(window)
+    }
+
+    static func showMainWindow() {
+        NSApp.setActivationPolicy(.regular)
+        configureAndCompactMainWindow()
+        mainWindow?.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    private static var mainWindow: NSWindow? {
+        NSApp.windows.first { $0.title == "Veil" }
+    }
+
+    private static func configure(_ window: NSWindow) {
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
         window.styleMask.insert(.fullSizeContentView)
         window.toolbar = nil
     }
 
-    @MainActor
-    private func compactMainWindowIfNeeded() {
-        guard let window = NSApp.windows.first(where: { $0.title == "Veil" }) else {
-            return
-        }
-
+    private static func compact(_ window: NSWindow) {
         let targetSize = NSSize(width: 1000, height: 560)
         guard window.frame.height > targetSize.height + 40 else {
             return
