@@ -508,7 +508,7 @@ private struct ControlCenterHero: View {
                         DashboardStat(title: "Provider", value: providerName(for: snapshot), symbolName: "bolt.horizontal", tint: snapshot.virtualizationAvailable ? .green : .orange)
                         DashboardStat(title: "Boot Ready", value: snapshot.bootReady ? "Ready" : "Blocked", symbolName: snapshot.bootReady ? "checkmark.seal" : "lock", tint: snapshot.bootReady ? .green : .orange)
                         DashboardStat(title: "Profile", value: snapshot.profileName == nil ? "Missing" : "Configured", symbolName: "person.crop.rectangle.stack", tint: snapshot.profileName == nil ? .orange : .green)
-                        DashboardStat(title: "Installer", value: snapshot.installerMediaPath == nil ? "Missing" : "Selected", symbolName: "opticaldisc", tint: snapshot.installerMediaPath == nil ? .orange : .green)
+                        DashboardStat(title: "Installer", value: installerStatusTitle, symbolName: "opticaldisc", tint: installerStatusTint)
                         DashboardStat(title: "Disk", value: snapshot.virtualDiskPath == nil ? "Missing" : "Selected", symbolName: "externaldrive", tint: snapshot.virtualDiskPath == nil ? .orange : .green)
                     }
 
@@ -557,6 +557,30 @@ private struct ControlCenterHero: View {
 
     private var canShowConsole: Bool {
         snapshot.state == .running || snapshot.state == .starting
+    }
+
+    private var installerStatusTitle: String {
+        if snapshot.installerMediaPath != nil {
+            return "Selected"
+        }
+
+        if snapshot.discoveredInstallerMediaPath != nil {
+            return "Found"
+        }
+
+        return "Missing"
+    }
+
+    private var installerStatusTint: Color {
+        if snapshot.installerMediaPath != nil {
+            return .green
+        }
+
+        if snapshot.discoveredInstallerMediaPath != nil {
+            return .blue
+        }
+
+        return .orange
     }
 
     private func providerName(for snapshot: VMRuntimeSnapshot) -> String {
@@ -687,6 +711,14 @@ private struct WindowsSetupDisplayPanel: View {
                     .lineLimit(3)
             }
 
+            if let discoveredInstallerName {
+                Label("Found \(discoveredInstallerName) in Downloads. Auto Prepare will attach it to the VM profile.", systemImage: "checkmark.seal")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+                    .lineLimit(2)
+            }
+
             LazyVGrid(
                 columns: [
                     GridItem(.adaptive(minimum: 154), spacing: 8)
@@ -738,14 +770,38 @@ private struct WindowsSetupDisplayPanel: View {
 
     private static let microsoftArmDownloadURL = URL(string: "https://www.microsoft.com/en-us/software-download/windows11arm64")!
 
+    private var selectedInstallerName: String? {
+        snapshot.installerMediaPath.map { URL(fileURLWithPath: $0).lastPathComponent }
+    }
+
+    private var discoveredInstallerName: String? {
+        guard snapshot.installerMediaPath == nil else {
+            return nil
+        }
+
+        return snapshot.discoveredInstallerMediaPath.map { URL(fileURLWithPath: $0).lastPathComponent }
+    }
+
     private var flowItems: [InstallFlowItem] {
-        [
+        let installerDetail: String
+        let installerState: InstallFlowState
+        if let selectedInstallerName {
+            installerDetail = selectedInstallerName
+            installerState = .complete
+        } else if let discoveredInstallerName {
+            installerDetail = "Found \(discoveredInstallerName). Auto Prepare will attach it."
+            installerState = .current
+        } else {
+            installerDetail = "Download the Arm64 ISO from Microsoft or keep it in Downloads."
+            installerState = .current
+        }
+
+        return [
             InstallFlowItem(
                 title: "Get Windows",
-                detail: snapshot.installerMediaPath.map { URL(fileURLWithPath: $0).lastPathComponent }
-                    ?? "Download the Arm64 ISO from Microsoft or keep it in Downloads.",
+                detail: installerDetail,
                 symbolName: "arrow.down.circle",
-                state: snapshot.installerMediaPath == nil ? .current : .complete
+                state: installerState
             ),
             InstallFlowItem(
                 title: "Prepare Mac VM",
@@ -804,6 +860,10 @@ private struct WindowsSetupDisplayPanel: View {
         case .unsupported:
             return "This Mac cannot run the current local Windows Arm VM path."
         case .notConfigured:
+            if let discoveredInstallerName {
+                return "Found \(discoveredInstallerName) in Downloads. Auto Prepare will create the profile, attach the ISO, and prepare the blank disk."
+            }
+
             return "Prepare a Windows 11 Arm profile. Veil will auto-detect a matching ISO in Downloads when one is available."
         case .stopped:
             return snapshot.bootReady
@@ -1157,7 +1217,7 @@ private struct SetupAssistantPanel: View {
             ),
             SetupItem(
                 title: "Installer Media",
-                detail: snapshot.installerMediaPath ?? "Auto-detects a Windows Arm ISO in Downloads, or choose one manually.",
+                detail: installerMediaDetail,
                 symbolName: "opticaldisc",
                 isComplete: snapshot.installerMediaPath != nil
             ),
@@ -1178,6 +1238,19 @@ private struct SetupAssistantPanel: View {
 
     private var completedCount: Int {
         items.filter(\.isComplete).count
+    }
+
+    private var installerMediaDetail: String {
+        if let path = snapshot.installerMediaPath {
+            return path
+        }
+
+        if let path = snapshot.discoveredInstallerMediaPath {
+            let filename = URL(fileURLWithPath: path).lastPathComponent
+            return "Found \(filename) in Downloads. Auto Prepare will attach it."
+        }
+
+        return "Auto-detects a Windows Arm ISO in Downloads, or choose one manually."
     }
 
     var body: some View {
@@ -1258,7 +1331,7 @@ private struct MachineSummaryPanel: View {
                 ShellMetricRow(label: "CPU", value: snapshot.cpuCount.map { "\($0) vCPU" } ?? "Adaptive")
                 ShellMetricRow(label: "Memory", value: snapshot.memoryMB.map { "\(formatGigabytes($0)) GB cap" } ?? "Adaptive")
                 ShellMetricRow(label: "Disk Size", value: snapshot.diskGB.map { "\($0) GB" } ?? "Adaptive")
-                ShellMetricRow(label: "Installer", value: resourceName(from: snapshot.installerMediaPath), monospaced: snapshot.installerMediaPath != nil)
+                ShellMetricRow(label: "Installer", value: installerResourceName, monospaced: snapshot.installerMediaPath != nil || snapshot.discoveredInstallerMediaPath != nil)
                 ShellMetricRow(label: "Disk", value: resourceName(from: snapshot.virtualDiskPath), monospaced: snapshot.virtualDiskPath != nil)
                 ShellMetricRow(label: "Runtime", value: snapshot.detail)
             }
@@ -1271,6 +1344,18 @@ private struct MachineSummaryPanel: View {
         }
 
         return URL(fileURLWithPath: path).lastPathComponent
+    }
+
+    private var installerResourceName: String {
+        if let selected = snapshot.installerMediaPath {
+            return resourceName(from: selected)
+        }
+
+        if let discovered = snapshot.discoveredInstallerMediaPath {
+            return "\(resourceName(from: discovered)) found"
+        }
+
+        return "Not selected"
     }
 
     private func formatGigabytes(_ memoryMB: Int) -> String {

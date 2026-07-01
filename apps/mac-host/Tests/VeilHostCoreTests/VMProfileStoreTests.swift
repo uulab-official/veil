@@ -525,6 +525,58 @@ struct VMProfileStoreTests {
         #expect(snapshot.bootReady)
     }
 
+    @Test("load snapshot reports discovered installer before profile exists")
+    func loadSnapshotReportsDiscoveredInstallerBeforeProfileExists() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let homeDirectory = directory.appendingPathComponent("Home", isDirectory: true)
+        let downloadsDirectory = homeDirectory.appendingPathComponent("Downloads", isDirectory: true)
+        try FileManager.default.createDirectory(at: downloadsDirectory, withIntermediateDirectories: true)
+        let installerURL = downloadsDirectory.appendingPathComponent("Win11_25H2_Korean_Arm64_v2.iso")
+        try Data("installer".utf8).write(to: installerURL)
+        let store = JSONVMProfileStore(directory: directory)
+        let service = LocalVMRuntimeService(
+            profileStore: store,
+            defaultHomeDirectory: homeDirectory
+        )
+
+        let snapshot = try await service.loadSnapshot()
+        let storedProfile = try await store.load()
+
+        let discoveredPath = try #require(snapshot.discoveredInstallerMediaPath)
+        #expect(URL(fileURLWithPath: discoveredPath).lastPathComponent == installerURL.lastPathComponent)
+        #expect(FileManager.default.fileExists(atPath: discoveredPath))
+        #expect(snapshot.installerMediaPath == nil)
+        #expect(storedProfile == nil)
+    }
+
+    @Test("load snapshot reports discovered installer without mutating profile")
+    func loadSnapshotReportsDiscoveredInstallerWithoutMutatingProfile() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let homeDirectory = directory.appendingPathComponent("Home", isDirectory: true)
+        let downloadsDirectory = homeDirectory.appendingPathComponent("Downloads", isDirectory: true)
+        try FileManager.default.createDirectory(at: downloadsDirectory, withIntermediateDirectories: true)
+        let installerURL = downloadsDirectory.appendingPathComponent("Win11_25H2_Korean_Arm64_v2.iso")
+        try Data("installer".utf8).write(to: installerURL)
+        let store = JSONVMProfileStore(directory: directory)
+        let profile = VMProfile.defaultWindows11Arm(homeDirectory: homeDirectory)
+        try await store.save(profile)
+        let service = LocalVMRuntimeService(
+            profileStore: store,
+            defaultHomeDirectory: homeDirectory
+        )
+
+        let snapshot = try await service.loadSnapshot()
+        let storedProfile = try #require(await store.load())
+
+        let discoveredPath = try #require(snapshot.discoveredInstallerMediaPath)
+        #expect(URL(fileURLWithPath: discoveredPath).lastPathComponent == installerURL.lastPathComponent)
+        #expect(FileManager.default.fileExists(atPath: discoveredPath))
+        #expect(snapshot.installerMediaPath == nil)
+        #expect(storedProfile.installerMediaPath == nil)
+    }
+
     @Test("prepare default VM preserves an existing configured installer")
     func prepareDefaultVMPreservesExistingConfiguredInstaller() async throws {
         let directory = FileManager.default.temporaryDirectory

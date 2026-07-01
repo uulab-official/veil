@@ -229,6 +229,7 @@ public struct VMRuntimeSnapshot: Codable, Equatable, Sendable {
     public var memoryMB: Int?
     public var diskGB: Int?
     public var installerMediaPath: String?
+    public var discoveredInstallerMediaPath: String?
     public var virtualDiskPath: String?
     public var runtimeProvider: VMRuntimeProviderSummary?
     public var runtimeProviders: [VMRuntimeProviderSummary]
@@ -248,6 +249,7 @@ public struct VMRuntimeSnapshot: Codable, Equatable, Sendable {
         memoryMB: Int? = nil,
         diskGB: Int? = nil,
         installerMediaPath: String? = nil,
+        discoveredInstallerMediaPath: String? = nil,
         virtualDiskPath: String? = nil,
         runtimeProvider: VMRuntimeProviderSummary? = nil,
         runtimeProviders: [VMRuntimeProviderSummary] = [],
@@ -266,6 +268,7 @@ public struct VMRuntimeSnapshot: Codable, Equatable, Sendable {
         self.memoryMB = memoryMB
         self.diskGB = diskGB
         self.installerMediaPath = installerMediaPath
+        self.discoveredInstallerMediaPath = discoveredInstallerMediaPath
         self.virtualDiskPath = virtualDiskPath
         self.runtimeProvider = runtimeProvider
         self.runtimeProviders = runtimeProviders
@@ -792,6 +795,7 @@ public struct LocalVMRuntimeService: VMRuntimeService {
         )
         let activeProvider = runtimeProviders.first { $0.kind == .appleVirtualization }
         let profile = try await profileStore.load()
+        let discoveredInstallerMediaPath = discoverDefaultInstallerMedia()?.path
 
         if virtualizationAvailable, let profile {
             let installationSteps = Self.installationSteps(for: profile)
@@ -812,6 +816,7 @@ public struct LocalVMRuntimeService: VMRuntimeService {
                 memoryMB: profile.memoryMB,
                 diskGB: profile.diskGB,
                 installerMediaPath: profile.installerMediaPath,
+                discoveredInstallerMediaPath: profile.installerMediaPath == nil ? discoveredInstallerMediaPath : nil,
                 virtualDiskPath: profile.virtualDiskPath,
                 runtimeProvider: activeProvider,
                 runtimeProviders: runtimeProviders,
@@ -833,6 +838,7 @@ public struct LocalVMRuntimeService: VMRuntimeService {
             architecture: architecture,
             minimumOSSupported: minimumOSSupported,
             profileName: nil,
+            discoveredInstallerMediaPath: discoveredInstallerMediaPath,
             runtimeProvider: activeProvider,
             runtimeProviders: runtimeProviders,
             detail: virtualizationAvailable
