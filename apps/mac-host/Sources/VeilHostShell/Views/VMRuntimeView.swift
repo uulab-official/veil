@@ -331,10 +331,10 @@ private struct InstallSimulationState: Equatable {
     static let steps = [
         "Checking Windows ISO",
         "Validating local VM profile",
-        "Starting Apple Virtualization",
-        "Attaching VM display",
-        "Opening console window",
-        "Handing off to Windows Setup"
+        "Starting QEMU/HVF",
+        "Attaching local display",
+        "Opening QEMU console",
+        "Checking Windows Setup boot"
     ]
 
     static let idle = InstallSimulationState(phase: .idle, stepIndex: 0, progress: 0)
@@ -534,11 +534,11 @@ private struct SimpleRuntimePanel: View {
                 return "Console handoff finished. Start again if the Windows setup window did not appear."
             }
 
-            return snapshot.bootReady ? "Ready to start the real Windows installer console." : statusText
+            return snapshot.bootReady ? "Ready to open the local QEMU Windows console." : statusText
         case .starting:
-            return "Starting Windows Setup. The installer opens in the VM console."
+            return "Starting QEMU/HVF. The Windows display opens in a separate console."
         case .running:
-            return "Windows Setup is running in the VM console."
+            return "QEMU/HVF is running. If UEFI Shell appears, the boot recipe still needs work."
         case .suspended:
             return "The VM is suspended."
         case .failed:
@@ -554,7 +554,7 @@ private struct SimpleRuntimePanel: View {
         if canStart {
             switch installSimulation.phase {
             case .idle:
-                return "Start Windows Setup"
+                return "Open Windows Console"
             case .running:
                 return "Starting..."
             case .complete:
@@ -654,11 +654,11 @@ private struct InstallSimulationProgressView: View {
     private var title: String {
         switch simulation.phase {
         case .idle:
-            return "Windows setup ready"
+            return "Windows console ready"
         case .running:
-            return "Starting VM console"
+            return "Opening QEMU console"
         case .complete:
-            return "Console handoff complete"
+            return "Console opened"
         }
     }
 

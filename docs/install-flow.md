@@ -29,15 +29,16 @@ The first four are local host prerequisites. The guest agent step remains pendin
 - Installer media is a user-selected local file.
 - The virtual disk can be user-selected or created as a blank sparse disk at `~/Virtual Machines/Veil/Windows 11 Arm.img`.
 - The boot spike stores EFI variables and the generic machine identifier next to the virtual disk so repeated boots keep stable VM identity.
-- The current local runtime provider is Apple Virtualization. A UTM-style QEMU/HVF provider is a local, serverless compatibility option under evaluation.
+- The host now prefers the local QEMU/HVF compatibility provider when it is installed and ready, because that is the clearest path to a UTM-style visible Windows installer console. Apple Virtualization remains the fallback feasibility provider.
 - The runtime snapshot reports structured setup steps so the UI can show what is complete, blocked, or pending.
 - The runtime snapshot reports preflight checks for installer media, guest OS, CPU, memory, and disk size.
 - A profile becomes boot-ready only when installer media, virtual disk, shared folder, automatic install media, and preflight checks all pass.
-- Pressing Start builds a `VZVirtualMachine`, starts it through Apple's Virtualization.framework, and opens a console window.
-- Apple Virtualization attaches the user-provided Windows ISO, the generated automatic install ISO, and the writable system disk when starting the VM.
-- While the VM is running, Show Console reopens the `VZVirtualMachineView` window if the user closes it.
+- Pressing Start builds the active local runtime plan and opens the visible VM console. On the current development Mac, this uses QEMU/HVF and the Cocoa display so the user sees the same boot surface that the smoke harness is testing.
+- QEMU/HVF attaches the user-provided Windows ISO, the generated automatic install ISO, and the writable system disk when starting the VM.
+- Apple Virtualization can still build a `VZVirtualMachine` with the same profile, ISO, automatic install media, and writable disk, but it is no longer the preferred visible-console path while Windows installer display support remains unproven.
+- While the VM is running, Show Console brings the active QEMU Cocoa window forward when the QEMU provider is active.
 - `./script/build_and_run.sh --start-vm` launches the signed app bundle with the prepared profile and starts the VM automatically.
-- Pressing Stop stops the active VM process and closes the console window.
+- Pressing Stop stops the active local VM process and closes host-side app bridge windows.
 - Each Start attempt records a metadata-only boot report with timestamps, result, resulting runtime state, selected profile, planned devices, and error text when startup fails.
 - Export Diagnostics writes a JSON bundle with host metadata, the runtime snapshot, setup steps, preflight checks, the stored VM profile, and the latest boot report to a user-selected diagnostics directory.
 - Start requires a locally signed app bundle with the `com.apple.security.virtualization` entitlement.
@@ -68,8 +69,10 @@ Current QEMU boot evidence:
 
 - QEMU can start the local device graph with HVF, Arm UEFI, lock-safe read-only Windows ISO media, generated automatic install ISO media, writable raw system disk, NAT networking, Cocoa/ramfb graphics, USB input, and serial logging.
 - `veil-vmctl qemu-start` can launch the stored Windows Arm profile into a visible foreground Cocoa QEMU window.
+- The main Veil app Start action now launches the same local QEMU/HVF console path; a manual app smoke check opened a foreground `QEMU Windows 11 Arm` window.
 - When the same ISO is already attached to another VM, QEMU needs the file-driver form `file.locking=off` for read-only ISO reuse.
 - The current boot attempts reach Arm UEFI and map the installer ISO as `FS0`, but Windows Setup does not yet start automatically; UEFI reports a boot image timeout and falls back to the EDK II shell.
+- USB storage, SCSI CD-ROM, and virtio-blk installer attachment variants have all been tested against the local `Win11_25H2_Korean_Arm64_v2.iso`; each still reaches UEFI and then falls back to the EDK II shell.
 - `virt,highmem=off` with more than 3 GB memory fails under HVF because address space is limited. A 3 GB `highmem=off` attempt reaches UEFI but still does not start Windows Setup.
 - `veil-vmctl qemu-smoke --json --seconds 25` now repeats the headless QEMU attempt in snapshot mode, writes serial/process logs, and classifies the current result as `uefiShell` with `boot-image-timeout` evidence.
 

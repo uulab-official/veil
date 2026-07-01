@@ -29,11 +29,6 @@ struct DetailView: View {
                         errorMessage: model.errorMessage
                     )
                 case .vm:
-                    WindowsAppBridgePanel(
-                        model: model,
-                        launchAction: launchWindowsAppAction
-                    )
-
                     VMRuntimeView(
                         model: vmModel,
                         startVMAction: startVMAction,

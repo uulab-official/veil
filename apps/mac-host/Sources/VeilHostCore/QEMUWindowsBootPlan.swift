@@ -152,6 +152,39 @@ public struct QEMUWindowsBootPlanner: Sendable {
     }
 }
 
+public enum LocalQEMUWindowsBootPlanFactory {
+    public static let defaultFirmwarePaths = [
+        "/opt/homebrew/share/qemu/edk2-aarch64-code.fd",
+        "/usr/local/share/qemu/edk2-aarch64-code.fd",
+        "/opt/local/share/qemu/edk2-aarch64-code.fd"
+    ]
+
+    public static func makePlan(
+        for profile: VMProfile,
+        architecture: String,
+        minimumOSSupported: Bool,
+        providerProbe: VMRuntimeProviderProbe = VMRuntimeProviderProbe(),
+        fileExists: @escaping @Sendable (String) -> Bool = { FileManager.default.fileExists(atPath: $0) }
+    ) throws -> QEMUWindowsBootPlan {
+        let qemuProvider = providerProbe
+            .localProviders(
+                architecture: architecture,
+                minimumOSSupported: minimumOSSupported
+            )
+            .first { $0.kind == .qemuHypervisor }
+        let executablePath = qemuProvider?.executablePath
+            ?? VMRuntimeProviderProbe.defaultQEMUExecutablePaths[0]
+        let firmwarePath = defaultFirmwarePaths.first(where: fileExists)
+        let planner = QEMUWindowsBootPlanner(
+            executablePath: executablePath,
+            isExecutableAvailable: qemuProvider?.status == .active && qemuProvider?.executablePath != nil,
+            firmwarePath: firmwarePath ?? defaultFirmwarePaths[0],
+            isFirmwareAvailable: firmwarePath != nil
+        )
+        return try planner.makePlan(for: profile)
+    }
+}
+
 public enum QEMUWindowsReadinessState: String, Codable, Equatable, Sendable {
     case passed
     case warning

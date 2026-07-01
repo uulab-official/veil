@@ -44,12 +44,12 @@ Veil should not require a cloud service or remote VM backend to run Windows apps
 
 Current provider status:
 
-- Apple Virtualization: active feasibility provider for profile, disk, EFI, console, and boot attempts.
-- QEMU/HVF: active compatibility provider candidate for UTM-grade Windows installer/device compatibility when Apple Virtualization reaches a VM state but cannot reliably show the Windows installer.
+- QEMU/HVF: active local compatibility provider for the visible Windows installer console path. The macOS host prefers this provider when `qemu-system-aarch64` and Arm EDK2 firmware are installed and the profile passes readiness checks.
+- Apple Virtualization: fallback feasibility provider for profile, disk, EFI, console, and boot attempts. It remains important, but it is not currently the leading path for Windows installer visibility.
 
 The provider probe is intentionally read-only. `veil-vmctl providers --json` reports candidate providers for diagnostics and harness validation, but it must not start, stop, create, or mutate a VM.
 
-The QEMU boot plan remains read-only. `veil-vmctl qemu-plan --json` converts the stored Windows Arm VM profile into a dry-run QEMU/HVF command plan and reports whether `qemu-system-aarch64` is locally available. `veil-vmctl qemu-start` is the guarded local execution spike for that plan: it checks QEMU doctor readiness first, launches the local Cocoa QEMU display, and writes process logs under Downloads diagnostics.
+The QEMU boot plan remains inspectable before execution. `veil-vmctl qemu-plan --json` converts the stored Windows Arm VM profile into a dry-run QEMU/HVF command plan and reports whether `qemu-system-aarch64` is locally available. `veil-vmctl qemu-start` is the guarded local execution spike for that plan: it checks QEMU doctor readiness first, launches the local Cocoa QEMU display, and writes process logs under Downloads diagnostics. The main macOS app now uses the same QEMU/HVF boot boundary when QEMU is ready, so the primary Start button opens the real local console instead of a separate simulation surface.
 
 ## Windows Arm Install Flow
 

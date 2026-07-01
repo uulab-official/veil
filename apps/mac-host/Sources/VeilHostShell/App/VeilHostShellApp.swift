@@ -5,7 +5,7 @@ import VeilHostCore
 @main
 struct VeilHostShellApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
-    private let vmConsolePresenter = VMConsoleWindowPresenter(bootRunner: VirtualizationVMRuntimeBooter.shared)
+    private let vmRuntimeBooter = QEMUVMRuntimeBooter.shared
     private let windowsAppWindowPresenter = WindowsAppWindowPresenter()
     @State private var model = HostDashboardModel(
         service: FallbackHostDashboardService(
@@ -19,7 +19,7 @@ struct VeilHostShellApp: App {
         )
     )
     @State private var vmModel = VMRuntimeModel(
-        service: LocalVMRuntimeService(bootRunner: VirtualizationVMRuntimeBooter.shared)
+        service: LocalVMRuntimeService(bootRunner: QEMUVMRuntimeBooter.shared)
     )
     @State private var consoleMessage: String?
 
@@ -34,7 +34,7 @@ struct VeilHostShellApp: App {
                 launchWindowsAppAction: launchSelectedWindowsAppWindow,
                 consoleMessage: consoleMessage
             )
-                .frame(minWidth: 1080, idealWidth: 1240, minHeight: 620, idealHeight: 720)
+                .frame(minWidth: 900, idealWidth: 1000, minHeight: 300, idealHeight: 320)
                 .task {
                     async let hostLoad: Void = model.load()
                     async let vmLoad: Void = vmModel.load()
@@ -45,13 +45,13 @@ struct VeilHostShellApp: App {
                     }
                 }
         }
-        .defaultSize(width: 1240, height: 720)
+        .defaultSize(width: 1000, height: 320)
         .defaultWindowPlacement { _, context in
             let visibleRect = context.defaultDisplay.visibleRect
-            let preferredSize = CGSize(width: 1240, height: 720)
+            let preferredSize = CGSize(width: 1000, height: 320)
             let size = CGSize(
-                width: min(preferredSize.width, max(min(1080, visibleRect.width), visibleRect.width * 0.82)),
-                height: min(preferredSize.height, max(min(620, visibleRect.height), visibleRect.height * 0.70))
+                width: min(preferredSize.width, max(min(900, visibleRect.width), visibleRect.width * 0.64)),
+                height: min(preferredSize.height, max(min(300, visibleRect.height), visibleRect.height * 0.32))
             )
             return WindowPlacement(size: size)
         }
@@ -109,17 +109,17 @@ struct VeilHostShellApp: App {
 
     private func startVMAndShowConsole() {
         Task { @MainActor in
-            consoleMessage = "Starting Windows setup. The VM Console window will open as soon as Veil receives a local display."
+            consoleMessage = "Opening the local QEMU Windows console."
             await vmModel.start()
 
             if vmModel.snapshot?.state == .running || vmModel.snapshot?.state == .starting {
-                if vmConsolePresenter.showConsoleIfAvailable() {
-                    consoleMessage = "VM Console is open. Windows setup appears in that separate display window."
+                if vmRuntimeBooter.showConsoleIfRunning() {
+                    consoleMessage = "QEMU Console is open. If it lands in UEFI Shell, the Windows boot recipe still needs work."
                 } else {
-                    consoleMessage = "Windows runtime is starting, but the display is not attached yet. Try Show Console again after a moment."
+                    consoleMessage = "Windows runtime is starting, but the QEMU display is not frontmost yet. Try Show Console again after a moment."
                 }
             } else if let errorMessage = vmModel.errorMessage {
-                consoleMessage = "Windows setup could not start: \(errorMessage)"
+                consoleMessage = "Windows console could not start: \(errorMessage)"
             }
         }
     }
@@ -129,9 +129,8 @@ struct VeilHostShellApp: App {
             await vmModel.stop()
 
             if vmModel.snapshot?.state == .stopped {
-                vmConsolePresenter.closeConsole()
                 windowsAppWindowPresenter.closeAll()
-                consoleMessage = "Windows setup console closed."
+                consoleMessage = "Windows console closed."
             }
         }
     }
@@ -157,10 +156,10 @@ struct VeilHostShellApp: App {
     }
 
     private func showVMConsole() {
-        if vmConsolePresenter.showConsoleIfAvailable() {
-            consoleMessage = "VM Console is open. Windows setup appears in that separate display window."
+        if vmRuntimeBooter.showConsoleIfRunning() {
+            consoleMessage = "QEMU Console is open. If it lands in UEFI Shell, the Windows boot recipe still needs work."
         } else {
-            consoleMessage = "No active Windows display is attached yet. Start the VM first, then open the console."
+            consoleMessage = "No active QEMU display is attached yet. Start Windows first, then open the console."
         }
     }
 
@@ -195,7 +194,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
-        let targetSize = NSSize(width: 1240, height: 720)
+        let targetSize = NSSize(width: 1000, height: 320)
         guard window.frame.height > targetSize.height + 40 else {
             return
         }

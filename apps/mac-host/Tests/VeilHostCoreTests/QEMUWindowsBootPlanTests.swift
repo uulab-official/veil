@@ -273,6 +273,56 @@ struct QEMUWindowsBootPlanTests {
         #expect(arguments.contains("driver=raw,file.driver=file,file.locking=off,file.filename=/Users/test/Virtual Machines/Veil/Windows 11 Arm.img,if=none,id=system"))
         #expect(!arguments.contains("cocoa"))
     }
+
+    @Test("QEMU runtime booter starts the local console process")
+    func qemuRuntimeBooterStartsLocalConsoleProcess() async throws {
+        let directory = try temporaryDirectory()
+        let installerURL = directory.appendingPathComponent("Windows.iso")
+        let diskURL = directory.appendingPathComponent("Windows.img")
+        let sharedFolderURL = directory.appendingPathComponent("Veil Shared", isDirectory: true)
+        let autoInstallURL = sharedFolderURL.appendingPathComponent("VeilAutoInstall.iso")
+        let qemuURL = directory.appendingPathComponent("qemu-system-aarch64")
+        let firmwareURL = directory.appendingPathComponent("edk2-aarch64-code.fd")
+        try FileManager.default.createDirectory(at: sharedFolderURL, withIntermediateDirectories: true)
+        try Data("installer".utf8).write(to: installerURL)
+        try Data("disk".utf8).write(to: diskURL)
+        try Data("auto".utf8).write(to: autoInstallURL)
+        try Data("qemu".utf8).write(to: qemuURL)
+        try Data("firmware".utf8).write(to: firmwareURL)
+
+        var profile = VMProfile.defaultWindows11Arm(createdAt: Date(timeIntervalSince1970: 1_782_752_400))
+        profile.installerMediaPath = installerURL.path
+        profile.virtualDiskPath = diskURL.path
+        profile.sharedFolderPath = sharedFolderURL.path
+
+        let plan = try QEMUWindowsBootPlanner(
+            executablePath: qemuURL.path,
+            isExecutableAvailable: true,
+            firmwarePath: firmwareURL.path,
+            isFirmwareAvailable: true
+        ).makePlan(for: profile)
+        final class Capture: @unchecked Sendable {
+            var executablePath: String?
+            var arguments: [String] = []
+        }
+        let capture = Capture()
+        let booter = QEMUVMRuntimeBooter(
+            diagnosticsDirectory: directory,
+            planBuilder: { _ in plan },
+            processRunner: { process in
+                capture.executablePath = process.executableURL?.path
+                capture.arguments = process.arguments ?? []
+            },
+            frontmostRunner: {}
+        )
+
+        let state = try await booter.start(profile: profile)
+
+        #expect(state == .running)
+        #expect(capture.executablePath == qemuURL.path)
+        #expect(capture.arguments.containsSequence(["-display", "cocoa"]))
+        #expect(capture.arguments.contains("driver=raw,file.driver=file,file.locking=off,file.filename=\(autoInstallURL.path),if=none,id=autounattend,media=cdrom,readonly=on"))
+    }
 }
 
 private extension [String] {
@@ -289,4 +339,11 @@ private extension [String] {
 
         return false
     }
+}
+
+private func temporaryDirectory() throws -> URL {
+    let directory = FileManager.default.temporaryDirectory
+        .appendingPathComponent(UUID().uuidString, isDirectory: true)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    return directory
 }

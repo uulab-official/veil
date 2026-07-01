@@ -543,6 +543,7 @@ public enum VMRuntimeError: Error, LocalizedError, Equatable, Sendable {
     case bootNotImplemented
     case bootPrerequisitesMissing
     case automaticInstallMediaCreationFailed(String)
+    case qemuNotReady(String)
 
     public var errorDescription: String? {
         switch self {
@@ -554,6 +555,8 @@ public enum VMRuntimeError: Error, LocalizedError, Equatable, Sendable {
             "Installer media, virtual disk, shared folder, and preflight checks must be ready before starting Windows."
         case let .automaticInstallMediaCreationFailed(message):
             "Unable to create automatic Windows install media: \(message)"
+        case let .qemuNotReady(message):
+            "QEMU/HVF is not ready: \(message)"
         }
     }
 }
@@ -884,7 +887,8 @@ public struct LocalVMRuntimeService: VMRuntimeService {
             architecture: architecture,
             minimumOSSupported: minimumOSSupported
         )
-        let activeProvider = runtimeProviders.first { $0.kind == .appleVirtualization }
+        let activeProvider = runtimeProviders.first { $0.kind == .qemuHypervisor && $0.status == .active }
+            ?? runtimeProviders.first { $0.kind == .appleVirtualization }
         let profile = try await profileStore.load()
         let discoveredInstallerMediaPath: String?
         if let profile {
