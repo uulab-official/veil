@@ -9,4 +9,5 @@
 - [x] Update architecture, install flow, roadmap, and README documentation.
 - [ ] Validate real Windows 11 Arm ISO boot behavior on Apple Virtualization.framework.
 - [x] Add diagnostics bundle export for failed boots and user bug reports.
+- [x] Persist the latest Start attempt result, resulting VM state, planned devices, and startup error text.
 - [ ] Add import flow for pre-existing Windows disk images only after file-format support is proven.

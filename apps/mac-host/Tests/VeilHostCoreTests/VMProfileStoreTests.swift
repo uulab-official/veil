@@ -510,6 +510,94 @@ struct VMProfileStoreTests {
         #expect(bootRunner.startedProfile?.virtualDiskPath == diskURL.path)
     }
 
+    @Test("local runtime records successful boot report")
+    func localRuntimeRecordsSuccessfulBootReport() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let reportDirectory = directory.appendingPathComponent("Reports", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let installerURL = directory.appendingPathComponent("Windows.iso")
+        let diskURL = directory.appendingPathComponent("Windows.vhdx")
+        let sharedFolderURL = directory.appendingPathComponent("Veil Shared", isDirectory: true)
+        try Data("installer".utf8).write(to: installerURL)
+        try Data("disk".utf8).write(to: diskURL)
+        try FileManager.default.createDirectory(at: sharedFolderURL, withIntermediateDirectories: true)
+        let store = JSONVMProfileStore(directory: directory)
+        let reportStore = JSONVMRuntimeBootReportStore(directory: reportDirectory)
+        var profile = VMProfile.defaultWindows11Arm(createdAt: Date(timeIntervalSince1970: 1_782_752_400))
+        profile.installerMediaPath = installerURL.path
+        profile.virtualDiskPath = diskURL.path
+        profile.sharedFolderPath = sharedFolderURL.path
+        try await store.save(profile)
+        let bootRunner = FakeVMRuntimeBooter(startState: .running)
+        let service = LocalVMRuntimeService(
+            profileStore: store,
+            bootRunner: bootRunner,
+            bootReportStore: reportStore,
+            diagnosticDate: { Date(timeIntervalSince1970: 1_782_838_800) }
+        )
+
+        _ = try await service.start()
+        let report = try #require(await reportStore.load())
+
+        #expect(report.startedAt == Date(timeIntervalSince1970: 1_782_838_800))
+        #expect(report.completedAt == Date(timeIntervalSince1970: 1_782_838_800))
+        #expect(report.result == .succeeded)
+        #expect(report.resultingState == .running)
+        #expect(report.errorMessage == nil)
+        #expect(report.profile.installerMediaPath == installerURL.path)
+        #expect(report.profile.virtualDiskPath == diskURL.path)
+        #expect(report.deviceSummary.storageDevices.map(\.role) == ["installer", "system-disk"])
+    }
+
+    @Test("local runtime records failed boot report in diagnostics")
+    func localRuntimeRecordsFailedBootReportInDiagnostics() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let reportDirectory = directory.appendingPathComponent("Reports", isDirectory: true)
+        let diagnosticsDirectory = directory.appendingPathComponent("Diagnostics", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let installerURL = directory.appendingPathComponent("Windows.iso")
+        let diskURL = directory.appendingPathComponent("Windows.vhdx")
+        let sharedFolderURL = directory.appendingPathComponent("Veil Shared", isDirectory: true)
+        try Data("installer".utf8).write(to: installerURL)
+        try Data("disk".utf8).write(to: diskURL)
+        try FileManager.default.createDirectory(at: sharedFolderURL, withIntermediateDirectories: true)
+        let store = JSONVMProfileStore(directory: directory)
+        let reportStore = JSONVMRuntimeBootReportStore(directory: reportDirectory)
+        var profile = VMProfile.defaultWindows11Arm(createdAt: Date(timeIntervalSince1970: 1_782_752_400))
+        profile.installerMediaPath = installerURL.path
+        profile.virtualDiskPath = diskURL.path
+        profile.sharedFolderPath = sharedFolderURL.path
+        try await store.save(profile)
+        let bootRunner = FakeVMRuntimeBooter(
+            startState: .failed,
+            startError: FakeBootError.simulated
+        )
+        let service = LocalVMRuntimeService(
+            profileStore: store,
+            bootRunner: bootRunner,
+            bootReportStore: reportStore,
+            diagnosticDate: { Date(timeIntervalSince1970: 1_782_838_800) }
+        )
+
+        await #expect(throws: FakeBootError.simulated) {
+            try await service.start()
+        }
+        let report = try #require(await reportStore.load())
+        let diagnosticsURL = try await service.exportDiagnostics(to: diagnosticsDirectory)
+        let bundle = try JSONDecoder.veilDiagnostics.decode(
+            VMRuntimeDiagnosticBundle.self,
+            from: Data(contentsOf: diagnosticsURL)
+        )
+
+        #expect(report.result == .failed)
+        #expect(report.resultingState == .failed)
+        #expect(report.errorMessage == "Simulated boot failure.")
+        #expect(bundle.lastBootReport?.result == .failed)
+        #expect(bundle.lastBootReport?.errorMessage == "Simulated boot failure.")
+    }
+
     @Test("local runtime stops a running profile")
     func localRuntimeStopsRunningProfile() async throws {
         let directory = FileManager.default.temporaryDirectory
@@ -556,16 +644,30 @@ struct VMProfileStoreTests {
     }
 }
 
+private enum FakeBootError: Error, LocalizedError {
+    case simulated
+
+    var errorDescription: String? {
+        "Simulated boot failure."
+    }
+}
+
 private final class FakeVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
     var startState: VMRuntimeState
     var currentState: VMRuntimeState?
+    var startError: (any Error)?
     private(set) var startCount = 0
     private(set) var stopCount = 0
     private(set) var startedProfile: VMProfile?
 
-    init(startState: VMRuntimeState, currentState: VMRuntimeState? = nil) {
+    init(
+        startState: VMRuntimeState,
+        currentState: VMRuntimeState? = nil,
+        startError: (any Error)? = nil
+    ) {
         self.startState = startState
         self.currentState = currentState
+        self.startError = startError
     }
 
     func runtimeState() async -> VMRuntimeState? {
@@ -575,6 +677,11 @@ private final class FakeVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
     func start(profile: VMProfile) async throws -> VMRuntimeState {
         startCount += 1
         startedProfile = profile
+        if let startError {
+            currentState = .failed
+            throw startError
+        }
+
         currentState = startState
         return startState
     }

@@ -14,6 +14,7 @@ UTM is the quality benchmark for VM setup depth, diagnostics, and open-source op
 - Adaptive default CPU, memory, and disk profile based on the current Mac.
 - Shared folder preparation.
 - Local diagnostics bundle export.
+- Last boot attempt report in diagnostics.
 - Typed Virtualization.framework device summary.
 - Start, stop, suspend, resume states.
 - Basic VM display surface for debugging.
@@ -26,6 +27,7 @@ Exit criteria:
 - A contributor is warned when a disk image is selected where bootable installer media is expected.
 - A contributor can prepare a VM profile whose resource caps are automatically sized for the host Mac.
 - A contributor can export metadata-only diagnostics for boot-readiness failures.
+- A contributor can inspect the latest Start attempt result and startup error without sharing Windows media or disk contents.
 - A contributor can inspect planned boot devices before starting the VM.
 - A contributor can start a guest VM from the host app.
 - Failure states are visible and debuggable.
@@ -119,7 +121,7 @@ Exit criteria:
 
 ## Current Next Step
 
-The protocol harness is now executable from JavaScript, the Swift host probe, and the SwiftUI host shell. The shell also has a VM Runtime status boundary, one-click VM preparation, adaptive host-sized resource caps, local boot-path checks, installer media role validation, shared-folder preparation, default sparse-disk creation, a setup-step checklist, profile preflight checks, metadata-only diagnostics export, a typed Virtualization.framework device summary, and a Virtualization.framework boot spike that opens and stops a VM console. The next implementation step is the v0.1/v0.2 overlap:
+The protocol harness is now executable from JavaScript, the Swift host probe, and the SwiftUI host shell. The shell also has a VM Runtime status boundary, one-click VM preparation, adaptive host-sized resource caps, local boot-path checks, installer media role validation, shared-folder preparation, default sparse-disk creation, a setup-step checklist, profile preflight checks, metadata-only diagnostics export, latest boot-attempt reporting, a typed Virtualization.framework device summary, and a Virtualization.framework boot spike that opens and stops a VM console. The next implementation step is the v0.1/v0.2 overlap:
 
 1. Harden the Virtualization.framework boot spike against real Windows 11 Arm installer variants.
 2. Add deeper validation for selected installer media and virtual disk paths, including file format and bootability checks proven by the spike.

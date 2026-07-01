@@ -226,17 +226,107 @@ public struct VMRuntimeDiagnosticBundle: Codable, Equatable, Sendable {
     public var host: VMRuntimeDiagnosticHost
     public var snapshot: VMRuntimeSnapshot
     public var profile: VMProfile?
+    public var lastBootReport: VMRuntimeBootReport?
 
     public init(
         generatedAt: Date,
         host: VMRuntimeDiagnosticHost,
         snapshot: VMRuntimeSnapshot,
-        profile: VMProfile?
+        profile: VMProfile?,
+        lastBootReport: VMRuntimeBootReport? = nil
     ) {
         self.generatedAt = generatedAt
         self.host = host
         self.snapshot = snapshot
         self.profile = profile
+        self.lastBootReport = lastBootReport
+    }
+}
+
+public enum VMRuntimeBootReportResult: String, Codable, Equatable, Sendable {
+    case succeeded
+    case failed
+}
+
+public struct VMRuntimeBootReport: Codable, Equatable, Sendable {
+    public var startedAt: Date
+    public var completedAt: Date
+    public var result: VMRuntimeBootReportResult
+    public var resultingState: VMRuntimeState
+    public var errorMessage: String?
+    public var profile: VMProfile
+    public var deviceSummary: VMRuntimeDeviceSummary
+
+    public init(
+        startedAt: Date,
+        completedAt: Date,
+        result: VMRuntimeBootReportResult,
+        resultingState: VMRuntimeState,
+        errorMessage: String?,
+        profile: VMProfile,
+        deviceSummary: VMRuntimeDeviceSummary
+    ) {
+        self.startedAt = startedAt
+        self.completedAt = completedAt
+        self.result = result
+        self.resultingState = resultingState
+        self.errorMessage = errorMessage
+        self.profile = profile
+        self.deviceSummary = deviceSummary
+    }
+}
+
+public protocol VMRuntimeBootReportStore: Sendable {
+    func load() async throws -> VMRuntimeBootReport?
+    func save(_ report: VMRuntimeBootReport) async throws
+}
+
+public struct JSONVMRuntimeBootReportStore: VMRuntimeBootReportStore {
+    public static var defaultDirectory: URL {
+        let baseDirectory = FileManager.default.urls(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask
+        ).first ?? FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library", isDirectory: true)
+            .appendingPathComponent("Application Support", isDirectory: true)
+
+        return baseDirectory
+            .appendingPathComponent("Veil", isDirectory: true)
+            .appendingPathComponent("Diagnostics", isDirectory: true)
+    }
+
+    private let directory: URL
+    private let fileName: String
+
+    public init(
+        directory: URL = Self.defaultDirectory,
+        fileName: String = "last-boot-report.json"
+    ) {
+        self.directory = directory
+        self.fileName = fileName
+    }
+
+    public func load() async throws -> VMRuntimeBootReport? {
+        let url = reportURL
+        guard FileManager.default.fileExists(atPath: url.path) else {
+            return nil
+        }
+
+        let data = try Data(contentsOf: url)
+        return try JSONDecoder.veilDiagnostics.decode(VMRuntimeBootReport.self, from: data)
+    }
+
+    public func save(_ report: VMRuntimeBootReport) async throws {
+        try FileManager.default.createDirectory(
+            at: directory,
+            withIntermediateDirectories: true
+        )
+        let data = try JSONEncoder.veilDiagnostics.encode(report)
+        try data.write(to: reportURL, options: [.atomic])
+    }
+
+    private var reportURL: URL {
+        directory.appendingPathComponent(fileName)
     }
 }
 
@@ -468,6 +558,7 @@ public struct LocalVMRuntimeService: VMRuntimeService {
     private let profileStore: any VMProfileStore
     private let defaultHomeDirectory: URL
     private let bootRunner: any VMRuntimeBooting
+    private let bootReportStore: any VMRuntimeBootReportStore
     private let resourcePlan: VMResourcePlan?
     private let diagnosticDate: @Sendable () -> Date
 
@@ -475,12 +566,14 @@ public struct LocalVMRuntimeService: VMRuntimeService {
         profileStore: any VMProfileStore = JSONVMProfileStore(),
         defaultHomeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser,
         bootRunner: any VMRuntimeBooting = UnavailableVMRuntimeBooter(),
+        bootReportStore: any VMRuntimeBootReportStore = JSONVMRuntimeBootReportStore(),
         resourcePlan: VMResourcePlan? = nil,
         diagnosticDate: @escaping @Sendable () -> Date = Date.init
     ) {
         self.profileStore = profileStore
         self.defaultHomeDirectory = defaultHomeDirectory
         self.bootRunner = bootRunner
+        self.bootReportStore = bootReportStore
         self.resourcePlan = resourcePlan
         self.diagnosticDate = diagnosticDate
     }
@@ -618,8 +711,30 @@ public struct LocalVMRuntimeService: VMRuntimeService {
             throw VMRuntimeError.bootPrerequisitesMissing
         }
 
-        _ = try await bootRunner.start(profile: profile)
-        return try await loadSnapshot()
+        let startedAt = diagnosticDate()
+        do {
+            let resultingState = try await bootRunner.start(profile: profile)
+            try? await bootReportStore.save(Self.bootReport(
+                startedAt: startedAt,
+                completedAt: diagnosticDate(),
+                result: .succeeded,
+                resultingState: resultingState,
+                errorMessage: nil,
+                profile: profile
+            ))
+            return try await loadSnapshot()
+        } catch {
+            let resultingState = await bootRunner.runtimeState() ?? .failed
+            try? await bootReportStore.save(Self.bootReport(
+                startedAt: startedAt,
+                completedAt: diagnosticDate(),
+                result: .failed,
+                resultingState: resultingState,
+                errorMessage: Self.errorMessage(for: error),
+                profile: profile
+            ))
+            throw error
+        }
     }
 
     public func stop() async throws -> VMRuntimeSnapshot {
@@ -631,11 +746,13 @@ public struct LocalVMRuntimeService: VMRuntimeService {
         let generatedAt = diagnosticDate()
         let snapshot = try await loadSnapshot()
         let profile = try await profileStore.load()
+        let lastBootReport = try await bootReportStore.load()
         let bundle = VMRuntimeDiagnosticBundle(
             generatedAt: generatedAt,
             host: Self.diagnosticHost(),
             snapshot: snapshot,
-            profile: profile
+            profile: profile,
+            lastBootReport: lastBootReport
         )
 
         try FileManager.default.createDirectory(
@@ -709,6 +826,34 @@ public struct LocalVMRuntimeService: VMRuntimeService {
         case .unsupported:
             "Veil requires macOS 15+ on Apple Silicon."
         }
+    }
+
+    private static func bootReport(
+        startedAt: Date,
+        completedAt: Date,
+        result: VMRuntimeBootReportResult,
+        resultingState: VMRuntimeState,
+        errorMessage: String?,
+        profile: VMProfile
+    ) -> VMRuntimeBootReport {
+        VMRuntimeBootReport(
+            startedAt: startedAt,
+            completedAt: completedAt,
+            result: result,
+            resultingState: resultingState,
+            errorMessage: errorMessage,
+            profile: profile,
+            deviceSummary: deviceSummary(for: profile)
+        )
+    }
+
+    private static func errorMessage(for error: any Error) -> String {
+        if let localized = error as? LocalizedError,
+           let description = localized.errorDescription {
+            return description
+        }
+
+        return String(describing: error)
     }
 
     private static func bootPathReadiness(
