@@ -11,6 +11,8 @@ Goal: keep the main Veil experience pointed at real local Windows boot and conso
 - [x] Replace the internal runtime card with a production-style Windows Setup Assistant surface.
 - [x] Keep advanced setup, preflight, provider, resource, and device information behind the Details toggle.
 - [x] Use icon-only secondary controls with tooltips so the primary action stays focused on installing Windows.
+- [x] Remove scrolling from the primary Windows setup screen.
+- [x] Make the primary setup action a large Play control, with secondary actions reduced to icon buttons.
 - [x] Ensure the primary ready-state action calls the real VM start path.
 - [x] Open the VM Console through `VZVirtualMachineView` when a local display is available.
 - [x] Rename visible progress from automatic-install simulation to VM console handoff.

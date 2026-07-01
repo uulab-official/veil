@@ -12,11 +12,21 @@ struct DetailView: View {
     var consoleMessage: String?
 
     var body: some View {
+        if selectedSection == .vm {
+            VMRuntimeView(
+                model: vmModel,
+                startVMAction: startVMAction,
+                stopVMAction: stopVMAction,
+                showVMConsoleAction: showVMConsoleAction,
+                consoleMessage: consoleMessage
+            )
+            .padding(18)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .background(.thinMaterial)
+        } else {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
-                if selectedSection != .vm {
-                    HeaderView(model: model, selectedSection: selectedSection)
-                }
+                HeaderView(model: model, selectedSection: selectedSection)
 
                 switch selectedSection {
                 case .apps:
@@ -29,13 +39,7 @@ struct DetailView: View {
                         errorMessage: model.errorMessage
                     )
                 case .vm:
-                    VMRuntimeView(
-                        model: vmModel,
-                        startVMAction: startVMAction,
-                        stopVMAction: stopVMAction,
-                        showVMConsoleAction: showVMConsoleAction,
-                        consoleMessage: consoleMessage
-                    )
+                    EmptyView()
                 case .launch:
                     LaunchView(result: model.lastLaunch)
                 }
@@ -45,6 +49,7 @@ struct DetailView: View {
             .padding(.vertical, 24)
         }
         .background(.thinMaterial)
+        }
     }
 }
 

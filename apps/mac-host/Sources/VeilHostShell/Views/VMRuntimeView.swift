@@ -21,6 +21,8 @@ struct VMRuntimeView: View {
                     canStart: model.canStart,
                     canStop: model.canStop,
                     isLoading: model.phase == .loading,
+                    errorMessage: model.errorMessage,
+                    diagnosticsURL: model.diagnosticsURL,
                     consoleMessage: consoleMessage,
                     canShowConsole: canShowConsole(for: snapshot),
                     prepareAction: {
@@ -58,40 +60,6 @@ struct VMRuntimeView: View {
                     runtimeSymbol: runtimeSymbol(for: snapshot.state),
                     runtimeTint: runtimeTint(for: snapshot.state)
                 )
-
-                if model.errorMessage != nil || model.diagnosticsURL != nil {
-                    ShellPanel(spacing: 8) {
-                        if let errorMessage = model.errorMessage {
-                            Label(errorMessage, systemImage: "exclamationmark.triangle")
-                                .foregroundStyle(.orange)
-                                .font(.callout)
-                        }
-
-                        if let diagnosticsURL = model.diagnosticsURL {
-                            Label("Diagnostics saved to \(diagnosticsURL.path)", systemImage: "doc.text.magnifyingglass")
-                                .foregroundStyle(.secondary)
-                                .font(.callout)
-                                .textSelection(.enabled)
-                        }
-                    }
-                }
-
-                if showsAdvancedDetails {
-                    ViewThatFits(in: .horizontal) {
-                        HStack(alignment: .top, spacing: 14) {
-                            setupColumn(snapshot)
-                                .frame(minWidth: 430)
-                            runtimeDetailColumn(snapshot)
-                                .frame(minWidth: 430)
-                        }
-
-                        VStack(alignment: .leading, spacing: 14) {
-                            setupColumn(snapshot)
-                            runtimeDetailColumn(snapshot)
-                        }
-                    }
-                    .transition(.opacity)
-                }
             } else if let errorMessage = model.errorMessage {
                 ShellPanel {
                     ContentUnavailableView(
@@ -129,6 +97,27 @@ struct VMRuntimeView: View {
         .onChange(of: model.snapshot?.state) { _, state in
             if state == .failed || state == .stopped {
                 installSimulation = .idle
+            }
+        }
+        .popover(isPresented: $showsAdvancedDetails, arrowEdge: .bottom) {
+            if let snapshot = model.snapshot {
+                ScrollView {
+                    ViewThatFits(in: .horizontal) {
+                        HStack(alignment: .top, spacing: 14) {
+                            setupColumn(snapshot)
+                                .frame(minWidth: 380)
+                            runtimeDetailColumn(snapshot)
+                                .frame(minWidth: 380)
+                        }
+
+                        VStack(alignment: .leading, spacing: 14) {
+                            setupColumn(snapshot)
+                            runtimeDetailColumn(snapshot)
+                        }
+                    }
+                    .padding(18)
+                }
+                .frame(width: 860, height: 560)
             }
         }
     }
@@ -363,6 +352,8 @@ private struct SimpleRuntimePanel: View {
     var canStart: Bool
     var canStop: Bool
     var isLoading: Bool
+    var errorMessage: String?
+    var diagnosticsURL: URL?
     var consoleMessage: String?
     var installSimulation: InstallSimulationState
     var primaryAction: () -> Void
@@ -1019,6 +1010,8 @@ private struct WindowsSetupDisplayPanel: View {
     var canStart: Bool
     var canStop: Bool
     var isLoading: Bool
+    var errorMessage: String?
+    var diagnosticsURL: URL?
     var consoleMessage: String?
     var canShowConsole: Bool
     var prepareAction: () -> Void
@@ -1047,7 +1040,7 @@ private struct WindowsSetupDisplayPanel: View {
     }
 
     private var heroPreview: some View {
-        VStack(alignment: .leading, spacing: 18) {
+        VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 10) {
                 VeilAppMark(size: 36)
 
@@ -1074,6 +1067,8 @@ private struct WindowsSetupDisplayPanel: View {
                     .lineLimit(3)
             }
 
+            largePlayControl
+
             windowsSetupMock
 
             Spacer(minLength: 0)
@@ -1087,7 +1082,7 @@ private struct WindowsSetupDisplayPanel: View {
             }
         }
         .padding(24)
-        .frame(maxWidth: .infinity, minHeight: 456, alignment: .topLeading)
+        .frame(maxWidth: .infinity, minHeight: 390, alignment: .topLeading)
         .background(
             LinearGradient(
                 colors: [
@@ -1116,9 +1111,9 @@ private struct WindowsSetupDisplayPanel: View {
 
             Divider()
 
-            VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 12) {
                 HStack(spacing: 14) {
-                    WindowsLogoMark(size: 54)
+                    WindowsLogoMark(size: 44)
 
                     VStack(alignment: .leading, spacing: 4) {
                         Text(previewTitle)
@@ -1132,14 +1127,8 @@ private struct WindowsSetupDisplayPanel: View {
 
                 ProgressView(value: progressFraction)
                     .tint(progressTint)
-
-                VStack(alignment: .leading, spacing: 8) {
-                    ForEach(flowItems) { item in
-                        CompactInstallFlowRow(item: item)
-                    }
-                }
             }
-            .padding(18)
+            .padding(14)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
@@ -1150,7 +1139,7 @@ private struct WindowsSetupDisplayPanel: View {
     }
 
     private var assistantContent: some View {
-        VStack(alignment: .leading, spacing: 20) {
+        VStack(alignment: .leading, spacing: 16) {
             HStack(alignment: .firstTextBaseline, spacing: 12) {
                 VStack(alignment: .leading, spacing: 5) {
                     Text("Install Windows on this Mac")
@@ -1166,14 +1155,22 @@ private struct WindowsSetupDisplayPanel: View {
                 StatusPill(title: phaseTitle, symbolName: phaseSymbol, tint: phaseTint)
             }
 
+            VStack(alignment: .leading, spacing: 10) {
+                ForEach(primaryFlowItems) { item in
+                    InstallFlowRow(item: item)
+                }
+            }
+
             if installSimulation.phase != .idle {
                 AssistantProgressStrip(simulation: installSimulation)
             }
 
-            VStack(alignment: .leading, spacing: 10) {
-                ForEach(flowItems) { item in
-                    InstallFlowRow(item: item)
-                }
+            if let errorMessage {
+                Label(errorMessage, systemImage: "exclamationmark.triangle")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+                    .textSelection(.enabled)
+                    .lineLimit(2)
             }
 
             if let consoleMessage {
@@ -1192,12 +1189,45 @@ private struct WindowsSetupDisplayPanel: View {
                     .lineLimit(1)
             }
 
+            if let diagnosticsURL {
+                Label("Diagnostics: \(diagnosticsURL.lastPathComponent)", systemImage: "doc.text.magnifyingglass")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+                    .lineLimit(1)
+            }
+
             Spacer(minLength: 0)
 
             actionBar
         }
         .padding(24)
-        .frame(maxWidth: .infinity, minHeight: 456, alignment: .topLeading)
+        .frame(maxWidth: .infinity, minHeight: 390, alignment: .topLeading)
+    }
+
+    private var largePlayControl: some View {
+        HStack(spacing: 14) {
+            Button(action: primaryAction) {
+                Image(systemName: primarySymbol)
+                    .font(.system(size: 26, weight: .bold))
+                    .foregroundStyle(.white)
+                    .frame(width: 64, height: 64)
+                    .background(primaryDisabled ? Color.secondary.opacity(0.35) : Color.accentColor, in: Circle())
+                    .shadow(color: Color.black.opacity(0.18), radius: 8, y: 4)
+            }
+            .buttonStyle(.plain)
+            .disabled(primaryDisabled)
+            .help(primaryTitle)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(primaryTitle)
+                    .font(.headline.weight(.semibold))
+                Text(primaryHint)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
+        }
     }
 
     private var actionBar: some View {
@@ -1212,13 +1242,6 @@ private struct WindowsSetupDisplayPanel: View {
 
     private var horizontalActions: some View {
         HStack(spacing: 8) {
-            Button(action: primaryAction) {
-                Label(primaryTitle, systemImage: primarySymbol)
-                    .frame(minWidth: 136)
-            }
-            .buttonStyle(.borderedProminent)
-            .disabled(primaryDisabled)
-
             Button(action: prepareAction) {
                 Label("Prepare", systemImage: "wand.and.stars")
                     .labelStyle(.iconOnly)
@@ -1315,6 +1338,10 @@ private struct WindowsSetupDisplayPanel: View {
         ]
     }
 
+    private var primaryFlowItems: [InstallFlowItem] {
+        Array(flowItems.prefix(3))
+    }
+
     private var heroSubtitle: String {
         if snapshot.state == .running {
             return "Windows is running in a separate VM console. The next milestone is app-window mode."
@@ -1393,6 +1420,18 @@ private struct WindowsSetupDisplayPanel: View {
         }
 
         return "wand.and.stars"
+    }
+
+    private var primaryHint: String {
+        if canStop {
+            return "Stop the current local Windows VM."
+        }
+
+        if canStart {
+            return "Start the VM and open the Windows console."
+        }
+
+        return "Create the profile, disk, shared folder, and install media."
     }
 
     private var primaryDisabled: Bool {

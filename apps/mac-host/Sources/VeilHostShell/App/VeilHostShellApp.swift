@@ -34,7 +34,7 @@ struct VeilHostShellApp: App {
                 launchWindowsAppAction: launchSelectedWindowsAppWindow,
                 consoleMessage: consoleMessage
             )
-                .frame(minWidth: 980, idealWidth: 1040, minHeight: 560, idealHeight: 640)
+                .frame(minWidth: 960, idealWidth: 1000, minHeight: 470, idealHeight: 500)
                 .task {
                     async let hostLoad: Void = model.load()
                     async let vmLoad: Void = vmModel.load()
@@ -45,13 +45,13 @@ struct VeilHostShellApp: App {
                     }
                 }
         }
-        .defaultSize(width: 1040, height: 640)
+        .defaultSize(width: 1000, height: 500)
         .defaultWindowPlacement { _, context in
             let visibleRect = context.defaultDisplay.visibleRect
-            let preferredSize = CGSize(width: 1040, height: 640)
+            let preferredSize = CGSize(width: 1000, height: 500)
             let size = CGSize(
-                width: min(preferredSize.width, max(min(980, visibleRect.width), visibleRect.width * 0.72)),
-                height: min(preferredSize.height, max(min(560, visibleRect.height), visibleRect.height * 0.68))
+                width: min(preferredSize.width, max(min(960, visibleRect.width), visibleRect.width * 0.68)),
+                height: min(preferredSize.height, max(min(470, visibleRect.height), visibleRect.height * 0.52))
             )
             return WindowPlacement(size: size)
         }
@@ -194,7 +194,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
-        let targetSize = NSSize(width: 1040, height: 640)
+        let targetSize = NSSize(width: 1000, height: 500)
         guard window.frame.height > targetSize.height + 40 else {
             return
         }
