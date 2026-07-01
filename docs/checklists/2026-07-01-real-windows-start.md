@@ -8,6 +8,9 @@ Goal: keep the main Veil experience pointed at real local Windows boot and conso
 - [x] Keep the default window large enough for a VM-focused control surface.
 - [x] Compact the default host window to a launcher-sized 1000 x 320 point control surface instead of a tall dashboard.
 - [x] Remove the pre-install Windows Apps bridge panel from the first runtime screen.
+- [x] Replace the internal runtime card with a production-style Windows Setup Assistant surface.
+- [x] Keep advanced setup, preflight, provider, resource, and device information behind the Details toggle.
+- [x] Use icon-only secondary controls with tooltips so the primary action stays focused on installing Windows.
 - [x] Ensure the primary ready-state action calls the real VM start path.
 - [x] Open the VM Console through `VZVirtualMachineView` when a local display is available.
 - [x] Rename visible progress from automatic-install simulation to VM console handoff.
@@ -27,6 +30,7 @@ Goal: keep the main Veil experience pointed at real local Windows boot and conso
 ## Next
 
 - [ ] Adjust the QEMU boot recipe so the Windows ISO reaches Windows Boot Manager instead of falling back to UEFI Shell.
+- [ ] Replace the static setup preview with a real VM screenshot once QEMU reaches Windows Setup.
 - [ ] Add a QEMU screenshot/screencapture harness so boot failures can be compared visually, not only through serial text.
 - [ ] Add recovery copy for common boot failures: bad ISO attachment, unsupported device model, EFI state, and disk format issues.
 - [ ] Convert the console handoff timer into real runtime state events.

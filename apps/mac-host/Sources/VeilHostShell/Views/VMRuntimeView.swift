@@ -15,14 +15,22 @@ struct VMRuntimeView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             if let snapshot = model.snapshot {
-                SimpleRuntimePanel(
+                WindowsSetupDisplayPanel(
                     snapshot: snapshot,
                     statusText: model.statusText,
                     canStart: model.canStart,
                     canStop: model.canStop,
                     isLoading: model.phase == .loading,
                     consoleMessage: consoleMessage,
-                    installSimulation: installSimulation,
+                    canShowConsole: canShowConsole(for: snapshot),
+                    prepareAction: {
+                        Task {
+                            await model.prepareDefaultVM()
+                        }
+                    },
+                    selectInstallerAction: {
+                        pathPicker = .installerMedia
+                    },
                     primaryAction: {
                         if model.canStop {
                             stopVMAction()
@@ -35,9 +43,6 @@ struct VMRuntimeView: View {
                             }
                         }
                     },
-                    chooseISOAction: {
-                        pathPicker = .installerMedia
-                    },
                     consoleAction: showVMConsoleAction,
                     refreshAction: {
                         Task {
@@ -47,9 +52,8 @@ struct VMRuntimeView: View {
                     detailsAction: {
                         showsAdvancedDetails.toggle()
                     },
-                    resetSimulationAction: {
-                        installSimulation = .idle
-                    },
+                    isShowingDetails: showsAdvancedDetails,
+                    installSimulation: installSimulation,
                     runtimeTitle: runtimeTitle(for: snapshot.state),
                     runtimeSymbol: runtimeSymbol(for: snapshot.state),
                     runtimeTint: runtimeTint(for: snapshot.state)
@@ -1011,117 +1015,165 @@ private struct ControlCenterHero: View {
 
 private struct WindowsSetupDisplayPanel: View {
     var snapshot: VMRuntimeSnapshot
-    var consoleMessage: String?
-    var isLoading: Bool
+    var statusText: String
     var canStart: Bool
+    var canStop: Bool
+    var isLoading: Bool
+    var consoleMessage: String?
     var canShowConsole: Bool
     var prepareAction: () -> Void
     var selectInstallerAction: () -> Void
-    var startAction: () -> Void
+    var primaryAction: () -> Void
     var consoleAction: () -> Void
+    var refreshAction: () -> Void
+    var detailsAction: () -> Void
+    var isShowingDetails: Bool
+    var installSimulation: InstallSimulationState
+    var runtimeTitle: String
+    var runtimeSymbol: String
+    var runtimeTint: Color
 
     var body: some View {
-        ShellPanel(spacing: 18) {
-            ViewThatFits(in: .horizontal) {
-                HStack(alignment: .top, spacing: 20) {
-                    installPreview
-                        .frame(width: 390)
-                    installContent
+        ShellPanel(spacing: 0) {
+            HStack(alignment: .top, spacing: 0) {
+                heroPreview
+                    .frame(width: 370)
+                Divider()
+                assistantContent
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
+            }
+        }
+        .padding(0)
+    }
+
+    private var heroPreview: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            HStack(spacing: 10) {
+                VeilAppMark(size: 36)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Veil")
+                        .font(.headline.weight(.semibold))
+                    Text("Windows App Runtime")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
 
-                VStack(alignment: .leading, spacing: 16) {
-                    installPreview
-                    installContent
+                Spacer()
+            }
+
+            VStack(alignment: .leading, spacing: 16) {
+                Text("Windows 11")
+                    .font(.system(size: 36, weight: .semibold))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+
+                Text(heroSubtitle)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(3)
+            }
+
+            windowsSetupMock
+
+            Spacer(minLength: 0)
+
+            HStack(spacing: 8) {
+                StatusPill(title: runtimeTitle, symbolName: runtimeSymbol, tint: runtimeTint)
+
+                if let providerName = snapshot.runtimeProvider?.displayName {
+                    StatusPill(title: providerName, symbolName: "bolt.horizontal", tint: .blue)
                 }
             }
         }
+        .padding(24)
+        .frame(maxWidth: .infinity, minHeight: 456, alignment: .topLeading)
+        .background(
+            LinearGradient(
+                colors: [
+                    Color(nsColor: .controlBackgroundColor),
+                    Color(nsColor: .windowBackgroundColor)
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        )
     }
 
-    private var installPreview: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(
-                    LinearGradient(
-                        colors: [
-                            Color(red: 0.03, green: 0.04, blue: 0.06),
-                            Color(red: 0.10, green: 0.11, blue: 0.14)
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-                .overlay {
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .strokeBorder(.white.opacity(0.12), lineWidth: 1)
-                }
+    private var windowsSetupMock: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 7) {
+                Circle().fill(.red.opacity(0.76)).frame(width: 9, height: 9)
+                Circle().fill(.yellow.opacity(0.76)).frame(width: 9, height: 9)
+                Circle().fill(.green.opacity(0.76)).frame(width: 9, height: 9)
+                Spacer()
+                Text("Windows Setup")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
 
-            VStack(alignment: .leading, spacing: 18) {
-                HStack {
-                    VStack(alignment: .leading, spacing: 5) {
-                        Text("Install Windows 11")
-                            .font(.title3.weight(.semibold))
-                            .foregroundStyle(.white)
-                        Text("Arm64 local runtime")
-                            .font(.caption)
-                            .foregroundStyle(.white.opacity(0.66))
-                    }
+            Divider()
 
-                    Spacer()
+            VStack(alignment: .leading, spacing: 16) {
+                HStack(spacing: 14) {
+                    WindowsLogoMark(size: 54)
 
-                    Image(systemName: previewSymbol)
-                        .font(.system(size: 28, weight: .semibold))
-                        .foregroundStyle(phaseTint)
-                }
-
-                HStack(spacing: 10) {
-                    WindowsPane(color: Color(red: 0.08, green: 0.55, blue: 1.00))
-                    WindowsPane(color: Color(red: 0.12, green: 0.78, blue: 0.72))
-                }
-                HStack(spacing: 10) {
-                    WindowsPane(color: Color(red: 1.00, green: 0.44, blue: 0.28))
-                    WindowsPane(color: Color(red: 1.00, green: 0.72, blue: 0.20))
-                }
-
-                VStack(alignment: .leading, spacing: 7) {
-                    HStack {
+                    VStack(alignment: .leading, spacing: 4) {
                         Text(previewTitle)
                             .font(.headline.weight(.semibold))
-                            .foregroundStyle(.white)
-                        Spacer()
-                        Text(progressText)
-                            .font(.caption.monospacedDigit())
-                            .foregroundStyle(.white.opacity(0.72))
+                        Text(previewSubtitle)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
                     }
+                }
 
-                    ProgressView(value: progressFraction)
-                        .tint(phaseTint)
+                ProgressView(value: progressFraction)
+                    .tint(progressTint)
 
-                    Text(previewSubtitle)
-                        .font(.caption)
-                        .foregroundStyle(.white.opacity(0.68))
-                        .lineLimit(2)
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(flowItems) { item in
+                        CompactInstallFlowRow(item: item)
+                    }
                 }
             }
             .padding(18)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .frame(maxWidth: .infinity, minHeight: 268)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .strokeBorder(.quaternary, lineWidth: 1)
+        }
     }
 
-    private var installContent: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .firstTextBaseline, spacing: 10) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Windows Installation Assistant")
-                        .font(.title3.weight(.semibold))
+    private var assistantContent: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            HStack(alignment: .firstTextBaseline, spacing: 12) {
+                VStack(alignment: .leading, spacing: 5) {
+                    Text("Install Windows on this Mac")
+                        .font(.title2.weight(.semibold))
                     Text(phaseDetail)
                         .font(.callout)
                         .foregroundStyle(.secondary)
                         .lineLimit(3)
                 }
 
-                Spacer()
+                Spacer(minLength: 12)
 
                 StatusPill(title: phaseTitle, symbolName: phaseSymbol, tint: phaseTint)
+            }
+
+            if installSimulation.phase != .idle {
+                AssistantProgressStrip(simulation: installSimulation)
+            }
+
+            VStack(alignment: .leading, spacing: 10) {
+                ForEach(flowItems) { item in
+                    InstallFlowRow(item: item)
+                }
             }
 
             if let consoleMessage {
@@ -1129,67 +1181,81 @@ private struct WindowsSetupDisplayPanel: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .textSelection(.enabled)
-                    .lineLimit(3)
-            }
-
-            if let discoveredInstallerName {
-                Label("Found \(discoveredInstallerName) in Downloads. Auto Prepare will attach it to the VM profile.", systemImage: "checkmark.seal")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .textSelection(.enabled)
                     .lineLimit(2)
             }
 
-            LazyVGrid(
-                columns: [
-                    GridItem(.adaptive(minimum: 154), spacing: 8)
-                ],
-                alignment: .leading,
-                spacing: 8
-            ) {
-                Link(destination: Self.microsoftArmDownloadURL) {
-                    Label("Get Windows 11", systemImage: "arrow.down.circle")
-                }
-                .buttonStyle(.bordered)
-
-                Button(action: prepareAction) {
-                    Label("Auto Prepare", systemImage: "wand.and.stars")
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(isLoading)
-
-                Button(action: selectInstallerAction) {
-                    Label("Choose ISO", systemImage: "opticaldisc")
-                }
-                .disabled(isLoading)
-
-                Button(action: startAction) {
-                    Label("Install Windows", systemImage: "play.fill")
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(!canStart || isLoading)
-
-                Button(action: consoleAction) {
-                    Label("Open Console", systemImage: "display")
-                }
-                .disabled(!canShowConsole || isLoading)
+            if let discoveredInstallerName {
+                Label("Found \(discoveredInstallerName) in Downloads.", systemImage: "checkmark.seal")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+                    .lineLimit(1)
             }
 
-            VStack(alignment: .leading, spacing: 8) {
-                ForEach(flowItems) { item in
-                    InstallFlowRow(item: item)
-                }
-            }
+            Spacer(minLength: 0)
 
-            Text("Windows media and licenses stay user-provided; Veil only links official download pages and attaches local files.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .lineLimit(2)
+            actionBar
         }
-        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .padding(24)
+        .frame(maxWidth: .infinity, minHeight: 456, alignment: .topLeading)
     }
 
-    private static let microsoftArmDownloadURL = URL(string: "https://www.microsoft.com/en-us/software-download/windows11arm64")!
+    private var actionBar: some View {
+        ViewThatFits(in: .horizontal) {
+            horizontalActions
+
+            VStack(alignment: .leading, spacing: 9) {
+                horizontalActions
+            }
+        }
+    }
+
+    private var horizontalActions: some View {
+        HStack(spacing: 8) {
+            Button(action: primaryAction) {
+                Label(primaryTitle, systemImage: primarySymbol)
+                    .frame(minWidth: 136)
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(primaryDisabled)
+
+            Button(action: prepareAction) {
+                Label("Prepare", systemImage: "wand.and.stars")
+                    .labelStyle(.iconOnly)
+            }
+            .disabled(isLoading || snapshot.state == .running || snapshot.state == .starting)
+            .help("Auto Prepare")
+
+            Button(action: selectInstallerAction) {
+                Label("Choose ISO", systemImage: "opticaldisc")
+                    .labelStyle(.iconOnly)
+            }
+            .disabled(isLoading || snapshot.state == .running || snapshot.state == .starting)
+            .help("Choose ISO")
+
+            Button(action: consoleAction) {
+                Label("Open Console", systemImage: "display")
+                    .labelStyle(.iconOnly)
+            }
+            .disabled(!canShowConsole || isLoading)
+            .help("Open Console")
+
+            Spacer(minLength: 4)
+
+            Button(action: refreshAction) {
+                Label("Refresh", systemImage: "arrow.clockwise")
+                    .labelStyle(.iconOnly)
+            }
+            .disabled(isLoading)
+            .help("Refresh")
+
+            Button(action: detailsAction) {
+                Label(isShowingDetails ? "Hide Details" : "Details", systemImage: "slider.horizontal.3")
+                    .labelStyle(.iconOnly)
+            }
+            .help("Show setup details")
+        }
+    }
 
     private var selectedInstallerName: String? {
         snapshot.installerMediaPath.map { URL(fileURLWithPath: $0).lastPathComponent }
@@ -1210,159 +1276,166 @@ private struct WindowsSetupDisplayPanel: View {
             installerDetail = selectedInstallerName
             installerState = .complete
         } else if let discoveredInstallerName {
-            installerDetail = "Found \(discoveredInstallerName). Auto Prepare will attach it."
+            installerDetail = "Ready to attach \(discoveredInstallerName)"
             installerState = .current
         } else {
-            installerDetail = "Download the Arm64 ISO from Microsoft or keep it in Downloads."
+            installerDetail = "Select the Windows 11 Arm ISO"
             installerState = .current
         }
 
         return [
             InstallFlowItem(
-                title: "Get Windows",
+                title: "Windows ISO",
                 detail: installerDetail,
-                symbolName: "arrow.down.circle",
+                symbolName: "opticaldisc",
                 state: installerState
             ),
             InstallFlowItem(
-                title: "Prepare Mac VM",
+                title: "Virtual Disk",
                 detail: snapshot.virtualDiskPath == nil
-                    ? "Create profile, shared folder, adaptive resources, and sparse disk."
-                    : "Profile, disk, and shared folder are configured.",
-                symbolName: "macbook",
-                state: snapshot.virtualDiskPath == nil ? (snapshot.profileName == nil ? .pending : .current) : .complete
+                    ? "Create a local 128 GB sparse disk"
+                    : URL(fileURLWithPath: snapshot.virtualDiskPath ?? "").lastPathComponent,
+                symbolName: "internaldrive",
+                state: snapshot.virtualDiskPath == nil ? .pending : .complete
             ),
             InstallFlowItem(
-                title: "Install Windows",
+                title: "Installer",
                 detail: canShowConsole
-                    ? "Continue setup inside the VM Console window."
-                    : (canStart ? "Ready to boot the installer." : "Waiting for setup readiness."),
+                    ? "VM console is open"
+                    : (canStart ? "Ready to start Windows Setup" : "Waiting for preparation"),
                 symbolName: "display",
                 state: canShowConsole ? .complete : (canStart ? .current : .pending)
             ),
             InstallFlowItem(
-                title: "Finish Integration",
-                detail: "Accept Microsoft setup terms, then install the Veil guest agent.",
-                symbolName: "sparkles",
+                title: "Mac Integration",
+                detail: "Install the Veil guest agent after Windows setup",
+                symbolName: "macwindow.on.rectangle",
                 state: snapshot.state == .running ? .current : .pending
             )
         ]
     }
 
-    private var phaseTitle: String {
-        if isLoading && snapshot.state == .starting {
-            return "Starting"
+    private var heroSubtitle: String {
+        if snapshot.state == .running {
+            return "Windows is running in a separate VM console. The next milestone is app-window mode."
         }
 
+        if snapshot.bootReady {
+            return "Ready to start a local Windows 11 Arm installer using QEMU/HVF."
+        }
+
+        return "A guided local setup for Windows apps on macOS. Bring your own Windows media."
+    }
+
+    private var phaseTitle: String {
         switch snapshot.state {
         case .unsupported:
             return "Unsupported"
         case .notConfigured:
-            return "No Profile"
+            return "Setup Needed"
         case .stopped:
-            return snapshot.bootReady ? "Ready" : "Blocked"
+            return snapshot.bootReady ? "Ready" : "Prepare"
         case .starting:
             return "Starting"
         case .running:
-            return "Console Live"
+            return "Running"
         case .suspended:
-            return "Suspended"
+            return "Paused"
         case .failed:
-            return "Failed"
+            return "Needs Attention"
         }
     }
 
     private var phaseDetail: String {
-        if isLoading && snapshot.state == .starting {
-            return "Veil is starting the local Windows VM. The installer display opens in a separate VM Console window as soon as Virtualization.framework exposes the screen."
-        }
-
         switch snapshot.state {
         case .unsupported:
-            return "This Mac cannot run the current local Windows Arm VM path."
+            return "This Mac cannot run the current local Windows Arm runtime path."
         case .notConfigured:
-            if let discoveredInstallerName {
-                return "Found \(discoveredInstallerName) in Downloads. Auto Prepare will create the profile, attach the ISO, and prepare the blank disk."
+            return discoveredInstallerName == nil
+                ? "Choose a Windows 11 Arm ISO or place it in Downloads, then let Veil prepare the local VM."
+                : "Veil found a Windows ISO. Auto Prepare will create the VM profile, disk, shared folder, and answer file."
+        case .stopped:
+            if snapshot.bootReady {
+                return "Everything required is attached. Install Windows opens the local VM console automatically."
             }
 
-            return "Prepare a Windows 11 Arm profile. Veil will auto-detect a matching ISO in Downloads when one is available."
-        case .stopped:
-            return snapshot.bootReady
-                ? "Ready to boot the Windows installer. Press Start Windows Setup; Veil will open the VM Console window automatically."
-                : snapshot.detail
+            return statusText
         case .starting:
-            return "Windows setup is starting. If the console did not appear, press Open VM Console after a moment."
+            return "Veil is starting QEMU/HVF and opening the Windows display."
         case .running:
-            return "The Windows installer display is attached to the VM Console window. Use that window for the setup screen."
+            return "Use the separate VM console for Windows setup. If UEFI Shell appears, open Details for diagnostics."
         case .suspended:
-            return "The VM is suspended. Resume support is still being hardened for the boot spike."
+            return "The VM is suspended. Resume support will be hardened after boot reliability."
         case .failed:
-            return "The last VM start failed. Export diagnostics or check the setup/preflight panels below."
+            return "Windows did not start cleanly. Details below keep the technical diagnostics out of the main flow."
         }
     }
 
-    private var consoleHint: String {
-        if canShowConsole {
-            return "The Windows installer is shown in the separate console window."
+    private var primaryTitle: String {
+        if canStop {
+            return "Stop Windows"
         }
 
         if canStart {
-            return "Console appears after the VM starts."
+            return installSimulation.phase == .running ? "Starting..." : "Install Windows"
         }
 
-        return "Complete the setup steps below before the console can open."
+        return snapshot.profileName == nil ? "Prepare Windows" : "Continue Setup"
+    }
+
+    private var primarySymbol: String {
+        if canStop {
+            return "stop.fill"
+        }
+
+        if canStart {
+            return "play.fill"
+        }
+
+        return "wand.and.stars"
+    }
+
+    private var primaryDisabled: Bool {
+        isLoading || snapshot.state == .unsupported || installSimulation.phase == .running
     }
 
     private var previewTitle: String {
         switch snapshot.state {
         case .running:
-            "Console Open"
+            "Windows Console Open"
         case .starting:
-            "Starting Display"
+            "Starting Windows"
         case .stopped where snapshot.bootReady:
-            "Ready To Boot"
+            "Ready to Install"
         case .failed:
-            "Needs Attention"
+            "Attention Required"
         default:
-            "Setup Waiting"
+            "Setup Assistant"
         }
     }
 
     private var previewSubtitle: String {
         switch snapshot.state {
         case .running:
-            "Continue Windows setup in the VM Console."
+            "Continue setup in the VM window."
         case .starting:
-            "Attaching the local Windows display."
+            "Opening the local display."
         case .stopped where snapshot.bootReady:
-            "Ready to boot the installer."
+            "Press Install Windows to boot."
+        case .failed:
+            "Review diagnostics before retrying."
         default:
-            "Download, prepare, install, then integrate."
+            "Prepare media and disk."
         }
     }
 
     private var progressFraction: Double {
+        if installSimulation.phase == .running {
+            return installSimulation.progress
+        }
+
         let completed = flowItems.filter { $0.state == .complete }.count
         return Double(completed) / Double(flowItems.count)
-    }
-
-    private var progressText: String {
-        "\(flowItems.filter { $0.state == .complete }.count)/\(flowItems.count)"
-    }
-
-    private var previewSymbol: String {
-        switch snapshot.state {
-        case .running:
-            "display"
-        case .starting:
-            "arrow.triangle.2.circlepath"
-        case .failed:
-            "exclamationmark.triangle"
-        case .stopped where snapshot.bootReady:
-            "play.circle.fill"
-        default:
-            "display"
-        }
     }
 
     private var phaseSymbol: String {
@@ -1391,6 +1464,93 @@ private struct WindowsSetupDisplayPanel: View {
         case .failed, .unsupported:
             .orange
         case .notConfigured, .suspended:
+            .secondary
+        }
+    }
+
+    private var progressTint: Color {
+        installSimulation.phase == .running ? .blue : phaseTint
+    }
+}
+
+private struct WindowsLogoMark: View {
+    var size: CGFloat
+
+    var body: some View {
+        Grid(horizontalSpacing: 3, verticalSpacing: 3) {
+            GridRow {
+                Rectangle().fill(Color(red: 0.03, green: 0.47, blue: 0.95))
+                Rectangle().fill(Color(red: 0.03, green: 0.47, blue: 0.95))
+            }
+            GridRow {
+                Rectangle().fill(Color(red: 0.03, green: 0.47, blue: 0.95))
+                Rectangle().fill(Color(red: 0.03, green: 0.47, blue: 0.95))
+            }
+        }
+        .frame(width: size, height: size)
+        .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
+        .accessibilityHidden(true)
+    }
+}
+
+private struct AssistantProgressStrip: View {
+    var simulation: InstallSimulationState
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            HStack {
+                Label(simulation.currentStep, systemImage: "arrow.triangle.2.circlepath")
+                    .font(.callout.weight(.semibold))
+                Spacer()
+                Text("\(Int(simulation.progress * 100))%")
+                    .font(.caption.monospacedDigit().weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+
+            ProgressView(value: simulation.progress)
+                .tint(.blue)
+        }
+        .padding(12)
+        .background(.blue.opacity(0.08), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+    }
+}
+
+private struct CompactInstallFlowRow: View {
+    var item: InstallFlowItem
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: statusSymbol)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(statusTint)
+                .frame(width: 16)
+
+            Text(item.title)
+                .font(.caption.weight(.semibold))
+                .lineLimit(1)
+
+            Spacer(minLength: 4)
+        }
+    }
+
+    private var statusSymbol: String {
+        switch item.state {
+        case .complete:
+            "checkmark.circle.fill"
+        case .current:
+            "arrow.right.circle.fill"
+        case .pending:
+            "circle"
+        }
+    }
+
+    private var statusTint: Color {
+        switch item.state {
+        case .complete:
+            .green
+        case .current:
+            .blue
+        case .pending:
             .secondary
         }
     }
