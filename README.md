@@ -185,7 +185,7 @@ The plan includes the local executable path Veil would use, whether that executa
 swift run veil-vmctl qemu-plan --json | node ../../harness/qemu-boot-plan/src/validate-qemu-plan.mjs
 ```
 
-This is a planning boundary only. It does not prove Windows will boot, and it does not start QEMU yet.
+This is a planning boundary only. It does not prove Windows will boot, and it does not start QEMU.
 
 Run the local QEMU/HVF doctor to get UTM/Parallels-style readiness checks and next actions:
 
@@ -214,6 +214,14 @@ swift run veil-vmctl qemu-smoke --json --seconds 25 | node ../../harness/qemu-sm
 ```
 
 The smoke command runs QEMU headlessly in snapshot mode and writes logs under `~/Downloads/Veil Diagnostics/QEMU Smoke`. Current evidence on the test Mac reaches Arm UEFI and falls back to EDK II shell; Windows Setup is not proven yet.
+
+Launch the guarded visible QEMU/HVF path for interactive Windows setup testing:
+
+```bash
+swift run veil-vmctl qemu-start --json
+```
+
+This starts a local Cocoa QEMU window from the prepared Windows Arm profile, brings it forward, and writes logs under `~/Downloads/Veil Diagnostics/QEMU Launch`. It still uses user-provided Windows media and does not bundle QEMU, firmware, Windows images, product keys, or activation material.
 
 You can prepare the local VM profile from a downloaded Windows 11 Arm ISO without clicking through the shell:
 

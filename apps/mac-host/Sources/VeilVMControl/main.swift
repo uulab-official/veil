@@ -7,6 +7,7 @@ enum VMControlError: Error, LocalizedError {
     case missingInstallerPath
     case installerNotFound(String)
     case missingProfileForQEMUPlan
+    case qemuNotReady([String])
 
     var errorDescription: String? {
         switch self {
@@ -20,10 +21,12 @@ enum VMControlError: Error, LocalizedError {
             "Installer file does not exist: \(path)"
         case .missingProfileForQEMUPlan:
             "No prepared VM profile found. Run veil-vmctl prepare --installer /path/to/Windows.iso first."
+        case .qemuNotReady(let nextActions):
+            "QEMU/HVF is not ready. \(nextActions.joined(separator: " "))"
         }
     }
 
-    private static let usage = "Usage: veil-vmctl prepare --installer /path/to/Windows.iso | veil-vmctl providers [--json] | veil-vmctl qemu-plan [--json] | veil-vmctl qemu-doctor [--json] | veil-vmctl qemu-smoke [--json] [--seconds 45]"
+    private static let usage = "Usage: veil-vmctl prepare --installer /path/to/Windows.iso | veil-vmctl providers [--json] | veil-vmctl qemu-plan [--json] | veil-vmctl qemu-doctor [--json] | veil-vmctl qemu-smoke [--json] [--seconds 45] | veil-vmctl qemu-start [--json]"
 }
 
 struct VMControlArguments {
@@ -33,6 +36,7 @@ struct VMControlArguments {
         case qemuPlan(json: Bool)
         case qemuDoctor(json: Bool)
         case qemuSmoke(json: Bool, seconds: Int)
+        case qemuStart(json: Bool)
     }
 
     var command: Command
@@ -57,6 +61,10 @@ struct VMControlArguments {
         if command == "qemu-smoke" {
             let seconds = secondsArgument(from: arguments) ?? 45
             return VMControlArguments(command: .qemuSmoke(json: arguments.contains("--json"), seconds: seconds))
+        }
+
+        if command == "qemu-start" {
+            return VMControlArguments(command: .qemuStart(json: arguments.contains("--json")))
         }
 
         guard command == "prepare" else {
@@ -113,6 +121,8 @@ struct VeilVMControl {
             try await printQEMUDoctor(json: json)
         case .qemuSmoke(let json, let seconds):
             try await printQEMUSmoke(json: json, seconds: seconds)
+        case .qemuStart(let json):
+            try await startQEMU(json: json)
         }
     }
 
@@ -264,6 +274,76 @@ struct VeilVMControl {
         print("Process log: \(report.processLogPath)")
     }
 
+    private static func startQEMU(json: Bool) async throws {
+        guard let profile = try await JSONVMProfileStore().load() else {
+            throw VMControlError.missingProfileForQEMUPlan
+        }
+
+        let plan = try makeQEMUPlan(for: profile)
+        let readiness = QEMUWindowsReadinessDoctor().makeReport(
+            profile: profile,
+            plan: plan
+        )
+        guard readiness.overallState == .ready else {
+            throw VMControlError.qemuNotReady(readiness.nextActions)
+        }
+
+        let logDirectory = diagnosticsDirectory()
+            .appendingPathComponent("QEMU Launch", isDirectory: true)
+        try FileManager.default.createDirectory(
+            at: logDirectory,
+            withIntermediateDirectories: true
+        )
+        let stamp = ISO8601DateFormatter()
+            .string(from: Date())
+            .replacingOccurrences(of: ":", with: "-")
+        let processLogURL = logDirectory.appendingPathComponent("qemu-launch-\(stamp).log")
+        FileManager.default.createFile(atPath: processLogURL.path, contents: nil)
+        let logHandle = try FileHandle(forWritingTo: processLogURL)
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: plan.executablePath)
+        process.arguments = plan.arguments
+        process.standardOutput = logHandle
+        process.standardError = logHandle
+        try process.run()
+        bringQEMUToFront()
+
+        let record = QEMULaunchRecord(
+            provider: plan.provider,
+            pid: Int(process.processIdentifier),
+            executablePath: plan.executablePath,
+            arguments: plan.arguments,
+            processLogPath: processLogURL.path,
+            startedAt: Date()
+        )
+
+        if json {
+            let data = try JSONEncoder.veilDiagnostics.encode(record)
+            print(String(decoding: data, as: UTF8.self))
+            return
+        }
+
+        print("QEMU/HVF Windows VM launched")
+        print("PID: \(record.pid)")
+        print("Executable: \(record.executablePath)")
+        print("Process log: \(record.processLogPath)")
+    }
+
+    private static func bringQEMUToFront() {
+        Thread.sleep(forTimeInterval: 0.5)
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+        process.arguments = [
+            "-e",
+            "tell application \"System Events\" to set frontmost of process \"qemu-system-aarch64\" to true"
+        ]
+        process.standardOutput = nil
+        process.standardError = nil
+        try? process.run()
+    }
+
     private static func runBoundedQEMU(
         executablePath: String,
         arguments: [String],
@@ -357,4 +437,35 @@ struct VeilVMControl {
         return downloads.appendingPathComponent("Veil Diagnostics", isDirectory: true)
     }
 
+}
+
+struct QEMULaunchRecord: Codable, Sendable {
+    var kind: String
+    var provider: String
+    var isServerBacked: Bool
+    var pid: Int
+    var executablePath: String
+    var arguments: [String]
+    var processLogPath: String
+    var startedAt: Date
+
+    init(
+        kind: String = "qemuWindowsArmLaunch",
+        provider: String,
+        isServerBacked: Bool = false,
+        pid: Int,
+        executablePath: String,
+        arguments: [String],
+        processLogPath: String,
+        startedAt: Date
+    ) {
+        self.kind = kind
+        self.provider = provider
+        self.isServerBacked = isServerBacked
+        self.pid = pid
+        self.executablePath = executablePath
+        self.arguments = arguments
+        self.processLogPath = processLogPath
+        self.startedAt = startedAt
+    }
 }

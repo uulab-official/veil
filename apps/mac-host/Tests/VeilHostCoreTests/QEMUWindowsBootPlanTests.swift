@@ -117,7 +117,7 @@ struct QEMUWindowsBootPlanTests {
             "hvf-plan"
         ])
         #expect(report.checks.allSatisfy { $0.state == .passed })
-        #expect(report.nextActions == ["Run veil-vmctl qemu-plan --json to review the exact command before execution support lands."])
+        #expect(report.nextActions == ["Run veil-vmctl qemu-start to launch the local QEMU/HVF Windows setup window."])
     }
 
     @Test("doctor blocks when QEMU executable is missing")

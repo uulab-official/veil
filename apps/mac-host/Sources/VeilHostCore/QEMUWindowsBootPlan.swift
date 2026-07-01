@@ -416,7 +416,7 @@ public struct QEMUWindowsReadinessDoctor: Sendable {
         }
 
         if actions.isEmpty {
-            actions.append("Run veil-vmctl qemu-plan --json to review the exact command before execution support lands.")
+            actions.append("Run veil-vmctl qemu-start to launch the local QEMU/HVF Windows setup window.")
         }
 
         return actions

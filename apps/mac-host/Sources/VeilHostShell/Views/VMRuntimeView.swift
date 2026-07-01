@@ -27,7 +27,8 @@ struct VMRuntimeView: View {
                         if model.canStop {
                             stopVMAction()
                         } else if model.canStart {
-                            startInstallSimulation()
+                            startConsoleHandoffProgress()
+                            startVMAction()
                         } else {
                             Task {
                                 await model.prepareDefaultVM()
@@ -120,6 +121,11 @@ struct VMRuntimeView: View {
             allowsMultipleSelection: false
         ) { result in
             handlePathImport(result)
+        }
+        .onChange(of: model.snapshot?.state) { _, state in
+            if state == .failed || state == .stopped {
+                installSimulation = .idle
+            }
         }
     }
 
@@ -292,7 +298,7 @@ struct VMRuntimeView: View {
     }
 
     @MainActor
-    private func startInstallSimulation() {
+    private func startConsoleHandoffProgress() {
         guard installSimulation.phase != .running else {
             return
         }
@@ -324,13 +330,11 @@ private struct InstallSimulationState: Equatable {
 
     static let steps = [
         "Checking Windows ISO",
-        "Creating unattended setup plan",
-        "Booting installer",
-        "Copying Windows files",
-        "Applying configuration",
-        "Restarting virtual machine",
-        "Preparing Veil guest tools",
-        "Ready for Windows apps"
+        "Validating local VM profile",
+        "Starting Apple Virtualization",
+        "Attaching VM display",
+        "Opening console window",
+        "Handing off to Windows Setup"
     ]
 
     static let idle = InstallSimulationState(phase: .idle, stepIndex: 0, progress: 0)
@@ -513,10 +517,10 @@ private struct SimpleRuntimePanel: View {
                 : "Windows ISO found. Prepare the VM to attach it and create the disk."
         case .stopped:
             if installSimulation.phase == .complete {
-                return "Simulated Windows install is complete. Guest agent work comes next."
+                return "Console handoff finished. Start again if the Windows setup window did not appear."
             }
 
-            return snapshot.bootReady ? "Windows is not installed yet. Simulate the automatic setup flow." : statusText
+            return snapshot.bootReady ? "Ready to start the real Windows installer console." : statusText
         case .starting:
             return "Starting Windows Setup. The installer opens in the VM console."
         case .running:
@@ -536,11 +540,11 @@ private struct SimpleRuntimePanel: View {
         if canStart {
             switch installSimulation.phase {
             case .idle:
-                return "Simulate Auto Install"
+                return "Start Windows Setup"
             case .running:
-                return "Installing..."
+                return "Starting..."
             case .complete:
-                return "Run Again"
+                return "Start Again"
             }
         }
 
@@ -560,7 +564,11 @@ private struct SimpleRuntimePanel: View {
     }
 
     private var primaryDisabled: Bool {
-        isLoading || snapshot.state == .unsupported || installSimulation.phase == .running
+        if canStop {
+            return isLoading || snapshot.state == .unsupported
+        }
+
+        return isLoading || snapshot.state == .unsupported || installSimulation.phase == .running
     }
 
     private var canShowConsole: Bool {
@@ -606,7 +614,7 @@ private struct InstallSimulationProgressView: View {
                             .labelStyle(.iconOnly)
                     }
                     .buttonStyle(.borderless)
-                    .help("Reset simulation")
+                    .help("Reset progress")
                 }
             }
         }
@@ -632,11 +640,11 @@ private struct InstallSimulationProgressView: View {
     private var title: String {
         switch simulation.phase {
         case .idle:
-            return "Automatic install ready"
+            return "Windows setup ready"
         case .running:
-            return "Automatic install simulation"
+            return "Starting VM console"
         case .complete:
-            return "Simulated install complete"
+            return "Console handoff complete"
         }
     }
 

@@ -45,11 +45,11 @@ Veil should not require a cloud service or remote VM backend to run Windows apps
 Current provider status:
 
 - Apple Virtualization: active feasibility provider for profile, disk, EFI, console, and boot attempts.
-- QEMU/HVF: planned local provider candidate for UTM-grade Windows installer/device compatibility if Apple Virtualization is not enough.
+- QEMU/HVF: active compatibility provider candidate for UTM-grade Windows installer/device compatibility when Apple Virtualization reaches a VM state but cannot reliably show the Windows installer.
 
 The provider probe is intentionally read-only. `veil-vmctl providers --json` reports candidate providers for diagnostics and harness validation, but it must not start, stop, create, or mutate a VM.
 
-The QEMU boot plan is also read-only. `veil-vmctl qemu-plan --json` converts the stored Windows Arm VM profile into a dry-run QEMU/HVF command plan and reports whether `qemu-system-aarch64` is locally available. The plan is meant to make the next boot spike reviewable and harness-testable before Veil executes QEMU.
+The QEMU boot plan remains read-only. `veil-vmctl qemu-plan --json` converts the stored Windows Arm VM profile into a dry-run QEMU/HVF command plan and reports whether `qemu-system-aarch64` is locally available. `veil-vmctl qemu-start` is the guarded local execution spike for that plan: it checks QEMU doctor readiness first, launches the local Cocoa QEMU display, and writes process logs under Downloads diagnostics.
 
 ## Windows Arm Install Flow
 

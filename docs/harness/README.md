@@ -82,6 +82,12 @@ swift run veil-vmctl qemu-smoke --json --seconds 25 | node ../../harness/qemu-sm
 
 The command uses snapshot mode and records logs under `~/Downloads/Veil Diagnostics/QEMU Smoke`. It is allowed to start a local QEMU process for the requested bounded duration, then terminate it for classification.
 
+## QEMU Start Scenario
+
+`veil-vmctl qemu-start [--json]` is the guarded visible-launch spike for the local QEMU/HVF provider. Unlike `qemu-plan`, it starts a local QEMU process with the stored Windows Arm profile and a Cocoa display. Unlike `qemu-smoke`, it is not bounded or snapshot-only; it is meant for interactive Windows setup testing after `qemu-doctor` reports ready.
+
+The command writes process logs under `~/Downloads/Veil Diagnostics/QEMU Launch` and reports the launched PID. It still does not distribute Windows media, activation keys, QEMU binaries, or firmware.
+
 ## First Scenario: Launch Notepad
 
 ```text
