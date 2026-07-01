@@ -648,6 +648,7 @@ public struct LocalVMRuntimeService: VMRuntimeService {
 
     private static func preflightChecks(for profile: VMProfile) -> [VMPreflightCheck] {
         [
+            installerMediaPreflightCheck(for: profile.installerMediaPath),
             VMPreflightCheck(
                 id: "guest-os",
                 title: "Windows Arm guest",
@@ -681,5 +682,50 @@ public struct LocalVMRuntimeService: VMRuntimeService {
                 state: profile.diskGB >= 64 ? .passed : .failed
             )
         ]
+    }
+
+    private static func installerMediaPreflightCheck(for path: String?) -> VMPreflightCheck {
+        guard let path, !path.isEmpty else {
+            return VMPreflightCheck(
+                id: "installer-media",
+                title: "Installer media",
+                detail: "Select a bootable ISO installer for Windows setup.",
+                state: .failed
+            )
+        }
+
+        if let detail = fileValidationDetail(path: path, label: "Installer media") {
+            return VMPreflightCheck(
+                id: "installer-media",
+                title: "Installer media",
+                detail: detail,
+                state: .failed
+            )
+        }
+
+        let fileExtension = URL(fileURLWithPath: path).pathExtension.lowercased()
+        switch fileExtension {
+        case "iso":
+            return VMPreflightCheck(
+                id: "installer-media",
+                title: "Installer media",
+                detail: "Bootable ISO installer selected.",
+                state: .passed
+            )
+        case "vhd", "vhdx":
+            return VMPreflightCheck(
+                id: "installer-media",
+                title: "Installer media",
+                detail: "Select a bootable ISO installer for Windows setup. VHDX files should be used as disk images, not installer media.",
+                state: .failed
+            )
+        default:
+            return VMPreflightCheck(
+                id: "installer-media",
+                title: "Installer media",
+                detail: "Select a bootable ISO installer for Windows setup.",
+                state: .failed
+            )
+        }
     }
 }

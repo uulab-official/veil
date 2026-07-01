@@ -132,6 +132,7 @@ struct VMProfileStoreTests {
             .passed,
             .passed,
             .passed,
+            .passed,
             .passed
         ])
     }
@@ -156,6 +157,34 @@ struct VMProfileStoreTests {
         #expect(profile.memoryMB == 12_288)
         #expect(profile.diskGB == 160)
         #expect(profile.virtualDiskPath?.hasSuffix("Windows 11 Arm.img") == true)
+    }
+
+    @Test("local runtime rejects unsupported installer media extensions")
+    func localRuntimeRejectsUnsupportedInstallerMediaExtensions() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let installerURL = directory.appendingPathComponent("Windows.vhdx")
+        let diskURL = directory.appendingPathComponent("Windows.img")
+        let sharedFolderURL = directory.appendingPathComponent("Veil Shared", isDirectory: true)
+        try Data("installer".utf8).write(to: installerURL)
+        try Data("disk".utf8).write(to: diskURL)
+        try FileManager.default.createDirectory(at: sharedFolderURL, withIntermediateDirectories: true)
+        let store = JSONVMProfileStore(directory: directory)
+        var profile = VMProfile.defaultWindows11Arm(createdAt: Date(timeIntervalSince1970: 1_782_752_400))
+        profile.installerMediaPath = installerURL.path
+        profile.virtualDiskPath = diskURL.path
+        profile.sharedFolderPath = sharedFolderURL.path
+        try await store.save(profile)
+
+        let service = LocalVMRuntimeService(profileStore: store)
+        let snapshot = try await service.loadSnapshot()
+        let installerCheck = try #require(snapshot.preflightChecks.first { $0.id == "installer-media" })
+
+        #expect(snapshot.bootReady == false)
+        #expect(snapshot.detail == "VM profile needs attention before boot.")
+        #expect(installerCheck.state == .failed)
+        #expect(installerCheck.detail == "Select a bootable ISO installer for Windows setup. VHDX files should be used as disk images, not installer media.")
     }
 
     @Test("local runtime is not boot ready when VM profile resources are invalid")
@@ -186,12 +215,14 @@ struct VMProfileStoreTests {
         #expect(snapshot.bootReady == false)
         #expect(snapshot.detail == "VM profile needs attention before boot.")
         #expect(snapshot.preflightChecks.map(\.id) == [
+            "installer-media",
             "guest-os",
             "cpu",
             "memory",
             "disk-size"
         ])
         #expect(snapshot.preflightChecks.map(\.state) == [
+            .passed,
             .failed,
             .failed,
             .failed,

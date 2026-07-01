@@ -26,7 +26,7 @@ The first three are local host prerequisites. The guest agent step remains pendi
 - The virtual disk can be user-selected or created as a blank sparse disk at `~/Virtual Machines/Veil/Windows 11 Arm.img`.
 - The boot spike stores EFI variables and the generic machine identifier next to the virtual disk so repeated boots keep stable VM identity.
 - The runtime snapshot reports structured setup steps so the UI can show what is complete, blocked, or pending.
-- The runtime snapshot reports preflight checks for guest OS, CPU, memory, and disk size.
+- The runtime snapshot reports preflight checks for installer media, guest OS, CPU, memory, and disk size.
 - A profile becomes boot-ready only when installer media, virtual disk, shared folder, and preflight checks all pass.
 - Pressing Start builds a `VZVirtualMachine`, starts it through Apple's Virtualization.framework, and opens a console window.
 - Pressing Stop stops the active VM process and closes the console window.
@@ -38,6 +38,7 @@ The adaptive resource profile is an initial configuration policy, not live VM ho
 
 Before the VM boot implementation lands, Veil already blocks obviously invalid profiles:
 
+- Installer media must be a local bootable ISO file. VHD/VHDX files are treated as disk images, not installer media.
 - Guest OS must be `windows-arm64`.
 - CPU allocation must be at least 2 virtual CPUs.
 - Memory allocation must be at least 4096 MB.
@@ -79,4 +80,4 @@ Enable app launcher and coherence windows
 - Bundling Windows media.
 - Creating a licensed Windows installation for the user.
 - Claiming Microsoft or Apple endorsement.
-- Validating the contents of a Windows installer image before the VM boot spike proves the exact requirements.
+- Fully validating the contents or bootability of a Windows installer image before the VM boot spike proves the exact requirements.

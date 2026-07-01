@@ -44,6 +44,18 @@ Veil treats Windows setup as a staged runtime prerequisite rather than a generic
 
 See [Windows Arm install flow](install-flow.md) for the user-facing setup sequence and non-goals.
 
+## UTM-Level Quality Target
+
+UTM is the open-source benchmark for a serious Mac VM host: it has a mature VM library, device settings, guest support documentation, and recovery guidance. Veil should match that level of setup clarity and operational diagnostics while keeping a narrower product goal. Veil is not trying to become a general QEMU manager. It should instead make the Windows App Runtime path reliable enough that users know which exact prerequisite blocks boot, which file role is wrong, and what recovery step is next.
+
+Near-term quality bars:
+
+- distinguish installer media from boot disks before Start is enabled,
+- produce structured preflight checks for every local boot prerequisite,
+- make VM metadata, resource caps, and selected files visible in the host shell,
+- keep fake-agent and fake-host harnesses so agent work remains testable without Windows,
+- add diagnostics bundles before developer-preview distribution.
+
 ## Windows Guest Agent
 
 MVP stack:
