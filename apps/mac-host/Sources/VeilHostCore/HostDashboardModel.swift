@@ -45,6 +45,7 @@ public final class HostDashboardModel {
     public private(set) var health: AgentHealthResponse?
     public private(set) var apps: [WindowsApp] = []
     public private(set) var lastLaunch: NotepadLaunchResult?
+    public private(set) var activeWindows: [WindowCreatedEvent] = []
     public private(set) var errorMessage: String?
     public private(set) var connectionMode: HostConnectionMode = .agent
     public private(set) var connectionDetail: String?
@@ -139,11 +140,21 @@ public final class HostDashboardModel {
             connectionDetail = result.connectionDetail
             selectedAppId = result.window.appId
             lastLaunch = result
+            storeActiveWindow(result.window)
             phase = .connected
         } catch {
             errorMessage = userMessage(for: error)
             phase = .failed
         }
+    }
+
+    private func storeActiveWindow(_ window: WindowCreatedEvent) {
+        if let index = activeWindows.firstIndex(where: { $0.windowId == window.windowId }) {
+            activeWindows[index] = window
+            return
+        }
+
+        activeWindows.append(window)
     }
 
     private func selectDefaultAppIfNeeded() {

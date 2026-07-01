@@ -35,9 +35,25 @@ struct HostDashboardModelTests {
         #expect(model.phase == .connected)
         #expect(model.lastLaunch?.launch.processId == 4912)
         #expect(model.lastLaunch?.window.windowId == "hwnd:0003029A")
+        #expect(model.activeWindows.map(\.windowId) == ["hwnd:0003029A"])
         #expect(model.selectedAppId == "winapp_notepad")
         #expect(model.canLaunchSelectedApp)
         #expect(model.statusText == "Launched Untitled - Notepad")
+    }
+
+    @Test("updates active window sessions by HWND")
+    @MainActor
+    func updatesActiveWindowSessionsByHWND() async throws {
+        let service = FakeDashboardService()
+        let model = HostDashboardModel(service: service)
+
+        await model.launchNotepad()
+        await model.launchNotepad()
+
+        #expect(model.activeWindows.count == 1)
+        #expect(model.activeWindows.first?.windowId == "hwnd:0003029A")
+        #expect(model.activeWindows.first?.title == "Untitled - Notepad")
+        #expect(service.launchCount == 2)
     }
 
     @Test("stores service failures as user visible errors")

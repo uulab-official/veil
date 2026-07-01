@@ -8,6 +8,7 @@ struct DetailView: View {
     var startVMAction: () -> Void
     var stopVMAction: () -> Void
     var showVMConsoleAction: () -> Void
+    var launchWindowsAppAction: () -> Void
     var consoleMessage: String?
 
     var body: some View {
@@ -28,6 +29,11 @@ struct DetailView: View {
                         errorMessage: model.errorMessage
                     )
                 case .vm:
+                    WindowsAppBridgePanel(
+                        model: model,
+                        launchAction: launchWindowsAppAction
+                    )
+
                     VMRuntimeView(
                         model: vmModel,
                         startVMAction: startVMAction,

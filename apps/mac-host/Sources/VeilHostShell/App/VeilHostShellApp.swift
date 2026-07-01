@@ -6,6 +6,7 @@ import VeilHostCore
 struct VeilHostShellApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     private let vmConsolePresenter = VMConsoleWindowPresenter(bootRunner: VirtualizationVMRuntimeBooter.shared)
+    private let windowsAppWindowPresenter = WindowsAppWindowPresenter()
     @State private var model = HostDashboardModel(
         service: FallbackHostDashboardService(
             primary: VeilHostClient(
@@ -30,6 +31,7 @@ struct VeilHostShellApp: App {
                 startVMAction: startVMAndShowConsole,
                 stopVMAction: stopVMAndCloseConsole,
                 showVMConsoleAction: showVMConsole,
+                launchWindowsAppAction: launchSelectedWindowsAppWindow,
                 consoleMessage: consoleMessage
             )
                 .frame(minWidth: 1180, idealWidth: 1360, minHeight: 740, idealHeight: 860)
@@ -89,10 +91,8 @@ struct VeilHostShellApp: App {
                 .keyboardShortcut("b", modifiers: [.command, .shift])
                 .disabled(!canShowVMConsole)
 
-                Button("Launch Notepad") {
-                    Task {
-                        await model.launchNotepad()
-                    }
+                Button("Open Windows App Window") {
+                    launchSelectedWindowsAppWindow()
                 }
                 .keyboardShortcut(.return, modifiers: [.command])
             }
@@ -130,8 +130,29 @@ struct VeilHostShellApp: App {
 
             if vmModel.snapshot?.state == .stopped {
                 vmConsolePresenter.closeConsole()
+                windowsAppWindowPresenter.closeAll()
                 consoleMessage = "Windows setup console closed."
             }
+        }
+    }
+
+    private func launchSelectedWindowsAppWindow() {
+        Task { @MainActor in
+            if model.apps.isEmpty {
+                await model.load()
+            }
+
+            await model.launchSelectedApp()
+
+            guard let result = model.lastLaunch else {
+                return
+            }
+
+            windowsAppWindowPresenter.showWindow(
+                for: result.window,
+                connectionMode: model.connectionMode,
+                supportsCapture: model.health?.capabilities.windowCapture == true
+            )
         }
     }
 

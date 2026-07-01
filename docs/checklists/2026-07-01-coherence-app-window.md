@@ -1,0 +1,20 @@
+# Coherence App Window Checklist
+
+Goal: make Veil's product direction visible as "Windows app as a macOS window" instead of only a VM console.
+
+## Completed
+
+- [x] Store active Windows window sessions from `window.created` events in `HostDashboardModel`.
+- [x] Keep one active session per HWND so the host can map one Windows window to one macOS window.
+- [x] Add an AppKit `NSWindow` presenter keyed by `windowId`.
+- [x] Add a main-screen Windows Apps On Mac panel with an `Open As Mac Window` action.
+- [x] Wire Command-Return to the same separate-window launch path.
+- [x] Show a placeholder app surface until guest window capture frames are available.
+
+## Next
+
+- [ ] Add protocol messages for frame stream subscribe/unsubscribe.
+- [ ] Replace the placeholder surface with captured Notepad frames from the Windows guest agent.
+- [ ] Translate mouse and keyboard events from the macOS app window back to the HWND.
+- [ ] Add clipboard buttons and then automatic text clipboard sync with loop prevention.
+- [ ] Persist and restore mapped app windows after VM reconnect.
