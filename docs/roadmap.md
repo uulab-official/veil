@@ -14,6 +14,7 @@ Veil does not have a cloud or server VM backend. Its VM layer is a local runtime
 - VM profile preflight checks.
 - Installer media role validation.
 - Adaptive default CPU, memory, and disk profile based on the current Mac.
+- Automatic Windows Arm ISO detection from `~/Downloads` during one-click preparation.
 - Shared folder preparation.
 - Local diagnostics bundle export.
 - Last boot attempt report in diagnostics.
@@ -30,6 +31,7 @@ Exit criteria:
 - A contributor can see which profile settings are invalid before boot.
 - A contributor is warned when a disk image is selected where bootable installer media is expected.
 - A contributor can prepare a VM profile whose resource caps are automatically sized for the host Mac.
+- A contributor can place a Windows Arm ISO in `~/Downloads` and let Veil attach it during preparation.
 - A contributor can export metadata-only diagnostics for boot-readiness failures.
 - A contributor can inspect the latest Start attempt result and startup error without sharing Windows media or disk contents.
 - A contributor can inspect planned boot devices before starting the VM.

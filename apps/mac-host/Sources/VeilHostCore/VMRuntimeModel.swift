@@ -877,6 +877,11 @@ public struct LocalVMRuntimeService: VMRuntimeService {
             withIntermediateDirectories: true
         )
 
+        if profile.installerMediaPath == nil,
+           let installerMediaURL = discoverDefaultInstallerMedia() {
+            profile.installerMediaPath = installerMediaURL.path
+        }
+
         if profile.virtualDiskPath != nil {
             return profile
         }
@@ -902,6 +907,46 @@ public struct LocalVMRuntimeService: VMRuntimeService {
 
         profile.virtualDiskPath = diskURL.path
         return profile
+    }
+
+    private func discoverDefaultInstallerMedia() -> URL? {
+        let downloadsURL = defaultHomeDirectory.appendingPathComponent("Downloads", isDirectory: true)
+        guard let urls = try? FileManager.default.contentsOfDirectory(
+            at: downloadsURL,
+            includingPropertiesForKeys: [.contentModificationDateKey, .isRegularFileKey],
+            options: [.skipsHiddenFiles]
+        ) else {
+            return nil
+        }
+
+        return urls
+            .filter(Self.isWindowsArmInstallerCandidate)
+            .sorted { lhs, rhs in
+                let lhsDate = (try? lhs.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
+                let rhsDate = (try? rhs.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
+                if lhsDate == rhsDate {
+                    return lhs.lastPathComponent < rhs.lastPathComponent
+                }
+
+                return lhsDate > rhsDate
+            }
+            .first
+    }
+
+    private static func isWindowsArmInstallerCandidate(_ url: URL) -> Bool {
+        guard url.pathExtension.lowercased() == "iso" else {
+            return false
+        }
+
+        let resourceValues = try? url.resourceValues(forKeys: [.isRegularFileKey])
+        guard resourceValues?.isRegularFile != false else {
+            return false
+        }
+
+        let filename = url.lastPathComponent.lowercased()
+        let looksLikeWindows = filename.contains("windows") || filename.contains("win11") || filename.contains("win_11")
+        let looksLikeArm = filename.contains("arm64") || filename.contains("aarch64") || filename.contains("arm")
+        return looksLikeWindows && looksLikeArm && !filename.contains("x64") && !filename.contains("x86")
     }
 
     public func updateProfilePaths(installerMediaPath: String?, virtualDiskPath: String?) async throws -> VMRuntimeSnapshot {

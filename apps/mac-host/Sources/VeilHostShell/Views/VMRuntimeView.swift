@@ -367,7 +367,7 @@ private struct QuickActionsPanel: View {
 
                 ControlActionTile(
                     title: "Prepare VM",
-                    detail: snapshot.profileName == nil ? "Create profile, shared folder, and default disk." : "Base VM resources are ready.",
+                    detail: snapshot.profileName == nil ? "Create profile, find Downloads ISO, shared folder, and default disk." : "Base VM resources are ready.",
                     symbolName: "wand.and.stars",
                     tint: .blue,
                     state: snapshot.profileName == nil ? .ready : .partial,
@@ -688,7 +688,7 @@ private struct WindowsSetupDisplayPanel: View {
         case .unsupported:
             return "This Mac cannot run the current local Windows Arm VM path."
         case .notConfigured:
-            return "Create or prepare a Windows 11 Arm profile, then select the ISO and virtual disk."
+            return "Prepare a Windows 11 Arm profile. Veil will auto-detect a matching ISO in Downloads when one is available."
         case .stopped:
             return snapshot.bootReady
                 ? "Ready to boot the Windows installer. Press Start Windows Setup; Veil will open the VM Console window automatically."
@@ -950,7 +950,7 @@ private struct SetupAssistantPanel: View {
             ),
             SetupItem(
                 title: "Installer Media",
-                detail: snapshot.installerMediaPath ?? "Select Windows 11 Arm installer media.",
+                detail: snapshot.installerMediaPath ?? "Auto-detects a Windows Arm ISO in Downloads, or choose one manually.",
                 symbolName: "opticaldisc",
                 isComplete: snapshot.installerMediaPath != nil
             ),
@@ -990,7 +990,7 @@ private struct SetupAssistantPanel: View {
             HStack(spacing: 8) {
                 if snapshot.profileName == nil {
                     Button(action: prepareAction) {
-                        Label("Prepare VM", systemImage: "wand.and.stars")
+                        Label("Auto Prepare", systemImage: "wand.and.stars")
                     }
                     .buttonStyle(.borderedProminent)
                     .disabled(isLoading)
