@@ -22,7 +22,6 @@ struct DetailView: View {
             )
             .padding(18)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .background(.thinMaterial)
         } else {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
@@ -48,7 +47,6 @@ struct DetailView: View {
             .padding(.horizontal, 28)
             .padding(.vertical, 24)
         }
-        .background(.thinMaterial)
         }
     }
 }

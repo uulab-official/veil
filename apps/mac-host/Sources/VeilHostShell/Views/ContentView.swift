@@ -11,24 +11,27 @@ struct ContentView: View {
     var consoleMessage: String?
 
     var body: some View {
-        VStack(spacing: 0) {
-            VeilWindowHeader(
-                isRefreshing: isRefreshing,
-                refreshAction: refreshAll
-            )
+        ZStack {
+            VeilWindowBackdrop()
+                .ignoresSafeArea()
 
-            Divider()
+            VStack(spacing: 0) {
+                VeilWindowHeader(
+                    isRefreshing: isRefreshing,
+                    refreshAction: refreshAll
+                )
 
-            DetailView(
-                model: model,
-                vmModel: vmModel,
-                selectedSection: .vm,
-                startVMAction: startVMAction,
-                stopVMAction: stopVMAction,
-                showVMConsoleAction: showVMConsoleAction,
-                launchWindowsAppAction: launchWindowsAppAction,
-                consoleMessage: consoleMessage
-            )
+                DetailView(
+                    model: model,
+                    vmModel: vmModel,
+                    selectedSection: .vm,
+                    startVMAction: startVMAction,
+                    stopVMAction: stopVMAction,
+                    showVMConsoleAction: showVMConsoleAction,
+                    launchWindowsAppAction: launchWindowsAppAction,
+                    consoleMessage: consoleMessage
+                )
+            }
         }
     }
 
@@ -44,6 +47,46 @@ struct ContentView: View {
         }
     }
 
+}
+
+private struct VeilWindowBackdrop: View {
+    var body: some View {
+        ZStack {
+            LinearGradient(
+                colors: [
+                    Color(nsColor: .windowBackgroundColor),
+                    Color(red: 0.07, green: 0.09, blue: 0.12),
+                    Color(red: 0.03, green: 0.15, blue: 0.22)
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+
+            VStack(spacing: 0) {
+                LinearGradient(
+                    colors: [
+                        Color.white.opacity(0.08),
+                        Color.clear
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .frame(height: 190)
+
+                Spacer()
+            }
+
+            HStack(spacing: 0) {
+                Rectangle()
+                    .fill(Color.cyan.opacity(0.07))
+                    .frame(maxWidth: .infinity)
+                Rectangle()
+                    .fill(Color.green.opacity(0.045))
+                    .frame(maxWidth: .infinity)
+            }
+            .blendMode(.screen)
+        }
+    }
 }
 
 private struct VeilWindowHeader: View {
@@ -77,7 +120,12 @@ private struct VeilWindowHeader: View {
         }
         .padding(.trailing, 14)
         .frame(height: 52)
-        .background(.thinMaterial)
+        .background(.ultraThinMaterial)
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(.white.opacity(0.08))
+                .frame(height: 1)
+        }
         .contentShape(Rectangle())
         .gesture(WindowDragGesture())
     }
