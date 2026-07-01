@@ -990,71 +990,59 @@ private struct WindowsSetupDisplayPanel: View {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .fill(installStageBackground)
 
-            VStack(spacing: 34) {
-                HStack(alignment: .top, spacing: 24) {
-                    HStack(alignment: .center, spacing: 18) {
-                        installMark
+            VStack(spacing: 24) {
+                Spacer(minLength: 8)
 
-                        VStack(alignment: .leading, spacing: 7) {
-                            Text("Install Windows 11")
-                                .font(.system(size: 34, weight: .semibold))
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.85)
-                            Text(installProcessSubtitle)
-                                .font(.callout)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(2)
-                        }
-                    }
+                VStack(spacing: 16) {
+                    installMark
 
-                    Spacer(minLength: 18)
-
-                    VStack(alignment: .trailing, spacing: 10) {
-                        Button(action: primaryAction) {
-                            Label(installPrimaryTitle, systemImage: primarySymbol)
-                                .frame(minWidth: 168)
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .controlSize(.large)
-                        .disabled(primaryDisabled)
-
-                        HStack(spacing: 8) {
-                            Button(action: prepareAction) {
-                                Label("Prepare", systemImage: "wand.and.stars")
-                                    .labelStyle(.iconOnly)
-                            }
-                            .disabled(isLoading || snapshot.state == .running || snapshot.state == .starting)
-                            .help("Prepare VM")
-
-                            Button(action: selectInstallerAction) {
-                                Label("Choose ISO", systemImage: "opticaldisc")
-                                    .labelStyle(.iconOnly)
-                            }
-                            .disabled(isLoading || snapshot.state == .running || snapshot.state == .starting)
-                            .help("Choose ISO")
-
-                            Button(action: detailsAction) {
-                                Label(isShowingDetails ? "Hide Details" : "Details", systemImage: "slider.horizontal.3")
-                                    .labelStyle(.iconOnly)
-                            }
-                            .help("Details")
-
-                            Button(action: refreshAction) {
-                                Label("Refresh", systemImage: "arrow.clockwise")
-                                    .labelStyle(.iconOnly)
-                            }
-                            .disabled(isLoading)
-                            .help("Refresh")
-                        }
-                        .controlSize(.regular)
+                    VStack(spacing: 8) {
+                        Text("Install Windows 11")
+                            .font(.system(size: 36, weight: .semibold))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.85)
+                        Text(installProcessSubtitle)
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                            .lineLimit(2)
                     }
                 }
 
-                setupTimeline
-
                 if installSimulation.phase != .idle {
                     AssistantProgressStrip(simulation: installSimulation)
-                        .frame(maxWidth: 560)
+                        .frame(maxWidth: 520)
+                }
+
+                Button(action: primaryAction) {
+                    Label(installPrimaryTitle, systemImage: primarySymbol)
+                        .frame(minWidth: 210)
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+                .disabled(primaryDisabled)
+
+                HStack(spacing: 8) {
+                    Button(action: selectInstallerAction) {
+                        Label("Choose ISO", systemImage: "opticaldisc")
+                    }
+                    .disabled(isLoading || snapshot.state == .running || snapshot.state == .starting)
+
+                    Button(action: prepareAction) {
+                        Label("Prepare", systemImage: "wand.and.stars")
+                    }
+                    .disabled(isLoading || snapshot.state == .running || snapshot.state == .starting)
+
+                    Button(action: detailsAction) {
+                        Label("Details", systemImage: "slider.horizontal.3")
+                    }
+
+                    Button(action: refreshAction) {
+                        Label("Refresh", systemImage: "arrow.clockwise")
+                            .labelStyle(.iconOnly)
+                    }
+                    .disabled(isLoading)
+                    .help("Refresh")
                 }
 
                 HStack(spacing: 12) {
@@ -1081,6 +1069,9 @@ private struct WindowsSetupDisplayPanel: View {
                         .disabled(isLoading)
                     }
                 }
+                .frame(maxWidth: 410)
+
+                Spacer(minLength: 8)
             }
             .padding(34)
         }
@@ -1100,21 +1091,6 @@ private struct WindowsSetupDisplayPanel: View {
                 .foregroundStyle(.blue)
         }
         .frame(width: 76, height: 76)
-    }
-
-    private var setupTimeline: some View {
-        HStack(spacing: 0) {
-            ForEach(Array(processItems.enumerated()), id: \.element.id) { index, item in
-                SetupTimelineStep(item: item)
-
-                if index < processItems.count - 1 {
-                    Rectangle()
-                        .fill(item.state == .complete ? Color.green.opacity(0.58) : Color.secondary.opacity(0.20))
-                        .frame(height: 1)
-                        .padding(.horizontal, 8)
-                }
-            }
-        }
     }
 
     private var installStageBackground: LinearGradient {
@@ -1374,39 +1350,6 @@ private struct WindowsSetupDisplayPanel: View {
         ]
     }
 
-    private var processItems: [InstallFlowItem] {
-        let hasInstaller = snapshot.installerMediaPath != nil || snapshot.discoveredInstallerMediaPath != nil
-        let prepared = snapshot.profileName != nil && snapshot.virtualDiskPath != nil
-        let installing = snapshot.state == .starting || snapshot.state == .running
-
-        return [
-            InstallFlowItem(
-                title: "Media",
-                detail: hasInstaller ? "ISO selected" : "Choose ISO",
-                symbolName: "opticaldisc",
-                state: hasInstaller ? .complete : .current
-            ),
-            InstallFlowItem(
-                title: "Disk",
-                detail: prepared ? "Disk ready" : "Prepare disk",
-                symbolName: "internaldrive",
-                state: prepared ? .complete : (hasInstaller ? .current : .pending)
-            ),
-            InstallFlowItem(
-                title: "Start",
-                detail: installing ? "Opening" : (snapshot.bootReady ? "Open setup" : "Waiting"),
-                symbolName: "play.rectangle",
-                state: installing ? .complete : (snapshot.bootReady ? .current : .pending)
-            ),
-            InstallFlowItem(
-                title: "Apps",
-                detail: "Agent later",
-                symbolName: "macwindow.on.rectangle",
-                state: snapshot.state == .running ? .current : .pending
-            )
-        ]
-    }
-
     private var metadataItems: [LauncherMetadataItem] {
         [
             LauncherMetadataItem(
@@ -1596,61 +1539,6 @@ private struct WindowsDisplayGrid: View {
             .stroke(.white.opacity(0.45), lineWidth: 1)
         }
         .allowsHitTesting(false)
-    }
-}
-
-private struct SetupTimelineStep: View {
-    var item: InstallFlowItem
-
-    var body: some View {
-        VStack(spacing: 9) {
-            ZStack {
-                Circle()
-                    .fill(statusTint.opacity(item.state == .pending ? 0.08 : 0.16))
-                Image(systemName: statusSymbol)
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundStyle(statusTint)
-            }
-            .frame(width: 30, height: 30)
-            .overlay {
-                Circle()
-                    .strokeBorder(statusTint.opacity(item.state == .current ? 0.34 : 0.14), lineWidth: 1)
-            }
-
-            VStack(spacing: 2) {
-                Text(item.title)
-                    .font(.caption.weight(.semibold))
-                    .lineLimit(1)
-                Text(item.detail)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-            }
-        }
-        .frame(maxWidth: 132)
-    }
-
-    private var statusSymbol: String {
-        switch item.state {
-        case .complete:
-            "checkmark"
-        case .current:
-            "arrow.right"
-        case .pending:
-            "circle"
-        }
-    }
-
-    private var statusTint: Color {
-        switch item.state {
-        case .complete:
-            .green
-        case .current:
-            .blue
-        case .pending:
-            .secondary
-        }
     }
 }
 

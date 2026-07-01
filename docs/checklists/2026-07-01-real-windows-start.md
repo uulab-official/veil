@@ -27,6 +27,7 @@ Goal: keep the main Veil experience pointed at real local Windows boot and conso
 - [x] Add a `windowsInstalled` runtime snapshot flag so the UI can switch to the one-click launcher only after setup.
 - [x] Make the post-install launcher fill the full primary panel with the blue Windows display surface.
 - [x] Simplify the pre-install assistant into one calm setup panel with a primary action, compact timeline, and ISO/Disk summaries.
+- [x] Remove the visible setup timeline from the default install screen so it behaves like a Parallels-style single decision assistant.
 - [x] Ensure the primary ready-state action calls the real VM start path.
 - [x] Open the VM Console through `VZVirtualMachineView` when a local display is available.
 - [x] Rename visible progress from automatic-install simulation to VM console handoff.
