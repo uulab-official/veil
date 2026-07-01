@@ -13,7 +13,9 @@ struct DetailView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
-                HeaderView(model: model, selectedSection: selectedSection)
+                if selectedSection != .vm {
+                    HeaderView(model: model, selectedSection: selectedSection)
+                }
 
                 switch selectedSection {
                 case .apps:

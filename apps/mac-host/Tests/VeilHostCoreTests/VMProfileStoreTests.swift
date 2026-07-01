@@ -602,6 +602,7 @@ struct VMProfileStoreTests {
 
         #expect(storedProfile.installerMediaPath == configuredInstallerURL.path)
         #expect(snapshot.installerMediaPath == configuredInstallerURL.path)
+        #expect(snapshot.discoveredInstallerMediaPath == nil)
     }
 
     @Test("prepare default VM preserves an existing configured disk")

@@ -9,18 +9,32 @@ struct VMRuntimeView: View {
     var showVMConsoleAction: () -> Void
     var consoleMessage: String?
     @State private var pathPicker: PathPicker?
+    @State private var showsAdvancedDetails = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             if let snapshot = model.snapshot {
-                ControlCenterHero(
+                SimpleRuntimePanel(
                     snapshot: snapshot,
                     statusText: model.statusText,
                     canStart: model.canStart,
                     canStop: model.canStop,
                     isLoading: model.phase == .loading,
-                    startAction: startVMAction,
-                    stopAction: stopVMAction,
+                    consoleMessage: consoleMessage,
+                    primaryAction: {
+                        if model.canStop {
+                            stopVMAction()
+                        } else if model.canStart {
+                            startVMAction()
+                        } else {
+                            Task {
+                                await model.prepareDefaultVM()
+                            }
+                        }
+                    },
+                    chooseISOAction: {
+                        pathPicker = .installerMedia
+                    },
                     consoleAction: showVMConsoleAction,
                     refreshAction: {
                         Task {
@@ -32,107 +46,44 @@ struct VMRuntimeView: View {
                     runtimeTint: runtimeTint(for: snapshot.state)
                 )
 
-                WindowsSetupDisplayPanel(
-                    snapshot: snapshot,
-                    consoleMessage: consoleMessage,
-                    isLoading: model.phase == .loading,
-                    canStart: model.canStart,
-                    canShowConsole: canShowConsole(for: snapshot),
-                    prepareAction: {
-                        Task {
-                            await model.prepareDefaultVM()
+                if model.errorMessage != nil || model.diagnosticsURL != nil {
+                    ShellPanel(spacing: 8) {
+                        if let errorMessage = model.errorMessage {
+                            Label(errorMessage, systemImage: "exclamationmark.triangle")
+                                .foregroundStyle(.orange)
+                                .font(.callout)
                         }
-                    },
-                    selectInstallerAction: {
-                        pathPicker = .installerMedia
-                    },
-                    startAction: startVMAction,
-                    consoleAction: showVMConsoleAction
-                )
 
-                QuickActionsPanel(
-                    snapshot: snapshot,
-                    canStart: model.canStart,
-                    canStop: model.canStop,
-                    isLoading: model.phase == .loading,
-                    startAction: startVMAction,
-                    stopAction: stopVMAction,
-                    consoleAction: showVMConsoleAction,
-                    refreshAction: {
-                        Task {
-                            await model.load()
+                        if let diagnosticsURL = model.diagnosticsURL {
+                            Label("Diagnostics saved to \(diagnosticsURL.path)", systemImage: "doc.text.magnifyingglass")
+                                .foregroundStyle(.secondary)
+                                .font(.callout)
+                                .textSelection(.enabled)
                         }
-                    },
-                    prepareAction: {
-                        Task {
-                            await model.prepareDefaultVM()
-                        }
-                    },
-                    createDiskAction: {
-                        Task {
-                            await model.createDefaultVirtualDisk()
-                        }
-                    },
-                    diagnosticsAction: {
-                        Task {
-                            await model.exportDiagnostics(to: diagnosticsDirectory())
-                        }
-                    }
-                )
-
-                ViewThatFits(in: .horizontal) {
-                    HStack(alignment: .top, spacing: 14) {
-                        setupColumn(snapshot)
-                            .frame(minWidth: 430)
-                        runtimeDetailColumn(snapshot)
-                            .frame(minWidth: 430)
-                    }
-
-                    VStack(alignment: .leading, spacing: 14) {
-                        setupColumn(snapshot)
-                        runtimeDetailColumn(snapshot)
                     }
                 }
 
-                ShellPanel {
-                    HStack(alignment: .firstTextBaseline, spacing: 10) {
-                        Image(systemName: model.canStart ? "checkmark.circle.fill" : "exclamationmark.triangle")
-                            .foregroundStyle(model.canStart ? .green : .orange)
-
-                        Text(model.canStart ? "Windows 11 Arm is ready for the next boot milestone." : "VM start is disabled until the Windows 11 Arm profile, installer media, and virtual disk are ready.")
-                            .foregroundStyle(.secondary)
-                            .font(.callout)
-
-                        Spacer()
-                    }
-
-                    if let errorMessage = model.errorMessage {
-                        Label(errorMessage, systemImage: "exclamationmark.triangle")
-                            .foregroundStyle(.orange)
-                            .font(.callout)
-                    }
-
-                    if let diagnosticsURL = model.diagnosticsURL {
-                        Label("Diagnostics saved to \(diagnosticsURL.path)", systemImage: "doc.text.magnifyingglass")
-                            .foregroundStyle(.secondary)
-                            .font(.callout)
-                            .textSelection(.enabled)
-                    }
-                }
-                .fileImporter(
-                    isPresented: Binding(
-                        get: { pathPicker != nil },
-                        set: { isPresented in
-                            if !isPresented {
-                                pathPicker = nil
-                            }
+                DisclosureGroup(isExpanded: $showsAdvancedDetails) {
+                    ViewThatFits(in: .horizontal) {
+                        HStack(alignment: .top, spacing: 14) {
+                            setupColumn(snapshot)
+                                .frame(minWidth: 430)
+                            runtimeDetailColumn(snapshot)
+                                .frame(minWidth: 430)
                         }
-                    ),
-                    allowedContentTypes: [.data],
-                    allowsMultipleSelection: false
-                ) { result in
-                    handlePathImport(result)
+
+                        VStack(alignment: .leading, spacing: 14) {
+                            setupColumn(snapshot)
+                            runtimeDetailColumn(snapshot)
+                        }
+                    }
+                    .padding(.top, 10)
+                } label: {
+                    Label("Details", systemImage: "slider.horizontal.3")
+                        .font(.headline)
                 }
+                .padding(.horizontal, 4)
+                .disabled(model.phase == .loading)
             } else if let errorMessage = model.errorMessage {
                 ShellPanel {
                     ContentUnavailableView(
@@ -152,6 +103,20 @@ struct VMRuntimeView: View {
                     .frame(maxWidth: .infinity, minHeight: 260)
                 }
             }
+        }
+        .fileImporter(
+            isPresented: Binding(
+                get: { pathPicker != nil },
+                set: { isPresented in
+                    if !isPresented {
+                        pathPicker = nil
+                    }
+                }
+            ),
+            allowedContentTypes: [.data],
+            allowsMultipleSelection: false
+        ) { result in
+            handlePathImport(result)
         }
     }
 
@@ -234,7 +199,6 @@ struct VMRuntimeView: View {
         }
         .frame(maxWidth: .infinity, alignment: .topLeading)
     }
-
     private func runtimeTitle(for state: VMRuntimeState) -> String {
         switch state {
         case .unsupported:
@@ -322,6 +286,252 @@ struct VMRuntimeView: View {
         let downloads = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first
             ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Downloads", isDirectory: true)
         return downloads.appendingPathComponent("Veil Diagnostics", isDirectory: true)
+    }
+}
+
+private struct SimpleRuntimePanel: View {
+    var snapshot: VMRuntimeSnapshot
+    var statusText: String
+    var canStart: Bool
+    var canStop: Bool
+    var isLoading: Bool
+    var consoleMessage: String?
+    var primaryAction: () -> Void
+    var chooseISOAction: () -> Void
+    var consoleAction: () -> Void
+    var refreshAction: () -> Void
+    var runtimeTitle: String
+    var runtimeSymbol: String
+    var runtimeTint: Color
+
+    var body: some View {
+        ShellPanel(spacing: 20) {
+            HStack(alignment: .center, spacing: 22) {
+                MachineBadge()
+
+                VStack(alignment: .leading, spacing: 14) {
+                    HStack(alignment: .firstTextBaseline, spacing: 12) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Windows 11 Arm")
+                                .font(.largeTitle.weight(.semibold))
+                                .lineLimit(1)
+                            Text(summaryText)
+                                .font(.callout)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(2)
+                        }
+
+                        Spacer()
+
+                        StatusPill(title: runtimeTitle, symbolName: runtimeSymbol, tint: runtimeTint)
+                    }
+
+                    setupStrip
+
+                    if let consoleMessage {
+                        Label(consoleMessage, systemImage: "info.circle")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .textSelection(.enabled)
+                            .lineLimit(2)
+                    }
+
+                    HStack(spacing: 9) {
+                        Button(action: primaryAction) {
+                            Label(primaryTitle, systemImage: primarySymbol)
+                                .frame(minWidth: 136)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(primaryDisabled)
+
+                        Button(action: chooseISOAction) {
+                            Label("Choose ISO", systemImage: "opticaldisc")
+                        }
+                        .disabled(isLoading)
+
+                        Link(destination: Self.microsoftArmDownloadURL) {
+                            Label("Get Windows", systemImage: "arrow.down.circle")
+                        }
+                        .buttonStyle(.bordered)
+
+                        Button(action: consoleAction) {
+                            Label("Console", systemImage: "display")
+                        }
+                        .disabled(!canShowConsole || isLoading)
+
+                        Button(action: refreshAction) {
+                            Label("Refresh", systemImage: "arrow.clockwise")
+                        }
+                        .disabled(isLoading)
+
+                        Spacer()
+                    }
+                }
+            }
+        }
+    }
+
+    private static let microsoftArmDownloadURL = URL(string: "https://www.microsoft.com/en-us/software-download/windows11arm64")!
+
+    private var setupStrip: some View {
+        HStack(spacing: 18) {
+            SetupStatusItem(
+                title: "Windows ISO",
+                detail: installerDetail,
+                symbolName: "opticaldisc",
+                state: installerState
+            )
+            SetupStatusItem(
+                title: "Virtual Disk",
+                detail: snapshot.virtualDiskPath.map { URL(fileURLWithPath: $0).lastPathComponent } ?? "Not created",
+                symbolName: "internaldrive",
+                state: snapshot.virtualDiskPath == nil ? .pending : .complete
+            )
+            SetupStatusItem(
+                title: "Ready",
+                detail: snapshot.bootReady ? "Can start" : "Needs setup",
+                symbolName: "checkmark.seal",
+                state: snapshot.bootReady ? .complete : .pending
+            )
+        }
+    }
+
+    private var installerDetail: String {
+        if let path = snapshot.installerMediaPath {
+            return URL(fileURLWithPath: path).lastPathComponent
+        }
+
+        if let path = snapshot.discoveredInstallerMediaPath {
+            return "\(URL(fileURLWithPath: path).lastPathComponent) found"
+        }
+
+        return "Not selected"
+    }
+
+    private var installerState: SetupStatusState {
+        if snapshot.installerMediaPath != nil {
+            return .complete
+        }
+
+        if snapshot.discoveredInstallerMediaPath != nil {
+            return .attention
+        }
+
+        return .pending
+    }
+
+    private var summaryText: String {
+        switch snapshot.state {
+        case .unsupported:
+            return "This Mac cannot run the current local Windows Arm runtime."
+        case .notConfigured:
+            return snapshot.discoveredInstallerMediaPath == nil
+                ? "Download or choose a Windows 11 Arm ISO, then prepare the VM."
+                : "Windows ISO found. Prepare the VM to attach it and create the disk."
+        case .stopped:
+            return snapshot.bootReady ? "Ready to start the Windows installer." : statusText
+        case .starting:
+            return "Starting the local VM. The console opens when the display attaches."
+        case .running:
+            return "Windows is running in the VM Console."
+        case .suspended:
+            return "The VM is suspended."
+        case .failed:
+            return "The last start attempt failed. Open details for diagnostics."
+        }
+    }
+
+    private var primaryTitle: String {
+        if canStop {
+            return "Stop"
+        }
+
+        if canStart {
+            return "Install Windows"
+        }
+
+        return snapshot.profileName == nil ? "Prepare VM" : "Continue Setup"
+    }
+
+    private var primarySymbol: String {
+        if canStop {
+            return "stop.fill"
+        }
+
+        if canStart {
+            return "play.fill"
+        }
+
+        return "wand.and.stars"
+    }
+
+    private var primaryDisabled: Bool {
+        isLoading || snapshot.state == .unsupported
+    }
+
+    private var canShowConsole: Bool {
+        snapshot.state == .running || snapshot.state == .starting
+    }
+}
+
+private struct MachineBadge: View {
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(.blue.gradient)
+            VStack(spacing: 10) {
+                Image(systemName: "display")
+                    .font(.system(size: 42, weight: .semibold))
+                Text("11")
+                    .font(.title.bold())
+            }
+            .foregroundStyle(.white)
+        }
+        .frame(width: 140, height: 140)
+    }
+}
+
+private enum SetupStatusState {
+    case complete
+    case attention
+    case pending
+}
+
+private struct SetupStatusItem: View {
+    var title: String
+    var detail: String
+    var symbolName: String
+    var state: SetupStatusState
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: symbolName)
+                .font(.body.weight(.semibold))
+                .foregroundStyle(tint)
+                .frame(width: 22)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.caption.weight(.semibold))
+                Text(detail)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+        }
+        .frame(minWidth: 150, alignment: .leading)
+    }
+
+    private var tint: Color {
+        switch state {
+        case .complete:
+            return .green
+        case .attention:
+            return .blue
+        case .pending:
+            return .secondary
+        }
     }
 }
 

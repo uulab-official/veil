@@ -795,7 +795,14 @@ public struct LocalVMRuntimeService: VMRuntimeService {
         )
         let activeProvider = runtimeProviders.first { $0.kind == .appleVirtualization }
         let profile = try await profileStore.load()
-        let discoveredInstallerMediaPath = discoverDefaultInstallerMedia()?.path
+        let discoveredInstallerMediaPath: String?
+        if let profile {
+            discoveredInstallerMediaPath = profile.installerMediaPath == nil
+                ? discoverDefaultInstallerMedia()?.path
+                : nil
+        } else {
+            discoveredInstallerMediaPath = discoverDefaultInstallerMedia()?.path
+        }
 
         if virtualizationAvailable, let profile {
             let installationSteps = Self.installationSteps(for: profile)
