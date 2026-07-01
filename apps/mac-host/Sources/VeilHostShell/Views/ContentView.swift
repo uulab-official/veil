@@ -13,9 +13,6 @@ struct ContentView: View {
     var body: some View {
         VStack(spacing: 0) {
             VeilWindowHeader(
-                statusTitle: runtimeTitle,
-                statusSymbol: runtimeSymbol,
-                statusTint: runtimeTint,
                 isRefreshing: isRefreshing,
                 refreshAction: refreshAll
             )
@@ -47,62 +44,9 @@ struct ContentView: View {
         }
     }
 
-    private var runtimeTitle: String {
-        switch vmModel.snapshot?.state {
-        case .running:
-            "Running"
-        case .starting:
-            "Starting"
-        case .stopped:
-            vmModel.snapshot?.bootReady == true ? "Ready" : "Prepare"
-        case .failed:
-            "Attention"
-        case .unsupported:
-            "Unsupported"
-        case .notConfigured:
-            "Setup"
-        case .suspended:
-            "Paused"
-        case nil:
-            "Loading"
-        }
-    }
-
-    private var runtimeSymbol: String {
-        switch vmModel.snapshot?.state {
-        case .running:
-            "display"
-        case .starting:
-            "arrow.triangle.2.circlepath"
-        case .stopped where vmModel.snapshot?.bootReady == true:
-            "checkmark.circle.fill"
-        case .failed, .unsupported:
-            "exclamationmark.triangle"
-        default:
-            "circle"
-        }
-    }
-
-    private var runtimeTint: Color {
-        switch vmModel.snapshot?.state {
-        case .running:
-            .green
-        case .starting:
-            .blue
-        case .stopped:
-            vmModel.snapshot?.bootReady == true ? .green : .orange
-        case .failed, .unsupported:
-            .orange
-        default:
-            .secondary
-        }
-    }
 }
 
 private struct VeilWindowHeader: View {
-    var statusTitle: String
-    var statusSymbol: String
-    var statusTint: Color
     var isRefreshing: Bool
     var refreshAction: () -> Void
 
@@ -120,9 +64,6 @@ private struct VeilWindowHeader: View {
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             }
-
-            StatusPill(title: statusTitle, symbolName: statusSymbol, tint: statusTint)
-                .padding(.leading, 4)
 
             Spacer()
 

@@ -55,10 +55,7 @@ struct VMRuntimeView: View {
                         showsAdvancedDetails.toggle()
                     },
                     isShowingDetails: showsAdvancedDetails,
-                    installSimulation: installSimulation,
-                    runtimeTitle: runtimeTitle(for: snapshot.state),
-                    runtimeSymbol: runtimeSymbol(for: snapshot.state),
-                    runtimeTint: runtimeTint(for: snapshot.state)
+                    installSimulation: installSimulation
                 )
             } else if let errorMessage = model.errorMessage {
                 ShellPanel {
@@ -201,57 +198,6 @@ struct VMRuntimeView: View {
         }
         .frame(maxWidth: .infinity, alignment: .topLeading)
     }
-    private func runtimeTitle(for state: VMRuntimeState) -> String {
-        switch state {
-        case .unsupported:
-            "Unsupported"
-        case .notConfigured:
-            "Not Configured"
-        case .stopped:
-            "Stopped"
-        case .starting:
-            "Starting"
-        case .running:
-            "Running"
-        case .suspended:
-            "Suspended"
-        case .failed:
-            "Failed"
-        }
-    }
-
-    private func runtimeSymbol(for state: VMRuntimeState) -> String {
-        switch state {
-        case .unsupported:
-            "xmark.octagon"
-        case .notConfigured:
-            "wrench.and.screwdriver"
-        case .stopped:
-            "stop.circle"
-        case .starting:
-            "arrow.triangle.2.circlepath"
-        case .running:
-            "play.circle.fill"
-        case .suspended:
-            "pause.circle"
-        case .failed:
-            "exclamationmark.triangle.fill"
-        }
-    }
-
-    private func runtimeTint(for state: VMRuntimeState) -> Color {
-        switch state {
-        case .unsupported, .failed:
-            .orange
-        case .notConfigured, .stopped, .suspended:
-            .secondary
-        case .starting:
-            .blue
-        case .running:
-            .green
-        }
-    }
-
     private func handlePathImport(_ result: Result<[URL], any Error>) {
         guard let picker = pathPicker else {
             return
@@ -476,7 +422,7 @@ private struct SimpleRuntimePanel: View {
                 state: snapshot.automaticInstallMediaPath == nil ? .pending : .complete
             )
             SetupStatusItem(
-                title: "Ready",
+                title: "Install",
                 detail: snapshot.bootReady ? "Can start" : "Needs setup",
                 symbolName: "checkmark.seal",
                 state: snapshot.bootReady ? .complete : .pending
@@ -529,7 +475,7 @@ private struct SimpleRuntimePanel: View {
                 return "Console handoff finished. Start again if the Windows setup window did not appear."
             }
 
-            return snapshot.bootReady ? "Ready to open the local QEMU Windows console." : statusText
+            return snapshot.bootReady ? "Install Windows to open the local console." : statusText
         case .starting:
             return "Starting QEMU/HVF. The Windows display opens in a separate console."
         case .running:
@@ -922,7 +868,7 @@ private struct ControlCenterHero: View {
                     ) {
                         DashboardStat(title: "Architecture", value: snapshot.architecture, symbolName: "cpu", tint: .blue)
                         DashboardStat(title: "Provider", value: providerName(for: snapshot), symbolName: "bolt.horizontal", tint: snapshot.virtualizationAvailable ? .green : .orange)
-                        DashboardStat(title: "Boot Ready", value: snapshot.bootReady ? "Ready" : "Blocked", symbolName: snapshot.bootReady ? "checkmark.seal" : "lock", tint: snapshot.bootReady ? .green : .orange)
+                        DashboardStat(title: "Install", value: snapshot.bootReady ? "Can Start" : "Blocked", symbolName: snapshot.bootReady ? "checkmark.seal" : "lock", tint: snapshot.bootReady ? .green : .orange)
                         DashboardStat(title: "Profile", value: snapshot.profileName == nil ? "Missing" : "Configured", symbolName: "person.crop.rectangle.stack", tint: snapshot.profileName == nil ? .orange : .green)
                         DashboardStat(title: "Installer", value: installerStatusTitle, symbolName: "opticaldisc", tint: installerStatusTint)
                         DashboardStat(title: "Disk", value: snapshot.virtualDiskPath == nil ? "Missing" : "Selected", symbolName: "externaldrive", tint: snapshot.virtualDiskPath == nil ? .orange : .green)
@@ -1022,42 +968,16 @@ private struct WindowsSetupDisplayPanel: View {
     var detailsAction: () -> Void
     var isShowingDetails: Bool
     var installSimulation: InstallSimulationState
-    var runtimeTitle: String
-    var runtimeSymbol: String
-    var runtimeTint: Color
 
     var body: some View {
         ShellPanel(spacing: 0) {
             VStack(spacing: 0) {
-                launcherHeader
-                Divider()
                 launcherStage
                 Divider()
                 launcherFooter
             }
         }
         .padding(0)
-    }
-
-    private var launcherHeader: some View {
-        HStack(spacing: 14) {
-            WindowsLogoMark(size: 42)
-
-            VStack(alignment: .leading, spacing: 3) {
-                Text("Windows 11")
-                    .font(.title2.weight(.semibold))
-                Text(headerSubtitle)
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
-
-            Spacer(minLength: 16)
-
-            StatusPill(title: phaseTitle, symbolName: phaseSymbol, tint: phaseTint)
-        }
-        .padding(.horizontal, 22)
-        .padding(.vertical, 16)
     }
 
     private var launcherStage: some View {
@@ -1091,9 +1011,6 @@ private struct WindowsSetupDisplayPanel: View {
                     }
 
                     Spacer()
-
-                    StatusPill(title: runtimeTitle, symbolName: runtimeSymbol, tint: .white)
-                        .background(.black.opacity(0.12), in: Capsule())
                 }
 
                 Spacer(minLength: 8)
@@ -1151,9 +1068,9 @@ private struct WindowsSetupDisplayPanel: View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("Setup Process")
+                    Text("Windows Setup")
                         .font(.headline.weight(.semibold))
-                    Text("Four steps to app mode")
+                    Text("Install once, then open Windows apps")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -1264,7 +1181,7 @@ private struct WindowsSetupDisplayPanel: View {
             installerDetail = selectedInstallerName
             installerState = .complete
         } else if let discoveredInstallerName {
-            installerDetail = "Ready to attach \(discoveredInstallerName)"
+            installerDetail = "Use \(discoveredInstallerName)"
             installerState = .current
         } else {
             installerDetail = "Select the Windows 11 Arm ISO"
@@ -1290,7 +1207,7 @@ private struct WindowsSetupDisplayPanel: View {
                 title: "Installer",
                 detail: canShowConsole
                     ? "VM console is open"
-                    : (canStart ? "Ready to start Windows Setup" : "Waiting for preparation"),
+                    : (canStart ? "Windows Setup can start" : "Waiting for preparation"),
                 symbolName: "display",
                 state: canShowConsole ? .complete : (canStart ? .current : .pending)
             ),
@@ -1323,7 +1240,7 @@ private struct WindowsSetupDisplayPanel: View {
             ),
             InstallFlowItem(
                 title: "Install",
-                detail: installing ? "Windows setup is running" : (snapshot.bootReady ? "Ready to boot setup" : "Waiting for preparation"),
+                detail: installing ? "Windows setup is running" : (snapshot.bootReady ? "Windows setup can start" : "Waiting for preparation"),
                 symbolName: "play.rectangle",
                 state: installing ? .complete : (snapshot.bootReady ? .current : .pending)
             ),
@@ -1355,42 +1272,27 @@ private struct WindowsSetupDisplayPanel: View {
                 tint: snapshot.virtualDiskPath == nil ? .orange : .green
             ),
             LauncherMetadataItem(
-                title: "Runtime",
-                value: snapshot.runtimeProvider?.displayName ?? "Local",
-                symbolName: "bolt.horizontal",
-                tint: snapshot.runtimeProvider == nil ? .secondary : .blue
+                title: "Install",
+                value: snapshot.state == .running ? "In progress" : "Windows setup",
+                symbolName: "play.rectangle",
+                tint: snapshot.state == .running ? .green : .blue
             ),
             LauncherMetadataItem(
-                title: "Mode",
-                value: snapshot.state == .running ? "Console" : "App Ready",
+                title: "Apps",
+                value: "After setup",
                 symbolName: "macwindow",
-                tint: snapshot.state == .running ? .green : .secondary
+                tint: .secondary
             )
         ]
     }
 
-    private var headerSubtitle: String {
-        switch snapshot.state {
-        case .running:
-            "Windows is running. App-window mode comes after the guest agent."
-        case .starting:
-            "Opening the local Windows display."
-        case .stopped where snapshot.bootReady:
-            "Ready to install Windows on this Mac."
-        case .failed:
-            "Startup needs attention."
-        default:
-            "A local Windows App Runtime for macOS."
-        }
-    }
-
     private var machineTitle: String {
-        snapshot.profileName ?? "Windows 11"
+        "Windows 11"
     }
 
     private var machineSubtitle: String {
         if snapshot.bootReady {
-            return "QEMU/HVF local runtime configured"
+            return "Windows can be installed now"
         }
 
         if let discoveredInstallerName {
@@ -1417,25 +1319,6 @@ private struct WindowsSetupDisplayPanel: View {
         }
 
         return URL(fileURLWithPath: path).lastPathComponent
-    }
-
-    private var phaseTitle: String {
-        switch snapshot.state {
-        case .unsupported:
-            return "Unsupported"
-        case .notConfigured:
-            return "Setup Needed"
-        case .stopped:
-            return snapshot.bootReady ? "Ready" : "Prepare"
-        case .starting:
-            return "Starting"
-        case .running:
-            return "Running"
-        case .suspended:
-            return "Paused"
-        case .failed:
-            return "Needs Attention"
-        }
     }
 
     private var phaseDetail: String {
@@ -1510,21 +1393,6 @@ private struct WindowsSetupDisplayPanel: View {
 
         let completed = flowItems.filter { $0.state == .complete }.count
         return Double(completed) / Double(flowItems.count)
-    }
-
-    private var phaseSymbol: String {
-        switch snapshot.state {
-        case .running:
-            "display"
-        case .starting:
-            "arrow.triangle.2.circlepath"
-        case .stopped where snapshot.bootReady:
-            "checkmark.circle.fill"
-        case .failed, .unsupported:
-            "exclamationmark.triangle"
-        default:
-            "clock"
-        }
     }
 
     private var phaseTint: Color {

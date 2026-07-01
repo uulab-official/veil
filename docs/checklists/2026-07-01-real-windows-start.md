@@ -13,6 +13,7 @@ Goal: keep the main Veil experience pointed at real local Windows boot and conso
 - [x] Add a macOS menu bar item so Veil can be reopened and controlled from the top system bar.
 - [x] Model the visible setup process as Get Windows, Prepare, Install, and Connect instead of a developer checklist.
 - [x] Keep ISO, disk, runtime provider, and guest-agent details visible only as compact status metadata on the first screen.
+- [x] Remove developer-style status badges from the first screen so the VM card reads like a product launcher.
 - [x] Remove the pre-install Windows Apps bridge panel from the first runtime screen.
 - [x] Replace the internal runtime card with a production-style Windows Setup Assistant surface.
 - [x] Keep advanced setup, preflight, provider, resource, and device information behind the Details toggle.
