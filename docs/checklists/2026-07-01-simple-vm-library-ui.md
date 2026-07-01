@@ -10,6 +10,10 @@ Goal: move the Control Center away from a developer dashboard and toward a Paral
 - [x] Kept primary actions visible: Install Windows, Choose ISO, Get Windows, Console, Refresh.
 - [x] Preserved installer, virtual disk, and boot-ready state in a compact status strip.
 - [x] Avoided scanning Downloads when a configured installer is already selected, preventing unnecessary macOS file-access prompts.
+- [x] Reduced the sidebar to the current Windows 11 Arm VM instead of exposing agent/debug sections.
+- [x] Removed the VM section toolbar title so the window reads more like a VM library.
+- [x] Hid ISO download/choose actions once the VM is ready to start setup.
+- [x] Renamed the primary action to Start Windows Setup to avoid implying Windows is already installed.
 
 ## Still Open
 

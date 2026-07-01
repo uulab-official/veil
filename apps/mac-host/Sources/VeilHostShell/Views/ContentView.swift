@@ -39,11 +39,13 @@ struct ContentView: View {
         }
         .toolbar {
             ToolbarItem(placement: .principal) {
-                TopAppBarTitle(
-                    section: selectedSection,
-                    runtimeState: vmModel.snapshot?.state,
-                    isRefreshing: isRefreshing
-                )
+                if selectedSection != .vm {
+                    TopAppBarTitle(
+                        section: selectedSection,
+                        runtimeState: vmModel.snapshot?.state,
+                        isRefreshing: isRefreshing
+                    )
+                }
             }
 
             ToolbarItemGroup {

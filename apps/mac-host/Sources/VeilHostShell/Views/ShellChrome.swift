@@ -44,7 +44,7 @@ enum ShellSection: String, CaseIterable, Hashable {
     case launch
 
     static var sidebarOrder: [ShellSection] {
-        [.vm, .apps, .agent, .launch]
+        [.vm]
     }
 
     var title: String {
@@ -54,7 +54,7 @@ enum ShellSection: String, CaseIterable, Hashable {
         case .agent:
             "Agent"
         case .vm:
-            "Control Center"
+            "Windows 11 Arm"
         case .launch:
             "Last Launch"
         }
@@ -67,7 +67,7 @@ enum ShellSection: String, CaseIterable, Hashable {
         case .agent:
             "Connection, session, and protocol capabilities"
         case .vm:
-            "Windows 11 Arm machine, setup, and Mac integration"
+            "Virtual machine"
         case .launch:
             "Most recent host-to-agent launch result"
         }
@@ -80,7 +80,7 @@ enum ShellSection: String, CaseIterable, Hashable {
         case .agent:
             "Protocol status"
         case .vm:
-            "Boot and install"
+            "Stopped"
         case .launch:
             "Recent result"
         }
@@ -93,7 +93,7 @@ enum ShellSection: String, CaseIterable, Hashable {
         case .agent:
             "network"
         case .vm:
-            "rectangle.stack"
+            "display"
         case .launch:
             "macwindow.on.rectangle"
         }

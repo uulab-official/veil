@@ -41,6 +41,9 @@ struct VMRuntimeView: View {
                             await model.load()
                         }
                     },
+                    detailsAction: {
+                        showsAdvancedDetails.toggle()
+                    },
                     runtimeTitle: runtimeTitle(for: snapshot.state),
                     runtimeSymbol: runtimeSymbol(for: snapshot.state),
                     runtimeTint: runtimeTint(for: snapshot.state)
@@ -63,7 +66,7 @@ struct VMRuntimeView: View {
                     }
                 }
 
-                DisclosureGroup(isExpanded: $showsAdvancedDetails) {
+                if showsAdvancedDetails {
                     ViewThatFits(in: .horizontal) {
                         HStack(alignment: .top, spacing: 14) {
                             setupColumn(snapshot)
@@ -77,13 +80,8 @@ struct VMRuntimeView: View {
                             runtimeDetailColumn(snapshot)
                         }
                     }
-                    .padding(.top, 10)
-                } label: {
-                    Label("Details", systemImage: "slider.horizontal.3")
-                        .font(.headline)
+                    .transition(.opacity)
                 }
-                .padding(.horizontal, 4)
-                .disabled(model.phase == .loading)
             } else if let errorMessage = model.errorMessage {
                 ShellPanel {
                     ContentUnavailableView(
@@ -300,6 +298,7 @@ private struct SimpleRuntimePanel: View {
     var chooseISOAction: () -> Void
     var consoleAction: () -> Void
     var refreshAction: () -> Void
+    var detailsAction: () -> Void
     var runtimeTitle: String
     var runtimeSymbol: String
     var runtimeTint: Color
@@ -339,30 +338,43 @@ private struct SimpleRuntimePanel: View {
                     HStack(spacing: 9) {
                         Button(action: primaryAction) {
                             Label(primaryTitle, systemImage: primarySymbol)
-                                .frame(minWidth: 136)
+                                .frame(minWidth: 176)
                         }
                         .buttonStyle(.borderedProminent)
                         .disabled(primaryDisabled)
 
-                        Button(action: chooseISOAction) {
-                            Label("Choose ISO", systemImage: "opticaldisc")
-                        }
-                        .disabled(isLoading)
+                        if !canStart {
+                            Button(action: chooseISOAction) {
+                                Label("Choose ISO", systemImage: "opticaldisc")
+                            }
+                            .disabled(isLoading)
 
-                        Link(destination: Self.microsoftArmDownloadURL) {
-                            Label("Get Windows", systemImage: "arrow.down.circle")
+                            Link(destination: Self.microsoftArmDownloadURL) {
+                                Label("Get Windows", systemImage: "arrow.down.circle")
+                            }
+                            .buttonStyle(.bordered)
                         }
-                        .buttonStyle(.bordered)
 
-                        Button(action: consoleAction) {
-                            Label("Console", systemImage: "display")
+                        if canShowConsole {
+                            Button(action: consoleAction) {
+                                Label("Console", systemImage: "display")
+                            }
+                            .disabled(isLoading)
                         }
-                        .disabled(!canShowConsole || isLoading)
 
                         Button(action: refreshAction) {
                             Label("Refresh", systemImage: "arrow.clockwise")
+                                .labelStyle(.iconOnly)
                         }
                         .disabled(isLoading)
+                        .help("Refresh")
+
+                        Button(action: detailsAction) {
+                            Label("Settings", systemImage: "gearshape")
+                                .labelStyle(.iconOnly)
+                        }
+                        .disabled(isLoading)
+                        .help("Details")
 
                         Spacer()
                     }
@@ -429,11 +441,11 @@ private struct SimpleRuntimePanel: View {
                 ? "Download or choose a Windows 11 Arm ISO, then prepare the VM."
                 : "Windows ISO found. Prepare the VM to attach it and create the disk."
         case .stopped:
-            return snapshot.bootReady ? "Ready to start the Windows installer." : statusText
+            return snapshot.bootReady ? "Windows is not installed yet. Start setup to open the installer." : statusText
         case .starting:
-            return "Starting the local VM. The console opens when the display attaches."
+            return "Starting Windows Setup. The installer opens in the VM console."
         case .running:
-            return "Windows is running in the VM Console."
+            return "Windows Setup is running in the VM console."
         case .suspended:
             return "The VM is suspended."
         case .failed:
@@ -447,7 +459,7 @@ private struct SimpleRuntimePanel: View {
         }
 
         if canStart {
-            return "Install Windows"
+            return "Start Windows Setup"
         }
 
         return snapshot.profileName == nil ? "Prepare VM" : "Continue Setup"
