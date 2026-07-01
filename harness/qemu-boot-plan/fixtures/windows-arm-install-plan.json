@@ -31,7 +31,7 @@
     "-device",
     "virtio-blk-pci,drive=system",
     "-netdev",
-    "user,id=net0",
+    "user,id=net0,hostfwd=tcp::18444-:18444",
     "-device",
     "virtio-net-pci,netdev=net0",
     "-display",

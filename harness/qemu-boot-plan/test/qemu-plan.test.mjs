@@ -50,4 +50,15 @@ describe("QEMU boot plan harness", () => {
 
     assert.throws(() => validateQEMUPlan(plan), /-bios/);
   });
+
+  it("rejects plans without guest agent port forwarding", () => {
+    const plan = {
+      ...fixture,
+      arguments: fixture.arguments.map((argument) =>
+        argument === "user,id=net0,hostfwd=tcp::18444-:18444" ? "user,id=net0" : argument
+      )
+    };
+
+    assert.throws(() => validateQEMUPlan(plan), /hostfwd=tcp::18444-:18444/);
+  });
 });

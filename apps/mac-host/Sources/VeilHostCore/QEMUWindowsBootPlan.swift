@@ -55,6 +55,9 @@ public struct QEMUWindowsBootPlan: Codable, Equatable, Sendable {
 }
 
 public struct QEMUWindowsBootPlanner: Sendable {
+    public static let guestAgentHostPort = 18_444
+    public static let guestAgentGuestPort = 18_444
+
     private let executablePath: String
     private let isExecutableAvailable: Bool
     private let firmwarePath: String?
@@ -110,6 +113,8 @@ public struct QEMUWindowsBootPlanner: Sendable {
             arguments.append(contentsOf: ["-bios", firmwarePath])
         }
 
+        let guestAgentForward = "hostfwd=tcp::\(Self.guestAgentHostPort)-:\(Self.guestAgentGuestPort)"
+
         arguments.append(contentsOf: [
             "-boot", "order=d",
             "-cpu", "host",
@@ -122,7 +127,7 @@ public struct QEMUWindowsBootPlanner: Sendable {
             "-device", "usb-storage,drive=autounattend",
             "-drive", "if=none,id=system,format=raw,file=\(virtualDiskPath)",
             "-device", "virtio-blk-pci,drive=system",
-            "-netdev", "user,id=net0",
+            "-netdev", "user,id=net0,\(guestAgentForward)",
             "-device", "virtio-net-pci,netdev=net0",
             "-display", "cocoa",
             "-device", "ramfb",

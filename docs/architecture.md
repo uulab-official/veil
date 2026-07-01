@@ -49,7 +49,7 @@ Current provider status:
 
 The provider probe is intentionally read-only. `veil-vmctl providers --json` reports candidate providers for diagnostics and harness validation, but it must not start, stop, create, or mutate a VM.
 
-The QEMU boot plan remains inspectable before execution. `veil-vmctl qemu-plan --json` converts the stored Windows Arm VM profile into a dry-run QEMU/HVF command plan and reports whether `qemu-system-aarch64` is locally available. `veil-vmctl qemu-start` is the guarded local execution spike for that plan: it checks QEMU doctor readiness first, launches the local Cocoa QEMU display, and writes process logs under Downloads diagnostics. The main macOS app now uses the same QEMU/HVF boot boundary when QEMU is ready, so the primary Start button opens the real local console instead of a separate simulation surface.
+The QEMU boot plan remains inspectable before execution. `veil-vmctl qemu-plan --json` converts the stored Windows Arm VM profile into a dry-run QEMU/HVF command plan and reports whether `qemu-system-aarch64` is locally available. `veil-vmctl qemu-start` is the guarded local execution spike for that plan: it checks QEMU doctor readiness first, launches the local Cocoa QEMU display, forwards the Windows guest agent port to `127.0.0.1:18444`, and writes process logs under Downloads diagnostics. The main macOS app now uses the same QEMU/HVF boot boundary when QEMU is ready, so the primary Start button opens the real local console instead of a separate simulation surface.
 
 ## Windows Arm Install Flow
 
@@ -108,7 +108,7 @@ The protocol is a product boundary. It should be easy to test without booting a 
 MVP transport:
 
 ```text
-Host connects to ws://guest-ip:18444
+Host connects to ws://127.0.0.1:18444 through QEMU `hostfwd=tcp::18444-:18444`
 JSON messages
 requestId for request/response correlation
 windowId represented as hwnd:<hex>

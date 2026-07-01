@@ -44,10 +44,14 @@ Goal: keep the main Veil experience pointed at real local Windows boot and conso
 - [x] Identify the Windows ISO boot timeout cause: Windows installer boot waits for a key press and falls back when no key is sent.
 - [x] Add a short QEMU monitor socket and automatically send boot key input after VM start.
 - [x] Verify the app-launched QEMU console reaches the Korean Windows 11 Setup product-key screen.
+- [x] Check the current local VM state: QEMU is running, but the 128 GB Windows disk only has 16 KiB allocated, so Windows is not installed yet.
+- [x] Check the current host integration state: no Windows guest agent is listening on `127.0.0.1:18444`.
+- [x] Add QEMU `hostfwd=tcp::18444-:18444` so a future Windows guest agent can connect back to the macOS host through localhost.
 
 ## Next
 
 - [ ] Improve `Autounattend.xml` so Windows Setup skips the product-key page without bundling a key.
+- [ ] Restart the currently running QEMU VM so the new guest-agent port forwarding takes effect.
 - [ ] Replace the static setup preview with a real VM screenshot once QEMU reaches Windows Setup.
 - [ ] Add a QEMU screenshot/screencapture harness so boot failures can be compared visually, not only through serial text.
 - [ ] Add recovery copy for common boot failures: bad ISO attachment, unsupported device model, EFI state, and disk format issues.

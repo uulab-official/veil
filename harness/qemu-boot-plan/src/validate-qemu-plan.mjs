@@ -7,7 +7,7 @@ const REQUIRED_SEQUENCES = [
   ["-bios"],
   ["-boot", "order=d"],
   ["-cpu", "host"],
-  ["-netdev", "user,id=net0"],
+  ["-netdev", "user,id=net0,hostfwd=tcp::18444-:18444"],
   ["-device", "virtio-net-pci,netdev=net0"],
   ["-display", "cocoa"]
 ];

@@ -102,7 +102,7 @@ Guide user through Windows setup when needed
 ↓
 Install Veil guest agent inside Windows
 ↓
-Reconnect host to agent
+Reconnect host to agent through QEMU `hostfwd` at ws://127.0.0.1:18444
 ↓
 Enable app launcher and coherence windows
 ```
