@@ -981,82 +981,96 @@ private struct WindowsSetupDisplayPanel: View {
     }
 
     private var launcherStage: some View {
-        HStack(alignment: .top, spacing: 18) {
-            machineHero
-                .frame(minWidth: 430, idealWidth: 500, maxWidth: .infinity)
+        VStack(spacing: 14) {
+            machineDisplay
+                .frame(maxWidth: .infinity)
+                .aspectRatio(16 / 7.7, contentMode: .fit)
+                .frame(minHeight: 330)
 
-            processRail
-                .frame(width: 300)
+            processStrip
         }
         .padding(22)
-        .frame(maxWidth: .infinity, minHeight: 310, alignment: .center)
+        .frame(maxWidth: .infinity, minHeight: 394, alignment: .center)
     }
 
-    private var machineHero: some View {
-        ZStack(alignment: .bottomLeading) {
+    private var machineDisplay: some View {
+        ZStack {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .fill(machineHeroGradient)
 
-            VStack(alignment: .leading, spacing: 18) {
-                HStack(alignment: .top) {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text(machineTitle)
-                            .font(.system(size: 28, weight: .semibold))
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.8)
-                        Text(machineSubtitle)
-                            .font(.callout)
-                            .foregroundStyle(.white.opacity(0.76))
-                            .lineLimit(2)
-                    }
+            WindowsDisplayGrid()
+                .opacity(0.16)
 
-                    Spacer()
-                }
-
+            VStack(spacing: 16) {
                 Spacer(minLength: 8)
 
-                HStack(alignment: .center, spacing: 18) {
-                    Button(action: primaryAction) {
-                        Image(systemName: primarySymbol)
-                            .font(.system(size: 28, weight: .bold))
-                            .foregroundStyle(.white)
-                            .frame(width: 72, height: 72)
-                            .background(primaryDisabled ? Color.white.opacity(0.22) : Color.accentColor, in: Circle())
-                            .overlay {
-                                Circle()
-                                    .strokeBorder(.white.opacity(primaryDisabled ? 0.16 : 0.36), lineWidth: 1)
-                            }
-                            .shadow(color: .black.opacity(0.24), radius: 18, y: 10)
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(primaryDisabled)
-                    .help(primaryTitle)
+                WindowsLogoMark(size: 82)
+                    .shadow(color: .black.opacity(0.18), radius: 16, y: 8)
 
-                    VStack(alignment: .leading, spacing: 5) {
-                        Text(primaryTitle)
-                            .font(.title3.weight(.semibold))
-                        Text(primaryHint)
-                            .font(.callout)
-                            .foregroundStyle(.white.opacity(0.78))
-                            .lineLimit(2)
-                    }
+                VStack(spacing: 4) {
+                    Text(machineTitle)
+                        .font(.system(size: 34, weight: .semibold))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                    Text(machineSubtitle)
+                        .font(.callout)
+                        .foregroundStyle(.white.opacity(0.74))
+                        .lineLimit(1)
                 }
+
+                Button(action: primaryAction) {
+                    ZStack {
+                        Circle()
+                            .fill(primaryDisabled ? Color.white.opacity(0.20) : Color.accentColor)
+                        Image(systemName: primarySymbol)
+                            .font(.system(size: 30, weight: .bold))
+                            .foregroundStyle(.white)
+                    }
+                    .frame(width: 74, height: 74)
+                    .overlay {
+                        Circle()
+                            .strokeBorder(.white.opacity(primaryDisabled ? 0.12 : 0.34), lineWidth: 1)
+                    }
+                    .shadow(color: .black.opacity(0.30), radius: 18, y: 10)
+                }
+                .buttonStyle(.plain)
+                .disabled(primaryDisabled)
+                .help(primaryTitle)
+
+                Text(primaryTitle)
+                    .font(.headline.weight(.semibold))
 
                 if installSimulation.phase != .idle {
                     AssistantProgressStrip(simulation: installSimulation)
+                        .frame(maxWidth: 420)
                         .foregroundStyle(.primary)
                 } else {
                     ProgressView(value: progressFraction)
                         .tint(progressTint)
-                        .frame(maxWidth: 360)
+                        .frame(maxWidth: 420)
                 }
+
+                Spacer(minLength: 8)
             }
             .foregroundStyle(.white)
             .padding(24)
-        }
-        .overlay(alignment: .topTrailing) {
-            WindowsGlassMark()
-                .padding(24)
+
+            VStack {
+                HStack {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(displayEyebrow)
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.white.opacity(0.62))
+                        Text(displayStatus)
+                            .font(.caption)
+                            .foregroundStyle(.white.opacity(0.52))
+                    }
+
+                    Spacer()
+                }
+                Spacer()
+            }
+            .padding(24)
         }
         .overlay {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
@@ -1064,46 +1078,99 @@ private struct WindowsSetupDisplayPanel: View {
         }
     }
 
-    private var processRail: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("Windows Setup")
-                        .font(.headline.weight(.semibold))
-                    Text("Install once, then open Windows apps")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-
-                Spacer()
-
-                Text("\(completedProcessCount)/\(processItems.count)")
-                    .font(.caption.monospacedDigit().weight(.semibold))
-                    .foregroundStyle(.secondary)
+    private var processStrip: some View {
+        HStack(spacing: 8) {
+            ForEach(processItems) { item in
+                CompactLauncherStep(item: item)
             }
-
-            VStack(spacing: 8) {
-                ForEach(processItems) { item in
-                    LauncherProcessRow(item: item)
-                }
-            }
-
-            Spacer(minLength: 0)
 
             if let errorMessage {
                 CompactNotice(text: errorMessage, symbolName: "exclamationmark.triangle", tint: .orange)
+                    .frame(maxWidth: 240)
             } else if let consoleMessage {
                 CompactNotice(text: consoleMessage, symbolName: "info.circle", tint: .secondary)
-            } else {
-                CompactNotice(text: phaseDetail, symbolName: "sparkles", tint: .secondary)
+                    .frame(maxWidth: 240)
             }
         }
-        .padding(16)
-        .frame(maxHeight: .infinity, alignment: .topLeading)
-        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .strokeBorder(.quaternary, lineWidth: 1)
+    }
+
+    private var displayEyebrow: String {
+        switch snapshot.state {
+        case .running:
+            "WINDOWS DISPLAY"
+        case .starting:
+            "OPENING WINDOWS"
+        default:
+            "WINDOWS 11"
+        }
+    }
+
+    private var displayStatus: String {
+        switch snapshot.state {
+        case .running:
+            "Open the console to continue."
+        case .starting:
+            "Starting the local display."
+        case .failed:
+            "Start failed. Open details."
+        default:
+            primaryHint
+        }
+    }
+
+    private struct CompactLauncherStep: View {
+        var item: InstallFlowItem
+
+        var body: some View {
+            HStack(spacing: 8) {
+                Image(systemName: statusSymbol)
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(statusTint)
+                    .frame(width: 20, height: 20)
+                    .background(statusTint.opacity(0.13), in: Circle())
+
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(item.title)
+                        .font(.caption.weight(.semibold))
+                        .lineLimit(1)
+                    Text(item.detail)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+
+                Spacer()
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .strokeBorder(statusTint.opacity(item.state == .current ? 0.28 : 0.10), lineWidth: 1)
+            }
+        }
+
+        private var statusSymbol: String {
+            switch item.state {
+            case .complete:
+                "checkmark"
+            case .current:
+                "arrow.right"
+            case .pending:
+                "circle"
+            }
+        }
+
+        private var statusTint: Color {
+            switch item.state {
+            case .complete:
+                .green
+            case .current:
+                .blue
+            case .pending:
+                .secondary
+            }
         }
     }
 
@@ -1227,34 +1294,30 @@ private struct WindowsSetupDisplayPanel: View {
 
         return [
             InstallFlowItem(
-                title: "Get Windows",
+                title: "Media",
                 detail: hasInstaller ? "Windows 11 Arm media found" : "Choose a Windows 11 Arm ISO",
                 symbolName: "opticaldisc",
                 state: hasInstaller ? .complete : .current
             ),
             InstallFlowItem(
-                title: "Prepare",
+                title: "Disk",
                 detail: prepared ? "Profile and disk are ready" : "Create the local VM profile",
                 symbolName: "internaldrive",
                 state: prepared ? .complete : (hasInstaller ? .current : .pending)
             ),
             InstallFlowItem(
-                title: "Install",
-                detail: installing ? "Windows setup is running" : (snapshot.bootReady ? "Windows setup can start" : "Waiting for preparation"),
+                title: "Start",
+                detail: installing ? "Windows display is opening" : (snapshot.bootReady ? "Press play to open Windows" : "Waiting for preparation"),
                 symbolName: "play.rectangle",
                 state: installing ? .complete : (snapshot.bootReady ? .current : .pending)
             ),
             InstallFlowItem(
-                title: "Connect",
+                title: "Apps",
                 detail: "Install the Veil guest agent after Windows",
                 symbolName: "macwindow.on.rectangle",
                 state: snapshot.state == .running ? .current : .pending
             )
         ]
-    }
-
-    private var completedProcessCount: Int {
-        processItems.filter { $0.state == .complete }.count
     }
 
     private var metadataItems: [LauncherMetadataItem] {
@@ -1272,8 +1335,8 @@ private struct WindowsSetupDisplayPanel: View {
                 tint: snapshot.virtualDiskPath == nil ? .orange : .green
             ),
             LauncherMetadataItem(
-                title: "Install",
-                value: snapshot.state == .running ? "In progress" : "Windows setup",
+                title: "Windows",
+                value: snapshot.state == .running ? "Running" : "Start",
                 symbolName: "play.rectangle",
                 tint: snapshot.state == .running ? .green : .blue
             ),
@@ -1292,7 +1355,7 @@ private struct WindowsSetupDisplayPanel: View {
 
     private var machineSubtitle: String {
         if snapshot.bootReady {
-            return "Windows can be installed now"
+            return "Press play to open the Windows display"
         }
 
         if let discoveredInstallerName {
@@ -1321,38 +1384,13 @@ private struct WindowsSetupDisplayPanel: View {
         return URL(fileURLWithPath: path).lastPathComponent
     }
 
-    private var phaseDetail: String {
-        switch snapshot.state {
-        case .unsupported:
-            return "This Mac cannot run the current local Windows Arm runtime path."
-        case .notConfigured:
-            return discoveredInstallerName == nil
-                ? "Choose a Windows 11 Arm ISO or place it in Downloads, then let Veil prepare the local VM."
-                : "Veil found a Windows ISO. Auto Prepare will create the VM profile, disk, shared folder, and answer file."
-        case .stopped:
-            if snapshot.bootReady {
-                return "Everything required is attached. Install Windows opens the local VM console automatically."
-            }
-
-            return statusText
-        case .starting:
-            return "Veil is starting QEMU/HVF and opening the Windows display."
-        case .running:
-            return "Use the separate VM console for Windows setup. If UEFI Shell appears, open Details for diagnostics."
-        case .suspended:
-            return "The VM is suspended. Resume support will be hardened after boot reliability."
-        case .failed:
-            return "Windows did not start cleanly. Details below keep the technical diagnostics out of the main flow."
-        }
-    }
-
     private var primaryTitle: String {
         if canStop {
             return "Stop Windows"
         }
 
         if canStart {
-            return installSimulation.phase == .running ? "Starting..." : "Install Windows"
+            return installSimulation.phase == .running ? "Starting..." : "Start Windows"
         }
 
         return snapshot.profileName == nil ? "Prepare Windows" : "Continue Setup"
@@ -1435,29 +1473,28 @@ private struct WindowsLogoMark: View {
     }
 }
 
-private struct WindowsGlassMark: View {
+private struct WindowsDisplayGrid: View {
     var body: some View {
-        Grid(horizontalSpacing: 6, verticalSpacing: 6) {
-            GridRow {
-                pane.opacity(0.28)
-                pane.opacity(0.18)
-            }
-            GridRow {
-                pane.opacity(0.20)
-                pane.opacity(0.32)
-            }
-        }
-        .frame(width: 112, height: 112)
-        .accessibilityHidden(true)
-    }
+        GeometryReader { proxy in
+            Path { path in
+                let spacing: CGFloat = 42
+                var x: CGFloat = spacing
+                while x < proxy.size.width {
+                    path.move(to: CGPoint(x: x, y: 0))
+                    path.addLine(to: CGPoint(x: x, y: proxy.size.height))
+                    x += spacing
+                }
 
-    private var pane: some View {
-        RoundedRectangle(cornerRadius: 10, style: .continuous)
-            .fill(.white)
-            .overlay {
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .strokeBorder(.white.opacity(0.25), lineWidth: 1)
+                var y: CGFloat = spacing
+                while y < proxy.size.height {
+                    path.move(to: CGPoint(x: 0, y: y))
+                    path.addLine(to: CGPoint(x: proxy.size.width, y: y))
+                    y += spacing
+                }
             }
+            .stroke(.white.opacity(0.45), lineWidth: 1)
+        }
+        .allowsHitTesting(false)
     }
 }
 
@@ -1475,67 +1512,6 @@ private struct CompactNotice: View {
             .padding(10)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(tint.opacity(0.08), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-    }
-}
-
-private struct LauncherProcessRow: View {
-    var item: InstallFlowItem
-
-    var body: some View {
-        HStack(spacing: 10) {
-            ZStack {
-                Circle()
-                    .fill(statusTint.opacity(0.12))
-                Image(systemName: statusSymbol)
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundStyle(statusTint)
-            }
-            .frame(width: 28, height: 28)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(item.title)
-                    .font(.callout.weight(.semibold))
-                    .lineLimit(1)
-                Text(item.detail)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
-
-            Spacer(minLength: 0)
-        }
-        .padding(10)
-        .background(rowBackground, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .strokeBorder(statusTint.opacity(item.state == .current ? 0.28 : 0.10), lineWidth: 1)
-        }
-    }
-
-    private var statusSymbol: String {
-        switch item.state {
-        case .complete:
-            "checkmark"
-        case .current:
-            "arrow.right"
-        case .pending:
-            "circle"
-        }
-    }
-
-    private var statusTint: Color {
-        switch item.state {
-        case .complete:
-            .green
-        case .current:
-            .blue
-        case .pending:
-            .secondary
-        }
-    }
-
-    private var rowBackground: Color {
-        item.state == .current ? Color.blue.opacity(0.08) : Color.secondary.opacity(0.05)
     }
 }
 
