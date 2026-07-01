@@ -11,6 +11,7 @@ harness/
 ├─ fake-agent/             WebSocket server that simulates the Windows guest agent
 ├─ fake-host/              CLI client that sends host messages
 ├─ runtime-provider-probe/ Validates local VM provider JSON output
+├─ qemu-boot-plan/         Validates dry-run QEMU/HVF Windows boot plan JSON
 ├─ protocol-fixtures/      JSON messages used by tests and docs
 └─ scenarios/              scripted end-to-end protocol flows
 ```
@@ -124,6 +125,24 @@ swift run veil-vmctl providers --json | node ../../harness/runtime-provider-prob
 ```
 
 Expected output: `provider output valid`. The JSON includes Apple Virtualization and QEMU/HVF candidates. QEMU/HVF may be `planned` when `qemu-system-aarch64` is not installed locally.
+
+## QEMU Boot Plan Harness
+
+The QEMU boot plan harness validates that Veil can describe an UTM-style local Windows Arm QEMU/HVF command before executing it.
+
+```bash
+cd harness/qemu-boot-plan
+npm test
+```
+
+Validate live host output:
+
+```bash
+cd apps/mac-host
+swift run veil-vmctl qemu-plan --json | node ../../harness/qemu-boot-plan/src/validate-qemu-plan.mjs
+```
+
+Expected output: `qemu plan valid`. The command is read-only: it must not launch QEMU, start a VM, stop a VM, or mutate installer/disk files.
 
 ## Fixture Policy
 

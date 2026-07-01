@@ -49,6 +49,8 @@ Current provider status:
 
 The provider probe is intentionally read-only. `veil-vmctl providers --json` reports candidate providers for diagnostics and harness validation, but it must not start, stop, create, or mutate a VM.
 
+The QEMU boot plan is also read-only. `veil-vmctl qemu-plan --json` converts the stored Windows Arm VM profile into a dry-run QEMU/HVF command plan and reports whether `qemu-system-aarch64` is locally available. The plan is meant to make the next boot spike reviewable and harness-testable before Veil executes QEMU.
+
 ## Windows Arm Install Flow
 
 Veil treats Windows setup as a staged runtime prerequisite rather than a generic VM wizard. The host profile tracks installer media, virtual disk, and a narrow macOS shared folder before VM boot work begins. The guest agent remains a separate pending step until Windows can boot and run an installer inside the guest.
@@ -71,6 +73,7 @@ Near-term quality bars:
 - distinguish installer media from boot disks before Start is enabled,
 - produce structured preflight checks for every local boot prerequisite,
 - expose the planned local runtime devices before Start is enabled,
+- expose QEMU/HVF command plans before executing QEMU,
 - make VM metadata, resource caps, and selected files visible in the host shell,
 - keep fake-agent and fake-host harnesses so agent work remains testable without Windows,
 - add diagnostics bundles before developer-preview distribution.

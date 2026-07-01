@@ -6,6 +6,7 @@ enum VMControlError: Error, LocalizedError {
     case unsupportedCommand(String)
     case missingInstallerPath
     case installerNotFound(String)
+    case missingProfileForQEMUPlan
 
     var errorDescription: String? {
         switch self {
@@ -17,16 +18,19 @@ enum VMControlError: Error, LocalizedError {
             "Missing installer path. \(Self.usage)"
         case .installerNotFound(let path):
             "Installer file does not exist: \(path)"
+        case .missingProfileForQEMUPlan:
+            "No prepared VM profile found. Run veil-vmctl prepare --installer /path/to/Windows.iso first."
         }
     }
 
-    private static let usage = "Usage: veil-vmctl prepare --installer /path/to/Windows.iso | veil-vmctl providers [--json]"
+    private static let usage = "Usage: veil-vmctl prepare --installer /path/to/Windows.iso | veil-vmctl providers [--json] | veil-vmctl qemu-plan [--json]"
 }
 
 struct VMControlArguments {
     enum Command: Equatable {
         case prepare(installerPath: String)
         case providers(json: Bool)
+        case qemuPlan(json: Bool)
     }
 
     var command: Command
@@ -38,6 +42,10 @@ struct VMControlArguments {
 
         if command == "providers" {
             return VMControlArguments(command: .providers(json: arguments.contains("--json")))
+        }
+
+        if command == "qemu-plan" {
+            return VMControlArguments(command: .qemuPlan(json: arguments.contains("--json")))
         }
 
         guard command == "prepare" else {
@@ -79,6 +87,8 @@ struct VeilVMControl {
             try await prepare(installerPath: installerPath)
         case .providers(let json):
             try printProviders(json: json)
+        case .qemuPlan(let json):
+            try await printQEMUPlan(json: json)
         }
     }
 
@@ -128,6 +138,51 @@ struct VeilVMControl {
             print("\(provider.displayName): \(provider.status.rawValue), \(provider.mode), \(provider.acceleration)\(pathSuffix)")
             print("  \(provider.detail)")
         }
+    }
+
+    private static func printQEMUPlan(json: Bool) async throws {
+        guard let profile = try await JSONVMProfileStore().load() else {
+            throw VMControlError.missingProfileForQEMUPlan
+        }
+
+        let qemuProvider = VMRuntimeProviderProbe()
+            .localProviders(
+                architecture: hostArchitecture(),
+                minimumOSSupported: ProcessInfo.processInfo.isOperatingSystemAtLeast(
+                    OperatingSystemVersion(majorVersion: 15, minorVersion: 0, patchVersion: 0)
+                )
+            )
+            .first { $0.kind == .qemuHypervisor }
+        let executablePath = qemuProvider?.executablePath
+            ?? VMRuntimeProviderProbe.defaultQEMUExecutablePaths[0]
+        let planner = QEMUWindowsBootPlanner(
+            executablePath: executablePath,
+            isExecutableAvailable: qemuProvider?.status == .active && qemuProvider?.executablePath != nil
+        )
+        let plan = try planner.makePlan(for: profile)
+
+        if json {
+            let data = try JSONEncoder.veilDiagnostics.encode(plan)
+            print(String(decoding: data, as: UTF8.self))
+            return
+        }
+
+        print(plan.summary)
+        print("\(plan.executablePath) \(plan.arguments.map(shellQuoted).joined(separator: " "))")
+        if !plan.warnings.isEmpty {
+            print("Warnings:")
+            for warning in plan.warnings {
+                print("  - \(warning)")
+            }
+        }
+    }
+
+    private static func shellQuoted(_ value: String) -> String {
+        guard value.rangeOfCharacter(from: .whitespacesAndNewlines) != nil else {
+            return value
+        }
+
+        return "'\(value.replacingOccurrences(of: "'", with: "'\\''"))'"
     }
 
     private static func hostArchitecture() -> String {

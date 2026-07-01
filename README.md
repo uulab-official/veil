@@ -67,6 +67,7 @@ harness/
   fake-host/         CLI simulator for the future macOS host protocol flow
   runtime-provider-probe/
                      JSON validator for local VM provider output
+  qemu-boot-plan/    JSON validator for dry-run QEMU/HVF Windows boot plans
 docs/
   architecture.md    System boundaries and component design
   mvp.md             MVP acceptance criteria
@@ -169,6 +170,20 @@ Validate that output with the harness:
 ```bash
 swift run veil-vmctl providers --json | node ../../harness/runtime-provider-probe/src/validate-provider-output.mjs
 ```
+
+Export a dry-run QEMU/HVF command plan without launching QEMU or mutating the VM:
+
+```bash
+swift run veil-vmctl qemu-plan --json
+```
+
+The plan includes the local executable path Veil would use, whether that executable is currently available, the Windows installer ISO, the writable system disk, HVF acceleration, NAT networking, display, graphics, and input devices. Validate it with:
+
+```bash
+swift run veil-vmctl qemu-plan --json | node ../../harness/qemu-boot-plan/src/validate-qemu-plan.mjs
+```
+
+This is a planning boundary only. It does not prove Windows will boot, and it does not start QEMU yet.
 
 You can prepare the local VM profile from a downloaded Windows 11 Arm ISO without clicking through the shell:
 
