@@ -7,6 +7,7 @@ struct ContentView: View {
     var startVMAction: () -> Void
     var stopVMAction: () -> Void
     var showVMConsoleAction: () -> Void
+    var consoleMessage: String?
     @SceneStorage("selectedSection") private var selectedSection: ShellSection = .vm
 
     var body: some View {
@@ -32,7 +33,8 @@ struct ContentView: View {
                 selectedSection: selectedSection,
                 startVMAction: startVMAction,
                 stopVMAction: stopVMAction,
-                showVMConsoleAction: showVMConsoleAction
+                showVMConsoleAction: showVMConsoleAction,
+                consoleMessage: consoleMessage
             )
         }
         .toolbar {

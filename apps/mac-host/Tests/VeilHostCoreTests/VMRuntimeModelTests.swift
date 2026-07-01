@@ -322,6 +322,35 @@ struct VMRuntimeModelTests {
         #expect(model.errorMessage == "VM boot is not implemented yet.")
     }
 
+    @Test("marks runtime failed when boot start fails after readiness")
+    @MainActor
+    func marksRuntimeFailedWhenBootStartFailsAfterReadiness() async throws {
+        let model = VMRuntimeModel(
+            service: FakeVMRuntimeService(
+                snapshot: VMRuntimeSnapshot(
+                    state: .stopped,
+                    virtualizationAvailable: true,
+                    architecture: "arm64",
+                    minimumOSSupported: true,
+                    profileName: "Windows 11 Arm",
+                    installerMediaPath: "/Users/test/Downloads/Windows.iso",
+                    virtualDiskPath: "/Users/test/Virtual Machines/Windows.vhdx",
+                    bootReady: true,
+                    detail: "Ready to start Windows."
+                ),
+                startError: VMRuntimeError.bootNotImplemented
+            )
+        )
+
+        await model.load()
+        await model.start()
+
+        #expect(model.phase == .failed)
+        #expect(model.snapshot?.state == .failed)
+        #expect(model.snapshot?.detail == "VM boot is not implemented yet.")
+        #expect(model.errorMessage == "VM boot is not implemented yet.")
+    }
+
     @Test("exports diagnostics through the service boundary")
     @MainActor
     func exportsDiagnosticsThroughServiceBoundary() async throws {
@@ -350,6 +379,7 @@ private final class FakeVMRuntimeService: VMRuntimeService {
     var stoppedSnapshot: VMRuntimeSnapshot?
     var diagnosticsURL: URL?
     var error: (any Error)?
+    var startError: (any Error)?
     private(set) var updatedInstallerMediaPath: String?
     private(set) var updatedVirtualDiskPath: String?
     private(set) var createCount = 0
@@ -368,7 +398,8 @@ private final class FakeVMRuntimeService: VMRuntimeService {
         startedSnapshot: VMRuntimeSnapshot? = nil,
         stoppedSnapshot: VMRuntimeSnapshot? = nil,
         diagnosticsURL: URL? = nil,
-        error: (any Error)? = nil
+        error: (any Error)? = nil,
+        startError: (any Error)? = nil
     ) {
         self.snapshot = snapshot
         self.createdSnapshot = createdSnapshot
@@ -379,6 +410,7 @@ private final class FakeVMRuntimeService: VMRuntimeService {
         self.stoppedSnapshot = stoppedSnapshot
         self.diagnosticsURL = diagnosticsURL
         self.error = error
+        self.startError = startError
     }
 
     func loadSnapshot() async throws -> VMRuntimeSnapshot {
@@ -435,6 +467,10 @@ private final class FakeVMRuntimeService: VMRuntimeService {
     }
 
     func start() async throws -> VMRuntimeSnapshot {
+        if let startError {
+            throw startError
+        }
+
         if let error {
             throw error
         }

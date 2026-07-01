@@ -7,6 +7,7 @@ struct VMRuntimeView: View {
     var startVMAction: () -> Void
     var stopVMAction: () -> Void
     var showVMConsoleAction: () -> Void
+    var consoleMessage: String?
     @State private var pathPicker: PathPicker?
 
     var body: some View {
@@ -29,6 +30,16 @@ struct VMRuntimeView: View {
                     runtimeTitle: runtimeTitle(for: snapshot.state),
                     runtimeSymbol: runtimeSymbol(for: snapshot.state),
                     runtimeTint: runtimeTint(for: snapshot.state)
+                )
+
+                WindowsSetupDisplayPanel(
+                    snapshot: snapshot,
+                    consoleMessage: consoleMessage,
+                    isLoading: model.phase == .loading,
+                    canStart: model.canStart,
+                    canShowConsole: canShowConsole(for: snapshot),
+                    startAction: startVMAction,
+                    consoleAction: showVMConsoleAction
                 )
 
                 QuickActionsPanel(
@@ -134,6 +145,10 @@ struct VMRuntimeView: View {
                 }
             }
         }
+    }
+
+    private func canShowConsole(for snapshot: VMRuntimeSnapshot) -> Bool {
+        snapshot.state == .running || snapshot.state == .starting
     }
 
     @ViewBuilder
@@ -538,6 +553,240 @@ private struct ControlCenterHero: View {
 
     private func providerName(for snapshot: VMRuntimeSnapshot) -> String {
         snapshot.runtimeProvider?.displayName ?? (snapshot.virtualizationAvailable ? "Local" : "Unavailable")
+    }
+}
+
+private struct WindowsSetupDisplayPanel: View {
+    var snapshot: VMRuntimeSnapshot
+    var consoleMessage: String?
+    var isLoading: Bool
+    var canStart: Bool
+    var canShowConsole: Bool
+    var startAction: () -> Void
+    var consoleAction: () -> Void
+
+    var body: some View {
+        ShellPanel(spacing: 14) {
+            HStack(alignment: .top, spacing: 16) {
+                displayPreview
+
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack(alignment: .firstTextBaseline, spacing: 10) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Windows Setup Display")
+                                .font(.title3.weight(.semibold))
+                            Text(phaseDetail)
+                                .font(.callout)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(3)
+                        }
+
+                        Spacer()
+
+                        StatusPill(title: phaseTitle, symbolName: phaseSymbol, tint: phaseTint)
+                    }
+
+                    if let consoleMessage {
+                        Label(consoleMessage, systemImage: "info.circle")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                            .textSelection(.enabled)
+                            .lineLimit(3)
+                    }
+
+                    HStack(spacing: 8) {
+                        Button(action: startAction) {
+                            Label("Start Windows Setup", systemImage: "power")
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(!canStart || isLoading)
+
+                        Button(action: consoleAction) {
+                            Label("Open VM Console", systemImage: "display")
+                        }
+                        .disabled(!canShowConsole || isLoading)
+
+                        Text(consoleHint)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+
+                        Spacer(minLength: 0)
+                    }
+                }
+            }
+        }
+    }
+
+    private var displayPreview: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color(red: 0.03, green: 0.04, blue: 0.06),
+                            Color(red: 0.10, green: 0.11, blue: 0.14)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .overlay {
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .strokeBorder(.white.opacity(0.12), lineWidth: 1)
+                }
+
+            VStack(spacing: 10) {
+                Image(systemName: previewSymbol)
+                    .font(.system(size: 34, weight: .semibold))
+                    .foregroundStyle(phaseTint)
+
+                Text(previewTitle)
+                    .font(.headline.weight(.semibold))
+                    .foregroundStyle(.white)
+
+                Text(previewSubtitle)
+                    .font(.caption)
+                    .foregroundStyle(.white.opacity(0.68))
+                    .multilineTextAlignment(.center)
+                    .lineLimit(3)
+            }
+            .padding(18)
+        }
+        .frame(width: 300, height: 178)
+    }
+
+    private var phaseTitle: String {
+        if isLoading && snapshot.state == .starting {
+            return "Starting"
+        }
+
+        switch snapshot.state {
+        case .unsupported:
+            return "Unsupported"
+        case .notConfigured:
+            return "No Profile"
+        case .stopped:
+            return snapshot.bootReady ? "Ready" : "Blocked"
+        case .starting:
+            return "Starting"
+        case .running:
+            return "Console Live"
+        case .suspended:
+            return "Suspended"
+        case .failed:
+            return "Failed"
+        }
+    }
+
+    private var phaseDetail: String {
+        if isLoading && snapshot.state == .starting {
+            return "Veil is starting the local Windows VM. The installer display opens in a separate VM Console window as soon as Virtualization.framework exposes the screen."
+        }
+
+        switch snapshot.state {
+        case .unsupported:
+            return "This Mac cannot run the current local Windows Arm VM path."
+        case .notConfigured:
+            return "Create or prepare a Windows 11 Arm profile, then select the ISO and virtual disk."
+        case .stopped:
+            return snapshot.bootReady
+                ? "Ready to boot the Windows installer. Press Start Windows Setup; Veil will open the VM Console window automatically."
+                : snapshot.detail
+        case .starting:
+            return "Windows setup is starting. If the console did not appear, press Open VM Console after a moment."
+        case .running:
+            return "The Windows installer display is attached to the VM Console window. Use that window for the setup screen."
+        case .suspended:
+            return "The VM is suspended. Resume support is still being hardened for the boot spike."
+        case .failed:
+            return "The last VM start failed. Export diagnostics or check the setup/preflight panels below."
+        }
+    }
+
+    private var consoleHint: String {
+        if canShowConsole {
+            return "The Windows installer is shown in the separate console window."
+        }
+
+        if canStart {
+            return "Console appears after the VM starts."
+        }
+
+        return "Complete the setup steps below before the console can open."
+    }
+
+    private var previewTitle: String {
+        switch snapshot.state {
+        case .running:
+            "Console Open"
+        case .starting:
+            "Starting Display"
+        case .stopped where snapshot.bootReady:
+            "Ready To Boot"
+        case .failed:
+            "Needs Attention"
+        default:
+            "Setup Waiting"
+        }
+    }
+
+    private var previewSubtitle: String {
+        switch snapshot.state {
+        case .running:
+            "Use the VM Console window to continue Windows setup."
+        case .starting:
+            "Attaching the local Windows display."
+        case .stopped where snapshot.bootReady:
+            "Press Start Windows Setup to open the installer."
+        default:
+            "Installer, disk, and preflight readiness appear below."
+        }
+    }
+
+    private var previewSymbol: String {
+        switch snapshot.state {
+        case .running:
+            "display"
+        case .starting:
+            "arrow.triangle.2.circlepath"
+        case .failed:
+            "exclamationmark.triangle"
+        case .stopped where snapshot.bootReady:
+            "play.circle.fill"
+        default:
+            "display"
+        }
+    }
+
+    private var phaseSymbol: String {
+        switch snapshot.state {
+        case .running:
+            "display"
+        case .starting:
+            "arrow.triangle.2.circlepath"
+        case .stopped where snapshot.bootReady:
+            "checkmark.circle.fill"
+        case .failed, .unsupported:
+            "exclamationmark.triangle"
+        default:
+            "clock"
+        }
+    }
+
+    private var phaseTint: Color {
+        switch snapshot.state {
+        case .running:
+            .green
+        case .starting:
+            .blue
+        case .stopped:
+            snapshot.bootReady ? .green : .orange
+        case .failed, .unsupported:
+            .orange
+        case .notConfigured, .suspended:
+            .secondary
+        }
     }
 }
 

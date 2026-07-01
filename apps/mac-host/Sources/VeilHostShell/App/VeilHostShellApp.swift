@@ -20,6 +20,7 @@ struct VeilHostShellApp: App {
     @State private var vmModel = VMRuntimeModel(
         service: LocalVMRuntimeService(bootRunner: VirtualizationVMRuntimeBooter.shared)
     )
+    @State private var consoleMessage: String?
 
     var body: some Scene {
         WindowGroup("Veil", id: "main") {
@@ -28,7 +29,8 @@ struct VeilHostShellApp: App {
                 vmModel: vmModel,
                 startVMAction: startVMAndShowConsole,
                 stopVMAction: stopVMAndCloseConsole,
-                showVMConsoleAction: showVMConsole
+                showVMConsoleAction: showVMConsole,
+                consoleMessage: consoleMessage
             )
                 .frame(minWidth: 1180, idealWidth: 1360, minHeight: 740, idealHeight: 860)
                 .task {
@@ -107,10 +109,17 @@ struct VeilHostShellApp: App {
 
     private func startVMAndShowConsole() {
         Task { @MainActor in
+            consoleMessage = "Starting Windows setup. The VM Console window will open as soon as Veil receives a local display."
             await vmModel.start()
 
             if vmModel.snapshot?.state == .running || vmModel.snapshot?.state == .starting {
-                vmConsolePresenter.showConsoleIfAvailable()
+                if vmConsolePresenter.showConsoleIfAvailable() {
+                    consoleMessage = "VM Console is open. Windows setup appears in that separate display window."
+                } else {
+                    consoleMessage = "Windows runtime is starting, but the display is not attached yet. Try Show Console again after a moment."
+                }
+            } else if let errorMessage = vmModel.errorMessage {
+                consoleMessage = "Windows setup could not start: \(errorMessage)"
             }
         }
     }
@@ -121,12 +130,17 @@ struct VeilHostShellApp: App {
 
             if vmModel.snapshot?.state == .stopped {
                 vmConsolePresenter.closeConsole()
+                consoleMessage = "Windows setup console closed."
             }
         }
     }
 
     private func showVMConsole() {
-        vmConsolePresenter.showConsoleIfAvailable()
+        if vmConsolePresenter.showConsoleIfAvailable() {
+            consoleMessage = "VM Console is open. Windows setup appears in that separate display window."
+        } else {
+            consoleMessage = "No active Windows display is attached yet. Start the VM first, then open the console."
+        }
     }
 
     private var canShowVMConsole: Bool {

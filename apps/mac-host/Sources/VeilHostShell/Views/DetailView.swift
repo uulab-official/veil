@@ -8,6 +8,7 @@ struct DetailView: View {
     var startVMAction: () -> Void
     var stopVMAction: () -> Void
     var showVMConsoleAction: () -> Void
+    var consoleMessage: String?
 
     var body: some View {
         ScrollView {
@@ -29,7 +30,8 @@ struct DetailView: View {
                         model: vmModel,
                         startVMAction: startVMAction,
                         stopVMAction: stopVMAction,
-                        showVMConsoleAction: showVMConsoleAction
+                        showVMConsoleAction: showVMConsoleAction,
+                        consoleMessage: consoleMessage
                     )
                 case .launch:
                     LaunchView(result: model.lastLaunch)

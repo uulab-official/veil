@@ -696,11 +696,23 @@ public final class VMRuntimeModel {
         phase = .loading
         errorMessage = nil
 
+        if canStart, var startingSnapshot = snapshot {
+            startingSnapshot.state = .starting
+            startingSnapshot.detail = "Starting Windows setup. The VM Console window will open when the local display is attached."
+            snapshot = startingSnapshot
+        }
+
         do {
             snapshot = try await service.start()
             phase = .loaded
         } catch {
-            errorMessage = userMessage(for: error)
+            let message = userMessage(for: error)
+            if var failedSnapshot = snapshot {
+                failedSnapshot.state = .failed
+                failedSnapshot.detail = message
+                snapshot = failedSnapshot
+            }
+            errorMessage = message
             phase = .failed
         }
     }

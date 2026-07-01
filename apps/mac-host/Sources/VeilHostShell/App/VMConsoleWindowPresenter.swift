@@ -12,9 +12,10 @@ final class VMConsoleWindowPresenter: NSObject, NSWindowDelegate {
         super.init()
     }
 
-    func showConsoleIfAvailable() {
+    @discardableResult
+    func showConsoleIfAvailable() -> Bool {
         guard let virtualMachine = bootRunner.activeVirtualMachine else {
-            return
+            return false
         }
 
         let consoleView = VZVirtualMachineView()
@@ -26,7 +27,7 @@ final class VMConsoleWindowPresenter: NSObject, NSWindowDelegate {
             window.contentView = consoleView
             window.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
-            return
+            return true
         }
 
         let window = NSWindow(
@@ -44,6 +45,7 @@ final class VMConsoleWindowPresenter: NSObject, NSWindowDelegate {
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
         self.window = window
+        return true
     }
 
     func closeConsole() {
