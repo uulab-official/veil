@@ -34,7 +34,7 @@ struct VeilHostShellApp: App {
                 launchWindowsAppAction: launchSelectedWindowsAppWindow,
                 consoleMessage: consoleMessage
             )
-                .frame(minWidth: 960, idealWidth: 1000, minHeight: 470, idealHeight: 500)
+                .frame(minWidth: 960, idealWidth: 1000, minHeight: 530, idealHeight: 560)
                 .task {
                     async let hostLoad: Void = model.load()
                     async let vmLoad: Void = vmModel.load()
@@ -45,13 +45,13 @@ struct VeilHostShellApp: App {
                     }
                 }
         }
-        .defaultSize(width: 1000, height: 500)
+        .defaultSize(width: 1000, height: 560)
         .defaultWindowPlacement { _, context in
             let visibleRect = context.defaultDisplay.visibleRect
-            let preferredSize = CGSize(width: 1000, height: 500)
+            let preferredSize = CGSize(width: 1000, height: 560)
             let size = CGSize(
                 width: min(preferredSize.width, max(min(960, visibleRect.width), visibleRect.width * 0.68)),
-                height: min(preferredSize.height, max(min(470, visibleRect.height), visibleRect.height * 0.52))
+                height: min(preferredSize.height, max(min(530, visibleRect.height), visibleRect.height * 0.58))
             )
             return WindowPlacement(size: size)
         }
@@ -174,6 +174,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
         DispatchQueue.main.async {
+            self.configureMainWindowChrome()
             self.compactMainWindowIfNeeded()
         }
     }
@@ -189,12 +190,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @MainActor
+    private func configureMainWindowChrome() {
+        guard let window = NSApp.windows.first(where: { $0.title == "Veil" }) else {
+            return
+        }
+
+        window.titleVisibility = .hidden
+        window.titlebarAppearsTransparent = true
+        window.styleMask.insert(.fullSizeContentView)
+        window.toolbar = nil
+    }
+
+    @MainActor
     private func compactMainWindowIfNeeded() {
         guard let window = NSApp.windows.first(where: { $0.title == "Veil" }) else {
             return
         }
 
-        let targetSize = NSSize(width: 1000, height: 500)
+        let targetSize = NSSize(width: 1000, height: 560)
         guard window.frame.height > targetSize.height + 40 else {
             return
         }

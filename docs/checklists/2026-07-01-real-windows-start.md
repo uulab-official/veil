@@ -6,7 +6,10 @@ Goal: keep the main Veil experience pointed at real local Windows boot and conso
 
 - [x] Recenter the main screen on one Windows 11 Arm machine instead of a multi-section sidebar.
 - [x] Keep the default window large enough for a VM-focused control surface.
-- [x] Compact the default host window to a launcher-sized 1000 x 320 point control surface instead of a tall dashboard.
+- [x] Compact the default host window to a launcher-sized 1000 x 560 point control surface instead of a tall dashboard.
+- [x] Replace the native window title with a custom Veil header that matches the focused setup launcher.
+- [x] Keep runtime status and refresh in the custom header so the main screen stays simple.
+- [x] Make the custom header draggable while preserving macOS traffic-light controls.
 - [x] Remove the pre-install Windows Apps bridge panel from the first runtime screen.
 - [x] Replace the internal runtime card with a production-style Windows Setup Assistant surface.
 - [x] Keep advanced setup, preflight, provider, resource, and device information behind the Details toggle.
