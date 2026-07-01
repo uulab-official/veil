@@ -107,64 +107,72 @@ private func drawIcon(in rect: NSRect) {
     let scale = rect.width / 1024
     func s(_ value: CGFloat) -> CGFloat { value * scale }
 
-    let outerRect = rect.insetBy(dx: s(56), dy: s(56))
+    let outerRect = rect.insetBy(dx: s(58), dy: s(58))
     let outerPath = NSBezierPath(
         roundedRect: outerRect,
-        xRadius: s(190),
-        yRadius: s(190)
+        xRadius: s(184),
+        yRadius: s(184)
     )
 
     NSGraphicsContext.current?.cgContext.setShadow(
-        offset: CGSize(width: 0, height: -s(28)),
-        blur: s(56),
-        color: NSColor.black.withAlphaComponent(0.22).cgColor
+        offset: CGSize(width: 0, height: -s(34)),
+        blur: s(68),
+        color: NSColor.black.withAlphaComponent(0.30).cgColor
     )
     NSGradient(
         colors: [
-            NSColor(calibratedRed: 0.06, green: 0.12, blue: 0.24, alpha: 1),
-            NSColor(calibratedRed: 0.03, green: 0.05, blue: 0.10, alpha: 1)
+            NSColor(calibratedRed: 0.12, green: 0.12, blue: 0.15, alpha: 1),
+            NSColor(calibratedRed: 0.02, green: 0.03, blue: 0.05, alpha: 1)
         ]
     )?.draw(in: outerPath, angle: -35)
     NSGraphicsContext.current?.cgContext.setShadow(offset: .zero, blur: 0, color: nil)
 
-    NSColor.white.withAlphaComponent(0.18).setStroke()
-    outerPath.lineWidth = s(5)
+    NSColor.white.withAlphaComponent(0.20).setStroke()
+    outerPath.lineWidth = s(6)
     outerPath.stroke()
 
-    let paneRect = outerRect.insetBy(dx: s(150), dy: s(170))
-    let panePath = NSBezierPath(
-        roundedRect: paneRect,
-        xRadius: s(78),
-        yRadius: s(78)
+    let backPaneRect = NSRect(
+        x: outerRect.minX + s(170),
+        y: outerRect.minY + s(280),
+        width: s(410),
+        height: s(410)
     )
+    let backPanePath = NSBezierPath(roundedRect: backPaneRect, xRadius: s(86), yRadius: s(86))
     NSGradient(
         colors: [
-            NSColor(calibratedRed: 0.10, green: 0.52, blue: 1.00, alpha: 1),
-            NSColor(calibratedRed: 0.20, green: 0.84, blue: 0.92, alpha: 1)
+            NSColor(calibratedRed: 0.06, green: 0.66, blue: 0.92, alpha: 1),
+            NSColor(calibratedRed: 0.17, green: 0.86, blue: 0.74, alpha: 1)
         ]
-    )?.draw(in: panePath, angle: -25)
+    )?.draw(in: backPanePath, angle: -28)
+
+    let frontPaneRect = NSRect(
+        x: outerRect.minX + s(430),
+        y: outerRect.minY + s(170),
+        width: s(410),
+        height: s(410)
+    )
+    let frontPanePath = NSBezierPath(roundedRect: frontPaneRect, xRadius: s(86), yRadius: s(86))
+    NSGradient(
+        colors: [
+            NSColor(calibratedRed: 1.00, green: 0.40, blue: 0.28, alpha: 1),
+            NSColor(calibratedRed: 1.00, green: 0.70, blue: 0.20, alpha: 1)
+        ]
+    )?.draw(in: frontPanePath, angle: -20)
 
     NSColor.white.withAlphaComponent(0.24).setStroke()
-    panePath.lineWidth = s(4)
-    panePath.stroke()
+    backPanePath.lineWidth = s(5)
+    backPanePath.stroke()
+    frontPanePath.lineWidth = s(5)
+    frontPanePath.stroke()
 
-    NSColor.white.withAlphaComponent(0.86).setStroke()
-    let divider = NSBezierPath()
-    divider.lineWidth = s(18)
-    divider.lineCapStyle = .round
-    divider.move(to: NSPoint(x: paneRect.midX, y: paneRect.minY + s(78)))
-    divider.line(to: NSPoint(x: paneRect.midX, y: paneRect.maxY - s(78)))
-    divider.move(to: NSPoint(x: paneRect.minX + s(78), y: paneRect.midY))
-    divider.line(to: NSPoint(x: paneRect.maxX - s(78), y: paneRect.midY))
-    divider.stroke()
-
-    let veilPath = NSBezierPath()
-    veilPath.lineWidth = s(48)
-    veilPath.lineCapStyle = .round
-    veilPath.lineJoinStyle = .round
-    veilPath.move(to: NSPoint(x: paneRect.minX + s(118), y: paneRect.maxY - s(120)))
-    veilPath.line(to: NSPoint(x: paneRect.midX, y: paneRect.minY + s(125)))
-    veilPath.line(to: NSPoint(x: paneRect.maxX - s(118), y: paneRect.maxY - s(120)))
-    NSColor.white.withAlphaComponent(0.94).setStroke()
-    veilPath.stroke()
+    let monogramRect = outerRect.insetBy(dx: s(260), dy: s(245))
+    let monogram = NSBezierPath()
+    monogram.lineWidth = s(64)
+    monogram.lineCapStyle = .round
+    monogram.lineJoinStyle = .round
+    monogram.move(to: NSPoint(x: monogramRect.minX + s(22), y: monogramRect.maxY - s(16)))
+    monogram.line(to: NSPoint(x: monogramRect.midX, y: monogramRect.minY + s(20)))
+    monogram.line(to: NSPoint(x: monogramRect.maxX - s(22), y: monogramRect.maxY - s(16)))
+    NSColor.white.withAlphaComponent(0.96).setStroke()
+    monogram.stroke()
 }

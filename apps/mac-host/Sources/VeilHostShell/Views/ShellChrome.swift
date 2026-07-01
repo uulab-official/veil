@@ -1,6 +1,42 @@
 import SwiftUI
 import VeilHostCore
 
+struct VeilAppMark: View {
+    var size: CGFloat = 34
+
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: size * 0.22, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color(red: 0.08, green: 0.09, blue: 0.11),
+                            Color(red: 0.18, green: 0.18, blue: 0.22)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+
+            RoundedRectangle(cornerRadius: size * 0.13, style: .continuous)
+                .fill(.cyan.opacity(0.92))
+                .frame(width: size * 0.44, height: size * 0.44)
+                .offset(x: -size * 0.12, y: -size * 0.07)
+
+            RoundedRectangle(cornerRadius: size * 0.13, style: .continuous)
+                .fill(.orange.opacity(0.95))
+                .frame(width: size * 0.44, height: size * 0.44)
+                .offset(x: size * 0.12, y: size * 0.07)
+
+            Text("V")
+                .font(.system(size: size * 0.42, weight: .bold, design: .rounded))
+                .foregroundStyle(.white)
+        }
+        .frame(width: size, height: size)
+        .accessibilityHidden(true)
+    }
+}
+
 enum ShellSection: String, CaseIterable, Hashable {
     case apps
     case agent
