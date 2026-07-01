@@ -20,6 +20,7 @@ The first three are local host prerequisites. The guest agent step remains pendi
 ## Current Host Behavior
 
 - Prepare VM creates the default Windows 11 Arm profile, the macOS shared folder at `~/Veil Shared`, and the default sparse disk in one action.
+- Prepare VM applies an adaptive resource profile from the current Mac: half of host CPU cores up to a safe cap, 25% of physical memory rounded down to a conservative VM cap, and a 128 GB default sparse disk.
 - Profile-only creation is still available for low-level setup testing.
 - Installer media is a user-selected local file.
 - The virtual disk can be user-selected or created as a blank sparse disk at `~/Virtual Machines/Veil/Windows 11 Arm.img`.
@@ -30,6 +31,8 @@ The first three are local host prerequisites. The guest agent step remains pendi
 - Pressing Start builds a `VZVirtualMachine`, starts it through Apple's Virtualization.framework, and opens a console window.
 - Pressing Stop stops the active VM process and closes the console window.
 - Start requires a locally signed app bundle with the `com.apple.security.virtualization` entitlement.
+
+The adaptive resource profile is an initial configuration policy, not live VM hot-resizing. Virtualization.framework can use host memory on demand under the configured VM memory cap, and future work can add app-specific profiles, suspend/resume policy, and telemetry-driven adjustments once the real Windows path is stable.
 
 ## Preflight Checks
 

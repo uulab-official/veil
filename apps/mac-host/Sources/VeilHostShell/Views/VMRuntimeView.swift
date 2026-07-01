@@ -467,15 +467,15 @@ private struct ResourcePlanPanel: View {
 
             ResourcePlanRow(
                 title: "CPU",
-                value: snapshot.virtualizationAvailable ? "Apple Virtualization.framework on \(snapshot.architecture)" : "Host virtualization unavailable",
+                value: cpuValue,
                 symbolName: "cpu",
-                state: snapshot.virtualizationAvailable ? .ready : .blocked
+                state: snapshot.cpuCount == nil ? (snapshot.virtualizationAvailable ? .planned : .blocked) : .ready
             )
             ResourcePlanRow(
                 title: "Memory",
-                value: "Automatic allocation profile planned for Windows 11 Arm.",
+                value: memoryValue,
                 symbolName: "memorychip",
-                state: .planned
+                state: snapshot.memoryMB == nil ? .planned : .ready
             )
             ResourcePlanRow(
                 title: "Display",
@@ -485,11 +485,52 @@ private struct ResourcePlanPanel: View {
             )
             ResourcePlanRow(
                 title: "Storage",
-                value: snapshot.virtualDiskPath == nil ? "Select a virtual disk before boot readiness." : "Virtual disk path selected.",
+                value: storageValue,
                 symbolName: "internaldrive",
                 state: snapshot.virtualDiskPath == nil ? .blocked : .partial
             )
         }
+    }
+
+    private var cpuValue: String {
+        guard snapshot.virtualizationAvailable else {
+            return "Host virtualization unavailable"
+        }
+
+        guard let cpuCount = snapshot.cpuCount else {
+            return "Adaptive CPU profile will be applied during VM preparation."
+        }
+
+        return "\(cpuCount) vCPU configured on Apple Virtualization.framework."
+    }
+
+    private var memoryValue: String {
+        guard let memoryMB = snapshot.memoryMB else {
+            return "Adaptive memory cap will be applied during VM preparation."
+        }
+
+        return "\(formatGigabytes(memoryMB)) GB adaptive memory cap configured."
+    }
+
+    private var storageValue: String {
+        guard let diskGB = snapshot.diskGB else {
+            return "128 GB sparse disk profile will be applied during VM preparation."
+        }
+
+        if snapshot.virtualDiskPath == nil {
+            return "\(diskGB) GB sparse disk profile configured; create or select a disk before boot."
+        }
+
+        return "\(diskGB) GB sparse virtual disk profile selected."
+    }
+
+    private func formatGigabytes(_ memoryMB: Int) -> String {
+        let gigabytes = Double(memoryMB) / 1_024
+        if gigabytes.rounded() == gigabytes {
+            return String(Int(gigabytes))
+        }
+
+        return String(format: "%.1f", gigabytes)
     }
 }
 
@@ -610,6 +651,9 @@ private struct MachineSummaryPanel: View {
             Grid(alignment: .leading, horizontalSpacing: 18, verticalSpacing: 10) {
                 ShellMetricRow(label: "Machine", value: "Windows 11 Arm")
                 ShellMetricRow(label: "Profile", value: snapshot.profileName ?? "Not configured")
+                ShellMetricRow(label: "CPU", value: snapshot.cpuCount.map { "\($0) vCPU" } ?? "Adaptive")
+                ShellMetricRow(label: "Memory", value: snapshot.memoryMB.map { "\(formatGigabytes($0)) GB cap" } ?? "Adaptive")
+                ShellMetricRow(label: "Disk Size", value: snapshot.diskGB.map { "\($0) GB" } ?? "Adaptive")
                 ShellMetricRow(label: "Installer", value: resourceName(from: snapshot.installerMediaPath), monospaced: snapshot.installerMediaPath != nil)
                 ShellMetricRow(label: "Disk", value: resourceName(from: snapshot.virtualDiskPath), monospaced: snapshot.virtualDiskPath != nil)
                 ShellMetricRow(label: "Runtime", value: snapshot.detail)
@@ -623,6 +667,15 @@ private struct MachineSummaryPanel: View {
         }
 
         return URL(fileURLWithPath: path).lastPathComponent
+    }
+
+    private func formatGigabytes(_ memoryMB: Int) -> String {
+        let gigabytes = Double(memoryMB) / 1_024
+        if gigabytes.rounded() == gigabytes {
+            return String(Int(gigabytes))
+        }
+
+        return String(format: "%.1f", gigabytes)
     }
 }
 

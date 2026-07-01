@@ -8,6 +8,7 @@ Veil aims for Parallels-class coherence, but the roadmap is deliberately staged 
 - VM profile storage.
 - Windows Arm install readiness checklist.
 - VM profile preflight checks.
+- Adaptive default CPU, memory, and disk profile based on the current Mac.
 - Shared folder preparation.
 - Start, stop, suspend, resume states.
 - Basic VM display surface for debugging.
@@ -17,6 +18,7 @@ Exit criteria:
 
 - A contributor can see which local setup prerequisites are blocking Windows boot.
 - A contributor can see which profile settings are invalid before boot.
+- A contributor can prepare a VM profile whose resource caps are automatically sized for the host Mac.
 - A contributor can start a guest VM from the host app.
 - Failure states are visible and debuggable.
 
@@ -109,7 +111,7 @@ Exit criteria:
 
 ## Current Next Step
 
-The protocol harness is now executable from JavaScript, the Swift host probe, and the SwiftUI host shell. The shell also has a VM Runtime status boundary, one-click VM preparation, local boot-path checks, shared-folder preparation, default sparse-disk creation, a setup-step checklist, profile preflight checks, and a Virtualization.framework boot spike that opens and stops a VM console. The next implementation step is the v0.1/v0.2 overlap:
+The protocol harness is now executable from JavaScript, the Swift host probe, and the SwiftUI host shell. The shell also has a VM Runtime status boundary, one-click VM preparation, adaptive host-sized resource caps, local boot-path checks, shared-folder preparation, default sparse-disk creation, a setup-step checklist, profile preflight checks, and a Virtualization.framework boot spike that opens and stops a VM console. The next implementation step is the v0.1/v0.2 overlap:
 
 1. Harden the Virtualization.framework boot spike against real Windows 11 Arm installer variants.
 2. Add deeper validation for selected installer media and virtual disk paths, including file format and bootability checks proven by the spike.

@@ -48,6 +48,9 @@ public struct VMRuntimeSnapshot: Codable, Equatable, Sendable {
     public var architecture: String
     public var minimumOSSupported: Bool
     public var profileName: String?
+    public var cpuCount: Int?
+    public var memoryMB: Int?
+    public var diskGB: Int?
     public var installerMediaPath: String?
     public var virtualDiskPath: String?
     public var installationSteps: [VMInstallationStep]
@@ -61,6 +64,9 @@ public struct VMRuntimeSnapshot: Codable, Equatable, Sendable {
         architecture: String,
         minimumOSSupported: Bool,
         profileName: String?,
+        cpuCount: Int? = nil,
+        memoryMB: Int? = nil,
+        diskGB: Int? = nil,
         installerMediaPath: String? = nil,
         virtualDiskPath: String? = nil,
         installationSteps: [VMInstallationStep] = [],
@@ -73,6 +79,9 @@ public struct VMRuntimeSnapshot: Codable, Equatable, Sendable {
         self.architecture = architecture
         self.minimumOSSupported = minimumOSSupported
         self.profileName = profileName
+        self.cpuCount = cpuCount
+        self.memoryMB = memoryMB
+        self.diskGB = diskGB
         self.installerMediaPath = installerMediaPath
         self.virtualDiskPath = virtualDiskPath
         self.installationSteps = installationSteps
@@ -328,15 +337,18 @@ public struct LocalVMRuntimeService: VMRuntimeService {
     private let profileStore: any VMProfileStore
     private let defaultHomeDirectory: URL
     private let bootRunner: any VMRuntimeBooting
+    private let resourcePlan: VMResourcePlan?
 
     public init(
         profileStore: any VMProfileStore = JSONVMProfileStore(),
         defaultHomeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser,
-        bootRunner: any VMRuntimeBooting = UnavailableVMRuntimeBooter()
+        bootRunner: any VMRuntimeBooting = UnavailableVMRuntimeBooter(),
+        resourcePlan: VMResourcePlan? = nil
     ) {
         self.profileStore = profileStore
         self.defaultHomeDirectory = defaultHomeDirectory
         self.bootRunner = bootRunner
+        self.resourcePlan = resourcePlan
     }
 
     public func loadSnapshot() async throws -> VMRuntimeSnapshot {
@@ -362,6 +374,9 @@ public struct LocalVMRuntimeService: VMRuntimeService {
                 architecture: architecture,
                 minimumOSSupported: true,
                 profileName: profile.name,
+                cpuCount: profile.cpuCount,
+                memoryMB: profile.memoryMB,
+                diskGB: profile.diskGB,
                 installerMediaPath: profile.installerMediaPath,
                 virtualDiskPath: profile.virtualDiskPath,
                 installationSteps: installationSteps,
@@ -388,7 +403,7 @@ public struct LocalVMRuntimeService: VMRuntimeService {
     }
 
     public func createDefaultProfile() async throws -> VMRuntimeSnapshot {
-        let profile = VMProfile.defaultWindows11Arm(homeDirectory: defaultHomeDirectory)
+        let profile = defaultProfile()
         try FileManager.default.createDirectory(
             atPath: profile.sharedFolderPath,
             withIntermediateDirectories: true
@@ -398,14 +413,14 @@ public struct LocalVMRuntimeService: VMRuntimeService {
     }
 
     public func prepareDefaultVM() async throws -> VMRuntimeSnapshot {
-        var profile = try await profileStore.load() ?? VMProfile.defaultWindows11Arm(homeDirectory: defaultHomeDirectory)
+        var profile = try await profileStore.load() ?? defaultProfile()
         profile = try prepareDefaultResources(for: profile)
         try await profileStore.save(profile)
         return try await loadSnapshot()
     }
 
     public func createDefaultVirtualDisk() async throws -> VMRuntimeSnapshot {
-        var profile = try await profileStore.load() ?? VMProfile.defaultWindows11Arm(homeDirectory: defaultHomeDirectory)
+        var profile = try await profileStore.load() ?? defaultProfile()
         if profile.virtualDiskPath != nil {
             return try await loadSnapshot()
         }
@@ -451,7 +466,7 @@ public struct LocalVMRuntimeService: VMRuntimeService {
     }
 
     public func updateProfilePaths(installerMediaPath: String?, virtualDiskPath: String?) async throws -> VMRuntimeSnapshot {
-        var profile = try await profileStore.load() ?? VMProfile.defaultWindows11Arm(homeDirectory: defaultHomeDirectory)
+        var profile = try await profileStore.load() ?? defaultProfile()
         profile.installerMediaPath = installerMediaPath
         profile.virtualDiskPath = virtualDiskPath
         try await profileStore.save(profile)
@@ -492,6 +507,15 @@ public struct LocalVMRuntimeService: VMRuntimeService {
             .appendingPathComponent("Virtual Machines", isDirectory: true)
             .appendingPathComponent("Veil", isDirectory: true)
             .appendingPathComponent("\(profile.name).img")
+    }
+
+    private func defaultProfile() -> VMProfile {
+        var profile = VMProfile.defaultWindows11Arm(homeDirectory: defaultHomeDirectory)
+        let plan = resourcePlan ?? VMResourcePolicy.currentHostPlan()
+        profile.cpuCount = plan.cpuCount
+        profile.memoryMB = plan.memoryMB
+        profile.diskGB = plan.diskGB
+        return profile
     }
 
     private static func runtimeDetail(for state: VMRuntimeState) -> String {

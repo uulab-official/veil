@@ -1,5 +1,41 @@
 import Foundation
 
+public struct VMResourcePlan: Codable, Equatable, Sendable {
+    public var cpuCount: Int
+    public var memoryMB: Int
+    public var diskGB: Int
+
+    public init(cpuCount: Int, memoryMB: Int, diskGB: Int) {
+        self.cpuCount = cpuCount
+        self.memoryMB = memoryMB
+        self.diskGB = diskGB
+    }
+}
+
+public enum VMResourcePolicy {
+    public static func automatic(
+        processorCount: Int,
+        physicalMemoryBytes: UInt64
+    ) -> VMResourcePlan {
+        let processorCount = max(1, processorCount)
+        let hostAwareCPUCap = max(2, min(8, processorCount - 1))
+        let cpuCount = min(max(2, processorCount / 2), hostAwareCPUCap)
+
+        let physicalMemoryMB = Int(physicalMemoryBytes / 1_024 / 1_024)
+        let quarterMemoryMB = (physicalMemoryMB / 4 / 1_024) * 1_024
+        let memoryMB = min(max(quarterMemoryMB, 4_096), 16_384)
+
+        return VMResourcePlan(cpuCount: cpuCount, memoryMB: memoryMB, diskGB: 128)
+    }
+
+    public static func currentHostPlan() -> VMResourcePlan {
+        automatic(
+            processorCount: ProcessInfo.processInfo.processorCount,
+            physicalMemoryBytes: ProcessInfo.processInfo.physicalMemory
+        )
+    }
+}
+
 public struct VMProfile: Codable, Equatable, Identifiable, Sendable {
     public var id: String
     public var name: String

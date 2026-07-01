@@ -5,6 +5,30 @@ import Testing
 
 @Suite("VM profile store")
 struct VMProfileStoreTests {
+    @Test("automatic resource policy scales with host resources")
+    func automaticResourcePolicyScalesWithHostResources() {
+        let plan = VMResourcePolicy.automatic(
+            processorCount: 12,
+            physicalMemoryBytes: 64 * 1_024 * 1_024 * 1_024
+        )
+
+        #expect(plan.cpuCount == 6)
+        #expect(plan.memoryMB == 16_384)
+        #expect(plan.diskGB == 128)
+    }
+
+    @Test("automatic resource policy keeps small hosts usable")
+    func automaticResourcePolicyKeepsSmallHostsUsable() {
+        let plan = VMResourcePolicy.automatic(
+            processorCount: 4,
+            physicalMemoryBytes: 16 * 1_024 * 1_024 * 1_024
+        )
+
+        #expect(plan.cpuCount == 2)
+        #expect(plan.memoryMB == 4_096)
+        #expect(plan.diskGB == 128)
+    }
+
     @Test("saves and loads a profile as JSON")
     func savesAndLoadsProfile() async throws {
         let directory = FileManager.default.temporaryDirectory
@@ -110,6 +134,28 @@ struct VMProfileStoreTests {
             .passed,
             .passed
         ])
+    }
+
+    @Test("prepare default VM applies injected adaptive resource plan")
+    func prepareDefaultVMAppliesInjectedAdaptiveResourcePlan() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let homeDirectory = directory.appendingPathComponent("Home", isDirectory: true)
+        let store = JSONVMProfileStore(directory: directory)
+        let resourcePlan = VMResourcePlan(cpuCount: 6, memoryMB: 12_288, diskGB: 160)
+        let service = LocalVMRuntimeService(
+            profileStore: store,
+            defaultHomeDirectory: homeDirectory,
+            resourcePlan: resourcePlan
+        )
+
+        _ = try await service.prepareDefaultVM()
+        let profile = try #require(await store.load())
+
+        #expect(profile.cpuCount == 6)
+        #expect(profile.memoryMB == 12_288)
+        #expect(profile.diskGB == 160)
+        #expect(profile.virtualDiskPath?.hasSuffix("Windows 11 Arm.img") == true)
     }
 
     @Test("local runtime is not boot ready when VM profile resources are invalid")
