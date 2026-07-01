@@ -34,7 +34,7 @@ struct VeilHostShellApp: App {
                 launchWindowsAppAction: launchSelectedWindowsAppWindow,
                 consoleMessage: consoleMessage
             )
-                .frame(minWidth: 1180, idealWidth: 1360, minHeight: 740, idealHeight: 860)
+                .frame(minWidth: 1080, idealWidth: 1240, minHeight: 620, idealHeight: 720)
                 .task {
                     async let hostLoad: Void = model.load()
                     async let vmLoad: Void = vmModel.load()
@@ -45,13 +45,13 @@ struct VeilHostShellApp: App {
                     }
                 }
         }
-        .defaultSize(width: 1360, height: 860)
+        .defaultSize(width: 1240, height: 720)
         .defaultWindowPlacement { _, context in
             let visibleRect = context.defaultDisplay.visibleRect
-            let preferredSize = CGSize(width: 1360, height: 860)
+            let preferredSize = CGSize(width: 1240, height: 720)
             let size = CGSize(
-                width: min(preferredSize.width, max(min(1180, visibleRect.width), visibleRect.width * 0.90)),
-                height: min(preferredSize.height, max(min(740, visibleRect.height), visibleRect.height * 0.86))
+                width: min(preferredSize.width, max(min(1080, visibleRect.width), visibleRect.width * 0.82)),
+                height: min(preferredSize.height, max(min(620, visibleRect.height), visibleRect.height * 0.70))
             )
             return WindowPlacement(size: size)
         }
@@ -174,6 +174,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         applyBundledAppIcon()
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
+        DispatchQueue.main.async {
+            self.compactMainWindowIfNeeded()
+        }
     }
 
     @MainActor
@@ -184,5 +187,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         NSApp.applicationIconImage = icon
+    }
+
+    @MainActor
+    private func compactMainWindowIfNeeded() {
+        guard let window = NSApp.windows.first(where: { $0.title == "Veil" }) else {
+            return
+        }
+
+        let targetSize = NSSize(width: 1240, height: 720)
+        guard window.frame.height > targetSize.height + 40 else {
+            return
+        }
+
+        let visibleFrame = window.screen?.visibleFrame ?? NSScreen.main?.visibleFrame ?? window.frame
+        let origin = NSPoint(
+            x: visibleFrame.midX - targetSize.width / 2,
+            y: visibleFrame.midY - targetSize.height / 2
+        )
+        window.setFrame(NSRect(origin: origin, size: targetSize), display: true, animate: false)
     }
 }

@@ -475,6 +475,12 @@ private struct SimpleRuntimePanel: View {
                 state: snapshot.virtualDiskPath == nil ? .pending : .complete
             )
             SetupStatusItem(
+                title: "Auto Install",
+                detail: answerFileDetail,
+                symbolName: "text.document",
+                state: snapshot.automaticInstallMediaPath == nil ? .pending : .complete
+            )
+            SetupStatusItem(
                 title: "Ready",
                 detail: snapshot.bootReady ? "Can start" : "Needs setup",
                 symbolName: "checkmark.seal",
@@ -505,6 +511,14 @@ private struct SimpleRuntimePanel: View {
         }
 
         return .pending
+    }
+
+    private var answerFileDetail: String {
+        guard let path = snapshot.automaticInstallMediaPath else {
+            return "Not prepared"
+        }
+
+        return URL(fileURLWithPath: path).lastPathComponent
     }
 
     private var summaryText: String {

@@ -76,8 +76,8 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
     }
 
     private func frame(for bounds: WindowBounds) -> NSRect {
-        let width = min(max(CGFloat(bounds.width), 720), 1280)
-        let height = min(max(CGFloat(bounds.height), 460), 860)
+        let width = min(max(CGFloat(bounds.width), 760), 1040)
+        let height = min(max(CGFloat(bounds.height) * 0.70, 440), 620)
         return NSRect(x: 0, y: 0, width: width, height: height)
     }
 }
@@ -128,7 +128,7 @@ private struct WindowsAppMirrorPlaceholderView: View {
                         .foregroundStyle(.secondary)
                 }
 
-                Text("This macOS window is mapped to a Windows HWND. Live frame capture will replace this placeholder when the guest agent starts streaming the app surface.")
+                Text("Mapped to a Windows HWND. Live app pixels will appear here when the guest agent starts streaming this window.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)

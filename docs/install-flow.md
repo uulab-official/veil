@@ -8,18 +8,21 @@ Users should not manage a generic VM app once setup is complete. They should pre
 
 ## v0.1 Setup Model
 
-The macOS host stores a local VM profile and reports four setup steps:
+The macOS host stores a local VM profile and reports five setup steps:
 
 1. Windows 11 Arm installer
 2. Virtual disk
 3. macOS shared folder
-4. Veil guest agent
+4. Automatic install media
+5. Veil guest agent
 
-The first three are local host prerequisites. The guest agent step remains pending until Windows can boot and the agent installer exists.
+The first four are local host prerequisites. The guest agent step remains pending until Windows can boot and the agent installer exists.
 
 ## Current Host Behavior
 
 - Prepare VM creates the default Windows 11 Arm profile, the macOS shared folder at `~/Veil Shared`, and the default sparse disk in one action.
+- Prepare VM creates `~/Veil Shared/Autounattend.xml` with Windows Setup language/OOBE inputs and no product key.
+- Prepare VM creates `~/Veil Shared/VeilAutoInstall.iso`, a small local ISO containing only `Autounattend.xml`, so Windows Setup can read unattended inputs as a VM-attached device.
 - Prepare VM applies an adaptive resource profile from the current Mac: half of host CPU cores up to a safe cap, 25% of physical memory rounded down to a conservative VM cap, and a 128 GB default sparse disk.
 - `veil-vmctl prepare --installer <path>` prepares the same local profile, shared folder, default sparse disk, installer path, and diagnostics bundle from the command line.
 - Profile-only creation is still available for low-level setup testing.
@@ -29,8 +32,9 @@ The first three are local host prerequisites. The guest agent step remains pendi
 - The current local runtime provider is Apple Virtualization. A UTM-style QEMU/HVF provider is a local, serverless compatibility option under evaluation.
 - The runtime snapshot reports structured setup steps so the UI can show what is complete, blocked, or pending.
 - The runtime snapshot reports preflight checks for installer media, guest OS, CPU, memory, and disk size.
-- A profile becomes boot-ready only when installer media, virtual disk, shared folder, and preflight checks all pass.
+- A profile becomes boot-ready only when installer media, virtual disk, shared folder, automatic install media, and preflight checks all pass.
 - Pressing Start builds a `VZVirtualMachine`, starts it through Apple's Virtualization.framework, and opens a console window.
+- Apple Virtualization attaches the user-provided Windows ISO, the generated automatic install ISO, and the writable system disk when starting the VM.
 - While the VM is running, Show Console reopens the `VZVirtualMachineView` window if the user closes it.
 - `./script/build_and_run.sh --start-vm` launches the signed app bundle with the prepared profile and starts the VM automatically.
 - Pressing Stop stops the active VM process and closes the console window.
@@ -62,7 +66,7 @@ The QEMU/HVF compatibility spike has progressed past static planning: on July 1,
 
 Current QEMU boot evidence:
 
-- QEMU can start the local device graph with HVF, Arm UEFI, lock-safe read-only ISO media, writable raw system disk, NAT networking, Cocoa/ramfb graphics, USB input, and serial logging.
+- QEMU can start the local device graph with HVF, Arm UEFI, lock-safe read-only Windows ISO media, generated automatic install ISO media, writable raw system disk, NAT networking, Cocoa/ramfb graphics, USB input, and serial logging.
 - `veil-vmctl qemu-start` can launch the stored Windows Arm profile into a visible foreground Cocoa QEMU window.
 - When the same ISO is already attached to another VM, QEMU needs the file-driver form `file.locking=off` for read-only ISO reuse.
 - The current boot attempts reach Arm UEFI and map the installer ISO as `FS0`, but Windows Setup does not yet start automatically; UEFI reports a boot image timeout and falls back to the EDK II shell.
@@ -81,7 +85,7 @@ References:
 ```text
 Create or load VM profile
 ↓
-Validate Windows installer, virtual disk, and shared folder
+Validate Windows installer, virtual disk, shared folder, and automatic install media
 ↓
 Run profile preflight checks
 ↓

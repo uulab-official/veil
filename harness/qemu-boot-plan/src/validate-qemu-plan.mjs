@@ -14,6 +14,7 @@ const REQUIRED_SEQUENCES = [
 
 const REQUIRED_DEVICES = [
   "usb-storage,drive=installer",
+  "usb-storage,drive=autounattend",
   "qemu-xhci,id=usb0",
   "virtio-blk-pci,drive=system",
   "ramfb",
@@ -31,6 +32,7 @@ export function validateQEMUPlan(plan) {
   requireString(plan.provider, "provider");
   requireString(plan.executablePath, "executablePath");
   requireString(plan.firmwarePath, "firmwarePath");
+  requireString(plan.automaticInstallMediaPath, "automaticInstallMediaPath");
   requireString(plan.summary, "summary");
 
   if (plan.kind !== "qemuWindowsArmBootPlan") {
@@ -84,6 +86,7 @@ export function validateQEMUPlan(plan) {
   const driveArguments = plan.arguments.filter((argument) => argument.includes("if=none,"));
   const biosIndex = plan.arguments.indexOf("-bios");
   const installerDrive = driveArguments.find((argument) => argument.includes("id=installer"));
+  const autoInstallDrive = driveArguments.find((argument) => argument.includes("id=autounattend"));
   const systemDrive = driveArguments.find((argument) => argument.includes("id=system"));
 
   if (biosIndex === -1 || plan.arguments[biosIndex + 1] !== plan.firmwarePath) {
@@ -104,6 +107,18 @@ export function validateQEMUPlan(plan) {
 
   if (!systemDrive || !systemDrive.includes("format=raw")) {
     throw new TypeError("QEMU plan must attach a writable raw system disk.");
+  }
+
+  if (!autoInstallDrive || !autoInstallDrive.includes("media=cdrom") || !autoInstallDrive.includes("readonly=on")) {
+    throw new TypeError("QEMU plan must attach automatic install media as a read-only cdrom drive.");
+  }
+
+  if (!autoInstallDrive.includes(plan.automaticInstallMediaPath)) {
+    throw new TypeError("QEMU automatic install drive must point to the declared automatic install media path.");
+  }
+
+  if (!plan.automaticInstallMediaPath.endsWith("VeilAutoInstall.iso")) {
+    throw new TypeError("QEMU automatic install media must point to VeilAutoInstall.iso.");
   }
 
   if (!installerDrive.includes(".iso")) {

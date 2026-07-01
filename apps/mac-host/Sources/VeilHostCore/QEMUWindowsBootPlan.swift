@@ -22,6 +22,7 @@ public struct QEMUWindowsBootPlan: Codable, Equatable, Sendable {
     public var isExecutableAvailable: Bool
     public var firmwarePath: String?
     public var isFirmwareAvailable: Bool
+    public var automaticInstallMediaPath: String?
     public var summary: String
     public var arguments: [String]
     public var warnings: [String]
@@ -34,6 +35,7 @@ public struct QEMUWindowsBootPlan: Codable, Equatable, Sendable {
         isExecutableAvailable: Bool,
         firmwarePath: String? = nil,
         isFirmwareAvailable: Bool = false,
+        automaticInstallMediaPath: String? = nil,
         summary: String,
         arguments: [String],
         warnings: [String]
@@ -45,6 +47,7 @@ public struct QEMUWindowsBootPlan: Codable, Equatable, Sendable {
         self.isExecutableAvailable = isExecutableAvailable
         self.firmwarePath = firmwarePath
         self.isFirmwareAvailable = isFirmwareAvailable
+        self.automaticInstallMediaPath = automaticInstallMediaPath
         self.summary = summary
         self.arguments = arguments
         self.warnings = warnings
@@ -80,6 +83,9 @@ public struct QEMUWindowsBootPlanner: Sendable {
 
         let cpuCount = max(2, profile.cpuCount)
         let memoryMB = max(4_096, profile.memoryMB)
+        let automaticInstallMediaPath = URL(fileURLWithPath: profile.sharedFolderPath)
+            .appendingPathComponent("VeilAutoInstall.iso")
+            .path
         var warnings: [String] = []
 
         if !isExecutableAvailable {
@@ -110,8 +116,10 @@ public struct QEMUWindowsBootPlanner: Sendable {
             "-smp", "\(cpuCount)",
             "-m", "\(memoryMB)M",
             "-drive", "driver=raw,file.driver=file,file.locking=off,file.filename=\(installerMediaPath),if=none,id=installer,media=cdrom,readonly=on",
+            "-drive", "driver=raw,file.driver=file,file.locking=off,file.filename=\(automaticInstallMediaPath),if=none,id=autounattend,media=cdrom,readonly=on",
             "-device", "qemu-xhci,id=usb0",
             "-device", "usb-storage,drive=installer",
+            "-device", "usb-storage,drive=autounattend",
             "-drive", "if=none,id=system,format=raw,file=\(virtualDiskPath)",
             "-device", "virtio-blk-pci,drive=system",
             "-netdev", "user,id=net0",
@@ -128,6 +136,7 @@ public struct QEMUWindowsBootPlanner: Sendable {
             isExecutableAvailable: isExecutableAvailable,
             firmwarePath: firmwarePath,
             isFirmwareAvailable: isFirmwareAvailable,
+            automaticInstallMediaPath: automaticInstallMediaPath,
             summary: "Dry-run QEMU/HVF command plan for \(profile.name). Veil does not execute this plan yet.",
             arguments: arguments,
             warnings: warnings
@@ -210,6 +219,7 @@ public struct QEMUWindowsReadinessDoctor: Sendable {
         let checks = [
             profileCheck(profile),
             installerMediaCheck(profile),
+            automaticInstallMediaCheck(plan),
             systemDiskCheck(profile),
             qemuExecutableCheck(plan),
             uefiFirmwareCheck(plan),
@@ -268,6 +278,33 @@ public struct QEMUWindowsReadinessDoctor: Sendable {
             title: "Installer media",
             state: .passed,
             detail: "Installer ISO is available at \(path)."
+        )
+    }
+
+    private func automaticInstallMediaCheck(_ plan: QEMUWindowsBootPlan?) -> QEMUWindowsReadinessCheck {
+        guard let path = nonEmpty(plan?.automaticInstallMediaPath) else {
+            return QEMUWindowsReadinessCheck(
+                id: "automatic-install-media",
+                title: "Automatic install media",
+                state: .blocked,
+                detail: "No automatic Windows setup media is configured."
+            )
+        }
+
+        guard fileExists(path) else {
+            return QEMUWindowsReadinessCheck(
+                id: "automatic-install-media",
+                title: "Automatic install media",
+                state: .blocked,
+                detail: "Automatic setup media is missing at \(path)."
+            )
+        }
+
+        return QEMUWindowsReadinessCheck(
+            id: "automatic-install-media",
+            title: "Automatic install media",
+            state: .passed,
+            detail: "Automatic setup media is available at \(path)."
         )
     }
 
@@ -397,6 +434,10 @@ public struct QEMUWindowsReadinessDoctor: Sendable {
 
         if checks.first(where: { $0.id == "installer-media" })?.state == .blocked {
             actions.append("Choose a local Windows 11 Arm ISO and run veil-vmctl prepare --installer /path/to/Windows.iso.")
+        }
+
+        if checks.first(where: { $0.id == "automatic-install-media" })?.state == .blocked {
+            actions.append("Run veil-vmctl prepare --installer /path/to/Windows.iso to create VeilAutoInstall.iso.")
         }
 
         if checks.first(where: { $0.id == "system-disk" })?.state == .blocked {

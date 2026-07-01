@@ -5,7 +5,7 @@ Goal: turn the Parallels-style IA setup flow into explicit host-side Windows Arm
 ## Checklist
 
 - [x] Add structured setup steps to VM runtime snapshots.
-- [x] Report installer media, virtual disk, shared folder, and guest-agent states.
+- [x] Report installer media, virtual disk, shared folder, automatic install media, and guest-agent states.
 - [x] Create the default macOS shared folder when creating the default VM profile.
 - [x] Require installer media, virtual disk, and shared folder readiness before boot readiness.
 - [x] Show setup steps in the SwiftUI VM Runtime panel.

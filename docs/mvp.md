@@ -9,11 +9,11 @@ Prove that Veil can run one Windows desktop app as a macOS-like window without m
 Acceptance criteria:
 
 - A macOS host app can create or load a VM profile.
-- The host can prepare the default profile, shared folder, and virtual disk in one action.
+- The host can prepare the default profile, shared folder, automatic install media, and virtual disk in one action.
 - The default profile applies an adaptive CPU, memory, and disk resource plan from the current Mac before boot.
 - Default profile creation prepares the macOS shared folder.
 - The host can create a blank default virtual disk file for the profile.
-- The host reports Windows installer, virtual disk, shared folder, and guest-agent setup steps.
+- The host reports Windows installer, virtual disk, shared folder, automatic install media, and guest-agent setup steps.
 - The host reports preflight checks for Windows Arm, CPU, memory, and disk settings.
 - The VM can be started from the host app through Virtualization.framework.
 - The active VM can be stopped from the host app.
@@ -63,8 +63,8 @@ Acceptance criteria:
 
 ## MVP Non-Goals
 
-- polished installer,
-- Windows install automation beyond local setup prerequisites,
+- a fully polished installer,
+- claiming fully unattended Windows installation before a real boot reaches Windows Setup,
 - multi-monitor support,
 - DirectX/game performance,
 - USB passthrough,

@@ -152,9 +152,27 @@ public final class VirtualizationVMRuntimeBooter: VMRuntimeBooting, @unchecked S
         )
 
         let installerDevice = VZUSBMassStorageDeviceConfiguration(attachment: installerAttachment)
+        let autoInstallDevice = try autoInstallMediaDevice(for: profile)
         let diskDevice = VZVirtioBlockDeviceConfiguration(attachment: diskAttachment)
         diskDevice.blockDeviceIdentifier = VMRuntimeDeviceDefaults.systemDiskIdentifier
-        return [installerDevice, diskDevice]
+
+        var devices: [VZStorageDeviceConfiguration] = [installerDevice]
+        if let autoInstallDevice {
+            devices.append(autoInstallDevice)
+        }
+        devices.append(diskDevice)
+        return devices
+    }
+
+    private func autoInstallMediaDevice(for profile: VMProfile) throws -> VZUSBMassStorageDeviceConfiguration? {
+        let mediaURL = URL(fileURLWithPath: profile.sharedFolderPath)
+            .appendingPathComponent("VeilAutoInstall.iso")
+        guard FileManager.default.fileExists(atPath: mediaURL.path) else {
+            return nil
+        }
+
+        let attachment = try VZDiskImageStorageDeviceAttachment(url: mediaURL, readOnly: true)
+        return VZUSBMassStorageDeviceConfiguration(attachment: attachment)
     }
 
     private func metadataURL(for profile: VMProfile, pathExtension: String) throws -> URL {

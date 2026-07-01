@@ -231,6 +231,8 @@ public struct VMRuntimeSnapshot: Codable, Equatable, Sendable {
     public var installerMediaPath: String?
     public var discoveredInstallerMediaPath: String?
     public var virtualDiskPath: String?
+    public var automaticInstallAnswerFilePath: String?
+    public var automaticInstallMediaPath: String?
     public var runtimeProvider: VMRuntimeProviderSummary?
     public var runtimeProviders: [VMRuntimeProviderSummary]
     public var installationSteps: [VMInstallationStep]
@@ -251,6 +253,8 @@ public struct VMRuntimeSnapshot: Codable, Equatable, Sendable {
         installerMediaPath: String? = nil,
         discoveredInstallerMediaPath: String? = nil,
         virtualDiskPath: String? = nil,
+        automaticInstallAnswerFilePath: String? = nil,
+        automaticInstallMediaPath: String? = nil,
         runtimeProvider: VMRuntimeProviderSummary? = nil,
         runtimeProviders: [VMRuntimeProviderSummary] = [],
         installationSteps: [VMInstallationStep] = [],
@@ -270,6 +274,8 @@ public struct VMRuntimeSnapshot: Codable, Equatable, Sendable {
         self.installerMediaPath = installerMediaPath
         self.discoveredInstallerMediaPath = discoveredInstallerMediaPath
         self.virtualDiskPath = virtualDiskPath
+        self.automaticInstallAnswerFilePath = automaticInstallAnswerFilePath
+        self.automaticInstallMediaPath = automaticInstallMediaPath
         self.runtimeProvider = runtimeProvider
         self.runtimeProviders = runtimeProviders
         self.installationSteps = installationSteps
@@ -536,6 +542,7 @@ public enum VMRuntimeError: Error, LocalizedError, Equatable, Sendable {
     case capabilityProbeFailed
     case bootNotImplemented
     case bootPrerequisitesMissing
+    case automaticInstallMediaCreationFailed(String)
 
     public var errorDescription: String? {
         switch self {
@@ -545,7 +552,88 @@ public enum VMRuntimeError: Error, LocalizedError, Equatable, Sendable {
             "VM boot is not implemented yet."
         case .bootPrerequisitesMissing:
             "Installer media, virtual disk, shared folder, and preflight checks must be ready before starting Windows."
+        case let .automaticInstallMediaCreationFailed(message):
+            "Unable to create automatic Windows install media: \(message)"
         }
+    }
+}
+
+public protocol AutomaticInstallMediaBuilding: Sendable {
+    func prepareMedia(answerFileURL: URL, mediaURL: URL) throws
+}
+
+public struct HdiutilAutomaticInstallMediaBuilder: AutomaticInstallMediaBuilding {
+    private let processRunner: @Sendable (String, [String]) throws -> Int32
+
+    public init(
+        processRunner: @escaping @Sendable (String, [String]) throws -> Int32 = Self.runProcess
+    ) {
+        self.processRunner = processRunner
+    }
+
+    public func prepareMedia(answerFileURL: URL, mediaURL: URL) throws {
+        let fileManager = FileManager.default
+        guard fileManager.fileExists(atPath: answerFileURL.path) else {
+            throw VMRuntimeError.automaticInstallMediaCreationFailed("Autounattend.xml is missing.")
+        }
+
+        if fileManager.fileExists(atPath: mediaURL.path) {
+            return
+        }
+
+        let stagingDirectory = mediaURL.deletingLastPathComponent()
+            .appendingPathComponent(".veil-auto-install-media", isDirectory: true)
+        try? fileManager.removeItem(at: stagingDirectory)
+        try fileManager.createDirectory(at: stagingDirectory, withIntermediateDirectories: true)
+        defer {
+            try? fileManager.removeItem(at: stagingDirectory)
+        }
+
+        try fileManager.copyItem(
+            at: answerFileURL,
+            to: stagingDirectory.appendingPathComponent("Autounattend.xml")
+        )
+
+        let temporaryOutputURL = mediaURL.deletingPathExtension()
+            .appendingPathExtension("iso.tmp")
+        try? fileManager.removeItem(at: temporaryOutputURL)
+        try? fileManager.removeItem(at: mediaURL)
+
+        let exitCode = try processRunner(
+            "/usr/bin/hdiutil",
+            [
+                "makehybrid",
+                "-iso",
+                "-joliet",
+                "-default-volume-name",
+                "VEIL_AUTO",
+                "-o",
+                temporaryOutputURL.path,
+                stagingDirectory.path
+            ]
+        )
+
+        guard exitCode == 0 else {
+            throw VMRuntimeError.automaticInstallMediaCreationFailed("hdiutil exited with code \(exitCode).")
+        }
+
+        let generatedURL = temporaryOutputURL.appendingPathExtension("iso")
+        if fileManager.fileExists(atPath: generatedURL.path) {
+            try fileManager.moveItem(at: generatedURL, to: mediaURL)
+        } else if fileManager.fileExists(atPath: temporaryOutputURL.path) {
+            try fileManager.moveItem(at: temporaryOutputURL, to: mediaURL)
+        } else {
+            throw VMRuntimeError.automaticInstallMediaCreationFailed("hdiutil did not produce an ISO image.")
+        }
+    }
+
+    public static func runProcess(executablePath: String, arguments: [String]) throws -> Int32 {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: executablePath)
+        process.arguments = arguments
+        try process.run()
+        process.waitUntilExit()
+        return process.terminationStatus
     }
 }
 
@@ -764,6 +852,7 @@ public struct LocalVMRuntimeService: VMRuntimeService {
     private let providerProbe: VMRuntimeProviderProbe
     private let resourcePlan: VMResourcePlan?
     private let diagnosticDate: @Sendable () -> Date
+    private let automaticInstallMediaBuilder: any AutomaticInstallMediaBuilding
 
     public init(
         profileStore: any VMProfileStore = JSONVMProfileStore(),
@@ -772,7 +861,8 @@ public struct LocalVMRuntimeService: VMRuntimeService {
         bootReportStore: any VMRuntimeBootReportStore = JSONVMRuntimeBootReportStore(),
         providerProbe: VMRuntimeProviderProbe = VMRuntimeProviderProbe(),
         resourcePlan: VMResourcePlan? = nil,
-        diagnosticDate: @escaping @Sendable () -> Date = Date.init
+        diagnosticDate: @escaping @Sendable () -> Date = Date.init,
+        automaticInstallMediaBuilder: any AutomaticInstallMediaBuilding = HdiutilAutomaticInstallMediaBuilder()
     ) {
         self.profileStore = profileStore
         self.defaultHomeDirectory = defaultHomeDirectory
@@ -781,6 +871,7 @@ public struct LocalVMRuntimeService: VMRuntimeService {
         self.providerProbe = providerProbe
         self.resourcePlan = resourcePlan
         self.diagnosticDate = diagnosticDate
+        self.automaticInstallMediaBuilder = automaticInstallMediaBuilder
     }
 
     public func loadSnapshot() async throws -> VMRuntimeSnapshot {
@@ -825,6 +916,8 @@ public struct LocalVMRuntimeService: VMRuntimeService {
                 installerMediaPath: profile.installerMediaPath,
                 discoveredInstallerMediaPath: profile.installerMediaPath == nil ? discoveredInstallerMediaPath : nil,
                 virtualDiskPath: profile.virtualDiskPath,
+                automaticInstallAnswerFilePath: Self.automaticInstallAnswerFilePathIfExists(for: profile),
+                automaticInstallMediaPath: Self.automaticInstallMediaPathIfExists(for: profile),
                 runtimeProvider: activeProvider,
                 runtimeProviders: runtimeProviders,
                 installationSteps: installationSteps,
@@ -889,6 +982,11 @@ public struct LocalVMRuntimeService: VMRuntimeService {
             atPath: profile.sharedFolderPath,
             withIntermediateDirectories: true
         )
+        try Self.prepareAutomaticInstallAnswerFile(for: profile)
+        try automaticInstallMediaBuilder.prepareMedia(
+            answerFileURL: Self.automaticInstallAnswerFileURL(for: profile),
+            mediaURL: Self.automaticInstallMediaURL(for: profile)
+        )
 
         if profile.installerMediaPath == nil,
            let installerMediaURL = discoverDefaultInstallerMedia() {
@@ -920,6 +1018,81 @@ public struct LocalVMRuntimeService: VMRuntimeService {
 
         profile.virtualDiskPath = diskURL.path
         return profile
+    }
+
+    private static func automaticInstallAnswerFileURL(for profile: VMProfile) -> URL {
+        URL(fileURLWithPath: profile.sharedFolderPath)
+            .appendingPathComponent("Autounattend.xml")
+    }
+
+    private static func automaticInstallMediaURL(for profile: VMProfile) -> URL {
+        URL(fileURLWithPath: profile.sharedFolderPath)
+            .appendingPathComponent("VeilAutoInstall.iso")
+    }
+
+    private static func automaticInstallAnswerFilePathIfExists(for profile: VMProfile) -> String? {
+        let url = automaticInstallAnswerFileURL(for: profile)
+        guard FileManager.default.fileExists(atPath: url.path) else {
+            return nil
+        }
+
+        return url.path
+    }
+
+    private static func automaticInstallMediaPathIfExists(for profile: VMProfile) -> String? {
+        let url = automaticInstallMediaURL(for: profile)
+        guard FileManager.default.fileExists(atPath: url.path) else {
+            return nil
+        }
+
+        return url.path
+    }
+
+    private static func prepareAutomaticInstallAnswerFile(for profile: VMProfile) throws {
+        let answerFileURL = automaticInstallAnswerFileURL(for: profile)
+        guard !FileManager.default.fileExists(atPath: answerFileURL.path) else {
+            return
+        }
+
+        let answerFile = """
+        <?xml version="1.0" encoding="utf-8"?>
+        <unattend xmlns="urn:schemas-microsoft-com:unattend">
+          <settings pass="windowsPE">
+            <component name="Microsoft-Windows-International-Core-WinPE" processorArchitecture="arm64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
+              <SetupUILanguage>
+                <UILanguage>ko-KR</UILanguage>
+              </SetupUILanguage>
+              <InputLocale>ko-KR</InputLocale>
+              <SystemLocale>ko-KR</SystemLocale>
+              <UILanguage>ko-KR</UILanguage>
+              <UserLocale>ko-KR</UserLocale>
+            </component>
+            <component name="Microsoft-Windows-Setup" processorArchitecture="arm64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
+              <UserData>
+                <AcceptEula>true</AcceptEula>
+              </UserData>
+            </component>
+          </settings>
+          <settings pass="oobeSystem">
+            <component name="Microsoft-Windows-International-Core" processorArchitecture="arm64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
+              <InputLocale>ko-KR</InputLocale>
+              <SystemLocale>ko-KR</SystemLocale>
+              <UILanguage>ko-KR</UILanguage>
+              <UserLocale>ko-KR</UserLocale>
+            </component>
+            <component name="Microsoft-Windows-Shell-Setup" processorArchitecture="arm64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
+              <OOBE>
+                <HideEULAPage>true</HideEULAPage>
+                <HideOnlineAccountScreens>false</HideOnlineAccountScreens>
+                <ProtectYourPC>3</ProtectYourPC>
+              </OOBE>
+            </component>
+          </settings>
+        </unattend>
+
+        """
+
+        try answerFile.write(to: answerFileURL, atomically: true, encoding: .utf8)
     }
 
     private func discoverDefaultInstallerMedia() -> URL? {
@@ -1129,6 +1302,8 @@ public struct LocalVMRuntimeService: VMRuntimeService {
         installationSteps: [VMInstallationStep],
         preflightChecks: [VMPreflightCheck]
     ) -> (isReady: Bool, detail: String) {
+        let hasFailedPreflight = preflightChecks.contains(where: { $0.state == .failed })
+
         for step in installationSteps where step.id != "guest-agent" && step.state != .complete {
             if step.id == "windows-installer" || step.id == "virtual-disk" {
                 let missingPathDetails = [
@@ -1139,12 +1314,18 @@ public struct LocalVMRuntimeService: VMRuntimeService {
                 if missingPathDetails.contains(step.detail) {
                     return (false, "Installer media and virtual disk paths are required before boot.")
                 }
+
+                return (false, step.detail)
+            }
+
+            if hasFailedPreflight {
+                return (false, "VM profile needs attention before boot.")
             }
 
             return (false, step.detail)
         }
 
-        if preflightChecks.contains(where: { $0.state == .failed }) {
+        if hasFailedPreflight {
             return (false, "VM profile needs attention before boot.")
         }
 
@@ -1176,6 +1357,18 @@ public struct LocalVMRuntimeService: VMRuntimeService {
             validationLabel: "Virtual disk"
         )
         let sharedFolderState = directoryStepState(path: profile.sharedFolderPath)
+        let answerFileURL = automaticInstallAnswerFileURL(for: profile)
+        let answerMediaURL = automaticInstallMediaURL(for: profile)
+        let answerFileState = fileStepState(
+            path: answerFileURL.path,
+            missingDetail: "Run Auto Prepare to create the Windows unattended setup answer file.",
+            validationLabel: "Automatic install answer file"
+        )
+        let answerMediaState = fileStepState(
+            path: answerMediaURL.path,
+            missingDetail: "Run Auto Prepare to create the Windows unattended setup media.",
+            validationLabel: "Automatic install media"
+        )
 
         return [
             VMInstallationStep(
@@ -1197,6 +1390,15 @@ public struct LocalVMRuntimeService: VMRuntimeService {
                 state: sharedFolderState.state
             ),
             VMInstallationStep(
+                id: "auto-install-answer-file",
+                title: "Automatic install media",
+                detail: automaticInstallStepDetail(
+                    answerFileState: answerFileState,
+                    answerMediaState: answerMediaState
+                ),
+                state: answerFileState.state == .complete && answerMediaState.state == .complete ? .complete : .blocked
+            ),
+            VMInstallationStep(
                 id: "guest-agent",
                 title: "Veil guest agent",
                 detail: "Install the guest agent inside Windows after the VM boot spike lands.",
@@ -1214,6 +1416,12 @@ public struct LocalVMRuntimeService: VMRuntimeService {
                     role: "installer",
                     attachment: "USB mass storage",
                     path: profile.installerMediaPath,
+                    readOnly: true
+                ),
+                VMRuntimeStorageDeviceSummary(
+                    role: "auto-install",
+                    attachment: "USB mass storage",
+                    path: automaticInstallMediaPathIfExists(for: profile),
                     readOnly: true
                 ),
                 VMRuntimeStorageDeviceSummary(
@@ -1247,6 +1455,21 @@ public struct LocalVMRuntimeService: VMRuntimeService {
         }
 
         return (.complete, nil)
+    }
+
+    private static func automaticInstallStepDetail(
+        answerFileState: (state: VMInstallationStepState, detail: String?),
+        answerMediaState: (state: VMInstallationStepState, detail: String?)
+    ) -> String {
+        if answerFileState.state != .complete {
+            return answerFileState.detail ?? "Run Auto Prepare to create the Windows unattended setup answer file."
+        }
+
+        if answerMediaState.state != .complete {
+            return answerMediaState.detail ?? "Run Auto Prepare to create the Windows unattended setup media."
+        }
+
+        return "VeilAutoInstall.iso is ready for Windows Setup unattended inputs."
     }
 
     private static func directoryStepState(path: String) -> (state: VMInstallationStepState, detail: String?) {

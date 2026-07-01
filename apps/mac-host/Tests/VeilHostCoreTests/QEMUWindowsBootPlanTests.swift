@@ -10,6 +10,7 @@ struct QEMUWindowsBootPlanTests {
         var profile = VMProfile.defaultWindows11Arm(createdAt: Date(timeIntervalSince1970: 1_782_752_400))
         profile.installerMediaPath = "/Users/test/Downloads/Win11_25H2_Korean_Arm64_v2.iso"
         profile.virtualDiskPath = "/Users/test/Virtual Machines/Veil/Windows 11 Arm.img"
+        profile.sharedFolderPath = "/Users/test/Veil Shared"
         profile.cpuCount = 8
         profile.memoryMB = 12_288
 
@@ -34,11 +35,14 @@ struct QEMUWindowsBootPlanTests {
         #expect(plan.arguments.containsSequence(["-smp", "8"]))
         #expect(plan.arguments.containsSequence(["-m", "12288M"]))
         #expect(plan.arguments.contains("driver=raw,file.driver=file,file.locking=off,file.filename=/Users/test/Downloads/Win11_25H2_Korean_Arm64_v2.iso,if=none,id=installer,media=cdrom,readonly=on"))
+        #expect(plan.automaticInstallMediaPath == "/Users/test/Veil Shared/VeilAutoInstall.iso")
+        #expect(plan.arguments.contains("driver=raw,file.driver=file,file.locking=off,file.filename=/Users/test/Veil Shared/VeilAutoInstall.iso,if=none,id=autounattend,media=cdrom,readonly=on"))
         #expect(plan.arguments.contains("if=none,id=system,format=raw,file=/Users/test/Virtual Machines/Veil/Windows 11 Arm.img"))
         #expect(plan.arguments.containsSequence(["-netdev", "user,id=net0"]))
         #expect(plan.arguments.containsSequence(["-device", "virtio-net-pci,netdev=net0"]))
         #expect(plan.arguments.containsSequence(["-display", "cocoa"]))
         #expect(plan.arguments.containsSequence(["-device", "qemu-xhci,id=usb0"]))
+        #expect(plan.arguments.containsSequence(["-device", "usb-storage,drive=autounattend"]))
         #expect(plan.arguments.contains("ramfb"))
         #expect(plan.arguments.contains("virtio-gpu-pci"))
         #expect(plan.arguments.contains("usb-kbd"))
@@ -68,6 +72,7 @@ struct QEMUWindowsBootPlanTests {
         var profile = VMProfile.defaultWindows11Arm(createdAt: Date(timeIntervalSince1970: 1_782_752_400))
         profile.installerMediaPath = "/Users/test/Downloads/Win11_25H2_Korean_Arm64_v2.iso"
         profile.virtualDiskPath = "/Users/test/Virtual Machines/Veil/Windows 11 Arm.img"
+        profile.sharedFolderPath = "/Users/test/Veil Shared"
 
         let planner = QEMUWindowsBootPlanner(
             executablePath: "/opt/homebrew/bin/qemu-system-aarch64",
@@ -87,6 +92,7 @@ struct QEMUWindowsBootPlanTests {
         var profile = VMProfile.defaultWindows11Arm(createdAt: Date(timeIntervalSince1970: 1_782_752_400))
         profile.installerMediaPath = "/Users/test/Downloads/Win11_25H2_Korean_Arm64_v2.iso"
         profile.virtualDiskPath = "/Users/test/Virtual Machines/Veil/Windows 11 Arm.img"
+        profile.sharedFolderPath = "/Users/test/Veil Shared"
 
         let planner = QEMUWindowsBootPlanner(
             executablePath: "/opt/homebrew/bin/qemu-system-aarch64",
@@ -98,6 +104,7 @@ struct QEMUWindowsBootPlanTests {
         let doctor = QEMUWindowsReadinessDoctor(
             fileExists: { path in
                 path == "/Users/test/Downloads/Win11_25H2_Korean_Arm64_v2.iso"
+                    || path == "/Users/test/Veil Shared/VeilAutoInstall.iso"
                     || path == "/Users/test/Virtual Machines/Veil/Windows 11 Arm.img"
                     || path == "/opt/homebrew/bin/qemu-system-aarch64"
                     || path == "/opt/homebrew/share/qemu/edk2-aarch64-code.fd"
@@ -111,6 +118,7 @@ struct QEMUWindowsBootPlanTests {
         #expect(report.checks.map(\.id) == [
             "vm-profile",
             "installer-media",
+            "automatic-install-media",
             "system-disk",
             "qemu-executable",
             "uefi-firmware",
@@ -125,6 +133,7 @@ struct QEMUWindowsBootPlanTests {
         var profile = VMProfile.defaultWindows11Arm(createdAt: Date(timeIntervalSince1970: 1_782_752_400))
         profile.installerMediaPath = "/Users/test/Downloads/Win11_25H2_Korean_Arm64_v2.iso"
         profile.virtualDiskPath = "/Users/test/Virtual Machines/Veil/Windows 11 Arm.img"
+        profile.sharedFolderPath = "/Users/test/Veil Shared"
 
         let planner = QEMUWindowsBootPlanner(
             executablePath: "/opt/homebrew/bin/qemu-system-aarch64",
@@ -136,6 +145,7 @@ struct QEMUWindowsBootPlanTests {
         let doctor = QEMUWindowsReadinessDoctor(
             fileExists: { path in
                 path == "/Users/test/Downloads/Win11_25H2_Korean_Arm64_v2.iso"
+                    || path == "/Users/test/Veil Shared/VeilAutoInstall.iso"
                     || path == "/Users/test/Virtual Machines/Veil/Windows 11 Arm.img"
                     || path == "/opt/homebrew/share/qemu/edk2-aarch64-code.fd"
             }
@@ -155,6 +165,7 @@ struct QEMUWindowsBootPlanTests {
         var profile = VMProfile.defaultWindows11Arm(createdAt: Date(timeIntervalSince1970: 1_782_752_400))
         profile.installerMediaPath = "/Users/test/Downloads/Win11_25H2_Korean_Arm64_v2.iso"
         profile.virtualDiskPath = "/Users/test/Virtual Machines/Veil/Windows 11 Arm.img"
+        profile.sharedFolderPath = "/Users/test/Veil Shared"
 
         let planner = QEMUWindowsBootPlanner(
             executablePath: "/opt/homebrew/bin/qemu-system-aarch64",
@@ -166,6 +177,7 @@ struct QEMUWindowsBootPlanTests {
         let doctor = QEMUWindowsReadinessDoctor(
             fileExists: { path in
                 path == "/Users/test/Downloads/Win11_25H2_Korean_Arm64_v2.iso"
+                    || path == "/Users/test/Veil Shared/VeilAutoInstall.iso"
                     || path == "/Users/test/Virtual Machines/Veil/Windows 11 Arm.img"
                     || path == "/opt/homebrew/bin/qemu-system-aarch64"
             }
@@ -241,6 +253,7 @@ struct QEMUWindowsBootPlanTests {
         var profile = VMProfile.defaultWindows11Arm(createdAt: Date(timeIntervalSince1970: 1_782_752_400))
         profile.installerMediaPath = "/Users/test/Downloads/Win11_25H2_Korean_Arm64_v2.iso"
         profile.virtualDiskPath = "/Users/test/Virtual Machines/Veil/Windows 11 Arm.img"
+        profile.sharedFolderPath = "/Users/test/Veil Shared"
         let plan = try QEMUWindowsBootPlanner(
             executablePath: "/opt/homebrew/bin/qemu-system-aarch64",
             isExecutableAvailable: true,

@@ -85,9 +85,11 @@ struct VMProfileStoreTests {
             "windows-installer",
             "virtual-disk",
             "shared-folder",
+            "auto-install-answer-file",
             "guest-agent"
         ])
         #expect(snapshot.installationSteps.map(\.state) == [
+            .blocked,
             .blocked,
             .blocked,
             .blocked,
@@ -106,6 +108,8 @@ struct VMProfileStoreTests {
         try Data("installer".utf8).write(to: installerURL)
         try Data("disk".utf8).write(to: diskURL)
         try FileManager.default.createDirectory(at: sharedFolderURL, withIntermediateDirectories: true)
+        try Data("<unattend />".utf8).write(to: sharedFolderURL.appendingPathComponent("Autounattend.xml"))
+        try Data("auto install media".utf8).write(to: sharedFolderURL.appendingPathComponent("VeilAutoInstall.iso"))
         let store = JSONVMProfileStore(directory: directory)
         var profile = VMProfile.defaultWindows11Arm(createdAt: Date(timeIntervalSince1970: 1_782_752_400))
         profile.installerMediaPath = installerURL.path
@@ -123,6 +127,7 @@ struct VMProfileStoreTests {
         #expect(snapshot.bootReady)
         #expect(snapshot.detail == "Ready to start Windows.")
         #expect(snapshot.installationSteps.map(\.state) == [
+            .complete,
             .complete,
             .complete,
             .complete,
@@ -261,6 +266,8 @@ struct VMProfileStoreTests {
         try Data("installer".utf8).write(to: installerURL)
         try Data("disk".utf8).write(to: diskURL)
         try FileManager.default.createDirectory(at: sharedFolderURL, withIntermediateDirectories: true)
+        try Data("<unattend />".utf8).write(to: sharedFolderURL.appendingPathComponent("Autounattend.xml"))
+        try Data("auto install media".utf8).write(to: sharedFolderURL.appendingPathComponent("VeilAutoInstall.iso"))
         let store = JSONVMProfileStore(directory: directory)
         var profile = VMProfile.defaultWindows11Arm(createdAt: Date(timeIntervalSince1970: 1_782_752_400))
         profile.installerMediaPath = installerURL.path
@@ -279,10 +286,14 @@ struct VMProfileStoreTests {
         #expect(devices.graphics.heightInPixels == 900)
         #expect(devices.inputDevices == ["USB keyboard", "USB screen-coordinate pointer"])
         #expect(devices.entropyDevice == "Virtio entropy")
-        #expect(devices.storageDevices.map(\.role) == ["installer", "system-disk"])
-        #expect(devices.storageDevices.map(\.attachment) == ["USB mass storage", "Virtio block"])
-        #expect(devices.storageDevices.map(\.readOnly) == [true, false])
-        #expect(devices.storageDevices.map(\.path) == [installerURL.path, diskURL.path])
+        #expect(devices.storageDevices.map(\.role) == ["installer", "auto-install", "system-disk"])
+        #expect(devices.storageDevices.map(\.attachment) == ["USB mass storage", "USB mass storage", "Virtio block"])
+        #expect(devices.storageDevices.map(\.readOnly) == [true, true, false])
+        #expect(devices.storageDevices.map(\.path) == [
+            installerURL.path,
+            sharedFolderURL.appendingPathComponent("VeilAutoInstall.iso").path,
+            diskURL.path
+        ])
     }
 
     @Test("prepare default VM applies injected adaptive resource plan")
@@ -318,6 +329,8 @@ struct VMProfileStoreTests {
         try Data("installer".utf8).write(to: installerURL)
         try Data("disk".utf8).write(to: diskURL)
         try FileManager.default.createDirectory(at: sharedFolderURL, withIntermediateDirectories: true)
+        try Data("<unattend />".utf8).write(to: sharedFolderURL.appendingPathComponent("Autounattend.xml"))
+        try Data("auto install media".utf8).write(to: sharedFolderURL.appendingPathComponent("VeilAutoInstall.iso"))
         let store = JSONVMProfileStore(directory: directory)
         var profile = VMProfile.defaultWindows11Arm(createdAt: Date(timeIntervalSince1970: 1_782_752_400))
         profile.installerMediaPath = installerURL.path
@@ -387,6 +400,8 @@ struct VMProfileStoreTests {
         try Data("installer".utf8).write(to: installerURL)
         try Data("disk".utf8).write(to: diskURL)
         try FileManager.default.createDirectory(at: sharedFolderURL, withIntermediateDirectories: true)
+        try Data("<unattend />".utf8).write(to: sharedFolderURL.appendingPathComponent("Autounattend.xml"))
+        try Data("auto install media".utf8).write(to: sharedFolderURL.appendingPathComponent("VeilAutoInstall.iso"))
         let store = JSONVMProfileStore(directory: directory)
         var profile = VMProfile.defaultWindows11Arm(createdAt: Date(timeIntervalSince1970: 1_782_752_400))
         profile.os = "windows-x86_64"
@@ -482,6 +497,9 @@ struct VMProfileStoreTests {
         let diskPath = try #require(profile.virtualDiskPath)
         var sharedFolderIsDirectory: ObjCBool = false
         var diskIsDirectory: ObjCBool = false
+        let answerFileURL = URL(fileURLWithPath: profile.sharedFolderPath)
+            .appendingPathComponent("Autounattend.xml")
+        let answerFile = try String(contentsOf: answerFileURL, encoding: .utf8)
 
         #expect(profile.name == "Windows 11 Arm")
         #expect(profile.sharedFolderPath == homeDirectory.appendingPathComponent("Veil Shared").path)
@@ -495,7 +513,13 @@ struct VMProfileStoreTests {
         #expect(diskIsDirectory.boolValue == false)
         #expect(snapshot.profileName == "Windows 11 Arm")
         #expect(snapshot.virtualDiskPath == diskPath)
+        #expect(snapshot.automaticInstallAnswerFilePath == answerFileURL.path)
+        #expect(snapshot.automaticInstallMediaPath == homeDirectory.appendingPathComponent("Veil Shared/VeilAutoInstall.iso").path)
+        #expect(answerFile.contains("<unattend"))
+        #expect(answerFile.contains("<AcceptEula>true</AcceptEula>"))
+        #expect(!answerFile.localizedCaseInsensitiveContains("productkey"))
         #expect(snapshot.installationSteps.first { $0.id == "shared-folder" }?.state == .complete)
+        #expect(snapshot.installationSteps.first { $0.id == "auto-install-answer-file" }?.state == .complete)
         #expect(snapshot.installationSteps.first { $0.id == "virtual-disk" }?.state == .complete)
     }
 
@@ -710,6 +734,8 @@ struct VMProfileStoreTests {
         try Data("installer".utf8).write(to: installerURL)
         try Data("disk".utf8).write(to: diskURL)
         try FileManager.default.createDirectory(at: sharedFolderURL, withIntermediateDirectories: true)
+        try Data("<unattend />".utf8).write(to: sharedFolderURL.appendingPathComponent("Autounattend.xml"))
+        try Data("auto install media".utf8).write(to: sharedFolderURL.appendingPathComponent("VeilAutoInstall.iso"))
         let store = JSONVMProfileStore(directory: directory)
         var profile = VMProfile.defaultWindows11Arm(createdAt: Date(timeIntervalSince1970: 1_782_752_400))
         profile.installerMediaPath = installerURL.path
@@ -748,6 +774,8 @@ struct VMProfileStoreTests {
         try Data("installer".utf8).write(to: installerURL)
         try Data("disk".utf8).write(to: diskURL)
         try FileManager.default.createDirectory(at: sharedFolderURL, withIntermediateDirectories: true)
+        try Data("<unattend />".utf8).write(to: sharedFolderURL.appendingPathComponent("Autounattend.xml"))
+        try Data("auto install media".utf8).write(to: sharedFolderURL.appendingPathComponent("VeilAutoInstall.iso"))
         let store = JSONVMProfileStore(directory: directory)
         let reportStore = JSONVMRuntimeBootReportStore(directory: reportDirectory)
         var profile = VMProfile.defaultWindows11Arm(createdAt: Date(timeIntervalSince1970: 1_782_752_400))
@@ -773,7 +801,7 @@ struct VMProfileStoreTests {
         #expect(report.errorMessage == nil)
         #expect(report.profile.installerMediaPath == installerURL.path)
         #expect(report.profile.virtualDiskPath == diskURL.path)
-        #expect(report.deviceSummary.storageDevices.map(\.role) == ["installer", "system-disk"])
+        #expect(report.deviceSummary.storageDevices.map(\.role) == ["installer", "auto-install", "system-disk"])
     }
 
     @Test("local runtime records failed boot report in diagnostics")
@@ -789,6 +817,8 @@ struct VMProfileStoreTests {
         try Data("installer".utf8).write(to: installerURL)
         try Data("disk".utf8).write(to: diskURL)
         try FileManager.default.createDirectory(at: sharedFolderURL, withIntermediateDirectories: true)
+        try Data("<unattend />".utf8).write(to: sharedFolderURL.appendingPathComponent("Autounattend.xml"))
+        try Data("auto install media".utf8).write(to: sharedFolderURL.appendingPathComponent("VeilAutoInstall.iso"))
         let store = JSONVMProfileStore(directory: directory)
         let reportStore = JSONVMRuntimeBootReportStore(directory: reportDirectory)
         var profile = VMProfile.defaultWindows11Arm(createdAt: Date(timeIntervalSince1970: 1_782_752_400))

@@ -15,6 +15,8 @@ Goal: keep the main Veil experience pointed at real local Windows boot and conso
 - [x] Add guarded `veil-vmctl qemu-start` execution for the local QEMU/HVF compatibility provider.
 - [x] Verify `qemu-start` opens a visible foreground QEMU Cocoa window.
 - [x] Record current QEMU/HVF result: TianoCore/Arm UEFI is visible, but Windows Setup is not reached yet.
+- [x] Generate a local `Autounattend.xml` during VM preparation so automatic setup has a real artifact to attach next.
+- [x] Generate and attach `VeilAutoInstall.iso` as setup-readable automatic install media in local runtime plans.
 
 ## Next
 
