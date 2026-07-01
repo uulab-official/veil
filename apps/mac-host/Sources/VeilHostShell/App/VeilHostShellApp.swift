@@ -150,7 +150,18 @@ struct VeilHostShellApp: App {
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
+        applyBundledAppIcon()
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
+    }
+
+    @MainActor
+    private func applyBundledAppIcon() {
+        guard let iconURL = Bundle.main.url(forResource: "VeilAppIcon", withExtension: "icns"),
+              let icon = NSImage(contentsOf: iconURL) else {
+            return
+        }
+
+        NSApp.applicationIconImage = icon
     }
 }

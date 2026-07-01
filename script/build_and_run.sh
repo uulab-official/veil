@@ -6,6 +6,7 @@ APP_EXECUTABLE="veil-host-shell"
 BUNDLE_NAME="Veil"
 BUNDLE_ID="org.uulab.veil.host-shell"
 MIN_SYSTEM_VERSION="15.0"
+BUNDLE_VERSION="$(date -u +%Y%m%d%H%M%S)"
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PACKAGE_DIR="$ROOT_DIR/apps/mac-host"
@@ -43,6 +44,10 @@ cat >"$INFO_PLIST" <<PLIST
   <string>$BUNDLE_NAME</string>
   <key>CFBundleIconFile</key>
   <string>VeilAppIcon</string>
+  <key>CFBundleShortVersionString</key>
+  <string>0.1.0</string>
+  <key>CFBundleVersion</key>
+  <string>$BUNDLE_VERSION</string>
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>LSMinimumSystemVersion</key>
