@@ -10,6 +10,7 @@ struct VMRuntimeView: View {
     var consoleMessage: String?
     @State private var pathPicker: PathPicker?
     @State private var showsAdvancedDetails = false
+    @State private var installSimulation = InstallSimulationState.idle
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -21,11 +22,12 @@ struct VMRuntimeView: View {
                     canStop: model.canStop,
                     isLoading: model.phase == .loading,
                     consoleMessage: consoleMessage,
+                    installSimulation: installSimulation,
                     primaryAction: {
                         if model.canStop {
                             stopVMAction()
                         } else if model.canStart {
-                            startVMAction()
+                            startInstallSimulation()
                         } else {
                             Task {
                                 await model.prepareDefaultVM()
@@ -43,6 +45,9 @@ struct VMRuntimeView: View {
                     },
                     detailsAction: {
                         showsAdvancedDetails.toggle()
+                    },
+                    resetSimulationAction: {
+                        installSimulation = .idle
                     },
                     runtimeTitle: runtimeTitle(for: snapshot.state),
                     runtimeSymbol: runtimeSymbol(for: snapshot.state),
@@ -285,6 +290,63 @@ struct VMRuntimeView: View {
             ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Downloads", isDirectory: true)
         return downloads.appendingPathComponent("Veil Diagnostics", isDirectory: true)
     }
+
+    @MainActor
+    private func startInstallSimulation() {
+        guard installSimulation.phase != .running else {
+            return
+        }
+
+        Task { @MainActor in
+            installSimulation = .running(stepIndex: 0, progress: 0.04)
+
+            for index in InstallSimulationState.steps.indices {
+                installSimulation = .running(stepIndex: index, progress: Double(index) / Double(InstallSimulationState.steps.count))
+                try? await Task.sleep(for: .milliseconds(850))
+                installSimulation = .running(stepIndex: index, progress: Double(index + 1) / Double(InstallSimulationState.steps.count))
+            }
+
+            installSimulation = .complete
+        }
+    }
+}
+
+private enum InstallSimulationPhase: Equatable {
+    case idle
+    case running
+    case complete
+}
+
+private struct InstallSimulationState: Equatable {
+    var phase: InstallSimulationPhase
+    var stepIndex: Int
+    var progress: Double
+
+    static let steps = [
+        "Checking Windows ISO",
+        "Creating unattended setup plan",
+        "Booting installer",
+        "Copying Windows files",
+        "Applying configuration",
+        "Restarting virtual machine",
+        "Preparing Veil guest tools",
+        "Ready for Windows apps"
+    ]
+
+    static let idle = InstallSimulationState(phase: .idle, stepIndex: 0, progress: 0)
+    static let complete = InstallSimulationState(phase: .complete, stepIndex: steps.count - 1, progress: 1)
+
+    static func running(stepIndex: Int, progress: Double) -> InstallSimulationState {
+        InstallSimulationState(
+            phase: .running,
+            stepIndex: min(max(stepIndex, 0), steps.count - 1),
+            progress: min(max(progress, 0), 1)
+        )
+    }
+
+    var currentStep: String {
+        Self.steps[stepIndex]
+    }
 }
 
 private struct SimpleRuntimePanel: View {
@@ -294,11 +356,13 @@ private struct SimpleRuntimePanel: View {
     var canStop: Bool
     var isLoading: Bool
     var consoleMessage: String?
+    var installSimulation: InstallSimulationState
     var primaryAction: () -> Void
     var chooseISOAction: () -> Void
     var consoleAction: () -> Void
     var refreshAction: () -> Void
     var detailsAction: () -> Void
+    var resetSimulationAction: () -> Void
     var runtimeTitle: String
     var runtimeSymbol: String
     var runtimeTint: Color
@@ -327,6 +391,13 @@ private struct SimpleRuntimePanel: View {
 
                     setupStrip
 
+                    if installSimulation.phase != .idle {
+                        InstallSimulationProgressView(
+                            simulation: installSimulation,
+                            resetAction: resetSimulationAction
+                        )
+                    }
+
                     if let consoleMessage {
                         Label(consoleMessage, systemImage: "info.circle")
                             .font(.caption)
@@ -343,7 +414,7 @@ private struct SimpleRuntimePanel: View {
                         .buttonStyle(.borderedProminent)
                         .disabled(primaryDisabled)
 
-                        if !canStart {
+                        if !canStart && installSimulation.phase == .idle {
                             Button(action: chooseISOAction) {
                                 Label("Choose ISO", systemImage: "opticaldisc")
                             }
@@ -366,7 +437,7 @@ private struct SimpleRuntimePanel: View {
                             Label("Refresh", systemImage: "arrow.clockwise")
                                 .labelStyle(.iconOnly)
                         }
-                        .disabled(isLoading)
+                        .disabled(isLoading || installSimulation.phase == .running)
                         .help("Refresh")
 
                         Button(action: detailsAction) {
@@ -441,7 +512,11 @@ private struct SimpleRuntimePanel: View {
                 ? "Download or choose a Windows 11 Arm ISO, then prepare the VM."
                 : "Windows ISO found. Prepare the VM to attach it and create the disk."
         case .stopped:
-            return snapshot.bootReady ? "Windows is not installed yet. Start setup to open the installer." : statusText
+            if installSimulation.phase == .complete {
+                return "Simulated Windows install is complete. Guest agent work comes next."
+            }
+
+            return snapshot.bootReady ? "Windows is not installed yet. Simulate the automatic setup flow." : statusText
         case .starting:
             return "Starting Windows Setup. The installer opens in the VM console."
         case .running:
@@ -459,7 +534,14 @@ private struct SimpleRuntimePanel: View {
         }
 
         if canStart {
-            return "Start Windows Setup"
+            switch installSimulation.phase {
+            case .idle:
+                return "Simulate Auto Install"
+            case .running:
+                return "Installing..."
+            case .complete:
+                return "Run Again"
+            }
         }
 
         return snapshot.profileName == nil ? "Prepare VM" : "Continue Setup"
@@ -478,11 +560,92 @@ private struct SimpleRuntimePanel: View {
     }
 
     private var primaryDisabled: Bool {
-        isLoading || snapshot.state == .unsupported
+        isLoading || snapshot.state == .unsupported || installSimulation.phase == .running
     }
 
     private var canShowConsole: Bool {
         snapshot.state == .running || snapshot.state == .starting
+    }
+}
+
+private struct InstallSimulationProgressView: View {
+    var simulation: InstallSimulationState
+    var resetAction: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline) {
+                Label(title, systemImage: symbolName)
+                    .font(.callout.weight(.semibold))
+                    .foregroundStyle(tint)
+
+                Spacer()
+
+                Text("\(Int(simulation.progress * 100))%")
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
+
+            ProgressView(value: simulation.progress)
+                .tint(tint)
+
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                Text(simulation.currentStep)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+
+                Spacer()
+
+                if simulation.phase == .complete {
+                    Button(action: resetAction) {
+                        Label("Reset", systemImage: "arrow.counterclockwise")
+                            .labelStyle(.iconOnly)
+                    }
+                    .buttonStyle(.borderless)
+                    .help("Reset simulation")
+                }
+            }
+        }
+        .padding(12)
+        .background(tint.opacity(0.08), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .strokeBorder(tint.opacity(0.16), lineWidth: 1)
+        }
+    }
+
+    private var title: String {
+        switch simulation.phase {
+        case .idle:
+            return "Automatic install ready"
+        case .running:
+            return "Automatic install simulation"
+        case .complete:
+            return "Simulated install complete"
+        }
+    }
+
+    private var symbolName: String {
+        switch simulation.phase {
+        case .idle:
+            return "wand.and.stars"
+        case .running:
+            return "arrow.triangle.2.circlepath"
+        case .complete:
+            return "checkmark.circle.fill"
+        }
+    }
+
+    private var tint: Color {
+        switch simulation.phase {
+        case .idle:
+            return .blue
+        case .running:
+            return .blue
+        case .complete:
+            return .green
+        }
     }
 }
 
