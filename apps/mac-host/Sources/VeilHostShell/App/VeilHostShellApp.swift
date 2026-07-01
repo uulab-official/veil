@@ -30,7 +30,7 @@ struct VeilHostShellApp: App {
                 stopVMAction: stopVMAndCloseConsole,
                 showVMConsoleAction: showVMConsole
             )
-                .frame(minWidth: 1040, idealWidth: 1180, minHeight: 680, idealHeight: 760)
+                .frame(minWidth: 1180, idealWidth: 1360, minHeight: 740, idealHeight: 860)
                 .task {
                     async let hostLoad: Void = model.load()
                     async let vmLoad: Void = vmModel.load()
@@ -41,12 +41,13 @@ struct VeilHostShellApp: App {
                     }
                 }
         }
-        .defaultSize(width: 1180, height: 760)
+        .defaultSize(width: 1360, height: 860)
         .defaultWindowPlacement { _, context in
             let visibleRect = context.defaultDisplay.visibleRect
+            let preferredSize = CGSize(width: 1360, height: 860)
             let size = CGSize(
-                width: min(1180, visibleRect.width),
-                height: min(760, visibleRect.height)
+                width: min(preferredSize.width, max(min(1180, visibleRect.width), visibleRect.width * 0.90)),
+                height: min(preferredSize.height, max(min(740, visibleRect.height), visibleRect.height * 0.86))
             )
             return WindowPlacement(size: size)
         }

@@ -18,13 +18,13 @@ struct ContentView: View {
                     .padding(.bottom, 8)
 
                 List(ShellSection.sidebarOrder, id: \.self, selection: $selectedSection) { section in
-                    Label(section.title, systemImage: section.symbolName)
+                    SidebarSectionRow(section: section)
                         .tag(section)
                 }
                 .listStyle(.sidebar)
             }
             .navigationTitle("Veil")
-            .navigationSplitViewColumnWidth(min: 180, ideal: 220)
+            .navigationSplitViewColumnWidth(min: 220, ideal: 250)
         } detail: {
             DetailView(
                 model: model,
@@ -124,6 +124,30 @@ private struct SidebarBrandHeader: View {
     }
 }
 
+private struct SidebarSectionRow: View {
+    var section: ShellSection
+
+    var body: some View {
+        HStack(spacing: 9) {
+            Image(systemName: section.symbolName)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(.blue)
+                .frame(width: 22)
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text(section.title)
+                    .font(.callout.weight(.semibold))
+                    .lineLimit(1)
+                Text(section.sidebarDetail)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+        }
+        .padding(.vertical, 3)
+    }
+}
+
 private struct TopAppBarTitle: View {
     var section: ShellSection
     var runtimeState: VMRuntimeState?
@@ -143,7 +167,7 @@ private struct TopAppBarTitle: View {
                     .lineLimit(1)
             }
         }
-        .frame(minWidth: 240, alignment: .leading)
+        .frame(minWidth: 300, alignment: .leading)
         .accessibilityElement(children: .combine)
     }
 

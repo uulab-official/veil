@@ -61,73 +61,17 @@ struct VMRuntimeView: View {
                     }
                 )
 
-                HStack(alignment: .top, spacing: 14) {
-                    VStack(alignment: .leading, spacing: 14) {
-                        SetupAssistantPanel(
-                            snapshot: snapshot,
-                            createProfileAction: {
-                                Task {
-                                    await model.createDefaultProfile()
-                                }
-                            },
-                            prepareAction: {
-                                Task {
-                                    await model.prepareDefaultVM()
-                                }
-                            },
-                            selectInstallerAction: {
-                                pathPicker = .installerMedia
-                            },
-                            selectDiskAction: {
-                                pathPicker = .virtualDisk
-                            },
-                            createDiskAction: {
-                                Task {
-                                    await model.createDefaultVirtualDisk()
-                                }
-                            },
-                            isLoading: model.phase == .loading
-                        )
-
-                        if !snapshot.installationSteps.isEmpty {
-                            ShellPanel(spacing: 10) {
-                                ShellPanelHeader(
-                                    title: "Windows Setup",
-                                    subtitle: "Profile readiness steps for Arm Windows installation.",
-                                    symbolName: "checklist"
-                                )
-
-                                ForEach(snapshot.installationSteps) { step in
-                                    InstallationStepRow(step: step)
-                                }
-                            }
-                        }
+                ViewThatFits(in: .horizontal) {
+                    HStack(alignment: .top, spacing: 14) {
+                        setupColumn(snapshot)
+                            .frame(minWidth: 430)
+                        runtimeDetailColumn(snapshot)
+                            .frame(minWidth: 430)
                     }
 
                     VStack(alignment: .leading, spacing: 14) {
-                        MachineSummaryPanel(snapshot: snapshot)
-
-                        RuntimeProvidersPanel(snapshot: snapshot)
-
-                        ResourcePlanPanel(snapshot: snapshot)
-
-                        DevicePlanPanel(snapshot: snapshot)
-
-                        MacIntegrationPanel(snapshot: snapshot)
-
-                        if !snapshot.preflightChecks.isEmpty {
-                            ShellPanel(spacing: 10) {
-                                ShellPanelHeader(
-                                    title: "Preflight",
-                                    subtitle: "Local checks that must pass before VM start.",
-                                    symbolName: "stethoscope"
-                                )
-
-                                ForEach(snapshot.preflightChecks) { check in
-                                    PreflightCheckRow(check: check)
-                                }
-                            }
-                        }
+                        setupColumn(snapshot)
+                        runtimeDetailColumn(snapshot)
                     }
                 }
 
@@ -190,6 +134,82 @@ struct VMRuntimeView: View {
                 }
             }
         }
+    }
+
+    @ViewBuilder
+    private func setupColumn(_ snapshot: VMRuntimeSnapshot) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            SetupAssistantPanel(
+                snapshot: snapshot,
+                createProfileAction: {
+                    Task {
+                        await model.createDefaultProfile()
+                    }
+                },
+                prepareAction: {
+                    Task {
+                        await model.prepareDefaultVM()
+                    }
+                },
+                selectInstallerAction: {
+                    pathPicker = .installerMedia
+                },
+                selectDiskAction: {
+                    pathPicker = .virtualDisk
+                },
+                createDiskAction: {
+                    Task {
+                        await model.createDefaultVirtualDisk()
+                    }
+                },
+                isLoading: model.phase == .loading
+            )
+
+            if !snapshot.installationSteps.isEmpty {
+                ShellPanel(spacing: 10) {
+                    ShellPanelHeader(
+                        title: "Windows Setup",
+                        subtitle: "Profile readiness steps for Arm Windows installation.",
+                        symbolName: "checklist"
+                    )
+
+                    ForEach(snapshot.installationSteps) { step in
+                        InstallationStepRow(step: step)
+                    }
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+    }
+
+    @ViewBuilder
+    private func runtimeDetailColumn(_ snapshot: VMRuntimeSnapshot) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            MachineSummaryPanel(snapshot: snapshot)
+
+            RuntimeProvidersPanel(snapshot: snapshot)
+
+            ResourcePlanPanel(snapshot: snapshot)
+
+            DevicePlanPanel(snapshot: snapshot)
+
+            MacIntegrationPanel(snapshot: snapshot)
+
+            if !snapshot.preflightChecks.isEmpty {
+                ShellPanel(spacing: 10) {
+                    ShellPanelHeader(
+                        title: "Preflight",
+                        subtitle: "Local checks that must pass before VM start.",
+                        symbolName: "stethoscope"
+                    )
+
+                    ForEach(snapshot.preflightChecks) { check in
+                        PreflightCheckRow(check: check)
+                    }
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .topLeading)
     }
 
     private func runtimeTitle(for state: VMRuntimeState) -> String {

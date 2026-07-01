@@ -35,9 +35,11 @@ struct DetailView: View {
                     LaunchView(result: model.lastLaunch)
                 }
             }
-            .padding(24)
+            .frame(maxWidth: 1280, alignment: .topLeading)
+            .padding(.horizontal, 28)
+            .padding(.vertical, 24)
         }
-        .background(.background)
+        .background(.thinMaterial)
     }
 }
 

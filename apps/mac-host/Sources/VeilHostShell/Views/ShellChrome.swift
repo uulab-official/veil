@@ -73,6 +73,19 @@ enum ShellSection: String, CaseIterable, Hashable {
         }
     }
 
+    var sidebarDetail: String {
+        switch self {
+        case .apps:
+            "Launch and mirror"
+        case .agent:
+            "Protocol status"
+        case .vm:
+            "Boot and install"
+        case .launch:
+            "Recent result"
+        }
+    }
+
     var symbolName: String {
         switch self {
         case .apps:
