@@ -2,6 +2,7 @@ import Foundation
 
 public protocol VMRuntimeService: Sendable {
     func loadSnapshot() async throws -> VMRuntimeSnapshot
+    func prepareDefaultVM() async throws -> VMRuntimeSnapshot
     func createDefaultProfile() async throws -> VMRuntimeSnapshot
     func createDefaultVirtualDisk() async throws -> VMRuntimeSnapshot
     func updateProfilePaths(installerMediaPath: String?, virtualDiskPath: String?) async throws -> VMRuntimeSnapshot
@@ -245,6 +246,19 @@ public final class VMRuntimeModel {
         }
     }
 
+    public func prepareDefaultVM() async {
+        phase = .loading
+        errorMessage = nil
+
+        do {
+            snapshot = try await service.prepareDefaultVM()
+            phase = .loaded
+        } catch {
+            errorMessage = userMessage(for: error)
+            phase = .failed
+        }
+    }
+
     public func createDefaultVirtualDisk() async {
         phase = .loading
         errorMessage = nil
@@ -383,18 +397,37 @@ public struct LocalVMRuntimeService: VMRuntimeService {
         return try await loadSnapshot()
     }
 
+    public func prepareDefaultVM() async throws -> VMRuntimeSnapshot {
+        var profile = try await profileStore.load() ?? VMProfile.defaultWindows11Arm(homeDirectory: defaultHomeDirectory)
+        profile = try prepareDefaultResources(for: profile)
+        try await profileStore.save(profile)
+        return try await loadSnapshot()
+    }
+
     public func createDefaultVirtualDisk() async throws -> VMRuntimeSnapshot {
         var profile = try await profileStore.load() ?? VMProfile.defaultWindows11Arm(homeDirectory: defaultHomeDirectory)
         if profile.virtualDiskPath != nil {
             return try await loadSnapshot()
         }
 
-        let diskURL = defaultVirtualDiskURL(for: profile)
+        profile = try prepareDefaultResources(for: profile)
+        try await profileStore.save(profile)
+        return try await loadSnapshot()
+    }
+
+    private func prepareDefaultResources(for profile: VMProfile) throws -> VMProfile {
+        var profile = profile
 
         try FileManager.default.createDirectory(
             atPath: profile.sharedFolderPath,
             withIntermediateDirectories: true
         )
+
+        if profile.virtualDiskPath != nil {
+            return profile
+        }
+
+        let diskURL = defaultVirtualDiskURL(for: profile)
         try FileManager.default.createDirectory(
             at: diskURL.deletingLastPathComponent(),
             withIntermediateDirectories: true
@@ -414,8 +447,7 @@ public struct LocalVMRuntimeService: VMRuntimeService {
         try fileHandle.truncate(atOffset: UInt64(profile.diskGB) * 1_024 * 1_024 * 1_024)
 
         profile.virtualDiskPath = diskURL.path
-        try await profileStore.save(profile)
-        return try await loadSnapshot()
+        return profile
     }
 
     public func updateProfilePaths(installerMediaPath: String?, virtualDiskPath: String?) async throws -> VMRuntimeSnapshot {

@@ -9,6 +9,7 @@ Prove that Veil can run one Windows desktop app as a macOS-like window without m
 Acceptance criteria:
 
 - A macOS host app can create or load a VM profile.
+- The host can prepare the default profile, shared folder, and virtual disk in one action.
 - Default profile creation prepares the macOS shared folder.
 - The host can create a blank default virtual disk file for the profile.
 - The host reports Windows installer, virtual disk, shared folder, and guest-agent setup steps.

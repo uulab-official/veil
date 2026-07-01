@@ -108,6 +108,32 @@ struct VMRuntimeModelTests {
         #expect(service.createCount == 1)
     }
 
+    @Test("prepares default VM and refreshes runtime state")
+    @MainActor
+    func preparesDefaultVMAndRefreshesRuntimeState() async throws {
+        let service = FakeVMRuntimeService(
+            preparedSnapshot: VMRuntimeSnapshot(
+                state: .stopped,
+                virtualizationAvailable: true,
+                architecture: "arm64",
+                minimumOSSupported: true,
+                profileName: "Windows 11 Arm",
+                installerMediaPath: nil,
+                virtualDiskPath: "/Users/test/Virtual Machines/Veil/Windows 11 Arm.img",
+                bootReady: false,
+                detail: "Select a Windows 11 Arm installer before setup can continue."
+            )
+        )
+        let model = VMRuntimeModel(service: service)
+
+        await model.prepareDefaultVM()
+
+        #expect(model.phase == .loaded)
+        #expect(model.snapshot?.profileName == "Windows 11 Arm")
+        #expect(model.snapshot?.virtualDiskPath == "/Users/test/Virtual Machines/Veil/Windows 11 Arm.img")
+        #expect(service.prepareCount == 1)
+    }
+
     @Test("updates profile paths and refreshes boot readiness")
     @MainActor
     func updatesProfilePathsAndRefreshesBootReadiness() async throws {
@@ -268,6 +294,7 @@ private final class FakeVMRuntimeService: VMRuntimeService {
     var snapshot: VMRuntimeSnapshot?
     var createdSnapshot: VMRuntimeSnapshot?
     var diskSnapshot: VMRuntimeSnapshot?
+    var preparedSnapshot: VMRuntimeSnapshot?
     var updatedSnapshot: VMRuntimeSnapshot?
     var startedSnapshot: VMRuntimeSnapshot?
     var stoppedSnapshot: VMRuntimeSnapshot?
@@ -276,6 +303,7 @@ private final class FakeVMRuntimeService: VMRuntimeService {
     private(set) var updatedVirtualDiskPath: String?
     private(set) var createCount = 0
     private(set) var createDiskCount = 0
+    private(set) var prepareCount = 0
     private(set) var startCount = 0
     private(set) var stopCount = 0
 
@@ -283,6 +311,7 @@ private final class FakeVMRuntimeService: VMRuntimeService {
         snapshot: VMRuntimeSnapshot? = nil,
         createdSnapshot: VMRuntimeSnapshot? = nil,
         diskSnapshot: VMRuntimeSnapshot? = nil,
+        preparedSnapshot: VMRuntimeSnapshot? = nil,
         updatedSnapshot: VMRuntimeSnapshot? = nil,
         startedSnapshot: VMRuntimeSnapshot? = nil,
         stoppedSnapshot: VMRuntimeSnapshot? = nil,
@@ -291,6 +320,7 @@ private final class FakeVMRuntimeService: VMRuntimeService {
         self.snapshot = snapshot
         self.createdSnapshot = createdSnapshot
         self.diskSnapshot = diskSnapshot
+        self.preparedSnapshot = preparedSnapshot
         self.updatedSnapshot = updatedSnapshot
         self.startedSnapshot = startedSnapshot
         self.stoppedSnapshot = stoppedSnapshot
@@ -325,6 +355,17 @@ private final class FakeVMRuntimeService: VMRuntimeService {
         let diskSnapshot = try #require(diskSnapshot)
         snapshot = diskSnapshot
         return diskSnapshot
+    }
+
+    func prepareDefaultVM() async throws -> VMRuntimeSnapshot {
+        if let error {
+            throw error
+        }
+
+        prepareCount += 1
+        let preparedSnapshot = try #require(preparedSnapshot)
+        snapshot = preparedSnapshot
+        return preparedSnapshot
     }
 
     func updateProfilePaths(installerMediaPath: String?, virtualDiskPath: String?) async throws -> VMRuntimeSnapshot {

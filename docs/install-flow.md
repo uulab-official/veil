@@ -19,7 +19,8 @@ The first three are local host prerequisites. The guest agent step remains pendi
 
 ## Current Host Behavior
 
-- Default profile creation creates the macOS shared folder at `~/Veil Shared`.
+- Prepare VM creates the default Windows 11 Arm profile, the macOS shared folder at `~/Veil Shared`, and the default sparse disk in one action.
+- Profile-only creation is still available for low-level setup testing.
 - Installer media is a user-selected local file.
 - The virtual disk can be user-selected or created as a blank sparse disk at `~/Virtual Machines/Veil/Windows 11 Arm.img`.
 - The boot spike stores EFI variables and the generic machine identifier next to the virtual disk so repeated boots keep stable VM identity.

@@ -41,6 +41,11 @@ struct VMRuntimeView: View {
                             await model.load()
                         }
                     },
+                    prepareAction: {
+                        Task {
+                            await model.prepareDefaultVM()
+                        }
+                    },
                     createDiskAction: {
                         Task {
                             await model.createDefaultVirtualDisk()
@@ -55,6 +60,11 @@ struct VMRuntimeView: View {
                             createProfileAction: {
                                 Task {
                                     await model.createDefaultProfile()
+                                }
+                            },
+                            prepareAction: {
+                                Task {
+                                    await model.prepareDefaultVM()
                                 }
                             },
                             selectInstallerAction: {
@@ -255,6 +265,7 @@ private struct QuickActionsPanel: View {
     var startAction: () -> Void
     var stopAction: () -> Void
     var refreshAction: () -> Void
+    var prepareAction: () -> Void
     var createDiskAction: () -> Void
 
     var body: some View {
@@ -281,6 +292,16 @@ private struct QuickActionsPanel: View {
                     action: canStop ? stopAction : startAction
                 )
                 .disabled((!canStart && !canStop) || isLoading)
+
+                ControlActionTile(
+                    title: "Prepare VM",
+                    detail: snapshot.profileName == nil ? "Create profile, shared folder, and default disk." : "Base VM resources are ready.",
+                    symbolName: "wand.and.stars",
+                    tint: .blue,
+                    state: snapshot.profileName == nil ? .ready : .partial,
+                    action: prepareAction
+                )
+                .disabled(snapshot.profileName != nil || isLoading)
 
                 ControlActionTile(
                     title: "Refresh",
@@ -475,6 +496,7 @@ private struct ResourcePlanPanel: View {
 private struct SetupAssistantPanel: View {
     var snapshot: VMRuntimeSnapshot
     var createProfileAction: () -> Void
+    var prepareAction: () -> Void
     var selectInstallerAction: () -> Void
     var selectDiskAction: () -> Void
     var createDiskAction: () -> Void
@@ -529,8 +551,14 @@ private struct SetupAssistantPanel: View {
 
             HStack(spacing: 8) {
                 if snapshot.profileName == nil {
+                    Button(action: prepareAction) {
+                        Label("Prepare VM", systemImage: "wand.and.stars")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(isLoading)
+
                     Button(action: createProfileAction) {
-                        Label("Create Profile", systemImage: "plus.circle")
+                        Label("Profile Only", systemImage: "plus.circle")
                     }
                     .disabled(isLoading)
                 }
