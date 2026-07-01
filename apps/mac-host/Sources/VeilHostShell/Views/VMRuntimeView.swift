@@ -1028,216 +1028,181 @@ private struct WindowsSetupDisplayPanel: View {
 
     var body: some View {
         ShellPanel(spacing: 0) {
-            HStack(alignment: .top, spacing: 0) {
-                heroPreview
-                    .frame(width: 370)
+            VStack(spacing: 0) {
+                launcherHeader
                 Divider()
-                assistantContent
-                    .frame(maxWidth: .infinity, alignment: .topLeading)
+                launcherStage
+                Divider()
+                launcherFooter
             }
         }
         .padding(0)
     }
 
-    private var heroPreview: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(spacing: 10) {
-                VeilAppMark(size: 36)
+    private var launcherHeader: some View {
+        HStack(spacing: 14) {
+            WindowsLogoMark(size: 42)
 
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Veil")
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Windows 11")
+                    .font(.title2.weight(.semibold))
+                Text(headerSubtitle)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+
+            Spacer(minLength: 16)
+
+            StatusPill(title: phaseTitle, symbolName: phaseSymbol, tint: phaseTint)
+        }
+        .padding(.horizontal, 22)
+        .padding(.vertical, 16)
+    }
+
+    private var launcherStage: some View {
+        HStack(alignment: .top, spacing: 18) {
+            machineHero
+                .frame(minWidth: 430, idealWidth: 500, maxWidth: .infinity)
+
+            processRail
+                .frame(width: 300)
+        }
+        .padding(22)
+        .frame(maxWidth: .infinity, minHeight: 310, alignment: .center)
+    }
+
+    private var machineHero: some View {
+        ZStack(alignment: .bottomLeading) {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(machineHeroGradient)
+
+            VStack(alignment: .leading, spacing: 18) {
+                HStack(alignment: .top) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(machineTitle)
+                            .font(.system(size: 28, weight: .semibold))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                        Text(machineSubtitle)
+                            .font(.callout)
+                            .foregroundStyle(.white.opacity(0.76))
+                            .lineLimit(2)
+                    }
+
+                    Spacer()
+
+                    StatusPill(title: runtimeTitle, symbolName: runtimeSymbol, tint: .white)
+                        .background(.black.opacity(0.12), in: Capsule())
+                }
+
+                Spacer(minLength: 8)
+
+                HStack(alignment: .center, spacing: 18) {
+                    Button(action: primaryAction) {
+                        Image(systemName: primarySymbol)
+                            .font(.system(size: 28, weight: .bold))
+                            .foregroundStyle(.white)
+                            .frame(width: 72, height: 72)
+                            .background(primaryDisabled ? Color.white.opacity(0.22) : Color.accentColor, in: Circle())
+                            .overlay {
+                                Circle()
+                                    .strokeBorder(.white.opacity(primaryDisabled ? 0.16 : 0.36), lineWidth: 1)
+                            }
+                            .shadow(color: .black.opacity(0.24), radius: 18, y: 10)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(primaryDisabled)
+                    .help(primaryTitle)
+
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text(primaryTitle)
+                            .font(.title3.weight(.semibold))
+                        Text(primaryHint)
+                            .font(.callout)
+                            .foregroundStyle(.white.opacity(0.78))
+                            .lineLimit(2)
+                    }
+                }
+
+                if installSimulation.phase != .idle {
+                    AssistantProgressStrip(simulation: installSimulation)
+                        .foregroundStyle(.primary)
+                } else {
+                    ProgressView(value: progressFraction)
+                        .tint(progressTint)
+                        .frame(maxWidth: 360)
+                }
+            }
+            .foregroundStyle(.white)
+            .padding(24)
+        }
+        .overlay(alignment: .topTrailing) {
+            WindowsGlassMark()
+                .padding(24)
+        }
+        .overlay {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .strokeBorder(.white.opacity(0.16), lineWidth: 1)
+        }
+    }
+
+    private var processRail: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Setup Process")
                         .font(.headline.weight(.semibold))
-                    Text("Windows App Runtime")
+                    Text("Four steps to app mode")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
 
                 Spacer()
-            }
 
-            VStack(alignment: .leading, spacing: 16) {
-                Text("Windows 11")
-                    .font(.system(size: 36, weight: .semibold))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-
-                Text(heroSubtitle)
-                    .font(.callout)
+                Text("\(completedProcessCount)/\(processItems.count)")
+                    .font(.caption.monospacedDigit().weight(.semibold))
                     .foregroundStyle(.secondary)
-                    .lineLimit(3)
             }
 
-            largePlayControl
-
-            windowsSetupMock
+            VStack(spacing: 8) {
+                ForEach(processItems) { item in
+                    LauncherProcessRow(item: item)
+                }
+            }
 
             Spacer(minLength: 0)
 
-            HStack(spacing: 8) {
-                StatusPill(title: runtimeTitle, symbolName: runtimeSymbol, tint: runtimeTint)
-
-                if let providerName = snapshot.runtimeProvider?.displayName {
-                    StatusPill(title: providerName, symbolName: "bolt.horizontal", tint: .blue)
-                }
+            if let errorMessage {
+                CompactNotice(text: errorMessage, symbolName: "exclamationmark.triangle", tint: .orange)
+            } else if let consoleMessage {
+                CompactNotice(text: consoleMessage, symbolName: "info.circle", tint: .secondary)
+            } else {
+                CompactNotice(text: phaseDetail, symbolName: "sparkles", tint: .secondary)
             }
         }
-        .padding(24)
-        .frame(maxWidth: .infinity, minHeight: 390, alignment: .topLeading)
-        .background(
-            LinearGradient(
-                colors: [
-                    Color(nsColor: .controlBackgroundColor),
-                    Color(nsColor: .windowBackgroundColor)
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-        )
-    }
-
-    private var windowsSetupMock: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 7) {
-                Circle().fill(.red.opacity(0.76)).frame(width: 9, height: 9)
-                Circle().fill(.yellow.opacity(0.76)).frame(width: 9, height: 9)
-                Circle().fill(.green.opacity(0.76)).frame(width: 9, height: 9)
-                Spacer()
-                Text("Windows Setup")
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(.secondary)
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-
-            Divider()
-
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(spacing: 14) {
-                    WindowsLogoMark(size: 44)
-
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(previewTitle)
-                            .font(.headline.weight(.semibold))
-                        Text(previewSubtitle)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(2)
-                    }
-                }
-
-                ProgressView(value: progressFraction)
-                    .tint(progressTint)
-            }
-            .padding(14)
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .padding(16)
+        .frame(maxHeight: .infinity, alignment: .topLeading)
+        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .strokeBorder(.quaternary, lineWidth: 1)
         }
     }
 
-    private var assistantContent: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack(alignment: .firstTextBaseline, spacing: 12) {
-                VStack(alignment: .leading, spacing: 5) {
-                    Text("Install Windows on this Mac")
-                        .font(.title2.weight(.semibold))
-                    Text(phaseDetail)
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(3)
-                }
-
-                Spacer(minLength: 12)
-
-                StatusPill(title: phaseTitle, symbolName: phaseSymbol, tint: phaseTint)
+    private var launcherFooter: some View {
+        HStack(spacing: 10) {
+            ForEach(metadataItems) { item in
+                LauncherMetadataChip(item: item)
             }
 
-            VStack(alignment: .leading, spacing: 10) {
-                ForEach(primaryFlowItems) { item in
-                    InstallFlowRow(item: item)
-                }
-            }
+            Spacer(minLength: 12)
 
-            if installSimulation.phase != .idle {
-                AssistantProgressStrip(simulation: installSimulation)
-            }
-
-            if let errorMessage {
-                Label(errorMessage, systemImage: "exclamationmark.triangle")
-                    .font(.caption)
-                    .foregroundStyle(.orange)
-                    .textSelection(.enabled)
-                    .lineLimit(2)
-            }
-
-            if let consoleMessage {
-                Label(consoleMessage, systemImage: "info.circle")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .textSelection(.enabled)
-                    .lineLimit(2)
-            }
-
-            if let discoveredInstallerName {
-                Label("Found \(discoveredInstallerName) in Downloads.", systemImage: "checkmark.seal")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .textSelection(.enabled)
-                    .lineLimit(1)
-            }
-
-            if let diagnosticsURL {
-                Label("Diagnostics: \(diagnosticsURL.lastPathComponent)", systemImage: "doc.text.magnifyingglass")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .textSelection(.enabled)
-                    .lineLimit(1)
-            }
-
-            Spacer(minLength: 0)
-
-            actionBar
-        }
-        .padding(24)
-        .frame(maxWidth: .infinity, minHeight: 390, alignment: .topLeading)
-    }
-
-    private var largePlayControl: some View {
-        HStack(spacing: 14) {
-            Button(action: primaryAction) {
-                Image(systemName: primarySymbol)
-                    .font(.system(size: 26, weight: .bold))
-                    .foregroundStyle(.white)
-                    .frame(width: 64, height: 64)
-                    .background(primaryDisabled ? Color.secondary.opacity(0.35) : Color.accentColor, in: Circle())
-                    .shadow(color: Color.black.opacity(0.18), radius: 8, y: 4)
-            }
-            .buttonStyle(.plain)
-            .disabled(primaryDisabled)
-            .help(primaryTitle)
-
-            VStack(alignment: .leading, spacing: 3) {
-                Text(primaryTitle)
-                    .font(.headline.weight(.semibold))
-                Text(primaryHint)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
-            }
-        }
-    }
-
-    private var actionBar: some View {
-        ViewThatFits(in: .horizontal) {
             horizontalActions
-
-            VStack(alignment: .leading, spacing: 9) {
-                horizontalActions
-            }
+                .frame(width: 236)
         }
+        .padding(.horizontal, 22)
+        .padding(.vertical, 14)
     }
 
     private var horizontalActions: some View {
@@ -1338,20 +1303,120 @@ private struct WindowsSetupDisplayPanel: View {
         ]
     }
 
-    private var primaryFlowItems: [InstallFlowItem] {
-        Array(flowItems.prefix(3))
+    private var processItems: [InstallFlowItem] {
+        let hasInstaller = snapshot.installerMediaPath != nil || snapshot.discoveredInstallerMediaPath != nil
+        let prepared = snapshot.profileName != nil && snapshot.virtualDiskPath != nil
+        let installing = snapshot.state == .starting || snapshot.state == .running
+
+        return [
+            InstallFlowItem(
+                title: "Get Windows",
+                detail: hasInstaller ? "Windows 11 Arm media found" : "Choose a Windows 11 Arm ISO",
+                symbolName: "opticaldisc",
+                state: hasInstaller ? .complete : .current
+            ),
+            InstallFlowItem(
+                title: "Prepare",
+                detail: prepared ? "Profile and disk are ready" : "Create the local VM profile",
+                symbolName: "internaldrive",
+                state: prepared ? .complete : (hasInstaller ? .current : .pending)
+            ),
+            InstallFlowItem(
+                title: "Install",
+                detail: installing ? "Windows setup is running" : (snapshot.bootReady ? "Ready to boot setup" : "Waiting for preparation"),
+                symbolName: "play.rectangle",
+                state: installing ? .complete : (snapshot.bootReady ? .current : .pending)
+            ),
+            InstallFlowItem(
+                title: "Connect",
+                detail: "Install the Veil guest agent after Windows",
+                symbolName: "macwindow.on.rectangle",
+                state: snapshot.state == .running ? .current : .pending
+            )
+        ]
     }
 
-    private var heroSubtitle: String {
-        if snapshot.state == .running {
-            return "Windows is running in a separate VM console. The next milestone is app-window mode."
-        }
+    private var completedProcessCount: Int {
+        processItems.filter { $0.state == .complete }.count
+    }
 
+    private var metadataItems: [LauncherMetadataItem] {
+        [
+            LauncherMetadataItem(
+                title: "ISO",
+                value: selectedInstallerName ?? discoveredInstallerName ?? "Missing",
+                symbolName: "opticaldisc",
+                tint: snapshot.installerMediaPath != nil ? .green : (snapshot.discoveredInstallerMediaPath != nil ? .blue : .orange)
+            ),
+            LauncherMetadataItem(
+                title: "Disk",
+                value: resourceName(from: snapshot.virtualDiskPath) ?? "Missing",
+                symbolName: "internaldrive",
+                tint: snapshot.virtualDiskPath == nil ? .orange : .green
+            ),
+            LauncherMetadataItem(
+                title: "Runtime",
+                value: snapshot.runtimeProvider?.displayName ?? "Local",
+                symbolName: "bolt.horizontal",
+                tint: snapshot.runtimeProvider == nil ? .secondary : .blue
+            ),
+            LauncherMetadataItem(
+                title: "Mode",
+                value: snapshot.state == .running ? "Console" : "App Ready",
+                symbolName: "macwindow",
+                tint: snapshot.state == .running ? .green : .secondary
+            )
+        ]
+    }
+
+    private var headerSubtitle: String {
+        switch snapshot.state {
+        case .running:
+            "Windows is running. App-window mode comes after the guest agent."
+        case .starting:
+            "Opening the local Windows display."
+        case .stopped where snapshot.bootReady:
+            "Ready to install Windows on this Mac."
+        case .failed:
+            "Startup needs attention."
+        default:
+            "A local Windows App Runtime for macOS."
+        }
+    }
+
+    private var machineTitle: String {
+        snapshot.profileName ?? "Windows 11"
+    }
+
+    private var machineSubtitle: String {
         if snapshot.bootReady {
-            return "Ready to start a local Windows 11 Arm installer using QEMU/HVF."
+            return "QEMU/HVF local runtime configured"
         }
 
-        return "A guided local setup for Windows apps on macOS. Bring your own Windows media."
+        if let discoveredInstallerName {
+            return "Found \(discoveredInstallerName)"
+        }
+
+        return "Bring your own Windows 11 Arm installer"
+    }
+
+    private var machineHeroGradient: LinearGradient {
+        switch snapshot.state {
+        case .running:
+            LinearGradient(colors: [Color(red: 0.04, green: 0.34, blue: 0.24), Color(red: 0.03, green: 0.18, blue: 0.24)], startPoint: .topLeading, endPoint: .bottomTrailing)
+        case .failed, .unsupported:
+            LinearGradient(colors: [Color(red: 0.42, green: 0.18, blue: 0.08), Color(red: 0.15, green: 0.12, blue: 0.11)], startPoint: .topLeading, endPoint: .bottomTrailing)
+        default:
+            LinearGradient(colors: [Color(red: 0.02, green: 0.32, blue: 0.62), Color(red: 0.08, green: 0.09, blue: 0.14)], startPoint: .topLeading, endPoint: .bottomTrailing)
+        }
+    }
+
+    private func resourceName(from path: String?) -> String? {
+        guard let path, !path.isEmpty else {
+            return nil
+        }
+
+        return URL(fileURLWithPath: path).lastPathComponent
     }
 
     private var phaseTitle: String {
@@ -1438,36 +1503,6 @@ private struct WindowsSetupDisplayPanel: View {
         isLoading || snapshot.state == .unsupported || installSimulation.phase == .running
     }
 
-    private var previewTitle: String {
-        switch snapshot.state {
-        case .running:
-            "Windows Console Open"
-        case .starting:
-            "Starting Windows"
-        case .stopped where snapshot.bootReady:
-            "Ready to Install"
-        case .failed:
-            "Attention Required"
-        default:
-            "Setup Assistant"
-        }
-    }
-
-    private var previewSubtitle: String {
-        switch snapshot.state {
-        case .running:
-            "Continue setup in the VM window."
-        case .starting:
-            "Opening the local display."
-        case .stopped where snapshot.bootReady:
-            "Press Install Windows to boot."
-        case .failed:
-            "Review diagnostics before retrying."
-        default:
-            "Prepare media and disk."
-        }
-    }
-
     private var progressFraction: Double {
         if installSimulation.phase == .running {
             return installSimulation.progress
@@ -1532,126 +1567,81 @@ private struct WindowsLogoMark: View {
     }
 }
 
-private struct AssistantProgressStrip: View {
-    var simulation: InstallSimulationState
-
+private struct WindowsGlassMark: View {
     var body: some View {
-        VStack(alignment: .leading, spacing: 9) {
-            HStack {
-                Label(simulation.currentStep, systemImage: "arrow.triangle.2.circlepath")
-                    .font(.callout.weight(.semibold))
-                Spacer()
-                Text("\(Int(simulation.progress * 100))%")
-                    .font(.caption.monospacedDigit().weight(.semibold))
-                    .foregroundStyle(.secondary)
+        Grid(horizontalSpacing: 6, verticalSpacing: 6) {
+            GridRow {
+                pane.opacity(0.28)
+                pane.opacity(0.18)
             }
-
-            ProgressView(value: simulation.progress)
-                .tint(.blue)
+            GridRow {
+                pane.opacity(0.20)
+                pane.opacity(0.32)
+            }
         }
-        .padding(12)
-        .background(.blue.opacity(0.08), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-    }
-}
-
-private struct CompactInstallFlowRow: View {
-    var item: InstallFlowItem
-
-    var body: some View {
-        HStack(spacing: 8) {
-            Image(systemName: statusSymbol)
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(statusTint)
-                .frame(width: 16)
-
-            Text(item.title)
-                .font(.caption.weight(.semibold))
-                .lineLimit(1)
-
-            Spacer(minLength: 4)
-        }
+        .frame(width: 112, height: 112)
+        .accessibilityHidden(true)
     }
 
-    private var statusSymbol: String {
-        switch item.state {
-        case .complete:
-            "checkmark.circle.fill"
-        case .current:
-            "arrow.right.circle.fill"
-        case .pending:
-            "circle"
-        }
-    }
-
-    private var statusTint: Color {
-        switch item.state {
-        case .complete:
-            .green
-        case .current:
-            .blue
-        case .pending:
-            .secondary
-        }
-    }
-}
-
-private struct WindowsPane: View {
-    var color: Color
-
-    var body: some View {
-        RoundedRectangle(cornerRadius: 6, style: .continuous)
-            .fill(color.gradient)
-            .frame(height: 52)
+    private var pane: some View {
+        RoundedRectangle(cornerRadius: 10, style: .continuous)
+            .fill(.white)
             .overlay {
-                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .strokeBorder(.white.opacity(0.18), lineWidth: 1)
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .strokeBorder(.white.opacity(0.25), lineWidth: 1)
             }
     }
 }
 
-private enum InstallFlowState {
-    case complete
-    case current
-    case pending
-}
-
-private struct InstallFlowItem: Identifiable {
-    var id: String { title }
-    var title: String
-    var detail: String
+private struct CompactNotice: View {
+    var text: String
     var symbolName: String
-    var state: InstallFlowState
+    var tint: Color
+
+    var body: some View {
+        Label(text, systemImage: symbolName)
+            .font(.caption)
+            .foregroundStyle(tint)
+            .lineLimit(3)
+            .textSelection(.enabled)
+            .padding(10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(tint.opacity(0.08), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+    }
 }
 
-private struct InstallFlowRow: View {
+private struct LauncherProcessRow: View {
     var item: InstallFlowItem
 
     var body: some View {
-        HStack(alignment: .top, spacing: 10) {
-            Image(systemName: statusSymbol)
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(statusTint)
-                .frame(width: 28, height: 28)
-                .background(statusTint.opacity(0.12), in: Circle())
-
-            Image(systemName: item.symbolName)
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(statusTint)
-                .frame(width: 22, height: 28)
+        HStack(spacing: 10) {
+            ZStack {
+                Circle()
+                    .fill(statusTint.opacity(0.12))
+                Image(systemName: statusSymbol)
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(statusTint)
+            }
+            .frame(width: 28, height: 28)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(item.title)
                     .font(.callout.weight(.semibold))
+                    .lineLimit(1)
                 Text(item.detail)
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                    .lineLimit(2)
-                    .textSelection(.enabled)
+                    .lineLimit(1)
             }
 
             Spacer(minLength: 0)
         }
-        .padding(.vertical, 2)
+        .padding(10)
+        .background(rowBackground, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .strokeBorder(statusTint.opacity(item.state == .current ? 0.28 : 0.10), lineWidth: 1)
+        }
     }
 
     private var statusSymbol: String {
@@ -1675,6 +1665,86 @@ private struct InstallFlowRow: View {
             .secondary
         }
     }
+
+    private var rowBackground: Color {
+        item.state == .current ? Color.blue.opacity(0.08) : Color.secondary.opacity(0.05)
+    }
+}
+
+private struct LauncherMetadataItem: Identifiable {
+    var id: String { title }
+    var title: String
+    var value: String
+    var symbolName: String
+    var tint: Color
+}
+
+private struct LauncherMetadataChip: View {
+    var item: LauncherMetadataItem
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: item.symbolName)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(item.tint)
+                .frame(width: 24, height: 24)
+                .background(item.tint.opacity(0.11), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text(item.title)
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                Text(item.value)
+                    .font(.caption.weight(.semibold))
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+        }
+        .padding(.horizontal, 9)
+        .padding(.vertical, 7)
+        .frame(maxWidth: 138, alignment: .leading)
+        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .strokeBorder(.quaternary, lineWidth: 1)
+        }
+    }
+}
+
+private struct AssistantProgressStrip: View {
+    var simulation: InstallSimulationState
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            HStack {
+                Label(simulation.currentStep, systemImage: "arrow.triangle.2.circlepath")
+                    .font(.callout.weight(.semibold))
+                Spacer()
+                Text("\(Int(simulation.progress * 100))%")
+                    .font(.caption.monospacedDigit().weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+
+            ProgressView(value: simulation.progress)
+                .tint(.blue)
+        }
+        .padding(12)
+        .background(.blue.opacity(0.08), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+    }
+}
+
+private enum InstallFlowState {
+    case complete
+    case current
+    case pending
+}
+
+private struct InstallFlowItem: Identifiable {
+    var id: String { title }
+    var title: String
+    var detail: String
+    var symbolName: String
+    var state: InstallFlowState
 }
 
 private struct DevicePlanPanel: View {
