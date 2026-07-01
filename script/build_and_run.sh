@@ -52,12 +52,15 @@ codesign --force --sign - --entitlements "$ENTITLEMENTS" "$APP_BINARY" >/dev/nul
 codesign --force --sign - --entitlements "$ENTITLEMENTS" "$APP_BUNDLE" >/dev/null
 
 open_app() {
-  /usr/bin/open -n "$APP_BUNDLE"
+  /usr/bin/open -n "$APP_BUNDLE" --args "$@"
 }
 
 case "$MODE" in
   run)
     open_app
+    ;;
+  --start-vm|start-vm)
+    open_app --start-vm
     ;;
   --debug|debug)
     lldb -- "$APP_BINARY"
@@ -76,7 +79,7 @@ case "$MODE" in
     pgrep -x "$APP_EXECUTABLE" >/dev/null
     ;;
   *)
-    echo "usage: $0 [run|--debug|--logs|--telemetry|--verify]" >&2
+    echo "usage: $0 [run|--start-vm|--debug|--logs|--telemetry|--verify]" >&2
     exit 2
     ;;
 esac

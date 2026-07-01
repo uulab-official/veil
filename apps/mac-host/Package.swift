@@ -19,6 +19,10 @@ let package = Package(
         .executable(
             name: "veil-host-shell",
             targets: ["VeilHostShell"]
+        ),
+        .executable(
+            name: "veil-vmctl",
+            targets: ["VeilVMControl"]
         )
     ],
     targets: [
@@ -31,6 +35,10 @@ let package = Package(
         ),
         .executableTarget(
             name: "VeilHostShell",
+            dependencies: ["VeilHostCore"]
+        ),
+        .executableTarget(
+            name: "VeilVMControl",
             dependencies: ["VeilHostCore"]
         ),
         .testTarget(

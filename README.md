@@ -149,6 +149,19 @@ The VM Runtime panel can export a local diagnostics JSON bundle to `~/Downloads/
 
 The runtime snapshot also exposes a typed device plan inspired by UTM's configuration model: EFI boot, generic platform identity, installer media, writable system disk, NAT networking, Virtio graphics, USB keyboard, pointer, and entropy. The shell shows this before Start so configuration mistakes are visible while Windows media is still being prepared.
 
+You can prepare the local VM profile from a downloaded Windows 11 Arm ISO without clicking through the shell:
+
+```bash
+cd apps/mac-host
+swift run veil-vmctl prepare --installer "$HOME/Downloads/Win11_25H2_Korean_Arm64_v2.iso"
+```
+
+Then launch the signed app bundle and start the VM automatically:
+
+```bash
+./script/build_and_run.sh --start-vm
+```
+
 The bundled run script signs the local app bundle with the `com.apple.security.virtualization` entitlement required by Virtualization.framework:
 
 ```bash

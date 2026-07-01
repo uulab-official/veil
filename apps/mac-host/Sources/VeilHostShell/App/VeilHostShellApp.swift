@@ -34,6 +34,10 @@ struct VeilHostShellApp: App {
                     async let hostLoad: Void = model.load()
                     async let vmLoad: Void = vmModel.load()
                     _ = await (hostLoad, vmLoad)
+
+                    if Self.shouldStartVMOnLaunch {
+                        startVMAndShowConsole()
+                    }
                 }
         }
         .defaultSize(width: 1180, height: 760)
@@ -87,6 +91,10 @@ struct VeilHostShellApp: App {
 
     private static var agentURLString: String {
         ProcessInfo.processInfo.environment["VEIL_AGENT_URL"] ?? "ws://127.0.0.1:18444"
+    }
+
+    private static var shouldStartVMOnLaunch: Bool {
+        ProcessInfo.processInfo.arguments.contains("--start-vm")
     }
 
     private func startVMAndShowConsole() {
