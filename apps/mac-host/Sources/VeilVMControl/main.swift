@@ -10,24 +10,34 @@ enum VMControlError: Error, LocalizedError {
     var errorDescription: String? {
         switch self {
         case .missingCommand:
-            "Usage: veil-vmctl prepare --installer /path/to/Windows.iso"
+            Self.usage
         case .unsupportedCommand(let command):
-            "Unsupported command '\(command)'. Usage: veil-vmctl prepare --installer /path/to/Windows.iso"
+            "Unsupported command '\(command)'. \(Self.usage)"
         case .missingInstallerPath:
-            "Missing installer path. Usage: veil-vmctl prepare --installer /path/to/Windows.iso"
+            "Missing installer path. \(Self.usage)"
         case .installerNotFound(let path):
             "Installer file does not exist: \(path)"
         }
     }
+
+    private static let usage = "Usage: veil-vmctl prepare --installer /path/to/Windows.iso | veil-vmctl providers [--json]"
 }
 
 struct VMControlArguments {
-    var command: String
-    var installerPath: String
+    enum Command: Equatable {
+        case prepare(installerPath: String)
+        case providers(json: Bool)
+    }
+
+    var command: Command
 
     static func parse(_ arguments: [String]) throws -> VMControlArguments {
         guard let command = arguments.first else {
             throw VMControlError.missingCommand
+        }
+
+        if command == "providers" {
+            return VMControlArguments(command: .providers(json: arguments.contains("--json")))
         }
 
         guard command == "prepare" else {
@@ -39,10 +49,7 @@ struct VMControlArguments {
             throw VMControlError.missingInstallerPath
         }
 
-        return VMControlArguments(
-            command: command,
-            installerPath: arguments[installerFlagIndex + 1]
-        )
+        return VMControlArguments(command: .prepare(installerPath: arguments[installerFlagIndex + 1]))
     }
 }
 
@@ -67,7 +74,16 @@ struct VeilVMControl {
     }
 
     private static func run(_ arguments: VMControlArguments) async throws {
-        let installerURL = URL(fileURLWithPath: arguments.installerPath)
+        switch arguments.command {
+        case .prepare(let installerPath):
+            try await prepare(installerPath: installerPath)
+        case .providers(let json):
+            try printProviders(json: json)
+        }
+    }
+
+    private static func prepare(installerPath: String) async throws {
+        let installerURL = URL(fileURLWithPath: installerPath)
         guard FileManager.default.fileExists(atPath: installerURL.path) else {
             throw VMControlError.installerNotFound(installerURL.path)
         }
@@ -89,6 +105,39 @@ struct VeilVMControl {
         print("Boot ready: \(configuredSnapshot.bootReady ? "yes" : "no")")
         print("Detail: \(configuredSnapshot.detail)")
         print("Diagnostics: \(diagnosticsURL.path)")
+    }
+
+    private static func printProviders(json: Bool) throws {
+        let architecture = hostArchitecture()
+        let minimumOSSupported = ProcessInfo.processInfo.isOperatingSystemAtLeast(
+            OperatingSystemVersion(majorVersion: 15, minorVersion: 0, patchVersion: 0)
+        )
+        let providers = VMRuntimeProviderProbe().localProviders(
+            architecture: architecture,
+            minimumOSSupported: minimumOSSupported
+        )
+
+        if json {
+            let data = try JSONEncoder.veilDiagnostics.encode(providers)
+            print(String(decoding: data, as: UTF8.self))
+            return
+        }
+
+        for provider in providers {
+            let pathSuffix = provider.executablePath.map { " at \($0)" } ?? ""
+            print("\(provider.displayName): \(provider.status.rawValue), \(provider.mode), \(provider.acceleration)\(pathSuffix)")
+            print("  \(provider.detail)")
+        }
+    }
+
+    private static func hostArchitecture() -> String {
+        #if arch(arm64)
+        return "arm64"
+        #elseif arch(x86_64)
+        return "x86_64"
+        #else
+        return "unknown"
+        #endif
     }
 
     private static func diagnosticsDirectory() -> URL {

@@ -1,0 +1,21 @@
+[
+  {
+    "acceleration": "Apple Hypervisor",
+    "detail": "Runs locally inside Veil.app with no server VM backend.",
+    "displayName": "Apple Virtualization",
+    "isServerBacked": false,
+    "kind": "appleVirtualization",
+    "mode": "Local VM runtime",
+    "status": "active"
+  },
+  {
+    "acceleration": "HVF",
+    "detail": "qemu-system-aarch64 found locally for UTM-style Windows compatibility experiments.",
+    "displayName": "QEMU/HVF",
+    "executablePath": "/opt/homebrew/bin/qemu-system-aarch64",
+    "isServerBacked": false,
+    "kind": "qemuHypervisor",
+    "mode": "Local compatibility provider",
+    "status": "active"
+  }
+]

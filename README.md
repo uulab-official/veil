@@ -65,6 +65,8 @@ harness/
   README.md          Local development and protocol harness strategy
   fake-agent/        WebSocket simulator for the Windows guest agent
   fake-host/         CLI simulator for the future macOS host protocol flow
+  runtime-provider-probe/
+                     JSON validator for local VM provider output
 docs/
   architecture.md    System boundaries and component design
   mvp.md             MVP acceptance criteria
@@ -152,6 +154,19 @@ The console can be reopened from the VM toolbar or Quick Actions while the VM is
 The VM Runtime panel can export a local diagnostics JSON bundle to `~/Downloads/Veil Diagnostics`. The bundle includes host metadata, runtime snapshot, setup steps, preflight checks, the stored VM profile, and the most recent Start attempt report. It records file paths, device metadata, boot result, resulting state, and error text for troubleshooting but never copies installer media, virtual disk contents, product keys, or Windows data.
 
 The runtime snapshot also exposes a typed device plan inspired by UTM's configuration model: EFI boot, generic platform identity, installer media, writable system disk, NAT networking, Virtio graphics, USB keyboard, pointer, and entropy. The shell shows this before Start so configuration mistakes are visible while Windows media is still being prepared.
+
+Inspect local runtime provider candidates without launching a VM:
+
+```bash
+cd apps/mac-host
+swift run veil-vmctl providers --json
+```
+
+Validate that output with the harness:
+
+```bash
+swift run veil-vmctl providers --json | node ../../harness/runtime-provider-probe/src/validate-provider-output.mjs
+```
 
 You can prepare the local VM profile from a downloaded Windows 11 Arm ISO without clicking through the shell:
 

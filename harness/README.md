@@ -10,6 +10,7 @@ The harness lets contributors develop the host app, Windows agent, and protocol 
 harness/
 ├─ fake-agent/             WebSocket server that simulates the Windows guest agent
 ├─ fake-host/              CLI client that sends host messages
+├─ runtime-provider-probe/ Validates local VM provider JSON output
 ├─ protocol-fixtures/      JSON messages used by tests and docs
 └─ scenarios/              scripted end-to-end protocol flows
 ```
@@ -105,6 +106,24 @@ The shell opens a macOS window with agent status, app list, and launch controls.
 The fake agent currently accepts launch requests only for `winapp_notepad`. The SwiftUI shell keeps that limit visible by disabling unsupported launches at the model boundary.
 
 The VM Runtime section does not depend on the fake agent. It reports local host capability and whether a Windows VM profile has been configured.
+
+## Runtime Provider Probe Harness
+
+The provider probe harness validates that Veil reports local runtime providers without implying a cloud or server VM backend.
+
+```bash
+cd harness/runtime-provider-probe
+npm test
+```
+
+Validate live host output:
+
+```bash
+cd apps/mac-host
+swift run veil-vmctl providers --json | node ../../harness/runtime-provider-probe/src/validate-provider-output.mjs
+```
+
+Expected output: `provider output valid`. The JSON includes Apple Virtualization and QEMU/HVF candidates. QEMU/HVF may be `planned` when `qemu-system-aarch64` is not installed locally.
 
 ## Fixture Policy
 

@@ -62,6 +62,7 @@ public struct VMRuntimeProviderSummary: Codable, Equatable, Sendable {
     public var isServerBacked: Bool
     public var status: VMRuntimeProviderStatus
     public var detail: String
+    public var executablePath: String?
 
     public init(
         kind: VMRuntimeProviderKind,
@@ -70,7 +71,8 @@ public struct VMRuntimeProviderSummary: Codable, Equatable, Sendable {
         acceleration: String,
         isServerBacked: Bool,
         status: VMRuntimeProviderStatus,
-        detail: String
+        detail: String,
+        executablePath: String? = nil
     ) {
         self.kind = kind
         self.displayName = displayName
@@ -79,6 +81,93 @@ public struct VMRuntimeProviderSummary: Codable, Equatable, Sendable {
         self.isServerBacked = isServerBacked
         self.status = status
         self.detail = detail
+        self.executablePath = executablePath
+    }
+}
+
+public struct VMRuntimeProviderProbe: Sendable {
+    public static let qemuEnvironmentKey = "VEIL_QEMU_SYSTEM_AARCH64"
+    public static let defaultQEMUExecutablePaths = [
+        "/opt/homebrew/bin/qemu-system-aarch64",
+        "/usr/local/bin/qemu-system-aarch64",
+        "/opt/local/bin/qemu-system-aarch64"
+    ]
+
+    private let environment: [String: String]
+    private let fileExists: @Sendable (String) -> Bool
+
+    public init(
+        environment: [String: String] = ProcessInfo.processInfo.environment,
+        fileExists: @escaping @Sendable (String) -> Bool = { FileManager.default.fileExists(atPath: $0) }
+    ) {
+        self.environment = environment
+        self.fileExists = fileExists
+    }
+
+    public func localProviders(
+        architecture: String,
+        minimumOSSupported: Bool
+    ) -> [VMRuntimeProviderSummary] {
+        [
+            appleVirtualizationProvider(
+                architecture: architecture,
+                minimumOSSupported: minimumOSSupported
+            ),
+            qemuHypervisorProvider()
+        ]
+    }
+
+    private func appleVirtualizationProvider(
+        architecture: String,
+        minimumOSSupported: Bool
+    ) -> VMRuntimeProviderSummary {
+        let isAvailable = architecture == "arm64" && minimumOSSupported
+        return VMRuntimeProviderSummary(
+            kind: .appleVirtualization,
+            displayName: "Apple Virtualization",
+            mode: "Local VM runtime",
+            acceleration: "Apple Hypervisor",
+            isServerBacked: false,
+            status: isAvailable ? .active : .unavailable,
+            detail: isAvailable
+                ? "Runs locally inside Veil.app with no server VM backend."
+                : "Requires macOS 15+ on Apple Silicon."
+        )
+    }
+
+    private func qemuHypervisorProvider() -> VMRuntimeProviderSummary {
+        if let executablePath = qemuExecutablePath() {
+            return VMRuntimeProviderSummary(
+                kind: .qemuHypervisor,
+                displayName: "QEMU/HVF",
+                mode: "Local compatibility provider",
+                acceleration: "HVF",
+                isServerBacked: false,
+                status: .active,
+                detail: "qemu-system-aarch64 found locally for UTM-style Windows compatibility experiments.",
+                executablePath: executablePath
+            )
+        }
+
+        return VMRuntimeProviderSummary(
+            kind: .qemuHypervisor,
+            displayName: "QEMU/HVF",
+            mode: "Local compatibility provider",
+            acceleration: "HVF",
+            isServerBacked: false,
+            status: .planned,
+            detail: "qemu-system-aarch64 not found. Install QEMU locally or set VEIL_QEMU_SYSTEM_AARCH64 to a local executable path."
+        )
+    }
+
+    private func qemuExecutablePath() -> String? {
+        if let overridePath = environment[Self.qemuEnvironmentKey],
+           !overridePath.isEmpty,
+           fileExists(overridePath) {
+            return overridePath
+        }
+
+        return Self.defaultQEMUExecutablePaths.first(where: fileExists)
     }
 }
 
@@ -94,6 +183,7 @@ public struct VMRuntimeSnapshot: Codable, Equatable, Sendable {
     public var installerMediaPath: String?
     public var virtualDiskPath: String?
     public var runtimeProvider: VMRuntimeProviderSummary?
+    public var runtimeProviders: [VMRuntimeProviderSummary]
     public var installationSteps: [VMInstallationStep]
     public var preflightChecks: [VMPreflightCheck]
     public var deviceSummary: VMRuntimeDeviceSummary?
@@ -112,6 +202,7 @@ public struct VMRuntimeSnapshot: Codable, Equatable, Sendable {
         installerMediaPath: String? = nil,
         virtualDiskPath: String? = nil,
         runtimeProvider: VMRuntimeProviderSummary? = nil,
+        runtimeProviders: [VMRuntimeProviderSummary] = [],
         installationSteps: [VMInstallationStep] = [],
         preflightChecks: [VMPreflightCheck] = [],
         deviceSummary: VMRuntimeDeviceSummary? = nil,
@@ -129,6 +220,7 @@ public struct VMRuntimeSnapshot: Codable, Equatable, Sendable {
         self.installerMediaPath = installerMediaPath
         self.virtualDiskPath = virtualDiskPath
         self.runtimeProvider = runtimeProvider
+        self.runtimeProviders = runtimeProviders
         self.installationSteps = installationSteps
         self.preflightChecks = preflightChecks
         self.deviceSummary = deviceSummary
@@ -606,6 +698,7 @@ public struct LocalVMRuntimeService: VMRuntimeService {
     private let defaultHomeDirectory: URL
     private let bootRunner: any VMRuntimeBooting
     private let bootReportStore: any VMRuntimeBootReportStore
+    private let providerProbe: VMRuntimeProviderProbe
     private let resourcePlan: VMResourcePlan?
     private let diagnosticDate: @Sendable () -> Date
 
@@ -614,6 +707,7 @@ public struct LocalVMRuntimeService: VMRuntimeService {
         defaultHomeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser,
         bootRunner: any VMRuntimeBooting = UnavailableVMRuntimeBooter(),
         bootReportStore: any VMRuntimeBootReportStore = JSONVMRuntimeBootReportStore(),
+        providerProbe: VMRuntimeProviderProbe = VMRuntimeProviderProbe(),
         resourcePlan: VMResourcePlan? = nil,
         diagnosticDate: @escaping @Sendable () -> Date = Date.init
     ) {
@@ -621,6 +715,7 @@ public struct LocalVMRuntimeService: VMRuntimeService {
         self.defaultHomeDirectory = defaultHomeDirectory
         self.bootRunner = bootRunner
         self.bootReportStore = bootReportStore
+        self.providerProbe = providerProbe
         self.resourcePlan = resourcePlan
         self.diagnosticDate = diagnosticDate
     }
@@ -631,6 +726,11 @@ public struct LocalVMRuntimeService: VMRuntimeService {
             OperatingSystemVersion(majorVersion: 15, minorVersion: 0, patchVersion: 0)
         )
         let virtualizationAvailable = architecture == "arm64" && minimumOSSupported
+        let runtimeProviders = providerProbe.localProviders(
+            architecture: architecture,
+            minimumOSSupported: minimumOSSupported
+        )
+        let activeProvider = runtimeProviders.first { $0.kind == .appleVirtualization }
         let profile = try await profileStore.load()
 
         if virtualizationAvailable, let profile {
@@ -653,10 +753,8 @@ public struct LocalVMRuntimeService: VMRuntimeService {
                 diskGB: profile.diskGB,
                 installerMediaPath: profile.installerMediaPath,
                 virtualDiskPath: profile.virtualDiskPath,
-                runtimeProvider: Self.appleVirtualizationProvider(
-                    status: .active,
-                    virtualizationAvailable: virtualizationAvailable
-                ),
+                runtimeProvider: activeProvider,
+                runtimeProviders: runtimeProviders,
                 installationSteps: installationSteps,
                 preflightChecks: preflightChecks,
                 deviceSummary: Self.deviceSummary(for: profile),
@@ -675,10 +773,8 @@ public struct LocalVMRuntimeService: VMRuntimeService {
             architecture: architecture,
             minimumOSSupported: minimumOSSupported,
             profileName: nil,
-            runtimeProvider: Self.appleVirtualizationProvider(
-                status: virtualizationAvailable ? .active : .unavailable,
-                virtualizationAvailable: virtualizationAvailable
-            ),
+            runtimeProvider: activeProvider,
+            runtimeProviders: runtimeProviders,
             detail: virtualizationAvailable
                 ? "No Windows VM profile has been created."
                 : "Veil requires macOS 15+ on Apple Silicon."
@@ -881,23 +977,6 @@ public struct LocalVMRuntimeService: VMRuntimeService {
         case .unsupported:
             "Veil requires macOS 15+ on Apple Silicon."
         }
-    }
-
-    private static func appleVirtualizationProvider(
-        status: VMRuntimeProviderStatus,
-        virtualizationAvailable: Bool
-    ) -> VMRuntimeProviderSummary {
-        VMRuntimeProviderSummary(
-            kind: .appleVirtualization,
-            displayName: "Apple Virtualization",
-            mode: "Local VM runtime",
-            acceleration: "Apple Hypervisor",
-            isServerBacked: false,
-            status: status,
-            detail: virtualizationAvailable
-                ? "Runs locally inside Veil.app with no server VM backend."
-                : "Requires macOS 15+ on Apple Silicon."
-        )
     }
 
     private static func bootReport(

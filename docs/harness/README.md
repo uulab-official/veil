@@ -15,6 +15,7 @@ The harness exists so host, guest, and protocol work can move independently.
 harness/
 ├─ fake-agent/             WebSocket server that behaves like the Windows agent
 ├─ fake-host/              CLI client that sends host messages to the agent
+├─ runtime-provider-probe/ JSON shape validation for local VM providers
 ├─ protocol-fixtures/      JSON fixtures for every stable message
 └─ scenarios/              scripted flows such as launch-notepad and clipboard-sync
 ```
@@ -25,9 +26,21 @@ Current executable pieces:
 
 - `harness/fake-agent`: a WebSocket simulator for the Windows guest agent.
 - `harness/fake-host`: a CLI simulator for the future macOS host flow.
+- `harness/runtime-provider-probe`: a JSON validator for serverless local runtime provider output.
 - `packages/protocol`: shared protocol constants and validation helpers.
 
 The macOS host shell also includes an internal demo agent fallback. If the WebSocket agent is unavailable, the app still loads demo Windows app metadata and can run the Notepad demo launch flow. The header and Agent view label this as Demo mode and include the unreachable endpoint. The fallback is limited to network availability errors; protocol and agent errors remain visible. Use the external fake agent when testing the transport boundary itself.
+
+## Provider Probe Scenario
+
+The provider probe checks the local VM runtime boundary separately from Windows boot. It should be run before real Windows installer testing so the team knows whether the machine has only Apple Virtualization available or also a local QEMU/HVF candidate.
+
+```bash
+cd apps/mac-host
+swift run veil-vmctl providers --json | node ../../harness/runtime-provider-probe/src/validate-provider-output.mjs
+```
+
+The command must not launch, stop, or mutate a VM. It only reports local provider candidates.
 
 ## First Scenario: Launch Notepad
 

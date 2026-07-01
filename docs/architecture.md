@@ -47,6 +47,8 @@ Current provider status:
 - Apple Virtualization: active feasibility provider for profile, disk, EFI, console, and boot attempts.
 - QEMU/HVF: planned local provider candidate for UTM-grade Windows installer/device compatibility if Apple Virtualization is not enough.
 
+The provider probe is intentionally read-only. `veil-vmctl providers --json` reports candidate providers for diagnostics and harness validation, but it must not start, stop, create, or mutate a VM.
+
 ## Windows Arm Install Flow
 
 Veil treats Windows setup as a staged runtime prerequisite rather than a generic VM wizard. The host profile tracks installer media, virtual disk, and a narrow macOS shared folder before VM boot work begins. The guest agent remains a separate pending step until Windows can boot and run an installer inside the guest.

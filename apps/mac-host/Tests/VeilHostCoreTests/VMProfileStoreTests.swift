@@ -159,6 +159,70 @@ struct VMProfileStoreTests {
         #expect(provider.status == .active)
     }
 
+    @Test("runtime provider probe reports QEMU provider when executable exists")
+    func runtimeProviderProbeReportsQEMUProvider() {
+        let probe = VMRuntimeProviderProbe(
+            environment: ["VEIL_QEMU_SYSTEM_AARCH64": "/opt/veil/bin/qemu-system-aarch64"],
+            fileExists: { path in path == "/opt/veil/bin/qemu-system-aarch64" }
+        )
+
+        let providers = probe.localProviders(
+            architecture: "arm64",
+            minimumOSSupported: true
+        )
+        let qemu = providers.first { $0.kind == .qemuHypervisor }
+
+        #expect(providers.map(\.kind) == [.appleVirtualization, .qemuHypervisor])
+        #expect(qemu?.displayName == "QEMU/HVF")
+        #expect(qemu?.acceleration == "HVF")
+        #expect(qemu?.isServerBacked == false)
+        #expect(qemu?.status == .active)
+        #expect(qemu?.executablePath == "/opt/veil/bin/qemu-system-aarch64")
+    }
+
+    @Test("runtime provider probe marks QEMU planned when executable is missing")
+    func runtimeProviderProbeMarksQEMUPlannedWhenMissing() {
+        let probe = VMRuntimeProviderProbe(
+            environment: [:],
+            fileExists: { _ in false }
+        )
+
+        let providers = probe.localProviders(
+            architecture: "arm64",
+            minimumOSSupported: true
+        )
+        let qemu = providers.first { $0.kind == .qemuHypervisor }
+
+        #expect(qemu?.status == .planned)
+        #expect(qemu?.executablePath == nil)
+        #expect(qemu?.detail.contains("qemu-system-aarch64 not found") == true)
+    }
+
+    @Test("local runtime reports provider candidates")
+    func localRuntimeReportsProviderCandidates() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let store = JSONVMProfileStore(directory: directory)
+        let profile = VMProfile.defaultWindows11Arm(
+            createdAt: Date(timeIntervalSince1970: 1_782_752_400),
+            homeDirectory: directory.appendingPathComponent("Home", isDirectory: true)
+        )
+        let providerProbe = VMRuntimeProviderProbe(
+            environment: ["VEIL_QEMU_SYSTEM_AARCH64": "/opt/veil/bin/qemu-system-aarch64"],
+            fileExists: { path in path == "/opt/veil/bin/qemu-system-aarch64" }
+        )
+        try await store.save(profile)
+
+        let service = LocalVMRuntimeService(
+            profileStore: store,
+            providerProbe: providerProbe
+        )
+        let snapshot = try await service.loadSnapshot()
+
+        #expect(snapshot.runtimeProviders.map(\.kind) == [.appleVirtualization, .qemuHypervisor])
+        #expect(snapshot.runtimeProviders.first { $0.kind == .qemuHypervisor }?.status == .active)
+    }
+
     @Test("local runtime reports virtualization device summary")
     func localRuntimeReportsVirtualizationDeviceSummary() async throws {
         let directory = FileManager.default.temporaryDirectory
