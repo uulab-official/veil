@@ -17,6 +17,7 @@ These JSON files mirror the stable examples in `docs/protocol.md`.
 - `input.mouse.left-down.json`
 - `input.key.copy.json`
 - `clipboard.text.set.host.json`
+- `clipboard.text.set.guest.json`
 - `error.app_not_found.json`
 
 ## Validation Rule

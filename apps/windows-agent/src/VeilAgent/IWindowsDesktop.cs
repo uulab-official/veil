@@ -11,4 +11,8 @@ public interface IWindowsDesktop
     Task<bool> SendKeyInputAsync(WindowKeyInput input, CancellationToken cancellationToken);
 
     Task SetClipboardTextAsync(string text, CancellationToken cancellationToken);
+
+    Task<string?> GetClipboardTextAsync(CancellationToken cancellationToken);
+
+    bool TryConsumeHostClipboardEcho(string text);
 }

@@ -1,0 +1,7 @@
+{
+  "type": "clipboard.text.set",
+  "requestId": "evt_clipboard_43",
+  "origin": "guest",
+  "sequence": 43,
+  "text": "hello from Windows"
+}

@@ -37,6 +37,7 @@ test("parses every stable fixture", async () => {
     "input.mouse.left-down.json",
     "input.key.copy.json",
     "clipboard.text.set.host.json",
+    "clipboard.text.set.guest.json",
     "error.app_not_found.json"
   ];
 
@@ -162,4 +163,14 @@ test("validates host clipboard text fixture", async () => {
   assert.equal(clipboard.origin, "host");
   assert.equal(clipboard.sequence, 42);
   assert.equal(clipboard.text, "hello from macOS");
+});
+
+test("validates guest clipboard text fixture", async () => {
+  const clipboard = validateClipboardTextSet(await readFixture("clipboard.text.set.guest.json"));
+
+  assert.equal(clipboard.type, MessageType.ClipboardTextSet);
+  assert.equal(clipboard.requestId, "evt_clipboard_43");
+  assert.equal(clipboard.origin, "guest");
+  assert.equal(clipboard.sequence, 43);
+  assert.equal(clipboard.text, "hello from Windows");
 });

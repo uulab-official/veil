@@ -61,7 +61,7 @@ Response:
     "windowTracking": true,
     "windowCapture": false,
     "input": true,
-    "clipboardText": false
+    "clipboardText": true
   }
 }
 ```
@@ -262,7 +262,7 @@ Loop prevention rule:
 - Receivers remember the latest `(origin, sequence)` pair.
 - A clipboard update caused by a remote message must not be echoed back as a new local change.
 
-Implementation note: the first implemented path syncs host text to the Windows guest before forwarded paste shortcuts. Guest-to-host clipboard observation remains a follow-up.
+Implementation note: the host syncs macOS text to the Windows guest before forwarded paste shortcuts. The Windows agent also observes text clipboard changes and broadcasts `clipboard.text.set` with `origin=guest`. The macOS host accepts only increasing guest sequences and writes them to the macOS pasteboard. Host-origin updates are consumed by the agent once so they are not echoed back as guest updates.
 
 ## Error
 

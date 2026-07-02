@@ -106,6 +106,17 @@ struct ProtocolMessageTests {
         #expect(clipboard.sequence == 42)
         #expect(clipboard.text == "hello from macOS")
     }
+
+    @Test("decodes guest clipboard text event")
+    func decodesGuestClipboardTextEvent() throws {
+        let clipboard: ClipboardTextSet = try decodeFixture("clipboard.text.set.guest")
+
+        #expect(clipboard.type == .clipboardTextSet)
+        #expect(clipboard.requestId == "evt_clipboard_43")
+        #expect(clipboard.origin == "guest")
+        #expect(clipboard.sequence == 43)
+        #expect(clipboard.text == "hello from Windows")
+    }
 }
 
 private func decodeFixture<T: Decodable>(_ name: String) throws -> T {

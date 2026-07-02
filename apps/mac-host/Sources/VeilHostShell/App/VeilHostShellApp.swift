@@ -155,12 +155,18 @@ struct VeilHostShellApp: App {
         agentEventTask = Task { @MainActor in
             while !Task.isCancelled {
                 await model.consumeProtocolMessages(from: agentTransport) { result in
-                    guard case .handledWindowFrame(let windowId) = result,
-                          let session = model.mirrorSessions.first(where: { $0.id == windowId }) else {
+                    switch result {
+                    case .handledWindowFrame(let windowId):
+                        guard let session = model.mirrorSessions.first(where: { $0.id == windowId }) else {
+                            return
+                        }
+
+                        windowsAppWindowPresenter.showWindow(for: session)
+                    case .handledClipboardText:
+                        syncGuestClipboardToPasteboard()
+                    case .ignored:
                         return
                     }
-
-                    windowsAppWindowPresenter.showWindow(for: session)
                 }
 
                 try? await Task.sleep(for: .seconds(2))
@@ -294,6 +300,17 @@ struct VeilHostShellApp: App {
                 )
             }
         }
+    }
+
+    @MainActor
+    private func syncGuestClipboardToPasteboard() {
+        guard let text = model.latestGuestClipboardText else {
+            return
+        }
+
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(text, forType: .string)
     }
 
     private func showVMConsole() {

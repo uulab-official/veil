@@ -11,14 +11,22 @@ public sealed class WebSocketAgentServer
     private readonly AgentEndpoint endpoint;
     private readonly AgentSession session;
     private readonly WindowFrameStreamer frameStreamer;
+    private readonly ClipboardTextStreamer clipboardTextStreamer;
     private readonly ConcurrentDictionary<Guid, WebSocket> clients = new();
     private readonly ConcurrentDictionary<string, CancellationTokenSource> frameStreamsByWindowId = new();
+    private CancellationTokenSource? clipboardStreamCancellation;
 
-    public WebSocketAgentServer(AgentEndpoint endpoint, AgentSession session, WindowFrameStreamer frameStreamer)
+    public WebSocketAgentServer(
+        AgentEndpoint endpoint,
+        AgentSession session,
+        WindowFrameStreamer frameStreamer,
+        ClipboardTextStreamer clipboardTextStreamer
+    )
     {
         this.endpoint = endpoint;
         this.session = session;
         this.frameStreamer = frameStreamer;
+        this.clipboardTextStreamer = clipboardTextStreamer;
     }
 
     public async Task RunAsync(CancellationToken cancellationToken = default)
@@ -26,6 +34,7 @@ public sealed class WebSocketAgentServer
         using var listener = new HttpListener();
         listener.Prefixes.Add(endpoint.HttpPrefix);
         listener.Start();
+        StartClipboardStream(cancellationToken);
 
         while (!cancellationToken.IsCancellationRequested)
         {
@@ -83,6 +92,31 @@ public sealed class WebSocketAgentServer
             clients.TryRemove(clientId, out _);
             socket.Dispose();
         }
+    }
+
+    private void StartClipboardStream(CancellationToken serverCancellationToken)
+    {
+        if (clipboardStreamCancellation is not null)
+        {
+            return;
+        }
+
+        var streamCancellation = CancellationTokenSource.CreateLinkedTokenSource(serverCancellationToken);
+        clipboardStreamCancellation = streamCancellation;
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await clipboardTextStreamer.StreamAsync(
+                    async (message, token) => await BroadcastTextAsync(message.ToJsonString(ProtocolJson.Options), token),
+                    streamCancellation.Token
+                );
+            }
+            catch (OperationCanceledException)
+            {
+                // Expected when the agent shuts down.
+            }
+        }, streamCancellation.Token);
     }
 
     private async Task BroadcastTextAsync(string text, CancellationToken cancellationToken)

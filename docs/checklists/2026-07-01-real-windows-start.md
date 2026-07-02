@@ -88,6 +88,7 @@ Goal: keep the main Veil experience pointed at real local Windows boot and conso
 - [x] Forward macOS mirrored-window mouse input to the Windows agent as `input.mouse` and map it to HWND client-area `PostMessage` calls.
 - [x] Forward macOS mirrored-window keyboard input to the Windows agent as `input.key`, mapping macOS Command shortcuts to Windows Ctrl shortcuts.
 - [x] Send macOS text clipboard to the Windows agent as `clipboard.text.set` before forwarded paste shortcuts.
+- [x] Broadcast Windows guest text clipboard changes back to macOS with host-echo loop prevention.
 
 ## Next
 

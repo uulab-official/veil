@@ -118,6 +118,21 @@ test("windows agent accepts host clipboard text updates", async () => {
   assert.match(session, /\["clipboardText"\]\s*=\s*true/);
 });
 
+test("windows agent broadcasts guest clipboard text changes without host echo loops", async () => {
+  const program = await readFile(resolve(agentRoot, "src/VeilAgent/Program.cs"), "utf8");
+  const server = await readFile(resolve(agentRoot, "src/VeilAgent/WebSocketAgentServer.cs"), "utf8");
+  const desktopInterface = await readFile(resolve(agentRoot, "src/VeilAgent/IWindowsDesktop.cs"), "utf8");
+  const desktop = await readFile(resolve(agentRoot, "src/VeilAgent/WindowsDesktop.cs"), "utf8");
+
+  assert.match(program, /new ClipboardTextStreamer\(/);
+  assert.match(server, /ClipboardTextStreamer/);
+  assert.match(server, /StartClipboardStream/);
+  assert.match(desktopInterface, /GetClipboardTextAsync\(CancellationToken cancellationToken\)/);
+  assert.match(desktop, /Clipboard\.GetText/);
+  assert.match(desktop, /lastHostClipboardText/);
+  assert.match(desktop, /lastHostClipboardSequence/);
+});
+
 test("windows agent sample launch flow emits Notepad window and first frame", async () => {
   const transcript = JSON.parse(
     await readFile(resolve(agentRoot, "fixtures/notepad-launch-with-frame.json"), "utf8")

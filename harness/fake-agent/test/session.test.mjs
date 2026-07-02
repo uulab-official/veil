@@ -134,6 +134,20 @@ test("accepts host clipboard text without a reply", async () => {
   assert.deepEqual(replies, []);
 });
 
+test("does not echo host clipboard text back as a guest event", async () => {
+  const session = createSession();
+
+  const replies = await session.handle({
+    type: "clipboard.text.set",
+    requestId: "req_clipboard_2",
+    origin: "host",
+    sequence: 2,
+    text: "do not echo"
+  });
+
+  assert.equal(replies.some((reply) => reply.origin === "guest"), false);
+});
+
 test("returns a structured error for unknown apps", async () => {
   const session = createSession();
 

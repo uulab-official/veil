@@ -70,6 +70,7 @@ public enum HostDashboardPhase: Equatable, Sendable {
 
 public enum HostProtocolMessageResult: Equatable, Sendable {
     case handledWindowFrame(windowId: String)
+    case handledClipboardText(sequence: Int)
     case ignored
 }
 
@@ -87,6 +88,8 @@ public final class HostDashboardModel {
     public private(set) var connectionDetail: String?
     public private(set) var pendingLaunchAppId: String?
     public private(set) var clipboardSequence = 0
+    public private(set) var latestGuestClipboardText: String?
+    public private(set) var lastGuestClipboardSequence = 0
     public var selectedAppId: String?
 
     private let service: any HostDashboardService
@@ -344,6 +347,17 @@ public final class HostDashboardModel {
         }
     }
 
+    public func receiveClipboardText(_ clipboard: ClipboardTextSet) -> Bool {
+        guard clipboard.origin == "guest",
+              clipboard.sequence > lastGuestClipboardSequence else {
+            return false
+        }
+
+        latestGuestClipboardText = clipboard.text
+        lastGuestClipboardSequence = clipboard.sequence
+        return true
+    }
+
     public func receiveProtocolMessage(
         _ message: Data,
         decoder: JSONDecoder = .veilProtocol
@@ -356,6 +370,11 @@ public final class HostDashboardModel {
             receiveWindowFrame(frame)
             return mirrorSessions.contains(where: { $0.id == frame.windowId && $0.latestFrame == frame })
                 ? .handledWindowFrame(windowId: frame.windowId)
+                : .ignored
+        case .clipboardTextSet:
+            let clipboard = try decoder.decode(ClipboardTextSet.self, from: message)
+            return receiveClipboardText(clipboard)
+                ? .handledClipboardText(sequence: clipboard.sequence)
                 : .ignored
         default:
             return .ignored

@@ -16,11 +16,11 @@ Goal: make Veil's product direction visible as "Windows app as a macOS window" i
 - [x] Add Windows agent `input.key` handling via HWND `WM_KEYDOWN` and `WM_KEYUP`.
 - [x] Sync macOS text clipboard to the Windows guest before forwarded paste shortcuts.
 - [x] Add Windows agent `clipboard.text.set` handling with STA clipboard writes.
+- [x] Add guest-to-host automatic text clipboard sync with loop prevention.
 
 ## Next
 
 - [ ] Add protocol messages for frame stream subscribe/unsubscribe.
 - [ ] Replace the placeholder surface with captured Notepad frames from the Windows guest agent.
 - [ ] Validate keyboard input inside Windows 11 Arm with Notepad focused.
-- [ ] Add guest-to-host automatic text clipboard sync with loop prevention.
 - [ ] Persist and restore mapped app windows after VM reconnect.

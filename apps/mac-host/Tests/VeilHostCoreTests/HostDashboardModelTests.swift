@@ -116,6 +116,30 @@ struct HostDashboardModelTests {
         #expect(session.latestFrame?.frameId == "frame_000001")
     }
 
+    @Test("consumes guest clipboard text from an event source once")
+    @MainActor
+    func consumesGuestClipboardTextFromEventSourceOnce() async throws {
+        let service = FakeDashboardService(health: .clipboardReady)
+        let model = HostDashboardModel(service: service)
+        let source = StaticHostEventSource(messages: [
+            Data(ClipboardTextSet.guestEventJSON.utf8),
+            Data(ClipboardTextSet.guestEventJSON.utf8)
+        ])
+        var handledResults: [HostProtocolMessageResult] = []
+
+        await model.load()
+        await model.consumeProtocolMessages(from: source) { result in
+            handledResults.append(result)
+        }
+
+        #expect(model.latestGuestClipboardText == "hello from Windows")
+        #expect(model.lastGuestClipboardSequence == 43)
+        #expect(handledResults == [
+            .handledClipboardText(sequence: 43),
+            .ignored
+        ])
+    }
+
     @Test("ignores frames for windows without a mirror session")
     @MainActor
     func ignoresFramesWithoutMirrorSession() async throws {
@@ -697,5 +721,11 @@ private extension WindowFrameEvent {
             scale: 1,
             encodedData: "iVBORw0KGgo="
         )
+    }
+}
+
+private extension ClipboardTextSet {
+    static var guestEventJSON: String {
+        #"{"type":"clipboard.text.set","requestId":"evt_clipboard_43","origin":"guest","sequence":43,"text":"hello from Windows"}"#
     }
 }

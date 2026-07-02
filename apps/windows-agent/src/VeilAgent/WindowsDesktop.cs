@@ -22,6 +22,9 @@ public sealed class WindowsDesktop : IWindowsDesktop
     private const int VK_CONTROL = 0x11;
     private const int VK_SHIFT = 0x10;
     private const int VK_MENU = 0x12;
+    private readonly object clipboardGate = new();
+    private string? lastHostClipboardText;
+    private int lastHostClipboardSequence;
 
     public async Task<LaunchedWindow> LaunchNotepadAsync(CancellationToken cancellationToken)
     {
@@ -151,6 +154,11 @@ public sealed class WindowsDesktop : IWindowsDesktop
             try
             {
                 Clipboard.SetText(text);
+                lock (clipboardGate)
+                {
+                    lastHostClipboardText = text;
+                    lastHostClipboardSequence += 1;
+                }
                 completion.SetResult(null);
             }
             catch (Exception error)
@@ -162,6 +170,50 @@ public sealed class WindowsDesktop : IWindowsDesktop
         thread.SetApartmentState(ApartmentState.STA);
         thread.Start();
         return completion.Task.WaitAsync(cancellationToken);
+    }
+
+    public Task<string?> GetClipboardTextAsync(CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (!OperatingSystem.IsWindows())
+        {
+            throw new PlatformNotSupportedException("The Veil Windows agent must run inside Windows.");
+        }
+
+        var completion = new TaskCompletionSource<string?>();
+        var thread = new Thread(() =>
+        {
+            try
+            {
+                var text = Clipboard.ContainsText()
+                    ? Clipboard.GetText()
+                    : null;
+                completion.SetResult(text);
+            }
+            catch (Exception error)
+            {
+                completion.SetException(error);
+            }
+        });
+
+        thread.SetApartmentState(ApartmentState.STA);
+        thread.Start();
+        return completion.Task.WaitAsync(cancellationToken);
+    }
+
+    public bool TryConsumeHostClipboardEcho(string text)
+    {
+        lock (clipboardGate)
+        {
+            if (lastHostClipboardSequence <= 0 || lastHostClipboardText != text)
+            {
+                return false;
+            }
+
+            lastHostClipboardText = null;
+            return true;
+        }
     }
 
     private static bool TryParseWindowId(string windowId, out IntPtr hwnd)
