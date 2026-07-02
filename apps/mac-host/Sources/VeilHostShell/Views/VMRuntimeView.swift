@@ -95,9 +95,7 @@ struct VMRuntimeView: View {
             handlePathImport(result)
         }
         .onChange(of: model.snapshot?.state) { _, state in
-            if state == .failed || state == .stopped {
-                installSimulation = .idle
-            }
+            updateConsoleHandoffProgress(for: state)
         }
         .popover(isPresented: $showsAdvancedDetails, arrowEdge: .bottom) {
             if let snapshot = model.snapshot {
@@ -245,16 +243,20 @@ struct VMRuntimeView: View {
             return
         }
 
-        Task { @MainActor in
-            installSimulation = .running(stepIndex: 0, progress: 0.04)
+        installSimulation = .running(stepIndex: 2, progress: 0.42)
+    }
 
-            for index in InstallSimulationState.steps.indices {
-                installSimulation = .running(stepIndex: index, progress: Double(index) / Double(InstallSimulationState.steps.count))
-                try? await Task.sleep(for: .milliseconds(850))
-                installSimulation = .running(stepIndex: index, progress: Double(index + 1) / Double(InstallSimulationState.steps.count))
-            }
-
+    @MainActor
+    private func updateConsoleHandoffProgress(for state: VMRuntimeState?) {
+        switch state {
+        case .starting:
+            installSimulation = .running(stepIndex: 3, progress: 0.66)
+        case .running:
             installSimulation = .complete
+        case .failed, .stopped:
+            installSimulation = .idle
+        default:
+            break
         }
     }
 }
