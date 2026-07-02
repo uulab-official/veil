@@ -5,6 +5,7 @@ import { readFixture } from "./fixtures.mjs";
 export function createSession(options = {}) {
   const broadcast = options.broadcast ?? (async () => {});
   const onInput = options.onInput ?? (async () => {});
+  const nextFrameSequence = options.nextFrameSequence ?? (() => 1);
 
   return {
     async handle(message) {
@@ -28,9 +29,11 @@ export function createSession(options = {}) {
           return handleWindowClose(message);
         case MessageType.InputMouse:
           await onInput(message);
+          await broadcastInputFrame(message, broadcast, nextFrameSequence);
           return [];
         case MessageType.InputKey:
           await onInput(message);
+          await broadcastInputFrame(message, broadcast, nextFrameSequence);
           return [];
         case MessageType.ClipboardTextSet:
           return [];
@@ -60,9 +63,26 @@ async function handleWindowFrameSubscribe(message, broadcast) {
   const frame = await readFixture("window.frame.json");
   await broadcast({
     ...frame,
-    windowId: message.windowId
+    windowId: message.windowId,
+    frameId: `frame_${String(1).padStart(6, "0")}`,
+    sequence: 1
   });
   return [];
+}
+
+async function broadcastInputFrame(message, broadcast, nextFrameSequence) {
+  if (!message.windowId) {
+    return;
+  }
+
+  const sequence = nextFrameSequence();
+  const frame = await readFixture("window.frame.json");
+  await broadcast({
+    ...frame,
+    windowId: message.windowId,
+    frameId: `frame_${String(sequence).padStart(6, "0")}`,
+    sequence
+  });
 }
 
 async function handleWindowClose(message) {

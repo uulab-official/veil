@@ -91,6 +91,8 @@ export function collectEventAfter(url, trigger, options = {}) {
   return new Promise((resolve, reject) => {
     const socket = new WebSocket(url);
     let settled = false;
+    let matchedEvent;
+    let triggerFinished = false;
 
     const finish = (callback, value) => {
       if (settled) {
@@ -103,6 +105,12 @@ export function collectEventAfter(url, trigger, options = {}) {
       callback(value);
     };
 
+    const finishIfReady = () => {
+      if (matchedEvent && triggerFinished) {
+        finish(resolve, matchedEvent);
+      }
+    };
+
     const timer = setTimeout(() => {
       finish(reject, new Error(`Timed out waiting for event from ${url}`));
     }, timeoutMs);
@@ -110,6 +118,8 @@ export function collectEventAfter(url, trigger, options = {}) {
     socket.on("open", async () => {
       try {
         await trigger();
+        triggerFinished = true;
+        finishIfReady();
       } catch (error) {
         finish(reject, error);
       }
@@ -118,7 +128,8 @@ export function collectEventAfter(url, trigger, options = {}) {
     socket.on("message", (data) => {
       const event = JSON.parse(data.toString("utf8"));
       if (predicate(event)) {
-        finish(resolve, event);
+        matchedEvent = event;
+        finishIfReady();
       }
     });
 

@@ -29,6 +29,7 @@ Goal: make Veil's product direction visible as "Windows app as a macOS window" i
 - [x] Extract macOS-to-Windows key mapping into tested host-core logic for mirrored app windows.
 - [x] Foreground and focus the guest HWND before forwarding mouse or keyboard input from mirrored app windows.
 - [x] Add an executable fake-host Notepad input smoke scenario for real-agent keyboard validation.
+- [x] Extend Notepad input smoke to wait for a post-input capture frame.
 
 ## Next
 

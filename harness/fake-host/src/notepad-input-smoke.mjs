@@ -47,8 +47,20 @@ export async function runNotepadInputSmoke(options = {}) {
   );
 
   validateWindowFrame(frame);
-  await sendClick(url, acceptance.windowId, click);
-  const keyInputs = await sendText(url, acceptance.windowId, text);
+  let keyInputs = [];
+  const postInputFrame = await collectEventAfter(
+    url,
+    async () => {
+      await sendClick(url, acceptance.windowId, click);
+      keyInputs = await sendText(url, acceptance.windowId, text);
+    },
+    {
+      predicate: (event) => event.type === MessageType.WindowFrame
+        && event.windowId === acceptance.windowId
+        && event.sequence > frame.sequence
+    }
+  );
+  validateWindowFrame(postInputFrame);
 
   return {
     url,
@@ -57,6 +69,7 @@ export async function runNotepadInputSmoke(options = {}) {
     launch: launch[0],
     window: launch[1],
     frame,
+    postInputFrame,
     click,
     text,
     keyInputs,

@@ -29,6 +29,8 @@ test("launches Notepad, receives a frame, and sends click plus keyboard input", 
 
   assert.equal(report.acceptance.windowId, "hwnd:0003029A");
   assert.equal(report.frame.type, "window.frame");
+  assert.equal(report.postInputFrame.type, "window.frame");
+  assert.ok(report.postInputFrame.sequence > report.frame.sequence);
   assert.deepEqual(inputs.map((input) => input.type), [
     "input.mouse",
     "input.mouse",

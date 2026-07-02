@@ -120,10 +120,11 @@ VEIL_AGENT_URL=ws://127.0.0.1:18444 npm run smoke:notepad-input
 ```
 
 The scenario opens Notepad, waits for a subscribed `window.frame`, clicks the
-mirrored HWND at a deterministic point, and sends `keyDown`/`keyUp` pairs for
-the configured smoke text. Set `VEIL_INPUT_TEXT` to override the default `veil`
-text. Against a real Windows guest, the next manual assertion is that the text
-appears in Notepad and the capture stream reflects the edited document.
+mirrored HWND at a deterministic point, sends `keyDown`/`keyUp` pairs for the
+configured smoke text, and waits for a later `window.frame` after input. Set
+`VEIL_INPUT_TEXT` to override the default `veil` text. Against a real Windows
+guest, the next manual assertion is that the post-input frame shows the edited
+Notepad document.
 
 ## Second Scenario: Clipboard Loop Prevention
 
