@@ -122,15 +122,23 @@ Goal: keep the main Veil experience pointed at real local Windows boot and conso
 - [x] Forward macOS mirrored-window keyboard input to the Windows agent as `input.key`, mapping macOS Command shortcuts to Windows Ctrl shortcuts.
 - [x] Send macOS text clipboard to the Windows agent as `clipboard.text.set` before forwarded paste shortcuts.
 - [x] Broadcast Windows guest text clipboard changes back to macOS with host-echo loop prevention.
+- [x] Add safe `veil-vmctl qemu-sendkey` and `veil-vmctl qemu-oobe-bypass` commands so OOBE recovery attempts are recorded without exposing arbitrary QEMU monitor commands.
+- [x] Capture current OOBE evidence: the live Windows install is at a Korean folder-selection dialog launched from the network-driver flow, with `Windows (C:)`, installer ISO, and `VEIL_AUTO` attached.
+- [x] Record current QEMU monitor input limitation: sending `esc` through the latest monitor socket records `terminationStatus: 1` and does not dismiss the OOBE folder dialog on the refreshed console screenshot.
+- [x] Add optional external Windows driver ISO support to the QEMU/HVF boot plan.
+- [x] Add a macOS host picker and CLI `prepare --drivers <path>` path for user-provided driver media.
+- [x] Update the QEMU boot-plan harness so the current `usb-net` network device and optional read-only driver media are validated.
 
 ## Next
 
 - [ ] Run `dotnet build apps/windows-agent/src/VeilAgent/VeilAgent.csproj` on a machine with the .NET 8 SDK installed.
+- [ ] Replace the current QEMU monitor `sendkey` path with a proven input path for OOBE recovery, or document the required manual click path while the VM is at the folder-selection dialog.
 - [ ] Continue the persistent visible Windows Setup install through first reboot.
 - [ ] Run `Veil Shared\Veil Guest Agent\Install Veil Agent.cmd` inside Windows 11 Arm and verify the current-session agent plus the `VeilAgent` logon task both start.
 - [ ] Verify the Win32/GDI HWND capture path inside Windows 11 Arm and record the captured Notepad frame evidence.
 - [ ] Tune the Windows agent frame stream for lower latency after correctness is verified.
 - [ ] Restart the currently running QEMU VM so the new guest-agent port forwarding takes effect.
-- [ ] Replace the static setup preview with a real VM screenshot once QEMU reaches Windows Setup.
+- [ ] Use attached driver media or a proven offline OOBE path to complete Windows OOBE.
+- [ ] Replace remaining static setup preview states with real VM screenshots whenever QEMU launch evidence exists.
 - [ ] After Windows reaches the desktop, install and auto-start the Veil guest agent.
 - [ ] Replace remaining manual installed-state copy with guest-agent evidence in the first-run setup flow.

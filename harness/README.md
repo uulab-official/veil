@@ -156,7 +156,7 @@ cd apps/mac-host
 swift run veil-vmctl qemu-plan --json | node ../../harness/qemu-boot-plan/src/validate-qemu-plan.mjs
 ```
 
-Expected output: `qemu plan valid`. The command is read-only: it must not launch QEMU, start a VM, stop a VM, or mutate installer/disk files.
+Expected output: `qemu plan valid`. The command is read-only: it must not launch QEMU, start a VM, stop a VM, or mutate installer/disk files. The plan validator covers installer media, automatic install media, optional read-only driver media, the NVMe system disk, and the current `usb-net` NAT device.
 
 ## QEMU Doctor Harness
 
@@ -192,7 +192,7 @@ cd apps/mac-host
 swift run veil-vmctl qemu-smoke --json --seconds 120 | node ../../harness/qemu-smoke/src/validate-qemu-smoke.mjs
 ```
 
-Expected current output on the test Mac: `qemu smoke valid`; the JSON currently reports `runningNoDecision` plus `boot-prompt-key-sent` and `qemu-running` evidence with a `.png` `consoleScreenshotPath`. On July 2, 2026, a local-only secure code plus secure vars firmware pair moved Windows Setup past the earlier TPM/Secure Boot requirement page, the NVMe system disk appeared as `Disk 0 Unallocated Space` at 128.0 GB, and the generated UEFI/GPT `Autounattend.xml` advanced setup to the Korean `Windows 11 installing` screen at 32%. The next checkpoint is a persistent visible install through the first reboot.
+Expected current output on the test Mac: `qemu smoke valid`; the JSON currently reports `runningNoDecision` plus `boot-prompt-key-sent` and `qemu-running` evidence with a `.png` `consoleScreenshotPath`. On July 2, 2026, a local-only secure code plus secure vars firmware pair moved Windows Setup past the earlier TPM/Secure Boot requirement page, the NVMe system disk appeared as `Disk 0 Unallocated Space` at 128.0 GB, and the generated UEFI/GPT `Autounattend.xml` advanced setup to the Korean `Windows 11 installing` screen at 32%. A persistent visible install then reached Windows OOBE; the current checkpoint is getting through the OOBE network/driver blocker with external driver media or a proven offline path.
 
 ## Fixture Policy
 

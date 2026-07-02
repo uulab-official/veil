@@ -7,7 +7,7 @@ const REQUIRED_SEQUENCES = [
   ["-boot", "order=d"],
   ["-cpu", "host"],
   ["-netdev", "user,id=net0,hostfwd=tcp::18444-:18444"],
-  ["-device", "virtio-net-pci,netdev=net0"],
+  ["-device", "usb-net,netdev=net0"],
   ["-display", "cocoa"]
 ];
 
@@ -107,6 +107,7 @@ export function validateQEMUPlan(plan) {
   const pflashDriveArguments = plan.arguments.filter((argument) => argument.includes("if=pflash,"));
   const installerDrive = driveArguments.find((argument) => argument.includes("id=installer"));
   const autoInstallDrive = driveArguments.find((argument) => argument.includes("id=autounattend"));
+  const driverMediaDrive = driveArguments.find((argument) => argument.includes("id=drivers"));
   const systemDrive = driveArguments.find((argument) => argument.includes("id=system"));
 
   if (plan.arguments.includes("-bios")) {
@@ -168,6 +169,16 @@ export function validateQEMUPlan(plan) {
 
   if (!autoInstallDrive.includes(plan.automaticInstallMediaPath)) {
     throw new TypeError("QEMU automatic install drive must point to the declared automatic install media path.");
+  }
+
+  if (driverMediaDrive) {
+    if (!driverMediaDrive.includes("media=cdrom") || !driverMediaDrive.includes("readonly=on")) {
+      throw new TypeError("QEMU driver media must attach as a read-only cdrom drive.");
+    }
+
+    if (!containsSequence(plan.arguments, ["-device", "usb-storage,drive=drivers"])) {
+      throw new TypeError("QEMU driver media drive must be exposed as USB mass storage.");
+    }
   }
 
   if (!plan.automaticInstallMediaPath.endsWith("VeilAutoInstall.iso")) {

@@ -41,7 +41,7 @@
     "-netdev",
     "user,id=net0,hostfwd=tcp::18444-:18444",
     "-device",
-    "virtio-net-pci,netdev=net0",
+    "usb-net,netdev=net0",
     "-device",
     "virtio-rng-pci",
     "-display",

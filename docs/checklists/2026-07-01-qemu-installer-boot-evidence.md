@@ -136,6 +136,15 @@ available during OOBE.
 
 Network device follow-up: a restart with QEMU `e1000` networking reached
 `/tmp/veil-e1000-oobe-3min.png`, but OOBE returned to the same network-driver
-screen. The next planned device is QEMU `usb-net`, which keeps NAT and the
-guest-agent host forward while testing a USB network class device instead of a
-PCI NIC.
+screen. A follow-up QEMU `usb-net` attempt also returned to the driver/network
+screen after the folder-picker flow. The current conclusion is that the tested
+Windows 11 Arm image reached OOBE, but did not expose a usable inbox network
+driver for `virtio-net-pci`, `e1000`, or `usb-net`.
+
+Driver-media follow-up: Veil now records an optional user-provided Windows
+driver ISO on the VM profile, exposes it in the macOS host picker, accepts it
+from `veil-vmctl prepare --drivers <path>`, and attaches it read-only as QEMU
+USB mass storage with drive id `drivers`. The next live checkpoint is to attach
+external driver media, complete OOBE or prove the offline bypass path, and then
+verify the guest-agent WebSocket forward from Windows back to
+`ws://127.0.0.1:18444`.

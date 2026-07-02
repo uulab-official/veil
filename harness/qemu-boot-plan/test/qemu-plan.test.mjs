@@ -29,6 +29,36 @@ describe("QEMU boot plan harness", () => {
     assert.equal(validateQEMUPlan(plan), plan);
   });
 
+  it("accepts optional read-only driver media", () => {
+    const plan = {
+      ...fixture,
+      arguments: [
+        ...fixture.arguments,
+        "-drive",
+        "driver=raw,file.driver=file,file.locking=off,file.filename=/Users/test/Downloads/virtio-win.iso,if=none,id=drivers,media=cdrom,readonly=on",
+        "-device",
+        "usb-storage,drive=drivers"
+      ]
+    };
+
+    assert.equal(validateQEMUPlan(plan), plan);
+  });
+
+  it("rejects writable driver media", () => {
+    const plan = {
+      ...fixture,
+      arguments: [
+        ...fixture.arguments,
+        "-drive",
+        "driver=raw,file.driver=file,file.locking=off,file.filename=/Users/test/Downloads/virtio-win.iso,if=none,id=drivers,media=cdrom",
+        "-device",
+        "usb-storage,drive=drivers"
+      ]
+    };
+
+    assert.throws(() => validateQEMUPlan(plan), /driver media.*read-only cdrom/);
+  });
+
   it("rejects plans that are not local", () => {
     assert.throws(
       () => validateQEMUPlan({ ...fixture, isServerBacked: true }),

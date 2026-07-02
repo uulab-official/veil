@@ -60,7 +60,7 @@ cd apps/mac-host
 swift run veil-vmctl qemu-plan --json | node ../../harness/qemu-boot-plan/src/validate-qemu-plan.mjs
 ```
 
-The command must not launch QEMU, start a VM, stop a VM, or mutate local VM files. It only validates the dry-run plan shape: local provider, HVF acceleration, installer ISO as read-only cdrom media, writable NVMe system disk, NAT networking, Cocoa display, graphics, and input devices.
+The command must not launch QEMU, start a VM, stop a VM, or mutate local VM files. It only validates the dry-run plan shape: local provider, HVF acceleration, installer ISO as read-only cdrom media, automatic install media, optional read-only driver media, writable NVMe system disk, NAT networking with the current `usb-net` device, Cocoa display, graphics, and input devices.
 
 ## QEMU Doctor Scenario
 
@@ -82,7 +82,7 @@ cd apps/mac-host
 swift run veil-vmctl qemu-smoke --json --seconds 120 | node ../../harness/qemu-smoke/src/validate-qemu-smoke.mjs
 ```
 
-The command uses snapshot mode and records logs plus a `qemu-smoke-*.console.png` VM-console screenshot path under `~/Downloads/Veil Diagnostics/QEMU Smoke`. It is allowed to start a local `swtpm` process, start QEMU with pflash UEFI code plus VM-local writable vars for the requested bounded duration, send bounded boot-prompt key input through QEMU's monitor, ask the monitor for a `screendump`, convert the raw frame to PNG, then terminate QEMU for classification. The current QEMU plan includes the UTM-style secure firmware pair when present, `virtio-rng-pci`, and an NVMe system disk so Windows Setup can use an inbox storage driver. On July 2, 2026, the NVMe smoke reached the Korean Windows Setup disk-selection screen with `Disk 0 Unallocated Space` visible as a 128.0 GB install target, then the UEFI/GPT unattended disk recipe advanced a later smoke to the Korean `Windows 11 installing` screen at 32%; the next checkpoint is a persistent visible install through the first reboot. Every smoke report must also include recovery `nextActions` so boot failures point to concrete ISO, firmware, device, or log checks.
+The command uses snapshot mode and records logs plus a `qemu-smoke-*.console.png` VM-console screenshot path under `~/Downloads/Veil Diagnostics/QEMU Smoke`. It is allowed to start a local `swtpm` process, start QEMU with pflash UEFI code plus VM-local writable vars for the requested bounded duration, send bounded boot-prompt key input through QEMU's monitor, ask the monitor for a `screendump`, convert the raw frame to PNG, then terminate QEMU for classification. The current QEMU plan includes the UTM-style secure firmware pair when present, `virtio-rng-pci`, optional external driver media, and an NVMe system disk so Windows Setup can use an inbox storage driver. On July 2, 2026, the NVMe smoke reached the Korean Windows Setup disk-selection screen with `Disk 0 Unallocated Space` visible as a 128.0 GB install target, then the UEFI/GPT unattended disk recipe advanced a later smoke to the Korean `Windows 11 installing` screen at 32%; the persistent visible install reached Windows OOBE, where the current blocker is network/driver availability. Every smoke report must also include recovery `nextActions` so boot failures point to concrete ISO, firmware, device, or log checks.
 
 ## QEMU Start Scenario
 
@@ -91,6 +91,16 @@ The command uses snapshot mode and records logs plus a `qemu-smoke-*.console.png
 The macOS app's QEMU launch boundary writes process logs under `~/Downloads/Veil Diagnostics/QEMU Launch`, reports the launched PID, and records a `qemu-console-*.png` path in `qemu-launch-latest.json`. The app asks QEMU's monitor to write that screenshot from the VM display, converts the raw frame to PNG, and surfaces the latest existing screenshot plus launch metadata in the Windows setup screen. The evidence is the guest console frame rather than a macOS desktop capture. It still does not distribute Windows media, activation keys, QEMU binaries, or firmware.
 
 `veil-vmctl qemu-capture [--json] [--output /path/to/console.png]` refreshes the latest launch record's VM-console screenshot through the recorded QEMU monitor socket. Use this instead of manually typing monitor commands: it sends only `screendump`, preserves the running VM, updates `qemu-launch-latest.json` when an output path is chosen, and returns a small capture record for evidence collection.
+
+`veil-vmctl qemu-sendkey [--json] key [key ...]` sends a bounded list of QEMU
+HMP `sendkey` commands through the latest launch record's monitor socket and
+returns per-key sender evidence. It intentionally exposes only `sendkey`
+operations rather than arbitrary monitor text so recovery commands cannot
+accidentally terminate a live Windows VM. `veil-vmctl qemu-oobe-bypass [--json]`
+is a convenience sequence for the common Windows OOBE `Shift+F10` plus
+`oobe\bypassnro` recovery path. The JSON record proves what was attempted; a
+fresh `qemu-capture` screenshot remains the authority for whether Windows
+accepted the input.
 
 ## First Scenario: Launch Notepad
 

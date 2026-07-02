@@ -150,13 +150,13 @@ The shell also includes a VM Runtime panel. That panel is a capability, profile-
 
 The VM Runtime panel can prepare a default local Windows 11 Arm VM in one step: profile, shared folder, and blank sparse virtual disk at `~/Virtual Machines/Veil/Windows 11 Arm.img`. During preparation Veil applies an adaptive resource profile from the current Mac: half of available CPU cores up to a safe cap, 25% of physical memory rounded to a conservative VM cap, and a 128 GB default sparse disk. Virtualization.framework still allocates memory on demand under that configured cap; Veil does not claim live hot-resizing yet. The boot spike keeps EFI variables and the generic machine identifier next to that disk as `Windows 11 Arm.efi` and `Windows 11 Arm.machine-id`. This writes local configuration and empty VM state files only; it does not install Windows, include Windows media, or bypass licensing.
 
-The profile can reference a user-provided installer image and virtual disk path, or use Veil's default blank disk file. Veil checks that the stored paths still point to local files, that installer media looks like a bootable ISO instead of a disk-image import, that the macOS shared folder exists, and that the profile targets Windows Arm with usable CPU, memory, and disk settings before marking the profile boot-ready. Pressing Start builds the active local runtime plan and opens a console window. On the current QEMU/HVF path, that console is a foreground Cocoa QEMU window. Pressing Stop stops the active VM process and closes the console. It still does not validate Windows media contents, include Windows media, or bypass licensing.
+The profile can reference a user-provided installer image, an optional external driver ISO, and a virtual disk path, or use Veil's default blank disk file. Veil checks that the stored paths still point to local files, that installer media looks like a bootable ISO instead of a disk-image import, that the macOS shared folder exists, and that the profile targets Windows Arm with usable CPU, memory, and disk settings before marking the profile boot-ready. Pressing Start builds the active local runtime plan and opens a console window. On the current QEMU/HVF path, that console is a foreground Cocoa QEMU window. Pressing Stop stops the active VM process and closes the console. It still does not validate Windows media contents, include Windows or driver media, or bypass licensing.
 
 The console can be reopened from the VM toolbar or Quick Actions while the VM is running. The current Windows path is still a feasibility spike: a running `VZVirtualMachine` process does not yet prove that every Windows 11 Arm ISO will present a visible installer through Apple's Virtio graphics path. UTM-level Windows reliability remains a roadmap item, not a completed claim.
 
 The VM Runtime panel can export a local diagnostics JSON bundle to `~/Downloads/Veil Diagnostics`. The bundle includes host metadata, runtime snapshot, setup steps, preflight checks, the stored VM profile, and the most recent Start attempt report. It records file paths, device metadata, boot result, resulting state, and error text for troubleshooting but never copies installer media, virtual disk contents, product keys, or Windows data.
 
-The runtime snapshot also exposes a typed device plan inspired by UTM's configuration model: EFI boot, generic platform identity, installer media, writable NVMe system disk, NAT networking, Virtio graphics, USB keyboard, pointer, and entropy. The shell shows this before Start so configuration mistakes are visible while Windows media is still being prepared.
+The runtime snapshot also exposes a typed device plan inspired by UTM's configuration model: EFI boot, generic platform identity, installer media, optional driver media, writable NVMe system disk, NAT networking, Virtio graphics, USB keyboard, pointer, and entropy. The shell shows this before Start so configuration mistakes are visible while Windows media is still being prepared.
 
 Inspect local runtime provider candidates without launching a VM:
 
@@ -228,6 +228,7 @@ You can prepare the local VM profile from a downloaded Windows 11 Arm ISO withou
 ```bash
 cd apps/mac-host
 swift run veil-vmctl prepare --installer "$HOME/Downloads/Win11_25H2_Korean_Arm64_v2.iso"
+swift run veil-vmctl prepare --installer "$HOME/Downloads/Win11_25H2_Korean_Arm64_v2.iso" --drivers "$HOME/Downloads/virtio-win.iso"
 ```
 
 Then launch the signed app bundle and start the VM automatically:

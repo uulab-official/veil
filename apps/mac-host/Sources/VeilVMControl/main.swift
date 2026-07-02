@@ -6,11 +6,13 @@ enum VMControlError: Error, LocalizedError {
     case unsupportedCommand(String)
     case missingInstallerPath
     case installerNotFound(String)
+    case driverMediaNotFound(String)
     case missingProfileForQEMUPlan
     case qemuNotReady([String])
     case missingQEMULaunchRecord
     case qemuMonitorUnavailable(String)
     case qemuScreenshotCaptureFailed(String)
+    case missingQEMUKeySequence
 
     var errorDescription: String? {
         switch self {
@@ -22,6 +24,8 @@ enum VMControlError: Error, LocalizedError {
             "Missing installer path. \(Self.usage)"
         case .installerNotFound(let path):
             "Installer file does not exist: \(path)"
+        case .driverMediaNotFound(let path):
+            "Driver media file does not exist: \(path)"
         case .missingProfileForQEMUPlan:
             "No prepared VM profile found. Run veil-vmctl prepare --installer /path/to/Windows.iso first."
         case .qemuNotReady(let nextActions):
@@ -32,21 +36,25 @@ enum VMControlError: Error, LocalizedError {
             "QEMU monitor socket is not available: \(path)"
         case .qemuScreenshotCaptureFailed(let path):
             "QEMU console screenshot could not be captured: \(path)"
+        case .missingQEMUKeySequence:
+            "Missing QEMU key sequence. Pass keys such as shift-f10, esc, tab, ret, or spc."
         }
     }
 
-    private static let usage = "Usage: veil-vmctl prepare --installer /path/to/Windows.iso | veil-vmctl providers [--json] | veil-vmctl qemu-plan [--json] | veil-vmctl qemu-doctor [--json] | veil-vmctl qemu-smoke [--json] [--seconds 45] | veil-vmctl qemu-start [--json] [--wait-seconds 15] | veil-vmctl qemu-capture [--json] [--output /path/to/console.png]"
+    private static let usage = "Usage: veil-vmctl prepare --installer /path/to/Windows.iso [--drivers /path/to/virtio-win.iso] | veil-vmctl providers [--json] | veil-vmctl qemu-plan [--json] | veil-vmctl qemu-doctor [--json] | veil-vmctl qemu-smoke [--json] [--seconds 45] | veil-vmctl qemu-start [--json] [--wait-seconds 15] | veil-vmctl qemu-capture [--json] [--output /path/to/console.png] | veil-vmctl qemu-sendkey [--json] key [key ...] | veil-vmctl qemu-oobe-bypass [--json]"
 }
 
 struct VMControlArguments {
     enum Command: Equatable {
-        case prepare(installerPath: String)
+        case prepare(installerPath: String, driverMediaPath: String?)
         case providers(json: Bool)
         case qemuPlan(json: Bool)
         case qemuDoctor(json: Bool)
         case qemuSmoke(json: Bool, seconds: Int)
         case qemuStart(json: Bool, waitSeconds: Int)
         case qemuCapture(json: Bool, outputPath: String?)
+        case qemuSendKey(json: Bool, keys: [String])
+        case qemuOOBEBypass(json: Bool)
     }
 
     var command: Command
@@ -87,6 +95,20 @@ struct VMControlArguments {
             )
         }
 
+        if command == "qemu-sendkey" {
+            let keys = arguments
+                .dropFirst()
+                .filter { !$0.hasPrefix("--") }
+            guard !keys.isEmpty else {
+                throw VMControlError.missingQEMUKeySequence
+            }
+            return VMControlArguments(command: .qemuSendKey(json: arguments.contains("--json"), keys: Array(keys)))
+        }
+
+        if command == "qemu-oobe-bypass" {
+            return VMControlArguments(command: .qemuOOBEBypass(json: arguments.contains("--json")))
+        }
+
         guard command == "prepare" else {
             throw VMControlError.unsupportedCommand(command)
         }
@@ -96,7 +118,12 @@ struct VMControlArguments {
             throw VMControlError.missingInstallerPath
         }
 
-        return VMControlArguments(command: .prepare(installerPath: arguments[installerFlagIndex + 1]))
+        return VMControlArguments(
+            command: .prepare(
+                installerPath: arguments[installerFlagIndex + 1],
+                driverMediaPath: stringArgument(named: "--drivers", from: arguments)
+            )
+        )
     }
 
     private static func secondsArgument(from arguments: [String]) -> Int? {
@@ -134,6 +161,21 @@ struct QEMUConsoleCaptureRecord: Codable, Equatable {
     var capturedAt: Date
 }
 
+struct QEMUKeySendResult: Codable, Equatable {
+    var key: String
+    var monitorCommand: String
+    var terminationStatus: Int32?
+    var didLaunchSender: Bool
+}
+
+struct QEMUKeySendRecord: Codable, Equatable {
+    var kind: String = "qemuKeySend"
+    var monitorSocketPath: String
+    var keys: [String]
+    var results: [QEMUKeySendResult]
+    var sentAt: Date
+}
+
 @main
 struct VeilVMControl {
     static func main() async {
@@ -156,8 +198,8 @@ struct VeilVMControl {
 
     private static func run(_ arguments: VMControlArguments) async throws {
         switch arguments.command {
-        case .prepare(let installerPath):
-            try await prepare(installerPath: installerPath)
+        case .prepare(let installerPath, let driverMediaPath):
+            try await prepare(installerPath: installerPath, driverMediaPath: driverMediaPath)
         case .providers(let json):
             try printProviders(json: json)
         case .qemuPlan(let json):
@@ -170,20 +212,30 @@ struct VeilVMControl {
             try await startQEMU(json: json, waitSeconds: waitSeconds)
         case .qemuCapture(let json, let outputPath):
             try await captureQEMUConsole(json: json, outputPath: outputPath)
+        case .qemuSendKey(let json, let keys):
+            try await sendQEMUKeys(json: json, keys: keys)
+        case .qemuOOBEBypass(let json):
+            try await sendQEMUOOBEBypass(json: json)
         }
     }
 
-    private static func prepare(installerPath: String) async throws {
+    private static func prepare(installerPath: String, driverMediaPath: String?) async throws {
         let installerURL = URL(fileURLWithPath: installerPath)
         guard FileManager.default.fileExists(atPath: installerURL.path) else {
             throw VMControlError.installerNotFound(installerURL.path)
+        }
+
+        let driverMediaURL = driverMediaPath.map(URL.init(fileURLWithPath:))
+        if let driverMediaURL,
+           !FileManager.default.fileExists(atPath: driverMediaURL.path) {
+            throw VMControlError.driverMediaNotFound(driverMediaURL.path)
         }
 
         let service = LocalVMRuntimeService()
         let preparedSnapshot = try await service.prepareDefaultVM()
         let configuredSnapshot = try await service.updateProfilePaths(
             installerMediaPath: installerURL.path,
-            driverMediaPath: preparedSnapshot.driverMediaPath,
+            driverMediaPath: driverMediaURL?.path ?? preparedSnapshot.driverMediaPath,
             virtualDiskPath: preparedSnapshot.virtualDiskPath
         )
         let diagnosticsURL = try await service.exportDiagnostics(to: diagnosticsDirectory())
@@ -192,6 +244,7 @@ struct VeilVMControl {
         print("Veil VM prepared")
         print("Profile: \(configuredSnapshot.profileName ?? "Not configured")")
         print("Installer: \(configuredSnapshot.installerMediaPath ?? "Not selected")")
+        print("Drivers: \(configuredSnapshot.driverMediaPath ?? "Not selected")")
         print("Virtual disk: \(configuredSnapshot.virtualDiskPath ?? "Not selected")")
         print("Shared folder: \(profile?.sharedFolderPath ?? "Not configured")")
         print("Boot ready: \(configuredSnapshot.bootReady ? "yes" : "no")")
@@ -488,6 +541,100 @@ struct VeilVMControl {
         print("QEMU console screenshot captured")
         print("Monitor socket: \(captureRecord.monitorSocketPath)")
         print("Console screenshot: \(captureRecord.consoleScreenshotPath)")
+    }
+
+    private static func sendQEMUOOBEBypass(json: Bool) async throws {
+        let keys = [
+            "shift-f10",
+            "o", "o", "b", "e",
+            "backslash",
+            "b", "y", "p", "a", "s", "s", "n", "r", "o",
+            "ret"
+        ]
+        try await sendQEMUKeys(json: json, keys: keys, delayAfterFirstKey: 1.0)
+    }
+
+    private static func sendQEMUKeys(
+        json: Bool,
+        keys: [String],
+        delayAfterFirstKey: TimeInterval = 0.08
+    ) async throws {
+        let launchRecord = try latestQEMULaunchRecord()
+        guard FileManager.default.fileExists(atPath: launchRecord.monitorSocketPath) else {
+            throw VMControlError.qemuMonitorUnavailable(launchRecord.monitorSocketPath)
+        }
+
+        var results: [QEMUKeySendResult] = []
+        for (index, key) in keys.enumerated() {
+            let command = "sendkey \(key)"
+            results.append(sendQEMUMonitorLine(command, monitorSocketPath: launchRecord.monitorSocketPath, key: key))
+            let delay = index == 0 ? delayAfterFirstKey : 0.08
+            try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+        }
+
+        let record = QEMUKeySendRecord(
+            monitorSocketPath: launchRecord.monitorSocketPath,
+            keys: keys,
+            results: results,
+            sentAt: Date()
+        )
+
+        if json {
+            let data = try JSONEncoder.veilDiagnostics.encode(record)
+            print(String(decoding: data, as: UTF8.self))
+            return
+        }
+
+        print("QEMU key sequence sent")
+        print("Monitor socket: \(record.monitorSocketPath)")
+        print("Keys: \(record.keys.joined(separator: ", "))")
+    }
+
+    private static func latestQEMULaunchRecord() throws -> QEMULaunchRecord {
+        let latestURL = diagnosticsDirectory()
+            .appendingPathComponent("QEMU Launch", isDirectory: true)
+            .appendingPathComponent("qemu-launch-latest.json")
+        guard FileManager.default.fileExists(atPath: latestURL.path) else {
+            throw VMControlError.missingQEMULaunchRecord
+        }
+
+        let data = try Data(contentsOf: latestURL)
+        return try JSONDecoder.veilDiagnostics.decode(QEMULaunchRecord.self, from: data)
+    }
+
+    private static func sendQEMUMonitorLine(
+        _ line: String,
+        monitorSocketPath: String,
+        key: String
+    ) -> QEMUKeySendResult {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/sh")
+        process.arguments = [
+            "-c",
+            "printf '%s\\n' \"$1\" | /usr/bin/nc -U \"$0\"",
+            monitorSocketPath,
+            line
+        ]
+        process.standardOutput = nil
+        process.standardError = nil
+
+        do {
+            try process.run()
+            process.waitUntilExit()
+            return QEMUKeySendResult(
+                key: key,
+                monitorCommand: line,
+                terminationStatus: process.terminationStatus,
+                didLaunchSender: true
+            )
+        } catch {
+            return QEMUKeySendResult(
+                key: key,
+                monitorCommand: line,
+                terminationStatus: nil,
+                didLaunchSender: false
+            )
+        }
     }
 
     private static func driveInitialQEMULaunch(
