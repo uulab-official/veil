@@ -37,7 +37,7 @@
       "title": "Arm UEFI firmware"
     },
     {
-      "detail": "The local AArch64 EDK2 firmware does not advertise secure-boot; Windows Setup may still report Secure Boot unsupported.",
+      "detail": "AArch64 EDK2 secure variable template is available, but Secure Boot is not proven until a live Windows setup smoke passes the requirement check.",
       "id": "secure-boot",
       "state": "warning",
       "title": "Secure Boot firmware"

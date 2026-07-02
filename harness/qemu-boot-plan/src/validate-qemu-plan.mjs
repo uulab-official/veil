@@ -16,6 +16,7 @@ const REQUIRED_DEVICES = [
   "usb-storage,drive=autounattend",
   "qemu-xhci,id=usb0",
   "virtio-blk-pci,drive=system",
+  "virtio-rng-pci",
   "ramfb",
   "virtio-gpu-pci",
   "usb-kbd",
@@ -112,8 +113,9 @@ export function validateQEMUPlan(plan) {
     throw new TypeError("QEMU plan firmware must point to edk2-aarch64-code.fd.");
   }
 
-  if (!plan.firmwareVarsTemplatePath.endsWith("edk2-arm-vars.fd")) {
-    throw new TypeError("QEMU plan firmware vars template must point to edk2-arm-vars.fd.");
+  if (!plan.firmwareVarsTemplatePath.endsWith("edk2-arm-vars.fd")
+    && !plan.firmwareVarsTemplatePath.endsWith("edk2-arm-secure-vars.fd")) {
+    throw new TypeError("QEMU plan firmware vars template must point to edk2-arm-vars.fd or edk2-arm-secure-vars.fd.");
   }
 
   if (!plan.firmwareVarsPath.endsWith("uefi-vars.fd")) {

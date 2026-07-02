@@ -2,7 +2,7 @@
 
 This harness validates `veil-vmctl qemu-doctor --json` output.
 
-The doctor report is read-only. It checks whether the local Windows Arm QEMU/HVF path has a profile, installer ISO, generated automatic install media, writable system disk, QEMU executable, Arm UEFI pflash firmware plus VM-local writable vars, Secure Boot firmware capability, `swtpm` TPM 2.0 emulator, and HVF command plan. It never launches QEMU and never mutates VM files.
+The doctor report is read-only. It checks whether the local Windows Arm QEMU/HVF path has a profile, installer ISO, generated automatic install media, writable system disk, QEMU executable, Arm UEFI pflash firmware plus VM-local writable vars, Secure Boot candidate status, `swtpm` TPM 2.0 emulator, and HVF command plan. It never launches QEMU and never mutates VM files. Secure Boot is reported as a warning until a bounded live Windows Setup smoke proves that the requirement page is gone.
 
 Run fixture tests:
 

@@ -948,6 +948,8 @@ public final class VMRuntimeModel {
 }
 
 public struct LocalVMRuntimeService: VMRuntimeService {
+    private static let armUEFIVariablesStoreSizeBytes: UInt64 = 64 * 1_024 * 1_024
+
     private let profileStore: any VMProfileStore
     private let defaultHomeDirectory: URL
     private let bootRunner: any VMRuntimeBooting
@@ -957,6 +959,7 @@ public struct LocalVMRuntimeService: VMRuntimeService {
     private let resourcePlan: VMResourcePlan?
     private let diagnosticDate: @Sendable () -> Date
     private let automaticInstallMediaBuilder: any AutomaticInstallMediaBuilding
+    private let firmwareVarsTemplatePaths: [String]
 
     public init(
         profileStore: any VMProfileStore = JSONVMProfileStore(),
@@ -967,7 +970,8 @@ public struct LocalVMRuntimeService: VMRuntimeService {
         providerProbe: VMRuntimeProviderProbe = VMRuntimeProviderProbe(),
         resourcePlan: VMResourcePlan? = nil,
         diagnosticDate: @escaping @Sendable () -> Date = Date.init,
-        automaticInstallMediaBuilder: any AutomaticInstallMediaBuilding = HdiutilAutomaticInstallMediaBuilder()
+        automaticInstallMediaBuilder: any AutomaticInstallMediaBuilding = HdiutilAutomaticInstallMediaBuilder(),
+        firmwareVarsTemplatePaths: [String]? = nil
     ) {
         self.profileStore = profileStore
         self.defaultHomeDirectory = defaultHomeDirectory
@@ -978,6 +982,11 @@ public struct LocalVMRuntimeService: VMRuntimeService {
         self.resourcePlan = resourcePlan
         self.diagnosticDate = diagnosticDate
         self.automaticInstallMediaBuilder = automaticInstallMediaBuilder
+        self.firmwareVarsTemplatePaths = firmwareVarsTemplatePaths
+            ?? (
+                LocalQEMUWindowsBootPlanFactory.defaultSecureFirmwareVarsTemplatePaths(homeDirectory: defaultHomeDirectory)
+                    + LocalQEMUWindowsBootPlanFactory.defaultFirmwareVarsTemplatePaths
+            )
     }
 
     public func loadSnapshot() async throws -> VMRuntimeSnapshot {
@@ -1120,7 +1129,11 @@ public struct LocalVMRuntimeService: VMRuntimeService {
 
         if let virtualDiskPath = profile.virtualDiskPath {
             try Self.prepareTPMStateDirectory(virtualDiskPath: virtualDiskPath)
-            try Self.prepareUEFIVariablesStore(virtualDiskPath: virtualDiskPath)
+            try Self.prepareUEFIVariablesStore(
+                virtualDiskPath: virtualDiskPath,
+                templatePaths: firmwareVarsTemplatePaths,
+                shouldUpgradeToSecureVars: profile.windowsInstalled != true
+            )
             return profile
         }
 
@@ -1145,7 +1158,11 @@ public struct LocalVMRuntimeService: VMRuntimeService {
 
         profile.virtualDiskPath = diskURL.path
         try Self.prepareTPMStateDirectory(virtualDiskPath: diskURL.path)
-        try Self.prepareUEFIVariablesStore(virtualDiskPath: diskURL.path)
+        try Self.prepareUEFIVariablesStore(
+            virtualDiskPath: diskURL.path,
+            templatePaths: firmwareVarsTemplatePaths,
+            shouldUpgradeToSecureVars: profile.windowsInstalled != true
+        )
         return profile
     }
 
@@ -1156,20 +1173,35 @@ public struct LocalVMRuntimeService: VMRuntimeService {
         try FileManager.default.createDirectory(at: tpmStateURL, withIntermediateDirectories: true)
     }
 
-    private static func prepareUEFIVariablesStore(virtualDiskPath: String) throws {
-        guard let templatePath = LocalQEMUWindowsBootPlanFactory.defaultFirmwareVarsTemplatePaths
-            .first(where: { FileManager.default.fileExists(atPath: $0) }) else {
+    private static func prepareUEFIVariablesStore(
+        virtualDiskPath: String,
+        templatePaths: [String],
+        shouldUpgradeToSecureVars: Bool
+    ) throws {
+        guard let templatePath = templatePaths.first(where: { FileManager.default.fileExists(atPath: $0) }) else {
             return
         }
 
         let varsURL = URL(fileURLWithPath: virtualDiskPath)
             .deletingLastPathComponent()
             .appendingPathComponent("uefi-vars.fd")
+        let shouldReplaceExisting = shouldUpgradeToSecureVars
+            && templatePath.hasSuffix("edk2-arm-secure-vars.fd")
+            && FileManager.default.fileExists(atPath: varsURL.path)
+        if shouldReplaceExisting {
+            try FileManager.default.removeItem(at: varsURL)
+        }
+
         guard !FileManager.default.fileExists(atPath: varsURL.path) else {
             return
         }
 
         try FileManager.default.copyItem(atPath: templatePath, toPath: varsURL.path)
+        let fileHandle = try FileHandle(forWritingTo: varsURL)
+        defer {
+            try? fileHandle.close()
+        }
+        try fileHandle.truncate(atOffset: armUEFIVariablesStoreSizeBytes)
     }
 
     private static func automaticInstallAnswerFileURL(for profile: VMProfile) -> URL {

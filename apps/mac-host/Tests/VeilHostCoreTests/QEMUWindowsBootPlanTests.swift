@@ -62,6 +62,7 @@ struct QEMUWindowsBootPlanTests {
         #expect(plan.arguments.containsSequence(["-display", "cocoa"]))
         #expect(plan.arguments.containsSequence(["-device", "qemu-xhci,id=usb0"]))
         #expect(plan.arguments.containsSequence(["-device", "usb-storage,drive=autounattend"]))
+        #expect(plan.arguments.containsSequence(["-device", "virtio-rng-pci"]))
         #expect(plan.arguments.contains("ramfb"))
         #expect(plan.arguments.contains("virtio-gpu-pci"))
         #expect(plan.arguments.contains("usb-kbd"))
@@ -166,7 +167,7 @@ struct QEMUWindowsBootPlanTests {
         #expect(report.checks.filter { $0.id != "secure-boot" }.allSatisfy { $0.state == .passed })
         #expect(report.checks.first { $0.id == "secure-boot" }?.state == .warning)
         #expect(report.nextActions.contains("Run veil-vmctl qemu-start to launch the local QEMU/HVF Windows setup window."))
-        #expect(report.nextActions.contains("Provide an AArch64 EDK2 firmware build that advertises secure-boot before expecting Windows Setup to pass the Secure Boot requirement."))
+        #expect(report.nextActions.contains("Run veil-vmctl qemu-smoke --json --seconds 120 and confirm Windows Setup no longer reports Secure Boot before marking Secure Boot support complete."))
     }
 
     @Test("local QEMU plan factory discovers swtpm and derives TPM state next to the disk")
@@ -201,6 +202,112 @@ struct QEMUWindowsBootPlanTests {
         #expect(plan.isTPMEmulatorAvailable)
         #expect(plan.tpmStateDirectoryPath == "/Users/test/Virtual Machines/Veil/tpm")
         #expect(plan.arguments.containsSequence(["-device", "tpm-tis-device,tpmdev=tpm0"]))
+    }
+
+    @Test("local QEMU plan factory prefers secure boot vars when available")
+    func localQEMUPlanFactoryPrefersSecureBootVars() throws {
+        var profile = VMProfile.defaultWindows11Arm(createdAt: Date(timeIntervalSince1970: 1_782_752_400))
+        profile.installerMediaPath = "/Users/test/Downloads/Win11_25H2_Korean_Arm64_v2.iso"
+        profile.virtualDiskPath = "/Users/test/Virtual Machines/Veil/Windows 11 Arm.img"
+        profile.sharedFolderPath = "/Users/test/Veil Shared"
+
+        let plan = try LocalQEMUWindowsBootPlanFactory.makePlan(
+            for: profile,
+            architecture: "arm64",
+            minimumOSSupported: true,
+            providerProbe: VMRuntimeProviderProbe(
+                environment: [:],
+                fileExists: { $0 == "/opt/homebrew/bin/qemu-system-aarch64" },
+                executableVersion: { _ in "QEMU emulator version 11.0.2" }
+            ),
+            fileExists: { path in
+                path == "/opt/homebrew/share/qemu/edk2-aarch64-code.fd"
+                    || path == "/Users/test/Library/Application Support/Veil/Firmware/edk2-arm-secure-vars.fd"
+                    || path == "/opt/homebrew/share/qemu/edk2-arm-vars.fd"
+                    || path == "/Users/test/Virtual Machines/Veil/uefi-vars.fd"
+                    || path == "/opt/homebrew/bin/swtpm"
+            },
+            secureVarsTemplatePaths: [
+                "/Users/test/Library/Application Support/Veil/Firmware/edk2-arm-secure-vars.fd"
+            ]
+        )
+
+        #expect(plan.firmwareVarsTemplatePath == "/Users/test/Library/Application Support/Veil/Firmware/edk2-arm-secure-vars.fd")
+        #expect(plan.isSecureBootFirmwareAvailable)
+        #expect(plan.warnings.isEmpty)
+    }
+
+    @Test("local QEMU plan factory handles empty firmware vars candidate lists")
+    func localQEMUPlanFactoryHandlesEmptyFirmwareVarsCandidateLists() throws {
+        var profile = VMProfile.defaultWindows11Arm(createdAt: Date(timeIntervalSince1970: 1_782_752_400))
+        profile.installerMediaPath = "/Users/test/Downloads/Win11_25H2_Korean_Arm64_v2.iso"
+        profile.virtualDiskPath = "/Users/test/Virtual Machines/Veil/Windows 11 Arm.img"
+        profile.sharedFolderPath = "/Users/test/Veil Shared"
+
+        let plan = try LocalQEMUWindowsBootPlanFactory.makePlan(
+            for: profile,
+            architecture: "arm64",
+            minimumOSSupported: true,
+            providerProbe: VMRuntimeProviderProbe(
+                environment: [:],
+                fileExists: { $0 == "/opt/homebrew/bin/qemu-system-aarch64" },
+                executableVersion: { _ in "QEMU emulator version 11.0.2" }
+            ),
+            fileExists: { path in
+                path == "/opt/homebrew/share/qemu/edk2-aarch64-code.fd"
+                    || path == "/Users/test/Virtual Machines/Veil/uefi-vars.fd"
+                    || path == "/opt/homebrew/bin/swtpm"
+            },
+            secureVarsTemplatePaths: [],
+            firmwareVarsTemplatePaths: []
+        )
+
+        #expect(plan.firmwareVarsTemplatePath == "/opt/homebrew/share/qemu/edk2-arm-vars.fd")
+        #expect(plan.isFirmwareVarsTemplateAvailable == false)
+        #expect(plan.isSecureBootFirmwareAvailable == false)
+    }
+
+    @Test("doctor warns when secure boot vars are available but not live verified")
+    func doctorWarnsWhenSecureBootVarsAreAvailableButNotLiveVerified() throws {
+        var profile = VMProfile.defaultWindows11Arm(createdAt: Date(timeIntervalSince1970: 1_782_752_400))
+        profile.installerMediaPath = "/Users/test/Downloads/Win11_25H2_Korean_Arm64_v2.iso"
+        profile.virtualDiskPath = "/Users/test/Virtual Machines/Veil/Windows 11 Arm.img"
+        profile.sharedFolderPath = "/Users/test/Veil Shared"
+
+        let planner = QEMUWindowsBootPlanner(
+            executablePath: "/opt/homebrew/bin/qemu-system-aarch64",
+            isExecutableAvailable: true,
+            firmwarePath: "/opt/homebrew/share/qemu/edk2-aarch64-code.fd",
+            isFirmwareAvailable: true,
+            firmwareVarsTemplatePath: "/Users/test/Library/Application Support/Veil/Firmware/edk2-arm-secure-vars.fd",
+            isFirmwareVarsTemplateAvailable: true,
+            firmwareVarsPath: "/Users/test/Virtual Machines/Veil/uefi-vars.fd",
+            isSecureBootFirmwareAvailable: true,
+            tpmEmulatorPath: "/opt/homebrew/bin/swtpm",
+            isTPMEmulatorAvailable: true,
+            tpmStateDirectoryPath: "/Users/test/Virtual Machines/Veil/tpm"
+        )
+        let plan = try planner.makePlan(for: profile)
+        let doctor = QEMUWindowsReadinessDoctor(
+            fileExists: { path in
+                path == "/Users/test/Downloads/Win11_25H2_Korean_Arm64_v2.iso"
+                    || path == "/Users/test/Veil Shared/VeilAutoInstall.iso"
+                    || path == "/Users/test/Virtual Machines/Veil/Windows 11 Arm.img"
+                    || path == "/opt/homebrew/bin/qemu-system-aarch64"
+                    || path == "/opt/homebrew/share/qemu/edk2-aarch64-code.fd"
+                    || path == "/Users/test/Library/Application Support/Veil/Firmware/edk2-arm-secure-vars.fd"
+                    || path == "/Users/test/Virtual Machines/Veil/uefi-vars.fd"
+                    || path == "/opt/homebrew/bin/swtpm"
+                    || path == "/Users/test/Virtual Machines/Veil/tpm"
+            }
+        )
+
+        let report = doctor.makeReport(profile: profile, plan: plan)
+        let secureBootCheck = try #require(report.checks.first { $0.id == "secure-boot" })
+
+        #expect(report.overallState == .ready)
+        #expect(secureBootCheck.state == .warning)
+        #expect(secureBootCheck.detail == "AArch64 EDK2 secure variable template is available, but Secure Boot is not proven until a live Windows setup smoke passes the requirement check.")
     }
 
     @Test("doctor blocks when UEFI vars store is missing")

@@ -80,6 +80,10 @@ Goal: keep the main Veil experience pointed at real local Windows boot and conso
 - [x] Verify a bounded `qemu-smoke --seconds 60` console PNG advances past product key and reaches the Windows 11 requirements page for missing TPM 2.0 and Secure Boot support.
 - [x] Verify a bounded `qemu-smoke --seconds 120` report records `tpm2-detected` and leaves Secure Boot as the only visible Windows 11 requirement failure.
 - [x] Verify a bounded pflash `qemu-smoke --seconds 120` report still records `boot-prompt-key-sent`, `tpm2-detected`, and the Secure Boot-only setup failure.
+- [x] Add UTM-style secure vars discovery for `edk2-arm-secure-vars.fd`.
+- [x] Prefer secure vars for new or not-yet-installed Windows profiles and pad the VM-local `uefi-vars.fd` to 64 MiB.
+- [x] Add `virtio-rng-pci` to the QEMU/HVF device plan.
+- [x] Verify a bounded secure-vars plus RNG `qemu-smoke --seconds 120` report still leaves Secure Boot as the only visible Windows 11 requirement failure.
 - [x] Add recovery copy to QEMU smoke reports for common boot failures.
 - [x] Convert QEMU monitor screenshots to PNG paths so users can inspect boot evidence directly.
 - [x] Surface the latest QEMU console PNG inside the Windows setup screen when launch evidence exists.
@@ -102,7 +106,7 @@ Goal: keep the main Veil experience pointed at real local Windows boot and conso
 ## Next
 
 - [ ] Run `dotnet build apps/windows-agent/src/VeilAgent/VeilAgent.csproj` on a machine with the .NET 8 SDK installed.
-- [ ] Add a Secure Boot-capable QEMU/HVF firmware; current local Homebrew QEMU has pflash vars but no AArch64 firmware descriptor advertising `secure-boot`.
+- [ ] Add a Secure Boot-capable QEMU/HVF firmware recipe that Windows Setup accepts; current local secure-vars candidate is discovered and attached, but live smoke still reports the Secure Boot requirement.
 - [ ] Run `Veil Shared\Veil Guest Agent\Install Veil Agent.cmd` inside Windows 11 Arm and verify the current-session agent plus the `VeilAgent` logon task both start.
 - [ ] Verify the Win32/GDI HWND capture path inside Windows 11 Arm and record the captured Notepad frame evidence.
 - [ ] Tune the Windows agent frame stream for lower latency after correctness is verified.

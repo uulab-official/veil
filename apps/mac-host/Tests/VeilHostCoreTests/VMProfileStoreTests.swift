@@ -1077,6 +1077,73 @@ struct VMProfileStoreTests {
         #expect(bootRunner.stopCount == 1)
     }
 
+    @Test("prepare default VM copies secure boot UEFI vars when available")
+    func prepareDefaultVMCopiesSecureBootUEFIVarsWhenAvailable() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let homeDirectory = directory.appendingPathComponent("Home", isDirectory: true)
+        let firmwareDirectory = directory.appendingPathComponent("Firmware", isDirectory: true)
+        try FileManager.default.createDirectory(at: firmwareDirectory, withIntermediateDirectories: true)
+        let secureVarsTemplateURL = firmwareDirectory.appendingPathComponent("edk2-arm-secure-vars.fd")
+        try Data("secure-vars-template".utf8).write(to: secureVarsTemplateURL)
+        let store = JSONVMProfileStore(directory: directory)
+        let service = LocalVMRuntimeService(
+            profileStore: store,
+            defaultHomeDirectory: homeDirectory,
+            firmwareVarsTemplatePaths: [secureVarsTemplateURL.path]
+        )
+
+        _ = try await service.prepareDefaultVM()
+        let profile = try #require(await store.load())
+        let diskPath = try #require(profile.virtualDiskPath)
+        let uefiVarsURL = URL(fileURLWithPath: diskPath)
+            .deletingLastPathComponent()
+            .appendingPathComponent("uefi-vars.fd")
+        let copiedVars = try String(contentsOf: uefiVarsURL, encoding: .utf8)
+        let attributes = try FileManager.default.attributesOfItem(atPath: uefiVarsURL.path)
+        let fileSize = try #require(attributes[.size] as? UInt64)
+
+        #expect(copiedVars.hasPrefix("secure-vars-template"))
+        #expect(fileSize == 64 * 1_024 * 1_024)
+    }
+
+    @Test("prepare default VM upgrades existing UEFI vars to secure vars before Windows install")
+    func prepareDefaultVMUpgradesExistingUEFIVarsToSecureVarsBeforeWindowsInstall() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let homeDirectory = directory.appendingPathComponent("Home", isDirectory: true)
+        let firmwareDirectory = directory.appendingPathComponent("Firmware", isDirectory: true)
+        let vmDirectory = homeDirectory
+            .appendingPathComponent("Virtual Machines", isDirectory: true)
+            .appendingPathComponent("Veil", isDirectory: true)
+        try FileManager.default.createDirectory(at: firmwareDirectory, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: vmDirectory, withIntermediateDirectories: true)
+        let secureVarsTemplateURL = firmwareDirectory.appendingPathComponent("edk2-arm-secure-vars.fd")
+        let diskURL = vmDirectory.appendingPathComponent("Windows 11 Arm.img")
+        let existingVarsURL = vmDirectory.appendingPathComponent("uefi-vars.fd")
+        try Data("secure-vars-template".utf8).write(to: secureVarsTemplateURL)
+        try Data("disk".utf8).write(to: diskURL)
+        try Data("old-insecure-vars".utf8).write(to: existingVarsURL)
+        let store = JSONVMProfileStore(directory: directory)
+        var profile = VMProfile.defaultWindows11Arm(createdAt: Date(timeIntervalSince1970: 1_782_752_400))
+        profile.virtualDiskPath = diskURL.path
+        profile.windowsInstalled = false
+        try await store.save(profile)
+        let service = LocalVMRuntimeService(
+            profileStore: store,
+            defaultHomeDirectory: homeDirectory,
+            firmwareVarsTemplatePaths: [secureVarsTemplateURL.path]
+        )
+
+        _ = try await service.prepareDefaultVM()
+        let copiedVars = try String(contentsOf: existingVarsURL, encoding: .utf8)
+        let attributes = try FileManager.default.attributesOfItem(atPath: existingVarsURL.path)
+        let fileSize = try #require(attributes[.size] as? UInt64)
+
+        #expect(copiedVars.hasPrefix("secure-vars-template"))
+        #expect(fileSize == 64 * 1_024 * 1_024)
+    }
+
     @Test("local runtime start rejects profiles that are not boot ready")
     func localRuntimeStartRejectsProfilesThatAreNotBootReady() async throws {
         let directory = FileManager.default.temporaryDirectory
