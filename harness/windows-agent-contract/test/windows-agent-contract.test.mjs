@@ -99,3 +99,12 @@ test("windows agent installs logon task against the local installed scripts", as
   assert.match(install, /\$StartScript\s*=\s*Join-Path\s+\$InstalledScriptsRoot\s+"Start-VeilAgent\.ps1"/);
   assert.doesNotMatch(install, /\$StartScript\s*=\s*Join-Path\s+\$AgentRoot\s+"scripts\\Start-VeilAgent\.ps1"/);
 });
+
+test("windows agent installer starts the installed agent immediately by default", async () => {
+  const install = await readFile(resolve(agentRoot, "scripts/Install-VeilAgent.ps1"), "utf8");
+
+  assert.match(install, /\[switch\]\$NoStart/);
+  assert.match(install, /if\s*\(-not\s+\$NoStart\)\s*{/);
+  assert.match(install, /&\s+\$StartScript\s+-InstallRoot\s+\$InstallRoot\s+-Port\s+\$Port/);
+  assert.match(install, /Write-Host "VeilAgent started and listening on ws:\/\/127\.0\.0\.1:\$Port\/\."/);
+});

@@ -78,11 +78,12 @@ Goal: keep the main Veil experience pointed at real local Windows boot and conso
 - [x] Stage a first-run `Veil Guest Agent` bundle in the macOS shared folder with double-click install/start launchers.
 - [x] Surface the latest QEMU console launch PID, log path, monitor socket, and start time in the runtime snapshot/UI.
 - [x] Make the Windows agent scheduled task use the installed script copy instead of the shared-folder source path.
+- [x] Make the Windows agent installer start the installed agent immediately by default, with `-NoStart` available for manual installs.
 
 ## Next
 
 - [ ] Run `dotnet build apps/windows-agent/src/VeilAgent/VeilAgent.csproj` on a machine with the .NET 8 SDK installed.
-- [ ] Run `Veil Shared\Veil Guest Agent\Install Veil Agent.cmd` inside Windows 11 Arm and verify the `VeilAgent` scheduled task starts after login.
+- [ ] Run `Veil Shared\Veil Guest Agent\Install Veil Agent.cmd` inside Windows 11 Arm and verify the current-session agent plus the `VeilAgent` logon task both start.
 - [ ] Verify the Win32/GDI HWND capture path inside Windows 11 Arm and record the captured Notepad frame evidence.
 - [ ] Tune the Windows agent frame stream for lower latency after correctness is verified.
 - [ ] Restart the currently running QEMU VM so the new guest-agent port forwarding takes effect.

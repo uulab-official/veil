@@ -1,7 +1,8 @@
 param(
     [string]$InstallRoot = "$env:LOCALAPPDATA\Veil\Agent",
     [string]$Configuration = "Release",
-    [int]$Port = 18444
+    [int]$Port = 18444,
+    [switch]$NoStart
 )
 
 $ErrorActionPreference = "Stop"
@@ -51,4 +52,9 @@ Register-ScheduledTask `
 [Environment]::SetEnvironmentVariable("VEIL_AGENT_PORT", "$Port", "User")
 
 Write-Host "VeilAgent installed to $PublishRoot and registered as user logon task '$TaskName'."
-Write-Host "Start now with: powershell -NoProfile -ExecutionPolicy Bypass -File `"$StartScript`" -InstallRoot `"$InstallRoot`" -Port $Port"
+if (-not $NoStart) {
+    & $StartScript -InstallRoot $InstallRoot -Port $Port
+    Write-Host "VeilAgent started and listening on ws://127.0.0.1:$Port/."
+} else {
+    Write-Host "Start now with: powershell -NoProfile -ExecutionPolicy Bypass -File `"$StartScript`" -InstallRoot `"$InstallRoot`" -Port $Port"
+}
