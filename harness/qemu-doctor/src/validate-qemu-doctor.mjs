@@ -5,9 +5,11 @@ const VALID_STATES = new Set(["passed", "warning", "blocked", "ready"]);
 const REQUIRED_CHECK_IDS = [
   "vm-profile",
   "installer-media",
+  "automatic-install-media",
   "system-disk",
   "qemu-executable",
   "uefi-firmware",
+  "secure-boot",
   "tpm-emulator",
   "hvf-plan"
 ];

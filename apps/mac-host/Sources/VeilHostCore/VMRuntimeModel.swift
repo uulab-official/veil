@@ -1120,6 +1120,7 @@ public struct LocalVMRuntimeService: VMRuntimeService {
 
         if let virtualDiskPath = profile.virtualDiskPath {
             try Self.prepareTPMStateDirectory(virtualDiskPath: virtualDiskPath)
+            try Self.prepareUEFIVariablesStore(virtualDiskPath: virtualDiskPath)
             return profile
         }
 
@@ -1144,6 +1145,7 @@ public struct LocalVMRuntimeService: VMRuntimeService {
 
         profile.virtualDiskPath = diskURL.path
         try Self.prepareTPMStateDirectory(virtualDiskPath: diskURL.path)
+        try Self.prepareUEFIVariablesStore(virtualDiskPath: diskURL.path)
         return profile
     }
 
@@ -1152,6 +1154,22 @@ public struct LocalVMRuntimeService: VMRuntimeService {
             .deletingLastPathComponent()
             .appendingPathComponent("tpm", isDirectory: true)
         try FileManager.default.createDirectory(at: tpmStateURL, withIntermediateDirectories: true)
+    }
+
+    private static func prepareUEFIVariablesStore(virtualDiskPath: String) throws {
+        guard let templatePath = LocalQEMUWindowsBootPlanFactory.defaultFirmwareVarsTemplatePaths
+            .first(where: { FileManager.default.fileExists(atPath: $0) }) else {
+            return
+        }
+
+        let varsURL = URL(fileURLWithPath: virtualDiskPath)
+            .deletingLastPathComponent()
+            .appendingPathComponent("uefi-vars.fd")
+        guard !FileManager.default.fileExists(atPath: varsURL.path) else {
+            return
+        }
+
+        try FileManager.default.copyItem(atPath: templatePath, toPath: varsURL.path)
     }
 
     private static func automaticInstallAnswerFileURL(for profile: VMProfile) -> URL {

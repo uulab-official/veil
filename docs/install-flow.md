@@ -69,7 +69,7 @@ The QEMU/HVF compatibility spike has progressed past static planning: on July 1,
 
 Current QEMU boot evidence:
 
-- QEMU can start the local device graph with HVF, Arm UEFI, lock-safe read-only Windows ISO media, generated automatic install ISO media, writable raw system disk, NAT networking, Cocoa/ramfb graphics, USB input, a local `swtpm` TPM 2.0 emulator, and serial logging.
+- QEMU can start the local device graph with HVF, Arm UEFI pflash code, a VM-local writable `uefi-vars.fd`, lock-safe read-only Windows ISO media, generated automatic install ISO media, writable raw system disk, NAT networking, Cocoa/ramfb graphics, USB input, a local `swtpm` TPM 2.0 emulator, and serial logging.
 - `veil-vmctl qemu-start` can launch the stored Windows Arm profile into a visible foreground Cocoa QEMU window.
 - The main Veil app Start action now launches the same local QEMU/HVF console path; a manual app smoke check opened a foreground `QEMU Windows 11 Arm` window.
 - When the same ISO is already attached to another VM, QEMU needs the file-driver form `file.locking=off` for read-only ISO reuse.
@@ -82,8 +82,9 @@ Current QEMU boot evidence:
 - On July 2, 2026, the bounded QEMU smoke run with the local `Win11_25H2_Korean_Arm64_v2.iso` produced a console PNG showing the Korean Windows 11 Setup product-key screen. The serial classifier remained `runningNoDecision`, so the screenshot is the authoritative evidence for that run.
 - After adding `ProductKey/WillShowUI=Never` without a `ProductKey/Key` value, a 60 second bounded QEMU smoke run advanced past the product-key prompt and reached the Korean Windows 11 requirements failure page.
 - After installing `swtpm` and adding QEMU `tpm-tis-device` plus `-tpmdev emulator`, a 120 second bounded QEMU smoke run recorded `tpm2-detected` evidence and the Windows Setup requirements page dropped the TPM 2.0 failure. The remaining visible blocker is Secure Boot support.
+- After switching from `-bios` to pflash code plus VM-local writable vars, another 120 second bounded QEMU smoke run kept `boot-prompt-key-sent`, `tpm2-detected`, and `qemu-running` evidence. The visible setup blocker stayed Secure Boot. Homebrew QEMU 11.0.2 ships an AArch64 EDK2 descriptor with pflash vars, but that descriptor does not advertise `secure-boot`; Veil now reports that as a doctor warning instead of hiding it in generic boot failure text.
 
-This means Veil can now distinguish "QEMU is missing" from "QEMU and the ISO are present, boot prompt input was sent, the console reached Windows Setup, and Windows 11 is now blocked on Secure Boot device support." The next QEMU milestone is to add a Secure Boot-capable AArch64 firmware/variable-store recipe, then continue through OOBE and the first guest-agent install without bundling Windows keys or media.
+This means Veil can now distinguish "QEMU is missing" from "QEMU and the ISO are present, boot prompt input was sent, pflash UEFI and TPM are attached, the console reached Windows Setup, and Windows 11 is now blocked on Secure Boot firmware support." The next QEMU milestone is to add or build a Secure Boot-capable AArch64 firmware, then continue through OOBE and the first guest-agent install without bundling Windows keys or media.
 
 References:
 

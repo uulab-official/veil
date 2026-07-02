@@ -71,12 +71,15 @@ Goal: keep the main Veil experience pointed at real local Windows boot and conso
 - [x] Improve `Autounattend.xml` so Windows Setup can select Windows 11 Pro without bundling a product key.
 - [x] Add `ProductKey/WillShowUI=Never` without emitting a `ProductKey/Key` value.
 - [x] Add `swtpm`-backed TPM 2.0 device planning and startup for QEMU/HVF.
+- [x] Add VM-local writable Arm UEFI vars store creation from `edk2-arm-vars.fd`.
+- [x] Replace the QEMU `-bios` firmware attachment with pflash code plus writable vars.
 - [x] Record QEMU app launches with a VM-console `screendump` screenshot path for visual boot evidence.
 - [x] Extend bounded `qemu-smoke` to validate VM-console screenshot paths, not only serial text.
 - [x] Send bounded boot-prompt key input during `qemu-smoke` and record `boot-prompt-key-sent` evidence.
 - [x] Verify a bounded `qemu-smoke --seconds 25` console PNG reaches the Korean Windows 11 Setup product-key screen.
 - [x] Verify a bounded `qemu-smoke --seconds 60` console PNG advances past product key and reaches the Windows 11 requirements page for missing TPM 2.0 and Secure Boot support.
 - [x] Verify a bounded `qemu-smoke --seconds 120` report records `tpm2-detected` and leaves Secure Boot as the only visible Windows 11 requirement failure.
+- [x] Verify a bounded pflash `qemu-smoke --seconds 120` report still records `boot-prompt-key-sent`, `tpm2-detected`, and the Secure Boot-only setup failure.
 - [x] Add recovery copy to QEMU smoke reports for common boot failures.
 - [x] Convert QEMU monitor screenshots to PNG paths so users can inspect boot evidence directly.
 - [x] Surface the latest QEMU console PNG inside the Windows setup screen when launch evidence exists.
@@ -99,7 +102,7 @@ Goal: keep the main Veil experience pointed at real local Windows boot and conso
 ## Next
 
 - [ ] Run `dotnet build apps/windows-agent/src/VeilAgent/VeilAgent.csproj` on a machine with the .NET 8 SDK installed.
-- [ ] Add a Secure Boot-capable QEMU/HVF recipe; current local Homebrew QEMU has no AArch64 secure-code firmware path detected.
+- [ ] Add a Secure Boot-capable QEMU/HVF firmware; current local Homebrew QEMU has pflash vars but no AArch64 firmware descriptor advertising `secure-boot`.
 - [ ] Run `Veil Shared\Veil Guest Agent\Install Veil Agent.cmd` inside Windows 11 Arm and verify the current-session agent plus the `VeilAgent` logon task both start.
 - [ ] Verify the Win32/GDI HWND capture path inside Windows 11 Arm and record the captured Notepad frame evidence.
 - [ ] Tune the Windows agent frame stream for lower latency after correctness is verified.

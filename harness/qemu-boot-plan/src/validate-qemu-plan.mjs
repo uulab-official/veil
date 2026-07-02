@@ -4,7 +4,6 @@ import { fileURLToPath } from "node:url";
 const REQUIRED_SEQUENCES = [
   ["-machine", "virt,highmem=on"],
   ["-accel", "hvf"],
-  ["-bios"],
   ["-boot", "order=d"],
   ["-cpu", "host"],
   ["-netdev", "user,id=net0,hostfwd=tcp::18444-:18444"],
@@ -32,6 +31,8 @@ export function validateQEMUPlan(plan) {
   requireString(plan.provider, "provider");
   requireString(plan.executablePath, "executablePath");
   requireString(plan.firmwarePath, "firmwarePath");
+  requireString(plan.firmwareVarsTemplatePath, "firmwareVarsTemplatePath");
+  requireString(plan.firmwareVarsPath, "firmwareVarsPath");
   requireString(plan.tpmEmulatorPath, "tpmEmulatorPath");
   requireString(plan.tpmStateDirectoryPath, "tpmStateDirectoryPath");
   requireString(plan.automaticInstallMediaPath, "automaticInstallMediaPath");
@@ -55,6 +56,14 @@ export function validateQEMUPlan(plan) {
 
   if (typeof plan.isFirmwareAvailable !== "boolean") {
     throw new TypeError("QEMU plan field 'isFirmwareAvailable' must be a boolean.");
+  }
+
+  if (typeof plan.isFirmwareVarsTemplateAvailable !== "boolean") {
+    throw new TypeError("QEMU plan field 'isFirmwareVarsTemplateAvailable' must be a boolean.");
+  }
+
+  if (typeof plan.isSecureBootFirmwareAvailable !== "boolean") {
+    throw new TypeError("QEMU plan field 'isSecureBootFirmwareAvailable' must be a boolean.");
   }
 
   if (typeof plan.isTPMEmulatorAvailable !== "boolean") {
@@ -90,17 +99,30 @@ export function validateQEMUPlan(plan) {
   }
 
   const driveArguments = plan.arguments.filter((argument) => argument.includes("if=none,"));
-  const biosIndex = plan.arguments.indexOf("-bios");
+  const pflashDriveArguments = plan.arguments.filter((argument) => argument.includes("if=pflash,"));
   const installerDrive = driveArguments.find((argument) => argument.includes("id=installer"));
   const autoInstallDrive = driveArguments.find((argument) => argument.includes("id=autounattend"));
   const systemDrive = driveArguments.find((argument) => argument.includes("id=system"));
 
-  if (biosIndex === -1 || plan.arguments[biosIndex + 1] !== plan.firmwarePath) {
-    throw new TypeError("QEMU plan must attach the declared Arm UEFI firmware with -bios.");
+  if (plan.arguments.includes("-bios")) {
+    throw new TypeError("QEMU plan must attach Arm UEFI through pflash drives rather than -bios.");
   }
 
   if (!plan.firmwarePath.endsWith("edk2-aarch64-code.fd")) {
     throw new TypeError("QEMU plan firmware must point to edk2-aarch64-code.fd.");
+  }
+
+  if (!plan.firmwareVarsTemplatePath.endsWith("edk2-arm-vars.fd")) {
+    throw new TypeError("QEMU plan firmware vars template must point to edk2-arm-vars.fd.");
+  }
+
+  if (!plan.firmwareVarsPath.endsWith("uefi-vars.fd")) {
+    throw new TypeError("QEMU plan firmware vars store must point to Veil's uefi-vars.fd.");
+  }
+
+  if (!pflashDriveArguments.some((argument) => argument === `if=pflash,format=raw,readonly=on,file=${plan.firmwarePath}`)
+    || !pflashDriveArguments.some((argument) => argument === `if=pflash,format=raw,file=${plan.firmwareVarsPath}`)) {
+    throw new TypeError("QEMU plan must attach Arm UEFI code and writable vars as pflash drives.");
   }
 
   if (!containsSequence(plan.arguments, ["-tpmdev", "emulator,id=tpm0,chardev=chrtpm"])

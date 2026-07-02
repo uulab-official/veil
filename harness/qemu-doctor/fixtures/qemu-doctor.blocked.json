@@ -13,6 +13,12 @@
       "title": "Installer media"
     },
     {
+      "detail": "Automatic setup media is available at /Users/test/Veil Shared/VeilAutoInstall.iso.",
+      "id": "automatic-install-media",
+      "state": "passed",
+      "title": "Automatic install media"
+    },
+    {
       "detail": "Writable system disk is available at /Users/test/Virtual Machines/Veil/Windows 11 Arm.img.",
       "id": "system-disk",
       "state": "passed",
@@ -25,10 +31,16 @@
       "title": "QEMU executable"
     },
     {
-      "detail": "Arm UEFI firmware is available at /opt/homebrew/share/qemu/edk2-aarch64-code.fd.",
+      "detail": "Arm UEFI firmware and writable variable store are available.",
       "id": "uefi-firmware",
       "state": "passed",
       "title": "Arm UEFI firmware"
+    },
+    {
+      "detail": "The local AArch64 EDK2 firmware does not advertise secure-boot; Windows Setup may still report Secure Boot unsupported.",
+      "id": "secure-boot",
+      "state": "warning",
+      "title": "Secure Boot firmware"
     },
     {
       "detail": "swtpm is not available at /opt/homebrew/bin/swtpm.",

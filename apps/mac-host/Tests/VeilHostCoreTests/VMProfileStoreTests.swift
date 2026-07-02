@@ -615,11 +615,15 @@ struct VMProfileStoreTests {
         var sharedFolderIsDirectory: ObjCBool = false
         var diskIsDirectory: ObjCBool = false
         var tpmStateIsDirectory: ObjCBool = false
+        var uefiVarsIsDirectory: ObjCBool = false
         let answerFileURL = URL(fileURLWithPath: profile.sharedFolderPath)
             .appendingPathComponent("Autounattend.xml")
         let tpmStateURL = URL(fileURLWithPath: diskPath)
             .deletingLastPathComponent()
             .appendingPathComponent("tpm", isDirectory: true)
+        let uefiVarsURL = URL(fileURLWithPath: diskPath)
+            .deletingLastPathComponent()
+            .appendingPathComponent("uefi-vars.fd")
         let agentBundleURL = URL(fileURLWithPath: profile.sharedFolderPath)
             .appendingPathComponent("Veil Guest Agent", isDirectory: true)
         let installCommandURL = agentBundleURL.appendingPathComponent("Install Veil Agent.cmd")
@@ -645,6 +649,10 @@ struct VMProfileStoreTests {
         #expect(diskIsDirectory.boolValue == false)
         #expect(FileManager.default.fileExists(atPath: tpmStateURL.path, isDirectory: &tpmStateIsDirectory))
         #expect(tpmStateIsDirectory.boolValue)
+        if LocalQEMUWindowsBootPlanFactory.defaultFirmwareVarsTemplatePaths.contains(where: { FileManager.default.fileExists(atPath: $0) }) {
+            #expect(FileManager.default.fileExists(atPath: uefiVarsURL.path, isDirectory: &uefiVarsIsDirectory))
+            #expect(uefiVarsIsDirectory.boolValue == false)
+        }
         #expect(snapshot.profileName == "Windows 11 Arm")
         #expect(snapshot.virtualDiskPath == diskPath)
         #expect(snapshot.automaticInstallAnswerFilePath == answerFileURL.path)

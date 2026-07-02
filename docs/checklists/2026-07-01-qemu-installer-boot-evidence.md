@@ -22,6 +22,8 @@ Goal: move from QEMU readiness into real Windows installer boot evidence.
 - [x] Record the initial real Windows Setup blocker: Windows reported missing TPM 2.0 and Secure Boot support.
 - [x] Install `swtpm`, attach QEMU `tpm-tis-device`, and record `tpm2-detected` smoke evidence.
 - [x] Record the updated real Windows Setup blocker: Secure Boot is still required.
+- [x] Switch the Arm UEFI recipe from `-bios` to pflash code plus VM-local writable `uefi-vars.fd`.
+- [x] Split Secure Boot firmware capability into its own doctor warning.
 - [ ] Add a Secure Boot-capable AArch64 QEMU/HVF firmware and variable-store recipe.
 
 Evidence: on July 2, 2026, `veil-vmctl qemu-smoke --json --seconds 25`
@@ -37,3 +39,10 @@ Setup's Korean requirements page for missing TPM 2.0 and Secure Boot support.
 TPM evidence: after installing `swtpm` and attaching QEMU's TPM emulator, a
 July 2, 2026 `qemu-smoke --json --seconds 120` run reported `tpm2-detected`.
 The console PNG then showed only the Korean Secure Boot requirement failure.
+
+Pflash evidence: after copying Homebrew QEMU's `edk2-arm-vars.fd` into the VM
+directory as `uefi-vars.fd` and attaching Arm EDK2 through pflash drives, a
+July 2, 2026 `qemu-smoke --json --seconds 120` run still reported
+`boot-prompt-key-sent`, `tpm2-detected`, and `qemu-running`. The console PNG
+still showed the Korean Secure Boot requirement failure, so the remaining
+blocker is an AArch64 EDK2 build that advertises `secure-boot`.

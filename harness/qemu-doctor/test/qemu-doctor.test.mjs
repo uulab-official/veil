@@ -43,4 +43,14 @@ describe("QEMU doctor harness", () => {
       /tpm-emulator/
     );
   });
+
+  it("rejects reports without a Secure Boot check", () => {
+    assert.throws(
+      () => validateQEMUDoctor({
+        ...blockedFixture,
+        checks: blockedFixture.checks.filter((check) => check.id !== "secure-boot")
+      }),
+      /secure-boot/
+    );
+  });
 });

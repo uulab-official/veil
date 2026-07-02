@@ -19,6 +19,10 @@ struct QEMUWindowsBootPlanTests {
             isExecutableAvailable: true,
             firmwarePath: "/opt/homebrew/share/qemu/edk2-aarch64-code.fd",
             isFirmwareAvailable: true,
+            firmwareVarsTemplatePath: "/opt/homebrew/share/qemu/edk2-arm-vars.fd",
+            isFirmwareVarsTemplateAvailable: true,
+            firmwareVarsPath: "/Users/test/Virtual Machines/Veil/uefi-vars.fd",
+            isSecureBootFirmwareAvailable: false,
             tpmEmulatorPath: "/opt/homebrew/bin/swtpm",
             isTPMEmulatorAvailable: true,
             tpmStateDirectoryPath: "/Users/test/Virtual Machines/Veil/tpm"
@@ -30,12 +34,18 @@ struct QEMUWindowsBootPlanTests {
         #expect(plan.isExecutableAvailable)
         #expect(plan.firmwarePath == "/opt/homebrew/share/qemu/edk2-aarch64-code.fd")
         #expect(plan.isFirmwareAvailable)
+        #expect(plan.firmwareVarsTemplatePath == "/opt/homebrew/share/qemu/edk2-arm-vars.fd")
+        #expect(plan.isFirmwareVarsTemplateAvailable)
+        #expect(plan.firmwareVarsPath == "/Users/test/Virtual Machines/Veil/uefi-vars.fd")
+        #expect(plan.isSecureBootFirmwareAvailable == false)
         #expect(plan.tpmEmulatorPath == "/opt/homebrew/bin/swtpm")
         #expect(plan.isTPMEmulatorAvailable)
         #expect(plan.tpmStateDirectoryPath == "/Users/test/Virtual Machines/Veil/tpm")
         #expect(plan.arguments.containsSequence(["-machine", "virt,highmem=on"]))
         #expect(plan.arguments.containsSequence(["-accel", "hvf"]))
-        #expect(plan.arguments.containsSequence(["-bios", "/opt/homebrew/share/qemu/edk2-aarch64-code.fd"]))
+        #expect(plan.arguments.containsSequence(["-drive", "if=pflash,format=raw,readonly=on,file=/opt/homebrew/share/qemu/edk2-aarch64-code.fd"]))
+        #expect(plan.arguments.containsSequence(["-drive", "if=pflash,format=raw,file=/Users/test/Virtual Machines/Veil/uefi-vars.fd"]))
+        #expect(!plan.arguments.contains("-bios"))
         #expect(plan.arguments.containsSequence(["-chardev", "socket,id=chrtpm,path=/Users/test/Virtual Machines/Veil/tpm/swtpm.sock"]))
         #expect(plan.arguments.containsSequence(["-tpmdev", "emulator,id=tpm0,chardev=chrtpm"]))
         #expect(plan.arguments.containsSequence(["-device", "tpm-tis-device,tpmdev=tpm0"]))
@@ -69,6 +79,10 @@ struct QEMUWindowsBootPlanTests {
             isExecutableAvailable: true,
             firmwarePath: "/opt/homebrew/share/qemu/edk2-aarch64-code.fd",
             isFirmwareAvailable: true,
+            firmwareVarsTemplatePath: "/opt/homebrew/share/qemu/edk2-arm-vars.fd",
+            isFirmwareVarsTemplateAvailable: true,
+            firmwareVarsPath: "/Users/test/Virtual Machines/Veil/uefi-vars.fd",
+            isSecureBootFirmwareAvailable: false,
             tpmEmulatorPath: "/opt/homebrew/bin/swtpm",
             isTPMEmulatorAvailable: true,
             tpmStateDirectoryPath: "/Users/test/Virtual Machines/Veil/tpm"
@@ -111,6 +125,10 @@ struct QEMUWindowsBootPlanTests {
             isExecutableAvailable: true,
             firmwarePath: "/opt/homebrew/share/qemu/edk2-aarch64-code.fd",
             isFirmwareAvailable: true,
+            firmwareVarsTemplatePath: "/opt/homebrew/share/qemu/edk2-arm-vars.fd",
+            isFirmwareVarsTemplateAvailable: true,
+            firmwareVarsPath: "/Users/test/Virtual Machines/Veil/uefi-vars.fd",
+            isSecureBootFirmwareAvailable: false,
             tpmEmulatorPath: "/opt/homebrew/bin/swtpm",
             isTPMEmulatorAvailable: true,
             tpmStateDirectoryPath: "/Users/test/Virtual Machines/Veil/tpm"
@@ -123,6 +141,8 @@ struct QEMUWindowsBootPlanTests {
                     || path == "/Users/test/Virtual Machines/Veil/Windows 11 Arm.img"
                     || path == "/opt/homebrew/bin/qemu-system-aarch64"
                     || path == "/opt/homebrew/share/qemu/edk2-aarch64-code.fd"
+                    || path == "/opt/homebrew/share/qemu/edk2-arm-vars.fd"
+                    || path == "/Users/test/Virtual Machines/Veil/uefi-vars.fd"
                     || path == "/opt/homebrew/bin/swtpm"
                     || path == "/Users/test/Virtual Machines/Veil/tpm"
             }
@@ -139,11 +159,14 @@ struct QEMUWindowsBootPlanTests {
             "system-disk",
             "qemu-executable",
             "uefi-firmware",
+            "secure-boot",
             "tpm-emulator",
             "hvf-plan"
         ])
-        #expect(report.checks.allSatisfy { $0.state == .passed })
-        #expect(report.nextActions == ["Run veil-vmctl qemu-start to launch the local QEMU/HVF Windows setup window."])
+        #expect(report.checks.filter { $0.id != "secure-boot" }.allSatisfy { $0.state == .passed })
+        #expect(report.checks.first { $0.id == "secure-boot" }?.state == .warning)
+        #expect(report.nextActions.contains("Run veil-vmctl qemu-start to launch the local QEMU/HVF Windows setup window."))
+        #expect(report.nextActions.contains("Provide an AArch64 EDK2 firmware build that advertises secure-boot before expecting Windows Setup to pass the Secure Boot requirement."))
     }
 
     @Test("local QEMU plan factory discovers swtpm and derives TPM state next to the disk")
@@ -164,14 +187,63 @@ struct QEMUWindowsBootPlanTests {
             ),
             fileExists: { path in
                 path == "/opt/homebrew/share/qemu/edk2-aarch64-code.fd"
+                    || path == "/opt/homebrew/share/qemu/edk2-arm-vars.fd"
+                    || path == "/Users/test/Virtual Machines/Veil/uefi-vars.fd"
                     || path == "/opt/homebrew/bin/swtpm"
             }
         )
 
+        #expect(plan.firmwareVarsTemplatePath == "/opt/homebrew/share/qemu/edk2-arm-vars.fd")
+        #expect(plan.isFirmwareVarsTemplateAvailable)
+        #expect(plan.firmwareVarsPath == "/Users/test/Virtual Machines/Veil/uefi-vars.fd")
+        #expect(plan.arguments.containsSequence(["-drive", "if=pflash,format=raw,file=/Users/test/Virtual Machines/Veil/uefi-vars.fd"]))
         #expect(plan.tpmEmulatorPath == "/opt/homebrew/bin/swtpm")
         #expect(plan.isTPMEmulatorAvailable)
         #expect(plan.tpmStateDirectoryPath == "/Users/test/Virtual Machines/Veil/tpm")
         #expect(plan.arguments.containsSequence(["-device", "tpm-tis-device,tpmdev=tpm0"]))
+    }
+
+    @Test("doctor blocks when UEFI vars store is missing")
+    func doctorBlocksWhenUEFIVarsStoreIsMissing() throws {
+        var profile = VMProfile.defaultWindows11Arm(createdAt: Date(timeIntervalSince1970: 1_782_752_400))
+        profile.installerMediaPath = "/Users/test/Downloads/Win11_25H2_Korean_Arm64_v2.iso"
+        profile.virtualDiskPath = "/Users/test/Virtual Machines/Veil/Windows 11 Arm.img"
+        profile.sharedFolderPath = "/Users/test/Veil Shared"
+
+        let planner = QEMUWindowsBootPlanner(
+            executablePath: "/opt/homebrew/bin/qemu-system-aarch64",
+            isExecutableAvailable: true,
+            firmwarePath: "/opt/homebrew/share/qemu/edk2-aarch64-code.fd",
+            isFirmwareAvailable: true,
+            firmwareVarsTemplatePath: "/opt/homebrew/share/qemu/edk2-arm-vars.fd",
+            isFirmwareVarsTemplateAvailable: true,
+            firmwareVarsPath: "/Users/test/Virtual Machines/Veil/uefi-vars.fd",
+            isSecureBootFirmwareAvailable: false,
+            tpmEmulatorPath: "/opt/homebrew/bin/swtpm",
+            isTPMEmulatorAvailable: true,
+            tpmStateDirectoryPath: "/Users/test/Virtual Machines/Veil/tpm"
+        )
+        let plan = try planner.makePlan(for: profile)
+        let doctor = QEMUWindowsReadinessDoctor(
+            fileExists: { path in
+                path == "/Users/test/Downloads/Win11_25H2_Korean_Arm64_v2.iso"
+                    || path == "/Users/test/Veil Shared/VeilAutoInstall.iso"
+                    || path == "/Users/test/Virtual Machines/Veil/Windows 11 Arm.img"
+                    || path == "/opt/homebrew/bin/qemu-system-aarch64"
+                    || path == "/opt/homebrew/share/qemu/edk2-aarch64-code.fd"
+                    || path == "/opt/homebrew/share/qemu/edk2-arm-vars.fd"
+                    || path == "/opt/homebrew/bin/swtpm"
+                    || path == "/Users/test/Virtual Machines/Veil/tpm"
+            }
+        )
+
+        let report = doctor.makeReport(profile: profile, plan: plan)
+        let firmwareCheck = try #require(report.checks.first { $0.id == "uefi-firmware" })
+
+        #expect(report.overallState == .blocked)
+        #expect(firmwareCheck.state == .blocked)
+        #expect(firmwareCheck.detail == "Writable Arm UEFI variable store is missing at /Users/test/Virtual Machines/Veil/uefi-vars.fd.")
+        #expect(report.nextActions.contains("Run veil-vmctl prepare --installer /path/to/Windows.iso to create Veil's writable UEFI variable store."))
     }
 
     @Test("doctor blocks when QEMU executable is missing")
@@ -272,7 +344,7 @@ struct QEMUWindowsBootPlanTests {
         #expect(report.overallState == .blocked)
         #expect(firmwareCheck.state == .blocked)
         #expect(firmwareCheck.detail == "Arm UEFI firmware is not available at /opt/homebrew/share/qemu/edk2-aarch64-code.fd.")
-        #expect(report.nextActions.contains("Install QEMU from Homebrew or point Veil at edk2-aarch64-code.fd before launching Windows setup."))
+        #expect(report.nextActions.contains("Install QEMU from Homebrew or point Veil at edk2-aarch64-code.fd and edk2-arm-vars.fd before launching Windows setup."))
     }
 
     @Test("smoke analyzer reports UEFI shell fallback with boot timeout evidence")
@@ -512,6 +584,8 @@ struct QEMUWindowsBootPlanTests {
         let autoInstallURL = sharedFolderURL.appendingPathComponent("VeilAutoInstall.iso")
         let qemuURL = directory.appendingPathComponent("qemu-system-aarch64")
         let firmwareURL = directory.appendingPathComponent("edk2-aarch64-code.fd")
+        let firmwareVarsTemplateURL = directory.appendingPathComponent("edk2-arm-vars.fd")
+        let firmwareVarsURL = directory.appendingPathComponent("uefi-vars.fd")
         let swtpmURL = directory.appendingPathComponent("swtpm")
         let tpmStateURL = directory.appendingPathComponent("tpm", isDirectory: true)
         try FileManager.default.createDirectory(at: sharedFolderURL, withIntermediateDirectories: true)
@@ -521,6 +595,8 @@ struct QEMUWindowsBootPlanTests {
         try Data("auto".utf8).write(to: autoInstallURL)
         try Data("qemu".utf8).write(to: qemuURL)
         try Data("firmware".utf8).write(to: firmwareURL)
+        try Data("vars-template".utf8).write(to: firmwareVarsTemplateURL)
+        try Data("vars".utf8).write(to: firmwareVarsURL)
         try Data("swtpm".utf8).write(to: swtpmURL)
 
         var profile = VMProfile.defaultWindows11Arm(createdAt: Date(timeIntervalSince1970: 1_782_752_400))
@@ -533,6 +609,10 @@ struct QEMUWindowsBootPlanTests {
             isExecutableAvailable: true,
             firmwarePath: firmwareURL.path,
             isFirmwareAvailable: true,
+            firmwareVarsTemplatePath: firmwareVarsTemplateURL.path,
+            isFirmwareVarsTemplateAvailable: true,
+            firmwareVarsPath: firmwareVarsURL.path,
+            isSecureBootFirmwareAvailable: false,
             tpmEmulatorPath: swtpmURL.path,
             isTPMEmulatorAvailable: true,
             tpmStateDirectoryPath: tpmStateURL.path

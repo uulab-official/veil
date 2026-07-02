@@ -42,13 +42,28 @@ describe("QEMU boot plan harness", () => {
     assert.throws(() => validateQEMUPlan(plan), /read-only cdrom/);
   });
 
-  it("rejects plans without declared Arm UEFI firmware", () => {
+  it("rejects plans without declared Arm UEFI pflash drives", () => {
     const plan = {
       ...fixture,
-      arguments: fixture.arguments.filter((argument) => argument !== "-bios" && argument !== fixture.firmwarePath)
+      arguments: fixture.arguments.filter((argument) =>
+        !argument.includes("if=pflash") && argument !== "-drive"
+      )
     };
 
-    assert.throws(() => validateQEMUPlan(plan), /-bios/);
+    assert.throws(() => validateQEMUPlan(plan), /pflash/);
+  });
+
+  it("rejects legacy -bios firmware attachment", () => {
+    const plan = {
+      ...fixture,
+      arguments: [
+        ...fixture.arguments.filter((argument) => !argument.includes("if=pflash")),
+        "-bios",
+        fixture.firmwarePath
+      ]
+    };
+
+    assert.throws(() => validateQEMUPlan(plan), /rather than -bios/);
   });
 
   it("rejects plans without guest agent port forwarding", () => {
