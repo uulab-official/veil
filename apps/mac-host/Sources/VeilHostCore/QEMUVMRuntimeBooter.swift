@@ -72,7 +72,7 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
     private let planBuilder: @Sendable (VMProfile) throws -> QEMUWindowsBootPlan
     private let processRunner: @Sendable (Process) throws -> Void
     private let frontmostRunner: @Sendable () -> Void
-    private let bootKeySender: @Sendable (URL) -> Void
+    private let bootKeySender: @Sendable (URL) -> Bool
     private let consoleScreenshotCapturer: @Sendable (URL, URL) -> Void
     private var process: Process?
     private var monitorSocketURL: URL?
@@ -82,7 +82,7 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
         planBuilder: @escaping @Sendable (VMProfile) throws -> QEMUWindowsBootPlan = QEMUVMRuntimeBooter.makePlan(for:),
         processRunner: @escaping @Sendable (Process) throws -> Void = { try $0.run() },
         frontmostRunner: @escaping @Sendable () -> Void = QEMUVMRuntimeBooter.bringQEMUToFront,
-        bootKeySender: @escaping @Sendable (URL) -> Void = QEMUVMRuntimeBooter.sendWindowsInstallerBootKey,
+        bootKeySender: @escaping @Sendable (URL) -> Bool = QEMUVMRuntimeBooter.sendWindowsInstallerBootKey,
         consoleScreenshotCapturer: @escaping @Sendable (URL, URL) -> Void = QEMUVMRuntimeBooter.captureConsoleScreenshot
     ) {
         self.diagnosticsDirectory = diagnosticsDirectory
@@ -243,9 +243,10 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
         try? process.run()
     }
 
-    public static func sendWindowsInstallerBootKey(monitorSocketURL: URL) {
+    @discardableResult
+    public static func sendWindowsInstallerBootKey(monitorSocketURL: URL) -> Bool {
         guard FileManager.default.fileExists(atPath: monitorSocketURL.path) else {
-            return
+            return false
         }
 
         let process = Process()
@@ -257,7 +258,13 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
         ]
         process.standardOutput = nil
         process.standardError = nil
-        try? process.run()
+        do {
+            try process.run()
+            process.waitUntilExit()
+            return process.terminationStatus == 0
+        } catch {
+            return false
+        }
     }
 
     public static func captureConsoleScreenshot(monitorSocketURL: URL, imageURL: URL) {
@@ -321,7 +328,7 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
         Task.detached {
             for _ in 0..<12 {
                 try? await Task.sleep(for: .seconds(1))
-                bootKeySender(monitorSocketURL)
+                _ = bootKeySender(monitorSocketURL)
             }
         }
     }

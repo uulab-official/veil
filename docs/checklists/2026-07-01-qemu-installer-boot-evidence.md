@@ -16,4 +16,10 @@ Goal: move from QEMU readiness into real Windows installer boot evidence.
 - [x] Add recovery `nextActions` to QEMU smoke reports for common boot failures.
 - [x] Convert QEMU monitor screenshots to PNG paths so visual evidence opens cleanly on macOS.
 - [x] Read `qemu-launch-latest.json` into runtime snapshots and show the latest console PNG in the setup surface.
-- [ ] Prove a Windows Setup screen with the selected ISO and commit the working device recipe.
+- [x] Send bounded boot-prompt key input during `qemu-smoke` and require `boot-prompt-key-sent` evidence for UEFI shell reports.
+- [x] Prove a Windows Setup screen with the selected ISO and commit the working device recipe.
+
+Evidence: on July 2, 2026, `veil-vmctl qemu-smoke --json --seconds 25`
+generated a console PNG showing the Korean Windows 11 Setup product-key screen
+with the local `Win11_25H2_Korean_Arm64_v2.iso`. The JSON serial classifier was
+`runningNoDecision`, so the console PNG is the proof for this checkpoint.

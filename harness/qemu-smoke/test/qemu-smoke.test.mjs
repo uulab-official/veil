@@ -27,6 +27,24 @@ describe("QEMU smoke harness", () => {
     );
   });
 
+  it("rejects UEFI shell reports without boot prompt key evidence", () => {
+    assert.throws(
+      () => validateQEMUSmoke({ ...uefiShellFixture, evidence: ["boot-image-timeout", "uefi-shell"] }),
+      /boot prompt key evidence/
+    );
+  });
+
+  it("rejects inconclusive running reports without boot prompt key evidence", () => {
+    assert.throws(
+      () => validateQEMUSmoke({
+        ...uefiShellFixture,
+        outcome: "runningNoDecision",
+        evidence: ["qemu-running"]
+      }),
+      /boot prompt key evidence/
+    );
+  });
+
   it("rejects unsafe durations", () => {
     assert.throws(
       () => validateQEMUSmoke({ ...uefiShellFixture, durationSeconds: 300 }),

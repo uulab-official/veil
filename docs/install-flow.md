@@ -75,12 +75,13 @@ Current QEMU boot evidence:
 - When the same ISO is already attached to another VM, QEMU needs the file-driver form `file.locking=off` for read-only ISO reuse.
 - Earlier boot attempts reached Arm UEFI and mapped the installer ISO as `FS0`, but Windows Setup did not start because UEFI reported a boot image timeout and fell back to the EDK II shell.
 - USB storage, SCSI CD-ROM, and virtio-blk installer attachment variants were tested against the local `Win11_25H2_Korean_Arm64_v2.iso`; without boot-key input, each reached UEFI and then fell back to the EDK II shell.
-- The boot timeout was traced to the Windows installer boot prompt requiring a key press. Veil now adds a short QEMU monitor socket for the app launch path and sends boot key input immediately after start.
+- The boot timeout was traced to the Windows installer boot prompt requiring a key press. Veil now adds a short QEMU monitor socket for the app launch path and bounded smoke path, then sends boot key input immediately after start.
 - With that app launch path, the local QEMU/HVF console reaches the Korean Windows 11 Setup product-key screen on July 1, 2026.
 - `virt,highmem=off` with more than 3 GB memory fails under HVF because address space is limited. A 3 GB `highmem=off` attempt reaches UEFI but still does not start Windows Setup.
-- `veil-vmctl qemu-smoke --json --seconds 25` now repeats the headless QEMU attempt in snapshot mode, writes serial/process logs, and classifies the current result as `uefiShell` with `boot-image-timeout` evidence.
+- `veil-vmctl qemu-smoke --json --seconds 25` now repeats the headless QEMU attempt in snapshot mode, sends bounded boot-prompt key input, writes serial/process logs plus a console PNG, and classifies the current result with `boot-prompt-key-sent` evidence.
+- On July 2, 2026, the bounded QEMU smoke run with the local `Win11_25H2_Korean_Arm64_v2.iso` produced a console PNG showing the Korean Windows 11 Setup product-key screen. The serial classifier remained `runningNoDecision`, so the screenshot is the authoritative evidence for that run.
 
-This means Veil can now distinguish "QEMU is missing" from "QEMU and the ISO are present, but installer boot prompt input was not sent." The next QEMU milestone is a repeatable launch harness that sends boot prompt input, captures serial logs and screenshots, and proves the product-key/OOBE path without bundling Windows keys or media.
+This means Veil can now distinguish "QEMU is missing" from "QEMU and the ISO are present, boot prompt input was sent, and the console reached Windows Setup even when serial text stayed inconclusive." The next QEMU milestone is to continue that path through OOBE and the first guest-agent install without bundling Windows keys or media.
 
 References:
 

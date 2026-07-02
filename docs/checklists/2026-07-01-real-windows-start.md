@@ -71,6 +71,8 @@ Goal: keep the main Veil experience pointed at real local Windows boot and conso
 - [x] Improve `Autounattend.xml` so Windows Setup can select Windows 11 Pro without bundling a product key.
 - [x] Record QEMU app launches with a VM-console `screendump` screenshot path for visual boot evidence.
 - [x] Extend bounded `qemu-smoke` to validate VM-console screenshot paths, not only serial text.
+- [x] Send bounded boot-prompt key input during `qemu-smoke` and record `boot-prompt-key-sent` evidence.
+- [x] Verify a bounded `qemu-smoke --seconds 25` console PNG reaches the Korean Windows 11 Setup product-key screen.
 - [x] Add recovery copy to QEMU smoke reports for common boot failures.
 - [x] Convert QEMU monitor screenshots to PNG paths so users can inspect boot evidence directly.
 - [x] Surface the latest QEMU console PNG inside the Windows setup screen when launch evidence exists.

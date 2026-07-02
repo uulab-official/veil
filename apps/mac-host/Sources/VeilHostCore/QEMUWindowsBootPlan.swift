@@ -564,10 +564,11 @@ public enum QEMUWindowsBootSmokeAnalyzer {
         didRemainRunningUntilTimeout: Bool,
         serialLogPath: String,
         processLogPath: String,
-        consoleScreenshotPath: String
+        consoleScreenshotPath: String,
+        runEvidence: [String] = []
     ) -> QEMUWindowsBootSmokeReport {
         let combinedOutput = "\(processOutput)\n\(serialOutput)"
-        var evidence: [String] = []
+        var evidence = runEvidence
 
         if processOutput.contains("qemu-system-aarch64:"),
            !processOutput.contains("terminating on signal") {
@@ -671,10 +672,14 @@ public enum QEMUWindowsBootSmokeAnalyzer {
             ]
         case .uefiShell:
             actions = [
-                "Confirm the installer ISO is attached as the first bootable USB/CD-ROM device and contains efi/boot/bootaa64.efi.",
-                "Try the visible qemu-start path and press a key when the firmware prompts to boot from CD/DVD.",
-                "Open the console screenshot and serial log together to compare the visible firmware state with the boot text."
+                "Confirm the installer ISO is attached as the first bootable USB/CD-ROM device and contains efi/boot/bootaa64.efi."
             ]
+            if evidence.contains("boot-prompt-key-sent") {
+                actions.append("The smoke run already sent boot prompt key input; inspect the console screenshot before changing the device recipe.")
+            } else {
+                actions.append("Try the visible qemu-start path and press a key when the firmware prompts to boot from CD/DVD.")
+            }
+            actions.append("Open the console screenshot and serial log together to compare the visible firmware state with the boot text.")
         case .bootImageTimeout:
             actions = [
                 "Retry with the visible qemu-start path and press a key during the boot prompt window.",
@@ -752,6 +757,41 @@ public struct QEMUWindowsBootSmokePlanner: Sendable {
         }
 
         return "driver=raw,file.driver=file,file.locking=off,file.filename=\(pathString),if=none,id=system"
+    }
+}
+
+public struct QEMUWindowsBootPromptAutomation: Sendable {
+    public var firstSendSecond: Int
+    public var maxSendCount: Int
+    private var sentSeconds: Set<Int>
+
+    public init(firstSendSecond: Int = 1, maxSendCount: Int = 12) {
+        self.firstSendSecond = firstSendSecond
+        self.maxSendCount = maxSendCount
+        self.sentSeconds = []
+    }
+
+    @discardableResult
+    public mutating func tick(
+        elapsedSeconds: Int,
+        monitorSocketURL: URL,
+        sendBootKey: (URL) -> Bool
+    ) -> Bool {
+        guard elapsedSeconds >= firstSendSecond else {
+            return false
+        }
+
+        let lastSendSecond = firstSendSecond + maxSendCount - 1
+        guard elapsedSeconds <= lastSendSecond,
+              !sentSeconds.contains(elapsedSeconds) else {
+            return false
+        }
+
+        let didSend = sendBootKey(monitorSocketURL)
+        if didSend {
+            sentSeconds.insert(elapsedSeconds)
+        }
+        return didSend
     }
 }
 

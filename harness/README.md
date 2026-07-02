@@ -192,7 +192,7 @@ cd apps/mac-host
 swift run veil-vmctl qemu-smoke --json --seconds 25 | node ../../harness/qemu-smoke/src/validate-qemu-smoke.mjs
 ```
 
-Expected current output on the test Mac: `qemu smoke valid`; the JSON currently reports `uefiShell` plus a `.png` `consoleScreenshotPath` and recovery `nextActions`, which means QEMU reaches Arm UEFI but Windows Setup is not proven.
+Expected current output on the test Mac: `qemu smoke valid`; the JSON currently reports `runningNoDecision` plus `boot-prompt-key-sent` evidence and a `.png` `consoleScreenshotPath`. On July 2, 2026, that PNG showed the Korean Windows 11 Setup product-key screen even though serial text stayed inconclusive.
 
 ## Fixture Policy
 

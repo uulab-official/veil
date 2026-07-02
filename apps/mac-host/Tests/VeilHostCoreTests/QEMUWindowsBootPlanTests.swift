@@ -256,6 +256,24 @@ struct QEMUWindowsBootPlanTests {
         #expect(report.evidence == ["boot-image-timeout", "uefi-shell"])
     }
 
+    @Test("smoke analyzer reports boot prompt key evidence")
+    func smokeAnalyzerReportsBootPromptKeyEvidence() {
+        let report = QEMUWindowsBootSmokeAnalyzer.makeReport(
+            durationSeconds: 25,
+            processOutput: "qemu-system-aarch64: terminating on signal 15 from pid 4766",
+            serialOutput: "Error: Image at 0027C344000 start failed: Time out\nUEFI Interactive Shell v2.2\nShell>",
+            didRemainRunningUntilTimeout: true,
+            serialLogPath: "/tmp/serial.log",
+            processLogPath: "/tmp/process.log",
+            consoleScreenshotPath: "/tmp/qemu-console.png",
+            runEvidence: ["boot-prompt-key-sent"]
+        )
+
+        #expect(report.outcome == .uefiShell)
+        #expect(report.evidence == ["boot-prompt-key-sent", "boot-image-timeout", "uefi-shell"])
+        #expect(report.nextActions.contains("The smoke run already sent boot prompt key input; inspect the console screenshot before changing the device recipe."))
+    }
+
     @Test("smoke planner converts the interactive plan into a headless bounded smoke run")
     func smokePlannerBuildsHeadlessArguments() throws {
         var profile = VMProfile.defaultWindows11Arm(createdAt: Date(timeIntervalSince1970: 1_782_752_400))
@@ -281,6 +299,70 @@ struct QEMUWindowsBootPlanTests {
         #expect(arguments.containsSequence(["-monitor", "unix:/tmp/veil-qemu-smoke.sock,server,nowait"]))
         #expect(arguments.contains("driver=raw,file.driver=file,file.locking=off,file.filename=/Users/test/Virtual Machines/Veil/Windows 11 Arm.img,if=none,id=system"))
         #expect(!arguments.contains("cocoa"))
+    }
+
+    @Test("smoke boot prompt automation sends bounded key attempts")
+    func smokeBootPromptAutomationSendsBoundedKeyAttempts() {
+        var automation = QEMUWindowsBootPromptAutomation()
+        let monitorSocketURL = URL(fileURLWithPath: "/tmp/veil-qemu-smoke.sock")
+        var sentPaths: [String] = []
+        var sendResults: [Bool] = []
+
+        for elapsedSecond in [0, 1, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14] {
+            let didSend = automation.tick(elapsedSeconds: elapsedSecond, monitorSocketURL: monitorSocketURL) { url in
+                sentPaths.append(url.path)
+                return true
+            }
+            sendResults.append(didSend)
+        }
+
+        #expect(sentPaths.count == 12)
+        #expect(sentPaths.allSatisfy { $0 == monitorSocketURL.path })
+        #expect(sendResults == [
+            false,
+            true,
+            false,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            false,
+            false
+        ])
+    }
+
+    @Test("smoke boot prompt automation retries when the monitor socket is not ready")
+    func smokeBootPromptAutomationRetriesWhenMonitorSocketIsNotReady() {
+        var automation = QEMUWindowsBootPromptAutomation()
+        let monitorSocketURL = URL(fileURLWithPath: "/tmp/veil-qemu-smoke.sock")
+        var attempts = 0
+
+        let firstAttempt = automation.tick(elapsedSeconds: 1, monitorSocketURL: monitorSocketURL) { _ in
+            attempts += 1
+            return false
+        }
+        let retryAttempt = automation.tick(elapsedSeconds: 1, monitorSocketURL: monitorSocketURL) { _ in
+            attempts += 1
+            return true
+        }
+
+        #expect(firstAttempt == false)
+        #expect(retryAttempt == true)
+        #expect(attempts == 2)
+    }
+
+    @Test("QEMU boot key sender reports a missing monitor socket")
+    func qemuBootKeySenderReportsMissingMonitorSocket() {
+        let missingSocketURL = URL(fileURLWithPath: "/tmp/veil-missing-\(UUID().uuidString).sock")
+
+        #expect(QEMUVMRuntimeBooter.sendWindowsInstallerBootKey(monitorSocketURL: missingSocketURL) == false)
     }
 
     @Test("QEMU runtime booter starts the local console process")
@@ -323,7 +405,7 @@ struct QEMUWindowsBootPlanTests {
                 capture.arguments = process.arguments ?? []
             },
             frontmostRunner: {},
-            bootKeySender: { _ in }
+            bootKeySender: { _ in true }
         )
 
         let state = try await booter.start(profile: profile)

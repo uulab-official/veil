@@ -266,7 +266,8 @@ struct VeilVMControl {
             didRemainRunningUntilTimeout: processOutput.didRemainRunningUntilTimeout,
             serialLogPath: serialLogURL.path,
             processLogPath: processLogURL.path,
-            consoleScreenshotPath: consoleScreenshotURL.path
+            consoleScreenshotPath: consoleScreenshotURL.path,
+            runEvidence: processOutput.bootPromptKeySendCount > 0 ? ["boot-prompt-key-sent"] : []
         )
 
         if json {
@@ -365,7 +366,7 @@ struct VeilVMControl {
         processLogURL: URL,
         monitorSocketURL: URL,
         consoleScreenshotURL: URL
-    ) throws -> (output: String, didRemainRunningUntilTimeout: Bool) {
+    ) throws -> (output: String, didRemainRunningUntilTimeout: Bool, bootPromptKeySendCount: Int) {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: executablePath)
         process.arguments = arguments
@@ -377,8 +378,19 @@ struct VeilVMControl {
         try process.run()
 
         let deadline = Date().addingTimeInterval(TimeInterval(seconds))
+        let startDate = Date()
+        var bootPromptAutomation = QEMUWindowsBootPromptAutomation()
+        var bootPromptKeySendCount = 0
         while process.isRunning, Date() < deadline {
             Thread.sleep(forTimeInterval: 0.25)
+            let didSendBootKey = bootPromptAutomation.tick(
+                elapsedSeconds: Int(Date().timeIntervalSince(startDate)),
+                monitorSocketURL: monitorSocketURL,
+                sendBootKey: QEMUVMRuntimeBooter.sendWindowsInstallerBootKey
+            )
+            if didSendBootKey {
+                bootPromptKeySendCount += 1
+            }
         }
 
         let didRemainRunningUntilTimeout = process.isRunning
@@ -399,7 +411,8 @@ struct VeilVMControl {
         try data.write(to: processLogURL, options: [.atomic])
         return (
             String(data: data, encoding: .utf8) ?? "",
-            didRemainRunningUntilTimeout
+            didRemainRunningUntilTimeout,
+            bootPromptKeySendCount
         )
     }
 

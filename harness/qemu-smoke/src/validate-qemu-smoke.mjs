@@ -59,6 +59,11 @@ export function validateQEMUSmoke(report) {
     throw new TypeError("QEMU smoke uefiShell reports must include uefi-shell evidence.");
   }
 
+  if (["uefiShell", "runningNoDecision"].includes(report.outcome)
+    && !report.evidence.includes("boot-prompt-key-sent")) {
+    throw new TypeError(`QEMU smoke ${report.outcome} reports must include boot prompt key evidence.`);
+  }
+
   if (report.outcome === "argumentFailure" && !report.evidence.includes("qemu-argument-error")) {
     throw new TypeError("QEMU smoke argumentFailure reports must include qemu-argument-error evidence.");
   }
