@@ -662,7 +662,13 @@ public struct HdiutilAutomaticInstallMediaBuilder: AutomaticInstallMediaBuilding
             throw VMRuntimeError.automaticInstallMediaCreationFailed("Autounattend.xml is missing.")
         }
 
-        if Self.mediaIsCurrent(mediaURL: mediaURL, answerFileURL: answerFileURL) {
+        let agentBundleURL = answerFileURL.deletingLastPathComponent()
+            .appendingPathComponent("Veil Guest Agent", isDirectory: true)
+        if Self.mediaIsCurrent(
+            mediaURL: mediaURL,
+            answerFileURL: answerFileURL,
+            agentBundleURL: agentBundleURL
+        ) {
             return
         }
 
@@ -678,6 +684,12 @@ public struct HdiutilAutomaticInstallMediaBuilder: AutomaticInstallMediaBuilding
             at: answerFileURL,
             to: stagingDirectory.appendingPathComponent("Autounattend.xml")
         )
+        if fileManager.fileExists(atPath: agentBundleURL.path) {
+            try fileManager.copyItem(
+                at: agentBundleURL,
+                to: stagingDirectory.appendingPathComponent("Veil Guest Agent", isDirectory: true)
+            )
+        }
 
         let temporaryOutputURL = mediaURL.deletingPathExtension()
             .appendingPathExtension("iso.tmp")
@@ -712,7 +724,7 @@ public struct HdiutilAutomaticInstallMediaBuilder: AutomaticInstallMediaBuilding
         }
     }
 
-    private static func mediaIsCurrent(mediaURL: URL, answerFileURL: URL) -> Bool {
+    private static func mediaIsCurrent(mediaURL: URL, answerFileURL: URL, agentBundleURL: URL) -> Bool {
         let fileManager = FileManager.default
         guard fileManager.fileExists(atPath: mediaURL.path),
               let mediaDate = try? fileManager.attributesOfItem(atPath: mediaURL.path)[.modificationDate] as? Date,
@@ -720,7 +732,34 @@ public struct HdiutilAutomaticInstallMediaBuilder: AutomaticInstallMediaBuilding
             return false
         }
 
-        return mediaDate >= answerDate
+        let payloadDate = max(answerDate, latestModificationDate(in: agentBundleURL) ?? answerDate)
+        return mediaDate >= payloadDate
+    }
+
+    private static func latestModificationDate(in url: URL) -> Date? {
+        let fileManager = FileManager.default
+        guard fileManager.fileExists(atPath: url.path) else {
+            return nil
+        }
+
+        var latest = (try? fileManager.attributesOfItem(atPath: url.path)[.modificationDate] as? Date)
+            ?? Date.distantPast
+        guard let enumerator = fileManager.enumerator(
+            at: url,
+            includingPropertiesForKeys: [.contentModificationDateKey]
+        ) else {
+            return latest
+        }
+
+        for case let fileURL as URL in enumerator {
+            guard let modificationDate = try? fileURL
+                .resourceValues(forKeys: [.contentModificationDateKey])
+                .contentModificationDate else {
+                continue
+            }
+            latest = max(latest, modificationDate)
+        }
+        return latest
     }
 
     public static func runProcess(executablePath: String, arguments: [String]) throws -> Int32 {

@@ -1218,8 +1218,20 @@ public enum QEMUQMPKeyboardCommandBuilder {
         ])
     }
 
+    public static func inputEventCommand(for key: String) throws -> String {
+        let qcodes = try qcodes(for: key)
+        let downEvents = qcodes.map { inputKeyEvent(qcode: $0, isDown: true) }
+        let upEvents = qcodes.reversed().map { inputKeyEvent(qcode: $0, isDown: false) }
+        return try jsonLine([
+            "execute": "input-send-event",
+            "arguments": [
+                "events": downEvents + upEvents
+            ]
+        ])
+    }
+
     public static func oobeBypassCommands() throws -> [String] {
-        try QEMUOOBEBypassKeySequence.steps.map(\.key).map(sendKeyCommand(for:))
+        try QEMUOOBEBypassKeySequence.steps.map(\.key).map(inputEventCommand(for:))
     }
 
     private static func qcodes(for key: String) throws -> [String] {
@@ -1269,6 +1281,19 @@ public enum QEMUQMPKeyboardCommandBuilder {
         return key
     }
 
+    private static func inputKeyEvent(qcode: String, isDown: Bool) -> [String: Any] {
+        [
+            "type": "key",
+            "data": [
+                "down": isDown,
+                "key": [
+                    "type": "qcode",
+                    "data": qcode
+                ]
+            ]
+        ]
+    }
+
     private static func jsonLine(_ object: [String: Any]) throws -> String {
         try QEMUQMPCommandJSONEncoder.jsonLine(object)
     }
@@ -1311,6 +1336,73 @@ public enum QEMUQMPControlCommandBuilder {
         try QEMUQMPCommandJSONEncoder.jsonLine([
             "execute": "system_powerdown"
         ])
+    }
+}
+
+public enum QEMUQMPPointerCommandError: Error, LocalizedError, Equatable, Sendable {
+    case coordinateOutOfRange(axis: String, value: Int)
+
+    public var errorDescription: String? {
+        switch self {
+        case .coordinateOutOfRange(let axis, let value):
+            "QMP pointer \(axis) coordinate \(value) is outside the valid 0...32767 absolute range."
+        }
+    }
+}
+
+public enum QEMUQMPPointerCommandBuilder {
+    public static let minimumAbsoluteCoordinate = 0
+    public static let maximumAbsoluteCoordinate = 32_767
+
+    public static func absoluteMoveCommand(x: Int, y: Int) throws -> String {
+        try validate(x: x, y: y)
+        return try QEMUQMPCommandJSONEncoder.jsonLine([
+            "execute": "input-send-event",
+            "arguments": [
+                "events": [
+                    [
+                        "type": "abs",
+                        "data": [
+                            "axis": "x",
+                            "value": x
+                        ]
+                    ],
+                    [
+                        "type": "abs",
+                        "data": [
+                            "axis": "y",
+                            "value": y
+                        ]
+                    ]
+                ]
+            ]
+        ])
+    }
+
+    public static func leftButtonCommand(isDown: Bool) throws -> String {
+        try QEMUQMPCommandJSONEncoder.jsonLine([
+            "execute": "input-send-event",
+            "arguments": [
+                "events": [
+                    [
+                        "type": "btn",
+                        "data": [
+                            "button": "left",
+                            "down": isDown
+                        ]
+                    ]
+                ]
+            ]
+        ])
+    }
+
+    private static func validate(x: Int, y: Int) throws {
+        guard (minimumAbsoluteCoordinate...maximumAbsoluteCoordinate).contains(x) else {
+            throw QEMUQMPPointerCommandError.coordinateOutOfRange(axis: "x", value: x)
+        }
+        guard (minimumAbsoluteCoordinate...maximumAbsoluteCoordinate).contains(y) else {
+            throw QEMUQMPPointerCommandError.coordinateOutOfRange(axis: "y", value: y)
+        }
     }
 }
 

@@ -169,3 +169,16 @@ a later explicit force-stop recovery path before the QMP relaunch checkpoint.
 Veil now has that recovery command as `qemu-force-stop --i-understand-data-loss`;
 without the exact acknowledgement flag, the command exits with a warning instead
 of signaling the process.
+
+QMP relaunch and desktop evidence: a July 2, 2026 QMP-attached visible launch
+used disk-first `-boot order=c` and returned to Windows OOBE from the installed
+NVMe disk. The first QMP text path used `send-key`; special keys opened
+Administrator cmd, but letter input did not reliably type into the prompt. The
+root cause was the QMP command shape, not Windows focus: QEMU's documented
+`input-send-event` key down/up payload typed into the elevated prompt. With that
+path, `qemu-sendkey` completed `oobe\bypassnro`, the guest rebooted, the
+offline "no internet" path was activated through QMP absolute pointer events,
+and the local `veil` development user was created. The evidence screenshot
+`/tmp/veil-windows-desktop-candidate.png` shows the Windows 11 Arm desktop.
+That proves the current local VM can reach first desktop login; the next
+checkpoint is guest-agent installation and `127.0.0.1:18444` connectivity.

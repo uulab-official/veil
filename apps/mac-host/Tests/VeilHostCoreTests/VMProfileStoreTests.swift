@@ -896,6 +896,45 @@ struct VMProfileStoreTests {
         #expect(try String(contentsOf: mediaURL, encoding: .utf8) == "fresh media")
     }
 
+    @Test("automatic install media includes the guest agent bundle")
+    func automaticInstallMediaIncludesGuestAgentBundle() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let answerFileURL = directory.appendingPathComponent("Autounattend.xml")
+        let mediaURL = directory.appendingPathComponent("VeilAutoInstall.iso")
+        let agentBundleURL = directory.appendingPathComponent("Veil Guest Agent", isDirectory: true)
+        let scriptsURL = agentBundleURL.appendingPathComponent("scripts", isDirectory: true)
+        try FileManager.default.createDirectory(at: scriptsURL, withIntermediateDirectories: true)
+        try Data("answer".utf8).write(to: answerFileURL)
+        try Data("installer".utf8).write(to: agentBundleURL.appendingPathComponent("Install Veil Agent.cmd"))
+        try Data("script".utf8).write(to: scriptsURL.appendingPathComponent("Install-VeilAgent.ps1"))
+        final class Capture: @unchecked Sendable {
+            var stagedInstallCommandExists = false
+            var stagedScriptExists = false
+        }
+        let capture = Capture()
+        let builder = HdiutilAutomaticInstallMediaBuilder { _, arguments in
+            let outputIndex = try #require(arguments.firstIndex(of: "-o"))
+            let stagingPath = try #require(arguments.last)
+            let stagingURL = URL(fileURLWithPath: stagingPath)
+            capture.stagedInstallCommandExists = FileManager.default.fileExists(
+                atPath: stagingURL.appendingPathComponent("Veil Guest Agent/Install Veil Agent.cmd").path
+            )
+            capture.stagedScriptExists = FileManager.default.fileExists(
+                atPath: stagingURL.appendingPathComponent("Veil Guest Agent/scripts/Install-VeilAgent.ps1").path
+            )
+            let outputPath = arguments[outputIndex + 1]
+            try Data("fresh media".utf8).write(to: URL(fileURLWithPath: "\(outputPath).iso"))
+            return 0
+        }
+
+        try builder.prepareMedia(answerFileURL: answerFileURL, mediaURL: mediaURL)
+
+        #expect(capture.stagedInstallCommandExists)
+        #expect(capture.stagedScriptExists)
+    }
+
     @Test("load snapshot reports discovered installer before profile exists")
     func loadSnapshotReportsDiscoveredInstallerBeforeProfileExists() async throws {
         let directory = FileManager.default.temporaryDirectory

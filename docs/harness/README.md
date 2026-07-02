@@ -110,20 +110,26 @@ writes may be interrupted.
 
 `veil-vmctl qemu-sendkey [--json] key [key ...]` sends a bounded list of key
 commands through the latest launch record. On new launches it prefers QMP
-`send-key`; on older launch records without QMP it falls back to HMP `sendkey`.
-It intentionally exposes only key operations rather than arbitrary monitor text
-so recovery commands cannot accidentally terminate a live Windows VM.
+`input-send-event` key down/up payloads; on older launch records without QMP it
+falls back to HMP `sendkey`. It intentionally exposes only key operations rather
+than arbitrary monitor text so recovery commands cannot accidentally terminate a
+live Windows VM.
+`veil-vmctl qemu-click [--json] --x <0...32767> --y <0...32767>` sends a bounded
+absolute left-click through QMP `input-send-event`. It is intended for
+screenshot-backed OOBE recovery steps such as activating "I do not have
+internet" when keyboard focus would open the driver picker instead.
 `veil-vmctl qemu-oobe-bypass [--json]` is a convenience sequence for the common
 Windows OOBE `Shift+F10` plus `oobe\bypassnro` recovery path. The sequence first
 sends `esc` to dismiss modal driver/folder dialogs, waits for the command prompt
 after `Shift+F10`, and then sends the command text. The JSON record proves what
 was attempted; a fresh `qemu-capture` screenshot remains the authority for
-whether Windows accepted the input. Current live evidence shows QMP special keys
-opening the Administrator command prompt, while QMP letter input still needs a
-screenshot-proven path before OOBE bypass can be considered automated.
+whether Windows accepted the input. Current live evidence shows the QMP
+`input-send-event` path typing into the Administrator command prompt, executing
+`oobe\bypassnro`, and continuing through offline local-user setup to the Windows
+11 Arm desktop.
 
-QMP behavior follows QEMU's documented JSON monitor protocol and `send-key`
-command shape:
+QMP behavior follows QEMU's documented JSON monitor protocol, `send-key`, and
+`input-send-event` command shapes:
 
 - [QEMU Machine Protocol Specification](https://www.qemu.org/docs/master/interop/qmp-spec.html)
 - [QEMU QMP Reference Manual](https://qemu-project.gitlab.io/qemu/interop/qemu-qmp-ref.html)

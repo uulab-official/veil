@@ -138,18 +138,20 @@ Goal: keep the main Veil experience pointed at real local Windows boot and conso
 - [x] Force-stop the old pre-QMP live launch, relaunch QEMU with a QMP socket, and recapture the installed Windows OOBE network screen from the local disk.
 - [x] Identify the post-OOBE-bypass reboot blocker: the live launch still used ISO-first `-boot order=d`, so firmware stayed at TianoCore instead of returning to the installed NVMe disk.
 - [x] Update the launch planner so partially installed or installed disks relaunch with disk-first `-boot order=c`.
-- [x] Record the current OOBE automation limit: QMP opens the Administrator command prompt with `shift-f10`, but QMP letter input does not yet reliably type `oobe\bypassnro` into the elevated Windows command prompt.
+- [x] Record the earlier OOBE automation limit: QMP `send-key` opened the Administrator command prompt with `shift-f10`, but did not reliably type `oobe\bypassnro` into the elevated Windows command prompt.
+- [x] Replace QMP `send-key` text input with `input-send-event` key down/up payloads; screenshot evidence shows it typing into Administrator cmd and executing `oobe\bypassnro`.
+- [x] Add bounded `veil-vmctl qemu-click --x --y` support for screenshot-backed OOBE pointer steps.
+- [x] Use QMP input events to continue offline OOBE, create the local `veil` development user, and reach the Windows 11 Arm desktop.
+- [x] Include the staged `Veil Guest Agent` bundle in `VeilAutoInstall.iso` so future desktop boots can access the installer from attached media.
 
 ## Next
 
 - [ ] Run `dotnet build apps/windows-agent/src/VeilAgent/VeilAgent.csproj` on a machine with the .NET 8 SDK installed.
-- [ ] Build a screenshot-verified OOBE input harness that waits for Windows UI readiness before sending `shift-f10`, then proves that `oobe\bypassnro` appears in the command prompt before pressing Enter.
-- [ ] Continue the persistent visible Windows Setup install through first reboot.
+- [ ] Remove the Windows agent installer's .NET SDK dependency by staging a pre-published win-arm64 bundle or documenting a required offline SDK/runtime media path.
 - [ ] Run `Veil Shared\Veil Guest Agent\Install Veil Agent.cmd` inside Windows 11 Arm and verify the current-session agent plus the `VeilAgent` logon task both start.
 - [ ] Verify the Win32/GDI HWND capture path inside Windows 11 Arm and record the captured Notepad frame evidence.
 - [ ] Tune the Windows agent frame stream for lower latency after correctness is verified.
 - [ ] Restart the currently running QEMU VM so the new guest-agent port forwarding takes effect.
-- [ ] Use attached driver media or a proven offline OOBE path to complete Windows OOBE.
 - [ ] Replace remaining static setup preview states with real VM screenshots whenever QEMU launch evidence exists.
 - [ ] After Windows reaches the desktop, install and auto-start the Veil guest agent.
 - [ ] Replace remaining manual installed-state copy with guest-agent evidence in the first-run setup flow.

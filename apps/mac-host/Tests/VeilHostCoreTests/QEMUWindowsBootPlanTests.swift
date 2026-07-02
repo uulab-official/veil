@@ -844,13 +844,35 @@ struct QEMUWindowsBootPlanTests {
         ])
     }
 
+    @Test("QMP keyboard command builder emits input event key down and up payloads")
+    func qmpKeyboardCommandBuilderEmitsInputEventPayloads() throws {
+        let command = try QEMUQMPKeyboardCommandBuilder.inputEventCommand(for: "shift-f10")
+        let data = try #require(command.data(using: .utf8))
+        let object = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let arguments = try #require(object["arguments"] as? [String: Any])
+        let events = try #require(arguments["events"] as? [[String: Any]])
+        let payloads = events.compactMap { event -> (String, Bool)? in
+            guard let data = event["data"] as? [String: Any],
+                  let down = data["down"] as? Bool,
+                  let key = data["key"] as? [String: String],
+                  let qcode = key["data"] else {
+                return nil
+            }
+            return (qcode, down)
+        }
+
+        #expect(object["execute"] as? String == "input-send-event")
+        #expect(payloads.map(\.0) == ["shift", "f10", "f10", "shift"])
+        #expect(payloads.map(\.1) == [true, true, false, false])
+    }
+
     @Test("QMP keyboard command builder maps OOBE bypass key sequence")
     func qmpKeyboardCommandBuilderMapsOOBEBypassSequence() throws {
         let commands = try QEMUQMPKeyboardCommandBuilder.oobeBypassCommands()
-        let escapeCommand = try QEMUQMPKeyboardCommandBuilder.sendKeyCommand(for: "esc")
-        let shiftF10Command = try QEMUQMPKeyboardCommandBuilder.sendKeyCommand(for: "shift-f10")
-        let backslashCommand = try QEMUQMPKeyboardCommandBuilder.sendKeyCommand(for: "backslash")
-        let returnCommand = try QEMUQMPKeyboardCommandBuilder.sendKeyCommand(for: "ret")
+        let escapeCommand = try QEMUQMPKeyboardCommandBuilder.inputEventCommand(for: "esc")
+        let shiftF10Command = try QEMUQMPKeyboardCommandBuilder.inputEventCommand(for: "shift-f10")
+        let backslashCommand = try QEMUQMPKeyboardCommandBuilder.inputEventCommand(for: "backslash")
+        let returnCommand = try QEMUQMPKeyboardCommandBuilder.inputEventCommand(for: "ret")
 
         #expect(commands.first == escapeCommand)
         #expect(commands.dropFirst().first == shiftF10Command)
@@ -879,6 +901,37 @@ struct QEMUWindowsBootPlanTests {
         let object = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
 
         #expect(object["execute"] as? String == "system_powerdown")
+    }
+
+    @Test("QMP pointer command builder emits absolute move payload")
+    func qmpPointerCommandBuilderEmitsAbsoluteMovePayload() throws {
+        let command = try QEMUQMPPointerCommandBuilder.absoluteMoveCommand(x: 19_800, y: 27_300)
+        let data = try #require(command.data(using: .utf8))
+        let object = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let arguments = try #require(object["arguments"] as? [String: Any])
+        let events = try #require(arguments["events"] as? [[String: Any]])
+        let payloads = events.compactMap { event -> (String, Int)? in
+            guard let data = event["data"] as? [String: Any],
+                  let axis = data["axis"] as? String,
+                  let value = data["value"] as? Int else {
+                return nil
+            }
+            return (axis, value)
+        }
+
+        #expect(object["execute"] as? String == "input-send-event")
+        #expect(payloads.map(\.0) == ["x", "y"])
+        #expect(payloads.map(\.1) == [19_800, 27_300])
+    }
+
+    @Test("QMP pointer command builder rejects out of range coordinates")
+    func qmpPointerCommandBuilderRejectsOutOfRangeCoordinates() {
+        #expect(throws: QEMUQMPPointerCommandError.coordinateOutOfRange(axis: "x", value: -1)) {
+            _ = try QEMUQMPPointerCommandBuilder.absoluteMoveCommand(x: -1, y: 0)
+        }
+        #expect(throws: QEMUQMPPointerCommandError.coordinateOutOfRange(axis: "y", value: 32_768)) {
+            _ = try QEMUQMPPointerCommandBuilder.absoluteMoveCommand(x: 0, y: 32_768)
+        }
     }
 
     @Test("force stop authorization requires the exact risk acknowledgement flag")
