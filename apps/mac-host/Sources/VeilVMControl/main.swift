@@ -281,6 +281,10 @@ struct VeilVMControl {
         print("Serial log: \(report.serialLogPath)")
         print("Process log: \(report.processLogPath)")
         print("Console screenshot: \(report.consoleScreenshotPath)")
+        print("Next actions:")
+        for action in report.nextActions {
+            print("  - \(action)")
+        }
     }
 
     private static func startQEMU(json: Bool) async throws {

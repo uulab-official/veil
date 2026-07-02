@@ -218,6 +218,8 @@ struct QEMUWindowsBootPlanTests {
         #expect(report.evidence.contains("uefi-shell"))
         #expect(report.consoleScreenshotPath == "/tmp/qemu-console.ppm")
         #expect(report.detail == "QEMU reached Arm UEFI, but Windows Setup did not start and firmware fell back to the EDK II shell.")
+        #expect(report.nextActions.contains("Confirm the installer ISO is attached as the first bootable USB/CD-ROM device and contains efi/boot/bootaa64.efi."))
+        #expect(report.nextActions.contains("Open the console screenshot and serial log together to compare the visible firmware state with the boot text."))
     }
 
     @Test("smoke analyzer reports argument failures before firmware")
@@ -235,6 +237,7 @@ struct QEMUWindowsBootPlanTests {
         #expect(report.outcome == .argumentFailure)
         #expect(report.evidence == ["qemu-argument-error"])
         #expect(report.consoleScreenshotPath == "/tmp/qemu-console.ppm")
+        #expect(report.nextActions.contains("Open the process log and fix the rejected QEMU argument or local resource path before retrying."))
     }
 
     @Test("smoke analyzer ignores expected timeout termination text")

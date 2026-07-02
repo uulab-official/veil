@@ -6,6 +6,11 @@
     "uefi-shell"
   ],
   "kind": "qemuWindowsArmBootSmokeReport",
+  "nextActions": [
+    "Confirm the installer ISO is attached as the first bootable USB/CD-ROM device and contains efi/boot/bootaa64.efi.",
+    "Try the visible qemu-start path and press a key when the firmware prompts to boot from CD/DVD.",
+    "Open the console screenshot and serial log together to compare the visible firmware state with the boot text."
+  ],
   "outcome": "uefiShell",
   "consoleScreenshotPath": "/Users/test/Downloads/Veil Diagnostics/QEMU Smoke/qemu-smoke.console.ppm",
   "processLogPath": "/Users/test/Downloads/Veil Diagnostics/QEMU Smoke/qemu-smoke.process.log",

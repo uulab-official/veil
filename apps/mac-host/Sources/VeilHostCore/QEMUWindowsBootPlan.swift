@@ -529,6 +529,7 @@ public struct QEMUWindowsBootSmokeReport: Codable, Equatable, Sendable {
     public var serialLogPath: String
     public var processLogPath: String
     public var consoleScreenshotPath: String
+    public var nextActions: [String]
 
     public init(
         kind: String = "qemuWindowsArmBootSmokeReport",
@@ -539,7 +540,8 @@ public struct QEMUWindowsBootSmokeReport: Codable, Equatable, Sendable {
         evidence: [String],
         serialLogPath: String,
         processLogPath: String,
-        consoleScreenshotPath: String
+        consoleScreenshotPath: String,
+        nextActions: [String]
     ) {
         self.kind = kind
         self.provider = provider
@@ -550,6 +552,7 @@ public struct QEMUWindowsBootSmokeReport: Codable, Equatable, Sendable {
         self.serialLogPath = serialLogPath
         self.processLogPath = processLogPath
         self.consoleScreenshotPath = consoleScreenshotPath
+        self.nextActions = nextActions
     }
 }
 
@@ -576,7 +579,8 @@ public enum QEMUWindowsBootSmokeAnalyzer {
                 evidence: evidence,
                 serialLogPath: serialLogPath,
                 processLogPath: processLogPath,
-                consoleScreenshotPath: consoleScreenshotPath
+                consoleScreenshotPath: consoleScreenshotPath,
+                nextActions: nextActions(for: .argumentFailure, evidence: evidence)
             )
         }
 
@@ -590,7 +594,8 @@ public enum QEMUWindowsBootSmokeAnalyzer {
                 evidence: evidence,
                 serialLogPath: serialLogPath,
                 processLogPath: processLogPath,
-                consoleScreenshotPath: consoleScreenshotPath
+                consoleScreenshotPath: consoleScreenshotPath,
+                nextActions: nextActions(for: .windowsBootStarted, evidence: evidence)
             )
         }
 
@@ -607,7 +612,8 @@ public enum QEMUWindowsBootSmokeAnalyzer {
                 evidence: evidence,
                 serialLogPath: serialLogPath,
                 processLogPath: processLogPath,
-                consoleScreenshotPath: consoleScreenshotPath
+                consoleScreenshotPath: consoleScreenshotPath,
+                nextActions: nextActions(for: .uefiShell, evidence: evidence)
             )
         }
 
@@ -619,7 +625,8 @@ public enum QEMUWindowsBootSmokeAnalyzer {
                 evidence: evidence,
                 serialLogPath: serialLogPath,
                 processLogPath: processLogPath,
-                consoleScreenshotPath: consoleScreenshotPath
+                consoleScreenshotPath: consoleScreenshotPath,
+                nextActions: nextActions(for: .bootImageTimeout, evidence: evidence)
             )
         }
 
@@ -632,7 +639,8 @@ public enum QEMUWindowsBootSmokeAnalyzer {
                 evidence: evidence,
                 serialLogPath: serialLogPath,
                 processLogPath: processLogPath,
-                consoleScreenshotPath: consoleScreenshotPath
+                consoleScreenshotPath: consoleScreenshotPath,
+                nextActions: nextActions(for: .runningNoDecision, evidence: evidence)
             )
         }
 
@@ -644,8 +652,57 @@ public enum QEMUWindowsBootSmokeAnalyzer {
             evidence: evidence,
             serialLogPath: serialLogPath,
             processLogPath: processLogPath,
-            consoleScreenshotPath: consoleScreenshotPath
+            consoleScreenshotPath: consoleScreenshotPath,
+            nextActions: nextActions(for: .exitedEarly, evidence: evidence)
         )
+    }
+
+    private static func nextActions(
+        for outcome: QEMUWindowsBootSmokeOutcome,
+        evidence: [String]
+    ) -> [String] {
+        var actions: [String]
+
+        switch outcome {
+        case .windowsBootStarted:
+            actions = [
+                "Continue the Windows installer and install the Veil guest agent after the first desktop login.",
+                "Keep the console screenshot and serial log as proof that the current boot recipe reaches Windows setup."
+            ]
+        case .uefiShell:
+            actions = [
+                "Confirm the installer ISO is attached as the first bootable USB/CD-ROM device and contains efi/boot/bootaa64.efi.",
+                "Try the visible qemu-start path and press a key when the firmware prompts to boot from CD/DVD.",
+                "Open the console screenshot and serial log together to compare the visible firmware state with the boot text."
+            ]
+        case .bootImageTimeout:
+            actions = [
+                "Retry with the visible qemu-start path and press a key during the boot prompt window.",
+                "Confirm the Windows Arm ISO boots on another VM host or re-download the installer from an official Microsoft source."
+            ]
+        case .argumentFailure:
+            actions = [
+                "Open the process log and fix the rejected QEMU argument or local resource path before retrying.",
+                "Run veil-vmctl qemu-doctor --json to confirm QEMU, firmware, installer media, automatic install media, and disk paths."
+            ]
+        case .runningNoDecision:
+            actions = [
+                "Increase --seconds and compare the console screenshot with the serial log before changing the boot recipe.",
+                "Use qemu-start for an interactive visible run if the headless smoke report remains inconclusive."
+            ]
+        case .exitedEarly:
+            actions = [
+                "Open the process log to identify whether QEMU exited because of a local file, firmware, or device configuration issue.",
+                "Run veil-vmctl qemu-doctor --json before retrying the smoke run."
+            ]
+        }
+
+        if evidence.contains("boot-image-timeout"),
+           !actions.contains("Confirm the installer ISO is attached as the first bootable USB/CD-ROM device and contains efi/boot/bootaa64.efi.") {
+            actions.append("Confirm the installer ISO is attached as the first bootable USB/CD-ROM device and contains efi/boot/bootaa64.efi.")
+        }
+
+        return actions
     }
 }
 

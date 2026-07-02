@@ -82,7 +82,7 @@ cd apps/mac-host
 swift run veil-vmctl qemu-smoke --json --seconds 25 | node ../../harness/qemu-smoke/src/validate-qemu-smoke.mjs
 ```
 
-The command uses snapshot mode and records logs plus a `qemu-smoke-*.console.ppm` VM-console screenshot path under `~/Downloads/Veil Diagnostics/QEMU Smoke`. It is allowed to start a local QEMU process for the requested bounded duration, ask QEMU's monitor for a `screendump`, then terminate it for classification.
+The command uses snapshot mode and records logs plus a `qemu-smoke-*.console.ppm` VM-console screenshot path under `~/Downloads/Veil Diagnostics/QEMU Smoke`. It is allowed to start a local QEMU process for the requested bounded duration, ask QEMU's monitor for a `screendump`, then terminate it for classification. Every smoke report must also include recovery `nextActions` so boot failures point to concrete ISO, firmware, device, or log checks.
 
 ## QEMU Start Scenario
 

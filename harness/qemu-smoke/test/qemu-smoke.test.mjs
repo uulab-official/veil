@@ -42,4 +42,13 @@ describe("QEMU smoke harness", () => {
       /consoleScreenshotPath/
     );
   });
+
+  it("rejects reports without recovery guidance", () => {
+    const { nextActions: _actions, ...report } = uefiShellFixture;
+
+    assert.throws(
+      () => validateQEMUSmoke(report),
+      /nextActions/
+    );
+  });
 });

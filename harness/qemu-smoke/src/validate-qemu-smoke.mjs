@@ -47,6 +47,14 @@ export function validateQEMUSmoke(report) {
     requireString(evidence, "evidence[]");
   }
 
+  if (!Array.isArray(report.nextActions) || report.nextActions.length === 0) {
+    throw new TypeError("QEMU smoke report must include nextActions.");
+  }
+
+  for (const action of report.nextActions) {
+    requireString(action, "nextActions[]");
+  }
+
   if (report.outcome === "uefiShell" && !report.evidence.includes("uefi-shell")) {
     throw new TypeError("QEMU smoke uefiShell reports must include uefi-shell evidence.");
   }
@@ -57,6 +65,10 @@ export function validateQEMUSmoke(report) {
 
   if (!report.consoleScreenshotPath.endsWith(".ppm")) {
     throw new TypeError("QEMU smoke consoleScreenshotPath must point to a .ppm image.");
+  }
+
+  if (report.outcome === "uefiShell" && !report.nextActions.some((action) => action.includes("bootaa64.efi"))) {
+    throw new TypeError("QEMU smoke uefiShell reports must include installer boot file recovery guidance.");
   }
 
   return report;
