@@ -23,6 +23,7 @@ Goal: make Veil's product direction visible as "Windows app as a macOS window" i
 - [x] Map mirrored-window mouse input through the aspect-fit captured frame rect instead of the full letterboxed host view.
 - [x] Restore mapped Notepad app windows after the live agent reconnects.
 - [x] Persist mapped app window intent across host app relaunch.
+- [x] Make fake-agent advertise capture support and broadcast fixture `window.frame` events to host event clients.
 
 ## Next
 

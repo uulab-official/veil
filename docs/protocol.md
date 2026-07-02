@@ -59,7 +59,7 @@ Response:
     "appList": true,
     "appLaunch": true,
     "windowTracking": true,
-    "windowCapture": false,
+    "windowCapture": true,
     "input": true,
     "clipboardText": true
   }

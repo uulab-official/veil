@@ -100,6 +100,8 @@ agent -> app.list.response with winapp_notepad
 host -> app.launch.request for winapp_notepad
 agent -> app.launch.response accepted
 agent -> window.created for hwnd:0003029A
+host -> window.frame.subscribe for hwnd:0003029A
+agent -> window.frame event with a PNG fixture broadcast to event clients
 ```
 
 ## Second Scenario: Clipboard Loop Prevention

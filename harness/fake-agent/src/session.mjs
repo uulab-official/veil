@@ -2,7 +2,9 @@ import { MessageType, createError, parseMessage } from "@veil/protocol";
 
 import { readFixture } from "./fixtures.mjs";
 
-export function createSession() {
+export function createSession(options = {}) {
+  const broadcast = options.broadcast ?? (async () => {});
+
   return {
     async handle(message) {
       const parsed = parseMessage(message);
@@ -18,7 +20,7 @@ export function createSession() {
         case MessageType.AppLaunchRequest:
           return handleAppLaunch(message);
         case MessageType.WindowFrameSubscribe:
-          return [];
+          return handleWindowFrameSubscribe(message, broadcast);
         case MessageType.WindowFrameUnsubscribe:
           return [];
         case MessageType.WindowCloseRequest:
@@ -45,6 +47,19 @@ async function handleAppLaunch(message) {
     withRequestId(await readFixture("app.launch.response.json"), message.requestId),
     await readFixture("window.created.json")
   ];
+}
+
+async function handleWindowFrameSubscribe(message, broadcast) {
+  if (!message.windowId) {
+    return [createError(message.requestId, "invalid_message", "window.frame.subscribe requires windowId.")];
+  }
+
+  const frame = await readFixture("window.frame.json");
+  await broadcast({
+    ...frame,
+    windowId: message.windowId
+  });
+  return [];
 }
 
 async function handleWindowClose(message) {

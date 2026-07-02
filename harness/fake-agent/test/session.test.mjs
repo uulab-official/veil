@@ -17,6 +17,7 @@ test("responds to agent health requests with fixture capability data", async () 
   assert.equal(replies[0].type, "agent.health.response");
   assert.equal(replies[0].requestId, "req_001");
   assert.equal(replies[0].capabilities.appLaunch, true);
+  assert.equal(replies[0].capabilities.windowCapture, true);
 });
 
 test("launches Notepad and emits a tracked window event", async () => {
@@ -134,8 +135,13 @@ test("accepts host clipboard text without a reply", async () => {
   assert.deepEqual(replies, []);
 });
 
-test("accepts frame stream subscribe and unsubscribe without a reply", async () => {
-  const session = createSession();
+test("broadcasts a fixture frame when a capture stream is subscribed", async () => {
+  const broadcastEvents = [];
+  const session = createSession({
+    broadcast: async (event) => {
+      broadcastEvents.push(event);
+    }
+  });
 
   const subscribeReplies = await session.handle({
     type: "window.frame.subscribe",
@@ -143,13 +149,23 @@ test("accepts frame stream subscribe and unsubscribe without a reply", async () 
     windowId: "hwnd:0003029A",
     format: "png"
   });
+
+  assert.deepEqual(subscribeReplies, []);
+  assert.equal(broadcastEvents.length, 1);
+  assert.equal(broadcastEvents[0].type, "window.frame");
+  assert.equal(broadcastEvents[0].windowId, "hwnd:0003029A");
+  assert.equal(broadcastEvents[0].format, "png");
+});
+
+test("accepts frame stream unsubscribe without a reply", async () => {
+  const session = createSession();
+
   const unsubscribeReplies = await session.handle({
     type: "window.frame.unsubscribe",
     requestId: "req_frame_unsubscribe_notepad",
     windowId: "hwnd:0003029A"
   });
 
-  assert.deepEqual(subscribeReplies, []);
   assert.deepEqual(unsubscribeReplies, []);
 });
 
