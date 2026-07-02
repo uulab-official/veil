@@ -1,4 +1,5 @@
 import Foundation
+import Darwin
 import VeilHostCore
 
 enum VMControlError: Error, LocalizedError {
@@ -13,6 +14,7 @@ enum VMControlError: Error, LocalizedError {
     case qemuMonitorUnavailable(String)
     case qemuScreenshotCaptureFailed(String)
     case missingQEMUKeySequence
+    case qemuAlreadyRunning(pid: Int32, monitorSocketPath: String)
 
     var errorDescription: String? {
         switch self {
@@ -38,10 +40,12 @@ enum VMControlError: Error, LocalizedError {
             "QEMU console screenshot could not be captured: \(path)"
         case .missingQEMUKeySequence:
             "Missing QEMU key sequence. Pass keys such as shift-f10, esc, tab, ret, or spc."
+        case .qemuAlreadyRunning(let pid, let monitorSocketPath):
+            "QEMU is already running as PID \(pid). Use qemu-capture to inspect it or qemu-powerdown to request a safe shutdown before starting another VM. Monitor socket: \(monitorSocketPath)"
         }
     }
 
-    private static let usage = "Usage: veil-vmctl prepare --installer /path/to/Windows.iso [--drivers /path/to/virtio-win.iso] | veil-vmctl providers [--json] | veil-vmctl qemu-plan [--json] | veil-vmctl qemu-doctor [--json] | veil-vmctl qemu-smoke [--json] [--seconds 45] | veil-vmctl qemu-start [--json] [--wait-seconds 15] | veil-vmctl qemu-capture [--json] [--output /path/to/console.png] | veil-vmctl qemu-sendkey [--json] key [key ...] | veil-vmctl qemu-oobe-bypass [--json]"
+    private static let usage = "Usage: veil-vmctl prepare --installer /path/to/Windows.iso [--drivers /path/to/virtio-win.iso] | veil-vmctl providers [--json] | veil-vmctl qemu-plan [--json] | veil-vmctl qemu-doctor [--json] | veil-vmctl qemu-smoke [--json] [--seconds 45] | veil-vmctl qemu-start [--json] [--wait-seconds 15] | veil-vmctl qemu-capture [--json] [--output /path/to/console.png] | veil-vmctl qemu-powerdown [--json] [--wait-seconds 30] | veil-vmctl qemu-sendkey [--json] key [key ...] | veil-vmctl qemu-oobe-bypass [--json]"
 }
 
 struct VMControlArguments {
@@ -53,6 +57,7 @@ struct VMControlArguments {
         case qemuSmoke(json: Bool, seconds: Int)
         case qemuStart(json: Bool, waitSeconds: Int)
         case qemuCapture(json: Bool, outputPath: String?)
+        case qemuPowerDown(json: Bool, waitSeconds: Int)
         case qemuSendKey(json: Bool, keys: [String])
         case qemuOOBEBypass(json: Bool)
     }
@@ -93,6 +98,11 @@ struct VMControlArguments {
                     outputPath: stringArgument(named: "--output", from: arguments)
                 )
             )
+        }
+
+        if command == "qemu-powerdown" {
+            let waitSeconds = waitSecondsArgument(from: arguments) ?? 30
+            return VMControlArguments(command: .qemuPowerDown(json: arguments.contains("--json"), waitSeconds: waitSeconds))
         }
 
         if command == "qemu-sendkey" {
@@ -178,6 +188,21 @@ struct QEMUKeySendRecord: Codable, Equatable {
     var sentAt: Date
 }
 
+struct QEMUPowerDownRecord: Codable, Equatable {
+    var kind: String = "qemuPowerDown"
+    var pid: Int32?
+    var monitorSocketPath: String
+    var qmpSocketPath: String?
+    var transport: String
+    var socketPath: String
+    var command: String
+    var didLaunchSender: Bool
+    var terminationStatus: Int32?
+    var waitedSeconds: Int
+    var didExitWithinWait: Bool
+    var requestedAt: Date
+}
+
 @main
 struct VeilVMControl {
     static func main() async {
@@ -214,6 +239,8 @@ struct VeilVMControl {
             try await startQEMU(json: json, waitSeconds: waitSeconds)
         case .qemuCapture(let json, let outputPath):
             try await captureQEMUConsole(json: json, outputPath: outputPath)
+        case .qemuPowerDown(let json, let waitSeconds):
+            try await powerDownQEMU(json: json, waitSeconds: waitSeconds)
         case .qemuSendKey(let json, let keys):
             try await sendQEMUKeys(json: json, keys: keys)
         case .qemuOOBEBypass(let json):
@@ -397,6 +424,8 @@ struct VeilVMControl {
     }
 
     private static func startQEMU(json: Bool, waitSeconds: Int) async throws {
+        try rejectDuplicateQEMULaunchIfNeeded()
+
         guard let profile = try await JSONVMProfileStore().load() else {
             throw VMControlError.missingProfileForQEMUPlan
         }
@@ -480,6 +509,7 @@ struct VeilVMControl {
         print("Process log: \(record.processLogPath)")
         print("Serial log: \(serialLogURL.path)")
         print("Monitor socket: \(record.monitorSocketPath)")
+        print("QMP socket: \(record.qmpSocketPath ?? "not attached")")
         print("Console screenshot: \(record.consoleScreenshotPath ?? "pending")")
     }
 
@@ -553,6 +583,55 @@ struct VeilVMControl {
         print("Console screenshot: \(captureRecord.consoleScreenshotPath)")
     }
 
+    private static func powerDownQEMU(json: Bool, waitSeconds: Int) async throws {
+        let launchRecord = try latestQEMULaunchRecord()
+        let qmpSocketPath = launchRecord.qmpSocketPath?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let canUseQMP = qmpSocketPath.map { !$0.isEmpty && FileManager.default.fileExists(atPath: $0) } ?? false
+        guard canUseQMP || FileManager.default.fileExists(atPath: launchRecord.monitorSocketPath) else {
+            throw VMControlError.qemuMonitorUnavailable(launchRecord.monitorSocketPath)
+        }
+
+        let sender: QEMUKeySendResult
+        if canUseQMP, let qmpSocketPath {
+            let command = try QEMUQMPControlCommandBuilder.powerDownCommand()
+            sender = sendQMPCommand(command, qmpSocketPath: qmpSocketPath, key: "system_powerdown")
+        } else {
+            sender = sendQEMUMonitorLine(
+                "system_powerdown",
+                monitorSocketPath: launchRecord.monitorSocketPath,
+                key: "system_powerdown"
+            )
+        }
+        let boundedWaitSeconds = min(max(waitSeconds, 0), 120)
+        let didExit = await waitForProcessExit(pid: launchRecord.pid, timeoutSeconds: boundedWaitSeconds)
+        let record = QEMUPowerDownRecord(
+            pid: launchRecord.pid,
+            monitorSocketPath: launchRecord.monitorSocketPath,
+            qmpSocketPath: launchRecord.qmpSocketPath,
+            transport: sender.transport,
+            socketPath: sender.socketPath,
+            command: sender.monitorCommand,
+            didLaunchSender: sender.didLaunchSender,
+            terminationStatus: sender.terminationStatus,
+            waitedSeconds: boundedWaitSeconds,
+            didExitWithinWait: didExit,
+            requestedAt: Date()
+        )
+
+        if json {
+            let data = try JSONEncoder.veilDiagnostics.encode(record)
+            print(String(decoding: data, as: UTF8.self))
+            return
+        }
+
+        print("QEMU powerdown requested")
+        print("PID: \(record.pid.map(String.init) ?? "unknown")")
+        print("Transport: \(record.transport)")
+        print("Socket: \(record.socketPath)")
+        print("Sender status: \(record.terminationStatus.map(String.init) ?? "not launched")")
+        print("Exited within wait: \(record.didExitWithinWait ? "yes" : "no")")
+    }
+
     private static func sendQEMUOOBEBypass(json: Bool) async throws {
         let keys = [
             "shift-f10",
@@ -580,7 +659,7 @@ struct VeilVMControl {
         for (index, key) in keys.enumerated() {
             if canUseQMP, let qmpSocketPath {
                 let command = try QEMUQMPKeyboardCommandBuilder.sendKeyCommand(for: key)
-                results.append(sendQMPKeyboardCommand(command, qmpSocketPath: qmpSocketPath, key: key))
+                results.append(sendQMPCommand(command, qmpSocketPath: qmpSocketPath, key: key))
             } else {
                 let command = "sendkey \(key)"
                 results.append(sendQEMUMonitorLine(command, monitorSocketPath: launchRecord.monitorSocketPath, key: key))
@@ -617,6 +696,45 @@ struct VeilVMControl {
 
         let data = try Data(contentsOf: latestURL)
         return try JSONDecoder.veilDiagnostics.decode(QEMULaunchRecord.self, from: data)
+    }
+
+    private static func rejectDuplicateQEMULaunchIfNeeded() throws {
+        guard let launchRecord = try? latestQEMULaunchRecord(),
+              let pid = launchRecord.pid,
+              isProcessRunning(pid: pid) else {
+            return
+        }
+
+        throw VMControlError.qemuAlreadyRunning(
+            pid: pid,
+            monitorSocketPath: launchRecord.monitorSocketPath
+        )
+    }
+
+    private static func isProcessRunning(pid: Int32) -> Bool {
+        Darwin.kill(pid, 0) == 0 || errno == EPERM
+    }
+
+    private static func waitForProcessExit(pid: Int32?, timeoutSeconds: Int) async -> Bool {
+        guard let pid else {
+            return false
+        }
+
+        if !isProcessRunning(pid: pid) {
+            return true
+        }
+
+        guard timeoutSeconds > 0 else {
+            return false
+        }
+
+        for _ in 0..<timeoutSeconds {
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
+            if !isProcessRunning(pid: pid) {
+                return true
+            }
+        }
+        return false
     }
 
     private static func sendQEMUMonitorLine(
@@ -658,7 +776,7 @@ struct VeilVMControl {
         }
     }
 
-    private static func sendQMPKeyboardCommand(
+    private static func sendQMPCommand(
         _ command: String,
         qmpSocketPath: String,
         key: String

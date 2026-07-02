@@ -154,5 +154,15 @@ records existed, and the HMP `sendkey` recovery path recorded a failed sender
 status without dismissing the folder-selection dialog. New smoke, CLI start,
 and app-launched QEMU runs now attach a QMP socket and `qemu-sendkey` prefers
 QMP `send-key`, falling back to HMP only for older launch records. The next
-checkpoint is to relaunch the visible VM, re-run `qemu-oobe-bypass`, and record
-the console PNG that proves whether Windows accepted the recovery sequence.
+checkpoint is to request safe shutdown with `qemu-powerdown`, relaunch the
+visible VM, re-run `qemu-oobe-bypass`, and record the console PNG that proves
+whether Windows accepted the recovery sequence. `qemu-start` now blocks duplicate
+launches while the latest recorded QEMU PID is still alive so the Windows disk is
+not accidentally attached to two running QEMU processes.
+
+Powerdown evidence: against the current pre-QMP live launch, a bounded
+`qemu-powerdown --json --wait-seconds 10` attempt recorded `transport=hmp`,
+`terminationStatus=1`, and `didExitWithinWait=false`. A follow-up
+`qemu-start --json --wait-seconds 1` correctly refused to launch a duplicate
+QEMU process for PID 46399. The old launch should be closed manually or through
+a later explicit force-stop recovery path before the QMP relaunch checkpoint.

@@ -92,6 +92,15 @@ The macOS app's QEMU launch boundary writes process logs under `~/Downloads/Veil
 
 `veil-vmctl qemu-capture [--json] [--output /path/to/console.png]` refreshes the latest launch record's VM-console screenshot through the recorded QEMU monitor socket. Use this instead of manually typing monitor commands: it sends only `screendump`, preserves the running VM, updates `qemu-launch-latest.json` when an output path is chosen, and returns a small capture record for evidence collection.
 
+`veil-vmctl qemu-powerdown [--json] [--wait-seconds 30]` sends the bounded
+`system_powerdown` command through the latest launch record and waits for the
+recorded QEMU PID to exit. On new launch records it prefers QMP; on older
+records it falls back to HMP. It is the preferred way to shut down a live
+visible install before relaunching with a new runtime recipe. `qemu-start`
+refuses to launch a second QEMU process while the latest recorded PID is still
+alive, which prevents two local QEMU processes from writing the same Windows
+disk.
+
 `veil-vmctl qemu-sendkey [--json] key [key ...]` sends a bounded list of key
 commands through the latest launch record. On new launches it prefers QMP
 `send-key`; on older launch records without QMP it falls back to HMP `sendkey`.

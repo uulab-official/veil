@@ -1260,6 +1260,20 @@ public enum QEMUQMPKeyboardCommandBuilder {
     }
 
     private static func jsonLine(_ object: [String: Any]) throws -> String {
+        try QEMUQMPCommandJSONEncoder.jsonLine(object)
+    }
+}
+
+public enum QEMUQMPControlCommandBuilder {
+    public static func powerDownCommand() throws -> String {
+        try QEMUQMPCommandJSONEncoder.jsonLine([
+            "execute": "system_powerdown"
+        ])
+    }
+}
+
+private enum QEMUQMPCommandJSONEncoder {
+    static func jsonLine(_ object: [String: Any]) throws -> String {
         guard JSONSerialization.isValidJSONObject(object) else {
             throw QEMUQMPKeyboardCommandError.serializationFailed
         }

@@ -831,6 +831,15 @@ struct QEMUWindowsBootPlanTests {
         #expect(commands.last == returnCommand)
     }
 
+    @Test("QMP control command builder emits system powerdown payload")
+    func qmpControlCommandBuilderEmitsSystemPowerdownPayload() throws {
+        let command = try QEMUQMPControlCommandBuilder.powerDownCommand()
+        let data = try #require(command.data(using: .utf8))
+        let object = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+
+        #expect(object["execute"] as? String == "system_powerdown")
+    }
+
     @Test("TPM emulator startup terminates with the QEMU connection")
     func tpmEmulatorStartupTerminatesWithQEMUConnection() throws {
         let directory = try temporaryDirectory()
