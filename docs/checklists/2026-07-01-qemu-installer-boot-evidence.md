@@ -108,3 +108,9 @@ Persistent install evidence: a July 2, 2026 visible `qemu-start` launch wrote
 and kept QEMU running as PID 44297. The real sparse disk grew past 5 GB, and a
 manual monitor capture at `/tmp/veil-live-install.png` showed the Korean
 `Windows 11 installing` screen at 39% complete.
+
+First reboot evidence: the same persistent launch later grew the sparse disk
+past 12 GB and produced `/tmp/veil-live-install-10min.png`, showing the black
+post-reboot Windows setup phase with Korean copy for `Installing 42%`. This
+proves the boot-key guard allowed the VM to continue from the NVMe disk instead
+of looping back into ISO setup after the first reboot.

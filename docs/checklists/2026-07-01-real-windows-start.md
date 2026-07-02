@@ -95,6 +95,7 @@ Goal: keep the main Veil experience pointed at real local Windows boot and conso
 - [x] Verify a bounded auto-partition `qemu-smoke` console PNG reaches the Korean Windows 11 installing screen at 32%.
 - [x] Launch a persistent visible `qemu-start` install and verify the real sparse disk grows past 5 GB while Windows Setup reaches 39%.
 - [x] Skip automatic ISO boot-key input after the disk has allocated at least 1 GiB, so a partial install can continue from NVMe instead of restarting setup.
+- [x] Verify the persistent visible install reaches the first post-reboot Windows setup phase (`Installing 42%`) instead of looping back into the ISO installer.
 - [x] Add recovery copy to QEMU smoke reports for common boot failures.
 - [x] Convert QEMU monitor screenshots to PNG paths so users can inspect boot evidence directly.
 - [x] Surface the latest QEMU console PNG inside the Windows setup screen when launch evidence exists.
