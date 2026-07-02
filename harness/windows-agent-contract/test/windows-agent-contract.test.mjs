@@ -15,8 +15,20 @@ const agentRoot = resolve(repoRoot, "apps/windows-agent");
 test("windows agent is scaffolded as a .NET 8 project", async () => {
   const project = await readFile(resolve(agentRoot, "src/VeilAgent/VeilAgent.csproj"), "utf8");
 
-  assert.match(project, /<TargetFramework>net8\.0<\/TargetFramework>/);
+  assert.match(project, /<TargetFramework>net8\.0-windows<\/TargetFramework>/);
+  assert.match(project, /<UseWindowsForms>true<\/UseWindowsForms>/);
   assert.match(project, /<RootNamespace>Veil\.Agent<\/RootNamespace>/);
+});
+
+test("windows agent is wired to real HWND capture by default", async () => {
+  const program = await readFile(resolve(agentRoot, "src/VeilAgent/Program.cs"), "utf8");
+  const capture = await readFile(resolve(agentRoot, "src/VeilAgent/GdiWindowFrameCapture.cs"), "utf8");
+
+  assert.match(program, /new GdiWindowFrameCapture\(\)/);
+  assert.doesNotMatch(program, /new BootstrapPngFrameCapture\(\)/);
+  assert.match(capture, /PrintWindow/);
+  assert.match(capture, /GetWindowRect/);
+  assert.match(capture, /ImageFormat\.Png/);
 });
 
 test("windows agent sample launch flow emits Notepad window and first frame", async () => {

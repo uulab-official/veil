@@ -30,6 +30,7 @@ public sealed class WindowsDesktop : IWindowsDesktop
 
                 return new LaunchedWindow(
                     WindowId: $"hwnd:{process.MainWindowHandle.ToInt64():X8}",
+                    Hwnd: process.MainWindowHandle,
                     ProcessId: process.Id,
                     Title: title,
                     Bounds: new WindowRect(0, 0, 1280, 800),

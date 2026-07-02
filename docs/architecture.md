@@ -107,7 +107,7 @@ Current scaffold status:
 - The agent exposes a WebSocket listener intended for `127.0.0.1:18444`.
 - It handles health, app list, and Notepad launch messages.
 - Notepad launch is structured to emit direct launch/window replies and broadcast a first `window.frame` event to event-subscriber sockets.
-- The first frame implementation is a deterministic bootstrap PNG behind `IWindowFrameCapture`; replacing it with real HWND capture is the next guest-agent milestone.
+- The default frame implementation uses Win32/GDI HWND capture behind `IWindowFrameCapture`; the deterministic bootstrap PNG implementation remains only as a fallback/test seam until Windows-side capture evidence is recorded.
 
 ## Protocol Package
 

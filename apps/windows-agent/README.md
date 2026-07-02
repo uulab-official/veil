@@ -7,7 +7,7 @@ Current scope:
 - .NET 8 console application.
 - WebSocket listener on `127.0.0.1:18444`.
 - Protocol handling for health, app list, and Notepad launch.
-- Notepad launch emits `app.launch.response`, `window.created`, and the first `window.frame` event through the event broadcast path.
+- Notepad launch emits `app.launch.response`, `window.created`, and the first HWND-captured `window.frame` event through the event broadcast path.
 
 This project intentionally does not ship Windows media, licenses, product keys, or proprietary SDKs.
 
@@ -35,4 +35,4 @@ cd harness/windows-agent-contract
 npm test
 ```
 
-The first frame currently uses a deterministic PNG bootstrap frame. The next capture milestone is to replace that implementation behind `IWindowFrameCapture` with Windows Graphics Capture or another real HWND capture source.
+The default frame path uses Win32/GDI capture behind `IWindowFrameCapture`. The next capture milestone is to verify the Notepad frame inside Windows 11 Arm and then evaluate Windows Graphics Capture or a lower-latency stream for continuing frames.

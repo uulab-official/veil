@@ -4,6 +4,7 @@ public sealed record WindowRect(int X, int Y, int Width, int Height);
 
 public sealed record LaunchedWindow(
     string WindowId,
+    nint Hwnd,
     int ProcessId,
     string Title,
     WindowRect Bounds,
