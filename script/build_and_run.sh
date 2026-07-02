@@ -85,13 +85,13 @@ case "$MODE" in
     ;;
   --verify|verify)
     open_app
-    for _ in {1..20}; do
-      if pgrep -x "$APP_EXECUTABLE" >/dev/null; then
+    for _ in {1..40}; do
+      if pgrep -f "$APP_BINARY" >/dev/null; then
         break
       fi
       sleep 0.25
     done
-    pgrep -x "$APP_EXECUTABLE" >/dev/null
+    pgrep -f "$APP_BINARY" >/dev/null
     test -f "$APP_ICON"
     ;;
   *)

@@ -86,6 +86,7 @@ Goal: keep the main Veil experience pointed at real local Windows boot and conso
 - [x] Add `window.close.request/response` fixtures, JS validators, Swift models, fake-agent support, and Windows agent `WM_CLOSE` handling.
 - [x] Send a close request when a user closes a mirrored macOS app window, while suppressing duplicate guest closes during VM stop cleanup.
 - [x] Forward macOS mirrored-window mouse input to the Windows agent as `input.mouse` and map it to HWND client-area `PostMessage` calls.
+- [x] Forward macOS mirrored-window keyboard input to the Windows agent as `input.key`, mapping macOS Command shortcuts to Windows Ctrl shortcuts.
 
 ## Next
 

@@ -191,6 +191,31 @@ public struct InputMouseEvent: Codable, Equatable, Sendable {
     }
 }
 
+public struct InputKeyEvent: Codable, Equatable, Sendable {
+    public var type: MessageType
+    public var windowId: String
+    public var event: String
+    public var key: String
+    public var windowsVirtualKey: Int
+    public var modifiers: [String]
+
+    public init(
+        type: MessageType = .inputKey,
+        windowId: String,
+        event: String,
+        key: String,
+        windowsVirtualKey: Int,
+        modifiers: [String] = []
+    ) {
+        self.type = type
+        self.windowId = windowId
+        self.event = event
+        self.key = key
+        self.windowsVirtualKey = windowsVirtualKey
+        self.modifiers = modifiers
+    }
+}
+
 public struct ErrorResponse: Codable, Equatable, Sendable {
     public var type: MessageType
     public var requestId: String?

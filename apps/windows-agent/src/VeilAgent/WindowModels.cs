@@ -30,3 +30,11 @@ public sealed record WindowMouseInput(
     int Y,
     IReadOnlyList<string> Modifiers
 );
+
+public sealed record WindowKeyInput(
+    string WindowId,
+    string Event,
+    string Key,
+    int WindowsVirtualKey,
+    IReadOnlyList<string> Modifiers
+);

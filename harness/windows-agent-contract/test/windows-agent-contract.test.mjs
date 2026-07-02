@@ -85,6 +85,24 @@ test("windows agent accepts host mouse input events", async () => {
   assert.match(session, /\["input"\]\s*=\s*true/);
 });
 
+test("windows agent accepts host key input events", async () => {
+  const messageTypes = await readFile(resolve(agentRoot, "src/VeilAgent/MessageTypes.cs"), "utf8");
+  const desktopInterface = await readFile(resolve(agentRoot, "src/VeilAgent/IWindowsDesktop.cs"), "utf8");
+  const desktop = await readFile(resolve(agentRoot, "src/VeilAgent/WindowsDesktop.cs"), "utf8");
+  const models = await readFile(resolve(agentRoot, "src/VeilAgent/WindowModels.cs"), "utf8");
+  const session = await readFile(resolve(agentRoot, "src/VeilAgent/AgentSession.cs"), "utf8");
+
+  assert.match(messageTypes, /InputKey\s*=\s*"input\.key"/);
+  assert.match(models, /WindowKeyInput/);
+  assert.match(desktopInterface, /SendKeyInputAsync\(WindowKeyInput input,\s*CancellationToken cancellationToken\)/);
+  assert.match(desktop, /WM_KEYDOWN/);
+  assert.match(desktop, /WM_KEYUP/);
+  assert.match(desktop, /VK_CONTROL/);
+  assert.match(desktop, /PostMessage/);
+  assert.match(session, /MessageTypes\.InputKey/);
+  assert.match(session, /HandleKeyInputAsync/);
+});
+
 test("windows agent sample launch flow emits Notepad window and first frame", async () => {
   const transcript = JSON.parse(
     await readFile(resolve(agentRoot, "fixtures/notepad-launch-with-frame.json"), "utf8")

@@ -189,6 +189,45 @@ struct HostDashboardModelTests {
         #expect(model.phase == .idle)
     }
 
+    @Test("forwards key input for mirrored windows")
+    @MainActor
+    func forwardsKeyInputForMirroredWindows() async throws {
+        let service = FakeDashboardService(health: .inputReady)
+        let model = HostDashboardModel(service: service)
+
+        await model.launchNotepad()
+        await model.sendKeyInput(
+            windowId: "hwnd:0003029A",
+            event: "keyDown",
+            key: "c",
+            windowsVirtualKey: 67,
+            modifiers: ["ctrl"]
+        )
+
+        #expect(service.keyInputs == [
+            InputKeyEvent(
+                windowId: "hwnd:0003029A",
+                event: "keyDown",
+                key: "c",
+                windowsVirtualKey: 67,
+                modifiers: ["ctrl"]
+            )
+        ])
+        #expect(model.phase == .connected)
+    }
+
+    @Test("ignores key input for windows without a mirror session")
+    @MainActor
+    func ignoresKeyInputForUnknownWindows() async throws {
+        let service = FakeDashboardService(health: .inputReady)
+        let model = HostDashboardModel(service: service)
+
+        await model.sendKeyInput(windowId: "hwnd:DEADBEEF", event: "keyDown", key: "c", windowsVirtualKey: 67)
+
+        #expect(service.keyInputs.isEmpty)
+        #expect(model.phase == .idle)
+    }
+
     @Test("updates active window sessions by HWND")
     @MainActor
     func updatesActiveWindowSessionsByHWND() async throws {
@@ -377,6 +416,7 @@ private final class FakeDashboardService: HostDashboardService {
     private(set) var launchCount = 0
     private(set) var closedWindowIds: [String] = []
     private(set) var mouseInputs: [InputMouseEvent] = []
+    private(set) var keyInputs: [InputKeyEvent] = []
 
     init(
         error: (any Error)? = nil,
@@ -436,6 +476,14 @@ private final class FakeDashboardService: HostDashboardService {
         }
 
         mouseInputs.append(input)
+    }
+
+    func sendKeyInput(_ input: InputKeyEvent) async throws {
+        if let error {
+            throw error
+        }
+
+        keyInputs.append(input)
     }
 }
 

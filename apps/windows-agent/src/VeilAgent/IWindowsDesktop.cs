@@ -7,4 +7,6 @@ public interface IWindowsDesktop
     Task<bool> CloseWindowAsync(string windowId, CancellationToken cancellationToken);
 
     Task<bool> SendMouseInputAsync(WindowMouseInput input, CancellationToken cancellationToken);
+
+    Task<bool> SendKeyInputAsync(WindowKeyInput input, CancellationToken cancellationToken);
 }

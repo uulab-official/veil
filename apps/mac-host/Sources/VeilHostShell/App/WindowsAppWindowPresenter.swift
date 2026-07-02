@@ -9,6 +9,7 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
 
     var onUserWindowClose: ((String) -> Void)?
     var onMouseInput: ((String, String, Int, Int) -> Void)?
+    var onKeyInput: ((String, String, String, Int, [String]) -> Void)?
 
     func showWindow(for session: WindowMirrorSession) {
         if let window = windowsById[session.id] {
@@ -70,6 +71,9 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
                 session: session,
                 onMouseInput: { [weak self] windowId, event, x, y in
                     self?.onMouseInput?(windowId, event, x, y)
+                },
+                onKeyInput: { [weak self] windowId, event, key, windowsVirtualKey, modifiers in
+                    self?.onKeyInput?(windowId, event, key, windowsVirtualKey, modifiers)
                 }
             )
         )
@@ -85,6 +89,7 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
 private struct WindowsAppMirrorPlaceholderView: View {
     var session: WindowMirrorSession
     var onMouseInput: (String, String, Int, Int) -> Void
+    var onKeyInput: (String, String, String, Int, [String]) -> Void
 
     var body: some View {
         VStack(spacing: 0) {
@@ -184,7 +189,11 @@ private struct WindowsAppMirrorPlaceholderView: View {
                     .background(Color(nsColor: .textBackgroundColor))
                 }
 
-                MouseInputCaptureView(session: session, onMouseInput: onMouseInput)
+                InputCaptureView(
+                    session: session,
+                    onMouseInput: onMouseInput,
+                    onKeyInput: onKeyInput
+                )
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -243,23 +252,26 @@ private struct WindowsAppMirrorPlaceholderView: View {
     }
 }
 
-private struct MouseInputCaptureView: NSViewRepresentable {
+private struct InputCaptureView: NSViewRepresentable {
     var session: WindowMirrorSession
     var onMouseInput: (String, String, Int, Int) -> Void
+    var onKeyInput: (String, String, String, Int, [String]) -> Void
 
-    func makeNSView(context: Context) -> MouseInputNSView {
-        MouseInputNSView()
+    func makeNSView(context: Context) -> InputCaptureNSView {
+        InputCaptureNSView()
     }
 
-    func updateNSView(_ nsView: MouseInputNSView, context: Context) {
+    func updateNSView(_ nsView: InputCaptureNSView, context: Context) {
         nsView.session = session
         nsView.onMouseInput = onMouseInput
+        nsView.onKeyInput = onKeyInput
     }
 }
 
-private final class MouseInputNSView: NSView {
+private final class InputCaptureNSView: NSView {
     var session: WindowMirrorSession?
     var onMouseInput: ((String, String, Int, Int) -> Void)?
+    var onKeyInput: ((String, String, String, Int, [String]) -> Void)?
 
     override var acceptsFirstResponder: Bool { true }
 
@@ -290,6 +302,29 @@ private final class MouseInputNSView: NSView {
         send("move", event)
     }
 
+    override func keyDown(with event: NSEvent) {
+        if !sendKey("keyDown", event) {
+            super.keyDown(with: event)
+        }
+    }
+
+    override func keyUp(with event: NSEvent) {
+        if !sendKey("keyUp", event) {
+            super.keyUp(with: event)
+        }
+    }
+
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        guard event.type == .keyDown,
+              event.modifierFlags.contains(.command),
+              sendKey("keyDown", event) else {
+            return super.performKeyEquivalent(with: event)
+        }
+
+        _ = sendKey("keyUp", event)
+        return true
+    }
+
     private func send(_ inputEvent: String, _ event: NSEvent) {
         guard let session,
               session.connectionMode == .agent,
@@ -312,6 +347,104 @@ private final class MouseInputNSView: NSView {
         )
 
         onMouseInput?(session.id, inputEvent, windowX, windowY)
+    }
+
+    private func sendKey(_ inputEvent: String, _ event: NSEvent) -> Bool {
+        guard let session,
+              session.connectionMode == .agent,
+              let key = inputKey(from: event),
+              let windowsVirtualKey = windowsVirtualKey(from: event, key: key) else {
+            return false
+        }
+
+        onKeyInput?(session.id, inputEvent, key, windowsVirtualKey, windowsModifiers(from: event))
+        return true
+    }
+
+    private func inputKey(from event: NSEvent) -> String? {
+        if let characters = event.charactersIgnoringModifiers,
+           let scalar = characters.unicodeScalars.first,
+           scalar.value >= 32,
+           scalar.value <= 126 {
+            return String(Character(scalar)).lowercased()
+        }
+
+        switch event.keyCode {
+        case 36:
+            return "enter"
+        case 48:
+            return "tab"
+        case 49:
+            return "space"
+        case 51:
+            return "backspace"
+        case 53:
+            return "escape"
+        case 123:
+            return "arrowLeft"
+        case 124:
+            return "arrowRight"
+        case 125:
+            return "arrowDown"
+        case 126:
+            return "arrowUp"
+        default:
+            return nil
+        }
+    }
+
+    private func windowsVirtualKey(from event: NSEvent, key: String) -> Int? {
+        if let scalar = key.uppercased().unicodeScalars.first,
+           scalar.value >= 65,
+           scalar.value <= 90 {
+            return Int(scalar.value)
+        }
+
+        if let scalar = key.unicodeScalars.first,
+           scalar.value >= 48,
+           scalar.value <= 57 {
+            return Int(scalar.value)
+        }
+
+        switch event.keyCode {
+        case 36:
+            return 13
+        case 48:
+            return 9
+        case 49:
+            return 32
+        case 51:
+            return 8
+        case 53:
+            return 27
+        case 123:
+            return 37
+        case 124:
+            return 39
+        case 125:
+            return 40
+        case 126:
+            return 38
+        default:
+            return nil
+        }
+    }
+
+    private func windowsModifiers(from event: NSEvent) -> [String] {
+        let flags = event.modifierFlags
+        var modifiers: [String] = []
+
+        if flags.contains(.command) || flags.contains(.control) {
+            modifiers.append("ctrl")
+        }
+        if flags.contains(.shift) {
+            modifiers.append("shift")
+        }
+        if flags.contains(.option) {
+            modifiers.append("alt")
+        }
+
+        return modifiers
     }
 
     private func clamp(_ value: Int, lower: Int, upper: Int) -> Int {

@@ -15,6 +15,7 @@ These JSON files mirror the stable examples in `docs/protocol.md`.
 - `window.close.request.json`
 - `window.close.response.json`
 - `input.mouse.left-down.json`
+- `input.key.copy.json`
 - `clipboard.text.set.host.json`
 - `error.app_not_found.json`
 

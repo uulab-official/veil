@@ -21,6 +21,8 @@ export function createSession() {
           return handleWindowClose(message);
         case MessageType.InputMouse:
           return [];
+        case MessageType.InputKey:
+          return [];
         default:
           return [createError(message.requestId, "unsupported_in_fake_agent", `Fake agent cannot handle ${message.type}`)];
       }

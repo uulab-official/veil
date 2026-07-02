@@ -7,6 +7,7 @@ import {
   MessageType,
   createError,
   parseMessage,
+  validateInputKey,
   validateNotepadAcceptance,
   validateInputMouse,
   validateWindowCloseRequest,
@@ -33,6 +34,7 @@ test("parses every stable fixture", async () => {
     "window.close.request.json",
     "window.close.response.json",
     "input.mouse.left-down.json",
+    "input.key.copy.json",
     "clipboard.text.set.host.json",
     "error.app_not_found.json"
   ];
@@ -138,4 +140,15 @@ test("validates one host mouse input fixture", async () => {
   assert.equal(input.x, 240);
   assert.equal(input.y, 130);
   assert.deepEqual(input.modifiers, []);
+});
+
+test("validates one host key input fixture", async () => {
+  const input = validateInputKey(await readFixture("input.key.copy.json"));
+
+  assert.equal(input.type, MessageType.InputKey);
+  assert.equal(input.windowId, "hwnd:0003029A");
+  assert.equal(input.event, "keyDown");
+  assert.equal(input.key, "c");
+  assert.equal(input.windowsVirtualKey, 67);
+  assert.deepEqual(input.modifiers, ["ctrl"]);
 });

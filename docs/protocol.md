@@ -239,6 +239,8 @@ Event from host to guest:
 
 The host maps macOS command shortcuts to Windows control shortcuts for app windows.
 
+Implementation note: the first Windows agent implementation maps `input.key` to HWND `WM_KEYDOWN` and `WM_KEYUP` messages. Modifier entries such as `ctrl`, `shift`, and `alt` are posted around the key event.
+
 ## Clipboard Text
 
 Host to guest:

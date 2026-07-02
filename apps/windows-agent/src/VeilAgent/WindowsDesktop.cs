@@ -13,9 +13,14 @@ public sealed class WindowsDesktop : IWindowsDesktop
     private const uint WM_RBUTTONDOWN = 0x0204;
     private const uint WM_RBUTTONUP = 0x0205;
     private const uint WM_MOUSEWHEEL = 0x020A;
+    private const uint WM_KEYDOWN = 0x0100;
+    private const uint WM_KEYUP = 0x0101;
     private const int MK_LBUTTON = 0x0001;
     private const int MK_RBUTTON = 0x0002;
     private const int WHEEL_DELTA = 120;
+    private const int VK_CONTROL = 0x11;
+    private const int VK_SHIFT = 0x10;
+    private const int VK_MENU = 0x12;
 
     public async Task<LaunchedWindow> LaunchNotepadAsync(CancellationToken cancellationToken)
     {
@@ -93,6 +98,43 @@ public sealed class WindowsDesktop : IWindowsDesktop
         return Task.FromResult(PostMessage(hwnd, message, wParam, lParam));
     }
 
+    public Task<bool> SendKeyInputAsync(WindowKeyInput input, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (!OperatingSystem.IsWindows())
+        {
+            throw new PlatformNotSupportedException("The Veil Windows agent must run inside Windows.");
+        }
+
+        if (!TryParseWindowId(input.WindowId, out var hwnd)
+            || !TryResolveKeyMessage(input.Event, out var message))
+        {
+            return Task.FromResult(false);
+        }
+
+        var accepted = true;
+        if (message == WM_KEYDOWN)
+        {
+            foreach (var modifierVirtualKey in ModifierVirtualKeys(input.Modifiers))
+            {
+                accepted &= PostMessage(hwnd, WM_KEYDOWN, new IntPtr(modifierVirtualKey), IntPtr.Zero);
+            }
+        }
+
+        accepted &= PostMessage(hwnd, message, new IntPtr(input.WindowsVirtualKey), IntPtr.Zero);
+
+        if (message == WM_KEYUP)
+        {
+            foreach (var modifierVirtualKey in ModifierVirtualKeys(input.Modifiers).Reverse())
+            {
+                accepted &= PostMessage(hwnd, WM_KEYUP, new IntPtr(modifierVirtualKey), IntPtr.Zero);
+            }
+        }
+
+        return Task.FromResult(accepted);
+    }
+
     private static bool TryParseWindowId(string windowId, out IntPtr hwnd)
     {
         hwnd = IntPtr.Zero;
@@ -153,6 +195,37 @@ public sealed class WindowsDesktop : IWindowsDesktop
     {
         var packed = (y & 0xFFFF) << 16 | (x & 0xFFFF);
         return new IntPtr(packed);
+    }
+
+    private static bool TryResolveKeyMessage(string eventName, out uint message)
+    {
+        message = eventName switch
+        {
+            "keyDown" => WM_KEYDOWN,
+            "keyUp" => WM_KEYUP,
+            _ => 0
+        };
+
+        return message != 0;
+    }
+
+    private static IEnumerable<int> ModifierVirtualKeys(IReadOnlyList<string> modifiers)
+    {
+        foreach (var modifier in modifiers)
+        {
+            switch (modifier)
+            {
+                case "ctrl":
+                    yield return VK_CONTROL;
+                    break;
+                case "shift":
+                    yield return VK_SHIFT;
+                    break;
+                case "alt":
+                    yield return VK_MENU;
+                    break;
+            }
+        }
     }
 
     [DllImport("user32.dll", SetLastError = true)]

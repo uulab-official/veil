@@ -105,6 +105,21 @@ test("accepts mouse input events without a reply", async () => {
   assert.deepEqual(replies, []);
 });
 
+test("accepts key input events without a reply", async () => {
+  const session = createSession();
+
+  const replies = await session.handle({
+    type: "input.key",
+    windowId: "hwnd:0003029A",
+    event: "keyDown",
+    key: "c",
+    windowsVirtualKey: 67,
+    modifiers: ["ctrl"]
+  });
+
+  assert.deepEqual(replies, []);
+});
+
 test("returns a structured error for unknown apps", async () => {
   const session = createSession();
 

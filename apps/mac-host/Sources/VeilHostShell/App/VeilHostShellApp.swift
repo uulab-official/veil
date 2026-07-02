@@ -264,6 +264,17 @@ struct VeilHostShellApp: App {
                 await model.sendMouseInput(windowId: windowId, event: event, x: x, y: y)
             }
         }
+        windowsAppWindowPresenter.onKeyInput = { windowId, event, key, windowsVirtualKey, modifiers in
+            Task { @MainActor in
+                await model.sendKeyInput(
+                    windowId: windowId,
+                    event: event,
+                    key: key,
+                    windowsVirtualKey: windowsVirtualKey,
+                    modifiers: modifiers
+                )
+            }
+        }
     }
 
     private func showVMConsole() {

@@ -84,6 +84,25 @@ struct VeilHostClientTests {
         #expect(transport.sentTypes == ["input.mouse"])
         #expect(transport.expectedReplyCounts == [0])
     }
+
+    @Test("sends key input without waiting for a reply")
+    func sendsKeyInputWithoutReply() async throws {
+        let transport = RecordingTransport(responses: [])
+        let client = VeilHostClient(transport: transport)
+
+        try await client.sendKeyInput(
+            InputKeyEvent(
+                windowId: "hwnd:0003029A",
+                event: "keyDown",
+                key: "c",
+                windowsVirtualKey: 67,
+                modifiers: ["ctrl"]
+            )
+        )
+
+        #expect(transport.sentTypes == ["input.key"])
+        #expect(transport.expectedReplyCounts == [0])
+    }
 }
 
 private final class RecordingTransport: HostTransport, @unchecked Sendable {

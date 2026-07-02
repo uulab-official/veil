@@ -83,6 +83,18 @@ struct ProtocolMessageTests {
         #expect(input.y == 130)
         #expect(input.modifiers == [])
     }
+
+    @Test("decodes key input event")
+    func decodesKeyInputEvent() throws {
+        let input: InputKeyEvent = try decodeFixture("input.key.copy")
+
+        #expect(input.type == .inputKey)
+        #expect(input.windowId == "hwnd:0003029A")
+        #expect(input.event == "keyDown")
+        #expect(input.key == "c")
+        #expect(input.windowsVirtualKey == 67)
+        #expect(input.modifiers == ["ctrl"])
+    }
 }
 
 private func decodeFixture<T: Decodable>(_ name: String) throws -> T {

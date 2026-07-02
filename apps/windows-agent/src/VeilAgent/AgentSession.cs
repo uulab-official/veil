@@ -26,6 +26,7 @@ public sealed class AgentSession
             MessageTypes.AppLaunchRequest => await HandleAppLaunchAsync(request, requestId, cancellationToken),
             MessageTypes.WindowCloseRequest => await HandleWindowCloseAsync(request, requestId, cancellationToken),
             MessageTypes.InputMouse => await HandleMouseInputAsync(request, requestId, cancellationToken),
+            MessageTypes.InputKey => await HandleKeyInputAsync(request, requestId, cancellationToken),
             _ => AgentReplies.Direct(ErrorResponse(requestId, "unknown_message_type", $"Unsupported message type {type}"))
         };
     }
@@ -114,6 +115,41 @@ public sealed class AgentSession
         catch (Exception error) when (error is not OperationCanceledException)
         {
             return AgentReplies.Direct(ErrorResponse(requestId, "input_mouse_failed", error.Message));
+        }
+    }
+
+    private async Task<AgentReplies> HandleKeyInputAsync(
+        JsonObject request,
+        string? requestId,
+        CancellationToken cancellationToken
+    )
+    {
+        var windowId = request["windowId"]?.GetValue<string>();
+        var eventName = request["event"]?.GetValue<string>();
+        var key = request["key"]?.GetValue<string>();
+        if (string.IsNullOrWhiteSpace(windowId)
+            || string.IsNullOrWhiteSpace(eventName)
+            || string.IsNullOrWhiteSpace(key)
+            || !TryReadInt(request, "windowsVirtualKey", out var windowsVirtualKey))
+        {
+            return AgentReplies.Direct(ErrorResponse(requestId, "invalid_message", "input.key requires windowId, event, key, and windowsVirtualKey."));
+        }
+
+        var modifiers = request["modifiers"] is JsonArray modifierArray
+            ? modifierArray.Select(modifier => modifier?.GetValue<string>() ?? string.Empty).Where(modifier => modifier.Length > 0).ToArray()
+            : Array.Empty<string>();
+
+        try
+        {
+            await desktop.SendKeyInputAsync(
+                new WindowKeyInput(windowId, eventName, key, windowsVirtualKey, modifiers),
+                cancellationToken
+            );
+            return AgentReplies.Direct();
+        }
+        catch (Exception error) when (error is not OperationCanceledException)
+        {
+            return AgentReplies.Direct(ErrorResponse(requestId, "input_key_failed", error.Message));
         }
     }
 
