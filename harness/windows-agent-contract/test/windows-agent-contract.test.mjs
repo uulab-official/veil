@@ -50,6 +50,22 @@ test("windows agent streams continuing window frames after launch", async () => 
   assert.match(streamer, /CaptureFrameAsync\(window,\s*sequence/);
 });
 
+test("windows agent accepts host window close requests", async () => {
+  const messageTypes = await readFile(resolve(agentRoot, "src/VeilAgent/MessageTypes.cs"), "utf8");
+  const desktopInterface = await readFile(resolve(agentRoot, "src/VeilAgent/IWindowsDesktop.cs"), "utf8");
+  const desktop = await readFile(resolve(agentRoot, "src/VeilAgent/WindowsDesktop.cs"), "utf8");
+  const session = await readFile(resolve(agentRoot, "src/VeilAgent/AgentSession.cs"), "utf8");
+
+  assert.match(messageTypes, /WindowCloseRequest\s*=\s*"window\.close\.request"/);
+  assert.match(messageTypes, /WindowCloseResponse\s*=\s*"window\.close\.response"/);
+  assert.match(desktopInterface, /CloseWindowAsync\(string windowId,\s*CancellationToken cancellationToken\)/);
+  assert.match(desktop, /WM_CLOSE/);
+  assert.match(desktop, /PostMessage/);
+  assert.match(session, /MessageTypes\.WindowCloseRequest/);
+  assert.match(session, /HandleWindowCloseAsync/);
+  assert.match(session, /MessageTypes\.WindowCloseResponse/);
+});
+
 test("windows agent sample launch flow emits Notepad window and first frame", async () => {
   const transcript = JSON.parse(
     await readFile(resolve(agentRoot, "fixtures/notepad-launch-with-frame.json"), "utf8")

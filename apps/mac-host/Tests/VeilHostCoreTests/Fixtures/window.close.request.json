@@ -1,0 +1,5 @@
+{
+  "type": "window.close.request",
+  "requestId": "req_close_001",
+  "windowId": "hwnd:0003029A"
+}

@@ -47,6 +47,7 @@ struct VeilHostShellApp: App {
             )
                 .frame(minWidth: 960, idealWidth: 1000, minHeight: 530, idealHeight: 560)
                 .task {
+                    configureWindowsAppWindowCloseBridge()
                     startAgentEventPumpIfNeeded()
                     startAgentReconnectPollerIfNeeded()
 
@@ -250,6 +251,14 @@ struct VeilHostShellApp: App {
                     captureState: .unavailable
                 )
         windowsAppWindowPresenter.showWindow(for: session)
+    }
+
+    private func configureWindowsAppWindowCloseBridge() {
+        windowsAppWindowPresenter.onUserWindowClose = { windowId in
+            Task { @MainActor in
+                _ = await model.closeMirrorSession(windowId: windowId)
+            }
+        }
     }
 
     private func showVMConsole() {

@@ -55,6 +55,22 @@ struct VeilHostClientTests {
             _ = try await client.launchNotepad()
         }
     }
+
+    @Test("sends a window close request to the agent")
+    func sendsWindowCloseRequest() async throws {
+        let transport = RecordingTransport(responses: [
+            #"{"type":"window.close.response","requestId":"req_close_notepad","windowId":"hwnd:0003029A","accepted":true}"#
+        ])
+        let client = VeilHostClient(transport: transport)
+
+        let response = try await client.closeWindow(windowId: "hwnd:0003029A")
+
+        #expect(transport.sentTypes == ["window.close.request"])
+        #expect(response.type == .windowCloseResponse)
+        #expect(response.requestId == "req_close_notepad")
+        #expect(response.windowId == "hwnd:0003029A")
+        #expect(response.accepted)
+    }
 }
 
 private final class RecordingTransport: HostTransport, @unchecked Sendable {

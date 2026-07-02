@@ -101,6 +101,12 @@ public struct VeilHostClient: HostDashboardService, Sendable {
         )
     }
 
+    public func closeWindow(windowId: String) async throws -> WindowCloseResponse {
+        try await request(
+            WindowCloseRequest(requestId: "req_close_notepad", windowId: windowId)
+        )
+    }
+
     public func loadOverview() async throws -> HostOverview {
         let health: AgentHealthResponse = try await request(
             AgentHealthRequest(requestId: "req_health")

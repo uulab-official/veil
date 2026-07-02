@@ -85,7 +85,12 @@ case "$MODE" in
     ;;
   --verify|verify)
     open_app
-    sleep 1
+    for _ in {1..20}; do
+      if pgrep -x "$APP_EXECUTABLE" >/dev/null; then
+        break
+      fi
+      sleep 0.25
+    done
     pgrep -x "$APP_EXECUTABLE" >/dev/null
     test -f "$APP_ICON"
     ;;

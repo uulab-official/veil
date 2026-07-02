@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { validateNotepadAcceptance } from "@veil/protocol";
+import { validateNotepadAcceptance, validateWindowCloseResponse } from "@veil/protocol";
 
 import { createSession } from "../src/session.mjs";
 
@@ -54,6 +54,40 @@ test("returns the fixture app list", async () => {
   assert.equal(replies.length, 1);
   assert.equal(replies[0].type, "app.list.response");
   assert.equal(replies[0].apps[0].id, "winapp_notepad");
+});
+
+test("accepts a window close request for a tracked HWND", async () => {
+  const session = createSession();
+
+  const replies = await session.handle({
+    type: "window.close.request",
+    requestId: "req_close_notepad",
+    windowId: "hwnd:0003029A"
+  });
+
+  assert.equal(replies.length, 1);
+  const response = validateWindowCloseResponse(replies[0]);
+  assert.equal(response.requestId, "req_close_notepad");
+  assert.equal(response.windowId, "hwnd:0003029A");
+  assert.equal(response.accepted, true);
+});
+
+test("rejects window close requests without a HWND", async () => {
+  const session = createSession();
+
+  const replies = await session.handle({
+    type: "window.close.request",
+    requestId: "req_bad_close"
+  });
+
+  assert.deepEqual(replies, [
+    {
+      type: "error",
+      requestId: "req_bad_close",
+      code: "invalid_message",
+      message: "window.close.request requires windowId."
+    }
+  ]);
 });
 
 test("returns a structured error for unknown apps", async () => {

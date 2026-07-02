@@ -4,6 +4,7 @@ import Observation
 public protocol HostDashboardService: Sendable {
     func loadOverview() async throws -> HostOverview
     func launchNotepad() async throws -> NotepadLaunchResult
+    func closeWindow(windowId: String) async throws -> WindowCloseResponse
 }
 
 public struct HostOverview: Codable, Equatable, Sendable {
@@ -244,6 +245,26 @@ public final class HostDashboardModel {
         mirrorSessions[index].captureState = .streaming
     }
 
+    @discardableResult
+    public func closeMirrorSession(windowId: String) async -> WindowCloseResponse? {
+        guard mirrorSessions.contains(where: { $0.id == windowId })
+                || activeWindows.contains(where: { $0.windowId == windowId }) else {
+            return nil
+        }
+
+        do {
+            let response = try await service.closeWindow(windowId: windowId)
+            if response.accepted {
+                removeWindowState(windowId: windowId)
+            }
+            return response
+        } catch {
+            errorMessage = userMessage(for: error)
+            phase = .failed
+            return nil
+        }
+    }
+
     public func receiveProtocolMessage(
         _ message: Data,
         decoder: JSONDecoder = .veilProtocol
@@ -303,6 +324,15 @@ public final class HostDashboardModel {
         }
 
         mirrorSessions.append(session)
+    }
+
+    private func removeWindowState(windowId: String) {
+        activeWindows.removeAll { $0.windowId == windowId }
+        mirrorSessions.removeAll { $0.id == windowId }
+
+        if lastLaunch?.window.windowId == windowId {
+            lastLaunch = nil
+        }
     }
 
     private func selectDefaultAppIfNeeded() {

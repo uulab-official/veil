@@ -43,6 +43,10 @@ public struct FallbackHostDashboardService: HostDashboardService, Sendable {
         }
     }
 
+    public func closeWindow(windowId: String) async throws -> WindowCloseResponse {
+        try await primary.closeWindow(windowId: windowId)
+    }
+
     private var fallbackDetail: String {
         "No Windows agent reachable at \(primaryEndpointDescription). Showing built-in demo data."
     }
@@ -83,6 +87,15 @@ public struct DemoHostDashboardService: HostDashboardService, Sendable {
             launch: .demoNotepad,
             window: .demoNotepad,
             connectionMode: .demo
+        )
+    }
+
+    public func closeWindow(windowId: String) async throws -> WindowCloseResponse {
+        WindowCloseResponse(
+            type: .windowCloseResponse,
+            requestId: "demo_close_window",
+            windowId: windowId,
+            accepted: true
         )
     }
 }

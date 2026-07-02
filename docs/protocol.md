@@ -167,6 +167,35 @@ Rules:
 - `format` is `png` for the first correctness harness.
 - `encodedData` is base64 only for early harness spikes; production capture should move to a separate binary or media stream.
 
+## Window Close
+
+Host request:
+
+```json
+{
+  "type": "window.close.request",
+  "requestId": "req_close_notepad",
+  "windowId": "hwnd:0003029A"
+}
+```
+
+Guest response:
+
+```json
+{
+  "type": "window.close.response",
+  "requestId": "req_close_notepad",
+  "windowId": "hwnd:0003029A",
+  "accepted": true
+}
+```
+
+Rules:
+
+- `windowId` must match the HWND-shaped id from a tracked `window.created` event.
+- On Windows, the first implementation maps this to `WM_CLOSE` for the target HWND.
+- `accepted: true` means the close message was posted to the window. The guest may later emit a dedicated `window.closed` event once window lifecycle tracking is added.
+
 ## Input Mouse
 
 Event from host to guest:

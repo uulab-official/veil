@@ -17,6 +17,8 @@ export function createSession() {
           return [withRequestId(await readFixture("app.list.response.json"), message.requestId)];
         case MessageType.AppLaunchRequest:
           return handleAppLaunch(message);
+        case MessageType.WindowCloseRequest:
+          return handleWindowClose(message);
         default:
           return [createError(message.requestId, "unsupported_in_fake_agent", `Fake agent cannot handle ${message.type}`)];
       }
@@ -32,6 +34,20 @@ async function handleAppLaunch(message) {
   return [
     withRequestId(await readFixture("app.launch.response.json"), message.requestId),
     await readFixture("window.created.json")
+  ];
+}
+
+async function handleWindowClose(message) {
+  if (!message.windowId) {
+    return [createError(message.requestId, "invalid_message", "window.close.request requires windowId.")];
+  }
+
+  return [
+    {
+      ...(await readFixture("window.close.response.json")),
+      requestId: message.requestId,
+      windowId: message.windowId
+    }
   ];
 }
 

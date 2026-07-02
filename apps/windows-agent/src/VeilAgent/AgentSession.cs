@@ -24,6 +24,7 @@ public sealed class AgentSession
             MessageTypes.AgentHealthRequest => AgentReplies.Direct(HealthResponse(requestId)),
             MessageTypes.AppListRequest => AgentReplies.Direct(AppListResponse(requestId)),
             MessageTypes.AppLaunchRequest => await HandleAppLaunchAsync(request, requestId, cancellationToken),
+            MessageTypes.WindowCloseRequest => await HandleWindowCloseAsync(request, requestId, cancellationToken),
             _ => AgentReplies.Direct(ErrorResponse(requestId, "unknown_message_type", $"Unsupported message type {type}"))
         };
     }
@@ -56,6 +57,29 @@ public sealed class AgentSession
             StreamWindow: launched,
             NextFrameSequence: 2
         );
+    }
+
+    private async Task<AgentReplies> HandleWindowCloseAsync(
+        JsonObject request,
+        string? requestId,
+        CancellationToken cancellationToken
+    )
+    {
+        var windowId = request["windowId"]?.GetValue<string>();
+        if (string.IsNullOrWhiteSpace(windowId))
+        {
+            return AgentReplies.Direct(ErrorResponse(requestId, "invalid_message", "window.close.request requires windowId."));
+        }
+
+        try
+        {
+            var accepted = await desktop.CloseWindowAsync(windowId, cancellationToken);
+            return AgentReplies.Direct(WindowCloseResponse(requestId, windowId, accepted));
+        }
+        catch (Exception error) when (error is not OperationCanceledException)
+        {
+            return AgentReplies.Direct(ErrorResponse(requestId, "window_close_failed", error.Message));
+        }
     }
 
     private static JsonObject HealthResponse(string? requestId) => new()
@@ -135,6 +159,14 @@ public sealed class AgentSession
         ["height"] = frame.Height,
         ["scale"] = frame.Scale,
         ["encodedData"] = frame.EncodedData
+    };
+
+    private static JsonObject WindowCloseResponse(string? requestId, string windowId, bool accepted) => new()
+    {
+        ["type"] = MessageTypes.WindowCloseResponse,
+        ["requestId"] = requestId,
+        ["windowId"] = windowId,
+        ["accepted"] = accepted
     };
 
     private static JsonObject ErrorResponse(string? requestId, string code, string message) => new()

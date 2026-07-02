@@ -7,6 +7,8 @@ export const MessageType = Object.freeze({
   AppLaunchResponse: "app.launch.response",
   WindowCreated: "window.created",
   WindowFrame: "window.frame",
+  WindowCloseRequest: "window.close.request",
+  WindowCloseResponse: "window.close.response",
   ClipboardTextSet: "clipboard.text.set",
   InputMouse: "input.mouse",
   InputKey: "input.key",
@@ -90,9 +92,33 @@ export function validateWindowFrame(frame) {
   return frame;
 }
 
-function requireNonEmptyString(value, fieldName) {
+export function validateWindowCloseRequest(request) {
+  if (!request || request.type !== MessageType.WindowCloseRequest) {
+    throw new TypeError("Window close request must use type window.close.request.");
+  }
+
+  requireNonEmptyString(request.requestId, "requestId", "Window close request");
+  requireNonEmptyString(request.windowId, "windowId", "Window close request");
+  return request;
+}
+
+export function validateWindowCloseResponse(response) {
+  if (!response || response.type !== MessageType.WindowCloseResponse) {
+    throw new TypeError("Window close response must use type window.close.response.");
+  }
+
+  requireNonEmptyString(response.requestId, "requestId", "Window close response");
+  requireNonEmptyString(response.windowId, "windowId", "Window close response");
+  if (typeof response.accepted !== "boolean") {
+    throw new TypeError("Window close response field 'accepted' must be a boolean.");
+  }
+
+  return response;
+}
+
+function requireNonEmptyString(value, fieldName, context = "Window frame") {
   if (typeof value !== "string" || value.length === 0) {
-    throw new TypeError(`Window frame field '${fieldName}' must be a non-empty string.`);
+    throw new TypeError(`${context} field '${fieldName}' must be a non-empty string.`);
   }
 }
 

@@ -57,6 +57,20 @@ struct ProtocolMessageTests {
         let payload = try #require(event.encodedPayloadData)
         #expect(payload.starts(with: [0x89, 0x50, 0x4E, 0x47]))
     }
+
+    @Test("decodes window close request and response")
+    func decodesWindowCloseRequestAndResponse() throws {
+        let request: WindowCloseRequest = try decodeFixture("window.close.request")
+        let response: WindowCloseResponse = try decodeFixture("window.close.response")
+
+        #expect(request.type == .windowCloseRequest)
+        #expect(request.requestId == "req_close_001")
+        #expect(request.windowId == "hwnd:0003029A")
+        #expect(response.type == .windowCloseResponse)
+        #expect(response.requestId == request.requestId)
+        #expect(response.windowId == request.windowId)
+        #expect(response.accepted)
+    }
 }
 
 private func decodeFixture<T: Decodable>(_ name: String) throws -> T {

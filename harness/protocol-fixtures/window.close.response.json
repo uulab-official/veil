@@ -1,0 +1,6 @@
+{
+  "type": "window.close.response",
+  "requestId": "req_close_notepad",
+  "windowId": "hwnd:0003029A",
+  "accepted": true
+}

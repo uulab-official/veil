@@ -8,6 +8,8 @@ import {
   createError,
   parseMessage,
   validateNotepadAcceptance,
+  validateWindowCloseRequest,
+  validateWindowCloseResponse,
   validateWindowFrame
 } from "../src/messages.mjs";
 
@@ -27,6 +29,8 @@ test("parses every stable fixture", async () => {
     "app.launch.response.json",
     "window.created.json",
     "window.frame.json",
+    "window.close.request.json",
+    "window.close.response.json",
     "clipboard.text.set.host.json",
     "error.app_not_found.json"
   ];
@@ -108,4 +112,17 @@ test("validates one captured window frame fixture", async () => {
   assert.equal(frame.format, "png");
   assert.equal(frame.width, 1);
   assert.equal(frame.height, 1);
+});
+
+test("validates window close request and response fixtures", async () => {
+  const request = validateWindowCloseRequest(await readFixture("window.close.request.json"));
+  const response = validateWindowCloseResponse(await readFixture("window.close.response.json"));
+
+  assert.equal(request.type, MessageType.WindowCloseRequest);
+  assert.equal(request.requestId, "req_close_notepad");
+  assert.equal(request.windowId, "hwnd:0003029A");
+  assert.equal(response.type, MessageType.WindowCloseResponse);
+  assert.equal(response.requestId, request.requestId);
+  assert.equal(response.windowId, request.windowId);
+  assert.equal(response.accepted, true);
 });

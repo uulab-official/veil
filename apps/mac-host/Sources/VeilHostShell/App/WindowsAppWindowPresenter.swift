@@ -5,6 +5,9 @@ import VeilHostCore
 @MainActor
 final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
     private var windowsById: [String: NSWindow] = [:]
+    private var suppressedCloseWindowIds: Set<String> = []
+
+    var onUserWindowClose: ((String) -> Void)?
 
     func showWindow(for session: WindowMirrorSession) {
         if let window = windowsById[session.id] {
@@ -38,6 +41,7 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
     }
 
     func closeAll() {
+        suppressedCloseWindowIds.formUnion(windowsById.keys)
         for window in windowsById.values {
             window.close()
         }
@@ -51,6 +55,10 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
         }
 
         windowsById[windowId] = nil
+
+        if suppressedCloseWindowIds.remove(windowId) == nil {
+            onUserWindowClose?(windowId)
+        }
     }
 
     private func hostingView(

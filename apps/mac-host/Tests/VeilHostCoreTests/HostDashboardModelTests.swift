@@ -130,6 +130,38 @@ struct HostDashboardModelTests {
         #expect(session.latestFrame == nil)
     }
 
+    @Test("closes mirrored Windows windows through the agent")
+    @MainActor
+    func closesMirroredWindowsThroughAgent() async throws {
+        let service = FakeDashboardService(health: .captureReady)
+        let model = HostDashboardModel(service: service)
+
+        await model.launchNotepad()
+        let response = await model.closeMirrorSession(windowId: "hwnd:0003029A")
+
+        #expect(response?.accepted == true)
+        #expect(service.closedWindowIds == ["hwnd:0003029A"])
+        #expect(model.activeWindows.isEmpty)
+        #expect(model.mirrorSessions.isEmpty)
+        #expect(model.lastLaunch == nil)
+        #expect(model.phase == .connected)
+    }
+
+    @Test("keeps mirrored window state when the agent rejects close")
+    @MainActor
+    func keepsMirroredWindowWhenAgentRejectsClose() async throws {
+        let service = FakeDashboardService(health: .captureReady, closeAccepted: false)
+        let model = HostDashboardModel(service: service)
+
+        await model.launchNotepad()
+        let response = await model.closeMirrorSession(windowId: "hwnd:0003029A")
+
+        #expect(response?.accepted == false)
+        #expect(model.activeWindows.map(\.windowId) == ["hwnd:0003029A"])
+        #expect(model.mirrorSessions.map(\.id) == ["hwnd:0003029A"])
+        #expect(model.lastLaunch?.window.windowId == "hwnd:0003029A")
+    }
+
     @Test("updates active window sessions by HWND")
     @MainActor
     func updatesActiveWindowSessionsByHWND() async throws {
@@ -285,6 +317,27 @@ struct HostDashboardModelTests {
         #expect(model.health == nil)
         #expect(model.apps.isEmpty)
     }
+
+    @Test("does not hide close failures behind demo fallback")
+    @MainActor
+    func doesNotHideCloseFailuresBehindDemoFallback() async throws {
+        let primary = FakeDashboardService(health: .captureReady)
+        let service = FallbackHostDashboardService(
+            primary: primary,
+            fallback: DemoHostDashboardService(),
+            primaryEndpointDescription: "ws://127.0.0.1:18444"
+        )
+        let model = HostDashboardModel(service: service)
+
+        await model.launchNotepad()
+        primary.error = URLError(.cannotConnectToHost)
+        let response = await model.closeMirrorSession(windowId: "hwnd:0003029A")
+
+        #expect(response == nil)
+        #expect(model.phase == .failed)
+        #expect(model.activeWindows.map(\.windowId) == ["hwnd:0003029A"])
+        #expect(model.mirrorSessions.map(\.id) == ["hwnd:0003029A"])
+    }
 }
 
 @MainActor
@@ -292,13 +345,21 @@ private final class FakeDashboardService: HostDashboardService {
     var error: (any Error)?
     var health: AgentHealthResponse
     var apps: [WindowsApp]
+    var closeAccepted: Bool
     private(set) var loadCount = 0
     private(set) var launchCount = 0
+    private(set) var closedWindowIds: [String] = []
 
-    init(error: (any Error)? = nil, health: AgentHealthResponse = .fixture, apps: [WindowsApp] = [.notepad]) {
+    init(
+        error: (any Error)? = nil,
+        health: AgentHealthResponse = .fixture,
+        apps: [WindowsApp] = [.notepad],
+        closeAccepted: Bool = true
+    ) {
         self.error = error
         self.health = health
         self.apps = apps
+        self.closeAccepted = closeAccepted
     }
 
     func loadOverview() async throws -> HostOverview {
@@ -324,6 +385,20 @@ private final class FakeDashboardService: HostDashboardService {
             apps: apps,
             launch: .fixture,
             window: .notepad
+        )
+    }
+
+    func closeWindow(windowId: String) async throws -> WindowCloseResponse {
+        if let error {
+            throw error
+        }
+
+        closedWindowIds.append(windowId)
+        return WindowCloseResponse(
+            type: .windowCloseResponse,
+            requestId: "req_close_notepad",
+            windowId: windowId,
+            accepted: closeAccepted
         )
     }
 }

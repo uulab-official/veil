@@ -1,9 +1,13 @@
 using System.Diagnostics;
+using System.Globalization;
+using System.Runtime.InteropServices;
 
 namespace Veil.Agent;
 
 public sealed class WindowsDesktop : IWindowsDesktop
 {
+    private const uint WM_CLOSE = 0x0010;
+
     public async Task<LaunchedWindow> LaunchNotepadAsync(CancellationToken cancellationToken)
     {
         if (!OperatingSystem.IsWindows())
@@ -44,4 +48,44 @@ public sealed class WindowsDesktop : IWindowsDesktop
 
         throw new TimeoutException("notepad.exe started but no top-level window was discovered.");
     }
+
+    public Task<bool> CloseWindowAsync(string windowId, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (!OperatingSystem.IsWindows())
+        {
+            throw new PlatformNotSupportedException("The Veil Windows agent must run inside Windows.");
+        }
+
+        if (!TryParseWindowId(windowId, out var hwnd))
+        {
+            return Task.FromResult(false);
+        }
+
+        return Task.FromResult(PostMessage(hwnd, WM_CLOSE, IntPtr.Zero, IntPtr.Zero));
+    }
+
+    private static bool TryParseWindowId(string windowId, out IntPtr hwnd)
+    {
+        hwnd = IntPtr.Zero;
+        const string prefix = "hwnd:";
+
+        if (!windowId.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var hex = windowId[prefix.Length..];
+        if (!long.TryParse(hex, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var value))
+        {
+            return false;
+        }
+
+        hwnd = new IntPtr(value);
+        return hwnd != IntPtr.Zero;
+    }
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool PostMessage(IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam);
 }
