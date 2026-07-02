@@ -8,6 +8,7 @@ const REQUIRED_CHECK_IDS = [
   "system-disk",
   "qemu-executable",
   "uefi-firmware",
+  "tpm-emulator",
   "hvf-plan"
 ];
 
@@ -36,7 +37,7 @@ export function validateQEMUDoctor(report) {
     throw new TypeError(`Unsupported QEMU doctor state: ${report.overallState}`);
   }
 
-  if (!Array.isArray(report.checks) || report.checks.length < REQUIRED_CHECK_IDS.length) {
+  if (!Array.isArray(report.checks)) {
     throw new TypeError("QEMU doctor report must include all readiness checks.");
   }
 
@@ -68,7 +69,10 @@ export function validateQEMUDoctor(report) {
     throw new TypeError("QEMU doctor report must be ready when no check is blocked.");
   }
 
-  if (hasBlockedCheck && report.nextActions.every((action) => !action.includes("Install QEMU") && !action.includes("prepare"))) {
+  if (hasBlockedCheck && report.nextActions.every((action) =>
+    !action.includes("Install QEMU")
+      && !action.includes("swtpm")
+      && !action.includes("prepare"))) {
     throw new TypeError("Blocked QEMU doctor reports must include actionable recovery guidance.");
   }
 

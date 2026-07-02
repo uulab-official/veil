@@ -31,6 +31,12 @@
       "title": "Arm UEFI firmware"
     },
     {
+      "detail": "swtpm is not available at /opt/homebrew/bin/swtpm.",
+      "id": "tpm-emulator",
+      "state": "blocked",
+      "title": "TPM 2.0 emulator"
+    },
+    {
       "detail": "QEMU command plan enables HVF acceleration and local devices.",
       "id": "hvf-plan",
       "state": "passed",
@@ -40,7 +46,8 @@
   "isServerBacked": false,
   "kind": "qemuWindowsArmReadinessReport",
   "nextActions": [
-    "Install QEMU with Homebrew or set VEIL_QEMU_SYSTEM_AARCH64 to the local qemu-system-aarch64 path."
+    "Install QEMU with Homebrew or set VEIL_QEMU_SYSTEM_AARCH64 to the local qemu-system-aarch64 path.",
+    "Install swtpm locally so Veil can attach a TPM 2.0 emulator for Windows 11 setup."
   ],
   "overallState": "blocked",
   "provider": "QEMU/HVF"

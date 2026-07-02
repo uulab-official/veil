@@ -70,6 +70,7 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
 
     private let diagnosticsDirectory: URL
     private let planBuilder: @Sendable (VMProfile) throws -> QEMUWindowsBootPlan
+    private let tpmEmulatorRunner: @Sendable (QEMUWindowsBootPlan) throws -> Void
     private let processRunner: @Sendable (Process) throws -> Void
     private let frontmostRunner: @Sendable () -> Void
     private let bootKeySender: @Sendable (URL) -> Bool
@@ -80,6 +81,7 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
     public init(
         diagnosticsDirectory: URL = QEMUVMRuntimeBooter.defaultDiagnosticsDirectory(),
         planBuilder: @escaping @Sendable (VMProfile) throws -> QEMUWindowsBootPlan = QEMUVMRuntimeBooter.makePlan(for:),
+        tpmEmulatorRunner: @escaping @Sendable (QEMUWindowsBootPlan) throws -> Void = QEMUVMRuntimeBooter.startTPMEmulatorIfNeeded,
         processRunner: @escaping @Sendable (Process) throws -> Void = { try $0.run() },
         frontmostRunner: @escaping @Sendable () -> Void = QEMUVMRuntimeBooter.bringQEMUToFront,
         bootKeySender: @escaping @Sendable (URL) -> Bool = QEMUVMRuntimeBooter.sendWindowsInstallerBootKey,
@@ -87,6 +89,7 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
     ) {
         self.diagnosticsDirectory = diagnosticsDirectory
         self.planBuilder = planBuilder
+        self.tpmEmulatorRunner = tpmEmulatorRunner
         self.processRunner = processRunner
         self.frontmostRunner = frontmostRunner
         self.bootKeySender = bootKeySender
@@ -120,6 +123,7 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
         FileManager.default.createFile(atPath: logURL.path, contents: nil)
         let logHandle = try FileHandle(forWritingTo: logURL)
         let monitorSocketURL = Self.monitorSocketURL()
+        try tpmEmulatorRunner(plan)
 
         let process = Process()
         process.executableURL = URL(fileURLWithPath: plan.executablePath)
@@ -241,6 +245,39 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
         process.standardOutput = nil
         process.standardError = nil
         try? process.run()
+    }
+
+    public static func startTPMEmulatorIfNeeded(plan: QEMUWindowsBootPlan) throws {
+        guard let tpmEmulatorPath = plan.tpmEmulatorPath,
+              let tpmStateDirectoryPath = plan.tpmStateDirectoryPath else {
+            return
+        }
+
+        let fileManager = FileManager.default
+        try fileManager.createDirectory(atPath: tpmStateDirectoryPath, withIntermediateDirectories: true)
+        let socketURL = URL(fileURLWithPath: tpmStateDirectoryPath)
+            .appendingPathComponent("swtpm.sock")
+        let pidURL = URL(fileURLWithPath: tpmStateDirectoryPath)
+            .appendingPathComponent("swtpm.pid")
+        try? fileManager.removeItem(at: socketURL)
+        try? fileManager.removeItem(at: pidURL)
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: tpmEmulatorPath)
+        process.arguments = [
+            "socket",
+            "--tpm2",
+            "--tpmstate", "dir=\(tpmStateDirectoryPath)",
+            "--ctrl", "type=unixio,path=\(socketURL.path),terminate",
+            "--pid", "file=\(pidURL.path)",
+            "--daemon"
+        ]
+        try process.run()
+        process.waitUntilExit()
+
+        guard process.terminationStatus == 0 else {
+            throw VMRuntimeError.qemuNotReady("swtpm exited with code \(process.terminationStatus).")
+        }
     }
 
     @discardableResult

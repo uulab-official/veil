@@ -32,6 +32,8 @@ export function validateQEMUPlan(plan) {
   requireString(plan.provider, "provider");
   requireString(plan.executablePath, "executablePath");
   requireString(plan.firmwarePath, "firmwarePath");
+  requireString(plan.tpmEmulatorPath, "tpmEmulatorPath");
+  requireString(plan.tpmStateDirectoryPath, "tpmStateDirectoryPath");
   requireString(plan.automaticInstallMediaPath, "automaticInstallMediaPath");
   requireString(plan.summary, "summary");
 
@@ -53,6 +55,10 @@ export function validateQEMUPlan(plan) {
 
   if (typeof plan.isFirmwareAvailable !== "boolean") {
     throw new TypeError("QEMU plan field 'isFirmwareAvailable' must be a boolean.");
+  }
+
+  if (typeof plan.isTPMEmulatorAvailable !== "boolean") {
+    throw new TypeError("QEMU plan field 'isTPMEmulatorAvailable' must be a boolean.");
   }
 
   if (!Array.isArray(plan.arguments) || plan.arguments.length === 0) {
@@ -95,6 +101,18 @@ export function validateQEMUPlan(plan) {
 
   if (!plan.firmwarePath.endsWith("edk2-aarch64-code.fd")) {
     throw new TypeError("QEMU plan firmware must point to edk2-aarch64-code.fd.");
+  }
+
+  if (!containsSequence(plan.arguments, ["-tpmdev", "emulator,id=tpm0,chardev=chrtpm"])
+    || !containsSequence(plan.arguments, ["-device", "tpm-tis-device,tpmdev=tpm0"])) {
+    throw new TypeError("QEMU plan must attach a TPM 2.0 emulator.");
+  }
+
+  const chardevIndex = plan.arguments.indexOf("-chardev");
+  if (chardevIndex === -1
+    || !plan.arguments[chardevIndex + 1]?.includes("socket,id=chrtpm")
+    || !plan.arguments[chardevIndex + 1]?.includes(`${plan.tpmStateDirectoryPath}/swtpm.sock`)) {
+    throw new TypeError("QEMU plan must attach the TPM chardev socket in the declared TPM state directory.");
   }
 
   if (!installerDrive || !installerDrive.includes("media=cdrom") || !installerDrive.includes("readonly=on")) {

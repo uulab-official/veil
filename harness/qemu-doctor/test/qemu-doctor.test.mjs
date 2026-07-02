@@ -33,4 +33,14 @@ describe("QEMU doctor harness", () => {
       /actionable recovery guidance/
     );
   });
+
+  it("rejects reports without a TPM emulator check", () => {
+    assert.throws(
+      () => validateQEMUDoctor({
+        ...blockedFixture,
+        checks: blockedFixture.checks.filter((check) => check.id !== "tpm-emulator")
+      }),
+      /tpm-emulator/
+    );
+  });
 });

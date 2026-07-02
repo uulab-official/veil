@@ -69,7 +69,7 @@ The QEMU/HVF compatibility spike has progressed past static planning: on July 1,
 
 Current QEMU boot evidence:
 
-- QEMU can start the local device graph with HVF, Arm UEFI, lock-safe read-only Windows ISO media, generated automatic install ISO media, writable raw system disk, NAT networking, Cocoa/ramfb graphics, USB input, and serial logging.
+- QEMU can start the local device graph with HVF, Arm UEFI, lock-safe read-only Windows ISO media, generated automatic install ISO media, writable raw system disk, NAT networking, Cocoa/ramfb graphics, USB input, a local `swtpm` TPM 2.0 emulator, and serial logging.
 - `veil-vmctl qemu-start` can launch the stored Windows Arm profile into a visible foreground Cocoa QEMU window.
 - The main Veil app Start action now launches the same local QEMU/HVF console path; a manual app smoke check opened a foreground `QEMU Windows 11 Arm` window.
 - When the same ISO is already attached to another VM, QEMU needs the file-driver form `file.locking=off` for read-only ISO reuse.
@@ -80,9 +80,10 @@ Current QEMU boot evidence:
 - `virt,highmem=off` with more than 3 GB memory fails under HVF because address space is limited. A 3 GB `highmem=off` attempt reaches UEFI but still does not start Windows Setup.
 - `veil-vmctl qemu-smoke --json --seconds 25` now repeats the headless QEMU attempt in snapshot mode, sends bounded boot-prompt key input, writes serial/process logs plus a console PNG, and classifies the current result with `boot-prompt-key-sent` evidence.
 - On July 2, 2026, the bounded QEMU smoke run with the local `Win11_25H2_Korean_Arm64_v2.iso` produced a console PNG showing the Korean Windows 11 Setup product-key screen. The serial classifier remained `runningNoDecision`, so the screenshot is the authoritative evidence for that run.
-- After adding `ProductKey/WillShowUI=Never` without a `ProductKey/Key` value, a 60 second bounded QEMU smoke run advanced past the product-key prompt and reached the Korean Windows 11 requirements failure page. The next blocker is now explicit: Windows Setup requires TPM 2.0 and Secure Boot.
+- After adding `ProductKey/WillShowUI=Never` without a `ProductKey/Key` value, a 60 second bounded QEMU smoke run advanced past the product-key prompt and reached the Korean Windows 11 requirements failure page.
+- After installing `swtpm` and adding QEMU `tpm-tis-device` plus `-tpmdev emulator`, a 120 second bounded QEMU smoke run recorded `tpm2-detected` evidence and the Windows Setup requirements page dropped the TPM 2.0 failure. The remaining visible blocker is Secure Boot support.
 
-This means Veil can now distinguish "QEMU is missing" from "QEMU and the ISO are present, boot prompt input was sent, the console reached Windows Setup, and Windows 11 is now blocked on TPM/Secure Boot device support." The next QEMU milestone is to add a local TPM 2.0 and Secure Boot-capable recipe, then continue through OOBE and the first guest-agent install without bundling Windows keys or media.
+This means Veil can now distinguish "QEMU is missing" from "QEMU and the ISO are present, boot prompt input was sent, the console reached Windows Setup, and Windows 11 is now blocked on Secure Boot device support." The next QEMU milestone is to add a Secure Boot-capable AArch64 firmware/variable-store recipe, then continue through OOBE and the first guest-agent install without bundling Windows keys or media.
 
 References:
 

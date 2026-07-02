@@ -614,8 +614,12 @@ struct VMProfileStoreTests {
         let diskPath = try #require(profile.virtualDiskPath)
         var sharedFolderIsDirectory: ObjCBool = false
         var diskIsDirectory: ObjCBool = false
+        var tpmStateIsDirectory: ObjCBool = false
         let answerFileURL = URL(fileURLWithPath: profile.sharedFolderPath)
             .appendingPathComponent("Autounattend.xml")
+        let tpmStateURL = URL(fileURLWithPath: diskPath)
+            .deletingLastPathComponent()
+            .appendingPathComponent("tpm", isDirectory: true)
         let agentBundleURL = URL(fileURLWithPath: profile.sharedFolderPath)
             .appendingPathComponent("Veil Guest Agent", isDirectory: true)
         let installCommandURL = agentBundleURL.appendingPathComponent("Install Veil Agent.cmd")
@@ -639,6 +643,8 @@ struct VMProfileStoreTests {
         #expect(sharedFolderIsDirectory.boolValue)
         #expect(FileManager.default.fileExists(atPath: diskPath, isDirectory: &diskIsDirectory))
         #expect(diskIsDirectory.boolValue == false)
+        #expect(FileManager.default.fileExists(atPath: tpmStateURL.path, isDirectory: &tpmStateIsDirectory))
+        #expect(tpmStateIsDirectory.boolValue)
         #expect(snapshot.profileName == "Windows 11 Arm")
         #expect(snapshot.virtualDiskPath == diskPath)
         #expect(snapshot.automaticInstallAnswerFilePath == answerFileURL.path)

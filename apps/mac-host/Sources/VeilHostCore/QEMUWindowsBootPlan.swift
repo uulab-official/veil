@@ -22,6 +22,9 @@ public struct QEMUWindowsBootPlan: Codable, Equatable, Sendable {
     public var isExecutableAvailable: Bool
     public var firmwarePath: String?
     public var isFirmwareAvailable: Bool
+    public var tpmEmulatorPath: String?
+    public var isTPMEmulatorAvailable: Bool
+    public var tpmStateDirectoryPath: String?
     public var automaticInstallMediaPath: String?
     public var summary: String
     public var arguments: [String]
@@ -35,6 +38,9 @@ public struct QEMUWindowsBootPlan: Codable, Equatable, Sendable {
         isExecutableAvailable: Bool,
         firmwarePath: String? = nil,
         isFirmwareAvailable: Bool = false,
+        tpmEmulatorPath: String? = nil,
+        isTPMEmulatorAvailable: Bool = false,
+        tpmStateDirectoryPath: String? = nil,
         automaticInstallMediaPath: String? = nil,
         summary: String,
         arguments: [String],
@@ -47,6 +53,9 @@ public struct QEMUWindowsBootPlan: Codable, Equatable, Sendable {
         self.isExecutableAvailable = isExecutableAvailable
         self.firmwarePath = firmwarePath
         self.isFirmwareAvailable = isFirmwareAvailable
+        self.tpmEmulatorPath = tpmEmulatorPath
+        self.isTPMEmulatorAvailable = isTPMEmulatorAvailable
+        self.tpmStateDirectoryPath = tpmStateDirectoryPath
         self.automaticInstallMediaPath = automaticInstallMediaPath
         self.summary = summary
         self.arguments = arguments
@@ -62,17 +71,26 @@ public struct QEMUWindowsBootPlanner: Sendable {
     private let isExecutableAvailable: Bool
     private let firmwarePath: String?
     private let isFirmwareAvailable: Bool
+    private let tpmEmulatorPath: String?
+    private let isTPMEmulatorAvailable: Bool
+    private let tpmStateDirectoryPath: String?
 
     public init(
         executablePath: String,
         isExecutableAvailable: Bool,
         firmwarePath: String? = nil,
-        isFirmwareAvailable: Bool = false
+        isFirmwareAvailable: Bool = false,
+        tpmEmulatorPath: String? = nil,
+        isTPMEmulatorAvailable: Bool = false,
+        tpmStateDirectoryPath: String? = nil
     ) {
         self.executablePath = executablePath
         self.isExecutableAvailable = isExecutableAvailable
         self.firmwarePath = firmwarePath
         self.isFirmwareAvailable = isFirmwareAvailable
+        self.tpmEmulatorPath = tpmEmulatorPath
+        self.isTPMEmulatorAvailable = isTPMEmulatorAvailable
+        self.tpmStateDirectoryPath = tpmStateDirectoryPath
     }
 
     public func makePlan(for profile: VMProfile) throws -> QEMUWindowsBootPlan {
@@ -113,6 +131,14 @@ public struct QEMUWindowsBootPlanner: Sendable {
             arguments.append(contentsOf: ["-bios", firmwarePath])
         }
 
+        if let tpmStateDirectoryPath {
+            arguments.append(contentsOf: [
+                "-chardev", "socket,id=chrtpm,path=\(tpmStateDirectoryPath)/swtpm.sock",
+                "-tpmdev", "emulator,id=tpm0,chardev=chrtpm",
+                "-device", "tpm-tis-device,tpmdev=tpm0"
+            ])
+        }
+
         let guestAgentForward = "hostfwd=tcp::\(Self.guestAgentHostPort)-:\(Self.guestAgentGuestPort)"
 
         arguments.append(contentsOf: [
@@ -141,6 +167,9 @@ public struct QEMUWindowsBootPlanner: Sendable {
             isExecutableAvailable: isExecutableAvailable,
             firmwarePath: firmwarePath,
             isFirmwareAvailable: isFirmwareAvailable,
+            tpmEmulatorPath: tpmEmulatorPath,
+            isTPMEmulatorAvailable: isTPMEmulatorAvailable,
+            tpmStateDirectoryPath: tpmStateDirectoryPath,
             automaticInstallMediaPath: automaticInstallMediaPath,
             summary: "Dry-run QEMU/HVF command plan for \(profile.name). Veil does not execute this plan yet.",
             arguments: arguments,
@@ -163,6 +192,11 @@ public enum LocalQEMUWindowsBootPlanFactory {
         "/usr/local/share/qemu/edk2-aarch64-code.fd",
         "/opt/local/share/qemu/edk2-aarch64-code.fd"
     ]
+    public static let defaultTPMEmulatorPaths = [
+        "/opt/homebrew/bin/swtpm",
+        "/usr/local/bin/swtpm",
+        "/opt/local/bin/swtpm"
+    ]
 
     public static func makePlan(
         for profile: VMProfile,
@@ -180,11 +214,17 @@ public enum LocalQEMUWindowsBootPlanFactory {
         let executablePath = qemuProvider?.executablePath
             ?? VMRuntimeProviderProbe.defaultQEMUExecutablePaths[0]
         let firmwarePath = defaultFirmwarePaths.first(where: fileExists)
+        let tpmEmulatorPath = defaultTPMEmulatorPaths.first(where: fileExists)
+        let tpmStateDirectoryPath = profile.virtualDiskPath
+            .map { URL(fileURLWithPath: $0).deletingLastPathComponent().appendingPathComponent("tpm", isDirectory: true).path }
         let planner = QEMUWindowsBootPlanner(
             executablePath: executablePath,
             isExecutableAvailable: qemuProvider?.status == .active && qemuProvider?.executablePath != nil,
             firmwarePath: firmwarePath ?? defaultFirmwarePaths[0],
-            isFirmwareAvailable: firmwarePath != nil
+            isFirmwareAvailable: firmwarePath != nil,
+            tpmEmulatorPath: tpmEmulatorPath ?? defaultTPMEmulatorPaths[0],
+            isTPMEmulatorAvailable: tpmEmulatorPath != nil,
+            tpmStateDirectoryPath: tpmStateDirectoryPath
         )
         return try planner.makePlan(for: profile)
     }
@@ -261,6 +301,7 @@ public struct QEMUWindowsReadinessDoctor: Sendable {
             systemDiskCheck(profile),
             qemuExecutableCheck(plan),
             uefiFirmwareCheck(plan),
+            tpmEmulatorCheck(plan),
             hvfPlanCheck(plan)
         ]
         let overallState: QEMUWindowsReadinessState = checks.contains { $0.state == .blocked }
@@ -427,6 +468,63 @@ public struct QEMUWindowsReadinessDoctor: Sendable {
         )
     }
 
+    private func tpmEmulatorCheck(_ plan: QEMUWindowsBootPlan?) -> QEMUWindowsReadinessCheck {
+        guard let plan else {
+            return QEMUWindowsReadinessCheck(
+                id: "tpm-emulator",
+                title: "TPM 2.0 emulator",
+                state: .blocked,
+                detail: "QEMU command plan is unavailable."
+            )
+        }
+
+        guard let tpmEmulatorPath = plan.tpmEmulatorPath,
+              !tpmEmulatorPath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return QEMUWindowsReadinessCheck(
+                id: "tpm-emulator",
+                title: "TPM 2.0 emulator",
+                state: .blocked,
+                detail: "No swtpm executable path is configured."
+            )
+        }
+
+        guard plan.isTPMEmulatorAvailable, fileExists(tpmEmulatorPath) else {
+            return QEMUWindowsReadinessCheck(
+                id: "tpm-emulator",
+                title: "TPM 2.0 emulator",
+                state: .blocked,
+                detail: "swtpm is not available at \(tpmEmulatorPath)."
+            )
+        }
+
+        guard let tpmStateDirectoryPath = plan.tpmStateDirectoryPath,
+              fileExists(tpmStateDirectoryPath) else {
+            return QEMUWindowsReadinessCheck(
+                id: "tpm-emulator",
+                title: "TPM 2.0 emulator",
+                state: .blocked,
+                detail: "TPM state directory is missing."
+            )
+        }
+
+        guard plan.arguments.containsSequence(["-tpmdev", "emulator,id=tpm0,chardev=chrtpm"]),
+              plan.arguments.containsSequence(["-device", "tpm-tis-device,tpmdev=tpm0"]) else {
+            return QEMUWindowsReadinessCheck(
+                id: "tpm-emulator",
+                title: "TPM 2.0 emulator",
+                state: .blocked,
+                detail: "QEMU command plan does not attach a TPM 2.0 emulator device."
+            )
+        }
+
+        return QEMUWindowsReadinessCheck(
+            id: "tpm-emulator",
+            title: "TPM 2.0 emulator",
+            state: .passed,
+            detail: "swtpm is available and the QEMU command plan attaches a TPM 2.0 emulator."
+        )
+    }
+
     private func uefiFirmwareCheck(_ plan: QEMUWindowsBootPlan?) -> QEMUWindowsReadinessCheck {
         guard let plan else {
             return QEMUWindowsReadinessCheck(
@@ -488,6 +586,10 @@ public struct QEMUWindowsReadinessDoctor: Sendable {
 
         if checks.first(where: { $0.id == "uefi-firmware" })?.state == .blocked {
             actions.append("Install QEMU from Homebrew or point Veil at edk2-aarch64-code.fd before launching Windows setup.")
+        }
+
+        if checks.first(where: { $0.id == "tpm-emulator" })?.state == .blocked {
+            actions.append("Install swtpm locally so Veil can attach a TPM 2.0 emulator for Windows 11 setup.")
         }
 
         if checks.first(where: { $0.id == "hvf-plan" })?.state == .blocked {
@@ -569,6 +671,11 @@ public enum QEMUWindowsBootSmokeAnalyzer {
     ) -> QEMUWindowsBootSmokeReport {
         let combinedOutput = "\(processOutput)\n\(serialOutput)"
         var evidence = runEvidence
+
+        if combinedOutput.contains("Tpm2GetCapabilityPcrs")
+            || combinedOutput.contains("SyncPcrAllocationsAndPcrMask") {
+            evidence.append("tpm2-detected")
+        }
 
         if processOutput.contains("qemu-system-aarch64:"),
            !processOutput.contains("terminating on signal") {

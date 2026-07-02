@@ -248,6 +248,7 @@ struct VeilVMControl {
             serialLogPath: serialLogURL.path,
             monitorSocketPath: monitorSocketURL.path
         )
+        try QEMUVMRuntimeBooter.startTPMEmulatorIfNeeded(plan: plan)
 
         let processOutput = try runBoundedQEMU(
             executablePath: plan.executablePath,
@@ -320,6 +321,7 @@ struct VeilVMControl {
         process.arguments = plan.arguments
         process.standardOutput = logHandle
         process.standardError = logHandle
+        try QEMUVMRuntimeBooter.startTPMEmulatorIfNeeded(plan: plan)
         try process.run()
         bringQEMUToFront()
 

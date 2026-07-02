@@ -1118,7 +1118,8 @@ public struct LocalVMRuntimeService: VMRuntimeService {
             profile.installerMediaPath = installerMediaURL.path
         }
 
-        if profile.virtualDiskPath != nil {
+        if let virtualDiskPath = profile.virtualDiskPath {
+            try Self.prepareTPMStateDirectory(virtualDiskPath: virtualDiskPath)
             return profile
         }
 
@@ -1142,7 +1143,15 @@ public struct LocalVMRuntimeService: VMRuntimeService {
         try fileHandle.truncate(atOffset: UInt64(profile.diskGB) * 1_024 * 1_024 * 1_024)
 
         profile.virtualDiskPath = diskURL.path
+        try Self.prepareTPMStateDirectory(virtualDiskPath: diskURL.path)
         return profile
+    }
+
+    private static func prepareTPMStateDirectory(virtualDiskPath: String) throws {
+        let tpmStateURL = URL(fileURLWithPath: virtualDiskPath)
+            .deletingLastPathComponent()
+            .appendingPathComponent("tpm", isDirectory: true)
+        try FileManager.default.createDirectory(at: tpmStateURL, withIntermediateDirectories: true)
     }
 
     private static func automaticInstallAnswerFileURL(for profile: VMProfile) -> URL {

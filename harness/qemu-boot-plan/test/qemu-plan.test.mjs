@@ -61,4 +61,15 @@ describe("QEMU boot plan harness", () => {
 
     assert.throws(() => validateQEMUPlan(plan), /hostfwd=tcp::18444-:18444/);
   });
+
+  it("rejects plans without TPM 2.0 emulator devices", () => {
+    const plan = {
+      ...fixture,
+      arguments: fixture.arguments.filter((argument) =>
+        !argument.includes("chrtpm") && !argument.includes("tpm0")
+      )
+    };
+
+    assert.throws(() => validateQEMUPlan(plan), /TPM 2.0 emulator/);
+  });
 });

@@ -71,7 +71,7 @@ cd apps/mac-host
 swift run veil-vmctl qemu-doctor --json | node ../../harness/qemu-doctor/src/validate-qemu-doctor.mjs
 ```
 
-The report includes named checks for VM profile, installer media, system disk, QEMU executable, and HVF command plan. Blocked reports must include next actions that a contributor can follow without guessing.
+The report includes named checks for VM profile, installer media, system disk, QEMU executable, Arm UEFI firmware, `swtpm` TPM 2.0 emulator, and HVF command plan. Blocked reports must include next actions that a contributor can follow without guessing.
 
 ## QEMU Smoke Scenario
 
@@ -82,7 +82,7 @@ cd apps/mac-host
 swift run veil-vmctl qemu-smoke --json --seconds 25 | node ../../harness/qemu-smoke/src/validate-qemu-smoke.mjs
 ```
 
-The command uses snapshot mode and records logs plus a `qemu-smoke-*.console.png` VM-console screenshot path under `~/Downloads/Veil Diagnostics/QEMU Smoke`. It is allowed to start a local QEMU process for the requested bounded duration, send bounded boot-prompt key input through QEMU's monitor, ask the monitor for a `screendump`, convert the raw frame to PNG, then terminate it for classification. Every smoke report must also include recovery `nextActions` so boot failures point to concrete ISO, firmware, device, or log checks.
+The command uses snapshot mode and records logs plus a `qemu-smoke-*.console.png` VM-console screenshot path under `~/Downloads/Veil Diagnostics/QEMU Smoke`. It is allowed to start a local `swtpm` process, start QEMU for the requested bounded duration, send bounded boot-prompt key input through QEMU's monitor, ask the monitor for a `screendump`, convert the raw frame to PNG, then terminate QEMU for classification. Every smoke report must also include recovery `nextActions` so boot failures point to concrete ISO, firmware, device, or log checks.
 
 ## QEMU Start Scenario
 
