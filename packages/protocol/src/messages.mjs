@@ -18,6 +18,7 @@ export const MessageType = Object.freeze({
 const knownTypes = new Set(Object.values(MessageType));
 const mouseEvents = new Set(["leftDown", "leftUp", "rightDown", "rightUp", "move", "scroll"]);
 const keyEvents = new Set(["keyDown", "keyUp"]);
+const clipboardOrigins = new Set(["host", "guest"]);
 
 export function parseMessage(message) {
   if (!message || typeof message.type !== "string" || message.type.length === 0) {
@@ -156,6 +157,25 @@ export function validateInputKey(input) {
   }
 
   return input;
+}
+
+export function validateClipboardTextSet(clipboard) {
+  if (!clipboard || clipboard.type !== MessageType.ClipboardTextSet) {
+    throw new TypeError("Clipboard text must use type clipboard.text.set.");
+  }
+
+  requireNonEmptyString(clipboard.requestId, "requestId", "Clipboard text");
+  requireNonEmptyString(clipboard.origin, "origin", "Clipboard text");
+  if (!clipboardOrigins.has(clipboard.origin)) {
+    throw new TypeError(`Clipboard text origin '${clipboard.origin}' is not supported.`);
+  }
+
+  requirePositiveInteger(clipboard.sequence, "sequence", "Clipboard text");
+  if (typeof clipboard.text !== "string") {
+    throw new TypeError("Clipboard text field 'text' must be a string.");
+  }
+
+  return clipboard;
 }
 
 function requireNonEmptyString(value, fieldName, context = "Window frame") {

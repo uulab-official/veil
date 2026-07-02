@@ -10,6 +10,7 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
     var onUserWindowClose: ((String) -> Void)?
     var onMouseInput: ((String, String, Int, Int) -> Void)?
     var onKeyInput: ((String, String, String, Int, [String]) -> Void)?
+    var onPasteShortcut: ((String, String, Int, [String], String) -> Void)?
 
     func showWindow(for session: WindowMirrorSession) {
         if let window = windowsById[session.id] {
@@ -74,6 +75,9 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
                 },
                 onKeyInput: { [weak self] windowId, event, key, windowsVirtualKey, modifiers in
                     self?.onKeyInput?(windowId, event, key, windowsVirtualKey, modifiers)
+                },
+                onPasteShortcut: { [weak self] windowId, key, windowsVirtualKey, modifiers, text in
+                    self?.onPasteShortcut?(windowId, key, windowsVirtualKey, modifiers, text)
                 }
             )
         )
@@ -90,6 +94,7 @@ private struct WindowsAppMirrorPlaceholderView: View {
     var session: WindowMirrorSession
     var onMouseInput: (String, String, Int, Int) -> Void
     var onKeyInput: (String, String, String, Int, [String]) -> Void
+    var onPasteShortcut: (String, String, Int, [String], String) -> Void
 
     var body: some View {
         VStack(spacing: 0) {
@@ -192,7 +197,8 @@ private struct WindowsAppMirrorPlaceholderView: View {
                 InputCaptureView(
                     session: session,
                     onMouseInput: onMouseInput,
-                    onKeyInput: onKeyInput
+                    onKeyInput: onKeyInput,
+                    onPasteShortcut: onPasteShortcut
                 )
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
@@ -256,6 +262,7 @@ private struct InputCaptureView: NSViewRepresentable {
     var session: WindowMirrorSession
     var onMouseInput: (String, String, Int, Int) -> Void
     var onKeyInput: (String, String, String, Int, [String]) -> Void
+    var onPasteShortcut: (String, String, Int, [String], String) -> Void
 
     func makeNSView(context: Context) -> InputCaptureNSView {
         InputCaptureNSView()
@@ -265,6 +272,7 @@ private struct InputCaptureView: NSViewRepresentable {
         nsView.session = session
         nsView.onMouseInput = onMouseInput
         nsView.onKeyInput = onKeyInput
+        nsView.onPasteShortcut = onPasteShortcut
     }
 }
 
@@ -272,6 +280,7 @@ private final class InputCaptureNSView: NSView {
     var session: WindowMirrorSession?
     var onMouseInput: ((String, String, Int, Int) -> Void)?
     var onKeyInput: ((String, String, String, Int, [String]) -> Void)?
+    var onPasteShortcut: ((String, String, Int, [String], String) -> Void)?
 
     override var acceptsFirstResponder: Bool { true }
 
@@ -316,8 +325,21 @@ private final class InputCaptureNSView: NSView {
 
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
         guard event.type == .keyDown,
-              event.modifierFlags.contains(.command),
-              sendKey("keyDown", event) else {
+              event.modifierFlags.contains(.command) else {
+            return super.performKeyEquivalent(with: event)
+        }
+
+        if isPasteShortcut(event),
+           let session,
+           session.connectionMode == .agent,
+           let key = inputKey(from: event),
+           let windowsVirtualKey = windowsVirtualKey(from: event, key: key),
+           let pasteboardText = NSPasteboard.general.string(forType: .string) {
+            onPasteShortcut?(session.id, key, windowsVirtualKey, windowsModifiers(from: event), pasteboardText)
+            return true
+        }
+
+        guard sendKey("keyDown", event) else {
             return super.performKeyEquivalent(with: event)
         }
 
@@ -445,6 +467,11 @@ private final class InputCaptureNSView: NSView {
         }
 
         return modifiers
+    }
+
+    private func isPasteShortcut(_ event: NSEvent) -> Bool {
+        event.modifierFlags.contains(.command)
+            && event.charactersIgnoringModifiers?.lowercased() == "v"
     }
 
     private func clamp(_ value: Int, lower: Int, upper: Int) -> Int {

@@ -103,6 +103,21 @@ test("windows agent accepts host key input events", async () => {
   assert.match(session, /HandleKeyInputAsync/);
 });
 
+test("windows agent accepts host clipboard text updates", async () => {
+  const messageTypes = await readFile(resolve(agentRoot, "src/VeilAgent/MessageTypes.cs"), "utf8");
+  const desktopInterface = await readFile(resolve(agentRoot, "src/VeilAgent/IWindowsDesktop.cs"), "utf8");
+  const desktop = await readFile(resolve(agentRoot, "src/VeilAgent/WindowsDesktop.cs"), "utf8");
+  const session = await readFile(resolve(agentRoot, "src/VeilAgent/AgentSession.cs"), "utf8");
+
+  assert.match(messageTypes, /ClipboardTextSet\s*=\s*"clipboard\.text\.set"/);
+  assert.match(desktopInterface, /SetClipboardTextAsync\(string text,\s*CancellationToken cancellationToken\)/);
+  assert.match(desktop, /Clipboard\.SetText/);
+  assert.match(desktop, /ApartmentState\.STA/);
+  assert.match(session, /MessageTypes\.ClipboardTextSet/);
+  assert.match(session, /HandleClipboardTextSetAsync/);
+  assert.match(session, /\["clipboardText"\]\s*=\s*true/);
+});
+
 test("windows agent sample launch flow emits Notepad window and first frame", async () => {
   const transcript = JSON.parse(
     await readFile(resolve(agentRoot, "fixtures/notepad-launch-with-frame.json"), "utf8")

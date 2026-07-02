@@ -115,6 +115,10 @@ public struct VeilHostClient: HostDashboardService, Sendable {
         _ = try await transport.send(encoder.encode(input), expectedReplies: 0)
     }
 
+    public func sendClipboardText(_ clipboard: ClipboardTextSet) async throws {
+        _ = try await transport.send(encoder.encode(clipboard), expectedReplies: 0)
+    }
+
     public func loadOverview() async throws -> HostOverview {
         let health: AgentHealthResponse = try await request(
             AgentHealthRequest(requestId: "req_health")

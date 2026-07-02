@@ -120,6 +120,20 @@ test("accepts key input events without a reply", async () => {
   assert.deepEqual(replies, []);
 });
 
+test("accepts host clipboard text without a reply", async () => {
+  const session = createSession();
+
+  const replies = await session.handle({
+    type: "clipboard.text.set",
+    requestId: "req_clipboard_1",
+    origin: "host",
+    sequence: 1,
+    text: "hello from macOS"
+  });
+
+  assert.deepEqual(replies, []);
+});
+
 test("returns a structured error for unknown apps", async () => {
   const session = createSession();
 

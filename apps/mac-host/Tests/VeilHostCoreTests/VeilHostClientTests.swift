@@ -103,6 +103,19 @@ struct VeilHostClientTests {
         #expect(transport.sentTypes == ["input.key"])
         #expect(transport.expectedReplyCounts == [0])
     }
+
+    @Test("sends host clipboard text without waiting for a reply")
+    func sendsHostClipboardTextWithoutReply() async throws {
+        let transport = RecordingTransport(responses: [])
+        let client = VeilHostClient(transport: transport)
+
+        try await client.sendClipboardText(
+            ClipboardTextSet(requestId: "req_clipboard_1", origin: "host", sequence: 1, text: "hello from macOS")
+        )
+
+        #expect(transport.sentTypes == ["clipboard.text.set"])
+        #expect(transport.expectedReplyCounts == [0])
+    }
 }
 
 private final class RecordingTransport: HostTransport, @unchecked Sendable {

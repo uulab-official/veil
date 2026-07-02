@@ -228,6 +228,37 @@ struct HostDashboardModelTests {
         #expect(model.phase == .idle)
     }
 
+    @Test("sends host clipboard text with increasing sequence")
+    @MainActor
+    func sendsHostClipboardTextWithIncreasingSequence() async throws {
+        let service = FakeDashboardService(health: .clipboardReady)
+        let model = HostDashboardModel(service: service)
+
+        await model.load()
+        await model.sendHostClipboardText("hello")
+        await model.sendHostClipboardText("world")
+
+        #expect(service.clipboardTexts.map(\.text) == ["hello", "world"])
+        #expect(service.clipboardTexts.map(\.origin) == ["host", "host"])
+        #expect(service.clipboardTexts.map(\.sequence) == [1, 2])
+        #expect(model.clipboardSequence == 2)
+        #expect(model.phase == .connected)
+    }
+
+    @Test("does not send host clipboard text without live clipboard support")
+    @MainActor
+    func doesNotSendClipboardTextWithoutLiveClipboardSupport() async throws {
+        let service = FakeDashboardService(health: .inputReady)
+        let model = HostDashboardModel(service: service)
+
+        await model.load()
+        await model.sendHostClipboardText("hello")
+
+        #expect(service.clipboardTexts.isEmpty)
+        #expect(model.clipboardSequence == 0)
+        #expect(model.phase == .connected)
+    }
+
     @Test("updates active window sessions by HWND")
     @MainActor
     func updatesActiveWindowSessionsByHWND() async throws {
@@ -417,6 +448,7 @@ private final class FakeDashboardService: HostDashboardService {
     private(set) var closedWindowIds: [String] = []
     private(set) var mouseInputs: [InputMouseEvent] = []
     private(set) var keyInputs: [InputKeyEvent] = []
+    private(set) var clipboardTexts: [ClipboardTextSet] = []
 
     init(
         error: (any Error)? = nil,
@@ -484,6 +516,14 @@ private final class FakeDashboardService: HostDashboardService {
         }
 
         keyInputs.append(input)
+    }
+
+    func sendClipboardText(_ clipboard: ClipboardTextSet) async throws {
+        if let error {
+            throw error
+        }
+
+        clipboardTexts.append(clipboard)
     }
 }
 
@@ -554,6 +594,25 @@ private extension AgentHealthResponse {
                 windowCapture: true,
                 input: true,
                 clipboardText: false
+            )
+        )
+    }
+
+    static var clipboardReady: AgentHealthResponse {
+        AgentHealthResponse(
+            type: .agentHealthResponse,
+            requestId: "req_health",
+            protocolVersion: 1,
+            agentVersion: "0.1.0",
+            os: "windows-arm64",
+            session: AgentSession(interactive: true, user: "veil-user"),
+            capabilities: AgentCapabilities(
+                appList: true,
+                appLaunch: true,
+                windowTracking: true,
+                windowCapture: true,
+                input: true,
+                clipboardText: true
             )
         )
     }

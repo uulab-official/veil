@@ -262,6 +262,8 @@ Loop prevention rule:
 - Receivers remember the latest `(origin, sequence)` pair.
 - A clipboard update caused by a remote message must not be echoed back as a new local change.
 
+Implementation note: the first implemented path syncs host text to the Windows guest before forwarded paste shortcuts. Guest-to-host clipboard observation remains a follow-up.
+
 ## Error
 
 ```json

@@ -27,6 +27,7 @@ public sealed class AgentSession
             MessageTypes.WindowCloseRequest => await HandleWindowCloseAsync(request, requestId, cancellationToken),
             MessageTypes.InputMouse => await HandleMouseInputAsync(request, requestId, cancellationToken),
             MessageTypes.InputKey => await HandleKeyInputAsync(request, requestId, cancellationToken),
+            MessageTypes.ClipboardTextSet => await HandleClipboardTextSetAsync(request, requestId, cancellationToken),
             _ => AgentReplies.Direct(ErrorResponse(requestId, "unknown_message_type", $"Unsupported message type {type}"))
         };
     }
@@ -153,6 +154,35 @@ public sealed class AgentSession
         }
     }
 
+    private async Task<AgentReplies> HandleClipboardTextSetAsync(
+        JsonObject request,
+        string? requestId,
+        CancellationToken cancellationToken
+    )
+    {
+        var text = request["text"]?.GetValue<string>();
+        var origin = request["origin"]?.GetValue<string>();
+        if (text is null || string.IsNullOrWhiteSpace(origin))
+        {
+            return AgentReplies.Direct(ErrorResponse(requestId, "invalid_message", "clipboard.text.set requires origin and text."));
+        }
+
+        if (origin != "host")
+        {
+            return AgentReplies.Direct();
+        }
+
+        try
+        {
+            await desktop.SetClipboardTextAsync(text, cancellationToken);
+            return AgentReplies.Direct();
+        }
+        catch (Exception error) when (error is not OperationCanceledException)
+        {
+            return AgentReplies.Direct(ErrorResponse(requestId, "clipboard_text_failed", error.Message));
+        }
+    }
+
     private static JsonObject HealthResponse(string? requestId) => new()
     {
         ["type"] = MessageTypes.AgentHealthResponse,
@@ -172,7 +202,7 @@ public sealed class AgentSession
             ["windowTracking"] = true,
             ["windowCapture"] = true,
             ["input"] = true,
-            ["clipboardText"] = false
+            ["clipboardText"] = true
         }
     };
 

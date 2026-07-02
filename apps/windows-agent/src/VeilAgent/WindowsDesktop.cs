@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.InteropServices;
+using System.Windows.Forms;
 
 namespace Veil.Agent;
 
@@ -133,6 +134,34 @@ public sealed class WindowsDesktop : IWindowsDesktop
         }
 
         return Task.FromResult(accepted);
+    }
+
+    public Task SetClipboardTextAsync(string text, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (!OperatingSystem.IsWindows())
+        {
+            throw new PlatformNotSupportedException("The Veil Windows agent must run inside Windows.");
+        }
+
+        var completion = new TaskCompletionSource<object?>();
+        var thread = new Thread(() =>
+        {
+            try
+            {
+                Clipboard.SetText(text);
+                completion.SetResult(null);
+            }
+            catch (Exception error)
+            {
+                completion.SetException(error);
+            }
+        });
+
+        thread.SetApartmentState(ApartmentState.STA);
+        thread.Start();
+        return completion.Task.WaitAsync(cancellationToken);
     }
 
     private static bool TryParseWindowId(string windowId, out IntPtr hwnd)

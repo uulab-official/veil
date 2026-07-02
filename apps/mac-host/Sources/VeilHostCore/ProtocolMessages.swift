@@ -216,6 +216,28 @@ public struct InputKeyEvent: Codable, Equatable, Sendable {
     }
 }
 
+public struct ClipboardTextSet: Codable, Equatable, Sendable {
+    public var type: MessageType
+    public var requestId: String
+    public var origin: String
+    public var sequence: Int
+    public var text: String
+
+    public init(
+        type: MessageType = .clipboardTextSet,
+        requestId: String,
+        origin: String,
+        sequence: Int,
+        text: String
+    ) {
+        self.type = type
+        self.requestId = requestId
+        self.origin = origin
+        self.sequence = sequence
+        self.text = text
+    }
+}
+
 public struct ErrorResponse: Codable, Equatable, Sendable {
     public var type: MessageType
     public var requestId: String?

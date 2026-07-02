@@ -7,6 +7,7 @@ public protocol HostDashboardService: Sendable {
     func closeWindow(windowId: String) async throws -> WindowCloseResponse
     func sendMouseInput(_ input: InputMouseEvent) async throws
     func sendKeyInput(_ input: InputKeyEvent) async throws
+    func sendClipboardText(_ clipboard: ClipboardTextSet) async throws
 }
 
 public struct HostOverview: Codable, Equatable, Sendable {
@@ -85,6 +86,7 @@ public final class HostDashboardModel {
     public private(set) var connectionMode: HostConnectionMode = .agent
     public private(set) var connectionDetail: String?
     public private(set) var pendingLaunchAppId: String?
+    public private(set) var clipboardSequence = 0
     public var selectedAppId: String?
 
     private let service: any HostDashboardService
@@ -313,6 +315,29 @@ public final class HostDashboardModel {
                     modifiers: modifiers
                 )
             )
+        } catch {
+            errorMessage = userMessage(for: error)
+            phase = .failed
+        }
+    }
+
+    public func sendHostClipboardText(_ text: String) async {
+        guard hasLiveAgentConnection,
+              health?.capabilities.clipboardText == true else {
+            return
+        }
+
+        let nextSequence = clipboardSequence + 1
+        do {
+            try await service.sendClipboardText(
+                ClipboardTextSet(
+                    requestId: "req_clipboard_\(nextSequence)",
+                    origin: "host",
+                    sequence: nextSequence,
+                    text: text
+                )
+            )
+            clipboardSequence = nextSequence
         } catch {
             errorMessage = userMessage(for: error)
             phase = .failed

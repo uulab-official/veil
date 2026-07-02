@@ -9,4 +9,6 @@ public interface IWindowsDesktop
     Task<bool> SendMouseInputAsync(WindowMouseInput input, CancellationToken cancellationToken);
 
     Task<bool> SendKeyInputAsync(WindowKeyInput input, CancellationToken cancellationToken);
+
+    Task SetClipboardTextAsync(string text, CancellationToken cancellationToken);
 }

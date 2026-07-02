@@ -275,6 +275,25 @@ struct VeilHostShellApp: App {
                 )
             }
         }
+        windowsAppWindowPresenter.onPasteShortcut = { windowId, key, windowsVirtualKey, modifiers, text in
+            Task { @MainActor in
+                await model.sendHostClipboardText(text)
+                await model.sendKeyInput(
+                    windowId: windowId,
+                    event: "keyDown",
+                    key: key,
+                    windowsVirtualKey: windowsVirtualKey,
+                    modifiers: modifiers
+                )
+                await model.sendKeyInput(
+                    windowId: windowId,
+                    event: "keyUp",
+                    key: key,
+                    windowsVirtualKey: windowsVirtualKey,
+                    modifiers: modifiers
+                )
+            }
+        }
     }
 
     private func showVMConsole() {

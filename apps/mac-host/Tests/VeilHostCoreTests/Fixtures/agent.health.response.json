@@ -14,6 +14,6 @@
     "windowTracking": true,
     "windowCapture": false,
     "input": true,
-    "clipboardText": false
+    "clipboardText": true
   }
 }

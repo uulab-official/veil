@@ -95,6 +95,17 @@ struct ProtocolMessageTests {
         #expect(input.windowsVirtualKey == 67)
         #expect(input.modifiers == ["ctrl"])
     }
+
+    @Test("decodes host clipboard text event")
+    func decodesHostClipboardTextEvent() throws {
+        let clipboard: ClipboardTextSet = try decodeFixture("clipboard.text.set.host")
+
+        #expect(clipboard.type == .clipboardTextSet)
+        #expect(clipboard.requestId == "req_004")
+        #expect(clipboard.origin == "host")
+        #expect(clipboard.sequence == 42)
+        #expect(clipboard.text == "hello from macOS")
+    }
 }
 
 private func decodeFixture<T: Decodable>(_ name: String) throws -> T {

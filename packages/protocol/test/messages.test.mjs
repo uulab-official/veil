@@ -7,6 +7,7 @@ import {
   MessageType,
   createError,
   parseMessage,
+  validateClipboardTextSet,
   validateInputKey,
   validateNotepadAcceptance,
   validateInputMouse,
@@ -151,4 +152,14 @@ test("validates one host key input fixture", async () => {
   assert.equal(input.key, "c");
   assert.equal(input.windowsVirtualKey, 67);
   assert.deepEqual(input.modifiers, ["ctrl"]);
+});
+
+test("validates host clipboard text fixture", async () => {
+  const clipboard = validateClipboardTextSet(await readFixture("clipboard.text.set.host.json"));
+
+  assert.equal(clipboard.type, MessageType.ClipboardTextSet);
+  assert.equal(clipboard.requestId, "req_004");
+  assert.equal(clipboard.origin, "host");
+  assert.equal(clipboard.sequence, 42);
+  assert.equal(clipboard.text, "hello from macOS");
 });
