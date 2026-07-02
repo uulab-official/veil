@@ -1,3 +1,5 @@
+import { mkdir, writeFile } from "node:fs/promises";
+import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { MessageType, validateWindowFrame } from "@veil/protocol";
 
@@ -10,6 +12,7 @@ export async function runNotepadInputSmoke(options = {}) {
   const url = options.url ?? process.env.VEIL_AGENT_URL ?? "ws://127.0.0.1:18444";
   const text = options.text ?? process.env.VEIL_INPUT_TEXT ?? "veil";
   const click = options.click ?? defaultClick;
+  const outputDir = options.outputDir ?? process.env.VEIL_SMOKE_OUTPUT_DIR;
 
   const health = await collectReplies(url, {
     type: MessageType.AgentHealthRequest,
@@ -61,6 +64,9 @@ export async function runNotepadInputSmoke(options = {}) {
     }
   );
   validateWindowFrame(postInputFrame);
+  const evidence = outputDir
+    ? await writeFrameEvidence(outputDir, frame, postInputFrame)
+    : null;
 
   return {
     url,
@@ -73,7 +79,22 @@ export async function runNotepadInputSmoke(options = {}) {
     click,
     text,
     keyInputs,
+    evidence,
     acceptance
+  };
+}
+
+async function writeFrameEvidence(outputDir, initialFrame, postInputFrame) {
+  await mkdir(outputDir, { recursive: true });
+  const initialFramePath = join(outputDir, "notepad-initial-frame.png");
+  const postInputFramePath = join(outputDir, "notepad-post-input-frame.png");
+
+  await writeFile(initialFramePath, Buffer.from(initialFrame.encodedData, "base64"));
+  await writeFile(postInputFramePath, Buffer.from(postInputFrame.encodedData, "base64"));
+
+  return {
+    initialFramePath,
+    postInputFramePath
   };
 }
 

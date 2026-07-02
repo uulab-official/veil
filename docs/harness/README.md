@@ -116,13 +116,17 @@ agent to exercise the first app-window input loop:
 
 ```bash
 cd harness/fake-host
-VEIL_AGENT_URL=ws://127.0.0.1:18444 npm run smoke:notepad-input
+VEIL_AGENT_URL=ws://127.0.0.1:18444 \
+VEIL_SMOKE_OUTPUT_DIR="$HOME/Downloads/Veil Diagnostics/Notepad Input" \
+npm run smoke:notepad-input
 ```
 
 The scenario opens Notepad, waits for a subscribed `window.frame`, clicks the
 mirrored HWND at a deterministic point, sends `keyDown`/`keyUp` pairs for the
 configured smoke text, and waits for a later `window.frame` after input. Set
-`VEIL_INPUT_TEXT` to override the default `veil` text. Against a real Windows
+`VEIL_INPUT_TEXT` to override the default `veil` text. When
+`VEIL_SMOKE_OUTPUT_DIR` is set, the smoke writes `notepad-initial-frame.png` and
+`notepad-post-input-frame.png` for visual inspection. Against a real Windows
 guest, the next manual assertion is that the post-input frame shows the edited
 Notepad document.
 
