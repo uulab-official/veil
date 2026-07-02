@@ -209,12 +209,14 @@ struct QEMUWindowsBootPlanTests {
             serialOutput: serialOutput,
             didRemainRunningUntilTimeout: true,
             serialLogPath: "/tmp/serial.log",
-            processLogPath: "/tmp/process.log"
+            processLogPath: "/tmp/process.log",
+            consoleScreenshotPath: "/tmp/qemu-console.ppm"
         )
 
         #expect(report.outcome == .uefiShell)
         #expect(report.evidence.contains("boot-image-timeout"))
         #expect(report.evidence.contains("uefi-shell"))
+        #expect(report.consoleScreenshotPath == "/tmp/qemu-console.ppm")
         #expect(report.detail == "QEMU reached Arm UEFI, but Windows Setup did not start and firmware fell back to the EDK II shell.")
     }
 
@@ -226,11 +228,13 @@ struct QEMUWindowsBootPlanTests {
             serialOutput: "",
             didRemainRunningUntilTimeout: false,
             serialLogPath: "/tmp/serial.log",
-            processLogPath: "/tmp/process.log"
+            processLogPath: "/tmp/process.log",
+            consoleScreenshotPath: "/tmp/qemu-console.ppm"
         )
 
         #expect(report.outcome == .argumentFailure)
         #expect(report.evidence == ["qemu-argument-error"])
+        #expect(report.consoleScreenshotPath == "/tmp/qemu-console.ppm")
     }
 
     @Test("smoke analyzer ignores expected timeout termination text")
@@ -241,7 +245,8 @@ struct QEMUWindowsBootPlanTests {
             serialOutput: "Error: Image at 0027C344000 start failed: Time out\nUEFI Interactive Shell v2.2\nShell>",
             didRemainRunningUntilTimeout: true,
             serialLogPath: "/tmp/serial.log",
-            processLogPath: "/tmp/process.log"
+            processLogPath: "/tmp/process.log",
+            consoleScreenshotPath: "/tmp/qemu-console.ppm"
         )
 
         #expect(report.outcome == .uefiShell)
@@ -263,13 +268,14 @@ struct QEMUWindowsBootPlanTests {
 
         let arguments = QEMUWindowsBootSmokePlanner().makeArguments(
             from: plan,
-            serialLogPath: "/tmp/veil-qemu-smoke.serial.log"
+            serialLogPath: "/tmp/veil-qemu-smoke.serial.log",
+            monitorSocketPath: "/tmp/veil-qemu-smoke.sock"
         )
 
         #expect(arguments.contains("-snapshot"))
         #expect(arguments.containsSequence(["-display", "none"]))
         #expect(arguments.containsSequence(["-serial", "file:/tmp/veil-qemu-smoke.serial.log"]))
-        #expect(arguments.containsSequence(["-monitor", "none"]))
+        #expect(arguments.containsSequence(["-monitor", "unix:/tmp/veil-qemu-smoke.sock,server,nowait"]))
         #expect(arguments.contains("driver=raw,file.driver=file,file.locking=off,file.filename=/Users/test/Virtual Machines/Veil/Windows 11 Arm.img,if=none,id=system"))
         #expect(!arguments.contains("cocoa"))
     }

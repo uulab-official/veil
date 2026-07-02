@@ -528,6 +528,7 @@ public struct QEMUWindowsBootSmokeReport: Codable, Equatable, Sendable {
     public var evidence: [String]
     public var serialLogPath: String
     public var processLogPath: String
+    public var consoleScreenshotPath: String
 
     public init(
         kind: String = "qemuWindowsArmBootSmokeReport",
@@ -537,7 +538,8 @@ public struct QEMUWindowsBootSmokeReport: Codable, Equatable, Sendable {
         detail: String,
         evidence: [String],
         serialLogPath: String,
-        processLogPath: String
+        processLogPath: String,
+        consoleScreenshotPath: String
     ) {
         self.kind = kind
         self.provider = provider
@@ -547,6 +549,7 @@ public struct QEMUWindowsBootSmokeReport: Codable, Equatable, Sendable {
         self.evidence = evidence
         self.serialLogPath = serialLogPath
         self.processLogPath = processLogPath
+        self.consoleScreenshotPath = consoleScreenshotPath
     }
 }
 
@@ -557,7 +560,8 @@ public enum QEMUWindowsBootSmokeAnalyzer {
         serialOutput: String,
         didRemainRunningUntilTimeout: Bool,
         serialLogPath: String,
-        processLogPath: String
+        processLogPath: String,
+        consoleScreenshotPath: String
     ) -> QEMUWindowsBootSmokeReport {
         let combinedOutput = "\(processOutput)\n\(serialOutput)"
         var evidence: [String] = []
@@ -571,7 +575,8 @@ public enum QEMUWindowsBootSmokeAnalyzer {
                 detail: "QEMU exited before firmware boot because the command line or local resources failed validation.",
                 evidence: evidence,
                 serialLogPath: serialLogPath,
-                processLogPath: processLogPath
+                processLogPath: processLogPath,
+                consoleScreenshotPath: consoleScreenshotPath
             )
         }
 
@@ -584,7 +589,8 @@ public enum QEMUWindowsBootSmokeAnalyzer {
                 detail: "QEMU reached Windows boot text during the bounded smoke run.",
                 evidence: evidence,
                 serialLogPath: serialLogPath,
-                processLogPath: processLogPath
+                processLogPath: processLogPath,
+                consoleScreenshotPath: consoleScreenshotPath
             )
         }
 
@@ -600,7 +606,8 @@ public enum QEMUWindowsBootSmokeAnalyzer {
                 detail: "QEMU reached Arm UEFI, but Windows Setup did not start and firmware fell back to the EDK II shell.",
                 evidence: evidence,
                 serialLogPath: serialLogPath,
-                processLogPath: processLogPath
+                processLogPath: processLogPath,
+                consoleScreenshotPath: consoleScreenshotPath
             )
         }
 
@@ -611,7 +618,8 @@ public enum QEMUWindowsBootSmokeAnalyzer {
                 detail: "Arm UEFI attempted the installer boot image, but it timed out before Windows Setup appeared.",
                 evidence: evidence,
                 serialLogPath: serialLogPath,
-                processLogPath: processLogPath
+                processLogPath: processLogPath,
+                consoleScreenshotPath: consoleScreenshotPath
             )
         }
 
@@ -623,7 +631,8 @@ public enum QEMUWindowsBootSmokeAnalyzer {
                 detail: "QEMU stayed alive for the bounded smoke run, but serial output did not prove Windows Setup or UEFI shell state.",
                 evidence: evidence,
                 serialLogPath: serialLogPath,
-                processLogPath: processLogPath
+                processLogPath: processLogPath,
+                consoleScreenshotPath: consoleScreenshotPath
             )
         }
 
@@ -634,7 +643,8 @@ public enum QEMUWindowsBootSmokeAnalyzer {
             detail: "QEMU exited before the bounded smoke run could classify Windows boot progress.",
             evidence: evidence,
             serialLogPath: serialLogPath,
-            processLogPath: processLogPath
+            processLogPath: processLogPath,
+            consoleScreenshotPath: consoleScreenshotPath
         )
     }
 }
@@ -644,7 +654,8 @@ public struct QEMUWindowsBootSmokePlanner: Sendable {
 
     public func makeArguments(
         from plan: QEMUWindowsBootPlan,
-        serialLogPath: String
+        serialLogPath: String,
+        monitorSocketPath: String
     ) -> [String] {
         var arguments = plan.arguments.map { argument in
             Self.lockSafeSystemDriveArgument(argument)
@@ -663,7 +674,7 @@ public struct QEMUWindowsBootSmokePlanner: Sendable {
 
         arguments.append(contentsOf: [
             "-serial", "file:\(serialLogPath)",
-            "-monitor", "none"
+            "-monitor", "unix:\(monitorSocketPath),server,nowait"
         ])
 
         return arguments

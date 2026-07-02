@@ -192,7 +192,7 @@ cd apps/mac-host
 swift run veil-vmctl qemu-smoke --json --seconds 25 | node ../../harness/qemu-smoke/src/validate-qemu-smoke.mjs
 ```
 
-Expected current output on the test Mac: `qemu smoke valid`; the JSON currently reports `uefiShell`, which means QEMU reaches Arm UEFI but Windows Setup is not proven.
+Expected current output on the test Mac: `qemu smoke valid`; the JSON currently reports `uefiShell` plus a `.ppm` `consoleScreenshotPath`, which means QEMU reaches Arm UEFI but Windows Setup is not proven.
 
 ## Fixture Policy
 

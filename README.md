@@ -213,7 +213,7 @@ Validate it with:
 swift run veil-vmctl qemu-smoke --json --seconds 25 | node ../../harness/qemu-smoke/src/validate-qemu-smoke.mjs
 ```
 
-The smoke command runs QEMU headlessly in snapshot mode and writes logs under `~/Downloads/Veil Diagnostics/QEMU Smoke`. Current evidence on the test Mac reaches Arm UEFI and falls back to EDK II shell; Windows Setup is not proven yet.
+The smoke command runs QEMU headlessly in snapshot mode and writes logs plus a `.ppm` VM-console screenshot path under `~/Downloads/Veil Diagnostics/QEMU Smoke`. Current evidence on the test Mac reaches Arm UEFI and falls back to EDK II shell; Windows Setup is not proven yet.
 
 Launch the guarded visible QEMU/HVF path for interactive Windows setup testing:
 

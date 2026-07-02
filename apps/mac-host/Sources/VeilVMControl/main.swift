@@ -240,17 +240,24 @@ struct VeilVMControl {
             .replacingOccurrences(of: ":", with: "-")
         let serialLogURL = logDirectory.appendingPathComponent("qemu-smoke-\(stamp).serial.log")
         let processLogURL = logDirectory.appendingPathComponent("qemu-smoke-\(stamp).process.log")
+        let consoleScreenshotURL = logDirectory.appendingPathComponent("qemu-smoke-\(stamp).console.ppm")
+        let monitorSocketURL = URL(fileURLWithPath: "/tmp")
+            .appendingPathComponent("veil-qemu-smoke-\(UUID().uuidString.prefix(8)).sock")
         let arguments = QEMUWindowsBootSmokePlanner().makeArguments(
             from: plan,
-            serialLogPath: serialLogURL.path
+            serialLogPath: serialLogURL.path,
+            monitorSocketPath: monitorSocketURL.path
         )
 
         let processOutput = try runBoundedQEMU(
             executablePath: plan.executablePath,
             arguments: arguments,
             seconds: boundedSeconds,
-            processLogURL: processLogURL
+            processLogURL: processLogURL,
+            monitorSocketURL: monitorSocketURL,
+            consoleScreenshotURL: consoleScreenshotURL
         )
+        try? FileManager.default.removeItem(at: monitorSocketURL)
         let serialOutput = (try? String(contentsOf: serialLogURL, encoding: .utf8)) ?? ""
         let report = QEMUWindowsBootSmokeAnalyzer.makeReport(
             durationSeconds: boundedSeconds,
@@ -258,7 +265,8 @@ struct VeilVMControl {
             serialOutput: serialOutput,
             didRemainRunningUntilTimeout: processOutput.didRemainRunningUntilTimeout,
             serialLogPath: serialLogURL.path,
-            processLogPath: processLogURL.path
+            processLogPath: processLogURL.path,
+            consoleScreenshotPath: consoleScreenshotURL.path
         )
 
         if json {
@@ -272,6 +280,7 @@ struct VeilVMControl {
         print("Evidence: \(report.evidence.joined(separator: ", "))")
         print("Serial log: \(report.serialLogPath)")
         print("Process log: \(report.processLogPath)")
+        print("Console screenshot: \(report.consoleScreenshotPath)")
     }
 
     private static func startQEMU(json: Bool) async throws {
@@ -349,7 +358,9 @@ struct VeilVMControl {
         executablePath: String,
         arguments: [String],
         seconds: Int,
-        processLogURL: URL
+        processLogURL: URL,
+        monitorSocketURL: URL,
+        consoleScreenshotURL: URL
     ) throws -> (output: String, didRemainRunningUntilTimeout: Bool) {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: executablePath)
@@ -367,6 +378,14 @@ struct VeilVMControl {
         }
 
         let didRemainRunningUntilTimeout = process.isRunning
+        if process.isRunning {
+            QEMUVMRuntimeBooter.captureConsoleScreenshot(
+                monitorSocketURL: monitorSocketURL,
+                imageURL: consoleScreenshotURL
+            )
+            Thread.sleep(forTimeInterval: 0.5)
+        }
+
         if process.isRunning {
             process.terminate()
         }

@@ -7,6 +7,7 @@
   ],
   "kind": "qemuWindowsArmBootSmokeReport",
   "outcome": "uefiShell",
+  "consoleScreenshotPath": "/Users/test/Downloads/Veil Diagnostics/QEMU Smoke/qemu-smoke.console.ppm",
   "processLogPath": "/Users/test/Downloads/Veil Diagnostics/QEMU Smoke/qemu-smoke.process.log",
   "provider": "QEMU/HVF",
   "serialLogPath": "/Users/test/Downloads/Veil Diagnostics/QEMU Smoke/qemu-smoke.serial.log"

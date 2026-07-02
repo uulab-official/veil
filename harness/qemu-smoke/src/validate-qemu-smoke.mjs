@@ -21,6 +21,7 @@ export function validateQEMUSmoke(report) {
   requireString(report.detail, "detail");
   requireString(report.serialLogPath, "serialLogPath");
   requireString(report.processLogPath, "processLogPath");
+  requireString(report.consoleScreenshotPath, "consoleScreenshotPath");
 
   if (report.kind !== "qemuWindowsArmBootSmokeReport") {
     throw new TypeError(`Unsupported QEMU smoke kind: ${report.kind}`);
@@ -52,6 +53,10 @@ export function validateQEMUSmoke(report) {
 
   if (report.outcome === "argumentFailure" && !report.evidence.includes("qemu-argument-error")) {
     throw new TypeError("QEMU smoke argumentFailure reports must include qemu-argument-error evidence.");
+  }
+
+  if (!report.consoleScreenshotPath.endsWith(".ppm")) {
+    throw new TypeError("QEMU smoke consoleScreenshotPath must point to a .ppm image.");
   }
 
   return report;

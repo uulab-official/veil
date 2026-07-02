@@ -12,5 +12,5 @@ Goal: move from QEMU readiness into real Windows installer boot evidence.
 - [x] Attempt real QEMU boot with the downloaded Windows 11 Arm ISO.
 - [x] Record that the current QEMU path reaches Arm UEFI but does not yet reach Windows Setup.
 - [x] Add repeatable QEMU launch records with process logs and a VM-console `screendump` screenshot path.
-- [ ] Extend bounded `qemu-smoke` runs to capture and validate VM-console screenshots.
+- [x] Extend bounded `qemu-smoke` runs to capture and validate VM-console screenshot paths.
 - [ ] Prove a Windows Setup screen with the selected ISO and commit the working device recipe.

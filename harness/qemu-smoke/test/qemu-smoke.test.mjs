@@ -33,4 +33,13 @@ describe("QEMU smoke harness", () => {
       /between 5 and 120/
     );
   });
+
+  it("rejects reports without a console screenshot path", () => {
+    const { consoleScreenshotPath: _path, ...report } = uefiShellFixture;
+
+    assert.throws(
+      () => validateQEMUSmoke(report),
+      /consoleScreenshotPath/
+    );
+  });
 });
