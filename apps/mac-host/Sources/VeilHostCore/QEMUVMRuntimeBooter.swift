@@ -115,6 +115,10 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
         guard readiness.overallState == .ready else {
             throw VMRuntimeError.qemuNotReady(readiness.nextActions.joined(separator: " "))
         }
+        let shouldSendInstallerBootKey = QEMUWindowsInstallerBootPolicy.shouldSendBootKey(
+            profile: profile,
+            virtualDiskAllocatedBytes: QEMUWindowsInstallerBootPolicy.allocatedFileSize(path: profile.virtualDiskPath)
+        )
 
         let launchDirectory = try qemuLaunchDirectory()
         let stamp = Self.timestamp()
@@ -147,7 +151,9 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
             stamp: stamp
         )
         frontmostRunner()
-        scheduleWindowsInstallerBootKeySend(monitorSocketURL: monitorSocketURL)
+        if shouldSendInstallerBootKey {
+            scheduleWindowsInstallerBootKeySend(monitorSocketURL: monitorSocketURL)
+        }
         scheduleConsoleScreenshotCapture(monitorSocketURL: monitorSocketURL, imageURL: consoleScreenshotURL)
         return .running
     }

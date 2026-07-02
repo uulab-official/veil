@@ -1056,6 +1056,53 @@ public struct QEMUWindowsBootLaunchPlanner: Sendable {
     }
 }
 
+public enum QEMUWindowsInstallerBootPolicy {
+    public static let partialInstallDiskAllocatedBytes: Int64 = 1_024 * 1_024 * 1_024
+
+    public static func shouldSendBootKey(
+        profile: VMProfile,
+        virtualDiskAllocatedBytes: Int64?
+    ) -> Bool {
+        shouldSendBootKey(
+            windowsInstalled: profile.windowsInstalled == true,
+            virtualDiskAllocatedBytes: virtualDiskAllocatedBytes
+        )
+    }
+
+    public static func shouldSendBootKey(
+        windowsInstalled: Bool,
+        virtualDiskAllocatedBytes: Int64?
+    ) -> Bool {
+        if windowsInstalled {
+            return false
+        }
+
+        guard let virtualDiskAllocatedBytes else {
+            return true
+        }
+
+        return virtualDiskAllocatedBytes < partialInstallDiskAllocatedBytes
+    }
+
+    public static func allocatedFileSize(path: String?) -> Int64? {
+        guard let path,
+              !path.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return nil
+        }
+
+        let url = URL(fileURLWithPath: path)
+        let values = try? url.resourceValues(forKeys: [.fileAllocatedSizeKey, .totalFileAllocatedSizeKey])
+        if let allocatedSize = values?.fileAllocatedSize {
+            return Int64(allocatedSize)
+        }
+        if let allocatedSize = values?.totalFileAllocatedSize {
+            return Int64(allocatedSize)
+        }
+
+        return nil
+    }
+}
+
 private enum QEMUWindowsBootArgumentRewriter {
     static func lockSafeSystemDriveArgument(_ argument: String) -> String {
         guard argument.contains("id=system"),

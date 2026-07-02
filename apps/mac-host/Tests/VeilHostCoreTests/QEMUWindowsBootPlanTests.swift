@@ -686,6 +686,26 @@ struct QEMUWindowsBootPlanTests {
         #expect(arguments.contains("driver=raw,file.driver=file,file.locking=off,file.filename=/Users/test/Virtual Machines/Veil/Windows 11 Arm.img,if=none,id=system"))
     }
 
+    @Test("installer boot key policy skips partially installed or installed disks")
+    func installerBootKeyPolicySkipsPartiallyInstalledOrInstalledDisks() {
+        #expect(QEMUWindowsInstallerBootPolicy.shouldSendBootKey(
+            windowsInstalled: false,
+            virtualDiskAllocatedBytes: nil
+        ))
+        #expect(QEMUWindowsInstallerBootPolicy.shouldSendBootKey(
+            windowsInstalled: false,
+            virtualDiskAllocatedBytes: 16 * 1024
+        ))
+        #expect(!QEMUWindowsInstallerBootPolicy.shouldSendBootKey(
+            windowsInstalled: false,
+            virtualDiskAllocatedBytes: 2 * 1024 * 1024 * 1024
+        ))
+        #expect(!QEMUWindowsInstallerBootPolicy.shouldSendBootKey(
+            windowsInstalled: true,
+            virtualDiskAllocatedBytes: 16 * 1024
+        ))
+    }
+
     @Test("smoke boot prompt automation sends bounded key attempts")
     func smokeBootPromptAutomationSendsBoundedKeyAttempts() {
         var automation = QEMUWindowsBootPromptAutomation()

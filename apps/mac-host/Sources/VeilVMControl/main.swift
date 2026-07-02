@@ -312,6 +312,10 @@ struct VeilVMControl {
         guard readiness.overallState == .ready else {
             throw VMControlError.qemuNotReady(readiness.nextActions)
         }
+        let shouldSendInstallerBootKey = QEMUWindowsInstallerBootPolicy.shouldSendBootKey(
+            profile: profile,
+            virtualDiskAllocatedBytes: QEMUWindowsInstallerBootPolicy.allocatedFileSize(path: profile.virtualDiskPath)
+        )
 
         let logDirectory = diagnosticsDirectory()
             .appendingPathComponent("QEMU Launch", isDirectory: true)
@@ -346,6 +350,7 @@ struct VeilVMControl {
         driveInitialQEMULaunch(
             process: process,
             waitSeconds: waitSeconds,
+            shouldSendInstallerBootKey: shouldSendInstallerBootKey,
             monitorSocketURL: monitorSocketURL,
             consoleScreenshotURL: consoleScreenshotURL
         )
@@ -390,6 +395,7 @@ struct VeilVMControl {
     private static func driveInitialQEMULaunch(
         process: Process,
         waitSeconds: Int,
+        shouldSendInstallerBootKey: Bool,
         monitorSocketURL: URL,
         consoleScreenshotURL: URL
     ) {
@@ -400,11 +406,13 @@ struct VeilVMControl {
 
         while process.isRunning, Date() < deadline {
             Thread.sleep(forTimeInterval: 0.25)
-            _ = bootPromptAutomation.tick(
-                elapsedSeconds: Int(Date().timeIntervalSince(startDate)),
-                monitorSocketURL: monitorSocketURL,
-                sendBootKey: QEMUVMRuntimeBooter.sendWindowsInstallerBootKey
-            )
+            if shouldSendInstallerBootKey {
+                _ = bootPromptAutomation.tick(
+                    elapsedSeconds: Int(Date().timeIntervalSince(startDate)),
+                    monitorSocketURL: monitorSocketURL,
+                    sendBootKey: QEMUVMRuntimeBooter.sendWindowsInstallerBootKey
+                )
+            }
         }
 
         if process.isRunning {

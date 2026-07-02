@@ -76,6 +76,7 @@ Current QEMU boot evidence:
 - Earlier boot attempts reached Arm UEFI and mapped the installer ISO as `FS0`, but Windows Setup did not start because UEFI reported a boot image timeout and fell back to the EDK II shell.
 - USB storage, SCSI CD-ROM, and virtio-blk installer attachment variants were tested against the local `Win11_25H2_Korean_Arm64_v2.iso`; without boot-key input, each reached UEFI and then fell back to the EDK II shell.
 - The boot timeout was traced to the Windows installer boot prompt requiring a key press. Veil now adds a short QEMU monitor socket for the app launch path and bounded smoke path, then sends boot key input immediately after start.
+- Veil sends that installer boot key only for a fresh or still-sparse disk. If the profile is marked installed or the virtual disk has already allocated at least 1 GiB, Veil treats the disk as partially installed or installed and lets the firmware boot through to the NVMe disk instead of forcing the ISO prompt again.
 - With that app launch path, the local QEMU/HVF console reaches the Korean Windows 11 Setup product-key screen on July 1, 2026.
 - `virt,highmem=off` with more than 3 GB memory fails under HVF because address space is limited. A 3 GB `highmem=off` attempt reaches UEFI but still does not start Windows Setup.
 - `veil-vmctl qemu-smoke --json --seconds 25` now repeats the headless QEMU attempt in snapshot mode, sends bounded boot-prompt key input, writes serial/process logs plus a console PNG, and classifies the current result with `boot-prompt-key-sent` evidence.
