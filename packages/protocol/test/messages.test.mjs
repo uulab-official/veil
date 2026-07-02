@@ -6,7 +6,8 @@ import test from "node:test";
 import {
   MessageType,
   createError,
-  parseMessage
+  parseMessage,
+  validateNotepadAcceptance
 } from "../src/messages.mjs";
 
 const fixtures = resolve(import.meta.dirname, "../../../harness/protocol-fixtures");
@@ -69,4 +70,29 @@ test("creates structured errors", () => {
     code: "app_not_found",
     message: "No app exists for id x"
   });
+});
+
+test("validates the Notepad launch acceptance pair", async () => {
+  const launch = await readFixture("app.launch.response.json");
+  const window = await readFixture("window.created.json");
+
+  assert.deepEqual(validateNotepadAcceptance(launch, window), {
+    appId: "winapp_notepad",
+    processId: 4912,
+    windowId: "hwnd:0003029A",
+    title: "Untitled - Notepad"
+  });
+});
+
+test("rejects Notepad acceptance when the HWND event belongs to another process", async () => {
+  const launch = await readFixture("app.launch.response.json");
+  const window = {
+    ...(await readFixture("window.created.json")),
+    processId: 9001
+  };
+
+  assert.throws(
+    () => validateNotepadAcceptance(launch, window),
+    /Notepad window event must match launch process/
+  );
 });

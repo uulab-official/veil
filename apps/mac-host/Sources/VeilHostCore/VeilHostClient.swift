@@ -6,6 +6,7 @@ public protocol HostTransport: Sendable {
 
 public enum VeilHostError: Error, Equatable, LocalizedError, Sendable {
     case notepadMissing
+    case notepadWindowMismatch
     case missingReply(String)
     case unsupportedHarnessApp
 
@@ -13,6 +14,8 @@ public enum VeilHostError: Error, Equatable, LocalizedError, Sendable {
         switch self {
         case .notepadMissing:
             "Notepad is not available from the Windows agent."
+        case .notepadWindowMismatch:
+            "The Windows agent launched Notepad, but the tracked HWND did not match the launch response."
         case .missingReply(let context):
             "The Windows agent did not return the expected reply: \(context)."
         case .unsupportedHarnessApp:
@@ -77,11 +80,20 @@ public struct VeilHostClient: HostDashboardService, Sendable {
             throw VeilHostError.missingReply("app launch requires response and window event")
         }
 
-        return try NotepadLaunchResult(
+        let launch = try decoder.decode(AppLaunchResponse.self, from: launchReplies[0])
+        let window = try decoder.decode(WindowCreatedEvent.self, from: launchReplies[1])
+
+        guard launch.accepted,
+              launch.processId == window.processId,
+              window.appId == "winapp_notepad" else {
+            throw VeilHostError.notepadWindowMismatch
+        }
+
+        return NotepadLaunchResult(
             health: overview.health,
             apps: overview.apps,
-            launch: decoder.decode(AppLaunchResponse.self, from: launchReplies[0]),
-            window: decoder.decode(WindowCreatedEvent.self, from: launchReplies[1])
+            launch: launch,
+            window: window
         )
     }
 

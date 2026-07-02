@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { validateNotepadAcceptance } from "@veil/protocol";
 
 import { createSession } from "../src/session.mjs";
 
@@ -33,6 +34,12 @@ test("launches Notepad and emits a tracked window event", async () => {
   assert.equal(replies[0].accepted, true);
   assert.equal(replies[1].type, "window.created");
   assert.equal(replies[1].windowId, "hwnd:0003029A");
+  assert.deepEqual(validateNotepadAcceptance(replies[0], replies[1]), {
+    appId: "winapp_notepad",
+    processId: 4912,
+    windowId: "hwnd:0003029A",
+    title: "Untitled - Notepad"
+  });
 });
 
 test("returns the fixture app list", async () => {

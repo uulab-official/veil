@@ -43,3 +43,28 @@ export function createError(requestId, code, message) {
     message
   };
 }
+
+export function validateNotepadAcceptance(launch, window) {
+  if (!launch || launch.type !== MessageType.AppLaunchResponse || launch.accepted !== true) {
+    throw new TypeError("Notepad launch response must be accepted.");
+  }
+
+  if (!window || window.type !== MessageType.WindowCreated) {
+    throw new TypeError("Notepad launch must emit a window.created event.");
+  }
+
+  if (window.appId !== "winapp_notepad") {
+    throw new TypeError("Notepad window event must reference winapp_notepad.");
+  }
+
+  if (window.processId !== launch.processId) {
+    throw new TypeError("Notepad window event must match launch process.");
+  }
+
+  return {
+    appId: window.appId,
+    processId: launch.processId,
+    windowId: window.windowId,
+    title: window.title
+  };
+}

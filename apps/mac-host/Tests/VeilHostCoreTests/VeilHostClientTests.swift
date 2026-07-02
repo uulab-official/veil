@@ -40,6 +40,21 @@ struct VeilHostClientTests {
             _ = try await client.launchNotepad()
         }
     }
+
+    @Test("rejects Notepad launch when the HWND event does not match the launched process")
+    func rejectsMismatchedNotepadWindowEvent() async throws {
+        let transport = RecordingTransport(responses: [
+            #"{"type":"agent.health.response","requestId":"req_health","protocolVersion":1,"agentVersion":"0.1.0","os":"windows-arm64","session":{"interactive":true,"user":"veil-user"},"capabilities":{"appList":true,"appLaunch":true,"windowTracking":true,"windowCapture":false,"input":false,"clipboardText":false}}"#,
+            #"{"type":"app.list.response","requestId":"req_apps","apps":[{"id":"winapp_notepad","name":"Notepad","exePath":"C:\\Windows\\System32\\notepad.exe","publisher":"Microsoft","iconId":"icon_notepad"}]}"#,
+            #"{"type":"app.launch.response","requestId":"req_launch_notepad","accepted":true,"processId":4912}"#,
+            #"{"type":"window.created","windowId":"hwnd:0003029A","processId":9001,"appId":"winapp_notepad","title":"Untitled - Notepad","bounds":{"x":10,"y":10,"width":1280,"height":800},"state":"normal","focused":true}"#
+        ])
+        let client = VeilHostClient(transport: transport)
+
+        await #expect(throws: VeilHostError.notepadWindowMismatch) {
+            _ = try await client.launchNotepad()
+        }
+    }
 }
 
 private final class RecordingTransport: HostTransport, @unchecked Sendable {

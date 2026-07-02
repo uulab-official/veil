@@ -1,6 +1,7 @@
 import { MessageType } from "@veil/protocol";
 
 import { collectReplies } from "./client.mjs";
+import { summarizeNotepadLaunch } from "./notepad-acceptance.mjs";
 
 const url = process.env.VEIL_AGENT_URL ?? "ws://127.0.0.1:18444";
 
@@ -25,10 +26,16 @@ const launch = await collectReplies(url, {
   expectedCount: 2
 });
 
+const acceptance = summarizeNotepadLaunch({
+  launch: launch[0],
+  window: launch[1]
+});
+
 console.log(JSON.stringify({
   url,
   health: health[0],
   apps: appList[0].apps,
   launch: launch[0],
-  window: launch[1]
+  window: launch[1],
+  acceptance
 }, null, 2));

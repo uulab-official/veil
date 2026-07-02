@@ -54,9 +54,12 @@ Goal: keep the main Veil experience pointed at real local Windows boot and conso
 - [x] Write app-launched QEMU evidence to `qemu-launch-latest.json` with executable path, arguments, process log, monitor socket, and timestamp.
 - [x] Add typed install evidence so the shell can distinguish sparse disk, setup-ready, profile-installed, and live guest-agent-connected states.
 - [x] Prevent demo fallback agent data from counting as Windows installation evidence.
+- [x] Make Notepad launch an explicit acceptance flow: launch response must be accepted and the `window.created` HWND must match `winapp_notepad` and the launched process id.
+- [x] Add the same Notepad acceptance validation to the JavaScript protocol package, fake-agent tests, and fake-host smoke output.
 
 ## Next
 
+- [ ] Scaffold the first real `apps/windows-agent` project so the acceptance flow can move from fake-agent fixtures to Windows.
 - [ ] Persist guest-agent install evidence back to the VM profile after a real Windows guest connects from the VM.
 - [ ] Improve `Autounattend.xml` so Windows Setup skips the product-key page without bundling a key.
 - [ ] Restart the currently running QEMU VM so the new guest-agent port forwarding takes effect.

@@ -61,7 +61,7 @@ npm test
 npm run launch:notepad
 ```
 
-Expected: JSON output includes `window.created` for `hwnd:0003029A`.
+Expected: JSON output includes `window.created` for `hwnd:0003029A` and an `acceptance` object proving the launch response and HWND event both point at `winapp_notepad` with the same process id.
 
 The fake host can target another agent URL:
 

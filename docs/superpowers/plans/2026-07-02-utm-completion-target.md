@@ -97,14 +97,16 @@ Execution note: `windowsInstalled` remains as a temporary profile compatibility 
 ### Task 3: Coherence Entry Path
 
 **Files:**
-- Modify: `apps/windows-agent`
+- Modify: `apps/windows-agent` (pending scaffold; not present yet)
 - Modify: `packages/protocol`
 - Modify: `apps/mac-host/Sources/VeilHostShell`
 - Test: protocol fixtures and fake-agent harness
 
-- [ ] **Step 1: Make Notepad launch the first real acceptance workflow**
+- [x] **Step 1: Make Notepad launch the first real acceptance workflow**
 
 Keep Notepad as the hard acceptance target and avoid adding generic VM-manager features until Notepad launch and HWND tracking pass.
+
+Execution note: The Swift host and JS harness now reject a Notepad launch unless the `app.launch.response` is accepted and the `window.created` event matches `winapp_notepad` and the launched `processId`. The fake-host CLI prints a Notepad acceptance summary.
 
 - [ ] **Step 2: Mirror one HWND**
 
