@@ -77,6 +77,7 @@ Goal: keep the main Veil experience pointed at real local Windows boot and conso
 - [x] Convert the console handoff progress from a fixed timer to VM runtime state changes.
 - [x] Stage a first-run `Veil Guest Agent` bundle in the macOS shared folder with double-click install/start launchers.
 - [x] Surface the latest QEMU console launch PID, log path, monitor socket, and start time in the runtime snapshot/UI.
+- [x] Make the Windows agent scheduled task use the installed script copy instead of the shared-folder source path.
 
 ## Next
 

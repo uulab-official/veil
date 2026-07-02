@@ -10,16 +10,27 @@ $ScriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $AgentRoot = Resolve-Path (Join-Path $ScriptRoot "..")
 $ProjectPath = Join-Path $AgentRoot "src\VeilAgent\VeilAgent.csproj"
 $PublishRoot = Join-Path $InstallRoot "app"
-$StartScript = Join-Path $AgentRoot "scripts\Start-VeilAgent.ps1"
+$InstalledScriptsRoot = Join-Path $InstallRoot "scripts"
+$StartScript = Join-Path $InstalledScriptsRoot "Start-VeilAgent.ps1"
 $TaskName = "VeilAgent"
 
 New-Item -ItemType Directory -Force -Path $PublishRoot | Out-Null
+New-Item -ItemType Directory -Force -Path $InstalledScriptsRoot | Out-Null
 
 dotnet publish $ProjectPath `
     --configuration $Configuration `
     --runtime win-arm64 `
     --self-contained false `
     --output $PublishRoot
+
+Copy-Item `
+    -Path (Join-Path $ScriptRoot "Start-VeilAgent.ps1") `
+    -Destination $InstalledScriptsRoot `
+    -Force
+Copy-Item `
+    -Path (Join-Path $ScriptRoot "Uninstall-VeilAgent.ps1") `
+    -Destination $InstalledScriptsRoot `
+    -Force
 
 $Action = New-ScheduledTaskAction `
     -Execute "powershell.exe" `

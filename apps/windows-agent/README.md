@@ -42,7 +42,7 @@ cd C:\Path\To\veil\apps\windows-agent
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\Install-VeilAgent.ps1
 ```
 
-The installer publishes the agent to `%LOCALAPPDATA%\Veil\Agent\app`, sets user-level `VEIL_AGENT_HOST` and `VEIL_AGENT_PORT`, and registers a user logon scheduled task named `VeilAgent`.
+The installer publishes the agent to `%LOCALAPPDATA%\Veil\Agent\app`, copies the start/uninstall scripts to `%LOCALAPPDATA%\Veil\Agent\scripts`, sets user-level `VEIL_AGENT_HOST` and `VEIL_AGENT_PORT`, and registers a user logon scheduled task named `VeilAgent`. The logon task points at the installed script copy, so agent auto-start does not depend on the original shared-folder path after installation.
 
 Start immediately without waiting for the next login:
 

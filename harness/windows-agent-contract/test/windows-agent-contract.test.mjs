@@ -90,3 +90,12 @@ test("windows agent includes user-logon install and uninstall scripts", async ()
   assert.match(uninstall, /Unregister-ScheduledTask/);
   assert.match(uninstall, /VeilAgent/);
 });
+
+test("windows agent installs logon task against the local installed scripts", async () => {
+  const install = await readFile(resolve(agentRoot, "scripts/Install-VeilAgent.ps1"), "utf8");
+
+  assert.match(install, /\$InstalledScriptsRoot\s*=\s*Join-Path\s+\$InstallRoot\s+"scripts"/);
+  assert.match(install, /Copy-Item[\s\S]+Start-VeilAgent\.ps1[\s\S]+-Destination\s+\$InstalledScriptsRoot/);
+  assert.match(install, /\$StartScript\s*=\s*Join-Path\s+\$InstalledScriptsRoot\s+"Start-VeilAgent\.ps1"/);
+  assert.doesNotMatch(install, /\$StartScript\s*=\s*Join-Path\s+\$AgentRoot\s+"scripts\\Start-VeilAgent\.ps1"/);
+});
