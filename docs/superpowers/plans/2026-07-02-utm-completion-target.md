@@ -65,7 +65,7 @@ cd /Users/bonjin/Documents/workspace/uulab/veil
 git diff --check
 ```
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/mac-host/Sources/VeilHostCore/QEMUVMRuntimeBooter.swift apps/mac-host/Tests/VeilHostCoreTests/QEMUWindowsBootPlanTests.swift docs/checklists/2026-07-01-real-windows-start.md docs/superpowers/plans/2026-07-02-utm-completion-target.md
@@ -80,17 +80,19 @@ git commit -m "feat: record qemu launch evidence"
 - Modify: `apps/mac-host/Sources/VeilHostShell/Views/VMRuntimeView.swift`
 - Test: `apps/mac-host/Tests/VeilHostCoreTests/VMProfileStoreTests.swift`
 
-- [ ] **Step 1: Add an install-complete evidence model**
+- [x] **Step 1: Add an install-complete evidence model**
 
 Add a typed install evidence summary that separates sparse disk evidence from real guest-agent evidence.
 
-- [ ] **Step 2: Set `windowsInstalled` only from explicit evidence**
+- [x] **Step 2: Set `windowsInstalled` only from explicit evidence**
 
 Keep manual profile state as temporary compatibility, but prefer a successful guest-agent health response once available.
 
-- [ ] **Step 3: Update the UI copy**
+- [x] **Step 3: Update the UI copy**
 
 Show "Install Windows", "Connect Agent", or "Start Windows" based on the evidence summary.
+
+Execution note: `windowsInstalled` remains as a temporary profile compatibility flag, but the shell now uses effective install evidence. Live `agent` mode health overrides profile/disk heuristics; demo fallback data does not.
 
 ### Task 3: Coherence Entry Path
 

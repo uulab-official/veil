@@ -15,6 +15,7 @@ struct DetailView: View {
         if selectedSection == .vm {
             VMRuntimeView(
                 model: vmModel,
+                guestAgentInstallEvidence: model.guestAgentInstallEvidence,
                 startVMAction: startVMAction,
                 stopVMAction: stopVMAction,
                 showVMConsoleAction: showVMConsoleAction,

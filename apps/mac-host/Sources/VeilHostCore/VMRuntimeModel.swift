@@ -239,6 +239,7 @@ public struct VMRuntimeSnapshot: Codable, Equatable, Sendable {
     public var installationSteps: [VMInstallationStep]
     public var preflightChecks: [VMPreflightCheck]
     public var deviceSummary: VMRuntimeDeviceSummary?
+    public var installEvidence: VMInstallEvidenceSummary
     public var bootReady: Bool
     public var windowsInstalled: Bool
     public var detail: String
@@ -263,6 +264,7 @@ public struct VMRuntimeSnapshot: Codable, Equatable, Sendable {
         installationSteps: [VMInstallationStep] = [],
         preflightChecks: [VMPreflightCheck] = [],
         deviceSummary: VMRuntimeDeviceSummary? = nil,
+        installEvidence: VMInstallEvidenceSummary = .notConfigured,
         bootReady: Bool = false,
         windowsInstalled: Bool = false,
         detail: String
@@ -286,10 +288,46 @@ public struct VMRuntimeSnapshot: Codable, Equatable, Sendable {
         self.installationSteps = installationSteps
         self.preflightChecks = preflightChecks
         self.deviceSummary = deviceSummary
+        self.installEvidence = installEvidence
         self.bootReady = bootReady
         self.windowsInstalled = windowsInstalled
         self.detail = detail
     }
+}
+
+public enum VMInstallEvidenceKind: String, Codable, Equatable, Sendable {
+    case notConfigured
+    case setupBlocked
+    case sparseDisk
+    case setupReady
+    case profileFlag
+    case guestAgent
+}
+
+public struct VMInstallEvidenceSummary: Codable, Equatable, Sendable {
+    public var kind: VMInstallEvidenceKind
+    public var isInstalled: Bool
+    public var title: String
+    public var detail: String
+
+    public init(
+        kind: VMInstallEvidenceKind,
+        isInstalled: Bool,
+        title: String,
+        detail: String
+    ) {
+        self.kind = kind
+        self.isInstalled = isInstalled
+        self.title = title
+        self.detail = detail
+    }
+
+    public static let notConfigured = VMInstallEvidenceSummary(
+        kind: .notConfigured,
+        isInstalled: false,
+        title: "Windows not configured",
+        detail: "Create or prepare a local Windows 11 Arm profile before installation can start."
+    )
 }
 
 public struct VMRuntimeStorageDeviceSummary: Codable, Equatable, Sendable {
@@ -916,6 +954,11 @@ public struct LocalVMRuntimeService: VMRuntimeService {
             let state = runtimeState ?? .stopped
             let virtualDiskAllocatedBytes = Self.allocatedFileSize(path: profile.virtualDiskPath)
             let windowsInstalled = profile.windowsInstalled == true
+            let installEvidence = Self.installEvidence(
+                bootPathReadiness: bootPathReadiness,
+                windowsInstalled: windowsInstalled,
+                virtualDiskAllocatedBytes: virtualDiskAllocatedBytes
+            )
             return VMRuntimeSnapshot(
                 state: state,
                 virtualizationAvailable: true,
@@ -936,6 +979,7 @@ public struct LocalVMRuntimeService: VMRuntimeService {
                 installationSteps: installationSteps,
                 preflightChecks: preflightChecks,
                 deviceSummary: Self.deviceSummary(for: profile),
+                installEvidence: installEvidence,
                 bootReady: bootPathReadiness.isReady,
                 windowsInstalled: windowsInstalled,
                 detail: runtimeState.map(Self.runtimeDetail(for:)) ?? (
@@ -1375,12 +1419,12 @@ public struct LocalVMRuntimeService: VMRuntimeService {
         windowsInstalled: Bool,
         virtualDiskAllocatedBytes: Int64?
     ) -> String {
-        guard bootPathReadiness.isReady else {
-            return bootPathReadiness.detail
-        }
-
         if windowsInstalled {
             return "Windows is installed and can be started."
+        }
+
+        guard bootPathReadiness.isReady else {
+            return bootPathReadiness.detail
         }
 
         if let virtualDiskAllocatedBytes,
@@ -1389,6 +1433,47 @@ public struct LocalVMRuntimeService: VMRuntimeService {
         }
 
         return "Windows setup can start."
+    }
+
+    private static func installEvidence(
+        bootPathReadiness: (isReady: Bool, detail: String),
+        windowsInstalled: Bool,
+        virtualDiskAllocatedBytes: Int64?
+    ) -> VMInstallEvidenceSummary {
+        if windowsInstalled {
+            return VMInstallEvidenceSummary(
+                kind: .profileFlag,
+                isInstalled: true,
+                title: "Windows installed",
+                detail: "The local profile is marked installed. Guest-agent evidence should replace this before developer preview."
+            )
+        }
+
+        guard bootPathReadiness.isReady else {
+            return VMInstallEvidenceSummary(
+                kind: .setupBlocked,
+                isInstalled: false,
+                title: "Setup blocked",
+                detail: bootPathReadiness.detail
+            )
+        }
+
+        if let virtualDiskAllocatedBytes,
+           virtualDiskAllocatedBytes < 1_024 * 1_024 * 1_024 {
+            return VMInstallEvidenceSummary(
+                kind: .sparseDisk,
+                isInstalled: false,
+                title: "Windows not installed",
+                detail: "The selected virtual disk is still sparse, so Veil should open Windows Setup instead of the launcher."
+            )
+        }
+
+        return VMInstallEvidenceSummary(
+            kind: .setupReady,
+            isInstalled: false,
+            title: "Windows setup ready",
+            detail: "Boot the installer, complete Windows setup, then connect the Veil guest agent."
+        )
     }
 
     private static func fileValidationDetail(path: String, label: String) -> String? {

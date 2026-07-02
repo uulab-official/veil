@@ -21,6 +21,9 @@ struct HostDashboardModelTests {
         #expect(model.canLaunchSelectedApp)
         #expect(model.statusText == "Connected to Windows agent 0.1.0")
         #expect(model.connectionMode == .agent)
+        #expect(model.hasLiveAgentConnection)
+        #expect(model.guestAgentInstallEvidence?.kind == .guestAgent)
+        #expect(model.guestAgentInstallEvidence?.isInstalled == true)
         #expect(model.errorMessage == nil)
     }
 
@@ -114,6 +117,8 @@ struct HostDashboardModelTests {
         #expect(model.errorMessage == nil)
         #expect(model.health?.agentVersion == "demo-0.1.0")
         #expect(model.connectionMode == .demo)
+        #expect(model.hasLiveAgentConnection == false)
+        #expect(model.guestAgentInstallEvidence == nil)
         #expect(model.statusText == "Demo mode: Windows agent unavailable")
         #expect(model.connectionDetail == "No Windows agent reachable at ws://127.0.0.1:18444. Showing built-in demo data.")
         #expect(model.apps.map(\.id).contains("winapp_notepad"))

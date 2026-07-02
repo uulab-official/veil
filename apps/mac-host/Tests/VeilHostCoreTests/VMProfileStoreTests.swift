@@ -132,6 +132,8 @@ struct VMProfileStoreTests {
         #expect(snapshot.virtualDiskAllocatedBytes != nil)
         #expect(snapshot.bootReady)
         #expect(snapshot.detail == "Windows is not installed yet.")
+        #expect(snapshot.installEvidence.kind == .sparseDisk)
+        #expect(snapshot.installEvidence.isInstalled == false)
         #expect(snapshot.installationSteps.map(\.state) == [
             .complete,
             .complete,
@@ -161,6 +163,8 @@ struct VMProfileStoreTests {
         let snapshot = try await service.loadSnapshot()
 
         #expect(snapshot.windowsInstalled)
+        #expect(snapshot.installEvidence.kind == .profileFlag)
+        #expect(snapshot.installEvidence.isInstalled)
     }
 
     @Test("local runtime reports sparse disk allocation evidence")
@@ -195,6 +199,8 @@ struct VMProfileStoreTests {
         #expect(snapshot.bootReady)
         #expect(allocatedBytes < 1_024 * 1_024 * 1_024)
         #expect(snapshot.detail == "Windows is not installed yet.")
+        #expect(snapshot.installEvidence.kind == .sparseDisk)
+        #expect(snapshot.installEvidence.isInstalled == false)
     }
 
     @Test("local runtime reports local runtime provider")

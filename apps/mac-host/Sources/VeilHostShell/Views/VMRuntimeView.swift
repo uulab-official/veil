@@ -4,6 +4,7 @@ import VeilHostCore
 
 struct VMRuntimeView: View {
     @Bindable var model: VMRuntimeModel
+    var guestAgentInstallEvidence: VMInstallEvidenceSummary?
     var startVMAction: () -> Void
     var stopVMAction: () -> Void
     var showVMConsoleAction: () -> Void
@@ -17,6 +18,7 @@ struct VMRuntimeView: View {
             if let snapshot = model.snapshot {
                 WindowsSetupDisplayPanel(
                     snapshot: snapshot,
+                    guestAgentInstallEvidence: guestAgentInstallEvidence,
                     statusText: model.statusText,
                     canStart: model.canStart,
                     canStop: model.canStop,
@@ -952,6 +954,7 @@ private struct ControlCenterHero: View {
 
 private struct WindowsSetupDisplayPanel: View {
     var snapshot: VMRuntimeSnapshot
+    var guestAgentInstallEvidence: VMInstallEvidenceSummary?
     var statusText: String
     var canStart: Bool
     var canStop: Bool
@@ -971,7 +974,7 @@ private struct WindowsSetupDisplayPanel: View {
 
     var body: some View {
         ShellPanel(spacing: 0) {
-            if snapshot.windowsInstalled {
+            if effectiveInstallEvidence.isInstalled {
                 installedLauncherStage
             } else {
                 installProcessStage
@@ -1062,6 +1065,13 @@ private struct WindowsSetupDisplayPanel: View {
 
                     Spacer(minLength: 0)
 
+                    InstallStatusSummary(
+                        title: "Agent",
+                        value: agentSummary,
+                        symbolName: "bolt.horizontal.circle",
+                        tint: guestAgentInstallEvidence == nil ? .secondary : .green
+                    )
+
                     if canShowConsole {
                         Button(action: consoleAction) {
                             Label("Open Console", systemImage: "display")
@@ -1069,7 +1079,7 @@ private struct WindowsSetupDisplayPanel: View {
                         .disabled(isLoading)
                     }
                 }
-                .frame(maxWidth: 410)
+                .frame(maxWidth: 600)
 
                 Spacer(minLength: 8)
             }
@@ -1214,6 +1224,10 @@ private struct WindowsSetupDisplayPanel: View {
     }
 
     private var installProcessSubtitle: String {
+        if effectiveInstallEvidence.kind == .setupReady {
+            return "Windows setup can start. After setup, connect the Veil guest agent to unlock Mac app windows."
+        }
+
         if isVirtualDiskEmptyForWindowsInstall {
             return "Windows is not installed yet. Open setup to install it on the local disk."
         }
@@ -1235,7 +1249,7 @@ private struct WindowsSetupDisplayPanel: View {
         }
 
         if canStart {
-            return installSimulation.phase == .running ? "Opening..." : "Install Windows"
+            return installSimulation.phase == .running ? "Opening..." : installActionTitle
         }
 
         return snapshot.profileName == nil ? "Prepare VM" : "Continue Setup"
@@ -1300,6 +1314,23 @@ private struct WindowsSetupDisplayPanel: View {
         snapshot.installerMediaPath.map { URL(fileURLWithPath: $0).lastPathComponent }
     }
 
+    private var effectiveInstallEvidence: VMInstallEvidenceSummary {
+        guestAgentInstallEvidence ?? snapshot.installEvidence
+    }
+
+    private var agentSummary: String {
+        guestAgentInstallEvidence?.title ?? "After setup"
+    }
+
+    private var installActionTitle: String {
+        switch effectiveInstallEvidence.kind {
+        case .setupReady:
+            "Connect Agent"
+        default:
+            "Install Windows"
+        }
+    }
+
     private var virtualDiskSummary: String {
         guard snapshot.virtualDiskPath != nil else {
             return "Not created"
@@ -1314,7 +1345,7 @@ private struct WindowsSetupDisplayPanel: View {
 
     private var isVirtualDiskEmptyForWindowsInstall: Bool {
         guard snapshot.bootReady,
-              !snapshot.windowsInstalled,
+              !effectiveInstallEvidence.isInstalled,
               let allocatedBytes = snapshot.virtualDiskAllocatedBytes else {
             return false
         }
@@ -1392,7 +1423,7 @@ private struct WindowsSetupDisplayPanel: View {
             ),
             LauncherMetadataItem(
                 title: "Windows",
-                value: snapshot.windowsInstalled
+                value: effectiveInstallEvidence.isInstalled
                     ? (snapshot.state == .running ? "Running" : "Start")
                     : (snapshot.bootReady ? "Install" : "Setup"),
                 symbolName: "play.rectangle",
@@ -1412,8 +1443,10 @@ private struct WindowsSetupDisplayPanel: View {
     }
 
     private var machineSubtitle: String {
-        if snapshot.windowsInstalled {
-            return "Ready to run on this Mac"
+        if effectiveInstallEvidence.isInstalled {
+            return effectiveInstallEvidence.kind == .guestAgent
+                ? "Guest agent connected"
+                : "Ready to run on this Mac"
         }
 
         if snapshot.bootReady {
@@ -1455,7 +1488,7 @@ private struct WindowsSetupDisplayPanel: View {
             return "Stop Windows"
         }
 
-        if snapshot.windowsInstalled {
+        if effectiveInstallEvidence.isInstalled {
             return "Start Windows"
         }
 
@@ -1483,7 +1516,7 @@ private struct WindowsSetupDisplayPanel: View {
             return "Stop the current local Windows VM."
         }
 
-        if snapshot.windowsInstalled {
+        if effectiveInstallEvidence.isInstalled {
             return "Open the Windows display."
         }
 

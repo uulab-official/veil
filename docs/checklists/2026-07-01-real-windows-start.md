@@ -52,10 +52,12 @@ Goal: keep the main Veil experience pointed at real local Windows boot and conso
 - [x] Surface sparse-disk allocation evidence in the runtime snapshot so the main screen does not imply Windows is installed before setup completes.
 - [x] Change the stopped runtime detail from a generic ready state to install-specific copy: not installed, setup can start, or installed.
 - [x] Write app-launched QEMU evidence to `qemu-launch-latest.json` with executable path, arguments, process log, monitor socket, and timestamp.
+- [x] Add typed install evidence so the shell can distinguish sparse disk, setup-ready, profile-installed, and live guest-agent-connected states.
+- [x] Prevent demo fallback agent data from counting as Windows installation evidence.
 
 ## Next
 
-- [ ] Promote disk/agent evidence into a first-class install-complete signal after the Windows guest agent connects.
+- [ ] Persist guest-agent install evidence back to the VM profile after a real Windows guest connects from the VM.
 - [ ] Improve `Autounattend.xml` so Windows Setup skips the product-key page without bundling a key.
 - [ ] Restart the currently running QEMU VM so the new guest-agent port forwarding takes effect.
 - [ ] Replace the static setup preview with a real VM screenshot once QEMU reaches Windows Setup.

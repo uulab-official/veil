@@ -94,6 +94,23 @@ public final class HostDashboardModel {
         selectedApp?.id == "winapp_notepad" && phase != .loading && phase != .launching
     }
 
+    public var hasLiveAgentConnection: Bool {
+        phase == .connected && connectionMode == .agent && health != nil
+    }
+
+    public var guestAgentInstallEvidence: VMInstallEvidenceSummary? {
+        guard hasLiveAgentConnection, let health else {
+            return nil
+        }
+
+        return VMInstallEvidenceSummary(
+            kind: .guestAgent,
+            isInstalled: true,
+            title: "Guest agent connected",
+            detail: "Windows is running the Veil guest agent \(health.agentVersion) over the local runtime channel."
+        )
+    }
+
     public func load() async {
         phase = .loading
         errorMessage = nil
