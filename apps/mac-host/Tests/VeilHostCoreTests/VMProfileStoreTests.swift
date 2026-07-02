@@ -1229,6 +1229,60 @@ struct VMProfileStoreTests {
         #expect(bootRunner.stopCount == 1)
     }
 
+    @Test("local runtime stops a running QEMU launch record")
+    func localRuntimeStopsRunningQEMULaunchRecord() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let installerURL = directory.appendingPathComponent("Windows.iso")
+        let diskURL = directory.appendingPathComponent("Windows.img")
+        let sharedFolderURL = directory.appendingPathComponent("Veil Shared", isDirectory: true)
+        try Data("installer".utf8).write(to: installerURL)
+        try Data("disk".utf8).write(to: diskURL)
+        try FileManager.default.createDirectory(at: sharedFolderURL, withIntermediateDirectories: true)
+        let qemuLaunchDirectory = directory.appendingPathComponent("QEMU Launch", isDirectory: true)
+        try FileManager.default.createDirectory(at: qemuLaunchDirectory, withIntermediateDirectories: true)
+        let launchRecord = QEMULaunchRecord(
+            pid: 4321,
+            executablePath: "/opt/homebrew/bin/qemu-system-aarch64",
+            arguments: ["-drive", "file=\(diskURL.path)"],
+            processLogPath: qemuLaunchDirectory.appendingPathComponent("qemu-launch.log").path,
+            monitorSocketPath: "/tmp/vq-test.sock",
+            qmpSocketPath: "/tmp/vq-test.qmp.sock",
+            consoleScreenshotPath: nil,
+            startedAt: Date(timeIntervalSince1970: 1_782_838_800)
+        )
+        try JSONEncoder.veilDiagnostics.encode(launchRecord)
+            .write(to: qemuLaunchDirectory.appendingPathComponent("qemu-launch-latest.json"), options: .atomic)
+        let store = JSONVMProfileStore(directory: directory)
+        var profile = VMProfile.defaultWindows11Arm(createdAt: Date(timeIntervalSince1970: 1_782_752_400))
+        profile.installerMediaPath = installerURL.path
+        profile.virtualDiskPath = diskURL.path
+        profile.sharedFolderPath = sharedFolderURL.path
+        try await store.save(profile)
+        final class TerminationCapture: @unchecked Sendable {
+            var pids: [Int32] = []
+        }
+        let terminationCapture = TerminationCapture()
+        let bootRunner = FakeVMRuntimeBooter(startState: .running, currentState: nil)
+        let service = LocalVMRuntimeService(
+            profileStore: store,
+            bootRunner: bootRunner,
+            qemuLaunchRecordStore: JSONQEMULaunchRecordStore(directory: qemuLaunchDirectory),
+            qemuLaunchProcessIsRunning: { pid in pid == 4321 },
+            qemuLaunchProcessTerminator: { pid in
+                terminationCapture.pids.append(pid)
+                return true
+            }
+        )
+
+        let snapshot = try await service.stop()
+
+        #expect(bootRunner.stopCount == 1)
+        #expect(terminationCapture.pids == [4321])
+        #expect(snapshot.state == .stopped)
+    }
+
     @Test("prepare default VM copies secure boot UEFI vars when available")
     func prepareDefaultVMCopiesSecureBootUEFIVarsWhenAvailable() async throws {
         let directory = FileManager.default.temporaryDirectory

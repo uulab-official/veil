@@ -720,6 +720,31 @@ struct QEMUWindowsBootPlanTests {
         #expect(arguments.contains("driver=raw,file.driver=file,file.locking=off,file.filename=/Users/test/Virtual Machines/Veil/Windows 11 Arm.img,if=none,id=system"))
     }
 
+    @Test("launch planner can prefer the installed disk after Windows setup has started")
+    func launchPlannerCanPreferInstalledDiskAfterSetupHasStarted() throws {
+        var profile = VMProfile.defaultWindows11Arm(createdAt: Date(timeIntervalSince1970: 1_782_752_400))
+        profile.installerMediaPath = "/Users/test/Downloads/Win11_25H2_Korean_Arm64_v2.iso"
+        profile.virtualDiskPath = "/Users/test/Virtual Machines/Veil/Windows 11 Arm.img"
+        profile.sharedFolderPath = "/Users/test/Veil Shared"
+        let plan = try QEMUWindowsBootPlanner(
+            executablePath: "/opt/homebrew/bin/qemu-system-aarch64",
+            isExecutableAvailable: true,
+            firmwarePath: "/opt/homebrew/share/qemu/edk2-aarch64-code.fd",
+            isFirmwareAvailable: true
+        ).makePlan(for: profile)
+
+        let arguments = QEMUWindowsBootLaunchPlanner().makeArguments(
+            from: plan,
+            serialLogPath: "/tmp/veil-qemu-launch.serial.log",
+            monitorSocketPath: "/tmp/veil-qemu-launch.sock",
+            qmpSocketPath: "/tmp/veil-qemu-launch.qmp.sock",
+            bootDiskFirst: true
+        )
+
+        #expect(arguments.containsSequence(["-boot", "order=c"]))
+        #expect(!arguments.containsSequence(["-boot", "order=d"]))
+    }
+
     @Test("installer boot key policy skips partially installed or installed disks")
     func installerBootKeyPolicySkipsPartiallyInstalledOrInstalledDisks() {
         #expect(QEMUWindowsInstallerBootPolicy.shouldSendBootKey(
@@ -822,13 +847,29 @@ struct QEMUWindowsBootPlanTests {
     @Test("QMP keyboard command builder maps OOBE bypass key sequence")
     func qmpKeyboardCommandBuilderMapsOOBEBypassSequence() throws {
         let commands = try QEMUQMPKeyboardCommandBuilder.oobeBypassCommands()
+        let escapeCommand = try QEMUQMPKeyboardCommandBuilder.sendKeyCommand(for: "esc")
         let shiftF10Command = try QEMUQMPKeyboardCommandBuilder.sendKeyCommand(for: "shift-f10")
         let backslashCommand = try QEMUQMPKeyboardCommandBuilder.sendKeyCommand(for: "backslash")
         let returnCommand = try QEMUQMPKeyboardCommandBuilder.sendKeyCommand(for: "ret")
 
-        #expect(commands.first == shiftF10Command)
+        #expect(commands.first == escapeCommand)
+        #expect(commands.dropFirst().first == shiftF10Command)
         #expect(commands.contains(backslashCommand))
         #expect(commands.last == returnCommand)
+    }
+
+    @Test("OOBE bypass sequence dismisses modals and waits for command prompt")
+    func oobeBypassSequenceDismissesModalsAndWaitsForCommandPrompt() {
+        let steps = QEMUOOBEBypassKeySequence.steps
+
+        #expect(steps.prefix(2).map(\.key) == ["esc", "shift-f10"])
+        #expect(steps[1].delayAfterSend >= 3.0)
+        #expect(steps.map(\.key).suffix(15) == [
+            "o", "o", "b", "e",
+            "backslash",
+            "b", "y", "p", "a", "s", "s", "n", "r", "o",
+            "ret"
+        ])
     }
 
     @Test("QMP control command builder emits system powerdown payload")

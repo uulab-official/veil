@@ -1054,9 +1054,13 @@ public struct QEMUWindowsBootLaunchPlanner: Sendable {
         from plan: QEMUWindowsBootPlan,
         serialLogPath: String,
         monitorSocketPath: String,
-        qmpSocketPath: String
+        qmpSocketPath: String,
+        bootDiskFirst: Bool = false
     ) -> [String] {
         var arguments = plan.arguments.map(QEMUWindowsBootArgumentRewriter.lockSafeSystemDriveArgument)
+        if bootDiskFirst {
+            arguments = QEMUWindowsBootArgumentRewriter.bootDiskFirstArguments(arguments)
+        }
 
         arguments.append(contentsOf: [
             "-serial", "file:\(serialLogPath)",
@@ -1116,6 +1120,18 @@ public enum QEMUWindowsInstallerBootPolicy {
 }
 
 private enum QEMUWindowsBootArgumentRewriter {
+    static func bootDiskFirstArguments(_ arguments: [String]) -> [String] {
+        var rewritten = arguments
+        guard let bootIndex = rewritten.firstIndex(of: "-boot"),
+              rewritten.indices.contains(bootIndex + 1) else {
+            rewritten.append(contentsOf: ["-boot", "order=c"])
+            return rewritten
+        }
+
+        rewritten[bootIndex + 1] = "order=c"
+        return rewritten
+    }
+
     static func lockSafeSystemDriveArgument(_ argument: String) -> String {
         guard argument.contains("id=system"),
               argument.contains("format=raw"),
@@ -1203,13 +1219,7 @@ public enum QEMUQMPKeyboardCommandBuilder {
     }
 
     public static func oobeBypassCommands() throws -> [String] {
-        try [
-            "shift-f10",
-            "o", "o", "b", "e",
-            "backslash",
-            "b", "y", "p", "a", "s", "s", "n", "r", "o",
-            "ret"
-        ].map(sendKeyCommand(for:))
+        try QEMUOOBEBypassKeySequence.steps.map(\.key).map(sendKeyCommand(for:))
     }
 
     private static func qcodes(for key: String) throws -> [String] {
@@ -1262,6 +1272,38 @@ public enum QEMUQMPKeyboardCommandBuilder {
     private static func jsonLine(_ object: [String: Any]) throws -> String {
         try QEMUQMPCommandJSONEncoder.jsonLine(object)
     }
+}
+
+public struct QEMUKeySequenceStep: Equatable, Sendable {
+    public var key: String
+    public var delayAfterSend: TimeInterval
+
+    public init(key: String, delayAfterSend: TimeInterval) {
+        self.key = key
+        self.delayAfterSend = delayAfterSend
+    }
+}
+
+public enum QEMUOOBEBypassKeySequence {
+    public static let steps: [QEMUKeySequenceStep] = [
+        QEMUKeySequenceStep(key: "esc", delayAfterSend: 0.4),
+        QEMUKeySequenceStep(key: "shift-f10", delayAfterSend: 3.0),
+        QEMUKeySequenceStep(key: "o", delayAfterSend: 0.12),
+        QEMUKeySequenceStep(key: "o", delayAfterSend: 0.12),
+        QEMUKeySequenceStep(key: "b", delayAfterSend: 0.12),
+        QEMUKeySequenceStep(key: "e", delayAfterSend: 0.12),
+        QEMUKeySequenceStep(key: "backslash", delayAfterSend: 0.12),
+        QEMUKeySequenceStep(key: "b", delayAfterSend: 0.12),
+        QEMUKeySequenceStep(key: "y", delayAfterSend: 0.12),
+        QEMUKeySequenceStep(key: "p", delayAfterSend: 0.12),
+        QEMUKeySequenceStep(key: "a", delayAfterSend: 0.12),
+        QEMUKeySequenceStep(key: "s", delayAfterSend: 0.12),
+        QEMUKeySequenceStep(key: "s", delayAfterSend: 0.12),
+        QEMUKeySequenceStep(key: "n", delayAfterSend: 0.12),
+        QEMUKeySequenceStep(key: "r", delayAfterSend: 0.12),
+        QEMUKeySequenceStep(key: "o", delayAfterSend: 0.12),
+        QEMUKeySequenceStep(key: "ret", delayAfterSend: 0.25)
+    ]
 }
 
 public enum QEMUQMPControlCommandBuilder {

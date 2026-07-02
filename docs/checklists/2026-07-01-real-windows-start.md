@@ -134,11 +134,16 @@ Goal: keep the main Veil experience pointed at real local Windows boot and conso
 - [x] Verify the current pre-QMP launch still refuses HMP control: `qemu-powerdown --wait-seconds 10` records `transport=hmp`, `terminationStatus=1`, and `didExitWithinWait=false`.
 - [x] Add a guarded `qemu-force-stop` last-resort recovery path that refuses to run without `--i-understand-data-loss`.
 - [x] Simplify the active setup UI so the Windows display is the primary surface and the bottom area is a thin control bar instead of a multi-card dashboard.
+- [x] Make the app Stop action terminate a matching live QEMU launch record PID, not only QEMU processes launched by the current app session.
+- [x] Force-stop the old pre-QMP live launch, relaunch QEMU with a QMP socket, and recapture the installed Windows OOBE network screen from the local disk.
+- [x] Identify the post-OOBE-bypass reboot blocker: the live launch still used ISO-first `-boot order=d`, so firmware stayed at TianoCore instead of returning to the installed NVMe disk.
+- [x] Update the launch planner so partially installed or installed disks relaunch with disk-first `-boot order=c`.
+- [x] Record the current OOBE automation limit: QMP opens the Administrator command prompt with `shift-f10`, but QMP letter input does not yet reliably type `oobe\bypassnro` into the elevated Windows command prompt.
 
 ## Next
 
 - [ ] Run `dotnet build apps/windows-agent/src/VeilAgent/VeilAgent.csproj` on a machine with the .NET 8 SDK installed.
-- [ ] Capture the current pre-QMP VM screen, use guarded force-stop only if normal shutdown still fails, relaunch it so `qemu-launch-latest.json` includes a QMP socket path, then re-run `qemu-oobe-bypass` and capture whether the OOBE recovery input is accepted.
+- [ ] Build a screenshot-verified OOBE input harness that waits for Windows UI readiness before sending `shift-f10`, then proves that `oobe\bypassnro` appears in the command prompt before pressing Enter.
 - [ ] Continue the persistent visible Windows Setup install through first reboot.
 - [ ] Run `Veil Shared\Veil Guest Agent\Install Veil Agent.cmd` inside Windows 11 Arm and verify the current-session agent plus the `VeilAgent` logon task both start.
 - [ ] Verify the Win32/GDI HWND capture path inside Windows 11 Arm and record the captured Notepad frame evidence.

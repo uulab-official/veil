@@ -968,6 +968,7 @@ public struct LocalVMRuntimeService: VMRuntimeService {
     private let automaticInstallMediaBuilder: any AutomaticInstallMediaBuilding
     private let consoleScreenshotRefresher: @Sendable (URL, URL) -> Void
     private let qemuLaunchProcessIsRunning: @Sendable (Int32) -> Bool
+    private let qemuLaunchProcessTerminator: @Sendable (Int32) -> Bool
     private let firmwareVarsTemplatePaths: [String]
 
     public init(
@@ -982,6 +983,7 @@ public struct LocalVMRuntimeService: VMRuntimeService {
         automaticInstallMediaBuilder: any AutomaticInstallMediaBuilding = HdiutilAutomaticInstallMediaBuilder(),
         consoleScreenshotRefresher: @escaping @Sendable (URL, URL) -> Void = QEMUVMRuntimeBooter.captureConsoleScreenshot,
         qemuLaunchProcessIsRunning: @escaping @Sendable (Int32) -> Bool = LocalVMRuntimeService.processIsRunning,
+        qemuLaunchProcessTerminator: @escaping @Sendable (Int32) -> Bool = LocalVMRuntimeService.terminateProcess,
         firmwareVarsTemplatePaths: [String]? = nil
     ) {
         self.profileStore = profileStore
@@ -995,6 +997,7 @@ public struct LocalVMRuntimeService: VMRuntimeService {
         self.automaticInstallMediaBuilder = automaticInstallMediaBuilder
         self.consoleScreenshotRefresher = consoleScreenshotRefresher
         self.qemuLaunchProcessIsRunning = qemuLaunchProcessIsRunning
+        self.qemuLaunchProcessTerminator = qemuLaunchProcessTerminator
         self.firmwareVarsTemplatePaths = firmwareVarsTemplatePaths
             ?? (
                 LocalQEMUWindowsBootPlanFactory.defaultSecureFirmwareVarsTemplatePaths(homeDirectory: defaultHomeDirectory)
@@ -1390,6 +1393,38 @@ public struct LocalVMRuntimeService: VMRuntimeService {
         }
     }
 
+    public static func terminateProcess(pid: Int32) -> Bool {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/kill")
+        process.arguments = ["-TERM", String(pid)]
+        process.standardOutput = Pipe()
+        process.standardError = Pipe()
+
+        do {
+            try process.run()
+            process.waitUntilExit()
+            return process.terminationStatus == 0
+        } catch {
+            return false
+        }
+    }
+
+    private static func stopQEMULaunchIfRunning(
+        _ launchRecord: QEMULaunchRecord?,
+        profile: VMProfile,
+        processIsRunning: @Sendable (Int32) -> Bool,
+        processTerminator: @Sendable (Int32) -> Bool
+    ) {
+        guard let pid = launchRecord?.pid,
+              let virtualDiskPath = profile.virtualDiskPath,
+              launchRecord?.arguments.contains(where: { $0.contains(virtualDiskPath) }) == true,
+              processIsRunning(pid) else {
+            return
+        }
+
+        _ = processTerminator(pid)
+    }
+
     private func refreshedConsoleScreenshotPath(from launchRecord: QEMULaunchRecord?) -> String? {
         guard let path = Self.existingConsoleScreenshotPath(from: launchRecord),
               let monitorSocketPath = launchRecord?.monitorSocketPath,
@@ -1663,7 +1698,17 @@ public struct LocalVMRuntimeService: VMRuntimeService {
     }
 
     public func stop() async throws -> VMRuntimeSnapshot {
+        let profile = try await profileStore.load()
+        let latestLaunchRecord = try? await qemuLaunchRecordStore.loadLatest()
         _ = try await bootRunner.stop()
+        if let profile {
+            Self.stopQEMULaunchIfRunning(
+                latestLaunchRecord,
+                profile: profile,
+                processIsRunning: qemuLaunchProcessIsRunning,
+                processTerminator: qemuLaunchProcessTerminator
+            )
+        }
         return try await loadSnapshot()
     }
 

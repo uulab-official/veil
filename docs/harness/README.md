@@ -114,9 +114,13 @@ commands through the latest launch record. On new launches it prefers QMP
 It intentionally exposes only key operations rather than arbitrary monitor text
 so recovery commands cannot accidentally terminate a live Windows VM.
 `veil-vmctl qemu-oobe-bypass [--json]` is a convenience sequence for the common
-Windows OOBE `Shift+F10` plus `oobe\bypassnro` recovery path. The JSON record
-proves what was attempted; a fresh `qemu-capture` screenshot remains the
-authority for whether Windows accepted the input.
+Windows OOBE `Shift+F10` plus `oobe\bypassnro` recovery path. The sequence first
+sends `esc` to dismiss modal driver/folder dialogs, waits for the command prompt
+after `Shift+F10`, and then sends the command text. The JSON record proves what
+was attempted; a fresh `qemu-capture` screenshot remains the authority for
+whether Windows accepted the input. Current live evidence shows QMP special keys
+opening the Administrator command prompt, while QMP letter input still needs a
+screenshot-proven path before OOBE bypass can be considered automated.
 
 QMP behavior follows QEMU's documented JSON monitor protocol and `send-key`
 command shape:

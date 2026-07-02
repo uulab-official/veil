@@ -492,7 +492,8 @@ struct VeilVMControl {
             from: plan,
             serialLogPath: serialLogURL.path,
             monitorSocketPath: monitorSocketURL.path,
-            qmpSocketPath: qmpSocketURL.path
+            qmpSocketPath: qmpSocketURL.path,
+            bootDiskFirst: !shouldSendInstallerBootKey
         )
 
         let process = Process()
@@ -697,20 +698,26 @@ struct VeilVMControl {
     }
 
     private static func sendQEMUOOBEBypass(json: Bool) async throws {
-        let keys = [
-            "shift-f10",
-            "o", "o", "b", "e",
-            "backslash",
-            "b", "y", "p", "a", "s", "s", "n", "r", "o",
-            "ret"
-        ]
-        try await sendQEMUKeys(json: json, keys: keys, delayAfterFirstKey: 1.0)
+        try await sendQEMUKeySteps(json: json, steps: QEMUOOBEBypassKeySequence.steps)
     }
 
     private static func sendQEMUKeys(
         json: Bool,
         keys: [String],
         delayAfterFirstKey: TimeInterval = 0.08
+    ) async throws {
+        let steps = keys.enumerated().map { index, key in
+            QEMUKeySequenceStep(
+                key: key,
+                delayAfterSend: index == 0 ? delayAfterFirstKey : 0.08
+            )
+        }
+        try await sendQEMUKeySteps(json: json, steps: steps)
+    }
+
+    private static func sendQEMUKeySteps(
+        json: Bool,
+        steps: [QEMUKeySequenceStep]
     ) async throws {
         let launchRecord = try latestQEMULaunchRecord()
         let qmpSocketPath = launchRecord.qmpSocketPath?.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -720,7 +727,8 @@ struct VeilVMControl {
         }
 
         var results: [QEMUKeySendResult] = []
-        for (index, key) in keys.enumerated() {
+        for step in steps {
+            let key = step.key
             if canUseQMP, let qmpSocketPath {
                 let command = try QEMUQMPKeyboardCommandBuilder.sendKeyCommand(for: key)
                 results.append(sendQMPCommand(command, qmpSocketPath: qmpSocketPath, key: key))
@@ -728,13 +736,12 @@ struct VeilVMControl {
                 let command = "sendkey \(key)"
                 results.append(sendQEMUMonitorLine(command, monitorSocketPath: launchRecord.monitorSocketPath, key: key))
             }
-            let delay = index == 0 ? delayAfterFirstKey : 0.08
-            try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+            try? await Task.sleep(nanoseconds: UInt64(step.delayAfterSend * 1_000_000_000))
         }
 
         let record = QEMUKeySendRecord(
             monitorSocketPath: launchRecord.monitorSocketPath,
-            keys: keys,
+            keys: steps.map(\.key),
             results: results,
             sentAt: Date()
         )

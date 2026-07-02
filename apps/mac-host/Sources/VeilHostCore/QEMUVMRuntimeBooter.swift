@@ -141,7 +141,8 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
             from: plan,
             serialLogPath: serialLogURL.path,
             monitorSocketPath: monitorSocketURL.path,
-            qmpSocketPath: qmpSocketURL.path
+            qmpSocketPath: qmpSocketURL.path,
+            bootDiskFirst: !shouldSendInstallerBootKey
         )
         process.standardOutput = logHandle
         process.standardError = logHandle
