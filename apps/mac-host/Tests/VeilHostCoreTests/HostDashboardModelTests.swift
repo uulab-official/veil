@@ -190,8 +190,9 @@ struct HostDashboardModelTests {
     @Test("loads demo overview when primary agent is unavailable")
     @MainActor
     func loadsDemoOverviewWhenPrimaryAgentIsUnavailable() async throws {
+        let primary = FakeDashboardService(error: URLError(.cannotConnectToHost))
         let service = FallbackHostDashboardService(
-            primary: FakeDashboardService(error: URLError(.cannotConnectToHost)),
+            primary: primary,
             fallback: DemoHostDashboardService(),
             primaryEndpointDescription: "ws://127.0.0.1:18444"
         )
@@ -209,6 +210,29 @@ struct HostDashboardModelTests {
         #expect(model.connectionDetail == "No Windows agent reachable at ws://127.0.0.1:18444. Showing built-in demo data.")
         #expect(model.apps.map(\.id).contains("winapp_notepad"))
         #expect(model.canLaunchSelectedApp)
+    }
+
+    @Test("refresh live agent retries after demo fallback")
+    @MainActor
+    func refreshLiveAgentRetriesAfterDemoFallback() async throws {
+        let primary = FakeDashboardService(error: URLError(.cannotConnectToHost))
+        let service = FallbackHostDashboardService(
+            primary: primary,
+            fallback: DemoHostDashboardService(),
+            primaryEndpointDescription: "ws://127.0.0.1:18444"
+        )
+        let model = HostDashboardModel(service: service)
+
+        await model.load()
+        primary.error = nil
+        await model.refreshLiveAgentIfNeeded()
+
+        #expect(model.phase == .connected)
+        #expect(model.connectionMode == .agent)
+        #expect(model.health?.agentVersion == "0.1.0")
+        #expect(model.hasLiveAgentConnection)
+        #expect(model.connectionDetail == nil)
+        #expect(primary.loadCount == 2)
     }
 
     @Test("launches demo Notepad when primary agent is unavailable")
@@ -256,6 +280,7 @@ private final class FakeDashboardService: HostDashboardService {
     var error: (any Error)?
     var health: AgentHealthResponse
     var apps: [WindowsApp]
+    private(set) var loadCount = 0
     private(set) var launchCount = 0
 
     init(error: (any Error)? = nil, health: AgentHealthResponse = .fixture, apps: [WindowsApp] = [.notepad]) {
@@ -265,6 +290,7 @@ private final class FakeDashboardService: HostDashboardService {
     }
 
     func loadOverview() async throws -> HostOverview {
+        loadCount += 1
         if let error {
             throw error
         }

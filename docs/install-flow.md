@@ -37,6 +37,7 @@ The first four are local host prerequisites. The guest agent step remains pendin
 - QEMU/HVF attaches the user-provided Windows ISO, the generated automatic install ISO, and the writable system disk when starting the VM.
 - Apple Virtualization can still build a `VZVirtualMachine` with the same profile, ISO, automatic install media, and writable disk, but it is no longer the preferred visible-console path while Windows installer display support remains unproven.
 - While the VM is running, Show Console brings the active QEMU Cocoa window forward when the QEMU provider is active.
+- While the VM is running, the host periodically retries the live guest-agent health check. When the Windows agent becomes reachable, Veil leaves demo mode and records guest-agent install evidence on the VM profile.
 - `./script/build_and_run.sh --start-vm` launches the signed app bundle with the prepared profile and starts the VM automatically.
 - Pressing Stop stops the active local VM process and closes host-side app bridge windows.
 - Each Start attempt records a metadata-only boot report with timestamps, result, resulting runtime state, selected profile, planned devices, and error text when startup fails.

@@ -14,6 +14,7 @@ struct VeilHostShellApp: App {
     )
     @State private var consoleMessage: String?
     @State private var agentEventTask: Task<Void, Never>?
+    @State private var agentReconnectTask: Task<Void, Never>?
 
     init() {
         let transport = URLSessionWebSocketTransport(
@@ -47,6 +48,7 @@ struct VeilHostShellApp: App {
                 .frame(minWidth: 960, idealWidth: 1000, minHeight: 530, idealHeight: 560)
                 .task {
                     startAgentEventPumpIfNeeded()
+                    startAgentReconnectPollerIfNeeded()
 
                     async let hostLoad: Void = model.load()
                     async let vmLoad: Void = vmModel.load()
@@ -161,6 +163,25 @@ struct VeilHostShellApp: App {
                 }
 
                 try? await Task.sleep(for: .seconds(2))
+            }
+        }
+    }
+
+    private func startAgentReconnectPollerIfNeeded() {
+        guard agentReconnectTask == nil else {
+            return
+        }
+
+        agentReconnectTask = Task { @MainActor in
+            while !Task.isCancelled {
+                let vmState = vmModel.snapshot?.state
+                let shouldPoll = (vmState == .running || vmState == .starting) && !model.hasLiveAgentConnection
+                if shouldPoll {
+                    await model.refreshLiveAgentIfNeeded()
+                    await recordGuestAgentInstallEvidenceIfNeeded()
+                }
+
+                try? await Task.sleep(for: .seconds(5))
             }
         }
     }

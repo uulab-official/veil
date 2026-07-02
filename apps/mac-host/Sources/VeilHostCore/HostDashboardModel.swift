@@ -161,6 +161,14 @@ public final class HostDashboardModel {
         }
     }
 
+    public func refreshLiveAgentIfNeeded() async {
+        guard !hasLiveAgentConnection else {
+            return
+        }
+
+        await load()
+    }
+
     public func launchSelectedApp() async {
         guard selectedApp != nil else {
             errorMessage = "Select an app before launching."
