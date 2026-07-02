@@ -1188,6 +1188,8 @@ public struct QEMUWindowsBootPromptAutomation: Sendable {
 public enum QEMUQMPKeyboardCommandError: Error, LocalizedError, Equatable, Sendable {
     case emptyKey
     case unsupportedKey(String)
+    case textTooLong(maximum: Int)
+    case unsupportedCharacter(String)
     case serializationFailed
 
     public var errorDescription: String? {
@@ -1196,6 +1198,10 @@ public enum QEMUQMPKeyboardCommandError: Error, LocalizedError, Equatable, Senda
             "QMP keyboard command requires a non-empty key."
         case .unsupportedKey(let key):
             "Unsupported QMP key '\(key)'."
+        case .textTooLong(let maximum):
+            "QMP text input is limited to \(maximum) characters."
+        case .unsupportedCharacter(let character):
+            "Unsupported QMP text character '\(character)'."
         case .serializationFailed:
             "QMP keyboard command could not be encoded as JSON."
         }
@@ -1234,6 +1240,14 @@ public enum QEMUQMPKeyboardCommandBuilder {
         try QEMUOOBEBypassKeySequence.steps.map(\.key).map(inputEventCommand(for:))
     }
 
+    public static func keySequence(forText text: String, maximumLength: Int = 2_048) throws -> [String] {
+        guard text.count <= maximumLength else {
+            throw QEMUQMPKeyboardCommandError.textTooLong(maximum: maximumLength)
+        }
+
+        return try text.map(qkey)
+    }
+
     private static func qcodes(for key: String) throws -> [String] {
         let normalized = key.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard !normalized.isEmpty else {
@@ -1257,6 +1271,8 @@ public enum QEMUQMPKeyboardCommandBuilder {
             return "spc"
         case "escape":
             return "esc"
+        case "cmd", "meta", "win", "windows":
+            return "meta_l"
         default:
             break
         }
@@ -1268,9 +1284,10 @@ public enum QEMUQMPKeyboardCommandBuilder {
         }
 
         let accepted = Set([
-            "shift", "ctrl", "alt", "meta", "cmd",
+            "shift", "ctrl", "alt", "meta_l",
             "esc", "ret", "spc", "tab", "backspace",
             "backslash", "slash", "minus", "equal", "dot", "comma",
+            "semicolon", "apostrophe", "grave_accent", "bracket_left", "bracket_right",
             "f1", "f2", "f3", "f4", "f5", "f6",
             "f7", "f8", "f9", "f10", "f11", "f12",
             "up", "down", "left", "right", "home", "end", "pgup", "pgdn", "delete"
@@ -1279,6 +1296,93 @@ public enum QEMUQMPKeyboardCommandBuilder {
             throw QEMUQMPKeyboardCommandError.unsupportedKey(key)
         }
         return key
+    }
+
+    private static func qkey(for character: Character) throws -> String {
+        if character >= "a" && character <= "z" {
+            return String(character)
+        }
+
+        if character >= "A" && character <= "Z" {
+            return "shift-\(String(character).lowercased())"
+        }
+
+        if character >= "0" && character <= "9" {
+            return String(character)
+        }
+
+        switch character {
+        case " ":
+            return "spc"
+        case "\n":
+            return "ret"
+        case "\\":
+            return "backslash"
+        case "/":
+            return "slash"
+        case "-":
+            return "minus"
+        case "=":
+            return "equal"
+        case ".":
+            return "dot"
+        case ",":
+            return "comma"
+        case ";":
+            return "semicolon"
+        case "'":
+            return "apostrophe"
+        case "`":
+            return "grave_accent"
+        case "[":
+            return "bracket_left"
+        case "]":
+            return "bracket_right"
+        case "!":
+            return "shift-1"
+        case "@":
+            return "shift-2"
+        case "#":
+            return "shift-3"
+        case "$":
+            return "shift-4"
+        case "%":
+            return "shift-5"
+        case "^":
+            return "shift-6"
+        case "&":
+            return "shift-7"
+        case "*":
+            return "shift-8"
+        case "(":
+            return "shift-9"
+        case ")":
+            return "shift-0"
+        case "_":
+            return "shift-minus"
+        case "+":
+            return "shift-equal"
+        case ":":
+            return "shift-semicolon"
+        case "\"":
+            return "shift-apostrophe"
+        case "|":
+            return "shift-backslash"
+        case "?":
+            return "shift-slash"
+        case "<":
+            return "shift-comma"
+        case ">":
+            return "shift-dot"
+        case "{":
+            return "shift-bracket_left"
+        case "}":
+            return "shift-bracket_right"
+        case "~":
+            return "shift-grave_accent"
+        default:
+            throw QEMUQMPKeyboardCommandError.unsupportedCharacter(String(character))
+        }
     }
 
     private static func inputKeyEvent(qcode: String, isDown: Bool) -> [String: Any] {

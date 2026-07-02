@@ -35,13 +35,20 @@ After Windows 11 Arm reaches the desktop, use the bundle that the macOS host sta
 Veil Shared\Veil Guest Agent\Install Veil Agent.cmd
 ```
 
-For the smoothest first-run path, publish a win-arm64 app bundle before building the install media:
+For the smoothest first-run path, publish a win-arm64 app bundle before building the install media.
+On macOS or Linux:
+
+```bash
+apps/windows-agent/scripts/publish-veil-agent-bundle.sh
+```
+
+On Windows or PowerShell:
 
 ```powershell
 apps\windows-agent\scripts\Publish-VeilAgentBundle.ps1
 ```
 
-That creates `apps\windows-agent\app\VeilAgent.exe` and its runtime payload. The installer prefers that packaged `app` folder and does not need the .NET SDK inside Windows. If no packaged `app` folder exists, the installer falls back to `dotnet publish`, which requires the .NET 8 SDK in the guest.
+That creates `apps\windows-agent\app\VeilAgent.exe` and its runtime payload. The installer prefers that packaged `app` folder and does not need the .NET SDK inside Windows. If no packaged `app` folder exists, the installer falls back to `dotnet publish`, which requires the .NET 8 SDK in the guest. The `app` folder is a local build artifact and is intentionally ignored by Git.
 
 For repository development without the shared-folder bundle, run this inside the guest:
 

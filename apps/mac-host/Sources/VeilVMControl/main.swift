@@ -14,6 +14,7 @@ enum VMControlError: Error, LocalizedError {
     case qemuMonitorUnavailable(String)
     case qemuScreenshotCaptureFailed(String)
     case missingQEMUKeySequence
+    case missingQEMUText
     case missingQEMUPointerCoordinate
     case qemuAlreadyRunning(pid: Int32, monitorSocketPath: String)
     case missingForceStopAcknowledgement
@@ -42,6 +43,8 @@ enum VMControlError: Error, LocalizedError {
             "QEMU console screenshot could not be captured: \(path)"
         case .missingQEMUKeySequence:
             "Missing QEMU key sequence. Pass keys such as shift-f10, esc, tab, ret, or spc."
+        case .missingQEMUText:
+            "Missing QEMU text. Pass qemu-type-text --text \"...\" with bounded ASCII input."
         case .missingQEMUPointerCoordinate:
             "Missing QEMU pointer coordinates. Pass --x and --y as absolute values from 0 to 32767."
         case .qemuAlreadyRunning(let pid, let monitorSocketPath):
@@ -51,7 +54,7 @@ enum VMControlError: Error, LocalizedError {
         }
     }
 
-    private static let usage = "Usage: veil-vmctl prepare --installer /path/to/Windows.iso [--drivers /path/to/virtio-win.iso] | veil-vmctl providers [--json] | veil-vmctl qemu-plan [--json] | veil-vmctl qemu-doctor [--json] | veil-vmctl qemu-smoke [--json] [--seconds 45] | veil-vmctl qemu-start [--json] [--wait-seconds 15] | veil-vmctl qemu-capture [--json] [--output /path/to/console.png] | veil-vmctl qemu-powerdown [--json] [--wait-seconds 30] | veil-vmctl qemu-force-stop [--json] --i-understand-data-loss [--wait-seconds 10] | veil-vmctl qemu-sendkey [--json] key [key ...] | veil-vmctl qemu-click [--json] --x 0...32767 --y 0...32767 | veil-vmctl qemu-oobe-bypass [--json]"
+    private static let usage = "Usage: veil-vmctl prepare --installer /path/to/Windows.iso [--drivers /path/to/virtio-win.iso] | veil-vmctl providers [--json] | veil-vmctl qemu-plan [--json] | veil-vmctl qemu-doctor [--json] | veil-vmctl qemu-smoke [--json] [--seconds 45] | veil-vmctl qemu-start [--json] [--wait-seconds 15] | veil-vmctl qemu-capture [--json] [--output /path/to/console.png] | veil-vmctl qemu-powerdown [--json] [--wait-seconds 30] | veil-vmctl qemu-force-stop [--json] --i-understand-data-loss [--wait-seconds 10] | veil-vmctl qemu-sendkey [--json] key [key ...] | veil-vmctl qemu-type-text [--json] --text \"...\" | veil-vmctl qemu-click [--json] --x 0...32767 --y 0...32767 | veil-vmctl qemu-oobe-bypass [--json]"
 }
 
 struct VMControlArguments {
@@ -66,6 +69,7 @@ struct VMControlArguments {
         case qemuPowerDown(json: Bool, waitSeconds: Int)
         case qemuForceStop(json: Bool, waitSeconds: Int, isAuthorized: Bool)
         case qemuSendKey(json: Bool, keys: [String])
+        case qemuTypeText(json: Bool, text: String)
         case qemuClick(json: Bool, x: Int, y: Int)
         case qemuOOBEBypass(json: Bool)
     }
@@ -132,6 +136,14 @@ struct VMControlArguments {
                 throw VMControlError.missingQEMUKeySequence
             }
             return VMControlArguments(command: .qemuSendKey(json: arguments.contains("--json"), keys: Array(keys)))
+        }
+
+        if command == "qemu-type-text" {
+            guard let text = stringArgument(named: "--text", from: arguments),
+                  !text.isEmpty else {
+                throw VMControlError.missingQEMUText
+            }
+            return VMControlArguments(command: .qemuTypeText(json: arguments.contains("--json"), text: text))
         }
 
         if command == "qemu-click" {
@@ -296,6 +308,8 @@ struct VeilVMControl {
             try await forceStopQEMU(json: json, waitSeconds: waitSeconds, isAuthorized: isAuthorized)
         case .qemuSendKey(let json, let keys):
             try await sendQEMUKeys(json: json, keys: keys)
+        case .qemuTypeText(let json, let text):
+            try await typeQEMUText(json: json, text: text)
         case .qemuClick(let json, let x, let y):
             try await clickQEMU(json: json, x: x, y: y)
         case .qemuOOBEBypass(let json):
@@ -783,6 +797,13 @@ struct VeilVMControl {
         print("QEMU key sequence sent")
         print("Monitor socket: \(record.monitorSocketPath)")
         print("Keys: \(record.keys.joined(separator: ", "))")
+    }
+
+    private static func typeQEMUText(json: Bool, text: String) async throws {
+        let steps = try QEMUQMPKeyboardCommandBuilder
+            .keySequence(forText: text)
+            .map { QEMUKeySequenceStep(key: $0, delayAfterSend: 0.035) }
+        try await sendQEMUKeySteps(json: json, steps: steps)
     }
 
     private static func clickQEMU(json: Bool, x: Int, y: Int) async throws {

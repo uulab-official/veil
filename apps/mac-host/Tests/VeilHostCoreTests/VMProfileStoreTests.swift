@@ -818,6 +818,9 @@ struct VMProfileStoreTests {
         #expect(answerFile.contains("<HideOnlineAccountScreens>true</HideOnlineAccountScreens>"))
         #expect(answerFile.contains("<HideWirelessSetupInOOBE>true</HideWirelessSetupInOOBE>"))
         #expect(answerFile.contains("HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\OOBE /v BypassNRO"))
+        #expect(answerFile.contains("<FirstLogonCommands>"))
+        #expect(answerFile.contains("Get-Volume -FileSystemLabel 'VEIL_AUTO'"))
+        #expect(answerFile.contains("Veil Guest Agent\\Install Veil Agent.cmd"))
         #expect(answerFile.range(
             of: #"<ProductKey>[\s\S]*?<Key>"#,
             options: .regularExpression

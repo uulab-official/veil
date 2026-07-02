@@ -866,6 +866,24 @@ struct QEMUWindowsBootPlanTests {
         #expect(payloads.map(\.1) == [true, true, false, false])
     }
 
+    @Test("QMP keyboard command builder maps Windows key aliases")
+    func qmpKeyboardCommandBuilderMapsWindowsKeyAliases() throws {
+        let command = try QEMUQMPKeyboardCommandBuilder.inputEventCommand(for: "cmd-r")
+        let data = try #require(command.data(using: .utf8))
+        let object = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let arguments = try #require(object["arguments"] as? [String: Any])
+        let events = try #require(arguments["events"] as? [[String: Any]])
+        let qcodes = events.compactMap { event -> String? in
+            guard let data = event["data"] as? [String: Any],
+                  let key = data["key"] as? [String: String] else {
+                return nil
+            }
+            return key["data"]
+        }
+
+        #expect(qcodes == ["meta_l", "r", "r", "meta_l"])
+    }
+
     @Test("QMP keyboard command builder maps OOBE bypass key sequence")
     func qmpKeyboardCommandBuilderMapsOOBEBypassSequence() throws {
         let commands = try QEMUQMPKeyboardCommandBuilder.oobeBypassCommands()
@@ -878,6 +896,31 @@ struct QEMUWindowsBootPlanTests {
         #expect(commands.dropFirst().first == shiftF10Command)
         #expect(commands.contains(backslashCommand))
         #expect(commands.last == returnCommand)
+    }
+
+    @Test("QMP keyboard command builder maps bounded ASCII text")
+    func qmpKeyboardCommandBuilderMapsBoundedASCIIText() throws {
+        let keys = try QEMUQMPKeyboardCommandBuilder.keySequence(forText: #"PowerShell -NoP -C "$v='VEIL_AUTO'; E:\Veil Guest Agent\Install Veil Agent.cmd""#)
+
+        #expect(keys.prefix(10) == [
+            "shift-p", "o", "w", "e", "r",
+            "shift-s", "h", "e", "l", "l"
+        ])
+        #expect(keys.contains("shift-4"))
+        #expect(keys.contains("shift-apostrophe"))
+        #expect(keys.contains("shift-semicolon"))
+        #expect(keys.contains("backslash"))
+        #expect(keys.contains("spc"))
+    }
+
+    @Test("QMP keyboard command builder rejects unsupported text")
+    func qmpKeyboardCommandBuilderRejectsUnsupportedText() throws {
+        #expect(throws: QEMUQMPKeyboardCommandError.unsupportedCharacter("한")) {
+            _ = try QEMUQMPKeyboardCommandBuilder.keySequence(forText: "한")
+        }
+        #expect(throws: QEMUQMPKeyboardCommandError.textTooLong(maximum: 4)) {
+            _ = try QEMUQMPKeyboardCommandBuilder.keySequence(forText: "12345", maximumLength: 4)
+        }
     }
 
     @Test("OOBE bypass sequence dismisses modals and waits for command prompt")

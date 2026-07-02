@@ -25,6 +25,7 @@ dotnet publish $ProjectPath `
     --configuration $Configuration `
     --runtime $Runtime `
     --self-contained:$SelfContained `
+    -p:EnableWindowsTargeting=true `
     --output $BundleRoot
 
 $AgentExe = Join-Path $BundleRoot "VeilAgent.exe"

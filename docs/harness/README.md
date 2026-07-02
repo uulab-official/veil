@@ -114,6 +114,13 @@ commands through the latest launch record. On new launches it prefers QMP
 falls back to HMP `sendkey`. It intentionally exposes only key operations rather
 than arbitrary monitor text so recovery commands cannot accidentally terminate a
 live Windows VM.
+
+`veil-vmctl qemu-type-text [--json] --text "..."` converts bounded ASCII text
+into QEMU key events and sends it through the latest launch record. It is for
+live recovery commands such as guest-agent install attempts when the Windows
+desktop is visible but no guest agent is connected yet. It intentionally rejects
+unsupported characters and long payloads; it is not a general remote shell.
+
 `veil-vmctl qemu-click [--json] --x <0...32767> --y <0...32767>` sends a bounded
 absolute left-click through QMP `input-send-event`. It is intended for
 screenshot-backed OOBE recovery steps such as activating "I do not have

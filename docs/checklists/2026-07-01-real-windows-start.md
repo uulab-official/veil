@@ -146,10 +146,15 @@ Goal: keep the main Veil experience pointed at real local Windows boot and conso
 - [x] Make the Windows agent installer prefer a packaged `app/VeilAgent.exe` bundle before falling back to guest-side `dotnet publish`.
 - [x] Add `Publish-VeilAgentBundle.ps1` for creating a win-arm64 self-contained agent bundle on a machine with the .NET 8 SDK.
 - [x] Verify the current `127.0.0.1:18444` listener is QEMU host forwarding only; `veil-host-probe` still times out until the guest agent is installed and started.
+- [x] Add a macOS/Linux `publish-veil-agent-bundle.sh` path so the host developer machine can produce `apps/windows-agent/app/VeilAgent.exe` without PowerShell.
+- [x] Add a first-logon `Autounattend.xml` command that finds the `VEIL_AUTO` media by volume label and runs `Veil Guest Agent\Install Veil Agent.cmd`.
+- [x] Produce the local win-arm64 `apps/windows-agent/app/VeilAgent.exe` bundle with the repo-local .NET 8 SDK.
+- [x] Rebuild `VeilAutoInstall.iso` and mount-verify that it contains `Autounattend.xml`, `Veil Guest Agent\Install Veil Agent.cmd`, and `Veil Guest Agent\app\VeilAgent.exe`.
+- [x] Add bounded `veil-vmctl qemu-type-text --text ...` input so live Windows recovery/install commands can be typed through the QMP input path instead of hand-driving the QEMU window.
+- [x] Attempt live agent install from the current Windows desktop with QMP input; `veil-host-probe` still times out, so this is not accepted as guest-agent-connected evidence.
 
 ## Next
 
-- [ ] Produce the packaged `apps/windows-agent/app/VeilAgent.exe` bundle on a machine with the .NET 8 SDK, then rebuild `VeilAutoInstall.iso`.
 - [ ] Run `Veil Shared\Veil Guest Agent\Install Veil Agent.cmd` inside Windows 11 Arm and verify the current-session agent plus the `VeilAgent` logon task both start.
 - [ ] Verify the Win32/GDI HWND capture path inside Windows 11 Arm and record the captured Notepad frame evidence.
 - [ ] Tune the Windows agent frame stream for lower latency after correctness is verified.
