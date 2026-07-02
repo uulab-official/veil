@@ -25,6 +25,7 @@ Goal: make Veil's product direction visible as "Windows app as a macOS window" i
 - [x] Persist mapped app window intent across host app relaunch.
 - [x] Make fake-agent advertise capture support and broadcast fixture `window.frame` events to host event clients.
 - [x] Extend fake-host launch flow to subscribe to Notepad capture and verify a received `window.frame`.
+- [x] Make mirrored app windows frame-first by removing header, debug caption, and status tiles once capture frames arrive.
 
 ## Next
 
