@@ -81,6 +81,7 @@ public final class HostDashboardModel {
     public private(set) var errorMessage: String?
     public private(set) var connectionMode: HostConnectionMode = .agent
     public private(set) var connectionDetail: String?
+    public private(set) var pendingLaunchAppId: String?
     public var selectedAppId: String?
 
     private let service: any HostDashboardService
@@ -129,6 +130,10 @@ public final class HostDashboardModel {
             && phase != .launching
     }
 
+    public var canRequestSelectedAppLaunch: Bool {
+        selectedApp?.id == "winapp_notepad" && phase != .loading && phase != .launching
+    }
+
     public var hasLiveAgentConnection: Bool {
         phase == .connected && connectionMode == .agent && health != nil
     }
@@ -170,6 +175,12 @@ public final class HostDashboardModel {
         }
 
         await load()
+
+        if hasLiveAgentConnection,
+           pendingLaunchAppId == "winapp_notepad" {
+            pendingLaunchAppId = nil
+            await launchNotepad()
+        }
     }
 
     public func launchSelectedApp() async {
@@ -180,8 +191,8 @@ public final class HostDashboardModel {
         }
 
         guard hasLiveAgentConnection else {
-            errorMessage = "Connect the Windows guest agent before opening a Mac window."
-            phase = .failed
+            pendingLaunchAppId = selectedAppId
+            errorMessage = nil
             return
         }
 

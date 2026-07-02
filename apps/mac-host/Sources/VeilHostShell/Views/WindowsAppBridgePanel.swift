@@ -38,7 +38,7 @@ struct WindowsAppBridgePanel: View {
                         .frame(minWidth: 210)
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(!model.canLaunchSelectedApp || model.phase == .loading || model.phase == .launching)
+                .disabled(!model.canRequestSelectedAppLaunch || model.phase == .loading || model.phase == .launching)
 
                 if let lastSession = model.mirrorSessions.last {
                     Label("\(lastSession.window.title) mapped", systemImage: "checkmark.circle.fill")
@@ -89,8 +89,12 @@ struct WindowsAppBridgePanel: View {
             return "Opening..."
         }
 
+        if model.pendingLaunchAppId != nil {
+            return "Queued For Agent"
+        }
+
         if !model.hasLiveAgentConnection {
-            return "Waiting For Agent"
+            return "Open When Ready"
         }
 
         return "Open As Mac Window"

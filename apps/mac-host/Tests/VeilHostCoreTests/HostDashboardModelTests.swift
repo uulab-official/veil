@@ -235,11 +235,12 @@ struct HostDashboardModelTests {
         #expect(primary.loadCount == 2)
     }
 
-    @Test("does not launch demo Notepad as a Mac window when primary agent is unavailable")
+    @Test("queues Notepad launch until live agent connects")
     @MainActor
-    func doesNotLaunchDemoNotepadAsMacWindowWhenPrimaryAgentIsUnavailable() async throws {
+    func queuesNotepadLaunchUntilLiveAgentConnects() async throws {
+        let primary = FakeDashboardService(error: URLError(.cannotConnectToHost))
         let service = FallbackHostDashboardService(
-            primary: FakeDashboardService(error: URLError(.cannotConnectToHost)),
+            primary: primary,
             fallback: DemoHostDashboardService(),
             primaryEndpointDescription: "ws://127.0.0.1:18444"
         )
@@ -248,12 +249,22 @@ struct HostDashboardModelTests {
         await model.load()
         await model.launchSelectedApp()
 
-        #expect(model.phase == .failed)
-        #expect(model.errorMessage == "Connect the Windows guest agent before opening a Mac window.")
+        #expect(model.phase == .connected)
+        #expect(model.errorMessage == nil)
         #expect(model.lastLaunch == nil)
         #expect(model.mirrorSessions.isEmpty)
+        #expect(model.pendingLaunchAppId == "winapp_notepad")
         #expect(model.connectionMode == .demo)
         #expect(model.connectionDetail == "No Windows agent reachable at ws://127.0.0.1:18444. Showing built-in demo data.")
+
+        primary.error = nil
+        await model.refreshLiveAgentIfNeeded()
+
+        #expect(model.connectionMode == .agent)
+        #expect(model.pendingLaunchAppId == nil)
+        #expect(model.lastLaunch?.window.title == "Untitled - Notepad")
+        #expect(model.mirrorSessions.map(\.id) == ["hwnd:0003029A"])
+        #expect(primary.launchCount == 1)
     }
 
     @Test("does not hide primary agent protocol failures behind demo fallback")

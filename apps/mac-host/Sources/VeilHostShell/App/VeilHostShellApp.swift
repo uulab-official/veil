@@ -224,6 +224,14 @@ struct VeilHostShellApp: App {
 
             await model.launchSelectedApp()
 
+            if model.pendingLaunchAppId != nil,
+               !model.hasLiveAgentConnection,
+               vmModel.canStart {
+                consoleMessage = "Starting Windows. Veil will open the app when the guest agent connects."
+                startVMAndShowConsole()
+                return
+            }
+
             guard let result = model.lastLaunch else {
                 return
             }
