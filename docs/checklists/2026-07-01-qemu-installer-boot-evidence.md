@@ -18,8 +18,16 @@ Goal: move from QEMU readiness into real Windows installer boot evidence.
 - [x] Read `qemu-launch-latest.json` into runtime snapshots and show the latest console PNG in the setup surface.
 - [x] Send bounded boot-prompt key input during `qemu-smoke` and require `boot-prompt-key-sent` evidence for UEFI shell reports.
 - [x] Prove a Windows Setup screen with the selected ISO and commit the working device recipe.
+- [x] Advance past the product-key prompt without bundling a `ProductKey/Key` value.
+- [x] Record the next real Windows Setup blocker: TPM 2.0 and Secure Boot are required.
+- [ ] Add a TPM 2.0 and Secure Boot-capable QEMU/HVF recipe.
 
 Evidence: on July 2, 2026, `veil-vmctl qemu-smoke --json --seconds 25`
 generated a console PNG showing the Korean Windows 11 Setup product-key screen
 with the local `Win11_25H2_Korean_Arm64_v2.iso`. The JSON serial classifier was
 `runningNoDecision`, so the console PNG is the proof for this checkpoint.
+
+Follow-up evidence: after regenerating `Autounattend.xml` with
+`ProductKey/WillShowUI=Never` and no `ProductKey/Key`, a July 2, 2026
+`qemu-smoke --json --seconds 60` run generated a console PNG showing Windows 11
+Setup's Korean TPM 2.0 and Secure Boot requirements failure page.

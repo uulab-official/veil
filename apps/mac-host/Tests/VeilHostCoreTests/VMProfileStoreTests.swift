@@ -649,7 +649,12 @@ struct VMProfileStoreTests {
         #expect(answerFile.contains("<Key>/IMAGE/NAME</Key>"))
         #expect(answerFile.contains("<Value>Windows 11 Pro</Value>"))
         #expect(answerFile.contains("<WillShowUI>OnError</WillShowUI>"))
-        #expect(!answerFile.localizedCaseInsensitiveContains("<ProductKey>"))
+        #expect(answerFile.contains("<ProductKey>"))
+        #expect(answerFile.contains("<WillShowUI>Never</WillShowUI>"))
+        #expect(answerFile.range(
+            of: #"<ProductKey>[\s\S]*?<Key>"#,
+            options: .regularExpression
+        ) == nil)
         #expect(FileManager.default.fileExists(atPath: installScriptURL.path))
         #expect(FileManager.default.fileExists(atPath: startScriptURL.path))
         #expect(FileManager.default.fileExists(atPath: projectURL.path))
@@ -687,6 +692,42 @@ struct VMProfileStoreTests {
         #expect(snapshot.installerMediaPath == profile.installerMediaPath)
         #expect(snapshot.installationSteps.first { $0.id == "windows-installer" }?.state == .complete)
         #expect(snapshot.bootReady)
+    }
+
+    @Test("automatic install media is rebuilt when the answer file is newer")
+    func automaticInstallMediaIsRebuiltWhenAnswerFileIsNewer() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let answerFileURL = directory.appendingPathComponent("Autounattend.xml")
+        let mediaURL = directory.appendingPathComponent("VeilAutoInstall.iso")
+        try Data("answer v2".utf8).write(to: answerFileURL)
+        try Data("stale media".utf8).write(to: mediaURL)
+        try FileManager.default.setAttributes(
+            [.modificationDate: Date(timeIntervalSince1970: 10)],
+            ofItemAtPath: mediaURL.path
+        )
+        try FileManager.default.setAttributes(
+            [.modificationDate: Date(timeIntervalSince1970: 20)],
+            ofItemAtPath: answerFileURL.path
+        )
+        final class Capture: @unchecked Sendable {
+            var processCalls = 0
+        }
+        let capture = Capture()
+        let builder = HdiutilAutomaticInstallMediaBuilder { _, arguments in
+            capture.processCalls += 1
+            let outputIndex = try #require(arguments.firstIndex(of: "-o"))
+            #expect(arguments.indices.contains(outputIndex + 1))
+            let outputPath = arguments[outputIndex + 1]
+            try Data("fresh media".utf8).write(to: URL(fileURLWithPath: "\(outputPath).iso"))
+            return 0
+        }
+
+        try builder.prepareMedia(answerFileURL: answerFileURL, mediaURL: mediaURL)
+
+        #expect(capture.processCalls == 1)
+        #expect(try String(contentsOf: mediaURL, encoding: .utf8) == "fresh media")
     }
 
     @Test("load snapshot reports discovered installer before profile exists")

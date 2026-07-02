@@ -69,10 +69,12 @@ Goal: keep the main Veil experience pointed at real local Windows boot and conso
 - [x] Send a continuing `window.frame` stream from the Windows guest agent after the first Notepad frame.
 - [x] Persist guest-agent install evidence back to the VM profile after a real Windows guest connects from the VM.
 - [x] Improve `Autounattend.xml` so Windows Setup can select Windows 11 Pro without bundling a product key.
+- [x] Add `ProductKey/WillShowUI=Never` without emitting a `ProductKey/Key` value.
 - [x] Record QEMU app launches with a VM-console `screendump` screenshot path for visual boot evidence.
 - [x] Extend bounded `qemu-smoke` to validate VM-console screenshot paths, not only serial text.
 - [x] Send bounded boot-prompt key input during `qemu-smoke` and record `boot-prompt-key-sent` evidence.
 - [x] Verify a bounded `qemu-smoke --seconds 25` console PNG reaches the Korean Windows 11 Setup product-key screen.
+- [x] Verify a bounded `qemu-smoke --seconds 60` console PNG advances past product key and reaches the Windows 11 TPM/Secure Boot requirements failure page.
 - [x] Add recovery copy to QEMU smoke reports for common boot failures.
 - [x] Convert QEMU monitor screenshots to PNG paths so users can inspect boot evidence directly.
 - [x] Surface the latest QEMU console PNG inside the Windows setup screen when launch evidence exists.
@@ -95,6 +97,7 @@ Goal: keep the main Veil experience pointed at real local Windows boot and conso
 ## Next
 
 - [ ] Run `dotnet build apps/windows-agent/src/VeilAgent/VeilAgent.csproj` on a machine with the .NET 8 SDK installed.
+- [ ] Add a TPM 2.0 and Secure Boot-capable QEMU/HVF recipe; current local Homebrew QEMU has no `swtpm` binary and no AArch64 secure-code firmware path detected.
 - [ ] Run `Veil Shared\Veil Guest Agent\Install Veil Agent.cmd` inside Windows 11 Arm and verify the current-session agent plus the `VeilAgent` logon task both start.
 - [ ] Verify the Win32/GDI HWND capture path inside Windows 11 Arm and record the captured Notepad frame evidence.
 - [ ] Tune the Windows agent frame stream for lower latency after correctness is verified.

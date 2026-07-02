@@ -29,6 +29,8 @@ Generated answer files must not include Windows product keys, including generic 
 
 - https://learn.microsoft.com/en-us/windows-hardware/customize/desktop/unattend/microsoft-windows-setup-userdata-productkey-key
 
+Veil may set `ProductKey/WillShowUI` to control whether Windows Setup shows the product-key UI, but it must not emit a `ProductKey/Key` value. That keeps the setup assistant from acting as a key distributor or activation workaround.
+
 When Veil needs to reduce edition-selection prompts, it should prefer Windows Setup image metadata such as `/IMAGE/NAME` in `ImageInstall/OSImage/InstallFrom/MetaData`, which Microsoft documents as selecting an edition or image from a `.wim` file:
 
 - https://learn.microsoft.com/en-us/windows-hardware/customize/desktop/unattend/microsoft-windows-setup-imageinstall-osimage-installfrom-metadata

@@ -21,7 +21,7 @@ The first four are local host prerequisites. The guest agent step remains pendin
 ## Current Host Behavior
 
 - Prepare VM creates the default Windows 11 Arm profile, the macOS shared folder at `~/Veil Shared`, and the default sparse disk in one action.
-- Prepare VM creates `~/Veil Shared/Autounattend.xml` with Windows Setup language/OOBE inputs and no product key.
+- Prepare VM creates `~/Veil Shared/Autounattend.xml` with Windows Setup language/OOBE inputs and no product key value.
 - Prepare VM creates `~/Veil Shared/VeilAutoInstall.iso`, a small local ISO containing only `Autounattend.xml`, so Windows Setup can read unattended inputs as a VM-attached device.
 - Prepare VM applies an adaptive resource profile from the current Mac: half of host CPU cores up to a safe cap, 25% of physical memory rounded down to a conservative VM cap, and a 128 GB default sparse disk.
 - `veil-vmctl prepare --installer <path>` prepares the same local profile, shared folder, default sparse disk, installer path, and diagnostics bundle from the command line.
@@ -80,8 +80,9 @@ Current QEMU boot evidence:
 - `virt,highmem=off` with more than 3 GB memory fails under HVF because address space is limited. A 3 GB `highmem=off` attempt reaches UEFI but still does not start Windows Setup.
 - `veil-vmctl qemu-smoke --json --seconds 25` now repeats the headless QEMU attempt in snapshot mode, sends bounded boot-prompt key input, writes serial/process logs plus a console PNG, and classifies the current result with `boot-prompt-key-sent` evidence.
 - On July 2, 2026, the bounded QEMU smoke run with the local `Win11_25H2_Korean_Arm64_v2.iso` produced a console PNG showing the Korean Windows 11 Setup product-key screen. The serial classifier remained `runningNoDecision`, so the screenshot is the authoritative evidence for that run.
+- After adding `ProductKey/WillShowUI=Never` without a `ProductKey/Key` value, a 60 second bounded QEMU smoke run advanced past the product-key prompt and reached the Korean Windows 11 requirements failure page. The next blocker is now explicit: Windows Setup requires TPM 2.0 and Secure Boot.
 
-This means Veil can now distinguish "QEMU is missing" from "QEMU and the ISO are present, boot prompt input was sent, and the console reached Windows Setup even when serial text stayed inconclusive." The next QEMU milestone is to continue that path through OOBE and the first guest-agent install without bundling Windows keys or media.
+This means Veil can now distinguish "QEMU is missing" from "QEMU and the ISO are present, boot prompt input was sent, the console reached Windows Setup, and Windows 11 is now blocked on TPM/Secure Boot device support." The next QEMU milestone is to add a local TPM 2.0 and Secure Boot-capable recipe, then continue through OOBE and the first guest-agent install without bundling Windows keys or media.
 
 References:
 

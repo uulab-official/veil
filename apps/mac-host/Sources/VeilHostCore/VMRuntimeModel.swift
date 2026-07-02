@@ -656,7 +656,7 @@ public struct HdiutilAutomaticInstallMediaBuilder: AutomaticInstallMediaBuilding
             throw VMRuntimeError.automaticInstallMediaCreationFailed("Autounattend.xml is missing.")
         }
 
-        if fileManager.fileExists(atPath: mediaURL.path) {
+        if Self.mediaIsCurrent(mediaURL: mediaURL, answerFileURL: answerFileURL) {
             return
         }
 
@@ -704,6 +704,17 @@ public struct HdiutilAutomaticInstallMediaBuilder: AutomaticInstallMediaBuilding
         } else {
             throw VMRuntimeError.automaticInstallMediaCreationFailed("hdiutil did not produce an ISO image.")
         }
+    }
+
+    private static func mediaIsCurrent(mediaURL: URL, answerFileURL: URL) -> Bool {
+        let fileManager = FileManager.default
+        guard fileManager.fileExists(atPath: mediaURL.path),
+              let mediaDate = try? fileManager.attributesOfItem(atPath: mediaURL.path)[.modificationDate] as? Date,
+              let answerDate = try? fileManager.attributesOfItem(atPath: answerFileURL.path)[.modificationDate] as? Date else {
+            return false
+        }
+
+        return mediaDate >= answerDate
     }
 
     public static func runProcess(executablePath: String, arguments: [String]) throws -> Int32 {
@@ -1282,11 +1293,17 @@ public struct LocalVMRuntimeService: VMRuntimeService {
 
     private static func prepareAutomaticInstallAnswerFile(for profile: VMProfile) throws {
         let answerFileURL = automaticInstallAnswerFileURL(for: profile)
-        guard !FileManager.default.fileExists(atPath: answerFileURL.path) else {
+        let answerFile = automaticInstallAnswerFile()
+        if FileManager.default.fileExists(atPath: answerFileURL.path),
+           (try? String(contentsOf: answerFileURL, encoding: .utf8)) == answerFile {
             return
         }
 
-        let answerFile = """
+        try answerFile.write(to: answerFileURL, atomically: true, encoding: .utf8)
+    }
+
+    private static func automaticInstallAnswerFile() -> String {
+        """
         <?xml version="1.0" encoding="utf-8"?>
         <unattend xmlns="urn:schemas-microsoft-com:unattend" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
           <settings pass="windowsPE">
@@ -1313,6 +1330,9 @@ public struct LocalVMRuntimeService: VMRuntimeService {
               </ImageInstall>
               <UserData>
                 <AcceptEula>true</AcceptEula>
+                <ProductKey>
+                  <WillShowUI>Never</WillShowUI>
+                </ProductKey>
               </UserData>
             </component>
           </settings>
@@ -1334,8 +1354,6 @@ public struct LocalVMRuntimeService: VMRuntimeService {
         </unattend>
 
         """
-
-        try answerFile.write(to: answerFileURL, atomically: true, encoding: .utf8)
     }
 
     private func discoverDefaultInstallerMedia() -> URL? {
