@@ -12,7 +12,7 @@
     "Open the console screenshot and serial log together to compare the visible firmware state with the boot text."
   ],
   "outcome": "uefiShell",
-  "consoleScreenshotPath": "/Users/test/Downloads/Veil Diagnostics/QEMU Smoke/qemu-smoke.console.ppm",
+  "consoleScreenshotPath": "/Users/test/Downloads/Veil Diagnostics/QEMU Smoke/qemu-smoke.console.png",
   "processLogPath": "/Users/test/Downloads/Veil Diagnostics/QEMU Smoke/qemu-smoke.process.log",
   "provider": "QEMU/HVF",
   "serialLogPath": "/Users/test/Downloads/Veil Diagnostics/QEMU Smoke/qemu-smoke.serial.log"

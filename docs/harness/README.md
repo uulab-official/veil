@@ -82,13 +82,13 @@ cd apps/mac-host
 swift run veil-vmctl qemu-smoke --json --seconds 25 | node ../../harness/qemu-smoke/src/validate-qemu-smoke.mjs
 ```
 
-The command uses snapshot mode and records logs plus a `qemu-smoke-*.console.ppm` VM-console screenshot path under `~/Downloads/Veil Diagnostics/QEMU Smoke`. It is allowed to start a local QEMU process for the requested bounded duration, ask QEMU's monitor for a `screendump`, then terminate it for classification. Every smoke report must also include recovery `nextActions` so boot failures point to concrete ISO, firmware, device, or log checks.
+The command uses snapshot mode and records logs plus a `qemu-smoke-*.console.png` VM-console screenshot path under `~/Downloads/Veil Diagnostics/QEMU Smoke`. It is allowed to start a local QEMU process for the requested bounded duration, ask QEMU's monitor for a `screendump`, convert the raw frame to PNG, then terminate it for classification. Every smoke report must also include recovery `nextActions` so boot failures point to concrete ISO, firmware, device, or log checks.
 
 ## QEMU Start Scenario
 
 `veil-vmctl qemu-start [--json]` is the guarded visible-launch spike for the local QEMU/HVF provider. Unlike `qemu-plan`, it starts a local QEMU process with the stored Windows Arm profile and a Cocoa display. Unlike `qemu-smoke`, it is not bounded or snapshot-only; it is meant for interactive Windows setup testing after `qemu-doctor` reports ready.
 
-The macOS app's QEMU launch boundary writes process logs under `~/Downloads/Veil Diagnostics/QEMU Launch`, reports the launched PID, and records a `qemu-console-*.ppm` path in `qemu-launch-latest.json`. The app asks QEMU's monitor to write that screenshot from the VM display, so the evidence is the guest console frame rather than a macOS desktop capture. It still does not distribute Windows media, activation keys, QEMU binaries, or firmware.
+The macOS app's QEMU launch boundary writes process logs under `~/Downloads/Veil Diagnostics/QEMU Launch`, reports the launched PID, and records a `qemu-console-*.png` path in `qemu-launch-latest.json`. The app asks QEMU's monitor to write that screenshot from the VM display and converts the raw frame to PNG, so the evidence is the guest console frame rather than a macOS desktop capture. It still does not distribute Windows media, activation keys, QEMU binaries, or firmware.
 
 ## First Scenario: Launch Notepad
 

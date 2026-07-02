@@ -63,8 +63,8 @@ export function validateQEMUSmoke(report) {
     throw new TypeError("QEMU smoke argumentFailure reports must include qemu-argument-error evidence.");
   }
 
-  if (!report.consoleScreenshotPath.endsWith(".ppm")) {
-    throw new TypeError("QEMU smoke consoleScreenshotPath must point to a .ppm image.");
+  if (!report.consoleScreenshotPath.endsWith(".png")) {
+    throw new TypeError("QEMU smoke consoleScreenshotPath must point to a .png image.");
   }
 
   if (report.outcome === "uefiShell" && !report.nextActions.some((action) => action.includes("bootaa64.efi"))) {

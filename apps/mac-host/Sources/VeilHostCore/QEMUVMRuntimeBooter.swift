@@ -88,7 +88,7 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
         let launchDirectory = try qemuLaunchDirectory()
         let stamp = Self.timestamp()
         let logURL = launchDirectory.appendingPathComponent("qemu-launch-\(stamp).log")
-        let consoleScreenshotURL = launchDirectory.appendingPathComponent("qemu-console-\(stamp).ppm")
+        let consoleScreenshotURL = launchDirectory.appendingPathComponent("qemu-console-\(stamp).png")
         FileManager.default.createFile(atPath: logURL.path, contents: nil)
         let logHandle = try FileHandle(forWritingTo: logURL)
         let monitorSocketURL = Self.monitorSocketURL()
@@ -237,17 +237,55 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
             return
         }
 
+        let rawImageURL = rawConsoleScreenshotURL(for: imageURL)
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/bin/sh")
         process.arguments = [
             "-c",
             "printf 'screendump \"%s\"\\n' \"$1\" | /usr/bin/nc -U \"$0\"",
             monitorSocketURL.path,
-            imageURL.path
+            rawImageURL.path
         ]
         process.standardOutput = nil
         process.standardError = nil
         try? process.run()
+        process.waitUntilExit()
+
+        guard imageURL.pathExtension.lowercased() == "png",
+              FileManager.default.fileExists(atPath: rawImageURL.path) else {
+            return
+        }
+
+        convertConsoleScreenshotToPNG(rawImageURL: rawImageURL, pngURL: imageURL)
+    }
+
+    private static func rawConsoleScreenshotURL(for imageURL: URL) -> URL {
+        guard imageURL.pathExtension.lowercased() == "png" else {
+            return imageURL
+        }
+
+        return imageURL
+            .deletingPathExtension()
+            .appendingPathExtension("ppm")
+    }
+
+    private static func convertConsoleScreenshotToPNG(rawImageURL: URL, pngURL: URL) {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/sips")
+        process.arguments = [
+            "-s", "format", "png",
+            rawImageURL.path,
+            "--out", pngURL.path
+        ]
+        process.standardOutput = nil
+        process.standardError = nil
+        try? process.run()
+        process.waitUntilExit()
+
+        if process.terminationStatus == 0,
+           FileManager.default.fileExists(atPath: pngURL.path) {
+            try? FileManager.default.removeItem(at: rawImageURL)
+        }
     }
 
     private func scheduleWindowsInstallerBootKeySend(monitorSocketURL: URL) {

@@ -213,7 +213,7 @@ Validate it with:
 swift run veil-vmctl qemu-smoke --json --seconds 25 | node ../../harness/qemu-smoke/src/validate-qemu-smoke.mjs
 ```
 
-The smoke command runs QEMU headlessly in snapshot mode and writes logs plus a `.ppm` VM-console screenshot path under `~/Downloads/Veil Diagnostics/QEMU Smoke`. Its JSON also includes `nextActions` for the detected boot state. Current evidence on the test Mac reaches Arm UEFI and falls back to EDK II shell; Windows Setup is not proven yet.
+The smoke command runs QEMU headlessly in snapshot mode and writes logs plus a `.png` VM-console screenshot path under `~/Downloads/Veil Diagnostics/QEMU Smoke`. Its JSON also includes `nextActions` for the detected boot state. Current evidence on the test Mac reaches Arm UEFI and falls back to EDK II shell; Windows Setup is not proven yet.
 
 Launch the guarded visible QEMU/HVF path for interactive Windows setup testing:
 
@@ -221,7 +221,7 @@ Launch the guarded visible QEMU/HVF path for interactive Windows setup testing:
 swift run veil-vmctl qemu-start --json
 ```
 
-This starts a local Cocoa QEMU window from the prepared Windows Arm profile, brings it forward, and writes logs under `~/Downloads/Veil Diagnostics/QEMU Launch`. App-launched QEMU sessions also record a `qemu-console-*.ppm` VM-display screenshot path in `qemu-launch-latest.json` for visual boot evidence. Veil still uses user-provided Windows media and does not bundle QEMU, firmware, Windows images, product keys, or activation material.
+This starts a local Cocoa QEMU window from the prepared Windows Arm profile, brings it forward, and writes logs under `~/Downloads/Veil Diagnostics/QEMU Launch`. App-launched QEMU sessions also record a `qemu-console-*.png` VM-display screenshot path in `qemu-launch-latest.json` for visual boot evidence. Veil still uses user-provided Windows media and does not bundle QEMU, firmware, Windows images, product keys, or activation material.
 
 You can prepare the local VM profile from a downloaded Windows 11 Arm ISO without clicking through the shell:
 

@@ -240,7 +240,7 @@ struct VeilVMControl {
             .replacingOccurrences(of: ":", with: "-")
         let serialLogURL = logDirectory.appendingPathComponent("qemu-smoke-\(stamp).serial.log")
         let processLogURL = logDirectory.appendingPathComponent("qemu-smoke-\(stamp).process.log")
-        let consoleScreenshotURL = logDirectory.appendingPathComponent("qemu-smoke-\(stamp).console.ppm")
+        let consoleScreenshotURL = logDirectory.appendingPathComponent("qemu-smoke-\(stamp).console.png")
         let monitorSocketURL = URL(fileURLWithPath: "/tmp")
             .appendingPathComponent("veil-qemu-smoke-\(UUID().uuidString.prefix(8)).sock")
         let arguments = QEMUWindowsBootSmokePlanner().makeArguments(

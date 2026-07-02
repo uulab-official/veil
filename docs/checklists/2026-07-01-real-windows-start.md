@@ -72,6 +72,7 @@ Goal: keep the main Veil experience pointed at real local Windows boot and conso
 - [x] Record QEMU app launches with a VM-console `screendump` screenshot path for visual boot evidence.
 - [x] Extend bounded `qemu-smoke` to validate VM-console screenshot paths, not only serial text.
 - [x] Add recovery copy to QEMU smoke reports for common boot failures.
+- [x] Convert QEMU monitor screenshots to PNG paths so users can inspect boot evidence directly.
 
 ## Next
 
