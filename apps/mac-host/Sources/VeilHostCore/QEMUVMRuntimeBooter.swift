@@ -37,6 +37,34 @@ public struct QEMULaunchRecord: Codable, Equatable, Sendable {
     }
 }
 
+public protocol QEMULaunchRecordStore: Sendable {
+    func loadLatest() async throws -> QEMULaunchRecord?
+}
+
+public struct JSONQEMULaunchRecordStore: QEMULaunchRecordStore {
+    private let directory: URL
+    private let fileName: String
+
+    public init(
+        directory: URL = QEMUVMRuntimeBooter.defaultDiagnosticsDirectory()
+            .appendingPathComponent("QEMU Launch", isDirectory: true),
+        fileName: String = "qemu-launch-latest.json"
+    ) {
+        self.directory = directory
+        self.fileName = fileName
+    }
+
+    public func loadLatest() async throws -> QEMULaunchRecord? {
+        let url = directory.appendingPathComponent(fileName)
+        guard FileManager.default.fileExists(atPath: url.path) else {
+            return nil
+        }
+
+        let data = try Data(contentsOf: url)
+        return try JSONDecoder.veilDiagnostics.decode(QEMULaunchRecord.self, from: data)
+    }
+}
+
 public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
     public static let shared = QEMUVMRuntimeBooter()
 

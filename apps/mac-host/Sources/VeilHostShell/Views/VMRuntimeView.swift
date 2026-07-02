@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import UniformTypeIdentifiers
 import VeilHostCore
@@ -645,6 +646,43 @@ private struct MachineBadge: View {
     }
 }
 
+private struct ConsoleScreenshotPreview: View {
+    var image: NSImage
+    var path: String
+
+    var body: some View {
+        ZStack(alignment: .bottomLeading) {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(.black)
+
+            Image(nsImage: image)
+                .resizable()
+                .scaledToFit()
+                .padding(10)
+
+            HStack(spacing: 6) {
+                Image(systemName: "display")
+                    .font(.caption.weight(.semibold))
+                Text(URL(fileURLWithPath: path).lastPathComponent)
+                    .font(.caption.weight(.semibold))
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+            .foregroundStyle(.white.opacity(0.86))
+            .padding(.horizontal, 10)
+            .padding(.vertical, 7)
+            .background(.black.opacity(0.48), in: Capsule())
+            .padding(10)
+        }
+        .aspectRatio(16 / 9, contentMode: .fit)
+        .overlay {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .strokeBorder(.white.opacity(0.16), lineWidth: 1)
+        }
+        .accessibilityLabel("Latest QEMU console screenshot")
+    }
+}
+
 private enum SetupStatusState {
     case complete
     case attention
@@ -997,7 +1035,15 @@ private struct WindowsSetupDisplayPanel: View {
                 Spacer(minLength: 8)
 
                 VStack(spacing: 16) {
-                    installMark
+                    if let consoleScreenshotImage {
+                        ConsoleScreenshotPreview(
+                            image: consoleScreenshotImage,
+                            path: snapshot.latestConsoleScreenshotPath ?? ""
+                        )
+                        .frame(maxWidth: 620)
+                    } else {
+                        installMark
+                    }
 
                     VStack(spacing: 8) {
                         Text("Install Windows 11")
@@ -1101,6 +1147,14 @@ private struct WindowsSetupDisplayPanel: View {
                 .foregroundStyle(.blue)
         }
         .frame(width: 76, height: 76)
+    }
+
+    private var consoleScreenshotImage: NSImage? {
+        guard let path = snapshot.latestConsoleScreenshotPath else {
+            return nil
+        }
+
+        return NSImage(contentsOfFile: path)
     }
 
     private var installStageBackground: LinearGradient {

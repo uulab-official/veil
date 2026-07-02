@@ -115,6 +115,24 @@ struct VMProfileStoreTests {
         try FileManager.default.createDirectory(at: sharedFolderURL, withIntermediateDirectories: true)
         try Data("<unattend />".utf8).write(to: sharedFolderURL.appendingPathComponent("Autounattend.xml"))
         try Data("auto install media".utf8).write(to: sharedFolderURL.appendingPathComponent("VeilAutoInstall.iso"))
+        let qemuLaunchDirectory = directory.appendingPathComponent("QEMU Launch", isDirectory: true)
+        try FileManager.default.createDirectory(at: qemuLaunchDirectory, withIntermediateDirectories: true)
+        let consoleScreenshotURL = qemuLaunchDirectory.appendingPathComponent("qemu-console-2026-07-02T11-10-00Z.png")
+        try Data("png".utf8).write(to: consoleScreenshotURL)
+        let launchRecord = QEMULaunchRecord(
+            pid: 1234,
+            executablePath: "/opt/homebrew/bin/qemu-system-aarch64",
+            arguments: ["-display", "cocoa"],
+            processLogPath: qemuLaunchDirectory.appendingPathComponent("qemu-launch.log").path,
+            monitorSocketPath: "/tmp/vq-test.sock",
+            consoleScreenshotPath: consoleScreenshotURL.path,
+            startedAt: Date(timeIntervalSince1970: 1_782_838_800)
+        )
+        let launchEncoder = JSONEncoder()
+        launchEncoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        launchEncoder.dateEncodingStrategy = .iso8601
+        try launchEncoder.encode(launchRecord)
+            .write(to: qemuLaunchDirectory.appendingPathComponent("qemu-launch-latest.json"), options: .atomic)
         let store = JSONVMProfileStore(directory: directory)
         var profile = VMProfile.defaultWindows11Arm(createdAt: Date(timeIntervalSince1970: 1_782_752_400))
         profile.installerMediaPath = installerURL.path
@@ -122,7 +140,10 @@ struct VMProfileStoreTests {
         profile.sharedFolderPath = sharedFolderURL.path
         try await store.save(profile)
 
-        let service = LocalVMRuntimeService(profileStore: store)
+        let service = LocalVMRuntimeService(
+            profileStore: store,
+            qemuLaunchRecordStore: JSONQEMULaunchRecordStore(directory: qemuLaunchDirectory)
+        )
         let snapshot = try await service.loadSnapshot()
 
         #expect(snapshot.state == .stopped)
@@ -131,6 +152,7 @@ struct VMProfileStoreTests {
         #expect(snapshot.virtualDiskPath == diskURL.path)
         #expect(snapshot.virtualDiskAllocatedBytes != nil)
         #expect(snapshot.bootReady)
+        #expect(snapshot.latestConsoleScreenshotPath == consoleScreenshotURL.path)
         #expect(snapshot.detail == "Windows is not installed yet.")
         #expect(snapshot.installEvidence.kind == .sparseDisk)
         #expect(snapshot.installEvidence.isInstalled == false)

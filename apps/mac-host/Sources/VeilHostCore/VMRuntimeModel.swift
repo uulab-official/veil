@@ -235,6 +235,7 @@ public struct VMRuntimeSnapshot: Codable, Equatable, Sendable {
     public var virtualDiskAllocatedBytes: Int64?
     public var automaticInstallAnswerFilePath: String?
     public var automaticInstallMediaPath: String?
+    public var latestConsoleScreenshotPath: String?
     public var runtimeProvider: VMRuntimeProviderSummary?
     public var runtimeProviders: [VMRuntimeProviderSummary]
     public var installationSteps: [VMInstallationStep]
@@ -260,6 +261,7 @@ public struct VMRuntimeSnapshot: Codable, Equatable, Sendable {
         virtualDiskAllocatedBytes: Int64? = nil,
         automaticInstallAnswerFilePath: String? = nil,
         automaticInstallMediaPath: String? = nil,
+        latestConsoleScreenshotPath: String? = nil,
         runtimeProvider: VMRuntimeProviderSummary? = nil,
         runtimeProviders: [VMRuntimeProviderSummary] = [],
         installationSteps: [VMInstallationStep] = [],
@@ -284,6 +286,7 @@ public struct VMRuntimeSnapshot: Codable, Equatable, Sendable {
         self.virtualDiskAllocatedBytes = virtualDiskAllocatedBytes
         self.automaticInstallAnswerFilePath = automaticInstallAnswerFilePath
         self.automaticInstallMediaPath = automaticInstallMediaPath
+        self.latestConsoleScreenshotPath = latestConsoleScreenshotPath
         self.runtimeProvider = runtimeProvider
         self.runtimeProviders = runtimeProviders
         self.installationSteps = installationSteps
@@ -910,6 +913,7 @@ public struct LocalVMRuntimeService: VMRuntimeService {
     private let defaultHomeDirectory: URL
     private let bootRunner: any VMRuntimeBooting
     private let bootReportStore: any VMRuntimeBootReportStore
+    private let qemuLaunchRecordStore: any QEMULaunchRecordStore
     private let providerProbe: VMRuntimeProviderProbe
     private let resourcePlan: VMResourcePlan?
     private let diagnosticDate: @Sendable () -> Date
@@ -920,6 +924,7 @@ public struct LocalVMRuntimeService: VMRuntimeService {
         defaultHomeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser,
         bootRunner: any VMRuntimeBooting = UnavailableVMRuntimeBooter(),
         bootReportStore: any VMRuntimeBootReportStore = JSONVMRuntimeBootReportStore(),
+        qemuLaunchRecordStore: any QEMULaunchRecordStore = JSONQEMULaunchRecordStore(),
         providerProbe: VMRuntimeProviderProbe = VMRuntimeProviderProbe(),
         resourcePlan: VMResourcePlan? = nil,
         diagnosticDate: @escaping @Sendable () -> Date = Date.init,
@@ -929,6 +934,7 @@ public struct LocalVMRuntimeService: VMRuntimeService {
         self.defaultHomeDirectory = defaultHomeDirectory
         self.bootRunner = bootRunner
         self.bootReportStore = bootReportStore
+        self.qemuLaunchRecordStore = qemuLaunchRecordStore
         self.providerProbe = providerProbe
         self.resourcePlan = resourcePlan
         self.diagnosticDate = diagnosticDate
@@ -958,6 +964,7 @@ public struct LocalVMRuntimeService: VMRuntimeService {
         }
 
         if virtualizationAvailable, let profile {
+            let latestLaunchRecord = try? await qemuLaunchRecordStore.loadLatest()
             let installationSteps = Self.installationSteps(for: profile)
             let preflightChecks = Self.preflightChecks(for: profile)
             let bootPathReadiness = Self.bootPathReadiness(
@@ -989,6 +996,7 @@ public struct LocalVMRuntimeService: VMRuntimeService {
                 virtualDiskAllocatedBytes: virtualDiskAllocatedBytes,
                 automaticInstallAnswerFilePath: Self.automaticInstallAnswerFilePathIfExists(for: profile),
                 automaticInstallMediaPath: Self.automaticInstallMediaPathIfExists(for: profile),
+                latestConsoleScreenshotPath: Self.existingConsoleScreenshotPath(from: latestLaunchRecord),
                 runtimeProvider: activeProvider,
                 runtimeProviders: runtimeProviders,
                 installationSteps: installationSteps,
@@ -1121,6 +1129,16 @@ public struct LocalVMRuntimeService: VMRuntimeService {
         }
 
         return url.path
+    }
+
+    private static func existingConsoleScreenshotPath(from launchRecord: QEMULaunchRecord?) -> String? {
+        guard let path = launchRecord?.consoleScreenshotPath,
+              !path.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              FileManager.default.fileExists(atPath: path) else {
+            return nil
+        }
+
+        return path
     }
 
     private static func prepareAutomaticInstallAnswerFile(for profile: VMProfile) throws {

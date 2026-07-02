@@ -15,4 +15,5 @@ Goal: move from QEMU readiness into real Windows installer boot evidence.
 - [x] Extend bounded `qemu-smoke` runs to capture and validate VM-console screenshot paths.
 - [x] Add recovery `nextActions` to QEMU smoke reports for common boot failures.
 - [x] Convert QEMU monitor screenshots to PNG paths so visual evidence opens cleanly on macOS.
+- [x] Read `qemu-launch-latest.json` into runtime snapshots and show the latest console PNG in the setup surface.
 - [ ] Prove a Windows Setup screen with the selected ISO and commit the working device recipe.
