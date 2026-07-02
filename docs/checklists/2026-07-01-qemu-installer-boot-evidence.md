@@ -102,3 +102,9 @@ wrote
 The PNG shows the Korean `Windows 11 installing` screen at 32% complete. The
 smoke command still reports `runningNoDecision` because serial output does not
 prove Windows Setup state, so the screenshot remains the authoritative evidence.
+
+Persistent install evidence: a July 2, 2026 visible `qemu-start` launch wrote
+`/Users/bonjin/Downloads/Veil Diagnostics/QEMU Launch/qemu-console-2026-07-02T07-43-57Z.png`
+and kept QEMU running as PID 44297. The real sparse disk grew past 5 GB, and a
+manual monitor capture at `/tmp/veil-live-install.png` showed the Korean
+`Windows 11 installing` screen at 39% complete.

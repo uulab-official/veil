@@ -213,12 +213,12 @@ Validate it with:
 swift run veil-vmctl qemu-smoke --json --seconds 120 | node ../../harness/qemu-smoke/src/validate-qemu-smoke.mjs
 ```
 
-The smoke command runs QEMU headlessly in snapshot mode and writes logs plus a `.png` VM-console screenshot path under `~/Downloads/Veil Diagnostics/QEMU Smoke`. Its JSON also includes `nextActions` for the detected boot state. Current evidence on the test Mac has reached the Korean Windows 11 installing screen at 32% with local secure firmware, TPM, NVMe storage, and UEFI/GPT unattended partitioning. The next checkpoint is a persistent visible install through the first reboot.
+The smoke command runs QEMU headlessly in snapshot mode and writes logs plus a `.png` VM-console screenshot path under `~/Downloads/Veil Diagnostics/QEMU Smoke`. Its JSON also includes `nextActions` for the detected boot state. Current evidence on the test Mac has reached the Korean Windows 11 installing screen with local secure firmware, TPM, NVMe storage, and UEFI/GPT unattended partitioning; a persistent visible `qemu-start` run continued on the real VM disk to 39%. The next checkpoint is the first Windows Setup reboot.
 
 Launch the guarded visible QEMU/HVF path for interactive Windows setup testing:
 
 ```bash
-swift run veil-vmctl qemu-start --json
+swift run veil-vmctl qemu-start --json --wait-seconds 45
 ```
 
 This starts a local Cocoa QEMU window from the prepared Windows Arm profile, brings it forward, and writes logs under `~/Downloads/Veil Diagnostics/QEMU Launch`. App-launched QEMU sessions also record a `qemu-console-*.png` VM-display screenshot path in `qemu-launch-latest.json`; the macOS setup screen surfaces that latest PNG when it exists. Veil still uses user-provided Windows media and does not bundle QEMU, firmware, Windows images, product keys, or activation material.

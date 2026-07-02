@@ -26,7 +26,7 @@ enum VMControlError: Error, LocalizedError {
         }
     }
 
-    private static let usage = "Usage: veil-vmctl prepare --installer /path/to/Windows.iso | veil-vmctl providers [--json] | veil-vmctl qemu-plan [--json] | veil-vmctl qemu-doctor [--json] | veil-vmctl qemu-smoke [--json] [--seconds 45] | veil-vmctl qemu-start [--json]"
+    private static let usage = "Usage: veil-vmctl prepare --installer /path/to/Windows.iso | veil-vmctl providers [--json] | veil-vmctl qemu-plan [--json] | veil-vmctl qemu-doctor [--json] | veil-vmctl qemu-smoke [--json] [--seconds 45] | veil-vmctl qemu-start [--json] [--wait-seconds 15]"
 }
 
 struct VMControlArguments {
@@ -36,7 +36,7 @@ struct VMControlArguments {
         case qemuPlan(json: Bool)
         case qemuDoctor(json: Bool)
         case qemuSmoke(json: Bool, seconds: Int)
-        case qemuStart(json: Bool)
+        case qemuStart(json: Bool, waitSeconds: Int)
     }
 
     var command: Command
@@ -64,7 +64,8 @@ struct VMControlArguments {
         }
 
         if command == "qemu-start" {
-            return VMControlArguments(command: .qemuStart(json: arguments.contains("--json")))
+            let waitSeconds = waitSecondsArgument(from: arguments) ?? 15
+            return VMControlArguments(command: .qemuStart(json: arguments.contains("--json"), waitSeconds: waitSeconds))
         }
 
         guard command == "prepare" else {
@@ -81,6 +82,15 @@ struct VMControlArguments {
 
     private static func secondsArgument(from arguments: [String]) -> Int? {
         guard let secondsFlagIndex = arguments.firstIndex(of: "--seconds"),
+              arguments.indices.contains(secondsFlagIndex + 1) else {
+            return nil
+        }
+
+        return Int(arguments[secondsFlagIndex + 1])
+    }
+
+    private static func waitSecondsArgument(from arguments: [String]) -> Int? {
+        guard let secondsFlagIndex = arguments.firstIndex(of: "--wait-seconds"),
               arguments.indices.contains(secondsFlagIndex + 1) else {
             return nil
         }
@@ -121,8 +131,8 @@ struct VeilVMControl {
             try await printQEMUDoctor(json: json)
         case .qemuSmoke(let json, let seconds):
             try await printQEMUSmoke(json: json, seconds: seconds)
-        case .qemuStart(let json):
-            try await startQEMU(json: json)
+        case .qemuStart(let json, let waitSeconds):
+            try await startQEMU(json: json, waitSeconds: waitSeconds)
         }
     }
 
@@ -289,7 +299,7 @@ struct VeilVMControl {
         }
     }
 
-    private static func startQEMU(json: Bool) async throws {
+    private static func startQEMU(json: Bool, waitSeconds: Int) async throws {
         guard let profile = try await JSONVMProfileStore().load() else {
             throw VMControlError.missingProfileForQEMUPlan
         }
@@ -313,27 +323,44 @@ struct VeilVMControl {
             .string(from: Date())
             .replacingOccurrences(of: ":", with: "-")
         let processLogURL = logDirectory.appendingPathComponent("qemu-launch-\(stamp).log")
+        let serialLogURL = logDirectory.appendingPathComponent("qemu-launch-\(stamp).serial.log")
+        let consoleScreenshotURL = logDirectory.appendingPathComponent("qemu-console-\(stamp).png")
+        let monitorSocketURL = URL(fileURLWithPath: "/tmp")
+            .appendingPathComponent("vq-\(UUID().uuidString.prefix(8)).sock")
         FileManager.default.createFile(atPath: processLogURL.path, contents: nil)
         let logHandle = try FileHandle(forWritingTo: processLogURL)
+        let launchArguments = QEMUWindowsBootLaunchPlanner().makeArguments(
+            from: plan,
+            serialLogPath: serialLogURL.path,
+            monitorSocketPath: monitorSocketURL.path
+        )
 
         let process = Process()
         process.executableURL = URL(fileURLWithPath: plan.executablePath)
-        process.arguments = plan.arguments
+        process.arguments = launchArguments
         process.standardOutput = logHandle
         process.standardError = logHandle
         try QEMUVMRuntimeBooter.startTPMEmulatorIfNeeded(plan: plan)
         try process.run()
         bringQEMUToFront()
+        driveInitialQEMULaunch(
+            process: process,
+            waitSeconds: waitSeconds,
+            monitorSocketURL: monitorSocketURL,
+            consoleScreenshotURL: consoleScreenshotURL
+        )
 
         let record = QEMULaunchRecord(
             provider: plan.provider,
             pid: process.processIdentifier,
             executablePath: plan.executablePath,
-            arguments: plan.arguments,
+            arguments: launchArguments,
             processLogPath: processLogURL.path,
-            monitorSocketPath: "none",
+            monitorSocketPath: monitorSocketURL.path,
+            consoleScreenshotPath: consoleScreenshotURL.path,
             startedAt: Date()
         )
+        try writeQEMULaunchRecord(record, directory: logDirectory, stamp: stamp)
 
         if json {
             let data = try JSONEncoder.veilDiagnostics.encode(record)
@@ -345,6 +372,47 @@ struct VeilVMControl {
         print("PID: \(record.pid.map(String.init) ?? "unknown")")
         print("Executable: \(record.executablePath)")
         print("Process log: \(record.processLogPath)")
+        print("Serial log: \(serialLogURL.path)")
+        print("Monitor socket: \(record.monitorSocketPath)")
+        print("Console screenshot: \(record.consoleScreenshotPath ?? "pending")")
+    }
+
+    private static func writeQEMULaunchRecord(
+        _ record: QEMULaunchRecord,
+        directory: URL,
+        stamp: String
+    ) throws {
+        let data = try JSONEncoder.veilDiagnostics.encode(record)
+        try data.write(to: directory.appendingPathComponent("qemu-launch-\(stamp).json"), options: .atomic)
+        try data.write(to: directory.appendingPathComponent("qemu-launch-latest.json"), options: .atomic)
+    }
+
+    private static func driveInitialQEMULaunch(
+        process: Process,
+        waitSeconds: Int,
+        monitorSocketURL: URL,
+        consoleScreenshotURL: URL
+    ) {
+        let boundedSeconds = min(max(waitSeconds, 0), 120)
+        let startDate = Date()
+        let deadline = startDate.addingTimeInterval(TimeInterval(boundedSeconds))
+        var bootPromptAutomation = QEMUWindowsBootPromptAutomation()
+
+        while process.isRunning, Date() < deadline {
+            Thread.sleep(forTimeInterval: 0.25)
+            _ = bootPromptAutomation.tick(
+                elapsedSeconds: Int(Date().timeIntervalSince(startDate)),
+                monitorSocketURL: monitorSocketURL,
+                sendBootKey: QEMUVMRuntimeBooter.sendWindowsInstallerBootKey
+            )
+        }
+
+        if process.isRunning {
+            QEMUVMRuntimeBooter.captureConsoleScreenshot(
+                monitorSocketURL: monitorSocketURL,
+                imageURL: consoleScreenshotURL
+            )
+        }
     }
 
     private static func bringQEMUToFront() {

@@ -70,7 +70,7 @@ The QEMU/HVF compatibility spike has progressed past static planning: on July 1,
 Current QEMU boot evidence:
 
 - QEMU can start the local device graph with HVF, Arm UEFI pflash code, a VM-local writable `uefi-vars.fd`, lock-safe read-only Windows ISO media, generated automatic install ISO media, writable raw NVMe system disk, NAT networking, Cocoa/ramfb graphics, USB input, a local `swtpm` TPM 2.0 emulator, and serial logging.
-- `veil-vmctl qemu-start` can launch the stored Windows Arm profile into a visible foreground Cocoa QEMU window.
+- `veil-vmctl qemu-start --wait-seconds <n>` can launch the stored Windows Arm profile into a visible foreground Cocoa QEMU window, keep a monitor socket open during the initial wait window, send boot-prompt key input, and record a VM-console screenshot path.
 - The main Veil app Start action now launches the same local QEMU/HVF console path; a manual app smoke check opened a foreground `QEMU Windows 11 Arm` window.
 - When the same ISO is already attached to another VM, QEMU needs the file-driver form `file.locking=off` for read-only ISO reuse.
 - Earlier boot attempts reached Arm UEFI and mapped the installer ISO as `FS0`, but Windows Setup did not start because UEFI reported a boot image timeout and fell back to the EDK II shell.
@@ -91,7 +91,7 @@ Current QEMU boot evidence:
 - With that secure code plus secure vars pair, a July 2, 2026 120 second bounded `qemu-smoke` reached the Korean Windows 11 Setup disk-selection screen. The earlier Secure Boot and TPM requirements page was gone, so the next visible blocker became storage discovery rather than Windows 11 requirements.
 - The disk-selection screen showed no available install target while the system disk was attached as `virtio-blk-pci`. Veil now follows the UTM-style QEMU NVMe device pattern for the install-time system disk (`-device nvme,drive=system,serial=veil-system`) so Windows Setup can use its inbox NVMe storage driver instead of requiring a VirtIO block driver during setup.
 - After switching to NVMe, a July 2, 2026 120 second bounded `qemu-smoke` produced a console PNG showing `Disk 0 Unallocated Space` as a 128.0 GB Windows Setup install target. The serial classifier remained `runningNoDecision`, so the console PNG is the authoritative evidence for the storage checkpoint.
-- Veil's generated `Autounattend.xml` now includes UEFI/GPT partition creation for Disk 0, `InstallTo` Disk 0 Partition 3, and `WillShowUI=Never` for DiskConfiguration, ImageInstall, and ProductKey while still omitting any product-key value. A follow-up July 2, 2026 bounded live `qemu-smoke` advanced to the Korean `Windows 11 installing` screen and showed 32% complete.
+- Veil's generated `Autounattend.xml` now includes UEFI/GPT partition creation for Disk 0, `InstallTo` Disk 0 Partition 3, and `WillShowUI=Never` for DiskConfiguration, ImageInstall, and ProductKey while still omitting any product-key value. A follow-up July 2, 2026 bounded live `qemu-smoke` advanced to the Korean `Windows 11 installing` screen and showed 32% complete. A persistent visible `qemu-start` run then continued on the real VM disk, grew the sparse disk past 5 GB, and reached 39% on the same installing screen.
 
 This means Veil can now distinguish "QEMU is missing" from "QEMU and the ISO are present" from "Windows Setup is actively installing on the local blank NVMe VM disk." The next QEMU milestone is to run a persistent visible install through the first reboot, then continue through OOBE and the first guest-agent install without bundling Windows keys or media.
 

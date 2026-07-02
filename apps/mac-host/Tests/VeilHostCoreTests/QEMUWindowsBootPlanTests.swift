@@ -660,6 +660,32 @@ struct QEMUWindowsBootPlanTests {
         #expect(!arguments.contains("cocoa"))
     }
 
+    @Test("launch planner keeps visible display and attaches monitor without snapshot mode")
+    func launchPlannerBuildsVisiblePersistentArguments() throws {
+        var profile = VMProfile.defaultWindows11Arm(createdAt: Date(timeIntervalSince1970: 1_782_752_400))
+        profile.installerMediaPath = "/Users/test/Downloads/Win11_25H2_Korean_Arm64_v2.iso"
+        profile.virtualDiskPath = "/Users/test/Virtual Machines/Veil/Windows 11 Arm.img"
+        profile.sharedFolderPath = "/Users/test/Veil Shared"
+        let plan = try QEMUWindowsBootPlanner(
+            executablePath: "/opt/homebrew/bin/qemu-system-aarch64",
+            isExecutableAvailable: true,
+            firmwarePath: "/opt/homebrew/share/qemu/edk2-aarch64-code.fd",
+            isFirmwareAvailable: true
+        ).makePlan(for: profile)
+
+        let arguments = QEMUWindowsBootLaunchPlanner().makeArguments(
+            from: plan,
+            serialLogPath: "/tmp/veil-qemu-launch.serial.log",
+            monitorSocketPath: "/tmp/veil-qemu-launch.sock"
+        )
+
+        #expect(!arguments.contains("-snapshot"))
+        #expect(arguments.containsSequence(["-display", "cocoa"]))
+        #expect(arguments.containsSequence(["-serial", "file:/tmp/veil-qemu-launch.serial.log"]))
+        #expect(arguments.containsSequence(["-monitor", "unix:/tmp/veil-qemu-launch.sock,server,nowait"]))
+        #expect(arguments.contains("driver=raw,file.driver=file,file.locking=off,file.filename=/Users/test/Virtual Machines/Veil/Windows 11 Arm.img,if=none,id=system"))
+    }
+
     @Test("smoke boot prompt automation sends bounded key attempts")
     func smokeBootPromptAutomationSendsBoundedKeyAttempts() {
         var automation = QEMUWindowsBootPromptAutomation()

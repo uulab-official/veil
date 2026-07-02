@@ -1014,9 +1014,7 @@ public struct QEMUWindowsBootSmokePlanner: Sendable {
         serialLogPath: String,
         monitorSocketPath: String
     ) -> [String] {
-        var arguments = plan.arguments.map { argument in
-            Self.lockSafeSystemDriveArgument(argument)
-        }
+        var arguments = plan.arguments.map(QEMUWindowsBootArgumentRewriter.lockSafeSystemDriveArgument)
 
         if let displayIndex = arguments.firstIndex(of: "-display"),
            arguments.indices.contains(displayIndex + 1) {
@@ -1037,7 +1035,29 @@ public struct QEMUWindowsBootSmokePlanner: Sendable {
         return arguments
     }
 
-    private static func lockSafeSystemDriveArgument(_ argument: String) -> String {
+}
+
+public struct QEMUWindowsBootLaunchPlanner: Sendable {
+    public init() {}
+
+    public func makeArguments(
+        from plan: QEMUWindowsBootPlan,
+        serialLogPath: String,
+        monitorSocketPath: String
+    ) -> [String] {
+        var arguments = plan.arguments.map(QEMUWindowsBootArgumentRewriter.lockSafeSystemDriveArgument)
+
+        arguments.append(contentsOf: [
+            "-serial", "file:\(serialLogPath)",
+            "-monitor", "unix:\(monitorSocketPath),server,nowait"
+        ])
+
+        return arguments
+    }
+}
+
+private enum QEMUWindowsBootArgumentRewriter {
+    static func lockSafeSystemDriveArgument(_ argument: String) -> String {
         guard argument.contains("id=system"),
               argument.contains("format=raw"),
               let fileRange = argument.range(of: "file=") else {

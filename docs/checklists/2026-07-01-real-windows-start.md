@@ -93,6 +93,7 @@ Goal: keep the main Veil experience pointed at real local Windows boot and conso
 - [x] Verify a bounded NVMe `qemu-smoke --seconds 120` console PNG shows `Disk 0 Unallocated Space` as a 128.0 GB Windows Setup target.
 - [x] Add UEFI/GPT Disk 0 partitioning, `InstallTo` Disk 0 Partition 3, and `WillShowUI=Never` for disk/image setup UI to the generated `Autounattend.xml`.
 - [x] Verify a bounded auto-partition `qemu-smoke` console PNG reaches the Korean Windows 11 installing screen at 32%.
+- [x] Launch a persistent visible `qemu-start` install and verify the real sparse disk grows past 5 GB while Windows Setup reaches 39%.
 - [x] Add recovery copy to QEMU smoke reports for common boot failures.
 - [x] Convert QEMU monitor screenshots to PNG paths so users can inspect boot evidence directly.
 - [x] Surface the latest QEMU console PNG inside the Windows setup screen when launch evidence exists.
@@ -115,7 +116,7 @@ Goal: keep the main Veil experience pointed at real local Windows boot and conso
 ## Next
 
 - [ ] Run `dotnet build apps/windows-agent/src/VeilAgent/VeilAgent.csproj` on a machine with the .NET 8 SDK installed.
-- [ ] Continue the persistent visible Windows Setup install from the auto-partition recipe through first reboot.
+- [ ] Continue the persistent visible Windows Setup install through first reboot.
 - [ ] Run `Veil Shared\Veil Guest Agent\Install Veil Agent.cmd` inside Windows 11 Arm and verify the current-session agent plus the `VeilAgent` logon task both start.
 - [ ] Verify the Win32/GDI HWND capture path inside Windows 11 Arm and record the captured Notepad frame evidence.
 - [ ] Tune the Windows agent frame stream for lower latency after correctness is verified.

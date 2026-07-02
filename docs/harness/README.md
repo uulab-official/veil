@@ -86,7 +86,7 @@ The command uses snapshot mode and records logs plus a `qemu-smoke-*.console.png
 
 ## QEMU Start Scenario
 
-`veil-vmctl qemu-start [--json]` is the guarded visible-launch spike for the local QEMU/HVF provider. Unlike `qemu-plan`, it starts a local QEMU process with the stored Windows Arm profile and a Cocoa display. Unlike `qemu-smoke`, it is not bounded or snapshot-only; it is meant for interactive Windows setup testing after `qemu-doctor` reports ready.
+`veil-vmctl qemu-start [--json] [--wait-seconds 15]` is the guarded visible-launch spike for the local QEMU/HVF provider. Unlike `qemu-plan`, it starts a local QEMU process with the stored Windows Arm profile and a Cocoa display. Unlike `qemu-smoke`, it is not snapshot-only; it is meant for interactive Windows setup testing after `qemu-doctor` reports ready. The optional wait window keeps the CLI alive long enough to send boot-prompt key input through QEMU's monitor and capture the first VM-console screenshot before returning.
 
 The macOS app's QEMU launch boundary writes process logs under `~/Downloads/Veil Diagnostics/QEMU Launch`, reports the launched PID, and records a `qemu-console-*.png` path in `qemu-launch-latest.json`. The app asks QEMU's monitor to write that screenshot from the VM display, converts the raw frame to PNG, and surfaces the latest existing screenshot plus launch metadata in the Windows setup screen. The evidence is the guest console frame rather than a macOS desktop capture. It still does not distribute Windows media, activation keys, QEMU binaries, or firmware.
 
