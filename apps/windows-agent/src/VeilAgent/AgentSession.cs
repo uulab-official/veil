@@ -25,6 +25,7 @@ public sealed class AgentSession
             MessageTypes.AppListRequest => AgentReplies.Direct(AppListResponse(requestId)),
             MessageTypes.AppLaunchRequest => await HandleAppLaunchAsync(request, requestId, cancellationToken),
             MessageTypes.WindowCloseRequest => await HandleWindowCloseAsync(request, requestId, cancellationToken),
+            MessageTypes.InputMouse => await HandleMouseInputAsync(request, requestId, cancellationToken),
             _ => AgentReplies.Direct(ErrorResponse(requestId, "unknown_message_type", $"Unsupported message type {type}"))
         };
     }
@@ -82,6 +83,40 @@ public sealed class AgentSession
         }
     }
 
+    private async Task<AgentReplies> HandleMouseInputAsync(
+        JsonObject request,
+        string? requestId,
+        CancellationToken cancellationToken
+    )
+    {
+        var windowId = request["windowId"]?.GetValue<string>();
+        var eventName = request["event"]?.GetValue<string>();
+        if (string.IsNullOrWhiteSpace(windowId)
+            || string.IsNullOrWhiteSpace(eventName)
+            || !TryReadInt(request, "x", out var x)
+            || !TryReadInt(request, "y", out var y))
+        {
+            return AgentReplies.Direct(ErrorResponse(requestId, "invalid_message", "input.mouse requires windowId, event, x, and y."));
+        }
+
+        var modifiers = request["modifiers"] is JsonArray modifierArray
+            ? modifierArray.Select(modifier => modifier?.GetValue<string>() ?? string.Empty).Where(modifier => modifier.Length > 0).ToArray()
+            : Array.Empty<string>();
+
+        try
+        {
+            await desktop.SendMouseInputAsync(
+                new WindowMouseInput(windowId, eventName, x, y, modifiers),
+                cancellationToken
+            );
+            return AgentReplies.Direct();
+        }
+        catch (Exception error) when (error is not OperationCanceledException)
+        {
+            return AgentReplies.Direct(ErrorResponse(requestId, "input_mouse_failed", error.Message));
+        }
+    }
+
     private static JsonObject HealthResponse(string? requestId) => new()
     {
         ["type"] = MessageTypes.AgentHealthResponse,
@@ -100,7 +135,7 @@ public sealed class AgentSession
             ["appLaunch"] = true,
             ["windowTracking"] = true,
             ["windowCapture"] = true,
-            ["input"] = false,
+            ["input"] = true,
             ["clipboardText"] = false
         }
     };
@@ -176,6 +211,30 @@ public sealed class AgentSession
         ["code"] = code,
         ["message"] = message
     };
+
+    private static bool TryReadInt(JsonObject request, string key, out int value)
+    {
+        value = 0;
+        try
+        {
+            var node = request[key];
+            if (node is null)
+            {
+                return false;
+            }
+
+            value = node.GetValue<int>();
+            return true;
+        }
+        catch (InvalidOperationException)
+        {
+            return false;
+        }
+        catch (FormatException)
+        {
+            return false;
+        }
+    }
 }
 
 public sealed record AgentReplies(

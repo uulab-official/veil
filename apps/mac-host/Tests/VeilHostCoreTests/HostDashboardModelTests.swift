@@ -162,6 +162,33 @@ struct HostDashboardModelTests {
         #expect(model.lastLaunch?.window.windowId == "hwnd:0003029A")
     }
 
+    @Test("forwards mouse input for mirrored windows")
+    @MainActor
+    func forwardsMouseInputForMirroredWindows() async throws {
+        let service = FakeDashboardService(health: .inputReady)
+        let model = HostDashboardModel(service: service)
+
+        await model.launchNotepad()
+        await model.sendMouseInput(windowId: "hwnd:0003029A", event: "leftDown", x: 240, y: 130)
+
+        #expect(service.mouseInputs == [
+            InputMouseEvent(windowId: "hwnd:0003029A", event: "leftDown", x: 240, y: 130)
+        ])
+        #expect(model.phase == .connected)
+    }
+
+    @Test("ignores mouse input for windows without a mirror session")
+    @MainActor
+    func ignoresMouseInputForUnknownWindows() async throws {
+        let service = FakeDashboardService(health: .inputReady)
+        let model = HostDashboardModel(service: service)
+
+        await model.sendMouseInput(windowId: "hwnd:DEADBEEF", event: "leftDown", x: 20, y: 20)
+
+        #expect(service.mouseInputs.isEmpty)
+        #expect(model.phase == .idle)
+    }
+
     @Test("updates active window sessions by HWND")
     @MainActor
     func updatesActiveWindowSessionsByHWND() async throws {
@@ -349,6 +376,7 @@ private final class FakeDashboardService: HostDashboardService {
     private(set) var loadCount = 0
     private(set) var launchCount = 0
     private(set) var closedWindowIds: [String] = []
+    private(set) var mouseInputs: [InputMouseEvent] = []
 
     init(
         error: (any Error)? = nil,
@@ -401,6 +429,14 @@ private final class FakeDashboardService: HostDashboardService {
             accepted: closeAccepted
         )
     }
+
+    func sendMouseInput(_ input: InputMouseEvent) async throws {
+        if let error {
+            throw error
+        }
+
+        mouseInputs.append(input)
+    }
 }
 
 private struct StaticHostEventSource: HostEventSource {
@@ -450,6 +486,25 @@ private extension AgentHealthResponse {
                 windowTracking: true,
                 windowCapture: true,
                 input: false,
+                clipboardText: false
+            )
+        )
+    }
+
+    static var inputReady: AgentHealthResponse {
+        AgentHealthResponse(
+            type: .agentHealthResponse,
+            requestId: "req_health",
+            protocolVersion: 1,
+            agentVersion: "0.1.0",
+            os: "windows-arm64",
+            session: AgentSession(interactive: true, user: "veil-user"),
+            capabilities: AgentCapabilities(
+                appList: true,
+                appLaunch: true,
+                windowTracking: true,
+                windowCapture: true,
+                input: true,
                 clipboardText: false
             )
         )

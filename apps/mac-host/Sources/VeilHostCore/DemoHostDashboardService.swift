@@ -47,6 +47,10 @@ public struct FallbackHostDashboardService: HostDashboardService, Sendable {
         try await primary.closeWindow(windowId: windowId)
     }
 
+    public func sendMouseInput(_ input: InputMouseEvent) async throws {
+        try await primary.sendMouseInput(input)
+    }
+
     private var fallbackDetail: String {
         "No Windows agent reachable at \(primaryEndpointDescription). Showing built-in demo data."
     }
@@ -98,6 +102,8 @@ public struct DemoHostDashboardService: HostDashboardService, Sendable {
             accepted: true
         )
     }
+
+    public func sendMouseInput(_ input: InputMouseEvent) async throws {}
 }
 
 private extension AgentHealthResponse {

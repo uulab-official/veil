@@ -7,6 +7,15 @@ namespace Veil.Agent;
 public sealed class WindowsDesktop : IWindowsDesktop
 {
     private const uint WM_CLOSE = 0x0010;
+    private const uint WM_MOUSEMOVE = 0x0200;
+    private const uint WM_LBUTTONDOWN = 0x0201;
+    private const uint WM_LBUTTONUP = 0x0202;
+    private const uint WM_RBUTTONDOWN = 0x0204;
+    private const uint WM_RBUTTONUP = 0x0205;
+    private const uint WM_MOUSEWHEEL = 0x020A;
+    private const int MK_LBUTTON = 0x0001;
+    private const int MK_RBUTTON = 0x0002;
+    private const int WHEEL_DELTA = 120;
 
     public async Task<LaunchedWindow> LaunchNotepadAsync(CancellationToken cancellationToken)
     {
@@ -66,6 +75,24 @@ public sealed class WindowsDesktop : IWindowsDesktop
         return Task.FromResult(PostMessage(hwnd, WM_CLOSE, IntPtr.Zero, IntPtr.Zero));
     }
 
+    public Task<bool> SendMouseInputAsync(WindowMouseInput input, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (!OperatingSystem.IsWindows())
+        {
+            throw new PlatformNotSupportedException("The Veil Windows agent must run inside Windows.");
+        }
+
+        if (!TryParseWindowId(input.WindowId, out var hwnd)
+            || !TryResolveMouseMessage(input, out var message, out var wParam, out var lParam))
+        {
+            return Task.FromResult(false);
+        }
+
+        return Task.FromResult(PostMessage(hwnd, message, wParam, lParam));
+    }
+
     private static bool TryParseWindowId(string windowId, out IntPtr hwnd)
     {
         hwnd = IntPtr.Zero;
@@ -84,6 +111,48 @@ public sealed class WindowsDesktop : IWindowsDesktop
 
         hwnd = new IntPtr(value);
         return hwnd != IntPtr.Zero;
+    }
+
+    private static bool TryResolveMouseMessage(
+        WindowMouseInput input,
+        out uint message,
+        out IntPtr wParam,
+        out IntPtr lParam
+    )
+    {
+        message = input.Event switch
+        {
+            "leftDown" => WM_LBUTTONDOWN,
+            "leftUp" => WM_LBUTTONUP,
+            "rightDown" => WM_RBUTTONDOWN,
+            "rightUp" => WM_RBUTTONUP,
+            "move" => WM_MOUSEMOVE,
+            "scroll" => WM_MOUSEWHEEL,
+            _ => 0
+        };
+
+        if (message == 0)
+        {
+            wParam = IntPtr.Zero;
+            lParam = IntPtr.Zero;
+            return false;
+        }
+
+        wParam = input.Event switch
+        {
+            "leftDown" => new IntPtr(MK_LBUTTON),
+            "rightDown" => new IntPtr(MK_RBUTTON),
+            "scroll" => new IntPtr(WHEEL_DELTA << 16),
+            _ => IntPtr.Zero
+        };
+        lParam = MakeLParam(input.X, input.Y);
+        return true;
+    }
+
+    private static IntPtr MakeLParam(int x, int y)
+    {
+        var packed = (y & 0xFFFF) << 16 | (x & 0xFFFF);
+        return new IntPtr(packed);
     }
 
     [DllImport("user32.dll", SetLastError = true)]

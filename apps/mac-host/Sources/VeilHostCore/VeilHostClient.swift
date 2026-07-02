@@ -107,6 +107,10 @@ public struct VeilHostClient: HostDashboardService, Sendable {
         )
     }
 
+    public func sendMouseInput(_ input: InputMouseEvent) async throws {
+        _ = try await transport.send(encoder.encode(input), expectedReplies: 0)
+    }
+
     public func loadOverview() async throws -> HostOverview {
         let health: AgentHealthResponse = try await request(
             AgentHealthRequest(requestId: "req_health")

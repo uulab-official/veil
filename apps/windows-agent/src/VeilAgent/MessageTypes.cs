@@ -12,5 +12,6 @@ public static class MessageTypes
     public const string WindowFrame = "window.frame";
     public const string WindowCloseRequest = "window.close.request";
     public const string WindowCloseResponse = "window.close.response";
+    public const string InputMouse = "input.mouse";
     public const string Error = "error";
 }

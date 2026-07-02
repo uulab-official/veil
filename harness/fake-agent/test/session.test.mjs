@@ -90,6 +90,21 @@ test("rejects window close requests without a HWND", async () => {
   ]);
 });
 
+test("accepts mouse input events without a reply", async () => {
+  const session = createSession();
+
+  const replies = await session.handle({
+    type: "input.mouse",
+    windowId: "hwnd:0003029A",
+    event: "leftDown",
+    x: 240,
+    y: 130,
+    modifiers: []
+  });
+
+  assert.deepEqual(replies, []);
+});
+
 test("returns a structured error for unknown apps", async () => {
   const session = createSession();
 

@@ -71,6 +71,18 @@ struct ProtocolMessageTests {
         #expect(response.windowId == request.windowId)
         #expect(response.accepted)
     }
+
+    @Test("decodes mouse input event")
+    func decodesMouseInputEvent() throws {
+        let input: InputMouseEvent = try decodeFixture("input.mouse.left-down")
+
+        #expect(input.type == .inputMouse)
+        #expect(input.windowId == "hwnd:0003029A")
+        #expect(input.event == "leftDown")
+        #expect(input.x == 240)
+        #expect(input.y == 130)
+        #expect(input.modifiers == [])
+    }
 }
 
 private func decodeFixture<T: Decodable>(_ name: String) throws -> T {

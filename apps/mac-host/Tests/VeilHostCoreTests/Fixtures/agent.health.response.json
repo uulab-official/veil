@@ -13,7 +13,7 @@
     "appLaunch": true,
     "windowTracking": true,
     "windowCapture": false,
-    "input": false,
+    "input": true,
     "clipboardText": false
   }
 }

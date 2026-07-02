@@ -22,3 +22,11 @@ public sealed record WindowFrame(
     double Scale,
     string EncodedData
 );
+
+public sealed record WindowMouseInput(
+    string WindowId,
+    string Event,
+    int X,
+    int Y,
+    IReadOnlyList<string> Modifiers
+);

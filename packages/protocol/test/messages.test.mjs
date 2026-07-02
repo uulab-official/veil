@@ -8,6 +8,7 @@ import {
   createError,
   parseMessage,
   validateNotepadAcceptance,
+  validateInputMouse,
   validateWindowCloseRequest,
   validateWindowCloseResponse,
   validateWindowFrame
@@ -31,6 +32,7 @@ test("parses every stable fixture", async () => {
     "window.frame.json",
     "window.close.request.json",
     "window.close.response.json",
+    "input.mouse.left-down.json",
     "clipboard.text.set.host.json",
     "error.app_not_found.json"
   ];
@@ -125,4 +127,15 @@ test("validates window close request and response fixtures", async () => {
   assert.equal(response.requestId, request.requestId);
   assert.equal(response.windowId, request.windowId);
   assert.equal(response.accepted, true);
+});
+
+test("validates one host mouse input fixture", async () => {
+  const input = validateInputMouse(await readFixture("input.mouse.left-down.json"));
+
+  assert.equal(input.type, MessageType.InputMouse);
+  assert.equal(input.windowId, "hwnd:0003029A");
+  assert.equal(input.event, "leftDown");
+  assert.equal(input.x, 240);
+  assert.equal(input.y, 130);
+  assert.deepEqual(input.modifiers, []);
 });

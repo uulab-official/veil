@@ -1,0 +1,8 @@
+{
+  "type": "input.mouse",
+  "windowId": "hwnd:0003029A",
+  "event": "leftDown",
+  "x": 240,
+  "y": 130,
+  "modifiers": []
+}

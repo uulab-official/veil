@@ -8,6 +8,7 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
     private var suppressedCloseWindowIds: Set<String> = []
 
     var onUserWindowClose: ((String) -> Void)?
+    var onMouseInput: ((String, String, Int, Int) -> Void)?
 
     func showWindow(for session: WindowMirrorSession) {
         if let window = windowsById[session.id] {
@@ -66,7 +67,10 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
     ) -> NSHostingView<WindowsAppMirrorPlaceholderView> {
         NSHostingView(
             rootView: WindowsAppMirrorPlaceholderView(
-                session: session
+                session: session,
+                onMouseInput: { [weak self] windowId, event, x, y in
+                    self?.onMouseInput?(windowId, event, x, y)
+                }
             )
         )
     }
@@ -80,6 +84,7 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
 
 private struct WindowsAppMirrorPlaceholderView: View {
     var session: WindowMirrorSession
+    var onMouseInput: (String, String, Int, Int) -> Void
 
     var body: some View {
         VStack(spacing: 0) {
@@ -112,71 +117,77 @@ private struct WindowsAppMirrorPlaceholderView: View {
 
             Divider()
 
-            if let latestFrameImage {
-                ZStack(alignment: .bottomLeading) {
-                    Color(nsColor: .windowBackgroundColor)
-                    Image(nsImage: latestFrameImage)
-                        .interpolation(.none)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+            ZStack {
+                if let latestFrameImage {
+                    ZStack(alignment: .bottomLeading) {
+                        Color(nsColor: .windowBackgroundColor)
+                        Image(nsImage: latestFrameImage)
+                            .interpolation(.none)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-                    Text(frameCaption)
-                        .font(.caption.monospaced())
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
-                        .padding(12)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else {
-                VStack(alignment: .leading, spacing: 16) {
-                    HStack(alignment: .firstTextBaseline) {
-                        Text("Untitled")
-                            .font(.system(size: 28, weight: .semibold))
-                        Spacer()
-                        Text(session.window.state.capitalized)
-                            .font(.caption.weight(.semibold))
+                        Text(frameCaption)
+                            .font(.caption.monospaced())
                             .foregroundStyle(.secondary)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+                            .padding(12)
                     }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    VStack(alignment: .leading, spacing: 16) {
+                        HStack(alignment: .firstTextBaseline) {
+                            Text("Untitled")
+                                .font(.system(size: 28, weight: .semibold))
+                            Spacer()
+                            Text(session.window.state.capitalized)
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                        }
 
-                    Text(captureDescription)
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+                        Text(captureDescription)
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
 
-                    HStack(spacing: 10) {
-                        MirrorStateTile(
-                            title: "Window Tracking",
-                            detail: "Mapped",
-                            symbolName: "rectangle.3.group",
-                            tint: .green
-                        )
-                        MirrorStateTile(
-                            title: "Capture",
-                            detail: captureDetail,
-                            symbolName: "viewfinder",
-                            tint: captureTint
-                        )
-                        MirrorStateTile(
-                            title: "Input",
-                            detail: "Planned",
-                            symbolName: "keyboard",
-                            tint: .secondary
-                        )
+                        HStack(spacing: 10) {
+                            MirrorStateTile(
+                                title: "Window Tracking",
+                                detail: "Mapped",
+                                symbolName: "rectangle.3.group",
+                                tint: .green
+                            )
+                            MirrorStateTile(
+                                title: "Capture",
+                                detail: captureDetail,
+                                symbolName: "viewfinder",
+                                tint: captureTint
+                            )
+                            MirrorStateTile(
+                                title: "Input",
+                                detail: session.connectionMode == .agent ? "Forwarded" : "Planned",
+                                symbolName: "keyboard",
+                                tint: session.connectionMode == .agent ? .green : .secondary
+                            )
+                        }
+
+                        Spacer()
+
+                        Text("Process \(session.window.processId)  |  \(session.window.bounds.width)x\(session.window.bounds.height) @ \(session.window.bounds.x),\(session.window.bounds.y)")
+                            .font(.caption.monospaced())
+                            .foregroundStyle(.tertiary)
                     }
-
-                    Spacer()
-
-                    Text("Process \(session.window.processId)  |  \(session.window.bounds.width)x\(session.window.bounds.height) @ \(session.window.bounds.x),\(session.window.bounds.y)")
-                        .font(.caption.monospaced())
-                        .foregroundStyle(.tertiary)
+                    .padding(22)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                    .background(Color(nsColor: .textBackgroundColor))
                 }
-                .padding(22)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                .background(Color(nsColor: .textBackgroundColor))
+
+                MouseInputCaptureView(session: session, onMouseInput: onMouseInput)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 
@@ -229,6 +240,82 @@ private struct WindowsAppMirrorPlaceholderView: View {
         case .unavailable:
             .secondary
         }
+    }
+}
+
+private struct MouseInputCaptureView: NSViewRepresentable {
+    var session: WindowMirrorSession
+    var onMouseInput: (String, String, Int, Int) -> Void
+
+    func makeNSView(context: Context) -> MouseInputNSView {
+        MouseInputNSView()
+    }
+
+    func updateNSView(_ nsView: MouseInputNSView, context: Context) {
+        nsView.session = session
+        nsView.onMouseInput = onMouseInput
+    }
+}
+
+private final class MouseInputNSView: NSView {
+    var session: WindowMirrorSession?
+    var onMouseInput: ((String, String, Int, Int) -> Void)?
+
+    override var acceptsFirstResponder: Bool { true }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        window?.makeFirstResponder(self)
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        window?.makeFirstResponder(self)
+        send("leftDown", event)
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        send("leftUp", event)
+    }
+
+    override func rightMouseDown(with event: NSEvent) {
+        window?.makeFirstResponder(self)
+        send("rightDown", event)
+    }
+
+    override func rightMouseUp(with event: NSEvent) {
+        send("rightUp", event)
+    }
+
+    override func mouseDragged(with event: NSEvent) {
+        send("move", event)
+    }
+
+    private func send(_ inputEvent: String, _ event: NSEvent) {
+        guard let session,
+              session.connectionMode == .agent,
+              bounds.width > 0,
+              bounds.height > 0 else {
+            return
+        }
+
+        let point = convert(event.locationInWindow, from: nil)
+        let windowX = clamp(
+            Int((point.x / bounds.width) * CGFloat(session.window.bounds.width)),
+            lower: 0,
+            upper: max(session.window.bounds.width - 1, 0)
+        )
+        let topOriginY = bounds.height - point.y
+        let windowY = clamp(
+            Int((topOriginY / bounds.height) * CGFloat(session.window.bounds.height)),
+            lower: 0,
+            upper: max(session.window.bounds.height - 1, 0)
+        )
+
+        onMouseInput?(session.id, inputEvent, windowX, windowY)
+    }
+
+    private func clamp(_ value: Int, lower: Int, upper: Int) -> Int {
+        min(max(value, lower), upper)
     }
 }
 

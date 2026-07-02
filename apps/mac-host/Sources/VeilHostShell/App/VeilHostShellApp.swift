@@ -259,6 +259,11 @@ struct VeilHostShellApp: App {
                 _ = await model.closeMirrorSession(windowId: windowId)
             }
         }
+        windowsAppWindowPresenter.onMouseInput = { windowId, event, x, y in
+            Task { @MainActor in
+                await model.sendMouseInput(windowId: windowId, event: event, x: x, y: y)
+            }
+        }
     }
 
     private func showVMConsole() {

@@ -66,6 +66,25 @@ test("windows agent accepts host window close requests", async () => {
   assert.match(session, /MessageTypes\.WindowCloseResponse/);
 });
 
+test("windows agent accepts host mouse input events", async () => {
+  const messageTypes = await readFile(resolve(agentRoot, "src/VeilAgent/MessageTypes.cs"), "utf8");
+  const desktopInterface = await readFile(resolve(agentRoot, "src/VeilAgent/IWindowsDesktop.cs"), "utf8");
+  const desktop = await readFile(resolve(agentRoot, "src/VeilAgent/WindowsDesktop.cs"), "utf8");
+  const models = await readFile(resolve(agentRoot, "src/VeilAgent/WindowModels.cs"), "utf8");
+  const session = await readFile(resolve(agentRoot, "src/VeilAgent/AgentSession.cs"), "utf8");
+
+  assert.match(messageTypes, /InputMouse\s*=\s*"input\.mouse"/);
+  assert.match(models, /WindowMouseInput/);
+  assert.match(desktopInterface, /SendMouseInputAsync\(WindowMouseInput input,\s*CancellationToken cancellationToken\)/);
+  assert.match(desktop, /WM_LBUTTONDOWN/);
+  assert.match(desktop, /WM_LBUTTONUP/);
+  assert.match(desktop, /WM_MOUSEMOVE/);
+  assert.match(desktop, /PostMessage/);
+  assert.match(session, /MessageTypes\.InputMouse/);
+  assert.match(session, /HandleMouseInputAsync/);
+  assert.match(session, /\["input"\]\s*=\s*true/);
+});
+
 test("windows agent sample launch flow emits Notepad window and first frame", async () => {
   const transcript = JSON.parse(
     await readFile(resolve(agentRoot, "fixtures/notepad-launch-with-frame.json"), "utf8")

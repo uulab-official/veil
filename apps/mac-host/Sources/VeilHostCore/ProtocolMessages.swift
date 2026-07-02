@@ -166,6 +166,31 @@ public struct WindowCloseResponse: Codable, Equatable, Sendable {
     }
 }
 
+public struct InputMouseEvent: Codable, Equatable, Sendable {
+    public var type: MessageType
+    public var windowId: String
+    public var event: String
+    public var x: Int
+    public var y: Int
+    public var modifiers: [String]
+
+    public init(
+        type: MessageType = .inputMouse,
+        windowId: String,
+        event: String,
+        x: Int,
+        y: Int,
+        modifiers: [String] = []
+    ) {
+        self.type = type
+        self.windowId = windowId
+        self.event = event
+        self.x = x
+        self.y = y
+        self.modifiers = modifiers
+    }
+}
+
 public struct ErrorResponse: Codable, Equatable, Sendable {
     public var type: MessageType
     public var requestId: String?

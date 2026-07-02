@@ -71,11 +71,25 @@ struct VeilHostClientTests {
         #expect(response.windowId == "hwnd:0003029A")
         #expect(response.accepted)
     }
+
+    @Test("sends mouse input without waiting for a reply")
+    func sendsMouseInputWithoutReply() async throws {
+        let transport = RecordingTransport(responses: [])
+        let client = VeilHostClient(transport: transport)
+
+        try await client.sendMouseInput(
+            InputMouseEvent(windowId: "hwnd:0003029A", event: "leftDown", x: 240, y: 130)
+        )
+
+        #expect(transport.sentTypes == ["input.mouse"])
+        #expect(transport.expectedReplyCounts == [0])
+    }
 }
 
 private final class RecordingTransport: HostTransport, @unchecked Sendable {
     private var responses: [String]
     private(set) var sentTypes: [String] = []
+    private(set) var expectedReplyCounts: [Int] = []
 
     init(responses: [String]) {
         self.responses = responses
@@ -84,6 +98,7 @@ private final class RecordingTransport: HostTransport, @unchecked Sendable {
     func send(_ message: Data, expectedReplies: Int) async throws -> [Data] {
         let object = try JSONSerialization.jsonObject(with: message) as? [String: Any]
         sentTypes.append(object?["type"] as? String ?? "")
+        expectedReplyCounts.append(expectedReplies)
 
         let replyStrings = Array(responses.prefix(expectedReplies))
         responses.removeFirst(expectedReplies)

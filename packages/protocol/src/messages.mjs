@@ -16,6 +16,7 @@ export const MessageType = Object.freeze({
 });
 
 const knownTypes = new Set(Object.values(MessageType));
+const mouseEvents = new Set(["leftDown", "leftUp", "rightDown", "rightUp", "move", "scroll"]);
 
 export function parseMessage(message) {
   if (!message || typeof message.type !== "string" || message.type.length === 0) {
@@ -116,6 +117,26 @@ export function validateWindowCloseResponse(response) {
   return response;
 }
 
+export function validateInputMouse(input) {
+  if (!input || input.type !== MessageType.InputMouse) {
+    throw new TypeError("Mouse input must use type input.mouse.");
+  }
+
+  requireNonEmptyString(input.windowId, "windowId", "Mouse input");
+  requireNonEmptyString(input.event, "event", "Mouse input");
+  if (!mouseEvents.has(input.event)) {
+    throw new TypeError(`Mouse input event '${input.event}' is not supported.`);
+  }
+
+  requireNonNegativeInteger(input.x, "x", "Mouse input");
+  requireNonNegativeInteger(input.y, "y", "Mouse input");
+  if (!Array.isArray(input.modifiers) || input.modifiers.some((modifier) => typeof modifier !== "string")) {
+    throw new TypeError("Mouse input field 'modifiers' must be an array of strings.");
+  }
+
+  return input;
+}
+
 function requireNonEmptyString(value, fieldName, context = "Window frame") {
   if (typeof value !== "string" || value.length === 0) {
     throw new TypeError(`${context} field '${fieldName}' must be a non-empty string.`);
@@ -125,5 +146,11 @@ function requireNonEmptyString(value, fieldName, context = "Window frame") {
 function requirePositiveInteger(value, fieldName) {
   if (!Number.isInteger(value) || value <= 0) {
     throw new TypeError(`Window frame field '${fieldName}' must be a positive integer.`);
+  }
+}
+
+function requireNonNegativeInteger(value, fieldName, context) {
+  if (!Number.isInteger(value) || value < 0) {
+    throw new TypeError(`${context} field '${fieldName}' must be a non-negative integer.`);
   }
 }

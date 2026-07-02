@@ -5,6 +5,7 @@ public protocol HostDashboardService: Sendable {
     func loadOverview() async throws -> HostOverview
     func launchNotepad() async throws -> NotepadLaunchResult
     func closeWindow(windowId: String) async throws -> WindowCloseResponse
+    func sendMouseInput(_ input: InputMouseEvent) async throws
 }
 
 public struct HostOverview: Codable, Equatable, Sendable {
@@ -262,6 +263,29 @@ public final class HostDashboardModel {
             errorMessage = userMessage(for: error)
             phase = .failed
             return nil
+        }
+    }
+
+    public func sendMouseInput(
+        windowId: String,
+        event: String,
+        x: Int,
+        y: Int,
+        modifiers: [String] = []
+    ) async {
+        guard mirrorSessions.contains(where: { $0.id == windowId }),
+              hasLiveAgentConnection,
+              health?.capabilities.input == true else {
+            return
+        }
+
+        do {
+            try await service.sendMouseInput(
+                InputMouseEvent(windowId: windowId, event: event, x: x, y: y, modifiers: modifiers)
+            )
+        } catch {
+            errorMessage = userMessage(for: error)
+            phase = .failed
         }
     }
 

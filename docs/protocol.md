@@ -60,7 +60,7 @@ Response:
     "appLaunch": true,
     "windowTracking": true,
     "windowCapture": false,
-    "input": false,
+    "input": true,
     "clipboardText": false
   }
 }
@@ -219,6 +219,8 @@ Allowed mouse events:
 - `rightUp`
 - `move`
 - `scroll`
+
+Implementation note: the first Windows agent implementation maps these host events to HWND `PostMessage` calls with client-area coordinates.
 
 ## Input Key
 
