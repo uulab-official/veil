@@ -1036,6 +1036,7 @@ public struct LocalVMRuntimeService: VMRuntimeService {
             atPath: profile.sharedFolderPath,
             withIntermediateDirectories: true
         )
+        try Self.prepareGuestAgentInstallerBundle(for: profile)
         try await profileStore.save(profile)
         return try await loadSnapshot()
     }
@@ -1065,6 +1066,7 @@ public struct LocalVMRuntimeService: VMRuntimeService {
             atPath: profile.sharedFolderPath,
             withIntermediateDirectories: true
         )
+        try Self.prepareGuestAgentInstallerBundle(for: profile)
         try Self.prepareAutomaticInstallAnswerFile(for: profile)
         try automaticInstallMediaBuilder.prepareMedia(
             answerFileURL: Self.automaticInstallAnswerFileURL(for: profile),
@@ -1112,6 +1114,99 @@ public struct LocalVMRuntimeService: VMRuntimeService {
         URL(fileURLWithPath: profile.sharedFolderPath)
             .appendingPathComponent("VeilAutoInstall.iso")
     }
+
+    private static func guestAgentInstallerBundleURL(for profile: VMProfile) -> URL {
+        URL(fileURLWithPath: profile.sharedFolderPath)
+            .appendingPathComponent("Veil Guest Agent", isDirectory: true)
+    }
+
+    private static func prepareGuestAgentInstallerBundle(for profile: VMProfile) throws {
+        let fileManager = FileManager.default
+        let bundleURL = guestAgentInstallerBundleURL(for: profile)
+        try fileManager.createDirectory(at: bundleURL, withIntermediateDirectories: true)
+
+        let sourceURL = windowsAgentSourceURL()
+        try copyWindowsAgentSubdirectory(
+            named: "scripts",
+            from: sourceURL,
+            to: bundleURL
+        )
+        try copyWindowsAgentSubdirectory(
+            named: "src",
+            from: sourceURL,
+            to: bundleURL
+        )
+
+        try installAgentCommandText.write(
+            to: bundleURL.appendingPathComponent("Install Veil Agent.cmd"),
+            atomically: true,
+            encoding: .utf8
+        )
+        try startAgentCommandText.write(
+            to: bundleURL.appendingPathComponent("Start Veil Agent.cmd"),
+            atomically: true,
+            encoding: .utf8
+        )
+        try guestAgentReadmeText.write(
+            to: bundleURL.appendingPathComponent("README.txt"),
+            atomically: true,
+            encoding: .utf8
+        )
+    }
+
+    private static func copyWindowsAgentSubdirectory(named name: String, from sourceRootURL: URL, to bundleURL: URL) throws {
+        let fileManager = FileManager.default
+        let sourceURL = sourceRootURL.appendingPathComponent(name, isDirectory: true)
+        let destinationURL = bundleURL.appendingPathComponent(name, isDirectory: true)
+        guard fileManager.fileExists(atPath: sourceURL.path) else {
+            throw VMRuntimeError.automaticInstallMediaCreationFailed(
+                "Windows agent source folder is missing at \(sourceURL.path)."
+            )
+        }
+
+        if fileManager.fileExists(atPath: destinationURL.path) {
+            try fileManager.removeItem(at: destinationURL)
+        }
+        try fileManager.copyItem(at: sourceURL, to: destinationURL)
+    }
+
+    private static func windowsAgentSourceURL() -> URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("windows-agent", isDirectory: true)
+    }
+
+    private static let installAgentCommandText = """
+    @echo off
+    setlocal
+    cd /d "%~dp0"
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\\Install-VeilAgent.ps1" %*
+    if errorlevel 1 pause
+
+    """
+
+    private static let startAgentCommandText = """
+    @echo off
+    setlocal
+    cd /d "%~dp0"
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\\Start-VeilAgent.ps1" %*
+    if errorlevel 1 pause
+
+    """
+
+    private static let guestAgentReadmeText = """
+    Veil Guest Agent
+
+    Run Install Veil Agent.cmd after Windows 11 reaches the desktop.
+    The installer publishes the .NET guest agent, registers the VeilAgent user logon task, and points it at ws://127.0.0.1:18444/.
+
+    Run Start Veil Agent.cmd to start the agent immediately after installation.
+    Keep this folder in the Veil Shared drive while Veil is in pre-alpha.
+
+    """
 
     private static func automaticInstallAnswerFilePathIfExists(for profile: VMProfile) -> String? {
         let url = automaticInstallAnswerFileURL(for: profile)

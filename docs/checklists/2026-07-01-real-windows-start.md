@@ -75,11 +75,12 @@ Goal: keep the main Veil experience pointed at real local Windows boot and conso
 - [x] Convert QEMU monitor screenshots to PNG paths so users can inspect boot evidence directly.
 - [x] Surface the latest QEMU console PNG inside the Windows setup screen when launch evidence exists.
 - [x] Convert the console handoff progress from a fixed timer to VM runtime state changes.
+- [x] Stage a first-run `Veil Guest Agent` bundle in the macOS shared folder with double-click install/start launchers.
 
 ## Next
 
 - [ ] Run `dotnet build apps/windows-agent/src/VeilAgent/VeilAgent.csproj` on a machine with the .NET 8 SDK installed.
-- [ ] Run `Install-VeilAgent.ps1` inside Windows 11 Arm and verify the `VeilAgent` scheduled task starts after login.
+- [ ] Run `Veil Shared\Veil Guest Agent\Install Veil Agent.cmd` inside Windows 11 Arm and verify the `VeilAgent` scheduled task starts after login.
 - [ ] Verify the Win32/GDI HWND capture path inside Windows 11 Arm and record the captured Notepad frame evidence.
 - [ ] Tune the Windows agent frame stream for lower latency after correctness is verified.
 - [ ] Restart the currently running QEMU VM so the new guest-agent port forwarding takes effect.

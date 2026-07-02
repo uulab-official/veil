@@ -29,7 +29,13 @@ ws://127.0.0.1:18444/
 
 ## Install In Windows
 
-After Windows 11 Arm reaches the desktop and the .NET 8 SDK is installed, run this inside the guest:
+After Windows 11 Arm reaches the desktop and the .NET 8 SDK is installed, use the bundle that the macOS host stages in the VM shared folder:
+
+```text
+Veil Shared\Veil Guest Agent\Install Veil Agent.cmd
+```
+
+For repository development without the shared-folder bundle, run this inside the guest:
 
 ```powershell
 cd C:\Path\To\veil\apps\windows-agent
@@ -39,6 +45,12 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\Install-VeilAgent.
 The installer publishes the agent to `%LOCALAPPDATA%\Veil\Agent\app`, sets user-level `VEIL_AGENT_HOST` and `VEIL_AGENT_PORT`, and registers a user logon scheduled task named `VeilAgent`.
 
 Start immediately without waiting for the next login:
+
+```text
+Veil Shared\Veil Guest Agent\Start Veil Agent.cmd
+```
+
+Or from a repository checkout:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\Start-VeilAgent.ps1
