@@ -4,6 +4,7 @@ import { readFixture } from "./fixtures.mjs";
 
 export function createSession(options = {}) {
   const broadcast = options.broadcast ?? (async () => {});
+  const onInput = options.onInput ?? (async () => {});
 
   return {
     async handle(message) {
@@ -26,8 +27,10 @@ export function createSession(options = {}) {
         case MessageType.WindowCloseRequest:
           return handleWindowClose(message);
         case MessageType.InputMouse:
+          await onInput(message);
           return [];
         case MessageType.InputKey:
+          await onInput(message);
           return [];
         case MessageType.ClipboardTextSet:
           return [];

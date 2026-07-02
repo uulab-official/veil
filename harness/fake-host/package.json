@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "launch:notepad": "node src/launch-notepad.mjs",
+    "smoke:notepad-input": "node src/notepad-input-smoke.mjs",
     "test": "node --test"
   },
   "dependencies": {

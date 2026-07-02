@@ -2,7 +2,7 @@ import { WebSocket, WebSocketServer } from "ws";
 
 import { createSession } from "./session.mjs";
 
-export function createFakeAgentServer({ host = "127.0.0.1", port = 18444 } = {}) {
+export function createFakeAgentServer({ host = "127.0.0.1", port = 18444, onInput = async () => {} } = {}) {
   const server = new WebSocketServer({ host, port });
   const clients = new Set();
 
@@ -13,6 +13,7 @@ export function createFakeAgentServer({ host = "127.0.0.1", port = 18444 } = {})
     });
 
     const session = createSession({
+      onInput,
       broadcast: async (event) => {
         const payload = JSON.stringify(event);
         for (const client of clients) {
