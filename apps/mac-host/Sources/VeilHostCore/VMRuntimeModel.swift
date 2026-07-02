@@ -231,6 +231,7 @@ public struct VMRuntimeSnapshot: Codable, Equatable, Sendable {
     public var installerMediaPath: String?
     public var discoveredInstallerMediaPath: String?
     public var virtualDiskPath: String?
+    public var virtualDiskAllocatedBytes: Int64?
     public var automaticInstallAnswerFilePath: String?
     public var automaticInstallMediaPath: String?
     public var runtimeProvider: VMRuntimeProviderSummary?
@@ -254,6 +255,7 @@ public struct VMRuntimeSnapshot: Codable, Equatable, Sendable {
         installerMediaPath: String? = nil,
         discoveredInstallerMediaPath: String? = nil,
         virtualDiskPath: String? = nil,
+        virtualDiskAllocatedBytes: Int64? = nil,
         automaticInstallAnswerFilePath: String? = nil,
         automaticInstallMediaPath: String? = nil,
         runtimeProvider: VMRuntimeProviderSummary? = nil,
@@ -276,6 +278,7 @@ public struct VMRuntimeSnapshot: Codable, Equatable, Sendable {
         self.installerMediaPath = installerMediaPath
         self.discoveredInstallerMediaPath = discoveredInstallerMediaPath
         self.virtualDiskPath = virtualDiskPath
+        self.virtualDiskAllocatedBytes = virtualDiskAllocatedBytes
         self.automaticInstallAnswerFilePath = automaticInstallAnswerFilePath
         self.automaticInstallMediaPath = automaticInstallMediaPath
         self.runtimeProvider = runtimeProvider
@@ -911,6 +914,8 @@ public struct LocalVMRuntimeService: VMRuntimeService {
             )
             let runtimeState = await bootRunner.runtimeState()
             let state = runtimeState ?? .stopped
+            let virtualDiskAllocatedBytes = Self.allocatedFileSize(path: profile.virtualDiskPath)
+            let windowsInstalled = profile.windowsInstalled == true
             return VMRuntimeSnapshot(
                 state: state,
                 virtualizationAvailable: true,
@@ -923,6 +928,7 @@ public struct LocalVMRuntimeService: VMRuntimeService {
                 installerMediaPath: profile.installerMediaPath,
                 discoveredInstallerMediaPath: profile.installerMediaPath == nil ? discoveredInstallerMediaPath : nil,
                 virtualDiskPath: profile.virtualDiskPath,
+                virtualDiskAllocatedBytes: virtualDiskAllocatedBytes,
                 automaticInstallAnswerFilePath: Self.automaticInstallAnswerFilePathIfExists(for: profile),
                 automaticInstallMediaPath: Self.automaticInstallMediaPathIfExists(for: profile),
                 runtimeProvider: activeProvider,
@@ -931,11 +937,13 @@ public struct LocalVMRuntimeService: VMRuntimeService {
                 preflightChecks: preflightChecks,
                 deviceSummary: Self.deviceSummary(for: profile),
                 bootReady: bootPathReadiness.isReady,
-                windowsInstalled: profile.windowsInstalled == true,
+                windowsInstalled: windowsInstalled,
                 detail: runtimeState.map(Self.runtimeDetail(for:)) ?? (
-                    bootPathReadiness.isReady
-                        ? "Ready to start Windows."
-                        : bootPathReadiness.detail
+                    Self.stoppedDetail(
+                        bootPathReadiness: bootPathReadiness,
+                        windowsInstalled: windowsInstalled,
+                        virtualDiskAllocatedBytes: virtualDiskAllocatedBytes
+                    )
                 )
             )
         }
@@ -1143,6 +1151,28 @@ public struct LocalVMRuntimeService: VMRuntimeService {
         return looksLikeWindows && looksLikeArm && !filename.contains("x64") && !filename.contains("x86")
     }
 
+    private static func allocatedFileSize(path: String?) -> Int64? {
+        guard let path, !path.isEmpty else {
+            return nil
+        }
+
+        let url = URL(fileURLWithPath: path)
+        let values = try? url.resourceValues(forKeys: [
+            .totalFileAllocatedSizeKey,
+            .fileAllocatedSizeKey
+        ])
+
+        if let totalAllocatedSize = values?.totalFileAllocatedSize {
+            return Int64(totalAllocatedSize)
+        }
+
+        if let allocatedSize = values?.fileAllocatedSize {
+            return Int64(allocatedSize)
+        }
+
+        return nil
+    }
+
     public func updateProfilePaths(installerMediaPath: String?, virtualDiskPath: String?) async throws -> VMRuntimeSnapshot {
         var profile = try await profileStore.load() ?? defaultProfile()
         profile.installerMediaPath = installerMediaPath
@@ -1338,6 +1368,27 @@ public struct LocalVMRuntimeService: VMRuntimeService {
         }
 
         return (true, "Ready to start Windows.")
+    }
+
+    private static func stoppedDetail(
+        bootPathReadiness: (isReady: Bool, detail: String),
+        windowsInstalled: Bool,
+        virtualDiskAllocatedBytes: Int64?
+    ) -> String {
+        guard bootPathReadiness.isReady else {
+            return bootPathReadiness.detail
+        }
+
+        if windowsInstalled {
+            return "Windows is installed and can be started."
+        }
+
+        if let virtualDiskAllocatedBytes,
+           virtualDiskAllocatedBytes < 1_024 * 1_024 * 1_024 {
+            return "Windows is not installed yet."
+        }
+
+        return "Windows setup can start."
     }
 
     private static func fileValidationDetail(path: String, label: String) -> String? {

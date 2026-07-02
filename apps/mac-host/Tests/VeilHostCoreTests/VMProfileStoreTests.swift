@@ -129,8 +129,9 @@ struct VMProfileStoreTests {
         #expect(snapshot.profileName == "Windows 11 Arm")
         #expect(snapshot.installerMediaPath == installerURL.path)
         #expect(snapshot.virtualDiskPath == diskURL.path)
+        #expect(snapshot.virtualDiskAllocatedBytes != nil)
         #expect(snapshot.bootReady)
-        #expect(snapshot.detail == "Ready to start Windows.")
+        #expect(snapshot.detail == "Windows is not installed yet.")
         #expect(snapshot.installationSteps.map(\.state) == [
             .complete,
             .complete,
@@ -160,6 +161,40 @@ struct VMProfileStoreTests {
         let snapshot = try await service.loadSnapshot()
 
         #expect(snapshot.windowsInstalled)
+    }
+
+    @Test("local runtime reports sparse disk allocation evidence")
+    func localRuntimeReportsSparseDiskAllocationEvidence() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let installerURL = directory.appendingPathComponent("Windows.iso")
+        let diskURL = directory.appendingPathComponent("Windows.img")
+        let sharedFolderURL = directory.appendingPathComponent("Veil Shared", isDirectory: true)
+        try Data("installer".utf8).write(to: installerURL)
+        try FileManager.default.createDirectory(at: sharedFolderURL, withIntermediateDirectories: true)
+        try Data("<unattend />".utf8).write(to: sharedFolderURL.appendingPathComponent("Autounattend.xml"))
+        try Data("auto install media".utf8).write(to: sharedFolderURL.appendingPathComponent("VeilAutoInstall.iso"))
+
+        #expect(FileManager.default.createFile(atPath: diskURL.path, contents: nil))
+        let handle = try FileHandle(forWritingTo: diskURL)
+        try handle.truncate(atOffset: 128 * 1_024 * 1_024 * 1_024)
+        try handle.close()
+
+        let store = JSONVMProfileStore(directory: directory)
+        var profile = VMProfile.defaultWindows11Arm(createdAt: Date(timeIntervalSince1970: 1_782_752_400))
+        profile.installerMediaPath = installerURL.path
+        profile.virtualDiskPath = diskURL.path
+        profile.sharedFolderPath = sharedFolderURL.path
+        try await store.save(profile)
+
+        let service = LocalVMRuntimeService(profileStore: store)
+        let snapshot = try await service.loadSnapshot()
+
+        let allocatedBytes = try #require(snapshot.virtualDiskAllocatedBytes)
+        #expect(snapshot.bootReady)
+        #expect(allocatedBytes < 1_024 * 1_024 * 1_024)
+        #expect(snapshot.detail == "Windows is not installed yet.")
     }
 
     @Test("local runtime reports local runtime provider")

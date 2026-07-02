@@ -1055,7 +1055,7 @@ private struct WindowsSetupDisplayPanel: View {
 
                     InstallStatusSummary(
                         title: "Virtual Disk",
-                        value: resourceName(from: snapshot.virtualDiskPath) ?? "Not created",
+                        value: virtualDiskSummary,
                         symbolName: "internaldrive",
                         tint: snapshot.virtualDiskPath == nil ? .orange : .green
                     )
@@ -1214,6 +1214,10 @@ private struct WindowsSetupDisplayPanel: View {
     }
 
     private var installProcessSubtitle: String {
+        if isVirtualDiskEmptyForWindowsInstall {
+            return "Windows is not installed yet. Open setup to install it on the local disk."
+        }
+
         if snapshot.bootReady {
             return "Open the Windows installer, complete setup, then return here to start Windows."
         }
@@ -1294,6 +1298,28 @@ private struct WindowsSetupDisplayPanel: View {
 
     private var selectedInstallerName: String? {
         snapshot.installerMediaPath.map { URL(fileURLWithPath: $0).lastPathComponent }
+    }
+
+    private var virtualDiskSummary: String {
+        guard snapshot.virtualDiskPath != nil else {
+            return "Not created"
+        }
+
+        if let allocatedBytes = snapshot.virtualDiskAllocatedBytes {
+            return "\(formattedByteCount(allocatedBytes)) used"
+        }
+
+        return resourceName(from: snapshot.virtualDiskPath) ?? "Selected"
+    }
+
+    private var isVirtualDiskEmptyForWindowsInstall: Bool {
+        guard snapshot.bootReady,
+              !snapshot.windowsInstalled,
+              let allocatedBytes = snapshot.virtualDiskAllocatedBytes else {
+            return false
+        }
+
+        return allocatedBytes < 1_024 * 1_024 * 1_024
     }
 
     private var discoveredInstallerName: String? {
@@ -1418,6 +1444,10 @@ private struct WindowsSetupDisplayPanel: View {
         }
 
         return URL(fileURLWithPath: path).lastPathComponent
+    }
+
+    private func formattedByteCount(_ bytes: Int64) -> String {
+        ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
     }
 
     private var primaryTitle: String {

@@ -49,9 +49,12 @@ Goal: keep the main Veil experience pointed at real local Windows boot and conso
 - [x] Check the current local VM state: QEMU is running, but the 128 GB Windows disk only has 16 KiB allocated, so Windows is not installed yet.
 - [x] Check the current host integration state: no Windows guest agent is listening on `127.0.0.1:18444`.
 - [x] Add QEMU `hostfwd=tcp::18444-:18444` so a future Windows guest agent can connect back to the macOS host through localhost.
+- [x] Surface sparse-disk allocation evidence in the runtime snapshot so the main screen does not imply Windows is installed before setup completes.
+- [x] Change the stopped runtime detail from a generic ready state to install-specific copy: not installed, setup can start, or installed.
 
 ## Next
 
+- [ ] Promote disk/agent evidence into a first-class install-complete signal after the Windows guest agent connects.
 - [ ] Improve `Autounattend.xml` so Windows Setup skips the product-key page without bundling a key.
 - [ ] Restart the currently running QEMU VM so the new guest-agent port forwarding takes effect.
 - [ ] Replace the static setup preview with a real VM screenshot once QEMU reaches Windows Setup.
