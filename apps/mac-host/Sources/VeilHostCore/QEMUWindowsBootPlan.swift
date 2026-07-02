@@ -1272,6 +1272,14 @@ public enum QEMUQMPControlCommandBuilder {
     }
 }
 
+public enum QEMUForceStopAuthorization {
+    public static let acknowledgementFlag = "--i-understand-data-loss"
+
+    public static func isAuthorized(arguments: [String]) -> Bool {
+        arguments.contains(acknowledgementFlag)
+    }
+}
+
 private enum QEMUQMPCommandJSONEncoder {
     static func jsonLine(_ object: [String: Any]) throws -> String {
         guard JSONSerialization.isValidJSONObject(object) else {

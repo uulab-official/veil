@@ -101,6 +101,13 @@ refuses to launch a second QEMU process while the latest recorded PID is still
 alive, which prevents two local QEMU processes from writing the same Windows
 disk.
 
+`veil-vmctl qemu-force-stop [--json] --i-understand-data-loss [--wait-seconds 10]`
+is the last-resort recovery path when a VM cannot shut down through
+`qemu-powerdown`. It sends `SIGTERM` to the latest recorded QEMU PID, waits for
+exit evidence, and refuses to run without the exact acknowledgement flag. Use it
+only after recording the current console state and accepting that Windows disk
+writes may be interrupted.
+
 `veil-vmctl qemu-sendkey [--json] key [key ...]` sends a bounded list of key
 commands through the latest launch record. On new launches it prefers QMP
 `send-key`; on older launch records without QMP it falls back to HMP `sendkey`.

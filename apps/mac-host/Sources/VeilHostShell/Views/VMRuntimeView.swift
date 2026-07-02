@@ -751,34 +751,21 @@ private struct ConsoleScreenshotPreview: View {
     var path: String
 
     var body: some View {
-        ZStack(alignment: .bottomLeading) {
+        ZStack {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .fill(.black)
 
             Image(nsImage: image)
                 .resizable()
                 .scaledToFit()
-                .padding(10)
-
-            HStack(spacing: 6) {
-                Image(systemName: "display")
-                    .font(.caption.weight(.semibold))
-                Text("Windows Display")
-                    .font(.caption.weight(.semibold))
-                    .lineLimit(1)
-            }
-            .foregroundStyle(.white.opacity(0.86))
-            .padding(.horizontal, 10)
-            .padding(.vertical, 7)
-            .background(.black.opacity(0.48), in: Capsule())
-            .padding(10)
+                .padding(6)
         }
         .aspectRatio(16 / 9, contentMode: .fit)
         .overlay {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .strokeBorder(.white.opacity(0.16), lineWidth: 1)
         }
-        .help(path)
+        .help("Latest Windows display")
         .accessibilityLabel("Latest QEMU console screenshot")
     }
 }
@@ -1160,7 +1147,8 @@ private struct WindowsSetupDisplayPanel: View {
                     image: consoleScreenshotImage,
                     path: snapshot.latestConsoleScreenshotPath ?? ""
                 )
-                .padding(14)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 12)
             } else {
                 VStack(spacing: 18) {
                     installMark
@@ -1178,78 +1166,60 @@ private struct WindowsSetupDisplayPanel: View {
                     }
                 }
                 .padding(.horizontal, 32)
-            }
 
-            VStack {
-                HStack {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("WINDOWS SETUP")
+                VStack {
+                    HStack {
+                        Text(setupStageTitle)
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(.secondary)
-                        Text(setupStageTitle)
-                            .font(.headline.weight(.semibold))
+                        Spacer()
                     }
                     Spacer()
                 }
-                Spacer()
+                .padding(24)
             }
-            .padding(24)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var installControlBar: some View {
-        HStack(spacing: 12) {
-            InstallStatusSummary(
-                title: "ISO",
-                value: selectedInstallerName ?? discoveredInstallerName ?? "Select ISO",
-                symbolName: "opticaldisc",
-                tint: snapshot.installerMediaPath != nil || snapshot.discoveredInstallerMediaPath != nil ? .green : .orange
-            )
-
-            InstallStatusSummary(
-                title: "Disk",
-                value: virtualDiskSummary,
-                symbolName: "internaldrive",
-                tint: snapshot.virtualDiskPath == nil ? .orange : .green
-            )
-
-            if let selectedDriverName {
-                InstallStatusSummary(
-                    title: "Drivers",
-                    value: selectedDriverName,
-                    symbolName: "externaldrive.badge.gearshape",
-                    tint: .green
-                )
+        HStack(spacing: 10) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(controlBarTitle)
+                    .font(.callout.weight(.semibold))
+                    .lineLimit(1)
+                Text(controlBarSubtitle)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
             }
-
-            if installSimulation.phase != .idle {
-                AssistantProgressStrip(simulation: installSimulation)
-                    .frame(maxWidth: 190)
-            }
+            .frame(minWidth: 260, maxWidth: .infinity, alignment: .leading)
 
             Spacer(minLength: 12)
 
-            Button(action: selectInstallerAction) {
-                Label("Choose ISO", systemImage: "opticaldisc")
-                    .labelStyle(.iconOnly)
-            }
-            .disabled(isLoading || snapshot.state == .running || snapshot.state == .starting)
-            .help("Choose ISO")
+            if !canStop && snapshot.state != .starting {
+                Button(action: selectInstallerAction) {
+                    Label("Choose ISO", systemImage: "opticaldisc")
+                        .labelStyle(.iconOnly)
+                }
+                .disabled(isLoading)
+                .help("Choose ISO")
 
-            Button(action: selectDriverAction) {
-                Label("Choose Drivers", systemImage: "externaldrive.badge.gearshape")
-                    .labelStyle(.iconOnly)
-            }
-            .disabled(isLoading || snapshot.state == .running || snapshot.state == .starting)
-            .help("Choose driver ISO")
+                Button(action: selectDriverAction) {
+                    Label("Choose Drivers", systemImage: "externaldrive.badge.gearshape")
+                        .labelStyle(.iconOnly)
+                }
+                .disabled(isLoading)
+                .help("Choose driver ISO")
 
-            Button(action: prepareAction) {
-                Label("Prepare", systemImage: "wand.and.stars")
-                    .labelStyle(.iconOnly)
+                Button(action: prepareAction) {
+                    Label("Prepare", systemImage: "wand.and.stars")
+                        .labelStyle(.iconOnly)
+                }
+                .disabled(isLoading)
+                .help("Prepare Windows VM")
             }
-            .disabled(isLoading || snapshot.state == .running || snapshot.state == .starting)
-            .help("Prepare Windows VM")
 
             Button(action: detailsAction) {
                 Label(isShowingDetails ? "Hide Details" : "Details", systemImage: "slider.horizontal.3")
@@ -1266,7 +1236,7 @@ private struct WindowsSetupDisplayPanel: View {
 
             Button(action: primaryAction) {
                 Label(installPrimaryTitle, systemImage: primarySymbol)
-                    .frame(minWidth: 124)
+                    .frame(minWidth: canStop ? 124 : 142)
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
@@ -1281,9 +1251,10 @@ private struct WindowsSetupDisplayPanel: View {
                 .help("Open Console")
             }
         }
-        .padding(.horizontal, 14)
+        .controlSize(.regular)
+        .padding(.horizontal, 18)
         .padding(.vertical, 12)
-        .background(.regularMaterial)
+        .background(.ultraThinMaterial)
         .overlay(alignment: .top) {
             Rectangle()
                 .fill(.quaternary)
@@ -1313,8 +1284,8 @@ private struct WindowsSetupDisplayPanel: View {
     private var installStageBackground: LinearGradient {
         LinearGradient(
             colors: [
-                Color(nsColor: .controlBackgroundColor).opacity(0.90),
-                Color(nsColor: .windowBackgroundColor).opacity(0.76)
+                Color(red: 0.07, green: 0.08, blue: 0.10),
+                Color(red: 0.11, green: 0.12, blue: 0.13)
             ],
             startPoint: .topLeading,
             endPoint: .bottomTrailing
@@ -1539,6 +1510,34 @@ private struct WindowsSetupDisplayPanel: View {
 
     private var selectedDriverName: String? {
         snapshot.driverMediaPath.map { URL(fileURLWithPath: $0).lastPathComponent }
+    }
+
+    private var controlBarTitle: String {
+        if canStop {
+            return "Windows is open"
+        }
+
+        if canStart {
+            return "Windows 11"
+        }
+
+        return "Set up Windows 11"
+    }
+
+    private var controlBarSubtitle: String {
+        if canStop {
+            return selectedInstallerName ?? discoveredInstallerName ?? "Local VM display"
+        }
+
+        if let selectedInstallerName {
+            return selectedInstallerName
+        }
+
+        if let discoveredInstallerName {
+            return "Found \(discoveredInstallerName)"
+        }
+
+        return "Choose a Windows 11 Arm ISO"
     }
 
     private var effectiveInstallEvidence: VMInstallEvidenceSummary {

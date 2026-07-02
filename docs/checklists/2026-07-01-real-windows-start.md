@@ -132,11 +132,13 @@ Goal: keep the main Veil experience pointed at real local Windows boot and conso
 - [x] Make `veil-vmctl qemu-sendkey` prefer QMP `send-key` on new launch records and fall back to HMP `sendkey` for older records.
 - [x] Add a safe QMP-first `qemu-powerdown` path and block duplicate `qemu-start` launches while the latest QEMU PID is still alive.
 - [x] Verify the current pre-QMP launch still refuses HMP control: `qemu-powerdown --wait-seconds 10` records `transport=hmp`, `terminationStatus=1`, and `didExitWithinWait=false`.
+- [x] Add a guarded `qemu-force-stop` last-resort recovery path that refuses to run without `--i-understand-data-loss`.
+- [x] Simplify the active setup UI so the Windows display is the primary surface and the bottom area is a thin control bar instead of a multi-card dashboard.
 
 ## Next
 
 - [ ] Run `dotnet build apps/windows-agent/src/VeilAgent/VeilAgent.csproj` on a machine with the .NET 8 SDK installed.
-- [ ] Use `qemu-powerdown` to request safe shutdown of the current pre-QMP visible VM, relaunch it so `qemu-launch-latest.json` includes a QMP socket path, then re-run `qemu-oobe-bypass` and capture whether the OOBE recovery input is accepted.
+- [ ] Capture the current pre-QMP VM screen, use guarded force-stop only if normal shutdown still fails, relaunch it so `qemu-launch-latest.json` includes a QMP socket path, then re-run `qemu-oobe-bypass` and capture whether the OOBE recovery input is accepted.
 - [ ] Continue the persistent visible Windows Setup install through first reboot.
 - [ ] Run `Veil Shared\Veil Guest Agent\Install Veil Agent.cmd` inside Windows 11 Arm and verify the current-session agent plus the `VeilAgent` logon task both start.
 - [ ] Verify the Win32/GDI HWND capture path inside Windows 11 Arm and record the captured Notepad frame evidence.

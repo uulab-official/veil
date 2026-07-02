@@ -840,6 +840,13 @@ struct QEMUWindowsBootPlanTests {
         #expect(object["execute"] as? String == "system_powerdown")
     }
 
+    @Test("force stop authorization requires the exact risk acknowledgement flag")
+    func forceStopAuthorizationRequiresTheExactRiskAcknowledgementFlag() {
+        #expect(QEMUForceStopAuthorization.isAuthorized(arguments: []) == false)
+        #expect(QEMUForceStopAuthorization.isAuthorized(arguments: ["--confirm"]) == false)
+        #expect(QEMUForceStopAuthorization.isAuthorized(arguments: ["--i-understand-data-loss"]) == true)
+    }
+
     @Test("TPM emulator startup terminates with the QEMU connection")
     func tpmEmulatorStartupTerminatesWithQEMUConnection() throws {
         let directory = try temporaryDirectory()

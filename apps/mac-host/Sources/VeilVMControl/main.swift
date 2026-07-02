@@ -15,6 +15,7 @@ enum VMControlError: Error, LocalizedError {
     case qemuScreenshotCaptureFailed(String)
     case missingQEMUKeySequence
     case qemuAlreadyRunning(pid: Int32, monitorSocketPath: String)
+    case missingForceStopAcknowledgement
 
     var errorDescription: String? {
         switch self {
@@ -42,10 +43,12 @@ enum VMControlError: Error, LocalizedError {
             "Missing QEMU key sequence. Pass keys such as shift-f10, esc, tab, ret, or spc."
         case .qemuAlreadyRunning(let pid, let monitorSocketPath):
             "QEMU is already running as PID \(pid). Use qemu-capture to inspect it or qemu-powerdown to request a safe shutdown before starting another VM. Monitor socket: \(monitorSocketPath)"
+        case .missingForceStopAcknowledgement:
+            "Force stop can interrupt Windows disk writes. Re-run with \(QEMUForceStopAuthorization.acknowledgementFlag) only when the VM cannot shut down normally."
         }
     }
 
-    private static let usage = "Usage: veil-vmctl prepare --installer /path/to/Windows.iso [--drivers /path/to/virtio-win.iso] | veil-vmctl providers [--json] | veil-vmctl qemu-plan [--json] | veil-vmctl qemu-doctor [--json] | veil-vmctl qemu-smoke [--json] [--seconds 45] | veil-vmctl qemu-start [--json] [--wait-seconds 15] | veil-vmctl qemu-capture [--json] [--output /path/to/console.png] | veil-vmctl qemu-powerdown [--json] [--wait-seconds 30] | veil-vmctl qemu-sendkey [--json] key [key ...] | veil-vmctl qemu-oobe-bypass [--json]"
+    private static let usage = "Usage: veil-vmctl prepare --installer /path/to/Windows.iso [--drivers /path/to/virtio-win.iso] | veil-vmctl providers [--json] | veil-vmctl qemu-plan [--json] | veil-vmctl qemu-doctor [--json] | veil-vmctl qemu-smoke [--json] [--seconds 45] | veil-vmctl qemu-start [--json] [--wait-seconds 15] | veil-vmctl qemu-capture [--json] [--output /path/to/console.png] | veil-vmctl qemu-powerdown [--json] [--wait-seconds 30] | veil-vmctl qemu-force-stop [--json] --i-understand-data-loss [--wait-seconds 10] | veil-vmctl qemu-sendkey [--json] key [key ...] | veil-vmctl qemu-oobe-bypass [--json]"
 }
 
 struct VMControlArguments {
@@ -58,6 +61,7 @@ struct VMControlArguments {
         case qemuStart(json: Bool, waitSeconds: Int)
         case qemuCapture(json: Bool, outputPath: String?)
         case qemuPowerDown(json: Bool, waitSeconds: Int)
+        case qemuForceStop(json: Bool, waitSeconds: Int, isAuthorized: Bool)
         case qemuSendKey(json: Bool, keys: [String])
         case qemuOOBEBypass(json: Bool)
     }
@@ -103,6 +107,17 @@ struct VMControlArguments {
         if command == "qemu-powerdown" {
             let waitSeconds = waitSecondsArgument(from: arguments) ?? 30
             return VMControlArguments(command: .qemuPowerDown(json: arguments.contains("--json"), waitSeconds: waitSeconds))
+        }
+
+        if command == "qemu-force-stop" {
+            let waitSeconds = waitSecondsArgument(from: arguments) ?? 10
+            return VMControlArguments(
+                command: .qemuForceStop(
+                    json: arguments.contains("--json"),
+                    waitSeconds: waitSeconds,
+                    isAuthorized: QEMUForceStopAuthorization.isAuthorized(arguments: arguments)
+                )
+            )
         }
 
         if command == "qemu-sendkey" {
@@ -203,6 +218,16 @@ struct QEMUPowerDownRecord: Codable, Equatable {
     var requestedAt: Date
 }
 
+struct QEMUForceStopRecord: Codable, Equatable {
+    var kind: String = "qemuForceStop"
+    var pid: Int32?
+    var signal: String
+    var didSignalProcess: Bool
+    var waitedSeconds: Int
+    var didExitWithinWait: Bool
+    var requestedAt: Date
+}
+
 @main
 struct VeilVMControl {
     static func main() async {
@@ -241,6 +266,8 @@ struct VeilVMControl {
             try await captureQEMUConsole(json: json, outputPath: outputPath)
         case .qemuPowerDown(let json, let waitSeconds):
             try await powerDownQEMU(json: json, waitSeconds: waitSeconds)
+        case .qemuForceStop(let json, let waitSeconds, let isAuthorized):
+            try await forceStopQEMU(json: json, waitSeconds: waitSeconds, isAuthorized: isAuthorized)
         case .qemuSendKey(let json, let keys):
             try await sendQEMUKeys(json: json, keys: keys)
         case .qemuOOBEBypass(let json):
@@ -629,6 +656,43 @@ struct VeilVMControl {
         print("Transport: \(record.transport)")
         print("Socket: \(record.socketPath)")
         print("Sender status: \(record.terminationStatus.map(String.init) ?? "not launched")")
+        print("Exited within wait: \(record.didExitWithinWait ? "yes" : "no")")
+    }
+
+    private static func forceStopQEMU(json: Bool, waitSeconds: Int, isAuthorized: Bool) async throws {
+        guard isAuthorized else {
+            throw VMControlError.missingForceStopAcknowledgement
+        }
+
+        let launchRecord = try latestQEMULaunchRecord()
+        let boundedWaitSeconds = min(max(waitSeconds, 0), 120)
+        let didSignal: Bool
+        if let pid = launchRecord.pid, isProcessRunning(pid: pid) {
+            didSignal = Darwin.kill(pid, SIGTERM) == 0
+        } else {
+            didSignal = false
+        }
+
+        let didExit = await waitForProcessExit(pid: launchRecord.pid, timeoutSeconds: boundedWaitSeconds)
+        let record = QEMUForceStopRecord(
+            pid: launchRecord.pid,
+            signal: "SIGTERM",
+            didSignalProcess: didSignal,
+            waitedSeconds: boundedWaitSeconds,
+            didExitWithinWait: didExit,
+            requestedAt: Date()
+        )
+
+        if json {
+            let data = try JSONEncoder.veilDiagnostics.encode(record)
+            print(String(decoding: data, as: UTF8.self))
+            return
+        }
+
+        print("QEMU force stop requested")
+        print("PID: \(record.pid.map(String.init) ?? "unknown")")
+        print("Signal: \(record.signal)")
+        print("Signaled: \(record.didSignalProcess ? "yes" : "no")")
         print("Exited within wait: \(record.didExitWithinWait ? "yes" : "no")")
     }
 

@@ -166,3 +166,6 @@ Powerdown evidence: against the current pre-QMP live launch, a bounded
 `qemu-start --json --wait-seconds 1` correctly refused to launch a duplicate
 QEMU process for PID 46399. The old launch should be closed manually or through
 a later explicit force-stop recovery path before the QMP relaunch checkpoint.
+Veil now has that recovery command as `qemu-force-stop --i-understand-data-loss`;
+without the exact acknowledgement flag, the command exits with a warning instead
+of signaling the process.
