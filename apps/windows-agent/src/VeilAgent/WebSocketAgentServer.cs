@@ -85,6 +85,11 @@ public sealed class WebSocketAgentServer
                 {
                     StartFrameStream(replies.StreamWindow, replies.NextFrameSequence, cancellationToken);
                 }
+
+                if (replies.StopStreamWindowId is not null)
+                {
+                    StopFrameStream(replies.StopStreamWindowId);
+                }
             }
         }
         finally
@@ -166,6 +171,15 @@ public sealed class WebSocketAgentServer
                 streamCancellation.Dispose();
             }
         }, streamCancellation.Token);
+    }
+
+    private void StopFrameStream(string windowId)
+    {
+        if (frameStreamsByWindowId.TryRemove(windowId, out var existing))
+        {
+            existing.Cancel();
+            existing.Dispose();
+        }
     }
 
     private static async Task<string?> ReceiveTextAsync(WebSocket socket, CancellationToken cancellationToken)

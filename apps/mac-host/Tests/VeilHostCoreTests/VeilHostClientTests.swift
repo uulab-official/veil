@@ -116,6 +116,21 @@ struct VeilHostClientTests {
         #expect(transport.sentTypes == ["clipboard.text.set"])
         #expect(transport.expectedReplyCounts == [0])
     }
+
+    @Test("sends frame stream subscribe and unsubscribe without waiting for replies")
+    func sendsFrameStreamControlWithoutReply() async throws {
+        let transport = RecordingTransport(responses: [])
+        let client = VeilHostClient(transport: transport)
+
+        try await client.subscribeWindowFrames(windowId: "hwnd:0003029A")
+        try await client.unsubscribeWindowFrames(windowId: "hwnd:0003029A")
+
+        #expect(transport.sentTypes == [
+            "window.frame.subscribe",
+            "window.frame.unsubscribe"
+        ])
+        #expect(transport.expectedReplyCounts == [0, 0])
+    }
 }
 
 private final class RecordingTransport: HostTransport, @unchecked Sendable {

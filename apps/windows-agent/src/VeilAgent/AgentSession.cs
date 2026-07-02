@@ -7,6 +7,8 @@ public sealed class AgentSession
 {
     private readonly IWindowsDesktop desktop;
     private readonly IWindowFrameCapture capture;
+    private readonly Dictionary<string, LaunchedWindow> trackedWindowsById = new();
+    private readonly object trackedWindowsGate = new();
 
     public AgentSession(IWindowsDesktop desktop, IWindowFrameCapture capture)
     {
@@ -24,6 +26,8 @@ public sealed class AgentSession
             MessageTypes.AgentHealthRequest => AgentReplies.Direct(HealthResponse(requestId)),
             MessageTypes.AppListRequest => AgentReplies.Direct(AppListResponse(requestId)),
             MessageTypes.AppLaunchRequest => await HandleAppLaunchAsync(request, requestId, cancellationToken),
+            MessageTypes.WindowFrameSubscribe => HandleWindowFrameSubscribeAsync(request, requestId),
+            MessageTypes.WindowFrameUnsubscribe => HandleWindowFrameUnsubscribeAsync(request, requestId),
             MessageTypes.WindowCloseRequest => await HandleWindowCloseAsync(request, requestId, cancellationToken),
             MessageTypes.InputMouse => await HandleMouseInputAsync(request, requestId, cancellationToken),
             MessageTypes.InputKey => await HandleKeyInputAsync(request, requestId, cancellationToken),
@@ -45,6 +49,7 @@ public sealed class AgentSession
         }
 
         var launched = await desktop.LaunchNotepadAsync(cancellationToken);
+        TrackWindow(launched);
         var frame = await capture.CaptureFrameAsync(launched, sequence: 1, cancellationToken);
 
         return new AgentReplies(
@@ -59,6 +64,42 @@ public sealed class AgentSession
             },
             StreamWindow: launched,
             NextFrameSequence: 2
+        );
+    }
+
+    private AgentReplies HandleWindowFrameSubscribeAsync(JsonObject request, string? requestId)
+    {
+        var windowId = request["windowId"]?.GetValue<string>();
+        if (string.IsNullOrWhiteSpace(windowId))
+        {
+            return AgentReplies.Direct(ErrorResponse(requestId, "invalid_message", "window.frame.subscribe requires windowId."));
+        }
+
+        if (!TryGetTrackedWindow(windowId, out var window))
+        {
+            return AgentReplies.Direct(ErrorResponse(requestId, "window_not_tracked", $"No tracked window exists for id {windowId}."));
+        }
+
+        return new AgentReplies(
+            DirectReplies: Array.Empty<JsonObject>(),
+            BroadcastEvents: Array.Empty<JsonObject>(),
+            StreamWindow: window,
+            NextFrameSequence: 1
+        );
+    }
+
+    private AgentReplies HandleWindowFrameUnsubscribeAsync(JsonObject request, string? requestId)
+    {
+        var windowId = request["windowId"]?.GetValue<string>();
+        if (string.IsNullOrWhiteSpace(windowId))
+        {
+            return AgentReplies.Direct(ErrorResponse(requestId, "invalid_message", "window.frame.unsubscribe requires windowId."));
+        }
+
+        return new AgentReplies(
+            DirectReplies: Array.Empty<JsonObject>(),
+            BroadcastEvents: Array.Empty<JsonObject>(),
+            StopStreamWindowId: windowId
         );
     }
 
@@ -278,6 +319,22 @@ public sealed class AgentSession
         ["message"] = message
     };
 
+    private void TrackWindow(LaunchedWindow window)
+    {
+        lock (trackedWindowsGate)
+        {
+            trackedWindowsById[window.WindowId] = window;
+        }
+    }
+
+    private bool TryGetTrackedWindow(string windowId, out LaunchedWindow window)
+    {
+        lock (trackedWindowsGate)
+        {
+            return trackedWindowsById.TryGetValue(windowId, out window!);
+        }
+    }
+
     private static bool TryReadInt(JsonObject request, string key, out int value)
     {
         value = 0;
@@ -307,7 +364,8 @@ public sealed record AgentReplies(
     IReadOnlyList<JsonObject> DirectReplies,
     IReadOnlyList<JsonObject> BroadcastEvents,
     LaunchedWindow? StreamWindow = null,
-    int NextFrameSequence = 1
+    int NextFrameSequence = 1,
+    string? StopStreamWindowId = null
 )
 {
     public static AgentReplies Direct(params JsonObject[] replies) => new(replies, Array.Empty<JsonObject>());

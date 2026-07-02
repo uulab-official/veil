@@ -59,6 +59,7 @@ struct HostDashboardModelTests {
         #expect(session.window.title == "Untitled - Notepad")
         #expect(session.connectionMode == .agent)
         #expect(session.captureState == .pending)
+        #expect(service.frameSubscriptions == ["hwnd:0003029A"])
     }
 
     @Test("stores the latest frame on the matching mirror session")
@@ -169,6 +170,7 @@ struct HostDashboardModelTests {
         #expect(model.mirrorSessions.isEmpty)
         #expect(model.lastLaunch == nil)
         #expect(model.phase == .connected)
+        #expect(service.frameUnsubscriptions == ["hwnd:0003029A"])
     }
 
     @Test("keeps mirrored window state when the agent rejects close")
@@ -473,6 +475,8 @@ private final class FakeDashboardService: HostDashboardService {
     private(set) var mouseInputs: [InputMouseEvent] = []
     private(set) var keyInputs: [InputKeyEvent] = []
     private(set) var clipboardTexts: [ClipboardTextSet] = []
+    private(set) var frameSubscriptions: [String] = []
+    private(set) var frameUnsubscriptions: [String] = []
 
     init(
         error: (any Error)? = nil,
@@ -548,6 +552,22 @@ private final class FakeDashboardService: HostDashboardService {
         }
 
         clipboardTexts.append(clipboard)
+    }
+
+    func subscribeWindowFrames(windowId: String) async throws {
+        if let error {
+            throw error
+        }
+
+        frameSubscriptions.append(windowId)
+    }
+
+    func unsubscribeWindowFrames(windowId: String) async throws {
+        if let error {
+            throw error
+        }
+
+        frameUnsubscriptions.append(windowId)
     }
 }
 

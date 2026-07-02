@@ -1,0 +1,6 @@
+{
+  "type": "window.frame.subscribe",
+  "requestId": "req_frame_subscribe_notepad",
+  "windowId": "hwnd:0003029A",
+  "format": "png"
+}

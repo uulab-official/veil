@@ -119,6 +119,30 @@ public struct VeilHostClient: HostDashboardService, Sendable {
         _ = try await transport.send(encoder.encode(clipboard), expectedReplies: 0)
     }
 
+    public func subscribeWindowFrames(windowId: String) async throws {
+        _ = try await transport.send(
+            encoder.encode(
+                WindowFrameSubscribeRequest(
+                    requestId: "req_frame_subscribe_\(requestIdSuffix(for: windowId))",
+                    windowId: windowId
+                )
+            ),
+            expectedReplies: 0
+        )
+    }
+
+    public func unsubscribeWindowFrames(windowId: String) async throws {
+        _ = try await transport.send(
+            encoder.encode(
+                WindowFrameUnsubscribeRequest(
+                    requestId: "req_frame_unsubscribe_\(requestIdSuffix(for: windowId))",
+                    windowId: windowId
+                )
+            ),
+            expectedReplies: 0
+        )
+    }
+
     public func loadOverview() async throws -> HostOverview {
         let health: AgentHealthResponse = try await request(
             AgentHealthRequest(requestId: "req_health")
@@ -138,5 +162,13 @@ public struct VeilHostClient: HostDashboardService, Sendable {
         }
 
         return try decoder.decode(Response.self, from: data)
+    }
+
+    private func requestIdSuffix(for windowId: String) -> String {
+        windowId.map { character in
+            character.isLetter || character.isNumber ? character : "_"
+        }
+        .map(String.init)
+        .joined()
     }
 }

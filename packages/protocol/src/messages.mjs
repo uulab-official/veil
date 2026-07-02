@@ -7,6 +7,8 @@ export const MessageType = Object.freeze({
   AppLaunchResponse: "app.launch.response",
   WindowCreated: "window.created",
   WindowFrame: "window.frame",
+  WindowFrameSubscribe: "window.frame.subscribe",
+  WindowFrameUnsubscribe: "window.frame.unsubscribe",
   WindowCloseRequest: "window.close.request",
   WindowCloseResponse: "window.close.response",
   ClipboardTextSet: "clipboard.text.set",
@@ -93,6 +95,31 @@ export function validateWindowFrame(frame) {
 
   requireNonEmptyString(frame.encodedData, "encodedData");
   return frame;
+}
+
+export function validateWindowFrameSubscribeRequest(request) {
+  if (!request || request.type !== MessageType.WindowFrameSubscribe) {
+    throw new TypeError("Window frame subscribe request must use type window.frame.subscribe.");
+  }
+
+  requireNonEmptyString(request.requestId, "requestId", "Window frame subscribe request");
+  requireNonEmptyString(request.windowId, "windowId", "Window frame subscribe request");
+  requireNonEmptyString(request.format, "format", "Window frame subscribe request");
+  if (request.format !== "png") {
+    throw new TypeError("Window frame subscribe request field 'format' must be png.");
+  }
+
+  return request;
+}
+
+export function validateWindowFrameUnsubscribeRequest(request) {
+  if (!request || request.type !== MessageType.WindowFrameUnsubscribe) {
+    throw new TypeError("Window frame unsubscribe request must use type window.frame.unsubscribe.");
+  }
+
+  requireNonEmptyString(request.requestId, "requestId", "Window frame unsubscribe request");
+  requireNonEmptyString(request.windowId, "windowId", "Window frame unsubscribe request");
+  return request;
 }
 
 export function validateWindowCloseRequest(request) {

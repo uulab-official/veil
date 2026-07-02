@@ -9,6 +9,8 @@ public enum MessageType: String, Codable, Sendable {
     case appLaunchResponse = "app.launch.response"
     case windowCreated = "window.created"
     case windowFrame = "window.frame"
+    case windowFrameSubscribe = "window.frame.subscribe"
+    case windowFrameUnsubscribe = "window.frame.unsubscribe"
     case windowCloseRequest = "window.close.request"
     case windowCloseResponse = "window.close.response"
     case clipboardTextSet = "clipboard.text.set"
@@ -137,6 +139,41 @@ public struct WindowFrameEvent: Codable, Equatable, Sendable {
 public extension WindowFrameEvent {
     var encodedPayloadData: Data? {
         Data(base64Encoded: encodedData)
+    }
+}
+
+public struct WindowFrameSubscribeRequest: Codable, Equatable, Sendable {
+    public var type: MessageType
+    public var requestId: String
+    public var windowId: String
+    public var format: String
+
+    public init(
+        type: MessageType = .windowFrameSubscribe,
+        requestId: String,
+        windowId: String,
+        format: String = "png"
+    ) {
+        self.type = type
+        self.requestId = requestId
+        self.windowId = windowId
+        self.format = format
+    }
+}
+
+public struct WindowFrameUnsubscribeRequest: Codable, Equatable, Sendable {
+    public var type: MessageType
+    public var requestId: String
+    public var windowId: String
+
+    public init(
+        type: MessageType = .windowFrameUnsubscribe,
+        requestId: String,
+        windowId: String
+    ) {
+        self.type = type
+        self.requestId = requestId
+        self.windowId = windowId
     }
 }
 

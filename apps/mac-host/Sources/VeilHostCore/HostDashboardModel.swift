@@ -8,6 +8,8 @@ public protocol HostDashboardService: Sendable {
     func sendMouseInput(_ input: InputMouseEvent) async throws
     func sendKeyInput(_ input: InputKeyEvent) async throws
     func sendClipboardText(_ clipboard: ClipboardTextSet) async throws
+    func subscribeWindowFrames(windowId: String) async throws
+    func unsubscribeWindowFrames(windowId: String) async throws
 }
 
 public struct HostOverview: Codable, Equatable, Sendable {
@@ -234,6 +236,10 @@ public final class HostDashboardModel {
                 connectionMode: result.connectionMode,
                 supportsCapture: result.health.capabilities.windowCapture
             )
+            if result.connectionMode == .agent,
+               result.health.capabilities.windowCapture {
+                try await service.subscribeWindowFrames(windowId: result.window.windowId)
+            }
             phase = .connected
             return result
         } catch {
@@ -260,6 +266,11 @@ public final class HostDashboardModel {
         }
 
         do {
+            if let session = mirrorSessions.first(where: { $0.id == windowId }),
+               session.captureState != .unavailable,
+               hasLiveAgentConnection {
+                try await service.unsubscribeWindowFrames(windowId: windowId)
+            }
             let response = try await service.closeWindow(windowId: windowId)
             if response.accepted {
                 removeWindowState(windowId: windowId)

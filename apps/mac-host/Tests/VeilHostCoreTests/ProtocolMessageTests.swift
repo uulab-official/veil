@@ -58,6 +58,20 @@ struct ProtocolMessageTests {
         #expect(payload.starts(with: [0x89, 0x50, 0x4E, 0x47]))
     }
 
+    @Test("decodes window frame stream requests")
+    func decodesWindowFrameStreamRequests() throws {
+        let subscribe: WindowFrameSubscribeRequest = try decodeFixture("window.frame.subscribe")
+        let unsubscribe: WindowFrameUnsubscribeRequest = try decodeFixture("window.frame.unsubscribe")
+
+        #expect(subscribe.type == .windowFrameSubscribe)
+        #expect(subscribe.requestId == "req_frame_subscribe_notepad")
+        #expect(subscribe.windowId == "hwnd:0003029A")
+        #expect(subscribe.format == "png")
+        #expect(unsubscribe.type == .windowFrameUnsubscribe)
+        #expect(unsubscribe.requestId == "req_frame_unsubscribe_notepad")
+        #expect(unsubscribe.windowId == "hwnd:0003029A")
+    }
+
     @Test("decodes window close request and response")
     func decodesWindowCloseRequestAndResponse() throws {
         let request: WindowCloseRequest = try decodeFixture("window.close.request")

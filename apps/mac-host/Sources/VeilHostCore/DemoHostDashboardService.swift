@@ -59,6 +59,14 @@ public struct FallbackHostDashboardService: HostDashboardService, Sendable {
         try await primary.sendClipboardText(clipboard)
     }
 
+    public func subscribeWindowFrames(windowId: String) async throws {
+        try await primary.subscribeWindowFrames(windowId: windowId)
+    }
+
+    public func unsubscribeWindowFrames(windowId: String) async throws {
+        try await primary.unsubscribeWindowFrames(windowId: windowId)
+    }
+
     private var fallbackDetail: String {
         "No Windows agent reachable at \(primaryEndpointDescription). Showing built-in demo data."
     }
@@ -116,6 +124,10 @@ public struct DemoHostDashboardService: HostDashboardService, Sendable {
     public func sendKeyInput(_ input: InputKeyEvent) async throws {}
 
     public func sendClipboardText(_ clipboard: ClipboardTextSet) async throws {}
+
+    public func subscribeWindowFrames(windowId: String) async throws {}
+
+    public func unsubscribeWindowFrames(windowId: String) async throws {}
 }
 
 private extension AgentHealthResponse {

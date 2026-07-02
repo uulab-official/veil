@@ -17,6 +17,10 @@ export function createSession() {
           return [withRequestId(await readFixture("app.list.response.json"), message.requestId)];
         case MessageType.AppLaunchRequest:
           return handleAppLaunch(message);
+        case MessageType.WindowFrameSubscribe:
+          return [];
+        case MessageType.WindowFrameUnsubscribe:
+          return [];
         case MessageType.WindowCloseRequest:
           return handleWindowClose(message);
         case MessageType.InputMouse:

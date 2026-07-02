@@ -167,6 +167,36 @@ Rules:
 - `format` is `png` for the first correctness harness.
 - `encodedData` is base64 only for early harness spikes; production capture should move to a separate binary or media stream.
 
+## Window Frame Stream Control
+
+Host request to start a frame stream for one tracked HWND:
+
+```json
+{
+  "type": "window.frame.subscribe",
+  "requestId": "req_frame_subscribe_notepad",
+  "windowId": "hwnd:0003029A",
+  "format": "png"
+}
+```
+
+Host request to stop that HWND frame stream:
+
+```json
+{
+  "type": "window.frame.unsubscribe",
+  "requestId": "req_frame_unsubscribe_notepad",
+  "windowId": "hwnd:0003029A"
+}
+```
+
+Rules:
+
+- `windowId` must reference a tracked `window.created` event.
+- `format` is `png` for the first stream control implementation.
+- These requests do not require a success response. Invalid requests may still return structured errors.
+- The macOS host subscribes after launching a capture-capable app window and unsubscribes before closing the mirrored window.
+
 ## Window Close
 
 Host request:

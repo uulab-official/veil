@@ -50,6 +50,20 @@ test("windows agent streams continuing window frames after launch", async () => 
   assert.match(streamer, /CaptureFrameAsync\(window,\s*sequence/);
 });
 
+test("windows agent supports host controlled frame stream subscribe and unsubscribe", async () => {
+  const messageTypes = await readFile(resolve(agentRoot, "src/VeilAgent/MessageTypes.cs"), "utf8");
+  const session = await readFile(resolve(agentRoot, "src/VeilAgent/AgentSession.cs"), "utf8");
+  const server = await readFile(resolve(agentRoot, "src/VeilAgent/WebSocketAgentServer.cs"), "utf8");
+
+  assert.match(messageTypes, /WindowFrameSubscribe\s*=\s*"window\.frame\.subscribe"/);
+  assert.match(messageTypes, /WindowFrameUnsubscribe\s*=\s*"window\.frame\.unsubscribe"/);
+  assert.match(session, /HandleWindowFrameSubscribeAsync/);
+  assert.match(session, /HandleWindowFrameUnsubscribeAsync/);
+  assert.match(session, /trackedWindowsById/);
+  assert.match(server, /StopFrameStream/);
+  assert.match(server, /StopStreamWindowId/);
+});
+
 test("windows agent accepts host window close requests", async () => {
   const messageTypes = await readFile(resolve(agentRoot, "src/VeilAgent/MessageTypes.cs"), "utf8");
   const desktopInterface = await readFile(resolve(agentRoot, "src/VeilAgent/IWindowsDesktop.cs"), "utf8");

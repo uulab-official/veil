@@ -13,7 +13,9 @@ import {
   validateInputMouse,
   validateWindowCloseRequest,
   validateWindowCloseResponse,
-  validateWindowFrame
+  validateWindowFrame,
+  validateWindowFrameSubscribeRequest,
+  validateWindowFrameUnsubscribeRequest
 } from "../src/messages.mjs";
 
 const fixtures = resolve(import.meta.dirname, "../../../harness/protocol-fixtures");
@@ -32,6 +34,8 @@ test("parses every stable fixture", async () => {
     "app.launch.response.json",
     "window.created.json",
     "window.frame.json",
+    "window.frame.subscribe.json",
+    "window.frame.unsubscribe.json",
     "window.close.request.json",
     "window.close.response.json",
     "input.mouse.left-down.json",
@@ -118,6 +122,19 @@ test("validates one captured window frame fixture", async () => {
   assert.equal(frame.format, "png");
   assert.equal(frame.width, 1);
   assert.equal(frame.height, 1);
+});
+
+test("validates window frame stream subscribe and unsubscribe fixtures", async () => {
+  const subscribe = validateWindowFrameSubscribeRequest(await readFixture("window.frame.subscribe.json"));
+  const unsubscribe = validateWindowFrameUnsubscribeRequest(await readFixture("window.frame.unsubscribe.json"));
+
+  assert.equal(subscribe.type, MessageType.WindowFrameSubscribe);
+  assert.equal(subscribe.requestId, "req_frame_subscribe_notepad");
+  assert.equal(subscribe.windowId, "hwnd:0003029A");
+  assert.equal(subscribe.format, "png");
+  assert.equal(unsubscribe.type, MessageType.WindowFrameUnsubscribe);
+  assert.equal(unsubscribe.requestId, "req_frame_unsubscribe_notepad");
+  assert.equal(unsubscribe.windowId, "hwnd:0003029A");
 });
 
 test("validates window close request and response fixtures", async () => {

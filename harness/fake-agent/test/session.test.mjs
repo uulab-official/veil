@@ -134,6 +134,25 @@ test("accepts host clipboard text without a reply", async () => {
   assert.deepEqual(replies, []);
 });
 
+test("accepts frame stream subscribe and unsubscribe without a reply", async () => {
+  const session = createSession();
+
+  const subscribeReplies = await session.handle({
+    type: "window.frame.subscribe",
+    requestId: "req_frame_subscribe_notepad",
+    windowId: "hwnd:0003029A",
+    format: "png"
+  });
+  const unsubscribeReplies = await session.handle({
+    type: "window.frame.unsubscribe",
+    requestId: "req_frame_unsubscribe_notepad",
+    windowId: "hwnd:0003029A"
+  });
+
+  assert.deepEqual(subscribeReplies, []);
+  assert.deepEqual(unsubscribeReplies, []);
+});
+
 test("does not echo host clipboard text back as a guest event", async () => {
   const session = createSession();
 
