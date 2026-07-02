@@ -209,6 +209,54 @@ struct VMRuntimeModelTests {
         #expect(service.updatedVirtualDiskPath == "/Users/test/Virtual Machines/Windows.vhdx")
     }
 
+    @Test("marks guest agent connected through the runtime model")
+    @MainActor
+    func marksGuestAgentConnectedThroughRuntimeModel() async throws {
+        let service = FakeVMRuntimeService(
+            snapshot: VMRuntimeSnapshot(
+                state: .running,
+                virtualizationAvailable: true,
+                architecture: "arm64",
+                minimumOSSupported: true,
+                profileName: "Windows 11 Arm",
+                installEvidence: VMInstallEvidenceSummary(
+                    kind: .setupReady,
+                    isInstalled: false,
+                    title: "Windows setup ready",
+                    detail: "Boot the installer, complete Windows setup, then connect the Veil guest agent."
+                ),
+                bootReady: true,
+                windowsInstalled: false,
+                detail: "Windows VM is running."
+            ),
+            guestAgentConnectedSnapshot: VMRuntimeSnapshot(
+                state: .running,
+                virtualizationAvailable: true,
+                architecture: "arm64",
+                minimumOSSupported: true,
+                profileName: "Windows 11 Arm",
+                installEvidence: VMInstallEvidenceSummary(
+                    kind: .guestAgent,
+                    isInstalled: true,
+                    title: "Guest agent connected",
+                    detail: "Windows is running the Veil guest agent 0.1.0 over the local runtime channel."
+                ),
+                bootReady: true,
+                windowsInstalled: true,
+                detail: "Windows VM is running."
+            )
+        )
+        let model = VMRuntimeModel(service: service)
+
+        await model.markGuestAgentConnected(agentVersion: "0.1.0")
+
+        #expect(model.phase == .loaded)
+        #expect(model.snapshot?.installEvidence.kind == .guestAgent)
+        #expect(model.snapshot?.windowsInstalled == true)
+        #expect(model.errorMessage == nil)
+        #expect(service.markedGuestAgentVersion == "0.1.0")
+    }
+
     @Test("creates default virtual disk through the service boundary")
     @MainActor
     func createsDefaultVirtualDiskThroughServiceBoundary() async throws {
@@ -375,6 +423,7 @@ private final class FakeVMRuntimeService: VMRuntimeService {
     var diskSnapshot: VMRuntimeSnapshot?
     var preparedSnapshot: VMRuntimeSnapshot?
     var updatedSnapshot: VMRuntimeSnapshot?
+    var guestAgentConnectedSnapshot: VMRuntimeSnapshot?
     var startedSnapshot: VMRuntimeSnapshot?
     var stoppedSnapshot: VMRuntimeSnapshot?
     var diagnosticsURL: URL?
@@ -382,6 +431,7 @@ private final class FakeVMRuntimeService: VMRuntimeService {
     var startError: (any Error)?
     private(set) var updatedInstallerMediaPath: String?
     private(set) var updatedVirtualDiskPath: String?
+    private(set) var markedGuestAgentVersion: String?
     private(set) var createCount = 0
     private(set) var createDiskCount = 0
     private(set) var prepareCount = 0
@@ -395,6 +445,7 @@ private final class FakeVMRuntimeService: VMRuntimeService {
         diskSnapshot: VMRuntimeSnapshot? = nil,
         preparedSnapshot: VMRuntimeSnapshot? = nil,
         updatedSnapshot: VMRuntimeSnapshot? = nil,
+        guestAgentConnectedSnapshot: VMRuntimeSnapshot? = nil,
         startedSnapshot: VMRuntimeSnapshot? = nil,
         stoppedSnapshot: VMRuntimeSnapshot? = nil,
         diagnosticsURL: URL? = nil,
@@ -406,6 +457,7 @@ private final class FakeVMRuntimeService: VMRuntimeService {
         self.diskSnapshot = diskSnapshot
         self.preparedSnapshot = preparedSnapshot
         self.updatedSnapshot = updatedSnapshot
+        self.guestAgentConnectedSnapshot = guestAgentConnectedSnapshot
         self.startedSnapshot = startedSnapshot
         self.stoppedSnapshot = stoppedSnapshot
         self.diagnosticsURL = diagnosticsURL
@@ -464,6 +516,17 @@ private final class FakeVMRuntimeService: VMRuntimeService {
         let updatedSnapshot = try #require(updatedSnapshot)
         snapshot = updatedSnapshot
         return updatedSnapshot
+    }
+
+    func markGuestAgentConnected(agentVersion: String) async throws -> VMRuntimeSnapshot {
+        if let error {
+            throw error
+        }
+
+        markedGuestAgentVersion = agentVersion
+        let guestAgentConnectedSnapshot = try #require(guestAgentConnectedSnapshot ?? snapshot)
+        snapshot = guestAgentConnectedSnapshot
+        return guestAgentConnectedSnapshot
     }
 
     func start() async throws -> VMRuntimeSnapshot {

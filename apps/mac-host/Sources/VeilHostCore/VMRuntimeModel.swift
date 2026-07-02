@@ -6,6 +6,7 @@ public protocol VMRuntimeService: Sendable {
     func createDefaultProfile() async throws -> VMRuntimeSnapshot
     func createDefaultVirtualDisk() async throws -> VMRuntimeSnapshot
     func updateProfilePaths(installerMediaPath: String?, virtualDiskPath: String?) async throws -> VMRuntimeSnapshot
+    func markGuestAgentConnected(agentVersion: String) async throws -> VMRuntimeSnapshot
     func start() async throws -> VMRuntimeSnapshot
     func stop() async throws -> VMRuntimeSnapshot
     func exportDiagnostics(to directory: URL) async throws -> URL
@@ -830,6 +831,19 @@ public final class VMRuntimeModel {
         }
     }
 
+    public func markGuestAgentConnected(agentVersion: String) async {
+        phase = .loading
+        errorMessage = nil
+
+        do {
+            snapshot = try await service.markGuestAgentConnected(agentVersion: agentVersion)
+            phase = .loaded
+        } catch {
+            errorMessage = userMessage(for: error)
+            phase = .failed
+        }
+    }
+
     public func start() async {
         phase = .loading
         errorMessage = nil
@@ -957,6 +971,7 @@ public struct LocalVMRuntimeService: VMRuntimeService {
             let installEvidence = Self.installEvidence(
                 bootPathReadiness: bootPathReadiness,
                 windowsInstalled: windowsInstalled,
+                guestAgentVersion: profile.guestAgentVersion,
                 virtualDiskAllocatedBytes: virtualDiskAllocatedBytes
             )
             return VMRuntimeSnapshot(
@@ -1225,6 +1240,18 @@ public struct LocalVMRuntimeService: VMRuntimeService {
         return try await loadSnapshot()
     }
 
+    public func markGuestAgentConnected(agentVersion: String) async throws -> VMRuntimeSnapshot {
+        guard var profile = try await profileStore.load() else {
+            throw VMRuntimeError.bootPrerequisitesMissing
+        }
+
+        profile.windowsInstalled = true
+        profile.guestAgentVersion = agentVersion
+        profile.guestAgentConnectedAt = diagnosticDate()
+        try await profileStore.save(profile)
+        return try await loadSnapshot()
+    }
+
     public func start() async throws -> VMRuntimeSnapshot {
         let snapshot = try await loadSnapshot()
         guard snapshot.bootReady else {
@@ -1438,8 +1465,18 @@ public struct LocalVMRuntimeService: VMRuntimeService {
     private static func installEvidence(
         bootPathReadiness: (isReady: Bool, detail: String),
         windowsInstalled: Bool,
+        guestAgentVersion: String?,
         virtualDiskAllocatedBytes: Int64?
     ) -> VMInstallEvidenceSummary {
+        if let guestAgentVersion {
+            return VMInstallEvidenceSummary(
+                kind: .guestAgent,
+                isInstalled: true,
+                title: "Guest agent connected",
+                detail: "Windows is running the Veil guest agent \(guestAgentVersion) over the local runtime channel."
+            )
+        }
+
         if windowsInstalled {
             return VMInstallEvidenceSummary(
                 kind: .profileFlag,

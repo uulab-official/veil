@@ -167,6 +167,32 @@ struct VMProfileStoreTests {
         #expect(snapshot.installEvidence.isInstalled)
     }
 
+    @Test("local runtime persists guest agent evidence as installed Windows")
+    func localRuntimePersistsGuestAgentEvidenceAsInstalledWindows() async throws {
+        let connectedAt = Date(timeIntervalSince1970: 1_783_000_000)
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let store = JSONVMProfileStore(directory: directory)
+        let profile = VMProfile.defaultWindows11Arm(createdAt: Date(timeIntervalSince1970: 1_782_752_400))
+        try await store.save(profile)
+
+        let service = LocalVMRuntimeService(
+            profileStore: store,
+            diagnosticDate: { connectedAt }
+        )
+        let snapshot = try await service.markGuestAgentConnected(agentVersion: "0.1.0")
+        let savedProfile = try #require(await store.load())
+
+        #expect(savedProfile.windowsInstalled == true)
+        #expect(savedProfile.guestAgentVersion == "0.1.0")
+        #expect(savedProfile.guestAgentConnectedAt == connectedAt)
+        #expect(snapshot.windowsInstalled)
+        #expect(snapshot.installEvidence.kind == .guestAgent)
+        #expect(snapshot.installEvidence.isInstalled)
+        #expect(snapshot.installEvidence.title == "Guest agent connected")
+        #expect(snapshot.installEvidence.detail.contains("0.1.0"))
+    }
+
     @Test("local runtime reports sparse disk allocation evidence")
     func localRuntimeReportsSparseDiskAllocationEvidence() async throws {
         let directory = FileManager.default.temporaryDirectory

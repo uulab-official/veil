@@ -51,6 +51,7 @@ struct VeilHostShellApp: App {
                     async let hostLoad: Void = model.load()
                     async let vmLoad: Void = vmModel.load()
                     _ = await (hostLoad, vmLoad)
+                    await recordGuestAgentInstallEvidenceIfNeeded()
 
                     if Self.shouldStartVMOnLaunch {
                         startVMAndShowConsole()
@@ -74,6 +75,7 @@ struct VeilHostShellApp: App {
                         async let hostLoad: Void = model.load()
                         async let vmLoad: Void = vmModel.load()
                         _ = await (hostLoad, vmLoad)
+                        await recordGuestAgentInstallEvidenceIfNeeded()
                     }
                 }
                 .keyboardShortcut("r", modifiers: [.command])
@@ -129,6 +131,17 @@ struct VeilHostShellApp: App {
 
     private static var shouldStartVMOnLaunch: Bool {
         ProcessInfo.processInfo.arguments.contains("--start-vm")
+    }
+
+    private func recordGuestAgentInstallEvidenceIfNeeded() async {
+        guard model.hasLiveAgentConnection,
+              let agentVersion = model.health?.agentVersion,
+              vmModel.snapshot?.profileName != nil,
+              vmModel.snapshot?.installEvidence.kind != .guestAgent else {
+            return
+        }
+
+        await vmModel.markGuestAgentConnected(agentVersion: agentVersion)
     }
 
     private func startAgentEventPumpIfNeeded() {
