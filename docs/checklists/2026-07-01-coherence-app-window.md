@@ -20,6 +20,7 @@ Goal: make Veil's product direction visible as "Windows app as a macOS window" i
 - [x] Add protocol messages for frame stream subscribe/unsubscribe.
 - [x] Subscribe to capture streams after launching a capture-capable Windows app window.
 - [x] Unsubscribe from capture streams before closing mirrored Windows app windows.
+- [x] Map mirrored-window mouse input through the aspect-fit captured frame rect instead of the full letterboxed host view.
 
 ## Next
 

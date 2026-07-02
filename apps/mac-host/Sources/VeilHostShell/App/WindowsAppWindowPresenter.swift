@@ -356,19 +356,23 @@ private final class InputCaptureNSView: NSView {
         }
 
         let point = convert(event.locationInWindow, from: nil)
-        let windowX = clamp(
-            Int((point.x / bounds.width) * CGFloat(session.window.bounds.width)),
-            lower: 0,
-            upper: max(session.window.bounds.width - 1, 0)
+        let sourceWidth = session.latestFrame?.width ?? session.window.bounds.width
+        let sourceHeight = session.latestFrame?.height ?? session.window.bounds.height
+        let viewport = WindowFrameViewport(
+            viewWidth: Double(bounds.width),
+            viewHeight: Double(bounds.height),
+            sourceWidth: sourceWidth,
+            sourceHeight: sourceHeight,
+            fitsSourceIntoView: session.latestFrame != nil
         )
-        let topOriginY = bounds.height - point.y
-        let windowY = clamp(
-            Int((topOriginY / bounds.height) * CGFloat(session.window.bounds.height)),
-            lower: 0,
-            upper: max(session.window.bounds.height - 1, 0)
-        )
+        guard let guestPoint = viewport.guestPoint(
+            forViewX: Double(point.x),
+            viewYFromBottom: Double(point.y)
+        ) else {
+            return
+        }
 
-        onMouseInput?(session.id, inputEvent, windowX, windowY)
+        onMouseInput?(session.id, inputEvent, guestPoint.x, guestPoint.y)
     }
 
     private func sendKey(_ inputEvent: String, _ event: NSEvent) -> Bool {
@@ -474,9 +478,6 @@ private final class InputCaptureNSView: NSView {
             && event.charactersIgnoringModifiers?.lowercased() == "v"
     }
 
-    private func clamp(_ value: Int, lower: Int, upper: Int) -> Int {
-        min(max(value, lower), upper)
-    }
 }
 
 private struct MirrorStateTile: View {
