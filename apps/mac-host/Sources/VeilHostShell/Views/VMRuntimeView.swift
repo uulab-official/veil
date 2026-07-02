@@ -1129,6 +1129,11 @@ private struct WindowsSetupDisplayPanel: View {
                 }
                 .frame(maxWidth: 600)
 
+                if let latestConsoleLaunch = snapshot.latestConsoleLaunch {
+                    ConsoleLaunchEvidenceStrip(evidence: latestConsoleLaunch)
+                        .frame(maxWidth: 600)
+                }
+
                 Spacer(minLength: 8)
             }
             .padding(34)
@@ -1693,6 +1698,63 @@ private struct InstallStatusSummary: View {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .strokeBorder(.quaternary, lineWidth: 1)
         }
+    }
+}
+
+private struct ConsoleLaunchEvidenceStrip: View {
+    var evidence: VMConsoleLaunchEvidence
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "display")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(.blue)
+                .frame(width: 26, height: 26)
+                .background(.blue.opacity(0.11), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Last Console")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.secondary)
+
+                Text(consoleSummary)
+                    .font(.caption.weight(.semibold))
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+
+            Spacer(minLength: 8)
+
+            if let pid = evidence.pid {
+                Text("PID \(pid)")
+                    .font(.caption.monospacedDigit().weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .strokeBorder(.quaternary, lineWidth: 1)
+        }
+        .help(helpText)
+    }
+
+    private var consoleSummary: String {
+        let logName = URL(fileURLWithPath: evidence.processLogPath).lastPathComponent
+        let startedAt = evidence.startedAt.formatted(date: .omitted, time: .shortened)
+        return "\(evidence.provider) started \(startedAt) · \(logName)"
+    }
+
+    private var helpText: String {
+        [
+            "Log: \(evidence.processLogPath)",
+            "Monitor: \(evidence.monitorSocketPath)",
+            evidence.consoleScreenshotPath.map { "Screenshot: \($0)" }
+        ]
+        .compactMap { $0 }
+        .joined(separator: "\n")
     }
 }
 

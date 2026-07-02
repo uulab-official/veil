@@ -9,8 +9,8 @@ Goal: make the macOS shell feel more like a real virtualization app and make the
 - [x] Add Show Console to the toolbar while the VM is running or starting.
 - [x] Add Console to VM Quick Actions.
 - [x] Document that the current Windows installer display path is still experimental.
+- [x] Add visible last-console diagnostics in the VM Runtime screen.
 
 Next:
 
-- [ ] Add visible last-boot/last-console diagnostics in the VM Runtime screen.
 - [ ] Prove or replace the Apple Virtio graphics path for Windows installer display.

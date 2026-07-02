@@ -236,6 +236,7 @@ public struct VMRuntimeSnapshot: Codable, Equatable, Sendable {
     public var automaticInstallAnswerFilePath: String?
     public var automaticInstallMediaPath: String?
     public var latestConsoleScreenshotPath: String?
+    public var latestConsoleLaunch: VMConsoleLaunchEvidence?
     public var runtimeProvider: VMRuntimeProviderSummary?
     public var runtimeProviders: [VMRuntimeProviderSummary]
     public var installationSteps: [VMInstallationStep]
@@ -262,6 +263,7 @@ public struct VMRuntimeSnapshot: Codable, Equatable, Sendable {
         automaticInstallAnswerFilePath: String? = nil,
         automaticInstallMediaPath: String? = nil,
         latestConsoleScreenshotPath: String? = nil,
+        latestConsoleLaunch: VMConsoleLaunchEvidence? = nil,
         runtimeProvider: VMRuntimeProviderSummary? = nil,
         runtimeProviders: [VMRuntimeProviderSummary] = [],
         installationSteps: [VMInstallationStep] = [],
@@ -287,6 +289,7 @@ public struct VMRuntimeSnapshot: Codable, Equatable, Sendable {
         self.automaticInstallAnswerFilePath = automaticInstallAnswerFilePath
         self.automaticInstallMediaPath = automaticInstallMediaPath
         self.latestConsoleScreenshotPath = latestConsoleScreenshotPath
+        self.latestConsoleLaunch = latestConsoleLaunch
         self.runtimeProvider = runtimeProvider
         self.runtimeProviders = runtimeProviders
         self.installationSteps = installationSteps
@@ -296,6 +299,31 @@ public struct VMRuntimeSnapshot: Codable, Equatable, Sendable {
         self.bootReady = bootReady
         self.windowsInstalled = windowsInstalled
         self.detail = detail
+    }
+}
+
+public struct VMConsoleLaunchEvidence: Codable, Equatable, Sendable {
+    public var provider: String
+    public var pid: Int32?
+    public var processLogPath: String
+    public var monitorSocketPath: String
+    public var consoleScreenshotPath: String?
+    public var startedAt: Date
+
+    public init(
+        provider: String,
+        pid: Int32?,
+        processLogPath: String,
+        monitorSocketPath: String,
+        consoleScreenshotPath: String?,
+        startedAt: Date
+    ) {
+        self.provider = provider
+        self.pid = pid
+        self.processLogPath = processLogPath
+        self.monitorSocketPath = monitorSocketPath
+        self.consoleScreenshotPath = consoleScreenshotPath
+        self.startedAt = startedAt
     }
 }
 
@@ -997,6 +1025,7 @@ public struct LocalVMRuntimeService: VMRuntimeService {
                 automaticInstallAnswerFilePath: Self.automaticInstallAnswerFilePathIfExists(for: profile),
                 automaticInstallMediaPath: Self.automaticInstallMediaPathIfExists(for: profile),
                 latestConsoleScreenshotPath: Self.existingConsoleScreenshotPath(from: latestLaunchRecord),
+                latestConsoleLaunch: Self.consoleLaunchEvidence(from: latestLaunchRecord),
                 runtimeProvider: activeProvider,
                 runtimeProviders: runtimeProviders,
                 installationSteps: installationSteps,
@@ -1234,6 +1263,21 @@ public struct LocalVMRuntimeService: VMRuntimeService {
         }
 
         return path
+    }
+
+    private static func consoleLaunchEvidence(from launchRecord: QEMULaunchRecord?) -> VMConsoleLaunchEvidence? {
+        guard let launchRecord else {
+            return nil
+        }
+
+        return VMConsoleLaunchEvidence(
+            provider: launchRecord.provider,
+            pid: launchRecord.pid,
+            processLogPath: launchRecord.processLogPath,
+            monitorSocketPath: launchRecord.monitorSocketPath,
+            consoleScreenshotPath: existingConsoleScreenshotPath(from: launchRecord),
+            startedAt: launchRecord.startedAt
+        )
     }
 
     private static func prepareAutomaticInstallAnswerFile(for profile: VMProfile) throws {

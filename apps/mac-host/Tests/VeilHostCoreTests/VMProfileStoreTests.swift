@@ -117,13 +117,15 @@ struct VMProfileStoreTests {
         try Data("auto install media".utf8).write(to: sharedFolderURL.appendingPathComponent("VeilAutoInstall.iso"))
         let qemuLaunchDirectory = directory.appendingPathComponent("QEMU Launch", isDirectory: true)
         try FileManager.default.createDirectory(at: qemuLaunchDirectory, withIntermediateDirectories: true)
+        let processLogURL = qemuLaunchDirectory.appendingPathComponent("qemu-launch.log")
+        try Data("qemu log".utf8).write(to: processLogURL)
         let consoleScreenshotURL = qemuLaunchDirectory.appendingPathComponent("qemu-console-2026-07-02T11-10-00Z.png")
         try Data("png".utf8).write(to: consoleScreenshotURL)
         let launchRecord = QEMULaunchRecord(
             pid: 1234,
             executablePath: "/opt/homebrew/bin/qemu-system-aarch64",
             arguments: ["-display", "cocoa"],
-            processLogPath: qemuLaunchDirectory.appendingPathComponent("qemu-launch.log").path,
+            processLogPath: processLogURL.path,
             monitorSocketPath: "/tmp/vq-test.sock",
             consoleScreenshotPath: consoleScreenshotURL.path,
             startedAt: Date(timeIntervalSince1970: 1_782_838_800)
@@ -153,6 +155,12 @@ struct VMProfileStoreTests {
         #expect(snapshot.virtualDiskAllocatedBytes != nil)
         #expect(snapshot.bootReady)
         #expect(snapshot.latestConsoleScreenshotPath == consoleScreenshotURL.path)
+        #expect(snapshot.latestConsoleLaunch?.provider == "QEMU/HVF")
+        #expect(snapshot.latestConsoleLaunch?.pid == 1234)
+        #expect(snapshot.latestConsoleLaunch?.processLogPath == processLogURL.path)
+        #expect(snapshot.latestConsoleLaunch?.monitorSocketPath == "/tmp/vq-test.sock")
+        #expect(snapshot.latestConsoleLaunch?.consoleScreenshotPath == consoleScreenshotURL.path)
+        #expect(snapshot.latestConsoleLaunch?.startedAt == Date(timeIntervalSince1970: 1_782_838_800))
         #expect(snapshot.detail == "Windows is not installed yet.")
         #expect(snapshot.installEvidence.kind == .sparseDisk)
         #expect(snapshot.installEvidence.isInstalled == false)
