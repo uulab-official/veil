@@ -54,12 +54,14 @@ struct VMProfileStoreTests {
         let store = JSONVMProfileStore(directory: directory)
         var profile = VMProfile.defaultWindows11Arm(createdAt: Date(timeIntervalSince1970: 1_782_752_400))
         profile.installerMediaPath = "/Users/test/Downloads/Windows.iso"
+        profile.driverMediaPath = "/Users/test/Downloads/virtio-win.iso"
         profile.virtualDiskPath = "/Users/test/Virtual Machines/Windows.vhdx"
 
         try await store.save(profile)
         let loaded = try await store.load()
 
         #expect(loaded?.installerMediaPath == "/Users/test/Downloads/Windows.iso")
+        #expect(loaded?.driverMediaPath == "/Users/test/Downloads/virtio-win.iso")
         #expect(loaded?.virtualDiskPath == "/Users/test/Virtual Machines/Windows.vhdx")
     }
 
@@ -186,9 +188,11 @@ struct VMProfileStoreTests {
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let installerURL = directory.appendingPathComponent("Windows.iso")
+        let driverURL = directory.appendingPathComponent("virtio-win.iso")
         let diskURL = directory.appendingPathComponent("Windows.img")
         let sharedFolderURL = directory.appendingPathComponent("Veil Shared", isDirectory: true)
         try Data("installer".utf8).write(to: installerURL)
+        try Data("drivers".utf8).write(to: driverURL)
         try Data("disk".utf8).write(to: diskURL)
         try FileManager.default.createDirectory(at: sharedFolderURL, withIntermediateDirectories: true)
         try Data("<unattend />".utf8).write(to: sharedFolderURL.appendingPathComponent("Autounattend.xml"))
@@ -221,6 +225,7 @@ struct VMProfileStoreTests {
         let store = JSONVMProfileStore(directory: directory)
         var profile = VMProfile.defaultWindows11Arm(createdAt: Date(timeIntervalSince1970: 1_782_752_400))
         profile.installerMediaPath = installerURL.path
+        profile.driverMediaPath = driverURL.path
         profile.virtualDiskPath = diskURL.path
         profile.sharedFolderPath = sharedFolderURL.path
         try await store.save(profile)
@@ -246,9 +251,11 @@ struct VMProfileStoreTests {
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let installerURL = directory.appendingPathComponent("Windows.iso")
+        let driverURL = directory.appendingPathComponent("virtio-win.iso")
         let diskURL = directory.appendingPathComponent("Windows.img")
         let sharedFolderURL = directory.appendingPathComponent("Veil Shared", isDirectory: true)
         try Data("installer".utf8).write(to: installerURL)
+        try Data("drivers".utf8).write(to: driverURL)
         try Data("disk".utf8).write(to: diskURL)
         try FileManager.default.createDirectory(at: sharedFolderURL, withIntermediateDirectories: true)
         try Data("<unattend />".utf8).write(to: sharedFolderURL.appendingPathComponent("Autounattend.xml"))
@@ -279,6 +286,7 @@ struct VMProfileStoreTests {
         let store = JSONVMProfileStore(directory: directory)
         var profile = VMProfile.defaultWindows11Arm(createdAt: Date(timeIntervalSince1970: 1_782_752_400))
         profile.installerMediaPath = installerURL.path
+        profile.driverMediaPath = driverURL.path
         profile.virtualDiskPath = diskURL.path
         profile.sharedFolderPath = sharedFolderURL.path
         try await store.save(profile)
@@ -493,9 +501,11 @@ struct VMProfileStoreTests {
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let installerURL = directory.appendingPathComponent("Windows.iso")
+        let driverURL = directory.appendingPathComponent("virtio-win.iso")
         let diskURL = directory.appendingPathComponent("Windows.img")
         let sharedFolderURL = directory.appendingPathComponent("Veil Shared", isDirectory: true)
         try Data("installer".utf8).write(to: installerURL)
+        try Data("drivers".utf8).write(to: driverURL)
         try Data("disk".utf8).write(to: diskURL)
         try FileManager.default.createDirectory(at: sharedFolderURL, withIntermediateDirectories: true)
         try Data("<unattend />".utf8).write(to: sharedFolderURL.appendingPathComponent("Autounattend.xml"))
@@ -503,6 +513,7 @@ struct VMProfileStoreTests {
         let store = JSONVMProfileStore(directory: directory)
         var profile = VMProfile.defaultWindows11Arm(createdAt: Date(timeIntervalSince1970: 1_782_752_400))
         profile.installerMediaPath = installerURL.path
+        profile.driverMediaPath = driverURL.path
         profile.virtualDiskPath = diskURL.path
         profile.sharedFolderPath = sharedFolderURL.path
         try await store.save(profile)
@@ -518,12 +529,13 @@ struct VMProfileStoreTests {
         #expect(devices.graphics.heightInPixels == 900)
         #expect(devices.inputDevices == ["USB keyboard", "USB screen-coordinate pointer"])
         #expect(devices.entropyDevice == "Virtio entropy")
-        #expect(devices.storageDevices.map(\.role) == ["installer", "auto-install", "system-disk"])
-        #expect(devices.storageDevices.map(\.attachment) == ["USB mass storage", "USB mass storage", "Virtio block"])
-        #expect(devices.storageDevices.map(\.readOnly) == [true, true, false])
+        #expect(devices.storageDevices.map(\.role) == ["installer", "auto-install", "drivers", "system-disk"])
+        #expect(devices.storageDevices.map(\.attachment) == ["USB mass storage", "USB mass storage", "USB mass storage", "Virtio block"])
+        #expect(devices.storageDevices.map(\.readOnly) == [true, true, true, false])
         #expect(devices.storageDevices.map(\.path) == [
             installerURL.path,
             sharedFolderURL.appendingPathComponent("VeilAutoInstall.iso").path,
+            driverURL.path,
             diskURL.path
         ])
     }

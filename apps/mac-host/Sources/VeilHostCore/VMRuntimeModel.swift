@@ -1959,29 +1959,45 @@ public struct LocalVMRuntimeService: VMRuntimeService {
     }
 
     private static func deviceSummary(for profile: VMProfile) -> VMRuntimeDeviceSummary {
-        VMRuntimeDeviceSummary(
+        var storageDevices = [
+            VMRuntimeStorageDeviceSummary(
+                role: "installer",
+                attachment: "USB mass storage",
+                path: profile.installerMediaPath,
+                readOnly: true
+            ),
+            VMRuntimeStorageDeviceSummary(
+                role: "auto-install",
+                attachment: "USB mass storage",
+                path: automaticInstallMediaPathIfExists(for: profile),
+                readOnly: true
+            )
+        ]
+
+        if let driverMediaPath = profile.driverMediaPath {
+            storageDevices.append(
+                VMRuntimeStorageDeviceSummary(
+                    role: "drivers",
+                    attachment: "USB mass storage",
+                    path: driverMediaPath,
+                    readOnly: true
+                )
+            )
+        }
+
+        storageDevices.append(
+            VMRuntimeStorageDeviceSummary(
+                role: "system-disk",
+                attachment: "Virtio block",
+                path: profile.virtualDiskPath,
+                readOnly: false
+            )
+        )
+
+        return VMRuntimeDeviceSummary(
             platform: "Generic",
             bootLoader: "EFI",
-            storageDevices: [
-                VMRuntimeStorageDeviceSummary(
-                    role: "installer",
-                    attachment: "USB mass storage",
-                    path: profile.installerMediaPath,
-                    readOnly: true
-                ),
-                VMRuntimeStorageDeviceSummary(
-                    role: "auto-install",
-                    attachment: "USB mass storage",
-                    path: automaticInstallMediaPathIfExists(for: profile),
-                    readOnly: true
-                ),
-                VMRuntimeStorageDeviceSummary(
-                    role: "system-disk",
-                    attachment: "Virtio block",
-                    path: profile.virtualDiskPath,
-                    readOnly: false
-                )
-            ],
+            storageDevices: storageDevices,
             networkMode: "NAT",
             graphics: VMRuntimeGraphicsSummary(
                 widthInPixels: VMRuntimeDeviceDefaults.graphicsWidthInPixels,
