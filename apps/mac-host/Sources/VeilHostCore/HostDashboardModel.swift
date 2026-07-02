@@ -64,6 +64,11 @@ public enum HostDashboardPhase: Equatable, Sendable {
     case failed
 }
 
+public enum HostProtocolMessageResult: Equatable, Sendable {
+    case handledWindowFrame(windowId: String)
+    case ignored
+}
+
 @MainActor
 @Observable
 public final class HostDashboardModel {
@@ -204,6 +209,38 @@ public final class HostDashboardModel {
 
         mirrorSessions[index].latestFrame = frame
         mirrorSessions[index].captureState = .streaming
+    }
+
+    public func receiveProtocolMessage(
+        _ message: Data,
+        decoder: JSONDecoder = .veilProtocol
+    ) throws -> HostProtocolMessageResult {
+        let envelope = try decoder.decode(ProtocolMessageEnvelope.self, from: message)
+
+        switch envelope.type {
+        case .windowFrame:
+            let frame = try decoder.decode(WindowFrameEvent.self, from: message)
+            receiveWindowFrame(frame)
+            return mirrorSessions.contains(where: { $0.id == frame.windowId && $0.latestFrame == frame })
+                ? .handledWindowFrame(windowId: frame.windowId)
+                : .ignored
+        default:
+            return .ignored
+        }
+    }
+
+    public func consumeProtocolMessages(
+        from source: any HostEventSource,
+        onMessageHandled: @MainActor (HostProtocolMessageResult) -> Void = { _ in }
+    ) async {
+        do {
+            for try await message in source.eventMessages() {
+                let result = try receiveProtocolMessage(message)
+                onMessageHandled(result)
+            }
+        } catch {
+            return
+        }
     }
 
     private func storeActiveWindow(_ window: WindowCreatedEvent) {

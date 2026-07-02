@@ -15,6 +15,10 @@ public enum MessageType: String, Codable, Sendable {
     case error
 }
 
+public struct ProtocolMessageEnvelope: Codable, Equatable, Sendable {
+    public var type: MessageType
+}
+
 public struct AgentHealthRequest: Codable, Equatable, Sendable {
     public var type: MessageType
     public var requestId: String

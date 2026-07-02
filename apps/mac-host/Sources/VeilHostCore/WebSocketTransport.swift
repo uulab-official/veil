@@ -1,6 +1,6 @@
 import Foundation
 
-public struct URLSessionWebSocketTransport: HostTransport {
+public struct URLSessionWebSocketTransport: HostTransport, HostEventSource {
     private let url: URL
     private let session: URLSession
 
@@ -31,5 +31,34 @@ public struct URLSessionWebSocketTransport: HostTransport {
         }
 
         return replies
+    }
+
+    public func eventMessages() -> AsyncThrowingStream<Data, any Error> {
+        AsyncThrowingStream { continuation in
+            let task = session.webSocketTask(with: url)
+            task.resume()
+
+            continuation.onTermination = { @Sendable _ in
+                task.cancel(with: .normalClosure, reason: nil)
+            }
+
+            Task {
+                do {
+                    while !Task.isCancelled {
+                        switch try await task.receive() {
+                        case .data(let data):
+                            continuation.yield(data)
+                        case .string(let text):
+                            continuation.yield(Data(text.utf8))
+                        @unknown default:
+                            continuation.finish(throwing: VeilHostError.missingReply("unsupported websocket message type"))
+                            return
+                        }
+                    }
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+            }
+        }
     }
 }

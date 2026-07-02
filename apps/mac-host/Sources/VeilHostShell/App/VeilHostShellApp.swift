@@ -7,21 +7,31 @@ struct VeilHostShellApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     private let vmRuntimeBooter = QEMUVMRuntimeBooter.shared
     private let windowsAppWindowPresenter = WindowsAppWindowPresenter()
-    @State private var model = HostDashboardModel(
-        service: FallbackHostDashboardService(
-            primary: VeilHostClient(
-                transport: URLSessionWebSocketTransport(
-                    url: URL(string: Self.agentURLString)!
-                )
-            ),
-            fallback: DemoHostDashboardService(),
-            primaryEndpointDescription: Self.agentURLString
-        )
-    )
+    private let agentTransport: URLSessionWebSocketTransport
+    @State private var model: HostDashboardModel
     @State private var vmModel = VMRuntimeModel(
         service: LocalVMRuntimeService(bootRunner: QEMUVMRuntimeBooter.shared)
     )
     @State private var consoleMessage: String?
+    @State private var agentEventTask: Task<Void, Never>?
+
+    init() {
+        let transport = URLSessionWebSocketTransport(
+            url: URL(string: Self.agentURLString)!
+        )
+        self.agentTransport = transport
+        _model = State(
+            initialValue: HostDashboardModel(
+                service: FallbackHostDashboardService(
+                    primary: VeilHostClient(
+                        transport: transport
+                    ),
+                    fallback: DemoHostDashboardService(),
+                    primaryEndpointDescription: Self.agentURLString
+                )
+            )
+        )
+    }
 
     var body: some Scene {
         Window("Veil", id: "main") {
@@ -36,6 +46,8 @@ struct VeilHostShellApp: App {
             )
                 .frame(minWidth: 960, idealWidth: 1000, minHeight: 530, idealHeight: 560)
                 .task {
+                    startAgentEventPumpIfNeeded()
+
                     async let hostLoad: Void = model.load()
                     async let vmLoad: Void = vmModel.load()
                     _ = await (hostLoad, vmLoad)
@@ -117,6 +129,27 @@ struct VeilHostShellApp: App {
 
     private static var shouldStartVMOnLaunch: Bool {
         ProcessInfo.processInfo.arguments.contains("--start-vm")
+    }
+
+    private func startAgentEventPumpIfNeeded() {
+        guard agentEventTask == nil else {
+            return
+        }
+
+        agentEventTask = Task { @MainActor in
+            while !Task.isCancelled {
+                await model.consumeProtocolMessages(from: agentTransport) { result in
+                    guard case .handledWindowFrame(let windowId) = result,
+                          let session = model.mirrorSessions.first(where: { $0.id == windowId }) else {
+                        return
+                    }
+
+                    windowsAppWindowPresenter.showWindow(for: session)
+                }
+
+                try? await Task.sleep(for: .seconds(2))
+            }
+        }
     }
 
     private func startVMAndShowConsole() {

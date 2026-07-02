@@ -4,6 +4,10 @@ public protocol HostTransport: Sendable {
     func send(_ message: Data, expectedReplies: Int) async throws -> [Data]
 }
 
+public protocol HostEventSource: Sendable {
+    func eventMessages() -> AsyncThrowingStream<Data, any Error>
+}
+
 public enum VeilHostError: Error, Equatable, LocalizedError, Sendable {
     case notepadMissing
     case notepadWindowMismatch

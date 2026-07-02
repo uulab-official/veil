@@ -79,6 +79,43 @@ struct HostDashboardModelTests {
         #expect(session.latestFrame?.encodedData.hasPrefix("iVBOR") == true)
     }
 
+    @Test("routes a protocol frame message into the matching mirror session")
+    @MainActor
+    func routesProtocolFrameMessageIntoMirrorSession() async throws {
+        let service = FakeDashboardService(health: .captureReady)
+        let model = HostDashboardModel(service: service)
+        let message = Data(WindowFrameEvent.notepadFirstFrameJSON.utf8)
+
+        await model.launchNotepad()
+        let result = try model.receiveProtocolMessage(message)
+
+        let session = try #require(model.mirrorSessions.first)
+        #expect(result == .handledWindowFrame(windowId: "hwnd:0003029A"))
+        #expect(session.captureState == .streaming)
+        #expect(session.latestFrame?.frameId == "frame_000001")
+    }
+
+    @Test("consumes protocol frames from an event source")
+    @MainActor
+    func consumesProtocolFramesFromEventSource() async throws {
+        let service = FakeDashboardService(health: .captureReady)
+        let model = HostDashboardModel(service: service)
+        let source = StaticHostEventSource(messages: [
+            Data(WindowFrameEvent.notepadFirstFrameJSON.utf8)
+        ])
+        var handledResults: [HostProtocolMessageResult] = []
+
+        await model.launchNotepad()
+        await model.consumeProtocolMessages(from: source) { result in
+            handledResults.append(result)
+        }
+
+        let session = try #require(model.mirrorSessions.first)
+        #expect(handledResults == [.handledWindowFrame(windowId: "hwnd:0003029A")])
+        #expect(session.captureState == .streaming)
+        #expect(session.latestFrame?.frameId == "frame_000001")
+    }
+
     @Test("ignores frames for windows without a mirror session")
     @MainActor
     func ignoresFramesWithoutMirrorSession() async throws {
@@ -253,6 +290,19 @@ private final class FakeDashboardService: HostDashboardService {
     }
 }
 
+private struct StaticHostEventSource: HostEventSource {
+    var messages: [Data]
+
+    func eventMessages() -> AsyncThrowingStream<Data, any Error> {
+        AsyncThrowingStream { continuation in
+            for message in messages {
+                continuation.yield(message)
+            }
+            continuation.finish()
+        }
+    }
+}
+
 private extension AgentHealthResponse {
     static var fixture: AgentHealthResponse {
         AgentHealthResponse(
@@ -342,6 +392,10 @@ private extension WindowCreatedEvent {
 }
 
 private extension WindowFrameEvent {
+    static var notepadFirstFrameJSON: String {
+        #"{"type":"window.frame","windowId":"hwnd:0003029A","frameId":"frame_000001","sequence":1,"format":"png","width":1,"height":1,"scale":1,"encodedData":"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII="}"#
+    }
+
     static var notepadFirstFrame: WindowFrameEvent {
         WindowFrameEvent(
             type: .windowFrame,
