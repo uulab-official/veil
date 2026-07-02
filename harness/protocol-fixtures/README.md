@@ -11,6 +11,7 @@ These JSON files mirror the stable examples in `docs/protocol.md`.
 - `app.launch.request.json`
 - `app.launch.response.json`
 - `window.created.json`
+- `window.frame.json`
 - `clipboard.text.set.host.json`
 - `error.app_not_found.json`
 

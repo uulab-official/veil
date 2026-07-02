@@ -7,7 +7,8 @@ import {
   MessageType,
   createError,
   parseMessage,
-  validateNotepadAcceptance
+  validateNotepadAcceptance,
+  validateWindowFrame
 } from "../src/messages.mjs";
 
 const fixtures = resolve(import.meta.dirname, "../../../harness/protocol-fixtures");
@@ -25,6 +26,7 @@ test("parses every stable fixture", async () => {
     "app.launch.request.json",
     "app.launch.response.json",
     "window.created.json",
+    "window.frame.json",
     "clipboard.text.set.host.json",
     "error.app_not_found.json"
   ];
@@ -95,4 +97,15 @@ test("rejects Notepad acceptance when the HWND event belongs to another process"
     () => validateNotepadAcceptance(launch, window),
     /Notepad window event must match launch process/
   );
+});
+
+test("validates one captured window frame fixture", async () => {
+  const frame = validateWindowFrame(await readFixture("window.frame.json"));
+
+  assert.equal(frame.type, MessageType.WindowFrame);
+  assert.equal(frame.windowId, "hwnd:0003029A");
+  assert.equal(frame.frameId, "frame_000001");
+  assert.equal(frame.format, "png");
+  assert.equal(frame.width, 1);
+  assert.equal(frame.height, 1);
 });

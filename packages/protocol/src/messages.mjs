@@ -6,6 +6,7 @@ export const MessageType = Object.freeze({
   AppLaunchRequest: "app.launch.request",
   AppLaunchResponse: "app.launch.response",
   WindowCreated: "window.created",
+  WindowFrame: "window.frame",
   ClipboardTextSet: "clipboard.text.set",
   InputMouse: "input.mouse",
   InputKey: "input.key",
@@ -67,4 +68,36 @@ export function validateNotepadAcceptance(launch, window) {
     windowId: window.windowId,
     title: window.title
   };
+}
+
+export function validateWindowFrame(frame) {
+  if (!frame || frame.type !== MessageType.WindowFrame) {
+    throw new TypeError("Window frame must use type window.frame.");
+  }
+
+  requireNonEmptyString(frame.windowId, "windowId");
+  requireNonEmptyString(frame.frameId, "frameId");
+  requireNonEmptyString(frame.format, "format");
+  requirePositiveInteger(frame.sequence, "sequence");
+  requirePositiveInteger(frame.width, "width");
+  requirePositiveInteger(frame.height, "height");
+
+  if (typeof frame.scale !== "number" || frame.scale <= 0) {
+    throw new TypeError("Window frame field 'scale' must be a positive number.");
+  }
+
+  requireNonEmptyString(frame.encodedData, "encodedData");
+  return frame;
+}
+
+function requireNonEmptyString(value, fieldName) {
+  if (typeof value !== "string" || value.length === 0) {
+    throw new TypeError(`Window frame field '${fieldName}' must be a non-empty string.`);
+  }
+}
+
+function requirePositiveInteger(value, fieldName) {
+  if (!Number.isInteger(value) || value <= 0) {
+    throw new TypeError(`Window frame field '${fieldName}' must be a positive integer.`);
+  }
 }

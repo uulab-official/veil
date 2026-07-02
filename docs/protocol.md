@@ -142,6 +142,31 @@ Event:
 }
 ```
 
+## Window Frame
+
+Early harness event from guest to host:
+
+```json
+{
+  "type": "window.frame",
+  "windowId": "hwnd:0003029A",
+  "frameId": "frame_000001",
+  "sequence": 1,
+  "format": "png",
+  "width": 1,
+  "height": 1,
+  "scale": 1,
+  "encodedData": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB..."
+}
+```
+
+Rules:
+
+- `windowId` must match a tracked `window.created` event.
+- `sequence` is monotonically increasing per window.
+- `format` is `png` for the first correctness harness.
+- `encodedData` is base64 only for early harness spikes; production capture should move to a separate binary or media stream.
+
 ## Input Mouse
 
 Event from host to guest:

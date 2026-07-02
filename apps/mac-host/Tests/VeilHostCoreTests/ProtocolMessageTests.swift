@@ -36,6 +36,19 @@ struct ProtocolMessageTests {
         #expect(event.bounds.width == 1280)
         #expect(event.focused)
     }
+
+    @Test("decodes window frame event")
+    func decodesWindowFrameEvent() throws {
+        let event: WindowFrameEvent = try decodeFixture("window.frame")
+
+        #expect(event.type == .windowFrame)
+        #expect(event.windowId == "hwnd:0003029A")
+        #expect(event.frameId == "frame_000001")
+        #expect(event.format == "png")
+        #expect(event.width == 1)
+        #expect(event.height == 1)
+        #expect(event.encodedData.hasPrefix("iVBOR"))
+    }
 }
 
 private func decodeFixture<T: Decodable>(_ name: String) throws -> T {

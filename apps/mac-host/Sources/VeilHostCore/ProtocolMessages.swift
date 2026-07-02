@@ -8,6 +8,7 @@ public enum MessageType: String, Codable, Sendable {
     case appLaunchRequest = "app.launch.request"
     case appLaunchResponse = "app.launch.response"
     case windowCreated = "window.created"
+    case windowFrame = "window.frame"
     case clipboardTextSet = "clipboard.text.set"
     case inputMouse = "input.mouse"
     case inputKey = "input.key"
@@ -113,6 +114,18 @@ public struct WindowBounds: Codable, Equatable, Sendable {
     public var y: Int
     public var width: Int
     public var height: Int
+}
+
+public struct WindowFrameEvent: Codable, Equatable, Sendable {
+    public var type: MessageType
+    public var windowId: String
+    public var frameId: String
+    public var sequence: Int
+    public var format: String
+    public var width: Int
+    public var height: Int
+    public var scale: Double
+    public var encodedData: String
 }
 
 public struct ErrorResponse: Codable, Equatable, Sendable {

@@ -58,10 +58,11 @@ Goal: keep the main Veil experience pointed at real local Windows boot and conso
 - [x] Add the same Notepad acceptance validation to the JavaScript protocol package, fake-agent tests, and fake-host smoke output.
 - [x] Store accepted Notepad HWNDs as typed mirror sessions with connection mode and capture state.
 - [x] Open macOS app windows from mirror sessions instead of raw window events so the presenter is ready for real capture frames.
+- [x] Add `window.frame` protocol fixtures for one PNG-encoded Notepad frame in Swift and JavaScript harnesses.
 
 ## Next
 
-- [ ] Add protocol messages and fixtures for one captured Notepad frame.
+- [ ] Route `window.frame` events into the host mirror session as the latest frame payload.
 - [ ] Scaffold the first real `apps/windows-agent` project so the acceptance flow can move from fake-agent fixtures to Windows.
 - [ ] Persist guest-agent install evidence back to the VM profile after a real Windows guest connects from the VM.
 - [ ] Improve `Autounattend.xml` so Windows Setup skips the product-key page without bundling a key.
