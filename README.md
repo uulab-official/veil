@@ -213,7 +213,7 @@ Validate it with:
 swift run veil-vmctl qemu-smoke --json --seconds 120 | node ../../harness/qemu-smoke/src/validate-qemu-smoke.mjs
 ```
 
-The smoke command runs QEMU headlessly in snapshot mode and writes logs plus a `.png` VM-console screenshot path under `~/Downloads/Veil Diagnostics/QEMU Smoke`. Its JSON also includes `nextActions` for the detected boot state. Current evidence on the test Mac has reached the Korean Windows 11 installing screen at 39% with local secure firmware, TPM, NVMe storage, and UEFI/GPT unattended partitioning. The next checkpoint is a persistent visible install through the first reboot.
+The smoke command runs QEMU headlessly in snapshot mode and writes logs plus a `.png` VM-console screenshot path under `~/Downloads/Veil Diagnostics/QEMU Smoke`. Its JSON also includes `nextActions` for the detected boot state. Current evidence on the test Mac has reached the Korean Windows 11 installing screen at 32% with local secure firmware, TPM, NVMe storage, and UEFI/GPT unattended partitioning. The next checkpoint is a persistent visible install through the first reboot.
 
 Launch the guarded visible QEMU/HVF path for interactive Windows setup testing:
 

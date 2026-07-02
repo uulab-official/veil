@@ -17,4 +17,4 @@ cd ../../apps/mac-host
 swift run veil-vmctl qemu-smoke --json --seconds 120 | node ../../harness/qemu-smoke/src/validate-qemu-smoke.mjs
 ```
 
-Expected current output on the test Mac: `qemu smoke valid` with `outcome: "runningNoDecision"`, `boot-prompt-key-sent` evidence, a `consoleScreenshotPath` pointing at a `.png` image, and `nextActions` asking the contributor to inspect that screenshot. On July 2, 2026, the current secure-firmware, TPM, NVMe, and UEFI/GPT unattended recipe reached the Korean `Windows 11 installing` screen at 39% complete.
+Expected current output on the test Mac: `qemu smoke valid` with `outcome: "runningNoDecision"`, `boot-prompt-key-sent` evidence, a `consoleScreenshotPath` pointing at a `.png` image, and `nextActions` asking the contributor to inspect that screenshot. On July 2, 2026, the current secure-firmware, TPM, NVMe, and UEFI/GPT unattended recipe reached the Korean `Windows 11 installing` screen at 32% complete.
