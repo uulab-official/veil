@@ -9,6 +9,7 @@ public struct QEMULaunchRecord: Codable, Equatable, Sendable {
     public var arguments: [String]
     public var processLogPath: String
     public var monitorSocketPath: String
+    public var consoleScreenshotPath: String?
     public var startedAt: Date
 
     public init(
@@ -20,6 +21,7 @@ public struct QEMULaunchRecord: Codable, Equatable, Sendable {
         arguments: [String],
         processLogPath: String,
         monitorSocketPath: String,
+        consoleScreenshotPath: String? = nil,
         startedAt: Date
     ) {
         self.kind = kind
@@ -30,6 +32,7 @@ public struct QEMULaunchRecord: Codable, Equatable, Sendable {
         self.arguments = arguments
         self.processLogPath = processLogPath
         self.monitorSocketPath = monitorSocketPath
+        self.consoleScreenshotPath = consoleScreenshotPath
         self.startedAt = startedAt
     }
 }
@@ -42,6 +45,7 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
     private let processRunner: @Sendable (Process) throws -> Void
     private let frontmostRunner: @Sendable () -> Void
     private let bootKeySender: @Sendable (URL) -> Void
+    private let consoleScreenshotCapturer: @Sendable (URL, URL) -> Void
     private var process: Process?
     private var monitorSocketURL: URL?
 
@@ -50,13 +54,15 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
         planBuilder: @escaping @Sendable (VMProfile) throws -> QEMUWindowsBootPlan = QEMUVMRuntimeBooter.makePlan(for:),
         processRunner: @escaping @Sendable (Process) throws -> Void = { try $0.run() },
         frontmostRunner: @escaping @Sendable () -> Void = QEMUVMRuntimeBooter.bringQEMUToFront,
-        bootKeySender: @escaping @Sendable (URL) -> Void = QEMUVMRuntimeBooter.sendWindowsInstallerBootKey
+        bootKeySender: @escaping @Sendable (URL) -> Void = QEMUVMRuntimeBooter.sendWindowsInstallerBootKey,
+        consoleScreenshotCapturer: @escaping @Sendable (URL, URL) -> Void = QEMUVMRuntimeBooter.captureConsoleScreenshot
     ) {
         self.diagnosticsDirectory = diagnosticsDirectory
         self.planBuilder = planBuilder
         self.processRunner = processRunner
         self.frontmostRunner = frontmostRunner
         self.bootKeySender = bootKeySender
+        self.consoleScreenshotCapturer = consoleScreenshotCapturer
     }
 
     public func runtimeState() async -> VMRuntimeState? {
@@ -82,6 +88,7 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
         let launchDirectory = try qemuLaunchDirectory()
         let stamp = Self.timestamp()
         let logURL = launchDirectory.appendingPathComponent("qemu-launch-\(stamp).log")
+        let consoleScreenshotURL = launchDirectory.appendingPathComponent("qemu-console-\(stamp).ppm")
         FileManager.default.createFile(atPath: logURL.path, contents: nil)
         let logHandle = try FileHandle(forWritingTo: logURL)
         let monitorSocketURL = Self.monitorSocketURL()
@@ -103,11 +110,13 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
             arguments: process.arguments ?? [],
             processLogURL: logURL,
             monitorSocketURL: monitorSocketURL,
+            consoleScreenshotURL: consoleScreenshotURL,
             directory: launchDirectory,
             stamp: stamp
         )
         frontmostRunner()
         scheduleWindowsInstallerBootKeySend(monitorSocketURL: monitorSocketURL)
+        scheduleConsoleScreenshotCapture(monitorSocketURL: monitorSocketURL, imageURL: consoleScreenshotURL)
         return .running
     }
 
@@ -158,6 +167,7 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
         arguments: [String],
         processLogURL: URL,
         monitorSocketURL: URL,
+        consoleScreenshotURL: URL,
         directory: URL,
         stamp: String
     ) throws {
@@ -168,6 +178,7 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
             arguments: arguments,
             processLogPath: processLogURL.path,
             monitorSocketPath: monitorSocketURL.path,
+            consoleScreenshotPath: consoleScreenshotURL.path,
             startedAt: Date()
         )
         let encoder = JSONEncoder()
@@ -221,12 +232,43 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
         try? process.run()
     }
 
+    public static func captureConsoleScreenshot(monitorSocketURL: URL, imageURL: URL) {
+        guard FileManager.default.fileExists(atPath: monitorSocketURL.path) else {
+            return
+        }
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/sh")
+        process.arguments = [
+            "-c",
+            "printf 'screendump \"%s\"\\n' \"$1\" | /usr/bin/nc -U \"$0\"",
+            monitorSocketURL.path,
+            imageURL.path
+        ]
+        process.standardOutput = nil
+        process.standardError = nil
+        try? process.run()
+    }
+
     private func scheduleWindowsInstallerBootKeySend(monitorSocketURL: URL) {
         let bootKeySender = self.bootKeySender
         Task.detached {
             for _ in 0..<12 {
                 try? await Task.sleep(for: .seconds(1))
                 bootKeySender(monitorSocketURL)
+            }
+        }
+    }
+
+    private func scheduleConsoleScreenshotCapture(monitorSocketURL: URL, imageURL: URL) {
+        let consoleScreenshotCapturer = self.consoleScreenshotCapturer
+        Task.detached {
+            for _ in 0..<6 {
+                try? await Task.sleep(for: .seconds(5))
+                consoleScreenshotCapturer(monitorSocketURL, imageURL)
+                if FileManager.default.fileExists(atPath: imageURL.path) {
+                    break
+                }
             }
         }
     }

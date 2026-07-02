@@ -221,7 +221,7 @@ Launch the guarded visible QEMU/HVF path for interactive Windows setup testing:
 swift run veil-vmctl qemu-start --json
 ```
 
-This starts a local Cocoa QEMU window from the prepared Windows Arm profile, brings it forward, and writes logs under `~/Downloads/Veil Diagnostics/QEMU Launch`. It still uses user-provided Windows media and does not bundle QEMU, firmware, Windows images, product keys, or activation material.
+This starts a local Cocoa QEMU window from the prepared Windows Arm profile, brings it forward, and writes logs under `~/Downloads/Veil Diagnostics/QEMU Launch`. App-launched QEMU sessions also record a `qemu-console-*.ppm` VM-display screenshot path in `qemu-launch-latest.json` for visual boot evidence. Veil still uses user-provided Windows media and does not bundle QEMU, firmware, Windows images, product keys, or activation material.
 
 You can prepare the local VM profile from a downloaded Windows 11 Arm ISO without clicking through the shell:
 

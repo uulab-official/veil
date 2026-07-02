@@ -69,6 +69,7 @@ Goal: keep the main Veil experience pointed at real local Windows boot and conso
 - [x] Send a continuing `window.frame` stream from the Windows guest agent after the first Notepad frame.
 - [x] Persist guest-agent install evidence back to the VM profile after a real Windows guest connects from the VM.
 - [x] Improve `Autounattend.xml` so Windows Setup can select Windows 11 Pro without bundling a product key.
+- [x] Record QEMU app launches with a VM-console `screendump` screenshot path for visual boot evidence.
 
 ## Next
 
@@ -78,7 +79,7 @@ Goal: keep the main Veil experience pointed at real local Windows boot and conso
 - [ ] Tune the Windows agent frame stream for lower latency after correctness is verified.
 - [ ] Restart the currently running QEMU VM so the new guest-agent port forwarding takes effect.
 - [ ] Replace the static setup preview with a real VM screenshot once QEMU reaches Windows Setup.
-- [ ] Add a QEMU screenshot/screencapture harness so boot failures can be compared visually, not only through serial text.
+- [ ] Extend bounded `qemu-smoke` to validate VM-console screenshots, not only serial text.
 - [ ] Add recovery copy for common boot failures: bad ISO attachment, unsupported device model, EFI state, and disk format issues.
 - [ ] Convert the console handoff timer into real runtime state events.
 - [ ] After Windows reaches the desktop, install and auto-start the Veil guest agent.

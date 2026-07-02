@@ -340,6 +340,8 @@ struct QEMUWindowsBootPlanTests {
         #expect(record.arguments.contains("driver=raw,file.driver=file,file.locking=off,file.filename=\(autoInstallURL.path),if=none,id=autounattend,media=cdrom,readonly=on"))
         #expect(record.processLogPath.hasSuffix(".log"))
         #expect(record.monitorSocketPath.contains("/tmp/vq-"))
+        #expect(record.consoleScreenshotPath?.contains("qemu-console-") == true)
+        #expect(record.consoleScreenshotPath?.hasSuffix(".ppm") == true)
     }
 }
 
