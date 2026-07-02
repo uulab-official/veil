@@ -25,10 +25,29 @@ test("windows agent is wired to real HWND capture by default", async () => {
   const capture = await readFile(resolve(agentRoot, "src/VeilAgent/GdiWindowFrameCapture.cs"), "utf8");
 
   assert.match(program, /new GdiWindowFrameCapture\(\)/);
+  assert.match(program, /new WindowFrameStreamer\(/);
   assert.doesNotMatch(program, /new BootstrapPngFrameCapture\(\)/);
   assert.match(capture, /PrintWindow/);
   assert.match(capture, /GetWindowRect/);
   assert.match(capture, /ImageFormat\.Png/);
+});
+
+test("windows agent streams continuing window frames after launch", async () => {
+  const session = await readFile(resolve(agentRoot, "src/VeilAgent/AgentSession.cs"), "utf8");
+  const server = await readFile(resolve(agentRoot, "src/VeilAgent/WebSocketAgentServer.cs"), "utf8");
+  const streamer = await readFile(resolve(agentRoot, "src/VeilAgent/WindowFrameStreamer.cs"), "utf8");
+  const captureInterface = await readFile(resolve(agentRoot, "src/VeilAgent/IWindowFrameCapture.cs"), "utf8");
+
+  assert.match(captureInterface, /CaptureFrameAsync\([^)]*int sequence/);
+  assert.match(session, /StreamWindow:\s*launched/);
+  assert.match(session, /NextFrameSequence:\s*2/);
+  assert.match(session, /SerializeFrame\(WindowFrame frame\)/);
+  assert.match(server, /StartFrameStream/);
+  assert.match(server, /WindowFrameStreamer/);
+  assert.match(server, /SerializeFrame\(frame\)/);
+  assert.match(streamer, /PeriodicTimer/);
+  assert.match(streamer, /firstSequence/);
+  assert.match(streamer, /CaptureFrameAsync\(window,\s*sequence/);
 });
 
 test("windows agent sample launch flow emits Notepad window and first frame", async () => {

@@ -6,7 +6,7 @@ namespace Veil.Agent;
 
 public sealed class GdiWindowFrameCapture : IWindowFrameCapture
 {
-    public Task<WindowFrame> CaptureFirstFrameAsync(LaunchedWindow window, CancellationToken cancellationToken)
+    public Task<WindowFrame> CaptureFrameAsync(LaunchedWindow window, int sequence, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -38,8 +38,8 @@ public sealed class GdiWindowFrameCapture : IWindowFrameCapture
 
         return Task.FromResult(new WindowFrame(
             WindowId: window.WindowId,
-            FrameId: "frame_000001",
-            Sequence: 1,
+            FrameId: $"frame_{sequence:000000}",
+            Sequence: sequence,
             Format: "png",
             Width: bounds.Width,
             Height: bounds.Height,

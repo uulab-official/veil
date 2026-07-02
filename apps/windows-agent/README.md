@@ -8,6 +8,7 @@ Current scope:
 - WebSocket listener on `127.0.0.1:18444`.
 - Protocol handling for health, app list, and Notepad launch.
 - Notepad launch emits `app.launch.response`, `window.created`, and the first HWND-captured `window.frame` event through the event broadcast path.
+- After the first frame, a per-window frame streamer continues broadcasting PNG `window.frame` events until the agent process stops or the window stream is replaced.
 
 This project intentionally does not ship Windows media, licenses, product keys, or proprietary SDKs.
 
@@ -58,4 +59,4 @@ cd harness/windows-agent-contract
 npm test
 ```
 
-The default frame path uses Win32/GDI capture behind `IWindowFrameCapture`. The next capture milestone is to verify the Notepad frame inside Windows 11 Arm and then evaluate Windows Graphics Capture or a lower-latency stream for continuing frames.
+The default frame path uses Win32/GDI capture behind `IWindowFrameCapture`. The current stream interval is 250 ms for correctness-first validation. The next capture milestone is to verify the Notepad frame inside Windows 11 Arm and then evaluate Windows Graphics Capture or a lower-latency stream.

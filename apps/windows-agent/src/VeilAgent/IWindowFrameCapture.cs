@@ -2,5 +2,5 @@ namespace Veil.Agent;
 
 public interface IWindowFrameCapture
 {
-    Task<WindowFrame> CaptureFirstFrameAsync(LaunchedWindow window, CancellationToken cancellationToken);
+    Task<WindowFrame> CaptureFrameAsync(LaunchedWindow window, int sequence, CancellationToken cancellationToken);
 }

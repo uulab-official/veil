@@ -41,7 +41,7 @@ public sealed class AgentSession
         }
 
         var launched = await desktop.LaunchNotepadAsync(cancellationToken);
-        var frame = await capture.CaptureFirstFrameAsync(launched, cancellationToken);
+        var frame = await capture.CaptureFrameAsync(launched, sequence: 1, cancellationToken);
 
         return new AgentReplies(
             DirectReplies: new List<JsonObject>
@@ -52,7 +52,9 @@ public sealed class AgentSession
             BroadcastEvents: new List<JsonObject>
             {
                 WindowFrameEvent(frame)
-            }
+            },
+            StreamWindow: launched,
+            NextFrameSequence: 2
         );
     }
 
@@ -146,7 +148,9 @@ public sealed class AgentSession
 
 public sealed record AgentReplies(
     IReadOnlyList<JsonObject> DirectReplies,
-    IReadOnlyList<JsonObject> BroadcastEvents
+    IReadOnlyList<JsonObject> BroadcastEvents,
+    LaunchedWindow? StreamWindow = null,
+    int NextFrameSequence = 1
 )
 {
     public static AgentReplies Direct(params JsonObject[] replies) => new(replies, Array.Empty<JsonObject>());
@@ -154,6 +158,24 @@ public sealed record AgentReplies(
     public IEnumerable<string> SerializeDirectReplies() => DirectReplies.Select(Serialize);
 
     public IEnumerable<string> SerializeBroadcastEvents() => BroadcastEvents.Select(Serialize);
+
+    public static string SerializeFrame(WindowFrame frame)
+    {
+        var message = new JsonObject
+        {
+            ["type"] = MessageTypes.WindowFrame,
+            ["windowId"] = frame.WindowId,
+            ["frameId"] = frame.FrameId,
+            ["sequence"] = frame.Sequence,
+            ["format"] = frame.Format,
+            ["width"] = frame.Width,
+            ["height"] = frame.Height,
+            ["scale"] = frame.Scale,
+            ["encodedData"] = frame.EncodedData
+        };
+
+        return Serialize(message);
+    }
 
     private static string Serialize(JsonObject message) => message.ToJsonString(ProtocolJson.Options);
 }

@@ -10,12 +10,15 @@ public sealed class WebSocketAgentServer
 {
     private readonly AgentEndpoint endpoint;
     private readonly AgentSession session;
+    private readonly WindowFrameStreamer frameStreamer;
     private readonly ConcurrentDictionary<Guid, WebSocket> clients = new();
+    private readonly ConcurrentDictionary<string, CancellationTokenSource> frameStreamsByWindowId = new();
 
-    public WebSocketAgentServer(AgentEndpoint endpoint, AgentSession session)
+    public WebSocketAgentServer(AgentEndpoint endpoint, AgentSession session, WindowFrameStreamer frameStreamer)
     {
         this.endpoint = endpoint;
         this.session = session;
+        this.frameStreamer = frameStreamer;
     }
 
     public async Task RunAsync(CancellationToken cancellationToken = default)
@@ -68,6 +71,11 @@ public sealed class WebSocketAgentServer
                 {
                     await BroadcastTextAsync(broadcast, cancellationToken);
                 }
+
+                if (replies.StreamWindow is not null)
+                {
+                    StartFrameStream(replies.StreamWindow, replies.NextFrameSequence, cancellationToken);
+                }
             }
         }
         finally
@@ -90,6 +98,40 @@ public sealed class WebSocketAgentServer
 
             await SendTextAsync(socket, text, cancellationToken);
         }
+    }
+
+    private void StartFrameStream(LaunchedWindow window, int firstSequence, CancellationToken serverCancellationToken)
+    {
+        if (frameStreamsByWindowId.TryRemove(window.WindowId, out var existing))
+        {
+            existing.Cancel();
+            existing.Dispose();
+        }
+
+        var streamCancellation = CancellationTokenSource.CreateLinkedTokenSource(serverCancellationToken);
+        frameStreamsByWindowId[window.WindowId] = streamCancellation;
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await frameStreamer.StreamAsync(
+                    window,
+                    firstSequence,
+                    async (frame, token) => await BroadcastTextAsync(AgentReplies.SerializeFrame(frame), token),
+                    streamCancellation.Token
+                );
+            }
+            catch (OperationCanceledException)
+            {
+                // Expected when the agent shuts down or the same HWND stream is replaced.
+            }
+            finally
+            {
+                frameStreamsByWindowId.TryRemove(window.WindowId, out _);
+                streamCancellation.Dispose();
+            }
+        }, streamCancellation.Token);
     }
 
     private static async Task<string?> ReceiveTextAsync(WebSocket socket, CancellationToken cancellationToken)
