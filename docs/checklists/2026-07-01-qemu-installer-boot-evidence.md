@@ -94,10 +94,11 @@ The PNG shows the Korean Windows 11 Setup disk-selection screen with
 `Disk 0 Unallocated Space` at 128.0 GB selected. The JSON classifier stayed
 `runningNoDecision`, so the screenshot is the checkpoint evidence.
 
-Automatic partition evidence: after adding UEFI/GPT Disk 0 partitioning and
-`InstallTo` Disk 0 Partition 3 to Veil's generated `Autounattend.xml`, a July
-2, 2026 bounded `qemu-smoke` wrote
-`/Users/bonjin/Downloads/Veil Diagnostics/QEMU Smoke/qemu-smoke-2026-07-02T07-30-52Z.console.png`.
-The PNG shows the Korean `Windows 11 installing` screen at 39% complete. The
+Automatic partition evidence: after adding UEFI/GPT Disk 0 partitioning,
+`InstallTo` Disk 0 Partition 3, and `WillShowUI=Never` for disk/image setup UI
+to Veil's generated `Autounattend.xml`, a July 2, 2026 bounded `qemu-smoke`
+wrote
+`/Users/bonjin/Downloads/Veil Diagnostics/QEMU Smoke/qemu-smoke-2026-07-02T07-34-20Z.console.png`.
+The PNG shows the Korean `Windows 11 installing` screen at 32% complete. The
 smoke command still reports `runningNoDecision` because serial output does not
 prove Windows Setup state, so the screenshot remains the authoritative evidence.

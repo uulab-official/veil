@@ -91,8 +91,8 @@ Goal: keep the main Veil experience pointed at real local Windows boot and conso
 - [x] Identify the next visible setup blocker: Windows Setup sees no install disk when the system disk is attached through VirtIO block.
 - [x] Switch the QEMU/HVF install-time system disk to NVMe for Windows inbox storage-driver support.
 - [x] Verify a bounded NVMe `qemu-smoke --seconds 120` console PNG shows `Disk 0 Unallocated Space` as a 128.0 GB Windows Setup target.
-- [x] Add UEFI/GPT Disk 0 partitioning and `InstallTo` Disk 0 Partition 3 to the generated `Autounattend.xml`.
-- [x] Verify a bounded auto-partition `qemu-smoke` console PNG reaches the Korean Windows 11 installing screen at 39%.
+- [x] Add UEFI/GPT Disk 0 partitioning, `InstallTo` Disk 0 Partition 3, and `WillShowUI=Never` for disk/image setup UI to the generated `Autounattend.xml`.
+- [x] Verify a bounded auto-partition `qemu-smoke` console PNG reaches the Korean Windows 11 installing screen at 32%.
 - [x] Add recovery copy to QEMU smoke reports for common boot failures.
 - [x] Convert QEMU monitor screenshots to PNG paths so users can inspect boot evidence directly.
 - [x] Surface the latest QEMU console PNG inside the Windows setup screen when launch evidence exists.

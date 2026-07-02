@@ -14,10 +14,13 @@ Goal: move Veil toward the Parallels-style install assistant flow while keeping 
 - [x] Treat the unattended answer file as a boot-readiness step.
 - [x] Keep the answer file free of product keys, activation material, and bundled Windows media.
 - [x] Attach the generated automatic install ISO in Apple Virtualization and QEMU/HVF boot plans.
+- [x] Generate UEFI/GPT Disk 0 partitioning plus `InstallTo` Disk 0 Partition 3 for Windows Setup.
+- [x] Hide disk/image setup UI with `WillShowUI=Never` while keeping product-key values absent.
+- [x] Verify bounded QEMU/HVF smoke reaches the Korean Windows 11 installing screen at 32%.
 
 ## Next
 
-- [ ] Add a boot recipe that reaches Windows Boot Manager before claiming full unattended installation.
+- [ ] Run a persistent visible QEMU/HVF install through first reboot.
 - [ ] Generate first-run guest-agent install scripts after Windows reaches the desktop.
 
 Verification:
