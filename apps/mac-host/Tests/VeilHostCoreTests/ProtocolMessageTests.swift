@@ -49,6 +49,14 @@ struct ProtocolMessageTests {
         #expect(event.height == 1)
         #expect(event.encodedData.hasPrefix("iVBOR"))
     }
+
+    @Test("decodes window frame payload data")
+    func decodesWindowFramePayloadData() throws {
+        let event: WindowFrameEvent = try decodeFixture("window.frame")
+
+        let payload = try #require(event.encodedPayloadData)
+        #expect(payload.starts(with: [0x89, 0x50, 0x4E, 0x47]))
+    }
 }
 
 private func decodeFixture<T: Decodable>(_ name: String) throws -> T {

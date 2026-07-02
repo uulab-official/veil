@@ -128,6 +128,12 @@ public struct WindowFrameEvent: Codable, Equatable, Sendable {
     public var encodedData: String
 }
 
+public extension WindowFrameEvent {
+    var encodedPayloadData: Data? {
+        Data(base64Encoded: encodedData)
+    }
+}
+
 public struct ErrorResponse: Codable, Equatable, Sendable {
     public var type: MessageType
     public var requestId: String?

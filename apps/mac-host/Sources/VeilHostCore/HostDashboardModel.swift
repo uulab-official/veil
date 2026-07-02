@@ -41,15 +41,18 @@ public struct WindowMirrorSession: Codable, Equatable, Identifiable, Sendable {
     public var window: WindowCreatedEvent
     public var connectionMode: HostConnectionMode
     public var captureState: WindowCaptureState
+    public var latestFrame: WindowFrameEvent?
 
     public init(
         window: WindowCreatedEvent,
         connectionMode: HostConnectionMode,
-        captureState: WindowCaptureState
+        captureState: WindowCaptureState,
+        latestFrame: WindowFrameEvent? = nil
     ) {
         self.window = window
         self.connectionMode = connectionMode
         self.captureState = captureState
+        self.latestFrame = latestFrame
     }
 }
 
@@ -192,6 +195,15 @@ public final class HostDashboardModel {
             errorMessage = userMessage(for: error)
             phase = .failed
         }
+    }
+
+    public func receiveWindowFrame(_ frame: WindowFrameEvent) {
+        guard let index = mirrorSessions.firstIndex(where: { $0.id == frame.windowId }) else {
+            return
+        }
+
+        mirrorSessions[index].latestFrame = frame
+        mirrorSessions[index].captureState = .streaming
     }
 
     private func storeActiveWindow(_ window: WindowCreatedEvent) {

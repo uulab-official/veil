@@ -61,6 +61,38 @@ struct HostDashboardModelTests {
         #expect(session.captureState == .pending)
     }
 
+    @Test("stores the latest frame on the matching mirror session")
+    @MainActor
+    func storesLatestFrameOnMatchingMirrorSession() async throws {
+        let service = FakeDashboardService(health: .captureReady)
+        let model = HostDashboardModel(service: service)
+
+        await model.launchNotepad()
+        model.receiveWindowFrame(.notepadFirstFrame)
+
+        let session = try #require(model.mirrorSessions.first)
+        #expect(session.captureState == .streaming)
+        #expect(session.latestFrame?.windowId == "hwnd:0003029A")
+        #expect(session.latestFrame?.frameId == "frame_000001")
+        #expect(session.latestFrame?.sequence == 1)
+        #expect(session.latestFrame?.format == "png")
+        #expect(session.latestFrame?.encodedData.hasPrefix("iVBOR") == true)
+    }
+
+    @Test("ignores frames for windows without a mirror session")
+    @MainActor
+    func ignoresFramesWithoutMirrorSession() async throws {
+        let service = FakeDashboardService(health: .captureReady)
+        let model = HostDashboardModel(service: service)
+
+        await model.launchNotepad()
+        model.receiveWindowFrame(.orphanFrame)
+
+        let session = try #require(model.mirrorSessions.first)
+        #expect(session.captureState == .pending)
+        #expect(session.latestFrame == nil)
+    }
+
     @Test("updates active window sessions by HWND")
     @MainActor
     func updatesActiveWindowSessionsByHWND() async throws {
@@ -305,6 +337,36 @@ private extension WindowCreatedEvent {
             bounds: WindowBounds(x: 10, y: 10, width: 1280, height: 800),
             state: "normal",
             focused: true
+        )
+    }
+}
+
+private extension WindowFrameEvent {
+    static var notepadFirstFrame: WindowFrameEvent {
+        WindowFrameEvent(
+            type: .windowFrame,
+            windowId: "hwnd:0003029A",
+            frameId: "frame_000001",
+            sequence: 1,
+            format: "png",
+            width: 1,
+            height: 1,
+            scale: 1,
+            encodedData: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII="
+        )
+    }
+
+    static var orphanFrame: WindowFrameEvent {
+        WindowFrameEvent(
+            type: .windowFrame,
+            windowId: "hwnd:DEADBEEF",
+            frameId: "frame_orphan",
+            sequence: 1,
+            format: "png",
+            width: 1,
+            height: 1,
+            scale: 1,
+            encodedData: "iVBORw0KGgo="
         )
     }
 }

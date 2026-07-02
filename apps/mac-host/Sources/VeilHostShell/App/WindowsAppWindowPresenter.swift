@@ -104,52 +104,90 @@ private struct WindowsAppMirrorPlaceholderView: View {
 
             Divider()
 
-            VStack(alignment: .leading, spacing: 16) {
-                HStack(alignment: .firstTextBaseline) {
-                    Text("Untitled")
-                        .font(.system(size: 28, weight: .semibold))
-                    Spacer()
-                    Text(session.window.state.capitalized)
-                        .font(.caption.weight(.semibold))
+            if let latestFrameImage {
+                ZStack(alignment: .bottomLeading) {
+                    Color(nsColor: .windowBackgroundColor)
+                    Image(nsImage: latestFrameImage)
+                        .interpolation(.none)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                    Text(frameCaption)
+                        .font(.caption.monospaced())
                         .foregroundStyle(.secondary)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+                        .padding(12)
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                VStack(alignment: .leading, spacing: 16) {
+                    HStack(alignment: .firstTextBaseline) {
+                        Text("Untitled")
+                            .font(.system(size: 28, weight: .semibold))
+                        Spacer()
+                        Text(session.window.state.capitalized)
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                    }
 
-                Text(captureDescription)
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                    Text(captureDescription)
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
 
-                HStack(spacing: 10) {
-                    MirrorStateTile(
-                        title: "Window Tracking",
-                        detail: "Mapped",
-                        symbolName: "rectangle.3.group",
-                        tint: .green
-                    )
-                    MirrorStateTile(
-                        title: "Capture",
-                        detail: captureDetail,
-                        symbolName: "viewfinder",
-                        tint: captureTint
-                    )
-                    MirrorStateTile(
-                        title: "Input",
-                        detail: "Planned",
-                        symbolName: "keyboard",
-                        tint: .secondary
-                    )
+                    HStack(spacing: 10) {
+                        MirrorStateTile(
+                            title: "Window Tracking",
+                            detail: "Mapped",
+                            symbolName: "rectangle.3.group",
+                            tint: .green
+                        )
+                        MirrorStateTile(
+                            title: "Capture",
+                            detail: captureDetail,
+                            symbolName: "viewfinder",
+                            tint: captureTint
+                        )
+                        MirrorStateTile(
+                            title: "Input",
+                            detail: "Planned",
+                            symbolName: "keyboard",
+                            tint: .secondary
+                        )
+                    }
+
+                    Spacer()
+
+                    Text("Process \(session.window.processId)  |  \(session.window.bounds.width)x\(session.window.bounds.height) @ \(session.window.bounds.x),\(session.window.bounds.y)")
+                        .font(.caption.monospaced())
+                        .foregroundStyle(.tertiary)
                 }
-
-                Spacer()
-
-                Text("Process \(session.window.processId)  |  \(session.window.bounds.width)x\(session.window.bounds.height) @ \(session.window.bounds.x),\(session.window.bounds.y)")
-                    .font(.caption.monospaced())
-                    .foregroundStyle(.tertiary)
+                .padding(22)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .background(Color(nsColor: .textBackgroundColor))
             }
-            .padding(22)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .background(Color(nsColor: .textBackgroundColor))
         }
+    }
+
+    private var latestFrameImage: NSImage? {
+        guard let frame = session.latestFrame,
+              frame.format == "png",
+              let data = frame.encodedPayloadData else {
+            return nil
+        }
+
+        return NSImage(data: data)
+    }
+
+    private var frameCaption: String {
+        guard let frame = session.latestFrame else {
+            return ""
+        }
+
+        return "\(frame.format.uppercased()) \(frame.width)x\(frame.height) #\(frame.sequence)"
     }
 
     private var captureDescription: String {
