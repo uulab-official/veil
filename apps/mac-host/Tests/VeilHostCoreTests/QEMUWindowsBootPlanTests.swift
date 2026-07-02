@@ -679,13 +679,15 @@ struct QEMUWindowsBootPlanTests {
         let arguments = QEMUWindowsBootSmokePlanner().makeArguments(
             from: plan,
             serialLogPath: "/tmp/veil-qemu-smoke.serial.log",
-            monitorSocketPath: "/tmp/veil-qemu-smoke.sock"
+            monitorSocketPath: "/tmp/veil-qemu-smoke.sock",
+            qmpSocketPath: "/tmp/veil-qemu-smoke.qmp.sock"
         )
 
         #expect(arguments.contains("-snapshot"))
         #expect(arguments.containsSequence(["-display", "none"]))
         #expect(arguments.containsSequence(["-serial", "file:/tmp/veil-qemu-smoke.serial.log"]))
         #expect(arguments.containsSequence(["-monitor", "unix:/tmp/veil-qemu-smoke.sock,server,nowait"]))
+        #expect(arguments.containsSequence(["-qmp", "unix:/tmp/veil-qemu-smoke.qmp.sock,server,nowait"]))
         #expect(arguments.contains("driver=raw,file.driver=file,file.locking=off,file.filename=/Users/test/Virtual Machines/Veil/Windows 11 Arm.img,if=none,id=system"))
         #expect(!arguments.contains("cocoa"))
     }
@@ -706,13 +708,15 @@ struct QEMUWindowsBootPlanTests {
         let arguments = QEMUWindowsBootLaunchPlanner().makeArguments(
             from: plan,
             serialLogPath: "/tmp/veil-qemu-launch.serial.log",
-            monitorSocketPath: "/tmp/veil-qemu-launch.sock"
+            monitorSocketPath: "/tmp/veil-qemu-launch.sock",
+            qmpSocketPath: "/tmp/veil-qemu-launch.qmp.sock"
         )
 
         #expect(!arguments.contains("-snapshot"))
         #expect(arguments.containsSequence(["-display", "cocoa"]))
         #expect(arguments.containsSequence(["-serial", "file:/tmp/veil-qemu-launch.serial.log"]))
         #expect(arguments.containsSequence(["-monitor", "unix:/tmp/veil-qemu-launch.sock,server,nowait"]))
+        #expect(arguments.containsSequence(["-qmp", "unix:/tmp/veil-qemu-launch.qmp.sock,server,nowait"]))
         #expect(arguments.contains("driver=raw,file.driver=file,file.locking=off,file.filename=/Users/test/Virtual Machines/Veil/Windows 11 Arm.img,if=none,id=system"))
     }
 
@@ -798,6 +802,33 @@ struct QEMUWindowsBootPlanTests {
         let missingSocketURL = URL(fileURLWithPath: "/tmp/veil-missing-\(UUID().uuidString).sock")
 
         #expect(QEMUVMRuntimeBooter.sendWindowsInstallerBootKey(monitorSocketURL: missingSocketURL) == false)
+    }
+
+    @Test("QMP keyboard command builder emits send-key qcode payloads")
+    func qmpKeyboardCommandBuilderEmitsSendKeyPayloads() throws {
+        let command = try QEMUQMPKeyboardCommandBuilder.sendKeyCommand(for: "shift-f10")
+        let data = try #require(command.data(using: .utf8))
+        let object = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let arguments = try #require(object["arguments"] as? [String: Any])
+        let keys = try #require(arguments["keys"] as? [[String: String]])
+
+        #expect(object["execute"] as? String == "send-key")
+        #expect(keys == [
+            ["type": "qcode", "data": "shift"],
+            ["type": "qcode", "data": "f10"]
+        ])
+    }
+
+    @Test("QMP keyboard command builder maps OOBE bypass key sequence")
+    func qmpKeyboardCommandBuilderMapsOOBEBypassSequence() throws {
+        let commands = try QEMUQMPKeyboardCommandBuilder.oobeBypassCommands()
+        let shiftF10Command = try QEMUQMPKeyboardCommandBuilder.sendKeyCommand(for: "shift-f10")
+        let backslashCommand = try QEMUQMPKeyboardCommandBuilder.sendKeyCommand(for: "backslash")
+        let returnCommand = try QEMUQMPKeyboardCommandBuilder.sendKeyCommand(for: "ret")
+
+        #expect(commands.first == shiftF10Command)
+        #expect(commands.contains(backslashCommand))
+        #expect(commands.last == returnCommand)
     }
 
     @Test("TPM emulator startup terminates with the QEMU connection")
@@ -908,6 +939,7 @@ struct QEMUWindowsBootPlanTests {
         #expect(capture.executablePath == qemuURL.path)
         #expect(capture.arguments.containsSequence(["-display", "cocoa"]))
         #expect(capture.arguments.contains("-monitor"))
+        #expect(capture.arguments.contains("-qmp"))
         #expect(capture.arguments.contains { $0.hasPrefix("unix:") && $0.hasSuffix(",server,nowait") })
         #expect(capture.arguments.contains("driver=raw,file.driver=file,file.locking=off,file.filename=\(autoInstallURL.path),if=none,id=autounattend,media=cdrom,readonly=on"))
 
@@ -925,6 +957,8 @@ struct QEMUWindowsBootPlanTests {
         #expect(record.arguments.contains("driver=raw,file.driver=file,file.locking=off,file.filename=\(autoInstallURL.path),if=none,id=autounattend,media=cdrom,readonly=on"))
         #expect(record.processLogPath.hasSuffix(".log"))
         #expect(record.monitorSocketPath.contains("/tmp/vq-"))
+        #expect(record.qmpSocketPath?.contains("/tmp/vq-") == true)
+        #expect(record.arguments.contains("-qmp"))
         #expect(record.consoleScreenshotPath?.contains("qemu-console-") == true)
         #expect(record.consoleScreenshotPath?.hasSuffix(".png") == true)
     }

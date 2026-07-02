@@ -163,6 +163,8 @@ struct QEMUConsoleCaptureRecord: Codable, Equatable {
 
 struct QEMUKeySendResult: Codable, Equatable {
     var key: String
+    var transport: String
+    var socketPath: String
     var monitorCommand: String
     var terminationStatus: Int32?
     var didLaunchSender: Bool
@@ -344,10 +346,13 @@ struct VeilVMControl {
         let consoleScreenshotURL = logDirectory.appendingPathComponent("qemu-smoke-\(stamp).console.png")
         let monitorSocketURL = URL(fileURLWithPath: "/tmp")
             .appendingPathComponent("veil-qemu-smoke-\(UUID().uuidString.prefix(8)).sock")
+        let qmpSocketURL = URL(fileURLWithPath: "/tmp")
+            .appendingPathComponent("veil-qemu-smoke-\(UUID().uuidString.prefix(8)).qmp.sock")
         let arguments = QEMUWindowsBootSmokePlanner().makeArguments(
             from: plan,
             serialLogPath: serialLogURL.path,
-            monitorSocketPath: monitorSocketURL.path
+            monitorSocketPath: monitorSocketURL.path,
+            qmpSocketPath: qmpSocketURL.path
         )
         try QEMUVMRuntimeBooter.startTPMEmulatorIfNeeded(plan: plan)
 
@@ -360,6 +365,7 @@ struct VeilVMControl {
             consoleScreenshotURL: consoleScreenshotURL
         )
         try? FileManager.default.removeItem(at: monitorSocketURL)
+        try? FileManager.default.removeItem(at: qmpSocketURL)
         let serialOutput = (try? String(contentsOf: serialLogURL, encoding: .utf8)) ?? ""
         let report = QEMUWindowsBootSmokeAnalyzer.makeReport(
             durationSeconds: boundedSeconds,
@@ -422,12 +428,15 @@ struct VeilVMControl {
         let consoleScreenshotURL = logDirectory.appendingPathComponent("qemu-console-\(stamp).png")
         let monitorSocketURL = URL(fileURLWithPath: "/tmp")
             .appendingPathComponent("vq-\(UUID().uuidString.prefix(8)).sock")
+        let qmpSocketURL = URL(fileURLWithPath: "/tmp")
+            .appendingPathComponent("vq-\(UUID().uuidString.prefix(8)).qmp.sock")
         FileManager.default.createFile(atPath: processLogURL.path, contents: nil)
         let logHandle = try FileHandle(forWritingTo: processLogURL)
         let launchArguments = QEMUWindowsBootLaunchPlanner().makeArguments(
             from: plan,
             serialLogPath: serialLogURL.path,
-            monitorSocketPath: monitorSocketURL.path
+            monitorSocketPath: monitorSocketURL.path,
+            qmpSocketPath: qmpSocketURL.path
         )
 
         let process = Process()
@@ -453,6 +462,7 @@ struct VeilVMControl {
             arguments: launchArguments,
             processLogPath: processLogURL.path,
             monitorSocketPath: monitorSocketURL.path,
+            qmpSocketPath: qmpSocketURL.path,
             consoleScreenshotPath: consoleScreenshotURL.path,
             startedAt: Date()
         )
@@ -560,14 +570,21 @@ struct VeilVMControl {
         delayAfterFirstKey: TimeInterval = 0.08
     ) async throws {
         let launchRecord = try latestQEMULaunchRecord()
-        guard FileManager.default.fileExists(atPath: launchRecord.monitorSocketPath) else {
+        let qmpSocketPath = launchRecord.qmpSocketPath?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let canUseQMP = qmpSocketPath.map { !$0.isEmpty && FileManager.default.fileExists(atPath: $0) } ?? false
+        guard canUseQMP || FileManager.default.fileExists(atPath: launchRecord.monitorSocketPath) else {
             throw VMControlError.qemuMonitorUnavailable(launchRecord.monitorSocketPath)
         }
 
         var results: [QEMUKeySendResult] = []
         for (index, key) in keys.enumerated() {
-            let command = "sendkey \(key)"
-            results.append(sendQEMUMonitorLine(command, monitorSocketPath: launchRecord.monitorSocketPath, key: key))
+            if canUseQMP, let qmpSocketPath {
+                let command = try QEMUQMPKeyboardCommandBuilder.sendKeyCommand(for: key)
+                results.append(sendQMPKeyboardCommand(command, qmpSocketPath: qmpSocketPath, key: key))
+            } else {
+                let command = "sendkey \(key)"
+                results.append(sendQEMUMonitorLine(command, monitorSocketPath: launchRecord.monitorSocketPath, key: key))
+            }
             let delay = index == 0 ? delayAfterFirstKey : 0.08
             try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
         }
@@ -611,7 +628,7 @@ struct VeilVMControl {
         process.executableURL = URL(fileURLWithPath: "/bin/sh")
         process.arguments = [
             "-c",
-            "printf '%s\\n' \"$1\" | /usr/bin/nc -U \"$0\"",
+            "printf '%s\\n' \"$1\" | /usr/bin/nc -w 1 -U \"$0\"",
             monitorSocketPath,
             line
         ]
@@ -623,6 +640,8 @@ struct VeilVMControl {
             process.waitUntilExit()
             return QEMUKeySendResult(
                 key: key,
+                transport: "hmp",
+                socketPath: monitorSocketPath,
                 monitorCommand: line,
                 terminationStatus: process.terminationStatus,
                 didLaunchSender: true
@@ -630,7 +649,49 @@ struct VeilVMControl {
         } catch {
             return QEMUKeySendResult(
                 key: key,
+                transport: "hmp",
+                socketPath: monitorSocketPath,
                 monitorCommand: line,
+                terminationStatus: nil,
+                didLaunchSender: false
+            )
+        }
+    }
+
+    private static func sendQMPKeyboardCommand(
+        _ command: String,
+        qmpSocketPath: String,
+        key: String
+    ) -> QEMUKeySendResult {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/sh")
+        process.arguments = [
+            "-c",
+            "printf '%s\\n%s\\n' \"$1\" \"$2\" | /usr/bin/nc -w 1 -U \"$0\"",
+            qmpSocketPath,
+            QEMUQMPKeyboardCommandBuilder.capabilitiesCommand(),
+            command
+        ]
+        process.standardOutput = nil
+        process.standardError = nil
+
+        do {
+            try process.run()
+            process.waitUntilExit()
+            return QEMUKeySendResult(
+                key: key,
+                transport: "qmp",
+                socketPath: qmpSocketPath,
+                monitorCommand: command,
+                terminationStatus: process.terminationStatus,
+                didLaunchSender: true
+            )
+        } catch {
+            return QEMUKeySendResult(
+                key: key,
+                transport: "qmp",
+                socketPath: qmpSocketPath,
+                monitorCommand: command,
                 terminationStatus: nil,
                 didLaunchSender: false
             )

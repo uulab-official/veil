@@ -9,6 +9,7 @@ public struct QEMULaunchRecord: Codable, Equatable, Sendable {
     public var arguments: [String]
     public var processLogPath: String
     public var monitorSocketPath: String
+    public var qmpSocketPath: String?
     public var consoleScreenshotPath: String?
     public var startedAt: Date
 
@@ -21,6 +22,7 @@ public struct QEMULaunchRecord: Codable, Equatable, Sendable {
         arguments: [String],
         processLogPath: String,
         monitorSocketPath: String,
+        qmpSocketPath: String? = nil,
         consoleScreenshotPath: String? = nil,
         startedAt: Date
     ) {
@@ -32,6 +34,7 @@ public struct QEMULaunchRecord: Codable, Equatable, Sendable {
         self.arguments = arguments
         self.processLogPath = processLogPath
         self.monitorSocketPath = monitorSocketPath
+        self.qmpSocketPath = qmpSocketPath
         self.consoleScreenshotPath = consoleScreenshotPath
         self.startedAt = startedAt
     }
@@ -77,6 +80,7 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
     private let consoleScreenshotCapturer: @Sendable (URL, URL) -> Void
     private var process: Process?
     private var monitorSocketURL: URL?
+    private var qmpSocketURL: URL?
 
     public init(
         diagnosticsDirectory: URL = QEMUVMRuntimeBooter.defaultDiagnosticsDirectory(),
@@ -123,29 +127,35 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
         let launchDirectory = try qemuLaunchDirectory()
         let stamp = Self.timestamp()
         let logURL = launchDirectory.appendingPathComponent("qemu-launch-\(stamp).log")
+        let serialLogURL = launchDirectory.appendingPathComponent("qemu-launch-\(stamp).serial.log")
         let consoleScreenshotURL = launchDirectory.appendingPathComponent("qemu-console-\(stamp).png")
         FileManager.default.createFile(atPath: logURL.path, contents: nil)
         let logHandle = try FileHandle(forWritingTo: logURL)
         let monitorSocketURL = Self.monitorSocketURL()
+        let qmpSocketURL = Self.qmpSocketURL()
         try tpmEmulatorRunner(plan)
 
         let process = Process()
         process.executableURL = URL(fileURLWithPath: plan.executablePath)
-        process.arguments = plan.arguments + [
-            "-monitor",
-            "unix:\(monitorSocketURL.path),server,nowait"
-        ]
+        process.arguments = QEMUWindowsBootLaunchPlanner().makeArguments(
+            from: plan,
+            serialLogPath: serialLogURL.path,
+            monitorSocketPath: monitorSocketURL.path,
+            qmpSocketPath: qmpSocketURL.path
+        )
         process.standardOutput = logHandle
         process.standardError = logHandle
         try processRunner(process)
         self.process = process
         self.monitorSocketURL = monitorSocketURL
+        self.qmpSocketURL = qmpSocketURL
         try writeLaunchRecord(
             process: process,
             plan: plan,
             arguments: process.arguments ?? [],
             processLogURL: logURL,
             monitorSocketURL: monitorSocketURL,
+            qmpSocketURL: qmpSocketURL,
             consoleScreenshotURL: consoleScreenshotURL,
             directory: launchDirectory,
             stamp: stamp
@@ -172,7 +182,11 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
         if let monitorSocketURL {
             try? FileManager.default.removeItem(at: monitorSocketURL)
         }
+        if let qmpSocketURL {
+            try? FileManager.default.removeItem(at: qmpSocketURL)
+        }
         self.monitorSocketURL = nil
+        self.qmpSocketURL = nil
         return .stopped
     }
 
@@ -205,6 +219,7 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
         arguments: [String],
         processLogURL: URL,
         monitorSocketURL: URL,
+        qmpSocketURL: URL,
         consoleScreenshotURL: URL,
         directory: URL,
         stamp: String
@@ -216,6 +231,7 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
             arguments: arguments,
             processLogPath: processLogURL.path,
             monitorSocketPath: monitorSocketURL.path,
+            qmpSocketPath: qmpSocketURL.path,
             consoleScreenshotPath: consoleScreenshotURL.path,
             startedAt: Date()
         )
@@ -392,6 +408,11 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
     private static func monitorSocketURL() -> URL {
         URL(fileURLWithPath: "/tmp")
             .appendingPathComponent("vq-\(UUID().uuidString.prefix(8)).sock")
+    }
+
+    private static func qmpSocketURL() -> URL {
+        URL(fileURLWithPath: "/tmp")
+            .appendingPathComponent("vq-\(UUID().uuidString.prefix(8)).qmp.sock")
     }
 
     private static func hostArchitecture() -> String {

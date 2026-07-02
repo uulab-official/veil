@@ -148,3 +148,11 @@ USB mass storage with drive id `drivers`. The next live checkpoint is to attach
 external driver media, complete OOBE or prove the offline bypass path, and then
 verify the guest-agent WebSocket forward from Windows back to
 `ws://127.0.0.1:18444`.
+
+OOBE input follow-up: the current live launch was started before QMP launch
+records existed, and the HMP `sendkey` recovery path recorded a failed sender
+status without dismissing the folder-selection dialog. New smoke, CLI start,
+and app-launched QEMU runs now attach a QMP socket and `qemu-sendkey` prefers
+QMP `send-key`, falling back to HMP only for older launch records. The next
+checkpoint is to relaunch the visible VM, re-run `qemu-oobe-bypass`, and record
+the console PNG that proves whether Windows accepted the recovery sequence.

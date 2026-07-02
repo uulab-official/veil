@@ -86,21 +86,27 @@ The command uses snapshot mode and records logs plus a `qemu-smoke-*.console.png
 
 ## QEMU Start Scenario
 
-`veil-vmctl qemu-start [--json] [--wait-seconds 15]` is the guarded visible-launch spike for the local QEMU/HVF provider. Unlike `qemu-plan`, it starts a local QEMU process with the stored Windows Arm profile and a Cocoa display. Unlike `qemu-smoke`, it is not snapshot-only; it is meant for interactive Windows setup testing after `qemu-doctor` reports ready. The optional wait window keeps the CLI alive long enough to send boot-prompt key input through QEMU's monitor and capture the first VM-console screenshot before returning.
+`veil-vmctl qemu-start [--json] [--wait-seconds 15]` is the guarded visible-launch spike for the local QEMU/HVF provider. Unlike `qemu-plan`, it starts a local QEMU process with the stored Windows Arm profile and a Cocoa display. Unlike `qemu-smoke`, it is not snapshot-only; it is meant for interactive Windows setup testing after `qemu-doctor` reports ready. The optional wait window keeps the CLI alive long enough to send boot-prompt key input through QEMU's monitor, attach a QMP socket for structured recovery input on new launches, and capture the first VM-console screenshot before returning.
 
-The macOS app's QEMU launch boundary writes process logs under `~/Downloads/Veil Diagnostics/QEMU Launch`, reports the launched PID, and records a `qemu-console-*.png` path in `qemu-launch-latest.json`. The app asks QEMU's monitor to write that screenshot from the VM display, converts the raw frame to PNG, and surfaces the latest existing screenshot plus launch metadata in the Windows setup screen. The evidence is the guest console frame rather than a macOS desktop capture. It still does not distribute Windows media, activation keys, QEMU binaries, or firmware.
+The macOS app's QEMU launch boundary writes process logs under `~/Downloads/Veil Diagnostics/QEMU Launch`, reports the launched PID, and records a `qemu-console-*.png` path in `qemu-launch-latest.json`. The app asks QEMU's HMP monitor to write that screenshot from the VM display, converts the raw frame to PNG, and surfaces the latest existing screenshot plus launch metadata in the Windows setup screen. New launch records also include a QMP socket path so recovery commands can use QEMU's structured `send-key` command instead of relying only on HMP `sendkey`. The evidence is the guest console frame rather than a macOS desktop capture. It still does not distribute Windows media, activation keys, QEMU binaries, or firmware.
 
 `veil-vmctl qemu-capture [--json] [--output /path/to/console.png]` refreshes the latest launch record's VM-console screenshot through the recorded QEMU monitor socket. Use this instead of manually typing monitor commands: it sends only `screendump`, preserves the running VM, updates `qemu-launch-latest.json` when an output path is chosen, and returns a small capture record for evidence collection.
 
-`veil-vmctl qemu-sendkey [--json] key [key ...]` sends a bounded list of QEMU
-HMP `sendkey` commands through the latest launch record's monitor socket and
-returns per-key sender evidence. It intentionally exposes only `sendkey`
-operations rather than arbitrary monitor text so recovery commands cannot
-accidentally terminate a live Windows VM. `veil-vmctl qemu-oobe-bypass [--json]`
-is a convenience sequence for the common Windows OOBE `Shift+F10` plus
-`oobe\bypassnro` recovery path. The JSON record proves what was attempted; a
-fresh `qemu-capture` screenshot remains the authority for whether Windows
-accepted the input.
+`veil-vmctl qemu-sendkey [--json] key [key ...]` sends a bounded list of key
+commands through the latest launch record. On new launches it prefers QMP
+`send-key`; on older launch records without QMP it falls back to HMP `sendkey`.
+It intentionally exposes only key operations rather than arbitrary monitor text
+so recovery commands cannot accidentally terminate a live Windows VM.
+`veil-vmctl qemu-oobe-bypass [--json]` is a convenience sequence for the common
+Windows OOBE `Shift+F10` plus `oobe\bypassnro` recovery path. The JSON record
+proves what was attempted; a fresh `qemu-capture` screenshot remains the
+authority for whether Windows accepted the input.
+
+QMP behavior follows QEMU's documented JSON monitor protocol and `send-key`
+command shape:
+
+- [QEMU Machine Protocol Specification](https://www.qemu.org/docs/master/interop/qmp-spec.html)
+- [QEMU QMP Reference Manual](https://qemu-project.gitlab.io/qemu/interop/qemu-qmp-ref.html)
 
 ## First Scenario: Launch Notepad
 

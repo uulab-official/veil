@@ -310,6 +310,7 @@ public struct VMConsoleLaunchEvidence: Codable, Equatable, Sendable {
     public var pid: Int32?
     public var processLogPath: String
     public var monitorSocketPath: String
+    public var qmpSocketPath: String?
     public var consoleScreenshotPath: String?
     public var startedAt: Date
 
@@ -318,6 +319,7 @@ public struct VMConsoleLaunchEvidence: Codable, Equatable, Sendable {
         pid: Int32?,
         processLogPath: String,
         monitorSocketPath: String,
+        qmpSocketPath: String? = nil,
         consoleScreenshotPath: String?,
         startedAt: Date
     ) {
@@ -325,6 +327,7 @@ public struct VMConsoleLaunchEvidence: Codable, Equatable, Sendable {
         self.pid = pid
         self.processLogPath = processLogPath
         self.monitorSocketPath = monitorSocketPath
+        self.qmpSocketPath = qmpSocketPath
         self.consoleScreenshotPath = consoleScreenshotPath
         self.startedAt = startedAt
     }
@@ -1414,6 +1417,7 @@ public struct LocalVMRuntimeService: VMRuntimeService {
             pid: launchRecord.pid,
             processLogPath: launchRecord.processLogPath,
             monitorSocketPath: launchRecord.monitorSocketPath,
+            qmpSocketPath: launchRecord.qmpSocketPath,
             consoleScreenshotPath: consoleScreenshotPath ?? existingConsoleScreenshotPath(from: launchRecord),
             startedAt: launchRecord.startedAt
         )

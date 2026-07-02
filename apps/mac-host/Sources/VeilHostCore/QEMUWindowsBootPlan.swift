@@ -1020,7 +1020,8 @@ public struct QEMUWindowsBootSmokePlanner: Sendable {
     public func makeArguments(
         from plan: QEMUWindowsBootPlan,
         serialLogPath: String,
-        monitorSocketPath: String
+        monitorSocketPath: String,
+        qmpSocketPath: String
     ) -> [String] {
         var arguments = plan.arguments.map(QEMUWindowsBootArgumentRewriter.lockSafeSystemDriveArgument)
 
@@ -1037,7 +1038,8 @@ public struct QEMUWindowsBootSmokePlanner: Sendable {
 
         arguments.append(contentsOf: [
             "-serial", "file:\(serialLogPath)",
-            "-monitor", "unix:\(monitorSocketPath),server,nowait"
+            "-monitor", "unix:\(monitorSocketPath),server,nowait",
+            "-qmp", "unix:\(qmpSocketPath),server,nowait"
         ])
 
         return arguments
@@ -1051,13 +1053,15 @@ public struct QEMUWindowsBootLaunchPlanner: Sendable {
     public func makeArguments(
         from plan: QEMUWindowsBootPlan,
         serialLogPath: String,
-        monitorSocketPath: String
+        monitorSocketPath: String,
+        qmpSocketPath: String
     ) -> [String] {
         var arguments = plan.arguments.map(QEMUWindowsBootArgumentRewriter.lockSafeSystemDriveArgument)
 
         arguments.append(contentsOf: [
             "-serial", "file:\(serialLogPath)",
-            "-monitor", "unix:\(monitorSocketPath),server,nowait"
+            "-monitor", "unix:\(monitorSocketPath),server,nowait",
+            "-qmp", "unix:\(qmpSocketPath),server,nowait"
         ])
 
         return arguments
@@ -1162,6 +1166,109 @@ public struct QEMUWindowsBootPromptAutomation: Sendable {
             sentSeconds.insert(elapsedSeconds)
         }
         return didSend
+    }
+}
+
+public enum QEMUQMPKeyboardCommandError: Error, LocalizedError, Equatable, Sendable {
+    case emptyKey
+    case unsupportedKey(String)
+    case serializationFailed
+
+    public var errorDescription: String? {
+        switch self {
+        case .emptyKey:
+            "QMP keyboard command requires a non-empty key."
+        case .unsupportedKey(let key):
+            "Unsupported QMP key '\(key)'."
+        case .serializationFailed:
+            "QMP keyboard command could not be encoded as JSON."
+        }
+    }
+}
+
+public enum QEMUQMPKeyboardCommandBuilder {
+    public static func capabilitiesCommand() -> String {
+        #"{"execute":"qmp_capabilities"}"#
+    }
+
+    public static func sendKeyCommand(for key: String) throws -> String {
+        let qcodes = try qcodes(for: key)
+        let keys = qcodes.map { ["type": "qcode", "data": $0] }
+        return try jsonLine([
+            "execute": "send-key",
+            "arguments": [
+                "keys": keys
+            ]
+        ])
+    }
+
+    public static func oobeBypassCommands() throws -> [String] {
+        try [
+            "shift-f10",
+            "o", "o", "b", "e",
+            "backslash",
+            "b", "y", "p", "a", "s", "s", "n", "r", "o",
+            "ret"
+        ].map(sendKeyCommand(for:))
+    }
+
+    private static func qcodes(for key: String) throws -> [String] {
+        let normalized = key.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !normalized.isEmpty else {
+            throw QEMUQMPKeyboardCommandError.emptyKey
+        }
+
+        if normalized.contains("-") {
+            return try normalized
+                .split(separator: "-")
+                .map { try qcode(forSingleKey: String($0)) }
+        }
+
+        return [try qcode(forSingleKey: normalized)]
+    }
+
+    private static func qcode(forSingleKey key: String) throws -> String {
+        switch key {
+        case "return", "enter":
+            return "ret"
+        case "space":
+            return "spc"
+        case "escape":
+            return "esc"
+        default:
+            break
+        }
+
+        if key.count == 1,
+           let scalar = key.unicodeScalars.first,
+           CharacterSet.lowercaseLetters.contains(scalar) || CharacterSet.decimalDigits.contains(scalar) {
+            return key
+        }
+
+        let accepted = Set([
+            "shift", "ctrl", "alt", "meta", "cmd",
+            "esc", "ret", "spc", "tab", "backspace",
+            "backslash", "slash", "minus", "equal", "dot", "comma",
+            "f1", "f2", "f3", "f4", "f5", "f6",
+            "f7", "f8", "f9", "f10", "f11", "f12",
+            "up", "down", "left", "right", "home", "end", "pgup", "pgdn", "delete"
+        ])
+        guard accepted.contains(key) else {
+            throw QEMUQMPKeyboardCommandError.unsupportedKey(key)
+        }
+        return key
+    }
+
+    private static func jsonLine(_ object: [String: Any]) throws -> String {
+        guard JSONSerialization.isValidJSONObject(object) else {
+            throw QEMUQMPKeyboardCommandError.serializationFailed
+        }
+
+        let data = try JSONSerialization.data(withJSONObject: object, options: [.sortedKeys])
+        guard let line = String(data: data, encoding: .utf8) else {
+            throw QEMUQMPKeyboardCommandError.serializationFailed
+        }
+        return line
     }
 }
 

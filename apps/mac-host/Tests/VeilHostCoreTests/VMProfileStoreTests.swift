@@ -129,6 +129,7 @@ struct VMProfileStoreTests {
             arguments: ["-display", "cocoa"],
             processLogPath: processLogURL.path,
             monitorSocketPath: "/tmp/vq-test.sock",
+            qmpSocketPath: "/tmp/vq-test.qmp.sock",
             consoleScreenshotPath: consoleScreenshotURL.path,
             startedAt: Date(timeIntervalSince1970: 1_782_838_800)
         )
@@ -161,6 +162,7 @@ struct VMProfileStoreTests {
         #expect(snapshot.latestConsoleLaunch?.pid == 1234)
         #expect(snapshot.latestConsoleLaunch?.processLogPath == processLogURL.path)
         #expect(snapshot.latestConsoleLaunch?.monitorSocketPath == "/tmp/vq-test.sock")
+        #expect(snapshot.latestConsoleLaunch?.qmpSocketPath == "/tmp/vq-test.qmp.sock")
         #expect(snapshot.latestConsoleLaunch?.consoleScreenshotPath == consoleScreenshotURL.path)
         #expect(snapshot.latestConsoleLaunch?.startedAt == Date(timeIntervalSince1970: 1_782_838_800))
         #expect(snapshot.detail == "Windows is not installed yet.")

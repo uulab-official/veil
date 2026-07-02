@@ -1917,6 +1917,7 @@ private struct ConsoleLaunchEvidenceStrip: View {
         [
             "Log: \(evidence.processLogPath)",
             "Monitor: \(evidence.monitorSocketPath)",
+            evidence.qmpSocketPath.map { "QMP: \($0)" },
             evidence.consoleScreenshotPath.map { "Screenshot: \($0)" }
         ]
         .compactMap { $0 }
