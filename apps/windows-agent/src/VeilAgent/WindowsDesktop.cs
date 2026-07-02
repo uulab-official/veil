@@ -19,6 +19,7 @@ public sealed class WindowsDesktop : IWindowsDesktop
     private const int MK_LBUTTON = 0x0001;
     private const int MK_RBUTTON = 0x0002;
     private const int WHEEL_DELTA = 120;
+    private const int SW_RESTORE = 9;
     private const int VK_CONTROL = 0x11;
     private const int VK_SHIFT = 0x10;
     private const int VK_MENU = 0x12;
@@ -99,6 +100,11 @@ public sealed class WindowsDesktop : IWindowsDesktop
             return Task.FromResult(false);
         }
 
+        if (!EnsureWindowReadyForInput(hwnd))
+        {
+            return Task.FromResult(false);
+        }
+
         return Task.FromResult(PostMessage(hwnd, message, wParam, lParam));
     }
 
@@ -113,6 +119,11 @@ public sealed class WindowsDesktop : IWindowsDesktop
 
         if (!TryParseWindowId(input.WindowId, out var hwnd)
             || !TryResolveKeyMessage(input.Event, out var message))
+        {
+            return Task.FromResult(false);
+        }
+
+        if (!EnsureWindowReadyForInput(hwnd))
         {
             return Task.FromResult(false);
         }
@@ -290,6 +301,19 @@ public sealed class WindowsDesktop : IWindowsDesktop
         return message != 0;
     }
 
+    private static bool EnsureWindowReadyForInput(IntPtr hwnd)
+    {
+        if (!IsWindow(hwnd))
+        {
+            return false;
+        }
+
+        ShowWindow(hwnd, SW_RESTORE);
+        SetForegroundWindow(hwnd);
+        SetFocus(hwnd);
+        return true;
+    }
+
     private static IEnumerable<int> ModifierVirtualKeys(IReadOnlyList<string> modifiers)
     {
         foreach (var modifier in modifiers)
@@ -311,4 +335,16 @@ public sealed class WindowsDesktop : IWindowsDesktop
 
     [DllImport("user32.dll", SetLastError = true)]
     private static extern bool PostMessage(IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool IsWindow(IntPtr hWnd);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool SetForegroundWindow(IntPtr hWnd);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern IntPtr SetFocus(IntPtr hWnd);
 }

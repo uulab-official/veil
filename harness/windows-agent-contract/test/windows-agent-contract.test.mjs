@@ -117,6 +117,15 @@ test("windows agent accepts host key input events", async () => {
   assert.match(session, /HandleKeyInputAsync/);
 });
 
+test("windows agent foregrounds the HWND before forwarding host input", async () => {
+  const desktop = await readFile(resolve(agentRoot, "src/VeilAgent/WindowsDesktop.cs"), "utf8");
+
+  assert.match(desktop, /EnsureWindowReadyForInput\(hwnd\)/);
+  assert.match(desktop, /SetForegroundWindow/);
+  assert.match(desktop, /SetFocus/);
+  assert.match(desktop, /ShowWindow/);
+});
+
 test("windows agent accepts host clipboard text updates", async () => {
   const messageTypes = await readFile(resolve(agentRoot, "src/VeilAgent/MessageTypes.cs"), "utf8");
   const desktopInterface = await readFile(resolve(agentRoot, "src/VeilAgent/IWindowsDesktop.cs"), "utf8");
