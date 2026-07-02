@@ -21,9 +21,7 @@ struct DetailView: View {
                 showVMConsoleAction: showVMConsoleAction,
                 consoleMessage: consoleMessage
             )
-            .padding(.horizontal, 18)
-            .padding(.top, 16)
-            .padding(.bottom, 18)
+            .padding(14)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         } else {
         ScrollView {

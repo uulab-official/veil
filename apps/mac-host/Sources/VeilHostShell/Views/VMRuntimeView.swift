@@ -234,6 +234,7 @@ struct VMRuntimeView: View {
 
         let path = url.path
         let currentInstaller = model.snapshot?.installerMediaPath
+        let currentDriver = model.snapshot?.driverMediaPath
         let currentDisk = model.snapshot?.virtualDiskPath
 
         Task {
@@ -241,11 +242,13 @@ struct VMRuntimeView: View {
             case .installerMedia:
                 await model.updateProfilePaths(
                     installerMediaPath: path,
+                    driverMediaPath: currentDriver,
                     virtualDiskPath: currentDisk
                 )
             case .virtualDisk:
                 await model.updateProfilePaths(
                     installerMediaPath: currentInstaller,
+                    driverMediaPath: currentDriver,
                     virtualDiskPath: path
                 )
             }
@@ -751,10 +754,9 @@ private struct ConsoleScreenshotPreview: View {
             HStack(spacing: 6) {
                 Image(systemName: "display")
                     .font(.caption.weight(.semibold))
-                Text(URL(fileURLWithPath: path).lastPathComponent)
+                Text("Windows Display")
                     .font(.caption.weight(.semibold))
                     .lineLimit(1)
-                    .truncationMode(.middle)
             }
             .foregroundStyle(.white.opacity(0.86))
             .padding(.horizontal, 10)
@@ -767,6 +769,7 @@ private struct ConsoleScreenshotPreview: View {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .strokeBorder(.white.opacity(0.16), lineWidth: 1)
         }
+        .help(path)
         .accessibilityLabel("Latest QEMU console screenshot")
     }
 }
@@ -1110,7 +1113,15 @@ private struct WindowsSetupDisplayPanel: View {
     }
 
     private var installedLauncherStage: some View {
-        machineDisplay
+        ZStack(alignment: .bottom) {
+            machineDisplay
+
+            launcherFooter
+                .background(.black.opacity(0.18))
+                .background(.ultraThinMaterial)
+                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .padding(14)
+        }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
@@ -1139,7 +1150,7 @@ private struct WindowsSetupDisplayPanel: View {
                     image: consoleScreenshotImage,
                     path: snapshot.latestConsoleScreenshotPath ?? ""
                 )
-                .padding(20)
+                .padding(14)
             } else {
                 VStack(spacing: 18) {
                     installMark
@@ -1195,7 +1206,7 @@ private struct WindowsSetupDisplayPanel: View {
 
             if installSimulation.phase != .idle {
                 AssistantProgressStrip(simulation: installSimulation)
-                    .frame(maxWidth: 260)
+                    .frame(maxWidth: 220)
             }
 
             Spacer(minLength: 12)
@@ -1229,7 +1240,7 @@ private struct WindowsSetupDisplayPanel: View {
 
             Button(action: primaryAction) {
                 Label(installPrimaryTitle, systemImage: primarySymbol)
-                    .frame(minWidth: 138)
+                    .frame(minWidth: 132)
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
@@ -1238,12 +1249,14 @@ private struct WindowsSetupDisplayPanel: View {
             if canShowConsole {
                 Button(action: consoleAction) {
                     Label("Console", systemImage: "display")
+                        .labelStyle(.iconOnly)
                 }
                 .disabled(isLoading)
+                .help("Open Console")
             }
         }
-        .padding(.horizontal, 18)
-        .padding(.vertical, 14)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
         .background(.regularMaterial)
         .overlay(alignment: .top) {
             Rectangle()
@@ -1381,9 +1394,9 @@ private struct WindowsSetupDisplayPanel: View {
     private var displayStatus: String {
         switch snapshot.state {
         case .running:
-            "Open the console to continue."
+            "Windows is running locally."
         case .starting:
-            "Starting the local display."
+            "Opening the local display."
         case .failed:
             "Start failed. Open details."
         default:
@@ -1393,15 +1406,15 @@ private struct WindowsSetupDisplayPanel: View {
 
     private var installProcessSubtitle: String {
         if effectiveInstallEvidence.kind == .setupReady {
-            return "Windows setup can start. After setup, connect the Veil guest agent to unlock Mac app windows."
+            return "Start setup, then install the Veil guest agent to open Windows apps as Mac windows."
         }
 
         if isVirtualDiskEmptyForWindowsInstall {
-            return "Windows is not installed yet. Open setup to install it on the local disk."
+            return "Windows is not installed yet. Open setup on the local disk."
         }
 
         if snapshot.bootReady {
-            return "Open the Windows installer, complete setup, then return here to start Windows."
+            return "Open the Windows installer and complete setup."
         }
 
         if discoveredInstallerName != nil {
@@ -1421,7 +1434,7 @@ private struct WindowsSetupDisplayPanel: View {
         }
 
         if canStart {
-            return "Ready to open setup"
+            return "Open Windows setup"
         }
 
         return snapshot.profileName == nil ? "Prepare the local VM" : "Continue setup"
@@ -1578,7 +1591,7 @@ private struct WindowsSetupDisplayPanel: View {
                 title: "Installer",
                 detail: canShowConsole
                     ? "VM console is open"
-                    : (canStart ? "Windows Setup can start" : "Waiting for preparation"),
+                    : (canStart ? "Open Windows Setup" : "Waiting for preparation"),
                 symbolName: "display",
                 state: canShowConsole ? .complete : (canStart ? .current : .pending)
             ),
@@ -1630,7 +1643,7 @@ private struct WindowsSetupDisplayPanel: View {
         if effectiveInstallEvidence.isInstalled {
             return effectiveInstallEvidence.kind == .guestAgent
                 ? "Guest agent connected"
-                : "Ready to run on this Mac"
+                : "Run it locally on this Mac"
         }
 
         if snapshot.bootReady {
@@ -1815,7 +1828,7 @@ private struct InstallStatusSummary: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
-        .frame(maxWidth: 190, alignment: .leading)
+        .frame(maxWidth: 168, alignment: .leading)
         .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 8, style: .continuous)

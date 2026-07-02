@@ -52,29 +52,16 @@ struct ContentView: View {
 private struct VeilWindowBackdrop: View {
     var body: some View {
         ZStack {
+            Color(red: 0.055, green: 0.061, blue: 0.071)
+
             LinearGradient(
                 colors: [
-                    Color(nsColor: .windowBackgroundColor),
-                    Color(red: 0.105, green: 0.118, blue: 0.135),
-                    Color(red: 0.070, green: 0.074, blue: 0.084)
+                    Color(red: 0.024, green: 0.130, blue: 0.240).opacity(0.52),
+                    Color.clear
                 ],
                 startPoint: .topLeading,
-                endPoint: .bottomTrailing
+                endPoint: .center
             )
-
-            VStack(spacing: 0) {
-                LinearGradient(
-                    colors: [
-                        Color.white.opacity(0.060),
-                        Color.clear
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-                .frame(height: 190)
-
-                Spacer()
-            }
         }
     }
 }
@@ -84,16 +71,16 @@ private struct VeilWindowHeader: View {
     var refreshAction: () -> Void
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 10) {
             Spacer()
-                .frame(width: 84)
+                .frame(width: 76)
 
-            VeilAppMark(size: 30)
+            VeilAppMark(size: 28)
 
             VStack(alignment: .leading, spacing: 1) {
                 Text("Veil")
                     .font(.system(size: 14, weight: .semibold))
-                Text("Windows on Mac")
+                Text("Windows Runtime")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             }
@@ -105,22 +92,20 @@ private struct VeilWindowHeader: View {
                     .labelStyle(.iconOnly)
             }
             .buttonStyle(.plain)
-            .padding(8)
-            .background(.thinMaterial, in: Circle())
+            .frame(width: 30, height: 30)
+            .background(.white.opacity(0.075), in: Circle())
             .disabled(isRefreshing)
             .help("Refresh")
         }
-        .padding(.leading, 0)
         .padding(.trailing, 16)
-        .frame(height: 62)
+        .frame(height: 50)
         .background(
             Rectangle()
-                .fill(.ultraThinMaterial)
-                .overlay(Color.black.opacity(0.18))
+                .fill(Color(red: 0.070, green: 0.076, blue: 0.088).opacity(0.96))
         )
         .overlay(alignment: .bottom) {
             Rectangle()
-                .fill(.white.opacity(0.065))
+                .fill(.white.opacity(0.055))
                 .frame(height: 1)
         }
         .contentShape(Rectangle())

@@ -35,7 +35,7 @@ struct VeilHostShellApp: App {
     }
 
     var body: some Scene {
-        Window("Veil", id: "main") {
+        WindowGroup("Veil", id: "main") {
             ContentView(
                 model: model,
                 vmModel: vmModel,
@@ -45,7 +45,7 @@ struct VeilHostShellApp: App {
                 launchWindowsAppAction: launchSelectedWindowsAppWindow,
                 consoleMessage: consoleMessage
             )
-                .frame(minWidth: 1040, idealWidth: 1180, minHeight: 650, idealHeight: 740)
+                .frame(minWidth: 980, idealWidth: 1240, minHeight: 600, idealHeight: 700)
                 .task {
                     configureWindowsAppWindowCloseBridge()
                     startAgentEventPumpIfNeeded()
@@ -66,13 +66,13 @@ struct VeilHostShellApp: App {
                     }
                 }
         }
-        .defaultSize(width: 1180, height: 740)
+        .defaultSize(width: 1240, height: 700)
         .defaultWindowPlacement { _, context in
             let visibleRect = context.defaultDisplay.visibleRect
-            let preferredSize = CGSize(width: 1180, height: 740)
+            let preferredSize = CGSize(width: 1240, height: 700)
             let size = CGSize(
-                width: min(preferredSize.width, visibleRect.width * 0.88),
-                height: min(preferredSize.height, visibleRect.height * 0.82)
+                width: min(preferredSize.width, visibleRect.width * 0.90),
+                height: min(preferredSize.height, visibleRect.height * 0.78)
             )
             return WindowPlacement(size: size)
         }
@@ -470,7 +470,7 @@ private enum MainWindowChrome {
     }
 
     private static func configure(_ window: NSWindow) {
-        window.minSize = NSSize(width: 1040, height: 650)
+        window.minSize = NSSize(width: 980, height: 600)
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
         window.styleMask.insert(.fullSizeContentView)
@@ -481,10 +481,10 @@ private enum MainWindowChrome {
 
     private static func fitToPreferredSize(_ window: NSWindow) {
         let visibleFrame = window.screen?.visibleFrame ?? NSScreen.main?.visibleFrame ?? window.frame
-        let preferredSize = NSSize(width: 1180, height: 740)
+        let preferredSize = NSSize(width: 1240, height: 700)
         let targetSize = NSSize(
-            width: min(preferredSize.width, visibleFrame.width * 0.88),
-            height: min(preferredSize.height, visibleFrame.height * 0.82)
+            width: min(preferredSize.width, visibleFrame.width * 0.90),
+            height: min(preferredSize.height, visibleFrame.height * 0.78)
         )
         let sizeDelta = abs(window.frame.width - targetSize.width) + abs(window.frame.height - targetSize.height)
         guard sizeDelta > 16 else {
