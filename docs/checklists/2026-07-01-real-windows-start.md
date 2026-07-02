@@ -143,11 +143,13 @@ Goal: keep the main Veil experience pointed at real local Windows boot and conso
 - [x] Add bounded `veil-vmctl qemu-click --x --y` support for screenshot-backed OOBE pointer steps.
 - [x] Use QMP input events to continue offline OOBE, create the local `veil` development user, and reach the Windows 11 Arm desktop.
 - [x] Include the staged `Veil Guest Agent` bundle in `VeilAutoInstall.iso` so future desktop boots can access the installer from attached media.
+- [x] Make the Windows agent installer prefer a packaged `app/VeilAgent.exe` bundle before falling back to guest-side `dotnet publish`.
+- [x] Add `Publish-VeilAgentBundle.ps1` for creating a win-arm64 self-contained agent bundle on a machine with the .NET 8 SDK.
+- [x] Verify the current `127.0.0.1:18444` listener is QEMU host forwarding only; `veil-host-probe` still times out until the guest agent is installed and started.
 
 ## Next
 
-- [ ] Run `dotnet build apps/windows-agent/src/VeilAgent/VeilAgent.csproj` on a machine with the .NET 8 SDK installed.
-- [ ] Remove the Windows agent installer's .NET SDK dependency by staging a pre-published win-arm64 bundle or documenting a required offline SDK/runtime media path.
+- [ ] Produce the packaged `apps/windows-agent/app/VeilAgent.exe` bundle on a machine with the .NET 8 SDK, then rebuild `VeilAutoInstall.iso`.
 - [ ] Run `Veil Shared\Veil Guest Agent\Install Veil Agent.cmd` inside Windows 11 Arm and verify the current-session agent plus the `VeilAgent` logon task both start.
 - [ ] Verify the Win32/GDI HWND capture path inside Windows 11 Arm and record the captured Notepad frame evidence.
 - [ ] Tune the Windows agent frame stream for lower latency after correctness is verified.

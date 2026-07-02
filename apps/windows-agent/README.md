@@ -29,11 +29,19 @@ ws://127.0.0.1:18444/
 
 ## Install In Windows
 
-After Windows 11 Arm reaches the desktop and the .NET 8 SDK is installed, use the bundle that the macOS host stages in the VM shared folder:
+After Windows 11 Arm reaches the desktop, use the bundle that the macOS host stages on the `VEIL_AUTO` media or in the VM shared folder:
 
 ```text
 Veil Shared\Veil Guest Agent\Install Veil Agent.cmd
 ```
+
+For the smoothest first-run path, publish a win-arm64 app bundle before building the install media:
+
+```powershell
+apps\windows-agent\scripts\Publish-VeilAgentBundle.ps1
+```
+
+That creates `apps\windows-agent\app\VeilAgent.exe` and its runtime payload. The installer prefers that packaged `app` folder and does not need the .NET SDK inside Windows. If no packaged `app` folder exists, the installer falls back to `dotnet publish`, which requires the .NET 8 SDK in the guest.
 
 For repository development without the shared-folder bundle, run this inside the guest:
 
@@ -42,7 +50,7 @@ cd C:\Path\To\veil\apps\windows-agent
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\Install-VeilAgent.ps1
 ```
 
-The installer publishes the agent to `%LOCALAPPDATA%\Veil\Agent\app`, copies the start/uninstall scripts to `%LOCALAPPDATA%\Veil\Agent\scripts`, sets user-level `VEIL_AGENT_HOST` and `VEIL_AGENT_PORT`, registers a user logon scheduled task named `VeilAgent`, and starts the agent immediately. The logon task points at the installed script copy, so agent auto-start does not depend on the original shared-folder path after installation. Pass `-NoStart` to install without starting the agent in the current session.
+The installer copies or publishes the agent to `%LOCALAPPDATA%\Veil\Agent\app`, copies the start/uninstall scripts to `%LOCALAPPDATA%\Veil\Agent\scripts`, sets user-level `VEIL_AGENT_HOST` and `VEIL_AGENT_PORT`, registers a user logon scheduled task named `VeilAgent`, and starts the agent immediately. The logon task points at the installed script copy, so agent auto-start does not depend on the original shared-folder path after installation. Pass `-NoStart` to install without starting the agent in the current session.
 
 Start again without waiting for the next login:
 

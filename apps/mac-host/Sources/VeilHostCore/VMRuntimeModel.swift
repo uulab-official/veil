@@ -1296,6 +1296,11 @@ public struct LocalVMRuntimeService: VMRuntimeService {
             from: sourceURL,
             to: bundleURL
         )
+        try copyWindowsAgentSubdirectoryIfPresent(
+            named: "app",
+            from: sourceURL,
+            to: bundleURL
+        )
         try copyWindowsAgentSubdirectory(
             named: "src",
             from: sourceURL,
@@ -1329,6 +1334,20 @@ public struct LocalVMRuntimeService: VMRuntimeService {
             )
         }
 
+        if fileManager.fileExists(atPath: destinationURL.path) {
+            try fileManager.removeItem(at: destinationURL)
+        }
+        try fileManager.copyItem(at: sourceURL, to: destinationURL)
+    }
+
+    private static func copyWindowsAgentSubdirectoryIfPresent(named name: String, from sourceRootURL: URL, to bundleURL: URL) throws {
+        let fileManager = FileManager.default
+        let sourceURL = sourceRootURL.appendingPathComponent(name, isDirectory: true)
+        guard fileManager.fileExists(atPath: sourceURL.path) else {
+            return
+        }
+
+        let destinationURL = bundleURL.appendingPathComponent(name, isDirectory: true)
         if fileManager.fileExists(atPath: destinationURL.path) {
             try fileManager.removeItem(at: destinationURL)
         }

@@ -759,6 +759,7 @@ struct VMProfileStoreTests {
         let startCommandURL = agentBundleURL.appendingPathComponent("Start Veil Agent.cmd")
         let agentReadmeURL = agentBundleURL.appendingPathComponent("README.txt")
         let installScriptURL = agentBundleURL.appendingPathComponent("scripts/Install-VeilAgent.ps1")
+        let publishScriptURL = agentBundleURL.appendingPathComponent("scripts/Publish-VeilAgentBundle.ps1")
         let startScriptURL = agentBundleURL.appendingPathComponent("scripts/Start-VeilAgent.ps1")
         let projectURL = agentBundleURL.appendingPathComponent("src/VeilAgent/VeilAgent.csproj")
         let answerFile = try String(contentsOf: answerFileURL, encoding: .utf8)
@@ -822,6 +823,7 @@ struct VMProfileStoreTests {
             options: .regularExpression
         ) == nil)
         #expect(FileManager.default.fileExists(atPath: installScriptURL.path))
+        #expect(FileManager.default.fileExists(atPath: publishScriptURL.path))
         #expect(FileManager.default.fileExists(atPath: startScriptURL.path))
         #expect(FileManager.default.fileExists(atPath: projectURL.path))
         #expect(installCommand.contains("Install-VeilAgent.ps1"))

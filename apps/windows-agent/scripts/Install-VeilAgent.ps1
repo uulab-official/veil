@@ -10,6 +10,8 @@ $ErrorActionPreference = "Stop"
 $ScriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $AgentRoot = Resolve-Path (Join-Path $ScriptRoot "..")
 $ProjectPath = Join-Path $AgentRoot "src\VeilAgent\VeilAgent.csproj"
+$BundledAppRoot = Join-Path $AgentRoot "app"
+$BundledAgentExe = Join-Path $BundledAppRoot "VeilAgent.exe"
 $PublishRoot = Join-Path $InstallRoot "app"
 $InstalledScriptsRoot = Join-Path $InstallRoot "scripts"
 $StartScript = Join-Path $InstalledScriptsRoot "Start-VeilAgent.ps1"
@@ -18,11 +20,23 @@ $TaskName = "VeilAgent"
 New-Item -ItemType Directory -Force -Path $PublishRoot | Out-Null
 New-Item -ItemType Directory -Force -Path $InstalledScriptsRoot | Out-Null
 
-dotnet publish $ProjectPath `
-    --configuration $Configuration `
-    --runtime win-arm64 `
-    --self-contained false `
-    --output $PublishRoot
+if (Test-Path $BundledAgentExe) {
+    Get-ChildItem -Path $PublishRoot -Force | Remove-Item -Recurse -Force
+    Copy-Item `
+        -Path (Join-Path $BundledAppRoot "*") `
+        -Destination $PublishRoot `
+        -Recurse `
+        -Force
+    Write-Host "Using packaged VeilAgent app bundle from $BundledAppRoot."
+} elseif (Get-Command dotnet -ErrorAction SilentlyContinue) {
+    dotnet publish $ProjectPath `
+        --configuration $Configuration `
+        --runtime win-arm64 `
+        --self-contained false `
+        --output $PublishRoot
+} else {
+    throw "No packaged VeilAgent.exe was found at $BundledAgentExe, and dotnet is not available. Build a win-arm64 bundle with scripts\Publish-VeilAgentBundle.ps1 before installing."
+}
 
 Copy-Item `
     -Path (Join-Path $ScriptRoot "Start-VeilAgent.ps1") `

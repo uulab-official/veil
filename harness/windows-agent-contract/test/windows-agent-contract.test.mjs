@@ -185,16 +185,22 @@ test("windows agent includes user-logon install and uninstall scripts", async ()
   const install = await readFile(resolve(agentRoot, "scripts/Install-VeilAgent.ps1"), "utf8");
   const uninstall = await readFile(resolve(agentRoot, "scripts/Uninstall-VeilAgent.ps1"), "utf8");
   const start = await readFile(resolve(agentRoot, "scripts/Start-VeilAgent.ps1"), "utf8");
+  const publish = await readFile(resolve(agentRoot, "scripts/Publish-VeilAgentBundle.ps1"), "utf8");
 
   assert.match(install, /Register-ScheduledTask/);
   assert.match(install, /New-ScheduledTaskTrigger\s+-AtLogOn/);
   assert.match(install, /VeilAgent/);
   assert.match(install, /dotnet publish/);
+  assert.match(install, /BundledAgentExe/);
+  assert.match(install, /Using packaged VeilAgent app bundle/);
   assert.match(install, /VEIL_AGENT_PORT/);
   assert.match(start, /VeilAgent\.exe/);
   assert.match(start, /127\.0\.0\.1/);
   assert.match(uninstall, /Unregister-ScheduledTask/);
   assert.match(uninstall, /VeilAgent/);
+  assert.match(publish, /--runtime\s+\$Runtime/);
+  assert.match(publish, /--self-contained:\$SelfContained/);
+  assert.match(publish, /VeilAgent\.exe/);
 });
 
 test("windows agent installs logon task against the local installed scripts", async () => {
