@@ -1502,6 +1502,17 @@ public struct LocalVMRuntimeService: VMRuntimeService {
               </UserData>
             </component>
           </settings>
+          <settings pass="specialize">
+            <component name="Microsoft-Windows-Deployment" processorArchitecture="arm64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
+              <RunSynchronous>
+                <RunSynchronousCommand wcm:action="add">
+                  <Order>1</Order>
+                  <Path>cmd /c reg add HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\OOBE /v BypassNRO /t REG_DWORD /d 1 /f</Path>
+                  <Description>Allow Windows OOBE offline setup when no inbox network driver is available</Description>
+                </RunSynchronousCommand>
+              </RunSynchronous>
+            </component>
+          </settings>
           <settings pass="oobeSystem">
             <component name="Microsoft-Windows-International-Core" processorArchitecture="arm64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
               <InputLocale>ko-KR</InputLocale>

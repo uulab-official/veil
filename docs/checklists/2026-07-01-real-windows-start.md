@@ -98,7 +98,9 @@ Goal: keep the main Veil experience pointed at real local Windows boot and conso
 - [x] Verify the persistent visible install reaches the first post-reboot Windows setup phase (`Installing 42%`) instead of looping back into the ISO installer.
 - [x] Verify the same persistent visible install continues through the post-reboot setup phase to `Installing 94%`.
 - [x] Verify the real install reaches the Korean Windows OOBE network screen and identify the `virtio-net-pci` driver blocker.
-- [x] Switch the QEMU network adapter plan from VirtIO networking to `e1000` for the next OOBE/network validation pass.
+- [x] Test `e1000` networking at OOBE and record that it returns to the same network-driver screen.
+- [x] Switch the QEMU network adapter plan from PCI NICs to `usb-net` for the next OOBE/network validation pass.
+- [x] Add a specialize-pass `BypassNRO` registry fallback to the generated `Autounattend.xml` for future offline OOBE attempts.
 - [x] Add a safe `veil-vmctl qemu-capture` command so live console evidence can be refreshed without sending QEMU monitor quit commands.
 - [x] Make the app runtime snapshot treat a matching live QEMU launch record as `running`, even when the VM was started by the CLI.
 - [x] Verify the app shell displays the refreshed live QEMU console screenshot and running controls from the CLI launch record.

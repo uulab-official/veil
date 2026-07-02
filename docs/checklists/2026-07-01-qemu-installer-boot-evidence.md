@@ -127,3 +127,15 @@ latest QEMU launch screenshot at
 showed the Korean `Connect to network` OOBE screen. That proves Windows setup
 reached OOBE and exposed the next blocker: Windows 11 Arm did not have an inbox
 driver for the previous `virtio-net-pci` device.
+
+Network-device follow-up: an `e1000` retry also returned to the Korean
+`Connect to network` OOBE screen. The next local QEMU plan now uses `usb-net`
+and the generated `Autounattend.xml` includes a specialize-pass `BypassNRO`
+registry fallback for future clean installs where no inbox network driver is
+available during OOBE.
+
+Network device follow-up: a restart with QEMU `e1000` networking reached
+`/tmp/veil-e1000-oobe-3min.png`, but OOBE returned to the same network-driver
+screen. The next planned device is QEMU `usb-net`, which keeps NAT and the
+guest-agent host forward while testing a USB network class device instead of a
+PCI NIC.

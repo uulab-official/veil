@@ -189,7 +189,7 @@ public struct QEMUWindowsBootPlanner: Sendable {
             "-drive", "if=none,id=system,format=raw,file=\(virtualDiskPath)",
             "-device", "nvme,drive=system,serial=veil-system",
             "-netdev", "user,id=net0,\(guestAgentForward)",
-            "-device", "e1000,netdev=net0",
+            "-device", "usb-net,netdev=net0",
             "-device", "virtio-rng-pci",
             "-display", "cocoa",
             "-device", "ramfb",

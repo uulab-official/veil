@@ -802,6 +802,7 @@ struct VMProfileStoreTests {
         #expect(answerFile.contains("<WillShowUI>Never</WillShowUI>"))
         #expect(answerFile.contains("<HideOnlineAccountScreens>true</HideOnlineAccountScreens>"))
         #expect(answerFile.contains("<HideWirelessSetupInOOBE>true</HideWirelessSetupInOOBE>"))
+        #expect(answerFile.contains("HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\OOBE /v BypassNRO"))
         #expect(answerFile.range(
             of: #"<ProductKey>[\s\S]*?<Key>"#,
             options: .regularExpression
