@@ -50,6 +50,10 @@ cat >"$INFO_PLIST" <<PLIST
   <string>$BUNDLE_VERSION</string>
   <key>CFBundlePackageType</key>
   <string>APPL</string>
+  <key>LSBackgroundOnly</key>
+  <false/>
+  <key>LSUIElement</key>
+  <false/>
   <key>LSMinimumSystemVersion</key>
   <string>$MIN_SYSTEM_VERSION</string>
   <key>NSPrincipalClass</key>

@@ -45,7 +45,7 @@ struct VeilHostShellApp: App {
                 launchWindowsAppAction: launchSelectedWindowsAppWindow,
                 consoleMessage: consoleMessage
             )
-                .frame(minWidth: 980, idealWidth: 1240, minHeight: 600, idealHeight: 700)
+                .frame(minWidth: 1040, idealWidth: 1280, minHeight: 660, idealHeight: 760)
                 .task {
                     configureWindowsAppWindowCloseBridge()
                     startAgentEventPumpIfNeeded()
@@ -66,13 +66,14 @@ struct VeilHostShellApp: App {
                     }
                 }
         }
-        .defaultSize(width: 1240, height: 700)
+        .defaultLaunchBehavior(.presented)
+        .defaultSize(width: 1280, height: 760)
         .defaultWindowPlacement { _, context in
             let visibleRect = context.defaultDisplay.visibleRect
-            let preferredSize = CGSize(width: 1240, height: 700)
+            let preferredSize = CGSize(width: 1280, height: 760)
             let size = CGSize(
                 width: min(preferredSize.width, visibleRect.width * 0.90),
-                height: min(preferredSize.height, visibleRect.height * 0.78)
+                height: min(preferredSize.height, visibleRect.height * 0.84)
             )
             return WindowPlacement(size: size)
         }
@@ -130,6 +131,7 @@ struct VeilHostShellApp: App {
                 refreshRuntimeAction: refreshRuntime
             )
         }
+        .defaultLaunchBehavior(.suppressed)
         .menuBarExtraStyle(.menu)
     }
 
@@ -364,13 +366,26 @@ struct VeilHostShellApp: App {
 }
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    func applicationWillFinishLaunching(_ notification: Notification) {
+        NSApp.setActivationPolicy(.regular)
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         applyBundledAppIcon()
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
         DispatchQueue.main.async {
-            MainWindowChrome.configureAndCompactMainWindow()
+            MainWindowChrome.showMainWindow()
         }
+    }
+
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        if !flag {
+            Task { @MainActor in
+                MainWindowChrome.showMainWindow()
+            }
+        }
+        return true
     }
 
     @MainActor
@@ -449,8 +464,10 @@ private struct VeilMenuBarMenu: View {
 
 @MainActor
 private enum MainWindowChrome {
+    private static var fallbackWindowController: NSWindowController?
+
     static func configureAndCompactMainWindow() {
-        guard let window = mainWindow else {
+        guard let window = mainWindow ?? createFallbackMainWindow() else {
             return
         }
 
@@ -466,11 +483,34 @@ private enum MainWindowChrome {
     }
 
     private static var mainWindow: NSWindow? {
-        NSApp.windows.first { $0.title == "Veil" }
+        NSApp.windows.first { window in
+            window.identifier?.rawValue == "main" || window.title == "Veil"
+        }
+    }
+
+    private static func createFallbackMainWindow() -> NSWindow? {
+        if let window = fallbackWindowController?.window {
+            return window
+        }
+
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 1280, height: 760),
+            styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
+            backing: .buffered,
+            defer: false
+        )
+        window.identifier = NSUserInterfaceItemIdentifier("main")
+        window.title = "Veil"
+        window.contentViewController = NSHostingController(rootView: StandaloneMainWindowRoot())
+
+        let controller = NSWindowController(window: window)
+        fallbackWindowController = controller
+        controller.showWindow(nil)
+        return window
     }
 
     private static func configure(_ window: NSWindow) {
-        window.minSize = NSSize(width: 980, height: 600)
+        window.minSize = NSSize(width: 1040, height: 660)
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
         window.styleMask.insert(.fullSizeContentView)
@@ -481,10 +521,10 @@ private enum MainWindowChrome {
 
     private static func fitToPreferredSize(_ window: NSWindow) {
         let visibleFrame = window.screen?.visibleFrame ?? NSScreen.main?.visibleFrame ?? window.frame
-        let preferredSize = NSSize(width: 1240, height: 700)
+        let preferredSize = NSSize(width: 1280, height: 760)
         let targetSize = NSSize(
             width: min(preferredSize.width, visibleFrame.width * 0.90),
-            height: min(preferredSize.height, visibleFrame.height * 0.78)
+            height: min(preferredSize.height, visibleFrame.height * 0.84)
         )
         let sizeDelta = abs(window.frame.width - targetSize.width) + abs(window.frame.height - targetSize.height)
         guard sizeDelta > 16 else {
@@ -496,5 +536,103 @@ private enum MainWindowChrome {
             y: visibleFrame.midY - targetSize.height / 2
         )
         window.setFrame(NSRect(origin: origin, size: targetSize), display: true, animate: false)
+    }
+}
+
+private struct StandaloneMainWindowRoot: View {
+    private let vmRuntimeBooter = QEMUVMRuntimeBooter.shared
+    @State private var model: HostDashboardModel
+    @State private var vmModel = VMRuntimeModel(
+        service: LocalVMRuntimeService(bootRunner: QEMUVMRuntimeBooter.shared)
+    )
+    @State private var consoleMessage: String?
+
+    init() {
+        let transport = URLSessionWebSocketTransport(
+            url: URL(string: Self.agentURLString)!
+        )
+        _model = State(
+            initialValue: HostDashboardModel(
+                service: FallbackHostDashboardService(
+                    primary: VeilHostClient(transport: transport),
+                    fallback: DemoHostDashboardService(),
+                    primaryEndpointDescription: Self.agentURLString
+                )
+            )
+        )
+    }
+
+    var body: some View {
+        ContentView(
+            model: model,
+            vmModel: vmModel,
+            startVMAction: startVMAndShowConsole,
+            stopVMAction: stopVMAndCloseConsole,
+            showVMConsoleAction: showVMConsole,
+            launchWindowsAppAction: launchSelectedWindowsApp,
+            consoleMessage: consoleMessage
+        )
+        .frame(minWidth: 1040, idealWidth: 1280, minHeight: 660, idealHeight: 760)
+        .task {
+            async let hostLoad: Void = model.load()
+            async let vmLoad: Void = vmModel.load()
+            _ = await (hostLoad, vmLoad)
+            await recordGuestAgentInstallEvidenceIfNeeded()
+        }
+    }
+
+    private static var agentURLString: String {
+        ProcessInfo.processInfo.environment["VEIL_AGENT_URL"] ?? "ws://127.0.0.1:18444"
+    }
+
+    private func startVMAndShowConsole() {
+        Task { @MainActor in
+            consoleMessage = "Opening the local QEMU Windows console."
+            await vmModel.start()
+
+            if vmModel.snapshot?.state == .running || vmModel.snapshot?.state == .starting {
+                if vmRuntimeBooter.showConsoleIfRunning() {
+                    consoleMessage = "QEMU Console is open."
+                } else {
+                    consoleMessage = "Windows runtime is starting, but the QEMU display is not frontmost yet."
+                }
+            } else if let errorMessage = vmModel.errorMessage {
+                consoleMessage = "Windows console could not start: \(errorMessage)"
+            }
+        }
+    }
+
+    private func stopVMAndCloseConsole() {
+        Task { @MainActor in
+            await vmModel.stop()
+            if vmModel.snapshot?.state == .stopped {
+                consoleMessage = "Windows console closed."
+            }
+        }
+    }
+
+    private func showVMConsole() {
+        if vmRuntimeBooter.showConsoleIfRunning() {
+            consoleMessage = "QEMU Console is open."
+        } else {
+            consoleMessage = "No active QEMU display is attached yet. Start Windows first, then open the console."
+        }
+    }
+
+    private func launchSelectedWindowsApp() {
+        Task { @MainActor in
+            await model.launchSelectedApp()
+        }
+    }
+
+    private func recordGuestAgentInstallEvidenceIfNeeded() async {
+        guard model.hasLiveAgentConnection,
+              let agentVersion = model.health?.agentVersion,
+              vmModel.snapshot?.profileName != nil,
+              vmModel.snapshot?.installEvidence.kind != .guestAgent else {
+            return
+        }
+
+        await vmModel.markGuestAgentConnected(agentVersion: agentVersion)
     }
 }

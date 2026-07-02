@@ -758,7 +758,7 @@ private struct ConsoleScreenshotPreview: View {
             Image(nsImage: image)
                 .resizable()
                 .scaledToFit()
-                .padding(6)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .aspectRatio(16 / 9, contentMode: .fit)
         .overlay {
@@ -1123,20 +1123,19 @@ private struct WindowsSetupDisplayPanel: View {
     }
 
     private var installProcessStage: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(installStageBackground)
+        ZStack(alignment: .bottom) {
+            installDisplaySurface
 
-            VStack(spacing: 0) {
-                installDisplaySurface
-
-                installControlBar
-            }
+            installControlBar
+                .background(.black.opacity(0.18))
+                .background(.ultraThinMaterial)
+                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .padding(14)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
         .overlay {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .strokeBorder(.quaternary, lineWidth: 1)
+                .strokeBorder(.white.opacity(0.14), lineWidth: 1)
         }
     }
 
@@ -1147,36 +1146,8 @@ private struct WindowsSetupDisplayPanel: View {
                     image: consoleScreenshotImage,
                     path: snapshot.latestConsoleScreenshotPath ?? ""
                 )
-                .padding(.horizontal, 14)
-                .padding(.vertical, 12)
             } else {
-                VStack(spacing: 18) {
-                    installMark
-
-                    VStack(spacing: 8) {
-                        Text("Install Windows 11")
-                            .font(.system(size: 36, weight: .semibold))
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.85)
-                        Text(installProcessSubtitle)
-                            .font(.callout)
-                            .foregroundStyle(.secondary)
-                            .multilineTextAlignment(.center)
-                            .lineLimit(2)
-                    }
-                }
-                .padding(.horizontal, 32)
-
-                VStack {
-                    HStack {
-                        Text(setupStageTitle)
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.secondary)
-                        Spacer()
-                    }
-                    Spacer()
-                }
-                .padding(24)
+                machineDisplay
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -1252,25 +1223,8 @@ private struct WindowsSetupDisplayPanel: View {
             }
         }
         .controlSize(.regular)
-        .padding(.horizontal, 18)
-        .padding(.vertical, 12)
-        .background(.ultraThinMaterial)
-        .overlay(alignment: .top) {
-            Rectangle()
-                .fill(.quaternary)
-                .frame(height: 1)
-        }
-    }
-
-    private var installMark: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(.blue.opacity(0.16))
-            Image(systemName: "display.and.arrow.down")
-                .font(.system(size: 34, weight: .semibold))
-                .foregroundStyle(.blue)
-        }
-        .frame(width: 76, height: 76)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
     }
 
     private var consoleScreenshotImage: NSImage? {
@@ -1279,17 +1233,6 @@ private struct WindowsSetupDisplayPanel: View {
         }
 
         return NSImage(contentsOfFile: path)
-    }
-
-    private var installStageBackground: LinearGradient {
-        LinearGradient(
-            colors: [
-                Color(red: 0.07, green: 0.08, blue: 0.10),
-                Color(red: 0.11, green: 0.12, blue: 0.13)
-            ],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
     }
 
     private var machineDisplay: some View {
@@ -1399,42 +1342,6 @@ private struct WindowsSetupDisplayPanel: View {
         default:
             primaryHint
         }
-    }
-
-    private var installProcessSubtitle: String {
-        if effectiveInstallEvidence.kind == .setupReady {
-            return "Start setup, then install the Veil guest agent to open Windows apps as Mac windows."
-        }
-
-        if isVirtualDiskEmptyForWindowsInstall {
-            return "Windows is not installed yet. Open setup on the local disk."
-        }
-
-        if snapshot.bootReady {
-            return "Open the Windows installer and complete setup."
-        }
-
-        if discoveredInstallerName != nil {
-            return "Veil found Windows media. Prepare the local VM before opening setup."
-        }
-
-        return "Choose a Windows 11 Arm ISO to prepare the local VM installation."
-    }
-
-    private var setupStageTitle: String {
-        if canShowConsole {
-            return "Windows display is open"
-        }
-
-        if snapshot.latestConsoleScreenshotPath != nil {
-            return "Windows setup is running"
-        }
-
-        if canStart {
-            return "Open Windows setup"
-        }
-
-        return snapshot.profileName == nil ? "Prepare the local VM" : "Continue setup"
     }
 
     private var installPrimaryTitle: String {
