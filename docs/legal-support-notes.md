@@ -23,6 +23,16 @@ Starting a local virtual machine with user-provided installer media and a blank 
 
 Veil must not upload, mirror, or serve Windows ISO files through project-owned storage, including Appwrite Storage buckets or other object-storage services. If a future Appwrite integration exists, it may store only metadata such as official download-page references, hashes supplied by the user, setup state, or user-owned private file references. It must not make Veil a Windows image distributor.
 
+## Unattended Setup Keys
+
+Generated answer files must not include Windows product keys, including generic setup keys. Microsoft documents `microsoft-windows-setup\UserData\ProductKey\Key` as a 25-character product-key value and explicitly notes that empty values are unsupported:
+
+- https://learn.microsoft.com/en-us/windows-hardware/customize/desktop/unattend/microsoft-windows-setup-userdata-productkey-key
+
+When Veil needs to reduce edition-selection prompts, it should prefer Windows Setup image metadata such as `/IMAGE/NAME` in `ImageInstall/OSImage/InstallFrom/MetaData`, which Microsoft documents as selecting an edition or image from a `.wim` file:
+
+- https://learn.microsoft.com/en-us/windows-hardware/customize/desktop/unattend/microsoft-windows-setup-imageinstall-osimage-installfrom-metadata
+
 ## Serverless Runtime Wording
 
 Veil's VM execution layer is a local runtime provider. Product and architecture docs should not describe this as a cloud backend, hosted Windows backend, or server VM backend. If QEMU/HVF is added later, it is still a local runtime provider launched by the macOS app, not a remote service.

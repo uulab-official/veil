@@ -68,6 +68,7 @@ Goal: keep the main Veil experience pointed at real local Windows boot and conso
 - [x] Add Windows guest install, start, and uninstall scripts that register the agent as a user logon task.
 - [x] Send a continuing `window.frame` stream from the Windows guest agent after the first Notepad frame.
 - [x] Persist guest-agent install evidence back to the VM profile after a real Windows guest connects from the VM.
+- [x] Improve `Autounattend.xml` so Windows Setup can select Windows 11 Pro without bundling a product key.
 
 ## Next
 
@@ -75,7 +76,6 @@ Goal: keep the main Veil experience pointed at real local Windows boot and conso
 - [ ] Run `Install-VeilAgent.ps1` inside Windows 11 Arm and verify the `VeilAgent` scheduled task starts after login.
 - [ ] Verify the Win32/GDI HWND capture path inside Windows 11 Arm and record the captured Notepad frame evidence.
 - [ ] Tune the Windows agent frame stream for lower latency after correctness is verified.
-- [ ] Improve `Autounattend.xml` so Windows Setup skips the product-key page without bundling a key.
 - [ ] Restart the currently running QEMU VM so the new guest-agent port forwarding takes effect.
 - [ ] Replace the static setup preview with a real VM screenshot once QEMU reaches Windows Setup.
 - [ ] Add a QEMU screenshot/screencapture harness so boot failures can be compared visually, not only through serial text.

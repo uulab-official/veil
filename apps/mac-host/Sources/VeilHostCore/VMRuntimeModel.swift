@@ -1131,7 +1131,7 @@ public struct LocalVMRuntimeService: VMRuntimeService {
 
         let answerFile = """
         <?xml version="1.0" encoding="utf-8"?>
-        <unattend xmlns="urn:schemas-microsoft-com:unattend">
+        <unattend xmlns="urn:schemas-microsoft-com:unattend" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
           <settings pass="windowsPE">
             <component name="Microsoft-Windows-International-Core-WinPE" processorArchitecture="arm64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
               <SetupUILanguage>
@@ -1143,6 +1143,17 @@ public struct LocalVMRuntimeService: VMRuntimeService {
               <UserLocale>ko-KR</UserLocale>
             </component>
             <component name="Microsoft-Windows-Setup" processorArchitecture="arm64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
+              <ImageInstall>
+                <OSImage>
+                  <InstallFrom>
+                    <MetaData wcm:action="add">
+                      <Key>/IMAGE/NAME</Key>
+                      <Value>Windows 11 Pro</Value>
+                    </MetaData>
+                  </InstallFrom>
+                  <WillShowUI>OnError</WillShowUI>
+                </OSImage>
+              </ImageInstall>
               <UserData>
                 <AcceptEula>true</AcceptEula>
               </UserData>
