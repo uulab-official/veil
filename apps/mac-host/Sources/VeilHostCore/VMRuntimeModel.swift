@@ -959,6 +959,8 @@ public struct LocalVMRuntimeService: VMRuntimeService {
     private let resourcePlan: VMResourcePlan?
     private let diagnosticDate: @Sendable () -> Date
     private let automaticInstallMediaBuilder: any AutomaticInstallMediaBuilding
+    private let consoleScreenshotRefresher: @Sendable (URL, URL) -> Void
+    private let qemuLaunchProcessIsRunning: @Sendable (Int32) -> Bool
     private let firmwareVarsTemplatePaths: [String]
 
     public init(
@@ -971,6 +973,8 @@ public struct LocalVMRuntimeService: VMRuntimeService {
         resourcePlan: VMResourcePlan? = nil,
         diagnosticDate: @escaping @Sendable () -> Date = Date.init,
         automaticInstallMediaBuilder: any AutomaticInstallMediaBuilding = HdiutilAutomaticInstallMediaBuilder(),
+        consoleScreenshotRefresher: @escaping @Sendable (URL, URL) -> Void = QEMUVMRuntimeBooter.captureConsoleScreenshot,
+        qemuLaunchProcessIsRunning: @escaping @Sendable (Int32) -> Bool = LocalVMRuntimeService.processIsRunning,
         firmwareVarsTemplatePaths: [String]? = nil
     ) {
         self.profileStore = profileStore
@@ -982,6 +986,8 @@ public struct LocalVMRuntimeService: VMRuntimeService {
         self.resourcePlan = resourcePlan
         self.diagnosticDate = diagnosticDate
         self.automaticInstallMediaBuilder = automaticInstallMediaBuilder
+        self.consoleScreenshotRefresher = consoleScreenshotRefresher
+        self.qemuLaunchProcessIsRunning = qemuLaunchProcessIsRunning
         self.firmwareVarsTemplatePaths = firmwareVarsTemplatePaths
             ?? (
                 LocalQEMUWindowsBootPlanFactory.defaultSecureFirmwareVarsTemplatePaths(homeDirectory: defaultHomeDirectory)
@@ -1013,6 +1019,7 @@ public struct LocalVMRuntimeService: VMRuntimeService {
 
         if virtualizationAvailable, let profile {
             let latestLaunchRecord = try? await qemuLaunchRecordStore.loadLatest()
+            let latestConsoleScreenshotPath = refreshedConsoleScreenshotPath(from: latestLaunchRecord)
             let installationSteps = Self.installationSteps(for: profile)
             let preflightChecks = Self.preflightChecks(for: profile)
             let bootPathReadiness = Self.bootPathReadiness(
@@ -1020,7 +1027,13 @@ public struct LocalVMRuntimeService: VMRuntimeService {
                 preflightChecks: preflightChecks
             )
             let runtimeState = await bootRunner.runtimeState()
-            let state = runtimeState ?? .stopped
+            let state = runtimeState
+                ?? Self.qemuLaunchRuntimeState(
+                    from: latestLaunchRecord,
+                    profile: profile,
+                    processIsRunning: qemuLaunchProcessIsRunning
+                )
+                ?? .stopped
             let virtualDiskAllocatedBytes = Self.allocatedFileSize(path: profile.virtualDiskPath)
             let windowsInstalled = profile.windowsInstalled == true
             let installEvidence = Self.installEvidence(
@@ -1044,8 +1057,11 @@ public struct LocalVMRuntimeService: VMRuntimeService {
                 virtualDiskAllocatedBytes: virtualDiskAllocatedBytes,
                 automaticInstallAnswerFilePath: Self.automaticInstallAnswerFilePathIfExists(for: profile),
                 automaticInstallMediaPath: Self.automaticInstallMediaPathIfExists(for: profile),
-                latestConsoleScreenshotPath: Self.existingConsoleScreenshotPath(from: latestLaunchRecord),
-                latestConsoleLaunch: Self.consoleLaunchEvidence(from: latestLaunchRecord),
+                latestConsoleScreenshotPath: latestConsoleScreenshotPath,
+                latestConsoleLaunch: Self.consoleLaunchEvidence(
+                    from: latestLaunchRecord,
+                    consoleScreenshotPath: latestConsoleScreenshotPath
+                ),
                 runtimeProvider: activeProvider,
                 runtimeProviders: runtimeProviders,
                 installationSteps: installationSteps,
@@ -1335,7 +1351,55 @@ public struct LocalVMRuntimeService: VMRuntimeService {
         return path
     }
 
-    private static func consoleLaunchEvidence(from launchRecord: QEMULaunchRecord?) -> VMConsoleLaunchEvidence? {
+    private static func qemuLaunchRuntimeState(
+        from launchRecord: QEMULaunchRecord?,
+        profile: VMProfile,
+        processIsRunning: @Sendable (Int32) -> Bool
+    ) -> VMRuntimeState? {
+        guard let pid = launchRecord?.pid,
+              let virtualDiskPath = profile.virtualDiskPath,
+              launchRecord?.arguments.contains(where: { $0.contains(virtualDiskPath) }) == true,
+              processIsRunning(pid) else {
+            return nil
+        }
+
+        return .running
+    }
+
+    public static func processIsRunning(pid: Int32) -> Bool {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/ps")
+        process.arguments = ["-p", String(pid)]
+        process.standardOutput = Pipe()
+        process.standardError = Pipe()
+
+        do {
+            try process.run()
+            process.waitUntilExit()
+            return process.terminationStatus == 0
+        } catch {
+            return false
+        }
+    }
+
+    private func refreshedConsoleScreenshotPath(from launchRecord: QEMULaunchRecord?) -> String? {
+        guard let path = Self.existingConsoleScreenshotPath(from: launchRecord),
+              let monitorSocketPath = launchRecord?.monitorSocketPath,
+              FileManager.default.fileExists(atPath: monitorSocketPath) else {
+            return Self.existingConsoleScreenshotPath(from: launchRecord)
+        }
+
+        consoleScreenshotRefresher(
+            URL(fileURLWithPath: monitorSocketPath),
+            URL(fileURLWithPath: path)
+        )
+        return Self.existingConsoleScreenshotPath(from: launchRecord) ?? path
+    }
+
+    private static func consoleLaunchEvidence(
+        from launchRecord: QEMULaunchRecord?,
+        consoleScreenshotPath: String? = nil
+    ) -> VMConsoleLaunchEvidence? {
         guard let launchRecord else {
             return nil
         }
@@ -1345,7 +1409,7 @@ public struct LocalVMRuntimeService: VMRuntimeService {
             pid: launchRecord.pid,
             processLogPath: launchRecord.processLogPath,
             monitorSocketPath: launchRecord.monitorSocketPath,
-            consoleScreenshotPath: existingConsoleScreenshotPath(from: launchRecord),
+            consoleScreenshotPath: consoleScreenshotPath ?? existingConsoleScreenshotPath(from: launchRecord),
             startedAt: launchRecord.startedAt
         )
     }
@@ -1448,7 +1512,8 @@ public struct LocalVMRuntimeService: VMRuntimeService {
             <component name="Microsoft-Windows-Shell-Setup" processorArchitecture="arm64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
               <OOBE>
                 <HideEULAPage>true</HideEULAPage>
-                <HideOnlineAccountScreens>false</HideOnlineAccountScreens>
+                <HideOnlineAccountScreens>true</HideOnlineAccountScreens>
+                <HideWirelessSetupInOOBE>true</HideWirelessSetupInOOBE>
                 <ProtectYourPC>3</ProtectYourPC>
               </OOBE>
             </component>

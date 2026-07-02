@@ -96,6 +96,12 @@ Goal: keep the main Veil experience pointed at real local Windows boot and conso
 - [x] Launch a persistent visible `qemu-start` install and verify the real sparse disk grows past 5 GB while Windows Setup reaches 39%.
 - [x] Skip automatic ISO boot-key input after the disk has allocated at least 1 GiB, so a partial install can continue from NVMe instead of restarting setup.
 - [x] Verify the persistent visible install reaches the first post-reboot Windows setup phase (`Installing 42%`) instead of looping back into the ISO installer.
+- [x] Verify the same persistent visible install continues through the post-reboot setup phase to `Installing 94%`.
+- [x] Verify the real install reaches the Korean Windows OOBE network screen and identify the `virtio-net-pci` driver blocker.
+- [x] Switch the QEMU network adapter plan from VirtIO networking to `e1000` for the next OOBE/network validation pass.
+- [x] Add a safe `veil-vmctl qemu-capture` command so live console evidence can be refreshed without sending QEMU monitor quit commands.
+- [x] Make the app runtime snapshot treat a matching live QEMU launch record as `running`, even when the VM was started by the CLI.
+- [x] Verify the app shell displays the refreshed live QEMU console screenshot and running controls from the CLI launch record.
 - [x] Add recovery copy to QEMU smoke reports for common boot failures.
 - [x] Convert QEMU monitor screenshots to PNG paths so users can inspect boot evidence directly.
 - [x] Surface the latest QEMU console PNG inside the Windows setup screen when launch evidence exists.

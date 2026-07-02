@@ -114,3 +114,16 @@ past 12 GB and produced `/tmp/veil-live-install-10min.png`, showing the black
 post-reboot Windows setup phase with Korean copy for `Installing 42%`. This
 proves the boot-key guard allowed the VM to continue from the NVMe disk instead
 of looping back into ISO setup after the first reboot.
+
+Post-reboot progress evidence: the same visible QEMU session later produced
+`/tmp/veil-live-install-after-reboot.png`, showing the Korean black Windows
+setup phase at `Installing 94%` while QEMU remained CPU-active. This proves the
+persistent VM was still advancing through the real Windows install flow after
+the first boot-manager handoff.
+
+OOBE evidence: after the same disk reached the first user setup phase, the
+latest QEMU launch screenshot at
+`/Users/bonjin/Downloads/Veil Diagnostics/QEMU Launch/qemu-console-2026-07-02T08-19-47Z.png`
+showed the Korean `Connect to network` OOBE screen. That proves Windows setup
+reached OOBE and exposed the next blocker: Windows 11 Arm did not have an inbox
+driver for the previous `virtio-net-pci` device.

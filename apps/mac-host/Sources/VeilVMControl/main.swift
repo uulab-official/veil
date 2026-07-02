@@ -8,6 +8,9 @@ enum VMControlError: Error, LocalizedError {
     case installerNotFound(String)
     case missingProfileForQEMUPlan
     case qemuNotReady([String])
+    case missingQEMULaunchRecord
+    case qemuMonitorUnavailable(String)
+    case qemuScreenshotCaptureFailed(String)
 
     var errorDescription: String? {
         switch self {
@@ -23,10 +26,16 @@ enum VMControlError: Error, LocalizedError {
             "No prepared VM profile found. Run veil-vmctl prepare --installer /path/to/Windows.iso first."
         case .qemuNotReady(let nextActions):
             "QEMU/HVF is not ready. \(nextActions.joined(separator: " "))"
+        case .missingQEMULaunchRecord:
+            "No QEMU launch record found. Run veil-vmctl qemu-start first."
+        case .qemuMonitorUnavailable(let path):
+            "QEMU monitor socket is not available: \(path)"
+        case .qemuScreenshotCaptureFailed(let path):
+            "QEMU console screenshot could not be captured: \(path)"
         }
     }
 
-    private static let usage = "Usage: veil-vmctl prepare --installer /path/to/Windows.iso | veil-vmctl providers [--json] | veil-vmctl qemu-plan [--json] | veil-vmctl qemu-doctor [--json] | veil-vmctl qemu-smoke [--json] [--seconds 45] | veil-vmctl qemu-start [--json] [--wait-seconds 15]"
+    private static let usage = "Usage: veil-vmctl prepare --installer /path/to/Windows.iso | veil-vmctl providers [--json] | veil-vmctl qemu-plan [--json] | veil-vmctl qemu-doctor [--json] | veil-vmctl qemu-smoke [--json] [--seconds 45] | veil-vmctl qemu-start [--json] [--wait-seconds 15] | veil-vmctl qemu-capture [--json] [--output /path/to/console.png]"
 }
 
 struct VMControlArguments {
@@ -37,6 +46,7 @@ struct VMControlArguments {
         case qemuDoctor(json: Bool)
         case qemuSmoke(json: Bool, seconds: Int)
         case qemuStart(json: Bool, waitSeconds: Int)
+        case qemuCapture(json: Bool, outputPath: String?)
     }
 
     var command: Command
@@ -68,6 +78,15 @@ struct VMControlArguments {
             return VMControlArguments(command: .qemuStart(json: arguments.contains("--json"), waitSeconds: waitSeconds))
         }
 
+        if command == "qemu-capture" {
+            return VMControlArguments(
+                command: .qemuCapture(
+                    json: arguments.contains("--json"),
+                    outputPath: stringArgument(named: "--output", from: arguments)
+                )
+            )
+        }
+
         guard command == "prepare" else {
             throw VMControlError.unsupportedCommand(command)
         }
@@ -97,6 +116,22 @@ struct VMControlArguments {
 
         return Int(arguments[secondsFlagIndex + 1])
     }
+
+    private static func stringArgument(named name: String, from arguments: [String]) -> String? {
+        guard let flagIndex = arguments.firstIndex(of: name),
+              arguments.indices.contains(flagIndex + 1) else {
+            return nil
+        }
+
+        return arguments[flagIndex + 1]
+    }
+}
+
+struct QEMUConsoleCaptureRecord: Codable, Equatable {
+    var kind: String = "qemuConsoleCapture"
+    var monitorSocketPath: String
+    var consoleScreenshotPath: String
+    var capturedAt: Date
 }
 
 @main
@@ -133,6 +168,8 @@ struct VeilVMControl {
             try await printQEMUSmoke(json: json, seconds: seconds)
         case .qemuStart(let json, let waitSeconds):
             try await startQEMU(json: json, waitSeconds: waitSeconds)
+        case .qemuCapture(let json, let outputPath):
+            try await captureQEMUConsole(json: json, outputPath: outputPath)
         }
     }
 
@@ -390,6 +427,66 @@ struct VeilVMControl {
         let data = try JSONEncoder.veilDiagnostics.encode(record)
         try data.write(to: directory.appendingPathComponent("qemu-launch-\(stamp).json"), options: .atomic)
         try data.write(to: directory.appendingPathComponent("qemu-launch-latest.json"), options: .atomic)
+    }
+
+    private static func captureQEMUConsole(json: Bool, outputPath: String?) async throws {
+        let directory = diagnosticsDirectory()
+            .appendingPathComponent("QEMU Launch", isDirectory: true)
+        let latestURL = directory.appendingPathComponent("qemu-launch-latest.json")
+        guard FileManager.default.fileExists(atPath: latestURL.path) else {
+            throw VMControlError.missingQEMULaunchRecord
+        }
+
+        let data = try Data(contentsOf: latestURL)
+        var launchRecord = try JSONDecoder.veilDiagnostics.decode(QEMULaunchRecord.self, from: data)
+        guard FileManager.default.fileExists(atPath: launchRecord.monitorSocketPath) else {
+            throw VMControlError.qemuMonitorUnavailable(launchRecord.monitorSocketPath)
+        }
+
+        let screenshotURL: URL
+        if let outputPath,
+           !outputPath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            screenshotURL = URL(fileURLWithPath: outputPath)
+        } else if let path = launchRecord.consoleScreenshotPath,
+                  !path.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            screenshotURL = URL(fileURLWithPath: path)
+        } else {
+            let stamp = ISO8601DateFormatter()
+                .string(from: Date())
+                .replacingOccurrences(of: ":", with: "-")
+            screenshotURL = directory.appendingPathComponent("qemu-console-\(stamp).png")
+        }
+
+        try FileManager.default.createDirectory(
+            at: screenshotURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        QEMUVMRuntimeBooter.captureConsoleScreenshot(
+            monitorSocketURL: URL(fileURLWithPath: launchRecord.monitorSocketPath),
+            imageURL: screenshotURL
+        )
+        guard FileManager.default.fileExists(atPath: screenshotURL.path) else {
+            throw VMControlError.qemuScreenshotCaptureFailed(screenshotURL.path)
+        }
+
+        launchRecord.consoleScreenshotPath = screenshotURL.path
+        let launchData = try JSONEncoder.veilDiagnostics.encode(launchRecord)
+        try launchData.write(to: latestURL, options: .atomic)
+
+        let captureRecord = QEMUConsoleCaptureRecord(
+            monitorSocketPath: launchRecord.monitorSocketPath,
+            consoleScreenshotPath: screenshotURL.path,
+            capturedAt: Date()
+        )
+        if json {
+            let captureData = try JSONEncoder.veilDiagnostics.encode(captureRecord)
+            print(String(decoding: captureData, as: UTF8.self))
+            return
+        }
+
+        print("QEMU console screenshot captured")
+        print("Monitor socket: \(captureRecord.monitorSocketPath)")
+        print("Console screenshot: \(captureRecord.consoleScreenshotPath)")
     }
 
     private static func driveInitialQEMULaunch(
