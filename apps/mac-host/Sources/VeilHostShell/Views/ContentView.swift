@@ -54,9 +54,9 @@ private struct VeilWindowBackdrop: View {
         ZStack {
             LinearGradient(
                 colors: [
-                    Color(red: 0.075, green: 0.078, blue: 0.086),
-                    Color(red: 0.095, green: 0.098, blue: 0.108),
-                    Color(red: 0.060, green: 0.063, blue: 0.071)
+                    Color(nsColor: .windowBackgroundColor),
+                    Color(red: 0.105, green: 0.118, blue: 0.135),
+                    Color(red: 0.070, green: 0.074, blue: 0.084)
                 ],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
@@ -65,7 +65,7 @@ private struct VeilWindowBackdrop: View {
             VStack(spacing: 0) {
                 LinearGradient(
                     colors: [
-                        Color.white.opacity(0.045),
+                        Color.white.opacity(0.060),
                         Color.clear
                     ],
                     startPoint: .top,
@@ -86,14 +86,14 @@ private struct VeilWindowHeader: View {
     var body: some View {
         HStack(spacing: 12) {
             Spacer()
-                .frame(width: 70)
+                .frame(width: 84)
 
-            VeilAppMark(size: 28)
+            VeilAppMark(size: 30)
 
             VStack(alignment: .leading, spacing: 1) {
                 Text("Veil")
-                    .font(.callout.weight(.semibold))
-                Text("Windows 11 on Mac")
+                    .font(.system(size: 14, weight: .semibold))
+                Text("Windows on Mac")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             }
@@ -104,22 +104,19 @@ private struct VeilWindowHeader: View {
                 Label("Refresh", systemImage: "arrow.clockwise")
                     .labelStyle(.iconOnly)
             }
-            .buttonStyle(.borderless)
+            .buttonStyle(.plain)
+            .padding(8)
+            .background(.thinMaterial, in: Circle())
             .disabled(isRefreshing)
             .help("Refresh")
         }
         .padding(.leading, 0)
-        .padding(.trailing, 14)
-        .frame(height: 54)
+        .padding(.trailing, 16)
+        .frame(height: 62)
         .background(
-            LinearGradient(
-                colors: [
-                    Color(red: 0.110, green: 0.113, blue: 0.122),
-                    Color(red: 0.083, green: 0.086, blue: 0.095)
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
+            Rectangle()
+                .fill(.ultraThinMaterial)
+                .overlay(Color.black.opacity(0.18))
         )
         .overlay(alignment: .bottom) {
             Rectangle()

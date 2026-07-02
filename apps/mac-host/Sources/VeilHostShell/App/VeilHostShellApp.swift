@@ -45,7 +45,7 @@ struct VeilHostShellApp: App {
                 launchWindowsAppAction: launchSelectedWindowsAppWindow,
                 consoleMessage: consoleMessage
             )
-                .frame(minWidth: 960, idealWidth: 1000, minHeight: 530, idealHeight: 560)
+                .frame(minWidth: 1040, idealWidth: 1180, minHeight: 650, idealHeight: 740)
                 .task {
                     configureWindowsAppWindowCloseBridge()
                     startAgentEventPumpIfNeeded()
@@ -66,13 +66,13 @@ struct VeilHostShellApp: App {
                     }
                 }
         }
-        .defaultSize(width: 1000, height: 560)
+        .defaultSize(width: 1180, height: 740)
         .defaultWindowPlacement { _, context in
             let visibleRect = context.defaultDisplay.visibleRect
-            let preferredSize = CGSize(width: 1000, height: 560)
+            let preferredSize = CGSize(width: 1180, height: 740)
             let size = CGSize(
-                width: min(preferredSize.width, max(min(960, visibleRect.width), visibleRect.width * 0.68)),
-                height: min(preferredSize.height, max(min(530, visibleRect.height), visibleRect.height * 0.58))
+                width: min(preferredSize.width, visibleRect.width * 0.88),
+                height: min(preferredSize.height, visibleRect.height * 0.82)
             )
             return WindowPlacement(size: size)
         }
@@ -455,7 +455,7 @@ private enum MainWindowChrome {
         }
 
         configure(window)
-        compact(window)
+        fitToPreferredSize(window)
     }
 
     static func showMainWindow() {
@@ -470,6 +470,7 @@ private enum MainWindowChrome {
     }
 
     private static func configure(_ window: NSWindow) {
+        window.minSize = NSSize(width: 1040, height: 650)
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
         window.styleMask.insert(.fullSizeContentView)
@@ -478,13 +479,18 @@ private enum MainWindowChrome {
         window.backgroundColor = .clear
     }
 
-    private static func compact(_ window: NSWindow) {
-        let targetSize = NSSize(width: 1000, height: 560)
-        guard window.frame.height > targetSize.height + 40 else {
+    private static func fitToPreferredSize(_ window: NSWindow) {
+        let visibleFrame = window.screen?.visibleFrame ?? NSScreen.main?.visibleFrame ?? window.frame
+        let preferredSize = NSSize(width: 1180, height: 740)
+        let targetSize = NSSize(
+            width: min(preferredSize.width, visibleFrame.width * 0.88),
+            height: min(preferredSize.height, visibleFrame.height * 0.82)
+        )
+        let sizeDelta = abs(window.frame.width - targetSize.width) + abs(window.frame.height - targetSize.height)
+        guard sizeDelta > 16 else {
             return
         }
 
-        let visibleFrame = window.screen?.visibleFrame ?? NSScreen.main?.visibleFrame ?? window.frame
         let origin = NSPoint(
             x: visibleFrame.midX - targetSize.width / 2,
             y: visibleFrame.midY - targetSize.height / 2

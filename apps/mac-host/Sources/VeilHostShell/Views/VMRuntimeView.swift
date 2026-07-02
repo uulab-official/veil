@@ -61,25 +61,46 @@ struct VMRuntimeView: View {
                     installSimulation: installSimulation
                 )
             } else if let errorMessage = model.errorMessage {
-                ShellPanel {
-                    ContentUnavailableView(
-                        "VM Runtime Unavailable",
-                        systemImage: "desktopcomputer.trianglebadge.exclamationmark",
-                        description: Text(errorMessage)
-                    )
-                    .frame(maxWidth: .infinity, minHeight: 260)
-                }
+                RuntimeLandingPanel(
+                    title: "Windows 11",
+                    subtitle: errorMessage,
+                    primaryTitle: "Try Again",
+                    primarySymbol: "arrow.clockwise",
+                    secondaryTitle: "Set Up",
+                    primaryAction: {
+                        Task {
+                            await model.load()
+                        }
+                    },
+                    secondaryAction: {
+                        Task {
+                            await model.prepareDefaultVM()
+                        }
+                    }
+                )
             } else {
-                ShellPanel {
-                    ContentUnavailableView(
-                        "VM Runtime Not Loaded",
-                        systemImage: "desktopcomputer",
-                        description: Text("Refresh to inspect local VM runtime capabilities.")
-                    )
-                    .frame(maxWidth: .infinity, minHeight: 260)
-                }
+                RuntimeLandingPanel(
+                    title: "Windows 11",
+                    subtitle: model.phase == .loading
+                        ? "Opening the local Windows runtime."
+                        : "Install and run Windows locally on this Mac.",
+                    primaryTitle: model.phase == .loading ? "Loading..." : "Set Up Windows",
+                    primarySymbol: model.phase == .loading ? "arrow.triangle.2.circlepath" : "play.fill",
+                    secondaryTitle: "Refresh",
+                    primaryAction: {
+                        Task {
+                            await model.prepareDefaultVM()
+                        }
+                    },
+                    secondaryAction: {
+                        Task {
+                            await model.load()
+                        }
+                    }
+                )
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .fileImporter(
             isPresented: Binding(
                 get: { pathPicker != nil },
@@ -648,6 +669,71 @@ private struct MachineBadge: View {
     }
 }
 
+private struct RuntimeLandingPanel: View {
+    var title: String
+    var subtitle: String
+    var primaryTitle: String
+    var primarySymbol: String
+    var secondaryTitle: String
+    var primaryAction: () -> Void
+    var secondaryAction: () -> Void
+
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color(red: 0.02, green: 0.32, blue: 0.62),
+                            Color(red: 0.06, green: 0.10, blue: 0.18)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+
+            WindowsDisplayGrid()
+                .opacity(0.16)
+
+            VStack(spacing: 18) {
+                WindowsLogoMark(size: 86)
+                    .shadow(color: .black.opacity(0.22), radius: 18, y: 10)
+
+                VStack(spacing: 6) {
+                    Text(title)
+                        .font(.system(size: 38, weight: .semibold))
+                    Text(subtitle)
+                        .font(.callout)
+                        .foregroundStyle(.white.opacity(0.75))
+                        .multilineTextAlignment(.center)
+                        .lineLimit(2)
+                }
+
+                HStack(spacing: 10) {
+                    Button(action: primaryAction) {
+                        Label(primaryTitle, systemImage: primarySymbol)
+                            .frame(minWidth: 150)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
+
+                    Button(action: secondaryAction) {
+                        Label(secondaryTitle, systemImage: secondaryTitle == "Refresh" ? "arrow.clockwise" : "wand.and.stars")
+                    }
+                    .controlSize(.large)
+                }
+            }
+            .foregroundStyle(.white)
+            .padding(32)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .overlay {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .strokeBorder(.white.opacity(0.16), lineWidth: 1)
+        }
+    }
+}
+
 private struct ConsoleScreenshotPreview: View {
     var image: NSImage
     var path: String
@@ -1013,19 +1099,19 @@ private struct WindowsSetupDisplayPanel: View {
     var installSimulation: InstallSimulationState
 
     var body: some View {
-        ShellPanel(spacing: 0) {
+        Group {
             if effectiveInstallEvidence.isInstalled {
                 installedLauncherStage
             } else {
                 installProcessStage
             }
         }
-        .padding(0)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var installedLauncherStage: some View {
         machineDisplay
-            .frame(maxWidth: .infinity, minHeight: 486)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var installProcessStage: some View {
@@ -1033,19 +1119,30 @@ private struct WindowsSetupDisplayPanel: View {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .fill(installStageBackground)
 
-            VStack(spacing: 24) {
-                Spacer(minLength: 8)
+            VStack(spacing: 0) {
+                installDisplaySurface
 
-                VStack(spacing: 16) {
-                    if let consoleScreenshotImage {
-                        ConsoleScreenshotPreview(
-                            image: consoleScreenshotImage,
-                            path: snapshot.latestConsoleScreenshotPath ?? ""
-                        )
-                        .frame(maxWidth: 620)
-                    } else {
-                        installMark
-                    }
+                installControlBar
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+        .overlay {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .strokeBorder(.quaternary, lineWidth: 1)
+        }
+    }
+
+    private var installDisplaySurface: some View {
+        ZStack {
+            if let consoleScreenshotImage {
+                ConsoleScreenshotPreview(
+                    image: consoleScreenshotImage,
+                    path: snapshot.latestConsoleScreenshotPath ?? ""
+                )
+                .padding(20)
+            } else {
+                VStack(spacing: 18) {
+                    installMark
 
                     VStack(spacing: 8) {
                         Text("Install Windows 11")
@@ -1059,89 +1156,99 @@ private struct WindowsSetupDisplayPanel: View {
                             .lineLimit(2)
                     }
                 }
-
-                if installSimulation.phase != .idle {
-                    AssistantProgressStrip(simulation: installSimulation)
-                        .frame(maxWidth: 520)
-                }
-
-                Button(action: primaryAction) {
-                    Label(installPrimaryTitle, systemImage: primarySymbol)
-                        .frame(minWidth: 210)
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
-                .disabled(primaryDisabled)
-
-                HStack(spacing: 8) {
-                    Button(action: selectInstallerAction) {
-                        Label("Choose ISO", systemImage: "opticaldisc")
-                    }
-                    .disabled(isLoading || snapshot.state == .running || snapshot.state == .starting)
-
-                    Button(action: prepareAction) {
-                        Label("Prepare", systemImage: "wand.and.stars")
-                    }
-                    .disabled(isLoading || snapshot.state == .running || snapshot.state == .starting)
-
-                    Button(action: detailsAction) {
-                        Label("Details", systemImage: "slider.horizontal.3")
-                    }
-
-                    Button(action: refreshAction) {
-                        Label("Refresh", systemImage: "arrow.clockwise")
-                            .labelStyle(.iconOnly)
-                    }
-                    .disabled(isLoading)
-                    .help("Refresh")
-                }
-
-                HStack(spacing: 12) {
-                    InstallStatusSummary(
-                        title: "Windows ISO",
-                        value: selectedInstallerName ?? discoveredInstallerName ?? "Not selected",
-                        symbolName: "opticaldisc",
-                        tint: snapshot.installerMediaPath != nil || snapshot.discoveredInstallerMediaPath != nil ? .green : .orange
-                    )
-
-                    InstallStatusSummary(
-                        title: "Virtual Disk",
-                        value: virtualDiskSummary,
-                        symbolName: "internaldrive",
-                        tint: snapshot.virtualDiskPath == nil ? .orange : .green
-                    )
-
-                    Spacer(minLength: 0)
-
-                    InstallStatusSummary(
-                        title: "Agent",
-                        value: agentSummary,
-                        symbolName: "bolt.horizontal.circle",
-                        tint: guestAgentInstallEvidence == nil ? .secondary : .green
-                    )
-
-                    if canShowConsole {
-                        Button(action: consoleAction) {
-                            Label("Open Console", systemImage: "display")
-                        }
-                        .disabled(isLoading)
-                    }
-                }
-                .frame(maxWidth: 600)
-
-                if let latestConsoleLaunch = snapshot.latestConsoleLaunch {
-                    ConsoleLaunchEvidenceStrip(evidence: latestConsoleLaunch)
-                        .frame(maxWidth: 600)
-                }
-
-                Spacer(minLength: 8)
+                .padding(.horizontal, 32)
             }
-            .padding(34)
+
+            VStack {
+                HStack {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("WINDOWS SETUP")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                        Text(setupStageTitle)
+                            .font(.headline.weight(.semibold))
+                    }
+                    Spacer()
+                }
+                Spacer()
+            }
+            .padding(24)
         }
-        .frame(maxWidth: .infinity, minHeight: 486, alignment: .center)
-        .overlay {
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .strokeBorder(.quaternary, lineWidth: 1)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var installControlBar: some View {
+        HStack(spacing: 12) {
+            InstallStatusSummary(
+                title: "ISO",
+                value: selectedInstallerName ?? discoveredInstallerName ?? "Select ISO",
+                symbolName: "opticaldisc",
+                tint: snapshot.installerMediaPath != nil || snapshot.discoveredInstallerMediaPath != nil ? .green : .orange
+            )
+
+            InstallStatusSummary(
+                title: "Disk",
+                value: virtualDiskSummary,
+                symbolName: "internaldrive",
+                tint: snapshot.virtualDiskPath == nil ? .orange : .green
+            )
+
+            if installSimulation.phase != .idle {
+                AssistantProgressStrip(simulation: installSimulation)
+                    .frame(maxWidth: 260)
+            }
+
+            Spacer(minLength: 12)
+
+            Button(action: selectInstallerAction) {
+                Label("Choose ISO", systemImage: "opticaldisc")
+                    .labelStyle(.iconOnly)
+            }
+            .disabled(isLoading || snapshot.state == .running || snapshot.state == .starting)
+            .help("Choose ISO")
+
+            Button(action: prepareAction) {
+                Label("Prepare", systemImage: "wand.and.stars")
+                    .labelStyle(.iconOnly)
+            }
+            .disabled(isLoading || snapshot.state == .running || snapshot.state == .starting)
+            .help("Prepare Windows VM")
+
+            Button(action: detailsAction) {
+                Label(isShowingDetails ? "Hide Details" : "Details", systemImage: "slider.horizontal.3")
+                    .labelStyle(.iconOnly)
+            }
+            .help("Details")
+
+            Button(action: refreshAction) {
+                Label("Refresh", systemImage: "arrow.clockwise")
+                    .labelStyle(.iconOnly)
+            }
+            .disabled(isLoading)
+            .help("Refresh")
+
+            Button(action: primaryAction) {
+                Label(installPrimaryTitle, systemImage: primarySymbol)
+                    .frame(minWidth: 138)
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.large)
+            .disabled(primaryDisabled)
+
+            if canShowConsole {
+                Button(action: consoleAction) {
+                    Label("Console", systemImage: "display")
+                }
+                .disabled(isLoading)
+            }
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 14)
+        .background(.regularMaterial)
+        .overlay(alignment: .top) {
+            Rectangle()
+                .fill(.quaternary)
+                .frame(height: 1)
         }
     }
 
@@ -1304,6 +1411,22 @@ private struct WindowsSetupDisplayPanel: View {
         return "Choose a Windows 11 Arm ISO to prepare the local VM installation."
     }
 
+    private var setupStageTitle: String {
+        if canShowConsole {
+            return "Windows display is open"
+        }
+
+        if snapshot.latestConsoleScreenshotPath != nil {
+            return "Windows setup is running"
+        }
+
+        if canStart {
+            return "Ready to open setup"
+        }
+
+        return snapshot.profileName == nil ? "Prepare the local VM" : "Continue setup"
+    }
+
     private var installPrimaryTitle: String {
         if canStop {
             return "Stop Setup"
@@ -1386,7 +1509,7 @@ private struct WindowsSetupDisplayPanel: View {
     private var installActionTitle: String {
         switch effectiveInstallEvidence.kind {
         case .setupReady:
-            "Connect Agent"
+            "Install Windows"
         default:
             "Install Windows"
         }
