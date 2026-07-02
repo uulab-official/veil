@@ -28,6 +28,8 @@ Goal: move from QEMU readiness into real Windows installer boot evidence.
 - [x] Pad copied Arm UEFI variable stores to QEMU's 64 MiB pflash backend size.
 - [x] Add `virtio-rng-pci` to the QEMU/HVF Windows 11 Arm device plan.
 - [x] Record that secure vars plus RNG still do not satisfy Windows Setup Secure Boot on the current live smoke.
+- [x] Split Secure Boot readiness into the UTM-style secure code plus secure vars pair.
+- [x] Record that current Homebrew QEMU lacks `edk2-aarch64-secure-code.fd`.
 - [ ] Add a Secure Boot-capable AArch64 QEMU/HVF firmware and variable-store recipe that Windows Setup accepts.
 
 Evidence: on July 2, 2026, `veil-vmctl qemu-smoke --json --seconds 25`
@@ -58,5 +60,7 @@ and pads copied stores to 64 MiB. A July 2, 2026
 `qemu-smoke --json --seconds 120` run with that secure vars candidate and
 `virtio-rng-pci` still reported `boot-prompt-key-sent`, `tpm2-detected`, and
 `qemu-running`; the console PNG still showed only the Korean Secure Boot
-requirement failure. Veil therefore keeps Secure Boot as a doctor warning until
-a live Windows Setup smoke proves the requirement is gone.
+requirement failure. Veil now treats UTM-style Secure Boot readiness as a pair:
+`edk2-aarch64-secure-code.fd` plus `edk2-arm-secure-vars.fd`. The current
+Homebrew QEMU install lacks `edk2-aarch64-secure-code.fd`, so `qemu-doctor`
+reports that missing file instead of implying secure vars alone are enough.

@@ -71,7 +71,7 @@ cd apps/mac-host
 swift run veil-vmctl qemu-doctor --json | node ../../harness/qemu-doctor/src/validate-qemu-doctor.mjs
 ```
 
-The report includes named checks for VM profile, installer media, automatic install media, system disk, QEMU executable, Arm UEFI firmware plus writable `uefi-vars.fd`, Secure Boot candidate status, `swtpm` TPM 2.0 emulator, and HVF command plan. Blocked reports must include next actions that a contributor can follow without guessing. Secure Boot stays a warning until a bounded live Windows Setup smoke proves the requirement page is gone.
+The report includes named checks for VM profile, installer media, automatic install media, system disk, QEMU executable, Arm UEFI firmware plus writable `uefi-vars.fd`, Secure Boot candidate status, `swtpm` TPM 2.0 emulator, and HVF command plan. Blocked reports must include next actions that a contributor can follow without guessing. Secure Boot candidate status requires the UTM-style `edk2-aarch64-secure-code.fd` plus `edk2-arm-secure-vars.fd` pair, and still stays a warning until a bounded live Windows Setup smoke proves the requirement page is gone.
 
 ## QEMU Smoke Scenario
 
@@ -82,7 +82,7 @@ cd apps/mac-host
 swift run veil-vmctl qemu-smoke --json --seconds 25 | node ../../harness/qemu-smoke/src/validate-qemu-smoke.mjs
 ```
 
-The command uses snapshot mode and records logs plus a `qemu-smoke-*.console.png` VM-console screenshot path under `~/Downloads/Veil Diagnostics/QEMU Smoke`. It is allowed to start a local `swtpm` process, start QEMU with pflash UEFI code plus VM-local writable vars for the requested bounded duration, send bounded boot-prompt key input through QEMU's monitor, ask the monitor for a `screendump`, convert the raw frame to PNG, then terminate QEMU for classification. The current QEMU plan includes a UTM-style secure vars candidate when present and `virtio-rng-pci`, but the July 2, 2026 live smoke still showed the Windows Setup Secure Boot requirement. Every smoke report must also include recovery `nextActions` so boot failures point to concrete ISO, firmware, device, or log checks.
+The command uses snapshot mode and records logs plus a `qemu-smoke-*.console.png` VM-console screenshot path under `~/Downloads/Veil Diagnostics/QEMU Smoke`. It is allowed to start a local `swtpm` process, start QEMU with pflash UEFI code plus VM-local writable vars for the requested bounded duration, send bounded boot-prompt key input through QEMU's monitor, ask the monitor for a `screendump`, convert the raw frame to PNG, then terminate QEMU for classification. The current QEMU plan includes a UTM-style secure vars candidate when present and `virtio-rng-pci`, but the July 2, 2026 live smoke still showed the Windows Setup Secure Boot requirement and the current Homebrew QEMU install lacks matching `edk2-aarch64-secure-code.fd`. Every smoke report must also include recovery `nextActions` so boot failures point to concrete ISO, firmware, device, or log checks.
 
 ## QEMU Start Scenario
 

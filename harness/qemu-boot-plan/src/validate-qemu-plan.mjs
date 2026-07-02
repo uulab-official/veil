@@ -109,13 +109,20 @@ export function validateQEMUPlan(plan) {
     throw new TypeError("QEMU plan must attach Arm UEFI through pflash drives rather than -bios.");
   }
 
-  if (!plan.firmwarePath.endsWith("edk2-aarch64-code.fd")) {
-    throw new TypeError("QEMU plan firmware must point to edk2-aarch64-code.fd.");
+  const hasSecureFirmwareCode = plan.firmwarePath.endsWith("edk2-aarch64-secure-code.fd");
+  const hasStandardFirmwareCode = plan.firmwarePath.endsWith("edk2-aarch64-code.fd");
+  const hasSecureFirmwareVars = plan.firmwareVarsTemplatePath.endsWith("edk2-arm-secure-vars.fd");
+
+  if (!hasStandardFirmwareCode && !hasSecureFirmwareCode) {
+    throw new TypeError("QEMU plan firmware must point to edk2-aarch64-code.fd or edk2-aarch64-secure-code.fd.");
   }
 
-  if (!plan.firmwareVarsTemplatePath.endsWith("edk2-arm-vars.fd")
-    && !plan.firmwareVarsTemplatePath.endsWith("edk2-arm-secure-vars.fd")) {
+  if (!plan.firmwareVarsTemplatePath.endsWith("edk2-arm-vars.fd") && !hasSecureFirmwareVars) {
     throw new TypeError("QEMU plan firmware vars template must point to edk2-arm-vars.fd or edk2-arm-secure-vars.fd.");
+  }
+
+  if (plan.isSecureBootFirmwareAvailable && (!hasSecureFirmwareCode || !hasSecureFirmwareVars)) {
+    throw new TypeError("QEMU plan Secure Boot firmware availability requires edk2-aarch64-secure-code.fd and edk2-arm-secure-vars.fd.");
   }
 
   if (!plan.firmwareVarsPath.endsWith("uefi-vars.fd")) {

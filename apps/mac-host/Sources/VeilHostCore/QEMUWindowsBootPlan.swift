@@ -232,6 +232,22 @@ public enum LocalQEMUWindowsBootPlanFactory {
         "/usr/local/share/qemu/edk2-aarch64-code.fd",
         "/opt/local/share/qemu/edk2-aarch64-code.fd"
     ]
+    public static func defaultSecureFirmwarePaths(
+        homeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser
+    ) -> [String] {
+        [
+            homeDirectory
+                .appendingPathComponent("Library/Application Support/Veil/Firmware", isDirectory: true)
+                .appendingPathComponent("edk2-aarch64-secure-code.fd")
+                .path,
+            "/Applications/UTM.app/Contents/Resources/qemu/edk2-aarch64-secure-code.fd",
+            "/Applications/UTM.app/Contents/Resources/edk2-aarch64-secure-code.fd",
+            "/Applications/UTM.app/Contents/Frameworks/QEMU.framework/Resources/edk2-aarch64-secure-code.fd",
+            "/opt/homebrew/share/qemu/edk2-aarch64-secure-code.fd",
+            "/usr/local/share/qemu/edk2-aarch64-secure-code.fd",
+            "/opt/local/share/qemu/edk2-aarch64-secure-code.fd"
+        ]
+    }
     public static let defaultFirmwareVarsTemplatePaths = [
         "/opt/homebrew/share/qemu/edk2-arm-vars.fd",
         "/usr/local/share/qemu/edk2-arm-vars.fd",
@@ -262,6 +278,7 @@ public enum LocalQEMUWindowsBootPlanFactory {
         minimumOSSupported: Bool,
         providerProbe: VMRuntimeProviderProbe = VMRuntimeProviderProbe(),
         fileExists: @escaping @Sendable (String) -> Bool = { FileManager.default.fileExists(atPath: $0) },
+        secureFirmwarePaths: [String] = defaultSecureFirmwarePaths(),
         secureVarsTemplatePaths: [String] = defaultSecureFirmwareVarsTemplatePaths(),
         firmwareVarsTemplatePaths: [String] = defaultFirmwareVarsTemplatePaths
     ) throws -> QEMUWindowsBootPlan {
@@ -273,8 +290,11 @@ public enum LocalQEMUWindowsBootPlanFactory {
             .first { $0.kind == .qemuHypervisor }
         let executablePath = qemuProvider?.executablePath
             ?? VMRuntimeProviderProbe.defaultQEMUExecutablePaths[0]
-        let firmwarePath = defaultFirmwarePaths.first(where: fileExists)
+        let secureFirmwarePath = secureFirmwarePaths.first(where: fileExists)
         let secureFirmwareVarsTemplatePath = secureVarsTemplatePaths.first(where: fileExists)
+        let isSecureBootFirmwareAvailable = secureFirmwarePath != nil && secureFirmwareVarsTemplatePath != nil
+        let firmwarePath = (secureFirmwareVarsTemplatePath != nil ? secureFirmwarePath : nil)
+            ?? defaultFirmwarePaths.first(where: fileExists)
         let firmwareVarsTemplatePath = secureFirmwareVarsTemplatePath
             ?? firmwareVarsTemplatePaths.first(where: fileExists)
         let fallbackFirmwareVarsTemplatePath = secureVarsTemplatePaths.first
@@ -293,7 +313,7 @@ public enum LocalQEMUWindowsBootPlanFactory {
             firmwareVarsTemplatePath: firmwareVarsTemplatePath ?? fallbackFirmwareVarsTemplatePath,
             isFirmwareVarsTemplateAvailable: firmwareVarsTemplatePath != nil,
             firmwareVarsPath: firmwareVarsPath,
-            isSecureBootFirmwareAvailable: secureFirmwareVarsTemplatePath != nil,
+            isSecureBootFirmwareAvailable: isSecureBootFirmwareAvailable,
             tpmEmulatorPath: tpmEmulatorPath ?? defaultTPMEmulatorPaths[0],
             isTPMEmulatorAvailable: tpmEmulatorPath != nil,
             tpmStateDirectoryPath: tpmStateDirectoryPath
@@ -608,6 +628,16 @@ public struct QEMUWindowsReadinessDoctor: Sendable {
             )
         }
 
+        if !plan.isSecureBootFirmwareAvailable,
+           plan.firmwareVarsTemplatePath?.hasSuffix("edk2-arm-secure-vars.fd") == true {
+            return QEMUWindowsReadinessCheck(
+                id: "secure-boot",
+                title: "Secure Boot firmware",
+                state: .warning,
+                detail: "AArch64 EDK2 secure variable template is available, but matching edk2-aarch64-secure-code.fd is missing."
+            )
+        }
+
         guard plan.isSecureBootFirmwareAvailable else {
             return QEMUWindowsReadinessCheck(
                 id: "secure-boot",
@@ -735,8 +765,13 @@ public struct QEMUWindowsReadinessDoctor: Sendable {
             actions.append("Run veil-vmctl prepare --installer /path/to/Windows.iso to create Veil's writable UEFI variable store.")
         }
 
-        if checks.first(where: { $0.id == "secure-boot" })?.state == .warning {
-            actions.append("Run veil-vmctl qemu-smoke --json --seconds 120 and confirm Windows Setup no longer reports Secure Boot before marking Secure Boot support complete.")
+        if let secureBootCheck = checks.first(where: { $0.id == "secure-boot" }),
+           secureBootCheck.state == .warning {
+            if secureBootCheck.detail.contains("edk2-aarch64-secure-code.fd is missing") {
+                actions.append("Provide edk2-aarch64-secure-code.fd alongside edk2-arm-secure-vars.fd before rerunning Windows Setup smoke.")
+            } else {
+                actions.append("Run veil-vmctl qemu-smoke --json --seconds 120 and confirm Windows Setup no longer reports Secure Boot before marking Secure Boot support complete.")
+            }
         }
 
         if checks.first(where: { $0.id == "tpm-emulator" })?.state == .blocked {

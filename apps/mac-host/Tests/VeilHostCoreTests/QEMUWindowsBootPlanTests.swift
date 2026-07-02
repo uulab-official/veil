@@ -204,8 +204,8 @@ struct QEMUWindowsBootPlanTests {
         #expect(plan.arguments.containsSequence(["-device", "tpm-tis-device,tpmdev=tpm0"]))
     }
 
-    @Test("local QEMU plan factory prefers secure boot vars when available")
-    func localQEMUPlanFactoryPrefersSecureBootVars() throws {
+    @Test("local QEMU plan factory keeps Secure Boot incomplete when only secure vars are available")
+    func localQEMUPlanFactoryKeepsSecureBootIncompleteWithOnlySecureVars() throws {
         var profile = VMProfile.defaultWindows11Arm(createdAt: Date(timeIntervalSince1970: 1_782_752_400))
         profile.installerMediaPath = "/Users/test/Downloads/Win11_25H2_Korean_Arm64_v2.iso"
         profile.virtualDiskPath = "/Users/test/Virtual Machines/Veil/Windows 11 Arm.img"
@@ -232,9 +232,44 @@ struct QEMUWindowsBootPlanTests {
             ]
         )
 
+        #expect(plan.firmwarePath == "/opt/homebrew/share/qemu/edk2-aarch64-code.fd")
+        #expect(plan.firmwareVarsTemplatePath == "/Users/test/Library/Application Support/Veil/Firmware/edk2-arm-secure-vars.fd")
+        #expect(plan.isSecureBootFirmwareAvailable == false)
+        #expect(plan.warnings.isEmpty)
+    }
+
+    @Test("local QEMU plan factory uses secure code and vars as a pair")
+    func localQEMUPlanFactoryUsesSecureCodeAndVarsAsPair() throws {
+        var profile = VMProfile.defaultWindows11Arm(createdAt: Date(timeIntervalSince1970: 1_782_752_400))
+        profile.installerMediaPath = "/Users/test/Downloads/Win11_25H2_Korean_Arm64_v2.iso"
+        profile.virtualDiskPath = "/Users/test/Virtual Machines/Veil/Windows 11 Arm.img"
+        profile.sharedFolderPath = "/Users/test/Veil Shared"
+
+        let plan = try LocalQEMUWindowsBootPlanFactory.makePlan(
+            for: profile,
+            architecture: "arm64",
+            minimumOSSupported: true,
+            providerProbe: VMRuntimeProviderProbe(
+                environment: [:],
+                fileExists: { $0 == "/opt/homebrew/bin/qemu-system-aarch64" },
+                executableVersion: { _ in "QEMU emulator version 11.0.2" }
+            ),
+            fileExists: { path in
+                path == "/opt/homebrew/share/qemu/edk2-aarch64-secure-code.fd"
+                    || path == "/opt/homebrew/share/qemu/edk2-aarch64-code.fd"
+                    || path == "/Users/test/Library/Application Support/Veil/Firmware/edk2-arm-secure-vars.fd"
+                    || path == "/Users/test/Virtual Machines/Veil/uefi-vars.fd"
+                    || path == "/opt/homebrew/bin/swtpm"
+            },
+            secureVarsTemplatePaths: [
+                "/Users/test/Library/Application Support/Veil/Firmware/edk2-arm-secure-vars.fd"
+            ]
+        )
+
+        #expect(plan.firmwarePath == "/opt/homebrew/share/qemu/edk2-aarch64-secure-code.fd")
         #expect(plan.firmwareVarsTemplatePath == "/Users/test/Library/Application Support/Veil/Firmware/edk2-arm-secure-vars.fd")
         #expect(plan.isSecureBootFirmwareAvailable)
-        #expect(plan.warnings.isEmpty)
+        #expect(plan.arguments.containsSequence(["-drive", "if=pflash,format=raw,readonly=on,file=/opt/homebrew/share/qemu/edk2-aarch64-secure-code.fd"]))
     }
 
     @Test("local QEMU plan factory handles empty firmware vars candidate lists")
@@ -277,12 +312,55 @@ struct QEMUWindowsBootPlanTests {
         let planner = QEMUWindowsBootPlanner(
             executablePath: "/opt/homebrew/bin/qemu-system-aarch64",
             isExecutableAvailable: true,
-            firmwarePath: "/opt/homebrew/share/qemu/edk2-aarch64-code.fd",
+            firmwarePath: "/opt/homebrew/share/qemu/edk2-aarch64-secure-code.fd",
             isFirmwareAvailable: true,
             firmwareVarsTemplatePath: "/Users/test/Library/Application Support/Veil/Firmware/edk2-arm-secure-vars.fd",
             isFirmwareVarsTemplateAvailable: true,
             firmwareVarsPath: "/Users/test/Virtual Machines/Veil/uefi-vars.fd",
             isSecureBootFirmwareAvailable: true,
+            tpmEmulatorPath: "/opt/homebrew/bin/swtpm",
+            isTPMEmulatorAvailable: true,
+            tpmStateDirectoryPath: "/Users/test/Virtual Machines/Veil/tpm"
+        )
+        let plan = try planner.makePlan(for: profile)
+        let doctor = QEMUWindowsReadinessDoctor(
+            fileExists: { path in
+                path == "/Users/test/Downloads/Win11_25H2_Korean_Arm64_v2.iso"
+                    || path == "/Users/test/Veil Shared/VeilAutoInstall.iso"
+                    || path == "/Users/test/Virtual Machines/Veil/Windows 11 Arm.img"
+                    || path == "/opt/homebrew/bin/qemu-system-aarch64"
+                    || path == "/opt/homebrew/share/qemu/edk2-aarch64-secure-code.fd"
+                    || path == "/Users/test/Library/Application Support/Veil/Firmware/edk2-arm-secure-vars.fd"
+                    || path == "/Users/test/Virtual Machines/Veil/uefi-vars.fd"
+                    || path == "/opt/homebrew/bin/swtpm"
+                    || path == "/Users/test/Virtual Machines/Veil/tpm"
+            }
+        )
+
+        let report = doctor.makeReport(profile: profile, plan: plan)
+        let secureBootCheck = try #require(report.checks.first { $0.id == "secure-boot" })
+
+        #expect(report.overallState == .ready)
+        #expect(secureBootCheck.state == .warning)
+        #expect(secureBootCheck.detail == "AArch64 EDK2 secure variable template is available, but Secure Boot is not proven until a live Windows setup smoke passes the requirement check.")
+    }
+
+    @Test("doctor warns when secure vars are available without secure code")
+    func doctorWarnsWhenSecureVarsAreAvailableWithoutSecureCode() throws {
+        var profile = VMProfile.defaultWindows11Arm(createdAt: Date(timeIntervalSince1970: 1_782_752_400))
+        profile.installerMediaPath = "/Users/test/Downloads/Win11_25H2_Korean_Arm64_v2.iso"
+        profile.virtualDiskPath = "/Users/test/Virtual Machines/Veil/Windows 11 Arm.img"
+        profile.sharedFolderPath = "/Users/test/Veil Shared"
+
+        let planner = QEMUWindowsBootPlanner(
+            executablePath: "/opt/homebrew/bin/qemu-system-aarch64",
+            isExecutableAvailable: true,
+            firmwarePath: "/opt/homebrew/share/qemu/edk2-aarch64-code.fd",
+            isFirmwareAvailable: true,
+            firmwareVarsTemplatePath: "/Users/test/Library/Application Support/Veil/Firmware/edk2-arm-secure-vars.fd",
+            isFirmwareVarsTemplateAvailable: true,
+            firmwareVarsPath: "/Users/test/Virtual Machines/Veil/uefi-vars.fd",
+            isSecureBootFirmwareAvailable: false,
             tpmEmulatorPath: "/opt/homebrew/bin/swtpm",
             isTPMEmulatorAvailable: true,
             tpmStateDirectoryPath: "/Users/test/Virtual Machines/Veil/tpm"
@@ -307,7 +385,8 @@ struct QEMUWindowsBootPlanTests {
 
         #expect(report.overallState == .ready)
         #expect(secureBootCheck.state == .warning)
-        #expect(secureBootCheck.detail == "AArch64 EDK2 secure variable template is available, but Secure Boot is not proven until a live Windows setup smoke passes the requirement check.")
+        #expect(secureBootCheck.detail == "AArch64 EDK2 secure variable template is available, but matching edk2-aarch64-secure-code.fd is missing.")
+        #expect(report.nextActions.contains("Provide edk2-aarch64-secure-code.fd alongside edk2-arm-secure-vars.fd before rerunning Windows Setup smoke."))
     }
 
     @Test("doctor blocks when UEFI vars store is missing")

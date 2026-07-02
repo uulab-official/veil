@@ -174,7 +174,7 @@ cd apps/mac-host
 swift run veil-vmctl qemu-doctor --json | node ../../harness/qemu-doctor/src/validate-qemu-doctor.mjs
 ```
 
-Expected output: `qemu doctor valid`. The report checks profile, installer media, automatic install media, system disk, QEMU executable, Arm UEFI pflash, VM-local writable vars, Secure Boot candidate status, TPM emulator status, and HVF plan status. It must include recovery guidance whenever blocked or when Secure Boot remains live-smoke-unproven.
+Expected output: `qemu doctor valid`. The report checks profile, installer media, automatic install media, system disk, QEMU executable, Arm UEFI pflash, VM-local writable vars, Secure Boot candidate status, TPM emulator status, and HVF plan status. It must include recovery guidance whenever blocked or when Secure Boot remains live-smoke-unproven. Secure Boot candidate status is a UTM-style pair: `edk2-aarch64-secure-code.fd` plus `edk2-arm-secure-vars.fd`.
 
 ## QEMU Smoke Harness
 
@@ -192,7 +192,7 @@ cd apps/mac-host
 swift run veil-vmctl qemu-smoke --json --seconds 25 | node ../../harness/qemu-smoke/src/validate-qemu-smoke.mjs
 ```
 
-Expected current output on the test Mac: `qemu smoke valid`; the JSON currently reports `runningNoDecision` plus `boot-prompt-key-sent`, `tpm2-detected`, and `qemu-running` evidence with a `.png` `consoleScreenshotPath`. On July 2, 2026, the secure-vars plus RNG smoke PNG still showed the Korean Windows 11 Setup Secure Boot requirement, so Secure Boot remains a warning until a live smoke proves that page is gone.
+Expected current output on the test Mac: `qemu smoke valid`; the JSON currently reports `runningNoDecision` plus `boot-prompt-key-sent`, `tpm2-detected`, and `qemu-running` evidence with a `.png` `consoleScreenshotPath`. On July 2, 2026, the secure-vars plus RNG smoke PNG still showed the Korean Windows 11 Setup Secure Boot requirement. The current Homebrew QEMU install also lacks `edk2-aarch64-secure-code.fd`, so Secure Boot remains a warning until the secure code plus secure vars pair exists and a live smoke proves the requirement page is gone.
 
 ## Fixture Policy
 

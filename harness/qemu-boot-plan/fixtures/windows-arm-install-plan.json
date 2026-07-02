@@ -63,7 +63,7 @@
   "isExecutableAvailable": true,
   "isFirmwareAvailable": true,
   "isFirmwareVarsTemplateAvailable": true,
-  "isSecureBootFirmwareAvailable": true,
+  "isSecureBootFirmwareAvailable": false,
   "isTPMEmulatorAvailable": true,
   "isServerBacked": false,
   "kind": "qemuWindowsArmBootPlan",

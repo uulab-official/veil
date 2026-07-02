@@ -37,7 +37,7 @@
       "title": "Arm UEFI firmware"
     },
     {
-      "detail": "AArch64 EDK2 secure variable template is available, but Secure Boot is not proven until a live Windows setup smoke passes the requirement check.",
+      "detail": "AArch64 EDK2 secure variable template is available, but matching edk2-aarch64-secure-code.fd is missing.",
       "id": "secure-boot",
       "state": "warning",
       "title": "Secure Boot firmware"
@@ -59,6 +59,7 @@
   "kind": "qemuWindowsArmReadinessReport",
   "nextActions": [
     "Install QEMU with Homebrew or set VEIL_QEMU_SYSTEM_AARCH64 to the local qemu-system-aarch64 path.",
+    "Provide edk2-aarch64-secure-code.fd alongside edk2-arm-secure-vars.fd before rerunning Windows Setup smoke.",
     "Install swtpm locally so Veil can attach a TPM 2.0 emulator for Windows 11 setup."
   ],
   "overallState": "blocked",

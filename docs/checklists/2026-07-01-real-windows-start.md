@@ -84,6 +84,8 @@ Goal: keep the main Veil experience pointed at real local Windows boot and conso
 - [x] Prefer secure vars for new or not-yet-installed Windows profiles and pad the VM-local `uefi-vars.fd` to 64 MiB.
 - [x] Add `virtio-rng-pci` to the QEMU/HVF device plan.
 - [x] Verify a bounded secure-vars plus RNG `qemu-smoke --seconds 120` report still leaves Secure Boot as the only visible Windows 11 requirement failure.
+- [x] Model UTM-style Secure Boot readiness as `edk2-aarch64-secure-code.fd` plus `edk2-arm-secure-vars.fd`.
+- [x] Report current Homebrew QEMU's missing `edk2-aarch64-secure-code.fd` in `qemu-doctor`.
 - [x] Add recovery copy to QEMU smoke reports for common boot failures.
 - [x] Convert QEMU monitor screenshots to PNG paths so users can inspect boot evidence directly.
 - [x] Surface the latest QEMU console PNG inside the Windows setup screen when launch evidence exists.
@@ -106,7 +108,7 @@ Goal: keep the main Veil experience pointed at real local Windows boot and conso
 ## Next
 
 - [ ] Run `dotnet build apps/windows-agent/src/VeilAgent/VeilAgent.csproj` on a machine with the .NET 8 SDK installed.
-- [ ] Add a Secure Boot-capable QEMU/HVF firmware recipe that Windows Setup accepts; current local secure-vars candidate is discovered and attached, but live smoke still reports the Secure Boot requirement.
+- [ ] Add a Secure Boot-capable QEMU/HVF firmware recipe that Windows Setup accepts; current local secure-vars candidate is discovered and attached, but matching `edk2-aarch64-secure-code.fd` is not available from Homebrew QEMU.
 - [ ] Run `Veil Shared\Veil Guest Agent\Install Veil Agent.cmd` inside Windows 11 Arm and verify the current-session agent plus the `VeilAgent` logon task both start.
 - [ ] Verify the Win32/GDI HWND capture path inside Windows 11 Arm and record the captured Notepad frame evidence.
 - [ ] Tune the Windows agent frame stream for lower latency after correctness is verified.

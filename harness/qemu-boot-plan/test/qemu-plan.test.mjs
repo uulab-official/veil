@@ -13,6 +13,22 @@ describe("QEMU boot plan harness", () => {
     assert.equal(validateQEMUPlan(fixture), fixture);
   });
 
+  it("accepts Secure Boot firmware when secure code and vars are paired", () => {
+    const plan = {
+      ...fixture,
+      isSecureBootFirmwareAvailable: true,
+      firmwarePath: "/opt/homebrew/share/qemu/edk2-aarch64-secure-code.fd",
+      firmwareVarsTemplatePath: "/Users/test/Library/Application Support/Veil/Firmware/edk2-arm-secure-vars.fd",
+      arguments: fixture.arguments.map((argument) =>
+        argument === `if=pflash,format=raw,readonly=on,file=${fixture.firmwarePath}`
+          ? "if=pflash,format=raw,readonly=on,file=/opt/homebrew/share/qemu/edk2-aarch64-secure-code.fd"
+          : argument
+      )
+    };
+
+    assert.equal(validateQEMUPlan(plan), plan);
+  });
+
   it("rejects plans that are not local", () => {
     assert.throws(
       () => validateQEMUPlan({ ...fixture, isServerBacked: true }),
@@ -64,6 +80,17 @@ describe("QEMU boot plan harness", () => {
     };
 
     assert.throws(() => validateQEMUPlan(plan), /rather than -bios/);
+  });
+
+  it("rejects Secure Boot availability without secure code and vars", () => {
+    const plan = {
+      ...fixture,
+      isSecureBootFirmwareAvailable: true,
+      firmwarePath: "/opt/homebrew/share/qemu/edk2-aarch64-code.fd",
+      firmwareVarsTemplatePath: "/opt/homebrew/share/qemu/edk2-arm-vars.fd"
+    };
+
+    assert.throws(() => validateQEMUPlan(plan), /Secure Boot firmware availability/);
   });
 
   it("rejects plans without guest agent port forwarding", () => {
