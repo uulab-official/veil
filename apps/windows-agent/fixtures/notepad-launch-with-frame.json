@@ -1,0 +1,37 @@
+{
+  "scenario": "notepad-launch-with-frame",
+  "messages": [
+    {
+      "type": "app.launch.response",
+      "requestId": "req_launch_notepad",
+      "accepted": true,
+      "processId": 4912
+    },
+    {
+      "type": "window.created",
+      "windowId": "hwnd:0003029A",
+      "processId": 4912,
+      "appId": "winapp_notepad",
+      "title": "Untitled - Notepad",
+      "bounds": {
+        "x": 10,
+        "y": 10,
+        "width": 1280,
+        "height": 800
+      },
+      "state": "normal",
+      "focused": true
+    },
+    {
+      "type": "window.frame",
+      "windowId": "hwnd:0003029A",
+      "frameId": "frame_000001",
+      "sequence": 1,
+      "format": "png",
+      "width": 1,
+      "height": 1,
+      "scale": 1,
+      "encodedData": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII="
+    }
+  ]
+}

@@ -101,6 +101,14 @@ Responsibilities:
 - update and observe the Windows clipboard,
 - report health and app lifecycle events.
 
+Current scaffold status:
+
+- `apps/windows-agent` contains the first C#/.NET 8 agent project.
+- The agent exposes a WebSocket listener intended for `127.0.0.1:18444`.
+- It handles health, app list, and Notepad launch messages.
+- Notepad launch is structured to emit direct launch/window replies and broadcast a first `window.frame` event to event-subscriber sockets.
+- The first frame implementation is a deterministic bootstrap PNG behind `IWindowFrameCapture`; replacing it with real HWND capture is the next guest-agent milestone.
+
 ## Protocol Package
 
 The protocol is a product boundary. It should be easy to test without booting a real VM.

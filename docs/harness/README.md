@@ -19,6 +19,7 @@ harness/
 ├─ qemu-boot-plan/         JSON shape validation for dry-run QEMU/HVF boot plans
 ├─ qemu-doctor/            JSON shape validation for QEMU/HVF readiness reports
 ├─ qemu-smoke/             JSON shape validation for bounded QEMU/HVF boot smoke reports
+├─ windows-agent-contract/ JSON and project-shape validation for the C# Windows agent
 ├─ protocol-fixtures/      JSON fixtures for every stable message
 └─ scenarios/              scripted flows such as launch-notepad and clipboard-sync
 ```
@@ -33,6 +34,7 @@ Current executable pieces:
 - `harness/qemu-boot-plan`: a JSON validator for dry-run QEMU/HVF Windows Arm boot plans.
 - `harness/qemu-doctor`: a JSON validator for QEMU/HVF readiness reports and next actions.
 - `harness/qemu-smoke`: a JSON validator for bounded QEMU/HVF boot smoke reports.
+- `harness/windows-agent-contract`: a contract validator for the first C# Windows agent scaffold and Notepad launch transcript.
 - `packages/protocol`: shared protocol constants and validation helpers.
 
 The macOS host shell also includes an internal demo agent fallback. If the WebSocket agent is unavailable, the app still loads demo Windows app metadata and can run the Notepad demo launch flow. The header and Agent view label this as Demo mode and include the unreachable endpoint. The fallback is limited to network availability errors; protocol and agent errors remain visible. Use the external fake agent when testing the transport boundary itself.

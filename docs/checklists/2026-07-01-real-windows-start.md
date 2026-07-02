@@ -62,10 +62,13 @@ Goal: keep the main Veil experience pointed at real local Windows boot and conso
 - [x] Route `window.frame` events into the host mirror session as the latest frame payload.
 - [x] Render PNG `window.frame` payloads in the macOS mirrored app window when a frame is available.
 - [x] Feed live guest-agent `window.frame` messages into `HostDashboardModel.receiveWindowFrame(_:)`.
+- [x] Scaffold the first real `apps/windows-agent` .NET project so the acceptance flow can move from fake-agent fixtures to Windows.
+- [x] Add a Windows agent contract harness for Notepad launch plus the first bootstrap `window.frame` event.
 
 ## Next
 
-- [ ] Scaffold the first real `apps/windows-agent` project so the acceptance flow can move from fake-agent fixtures to Windows.
+- [ ] Run `dotnet build apps/windows-agent/src/VeilAgent/VeilAgent.csproj` on a machine with the .NET 8 SDK installed.
+- [ ] Replace the Windows agent bootstrap PNG frame with a real HWND capture implementation.
 - [ ] Send the first real `window.frame` event from the Windows guest agent after Notepad is launched.
 - [ ] Persist guest-agent install evidence back to the VM profile after a real Windows guest connects from the VM.
 - [ ] Improve `Autounattend.xml` so Windows Setup skips the product-key page without bundling a key.

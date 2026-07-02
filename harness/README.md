@@ -14,6 +14,7 @@ harness/
 ├─ qemu-boot-plan/         Validates dry-run QEMU/HVF Windows boot plan JSON
 ├─ qemu-doctor/            Validates QEMU/HVF readiness report JSON
 ├─ qemu-smoke/             Validates bounded QEMU/HVF boot smoke report JSON
+├─ windows-agent-contract/ Validates the first real C# Windows agent scaffold contract
 ├─ protocol-fixtures/      JSON messages used by tests and docs
 └─ scenarios/              scripted end-to-end protocol flows
 ```
@@ -109,6 +110,17 @@ The shell opens a macOS window with agent status, app list, and launch controls.
 The fake agent currently accepts launch requests only for `winapp_notepad`. The SwiftUI shell keeps that limit visible by disabling unsupported launches at the model boundary.
 
 The VM Runtime section does not depend on the fake agent. It reports local host capability and whether a Windows VM profile has been configured.
+
+## Windows Agent Contract Harness
+
+The Windows agent contract harness validates the first C#/.NET guest agent scaffold without requiring a Windows VM or the .NET SDK on the host Mac.
+
+```bash
+cd harness/windows-agent-contract
+npm test
+```
+
+Expected output: the .NET project targets `net8.0`, and the sample Notepad launch transcript emits `app.launch.response`, `window.created`, and a PNG `window.frame` event that validates against the shared protocol helpers.
 
 ## Runtime Provider Probe Harness
 
