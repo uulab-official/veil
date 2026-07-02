@@ -51,9 +51,14 @@ struct VeilHostShellApp: App {
                     startAgentEventPumpIfNeeded()
                     startAgentReconnectPollerIfNeeded()
 
+                    await model.loadRestoreIntent()
                     async let hostLoad: Void = model.load()
                     async let vmLoad: Void = vmModel.load()
                     _ = await (hostLoad, vmLoad)
+                    let restoredLaunches = await model.restoreMirroredWindowsAfterReconnect()
+                    for launch in restoredLaunches {
+                        showWindowsAppWindow(for: launch)
+                    }
                     await recordGuestAgentInstallEvidenceIfNeeded()
 
                     if Self.shouldStartVMOnLaunch {

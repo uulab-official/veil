@@ -461,13 +461,36 @@ struct HostDashboardModelTests {
     @Test("removes restored app intent when a mapped window closes")
     @MainActor
     func removesRestoredAppIntentWhenMappedWindowCloses() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let intentStore = JSONWindowRestoreIntentStore(directory: directory)
         let service = FakeDashboardService(health: .captureReady)
-        let model = HostDashboardModel(service: service)
+        let model = HostDashboardModel(service: service, restoreIntentStore: intentStore)
 
         await model.launchNotepad()
+        #expect(try await intentStore.load()?.appIds == ["winapp_notepad"])
+
         _ = await model.closeMirrorSession(windowId: "hwnd:0003029A")
 
         #expect(model.restorableAppIds.isEmpty)
+        #expect(try await intentStore.load()?.appIds == [])
+    }
+
+    @Test("loads persisted mapped app intent on startup")
+    @MainActor
+    func loadsPersistedMappedAppIntentOnStartup() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let intentStore = JSONWindowRestoreIntentStore(directory: directory)
+        try await intentStore.save(WindowRestoreIntent(appIds: ["winapp_notepad"]))
+        let model = HostDashboardModel(
+            service: FakeDashboardService(health: .captureReady),
+            restoreIntentStore: intentStore
+        )
+
+        await model.loadRestoreIntent()
+
+        #expect(model.restorableAppIds == ["winapp_notepad"])
     }
 
     @Test("does not hide primary agent protocol failures behind demo fallback")

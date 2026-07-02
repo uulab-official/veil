@@ -96,9 +96,14 @@ public final class HostDashboardModel {
     public var selectedAppId: String?
 
     private let service: any HostDashboardService
+    private let restoreIntentStore: any WindowRestoreIntentStore
 
-    public init(service: any HostDashboardService) {
+    public init(
+        service: any HostDashboardService,
+        restoreIntentStore: any WindowRestoreIntentStore = JSONWindowRestoreIntentStore()
+    ) {
         self.service = service
+        self.restoreIntentStore = restoreIntentStore
     }
 
     public var statusText: String {
@@ -196,6 +201,14 @@ public final class HostDashboardModel {
         return nil
     }
 
+    public func loadRestoreIntent() async {
+        do {
+            restorableAppIds = try await restoreIntentStore.load()?.appIds ?? []
+        } catch {
+            errorMessage = userMessage(for: error)
+        }
+    }
+
     public func restoreMirroredWindowsAfterReconnect() async -> [NotepadLaunchResult] {
         guard !restorableAppIds.isEmpty else {
             return []
@@ -254,7 +267,7 @@ public final class HostDashboardModel {
             connectionDetail = result.connectionDetail
             selectedAppId = result.window.appId
             lastLaunch = result
-            rememberRestorableAppId(result.window.appId)
+            await rememberRestorableAppId(result.window.appId)
             storeActiveWindow(result.window)
             storeMirrorSession(
                 window: result.window,
@@ -298,7 +311,7 @@ public final class HostDashboardModel {
             }
             let response = try await service.closeWindow(windowId: windowId)
             if response.accepted {
-                removeWindowState(windowId: windowId)
+                await removeWindowState(windowId: windowId)
             }
             return response
         } catch {
@@ -460,7 +473,7 @@ public final class HostDashboardModel {
         mirrorSessions.append(session)
     }
 
-    private func removeWindowState(windowId: String) {
+    private func removeWindowState(windowId: String) async {
         let removedAppIds = activeWindows
             .filter { $0.windowId == windowId }
             .map(\.appId)
@@ -472,20 +485,30 @@ public final class HostDashboardModel {
         }
 
         for appId in removedAppIds {
-            forgetRestorableAppId(appId)
+            await forgetRestorableAppId(appId)
         }
     }
 
-    private func rememberRestorableAppId(_ appId: String) {
-        guard !restorableAppIds.contains(appId) else {
+    private func rememberRestorableAppId(_ appId: String) async {
+        if !restorableAppIds.contains(appId) {
+            restorableAppIds.append(appId)
+        }
+
+        await persistRestoreIntent()
+    }
+
+    private func forgetRestorableAppId(_ appId: String) async {
+        restorableAppIds.removeAll { $0 == appId }
+        await persistRestoreIntent()
+    }
+
+    private func persistRestoreIntent() async {
+        do {
+            try await restoreIntentStore.save(WindowRestoreIntent(appIds: restorableAppIds))
+        } catch {
+            errorMessage = userMessage(for: error)
             return
         }
-
-        restorableAppIds.append(appId)
-    }
-
-    private func forgetRestorableAppId(_ appId: String) {
-        restorableAppIds.removeAll { $0 == appId }
     }
 
     private func selectDefaultAppIfNeeded() {
