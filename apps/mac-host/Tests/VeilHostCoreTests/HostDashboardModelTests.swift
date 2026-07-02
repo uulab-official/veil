@@ -225,7 +225,7 @@ struct HostDashboardModelTests {
 
         await model.load()
         primary.error = nil
-        await model.refreshLiveAgentIfNeeded()
+        _ = await model.refreshLiveAgentIfNeeded()
 
         #expect(model.phase == .connected)
         #expect(model.connectionMode == .agent)
@@ -258,11 +258,12 @@ struct HostDashboardModelTests {
         #expect(model.connectionDetail == "No Windows agent reachable at ws://127.0.0.1:18444. Showing built-in demo data.")
 
         primary.error = nil
-        await model.refreshLiveAgentIfNeeded()
+        let fulfilledLaunch = await model.refreshLiveAgentIfNeeded()
 
         #expect(model.connectionMode == .agent)
         #expect(model.pendingLaunchAppId == nil)
         #expect(model.lastLaunch?.window.title == "Untitled - Notepad")
+        #expect(fulfilledLaunch?.window.title == "Untitled - Notepad")
         #expect(model.mirrorSessions.map(\.id) == ["hwnd:0003029A"])
         #expect(primary.launchCount == 1)
     }

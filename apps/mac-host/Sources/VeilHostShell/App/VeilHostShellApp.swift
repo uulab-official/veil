@@ -177,7 +177,9 @@ struct VeilHostShellApp: App {
                 let vmState = vmModel.snapshot?.state
                 let shouldPoll = (vmState == .running || vmState == .starting) && !model.hasLiveAgentConnection
                 if shouldPoll {
-                    await model.refreshLiveAgentIfNeeded()
+                    if let fulfilledLaunch = await model.refreshLiveAgentIfNeeded() {
+                        showWindowsAppWindow(for: fulfilledLaunch)
+                    }
                     await recordGuestAgentInstallEvidenceIfNeeded()
                 }
 
@@ -236,14 +238,18 @@ struct VeilHostShellApp: App {
                 return
             }
 
-            let session = model.mirrorSessions.first { $0.id == result.window.windowId }
+            showWindowsAppWindow(for: result)
+        }
+    }
+
+    private func showWindowsAppWindow(for result: NotepadLaunchResult) {
+        let session = model.mirrorSessions.first { $0.id == result.window.windowId }
                 ?? WindowMirrorSession(
                     window: result.window,
                     connectionMode: model.connectionMode,
                     captureState: .unavailable
                 )
-            windowsAppWindowPresenter.showWindow(for: session)
-        }
+        windowsAppWindowPresenter.showWindow(for: session)
     }
 
     private func showVMConsole() {

@@ -169,9 +169,9 @@ public final class HostDashboardModel {
         }
     }
 
-    public func refreshLiveAgentIfNeeded() async {
+    public func refreshLiveAgentIfNeeded() async -> NotepadLaunchResult? {
         guard !hasLiveAgentConnection else {
-            return
+            return nil
         }
 
         await load()
@@ -179,8 +179,10 @@ public final class HostDashboardModel {
         if hasLiveAgentConnection,
            pendingLaunchAppId == "winapp_notepad" {
             pendingLaunchAppId = nil
-            await launchNotepad()
+            return await launchNotepad()
         }
+
+        return nil
     }
 
     public func launchSelectedApp() async {
@@ -202,10 +204,11 @@ public final class HostDashboardModel {
             return
         }
 
-        await launchNotepad()
+        _ = await launchNotepad()
     }
 
-    public func launchNotepad() async {
+    @discardableResult
+    public func launchNotepad() async -> NotepadLaunchResult? {
         phase = .launching
         errorMessage = nil
 
@@ -224,9 +227,11 @@ public final class HostDashboardModel {
                 supportsCapture: result.health.capabilities.windowCapture
             )
             phase = .connected
+            return result
         } catch {
             errorMessage = userMessage(for: error)
             phase = .failed
+            return nil
         }
     }
 

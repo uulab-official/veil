@@ -82,6 +82,7 @@ Goal: keep the main Veil experience pointed at real local Windows boot and conso
 - [x] Poll for a live guest agent while the VM is running so the host can leave demo mode after installation without a manual refresh.
 - [x] Gate macOS app-window launch on a live Windows guest agent so demo fallback cannot masquerade as real mirroring.
 - [x] Queue a Notepad open request while waiting for the live agent, then launch it automatically after the agent connects.
+- [x] Return fulfilled pending-launch results to the macOS presenter so the accepted HWND opens as a Mac window after reconnect.
 
 ## Next
 
