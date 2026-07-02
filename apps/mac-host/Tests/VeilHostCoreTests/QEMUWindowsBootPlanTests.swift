@@ -74,6 +74,34 @@ struct QEMUWindowsBootPlanTests {
         #expect(plan.warnings.isEmpty)
     }
 
+    @Test("attaches optional Windows driver media")
+    func attachesOptionalWindowsDriverMedia() throws {
+        var profile = VMProfile.defaultWindows11Arm(createdAt: Date(timeIntervalSince1970: 1_782_752_400))
+        profile.installerMediaPath = "/Users/test/Downloads/Win11_25H2_Korean_Arm64_v2.iso"
+        profile.driverMediaPath = "/Users/test/Downloads/virtio-win.iso"
+        profile.virtualDiskPath = "/Users/test/Virtual Machines/Veil/Windows 11 Arm.img"
+        profile.sharedFolderPath = "/Users/test/Veil Shared"
+
+        let planner = QEMUWindowsBootPlanner(
+            executablePath: "/opt/homebrew/bin/qemu-system-aarch64",
+            isExecutableAvailable: true,
+            firmwarePath: "/opt/homebrew/share/qemu/edk2-aarch64-code.fd",
+            isFirmwareAvailable: true,
+            firmwareVarsTemplatePath: "/opt/homebrew/share/qemu/edk2-arm-vars.fd",
+            isFirmwareVarsTemplateAvailable: true,
+            firmwareVarsPath: "/Users/test/Virtual Machines/Veil/uefi-vars.fd",
+            isSecureBootFirmwareAvailable: false,
+            tpmEmulatorPath: "/opt/homebrew/bin/swtpm",
+            isTPMEmulatorAvailable: true,
+            tpmStateDirectoryPath: "/Users/test/Virtual Machines/Veil/tpm"
+        )
+
+        let plan = try planner.makePlan(for: profile)
+
+        #expect(plan.arguments.contains("driver=raw,file.driver=file,file.locking=off,file.filename=/Users/test/Downloads/virtio-win.iso,if=none,id=drivers,media=cdrom,readonly=on"))
+        #expect(plan.arguments.containsSequence(["-device", "usb-storage,drive=drivers"]))
+    }
+
     @Test("rejects profiles without installer media")
     func rejectsMissingInstallerMedia() {
         var profile = VMProfile.defaultWindows11Arm(createdAt: Date(timeIntervalSince1970: 1_782_752_400))

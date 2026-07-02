@@ -47,6 +47,7 @@ public struct VMProfile: Codable, Equatable, Identifiable, Sendable {
     public var suspendOnQuit: Bool
     public var sharedFolderPath: String
     public var installerMediaPath: String?
+    public var driverMediaPath: String?
     public var virtualDiskPath: String?
     public var windowsInstalled: Bool?
     public var guestAgentVersion: String?
@@ -64,6 +65,7 @@ public struct VMProfile: Codable, Equatable, Identifiable, Sendable {
         suspendOnQuit: Bool,
         sharedFolderPath: String,
         installerMediaPath: String? = nil,
+        driverMediaPath: String? = nil,
         virtualDiskPath: String? = nil,
         windowsInstalled: Bool? = nil,
         guestAgentVersion: String? = nil,
@@ -80,6 +82,7 @@ public struct VMProfile: Codable, Equatable, Identifiable, Sendable {
         self.suspendOnQuit = suspendOnQuit
         self.sharedFolderPath = sharedFolderPath
         self.installerMediaPath = installerMediaPath
+        self.driverMediaPath = driverMediaPath
         self.virtualDiskPath = virtualDiskPath
         self.windowsInstalled = windowsInstalled
         self.guestAgentVersion = guestAgentVersion

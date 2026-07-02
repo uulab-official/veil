@@ -190,6 +190,7 @@ struct VMRuntimeModelTests {
                 minimumOSSupported: true,
                 profileName: "Windows 11 Arm",
                 installerMediaPath: "/Users/test/Downloads/Windows.iso",
+                driverMediaPath: "/Users/test/Downloads/virtio-win.iso",
                 virtualDiskPath: "/Users/test/Virtual Machines/Windows.vhdx",
                 bootReady: true,
                 detail: "Ready to start Windows."
@@ -199,6 +200,7 @@ struct VMRuntimeModelTests {
 
         await model.updateProfilePaths(
             installerMediaPath: "/Users/test/Downloads/Windows.iso",
+            driverMediaPath: "/Users/test/Downloads/virtio-win.iso",
             virtualDiskPath: "/Users/test/Virtual Machines/Windows.vhdx"
         )
 
@@ -206,6 +208,7 @@ struct VMRuntimeModelTests {
         #expect(model.snapshot?.bootReady == true)
         #expect(model.canStart)
         #expect(service.updatedInstallerMediaPath == "/Users/test/Downloads/Windows.iso")
+        #expect(service.updatedDriverMediaPath == "/Users/test/Downloads/virtio-win.iso")
         #expect(service.updatedVirtualDiskPath == "/Users/test/Virtual Machines/Windows.vhdx")
     }
 
@@ -430,6 +433,7 @@ private final class FakeVMRuntimeService: VMRuntimeService {
     var error: (any Error)?
     var startError: (any Error)?
     private(set) var updatedInstallerMediaPath: String?
+    private(set) var updatedDriverMediaPath: String?
     private(set) var updatedVirtualDiskPath: String?
     private(set) var markedGuestAgentVersion: String?
     private(set) var createCount = 0
@@ -506,12 +510,13 @@ private final class FakeVMRuntimeService: VMRuntimeService {
         return preparedSnapshot
     }
 
-    func updateProfilePaths(installerMediaPath: String?, virtualDiskPath: String?) async throws -> VMRuntimeSnapshot {
+    func updateProfilePaths(installerMediaPath: String?, driverMediaPath: String?, virtualDiskPath: String?) async throws -> VMRuntimeSnapshot {
         if let error {
             throw error
         }
 
         updatedInstallerMediaPath = installerMediaPath
+        updatedDriverMediaPath = driverMediaPath
         updatedVirtualDiskPath = virtualDiskPath
         let updatedSnapshot = try #require(updatedSnapshot)
         snapshot = updatedSnapshot

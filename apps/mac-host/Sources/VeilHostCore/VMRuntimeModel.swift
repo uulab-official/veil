@@ -5,7 +5,7 @@ public protocol VMRuntimeService: Sendable {
     func prepareDefaultVM() async throws -> VMRuntimeSnapshot
     func createDefaultProfile() async throws -> VMRuntimeSnapshot
     func createDefaultVirtualDisk() async throws -> VMRuntimeSnapshot
-    func updateProfilePaths(installerMediaPath: String?, virtualDiskPath: String?) async throws -> VMRuntimeSnapshot
+    func updateProfilePaths(installerMediaPath: String?, driverMediaPath: String?, virtualDiskPath: String?) async throws -> VMRuntimeSnapshot
     func markGuestAgentConnected(agentVersion: String) async throws -> VMRuntimeSnapshot
     func start() async throws -> VMRuntimeSnapshot
     func stop() async throws -> VMRuntimeSnapshot
@@ -231,6 +231,7 @@ public struct VMRuntimeSnapshot: Codable, Equatable, Sendable {
     public var diskGB: Int?
     public var installerMediaPath: String?
     public var discoveredInstallerMediaPath: String?
+    public var driverMediaPath: String?
     public var virtualDiskPath: String?
     public var virtualDiskAllocatedBytes: Int64?
     public var automaticInstallAnswerFilePath: String?
@@ -258,6 +259,7 @@ public struct VMRuntimeSnapshot: Codable, Equatable, Sendable {
         diskGB: Int? = nil,
         installerMediaPath: String? = nil,
         discoveredInstallerMediaPath: String? = nil,
+        driverMediaPath: String? = nil,
         virtualDiskPath: String? = nil,
         virtualDiskAllocatedBytes: Int64? = nil,
         automaticInstallAnswerFilePath: String? = nil,
@@ -284,6 +286,7 @@ public struct VMRuntimeSnapshot: Codable, Equatable, Sendable {
         self.diskGB = diskGB
         self.installerMediaPath = installerMediaPath
         self.discoveredInstallerMediaPath = discoveredInstallerMediaPath
+        self.driverMediaPath = driverMediaPath
         self.virtualDiskPath = virtualDiskPath
         self.virtualDiskAllocatedBytes = virtualDiskAllocatedBytes
         self.automaticInstallAnswerFilePath = automaticInstallAnswerFilePath
@@ -857,13 +860,14 @@ public final class VMRuntimeModel {
         }
     }
 
-    public func updateProfilePaths(installerMediaPath: String?, virtualDiskPath: String?) async {
+    public func updateProfilePaths(installerMediaPath: String?, driverMediaPath: String?, virtualDiskPath: String?) async {
         phase = .loading
         errorMessage = nil
 
         do {
             snapshot = try await service.updateProfilePaths(
                 installerMediaPath: installerMediaPath,
+                driverMediaPath: driverMediaPath,
                 virtualDiskPath: virtualDiskPath
             )
             phase = .loaded
@@ -1053,6 +1057,7 @@ public struct LocalVMRuntimeService: VMRuntimeService {
                 diskGB: profile.diskGB,
                 installerMediaPath: profile.installerMediaPath,
                 discoveredInstallerMediaPath: profile.installerMediaPath == nil ? discoveredInstallerMediaPath : nil,
+                driverMediaPath: profile.driverMediaPath,
                 virtualDiskPath: profile.virtualDiskPath,
                 virtualDiskAllocatedBytes: virtualDiskAllocatedBytes,
                 automaticInstallAnswerFilePath: Self.automaticInstallAnswerFilePathIfExists(for: profile),
@@ -1596,9 +1601,10 @@ public struct LocalVMRuntimeService: VMRuntimeService {
         return nil
     }
 
-    public func updateProfilePaths(installerMediaPath: String?, virtualDiskPath: String?) async throws -> VMRuntimeSnapshot {
+    public func updateProfilePaths(installerMediaPath: String?, driverMediaPath: String?, virtualDiskPath: String?) async throws -> VMRuntimeSnapshot {
         var profile = try await profileStore.load() ?? defaultProfile()
         profile.installerMediaPath = installerMediaPath
+        profile.driverMediaPath = driverMediaPath
         profile.virtualDiskPath = virtualDiskPath
         try await profileStore.save(profile)
         return try await loadSnapshot()

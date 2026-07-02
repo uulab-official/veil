@@ -183,6 +183,7 @@ struct VeilVMControl {
         let preparedSnapshot = try await service.prepareDefaultVM()
         let configuredSnapshot = try await service.updateProfilePaths(
             installerMediaPath: installerURL.path,
+            driverMediaPath: preparedSnapshot.driverMediaPath,
             virtualDiskPath: preparedSnapshot.virtualDiskPath
         )
         let diagnosticsURL = try await service.exportDiagnostics(to: diagnosticsDirectory())

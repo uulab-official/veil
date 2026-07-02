@@ -131,6 +131,7 @@ public struct QEMUWindowsBootPlanner: Sendable {
         let automaticInstallMediaPath = URL(fileURLWithPath: profile.sharedFolderPath)
             .appendingPathComponent("VeilAutoInstall.iso")
             .path
+        let driverMediaPath = nonEmpty(profile.driverMediaPath)
         var warnings: [String] = []
 
         if !isExecutableAvailable {
@@ -197,6 +198,13 @@ public struct QEMUWindowsBootPlanner: Sendable {
             "-device", "usb-kbd",
             "-device", "usb-tablet"
         ])
+
+        if let driverMediaPath {
+            arguments.append(contentsOf: [
+                "-drive", "driver=raw,file.driver=file,file.locking=off,file.filename=\(driverMediaPath),if=none,id=drivers,media=cdrom,readonly=on",
+                "-device", "usb-storage,drive=drivers"
+            ])
+        }
 
         return QEMUWindowsBootPlan(
             executablePath: executablePath,
