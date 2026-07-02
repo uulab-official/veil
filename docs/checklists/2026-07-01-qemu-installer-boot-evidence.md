@@ -30,7 +30,13 @@ Goal: move from QEMU readiness into real Windows installer boot evidence.
 - [x] Record that secure vars plus RNG still do not satisfy Windows Setup Secure Boot on the current live smoke.
 - [x] Split Secure Boot readiness into the UTM-style secure code plus secure vars pair.
 - [x] Record that current Homebrew QEMU lacks `edk2-aarch64-secure-code.fd`.
-- [ ] Add a Secure Boot-capable AArch64 QEMU/HVF firmware and variable-store recipe that Windows Setup accepts.
+- [x] Add a local-only Secure Boot-capable AArch64 QEMU/HVF firmware and variable-store recipe that Windows Setup accepts.
+- [x] Record that the secure firmware pair reaches the Windows Setup disk-selection screen.
+- [x] Switch the install-time system disk from VirtIO block to NVMe so Windows Setup can use an inbox storage driver.
+- [x] Verify that the NVMe system disk appears as an install target in Windows Setup.
+- [x] Add UEFI/GPT Disk 0 partitioning and `InstallTo` Disk 0 Partition 3 to `Autounattend.xml`.
+- [x] Verify that bounded Windows Setup smoke advances to the Windows 11 installing screen.
+- [ ] Run a persistent visible install through the first Windows Setup reboot.
 
 Evidence: on July 2, 2026, `veil-vmctl qemu-smoke --json --seconds 25`
 generated a console PNG showing the Korean Windows 11 Setup product-key screen
@@ -64,3 +70,34 @@ requirement failure. Veil now treats UTM-style Secure Boot readiness as a pair:
 `edk2-aarch64-secure-code.fd` plus `edk2-arm-secure-vars.fd`. The current
 Homebrew QEMU install lacks `edk2-aarch64-secure-code.fd`, so `qemu-doctor`
 reports that missing file instead of implying secure vars alone are enough.
+
+Secure firmware pair evidence: a local-only Ubuntu AAVMF package,
+`qemu-efi-aarch64_2024.02-2ubuntu0.7_all.deb`, contains
+`AAVMF_CODE.secboot.fd` and `AAVMF_VARS.ms.fd`. On July 2, 2026 these were
+copied into the user-local Veil firmware cache as
+`edk2-aarch64-secure-code.fd` and `edk2-arm-secure-vars.fd`, then copied into
+the VM-local `uefi-vars.fd` store. The binaries are not committed. A
+`qemu-smoke --json --seconds 120` run then reached the Korean Windows 11 Setup
+disk-selection screen, which means the earlier TPM and Secure Boot requirement
+page was no longer the visible blocker.
+
+Storage evidence: that disk-selection screen showed no install target while the
+system disk used `virtio-blk-pci`. Veil now plans the writable raw disk behind
+`-device nvme,drive=system,serial=veil-system`, matching the UTM-style QEMU
+NVMe device pattern and avoiding a VirtIO block driver requirement during
+Windows Setup.
+
+NVMe evidence: after switching the install-time system disk to NVMe, a July 2,
+2026 `qemu-smoke --json --seconds 120` run wrote
+`/Users/bonjin/Downloads/Veil Diagnostics/QEMU Smoke/qemu-smoke-2026-07-02T07-28-44Z.console.png`.
+The PNG shows the Korean Windows 11 Setup disk-selection screen with
+`Disk 0 Unallocated Space` at 128.0 GB selected. The JSON classifier stayed
+`runningNoDecision`, so the screenshot is the checkpoint evidence.
+
+Automatic partition evidence: after adding UEFI/GPT Disk 0 partitioning and
+`InstallTo` Disk 0 Partition 3 to Veil's generated `Autounattend.xml`, a July
+2, 2026 bounded `qemu-smoke` wrote
+`/Users/bonjin/Downloads/Veil Diagnostics/QEMU Smoke/qemu-smoke-2026-07-02T07-30-52Z.console.png`.
+The PNG shows the Korean `Windows 11 installing` screen at 39% complete. The
+smoke command still reports `runningNoDecision` because serial output does not
+prove Windows Setup state, so the screenshot remains the authoritative evidence.

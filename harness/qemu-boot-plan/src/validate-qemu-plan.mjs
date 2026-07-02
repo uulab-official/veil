@@ -15,7 +15,7 @@ const REQUIRED_DEVICES = [
   "usb-storage,drive=installer",
   "usb-storage,drive=autounattend",
   "qemu-xhci,id=usb0",
-  "virtio-blk-pci,drive=system",
+  "nvme,drive=system,serial=veil-system",
   "virtio-rng-pci",
   "ramfb",
   "virtio-gpu-pci",
@@ -91,6 +91,10 @@ export function validateQEMUPlan(plan) {
     if (!containsSequence(plan.arguments, sequence)) {
       throw new TypeError(`QEMU plan arguments must include sequence: ${sequence.join(" ")}`);
     }
+  }
+
+  if (containsSequence(plan.arguments, ["-device", "virtio-blk-pci,drive=system"])) {
+    throw new TypeError("QEMU plan must attach an NVMe system disk for Windows setup inbox driver support.");
   }
 
   for (const device of REQUIRED_DEVICES) {

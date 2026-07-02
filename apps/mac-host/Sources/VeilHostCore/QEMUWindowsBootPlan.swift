@@ -187,7 +187,7 @@ public struct QEMUWindowsBootPlanner: Sendable {
             "-device", "usb-storage,drive=installer",
             "-device", "usb-storage,drive=autounattend",
             "-drive", "if=none,id=system,format=raw,file=\(virtualDiskPath)",
-            "-device", "virtio-blk-pci,drive=system",
+            "-device", "nvme,drive=system,serial=veil-system",
             "-netdev", "user,id=net0,\(guestAgentForward)",
             "-device", "virtio-net-pci,netdev=net0",
             "-device", "virtio-rng-pci",

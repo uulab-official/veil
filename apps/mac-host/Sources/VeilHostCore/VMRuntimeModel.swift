@@ -1376,15 +1376,58 @@ public struct LocalVMRuntimeService: VMRuntimeService {
               <UserLocale>ko-KR</UserLocale>
             </component>
             <component name="Microsoft-Windows-Setup" processorArchitecture="arm64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
+              <DiskConfiguration>
+                <Disk wcm:action="add">
+                  <DiskID>0</DiskID>
+                  <WillWipeDisk>true</WillWipeDisk>
+                  <CreatePartitions>
+                    <CreatePartition wcm:action="add">
+                      <Order>1</Order>
+                      <Type>EFI</Type>
+                      <Size>100</Size>
+                    </CreatePartition>
+                    <CreatePartition wcm:action="add">
+                      <Order>2</Order>
+                      <Type>MSR</Type>
+                      <Size>16</Size>
+                    </CreatePartition>
+                    <CreatePartition wcm:action="add">
+                      <Order>3</Order>
+                      <Type>Primary</Type>
+                      <Extend>true</Extend>
+                    </CreatePartition>
+                  </CreatePartitions>
+                  <ModifyPartitions>
+                    <ModifyPartition wcm:action="add">
+                      <Order>1</Order>
+                      <PartitionID>1</PartitionID>
+                      <Label>System</Label>
+                      <Format>FAT32</Format>
+                    </ModifyPartition>
+                    <ModifyPartition wcm:action="add">
+                      <Order>2</Order>
+                      <PartitionID>3</PartitionID>
+                      <Label>Windows</Label>
+                      <Letter>C</Letter>
+                      <Format>NTFS</Format>
+                    </ModifyPartition>
+                  </ModifyPartitions>
+                </Disk>
+                <WillShowUI>Never</WillShowUI>
+              </DiskConfiguration>
               <ImageInstall>
                 <OSImage>
+                  <InstallTo>
+                    <DiskID>0</DiskID>
+                    <PartitionID>3</PartitionID>
+                  </InstallTo>
                   <InstallFrom>
                     <MetaData wcm:action="add">
                       <Key>/IMAGE/NAME</Key>
                       <Value>Windows 11 Pro</Value>
                     </MetaData>
                   </InstallFrom>
-                  <WillShowUI>OnError</WillShowUI>
+                  <WillShowUI>Never</WillShowUI>
                 </OSImage>
               </ImageInstall>
               <UserData>

@@ -37,7 +37,7 @@
     "-drive",
     "if=none,id=system,format=raw,file=/Users/test/Virtual Machines/Veil/Windows 11 Arm.img",
     "-device",
-    "virtio-blk-pci,drive=system",
+    "nvme,drive=system,serial=veil-system",
     "-netdev",
     "user,id=net0,hostfwd=tcp::18444-:18444",
     "-device",

@@ -114,4 +114,17 @@ describe("QEMU boot plan harness", () => {
 
     assert.throws(() => validateQEMUPlan(plan), /TPM 2.0 emulator/);
   });
+
+  it("rejects VirtIO block as the install-time system disk", () => {
+    const plan = {
+      ...fixture,
+      arguments: fixture.arguments.map((argument) =>
+        argument === "nvme,drive=system,serial=veil-system"
+          ? "virtio-blk-pci,drive=system"
+          : argument
+      )
+    };
+
+    assert.throws(() => validateQEMUPlan(plan), /NVMe system disk/);
+  });
 });

@@ -659,10 +659,30 @@ struct VMProfileStoreTests {
         #expect(snapshot.automaticInstallMediaPath == homeDirectory.appendingPathComponent("Veil Shared/VeilAutoInstall.iso").path)
         #expect(answerFile.contains("<unattend"))
         #expect(answerFile.contains("<AcceptEula>true</AcceptEula>"))
+        #expect(answerFile.contains("<DiskConfiguration>"))
+        #expect(answerFile.contains("<DiskID>0</DiskID>"))
+        #expect(answerFile.contains("<WillWipeDisk>true</WillWipeDisk>"))
+        #expect(answerFile.contains("<Type>EFI</Type>"))
+        #expect(answerFile.contains("<Type>MSR</Type>"))
+        #expect(answerFile.contains("<Type>Primary</Type>"))
+        #expect(answerFile.contains("<Label>System</Label>"))
+        #expect(answerFile.contains("<Format>FAT32</Format>"))
+        #expect(answerFile.contains("<Label>Windows</Label>"))
+        #expect(answerFile.contains("<Format>NTFS</Format>"))
         #expect(answerFile.contains("<ImageInstall>"))
+        #expect(answerFile.contains("<InstallTo>"))
+        #expect(answerFile.contains("<PartitionID>3</PartitionID>"))
         #expect(answerFile.contains("<Key>/IMAGE/NAME</Key>"))
         #expect(answerFile.contains("<Value>Windows 11 Pro</Value>"))
-        #expect(answerFile.contains("<WillShowUI>OnError</WillShowUI>"))
+        #expect(answerFile.range(
+            of: #"<DiskConfiguration>[\s\S]*?<WillShowUI>Never</WillShowUI>[\s\S]*?</DiskConfiguration>"#,
+            options: .regularExpression
+        ) != nil)
+        #expect(answerFile.range(
+            of: #"<ImageInstall>[\s\S]*?<WillShowUI>Never</WillShowUI>[\s\S]*?</ImageInstall>"#,
+            options: .regularExpression
+        ) != nil)
+        #expect(!answerFile.contains("<WillShowUI>OnError</WillShowUI>"))
         #expect(answerFile.contains("<ProductKey>"))
         #expect(answerFile.contains("<WillShowUI>Never</WillShowUI>"))
         #expect(answerFile.range(

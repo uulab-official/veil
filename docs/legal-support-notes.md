@@ -35,6 +35,12 @@ When Veil needs to reduce edition-selection prompts, it should prefer Windows Se
 
 - https://learn.microsoft.com/en-us/windows-hardware/customize/desktop/unattend/microsoft-windows-setup-imageinstall-osimage-installfrom-metadata
 
+Veil may generate unattended disk configuration only for the blank local VM disk it creates or the user explicitly assigns to the VM profile. Disk wiping must remain scoped to the guest VM disk (`DiskID` 0 inside Windows Setup), never to a host volume. Microsoft documents `DiskConfiguration`, `CreatePartition`, and UEFI/GPT partitioning as Windows Setup mechanisms:
+
+- https://learn.microsoft.com/en-us/windows-hardware/customize/desktop/unattend/microsoft-windows-setup-diskconfiguration
+- https://learn.microsoft.com/en-us/windows-hardware/customize/desktop/unattend/microsoft-windows-setup-diskconfiguration-disk-createpartitions-createpartition
+- https://learn.microsoft.com/en-us/windows-hardware/manufacture/desktop/configure-uefigpt-based-hard-drive-partitions?view=windows-11
+
 ## Serverless Runtime Wording
 
 Veil's VM execution layer is a local runtime provider. Product and architecture docs should not describe this as a cloud backend, hosted Windows backend, or server VM backend. If QEMU/HVF is added later, it is still a local runtime provider launched by the macOS app, not a remote service.

@@ -57,6 +57,8 @@ struct QEMUWindowsBootPlanTests {
         #expect(plan.automaticInstallMediaPath == "/Users/test/Veil Shared/VeilAutoInstall.iso")
         #expect(plan.arguments.contains("driver=raw,file.driver=file,file.locking=off,file.filename=/Users/test/Veil Shared/VeilAutoInstall.iso,if=none,id=autounattend,media=cdrom,readonly=on"))
         #expect(plan.arguments.contains("if=none,id=system,format=raw,file=/Users/test/Virtual Machines/Veil/Windows 11 Arm.img"))
+        #expect(plan.arguments.containsSequence(["-device", "nvme,drive=system,serial=veil-system"]))
+        #expect(!plan.arguments.containsSequence(["-device", "virtio-blk-pci,drive=system"]))
         #expect(plan.arguments.containsSequence(["-netdev", "user,id=net0,hostfwd=tcp::18444-:18444"]))
         #expect(plan.arguments.containsSequence(["-device", "virtio-net-pci,netdev=net0"]))
         #expect(plan.arguments.containsSequence(["-display", "cocoa"]))

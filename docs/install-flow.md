@@ -21,7 +21,7 @@ The first four are local host prerequisites. The guest agent step remains pendin
 ## Current Host Behavior
 
 - Prepare VM creates the default Windows 11 Arm profile, the macOS shared folder at `~/Veil Shared`, and the default sparse disk in one action.
-- Prepare VM creates `~/Veil Shared/Autounattend.xml` with Windows Setup language/OOBE inputs and no product key value.
+- Prepare VM creates `~/Veil Shared/Autounattend.xml` with Windows Setup language/OOBE inputs, Windows 11 Pro image selection, UEFI/GPT disk partitioning for the blank VM disk, and no product key value.
 - Prepare VM creates `~/Veil Shared/VeilAutoInstall.iso`, a small local ISO containing only `Autounattend.xml`, so Windows Setup can read unattended inputs as a VM-attached device.
 - Prepare VM applies an adaptive resource profile from the current Mac: half of host CPU cores up to a safe cap, 25% of physical memory rounded down to a conservative VM cap, and a 128 GB default sparse disk.
 - `veil-vmctl prepare --installer <path>` prepares the same local profile, shared folder, default sparse disk, installer path, and diagnostics bundle from the command line.
@@ -34,7 +34,7 @@ The first four are local host prerequisites. The guest agent step remains pendin
 - The runtime snapshot reports preflight checks for installer media, guest OS, CPU, memory, and disk size.
 - A profile becomes boot-ready only when installer media, virtual disk, shared folder, automatic install media, and preflight checks all pass.
 - Pressing Start builds the active local runtime plan and opens the visible VM console. On the current development Mac, this uses QEMU/HVF and the Cocoa display so the user sees the same boot surface that the smoke harness is testing.
-- QEMU/HVF attaches the user-provided Windows ISO, the generated automatic install ISO, and the writable system disk when starting the VM.
+- QEMU/HVF attaches the user-provided Windows ISO, the generated automatic install ISO, and the writable NVMe system disk when starting the VM. NVMe is used for the install-time system disk because the Windows 11 Arm installer sees it without a separate VirtIO storage driver.
 - Apple Virtualization can still build a `VZVirtualMachine` with the same profile, ISO, automatic install media, and writable disk, but it is no longer the preferred visible-console path while Windows installer display support remains unproven.
 - While the VM is running, Show Console brings the active QEMU Cocoa window forward when the QEMU provider is active.
 - While the VM is running, the host periodically retries the live guest-agent health check. When the Windows agent becomes reachable, Veil leaves demo mode and records guest-agent install evidence on the VM profile.
@@ -69,7 +69,7 @@ The QEMU/HVF compatibility spike has progressed past static planning: on July 1,
 
 Current QEMU boot evidence:
 
-- QEMU can start the local device graph with HVF, Arm UEFI pflash code, a VM-local writable `uefi-vars.fd`, lock-safe read-only Windows ISO media, generated automatic install ISO media, writable raw system disk, NAT networking, Cocoa/ramfb graphics, USB input, a local `swtpm` TPM 2.0 emulator, and serial logging.
+- QEMU can start the local device graph with HVF, Arm UEFI pflash code, a VM-local writable `uefi-vars.fd`, lock-safe read-only Windows ISO media, generated automatic install ISO media, writable raw NVMe system disk, NAT networking, Cocoa/ramfb graphics, USB input, a local `swtpm` TPM 2.0 emulator, and serial logging.
 - `veil-vmctl qemu-start` can launch the stored Windows Arm profile into a visible foreground Cocoa QEMU window.
 - The main Veil app Start action now launches the same local QEMU/HVF console path; a manual app smoke check opened a foreground `QEMU Windows 11 Arm` window.
 - When the same ISO is already attached to another VM, QEMU needs the file-driver form `file.locking=off` for read-only ISO reuse.
@@ -87,13 +87,21 @@ Current QEMU boot evidence:
 - Veil still prefers the secure vars template for new Windows 11 Arm profiles, replaces an existing pre-install `uefi-vars.fd` when upgrading to secure vars, and pads small templates to QEMU's 64 MiB pflash backend size. However, it does not mark Secure Boot firmware available unless matching secure code is also present.
 - Adding the secure vars candidate and UTM-style `virtio-rng-pci` device is not yet enough to claim Secure Boot support. A July 2, 2026 120 second live `qemu-smoke` with the secure vars template still recorded `boot-prompt-key-sent`, `tpm2-detected`, and `qemu-running`, while the console PNG still showed the Korean Windows Setup Secure Boot requirement. The serial log also still reported `ArmTrngLib could not be correctly initialized.`
 - On the current test Mac, Homebrew QEMU 11.0.2 has `/opt/homebrew/share/qemu/edk2-aarch64-code.fd` but no `edk2-aarch64-secure-code.fd`; `qemu-doctor` now reports that exact missing half of the pair.
+- A local-only Ubuntu AAVMF package (`qemu-efi-aarch64_2024.02-2ubuntu0.7_all.deb` from `https://security.ubuntu.com/ubuntu/pool/main/e/edk2/qemu-efi-aarch64_2024.02-2ubuntu0.7_all.deb`) provided `AAVMF_CODE.secboot.fd` and `AAVMF_VARS.ms.fd`. These files were copied into the user-local Veil firmware cache as `edk2-aarch64-secure-code.fd` and `edk2-arm-secure-vars.fd`; the firmware binaries are not committed.
+- With that secure code plus secure vars pair, a July 2, 2026 120 second bounded `qemu-smoke` reached the Korean Windows 11 Setup disk-selection screen. The earlier Secure Boot and TPM requirements page was gone, so the next visible blocker became storage discovery rather than Windows 11 requirements.
+- The disk-selection screen showed no available install target while the system disk was attached as `virtio-blk-pci`. Veil now follows the UTM-style QEMU NVMe device pattern for the install-time system disk (`-device nvme,drive=system,serial=veil-system`) so Windows Setup can use its inbox NVMe storage driver instead of requiring a VirtIO block driver during setup.
+- After switching to NVMe, a July 2, 2026 120 second bounded `qemu-smoke` produced a console PNG showing `Disk 0 Unallocated Space` as a 128.0 GB Windows Setup install target. The serial classifier remained `runningNoDecision`, so the console PNG is the authoritative evidence for the storage checkpoint.
+- Veil's generated `Autounattend.xml` now includes UEFI/GPT partition creation for Disk 0, `InstallTo` Disk 0 Partition 3, and `WillShowUI=Never` for DiskConfiguration, ImageInstall, and ProductKey while still omitting any product-key value. A follow-up July 2, 2026 bounded live `qemu-smoke` advanced to the Korean `Windows 11 installing` screen and showed 32% complete.
 
-This means Veil can now distinguish "QEMU is missing" from "QEMU and the ISO are present, boot prompt input was sent, pflash UEFI, secure-vars candidate, RNG, and TPM are attached, but the matching secure code firmware is missing." The next QEMU milestone is to obtain or build an AArch64 QEMU/HVF `edk2-aarch64-secure-code.fd` plus `edk2-arm-secure-vars.fd` recipe that Windows Setup accepts as Secure Boot enabled, then continue through OOBE and the first guest-agent install without bundling Windows keys or media.
+This means Veil can now distinguish "QEMU is missing" from "QEMU and the ISO are present" from "Windows Setup is actively installing on the local blank NVMe VM disk." The next QEMU milestone is to run a persistent visible install through the first reboot, then continue through OOBE and the first guest-agent install without bundling Windows keys or media.
 
 References:
 
 - Apple: [Running Linux in a Virtual Machine](https://developer.apple.com/documentation/virtualization/running-linux-in-a-virtual-machine)
 - Apple: [Running macOS in a virtual machine on Apple silicon](https://developer.apple.com/documentation/virtualization/running-macos-in-a-virtual-machine-on-apple-silicon)
+- Microsoft: [DiskConfiguration](https://learn.microsoft.com/en-us/windows-hardware/customize/desktop/unattend/microsoft-windows-setup-diskconfiguration)
+- Microsoft: [CreatePartition](https://learn.microsoft.com/en-us/windows-hardware/customize/desktop/unattend/microsoft-windows-setup-diskconfiguration-disk-createpartitions-createpartition)
+- Microsoft: [UEFI/GPT-based hard drive partitions](https://learn.microsoft.com/en-us/windows-hardware/manufacture/desktop/configure-uefigpt-based-hard-drive-partitions?view=windows-11)
 
 ## Later Boot Flow
 

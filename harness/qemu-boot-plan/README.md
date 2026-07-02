@@ -2,7 +2,7 @@
 
 This harness validates `veil-vmctl qemu-plan --json` output.
 
-The plan is intentionally a dry run. It describes the QEMU/HVF command Veil would need for a Windows 11 Arm install path, including Arm UEFI pflash code, VM-local writable UEFI vars, ISO boot order, lock-safe read-only installer media, generated automatic install media, local display/input devices, guest-agent port forwarding, and the `swtpm` TPM 2.0 emulator device. Secure Boot availability is only valid when the plan pairs `edk2-aarch64-secure-code.fd` with `edk2-arm-secure-vars.fd`. The validator never launches QEMU and never touches the installer or disk.
+The plan is intentionally a dry run. It describes the QEMU/HVF command Veil would need for a Windows 11 Arm install path, including Arm UEFI pflash code, VM-local writable UEFI vars, ISO boot order, lock-safe read-only installer media, generated automatic install media, an NVMe install-time system disk, local display/input devices, guest-agent port forwarding, and the `swtpm` TPM 2.0 emulator device. Secure Boot availability is only valid when the plan pairs `edk2-aarch64-secure-code.fd` with `edk2-arm-secure-vars.fd`. The validator never launches QEMU and never touches the installer or disk.
 
 Run fixture tests:
 

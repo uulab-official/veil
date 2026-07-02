@@ -189,10 +189,10 @@ Validate live host output:
 
 ```bash
 cd apps/mac-host
-swift run veil-vmctl qemu-smoke --json --seconds 25 | node ../../harness/qemu-smoke/src/validate-qemu-smoke.mjs
+swift run veil-vmctl qemu-smoke --json --seconds 120 | node ../../harness/qemu-smoke/src/validate-qemu-smoke.mjs
 ```
 
-Expected current output on the test Mac: `qemu smoke valid`; the JSON currently reports `runningNoDecision` plus `boot-prompt-key-sent`, `tpm2-detected`, and `qemu-running` evidence with a `.png` `consoleScreenshotPath`. On July 2, 2026, the secure-vars plus RNG smoke PNG still showed the Korean Windows 11 Setup Secure Boot requirement. The current Homebrew QEMU install also lacks `edk2-aarch64-secure-code.fd`, so Secure Boot remains a warning until the secure code plus secure vars pair exists and a live smoke proves the requirement page is gone.
+Expected current output on the test Mac: `qemu smoke valid`; the JSON currently reports `runningNoDecision` plus `boot-prompt-key-sent` and `qemu-running` evidence with a `.png` `consoleScreenshotPath`. On July 2, 2026, a local-only secure code plus secure vars firmware pair moved Windows Setup past the earlier TPM/Secure Boot requirement page, the NVMe system disk appeared as `Disk 0 Unallocated Space` at 128.0 GB, and the generated UEFI/GPT `Autounattend.xml` advanced setup to the Korean `Windows 11 installing` screen at 39%. The next checkpoint is a persistent visible install through the first reboot.
 
 ## Fixture Policy
 
