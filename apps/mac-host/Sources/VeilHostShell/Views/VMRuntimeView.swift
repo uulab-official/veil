@@ -36,6 +36,9 @@ struct VMRuntimeView: View {
                     selectInstallerAction: {
                         pathPicker = .installerMedia
                     },
+                    selectDriverAction: {
+                        pathPicker = .driverMedia
+                    },
                     primaryAction: {
                         if model.canStop {
                             stopVMAction()
@@ -243,6 +246,12 @@ struct VMRuntimeView: View {
                 await model.updateProfilePaths(
                     installerMediaPath: path,
                     driverMediaPath: currentDriver,
+                    virtualDiskPath: currentDisk
+                )
+            case .driverMedia:
+                await model.updateProfilePaths(
+                    installerMediaPath: currentInstaller,
+                    driverMediaPath: path,
                     virtualDiskPath: currentDisk
                 )
             case .virtualDisk:
@@ -1094,6 +1103,7 @@ private struct WindowsSetupDisplayPanel: View {
     var canShowConsole: Bool
     var prepareAction: () -> Void
     var selectInstallerAction: () -> Void
+    var selectDriverAction: () -> Void
     var primaryAction: () -> Void
     var consoleAction: () -> Void
     var refreshAction: () -> Void
@@ -1204,9 +1214,18 @@ private struct WindowsSetupDisplayPanel: View {
                 tint: snapshot.virtualDiskPath == nil ? .orange : .green
             )
 
+            if let selectedDriverName {
+                InstallStatusSummary(
+                    title: "Drivers",
+                    value: selectedDriverName,
+                    symbolName: "externaldrive.badge.gearshape",
+                    tint: .green
+                )
+            }
+
             if installSimulation.phase != .idle {
                 AssistantProgressStrip(simulation: installSimulation)
-                    .frame(maxWidth: 220)
+                    .frame(maxWidth: 190)
             }
 
             Spacer(minLength: 12)
@@ -1217,6 +1236,13 @@ private struct WindowsSetupDisplayPanel: View {
             }
             .disabled(isLoading || snapshot.state == .running || snapshot.state == .starting)
             .help("Choose ISO")
+
+            Button(action: selectDriverAction) {
+                Label("Choose Drivers", systemImage: "externaldrive.badge.gearshape")
+                    .labelStyle(.iconOnly)
+            }
+            .disabled(isLoading || snapshot.state == .running || snapshot.state == .starting)
+            .help("Choose driver ISO")
 
             Button(action: prepareAction) {
                 Label("Prepare", systemImage: "wand.and.stars")
@@ -1240,7 +1266,7 @@ private struct WindowsSetupDisplayPanel: View {
 
             Button(action: primaryAction) {
                 Label(installPrimaryTitle, systemImage: primarySymbol)
-                    .frame(minWidth: 132)
+                    .frame(minWidth: 124)
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
@@ -1509,6 +1535,10 @@ private struct WindowsSetupDisplayPanel: View {
 
     private var selectedInstallerName: String? {
         snapshot.installerMediaPath.map { URL(fileURLWithPath: $0).lastPathComponent }
+    }
+
+    private var selectedDriverName: String? {
+        snapshot.driverMediaPath.map { URL(fileURLWithPath: $0).lastPathComponent }
     }
 
     private var effectiveInstallEvidence: VMInstallEvidenceSummary {
@@ -2426,12 +2456,15 @@ private struct SetupItemRow: View {
 
 private enum PathPicker: Identifiable {
     case installerMedia
+    case driverMedia
     case virtualDisk
 
     var id: String {
         switch self {
         case .installerMedia:
             "installerMedia"
+        case .driverMedia:
+            "driverMedia"
         case .virtualDisk:
             "virtualDisk"
         }
