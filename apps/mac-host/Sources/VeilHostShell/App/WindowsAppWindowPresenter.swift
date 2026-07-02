@@ -177,6 +177,7 @@ private final class InputCaptureNSView: NSView {
     var onMouseInput: ((String, String, Int, Int) -> Void)?
     var onKeyInput: ((String, String, String, Int, [String]) -> Void)?
     var onPasteShortcut: ((String, String, Int, [String], String) -> Void)?
+    private let keyboardMapper = MacKeyboardInputMapper()
 
     override var acceptsFirstResponder: Bool { true }
 
@@ -228,10 +229,13 @@ private final class InputCaptureNSView: NSView {
         if isPasteShortcut(event),
            let session,
            session.connectionMode == .agent,
-           let key = inputKey(from: event),
-           let windowsVirtualKey = windowsVirtualKey(from: event, key: key),
+           let input = keyboardMapper.input(
+                charactersIgnoringModifiers: event.charactersIgnoringModifiers,
+                keyCode: event.keyCode,
+                modifiers: macKeyboardModifiers(from: event)
+           ),
            let pasteboardText = NSPasteboard.general.string(forType: .string) {
-            onPasteShortcut?(session.id, key, windowsVirtualKey, windowsModifiers(from: event), pasteboardText)
+            onPasteShortcut?(session.id, input.key, input.windowsVirtualKey, input.modifiers, pasteboardText)
             return true
         }
 
@@ -274,96 +278,33 @@ private final class InputCaptureNSView: NSView {
     private func sendKey(_ inputEvent: String, _ event: NSEvent) -> Bool {
         guard let session,
               session.connectionMode == .agent,
-              let key = inputKey(from: event),
-              let windowsVirtualKey = windowsVirtualKey(from: event, key: key) else {
+              let input = keyboardMapper.input(
+                charactersIgnoringModifiers: event.charactersIgnoringModifiers,
+                keyCode: event.keyCode,
+                modifiers: macKeyboardModifiers(from: event)
+              ) else {
             return false
         }
 
-        onKeyInput?(session.id, inputEvent, key, windowsVirtualKey, windowsModifiers(from: event))
+        onKeyInput?(session.id, inputEvent, input.key, input.windowsVirtualKey, input.modifiers)
         return true
     }
 
-    private func inputKey(from event: NSEvent) -> String? {
-        if let characters = event.charactersIgnoringModifiers,
-           let scalar = characters.unicodeScalars.first,
-           scalar.value >= 32,
-           scalar.value <= 126 {
-            return String(Character(scalar)).lowercased()
-        }
-
-        switch event.keyCode {
-        case 36:
-            return "enter"
-        case 48:
-            return "tab"
-        case 49:
-            return "space"
-        case 51:
-            return "backspace"
-        case 53:
-            return "escape"
-        case 123:
-            return "arrowLeft"
-        case 124:
-            return "arrowRight"
-        case 125:
-            return "arrowDown"
-        case 126:
-            return "arrowUp"
-        default:
-            return nil
-        }
-    }
-
-    private func windowsVirtualKey(from event: NSEvent, key: String) -> Int? {
-        if let scalar = key.uppercased().unicodeScalars.first,
-           scalar.value >= 65,
-           scalar.value <= 90 {
-            return Int(scalar.value)
-        }
-
-        if let scalar = key.unicodeScalars.first,
-           scalar.value >= 48,
-           scalar.value <= 57 {
-            return Int(scalar.value)
-        }
-
-        switch event.keyCode {
-        case 36:
-            return 13
-        case 48:
-            return 9
-        case 49:
-            return 32
-        case 51:
-            return 8
-        case 53:
-            return 27
-        case 123:
-            return 37
-        case 124:
-            return 39
-        case 125:
-            return 40
-        case 126:
-            return 38
-        default:
-            return nil
-        }
-    }
-
-    private func windowsModifiers(from event: NSEvent) -> [String] {
+    private func macKeyboardModifiers(from event: NSEvent) -> MacKeyboardModifier {
         let flags = event.modifierFlags
-        var modifiers: [String] = []
+        var modifiers: MacKeyboardModifier = []
 
-        if flags.contains(.command) || flags.contains(.control) {
-            modifiers.append("ctrl")
+        if flags.contains(.command) {
+            modifiers.insert(.command)
+        }
+        if flags.contains(.control) {
+            modifiers.insert(.control)
         }
         if flags.contains(.shift) {
-            modifiers.append("shift")
+            modifiers.insert(.shift)
         }
         if flags.contains(.option) {
-            modifiers.append("alt")
+            modifiers.insert(.option)
         }
 
         return modifiers
