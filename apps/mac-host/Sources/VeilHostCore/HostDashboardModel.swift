@@ -30,6 +30,29 @@ public enum HostConnectionMode: String, Codable, Equatable, Sendable {
     case demo
 }
 
+public enum WindowCaptureState: String, Codable, Equatable, Sendable {
+    case unavailable
+    case pending
+    case streaming
+}
+
+public struct WindowMirrorSession: Codable, Equatable, Identifiable, Sendable {
+    public var id: String { window.windowId }
+    public var window: WindowCreatedEvent
+    public var connectionMode: HostConnectionMode
+    public var captureState: WindowCaptureState
+
+    public init(
+        window: WindowCreatedEvent,
+        connectionMode: HostConnectionMode,
+        captureState: WindowCaptureState
+    ) {
+        self.window = window
+        self.connectionMode = connectionMode
+        self.captureState = captureState
+    }
+}
+
 public enum HostDashboardPhase: Equatable, Sendable {
     case idle
     case loading
@@ -46,6 +69,7 @@ public final class HostDashboardModel {
     public private(set) var apps: [WindowsApp] = []
     public private(set) var lastLaunch: NotepadLaunchResult?
     public private(set) var activeWindows: [WindowCreatedEvent] = []
+    public private(set) var mirrorSessions: [WindowMirrorSession] = []
     public private(set) var errorMessage: String?
     public private(set) var connectionMode: HostConnectionMode = .agent
     public private(set) var connectionDetail: String?
@@ -158,6 +182,11 @@ public final class HostDashboardModel {
             selectedAppId = result.window.appId
             lastLaunch = result
             storeActiveWindow(result.window)
+            storeMirrorSession(
+                window: result.window,
+                connectionMode: result.connectionMode,
+                supportsCapture: result.health.capabilities.windowCapture
+            )
             phase = .connected
         } catch {
             errorMessage = userMessage(for: error)
@@ -172,6 +201,26 @@ public final class HostDashboardModel {
         }
 
         activeWindows.append(window)
+    }
+
+    private func storeMirrorSession(
+        window: WindowCreatedEvent,
+        connectionMode: HostConnectionMode,
+        supportsCapture: Bool
+    ) {
+        let captureState: WindowCaptureState = connectionMode == .agent && supportsCapture ? .pending : .unavailable
+        let session = WindowMirrorSession(
+            window: window,
+            connectionMode: connectionMode,
+            captureState: captureState
+        )
+
+        if let index = mirrorSessions.firstIndex(where: { $0.id == session.id }) {
+            mirrorSessions[index] = session
+            return
+        }
+
+        mirrorSessions.append(session)
     }
 
     private func selectDefaultAppIfNeeded() {

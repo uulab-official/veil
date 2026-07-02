@@ -56,9 +56,12 @@ Goal: keep the main Veil experience pointed at real local Windows boot and conso
 - [x] Prevent demo fallback agent data from counting as Windows installation evidence.
 - [x] Make Notepad launch an explicit acceptance flow: launch response must be accepted and the `window.created` HWND must match `winapp_notepad` and the launched process id.
 - [x] Add the same Notepad acceptance validation to the JavaScript protocol package, fake-agent tests, and fake-host smoke output.
+- [x] Store accepted Notepad HWNDs as typed mirror sessions with connection mode and capture state.
+- [x] Open macOS app windows from mirror sessions instead of raw window events so the presenter is ready for real capture frames.
 
 ## Next
 
+- [ ] Add protocol messages and fixtures for one captured Notepad frame.
 - [ ] Scaffold the first real `apps/windows-agent` project so the acceptance flow can move from fake-agent fixtures to Windows.
 - [ ] Persist guest-agent install evidence back to the VM profile after a real Windows guest connects from the VM.
 - [ ] Improve `Autounattend.xml` so Windows Setup skips the product-key page without bundling a key.

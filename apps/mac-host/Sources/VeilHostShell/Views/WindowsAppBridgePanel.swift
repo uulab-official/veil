@@ -40,8 +40,8 @@ struct WindowsAppBridgePanel: View {
                 .buttonStyle(.borderedProminent)
                 .disabled(!model.canLaunchSelectedApp || model.phase == .loading || model.phase == .launching)
 
-                if let lastWindow = model.activeWindows.last {
-                    Label("\(lastWindow.title) mapped", systemImage: "checkmark.circle.fill")
+                if let lastSession = model.mirrorSessions.last {
+                    Label("\(lastSession.window.title) mapped", systemImage: "checkmark.circle.fill")
                         .font(.callout)
                         .foregroundStyle(.green)
                         .lineLimit(1)
@@ -58,15 +58,15 @@ struct WindowsAppBridgePanel: View {
             HStack(spacing: 10) {
                 CoherenceMetric(
                     title: "HWND Sessions",
-                    value: "\(model.activeWindows.count)",
+                    value: "\(model.mirrorSessions.count)",
                     symbolName: "rectangle.3.group",
-                    tint: model.activeWindows.isEmpty ? .secondary : .green
+                    tint: model.mirrorSessions.isEmpty ? .secondary : .green
                 )
                 CoherenceMetric(
                     title: "Capture",
-                    value: model.health?.capabilities.windowCapture == true ? "Ready" : "Pending",
+                    value: captureValue,
                     symbolName: "viewfinder",
-                    tint: model.health?.capabilities.windowCapture == true ? .green : .orange
+                    tint: captureTint
                 )
                 CoherenceMetric(
                     title: "Input",
@@ -90,6 +90,30 @@ struct WindowsAppBridgePanel: View {
         }
 
         return "Open As Mac Window"
+    }
+
+    private var captureValue: String {
+        if model.mirrorSessions.contains(where: { $0.captureState == .streaming }) {
+            return "Streaming"
+        }
+
+        if model.mirrorSessions.contains(where: { $0.captureState == .pending }) {
+            return "Pending"
+        }
+
+        return model.health?.capabilities.windowCapture == true ? "Available" : "Planned"
+    }
+
+    private var captureTint: Color {
+        if model.mirrorSessions.contains(where: { $0.captureState == .streaming }) {
+            return .green
+        }
+
+        if model.mirrorSessions.contains(where: { $0.captureState == .pending }) {
+            return .orange
+        }
+
+        return model.health?.capabilities.windowCapture == true ? .green : .secondary
     }
 
     private var statusTitle: String {

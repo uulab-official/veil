@@ -161,11 +161,13 @@ struct VeilHostShellApp: App {
                 return
             }
 
-            windowsAppWindowPresenter.showWindow(
-                for: result.window,
-                connectionMode: model.connectionMode,
-                supportsCapture: model.health?.capabilities.windowCapture == true
-            )
+            let session = model.mirrorSessions.first { $0.id == result.window.windowId }
+                ?? WindowMirrorSession(
+                    window: result.window,
+                    connectionMode: model.connectionMode,
+                    captureState: .unavailable
+                )
+            windowsAppWindowPresenter.showWindow(for: session)
         }
     }
 

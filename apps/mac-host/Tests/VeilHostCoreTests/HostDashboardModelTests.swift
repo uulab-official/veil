@@ -39,9 +39,26 @@ struct HostDashboardModelTests {
         #expect(model.lastLaunch?.launch.processId == 4912)
         #expect(model.lastLaunch?.window.windowId == "hwnd:0003029A")
         #expect(model.activeWindows.map(\.windowId) == ["hwnd:0003029A"])
+        #expect(model.mirrorSessions.map(\.id) == ["hwnd:0003029A"])
+        #expect(model.mirrorSessions.first?.captureState == .unavailable)
         #expect(model.selectedAppId == "winapp_notepad")
         #expect(model.canLaunchSelectedApp)
         #expect(model.statusText == "Launched Untitled - Notepad")
+    }
+
+    @Test("stores a pending capture mirror session when the live agent supports capture")
+    @MainActor
+    func storesPendingCaptureMirrorSessionWhenAgentSupportsCapture() async throws {
+        let service = FakeDashboardService(health: .captureReady)
+        let model = HostDashboardModel(service: service)
+
+        await model.launchNotepad()
+
+        let session = try #require(model.mirrorSessions.first)
+        #expect(session.id == "hwnd:0003029A")
+        #expect(session.window.title == "Untitled - Notepad")
+        #expect(session.connectionMode == .agent)
+        #expect(session.captureState == .pending)
     }
 
     @Test("updates active window sessions by HWND")
@@ -168,11 +185,13 @@ struct HostDashboardModelTests {
 @MainActor
 private final class FakeDashboardService: HostDashboardService {
     var error: (any Error)?
+    var health: AgentHealthResponse
     var apps: [WindowsApp]
     private(set) var launchCount = 0
 
-    init(error: (any Error)? = nil, apps: [WindowsApp] = [.notepad]) {
+    init(error: (any Error)? = nil, health: AgentHealthResponse = .fixture, apps: [WindowsApp] = [.notepad]) {
         self.error = error
+        self.health = health
         self.apps = apps
     }
 
@@ -182,7 +201,7 @@ private final class FakeDashboardService: HostDashboardService {
         }
 
         return HostOverview(
-            health: .fixture,
+            health: health,
             apps: apps
         )
     }
@@ -194,7 +213,7 @@ private final class FakeDashboardService: HostDashboardService {
 
         launchCount += 1
         return NotepadLaunchResult(
-            health: .fixture,
+            health: health,
             apps: apps,
             launch: .fixture,
             window: .notepad
@@ -216,6 +235,25 @@ private extension AgentHealthResponse {
                 appLaunch: true,
                 windowTracking: true,
                 windowCapture: false,
+                input: false,
+                clipboardText: false
+            )
+        )
+    }
+
+    static var captureReady: AgentHealthResponse {
+        AgentHealthResponse(
+            type: .agentHealthResponse,
+            requestId: "req_health",
+            protocolVersion: 1,
+            agentVersion: "0.1.0",
+            os: "windows-arm64",
+            session: AgentSession(interactive: true, user: "veil-user"),
+            capabilities: AgentCapabilities(
+                appList: true,
+                appLaunch: true,
+                windowTracking: true,
+                windowCapture: true,
                 input: false,
                 clipboardText: false
             )

@@ -6,17 +6,11 @@ import VeilHostCore
 final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
     private var windowsById: [String: NSWindow] = [:]
 
-    func showWindow(
-        for event: WindowCreatedEvent,
-        connectionMode: HostConnectionMode,
-        supportsCapture: Bool
-    ) {
-        if let window = windowsById[event.windowId] {
-            window.title = event.title
+    func showWindow(for session: WindowMirrorSession) {
+        if let window = windowsById[session.id] {
+            window.title = session.window.title
             window.contentView = hostingView(
-                for: event,
-                connectionMode: connectionMode,
-                supportsCapture: supportsCapture
+                for: session
             )
             window.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
@@ -24,24 +18,22 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
         }
 
         let window = NSWindow(
-            contentRect: frame(for: event.bounds),
+            contentRect: frame(for: session.window.bounds),
             styleMask: [.titled, .closable, .miniaturizable, .resizable],
             backing: .buffered,
             defer: false
         )
-        window.identifier = NSUserInterfaceItemIdentifier(event.windowId)
-        window.title = event.title
+        window.identifier = NSUserInterfaceItemIdentifier(session.id)
+        window.title = session.window.title
         window.delegate = self
         window.isReleasedWhenClosed = false
         window.contentMinSize = NSSize(width: 520, height: 360)
         window.contentView = hostingView(
-            for: event,
-            connectionMode: connectionMode,
-            supportsCapture: supportsCapture
+            for: session
         )
         window.center()
         window.makeKeyAndOrderFront(nil)
-        windowsById[event.windowId] = window
+        windowsById[session.id] = window
         NSApp.activate(ignoringOtherApps: true)
     }
 
@@ -62,15 +54,11 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
     }
 
     private func hostingView(
-        for event: WindowCreatedEvent,
-        connectionMode: HostConnectionMode,
-        supportsCapture: Bool
+        for session: WindowMirrorSession
     ) -> NSHostingView<WindowsAppMirrorPlaceholderView> {
         NSHostingView(
             rootView: WindowsAppMirrorPlaceholderView(
-                event: event,
-                connectionMode: connectionMode,
-                supportsCapture: supportsCapture
+                session: session
             )
         )
     }
@@ -83,9 +71,7 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
 }
 
 private struct WindowsAppMirrorPlaceholderView: View {
-    var event: WindowCreatedEvent
-    var connectionMode: HostConnectionMode
-    var supportsCapture: Bool
+    var session: WindowMirrorSession
 
     var body: some View {
         VStack(spacing: 0) {
@@ -97,21 +83,21 @@ private struct WindowsAppMirrorPlaceholderView: View {
                     .background(.blue, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(event.title)
+                    Text(session.window.title)
                         .font(.headline)
-                    Text(event.windowId)
+                    Text(session.window.windowId)
                         .font(.caption.monospaced())
                         .foregroundStyle(.secondary)
                 }
 
                 Spacer()
 
-                Label(connectionMode == .demo ? "Demo Window" : "Agent Window", systemImage: connectionMode == .demo ? "play.rectangle" : "bolt.horizontal.circle")
+                Label(session.connectionMode == .demo ? "Demo Window" : "Agent Window", systemImage: session.connectionMode == .demo ? "play.rectangle" : "bolt.horizontal.circle")
                     .font(.caption.weight(.semibold))
-                    .foregroundStyle(connectionMode == .demo ? .orange : .green)
+                    .foregroundStyle(session.connectionMode == .demo ? .orange : .green)
                     .padding(.horizontal, 9)
                     .padding(.vertical, 5)
-                    .background((connectionMode == .demo ? Color.orange : Color.green).opacity(0.12), in: Capsule())
+                    .background((session.connectionMode == .demo ? Color.orange : Color.green).opacity(0.12), in: Capsule())
             }
             .padding(14)
             .background(.regularMaterial)
@@ -123,12 +109,12 @@ private struct WindowsAppMirrorPlaceholderView: View {
                     Text("Untitled")
                         .font(.system(size: 28, weight: .semibold))
                     Spacer()
-                    Text(event.state.capitalized)
+                    Text(session.window.state.capitalized)
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(.secondary)
                 }
 
-                Text("Mapped to a Windows HWND. Live app pixels will appear here when the guest agent starts streaming this window.")
+                Text(captureDescription)
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -142,9 +128,9 @@ private struct WindowsAppMirrorPlaceholderView: View {
                     )
                     MirrorStateTile(
                         title: "Capture",
-                        detail: supportsCapture ? "Available" : "Pending",
+                        detail: captureDetail,
                         symbolName: "viewfinder",
-                        tint: supportsCapture ? .green : .orange
+                        tint: captureTint
                     )
                     MirrorStateTile(
                         title: "Input",
@@ -156,13 +142,46 @@ private struct WindowsAppMirrorPlaceholderView: View {
 
                 Spacer()
 
-                Text("Process \(event.processId)  |  \(event.bounds.width)x\(event.bounds.height) @ \(event.bounds.x),\(event.bounds.y)")
+                Text("Process \(session.window.processId)  |  \(session.window.bounds.width)x\(session.window.bounds.height) @ \(session.window.bounds.x),\(session.window.bounds.y)")
                     .font(.caption.monospaced())
                     .foregroundStyle(.tertiary)
             }
             .padding(22)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .background(Color(nsColor: .textBackgroundColor))
+        }
+    }
+
+    private var captureDescription: String {
+        switch session.captureState {
+        case .streaming:
+            "Live pixels are streaming from the Windows guest for this HWND."
+        case .pending:
+            "Mapped to a Windows HWND. Capture is available and waiting for the guest agent to start streaming this window."
+        case .unavailable:
+            "Mapped to a Windows HWND. Live app pixels will appear here when the guest agent starts streaming this window."
+        }
+    }
+
+    private var captureDetail: String {
+        switch session.captureState {
+        case .streaming:
+            "Streaming"
+        case .pending:
+            "Pending"
+        case .unavailable:
+            "Unavailable"
+        }
+    }
+
+    private var captureTint: Color {
+        switch session.captureState {
+        case .streaming:
+            .green
+        case .pending:
+            .orange
+        case .unavailable:
+            .secondary
         }
     }
 }

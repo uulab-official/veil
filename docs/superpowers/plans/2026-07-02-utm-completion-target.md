@@ -108,6 +108,8 @@ Keep Notepad as the hard acceptance target and avoid adding generic VM-manager f
 
 Execution note: The Swift host and JS harness now reject a Notepad launch unless the `app.launch.response` is accepted and the `window.created` event matches `winapp_notepad` and the launched `processId`. The fake-host CLI prints a Notepad acceptance summary.
 
-- [ ] **Step 2: Mirror one HWND**
+- [x] **Step 2: Mirror one HWND**
 
 Add a simple capture stream and macOS window presentation behind the existing protocol boundary.
+
+Execution note: The host now stores a typed `WindowMirrorSession` for the accepted Notepad HWND and opens the macOS mirror window from that session. The current surface is still a placeholder until a real Windows agent streams frames; capture state is modeled as `unavailable`, `pending`, or `streaming` so the frame protocol can attach without rewriting the presenter.
