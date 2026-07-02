@@ -92,6 +92,7 @@ public final class HostDashboardModel {
     public private(set) var clipboardSequence = 0
     public private(set) var latestGuestClipboardText: String?
     public private(set) var lastGuestClipboardSequence = 0
+    public private(set) var restorableAppIds: [String] = []
     public var selectedAppId: String?
 
     private let service: any HostDashboardService
@@ -195,6 +196,29 @@ public final class HostDashboardModel {
         return nil
     }
 
+    public func restoreMirroredWindowsAfterReconnect() async -> [NotepadLaunchResult] {
+        guard !restorableAppIds.isEmpty else {
+            return []
+        }
+
+        if !hasLiveAgentConnection {
+            await load()
+        }
+
+        guard hasLiveAgentConnection else {
+            return []
+        }
+
+        var restored: [NotepadLaunchResult] = []
+        for appId in restorableAppIds where appId == "winapp_notepad" {
+            if let result = await launchNotepad() {
+                restored.append(result)
+            }
+        }
+
+        return restored
+    }
+
     public func launchSelectedApp() async {
         guard selectedApp != nil else {
             errorMessage = "Select an app before launching."
@@ -230,6 +254,7 @@ public final class HostDashboardModel {
             connectionDetail = result.connectionDetail
             selectedAppId = result.window.appId
             lastLaunch = result
+            rememberRestorableAppId(result.window.appId)
             storeActiveWindow(result.window)
             storeMirrorSession(
                 window: result.window,
@@ -436,12 +461,31 @@ public final class HostDashboardModel {
     }
 
     private func removeWindowState(windowId: String) {
+        let removedAppIds = activeWindows
+            .filter { $0.windowId == windowId }
+            .map(\.appId)
         activeWindows.removeAll { $0.windowId == windowId }
         mirrorSessions.removeAll { $0.id == windowId }
 
         if lastLaunch?.window.windowId == windowId {
             lastLaunch = nil
         }
+
+        for appId in removedAppIds {
+            forgetRestorableAppId(appId)
+        }
+    }
+
+    private func rememberRestorableAppId(_ appId: String) {
+        guard !restorableAppIds.contains(appId) else {
+            return
+        }
+
+        restorableAppIds.append(appId)
+    }
+
+    private func forgetRestorableAppId(_ appId: String) {
+        restorableAppIds.removeAll { $0 == appId }
     }
 
     private func selectDefaultAppIfNeeded() {

@@ -21,9 +21,10 @@ Goal: make Veil's product direction visible as "Windows app as a macOS window" i
 - [x] Subscribe to capture streams after launching a capture-capable Windows app window.
 - [x] Unsubscribe from capture streams before closing mirrored Windows app windows.
 - [x] Map mirrored-window mouse input through the aspect-fit captured frame rect instead of the full letterboxed host view.
+- [x] Restore mapped Notepad app windows after the live agent reconnects.
 
 ## Next
 
 - [ ] Replace the placeholder surface with captured Notepad frames from the Windows guest agent.
 - [ ] Validate keyboard input inside Windows 11 Arm with Notepad focused.
-- [ ] Persist and restore mapped app windows after VM reconnect.
+- [ ] Persist mapped app window intent across host app relaunch.

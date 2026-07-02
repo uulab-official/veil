@@ -184,7 +184,13 @@ struct VeilHostShellApp: App {
                 let vmState = vmModel.snapshot?.state
                 let shouldPoll = (vmState == .running || vmState == .starting) && !model.hasLiveAgentConnection
                 if shouldPoll {
-                    if let fulfilledLaunch = await model.refreshLiveAgentIfNeeded() {
+                    let restoredLaunches = await model.restoreMirroredWindowsAfterReconnect()
+                    for launch in restoredLaunches {
+                        showWindowsAppWindow(for: launch)
+                    }
+
+                    if restoredLaunches.isEmpty,
+                       let fulfilledLaunch = await model.refreshLiveAgentIfNeeded() {
                         showWindowsAppWindow(for: fulfilledLaunch)
                     }
                     await recordGuestAgentInstallEvidenceIfNeeded()

@@ -423,6 +423,53 @@ struct HostDashboardModelTests {
         #expect(primary.launchCount == 1)
     }
 
+    @Test("restores mapped app windows after the live agent reconnects")
+    @MainActor
+    func restoresMappedAppWindowsAfterReconnect() async throws {
+        let primary = FakeDashboardService(health: .captureReady)
+        let service = FallbackHostDashboardService(
+            primary: primary,
+            fallback: DemoHostDashboardService(),
+            primaryEndpointDescription: "ws://127.0.0.1:18444"
+        )
+        let model = HostDashboardModel(service: service)
+
+        await model.load()
+        await model.launchSelectedApp()
+
+        #expect(model.restorableAppIds == ["winapp_notepad"])
+        #expect(primary.launchCount == 1)
+        #expect(primary.frameSubscriptions == ["hwnd:0003029A"])
+
+        primary.error = URLError(.cannotConnectToHost)
+        await model.load()
+
+        #expect(model.connectionMode == .demo)
+        #expect(model.hasLiveAgentConnection == false)
+
+        primary.error = nil
+        let restored = await model.restoreMirroredWindowsAfterReconnect()
+
+        #expect(restored.map(\.window.windowId) == ["hwnd:0003029A"])
+        #expect(model.connectionMode == .agent)
+        #expect(model.mirrorSessions.map(\.id) == ["hwnd:0003029A"])
+        #expect(model.restorableAppIds == ["winapp_notepad"])
+        #expect(primary.launchCount == 2)
+        #expect(primary.frameSubscriptions == ["hwnd:0003029A", "hwnd:0003029A"])
+    }
+
+    @Test("removes restored app intent when a mapped window closes")
+    @MainActor
+    func removesRestoredAppIntentWhenMappedWindowCloses() async throws {
+        let service = FakeDashboardService(health: .captureReady)
+        let model = HostDashboardModel(service: service)
+
+        await model.launchNotepad()
+        _ = await model.closeMirrorSession(windowId: "hwnd:0003029A")
+
+        #expect(model.restorableAppIds.isEmpty)
+    }
+
     @Test("does not hide primary agent protocol failures behind demo fallback")
     @MainActor
     func doesNotHidePrimaryAgentProtocolFailuresBehindDemoFallback() async throws {
