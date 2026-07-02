@@ -65,10 +65,12 @@ Goal: keep the main Veil experience pointed at real local Windows boot and conso
 - [x] Scaffold the first real `apps/windows-agent` .NET project so the acceptance flow can move from fake-agent fixtures to Windows.
 - [x] Add a Windows agent contract harness for Notepad launch plus the first bootstrap `window.frame` event.
 - [x] Wire the Windows agent default frame capture path to a real HWND capture implementation using Win32/GDI.
+- [x] Add Windows guest install, start, and uninstall scripts that register the agent as a user logon task.
 
 ## Next
 
 - [ ] Run `dotnet build apps/windows-agent/src/VeilAgent/VeilAgent.csproj` on a machine with the .NET 8 SDK installed.
+- [ ] Run `Install-VeilAgent.ps1` inside Windows 11 Arm and verify the `VeilAgent` scheduled task starts after login.
 - [ ] Verify the Win32/GDI HWND capture path inside Windows 11 Arm and record the captured Notepad frame evidence.
 - [ ] Send a continuing `window.frame` stream from the Windows guest agent after the first Notepad frame.
 - [ ] Persist guest-agent install evidence back to the VM profile after a real Windows guest connects from the VM.

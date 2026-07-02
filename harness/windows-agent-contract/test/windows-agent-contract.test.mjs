@@ -55,3 +55,19 @@ test("windows agent sample launch flow emits Notepad window and first frame", as
   assert.equal(frame.windowId, window.windowId);
   assert.equal(frame.format, "png");
 });
+
+test("windows agent includes user-logon install and uninstall scripts", async () => {
+  const install = await readFile(resolve(agentRoot, "scripts/Install-VeilAgent.ps1"), "utf8");
+  const uninstall = await readFile(resolve(agentRoot, "scripts/Uninstall-VeilAgent.ps1"), "utf8");
+  const start = await readFile(resolve(agentRoot, "scripts/Start-VeilAgent.ps1"), "utf8");
+
+  assert.match(install, /Register-ScheduledTask/);
+  assert.match(install, /New-ScheduledTaskTrigger\s+-AtLogOn/);
+  assert.match(install, /VeilAgent/);
+  assert.match(install, /dotnet publish/);
+  assert.match(install, /VEIL_AGENT_PORT/);
+  assert.match(start, /VeilAgent\.exe/);
+  assert.match(start, /127\.0\.0\.1/);
+  assert.match(uninstall, /Unregister-ScheduledTask/);
+  assert.match(uninstall, /VeilAgent/);
+});

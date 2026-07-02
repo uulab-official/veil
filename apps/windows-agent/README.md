@@ -26,6 +26,29 @@ The executable listens at:
 ws://127.0.0.1:18444/
 ```
 
+## Install In Windows
+
+After Windows 11 Arm reaches the desktop and the .NET 8 SDK is installed, run this inside the guest:
+
+```powershell
+cd C:\Path\To\veil\apps\windows-agent
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\Install-VeilAgent.ps1
+```
+
+The installer publishes the agent to `%LOCALAPPDATA%\Veil\Agent\app`, sets user-level `VEIL_AGENT_HOST` and `VEIL_AGENT_PORT`, and registers a user logon scheduled task named `VeilAgent`.
+
+Start immediately without waiting for the next login:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\Start-VeilAgent.ps1
+```
+
+Remove the user task and published files:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\Uninstall-VeilAgent.ps1
+```
+
 ## Harness Contract
 
 The repository-level contract harness validates the expected launch transcript without requiring a Windows VM:
