@@ -104,6 +104,11 @@ host -> window.frame.subscribe for hwnd:0003029A
 agent -> window.frame event with a PNG fixture broadcast to event clients
 ```
 
+The executable fake-host scenario now validates this full local loop against
+`harness/fake-agent`: direct request/reply sockets launch Notepad, a separate
+event socket receives the subscribed `window.frame`, and the protocol package
+validates the captured frame shape.
+
 ## Second Scenario: Clipboard Loop Prevention
 
 ```text

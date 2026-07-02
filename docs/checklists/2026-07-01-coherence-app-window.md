@@ -24,6 +24,7 @@ Goal: make Veil's product direction visible as "Windows app as a macOS window" i
 - [x] Restore mapped Notepad app windows after the live agent reconnects.
 - [x] Persist mapped app window intent across host app relaunch.
 - [x] Make fake-agent advertise capture support and broadcast fixture `window.frame` events to host event clients.
+- [x] Extend fake-host launch flow to subscribe to Notepad capture and verify a received `window.frame`.
 
 ## Next
 
