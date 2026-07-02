@@ -51,6 +51,7 @@ Goal: keep the main Veil experience pointed at real local Windows boot and conso
 - [x] Add QEMU `hostfwd=tcp::18444-:18444` so a future Windows guest agent can connect back to the macOS host through localhost.
 - [x] Surface sparse-disk allocation evidence in the runtime snapshot so the main screen does not imply Windows is installed before setup completes.
 - [x] Change the stopped runtime detail from a generic ready state to install-specific copy: not installed, setup can start, or installed.
+- [x] Write app-launched QEMU evidence to `qemu-launch-latest.json` with executable path, arguments, process log, monitor socket, and timestamp.
 
 ## Next
 

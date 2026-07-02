@@ -311,10 +311,11 @@ struct VeilVMControl {
 
         let record = QEMULaunchRecord(
             provider: plan.provider,
-            pid: Int(process.processIdentifier),
+            pid: process.processIdentifier,
             executablePath: plan.executablePath,
             arguments: plan.arguments,
             processLogPath: processLogURL.path,
+            monitorSocketPath: "none",
             startedAt: Date()
         )
 
@@ -325,7 +326,7 @@ struct VeilVMControl {
         }
 
         print("QEMU/HVF Windows VM launched")
-        print("PID: \(record.pid)")
+        print("PID: \(record.pid.map(String.init) ?? "unknown")")
         print("Executable: \(record.executablePath)")
         print("Process log: \(record.processLogPath)")
     }
@@ -413,35 +414,4 @@ struct VeilVMControl {
         return downloads.appendingPathComponent("Veil Diagnostics", isDirectory: true)
     }
 
-}
-
-struct QEMULaunchRecord: Codable, Sendable {
-    var kind: String
-    var provider: String
-    var isServerBacked: Bool
-    var pid: Int
-    var executablePath: String
-    var arguments: [String]
-    var processLogPath: String
-    var startedAt: Date
-
-    init(
-        kind: String = "qemuWindowsArmLaunch",
-        provider: String,
-        isServerBacked: Bool = false,
-        pid: Int,
-        executablePath: String,
-        arguments: [String],
-        processLogPath: String,
-        startedAt: Date
-    ) {
-        self.kind = kind
-        self.provider = provider
-        self.isServerBacked = isServerBacked
-        self.pid = pid
-        self.executablePath = executablePath
-        self.arguments = arguments
-        self.processLogPath = processLogPath
-        self.startedAt = startedAt
-    }
 }

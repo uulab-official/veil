@@ -1,5 +1,39 @@
 import Foundation
 
+public struct QEMULaunchRecord: Codable, Equatable, Sendable {
+    public var kind: String
+    public var provider: String
+    public var isServerBacked: Bool
+    public var pid: Int32?
+    public var executablePath: String
+    public var arguments: [String]
+    public var processLogPath: String
+    public var monitorSocketPath: String
+    public var startedAt: Date
+
+    public init(
+        kind: String = "qemuWindowsArmLaunch",
+        provider: String = "QEMU/HVF",
+        isServerBacked: Bool = false,
+        pid: Int32?,
+        executablePath: String,
+        arguments: [String],
+        processLogPath: String,
+        monitorSocketPath: String,
+        startedAt: Date
+    ) {
+        self.kind = kind
+        self.provider = provider
+        self.isServerBacked = isServerBacked
+        self.pid = pid
+        self.executablePath = executablePath
+        self.arguments = arguments
+        self.processLogPath = processLogPath
+        self.monitorSocketPath = monitorSocketPath
+        self.startedAt = startedAt
+    }
+}
+
 public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
     public static let shared = QEMUVMRuntimeBooter()
 
@@ -45,7 +79,9 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
             throw VMRuntimeError.qemuNotReady(readiness.nextActions.joined(separator: " "))
         }
 
-        let logURL = try processLogURL()
+        let launchDirectory = try qemuLaunchDirectory()
+        let stamp = Self.timestamp()
+        let logURL = launchDirectory.appendingPathComponent("qemu-launch-\(stamp).log")
         FileManager.default.createFile(atPath: logURL.path, contents: nil)
         let logHandle = try FileHandle(forWritingTo: logURL)
         let monitorSocketURL = Self.monitorSocketURL()
@@ -61,6 +97,15 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
         try processRunner(process)
         self.process = process
         self.monitorSocketURL = monitorSocketURL
+        try writeLaunchRecord(
+            process: process,
+            plan: plan,
+            arguments: process.arguments ?? [],
+            processLogURL: logURL,
+            monitorSocketURL: monitorSocketURL,
+            directory: launchDirectory,
+            stamp: stamp
+        )
         frontmostRunner()
         scheduleWindowsInstallerBootKeySend(monitorSocketURL: monitorSocketURL)
         return .running
@@ -101,13 +146,42 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
         )
     }
 
-    private func processLogURL() throws -> URL {
+    private func qemuLaunchDirectory() throws -> URL {
         let directory = diagnosticsDirectory.appendingPathComponent("QEMU Launch", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        let stamp = ISO8601DateFormatter()
+        return directory
+    }
+
+    private func writeLaunchRecord(
+        process: Process,
+        plan: QEMUWindowsBootPlan,
+        arguments: [String],
+        processLogURL: URL,
+        monitorSocketURL: URL,
+        directory: URL,
+        stamp: String
+    ) throws {
+        let pid = process.processIdentifier > 0 ? process.processIdentifier : nil
+        let record = QEMULaunchRecord(
+            pid: pid,
+            executablePath: plan.executablePath,
+            arguments: arguments,
+            processLogPath: processLogURL.path,
+            monitorSocketPath: monitorSocketURL.path,
+            startedAt: Date()
+        )
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        encoder.dateEncodingStrategy = .iso8601
+        let data = try encoder.encode(record)
+        try data.write(to: directory.appendingPathComponent("qemu-launch-\(stamp).json"), options: .atomic)
+        try data.write(to: directory.appendingPathComponent("qemu-launch-latest.json"), options: .atomic)
+    }
+
+    private static func timestamp() -> String {
+        ISO8601DateFormatter()
             .string(from: Date())
             .replacingOccurrences(of: ":", with: "-")
-        return directory.appendingPathComponent("qemu-launch-\(stamp).log")
     }
 
     public static func defaultDiagnosticsDirectory() -> URL {

@@ -325,6 +325,21 @@ struct QEMUWindowsBootPlanTests {
         #expect(capture.arguments.contains("-monitor"))
         #expect(capture.arguments.contains { $0.hasPrefix("unix:") && $0.hasSuffix(",server,nowait") })
         #expect(capture.arguments.contains("driver=raw,file.driver=file,file.locking=off,file.filename=\(autoInstallURL.path),if=none,id=autounattend,media=cdrom,readonly=on"))
+
+        let recordURL = directory
+            .appendingPathComponent("QEMU Launch", isDirectory: true)
+            .appendingPathComponent("qemu-launch-latest.json")
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let record = try decoder.decode(QEMULaunchRecord.self, from: Data(contentsOf: recordURL))
+        #expect(record.kind == "qemuWindowsArmLaunch")
+        #expect(record.provider == "QEMU/HVF")
+        #expect(record.isServerBacked == false)
+        #expect(record.executablePath == qemuURL.path)
+        #expect(record.arguments.containsSequence(["-display", "cocoa"]))
+        #expect(record.arguments.contains("driver=raw,file.driver=file,file.locking=off,file.filename=\(autoInstallURL.path),if=none,id=autounattend,media=cdrom,readonly=on"))
+        #expect(record.processLogPath.hasSuffix(".log"))
+        #expect(record.monitorSocketPath.contains("/tmp/vq-"))
     }
 }
 
