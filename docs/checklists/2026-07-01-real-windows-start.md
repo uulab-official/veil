@@ -152,10 +152,19 @@ Goal: keep the main Veil experience pointed at real local Windows boot and conso
 - [x] Rebuild `VeilAutoInstall.iso` and mount-verify that it contains `Autounattend.xml`, `Veil Guest Agent\Install Veil Agent.cmd`, and `Veil Guest Agent\app\VeilAgent.exe`.
 - [x] Add bounded `veil-vmctl qemu-type-text --text ...` input so live Windows recovery/install commands can be typed through the QMP input path instead of hand-driving the QEMU window.
 - [x] Attempt live agent install from the current Windows desktop with QMP input; `veil-host-probe` still times out, so this is not accepted as guest-agent-connected evidence.
+- [x] Add `Bootstrap-VeilAgentFromMedia.ps1` so FirstLogonCommands can run a short media script instead of a long inline installer command.
+- [x] Add guest-side bootstrap/install/start logs under `%LOCALAPPDATA%\Veil\Agent\logs` so failed agent installs leave evidence.
+- [x] Identify the live install retry root cause: the running QEMU process still had the old 900 KB `VeilAutoInstall.iso` inode open, while the regenerated 349 MB ISO with the agent bundle was a different inode.
+- [x] Relaunch QEMU after force-stopping the stale-ISO process; `lsof` verified PID 94521 attached the current 349 MB `VeilAutoInstall.iso` inode.
+- [x] Verify `ctrl-esc` opens the Windows Run dialog through QMP when `cmd-r` does not; use this as the current live recovery path for opening PowerShell.
+- [x] Verify direct `& E:/.../Bootstrap-VeilAgentFromMedia.ps1` is blocked by Windows PowerShell execution policy, reinforcing that first-logon/manual launch paths must use `-ExecutionPolicy Bypass`.
+- [x] Retry bootstrap from the live desktop with `-ExecutionPolicy Bypass`; the VM rebooted or returned to firmware/boot flow afterward, and `veil-host-probe` still timed out, so guest-agent connection remains unproven.
 
 ## Next
 
 - [ ] Run `Veil Shared\Veil Guest Agent\Install Veil Agent.cmd` inside Windows 11 Arm and verify the current-session agent plus the `VeilAgent` logon task both start.
+- [ ] Capture `%LOCALAPPDATA%\Veil\Agent\logs\bootstrap.log`, `install.log`, and `start.log` from the guest after the next bootstrap attempt.
+- [ ] If the current VM remains on a black screen, recover with a clean disk-first relaunch and verify Windows reaches the desktop before retrying the agent installer.
 - [ ] Verify the Win32/GDI HWND capture path inside Windows 11 Arm and record the captured Notepad frame evidence.
 - [ ] Tune the Windows agent frame stream for lower latency after correctness is verified.
 - [ ] Restart the currently running QEMU VM so the new guest-agent port forwarding takes effect.

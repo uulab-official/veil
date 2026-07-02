@@ -820,7 +820,7 @@ struct VMProfileStoreTests {
         #expect(answerFile.contains("HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\OOBE /v BypassNRO"))
         #expect(answerFile.contains("<FirstLogonCommands>"))
         #expect(answerFile.contains("Get-Volume -FileSystemLabel 'VEIL_AUTO'"))
-        #expect(answerFile.contains("Veil Guest Agent\\Install Veil Agent.cmd"))
+        #expect(answerFile.contains("Veil Guest Agent\\scripts\\Bootstrap-VeilAgentFromMedia.ps1"))
         #expect(answerFile.range(
             of: #"<ProductKey>[\s\S]*?<Key>"#,
             options: .regularExpression
@@ -834,6 +834,7 @@ struct VMProfileStoreTests {
         #expect(startCommand.contains("Start-VeilAgent.ps1"))
         #expect(agentReadme.contains("Install Veil Agent.cmd"))
         #expect(agentReadme.contains("ws://127.0.0.1:18444/"))
+        #expect(agentReadme.contains("%LOCALAPPDATA%\\Veil\\Agent\\logs"))
         #expect(snapshot.installationSteps.first { $0.id == "shared-folder" }?.state == .complete)
         #expect(snapshot.installationSteps.first { $0.id == "auto-install-answer-file" }?.state == .complete)
         #expect(snapshot.installationSteps.first { $0.id == "virtual-disk" }?.state == .complete)

@@ -1386,6 +1386,7 @@ public struct LocalVMRuntimeService: VMRuntimeService {
 
     Run Install Veil Agent.cmd after Windows 11 reaches the desktop.
     The installer uses the packaged VeilAgent.exe bundle when present, registers the VeilAgent user logon task, and points it at ws://127.0.0.1:18444/.
+    Bootstrap and installer logs are written under %LOCALAPPDATA%\\Veil\\Agent\\logs.
     If this media does not include app\\VeilAgent.exe, build it on the Mac with apps/windows-agent/scripts/publish-veil-agent-bundle.sh before preparing the VM again.
 
     Run Start Veil Agent.cmd to start the agent immediately after installation.
@@ -1634,7 +1635,7 @@ public struct LocalVMRuntimeService: VMRuntimeService {
                 <SynchronousCommand wcm:action="add">
                   <Order>1</Order>
                   <Description>Install and start the Veil guest agent from VEIL_AUTO media</Description>
-                  <CommandLine>powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "$volume = Get-Volume -FileSystemLabel 'VEIL_AUTO' -ErrorAction SilentlyContinue | Select-Object -First 1; if ($volume -and $volume.DriveLetter) { $installer = Join-Path ($volume.DriveLetter + ':\\') 'Veil Guest Agent\\Install Veil Agent.cmd'; if (Test-Path $installer) { Start-Process -FilePath $installer -WindowStyle Minimized -Wait } }"</CommandLine>
+                  <CommandLine>powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "$volume = Get-Volume -FileSystemLabel 'VEIL_AUTO' -ErrorAction SilentlyContinue | Select-Object -First 1; if ($volume -and $volume.DriveLetter) { $script = Join-Path ($volume.DriveLetter + ':\\') 'Veil Guest Agent\\scripts\\Bootstrap-VeilAgentFromMedia.ps1'; if (Test-Path $script) { powershell.exe -NoProfile -ExecutionPolicy Bypass -File $script } }"</CommandLine>
                 </SynchronousCommand>
               </FirstLogonCommands>
             </component>
