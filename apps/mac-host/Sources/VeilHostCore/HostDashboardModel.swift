@@ -123,7 +123,10 @@ public final class HostDashboardModel {
     }
 
     public var canLaunchSelectedApp: Bool {
-        selectedApp?.id == "winapp_notepad" && phase != .loading && phase != .launching
+        selectedApp?.id == "winapp_notepad"
+            && hasLiveAgentConnection
+            && phase != .loading
+            && phase != .launching
     }
 
     public var hasLiveAgentConnection: Bool {
@@ -172,6 +175,12 @@ public final class HostDashboardModel {
     public func launchSelectedApp() async {
         guard selectedApp != nil else {
             errorMessage = "Select an app before launching."
+            phase = .failed
+            return
+        }
+
+        guard hasLiveAgentConnection else {
+            errorMessage = "Connect the Windows guest agent before opening a Mac window."
             phase = .failed
             return
         }

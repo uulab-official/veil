@@ -89,6 +89,10 @@ struct WindowsAppBridgePanel: View {
             return "Opening..."
         }
 
+        if !model.hasLiveAgentConnection {
+            return "Waiting For Agent"
+        }
+
         return "Open As Mac Window"
     }
 

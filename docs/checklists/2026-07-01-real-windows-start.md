@@ -80,6 +80,7 @@ Goal: keep the main Veil experience pointed at real local Windows boot and conso
 - [x] Make the Windows agent scheduled task use the installed script copy instead of the shared-folder source path.
 - [x] Make the Windows agent installer start the installed agent immediately by default, with `-NoStart` available for manual installs.
 - [x] Poll for a live guest agent while the VM is running so the host can leave demo mode after installation without a manual refresh.
+- [x] Gate macOS app-window launch on a live Windows guest agent so demo fallback cannot masquerade as real mirroring.
 
 ## Next
 
