@@ -18,12 +18,16 @@ Goal: make the installed Windows surface feel like an app runtime instead of a V
 - [x] Rename primary commands and setup handoff copy from VM/console wording toward Windows display/app wording.
 - [x] Remove product-facing Console/Prepare VM/QEMU-console wording from the main runtime surface.
 - [x] Rename host shell and SwiftUI display-action plumbing away from console terminology.
+- [x] Include mirrored frame timing in app-frame proof records so first-frame evidence carries cadence context.
 
 ## Review Notes
 
 - CEO: the main action should express "open the Windows app I need", not "manage a VM".
 - Engineering: keep host dashboard state as the source of truth for whether app launch is available.
 - Design: installed state should have one dominant action, with VM management pushed to smaller controls.
+- GStack CEO review: raise the proof bar from "a screenshot exists" to "the app can explain when Windows first rendered and how fresh the stream is."
+- GStack engineering review: keep timing as metadata in diagnostics/proof JSON, not as UI-only state.
+- GStack design review: avoid adding more visible controls for this; the default surface stays focused on the Windows screen.
 
 ## Next
 

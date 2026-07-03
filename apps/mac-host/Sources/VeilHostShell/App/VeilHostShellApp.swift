@@ -8,6 +8,7 @@ private struct AppFrameProofRecord: Codable {
     var endpoint: String
     var launchResult: NotepadLaunchResult
     var frame: WindowFrameEvent
+    var frameTiming: WindowFrameTiming?
     var frameImagePath: String?
 }
 
@@ -330,9 +331,10 @@ struct VeilHostShellApp: App {
                 displayMessage = "App frame proof timed out waiting for the first frame from \(result.window.title)."
                 return
             }
+            let frameTiming = model.mirrorSessions.first(where: { $0.id == result.window.windowId })?.frameTiming
 
             do {
-                let url = try writeAppFrameProof(launchResult: result, frame: frame)
+                let url = try writeAppFrameProof(launchResult: result, frame: frame, frameTiming: frameTiming)
                 displayMessage = "App frame proof saved: \(url.path)"
             } catch {
                 displayMessage = "App frame proof could not be saved: \(userMessage(for: error))"
@@ -355,7 +357,8 @@ struct VeilHostShellApp: App {
 
     private func writeAppFrameProof(
         launchResult: NotepadLaunchResult,
-        frame: WindowFrameEvent
+        frame: WindowFrameEvent,
+        frameTiming: WindowFrameTiming?
     ) throws -> URL {
         let directory = QEMUVMRuntimeBooter.defaultDiagnosticsDirectory()
             .appendingPathComponent("App Frame Proof", isDirectory: true)
@@ -372,6 +375,7 @@ struct VeilHostShellApp: App {
             endpoint: Self.agentURLString,
             launchResult: launchResult,
             frame: frame,
+            frameTiming: frameTiming,
             frameImagePath: FileManager.default.fileExists(atPath: imageURL.path) ? imageURL.path : nil
         )
         let outputURL = directory.appendingPathComponent("app-frame-proof-\(stamp).json")
