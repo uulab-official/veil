@@ -14,6 +14,7 @@ Goal: move Veil from a Veil shell plus separate QEMU Cocoa display toward a UTM-
 - [x] Add a headless QEMU launch mode that rewrites app-started QEMU from `-display cocoa` to `-display none`.
 - [x] Make the macOS app use headless single-window preview mode by default, with `VEIL_USE_NATIVE_QEMU_DISPLAY=1` as the explicit native-window fallback.
 - [x] Record the display mode in QEMU launch diagnostics.
+- [x] Surface the latest setup screenshot refresh time in runtime evidence so the single-window preview shows whether it is updating.
 
 ## Next
 

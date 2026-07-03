@@ -1976,6 +1976,11 @@ private struct WindowsDisplayLaunchEvidenceStrip: View {
 
     private var displaySummary: String {
         let logName = URL(fileURLWithPath: evidence.processLogPath).lastPathComponent
+        if let refreshedAt = evidence.consoleScreenshotRefreshedAt {
+            let refreshed = refreshedAt.formatted(date: .omitted, time: .shortened)
+            return "Preview refreshed \(refreshed) · \(logName)"
+        }
+
         let startedAt = evidence.startedAt.formatted(date: .omitted, time: .shortened)
         return "\(evidence.provider) started \(startedAt) · \(logName)"
     }
@@ -1985,7 +1990,8 @@ private struct WindowsDisplayLaunchEvidenceStrip: View {
             "Log: \(evidence.processLogPath)",
             "Monitor: \(evidence.monitorSocketPath)",
             evidence.qmpSocketPath.map { "QMP: \($0)" },
-            evidence.consoleScreenshotPath.map { "Screenshot: \($0)" }
+            evidence.consoleScreenshotPath.map { "Screenshot: \($0)" },
+            evidence.consoleScreenshotRefreshedAt.map { "Screenshot refreshed: \($0.formatted(date: .abbreviated, time: .standard))" }
         ]
         .compactMap { $0 }
         .joined(separator: "\n")

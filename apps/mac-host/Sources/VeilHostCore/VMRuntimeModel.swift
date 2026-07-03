@@ -312,6 +312,7 @@ public struct VMConsoleLaunchEvidence: Codable, Equatable, Sendable {
     public var monitorSocketPath: String
     public var qmpSocketPath: String?
     public var consoleScreenshotPath: String?
+    public var consoleScreenshotRefreshedAt: Date?
     public var startedAt: Date
 
     public init(
@@ -321,6 +322,7 @@ public struct VMConsoleLaunchEvidence: Codable, Equatable, Sendable {
         monitorSocketPath: String,
         qmpSocketPath: String? = nil,
         consoleScreenshotPath: String?,
+        consoleScreenshotRefreshedAt: Date? = nil,
         startedAt: Date
     ) {
         self.provider = provider
@@ -329,6 +331,7 @@ public struct VMConsoleLaunchEvidence: Codable, Equatable, Sendable {
         self.monitorSocketPath = monitorSocketPath
         self.qmpSocketPath = qmpSocketPath
         self.consoleScreenshotPath = consoleScreenshotPath
+        self.consoleScreenshotRefreshedAt = consoleScreenshotRefreshedAt
         self.startedAt = startedAt
     }
 }
@@ -1084,7 +1087,7 @@ public struct LocalVMRuntimeService: VMRuntimeService {
 
         if virtualizationAvailable, let profile {
             let latestLaunchRecord = try? await qemuLaunchRecordStore.loadLatest()
-            let latestConsoleScreenshotPath = refreshedConsoleScreenshotPath(from: latestLaunchRecord)
+            let latestConsoleScreenshot = refreshedConsoleScreenshot(from: latestLaunchRecord)
             let installationSteps = Self.installationSteps(for: profile)
             let preflightChecks = Self.preflightChecks(for: profile)
             let bootPathReadiness = Self.bootPathReadiness(
@@ -1125,10 +1128,11 @@ public struct LocalVMRuntimeService: VMRuntimeService {
                 virtualDiskAllocatedBytes: virtualDiskAllocatedBytes,
                 automaticInstallAnswerFilePath: Self.automaticInstallAnswerFilePathIfExists(for: profile),
                 automaticInstallMediaPath: Self.automaticInstallMediaPathIfExists(for: profile),
-                latestConsoleScreenshotPath: latestConsoleScreenshotPath,
+                latestConsoleScreenshotPath: latestConsoleScreenshot.path,
                 latestConsoleLaunch: Self.consoleLaunchEvidence(
                     from: latestLaunchRecord,
-                    consoleScreenshotPath: latestConsoleScreenshotPath
+                    consoleScreenshotPath: latestConsoleScreenshot.path,
+                    consoleScreenshotRefreshedAt: latestConsoleScreenshot.refreshedAt
                 ),
                 runtimeProvider: activeProvider,
                 runtimeProviders: runtimeProviders,
@@ -1513,23 +1517,33 @@ public struct LocalVMRuntimeService: VMRuntimeService {
         _ = processTerminator(pid)
     }
 
-    private func refreshedConsoleScreenshotPath(from launchRecord: QEMULaunchRecord?) -> String? {
+    private struct ConsoleScreenshotRefresh {
+        var path: String?
+        var refreshedAt: Date?
+    }
+
+    private func refreshedConsoleScreenshot(from launchRecord: QEMULaunchRecord?) -> ConsoleScreenshotRefresh {
         guard let path = Self.existingConsoleScreenshotPath(from: launchRecord),
               let monitorSocketPath = launchRecord?.monitorSocketPath,
               FileManager.default.fileExists(atPath: monitorSocketPath) else {
-            return Self.existingConsoleScreenshotPath(from: launchRecord)
+            return ConsoleScreenshotRefresh(
+                path: Self.existingConsoleScreenshotPath(from: launchRecord),
+                refreshedAt: nil
+            )
         }
 
         consoleScreenshotRefresher(
             URL(fileURLWithPath: monitorSocketPath),
             URL(fileURLWithPath: path)
         )
-        return Self.existingConsoleScreenshotPath(from: launchRecord) ?? path
+        let refreshedPath = Self.existingConsoleScreenshotPath(from: launchRecord) ?? path
+        return ConsoleScreenshotRefresh(path: refreshedPath, refreshedAt: diagnosticDate())
     }
 
     private static func consoleLaunchEvidence(
         from launchRecord: QEMULaunchRecord?,
-        consoleScreenshotPath: String? = nil
+        consoleScreenshotPath: String? = nil,
+        consoleScreenshotRefreshedAt: Date? = nil
     ) -> VMConsoleLaunchEvidence? {
         guard let launchRecord else {
             return nil
@@ -1542,6 +1556,7 @@ public struct LocalVMRuntimeService: VMRuntimeService {
             monitorSocketPath: launchRecord.monitorSocketPath,
             qmpSocketPath: launchRecord.qmpSocketPath,
             consoleScreenshotPath: consoleScreenshotPath ?? existingConsoleScreenshotPath(from: launchRecord),
+            consoleScreenshotRefreshedAt: consoleScreenshotRefreshedAt,
             startedAt: launchRecord.startedAt
         )
     }

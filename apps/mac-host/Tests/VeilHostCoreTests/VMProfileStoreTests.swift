@@ -398,6 +398,7 @@ struct VMProfileStoreTests {
         let service = LocalVMRuntimeService(
             profileStore: store,
             qemuLaunchRecordStore: JSONQEMULaunchRecordStore(directory: qemuLaunchDirectory),
+            diagnosticDate: { Date(timeIntervalSince1970: 1_782_838_860) },
             consoleScreenshotRefresher: { _, imageURL in
                 try? Data("fresh".utf8).write(to: imageURL)
             }
@@ -407,6 +408,7 @@ struct VMProfileStoreTests {
 
         #expect(snapshot.latestConsoleScreenshotPath == consoleScreenshotURL.path)
         #expect(snapshot.latestConsoleLaunch?.consoleScreenshotPath == consoleScreenshotURL.path)
+        #expect(snapshot.latestConsoleLaunch?.consoleScreenshotRefreshedAt == Date(timeIntervalSince1970: 1_782_838_860))
         #expect(try String(contentsOf: consoleScreenshotURL, encoding: .utf8) == "fresh")
     }
 
