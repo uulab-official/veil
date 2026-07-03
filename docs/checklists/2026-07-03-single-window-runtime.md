@@ -8,7 +8,7 @@ Goal: move Veil from a Veil shell plus separate QEMU Cocoa display toward a UTM-
 
 - [x] Identify the two-window cause: Veil opens its SwiftUI shell while QEMU's `-display cocoa` creates a second native macOS window.
 - [x] Stop treating Start as an "open display" action in product copy.
-- [x] Rename the temporary external display affordance to "Native QEMU Display" so it is clearly a fallback, not the target experience.
+- [x] Move the temporary external display affordance behind an explicit Open Recovery Display menu action so it is clearly a fallback, not the target experience.
 - [x] Keep the main Veil window as the default place for runtime status, screenshots, app-frame proof, and app launch.
 - [x] Document that embedded display is the UTM-class target and QEMU Cocoa is temporary.
 - [x] Add a headless QEMU launch mode that rewrites app-started QEMU from `-display cocoa` to `-display none`.
@@ -31,8 +31,8 @@ Goal: move Veil from a Veil shell plus separate QEMU Cocoa display toward a UTM-
 - [x] Make embedded display the default `veil-vmctl qemu-start` path and keep native QEMU Cocoa display behind `--native-display`.
 - [x] Guard the runtime booter so frontmost/System Events automation only runs for the explicit native display fallback.
 - [x] Detect already-running orphan QEMU processes by configured Windows disk path so an old native Cocoa display cannot silently coexist with a new embedded launch.
+- [x] Remove normal VM-screen Native Display buttons so the product surface stays one-window by default.
 
 ## Next
 
-- [ ] Replace screenshot-only setup evidence with the VNC-backed installer surface.
 - [ ] Verify one-window startup with a running Windows 11 Arm install and guest-agent connection.

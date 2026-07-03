@@ -11,7 +11,6 @@ struct VMRuntimeView: View {
     var activeMirrorSession: WindowMirrorSession?
     var startVMAction: () -> Void
     var stopVMAction: () -> Void
-    var showWindowsDisplayAction: () -> Void
     var installGuestAgentAction: () -> Void
     var launchWindowsAppAction: () -> Void
     var recordAppFrameProofAction: () -> Void
@@ -61,7 +60,6 @@ struct VMRuntimeView: View {
                             }
                         }
                     },
-                    displayAction: showWindowsDisplayAction,
                     stopAction: stopVMAction,
                     installGuestAgentAction: installGuestAgentAction,
                     canLaunchWindowsApp: canLaunchWindowsApp,
@@ -465,13 +463,6 @@ private struct SimpleRuntimePanel: View {
                                 Label("Get Windows", systemImage: "arrow.down.circle")
                             }
                             .buttonStyle(.bordered)
-                        }
-
-                        if canShowDisplay {
-                            Button(action: displayAction) {
-                                Label("Native Display", systemImage: "display")
-                            }
-                            .disabled(isLoading)
                         }
 
                         Button(action: refreshAction) {
@@ -1059,16 +1050,6 @@ private struct QuickActionsPanel: View {
                 .disabled((!canStart && !canStop) || isLoading)
 
                 ControlActionTile(
-                    title: "Native Display",
-                    detail: canShowDisplay ? "Open the temporary native QEMU display." : "Display evidence appears after Windows starts.",
-                    symbolName: "display",
-                    tint: .blue,
-                    state: canShowDisplay ? .ready : .blocked,
-                    action: displayAction
-                )
-                .disabled(!canShowDisplay || isLoading)
-
-                ControlActionTile(
                     title: "Prepare Windows",
                     detail: snapshot.profileName == nil ? "Create the local profile, shared folder, install media, and default disk." : "Base Windows resources are ready.",
                     symbolName: "wand.and.stars",
@@ -1227,13 +1208,6 @@ private struct ControlCenterHero: View {
                             .disabled(true)
                         }
 
-                        if canShowDisplay {
-                            Button(action: displayAction) {
-                                Label("Native Display", systemImage: "display")
-                            }
-                            .disabled(isLoading)
-                        }
-
                         Button(action: refreshAction) {
                             Label("Refresh", systemImage: "arrow.clockwise")
                         }
@@ -1290,7 +1264,6 @@ private struct WindowsSetupDisplayPanel: View {
     var selectInstallerAction: () -> Void
     var selectDriverAction: () -> Void
     var primaryAction: () -> Void
-    var displayAction: () -> Void
     var stopAction: () -> Void
     var installGuestAgentAction: () -> Void
     var canLaunchWindowsApp: Bool
@@ -1631,7 +1604,7 @@ private struct WindowsSetupDisplayPanel: View {
         case .running:
             "Windows is running locally."
         case .starting:
-            "Opening the local display."
+            "Opening Windows inside Veil."
         case .failed:
             "Start failed. Open details."
         default:
@@ -1829,8 +1802,8 @@ private struct WindowsSetupDisplayPanel: View {
             InstallFlowItem(
                 title: "Installer",
                 detail: canShowDisplay
-                    ? "Native QEMU display available"
-                    : (canStart ? "Open Windows Setup" : "Waiting for preparation"),
+                    ? "Windows display is active in Veil"
+                    : (canStart ? "Start Windows Setup" : "Waiting for preparation"),
                 symbolName: "display",
                 state: canShowDisplay ? .complete : (canStart ? .current : .pending)
             ),
@@ -1910,7 +1883,7 @@ private struct WindowsSetupDisplayPanel: View {
         }
 
         if snapshot.bootReady {
-            return "Press play to open the Windows display"
+            return "Press play to start Windows in this window"
         }
 
         if installerNeedsFilePickerAccess {
@@ -1997,11 +1970,11 @@ private struct WindowsSetupDisplayPanel: View {
         }
 
         if effectiveInstallEvidence.isInstalled {
-            return "Open the Windows display."
+            return "Start Windows inside the main Veil window."
         }
 
         if canStart {
-            return "Start Windows and open the local display."
+            return "Start Windows Setup inside Veil's embedded display."
         }
 
         if installerNeedsFilePickerAccess {

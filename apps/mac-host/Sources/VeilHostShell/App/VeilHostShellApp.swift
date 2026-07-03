@@ -69,7 +69,6 @@ struct VeilHostShellApp: App {
                 vmModel: vmModel,
                 startVMAction: startWindowsAndShowDisplay,
                 stopVMAction: stopWindowsAndCloseDisplay,
-                showWindowsDisplayAction: showWindowsDisplay,
                 installGuestAgentAction: installGuestAgentFromDisplay,
                 launchWindowsAppAction: launchSelectedWindowsAppWindow,
                 recordAppFrameProofAction: recordAppFrameProof,
@@ -138,11 +137,12 @@ struct VeilHostShellApp: App {
                 .keyboardShortcut(".", modifiers: [.command])
                 .disabled(!vmModel.canStop || vmModel.phase == .loading)
 
-                Button("Show Native QEMU Display") {
-                    showWindowsDisplay()
+                if canShowWindowsDisplay {
+                    Button("Open Recovery Display") {
+                        showWindowsDisplay()
+                    }
+                    .keyboardShortcut("b", modifiers: [.command, .shift])
                 }
-                .keyboardShortcut("b", modifiers: [.command, .shift])
-                .disabled(!canShowWindowsDisplay)
 
                 Button("Install Guest Agent") {
                     installGuestAgentFromDisplay()
@@ -263,8 +263,8 @@ struct VeilHostShellApp: App {
 
             if vmModel.snapshot?.state == .running || vmModel.snapshot?.state == .starting {
                 displayMessage = vmRuntimeBooter.supportsNativeDisplayWindow
-                    ? "Windows is running in the native QEMU display."
-                    : "Windows is running in single-window preview mode. Veil will refresh setup evidence inside this window."
+                    ? "Windows is running in recovery display mode."
+                    : "Windows is running inside the main Veil window. Setup evidence refreshes here."
             } else if let errorMessage = vmModel.errorMessage {
                 displayMessage = "Windows display could not start: \(errorMessage)"
             }
@@ -465,9 +465,9 @@ struct VeilHostShellApp: App {
     private func showWindowsDisplay() {
         activateMainWindow()
         if vmRuntimeBooter.showConsoleIfRunning() {
-            displayMessage = "Native QEMU display brought forward. This is temporary until Veil embeds the display in one window."
+            displayMessage = "Recovery display brought forward."
         } else {
-            displayMessage = "No active native QEMU display is attached yet. Start Windows first."
+            displayMessage = "No recovery display is attached. Windows normally runs inside the main Veil window."
         }
     }
 
@@ -607,11 +607,12 @@ private struct VeilMenuBarMenu: View {
         }
         .disabled(!vmModel.canStart || vmModel.phase == .loading)
 
-        Button("Show Native QEMU Display", systemImage: "display") {
-            openMainWindow()
-            showWindowsDisplayAction()
+        if canShowWindowsDisplay {
+            Button("Open Recovery Display", systemImage: "display") {
+                openMainWindow()
+                showWindowsDisplayAction()
+            }
         }
-        .disabled(!canShowWindowsDisplay)
 
         Button("Install Guest Agent", systemImage: "person.crop.circle.badge.plus") {
             openMainWindow()
@@ -768,7 +769,6 @@ private struct StandaloneMainWindowRoot: View {
             vmModel: vmModel,
             startVMAction: startWindowsAndShowDisplay,
             stopVMAction: stopWindowsAndCloseDisplay,
-            showWindowsDisplayAction: showWindowsDisplay,
             installGuestAgentAction: installGuestAgentFromDisplay,
             launchWindowsAppAction: launchSelectedWindowsApp,
             recordAppFrameProofAction: {},
@@ -794,8 +794,8 @@ private struct StandaloneMainWindowRoot: View {
 
             if vmModel.snapshot?.state == .running || vmModel.snapshot?.state == .starting {
                 displayMessage = vmRuntimeBooter.supportsNativeDisplayWindow
-                    ? "Windows is running in the native QEMU display."
-                    : "Windows is running in single-window preview mode. Veil will refresh setup evidence inside this window."
+                    ? "Windows is running in recovery display mode."
+                    : "Windows is running inside the main Veil window. Setup evidence refreshes here."
             } else if let errorMessage = vmModel.errorMessage {
                 displayMessage = "Windows display could not start: \(errorMessage)"
             }
@@ -813,9 +813,9 @@ private struct StandaloneMainWindowRoot: View {
 
     private func showWindowsDisplay() {
         if vmRuntimeBooter.showConsoleIfRunning() {
-            displayMessage = "Native QEMU display brought forward. This is temporary until Veil embeds the display in one window."
+            displayMessage = "Recovery display brought forward."
         } else {
-            displayMessage = "No active native QEMU display is attached yet. Start Windows first."
+            displayMessage = "No recovery display is attached. Windows normally runs inside the main Veil window."
         }
     }
 

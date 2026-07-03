@@ -7,7 +7,6 @@ struct DetailView: View {
     var selectedSection: ShellSection
     var startVMAction: () -> Void
     var stopVMAction: () -> Void
-    var showWindowsDisplayAction: () -> Void
     var installGuestAgentAction: () -> Void
     var launchWindowsAppAction: () -> Void
     var recordAppFrameProofAction: () -> Void
@@ -23,7 +22,6 @@ struct DetailView: View {
                 activeMirrorSession: activeMirrorSession,
                 startVMAction: startVMAction,
                 stopVMAction: stopVMAction,
-                showWindowsDisplayAction: showWindowsDisplayAction,
                 installGuestAgentAction: installGuestAgentAction,
                 launchWindowsAppAction: launchWindowsAppAction,
                 recordAppFrameProofAction: recordAppFrameProofAction,
