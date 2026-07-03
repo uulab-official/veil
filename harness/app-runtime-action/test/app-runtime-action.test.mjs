@@ -10,6 +10,12 @@ test("validates app runtime launch action fixture", () => {
   assert.equal(validateAppRuntimeAction(report), report);
 });
 
+test("validates app runtime pending launch fixture", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-action.launch-pending.json", import.meta.url), "utf8"));
+
+  assert.equal(validateAppRuntimeAction(report), report);
+});
+
 test("validates quiet runtime readiness action fixture", () => {
   const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-action.quiet-ready.json", import.meta.url), "utf8"));
 
@@ -41,6 +47,41 @@ test("rejects accepted launch actions without a window", () => {
   assert.throws(
     () => validateAppRuntimeAction(report),
     /window must be an object/
+  );
+});
+
+test("rejects pending launch actions with a fake window", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-action.launch-pending.json", import.meta.url), "utf8"));
+  report.window = {
+    type: "window.created",
+    windowId: "hwnd:FAKE",
+    processId: 4912,
+    appId: "winapp_notepad",
+    title: "Fake Notepad",
+    bounds: {
+      x: 80,
+      y: 80,
+      width: 1180,
+      height: 760
+    },
+    state: "normal",
+    focused: true
+  };
+
+  assert.throws(
+    () => validateAppRuntimeAction(report),
+    /rejected launch actions cannot include window/
+  );
+});
+
+test("rejects pending launch actions whose app id drifts", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-action.launch-pending.json", import.meta.url), "utf8"));
+  report.status.launchPlan.pendingLaunchAppId = "winapp_calculator";
+  report.status.pendingLaunchAppId = "winapp_calculator";
+
+  assert.throws(
+    () => validateAppRuntimeAction(report),
+    /pendingLaunchAppId/
   );
 });
 

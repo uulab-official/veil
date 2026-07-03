@@ -1,0 +1,133 @@
+{
+  "kind": "windowsAppRuntimeAction",
+  "action": "launch",
+  "requestedAt": "2026-07-04T02:05:00Z",
+  "endpoint": "ws://127.0.0.1:9",
+  "connectionMode": "demo",
+  "accepted": false,
+  "appId": "winapp_notepad",
+  "closedWindows": [],
+  "mouseInputs": [],
+  "keyInputs": [],
+  "restoredWindows": [],
+  "restoreRequestedAppIds": [],
+  "broughtForwardWindowIds": [],
+  "status": {
+    "kind": "windowsAppRuntimeStatus",
+    "generatedAt": "2026-07-04T02:05:01Z",
+    "phase": "connected",
+    "selectedAppId": "winapp_notepad",
+    "pendingLaunchAppId": "winapp_notepad",
+    "connection": {
+      "mode": "demo",
+      "hasLiveAgentConnection": false,
+      "agentVersion": "demo-0.1.0",
+      "os": "windows-arm64",
+      "connectionDetail": "No Windows agent reachable at ws://127.0.0.1:9. Showing built-in demo data."
+    },
+    "apps": [
+      {
+        "id": "winapp_notepad",
+        "name": "Notepad",
+        "canRequestLaunch": true,
+        "canLaunchNow": false
+      },
+      {
+        "id": "winapp_calculator",
+        "name": "Calculator",
+        "canRequestLaunch": true,
+        "canLaunchNow": false
+      }
+    ],
+    "mirrorSessions": [],
+    "restorableAppIds": [],
+    "dockIntegration": {
+      "isEnabled": true,
+      "openWindowCount": 0,
+      "canOpenMainWindow": true,
+      "canBringWindowsAppsForward": false,
+      "canRestorePreviousApps": false,
+      "canLaunchSelectedApp": true
+    },
+    "macWindowIntegration": {
+      "isEnabled": true,
+      "acceptsGuestWindowEvents": false,
+      "opensMacWindowsAutomatically": true,
+      "hidesLauncherWhenMirroring": false,
+      "mirroredWindowCount": 0,
+      "pendingFrameWindowCount": 0,
+      "streamingWindowCount": 0,
+      "reason": "Waiting for the live Windows agent before guest HWND events can open macOS windows automatically."
+    },
+    "quietRuntime": {
+      "isEnabled": true,
+      "hasOpenedAppWindowThisSession": false,
+      "openWindowCount": 0,
+      "canQuietRuntime": false,
+      "willQuietAutomatically": false,
+      "automaticQuietDelaySeconds": 8,
+      "recommendedAction": "none",
+      "reason": "No Windows app window has opened in this host session."
+    },
+    "launchPlan": {
+      "selectedAppId": "winapp_notepad",
+      "pendingLaunchAppId": "winapp_notepad",
+      "canRequestSelectedAppLaunch": true,
+      "canLaunchSelectedAppNow": false,
+      "requiresRuntimeStart": true,
+      "requiresGuestAgent": true,
+      "recommendedAction": "start-runtime-for-pending-launch",
+      "recommendedStartCommand": "veil-vmctl qemu-start --json --wait-seconds 30",
+      "recommendedWaitCommand": "veil-vmctl guest-agent-wait --json --wait-seconds 30",
+      "recommendedLaunchCommand": "veil-vmctl app-runtime-action --json --action launch --app-id winapp_notepad",
+      "reason": "The selected app launch is queued until Windows starts and the guest agent connects."
+    },
+    "actions": [
+      {
+        "id": "dock.openMainWindow",
+        "title": "Open Veil From Dock",
+        "isAvailable": true
+      },
+      {
+        "id": "dock.bringWindowsAppsForward",
+        "title": "Bring Windows Apps Forward",
+        "isAvailable": false
+      },
+      {
+        "id": "windowsApps.restorePrevious",
+        "title": "Restore Previous Apps",
+        "isAvailable": false
+      },
+      {
+        "id": "windowsApps.closeAll",
+        "title": "Close All Windows Apps",
+        "isAvailable": false
+      },
+      {
+        "id": "macWindows.autoOpen",
+        "title": "Auto Open Windows App Windows",
+        "isAvailable": false
+      },
+      {
+        "id": "runtime.startWindowsForApp",
+        "title": "Start Windows For App Launch",
+        "isAvailable": true
+      },
+      {
+        "id": "runtime.quietWhenIdle",
+        "title": "Quiet Runtime When Idle",
+        "isAvailable": false
+      },
+      {
+        "id": "clipboard.setText",
+        "title": "Set Windows Clipboard Text",
+        "isAvailable": false
+      }
+    ]
+  },
+  "nextActions": [
+    "Run `veil-vmctl qemu-start --json --wait-seconds 30` to start the local Windows runtime for the selected app.",
+    "Run `veil-vmctl guest-agent-wait --json --wait-seconds 30` to wait for the Windows guest agent.",
+    "Run `veil-vmctl app-runtime-action --json --action launch --app-id winapp_notepad` after the guest agent connects."
+  ]
+}

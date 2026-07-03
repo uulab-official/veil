@@ -93,6 +93,10 @@ Windows clipboard text, type bounded ASCII text, restore persisted app-window
 intent after reconnect with requested app ids matched to restored HWNDs, or
 confirm that the runtime is ready to quiet after every mirrored Windows app
 window has closed.
+In real-agent mode, a launch request must not fabricate a demo HWND when the
+guest agent is unavailable; it returns a rejected pending-launch action with
+`status.pendingLaunchAppId` and `status.launchPlan` start/wait/retry commands
+instead.
 
 ```bash
 cd apps/mac-host

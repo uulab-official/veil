@@ -89,11 +89,28 @@ function validateQuietWhenIdleAction(report) {
 }
 
 function validateLaunchAction(report) {
+  requireString(report.appId, "appId");
+
   if (!report.accepted) {
+    if (report.launch !== undefined && report.launch !== null) {
+      throw new TypeError("rejected launch actions cannot include launch.");
+    }
+
+    if (report.window !== undefined && report.window !== null) {
+      throw new TypeError("rejected launch actions cannot include window.");
+    }
+
+    if (
+      report.status.launchPlan.canRequestSelectedAppLaunch &&
+      report.status.launchPlan.requiresRuntimeStart &&
+      report.status.launchPlan.pendingLaunchAppId !== report.appId
+    ) {
+      throw new TypeError("rejected app-first launch actions must queue pendingLaunchAppId for the requested app.");
+    }
+
     return;
   }
 
-  requireString(report.appId, "appId");
   requireString(report.windowId, "windowId");
   validateLaunchResponse(report.launch);
   validateWindow(report.window);

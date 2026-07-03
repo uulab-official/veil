@@ -690,7 +690,16 @@ struct VeilVMControl {
             guard !launchAppId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
                 throw VMControlError.missingAppId
             }
-            let result = await model.launchApp(appId: launchAppId)
+
+            let result: WindowsAppLaunchResult?
+            if demo {
+                result = await model.launchApp(appId: launchAppId)
+            } else {
+                model.selectedAppId = launchAppId
+                await model.launchSelectedApp()
+                result = model.lastLaunch?.window.appId == launchAppId ? model.lastLaunch : nil
+            }
+
             launch = result?.launch
             window = result?.window
             resolvedAppId = launchAppId
@@ -819,7 +828,7 @@ struct VeilVMControl {
             broughtForwardWindowIds: broughtForwardWindowIds,
             quietRuntime: quietRuntime,
             status: status,
-            nextActions: nextActions(for: action, accepted: accepted)
+            nextActions: nextActions(for: action, accepted: accepted, status: status)
         )
 
         if json {
@@ -867,7 +876,8 @@ struct VeilVMControl {
 
     private static func nextActions(
         for action: VMControlArguments.AppRuntimeAction,
-        accepted: Bool
+        accepted: Bool,
+        status: WindowsAppRuntimeStatusReport
     ) -> [String] {
         if accepted {
             switch action {
@@ -924,10 +934,36 @@ struct VeilVMControl {
             }
         }
 
+        if action == .launch {
+            return launchRecoveryActions(from: status.launchPlan)
+        }
+
         return [
             "Run `veil-vmctl guest-agent-wait --json` to confirm the Windows guest agent is connected.",
             "Run `veil-vmctl app-runtime-status --json` and check the requested app or window id before retrying."
         ]
+    }
+
+    private static func launchRecoveryActions(from launchPlan: WindowsAppRuntimeLaunchPlanStatus) -> [String] {
+        var actions: [String] = []
+
+        if let startCommand = launchPlan.recommendedStartCommand {
+            actions.append("Run `\(startCommand)` to start the local Windows runtime for the selected app.")
+        }
+
+        if let waitCommand = launchPlan.recommendedWaitCommand {
+            actions.append("Run `\(waitCommand)` to wait for the Windows guest agent.")
+        }
+
+        if let launchCommand = launchPlan.recommendedLaunchCommand {
+            actions.append("Run `\(launchCommand)` after the guest agent connects.")
+        }
+
+        if actions.isEmpty {
+            actions.append("Run `veil-vmctl app-runtime-status --json` and check the selected app before retrying.")
+        }
+
+        return actions
     }
 
     private static func proveAppWindow(json: Bool, appId: String, waitSeconds: Int, outputPath: String?) async throws {
