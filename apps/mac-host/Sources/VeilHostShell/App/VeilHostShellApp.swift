@@ -404,10 +404,8 @@ struct VeilHostShellApp: App {
             await model.launchSelectedApp()
 
             if model.pendingLaunchAppId != nil,
-               !model.hasLiveAgentConnection,
-               vmModel.canStart {
-                displayMessage = "Starting Windows. Veil will open the app when the guest agent connects."
-                startWindowsAndShowDisplay()
+               !model.hasLiveAgentConnection {
+                continuePendingLaunchHandoff()
                 return
             }
 
@@ -438,10 +436,8 @@ struct VeilHostShellApp: App {
         }
 
         guard model.canFulfillPendingLaunch else {
-            if model.pendingLaunchStatus().willLaunchOnAgentReconnect,
-               vmModel.canStart {
-                displayMessage = "Starting Windows. Veil will open the queued app when the guest agent connects."
-                startWindowsAndShowDisplay()
+            if model.pendingLaunchStatus().willLaunchOnAgentReconnect {
+                continuePendingLaunchHandoff()
             } else {
                 displayMessage = model.pendingLaunchStatus().reason
             }
@@ -456,6 +452,34 @@ struct VeilHostShellApp: App {
         displayMessage = "\(result.window.title) opened as a macOS window."
         showWindowsAppWindow(for: result)
         hideMainWindowForCoherenceIfNeeded()
+    }
+
+    private func continuePendingLaunchHandoff() {
+        let appName = pendingLaunchDisplayName()
+        switch vmModel.snapshot?.state {
+        case .running, .starting:
+            activateMainWindow()
+            displayMessage = "Windows is running. Veil is waiting for the guest agent to open \(appName)."
+            if vmRuntimeBooter.supportsNativeDisplayWindow {
+                showWindowsDisplay()
+            }
+        default:
+            guard vmModel.canStart else {
+                displayMessage = "Veil queued \(appName). Start Windows when the local runtime is available."
+                return
+            }
+
+            displayMessage = "Starting Windows. Veil will open \(appName) when the guest agent connects."
+            startWindowsAndShowDisplay()
+        }
+    }
+
+    private func pendingLaunchDisplayName() -> String {
+        guard let pendingAppId = model.pendingLaunchAppId else {
+            return "the queued app"
+        }
+
+        return model.apps.first { $0.id == pendingAppId }?.name ?? "the queued app"
     }
 
     private func restoreWindowsAppWindows() {
