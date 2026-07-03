@@ -21,13 +21,14 @@ The first four are local host prerequisites. The guest agent step remains pendin
 ## Current Host Behavior
 
 - Prepare VM creates the default Windows 11 Arm profile, the macOS shared folder at `~/Veil Shared`, and the default sparse disk in one action.
+- Prepare VM does not scan Downloads or any other broad user folder for installer media. The user chooses the Windows ISO explicitly in the host app, or passes it through `veil-vmctl prepare --installer <path>`.
 - Prepare VM creates `~/Veil Shared/Autounattend.xml` with Windows Setup language/OOBE inputs, Windows 11 Pro image selection, UEFI/GPT disk partitioning for the blank VM disk, an offline OOBE registry fallback, and no product key value.
 - Prepare VM creates `~/Veil Shared/VeilAutoInstall.iso`, a small local ISO containing only `Autounattend.xml`, so Windows Setup can read unattended inputs as a VM-attached device.
 - Prepare VM applies an adaptive resource profile from the current Mac: half of host CPU cores up to a safe cap, 25% of physical memory rounded down to a conservative VM cap, and a 128 GB default sparse disk.
 - `veil-vmctl prepare --installer <path>` prepares the same local profile, shared folder, default sparse disk, installer path, and diagnostics bundle from the command line.
 - `veil-vmctl prepare --installer <path> --drivers <path>` also stores an optional user-provided Windows driver ISO path. Veil attaches that media read-only during QEMU/HVF boots, but does not download, bundle, or license driver media.
 - Profile-only creation is still available for low-level setup testing.
-- Installer media is a user-selected local file.
+- Installer media is a user-selected local file. Veil stores the selected path in the local profile but does not copy, redistribute, or auto-discover Windows media.
 - The virtual disk can be user-selected or created as a blank sparse disk at `~/Virtual Machines/Veil/Windows 11 Arm.img`.
 - The boot spike stores EFI variables and the generic machine identifier next to the virtual disk so repeated boots keep stable VM identity.
 - The host now prefers the local QEMU/HVF compatibility provider when it is installed and ready, because that is the clearest path to a UTM-style visible Windows installer console. Apple Virtualization remains the fallback feasibility provider.

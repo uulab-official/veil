@@ -1178,11 +1178,6 @@ public struct LocalVMRuntimeService: VMRuntimeService {
             mediaURL: Self.automaticInstallMediaURL(for: profile)
         )
 
-        if profile.installerMediaPath == nil,
-           let installerMediaURL = discoverDefaultInstallerMedia() {
-            profile.installerMediaPath = installerMediaURL.path
-        }
-
         if let virtualDiskPath = profile.virtualDiskPath {
             try Self.prepareTPMStateDirectory(virtualDiskPath: virtualDiskPath)
             try Self.prepareUEFIVariablesStore(
@@ -1635,46 +1630,6 @@ public struct LocalVMRuntimeService: VMRuntimeService {
         """
     }
 
-    private func discoverDefaultInstallerMedia() -> URL? {
-        let downloadsURL = defaultHomeDirectory.appendingPathComponent("Downloads", isDirectory: true)
-        guard let urls = try? FileManager.default.contentsOfDirectory(
-            at: downloadsURL,
-            includingPropertiesForKeys: [.contentModificationDateKey, .isRegularFileKey],
-            options: [.skipsHiddenFiles]
-        ) else {
-            return nil
-        }
-
-        return urls
-            .filter(Self.isWindowsArmInstallerCandidate)
-            .sorted { lhs, rhs in
-                let lhsDate = (try? lhs.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
-                let rhsDate = (try? rhs.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
-                if lhsDate == rhsDate {
-                    return lhs.lastPathComponent < rhs.lastPathComponent
-                }
-
-                return lhsDate > rhsDate
-            }
-            .first
-    }
-
-    private static func isWindowsArmInstallerCandidate(_ url: URL) -> Bool {
-        guard url.pathExtension.lowercased() == "iso" else {
-            return false
-        }
-
-        let resourceValues = try? url.resourceValues(forKeys: [.isRegularFileKey])
-        guard resourceValues?.isRegularFile != false else {
-            return false
-        }
-
-        let filename = url.lastPathComponent.lowercased()
-        let looksLikeWindows = filename.contains("windows") || filename.contains("win11") || filename.contains("win_11")
-        let looksLikeArm = filename.contains("arm64") || filename.contains("aarch64") || filename.contains("arm")
-        return looksLikeWindows && looksLikeArm && !filename.contains("x64") && !filename.contains("x86")
-    }
-
     private static func allocatedFileSize(path: String?) -> Int64? {
         guard let path, !path.isEmpty else {
             return nil
@@ -2018,12 +1973,12 @@ public struct LocalVMRuntimeService: VMRuntimeService {
         let answerMediaURL = automaticInstallMediaURL(for: profile)
         let answerFileState = fileStepState(
             path: answerFileURL.path,
-            missingDetail: "Run Auto Prepare to create the Windows unattended setup answer file.",
+            missingDetail: "Run Prepare VM to create the Windows unattended setup answer file.",
             validationLabel: "Automatic install answer file"
         )
         let answerMediaState = fileStepState(
             path: answerMediaURL.path,
-            missingDetail: "Run Auto Prepare to create the Windows unattended setup media.",
+            missingDetail: "Run Prepare VM to create the Windows unattended setup media.",
             validationLabel: "Automatic install media"
         )
 
@@ -2135,11 +2090,11 @@ public struct LocalVMRuntimeService: VMRuntimeService {
         answerMediaState: (state: VMInstallationStepState, detail: String?)
     ) -> String {
         if answerFileState.state != .complete {
-            return answerFileState.detail ?? "Run Auto Prepare to create the Windows unattended setup answer file."
+            return answerFileState.detail ?? "Run Prepare VM to create the Windows unattended setup answer file."
         }
 
         if answerMediaState.state != .complete {
-            return answerMediaState.detail ?? "Run Auto Prepare to create the Windows unattended setup media."
+            return answerMediaState.detail ?? "Run Prepare VM to create the Windows unattended setup media."
         }
 
         return "VeilAutoInstall.iso is ready for Windows Setup unattended inputs."

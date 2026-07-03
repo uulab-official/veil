@@ -45,6 +45,8 @@ struct VMRuntimeView: View {
                         } else if model.canStart {
                             startConsoleHandoffProgress()
                             startVMAction()
+                        } else if snapshot.installerMediaPath == nil {
+                            pathPicker = .installerMedia
                         } else {
                             Task {
                                 await model.prepareDefaultVM()
@@ -87,13 +89,11 @@ struct VMRuntimeView: View {
                     subtitle: model.phase == .loading
                         ? "Opening the local Windows runtime."
                         : "Install and run Windows locally on this Mac.",
-                    primaryTitle: model.phase == .loading ? "Loading..." : "Set Up Windows",
-                    primarySymbol: model.phase == .loading ? "arrow.triangle.2.circlepath" : "play.fill",
+                    primaryTitle: model.phase == .loading ? "Loading..." : "Choose Windows ISO",
+                    primarySymbol: model.phase == .loading ? "arrow.triangle.2.circlepath" : "opticaldisc",
                     secondaryTitle: "Refresh",
                     primaryAction: {
-                        Task {
-                            await model.prepareDefaultVM()
-                        }
+                        pathPicker = .installerMedia
                     },
                     secondaryAction: {
                         Task {
@@ -471,20 +471,12 @@ private struct SimpleRuntimePanel: View {
             return URL(fileURLWithPath: path).lastPathComponent
         }
 
-        if let path = snapshot.discoveredInstallerMediaPath {
-            return "\(URL(fileURLWithPath: path).lastPathComponent) found"
-        }
-
         return "Not selected"
     }
 
     private var installerState: SetupStatusState {
         if snapshot.installerMediaPath != nil {
             return .complete
-        }
-
-        if snapshot.discoveredInstallerMediaPath != nil {
-            return .attention
         }
 
         return .pending
@@ -503,9 +495,7 @@ private struct SimpleRuntimePanel: View {
         case .unsupported:
             return "This Mac cannot run the current local Windows Arm runtime."
         case .notConfigured:
-            return snapshot.discoveredInstallerMediaPath == nil
-                ? "Download or choose a Windows 11 Arm ISO, then prepare the VM."
-                : "Windows ISO found. Prepare the VM to attach it and create the disk."
+            return "Choose a Windows 11 Arm ISO, then prepare the VM."
         case .stopped:
             if installSimulation.phase == .complete {
                 return "Console handoff finished. Start again if the Windows setup window did not appear."
@@ -539,6 +529,10 @@ private struct SimpleRuntimePanel: View {
             }
         }
 
+        if snapshot.installerMediaPath == nil {
+            return "Choose Windows ISO"
+        }
+
         return snapshot.profileName == nil ? "Prepare VM" : "Continue Setup"
     }
 
@@ -549,6 +543,10 @@ private struct SimpleRuntimePanel: View {
 
         if canStart {
             return "play.fill"
+        }
+
+        if snapshot.installerMediaPath == nil {
+            return "opticaldisc"
         }
 
         return "wand.and.stars"
@@ -862,7 +860,7 @@ private struct QuickActionsPanel: View {
 
                 ControlActionTile(
                     title: "Prepare VM",
-                    detail: snapshot.profileName == nil ? "Create profile, find Downloads ISO, shared folder, and default disk." : "Base VM resources are ready.",
+                    detail: snapshot.profileName == nil ? "Create the profile, shared folder, auto-install media, and default disk." : "Base VM resources are ready.",
                     symbolName: "wand.and.stars",
                     tint: .blue,
                     state: snapshot.profileName == nil ? .ready : .partial,
@@ -1051,20 +1049,12 @@ private struct ControlCenterHero: View {
             return "Selected"
         }
 
-        if snapshot.discoveredInstallerMediaPath != nil {
-            return "Found"
-        }
-
         return "Missing"
     }
 
     private var installerStatusTint: Color {
         if snapshot.installerMediaPath != nil {
             return .green
-        }
-
-        if snapshot.discoveredInstallerMediaPath != nil {
-            return .blue
         }
 
         return .orange
@@ -1343,6 +1333,10 @@ private struct WindowsSetupDisplayPanel: View {
             return installSimulation.phase == .running ? "Opening..." : installActionTitle
         }
 
+        if snapshot.installerMediaPath == nil {
+            return "Choose ISO"
+        }
+
         return snapshot.profileName == nil ? "Prepare VM" : "Continue Setup"
     }
 
@@ -1368,7 +1362,7 @@ private struct WindowsSetupDisplayPanel: View {
                     .labelStyle(.iconOnly)
             }
             .disabled(isLoading || snapshot.state == .running || snapshot.state == .starting)
-            .help("Auto Prepare")
+            .help("Prepare VM")
 
             Button(action: selectInstallerAction) {
                 Label("Choose ISO", systemImage: "opticaldisc")
@@ -1416,15 +1410,11 @@ private struct WindowsSetupDisplayPanel: View {
 
     private var controlBarSubtitle: String {
         if canStop {
-            return selectedInstallerName ?? discoveredInstallerName ?? "Local VM display"
+            return selectedInstallerName ?? "Local VM display"
         }
 
         if let selectedInstallerName {
             return selectedInstallerName
-        }
-
-        if let discoveredInstallerName {
-            return "Found \(discoveredInstallerName)"
         }
 
         return "Choose a Windows 11 Arm ISO"
@@ -1469,23 +1459,12 @@ private struct WindowsSetupDisplayPanel: View {
         return allocatedBytes < 1_024 * 1_024 * 1_024
     }
 
-    private var discoveredInstallerName: String? {
-        guard snapshot.installerMediaPath == nil else {
-            return nil
-        }
-
-        return snapshot.discoveredInstallerMediaPath.map { URL(fileURLWithPath: $0).lastPathComponent }
-    }
-
     private var flowItems: [InstallFlowItem] {
         let installerDetail: String
         let installerState: InstallFlowState
         if let selectedInstallerName {
             installerDetail = selectedInstallerName
             installerState = .complete
-        } else if let discoveredInstallerName {
-            installerDetail = "Use \(discoveredInstallerName)"
-            installerState = .current
         } else {
             installerDetail = "Select the Windows 11 Arm ISO"
             installerState = .current
@@ -1527,9 +1506,9 @@ private struct WindowsSetupDisplayPanel: View {
         [
             LauncherMetadataItem(
                 title: "ISO",
-                value: selectedInstallerName ?? discoveredInstallerName ?? "Missing",
+                value: selectedInstallerName ?? "Missing",
                 symbolName: "opticaldisc",
-                tint: snapshot.installerMediaPath != nil ? .green : (snapshot.discoveredInstallerMediaPath != nil ? .blue : .orange)
+                tint: snapshot.installerMediaPath != nil ? .green : .orange
             ),
             LauncherMetadataItem(
                 title: "Disk",
@@ -1567,10 +1546,6 @@ private struct WindowsSetupDisplayPanel: View {
 
         if snapshot.bootReady {
             return "Press play to open the Windows display"
-        }
-
-        if let discoveredInstallerName {
-            return "Found \(discoveredInstallerName)"
         }
 
         return "Bring your own Windows 11 Arm installer"
@@ -2078,12 +2053,7 @@ private struct SetupAssistantPanel: View {
             return path
         }
 
-        if let path = snapshot.discoveredInstallerMediaPath {
-            let filename = URL(fileURLWithPath: path).lastPathComponent
-            return "Found \(filename) in Downloads. Auto Prepare will attach it."
-        }
-
-        return "Auto-detects a Windows Arm ISO in Downloads, or choose one manually."
+        return "Choose a Windows 11 Arm ISO. Veil will not scan Downloads automatically."
     }
 
     var body: some View {
@@ -2103,7 +2073,7 @@ private struct SetupAssistantPanel: View {
             HStack(spacing: 8) {
                 if snapshot.profileName == nil {
                     Button(action: prepareAction) {
-                        Label("Auto Prepare", systemImage: "wand.and.stars")
+                        Label("Prepare", systemImage: "wand.and.stars")
                     }
                     .buttonStyle(.borderedProminent)
                     .disabled(isLoading)
@@ -2164,7 +2134,7 @@ private struct MachineSummaryPanel: View {
                 ShellMetricRow(label: "CPU", value: snapshot.cpuCount.map { "\($0) vCPU" } ?? "Adaptive")
                 ShellMetricRow(label: "Memory", value: snapshot.memoryMB.map { "\(formatGigabytes($0)) GB cap" } ?? "Adaptive")
                 ShellMetricRow(label: "Disk Size", value: snapshot.diskGB.map { "\($0) GB" } ?? "Adaptive")
-                ShellMetricRow(label: "Installer", value: installerResourceName, monospaced: snapshot.installerMediaPath != nil || snapshot.discoveredInstallerMediaPath != nil)
+                ShellMetricRow(label: "Installer", value: installerResourceName, monospaced: snapshot.installerMediaPath != nil)
                 ShellMetricRow(label: "Disk", value: resourceName(from: snapshot.virtualDiskPath), monospaced: snapshot.virtualDiskPath != nil)
                 ShellMetricRow(label: "Runtime", value: snapshot.detail)
             }
@@ -2182,10 +2152,6 @@ private struct MachineSummaryPanel: View {
     private var installerResourceName: String {
         if let selected = snapshot.installerMediaPath {
             return resourceName(from: selected)
-        }
-
-        if let discovered = snapshot.discoveredInstallerMediaPath {
-            return "\(resourceName(from: discovered)) found"
         }
 
         return "Not selected"

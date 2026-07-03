@@ -840,8 +840,8 @@ struct VMProfileStoreTests {
         #expect(snapshot.installationSteps.first { $0.id == "virtual-disk" }?.state == .complete)
     }
 
-    @Test("prepare default VM auto detects Windows Arm ISO from Downloads")
-    func prepareDefaultVMAutoDetectsWindowsArmISOFromDownloads() async throws {
+    @Test("prepare default VM does not scan Downloads for installer media")
+    func prepareDefaultVMDoesNotScanDownloadsForInstallerMedia() async throws {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
         let homeDirectory = directory.appendingPathComponent("Home", isDirectory: true)
@@ -857,13 +857,13 @@ struct VMProfileStoreTests {
 
         let snapshot = try await service.prepareDefaultVM()
         let profile = try #require(await store.load())
-        let installerMediaPath = try #require(profile.installerMediaPath)
 
-        #expect(URL(fileURLWithPath: installerMediaPath).lastPathComponent == installerURL.lastPathComponent)
-        #expect(FileManager.default.fileExists(atPath: installerMediaPath))
-        #expect(snapshot.installerMediaPath == profile.installerMediaPath)
-        #expect(snapshot.installationSteps.first { $0.id == "windows-installer" }?.state == .complete)
-        #expect(snapshot.bootReady)
+        #expect(profile.installerMediaPath == nil)
+        #expect(FileManager.default.fileExists(atPath: installerURL.path))
+        #expect(snapshot.installerMediaPath == nil)
+        #expect(snapshot.discoveredInstallerMediaPath == nil)
+        #expect(snapshot.installationSteps.first { $0.id == "windows-installer" }?.state == .blocked)
+        #expect(!snapshot.bootReady)
     }
 
     @Test("automatic install media is rebuilt when the answer file is newer")
