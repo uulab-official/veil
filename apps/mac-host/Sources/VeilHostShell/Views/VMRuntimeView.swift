@@ -453,7 +453,7 @@ private struct SimpleRuntimePanel: View {
 
                         if canShowDisplay {
                             Button(action: displayAction) {
-                                Label("Display", systemImage: "display")
+                                Label("Native Display", systemImage: "display")
                             }
                             .disabled(isLoading)
                         }
@@ -542,12 +542,12 @@ private struct SimpleRuntimePanel: View {
             return "Choose a Windows 11 Arm ISO, then prepare Windows."
         case .stopped:
             if installSimulation.phase == .complete {
-                return "Windows display handoff finished. Start again if the setup window did not appear."
+                return "Windows start handoff finished. Start again if setup did not continue."
             }
 
-            return snapshot.bootReady ? "Install Windows to open the local display." : statusText
+            return snapshot.bootReady ? "Start Windows setup from this main window." : statusText
         case .starting:
-            return "Starting local Windows. The display opens in a separate window."
+            return "Starting local Windows. Native QEMU display is temporary until embedded display lands."
         case .running:
             return "Windows is running locally. Open a Windows app once the guest agent connects."
         case .suspended:
@@ -565,7 +565,7 @@ private struct SimpleRuntimePanel: View {
         if canStart {
             switch installSimulation.phase {
             case .idle:
-                return "Open Windows Display"
+                return "Start Windows"
             case .running:
                 return "Starting..."
             case .complete:
@@ -893,8 +893,8 @@ private struct QuickActionsPanel: View {
                 .disabled((!canStart && !canStop) || isLoading)
 
                 ControlActionTile(
-                    title: "Display",
-                    detail: canShowDisplay ? "Open the Windows installer display." : "Display appears after Windows starts.",
+                    title: "Native Display",
+                    detail: canShowDisplay ? "Open the temporary native QEMU display." : "Display evidence appears after Windows starts.",
                     symbolName: "display",
                     tint: .blue,
                     state: canShowDisplay ? .ready : .blocked,
@@ -1063,7 +1063,7 @@ private struct ControlCenterHero: View {
 
                         if canShowDisplay {
                             Button(action: displayAction) {
-                                Label("Display", systemImage: "display")
+                                Label("Native Display", systemImage: "display")
                             }
                             .disabled(isLoading)
                         }
@@ -1633,7 +1633,7 @@ private struct WindowsSetupDisplayPanel: View {
             InstallFlowItem(
                 title: "Installer",
                 detail: canShowDisplay
-                    ? "Windows display is open"
+                    ? "Native QEMU display available"
                     : (canStart ? "Open Windows Setup" : "Waiting for preparation"),
                 symbolName: "display",
                 state: canShowDisplay ? .complete : (canStart ? .current : .pending)
@@ -1946,7 +1946,7 @@ private struct WindowsDisplayLaunchEvidenceStrip: View {
                 .background(.blue.opacity(0.11), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
 
             VStack(alignment: .leading, spacing: 2) {
-                Text("Last Display")
+                Text("Last Evidence")
                     .font(.caption2.weight(.semibold))
                     .foregroundStyle(.secondary)
 
@@ -2153,7 +2153,7 @@ private struct ResourcePlanPanel: View {
                 state: snapshot.memoryMB == nil ? .planned : .ready
             )
             ResourcePlanRow(
-                title: "Display",
+                title: "Embedded Display",
                 value: "Retina-scaled desktop and seamless app windows are planned.",
                 symbolName: "display",
                 state: .planned

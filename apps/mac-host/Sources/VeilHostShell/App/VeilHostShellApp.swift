@@ -120,7 +120,7 @@ struct VeilHostShellApp: App {
                 .keyboardShortcut(".", modifiers: [.command])
                 .disabled(!vmModel.canStop || vmModel.phase == .loading)
 
-                Button("Show Windows Display") {
+                Button("Show Native QEMU Display") {
                     showWindowsDisplay()
                 }
                 .keyboardShortcut("b", modifiers: [.command, .shift])
@@ -239,15 +239,11 @@ struct VeilHostShellApp: App {
     private func startWindowsAndShowDisplay() {
         Task { @MainActor in
             activateMainWindow()
-            displayMessage = "Opening the local Windows display."
+            displayMessage = "Starting Windows locally. Veil stays in this main window while setup runs."
             await vmModel.start()
 
             if vmModel.snapshot?.state == .running || vmModel.snapshot?.state == .starting {
-                if vmRuntimeBooter.showConsoleIfRunning() {
-                    displayMessage = "Windows display is open."
-                } else {
-                    displayMessage = "Windows runtime is starting, but the display is not frontmost yet. Try Show Windows Display again after a moment."
-                }
+                displayMessage = "Windows is running. The current QEMU display is a temporary native window until embedded display lands."
             } else if let errorMessage = vmModel.errorMessage {
                 displayMessage = "Windows display could not start: \(errorMessage)"
             }
@@ -448,9 +444,9 @@ struct VeilHostShellApp: App {
     private func showWindowsDisplay() {
         activateMainWindow()
         if vmRuntimeBooter.showConsoleIfRunning() {
-            displayMessage = "Windows display is open."
+            displayMessage = "Native QEMU display brought forward. This is temporary until Veil embeds the display in one window."
         } else {
-            displayMessage = "No active Windows display is attached yet. Start Windows first, then open the display."
+            displayMessage = "No active native QEMU display is attached yet. Start Windows first."
         }
     }
 
@@ -588,7 +584,7 @@ private struct VeilMenuBarMenu: View {
         }
         .disabled(!vmModel.canStart || vmModel.phase == .loading)
 
-        Button("Show Windows Display", systemImage: "display") {
+        Button("Show Native QEMU Display", systemImage: "display") {
             openMainWindow()
             showWindowsDisplayAction()
         }
@@ -764,15 +760,11 @@ private struct StandaloneMainWindowRoot: View {
 
     private func startWindowsAndShowDisplay() {
         Task { @MainActor in
-            displayMessage = "Opening the local Windows display."
+            displayMessage = "Starting Windows locally. Veil stays in this main window while setup runs."
             await vmModel.start()
 
             if vmModel.snapshot?.state == .running || vmModel.snapshot?.state == .starting {
-                if vmRuntimeBooter.showConsoleIfRunning() {
-                    displayMessage = "Windows display is open."
-                } else {
-                    displayMessage = "Windows runtime is starting, but the display is not frontmost yet."
-                }
+                displayMessage = "Windows is running. The current QEMU display is a temporary native window until embedded display lands."
             } else if let errorMessage = vmModel.errorMessage {
                 displayMessage = "Windows display could not start: \(errorMessage)"
             }
@@ -790,9 +782,9 @@ private struct StandaloneMainWindowRoot: View {
 
     private func showWindowsDisplay() {
         if vmRuntimeBooter.showConsoleIfRunning() {
-            displayMessage = "Windows display is open."
+            displayMessage = "Native QEMU display brought forward. This is temporary until Veil embeds the display in one window."
         } else {
-            displayMessage = "No active Windows display is attached yet. Start Windows first, then open the display."
+            displayMessage = "No active native QEMU display is attached yet. Start Windows first."
         }
     }
 
