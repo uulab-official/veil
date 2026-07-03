@@ -1574,6 +1574,19 @@ private struct WindowsSetupDisplayPanel: View {
                 Spacer()
             }
             .padding(24)
+
+            if !visibleRecoveryActions.isEmpty {
+                VStack {
+                    HStack(alignment: .top) {
+                        Spacer()
+                        InstallRecoveryActionsPanel(actions: visibleRecoveryActions)
+                            .frame(maxWidth: 360)
+                    }
+                    Spacer()
+                }
+                .padding(24)
+                .allowsHitTesting(false)
+            }
         }
         .overlay {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
@@ -1603,6 +1616,22 @@ private struct WindowsSetupDisplayPanel: View {
         default:
             primaryHint
         }
+    }
+
+    private var visibleRecoveryActions: [String] {
+        guard !effectiveInstallEvidence.isInstalled else {
+            return []
+        }
+
+        let report = snapshot.windowsInstallStatusReport()
+        let shouldShow = !snapshot.bootReady
+            || snapshot.state == .running
+            || snapshot.state == .failed
+        guard shouldShow else {
+            return []
+        }
+
+        return Array(report.nextActions.prefix(3))
     }
 
     private var installPrimaryTitle: String {
@@ -2147,6 +2176,42 @@ private struct InstallStatusSummary: View {
         .overlay {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .strokeBorder(.quaternary, lineWidth: 1)
+        }
+    }
+}
+
+private struct InstallRecoveryActionsPanel: View {
+    var actions: [String]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            Label("Recovery Steps", systemImage: "wrench.and.screwdriver")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.white.opacity(0.86))
+
+            VStack(alignment: .leading, spacing: 7) {
+                ForEach(Array(actions.enumerated()), id: \.offset) { index, action in
+                    HStack(alignment: .top, spacing: 8) {
+                        Text("\(index + 1)")
+                            .font(.caption2.monospacedDigit().weight(.bold))
+                            .foregroundStyle(.white)
+                            .frame(width: 18, height: 18)
+                            .background(.white.opacity(0.16), in: Circle())
+
+                        Text(action)
+                            .font(.caption)
+                            .foregroundStyle(.white.opacity(0.78))
+                            .lineLimit(3)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            }
+        }
+        .padding(12)
+        .background(.black.opacity(0.36), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .strokeBorder(.white.opacity(0.16), lineWidth: 1)
         }
     }
 }

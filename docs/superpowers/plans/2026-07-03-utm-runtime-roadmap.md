@@ -51,6 +51,7 @@
 - [x] Add a read-only install-status command for boot/install evidence under diagnostics, not in git.
 - [x] Extend install-status display evidence with resolution, scaling, Retina, and live validation policy.
 - [x] Add recovery guidance when install status is blocked but the configured disk is already attached to a running QEMU process.
+- [x] Surface install-status recovery steps in the app setup screen.
 - [ ] Record a fresh live boot/install evidence pass under diagnostics, not in git.
 - [ ] Update install-flow docs with exact observed blockers and recovery steps.
 
@@ -405,6 +406,35 @@ Run:
 cd apps/mac-host && swift test --filter VMProfileStoreTests/reportsRunningQEMURecoveryBeforeBlockedInstallActions
 cd harness/qemu-install-status && npm test
 cd apps/mac-host && swift run veil-vmctl qemu-install-status --json | node ../../harness/qemu-install-status/src/validate-qemu-install-status.mjs
+cd apps/mac-host && swift test
+./script/build_and_run.sh --verify
+git diff --check
+```
+
+Expected: all pass.
+
+## Task 10: In-App Install Recovery Steps
+
+**Files:**
+- Modify: `apps/mac-host/Sources/VeilHostShell/Views/VMRuntimeView.swift`
+- Modify: `docs/install-flow.md`
+- Modify: `docs/checklists/2026-07-03-utm-source-hardening.md`
+
+- [x] **Step 1: Reuse install-status next actions**
+
+Make the main Windows setup surface derive recovery guidance from `VMRuntimeSnapshot.windowsInstallStatusReport()` so app and CLI recovery order stay aligned.
+
+- [x] **Step 2: Add compact recovery panel**
+
+Render up to three recovery steps over the setup display when Windows is blocked, running, or failed and not yet installed.
+
+- [ ] **Step 3: Verify**
+
+Run:
+
+```bash
+cd apps/mac-host && swift build --product veil-host-shell
+cd apps/mac-host && swift test --filter VMProfileStoreTests/reportsRunningQEMURecoveryBeforeBlockedInstallActions
 cd apps/mac-host && swift test
 ./script/build_and_run.sh --verify
 git diff --check
