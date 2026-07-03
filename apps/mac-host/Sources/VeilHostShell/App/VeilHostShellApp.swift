@@ -98,6 +98,10 @@ struct VeilHostShellApp: App {
                     if Self.shouldStartVMOnLaunch {
                         startWindowsAndShowDisplay()
                     }
+                    syncDockTileRuntimeStatus()
+                }
+                .onChange(of: model.mirrorSessions.count) {
+                    syncDockTileRuntimeStatus()
                 }
         }
         .defaultLaunchBehavior(.presented)
@@ -422,6 +426,10 @@ struct VeilHostShellApp: App {
                 stopVMAction: stopWindowsAndCloseDisplay
             )
         }
+    }
+
+    private func syncDockTileRuntimeStatus() {
+        DockTileRuntimePresenter.update(model.runtimeStatusReport().dockIntegration)
     }
 
     private func showWindowsAppWindow(for result: NotepadLaunchResult) {
