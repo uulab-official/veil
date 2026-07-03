@@ -64,3 +64,4 @@ Goal: adapt concrete UTM source patterns into Veil while keeping Veil focused on
 - [x] Add automatic Quiet Windows scheduling after the final mirrored app window closes, with `quietRuntime.willQuietAutomatically` and `automaticQuietDelaySeconds` exposed to harnesses.
 - [x] Add `macWindowIntegration` to `app-runtime-status` so automation can verify guest HWND events are promoted into macOS app windows automatically.
 - [x] Add a live Mac-window integration fixture proving a live agent HWND session drives Dock badge, auto-open, launcher-hide, and pending-frame status together.
+- [x] Add `bring-forward` to `app-runtime-action` so Dock/menu foreground behavior is automation-visible and checked against mirrored HWND status.

@@ -16,6 +16,12 @@ test("validates quiet runtime readiness action fixture", () => {
   assert.equal(validateAppRuntimeAction(report), report);
 });
 
+test("validates app runtime bring-forward action fixture", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-action.bring-forward-demo.json", import.meta.url), "utf8"));
+
+  assert.equal(validateAppRuntimeAction(report), report);
+});
+
 test("rejects accepted launch actions without a window", () => {
   const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-action.launch-demo.json", import.meta.url), "utf8"));
   delete report.window;
@@ -60,6 +66,16 @@ test("rejects quiet runtime actions whose decision drifts from status", () => {
   assert.throws(
     () => validateAppRuntimeAction(report),
     /must match report\.status\.quietRuntime/
+  );
+});
+
+test("rejects bring-forward actions whose windows drift from status", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-action.bring-forward-demo.json", import.meta.url), "utf8"));
+  report.broughtForwardWindowIds = ["hwnd:DIFFERENT"];
+
+  assert.throws(
+    () => validateAppRuntimeAction(report),
+    /broughtForwardWindowIds/
   );
 });
 

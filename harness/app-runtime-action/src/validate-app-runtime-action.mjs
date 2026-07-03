@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 
 import { validateAppRuntimeStatus } from "../../app-runtime-status/src/validate-app-runtime-status.mjs";
 
-const VALID_ACTIONS = new Set(["launch", "focus", "close", "restore", "quiet-when-idle", "clipboard", "type-text", "click"]);
+const VALID_ACTIONS = new Set(["launch", "focus", "close", "restore", "bring-forward", "quiet-when-idle", "clipboard", "type-text", "click"]);
 const VALID_CONNECTION_MODES = new Set(["agent", "demo"]);
 
 export function validateAppRuntimeAction(report) {
@@ -51,6 +51,9 @@ export function validateAppRuntimeAction(report) {
       break;
     case "restore":
       validateRestoreAction(report);
+      break;
+    case "bring-forward":
+      validateBringForwardAction(report);
       break;
     case "quiet-when-idle":
       validateQuietWhenIdleAction(report);
@@ -123,6 +126,42 @@ function validateCloseAction(report) {
 function validateRestoreAction(report) {
   for (const window of report.restoredWindows) {
     validateWindow(window);
+  }
+}
+
+function validateBringForwardAction(report) {
+  validateStringArray(report.broughtForwardWindowIds, "broughtForwardWindowIds");
+
+  if (report.accepted !== report.status.dockIntegration.canBringWindowsAppsForward) {
+    throw new TypeError("bring-forward accepted must match status.dockIntegration.canBringWindowsAppsForward.");
+  }
+
+  if (!report.accepted) {
+    if (report.broughtForwardWindowIds.length !== 0) {
+      throw new TypeError("rejected bring-forward actions cannot include broughtForwardWindowIds.");
+    }
+    return;
+  }
+
+  const mirrorWindowIds = report.status.mirrorSessions.map((session) => session.windowId);
+  if (report.broughtForwardWindowIds.length === 0) {
+    throw new TypeError("accepted bring-forward actions must include broughtForwardWindowIds.");
+  }
+
+  if (JSON.stringify(report.broughtForwardWindowIds) !== JSON.stringify(mirrorWindowIds)) {
+    throw new TypeError("broughtForwardWindowIds must match status.mirrorSessions order.");
+  }
+
+  requireString(report.windowId, "windowId");
+  if (report.windowId !== report.broughtForwardWindowIds.at(-1)) {
+    throw new TypeError("bring-forward windowId must identify the foreground mirror session.");
+  }
+
+  if (report.focus !== undefined && report.focus !== null) {
+    validateBooleanResponse(report.focus, "window.focus.response");
+    if (report.focus.windowId !== report.windowId) {
+      throw new TypeError("bring-forward focus response must match report.windowId.");
+    }
   }
 }
 

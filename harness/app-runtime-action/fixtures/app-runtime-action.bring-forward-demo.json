@@ -1,0 +1,124 @@
+{
+  "kind": "windowsAppRuntimeAction",
+  "action": "bring-forward",
+  "requestedAt": "2026-07-03T13:30:00Z",
+  "endpoint": "demo",
+  "connectionMode": "demo",
+  "accepted": true,
+  "windowId": "hwnd:DEMO0001",
+  "focus": {
+    "type": "window.focus.response",
+    "requestId": "local_focus_window",
+    "windowId": "hwnd:DEMO0001",
+    "accepted": true
+  },
+  "close": null,
+  "restoredWindows": [],
+  "broughtForwardWindowIds": [
+    "hwnd:DEMO0001"
+  ],
+  "status": {
+    "kind": "windowsAppRuntimeStatus",
+    "generatedAt": "2026-07-03T13:30:01Z",
+    "phase": "connected",
+    "selectedAppId": "winapp_notepad",
+    "connection": {
+      "mode": "demo",
+      "hasLiveAgentConnection": false,
+      "agentVersion": "demo-0.1.0",
+      "os": "windows-arm64"
+    },
+    "dockIntegration": {
+      "isEnabled": true,
+      "openWindowCount": 1,
+      "badgeLabel": "1",
+      "canOpenMainWindow": true,
+      "canBringWindowsAppsForward": true,
+      "canRestorePreviousApps": false,
+      "canLaunchSelectedApp": true
+    },
+    "macWindowIntegration": {
+      "isEnabled": true,
+      "acceptsGuestWindowEvents": false,
+      "opensMacWindowsAutomatically": true,
+      "hidesLauncherWhenMirroring": false,
+      "mirroredWindowCount": 1,
+      "pendingFrameWindowCount": 0,
+      "streamingWindowCount": 0,
+      "reason": "Waiting for the live Windows agent before guest HWND events can open macOS windows automatically."
+    },
+    "quietRuntime": {
+      "isEnabled": true,
+      "hasOpenedAppWindowThisSession": true,
+      "openWindowCount": 1,
+      "canQuietRuntime": false,
+      "willQuietAutomatically": false,
+      "automaticQuietDelaySeconds": 8,
+      "recommendedAction": "keep-running",
+      "reason": "Windows app windows are still open."
+    },
+    "apps": [
+      {
+        "id": "winapp_notepad",
+        "name": "Notepad",
+        "canRequestLaunch": true,
+        "canLaunchNow": false
+      }
+    ],
+    "mirrorSessions": [
+      {
+        "windowId": "hwnd:DEMO0001",
+        "appId": "winapp_notepad",
+        "title": "Untitled - Notepad",
+        "captureState": "unavailable",
+        "canFocus": true,
+        "canClose": true,
+        "canSendInput": false
+      }
+    ],
+    "restorableAppIds": [
+      "winapp_notepad"
+    ],
+    "actions": [
+      {
+        "id": "dock.openMainWindow",
+        "title": "Open Veil From Dock",
+        "isAvailable": true
+      },
+      {
+        "id": "dock.bringWindowsAppsForward",
+        "title": "Bring Windows Apps Forward",
+        "isAvailable": true
+      },
+      {
+        "id": "windowsApps.restorePrevious",
+        "title": "Restore Previous Apps",
+        "isAvailable": false
+      },
+      {
+        "id": "windowsApps.closeAll",
+        "title": "Close All Windows Apps",
+        "isAvailable": true
+      },
+      {
+        "id": "macWindows.autoOpen",
+        "title": "Auto Open Windows App Windows",
+        "isAvailable": false
+      },
+      {
+        "id": "runtime.quietWhenIdle",
+        "title": "Quiet Runtime When Idle",
+        "isAvailable": false
+      },
+      {
+        "id": "clipboard.setText",
+        "title": "Set Windows Clipboard Text",
+        "isAvailable": false
+      }
+    ]
+  },
+  "nextActions": [
+    "Confirm the mirrored Windows app windows are frontmost on macOS.",
+    "Run `veil-vmctl app-runtime-action --json --action focus --window-id ...` if one app window needs explicit guest focus."
+  ]
+}

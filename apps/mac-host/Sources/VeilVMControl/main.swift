@@ -63,9 +63,9 @@ enum VMControlError: Error, LocalizedError {
         case .missingAppId:
             "Missing Windows app id. Pass --app-id winapp_notepad, winapp_calculator, or another id reported by app-runtime-status."
         case .missingAppRuntimeAction:
-            "Missing app runtime action. Pass --action launch, focus, close, restore, quiet-when-idle, clipboard, or type-text."
+            "Missing app runtime action. Pass --action launch, focus, close, restore, bring-forward, quiet-when-idle, clipboard, type-text, or click."
         case .unsupportedAppRuntimeAction(let action):
-            "Unsupported app runtime action '\(action)'. Pass --action launch, focus, close, restore, quiet-when-idle, clipboard, or type-text."
+            "Unsupported app runtime action '\(action)'. Pass --action launch, focus, close, restore, bring-forward, quiet-when-idle, clipboard, type-text, or click."
         case .missingWindowId:
             "Missing Windows window id. Pass --window-id hwnd:XXXXXXXX from app-runtime-status or app-window-proof."
         case .missingAppRuntimeText:
@@ -83,7 +83,7 @@ enum VMControlError: Error, LocalizedError {
         }
     }
 
-    private static let usage = "Usage: veil-vmctl prepare --installer /path/to/Windows.iso [--drivers /path/to/virtio-win.iso] | veil-vmctl app-runtime-status [--json] [--demo] | veil-vmctl app-runtime-action --action launch|focus|close|restore|quiet-when-idle|clipboard|type-text|click [--json] [--demo] [--app-id winapp_notepad] [--window-id hwnd:XXXXXXXX] [--text \"...\"] [--x 240 --y 130] | veil-vmctl app-window-proof [--json] [--app-id winapp_notepad] [--wait-seconds 10] [--output /path/to/proof.json] | veil-vmctl coherence-proof [--json] [--app-id winapp_notepad] [--wait-seconds 10] [--output /path/to/proof.json] | veil-vmctl mvp-proof [--json] [--app-id winapp_notepad] [--wait-seconds 30] [--output /path/to/proof.json] [--require-proved] | veil-vmctl guest-agent-wait [--json] [--wait-seconds 30] | veil-vmctl mark-installed [--json] | veil-vmctl providers [--json] | veil-vmctl qemu-plan [--json] | veil-vmctl qemu-doctor [--json] | veil-vmctl qemu-install-status [--json] | veil-vmctl qemu-smoke [--json] [--seconds 45] | veil-vmctl qemu-start [--json] [--wait-seconds 15] [--native-display] | veil-vmctl qemu-display-smoke [--json] [--wait-seconds 5] | veil-vmctl qemu-capture [--json] [--output /path/to/console.png] | veil-vmctl qemu-powerdown [--json] [--wait-seconds 30] | veil-vmctl qemu-force-stop [--json] --i-understand-data-loss [--wait-seconds 10] | veil-vmctl qemu-sendkey [--json] key [key ...] | veil-vmctl qemu-type-text [--json] --text \"...\" | veil-vmctl qemu-click [--json] --x 0...32767 --y 0...32767 | veil-vmctl qemu-oobe-bypass [--json] | veil-vmctl qemu-install-agent [--json]"
+    private static let usage = "Usage: veil-vmctl prepare --installer /path/to/Windows.iso [--drivers /path/to/virtio-win.iso] | veil-vmctl app-runtime-status [--json] [--demo] | veil-vmctl app-runtime-action --action launch|focus|close|restore|bring-forward|quiet-when-idle|clipboard|type-text|click [--json] [--demo] [--app-id winapp_notepad] [--window-id hwnd:XXXXXXXX] [--text \"...\"] [--x 240 --y 130] | veil-vmctl app-window-proof [--json] [--app-id winapp_notepad] [--wait-seconds 10] [--output /path/to/proof.json] | veil-vmctl coherence-proof [--json] [--app-id winapp_notepad] [--wait-seconds 10] [--output /path/to/proof.json] | veil-vmctl mvp-proof [--json] [--app-id winapp_notepad] [--wait-seconds 30] [--output /path/to/proof.json] [--require-proved] | veil-vmctl guest-agent-wait [--json] [--wait-seconds 30] | veil-vmctl mark-installed [--json] | veil-vmctl providers [--json] | veil-vmctl qemu-plan [--json] | veil-vmctl qemu-doctor [--json] | veil-vmctl qemu-install-status [--json] | veil-vmctl qemu-smoke [--json] [--seconds 45] | veil-vmctl qemu-start [--json] [--wait-seconds 15] [--native-display] | veil-vmctl qemu-display-smoke [--json] [--wait-seconds 5] | veil-vmctl qemu-capture [--json] [--output /path/to/console.png] | veil-vmctl qemu-powerdown [--json] [--wait-seconds 30] | veil-vmctl qemu-force-stop [--json] --i-understand-data-loss [--wait-seconds 10] | veil-vmctl qemu-sendkey [--json] key [key ...] | veil-vmctl qemu-type-text [--json] --text \"...\" | veil-vmctl qemu-click [--json] --x 0...32767 --y 0...32767 | veil-vmctl qemu-oobe-bypass [--json] | veil-vmctl qemu-install-agent [--json]"
 }
 
 struct VMControlArguments {
@@ -92,6 +92,7 @@ struct VMControlArguments {
         case focus
         case close
         case restore
+        case bringForward = "bring-forward"
         case quietWhenIdle = "quiet-when-idle"
         case clipboard
         case typeText = "type-text"
@@ -462,6 +463,7 @@ struct AppRuntimeActionReport: Codable, Equatable {
     var keyInputs: [InputKeyEvent]
     var typedTextCharacterCount: Int?
     var restoredWindows: [WindowCreatedEvent]
+    var broughtForwardWindowIds: [String]
     var quietRuntime: WindowsAppRuntimeQuietPolicyStatus?
     var status: WindowsAppRuntimeStatusReport
     var nextActions: [String]
@@ -657,6 +659,7 @@ struct VeilVMControl {
         var keyInputs: [InputKeyEvent] = []
         var typedTextCharacterCount: Int?
         var restoredWindows: [WindowCreatedEvent] = []
+        var broughtForwardWindowIds: [String] = []
         var quietRuntime: WindowsAppRuntimeQuietPolicyStatus?
         var accepted = false
         var resolvedAppId = appId
@@ -700,6 +703,13 @@ struct VeilVMControl {
             let restored = await model.restoreMirroredWindowsAfterReconnect()
             restoredWindows = restored.map(\.window)
             accepted = !restored.isEmpty
+        case .bringForward:
+            broughtForwardWindowIds = model.mirrorSessions.map(\.id)
+            if let foregroundSession = model.mirrorSessions.last {
+                focus = await model.focusMirrorSession(windowId: foregroundSession.id)
+                resolvedWindowId = foregroundSession.id
+            }
+            accepted = !broughtForwardWindowIds.isEmpty
         case .quietWhenIdle:
             quietRuntime = model.quietRuntimeStatus()
             accepted = quietRuntime?.canQuietRuntime == true
@@ -781,6 +791,7 @@ struct VeilVMControl {
             keyInputs: keyInputs,
             typedTextCharacterCount: typedTextCharacterCount,
             restoredWindows: restoredWindows,
+            broughtForwardWindowIds: broughtForwardWindowIds,
             quietRuntime: quietRuntime,
             status: status,
             nextActions: nextActions(for: action, accepted: accepted)
@@ -812,6 +823,9 @@ struct VeilVMControl {
         }
         if !report.keyInputs.isEmpty {
             print("Key events: \(report.keyInputs.count)")
+        }
+        if !report.broughtForwardWindowIds.isEmpty {
+            print("Brought forward windows: \(report.broughtForwardWindowIds.joined(separator: ", "))")
         }
         print("Open Windows app windows: \(report.status.mirrorSessions.count)")
         print("Next actions:")
@@ -845,6 +859,11 @@ struct VeilVMControl {
                 return [
                     "Open or focus restored mirrored windows from the menu bar.",
                     "Run `veil-vmctl app-runtime-status --json` to inspect restored sessions."
+                ]
+            case .bringForward:
+                return [
+                    "Confirm the mirrored Windows app windows are frontmost on macOS.",
+                    "Run `veil-vmctl app-runtime-action --json --action focus --window-id ...` if one app window needs explicit guest focus."
                 ]
             case .quietWhenIdle:
                 return [
