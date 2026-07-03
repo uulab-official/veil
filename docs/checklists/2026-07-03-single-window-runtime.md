@@ -47,6 +47,7 @@ Goal: move Veil from a Veil shell plus separate QEMU Cocoa display toward a UTM-
 - [x] Cascade multiple mirrored Windows app windows within the visible display instead of stacking every app at the same centered origin.
 - [x] Hide the Veil launcher after a real guest-agent app launch so the mirrored Windows app becomes the foreground Coherence-style experience.
 - [x] Use edge-to-edge transparent host chrome for mirrored Windows app windows while keeping the logical app title for accessibility and Window menu identity.
+- [x] Add a menu bar Running Windows Apps section so hidden or covered mirrored app windows can be brought forward without reopening the Veil launcher.
 
 ## Next
 

@@ -182,6 +182,7 @@ struct VeilHostShellApp: App {
                 installGuestAgentAction: installGuestAgentFromDisplay,
                 launchWindowsAppAction: launchSelectedWindowsAppWindow,
                 launchWindowsAppByIdAction: launchWindowsAppWindow(appId:),
+                focusWindowsAppWindowAction: focusWindowsAppWindow(windowId:),
                 recordAppFrameProofAction: recordAppFrameProof,
                 refreshAppsAction: refreshApps,
                 refreshRuntimeAction: refreshRuntime,
@@ -321,6 +322,14 @@ struct VeilHostShellApp: App {
     private func launchWindowsAppWindow(appId: String) {
         model.selectedAppId = appId
         launchSelectedWindowsAppWindow()
+    }
+
+    private func focusWindowsAppWindow(windowId: String) {
+        guard let session = model.mirrorSessions.first(where: { $0.id == windowId }) else {
+            return
+        }
+
+        windowsAppWindowPresenter.showWindow(for: session)
     }
 
     private func showWindowsAppWindow(for result: NotepadLaunchResult) {
@@ -627,6 +636,7 @@ private struct VeilMenuBarMenu: View {
     var installGuestAgentAction: () -> Void
     var launchWindowsAppAction: () -> Void
     var launchWindowsAppByIdAction: (String) -> Void
+    var focusWindowsAppWindowAction: (String) -> Void
     var recordAppFrameProofAction: () -> Void
     var refreshAppsAction: () -> Void
     var refreshRuntimeAction: () -> Void
@@ -638,6 +648,18 @@ private struct VeilMenuBarMenu: View {
         }
 
         Divider()
+
+        if !model.mirrorSessions.isEmpty {
+            Menu("Running Windows Apps", systemImage: "rectangle.3.group") {
+                ForEach(model.mirrorSessions) { session in
+                    Button(session.window.title, systemImage: "macwindow") {
+                        focusWindowsAppWindowAction(session.id)
+                    }
+                }
+            }
+
+            Divider()
+        }
 
         if model.apps.isEmpty {
             Button("Load Windows Apps", systemImage: "square.grid.2x2") {
