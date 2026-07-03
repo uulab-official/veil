@@ -5,6 +5,15 @@ import Testing
 
 @Suite("QEMU Windows boot plan")
 struct QEMUWindowsBootPlanTests {
+    @Test("default diagnostics stay in application support")
+    func defaultDiagnosticsStayInApplicationSupport() {
+        let directory = QEMUVMRuntimeBooter.defaultDiagnosticsDirectory()
+        let components = directory.pathComponents
+
+        #expect(components.suffix(3).elementsEqual(["Application Support", "Veil", "Diagnostics"]))
+        #expect(!components.contains("Downloads"))
+    }
+
     @Test("builds a Windows 11 Arm install plan")
     func buildsWindowsArmInstallPlan() throws {
         var profile = VMProfile.defaultWindows11Arm(createdAt: Date(timeIntervalSince1970: 1_782_752_400))

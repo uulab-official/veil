@@ -163,7 +163,7 @@ The profile can reference a user-provided installer image, an optional external 
 
 The console can be reopened from the VM toolbar or Quick Actions while the VM is running. The current Windows path is still a feasibility spike: a running `VZVirtualMachine` process does not yet prove that every Windows 11 Arm ISO will present a visible installer through Apple's Virtio graphics path. UTM-level Windows reliability remains a roadmap item, not a completed claim.
 
-The VM Runtime panel can export a local diagnostics JSON bundle to `~/Downloads/Veil Diagnostics`. The bundle includes host metadata, runtime snapshot, setup steps, preflight checks, the stored VM profile, and the most recent Start attempt report. It records file paths, device metadata, boot result, resulting state, and error text for troubleshooting but never copies installer media, virtual disk contents, product keys, or Windows data.
+The VM Runtime panel writes local diagnostics JSON under `~/Library/Application Support/Veil/Diagnostics` by default so routine boot evidence does not require broad Downloads-folder access. The bundle includes host metadata, runtime snapshot, setup steps, preflight checks, the stored VM profile, and the most recent Start attempt report. It records file paths, device metadata, boot result, resulting state, and error text for troubleshooting but never copies installer media, virtual disk contents, product keys, or Windows data.
 
 The runtime snapshot also exposes a typed device plan inspired by UTM's configuration model: EFI boot, generic platform identity, installer media, optional driver media, writable NVMe system disk, NAT networking, Virtio graphics, USB keyboard, pointer, and entropy. The shell shows this before Start so configuration mistakes are visible while Windows media is still being prepared.
 
@@ -222,7 +222,7 @@ Validate it with:
 swift run veil-vmctl qemu-smoke --json --seconds 120 | node ../../harness/qemu-smoke/src/validate-qemu-smoke.mjs
 ```
 
-The smoke command runs QEMU headlessly in snapshot mode and writes logs plus a `.png` VM-console screenshot path under `~/Downloads/Veil Diagnostics/QEMU Smoke`. Its JSON also includes `nextActions` for the detected boot state. Current evidence on the test Mac has reached the Korean Windows 11 installing screen with local secure firmware, TPM, NVMe storage, and UEFI/GPT unattended partitioning; a persistent visible `qemu-start` run continued on the real VM disk to 39%. The next checkpoint is the first Windows Setup reboot.
+The smoke command runs QEMU headlessly in snapshot mode and writes logs plus a `.png` VM-console screenshot path under `~/Library/Application Support/Veil/Diagnostics/QEMU Smoke` unless `VEIL_SMOKE_OUTPUT_DIR` overrides it. Its JSON also includes `nextActions` for the detected boot state. Current evidence on the test Mac has reached the Korean Windows 11 installing screen with local secure firmware, TPM, NVMe storage, and UEFI/GPT unattended partitioning; a persistent visible `qemu-start` run continued on the real VM disk to 39%. The next checkpoint is the first Windows Setup reboot.
 
 Launch the guarded visible QEMU/HVF path for interactive Windows setup testing:
 
@@ -230,7 +230,7 @@ Launch the guarded visible QEMU/HVF path for interactive Windows setup testing:
 swift run veil-vmctl qemu-start --json --wait-seconds 45
 ```
 
-This starts a local Cocoa QEMU window from the prepared Windows Arm profile, brings it forward, and writes logs under `~/Downloads/Veil Diagnostics/QEMU Launch`. App-launched QEMU sessions also record a `qemu-console-*.png` VM-display screenshot path in `qemu-launch-latest.json`; the macOS setup screen surfaces that latest PNG when it exists. Veil still uses user-provided Windows media and does not bundle QEMU, firmware, Windows images, product keys, or activation material.
+This starts a local Cocoa QEMU window from the prepared Windows Arm profile, brings it forward, and writes logs under `~/Library/Application Support/Veil/Diagnostics/QEMU Launch`. App-launched QEMU sessions also record a `qemu-console-*.png` VM-display screenshot path in `qemu-launch-latest.json`; the macOS setup screen surfaces that latest PNG when it exists. Veil still uses user-provided Windows media and does not bundle QEMU, firmware, Windows images, product keys, or activation material.
 
 You can prepare the local VM profile from a downloaded Windows 11 Arm ISO without clicking through the shell:
 
