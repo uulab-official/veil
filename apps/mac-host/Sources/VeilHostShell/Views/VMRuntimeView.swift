@@ -175,7 +175,10 @@ struct VMRuntimeView: View {
                 await model.refreshRuntimeEvidence()
             }
 
-            try? await Task.sleep(for: .seconds(3))
+            let refreshInterval: Duration = model.snapshot?.latestConsoleScreenshotPath == nil
+                ? .seconds(3)
+                : .seconds(1)
+            try? await Task.sleep(for: refreshInterval)
         }
     }
 
@@ -789,6 +792,7 @@ private struct RuntimeLandingPanel: View {
 private struct WindowsDisplayScreenshotPreview: View {
     var image: NSImage
     var path: String
+    var revisionID: String
 
     var body: some View {
         ZStack {
@@ -799,6 +803,7 @@ private struct WindowsDisplayScreenshotPreview: View {
                 .resizable()
                 .scaledToFit()
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .id(revisionID)
         }
         .aspectRatio(16 / 9, contentMode: .fit)
         .overlay {
@@ -807,6 +812,7 @@ private struct WindowsDisplayScreenshotPreview: View {
         }
         .help("Latest Windows display")
         .accessibilityLabel("Latest Windows display screenshot")
+        .accessibilityValue(path)
     }
 }
 
@@ -1182,7 +1188,8 @@ private struct WindowsSetupDisplayPanel: View {
             if let displayScreenshotImage {
                 WindowsDisplayScreenshotPreview(
                     image: displayScreenshotImage,
-                    path: snapshot.latestConsoleScreenshotPath ?? ""
+                    path: snapshot.latestConsoleScreenshotPath ?? "",
+                    revisionID: displayScreenshotRevisionID
                 )
             } else {
                 machineDisplay
@@ -1332,6 +1339,12 @@ private struct WindowsSetupDisplayPanel: View {
         }
 
         return NSImage(contentsOfFile: path)
+    }
+
+    private var displayScreenshotRevisionID: String {
+        let path = snapshot.latestConsoleScreenshotPath ?? "missing"
+        let refreshedAt = snapshot.latestConsoleLaunch?.consoleScreenshotRefreshedAt?.timeIntervalSince1970 ?? 0
+        return "\(path)#\(refreshedAt)"
     }
 
     private var machineDisplay: some View {
