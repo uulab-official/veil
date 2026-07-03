@@ -1314,6 +1314,11 @@ public struct LocalVMRuntimeService: VMRuntimeService {
             atomically: true,
             encoding: .utf8
         )
+        try collectAgentDiagnosticsCommandText.write(
+            to: bundleURL.appendingPathComponent("Collect Veil Agent Diagnostics.cmd"),
+            atomically: true,
+            encoding: .utf8
+        )
         try guestAgentReadmeText.write(
             to: bundleURL.appendingPathComponent("README.txt"),
             atomically: true,
@@ -1378,6 +1383,15 @@ public struct LocalVMRuntimeService: VMRuntimeService {
 
     """
 
+    private static let collectAgentDiagnosticsCommandText = """
+    @echo off
+    setlocal
+    cd /d "%~dp0"
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\\Collect-VeilAgentDiagnostics.ps1" %*
+    if errorlevel 1 pause
+
+    """
+
     private static let guestAgentReadmeText = """
     Veil Guest Agent
 
@@ -1387,6 +1401,7 @@ public struct LocalVMRuntimeService: VMRuntimeService {
     If this media does not include app\\VeilAgent.exe, build it on the Mac with apps/windows-agent/scripts/publish-veil-agent-bundle.sh before preparing the VM again.
 
     Run Start Veil Agent.cmd to start the agent immediately after installation.
+    Run Collect Veil Agent Diagnostics.cmd to write a metadata-only diagnostics ZIP to the Windows desktop when install, start, or connection checks fail.
     Keep this folder in the Veil Shared drive while Veil is in pre-alpha.
 
     """

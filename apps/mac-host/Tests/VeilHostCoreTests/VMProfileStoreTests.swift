@@ -884,14 +884,17 @@ struct VMProfileStoreTests {
             .appendingPathComponent("Veil Guest Agent", isDirectory: true)
         let installCommandURL = agentBundleURL.appendingPathComponent("Install Veil Agent.cmd")
         let startCommandURL = agentBundleURL.appendingPathComponent("Start Veil Agent.cmd")
+        let diagnosticsCommandURL = agentBundleURL.appendingPathComponent("Collect Veil Agent Diagnostics.cmd")
         let agentReadmeURL = agentBundleURL.appendingPathComponent("README.txt")
         let installScriptURL = agentBundleURL.appendingPathComponent("scripts/Install-VeilAgent.ps1")
         let publishScriptURL = agentBundleURL.appendingPathComponent("scripts/Publish-VeilAgentBundle.ps1")
         let startScriptURL = agentBundleURL.appendingPathComponent("scripts/Start-VeilAgent.ps1")
+        let diagnosticsScriptURL = agentBundleURL.appendingPathComponent("scripts/Collect-VeilAgentDiagnostics.ps1")
         let projectURL = agentBundleURL.appendingPathComponent("src/VeilAgent/VeilAgent.csproj")
         let answerFile = try String(contentsOf: answerFileURL, encoding: .utf8)
         let installCommand = try String(contentsOf: installCommandURL, encoding: .utf8)
         let startCommand = try String(contentsOf: startCommandURL, encoding: .utf8)
+        let diagnosticsCommand = try String(contentsOf: diagnosticsCommandURL, encoding: .utf8)
         let agentReadme = try String(contentsOf: agentReadmeURL, encoding: .utf8)
 
         #expect(profile.name == "Windows 11 Arm")
@@ -955,11 +958,16 @@ struct VMProfileStoreTests {
         #expect(FileManager.default.fileExists(atPath: installScriptURL.path))
         #expect(FileManager.default.fileExists(atPath: publishScriptURL.path))
         #expect(FileManager.default.fileExists(atPath: startScriptURL.path))
+        #expect(FileManager.default.fileExists(atPath: diagnosticsScriptURL.path))
         #expect(FileManager.default.fileExists(atPath: projectURL.path))
         #expect(installCommand.contains("Install-VeilAgent.ps1"))
         #expect(installCommand.contains("-ExecutionPolicy Bypass"))
         #expect(startCommand.contains("Start-VeilAgent.ps1"))
+        #expect(diagnosticsCommand.contains("Collect-VeilAgentDiagnostics.ps1"))
+        #expect(diagnosticsCommand.contains("-ExecutionPolicy Bypass"))
         #expect(agentReadme.contains("Install Veil Agent.cmd"))
+        #expect(agentReadme.contains("Collect Veil Agent Diagnostics.cmd"))
+        #expect(agentReadme.contains("diagnostics ZIP"))
         #expect(agentReadme.contains("ws://127.0.0.1:18444/"))
         #expect(agentReadme.contains("%LOCALAPPDATA%\\Veil\\Agent\\logs"))
         #expect(snapshot.installationSteps.first { $0.id == "shared-folder" }?.state == .complete)
@@ -1041,10 +1049,14 @@ struct VMProfileStoreTests {
         try FileManager.default.createDirectory(at: scriptsURL, withIntermediateDirectories: true)
         try Data("answer".utf8).write(to: answerFileURL)
         try Data("installer".utf8).write(to: agentBundleURL.appendingPathComponent("Install Veil Agent.cmd"))
+        try Data("diagnostics".utf8).write(to: agentBundleURL.appendingPathComponent("Collect Veil Agent Diagnostics.cmd"))
         try Data("script".utf8).write(to: scriptsURL.appendingPathComponent("Install-VeilAgent.ps1"))
+        try Data("diagnostics script".utf8).write(to: scriptsURL.appendingPathComponent("Collect-VeilAgentDiagnostics.ps1"))
         final class Capture: @unchecked Sendable {
             var stagedInstallCommandExists = false
             var stagedScriptExists = false
+            var stagedDiagnosticsCommandExists = false
+            var stagedDiagnosticsScriptExists = false
         }
         let capture = Capture()
         let builder = HdiutilAutomaticInstallMediaBuilder { _, arguments in
@@ -1057,6 +1069,12 @@ struct VMProfileStoreTests {
             capture.stagedScriptExists = FileManager.default.fileExists(
                 atPath: stagingURL.appendingPathComponent("Veil Guest Agent/scripts/Install-VeilAgent.ps1").path
             )
+            capture.stagedDiagnosticsCommandExists = FileManager.default.fileExists(
+                atPath: stagingURL.appendingPathComponent("Veil Guest Agent/Collect Veil Agent Diagnostics.cmd").path
+            )
+            capture.stagedDiagnosticsScriptExists = FileManager.default.fileExists(
+                atPath: stagingURL.appendingPathComponent("Veil Guest Agent/scripts/Collect-VeilAgentDiagnostics.ps1").path
+            )
             let outputPath = arguments[outputIndex + 1]
             try Data("fresh media".utf8).write(to: URL(fileURLWithPath: "\(outputPath).iso"))
             return 0
@@ -1066,6 +1084,8 @@ struct VMProfileStoreTests {
 
         #expect(capture.stagedInstallCommandExists)
         #expect(capture.stagedScriptExists)
+        #expect(capture.stagedDiagnosticsCommandExists)
+        #expect(capture.stagedDiagnosticsScriptExists)
     }
 
     @Test("load snapshot avoids Downloads installer discovery before profile exists")

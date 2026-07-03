@@ -185,6 +185,7 @@ test("windows agent includes user-logon install and uninstall scripts", async ()
   const install = await readFile(resolve(agentRoot, "scripts/Install-VeilAgent.ps1"), "utf8");
   const uninstall = await readFile(resolve(agentRoot, "scripts/Uninstall-VeilAgent.ps1"), "utf8");
   const start = await readFile(resolve(agentRoot, "scripts/Start-VeilAgent.ps1"), "utf8");
+  const diagnostics = await readFile(resolve(agentRoot, "scripts/Collect-VeilAgentDiagnostics.ps1"), "utf8");
   const bootstrap = await readFile(resolve(agentRoot, "scripts/Bootstrap-VeilAgentFromMedia.ps1"), "utf8");
   const publish = await readFile(resolve(agentRoot, "scripts/Publish-VeilAgentBundle.ps1"), "utf8");
   const publishShell = await readFile(resolve(agentRoot, "scripts/publish-veil-agent-bundle.sh"), "utf8");
@@ -198,9 +199,14 @@ test("windows agent includes user-logon install and uninstall scripts", async ()
   assert.match(install, /VEIL_AGENT_PORT/);
   assert.match(install, /Start-Transcript/);
   assert.match(install, /install\.log/);
+  assert.match(install, /Collect-VeilAgentDiagnostics\.ps1/);
   assert.match(start, /VeilAgent\.exe/);
   assert.match(start, /127\.0\.0\.1/);
   assert.match(start, /start\.log/);
+  assert.match(diagnostics, /Compress-Archive/);
+  assert.match(diagnostics, /veil-agent-diagnostics-\$Timestamp\.zip/);
+  assert.match(diagnostics, /Get-ScheduledTask\s+-TaskName\s+\$TaskName/);
+  assert.match(diagnostics, /bootstrap\.log|install\.log|start\.log|LogRoot/);
   assert.match(bootstrap, /Bootstrap-VeilAgentFromMedia/);
   assert.match(bootstrap, /Install Veil Agent\.cmd/);
   assert.match(bootstrap, /bootstrap\.log/);
@@ -221,6 +227,7 @@ test("windows agent installs logon task against the local installed scripts", as
 
   assert.match(install, /\$InstalledScriptsRoot\s*=\s*Join-Path\s+\$InstallRoot\s+"scripts"/);
   assert.match(install, /Copy-Item[\s\S]+Start-VeilAgent\.ps1[\s\S]+-Destination\s+\$InstalledScriptsRoot/);
+  assert.match(install, /Copy-Item[\s\S]+Collect-VeilAgentDiagnostics\.ps1[\s\S]+-Destination\s+\$InstalledScriptsRoot/);
   assert.match(install, /\$StartScript\s*=\s*Join-Path\s+\$InstalledScriptsRoot\s+"Start-VeilAgent\.ps1"/);
   assert.doesNotMatch(install, /\$StartScript\s*=\s*Join-Path\s+\$AgentRoot\s+"scripts\\Start-VeilAgent\.ps1"/);
 });

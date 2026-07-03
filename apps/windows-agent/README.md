@@ -65,6 +65,14 @@ Bootstrap, install, and start logs are written under:
 %LOCALAPPDATA%\Veil\Agent\logs
 ```
 
+Collect install/start diagnostics without copying Windows user data:
+
+```text
+Veil Shared\Veil Guest Agent\Collect Veil Agent Diagnostics.cmd
+```
+
+The collector writes `veil-agent-diagnostics-<timestamp>.zip` to the Windows desktop. It includes VeilAgent logs, scheduled-task metadata, process status, and a short summary; it does not copy Windows media, product keys, virtual disk contents, or user documents.
+
 Start again without waiting for the next login:
 
 ```text

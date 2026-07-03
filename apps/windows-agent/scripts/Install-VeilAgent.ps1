@@ -53,6 +53,10 @@ try {
         -Destination $InstalledScriptsRoot `
         -Force
     Copy-Item `
+        -Path (Join-Path $ScriptRoot "Collect-VeilAgentDiagnostics.ps1") `
+        -Destination $InstalledScriptsRoot `
+        -Force
+    Copy-Item `
         -Path (Join-Path $ScriptRoot "Uninstall-VeilAgent.ps1") `
         -Destination $InstalledScriptsRoot `
         -Force
