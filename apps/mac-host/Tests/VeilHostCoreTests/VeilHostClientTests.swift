@@ -66,6 +66,49 @@ struct VeilHostClientTests {
         #expect(diagnostic.nextActions.contains("Confirm the Windows 11 Arm VM is running and has reached the desktop."))
     }
 
+    @Test("waits for connected Windows guest agent")
+    func waitsForConnectedWindowsGuestAgent() async throws {
+        let transport = RecordingTransport(responses: [
+            #"{"type":"agent.health.response","requestId":"req_health","protocolVersion":1,"agentVersion":"0.1.0","os":"windows-arm64","session":{"interactive":true,"user":"veil-user"},"capabilities":{"appList":true,"appLaunch":true,"windowTracking":true,"windowCapture":true,"input":true,"clipboardText":true}}"#
+        ])
+        let client = VeilHostClient(transport: transport)
+
+        let report = await client.waitForAgentConnection(
+            endpoint: "ws://127.0.0.1:18444",
+            timeoutSeconds: 10,
+            pollIntervalNanoseconds: 1,
+            perAttemptTimeoutNanoseconds: 1_000_000
+        )
+
+        #expect(report.kind == "guestAgentWait")
+        #expect(report.status == .connected)
+        #expect(report.endpoint == "ws://127.0.0.1:18444")
+        #expect(report.attempts == 1)
+        #expect(report.connectedAt != nil)
+        #expect(report.diagnostic.health?.agentVersion == "0.1.0")
+        #expect(report.nextActions.contains("Run `veil-vmctl app-runtime-status --json` to inspect app launch readiness."))
+    }
+
+    @Test("wait reports unavailable Windows guest agent with recovery actions")
+    func waitReportsUnavailableWindowsGuestAgentWithRecoveryActions() async throws {
+        let client = VeilHostClient(transport: FailingTransport(error: DiagnosticTransportError.connectionRefused))
+
+        let report = await client.waitForAgentConnection(
+            endpoint: "ws://127.0.0.1:18444",
+            timeoutSeconds: 0,
+            pollIntervalNanoseconds: 1,
+            perAttemptTimeoutNanoseconds: 1_000_000
+        )
+
+        #expect(report.kind == "guestAgentWait")
+        #expect(report.status == .unavailable)
+        #expect(report.waitedSeconds == 0)
+        #expect(report.attempts == 1)
+        #expect(report.connectedAt == nil)
+        #expect(report.diagnostic.errorMessage == "Connection refused.")
+        #expect(report.nextActions.contains("Inside Windows, run Veil Shared\\Veil Guest Agent\\Install Veil Agent.cmd."))
+    }
+
     @Test("runs the Notepad launch flow in protocol order")
     func runsNotepadLaunchFlow() async throws {
         let transport = RecordingTransport(responses: [

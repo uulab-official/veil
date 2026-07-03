@@ -11,9 +11,13 @@ harness/
 ├─ fake-agent/             WebSocket server that simulates the Windows guest agent
 ├─ fake-host/              CLI client that sends host messages
 ├─ runtime-provider-probe/ Validates local VM provider JSON output
+├─ app-runtime-status/     Validates host app-runtime status/actions JSON
+├─ guest-agent-wait/       Validates post-install guest-agent readiness JSON
 ├─ qemu-boot-plan/         Validates dry-run QEMU/HVF Windows boot plan JSON
 ├─ qemu-doctor/            Validates QEMU/HVF readiness report JSON
+├─ qemu-install-status/    Validates visible Windows install evidence JSON
 ├─ qemu-smoke/             Validates bounded QEMU/HVF boot smoke report JSON
+├─ qemu-display-smoke/     Validates embedded display frame evidence JSON
 ├─ windows-agent-contract/ Validates the first real C# Windows agent scaffold contract
 ├─ protocol-fixtures/      JSON messages used by tests and docs
 └─ scenarios/              scripted end-to-end protocol flows
@@ -96,6 +100,17 @@ swift run veil-host-probe --diagnose-agent
 ```
 
 Expected: pretty-printed JSON reports `status: "unavailable"` and includes next actions for installing `Veil Guest Agent`, collecting the Windows-side diagnostics ZIP, and checking QEMU/HVF port forwarding.
+
+For the post-install readiness gate:
+
+```bash
+swift run veil-vmctl guest-agent-wait --json --wait-seconds 30 | node ../../harness/guest-agent-wait/src/validate-guest-agent-wait.mjs
+```
+
+Expected: JSON reports `status: "connected"` once the Windows guest agent is
+reachable through QEMU/HVF port forwarding. If unavailable, the report remains
+valid JSON and lists the installer, diagnostics, and port-forwarding recovery
+steps.
 
 For the full launch acceptance flow:
 

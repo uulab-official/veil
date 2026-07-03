@@ -109,6 +109,7 @@ Current scaffold status:
 - The first app catalog covers Notepad, Calculator, and Paint; launches are structured to emit direct launch/window replies and broadcast a first `window.frame` event to event-subscriber sockets.
 - After launch, a per-window stream loop continues broadcasting PNG `window.frame` events using monotonically increasing sequence numbers.
 - The default frame implementation uses Win32/GDI HWND capture behind `IWindowFrameCapture`; the deterministic bootstrap PNG implementation remains only as a fallback/test seam until Windows-side capture evidence is recorded.
+- The host-side `veil-vmctl guest-agent-wait --json` command is the post-install readiness gate: it waits for the installed agent's health response on the forwarded loopback endpoint before automation proceeds to app-runtime status or Notepad frame validation.
 
 ## Protocol Package
 

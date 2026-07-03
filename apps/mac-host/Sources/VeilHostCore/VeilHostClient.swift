@@ -105,6 +105,42 @@ public struct AgentConnectionDiagnostic: Codable, Equatable, Sendable {
     }
 }
 
+public enum AgentConnectionWaitStatus: String, Codable, Equatable, Sendable {
+    case connected
+    case unavailable
+}
+
+public struct AgentConnectionWaitReport: Codable, Equatable, Sendable {
+    public var kind: String
+    public var endpoint: String
+    public var status: AgentConnectionWaitStatus
+    public var waitedSeconds: Int
+    public var attempts: Int
+    public var connectedAt: Date?
+    public var diagnostic: AgentConnectionDiagnostic
+    public var nextActions: [String]
+
+    public init(
+        kind: String = "guestAgentWait",
+        endpoint: String,
+        status: AgentConnectionWaitStatus,
+        waitedSeconds: Int,
+        attempts: Int,
+        connectedAt: Date? = nil,
+        diagnostic: AgentConnectionDiagnostic,
+        nextActions: [String]
+    ) {
+        self.kind = kind
+        self.endpoint = endpoint
+        self.status = status
+        self.waitedSeconds = waitedSeconds
+        self.attempts = attempts
+        self.connectedAt = connectedAt
+        self.diagnostic = diagnostic
+        self.nextActions = nextActions
+    }
+}
+
 private enum AgentConnectionProbeError: Error, LocalizedError {
     case timeout
 
@@ -183,6 +219,59 @@ public struct VeilHostClient: HostDashboardService, Sendable {
             return .connected(endpoint: endpoint, health: health)
         } catch {
             return .unavailable(endpoint: endpoint, errorMessage: Self.errorMessage(for: error))
+        }
+    }
+
+    public func waitForAgentConnection(
+        endpoint: String,
+        timeoutSeconds: Int = 30,
+        pollIntervalNanoseconds: UInt64 = 1_000_000_000,
+        perAttemptTimeoutNanoseconds: UInt64 = 2_000_000_000
+    ) async -> AgentConnectionWaitReport {
+        let boundedTimeoutSeconds = min(max(timeoutSeconds, 0), 300)
+        let startedAt = Date()
+        let deadline = startedAt.addingTimeInterval(TimeInterval(boundedTimeoutSeconds))
+        var attempts = 0
+        var latestDiagnostic = AgentConnectionDiagnostic.unavailable(
+            endpoint: endpoint,
+            errorMessage: "Guest agent wait has not started."
+        )
+
+        while true {
+            attempts += 1
+            latestDiagnostic = await diagnoseAgentConnection(
+                endpoint: endpoint,
+                timeoutNanoseconds: perAttemptTimeoutNanoseconds
+            )
+
+            if latestDiagnostic.status == .connected {
+                return AgentConnectionWaitReport(
+                    endpoint: endpoint,
+                    status: .connected,
+                    waitedSeconds: Self.elapsedSeconds(since: startedAt),
+                    attempts: attempts,
+                    connectedAt: Date(),
+                    diagnostic: latestDiagnostic,
+                    nextActions: [
+                        "Run `veil-vmctl app-runtime-status --json` to inspect app launch readiness.",
+                        "Run `veil-host-probe --launch-notepad-frame` to verify HWND launch, tracking, and first frame capture."
+                    ]
+                )
+            }
+
+            guard Date() < deadline else {
+                return AgentConnectionWaitReport(
+                    endpoint: endpoint,
+                    status: .unavailable,
+                    waitedSeconds: boundedTimeoutSeconds,
+                    attempts: attempts,
+                    diagnostic: latestDiagnostic,
+                    nextActions: latestDiagnostic.nextActions
+                )
+            }
+
+            let remainingNanoseconds = max(0, UInt64(deadline.timeIntervalSinceNow * 1_000_000_000))
+            try? await Task.sleep(nanoseconds: min(pollIntervalNanoseconds, remainingNanoseconds))
         }
     }
 
@@ -280,5 +369,9 @@ public struct VeilHostClient: HostDashboardService, Sendable {
         }
 
         return String(describing: error)
+    }
+
+    private static func elapsedSeconds(since date: Date) -> Int {
+        max(0, Int(Date().timeIntervalSince(date).rounded(.up)))
     }
 }

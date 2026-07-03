@@ -17,6 +17,7 @@ harness/
 ├─ fake-host/              CLI client that sends host messages to the agent
 ├─ runtime-provider-probe/ JSON shape validation for local VM providers
 ├─ app-runtime-status/     JSON shape validation for host app-runtime status/actions
+├─ guest-agent-wait/       JSON shape validation for post-install guest-agent readiness
 ├─ qemu-boot-plan/         JSON shape validation for dry-run QEMU/HVF boot plans
 ├─ qemu-doctor/            JSON shape validation for QEMU/HVF readiness reports
 ├─ qemu-install-status/    JSON shape validation for visible Windows install evidence
@@ -35,6 +36,7 @@ Current executable pieces:
 - `harness/fake-host`: a CLI simulator for the future macOS host flow.
 - `harness/runtime-provider-probe`: a JSON validator for serverless local runtime provider output.
 - `harness/app-runtime-status`: a JSON validator for app runtime status, open HWND sessions, and supported actions.
+- `harness/guest-agent-wait`: a JSON validator for waiting until the installed Windows guest agent is reachable after setup/login.
 - `harness/qemu-boot-plan`: a JSON validator for dry-run QEMU/HVF Windows Arm boot plans.
 - `harness/qemu-doctor`: a JSON validator for QEMU/HVF readiness reports and next actions.
 - `harness/qemu-install-status`: a JSON validator for the latest Windows install state, launch evidence, console screenshot, and recovery actions.
@@ -59,6 +61,24 @@ swift run veil-vmctl app-runtime-status --json --demo | node ../../harness/app-r
 Use `--demo` for deterministic local harness checks. Without `--demo`, the
 command tries `VEIL_AGENT_URL` or `ws://127.0.0.1:18444` and falls back to demo
 metadata only for network availability errors.
+
+## Guest Agent Wait Scenario
+
+The guest-agent wait command is the post-install readiness gate between
+"Windows desktop is visible" and "launch a Windows app as a macOS window". It
+polls `VEIL_AGENT_URL` or `ws://127.0.0.1:18444` for `agent.health.response`
+without starting, stopping, or mutating the VM.
+
+```bash
+cd apps/mac-host
+swift run veil-vmctl guest-agent-wait --json --wait-seconds 30 | node ../../harness/guest-agent-wait/src/validate-guest-agent-wait.mjs
+```
+
+A connected report must point automation at `app-runtime-status` and the
+Notepad frame probe. An unavailable report must keep the recovery path explicit:
+confirm the Windows desktop is running, install `Veil Guest Agent` from the
+shared media, collect the Windows-side diagnostics ZIP if needed, and verify
+QEMU/HVF port forwarding.
 
 ## Provider Probe Scenario
 

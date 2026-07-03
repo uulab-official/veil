@@ -53,6 +53,7 @@
 - [x] Add recovery guidance when install status is blocked but the configured disk is already attached to a running QEMU process.
 - [x] Surface install-status recovery steps in the app setup screen.
 - [x] Add structured running QEMU process evidence so blocked setup reports name the exact PID and monitor/QMP sockets.
+- [x] Add a guest-agent wait gate that polls the forwarded agent health endpoint before app-window launch automation.
 - [ ] Record a fresh live boot/install evidence pass under diagnostics, not in git.
 - [ ] Update install-flow docs with exact observed blockers and recovery steps.
 
@@ -206,6 +207,50 @@ Run:
 
 ```bash
 cd apps/mac-host && swift test --filter HostDashboardModelTests
+cd apps/mac-host && swift test
+./script/build_and_run.sh --verify
+git diff --check
+```
+
+Expected: all pass.
+
+## Task 12: Guest Agent Wait Gate
+
+**Files:**
+- Modify: `apps/mac-host/Sources/VeilHostCore/VeilHostClient.swift`
+- Modify: `apps/mac-host/Tests/VeilHostCoreTests/VeilHostClientTests.swift`
+- Modify: `apps/mac-host/Sources/VeilVMControl/main.swift`
+- Create: `harness/guest-agent-wait/package.json`
+- Create: `harness/guest-agent-wait/src/validate-guest-agent-wait.mjs`
+- Create: `harness/guest-agent-wait/test/guest-agent-wait.test.mjs`
+- Create: `harness/guest-agent-wait/fixtures/guest-agent-wait.connected.json`
+- Modify: `docs/harness/README.md`
+- Modify: `docs/architecture.md`
+- Modify: `docs/checklists/2026-07-03-utm-source-hardening.md`
+
+- [x] **Step 1: Add a codable wait report**
+
+Expose `guestAgentWait` reports with endpoint, status, attempts, waited seconds,
+connected health evidence, and next actions.
+
+- [x] **Step 2: Add CLI command**
+
+Add `veil-vmctl guest-agent-wait [--json] [--wait-seconds 30]` using
+`VEIL_AGENT_URL` or `ws://127.0.0.1:18444`.
+
+- [x] **Step 3: Add harness validation**
+
+Validate connected reports and reject missing app-runtime next actions or
+missing install recovery guidance for unavailable reports.
+
+- [x] **Step 4: Verify**
+
+Run:
+
+```bash
+cd apps/mac-host && swift test --filter VeilHostClientTests
+cd harness/guest-agent-wait && npm test
+cd apps/mac-host && VEIL_AGENT_URL=ws://127.0.0.1:<fake-port> swift run veil-vmctl guest-agent-wait --json --wait-seconds 2 | node ../../harness/guest-agent-wait/src/validate-guest-agent-wait.mjs
 cd apps/mac-host && swift test
 ./script/build_and_run.sh --verify
 git diff --check

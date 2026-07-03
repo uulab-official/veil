@@ -1,0 +1,39 @@
+{
+  "attempts": 1,
+  "connectedAt": "2026-07-03T12:00:00Z",
+  "diagnostic": {
+    "endpoint": "ws://127.0.0.1:18444",
+    "health": {
+      "agentVersion": "0.1.0",
+      "capabilities": {
+        "appLaunch": true,
+        "appList": true,
+        "clipboardText": true,
+        "input": true,
+        "windowCapture": true,
+        "windowTracking": true
+      },
+      "os": "windows-arm64",
+      "protocolVersion": 1,
+      "requestId": "req_health",
+      "session": {
+        "interactive": true,
+        "user": "veil-user"
+      },
+      "type": "agent.health.response"
+    },
+    "nextActions": [
+      "Run veil-host-probe --overview to verify app metadata.",
+      "Run veil-host-probe --launch-notepad-frame to verify HWND launch, tracking, and first frame capture."
+    ],
+    "status": "connected"
+  },
+  "endpoint": "ws://127.0.0.1:18444",
+  "kind": "guestAgentWait",
+  "nextActions": [
+    "Run `veil-vmctl app-runtime-status --json` to inspect app launch readiness.",
+    "Run `veil-host-probe --launch-notepad-frame` to verify HWND launch, tracking, and first frame capture."
+  ],
+  "status": "connected",
+  "waitedSeconds": 0
+}

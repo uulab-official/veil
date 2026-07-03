@@ -62,7 +62,7 @@ enum VMControlError: Error, LocalizedError {
         }
     }
 
-    private static let usage = "Usage: veil-vmctl prepare --installer /path/to/Windows.iso [--drivers /path/to/virtio-win.iso] | veil-vmctl app-runtime-status [--json] [--demo] | veil-vmctl mark-installed [--json] | veil-vmctl providers [--json] | veil-vmctl qemu-plan [--json] | veil-vmctl qemu-doctor [--json] | veil-vmctl qemu-install-status [--json] | veil-vmctl qemu-smoke [--json] [--seconds 45] | veil-vmctl qemu-start [--json] [--wait-seconds 15] [--native-display] | veil-vmctl qemu-display-smoke [--json] [--wait-seconds 5] | veil-vmctl qemu-capture [--json] [--output /path/to/console.png] | veil-vmctl qemu-powerdown [--json] [--wait-seconds 30] | veil-vmctl qemu-force-stop [--json] --i-understand-data-loss [--wait-seconds 10] | veil-vmctl qemu-sendkey [--json] key [key ...] | veil-vmctl qemu-type-text [--json] --text \"...\" | veil-vmctl qemu-click [--json] --x 0...32767 --y 0...32767 | veil-vmctl qemu-oobe-bypass [--json] | veil-vmctl qemu-install-agent [--json]"
+    private static let usage = "Usage: veil-vmctl prepare --installer /path/to/Windows.iso [--drivers /path/to/virtio-win.iso] | veil-vmctl app-runtime-status [--json] [--demo] | veil-vmctl guest-agent-wait [--json] [--wait-seconds 30] | veil-vmctl mark-installed [--json] | veil-vmctl providers [--json] | veil-vmctl qemu-plan [--json] | veil-vmctl qemu-doctor [--json] | veil-vmctl qemu-install-status [--json] | veil-vmctl qemu-smoke [--json] [--seconds 45] | veil-vmctl qemu-start [--json] [--wait-seconds 15] [--native-display] | veil-vmctl qemu-display-smoke [--json] [--wait-seconds 5] | veil-vmctl qemu-capture [--json] [--output /path/to/console.png] | veil-vmctl qemu-powerdown [--json] [--wait-seconds 30] | veil-vmctl qemu-force-stop [--json] --i-understand-data-loss [--wait-seconds 10] | veil-vmctl qemu-sendkey [--json] key [key ...] | veil-vmctl qemu-type-text [--json] --text \"...\" | veil-vmctl qemu-click [--json] --x 0...32767 --y 0...32767 | veil-vmctl qemu-oobe-bypass [--json] | veil-vmctl qemu-install-agent [--json]"
 }
 
 struct VMControlArguments {
@@ -74,6 +74,7 @@ struct VMControlArguments {
     enum Command: Equatable {
         case prepare(installerPath: String, driverMediaPath: String?)
         case appRuntimeStatus(json: Bool, demo: Bool)
+        case guestAgentWait(json: Bool, waitSeconds: Int)
         case markInstalled(json: Bool)
         case providers(json: Bool)
         case qemuPlan(json: Bool)
@@ -110,6 +111,11 @@ struct VMControlArguments {
                     demo: arguments.contains("--demo")
                 )
             )
+        }
+
+        if command == "guest-agent-wait" {
+            let waitSeconds = waitSecondsArgument(from: arguments) ?? 30
+            return VMControlArguments(command: .guestAgentWait(json: arguments.contains("--json"), waitSeconds: waitSeconds))
         }
 
         if command == "mark-installed" {
@@ -357,6 +363,8 @@ struct VeilVMControl {
             try await prepare(installerPath: installerPath, driverMediaPath: driverMediaPath)
         case .appRuntimeStatus(let json, let demo):
             try await printAppRuntimeStatus(json: json, demo: demo)
+        case .guestAgentWait(let json, let waitSeconds):
+            try await waitForGuestAgent(json: json, waitSeconds: waitSeconds)
         case .markInstalled(let json):
             try await markInstalled(json: json)
         case .providers(let json):
@@ -470,6 +478,41 @@ struct VeilVMControl {
             fallback: DemoHostDashboardService(),
             primaryEndpointDescription: endpoint
         )
+    }
+
+    private static func waitForGuestAgent(json: Bool, waitSeconds: Int) async throws {
+        let endpoint = ProcessInfo.processInfo.environment["VEIL_AGENT_URL"] ?? "ws://127.0.0.1:18444"
+        let url = URL(string: endpoint) ?? URL(string: "ws://127.0.0.1:18444")!
+        let client = VeilHostClient(
+            transport: URLSessionWebSocketTransport(url: url, requestTimeout: 3)
+        )
+        let report = await client.waitForAgentConnection(
+            endpoint: endpoint,
+            timeoutSeconds: waitSeconds
+        )
+
+        if json {
+            let data = try JSONEncoder.veilDiagnostics.encode(report)
+            print(String(decoding: data, as: UTF8.self))
+            return
+        }
+
+        print("Windows guest agent: \(report.status.rawValue)")
+        print("Endpoint: \(report.endpoint)")
+        print("Attempts: \(report.attempts)")
+        print("Waited seconds: \(report.waitedSeconds)")
+        if let health = report.diagnostic.health {
+            print("Agent: \(health.agentVersion)")
+            print("OS: \(health.os)")
+            print("Capabilities: appLaunch=\(health.capabilities.appLaunch), windowCapture=\(health.capabilities.windowCapture), input=\(health.capabilities.input), clipboard=\(health.capabilities.clipboardText)")
+        }
+        if let errorMessage = report.diagnostic.errorMessage {
+            print("Error: \(errorMessage)")
+        }
+        print("Next actions:")
+        for action in report.nextActions {
+            print("  - \(action)")
+        }
     }
 
     private static func markInstalled(json: Bool) async throws {
