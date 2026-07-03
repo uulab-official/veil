@@ -25,6 +25,7 @@ Goal: adapt concrete UTM source patterns into Veil while keeping Veil focused on
 - [x] Add a menu bar restore action for restorable Windows apps after guest-agent reconnect.
 - [x] Add `veil-vmctl app-runtime-status --json` plus a Node harness validator for app-runtime status/actions.
 - [x] Add `veil-vmctl qemu-install-status --json` plus a Node harness validator for persistent Windows install evidence.
+- [x] Extend display evidence with planned resolution, aspect-fit scaling, Retina rendering policy, and live VNC validation guidance.
 
 ## Next Hardening Pass
 
@@ -33,4 +34,4 @@ Goal: adapt concrete UTM source patterns into Veil while keeping Veil focused on
 - [x] Add a menu bar restore action for the last restorable Windows apps after VM reconnect, matching the current restore-intent store.
 - [x] Add an automation-facing command surface for app launch/close/status so harnesses can drive the same path as the UI.
 - [x] Add an install-status command surface so persistent Windows setup evidence can be checked without manually inspecting raw launch records.
-- [ ] Extend display evidence with dynamic resolution/scaling decisions for the embedded runtime surface.
+- [x] Extend display evidence with dynamic resolution/scaling decisions for the embedded runtime surface.

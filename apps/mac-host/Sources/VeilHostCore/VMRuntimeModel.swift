@@ -324,6 +324,7 @@ public struct VMWindowsInstallStatusReport: Codable, Equatable, Sendable {
     public var virtualDiskPath: String?
     public var automaticInstallMediaPath: String?
     public var latestConsoleScreenshotPath: String?
+    public var displaySurface: VMConsoleDisplaySurface
     public var latestConsoleLaunch: VMConsoleLaunchEvidence?
     public var nextActions: [String]
 
@@ -340,6 +341,7 @@ public struct VMWindowsInstallStatusReport: Codable, Equatable, Sendable {
         virtualDiskPath: String?,
         automaticInstallMediaPath: String?,
         latestConsoleScreenshotPath: String?,
+        displaySurface: VMConsoleDisplaySurface,
         latestConsoleLaunch: VMConsoleLaunchEvidence?,
         nextActions: [String]
     ) {
@@ -355,6 +357,7 @@ public struct VMWindowsInstallStatusReport: Codable, Equatable, Sendable {
         self.virtualDiskPath = virtualDiskPath
         self.automaticInstallMediaPath = automaticInstallMediaPath
         self.latestConsoleScreenshotPath = latestConsoleScreenshotPath
+        self.displaySurface = displaySurface
         self.latestConsoleLaunch = latestConsoleLaunch
         self.nextActions = nextActions
     }
@@ -374,6 +377,7 @@ public extension VMRuntimeSnapshot {
             virtualDiskPath: virtualDiskPath,
             automaticInstallMediaPath: automaticInstallMediaPath,
             latestConsoleScreenshotPath: latestConsoleScreenshotPath,
+            displaySurface: displaySurfaceEvidence(),
             latestConsoleLaunch: latestConsoleLaunch,
             nextActions: windowsInstallNextActions()
         )
@@ -429,6 +433,24 @@ public extension VMRuntimeSnapshot {
 
         return ["Start the visible install with `veil-vmctl qemu-start --wait-seconds 15`."]
     }
+
+    private func displaySurfaceEvidence() -> VMConsoleDisplaySurface {
+        if let surface = latestConsoleLaunch?.displaySurface,
+           surface.kind != .unavailable {
+            return surface
+        }
+
+        guard let latestConsoleScreenshotPath else {
+            return .unavailable
+        }
+
+        return VMConsoleDisplaySurface(
+            kind: .screenshot,
+            endpoint: nil,
+            screenshotPath: latestConsoleScreenshotPath,
+            isLiveCapable: false
+        )
+    }
 }
 
 public struct VMConsoleLaunchEvidence: Codable, Equatable, Sendable {
@@ -450,7 +472,8 @@ public struct VMConsoleLaunchEvidence: Codable, Equatable, Sendable {
                 kind: .vncLoopback,
                 endpoint: "\(vncHost):\(vncPort)",
                 screenshotPath: consoleScreenshotPath,
-                isLiveCapable: true
+                isLiveCapable: true,
+                validationCommand: VMRuntimeDeviceDefaults.liveDisplayValidationCommand
             )
         }
 
@@ -459,7 +482,8 @@ public struct VMConsoleLaunchEvidence: Codable, Equatable, Sendable {
                 kind: .screenshot,
                 endpoint: nil,
                 screenshotPath: consoleScreenshotPath,
-                isLiveCapable: false
+                isLiveCapable: false,
+                validationCommand: nil
             )
         }
 
@@ -504,24 +528,43 @@ public struct VMConsoleDisplaySurface: Codable, Equatable, Sendable {
     public var endpoint: String?
     public var screenshotPath: String?
     public var isLiveCapable: Bool
+    public var plannedWidthInPixels: Int
+    public var plannedHeightInPixels: Int
+    public var scalingMode: String
+    public var dynamicResolution: String
+    public var retinaScaling: String
+    public var validationCommand: String?
 
     public init(
         kind: VMConsoleDisplaySurfaceKind,
         endpoint: String?,
         screenshotPath: String?,
-        isLiveCapable: Bool
+        isLiveCapable: Bool,
+        plannedWidthInPixels: Int = VMRuntimeDeviceDefaults.graphicsWidthInPixels,
+        plannedHeightInPixels: Int = VMRuntimeDeviceDefaults.graphicsHeightInPixels,
+        scalingMode: String = VMRuntimeDeviceDefaults.displayScalingMode,
+        dynamicResolution: String = VMRuntimeDeviceDefaults.dynamicResolutionPolicy,
+        retinaScaling: String = VMRuntimeDeviceDefaults.retinaScalingPolicy,
+        validationCommand: String? = nil
     ) {
         self.kind = kind
         self.endpoint = endpoint
         self.screenshotPath = screenshotPath
         self.isLiveCapable = isLiveCapable
+        self.plannedWidthInPixels = plannedWidthInPixels
+        self.plannedHeightInPixels = plannedHeightInPixels
+        self.scalingMode = scalingMode
+        self.dynamicResolution = dynamicResolution
+        self.retinaScaling = retinaScaling
+        self.validationCommand = validationCommand
     }
 
     public static let unavailable = VMConsoleDisplaySurface(
         kind: .unavailable,
         endpoint: nil,
         screenshotPath: nil,
-        isLiveCapable: false
+        isLiveCapable: false,
+        validationCommand: nil
     )
 }
 
@@ -638,11 +681,24 @@ public struct VMRuntimeDisplayConfigurationSummary: Codable, Equatable, Sendable
     public var surface: String
     public var widthInPixels: Int
     public var heightInPixels: Int
+    public var scalingMode: String
+    public var dynamicResolution: String
+    public var retinaScaling: String
 
-    public init(surface: String, widthInPixels: Int, heightInPixels: Int) {
+    public init(
+        surface: String,
+        widthInPixels: Int,
+        heightInPixels: Int,
+        scalingMode: String,
+        dynamicResolution: String,
+        retinaScaling: String
+    ) {
         self.surface = surface
         self.widthInPixels = widthInPixels
         self.heightInPixels = heightInPixels
+        self.scalingMode = scalingMode
+        self.dynamicResolution = dynamicResolution
+        self.retinaScaling = retinaScaling
     }
 }
 
@@ -720,6 +776,10 @@ public enum VMRuntimeDeviceDefaults {
     public static let systemDiskIdentifier = "veil-system-disk"
     public static let graphicsWidthInPixels = 1440
     public static let graphicsHeightInPixels = 900
+    public static let displayScalingMode = "aspect-fit host window"
+    public static let dynamicResolutionPolicy = "fixed guest framebuffer until guest agent display bridge"
+    public static let retinaScalingPolicy = "host-rendered Retina interpolation"
+    public static let liveDisplayValidationCommand = "veil-vmctl qemu-display-smoke --json"
 }
 
 public enum VMInstallationStepState: String, Codable, Equatable, Sendable {
@@ -2795,7 +2855,10 @@ public struct LocalVMRuntimeService: VMRuntimeService {
             display: VMRuntimeDisplayConfigurationSummary(
                 surface: "Embedded VNC loopback",
                 widthInPixels: devices.graphics.widthInPixels,
-                heightInPixels: devices.graphics.heightInPixels
+                heightInPixels: devices.graphics.heightInPixels,
+                scalingMode: VMRuntimeDeviceDefaults.displayScalingMode,
+                dynamicResolution: VMRuntimeDeviceDefaults.dynamicResolutionPolicy,
+                retinaScaling: VMRuntimeDeviceDefaults.retinaScalingPolicy
             ),
             sharing: VMRuntimeSharingConfigurationSummary(
                 sharedFolderPath: profile.sharedFolderPath

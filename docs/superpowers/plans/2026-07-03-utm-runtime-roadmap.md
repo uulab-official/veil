@@ -49,6 +49,7 @@
 
 - [ ] Run the current Windows 11 Arm ISO through QEMU/HVF embedded display.
 - [x] Add a read-only install-status command for boot/install evidence under diagnostics, not in git.
+- [x] Extend install-status display evidence with resolution, scaling, Retina, and live validation policy.
 - [ ] Record a fresh live boot/install evidence pass under diagnostics, not in git.
 - [ ] Update install-flow docs with exact observed blockers and recovery steps.
 
@@ -324,6 +325,47 @@ Run:
 cd apps/mac-host && swift test --filter VMProfileStoreTests/buildsWindowsInstallStatusReportFromLaunchEvidence
 cd apps/mac-host && swift run veil-vmctl qemu-install-status --json | node ../../harness/qemu-install-status/src/validate-qemu-install-status.mjs
 cd harness/qemu-install-status && npm test
+cd apps/mac-host && swift test
+./script/build_and_run.sh --verify
+git diff --check
+```
+
+Expected: all pass.
+
+## Task 8: Embedded Display Evidence Policy
+
+**Files:**
+- Modify: `apps/mac-host/Sources/VeilHostCore/VMRuntimeModel.swift`
+- Modify: `apps/mac-host/Sources/VeilVMControl/main.swift`
+- Modify: `apps/mac-host/Tests/VeilHostCoreTests/VMProfileStoreTests.swift`
+- Modify: `harness/qemu-install-status/fixtures/qemu-install-status.running.json`
+- Modify: `harness/qemu-install-status/src/validate-qemu-install-status.mjs`
+- Modify: `harness/qemu-install-status/test/qemu-install-status.test.mjs`
+- Modify: `docs/harness/README.md`
+- Modify: `docs/install-flow.md`
+- Modify: `docs/checklists/2026-07-03-utm-source-hardening.md`
+
+- [x] **Step 1: Add display evidence fields**
+
+Add planned dimensions, scaling mode, dynamic-resolution policy, Retina policy, and validation command to the console display surface and runtime display configuration summary.
+
+- [x] **Step 2: Expose install-status display evidence**
+
+Add `displaySurface` to `VMWindowsInstallStatusReport` so CLI and harnesses can inspect display policy without decoding UI state.
+
+- [x] **Step 3: Extend validators and fixtures**
+
+Require live VNC display surfaces to include loopback endpoint evidence, positive planned dimensions, scaling policy, and `qemu-display-smoke` validation guidance.
+
+- [x] **Step 4: Verify**
+
+Run:
+
+```bash
+cd apps/mac-host && swift test --filter VMProfileStoreTests/buildsWindowsInstallStatusReportFromLaunchEvidence
+cd apps/mac-host && swift test --filter VMProfileStoreTests/localRuntimeReportsVirtualizationDeviceSummary
+cd harness/qemu-install-status && npm test
+cd apps/mac-host && swift run veil-vmctl qemu-install-status --json | node ../../harness/qemu-install-status/src/validate-qemu-install-status.mjs
 cd apps/mac-host && swift test
 ./script/build_and_run.sh --verify
 git diff --check

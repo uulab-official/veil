@@ -31,3 +31,13 @@ test("rejects running reports with launch evidence but without capture guidance"
     /qemu-capture/
   );
 });
+
+test("rejects live display surfaces without validation guidance", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/qemu-install-status.running.json", import.meta.url), "utf8"));
+  delete report.displaySurface.validationCommand;
+
+  assert.throws(
+    () => validateQEMUInstallStatus(report),
+    /qemu-display-smoke/
+  );
+});

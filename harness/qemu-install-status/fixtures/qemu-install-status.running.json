@@ -2,6 +2,18 @@
   "automaticInstallMediaPath": "/Users/test/Virtual Machines/Veil Shared/VeilAutoInstall.iso",
   "bootReady": true,
   "driverMediaPath": "/Users/test/Downloads/virtio-win.iso",
+  "displaySurface": {
+    "dynamicResolution": "fixed guest framebuffer until guest agent display bridge",
+    "endpoint": "127.0.0.1:5907",
+    "isLiveCapable": true,
+    "kind": "vncLoopback",
+    "plannedHeightInPixels": 900,
+    "plannedWidthInPixels": 1440,
+    "retinaScaling": "host-rendered Retina interpolation",
+    "scalingMode": "aspect-fit host window",
+    "screenshotPath": "/Users/test/Library/Application Support/Veil/Diagnostics/QEMU Launch/qemu-console-2026-07-03T12-00-00Z.png",
+    "validationCommand": "veil-vmctl qemu-display-smoke --json"
+  },
   "generatedAt": "2026-07-03T12:00:00Z",
   "installEvidence": {
     "detail": "The Windows disk exists and setup can continue, but Windows has not been marked installed yet.",

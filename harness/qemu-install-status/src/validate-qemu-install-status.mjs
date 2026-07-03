@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 const VALID_STATES = new Set(["unsupported", "notConfigured", "stopped", "starting", "running", "suspended", "failed"]);
 const VALID_INSTALL_EVIDENCE = new Set(["notConfigured", "setupBlocked", "sparseDisk", "setupReady", "profileFlag", "guestAgent"]);
 const VALID_PREVIEW_STATUSES = new Set(["fresh", "stale", "unavailable"]);
+const VALID_DISPLAY_SURFACES = new Set(["vncLoopback", "screenshot", "unavailable"]);
 
 export function validateQEMUInstallStatus(report) {
   if (!report || typeof report !== "object" || Array.isArray(report)) {
@@ -33,6 +34,7 @@ export function validateQEMUInstallStatus(report) {
   validateOptionalPath(report.virtualDiskPath, "virtualDiskPath");
   validateOptionalPath(report.automaticInstallMediaPath, "automaticInstallMediaPath");
   validateOptionalPath(report.latestConsoleScreenshotPath, "latestConsoleScreenshotPath");
+  validateDisplaySurface(report.displaySurface);
   validateNextActions(report.nextActions);
 
   if (report.profileName !== undefined) {
@@ -50,6 +52,59 @@ export function validateQEMUInstallStatus(report) {
   }
 
   return report;
+}
+
+function validateDisplaySurface(surface) {
+  if (!surface || typeof surface !== "object" || Array.isArray(surface)) {
+    throw new TypeError("displaySurface must be an object.");
+  }
+
+  requireString(surface.kind, "displaySurface.kind");
+  if (!VALID_DISPLAY_SURFACES.has(surface.kind)) {
+    throw new TypeError(`Unsupported display surface kind: ${surface.kind}`);
+  }
+  requireBoolean(surface.isLiveCapable, "displaySurface.isLiveCapable");
+  requireInteger(surface.plannedWidthInPixels, "displaySurface.plannedWidthInPixels");
+  requireInteger(surface.plannedHeightInPixels, "displaySurface.plannedHeightInPixels");
+  requireString(surface.scalingMode, "displaySurface.scalingMode");
+  requireString(surface.dynamicResolution, "displaySurface.dynamicResolution");
+  requireString(surface.retinaScaling, "displaySurface.retinaScaling");
+
+  if (surface.plannedWidthInPixels <= 0 || surface.plannedHeightInPixels <= 0) {
+    throw new TypeError("displaySurface planned dimensions must be positive.");
+  }
+
+  if (surface.kind === "vncLoopback") {
+    requireString(surface.endpoint, "displaySurface.endpoint");
+    if (!/^127\.0\.0\.1:\d+$/.test(surface.endpoint)) {
+      throw new TypeError("displaySurface.endpoint must be a loopback VNC endpoint.");
+    }
+    if (surface.isLiveCapable !== true) {
+      throw new TypeError("vncLoopback display surfaces must be live capable.");
+    }
+    if (typeof surface.validationCommand !== "string" || !surface.validationCommand.includes("qemu-display-smoke")) {
+      throw new TypeError("vncLoopback display surfaces must include qemu-display-smoke validation guidance.");
+    }
+  }
+
+  if (surface.kind === "screenshot") {
+    validateOptionalPath(surface.screenshotPath, "displaySurface.screenshotPath");
+    if (surface.screenshotPath && !surface.screenshotPath.endsWith(".png")) {
+      throw new TypeError("displaySurface.screenshotPath must point to a .png image.");
+    }
+  }
+
+  if (surface.kind === "unavailable" && surface.isLiveCapable !== false) {
+    throw new TypeError("unavailable display surfaces cannot be live capable.");
+  }
+
+  validateOptionalPath(surface.screenshotPath, "displaySurface.screenshotPath");
+  if (surface.endpoint !== undefined && surface.kind !== "vncLoopback") {
+    requireString(surface.endpoint, "displaySurface.endpoint");
+  }
+  if (surface.validationCommand !== undefined && surface.kind !== "vncLoopback") {
+    requireString(surface.validationCommand, "displaySurface.validationCommand");
+  }
 }
 
 function validateInstallEvidence(evidence) {

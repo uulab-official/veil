@@ -583,12 +583,19 @@ struct VeilVMControl {
         print("Drivers: \(report.driverMediaPath ?? "Not selected")")
         print("Virtual disk: \(report.virtualDiskPath ?? "Not selected")")
         print("Console screenshot: \(report.latestConsoleScreenshotPath ?? "Not captured")")
+        print("Display surface: \(report.displaySurface.kind.rawValue)")
+        print("Display size: \(report.displaySurface.plannedWidthInPixels)x\(report.displaySurface.plannedHeightInPixels)")
+        print("Display scaling: \(report.displaySurface.scalingMode)")
+        print("Dynamic resolution: \(report.displaySurface.dynamicResolution)")
+        print("Retina scaling: \(report.displaySurface.retinaScaling)")
+        if let endpoint = report.displaySurface.endpoint {
+            print("Display endpoint: \(endpoint)")
+        }
+        if let validationCommand = report.displaySurface.validationCommand {
+            print("Display validation: \(validationCommand)")
+        }
         if let launch = report.latestConsoleLaunch {
             print("Latest QEMU PID: \(launch.pid.map(String.init) ?? "unknown")")
-            print("Display surface: \(launch.displaySurface.kind.rawValue)")
-            if let endpoint = launch.displaySurface.endpoint {
-                print("Display endpoint: \(endpoint)")
-            }
         }
         print("Detail: \(report.installEvidence.detail)")
         print("Next actions:")
