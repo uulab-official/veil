@@ -320,6 +320,28 @@ public struct VMConsoleLaunchEvidence: Codable, Equatable, Sendable {
     public var previewStatus: VMConsolePreviewStatus
     public var startedAt: Date
 
+    public var displaySurface: VMConsoleDisplaySurface {
+        if let vncHost, let vncPort {
+            return VMConsoleDisplaySurface(
+                kind: .vncLoopback,
+                endpoint: "\(vncHost):\(vncPort)",
+                screenshotPath: consoleScreenshotPath,
+                isLiveCapable: true
+            )
+        }
+
+        if let consoleScreenshotPath {
+            return VMConsoleDisplaySurface(
+                kind: .screenshot,
+                endpoint: nil,
+                screenshotPath: consoleScreenshotPath,
+                isLiveCapable: false
+            )
+        }
+
+        return .unavailable
+    }
+
     public init(
         provider: String,
         pid: Int32?,
@@ -345,6 +367,38 @@ public struct VMConsoleLaunchEvidence: Codable, Equatable, Sendable {
         self.previewStatus = previewStatus
         self.startedAt = startedAt
     }
+}
+
+public enum VMConsoleDisplaySurfaceKind: String, Codable, Equatable, Sendable {
+    case vncLoopback
+    case screenshot
+    case unavailable
+}
+
+public struct VMConsoleDisplaySurface: Codable, Equatable, Sendable {
+    public var kind: VMConsoleDisplaySurfaceKind
+    public var endpoint: String?
+    public var screenshotPath: String?
+    public var isLiveCapable: Bool
+
+    public init(
+        kind: VMConsoleDisplaySurfaceKind,
+        endpoint: String?,
+        screenshotPath: String?,
+        isLiveCapable: Bool
+    ) {
+        self.kind = kind
+        self.endpoint = endpoint
+        self.screenshotPath = screenshotPath
+        self.isLiveCapable = isLiveCapable
+    }
+
+    public static let unavailable = VMConsoleDisplaySurface(
+        kind: .unavailable,
+        endpoint: nil,
+        screenshotPath: nil,
+        isLiveCapable: false
+    )
 }
 
 public enum VMConsolePreviewStatus: String, Codable, Equatable, Sendable {

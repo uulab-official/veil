@@ -802,8 +802,9 @@ private struct RuntimeLandingPanel: View {
     }
 }
 
-private struct WindowsDisplayScreenshotPreview: View {
-    var image: NSImage
+private struct WindowsEmbeddedDisplayPreview: View {
+    var image: NSImage?
+    var surface: VMConsoleDisplaySurface
     var path: String
     var revisionID: String
     var pointerTapAction: (Double, Double) -> Void
@@ -814,11 +815,36 @@ private struct WindowsDisplayScreenshotPreview: View {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .fill(.black)
 
-            Image(nsImage: image)
-                .resizable()
-                .scaledToFit()
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .id(revisionID)
+            if let image {
+                Image(nsImage: image)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .id(revisionID)
+            } else {
+                WindowsDisplayGrid()
+                    .opacity(0.10)
+                Image(systemName: surface.kind == .vncLoopback ? "display.and.arrow.down" : "display")
+                    .font(.system(size: 48, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.56))
+            }
+
+            if surface.kind == .vncLoopback {
+                VStack {
+                    HStack {
+                        Label(surface.endpoint ?? "Loopback display", systemImage: "dot.radiowaves.left.and.right")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.white.opacity(0.82))
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 7)
+                            .background(.black.opacity(0.30), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                        Spacer()
+                    }
+                    Spacer()
+                }
+                .padding(14)
+                .allowsHitTesting(false)
+            }
 
             ConsolePreviewInputCaptureView(
                 pointerTapAction: pointerTapAction,
@@ -831,8 +857,8 @@ private struct WindowsDisplayScreenshotPreview: View {
                 .strokeBorder(.white.opacity(0.16), lineWidth: 1)
         }
         .help("Latest Windows display")
-        .accessibilityLabel("Latest Windows display screenshot")
-        .accessibilityValue(path)
+        .accessibilityLabel(surface.kind == .vncLoopback ? "Embedded Windows display endpoint" : "Latest Windows display screenshot")
+        .accessibilityValue(surface.endpoint ?? path)
     }
 }
 
@@ -1297,9 +1323,10 @@ private struct WindowsSetupDisplayPanel: View {
 
     private var installDisplaySurface: some View {
         ZStack {
-            if let displayScreenshotImage {
-                WindowsDisplayScreenshotPreview(
+            if let displaySurface {
+                WindowsEmbeddedDisplayPreview(
                     image: displayScreenshotImage,
+                    surface: displaySurface,
                     path: snapshot.latestConsoleScreenshotPath ?? "",
                     revisionID: displayScreenshotRevisionID,
                     pointerTapAction: consolePointerTapAction,
@@ -1309,7 +1336,7 @@ private struct WindowsSetupDisplayPanel: View {
                 machineDisplay
             }
         }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     @ViewBuilder
@@ -1453,6 +1480,24 @@ private struct WindowsSetupDisplayPanel: View {
         }
 
         return NSImage(contentsOfFile: path)
+    }
+
+    private var displaySurface: VMConsoleDisplaySurface? {
+        if let surface = snapshot.latestConsoleLaunch?.displaySurface,
+           surface.kind != .unavailable {
+            return surface
+        }
+
+        guard let path = snapshot.latestConsoleScreenshotPath else {
+            return nil
+        }
+
+        return VMConsoleDisplaySurface(
+            kind: .screenshot,
+            endpoint: nil,
+            screenshotPath: path,
+            isLiveCapable: false
+        )
     }
 
     private var displayScreenshotRevisionID: String {
