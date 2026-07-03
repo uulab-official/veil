@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { validateAppLaunchAcceptance, validateWindowCloseResponse } from "@veil/protocol";
+import { validateAppLaunchAcceptance, validateWindowClosed, validateWindowCloseResponse } from "@veil/protocol";
 
 import { createSession } from "../src/session.mjs";
 
@@ -77,7 +77,12 @@ test("returns the fixture app list", async () => {
 });
 
 test("accepts a window close request for a tracked HWND", async () => {
-  const session = createSession();
+  const broadcastEvents = [];
+  const session = createSession({
+    broadcast: async (event) => {
+      broadcastEvents.push(event);
+    }
+  });
 
   const replies = await session.handle({
     type: "window.close.request",
@@ -90,6 +95,9 @@ test("accepts a window close request for a tracked HWND", async () => {
   assert.equal(response.requestId, "req_close_notepad");
   assert.equal(response.windowId, "hwnd:0003029A");
   assert.equal(response.accepted, true);
+  assert.equal(broadcastEvents.length, 1);
+  const closed = validateWindowClosed(broadcastEvents[0]);
+  assert.equal(closed.windowId, "hwnd:0003029A");
 });
 
 test("rejects window close requests without a HWND", async () => {

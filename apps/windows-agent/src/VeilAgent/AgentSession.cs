@@ -144,7 +144,17 @@ public sealed class AgentSession
         try
         {
             var accepted = await desktop.CloseWindowAsync(windowId, cancellationToken);
-            return AgentReplies.Direct(WindowCloseResponse(requestId, windowId, accepted));
+            if (!accepted)
+            {
+                return AgentReplies.Direct(WindowCloseResponse(requestId, windowId, accepted));
+            }
+
+            UntrackWindow(windowId);
+            return new AgentReplies(
+                DirectReplies: new[] { WindowCloseResponse(requestId, windowId, accepted) },
+                BroadcastEvents: new[] { WindowClosedEvent(windowId) },
+                StopStreamWindowId: windowId
+            );
         }
         catch (Exception error) when (error is not OperationCanceledException)
         {
@@ -328,6 +338,12 @@ public sealed class AgentSession
         ["encodedData"] = frame.EncodedData
     };
 
+    private static JsonObject WindowClosedEvent(string windowId) => new()
+    {
+        ["type"] = MessageTypes.WindowClosed,
+        ["windowId"] = windowId
+    };
+
     private static JsonObject WindowCloseResponse(string? requestId, string windowId, bool accepted) => new()
     {
         ["type"] = MessageTypes.WindowCloseResponse,
@@ -357,6 +373,14 @@ public sealed class AgentSession
         lock (trackedWindowsGate)
         {
             return trackedWindowsById.TryGetValue(windowId, out window!);
+        }
+    }
+
+    private void UntrackWindow(string windowId)
+    {
+        lock (trackedWindowsGate)
+        {
+            trackedWindowsById.Remove(windowId);
         }
     }
 

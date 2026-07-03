@@ -6,6 +6,7 @@ export const MessageType = Object.freeze({
   AppLaunchRequest: "app.launch.request",
   AppLaunchResponse: "app.launch.response",
   WindowCreated: "window.created",
+  WindowClosed: "window.closed",
   WindowFrame: "window.frame",
   WindowFrameSubscribe: "window.frame.subscribe",
   WindowFrameUnsubscribe: "window.frame.unsubscribe",
@@ -76,6 +77,15 @@ export function validateAppLaunchAcceptance(launch, window) {
 }
 
 export const validateNotepadAcceptance = validateAppLaunchAcceptance;
+
+export function validateWindowClosed(closed) {
+  if (!closed || closed.type !== MessageType.WindowClosed) {
+    throw new TypeError("Window closed event must use type window.closed.");
+  }
+
+  requireNonEmptyString(closed.windowId, "windowId", "Window closed event");
+  return closed;
+}
 
 export function validateWindowFrame(frame) {
   if (!frame || frame.type !== MessageType.WindowFrame) {

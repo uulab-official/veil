@@ -240,11 +240,21 @@ Guest response:
 }
 ```
 
+Guest lifecycle event:
+
+```json
+{
+  "type": "window.closed",
+  "windowId": "hwnd:0003029A"
+}
+```
+
 Rules:
 
 - `windowId` must match the HWND-shaped id from a tracked `window.created` event.
 - On Windows, the first implementation maps this to `WM_CLOSE` for the target HWND.
-- `accepted: true` means the close message was posted to the window. The guest may later emit a dedicated `window.closed` event once window lifecycle tracking is added.
+- `accepted: true` means the close message was posted to the window.
+- `window.closed` tells the host to remove the tracked HWND, close the macOS mirror window without sending another close request, and forget the persisted restore intent for that app.
 
 ## Input Mouse
 

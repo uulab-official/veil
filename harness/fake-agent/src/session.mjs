@@ -26,7 +26,7 @@ export function createSession(options = {}) {
         case MessageType.WindowFrameUnsubscribe:
           return [];
         case MessageType.WindowCloseRequest:
-          return handleWindowClose(message);
+          return handleWindowClose(message, broadcast);
         case MessageType.InputMouse:
           await onInput(message);
           await broadcastInputFrame(message, broadcast, nextFrameSequence);
@@ -126,10 +126,15 @@ async function broadcastInputFrame(message, broadcast, nextFrameSequence) {
   });
 }
 
-async function handleWindowClose(message) {
+async function handleWindowClose(message, broadcast) {
   if (!message.windowId) {
     return [createError(message.requestId, "invalid_message", "window.close.request requires windowId.")];
   }
+
+  await broadcast({
+    ...(await readFixture("window.closed.json")),
+    windowId: message.windowId
+  });
 
   return [
     {

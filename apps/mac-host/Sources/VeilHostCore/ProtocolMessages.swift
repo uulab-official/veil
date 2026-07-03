@@ -8,6 +8,7 @@ public enum MessageType: String, Codable, Sendable {
     case appLaunchRequest = "app.launch.request"
     case appLaunchResponse = "app.launch.response"
     case windowCreated = "window.created"
+    case windowClosed = "window.closed"
     case windowFrame = "window.frame"
     case windowFrameSubscribe = "window.frame.subscribe"
     case windowFrameUnsubscribe = "window.frame.unsubscribe"
@@ -115,6 +116,16 @@ public struct WindowCreatedEvent: Codable, Equatable, Sendable {
     public var bounds: WindowBounds
     public var state: String
     public var focused: Bool
+}
+
+public struct WindowClosedEvent: Codable, Equatable, Sendable {
+    public var type: MessageType
+    public var windowId: String
+
+    public init(type: MessageType = .windowClosed, windowId: String) {
+        self.type = type
+        self.windowId = windowId
+    }
 }
 
 public struct WindowBounds: Codable, Equatable, Sendable {

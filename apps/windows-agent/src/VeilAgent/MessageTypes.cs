@@ -9,6 +9,7 @@ public static class MessageTypes
     public const string AppLaunchRequest = "app.launch.request";
     public const string AppLaunchResponse = "app.launch.response";
     public const string WindowCreated = "window.created";
+    public const string WindowClosed = "window.closed";
     public const string WindowFrame = "window.frame";
     public const string WindowFrameSubscribe = "window.frame.subscribe";
     public const string WindowFrameUnsubscribe = "window.frame.unsubscribe";

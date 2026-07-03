@@ -98,6 +98,7 @@ public enum HostDashboardPhase: String, Codable, Equatable, Sendable {
 
 public enum HostProtocolMessageResult: Equatable, Sendable {
     case handledWindowFrame(windowId: String)
+    case handledWindowClosed(windowId: String)
     case handledClipboardText(sequence: Int)
     case ignored
 }
@@ -687,7 +688,7 @@ public final class HostDashboardModel {
     public func receiveProtocolMessage(
         _ message: Data,
         decoder: JSONDecoder = .veilProtocol
-    ) throws -> HostProtocolMessageResult {
+    ) async throws -> HostProtocolMessageResult {
         let envelope = try decoder.decode(ProtocolMessageEnvelope.self, from: message)
 
         switch envelope.type {
@@ -697,6 +698,15 @@ public final class HostDashboardModel {
             return mirrorSessions.contains(where: { $0.id == frame.windowId && $0.latestFrame == frame })
                 ? .handledWindowFrame(windowId: frame.windowId)
                 : .ignored
+        case .windowClosed:
+            let event = try decoder.decode(WindowClosedEvent.self, from: message)
+            guard activeWindows.contains(where: { $0.windowId == event.windowId })
+                    || mirrorSessions.contains(where: { $0.id == event.windowId }) else {
+                return .ignored
+            }
+
+            await removeWindowState(windowId: event.windowId)
+            return .handledWindowClosed(windowId: event.windowId)
         case .clipboardTextSet:
             let clipboard = try decoder.decode(ClipboardTextSet.self, from: message)
             return receiveClipboardText(clipboard)
@@ -713,7 +723,7 @@ public final class HostDashboardModel {
     ) async {
         do {
             for try await message in source.eventMessages() {
-                let result = try receiveProtocolMessage(message)
+                let result = try await receiveProtocolMessage(message)
                 onMessageHandled(result)
             }
         } catch {
@@ -751,9 +761,14 @@ public final class HostDashboardModel {
     }
 
     private func removeWindowState(windowId: String) async {
-        let removedAppIds = activeWindows
-            .filter { $0.windowId == windowId }
-            .map(\.appId)
+        let removedAppIds = Set(
+            activeWindows
+                .filter { $0.windowId == windowId }
+                .map(\.appId)
+            + mirrorSessions
+                .filter { $0.id == windowId }
+                .map(\.window.appId)
+        )
         activeWindows.removeAll { $0.windowId == windowId }
         mirrorSessions.removeAll { $0.id == windowId }
 

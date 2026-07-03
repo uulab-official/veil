@@ -11,6 +11,7 @@ import {
   validateClipboardTextSet,
   validateInputKey,
   validateInputMouse,
+  validateWindowClosed,
   validateWindowCloseRequest,
   validateWindowCloseResponse,
   validateWindowFrame,
@@ -33,6 +34,7 @@ test("parses every stable fixture", async () => {
     "app.launch.request.json",
     "app.launch.response.json",
     "window.created.json",
+    "window.closed.json",
     "window.frame.json",
     "window.frame.subscribe.json",
     "window.frame.unsubscribe.json",
@@ -143,6 +145,13 @@ test("validates one captured window frame fixture", async () => {
   assert.equal(frame.format, "png");
   assert.equal(frame.width, 1);
   assert.equal(frame.height, 1);
+});
+
+test("validates one window closed fixture", async () => {
+  const closed = validateWindowClosed(await readFixture("window.closed.json"));
+
+  assert.equal(closed.type, MessageType.WindowClosed);
+  assert.equal(closed.windowId, "hwnd:0003029A");
 });
 
 test("validates window frame stream subscribe and unsubscribe fixtures", async () => {

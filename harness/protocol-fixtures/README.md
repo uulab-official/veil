@@ -11,6 +11,7 @@ These JSON files mirror the stable examples in `docs/protocol.md`.
 - `app.launch.request.json`
 - `app.launch.response.json`
 - `window.created.json`
+- `window.closed.json`
 - `window.frame.json`
 - `window.frame.subscribe.json`
 - `window.frame.unsubscribe.json`

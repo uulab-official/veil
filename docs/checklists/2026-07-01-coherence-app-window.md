@@ -36,6 +36,7 @@ Goal: make Veil's product direction visible as "Windows app as a macOS window" i
 - [x] Make normal mirrored Windows app windows open as a large work surface instead of inheriting small HWND bounds.
 - [x] Keep mirrored app-window chrome frame-first with a black full-window surface and hidden title text.
 - [x] Hide the main Veil launcher after automatic reconnect or restore opens mirrored Windows app windows.
+- [x] Add `window.closed` lifecycle events so guest-side close state removes the macOS mirror window and restore intent.
 
 ## Next
 

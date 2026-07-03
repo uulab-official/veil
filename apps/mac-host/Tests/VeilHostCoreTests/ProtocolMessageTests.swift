@@ -39,6 +39,14 @@ struct ProtocolMessageTests {
         #expect(event.focused)
     }
 
+    @Test("decodes window closed event")
+    func decodesWindowClosedEvent() throws {
+        let event: WindowClosedEvent = try decodeFixture("window.closed")
+
+        #expect(event.type == .windowClosed)
+        #expect(event.windowId == "hwnd:0003029A")
+    }
+
     @Test("decodes window frame event")
     func decodesWindowFrameEvent() throws {
         let event: WindowFrameEvent = try decodeFixture("window.frame")
