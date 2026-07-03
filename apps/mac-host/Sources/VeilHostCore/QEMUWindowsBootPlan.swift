@@ -75,6 +75,11 @@ public struct QEMUWindowsBootPlan: Codable, Equatable, Sendable {
     }
 }
 
+public enum QEMUWindowsBootDisplayMode: String, Codable, Equatable, Sendable {
+    case nativeCocoa
+    case headless
+}
+
 public struct QEMUWindowsBootPlanner: Sendable {
     public static let guestAgentHostPort = 18_444
     public static let guestAgentGuestPort = 18_444
@@ -1055,11 +1060,20 @@ public struct QEMUWindowsBootLaunchPlanner: Sendable {
         serialLogPath: String,
         monitorSocketPath: String,
         qmpSocketPath: String,
-        bootDiskFirst: Bool = false
+        bootDiskFirst: Bool = false,
+        displayMode: QEMUWindowsBootDisplayMode = .nativeCocoa
     ) -> [String] {
         var arguments = plan.arguments.map(QEMUWindowsBootArgumentRewriter.lockSafeSystemDriveArgument)
         if bootDiskFirst {
             arguments = QEMUWindowsBootArgumentRewriter.bootDiskFirstArguments(arguments)
+        }
+        if displayMode == .headless {
+            if let displayIndex = arguments.firstIndex(of: "-display"),
+               arguments.indices.contains(displayIndex + 1) {
+                arguments[displayIndex + 1] = "none"
+            } else {
+                arguments.append(contentsOf: ["-display", "none"])
+            }
         }
 
         arguments.append(contentsOf: [

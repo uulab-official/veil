@@ -351,8 +351,8 @@ private struct InstallSimulationState: Equatable {
         "Checking Windows ISO",
         "Validating local VM profile",
         "Starting local Windows",
-        "Attaching local display",
-        "Opening Windows display",
+        "Attaching embedded preview",
+        "Refreshing setup evidence",
         "Checking Windows Setup boot"
     ]
 
@@ -547,7 +547,7 @@ private struct SimpleRuntimePanel: View {
 
             return snapshot.bootReady ? "Start Windows setup from this main window." : statusText
         case .starting:
-            return "Starting local Windows. Native QEMU display is temporary until embedded display lands."
+            return "Starting local Windows in the main Veil window."
         case .running:
             return "Windows is running locally. Open a Windows app once the guest agent connects."
         case .suspended:
@@ -673,11 +673,11 @@ private struct InstallSimulationProgressView: View {
     private var title: String {
         switch simulation.phase {
         case .idle:
-            return "Windows display ready"
+            return "Windows preview ready"
         case .running:
-            return "Opening Windows display"
+            return "Starting Windows preview"
         case .complete:
-            return "Windows display opened"
+            return "Windows preview attached"
         }
     }
 

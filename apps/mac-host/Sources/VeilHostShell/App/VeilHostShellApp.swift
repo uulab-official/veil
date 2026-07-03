@@ -12,24 +12,37 @@ private struct AppFrameProofRecord: Codable {
     var frameImagePath: String?
 }
 
+private enum AppRuntimeBooterFactory {
+    static func make() -> QEMUVMRuntimeBooter {
+        if ProcessInfo.processInfo.environment["VEIL_USE_NATIVE_QEMU_DISPLAY"] == "1" {
+            return QEMUVMRuntimeBooter.shared
+        }
+
+        return QEMUVMRuntimeBooter(
+            frontmostRunner: {},
+            displayMode: .headless
+        )
+    }
+}
+
 @main
 struct VeilHostShellApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
-    private let vmRuntimeBooter = QEMUVMRuntimeBooter.shared
+    private let vmRuntimeBooter: QEMUVMRuntimeBooter
     private let windowsAppWindowPresenter = WindowsAppWindowPresenter()
     private let agentTransport: URLSessionWebSocketTransport
     @State private var model: HostDashboardModel
-    @State private var vmModel = VMRuntimeModel(
-        service: LocalVMRuntimeService(bootRunner: QEMUVMRuntimeBooter.shared)
-    )
+    @State private var vmModel: VMRuntimeModel
     @State private var displayMessage: String?
     @State private var agentEventTask: Task<Void, Never>?
     @State private var agentReconnectTask: Task<Void, Never>?
 
     init() {
+        let runtimeBooter = AppRuntimeBooterFactory.make()
         let transport = URLSessionWebSocketTransport(
             url: URL(string: Self.agentURLString)!
         )
+        self.vmRuntimeBooter = runtimeBooter
         self.agentTransport = transport
         _model = State(
             initialValue: HostDashboardModel(
@@ -40,6 +53,11 @@ struct VeilHostShellApp: App {
                     fallback: DemoHostDashboardService(),
                     primaryEndpointDescription: Self.agentURLString
                 )
+            )
+        )
+        _vmModel = State(
+            initialValue: VMRuntimeModel(
+                service: LocalVMRuntimeService(bootRunner: runtimeBooter)
             )
         )
     }
@@ -156,7 +174,8 @@ struct VeilHostShellApp: App {
                 installGuestAgentAction: installGuestAgentFromDisplay,
                 launchWindowsAppAction: launchSelectedWindowsAppWindow,
                 recordAppFrameProofAction: recordAppFrameProof,
-                refreshRuntimeAction: refreshRuntime
+                refreshRuntimeAction: refreshRuntime,
+                supportsNativeDisplayWindow: vmRuntimeBooter.supportsNativeDisplayWindow
             )
         }
         .defaultLaunchBehavior(.suppressed)
@@ -243,7 +262,9 @@ struct VeilHostShellApp: App {
             await vmModel.start()
 
             if vmModel.snapshot?.state == .running || vmModel.snapshot?.state == .starting {
-                displayMessage = "Windows is running. The current QEMU display is a temporary native window until embedded display lands."
+                displayMessage = vmRuntimeBooter.supportsNativeDisplayWindow
+                    ? "Windows is running in the native QEMU display."
+                    : "Windows is running in single-window preview mode. Veil will refresh setup evidence inside this window."
             } else if let errorMessage = vmModel.errorMessage {
                 displayMessage = "Windows display could not start: \(errorMessage)"
             }
@@ -478,7 +499,8 @@ struct VeilHostShellApp: App {
     }
 
     private var canShowWindowsDisplay: Bool {
-        vmModel.snapshot?.state == .running || vmModel.snapshot?.state == .starting
+        vmRuntimeBooter.supportsNativeDisplayWindow
+            && (vmModel.snapshot?.state == .running || vmModel.snapshot?.state == .starting)
     }
 
     private var canInstallGuestAgent: Bool {
@@ -556,6 +578,7 @@ private struct VeilMenuBarMenu: View {
     var launchWindowsAppAction: () -> Void
     var recordAppFrameProofAction: () -> Void
     var refreshRuntimeAction: () -> Void
+    var supportsNativeDisplayWindow: Bool
 
     var body: some View {
         Button("Open Veil", systemImage: "macwindow") {
@@ -617,7 +640,8 @@ private struct VeilMenuBarMenu: View {
     }
 
     private var canShowWindowsDisplay: Bool {
-        vmModel.snapshot?.state == .running || vmModel.snapshot?.state == .starting
+        supportsNativeDisplayWindow
+            && (vmModel.snapshot?.state == .running || vmModel.snapshot?.state == .starting)
     }
 
     private var canInstallGuestAgent: Bool {
@@ -711,17 +735,17 @@ private enum MainWindowChrome {
 }
 
 private struct StandaloneMainWindowRoot: View {
-    private let vmRuntimeBooter = QEMUVMRuntimeBooter.shared
+    private let vmRuntimeBooter: QEMUVMRuntimeBooter
     @State private var model: HostDashboardModel
-    @State private var vmModel = VMRuntimeModel(
-        service: LocalVMRuntimeService(bootRunner: QEMUVMRuntimeBooter.shared)
-    )
+    @State private var vmModel: VMRuntimeModel
     @State private var displayMessage: String?
 
     init() {
+        let runtimeBooter = AppRuntimeBooterFactory.make()
         let transport = URLSessionWebSocketTransport(
             url: URL(string: Self.agentURLString)!
         )
+        self.vmRuntimeBooter = runtimeBooter
         _model = State(
             initialValue: HostDashboardModel(
                 service: FallbackHostDashboardService(
@@ -729,6 +753,11 @@ private struct StandaloneMainWindowRoot: View {
                     fallback: DemoHostDashboardService(),
                     primaryEndpointDescription: Self.agentURLString
                 )
+            )
+        )
+        _vmModel = State(
+            initialValue: VMRuntimeModel(
+                service: LocalVMRuntimeService(bootRunner: runtimeBooter)
             )
         )
     }
@@ -764,7 +793,9 @@ private struct StandaloneMainWindowRoot: View {
             await vmModel.start()
 
             if vmModel.snapshot?.state == .running || vmModel.snapshot?.state == .starting {
-                displayMessage = "Windows is running. The current QEMU display is a temporary native window until embedded display lands."
+                displayMessage = vmRuntimeBooter.supportsNativeDisplayWindow
+                    ? "Windows is running in the native QEMU display."
+                    : "Windows is running in single-window preview mode. Veil will refresh setup evidence inside this window."
             } else if let errorMessage = vmModel.errorMessage {
                 displayMessage = "Windows display could not start: \(errorMessage)"
             }

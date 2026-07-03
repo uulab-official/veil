@@ -11,10 +11,13 @@ Goal: move Veil from a Veil shell plus separate QEMU Cocoa display toward a UTM-
 - [x] Rename the temporary external display affordance to "Native QEMU Display" so it is clearly a fallback, not the target experience.
 - [x] Keep the main Veil window as the default place for runtime status, screenshots, app-frame proof, and app launch.
 - [x] Document that embedded display is the UTM-class target and QEMU Cocoa is temporary.
+- [x] Add a headless QEMU launch mode that rewrites app-started QEMU from `-display cocoa` to `-display none`.
+- [x] Make the macOS app use headless single-window preview mode by default, with `VEIL_USE_NATIVE_QEMU_DISPLAY=1` as the explicit native-window fallback.
+- [x] Record the display mode in QEMU launch diagnostics.
 
 ## Next
 
-- [ ] Add an embedded display provider spike that can render the QEMU guest surface inside the main SwiftUI/AppKit window.
+- [ ] Turn the current screenshot evidence refresh into a live embedded display provider inside the main SwiftUI/AppKit window.
 - [ ] Route pointer and keyboard input through the embedded display provider before demoting the native QEMU window completely.
 - [ ] Keep native QEMU display available only as an advanced recovery fallback.
 - [ ] Replace screenshot-only setup evidence with a live embedded installer surface.

@@ -962,7 +962,7 @@ public final class VMRuntimeModel {
 
         if canStart, var startingSnapshot = snapshot {
             startingSnapshot.state = .starting
-            startingSnapshot.detail = "Starting Windows setup. The VM Console window will open when the local display is attached."
+            startingSnapshot.detail = "Starting Windows setup. Veil keeps runtime status and setup evidence in the main window."
             snapshot = startingSnapshot
         }
 

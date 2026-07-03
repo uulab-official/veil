@@ -7,6 +7,7 @@ public struct QEMULaunchRecord: Codable, Equatable, Sendable {
     public var pid: Int32?
     public var executablePath: String
     public var arguments: [String]
+    public var displayMode: QEMUWindowsBootDisplayMode?
     public var processLogPath: String
     public var monitorSocketPath: String
     public var qmpSocketPath: String?
@@ -20,6 +21,7 @@ public struct QEMULaunchRecord: Codable, Equatable, Sendable {
         pid: Int32?,
         executablePath: String,
         arguments: [String],
+        displayMode: QEMUWindowsBootDisplayMode? = .nativeCocoa,
         processLogPath: String,
         monitorSocketPath: String,
         qmpSocketPath: String? = nil,
@@ -32,6 +34,7 @@ public struct QEMULaunchRecord: Codable, Equatable, Sendable {
         self.pid = pid
         self.executablePath = executablePath
         self.arguments = arguments
+        self.displayMode = displayMode
         self.processLogPath = processLogPath
         self.monitorSocketPath = monitorSocketPath
         self.qmpSocketPath = qmpSocketPath
@@ -78,6 +81,7 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
     private let frontmostRunner: @Sendable () -> Void
     private let bootKeySender: @Sendable (URL) -> Bool
     private let consoleScreenshotCapturer: @Sendable (URL, URL) -> Void
+    private let displayMode: QEMUWindowsBootDisplayMode
     private var process: Process?
     private var monitorSocketURL: URL?
     private var qmpSocketURL: URL?
@@ -89,7 +93,8 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
         processRunner: @escaping @Sendable (Process) throws -> Void = { try $0.run() },
         frontmostRunner: @escaping @Sendable () -> Void = QEMUVMRuntimeBooter.bringQEMUToFrontIfAllowed,
         bootKeySender: @escaping @Sendable (URL) -> Bool = QEMUVMRuntimeBooter.sendWindowsInstallerBootKey,
-        consoleScreenshotCapturer: @escaping @Sendable (URL, URL) -> Void = QEMUVMRuntimeBooter.captureConsoleScreenshot
+        consoleScreenshotCapturer: @escaping @Sendable (URL, URL) -> Void = QEMUVMRuntimeBooter.captureConsoleScreenshot,
+        displayMode: QEMUWindowsBootDisplayMode = .nativeCocoa
     ) {
         self.diagnosticsDirectory = diagnosticsDirectory
         self.planBuilder = planBuilder
@@ -98,6 +103,11 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
         self.frontmostRunner = frontmostRunner
         self.bootKeySender = bootKeySender
         self.consoleScreenshotCapturer = consoleScreenshotCapturer
+        self.displayMode = displayMode
+    }
+
+    public var supportsNativeDisplayWindow: Bool {
+        displayMode == .nativeCocoa
     }
 
     public func runtimeState() async -> VMRuntimeState? {
@@ -110,7 +120,9 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
 
     public func start(profile: VMProfile) async throws -> VMRuntimeState {
         if process?.isRunning == true {
-            frontmostRunner()
+            if displayMode == .nativeCocoa {
+                frontmostRunner()
+            }
             return .running
         }
 
@@ -142,7 +154,8 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
             serialLogPath: serialLogURL.path,
             monitorSocketPath: monitorSocketURL.path,
             qmpSocketPath: qmpSocketURL.path,
-            bootDiskFirst: !shouldSendInstallerBootKey
+            bootDiskFirst: !shouldSendInstallerBootKey,
+            displayMode: displayMode
         )
         process.standardOutput = logHandle
         process.standardError = logHandle
@@ -192,7 +205,7 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
     }
 
     public func showConsoleIfRunning() -> Bool {
-        guard process?.isRunning == true else {
+        guard displayMode == .nativeCocoa, process?.isRunning == true else {
             return false
         }
 
@@ -239,6 +252,7 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
             pid: pid,
             executablePath: plan.executablePath,
             arguments: arguments,
+            displayMode: displayMode,
             processLogPath: processLogURL.path,
             monitorSocketPath: monitorSocketURL.path,
             qmpSocketPath: qmpSocketURL.path,
