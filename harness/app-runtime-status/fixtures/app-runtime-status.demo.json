@@ -72,7 +72,8 @@
     "canOpenMainWindow": true,
     "canRestorePreviousApps": false,
     "isEnabled": true,
-    "openWindowCount": 0
+    "openWindowCount": 0,
+    "pendingLaunchCount": 0
   },
   "macWindowIntegration": {
     "acceptsGuestWindowEvents": false,

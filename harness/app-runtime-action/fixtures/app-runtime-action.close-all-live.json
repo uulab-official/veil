@@ -58,6 +58,7 @@
     "dockIntegration": {
       "isEnabled": true,
       "openWindowCount": 0,
+      "pendingLaunchCount": 0,
       "canOpenMainWindow": true,
       "canBringWindowsAppsForward": false,
       "canRestorePreviousApps": false,

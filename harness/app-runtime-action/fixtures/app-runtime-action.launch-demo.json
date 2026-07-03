@@ -63,6 +63,7 @@
     "dockIntegration": {
       "isEnabled": true,
       "openWindowCount": 1,
+      "pendingLaunchCount": 0,
       "badgeLabel": "1",
       "canOpenMainWindow": true,
       "canBringWindowsAppsForward": true,

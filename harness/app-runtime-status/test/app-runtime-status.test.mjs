@@ -94,6 +94,24 @@ test("rejects Dock integration counts that drift from mirrored sessions", () => 
   );
 });
 
+test("rejects Dock integration pending launch count drift", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.demo.json", import.meta.url), "utf8"));
+  report.pendingLaunchAppId = "winapp_notepad";
+  report.pendingLaunch.isQueued = true;
+  report.pendingLaunch.appId = "winapp_notepad";
+  report.pendingLaunch.willLaunchOnAgentReconnect = true;
+  report.pendingLaunch.recommendedAction = "auto-launch-on-agent-reconnect";
+  report.launchPlan.pendingLaunchAppId = "winapp_notepad";
+  report.launchPlan.recommendedAction = "start-runtime-for-pending-launch";
+  report.launchPlan.recommendedLaunchCommand = "veil-vmctl app-runtime-action --json --action fulfill-pending";
+  report.launchPlan.reason = "The selected app launch is queued until Windows starts and the guest agent connects.";
+
+  assert.throws(
+    () => validateAppRuntimeStatus(report),
+    /pendingLaunchCount/
+  );
+});
+
 test("rejects quiet runtime counts that drift from mirrored sessions", () => {
   const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.demo.json", import.meta.url), "utf8"));
   report.quietRuntime.openWindowCount = 1;
@@ -144,6 +162,8 @@ test("rejects queued pending launch status without matching app id", () => {
   report.pendingLaunch.appId = "winapp_calculator";
   report.pendingLaunch.willLaunchOnAgentReconnect = true;
   report.pendingLaunch.recommendedAction = "auto-launch-on-agent-reconnect";
+  report.dockIntegration.pendingLaunchCount = 1;
+  report.dockIntegration.badgeLabel = "...";
   report.launchPlan.pendingLaunchAppId = "winapp_notepad";
   report.launchPlan.recommendedAction = "start-runtime-for-pending-launch";
   report.launchPlan.recommendedLaunchCommand = "veil-vmctl app-runtime-action --json --action fulfill-pending";
@@ -162,6 +182,8 @@ test("rejects queued pending launch plans without fulfill-pending recovery", () 
   report.pendingLaunch.appId = "winapp_notepad";
   report.pendingLaunch.willLaunchOnAgentReconnect = true;
   report.pendingLaunch.recommendedAction = "auto-launch-on-agent-reconnect";
+  report.dockIntegration.pendingLaunchCount = 1;
+  report.dockIntegration.badgeLabel = "...";
   report.launchPlan.pendingLaunchAppId = "winapp_notepad";
   report.launchPlan.recommendedAction = "start-runtime-for-pending-launch";
   report.launchPlan.reason = "The selected app launch is queued until Windows starts and the guest agent connects.";
@@ -209,6 +231,7 @@ test("rejects fulfill-pending action availability that drifts from queued launch
   };
   report.launchPlan.pendingLaunchAppId = "winapp_notepad";
   report.launchPlan.recommendedAction = "fulfill-pending-now";
+  report.dockIntegration.pendingLaunchCount = 1;
   report.launchPlan.recommendedLaunchCommand = "veil-vmctl app-runtime-action --json --action fulfill-pending";
   report.launchPlan.reason = "The live Windows agent can fulfill the queued app launch now.";
 

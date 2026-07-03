@@ -185,6 +185,7 @@ public struct WindowsAppRuntimeActionStatus: Codable, Equatable, Sendable {
 public struct WindowsAppRuntimeDockIntegrationStatus: Codable, Equatable, Sendable {
     public var isEnabled: Bool
     public var openWindowCount: Int
+    public var pendingLaunchCount: Int
     public var badgeLabel: String?
     public var canOpenMainWindow: Bool
     public var canBringWindowsAppsForward: Bool
@@ -194,6 +195,7 @@ public struct WindowsAppRuntimeDockIntegrationStatus: Codable, Equatable, Sendab
     public init(
         isEnabled: Bool,
         openWindowCount: Int,
+        pendingLaunchCount: Int,
         badgeLabel: String?,
         canOpenMainWindow: Bool,
         canBringWindowsAppsForward: Bool,
@@ -202,6 +204,7 @@ public struct WindowsAppRuntimeDockIntegrationStatus: Codable, Equatable, Sendab
     ) {
         self.isEnabled = isEnabled
         self.openWindowCount = openWindowCount
+        self.pendingLaunchCount = pendingLaunchCount
         self.badgeLabel = badgeLabel
         self.canOpenMainWindow = canOpenMainWindow
         self.canBringWindowsAppsForward = canBringWindowsAppsForward
@@ -585,7 +588,8 @@ public final class HostDashboardModel {
             dockIntegration: WindowsAppRuntimeDockIntegrationStatus(
                 isEnabled: true,
                 openWindowCount: mirrorSessions.count,
-                badgeLabel: mirrorSessions.isEmpty ? nil : "\(mirrorSessions.count)",
+                pendingLaunchCount: pendingLaunch.isQueued ? 1 : 0,
+                badgeLabel: dockBadgeLabel(pendingLaunch: pendingLaunch),
                 canOpenMainWindow: true,
                 canBringWindowsAppsForward: !mirrorSessions.isEmpty,
                 canRestorePreviousApps: canRestoreMirrorSessions,
@@ -683,6 +687,18 @@ public final class HostDashboardModel {
             recommendedAction: "select-supported-app",
             reason: "The queued Windows app is not available in the current app catalog."
         )
+    }
+
+    private func dockBadgeLabel(pendingLaunch: WindowsAppRuntimePendingLaunchStatus) -> String? {
+        if !mirrorSessions.isEmpty {
+            return "\(mirrorSessions.count)"
+        }
+
+        if pendingLaunch.isQueued {
+            return "..."
+        }
+
+        return nil
     }
 
     public func launchPlanStatus() -> WindowsAppRuntimeLaunchPlanStatus {

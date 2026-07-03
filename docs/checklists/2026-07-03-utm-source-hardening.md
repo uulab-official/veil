@@ -79,3 +79,4 @@ Goal: adapt concrete UTM source patterns into Veil while keeping Veil focused on
 - [x] Wire pending-launch fulfillment into the macOS app button, menu bar menu, Dock menu, and command shortcut so reconnect recovery feels app-first instead of VM-first.
 - [x] Replace installed-runtime hero progress with an app-runtime flow strip for Windows, guest agent, and app window readiness so pending launches read as "opening app" rather than generic VM state.
 - [x] Keep queued app handoff visible when Windows is already running or starting but the guest agent is not connected, with a clear "waiting for guest agent" app-first status.
+- [x] Extend Dock integration status and badge behavior so a queued Windows app launch remains visible in the Dock before any mirrored HWND exists.

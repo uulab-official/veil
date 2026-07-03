@@ -113,6 +113,7 @@ test("rejects accepted fulfill-pending actions that leave pending launch queued"
   };
   report.status.launchPlan.pendingLaunchAppId = "winapp_notepad";
   report.status.launchPlan.recommendedLaunchCommand = "veil-vmctl app-runtime-action --json --action fulfill-pending";
+  report.status.dockIntegration.pendingLaunchCount = 1;
   report.status.actions.find((action) => action.id === "runtime.fulfillPendingLaunch").isAvailable = true;
   report.launchPlan.pendingLaunchAppId = "winapp_notepad";
   report.launchPlan.recommendedLaunchCommand = "veil-vmctl app-runtime-action --json --action fulfill-pending";

@@ -30,7 +30,7 @@ export function validateAppRuntimeStatus(report) {
   validatePendingLaunch(report.pendingLaunch, report);
   validateMirrorSessions(report.mirrorSessions);
   validateStringArray(report.restorableAppIds, "restorableAppIds");
-  validateDockIntegration(report.dockIntegration, report.mirrorSessions);
+  validateDockIntegration(report.dockIntegration, report.mirrorSessions, report);
   validateMacWindowIntegration(report.macWindowIntegration, report.mirrorSessions, report.connection);
   validateQuietRuntime(report.quietRuntime, report.mirrorSessions);
   validateLaunchPlan(report.launchPlan, report);
@@ -342,13 +342,14 @@ function validateLaunchPlan(launchPlan, report) {
   }
 }
 
-function validateDockIntegration(dockIntegration, mirrorSessions) {
+function validateDockIntegration(dockIntegration, mirrorSessions, report) {
   if (!dockIntegration || typeof dockIntegration !== "object" || Array.isArray(dockIntegration)) {
     throw new TypeError("dockIntegration must be an object.");
   }
 
   requireBoolean(dockIntegration.isEnabled, "dockIntegration.isEnabled");
   requireNonNegativeInteger(dockIntegration.openWindowCount, "dockIntegration.openWindowCount");
+  requireNonNegativeInteger(dockIntegration.pendingLaunchCount, "dockIntegration.pendingLaunchCount");
   requireBoolean(dockIntegration.canOpenMainWindow, "dockIntegration.canOpenMainWindow");
   requireBoolean(dockIntegration.canBringWindowsAppsForward, "dockIntegration.canBringWindowsAppsForward");
   requireBoolean(dockIntegration.canRestorePreviousApps, "dockIntegration.canRestorePreviousApps");
@@ -358,14 +359,26 @@ function validateDockIntegration(dockIntegration, mirrorSessions) {
     throw new TypeError("dockIntegration.openWindowCount must match mirrorSessions length.");
   }
 
-  if (dockIntegration.openWindowCount === 0 && dockIntegration.badgeLabel !== undefined) {
-    throw new TypeError("dockIntegration.badgeLabel must be omitted when no Windows app windows are open.");
+  const expectedPendingLaunchCount = report.pendingLaunch.isQueued ? 1 : 0;
+  if (dockIntegration.pendingLaunchCount !== expectedPendingLaunchCount) {
+    throw new TypeError("dockIntegration.pendingLaunchCount must reflect queued pending launch state.");
+  }
+
+  if (dockIntegration.openWindowCount === 0 && dockIntegration.pendingLaunchCount === 0 && dockIntegration.badgeLabel !== undefined) {
+    throw new TypeError("dockIntegration.badgeLabel must be omitted when no Windows app windows or pending launches exist.");
   }
 
   if (dockIntegration.openWindowCount > 0) {
     requireString(dockIntegration.badgeLabel, "dockIntegration.badgeLabel");
     if (dockIntegration.badgeLabel !== String(dockIntegration.openWindowCount)) {
       throw new TypeError("dockIntegration.badgeLabel must match openWindowCount.");
+    }
+  }
+
+  if (dockIntegration.openWindowCount === 0 && dockIntegration.pendingLaunchCount > 0) {
+    requireString(dockIntegration.badgeLabel, "dockIntegration.badgeLabel");
+    if (dockIntegration.badgeLabel !== "...") {
+      throw new TypeError("dockIntegration.badgeLabel must show pending app launch progress.");
     }
   }
 
