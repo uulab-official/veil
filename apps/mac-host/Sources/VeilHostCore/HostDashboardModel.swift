@@ -111,6 +111,7 @@ public struct WindowsAppRuntimeConnectionStatus: Codable, Equatable, Sendable {
     public var hasLiveAgentConnection: Bool
     public var agentVersion: String?
     public var os: String?
+    public var capabilities: AgentCapabilities?
     public var connectionDetail: String?
 
     public init(
@@ -118,12 +119,14 @@ public struct WindowsAppRuntimeConnectionStatus: Codable, Equatable, Sendable {
         hasLiveAgentConnection: Bool,
         agentVersion: String?,
         os: String?,
+        capabilities: AgentCapabilities? = nil,
         connectionDetail: String?
     ) {
         self.mode = mode
         self.hasLiveAgentConnection = hasLiveAgentConnection
         self.agentVersion = agentVersion
         self.os = os
+        self.capabilities = capabilities
         self.connectionDetail = connectionDetail
     }
 }
@@ -534,6 +537,21 @@ public final class HostDashboardModel {
         hasLiveAgentConnection && health?.capabilities.clipboardText == true
     }
 
+    public var canRunAppWindowProof: Bool {
+        guard let selectedAppId else {
+            return false
+        }
+
+        return canLaunchApp(appId: selectedAppId)
+            && health?.capabilities.windowCapture == true
+    }
+
+    public var canRunCoherenceProof: Bool {
+        canRunAppWindowProof
+            && health?.capabilities.input == true
+            && health?.capabilities.clipboardText == true
+    }
+
     public var canRestoreMirrorSessions: Bool {
         hasLiveAgentConnection
             && !restorableAppIds.isEmpty
@@ -603,6 +621,7 @@ public final class HostDashboardModel {
                 hasLiveAgentConnection: hasLiveAgentConnection,
                 agentVersion: health?.agentVersion,
                 os: health?.os,
+                capabilities: hasLiveAgentConnection ? health?.capabilities : nil,
                 connectionDetail: connectionDetail
             ),
             apps: apps.map { app in
@@ -684,6 +703,21 @@ public final class HostDashboardModel {
                     id: "runtime.stopWhenIdle",
                     title: "Stop Runtime When Idle",
                     isAvailable: quietRuntime.canQuietRuntime
+                ),
+                WindowsAppRuntimeActionStatus(
+                    id: "proof.appWindow",
+                    title: "Run App Window Proof",
+                    isAvailable: canRunAppWindowProof
+                ),
+                WindowsAppRuntimeActionStatus(
+                    id: "proof.coherence",
+                    title: "Run Coherence Proof",
+                    isAvailable: canRunCoherenceProof
+                ),
+                WindowsAppRuntimeActionStatus(
+                    id: "proof.mvp",
+                    title: "Run MVP Proof",
+                    isAvailable: canRunCoherenceProof
                 ),
                 WindowsAppRuntimeActionStatus(
                     id: "clipboard.setText",

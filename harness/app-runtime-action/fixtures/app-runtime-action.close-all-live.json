@@ -37,7 +37,15 @@
       "mode": "agent",
       "hasLiveAgentConnection": true,
       "agentVersion": "0.1.0",
-      "os": "windows-arm64"
+      "os": "windows-arm64",
+      "capabilities": {
+        "appList": true,
+        "appLaunch": true,
+        "windowTracking": true,
+        "windowCapture": true,
+        "input": true,
+        "clipboardText": true
+      }
     },
     "dockIntegration": {
       "isEnabled": true,
@@ -148,6 +156,21 @@
       {
         "id": "runtime.stopWhenIdle",
         "title": "Stop Runtime When Idle",
+        "isAvailable": true
+      },
+      {
+        "id": "proof.appWindow",
+        "title": "Run App Window Proof",
+        "isAvailable": true
+      },
+      {
+        "id": "proof.coherence",
+        "title": "Run Coherence Proof",
+        "isAvailable": true
+      },
+      {
+        "id": "proof.mvp",
+        "title": "Run MVP Proof",
         "isAvailable": true
       },
       {

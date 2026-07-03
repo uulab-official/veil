@@ -184,6 +184,21 @@
         "isAvailable": false
       },
       {
+        "id": "proof.appWindow",
+        "title": "Run App Window Proof",
+        "isAvailable": false
+      },
+      {
+        "id": "proof.coherence",
+        "title": "Run Coherence Proof",
+        "isAvailable": false
+      },
+      {
+        "id": "proof.mvp",
+        "title": "Run MVP Proof",
+        "isAvailable": false
+      },
+      {
         "id": "clipboard.setText",
         "title": "Set Windows Clipboard Text",
         "isAvailable": false

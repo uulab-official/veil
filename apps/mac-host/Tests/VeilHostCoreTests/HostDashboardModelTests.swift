@@ -466,6 +466,9 @@ struct HostDashboardModelTests {
         #expect(report.connection.mode == .agent)
         #expect(report.connection.hasLiveAgentConnection)
         #expect(report.connection.agentVersion == "0.1.0")
+        #expect(report.connection.capabilities?.windowCapture == true)
+        #expect(report.connection.capabilities?.input == true)
+        #expect(report.connection.capabilities?.clipboardText == true)
         #expect(report.apps.map(\.id) == ["winapp_notepad"])
         #expect(report.apps.map(\.canRequestLaunch) == [true])
         #expect(report.apps.map(\.canLaunchNow) == [true])
@@ -521,6 +524,9 @@ struct HostDashboardModelTests {
         #expect(report.actions.first { $0.id == "runtime.fulfillPendingLaunch" }?.isAvailable == false)
         #expect(report.actions.first { $0.id == "runtime.quietWhenIdle" }?.isAvailable == false)
         #expect(report.actions.first { $0.id == "runtime.stopWhenIdle" }?.isAvailable == false)
+        #expect(report.actions.first { $0.id == "proof.appWindow" }?.isAvailable == true)
+        #expect(report.actions.first { $0.id == "proof.coherence" }?.isAvailable == true)
+        #expect(report.actions.first { $0.id == "proof.mvp" }?.isAvailable == true)
     }
 
     @Test("reports quiet runtime readiness after the final Windows app window closes")
@@ -552,6 +558,9 @@ struct HostDashboardModelTests {
         #expect(report.launcherVisibility.recommendedAction == "show-launcher")
         #expect(report.actions.first { $0.id == "runtime.quietWhenIdle" }?.isAvailable == true)
         #expect(report.actions.first { $0.id == "runtime.stopWhenIdle" }?.isAvailable == true)
+        #expect(report.actions.first { $0.id == "proof.appWindow" }?.isAvailable == true)
+        #expect(report.actions.first { $0.id == "proof.coherence" }?.isAvailable == false)
+        #expect(report.actions.first { $0.id == "proof.mvp" }?.isAvailable == false)
     }
 
     @Test("updates active window sessions by HWND")

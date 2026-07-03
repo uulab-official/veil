@@ -69,6 +69,7 @@ Goal: adapt concrete UTM source patterns into Veil while keeping Veil focused on
 - [x] Add `close-all` to `app-runtime-action` so Dock/menu close-all behavior proves all mirrored HWNDs are closed and quiet-runtime readiness is visible.
 - [x] Add `quietRuntime.recommendedStopCommand` so automation can move from closed Windows app windows to the bounded app-runtime stop command without guessing the low-level QEMU command.
 - [x] Add `runtime.stopWhenIdle` to the status action list so automation can distinguish quiet-readiness from the actual stop-runtime command availability.
+- [x] Add live `connection.capabilities` plus `proof.appWindow`, `proof.coherence`, and `proof.mvp` action gates so proof runs are enabled only when the guest agent can support them.
 - [x] Add `launchPlan` to `app-runtime-status` so app-first launch automation can prove when Veil must start Windows, wait for the guest agent, and replay the selected app launch.
 - [x] Make real `app-runtime-action launch` queue a pending app launch instead of returning a fake demo HWND when the Windows guest agent is unavailable.
 - [x] Keep `FallbackHostDashboardService` demo fallback limited to overview metadata so live app launches cannot turn network failures into fake mirrored windows.

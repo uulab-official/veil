@@ -100,6 +100,10 @@ same status includes `recommendedStopCommand` so automation can hand off to the
 bounded local runtime shutdown command without guessing. The `actions` list
 also exposes `runtime.stopWhenIdle` so callers can gate the actual stop command
 from the same app-runtime status contract.
+When a live agent is connected, `connection.capabilities` mirrors the agent's
+app launch, window capture, input, and clipboard support. The proof actions
+`proof.appWindow`, `proof.coherence`, and `proof.mvp` are available only when
+those capabilities can support the matching proof command.
 
 ```bash
 cd apps/mac-host

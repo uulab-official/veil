@@ -282,6 +282,47 @@ test("rejects stop action availability that drifts from quiet runtime readiness"
   );
 });
 
+test("rejects live agent reports without structured capabilities", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.mac-window-live.json", import.meta.url), "utf8"));
+  delete report.connection.capabilities.windowCapture;
+
+  assert.throws(
+    () => validateAppRuntimeStatus(report),
+    /connection\.capabilities\.windowCapture/
+  );
+});
+
+test("rejects proof action availability that drifts from capture readiness", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.mac-window-live.json", import.meta.url), "utf8"));
+  report.connection.capabilities.windowCapture = false;
+
+  assert.throws(
+    () => validateAppRuntimeStatus(report),
+    /proof\.appWindow/
+  );
+});
+
+test("rejects coherence proof availability that drifts from input readiness", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.mac-window-live.json", import.meta.url), "utf8"));
+  report.connection.capabilities.input = false;
+  report.actions.find((action) => action.id === "proof.mvp").isAvailable = false;
+
+  assert.throws(
+    () => validateAppRuntimeStatus(report),
+    /proof\.coherence/
+  );
+});
+
+test("rejects MVP proof availability that drifts from coherence readiness", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.mac-window-live.json", import.meta.url), "utf8"));
+  report.actions.find((action) => action.id === "proof.mvp").isAvailable = false;
+
+  assert.throws(
+    () => validateAppRuntimeStatus(report),
+    /proof\.mvp/
+  );
+});
+
 test("rejects launcher hiding without live mirrored windows", () => {
   const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.demo.json", import.meta.url), "utf8"));
   report.macWindowIntegration.hidesLauncherWhenMirroring = true;

@@ -77,6 +77,23 @@ function validateConnection(connection) {
   if (connection.connectionDetail !== undefined) {
     requireString(connection.connectionDetail, "connection.connectionDetail");
   }
+
+  if (connection.capabilities !== undefined) {
+    validateCapabilities(connection.capabilities);
+    if (!connection.hasLiveAgentConnection) {
+      throw new TypeError("connection.capabilities is only allowed when a live agent is connected.");
+    }
+  }
+}
+
+function validateCapabilities(capabilities) {
+  if (!capabilities || typeof capabilities !== "object" || Array.isArray(capabilities)) {
+    throw new TypeError("connection.capabilities must be an object.");
+  }
+
+  for (const field of ["appList", "appLaunch", "windowTracking", "windowCapture", "input", "clipboardText"]) {
+    requireBoolean(capabilities[field], `connection.capabilities.${field}`);
+  }
 }
 
 function validateApps(apps) {
@@ -462,6 +479,9 @@ function validateActions(actions, report) {
     "runtime.fulfillPendingLaunch",
     "runtime.quietWhenIdle",
     "runtime.stopWhenIdle",
+    "proof.appWindow",
+    "proof.coherence",
+    "proof.mvp",
     "clipboard.setText"
   ]) {
     if (!actionIds.has(requiredAction)) {
@@ -501,6 +521,30 @@ function validateActions(actions, report) {
   const stopWhenIdleAction = actions.find((action) => action.id === "runtime.stopWhenIdle");
   if (stopWhenIdleAction.isAvailable !== report.quietRuntime.canQuietRuntime) {
     throw new TypeError("runtime.stopWhenIdle availability must match quietRuntime.canQuietRuntime.");
+  }
+
+  const selectedApp = report.apps.find((app) => app.id === report.selectedAppId);
+  const capabilities = report.connection.capabilities;
+  const canRunAppWindowProof = report.connection.hasLiveAgentConnection
+    && selectedApp?.canLaunchNow === true
+    && capabilities?.windowCapture === true;
+  const canRunCoherenceProof = canRunAppWindowProof
+    && capabilities?.input === true
+    && capabilities?.clipboardText === true;
+
+  const appWindowProofAction = actions.find((action) => action.id === "proof.appWindow");
+  if (appWindowProofAction.isAvailable !== canRunAppWindowProof) {
+    throw new TypeError("proof.appWindow availability must match live app launch and window capture readiness.");
+  }
+
+  const coherenceProofAction = actions.find((action) => action.id === "proof.coherence");
+  if (coherenceProofAction.isAvailable !== canRunCoherenceProof) {
+    throw new TypeError("proof.coherence availability must match input and clipboard proof readiness.");
+  }
+
+  const mvpProofAction = actions.find((action) => action.id === "proof.mvp");
+  if (mvpProofAction.isAvailable !== canRunCoherenceProof) {
+    throw new TypeError("proof.mvp availability must match coherence proof readiness.");
   }
 }
 
