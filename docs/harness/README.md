@@ -126,7 +126,10 @@ common post-desktop recovery path: it opens the Windows Run dialog, finds the
 attached `VEIL_AUTO` media by volume label, and runs
 `Veil Guest Agent\scripts\Bootstrap-VeilAgentFromMedia.ps1` with
 `-ExecutionPolicy Bypass`. Use it only when the Windows desktop is visible in
-the console and the host probe still reports the guest agent unavailable.
+the console and the host probe still reports the guest agent unavailable. The
+macOS host shell uses the same Core key-sequence sender for its Install Guest
+Agent button and menu bar item, so CLI and GUI recovery stay on the same
+bounded QMP/HMP path.
 
 `veil-vmctl qemu-click [--json] --x <0...32767> --y <0...32767>` sends a bounded
 absolute left-click through QMP `input-send-event`. It is intended for

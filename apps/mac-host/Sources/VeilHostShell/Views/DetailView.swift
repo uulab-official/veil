@@ -8,6 +8,7 @@ struct DetailView: View {
     var startVMAction: () -> Void
     var stopVMAction: () -> Void
     var showVMConsoleAction: () -> Void
+    var installGuestAgentAction: () -> Void
     var launchWindowsAppAction: () -> Void
     var consoleMessage: String?
 
@@ -19,6 +20,7 @@ struct DetailView: View {
                 startVMAction: startVMAction,
                 stopVMAction: stopVMAction,
                 showVMConsoleAction: showVMConsoleAction,
+                installGuestAgentAction: installGuestAgentAction,
                 consoleMessage: consoleMessage
             )
             .padding(6)

@@ -42,6 +42,7 @@ struct VeilHostShellApp: App {
                 startVMAction: startVMAndShowConsole,
                 stopVMAction: stopVMAndCloseConsole,
                 showVMConsoleAction: showVMConsole,
+                installGuestAgentAction: installGuestAgentFromConsole,
                 launchWindowsAppAction: launchSelectedWindowsAppWindow,
                 consoleMessage: consoleMessage
             )
@@ -114,6 +115,12 @@ struct VeilHostShellApp: App {
                 .keyboardShortcut("b", modifiers: [.command, .shift])
                 .disabled(!canShowVMConsole)
 
+                Button("Install Guest Agent") {
+                    installGuestAgentFromConsole()
+                }
+                .keyboardShortcut("i", modifiers: [.command, .shift])
+                .disabled(!canInstallGuestAgent)
+
                 Button("Open Windows App Window") {
                     launchSelectedWindowsAppWindow()
                 }
@@ -128,6 +135,7 @@ struct VeilHostShellApp: App {
                 startVMAction: startVMAndShowConsole,
                 stopVMAction: stopVMAndCloseConsole,
                 showVMConsoleAction: showVMConsole,
+                installGuestAgentAction: installGuestAgentFromConsole,
                 refreshRuntimeAction: refreshRuntime
             )
         }
@@ -335,6 +343,21 @@ struct VeilHostShellApp: App {
         }
     }
 
+    private func installGuestAgentFromConsole() {
+        Task { @MainActor in
+            activateMainWindow()
+            consoleMessage = "Sending the Veil guest agent installer to Windows."
+            do {
+                _ = try await vmRuntimeBooter.installGuestAgentFromAttachedMedia()
+                consoleMessage = "Guest agent installer sent. Veil will connect when the Windows agent starts."
+                await vmModel.refreshRuntimeEvidence()
+                await recordGuestAgentInstallEvidenceIfNeeded()
+            } catch {
+                consoleMessage = "Guest agent install could not start: \(userMessage(for: error))"
+            }
+        }
+    }
+
     private func refreshRuntime() {
         Task {
             await vmModel.load()
@@ -351,6 +374,10 @@ struct VeilHostShellApp: App {
         vmModel.snapshot?.state == .running || vmModel.snapshot?.state == .starting
     }
 
+    private var canInstallGuestAgent: Bool {
+        canShowVMConsole && vmModel.snapshot?.installEvidence.kind != .guestAgent
+    }
+
     private var menuBarSymbolName: String {
         switch vmModel.snapshot?.state {
         case .running:
@@ -362,6 +389,15 @@ struct VeilHostShellApp: App {
         default:
             "play.rectangle"
         }
+    }
+
+    private func userMessage(for error: any Error) -> String {
+        if let localized = error as? LocalizedError,
+           let description = localized.errorDescription {
+            return description
+        }
+
+        return error.localizedDescription
     }
 }
 
@@ -408,6 +444,7 @@ private struct VeilMenuBarMenu: View {
     var startVMAction: () -> Void
     var stopVMAction: () -> Void
     var showVMConsoleAction: () -> Void
+    var installGuestAgentAction: () -> Void
     var refreshRuntimeAction: () -> Void
 
     var body: some View {
@@ -428,6 +465,12 @@ private struct VeilMenuBarMenu: View {
             showVMConsoleAction()
         }
         .disabled(!canShowVMConsole)
+
+        Button("Install Guest Agent", systemImage: "person.crop.circle.badge.plus") {
+            openMainWindow()
+            installGuestAgentAction()
+        }
+        .disabled(!canInstallGuestAgent)
 
         Button("Stop Windows", systemImage: "stop.fill") {
             openMainWindow()
@@ -451,6 +494,10 @@ private struct VeilMenuBarMenu: View {
 
     private var canShowVMConsole: Bool {
         vmModel.snapshot?.state == .running || vmModel.snapshot?.state == .starting
+    }
+
+    private var canInstallGuestAgent: Bool {
+        canShowVMConsole && vmModel.snapshot?.installEvidence.kind != .guestAgent
     }
 
     private func openMainWindow() {
@@ -569,6 +616,7 @@ private struct StandaloneMainWindowRoot: View {
             startVMAction: startVMAndShowConsole,
             stopVMAction: stopVMAndCloseConsole,
             showVMConsoleAction: showVMConsole,
+            installGuestAgentAction: installGuestAgentFromConsole,
             launchWindowsAppAction: launchSelectedWindowsApp,
             consoleMessage: consoleMessage
         )
@@ -619,6 +667,20 @@ private struct StandaloneMainWindowRoot: View {
         }
     }
 
+    private func installGuestAgentFromConsole() {
+        Task { @MainActor in
+            consoleMessage = "Sending the Veil guest agent installer to Windows."
+            do {
+                _ = try await vmRuntimeBooter.installGuestAgentFromAttachedMedia()
+                consoleMessage = "Guest agent installer sent. Veil will connect when the Windows agent starts."
+                await vmModel.refreshRuntimeEvidence()
+                await recordGuestAgentInstallEvidenceIfNeeded()
+            } catch {
+                consoleMessage = "Guest agent install could not start: \(userMessage(for: error))"
+            }
+        }
+    }
+
     private func launchSelectedWindowsApp() {
         Task { @MainActor in
             await model.launchSelectedApp()
@@ -634,5 +696,14 @@ private struct StandaloneMainWindowRoot: View {
         }
 
         await vmModel.markGuestAgentConnected(agentVersion: agentVersion)
+    }
+
+    private func userMessage(for error: any Error) -> String {
+        if let localized = error as? LocalizedError,
+           let description = localized.errorDescription {
+            return description
+        }
+
+        return error.localizedDescription
     }
 }

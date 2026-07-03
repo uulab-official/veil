@@ -7,6 +7,7 @@ struct ContentView: View {
     var startVMAction: () -> Void
     var stopVMAction: () -> Void
     var showVMConsoleAction: () -> Void
+    var installGuestAgentAction: () -> Void
     var launchWindowsAppAction: () -> Void
     var consoleMessage: String?
 
@@ -33,6 +34,7 @@ struct ContentView: View {
                     startVMAction: startVMAction,
                     stopVMAction: stopVMAction,
                     showVMConsoleAction: showVMConsoleAction,
+                    installGuestAgentAction: installGuestAgentAction,
                     launchWindowsAppAction: launchWindowsAppAction,
                     consoleMessage: consoleMessage
                 )

@@ -9,6 +9,7 @@ struct VMRuntimeView: View {
     var startVMAction: () -> Void
     var stopVMAction: () -> Void
     var showVMConsoleAction: () -> Void
+    var installGuestAgentAction: () -> Void
     var consoleMessage: String?
     @State private var pathPicker: PathPicker?
     @State private var showsAdvancedDetails = false
@@ -54,6 +55,7 @@ struct VMRuntimeView: View {
                         }
                     },
                     consoleAction: showVMConsoleAction,
+                    installGuestAgentAction: installGuestAgentAction,
                     refreshAction: {
                         Task {
                             await model.load()
@@ -1111,6 +1113,7 @@ private struct WindowsSetupDisplayPanel: View {
     var selectDriverAction: () -> Void
     var primaryAction: () -> Void
     var consoleAction: () -> Void
+    var installGuestAgentAction: () -> Void
     var refreshAction: () -> Void
     var detailsAction: () -> Void
     var isShowingDetails: Bool
@@ -1215,6 +1218,15 @@ private struct WindowsSetupDisplayPanel: View {
                     .labelStyle(.iconOnly)
             }
             .help("Details")
+
+            if canInstallGuestAgent {
+                Button(action: installGuestAgentAction) {
+                    Label("Install Agent", systemImage: "person.crop.circle.badge.plus")
+                        .labelStyle(.iconOnly)
+                }
+                .disabled(isLoading)
+                .help("Install Veil guest agent")
+            }
 
             Button(action: refreshAction) {
                 Label("Refresh", systemImage: "arrow.clockwise")
@@ -1410,6 +1422,15 @@ private struct WindowsSetupDisplayPanel: View {
             .disabled(isLoading)
             .help("Refresh")
 
+            if canInstallGuestAgent {
+                Button(action: installGuestAgentAction) {
+                    Label("Install Agent", systemImage: "person.crop.circle.badge.plus")
+                        .labelStyle(.iconOnly)
+                }
+                .disabled(isLoading)
+                .help("Install Veil guest agent")
+            }
+
             Button(action: detailsAction) {
                 Label(isShowingDetails ? "Hide Details" : "Details", systemImage: "slider.horizontal.3")
                     .labelStyle(.iconOnly)
@@ -1456,6 +1477,10 @@ private struct WindowsSetupDisplayPanel: View {
 
     private var effectiveInstallEvidence: VMInstallEvidenceSummary {
         guestAgentInstallEvidence ?? snapshot.installEvidence
+    }
+
+    private var canInstallGuestAgent: Bool {
+        canShowConsole && effectiveInstallEvidence.kind != .guestAgent
     }
 
     private var agentSummary: String {

@@ -200,6 +200,15 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
         return true
     }
 
+    public func installGuestAgentFromAttachedMedia() async throws -> QEMUKeySendRecord {
+        let sender = QEMUKeySequenceSender(
+            launchRecordStore: JSONQEMULaunchRecordStore(
+                directory: diagnosticsDirectory.appendingPathComponent("QEMU Launch", isDirectory: true)
+            )
+        )
+        return try await sender.send(steps: QEMUGuestAgentInstallKeySequence.steps)
+    }
+
     public static func makePlan(for profile: VMProfile) throws -> QEMUWindowsBootPlan {
         try LocalQEMUWindowsBootPlanFactory.makePlan(
             for: profile,

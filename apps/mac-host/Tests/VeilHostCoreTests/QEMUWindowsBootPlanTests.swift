@@ -927,6 +927,49 @@ struct QEMUWindowsBootPlanTests {
         #expect(keys.count < 2_048)
     }
 
+    @Test("QEMU key sequence sender prefers QMP when launch record has QMP socket")
+    func qemuKeySequenceSenderPrefersQMPWhenLaunchRecordHasQMPSocket() async throws {
+        let launchRecord = QEMULaunchRecord(
+            pid: 123,
+            executablePath: "/opt/homebrew/bin/qemu-system-aarch64",
+            arguments: [],
+            processLogPath: "/tmp/qemu.log",
+            monitorSocketPath: "/tmp/veil-monitor.sock",
+            qmpSocketPath: "/tmp/veil-qmp.sock",
+            startedAt: Date(timeIntervalSince1970: 1)
+        )
+        final class Capture: @unchecked Sendable {
+            var calls: [[String]] = []
+        }
+        let capture = Capture()
+        let sender = QEMUKeySequenceSender(
+            launchRecordStore: StaticQEMULaunchRecordStore(record: launchRecord),
+            fileExists: { $0 == "/tmp/veil-qmp.sock" },
+            processRunner: { executablePath, arguments in
+                capture.calls.append([executablePath] + arguments)
+                return 0
+            },
+            now: { Date(timeIntervalSince1970: 2) }
+        )
+
+        let record = try await sender.send(
+            steps: [
+                QEMUKeySequenceStep(key: "cmd-r", delayAfterSend: 0),
+                QEMUKeySequenceStep(key: "ret", delayAfterSend: 0)
+            ]
+        )
+
+        #expect(record.monitorSocketPath == "/tmp/veil-monitor.sock")
+        #expect(record.keys == ["cmd-r", "ret"])
+        #expect(record.sentAt == Date(timeIntervalSince1970: 2))
+        #expect(record.results.map(\.transport) == ["qmp", "qmp"])
+        #expect(record.results.allSatisfy { $0.socketPath == "/tmp/veil-qmp.sock" })
+        #expect(record.results.first?.monitorCommand.contains("input-send-event") == true)
+        #expect(record.results.first?.monitorCommand.contains("meta_l") == true)
+        #expect(capture.calls.count == 2)
+        #expect(capture.calls.first?.contains(QEMUQMPKeyboardCommandBuilder.capabilitiesCommand()) == true)
+    }
+
     @Test("QMP keyboard command builder rejects unsupported text")
     func qmpKeyboardCommandBuilderRejectsUnsupportedText() throws {
         #expect(throws: QEMUQMPKeyboardCommandError.unsupportedCharacter("한")) {
@@ -1152,4 +1195,12 @@ private func temporaryDirectory() throws -> URL {
         .appendingPathComponent(UUID().uuidString, isDirectory: true)
     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     return directory
+}
+
+private struct StaticQEMULaunchRecordStore: QEMULaunchRecordStore {
+    var record: QEMULaunchRecord?
+
+    func loadLatest() async throws -> QEMULaunchRecord? {
+        record
+    }
 }
