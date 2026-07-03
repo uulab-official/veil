@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
@@ -25,6 +26,35 @@ test("validates saved MVP proof path", () => {
   report.savedProofPath = "/Users/test/Library/Application Support/Veil/Diagnostics/MVP Proof/notepad-proof.json";
 
   assert.equal(validateMVPProof(report), report);
+});
+
+test("validates proved MVP proof in release mode", () => {
+  const report = readFixture("mvp-proof.proved.json");
+
+  assert.equal(validateMVPProof(report, { requireProved: true }), report);
+});
+
+test("rejects unavailable MVP proof in release mode", () => {
+  const report = readFixture("mvp-proof.unavailable.json");
+
+  assert.throws(
+    () => validateMVPProof(report, { requireProved: true }),
+    /status=proved/
+  );
+});
+
+test("CLI rejects unavailable MVP proof with require-proved", () => {
+  const result = spawnSync(
+    process.execPath,
+    [new URL("../src/validate-mvp-proof.mjs", import.meta.url).pathname, "--require-proved"],
+    {
+      input: readFileSync(new URL("../fixtures/mvp-proof.unavailable.json", import.meta.url)),
+      encoding: "utf8"
+    }
+  );
+
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /status=proved/);
 });
 
 test("rejects proved MVP proof without coherence evidence", () => {

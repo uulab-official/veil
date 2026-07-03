@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 
 const VALID_STATUSES = new Set(["proved", "unavailable"]);
 
-export function validateMVPProof(report) {
+export function validateMVPProof(report, options = {}) {
   if (!report || typeof report !== "object" || Array.isArray(report)) {
     throw new TypeError("MVP proof report must be a JSON object.");
   }
@@ -20,6 +20,9 @@ export function validateMVPProof(report) {
   requireString(report.status, "status");
   if (!VALID_STATUSES.has(report.status)) {
     throw new TypeError(`Unsupported MVP proof status: ${report.status}`);
+  }
+  if (options.requireProved === true && report.status !== "proved") {
+    throw new TypeError("MVP release proof requires status=proved.");
   }
   requireString(report.provedAt, "provedAt");
   if (Number.isNaN(Date.parse(report.provedAt))) {
@@ -206,7 +209,9 @@ function main() {
     throw new TypeError("Expected MVP proof JSON on stdin.");
   }
 
-  validateMVPProof(JSON.parse(input));
+  validateMVPProof(JSON.parse(input), {
+    requireProved: process.argv.includes("--require-proved")
+  });
   process.stdout.write("mvp proof valid\n");
 }
 

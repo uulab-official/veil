@@ -119,13 +119,14 @@ for Notepad.
 ```bash
 cd apps/mac-host
 proof="$HOME/Library/Application Support/Veil/Diagnostics/MVP Proof/notepad-proof.json"
-swift run veil-vmctl mvp-proof --json --app-id winapp_notepad --output "$proof" | node ../../harness/mvp-proof/src/validate-mvp-proof.mjs
-node ../../harness/mvp-proof/src/validate-mvp-proof.mjs < "$proof"
+swift run veil-vmctl mvp-proof --json --app-id winapp_notepad --output "$proof" | node ../../harness/mvp-proof/src/validate-mvp-proof.mjs --require-proved
+node ../../harness/mvp-proof/src/validate-mvp-proof.mjs --require-proved < "$proof"
 ```
 
 Use this before claiming the MVP loop is ready on a real Windows VM. If the
 agent is unavailable, the command returns recovery JSON instead of launching an
-app; the harness will reject that as a release proof.
+app; `--require-proved` rejects that recovery JSON as release proof. Omit
+`--require-proved` only when validating recovery-report shape.
 
 ## Guest Agent Wait Scenario
 
