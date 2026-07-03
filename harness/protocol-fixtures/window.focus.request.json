@@ -1,0 +1,5 @@
+{
+  "type": "window.focus.request",
+  "requestId": "req_focus_notepad",
+  "windowId": "hwnd:0003029A"
+}

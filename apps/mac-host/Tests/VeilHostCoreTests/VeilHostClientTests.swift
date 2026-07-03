@@ -344,6 +344,22 @@ struct VeilHostClientTests {
         #expect(response.accepted)
     }
 
+    @Test("sends a window focus request to the agent")
+    func sendsWindowFocusRequest() async throws {
+        let transport = RecordingTransport(responses: [
+            #"{"type":"window.focus.response","requestId":"req_focus_hwnd_0003029A","windowId":"hwnd:0003029A","accepted":true}"#
+        ])
+        let client = VeilHostClient(transport: transport)
+
+        let response = try await client.focusWindow(windowId: "hwnd:0003029A")
+
+        #expect(transport.sentTypes == ["window.focus.request"])
+        #expect(response.type == .windowFocusResponse)
+        #expect(response.requestId == "req_focus_hwnd_0003029A")
+        #expect(response.windowId == "hwnd:0003029A")
+        #expect(response.accepted)
+    }
+
     @Test("sends mouse input without waiting for a reply")
     func sendsMouseInputWithoutReply() async throws {
         let transport = RecordingTransport(responses: [])

@@ -5,6 +5,7 @@ public protocol HostDashboardService: Sendable {
     func loadOverview() async throws -> HostOverview
     func launchApp(appId: String) async throws -> WindowsAppLaunchResult
     func launchNotepad() async throws -> NotepadLaunchResult
+    func focusWindow(windowId: String) async throws -> WindowFocusResponse
     func closeWindow(windowId: String) async throws -> WindowCloseResponse
     func sendMouseInput(_ input: InputMouseEvent) async throws
     func sendKeyInput(_ input: InputKeyEvent) async throws
@@ -332,7 +333,11 @@ public final class HostDashboardModel {
     }
 
     public func canFocusMirrorSession(windowId: String) -> Bool {
-        mirrorSessions.contains { $0.id == windowId }
+        phase != .loading
+            && (
+                mirrorSessions.contains { $0.id == windowId }
+                    || activeWindows.contains { $0.windowId == windowId }
+            )
     }
 
     public func canCloseMirrorSession(windowId: String) -> Bool {
@@ -564,6 +569,35 @@ public final class HostDashboardModel {
             },
             receivedFrameCount: (priorTiming?.receivedFrameCount ?? 0) + 1
         )
+    }
+
+    @discardableResult
+    public func focusMirrorSession(windowId: String) async -> WindowFocusResponse? {
+        guard canFocusMirrorSession(windowId: windowId) else {
+            return nil
+        }
+
+        do {
+            let response: WindowFocusResponse
+            if hasLiveAgentConnection {
+                response = try await service.focusWindow(windowId: windowId)
+            } else {
+                response = WindowFocusResponse(
+                    requestId: "local_focus_window",
+                    windowId: windowId,
+                    accepted: true
+                )
+            }
+
+            if response.accepted {
+                markFocusedWindow(windowId: windowId)
+            }
+            return response
+        } catch {
+            errorMessage = userMessage(for: error)
+            phase = .failed
+            return nil
+        }
     }
 
     @discardableResult
@@ -803,6 +837,20 @@ public final class HostDashboardModel {
 
         mirrorSessions[index].window = window
         return true
+    }
+
+    private func markFocusedWindow(windowId: String) {
+        activeWindows = activeWindows.map { window in
+            var focusedWindow = window
+            focusedWindow.focused = window.windowId == windowId
+            return focusedWindow
+        }
+
+        mirrorSessions = mirrorSessions.map { session in
+            var focusedSession = session
+            focusedSession.window.focused = session.id == windowId
+            return focusedSession
+        }
     }
 
     private func removeWindowState(windowId: String) async {

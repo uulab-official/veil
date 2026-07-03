@@ -53,6 +53,7 @@ public sealed class AgentSession
             MessageTypes.AppLaunchRequest => await HandleAppLaunchAsync(request, requestId, cancellationToken),
             MessageTypes.WindowFrameSubscribe => HandleWindowFrameSubscribeAsync(request, requestId),
             MessageTypes.WindowFrameUnsubscribe => HandleWindowFrameUnsubscribeAsync(request, requestId),
+            MessageTypes.WindowFocusRequest => await HandleWindowFocusAsync(request, requestId, cancellationToken),
             MessageTypes.WindowCloseRequest => await HandleWindowCloseAsync(request, requestId, cancellationToken),
             MessageTypes.InputMouse => await HandleMouseInputAsync(request, requestId, cancellationToken),
             MessageTypes.InputKey => await HandleKeyInputAsync(request, requestId, cancellationToken),
@@ -127,6 +128,34 @@ public sealed class AgentSession
             BroadcastEvents: Array.Empty<JsonObject>(),
             StopStreamWindowId: windowId
         );
+    }
+
+    private async Task<AgentReplies> HandleWindowFocusAsync(
+        JsonObject request,
+        string? requestId,
+        CancellationToken cancellationToken
+    )
+    {
+        var windowId = request["windowId"]?.GetValue<string>();
+        if (string.IsNullOrWhiteSpace(windowId))
+        {
+            return AgentReplies.Direct(ErrorResponse(requestId, "invalid_message", "window.focus.request requires windowId."));
+        }
+
+        if (!TryGetTrackedWindow(windowId, out _))
+        {
+            return AgentReplies.Direct(WindowFocusResponse(requestId, windowId, accepted: false));
+        }
+
+        try
+        {
+            var accepted = await desktop.FocusWindowAsync(windowId, cancellationToken);
+            return AgentReplies.Direct(WindowFocusResponse(requestId, windowId, accepted));
+        }
+        catch (Exception error) when (error is not OperationCanceledException)
+        {
+            return AgentReplies.Direct(ErrorResponse(requestId, "window_focus_failed", error.Message));
+        }
     }
 
     private async Task<AgentReplies> HandleWindowCloseAsync(
@@ -342,6 +371,14 @@ public sealed class AgentSession
     {
         ["type"] = MessageTypes.WindowClosed,
         ["windowId"] = windowId
+    };
+
+    private static JsonObject WindowFocusResponse(string? requestId, string windowId, bool accepted) => new()
+    {
+        ["type"] = MessageTypes.WindowFocusResponse,
+        ["requestId"] = requestId,
+        ["windowId"] = windowId,
+        ["accepted"] = accepted
     };
 
     private static JsonObject WindowCloseResponse(string? requestId, string windowId, bool accepted) => new()

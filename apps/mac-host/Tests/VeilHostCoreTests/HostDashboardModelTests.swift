@@ -412,6 +412,29 @@ struct HostDashboardModelTests {
         #expect(!model.canRestoreMirrorSessions)
     }
 
+    @Test("focuses a mirrored window through the live agent")
+    @MainActor
+    func focusesMirrorSessionThroughLiveAgent() async throws {
+        let service = FakeDashboardService(
+            health: .inputReady,
+            apps: [.notepad, .calculator]
+        )
+        let model = HostDashboardModel(service: service)
+
+        await model.load()
+        await model.launchApp(appId: "winapp_notepad")
+        await model.launchApp(appId: "winapp_calculator")
+        let response = await model.focusMirrorSession(windowId: "hwnd:0003030B")
+
+        #expect(response?.type == .windowFocusResponse)
+        #expect(response?.accepted == true)
+        #expect(service.focusedWindowIds == ["hwnd:0003030B"])
+        #expect(model.activeWindows.first { $0.windowId == "hwnd:0003029A" }?.focused == false)
+        #expect(model.activeWindows.first { $0.windowId == "hwnd:0003030B" }?.focused == true)
+        #expect(model.mirrorSessions.first { $0.id == "hwnd:0003029A" }?.window.focused == false)
+        #expect(model.mirrorSessions.first { $0.id == "hwnd:0003030B" }?.window.focused == true)
+    }
+
     @Test("disables unsupported input and clipboard commands")
     @MainActor
     func disablesUnsupportedInputAndClipboardCommands() async throws {
@@ -723,6 +746,7 @@ private final class FakeDashboardService: HostDashboardService {
     private(set) var loadCount = 0
     private(set) var launchCount = 0
     private(set) var launchedAppIds: [String] = []
+    private(set) var focusedWindowIds: [String] = []
     private(set) var closedWindowIds: [String] = []
     private(set) var mouseInputs: [InputMouseEvent] = []
     private(set) var keyInputs: [InputKeyEvent] = []
@@ -771,6 +795,20 @@ private final class FakeDashboardService: HostDashboardService {
 
     func launchNotepad() async throws -> NotepadLaunchResult {
         try await launchApp(appId: "winapp_notepad")
+    }
+
+    func focusWindow(windowId: String) async throws -> WindowFocusResponse {
+        if let error {
+            throw error
+        }
+
+        focusedWindowIds.append(windowId)
+        return WindowFocusResponse(
+            type: .windowFocusResponse,
+            requestId: "req_focus_window",
+            windowId: windowId,
+            accepted: true
+        )
     }
 
     func closeWindow(windowId: String) async throws -> WindowCloseResponse {

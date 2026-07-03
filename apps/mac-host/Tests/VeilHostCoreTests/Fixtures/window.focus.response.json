@@ -1,0 +1,6 @@
+{
+  "type": "window.focus.response",
+  "requestId": "req_focus_notepad",
+  "windowId": "hwnd:0003029A",
+  "accepted": true
+}

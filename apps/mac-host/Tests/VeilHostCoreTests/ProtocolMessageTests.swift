@@ -93,6 +93,20 @@ struct ProtocolMessageTests {
         #expect(unsubscribe.windowId == "hwnd:0003029A")
     }
 
+    @Test("decodes window focus request and response")
+    func decodesWindowFocusRequestAndResponse() throws {
+        let request: WindowFocusRequest = try decodeFixture("window.focus.request")
+        let response: WindowFocusResponse = try decodeFixture("window.focus.response")
+
+        #expect(request.type == .windowFocusRequest)
+        #expect(request.requestId == "req_focus_notepad")
+        #expect(request.windowId == "hwnd:0003029A")
+        #expect(response.type == .windowFocusResponse)
+        #expect(response.requestId == request.requestId)
+        #expect(response.windowId == request.windowId)
+        #expect(response.accepted)
+    }
+
     @Test("decodes window close request and response")
     func decodesWindowCloseRequestAndResponse() throws {
         let request: WindowCloseRequest = try decodeFixture("window.close.request")

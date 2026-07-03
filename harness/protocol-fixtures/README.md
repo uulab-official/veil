@@ -16,6 +16,8 @@ These JSON files mirror the stable examples in `docs/protocol.md`.
 - `window.frame.json`
 - `window.frame.subscribe.json`
 - `window.frame.unsubscribe.json`
+- `window.focus.request.json`
+- `window.focus.response.json`
 - `window.close.request.json`
 - `window.close.response.json`
 - `input.mouse.left-down.json`

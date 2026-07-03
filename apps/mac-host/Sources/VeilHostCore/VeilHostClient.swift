@@ -634,6 +634,12 @@ public struct VeilHostClient: HostDashboardService, Sendable {
         )
     }
 
+    public func focusWindow(windowId: String) async throws -> WindowFocusResponse {
+        try await request(
+            WindowFocusRequest(requestId: "req_focus_\(requestIdSuffix(for: windowId))", windowId: windowId)
+        )
+    }
+
     public func sendMouseInput(_ input: InputMouseEvent) async throws {
         _ = try await transport.send(encoder.encode(input), expectedReplies: 0)
     }

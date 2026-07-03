@@ -17,6 +17,8 @@ import {
   validateWindowFrame,
   validateWindowFrameSubscribeRequest,
   validateWindowFrameUnsubscribeRequest,
+  validateWindowFocusRequest,
+  validateWindowFocusResponse,
   validateWindowUpdated
 } from "../src/messages.mjs";
 
@@ -40,6 +42,8 @@ test("parses every stable fixture", async () => {
     "window.frame.json",
     "window.frame.subscribe.json",
     "window.frame.unsubscribe.json",
+    "window.focus.request.json",
+    "window.focus.response.json",
     "window.close.request.json",
     "window.close.response.json",
     "input.mouse.left-down.json",
@@ -176,6 +180,19 @@ test("validates window frame stream subscribe and unsubscribe fixtures", async (
   assert.equal(unsubscribe.type, MessageType.WindowFrameUnsubscribe);
   assert.equal(unsubscribe.requestId, "req_frame_unsubscribe_notepad");
   assert.equal(unsubscribe.windowId, "hwnd:0003029A");
+});
+
+test("validates window focus request and response fixtures", async () => {
+  const request = validateWindowFocusRequest(await readFixture("window.focus.request.json"));
+  const response = validateWindowFocusResponse(await readFixture("window.focus.response.json"));
+
+  assert.equal(request.type, MessageType.WindowFocusRequest);
+  assert.equal(request.requestId, "req_focus_notepad");
+  assert.equal(request.windowId, "hwnd:0003029A");
+  assert.equal(response.type, MessageType.WindowFocusResponse);
+  assert.equal(response.requestId, request.requestId);
+  assert.equal(response.windowId, request.windowId);
+  assert.equal(response.accepted, true);
 });
 
 test("validates window close request and response fixtures", async () => {

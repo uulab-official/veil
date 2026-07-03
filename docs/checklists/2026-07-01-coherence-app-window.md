@@ -39,6 +39,7 @@ Goal: make Veil's product direction visible as "Windows app as a macOS window" i
 - [x] Add `window.closed` lifecycle events so guest-side close state removes the macOS mirror window and restore intent.
 - [x] Handle async `window.created` lifecycle events so guest-created HWNDs open as macOS mirror windows.
 - [x] Add `window.updated` lifecycle events so title, bounds, state, and focus metadata stay current without resetting frames.
+- [x] Add explicit `window.focus.request` handling so bringing a macOS mirror window forward also asks Windows to foreground the HWND.
 
 ## Next
 

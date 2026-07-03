@@ -25,6 +25,8 @@ export function createSession(options = {}) {
           return handleWindowFrameSubscribe(message, broadcast);
         case MessageType.WindowFrameUnsubscribe:
           return [];
+        case MessageType.WindowFocusRequest:
+          return handleWindowFocus(message);
         case MessageType.WindowCloseRequest:
           return handleWindowClose(message, broadcast);
         case MessageType.InputMouse:
@@ -139,6 +141,20 @@ async function handleWindowClose(message, broadcast) {
   return [
     {
       ...(await readFixture("window.close.response.json")),
+      requestId: message.requestId,
+      windowId: message.windowId
+    }
+  ];
+}
+
+async function handleWindowFocus(message) {
+  if (!message.windowId) {
+    return [createError(message.requestId, "invalid_message", "window.focus.request requires windowId.")];
+  }
+
+  return [
+    {
+      ...(await readFixture("window.focus.response.json")),
       requestId: message.requestId,
       windowId: message.windowId
     }

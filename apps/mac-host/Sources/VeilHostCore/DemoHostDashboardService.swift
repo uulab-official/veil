@@ -51,6 +51,10 @@ public struct FallbackHostDashboardService: HostDashboardService, Sendable {
         try await launchApp(appId: "winapp_notepad")
     }
 
+    public func focusWindow(windowId: String) async throws -> WindowFocusResponse {
+        try await primary.focusWindow(windowId: windowId)
+    }
+
     public func closeWindow(windowId: String) async throws -> WindowCloseResponse {
         try await primary.closeWindow(windowId: windowId)
     }
@@ -130,6 +134,15 @@ public struct DemoHostDashboardService: HostDashboardService, Sendable {
 
     public func launchNotepad() async throws -> NotepadLaunchResult {
         try await launchApp(appId: "winapp_notepad")
+    }
+
+    public func focusWindow(windowId: String) async throws -> WindowFocusResponse {
+        WindowFocusResponse(
+            type: .windowFocusResponse,
+            requestId: "demo_focus_window",
+            windowId: windowId,
+            accepted: true
+        )
     }
 
     public func closeWindow(windowId: String) async throws -> WindowCloseResponse {

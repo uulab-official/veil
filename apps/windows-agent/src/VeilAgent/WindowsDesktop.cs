@@ -167,6 +167,23 @@ public sealed class WindowsDesktop : IWindowsDesktop
         return Task.FromResult(PostMessage(hwnd, WM_CLOSE, IntPtr.Zero, IntPtr.Zero));
     }
 
+    public Task<bool> FocusWindowAsync(string windowId, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (!OperatingSystem.IsWindows())
+        {
+            throw new PlatformNotSupportedException("The Veil Windows agent must run inside Windows.");
+        }
+
+        if (!TryParseWindowId(windowId, out var hwnd))
+        {
+            return Task.FromResult(false);
+        }
+
+        return Task.FromResult(EnsureWindowReadyForInput(hwnd));
+    }
+
     public Task<bool> SendMouseInputAsync(WindowMouseInput input, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();

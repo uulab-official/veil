@@ -11,6 +11,8 @@ export const MessageType = Object.freeze({
   WindowFrame: "window.frame",
   WindowFrameSubscribe: "window.frame.subscribe",
   WindowFrameUnsubscribe: "window.frame.unsubscribe",
+  WindowFocusRequest: "window.focus.request",
+  WindowFocusResponse: "window.focus.response",
   WindowCloseRequest: "window.close.request",
   WindowCloseResponse: "window.close.response",
   ClipboardTextSet: "clipboard.text.set",
@@ -153,6 +155,30 @@ export function validateWindowFrameUnsubscribeRequest(request) {
   requireNonEmptyString(request.requestId, "requestId", "Window frame unsubscribe request");
   requireNonEmptyString(request.windowId, "windowId", "Window frame unsubscribe request");
   return request;
+}
+
+export function validateWindowFocusRequest(request) {
+  if (!request || request.type !== MessageType.WindowFocusRequest) {
+    throw new TypeError("Window focus request must use type window.focus.request.");
+  }
+
+  requireNonEmptyString(request.requestId, "requestId", "Window focus request");
+  requireNonEmptyString(request.windowId, "windowId", "Window focus request");
+  return request;
+}
+
+export function validateWindowFocusResponse(response) {
+  if (!response || response.type !== MessageType.WindowFocusResponse) {
+    throw new TypeError("Window focus response must use type window.focus.response.");
+  }
+
+  requireNonEmptyString(response.requestId, "requestId", "Window focus response");
+  requireNonEmptyString(response.windowId, "windowId", "Window focus response");
+  if (typeof response.accepted !== "boolean") {
+    throw new TypeError("Window focus response field 'accepted' must be a boolean.");
+  }
+
+  return response;
 }
 
 export function validateWindowCloseRequest(request) {

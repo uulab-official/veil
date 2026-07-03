@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { validateAppLaunchAcceptance, validateWindowClosed, validateWindowCloseResponse } from "@veil/protocol";
+import {
+  validateAppLaunchAcceptance,
+  validateWindowClosed,
+  validateWindowCloseResponse,
+  validateWindowFocusResponse
+} from "@veil/protocol";
 
 import { createSession } from "../src/session.mjs";
 
@@ -114,6 +119,40 @@ test("rejects window close requests without a HWND", async () => {
       requestId: "req_bad_close",
       code: "invalid_message",
       message: "window.close.request requires windowId."
+    }
+  ]);
+});
+
+test("accepts a window focus request for a tracked HWND", async () => {
+  const session = createSession();
+
+  const replies = await session.handle({
+    type: "window.focus.request",
+    requestId: "req_focus_notepad",
+    windowId: "hwnd:0003029A"
+  });
+
+  assert.equal(replies.length, 1);
+  const response = validateWindowFocusResponse(replies[0]);
+  assert.equal(response.requestId, "req_focus_notepad");
+  assert.equal(response.windowId, "hwnd:0003029A");
+  assert.equal(response.accepted, true);
+});
+
+test("rejects window focus requests without a HWND", async () => {
+  const session = createSession();
+
+  const replies = await session.handle({
+    type: "window.focus.request",
+    requestId: "req_bad_focus"
+  });
+
+  assert.deepEqual(replies, [
+    {
+      type: "error",
+      requestId: "req_bad_focus",
+      code: "invalid_message",
+      message: "window.focus.request requires windowId."
     }
   ]);
 });

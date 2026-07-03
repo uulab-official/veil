@@ -360,11 +360,15 @@ struct VeilHostShellApp: App {
     }
 
     private func focusWindowsAppWindow(windowId: String) {
-        guard let session = model.mirrorSessions.first(where: { $0.id == windowId }) else {
-            return
-        }
+        Task { @MainActor in
+            let response = await model.focusMirrorSession(windowId: windowId)
+            guard response?.accepted == true,
+                  let session = model.mirrorSessions.first(where: { $0.id == windowId }) else {
+                return
+            }
 
-        windowsAppWindowPresenter.showWindow(for: session)
+            windowsAppWindowPresenter.showWindow(for: session)
+        }
     }
 
     private func closeWindowsAppWindow(windowId: String) {

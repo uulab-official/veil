@@ -14,6 +14,8 @@ public static class MessageTypes
     public const string WindowFrame = "window.frame";
     public const string WindowFrameSubscribe = "window.frame.subscribe";
     public const string WindowFrameUnsubscribe = "window.frame.unsubscribe";
+    public const string WindowFocusRequest = "window.focus.request";
+    public const string WindowFocusResponse = "window.focus.response";
     public const string WindowCloseRequest = "window.close.request";
     public const string WindowCloseResponse = "window.close.response";
     public const string InputMouse = "input.mouse";

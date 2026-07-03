@@ -94,6 +94,22 @@ test("windows agent accepts host window close requests", async () => {
   assert.match(session, /MessageTypes\.WindowCloseResponse/);
 });
 
+test("windows agent accepts host window focus requests", async () => {
+  const messageTypes = await readFile(resolve(agentRoot, "src/VeilAgent/MessageTypes.cs"), "utf8");
+  const desktopInterface = await readFile(resolve(agentRoot, "src/VeilAgent/IWindowsDesktop.cs"), "utf8");
+  const desktop = await readFile(resolve(agentRoot, "src/VeilAgent/WindowsDesktop.cs"), "utf8");
+  const session = await readFile(resolve(agentRoot, "src/VeilAgent/AgentSession.cs"), "utf8");
+
+  assert.match(messageTypes, /WindowFocusRequest\s*=\s*"window\.focus\.request"/);
+  assert.match(messageTypes, /WindowFocusResponse\s*=\s*"window\.focus\.response"/);
+  assert.match(desktopInterface, /FocusWindowAsync\(string windowId,\s*CancellationToken cancellationToken\)/);
+  assert.match(desktop, /FocusWindowAsync/);
+  assert.match(desktop, /EnsureWindowReadyForInput\(hwnd\)/);
+  assert.match(session, /MessageTypes\.WindowFocusRequest/);
+  assert.match(session, /HandleWindowFocusAsync/);
+  assert.match(session, /MessageTypes\.WindowFocusResponse/);
+});
+
 test("windows agent accepts host mouse input events", async () => {
   const messageTypes = await readFile(resolve(agentRoot, "src/VeilAgent/MessageTypes.cs"), "utf8");
   const desktopInterface = await readFile(resolve(agentRoot, "src/VeilAgent/IWindowsDesktop.cs"), "utf8");

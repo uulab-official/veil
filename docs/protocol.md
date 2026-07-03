@@ -249,6 +249,36 @@ Rules:
 - These requests do not require a success response. Invalid requests may still return structured errors.
 - The macOS host subscribes after launching a capture-capable app window and unsubscribes before closing the mirrored window.
 
+## Window Focus
+
+Host request:
+
+```json
+{
+  "type": "window.focus.request",
+  "requestId": "req_focus_notepad",
+  "windowId": "hwnd:0003029A"
+}
+```
+
+Guest response:
+
+```json
+{
+  "type": "window.focus.response",
+  "requestId": "req_focus_notepad",
+  "windowId": "hwnd:0003029A",
+  "accepted": true
+}
+```
+
+Rules:
+
+- `windowId` must match the HWND-shaped id from a tracked `window.created` event.
+- On Windows, the first implementation restores the window and asks the OS to foreground/focus the target HWND.
+- `accepted: true` means the focus request reached a tracked HWND and the platform focus call was accepted.
+- `accepted: false` means the HWND is no longer tracked or the OS rejected the focus request; the host should still be able to bring the macOS mirror window forward for recovery.
+
 ## Window Close
 
 Host request:

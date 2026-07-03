@@ -13,6 +13,8 @@ public enum MessageType: String, Codable, Sendable {
     case windowFrame = "window.frame"
     case windowFrameSubscribe = "window.frame.subscribe"
     case windowFrameUnsubscribe = "window.frame.unsubscribe"
+    case windowFocusRequest = "window.focus.request"
+    case windowFocusResponse = "window.focus.response"
     case windowCloseRequest = "window.close.request"
     case windowCloseResponse = "window.close.response"
     case clipboardTextSet = "clipboard.text.set"
@@ -250,6 +252,32 @@ public struct WindowFrameUnsubscribeRequest: Codable, Equatable, Sendable {
         self.type = type
         self.requestId = requestId
         self.windowId = windowId
+    }
+}
+
+public struct WindowFocusRequest: Codable, Equatable, Sendable {
+    public var type: MessageType
+    public var requestId: String
+    public var windowId: String
+
+    public init(requestId: String, windowId: String) {
+        self.type = .windowFocusRequest
+        self.requestId = requestId
+        self.windowId = windowId
+    }
+}
+
+public struct WindowFocusResponse: Codable, Equatable, Sendable {
+    public var type: MessageType
+    public var requestId: String
+    public var windowId: String
+    public var accepted: Bool
+
+    public init(type: MessageType = .windowFocusResponse, requestId: String, windowId: String, accepted: Bool) {
+        self.type = type
+        self.requestId = requestId
+        self.windowId = windowId
+        self.accepted = accepted
     }
 }
 
