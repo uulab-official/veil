@@ -1,0 +1,41 @@
+{
+  "appId": "winapp_notepad",
+  "endpoint": "ws://127.0.0.1:18444",
+  "frame": {
+    "encodedByteCount": 68,
+    "format": "png",
+    "frameId": "frame_000001",
+    "height": 1,
+    "scale": 1,
+    "sequence": 1,
+    "width": 1,
+    "windowId": "hwnd:0003029A"
+  },
+  "kind": "windowsAppWindowProof",
+  "launch": {
+    "accepted": true,
+    "processId": 4912,
+    "requestId": "req_launch_winapp_notepad",
+    "type": "app.launch.response"
+  },
+  "nextActions": [
+    "Open the mirrored HWND in the Veil host shell as a macOS window.",
+    "Run `veil-vmctl app-runtime-status --json` to inspect active mirrored sessions and supported actions."
+  ],
+  "provedAt": "2026-07-03T12:00:00Z",
+  "window": {
+    "appId": "winapp_notepad",
+    "bounds": {
+      "height": 800,
+      "width": 1280,
+      "x": 10,
+      "y": 10
+    },
+    "focused": true,
+    "processId": 4912,
+    "state": "normal",
+    "title": "Untitled - Notepad",
+    "type": "window.created",
+    "windowId": "hwnd:0003029A"
+  }
+}

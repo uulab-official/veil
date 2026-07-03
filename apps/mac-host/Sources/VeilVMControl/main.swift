@@ -18,6 +18,7 @@ enum VMControlError: Error, LocalizedError {
     case missingQEMUKeySequence
     case missingQEMUText
     case missingQEMUPointerCoordinate
+    case missingAppId
     case qemuAlreadyRunning(pid: Int32, monitorSocketPath: String?)
     case missingForceStopAcknowledgement
 
@@ -53,6 +54,8 @@ enum VMControlError: Error, LocalizedError {
             "Missing QEMU text. Pass qemu-type-text --text \"...\" with bounded ASCII input."
         case .missingQEMUPointerCoordinate:
             "Missing QEMU pointer coordinates. Pass --x and --y as absolute values from 0 to 32767."
+        case .missingAppId:
+            "Missing Windows app id. Pass --app-id winapp_notepad, winapp_calculator, or another id reported by app-runtime-status."
         case .qemuAlreadyRunning(let pid, let monitorSocketPath):
             monitorSocketPath.map {
                 "QEMU is already running as PID \(pid). Close the existing QEMU/Windows window, or use qemu-powerdown when the process was launched from the current Veil diagnostics path. Monitor socket: \($0)"
@@ -62,7 +65,7 @@ enum VMControlError: Error, LocalizedError {
         }
     }
 
-    private static let usage = "Usage: veil-vmctl prepare --installer /path/to/Windows.iso [--drivers /path/to/virtio-win.iso] | veil-vmctl app-runtime-status [--json] [--demo] | veil-vmctl guest-agent-wait [--json] [--wait-seconds 30] | veil-vmctl mark-installed [--json] | veil-vmctl providers [--json] | veil-vmctl qemu-plan [--json] | veil-vmctl qemu-doctor [--json] | veil-vmctl qemu-install-status [--json] | veil-vmctl qemu-smoke [--json] [--seconds 45] | veil-vmctl qemu-start [--json] [--wait-seconds 15] [--native-display] | veil-vmctl qemu-display-smoke [--json] [--wait-seconds 5] | veil-vmctl qemu-capture [--json] [--output /path/to/console.png] | veil-vmctl qemu-powerdown [--json] [--wait-seconds 30] | veil-vmctl qemu-force-stop [--json] --i-understand-data-loss [--wait-seconds 10] | veil-vmctl qemu-sendkey [--json] key [key ...] | veil-vmctl qemu-type-text [--json] --text \"...\" | veil-vmctl qemu-click [--json] --x 0...32767 --y 0...32767 | veil-vmctl qemu-oobe-bypass [--json] | veil-vmctl qemu-install-agent [--json]"
+    private static let usage = "Usage: veil-vmctl prepare --installer /path/to/Windows.iso [--drivers /path/to/virtio-win.iso] | veil-vmctl app-runtime-status [--json] [--demo] | veil-vmctl app-window-proof [--json] [--app-id winapp_notepad] [--wait-seconds 10] | veil-vmctl guest-agent-wait [--json] [--wait-seconds 30] | veil-vmctl mark-installed [--json] | veil-vmctl providers [--json] | veil-vmctl qemu-plan [--json] | veil-vmctl qemu-doctor [--json] | veil-vmctl qemu-install-status [--json] | veil-vmctl qemu-smoke [--json] [--seconds 45] | veil-vmctl qemu-start [--json] [--wait-seconds 15] [--native-display] | veil-vmctl qemu-display-smoke [--json] [--wait-seconds 5] | veil-vmctl qemu-capture [--json] [--output /path/to/console.png] | veil-vmctl qemu-powerdown [--json] [--wait-seconds 30] | veil-vmctl qemu-force-stop [--json] --i-understand-data-loss [--wait-seconds 10] | veil-vmctl qemu-sendkey [--json] key [key ...] | veil-vmctl qemu-type-text [--json] --text \"...\" | veil-vmctl qemu-click [--json] --x 0...32767 --y 0...32767 | veil-vmctl qemu-oobe-bypass [--json] | veil-vmctl qemu-install-agent [--json]"
 }
 
 struct VMControlArguments {
@@ -74,6 +77,7 @@ struct VMControlArguments {
     enum Command: Equatable {
         case prepare(installerPath: String, driverMediaPath: String?)
         case appRuntimeStatus(json: Bool, demo: Bool)
+        case appWindowProof(json: Bool, appId: String, waitSeconds: Int)
         case guestAgentWait(json: Bool, waitSeconds: Int)
         case markInstalled(json: Bool)
         case providers(json: Bool)
@@ -109,6 +113,21 @@ struct VMControlArguments {
                 command: .appRuntimeStatus(
                     json: arguments.contains("--json"),
                     demo: arguments.contains("--demo")
+                )
+            )
+        }
+
+        if command == "app-window-proof" {
+            let appId = stringArgument(named: "--app-id", from: arguments) ?? "winapp_notepad"
+            guard !appId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                throw VMControlError.missingAppId
+            }
+            let waitSeconds = waitSecondsArgument(from: arguments) ?? 10
+            return VMControlArguments(
+                command: .appWindowProof(
+                    json: arguments.contains("--json"),
+                    appId: appId,
+                    waitSeconds: waitSeconds
                 )
             )
         }
@@ -363,6 +382,8 @@ struct VeilVMControl {
             try await prepare(installerPath: installerPath, driverMediaPath: driverMediaPath)
         case .appRuntimeStatus(let json, let demo):
             try await printAppRuntimeStatus(json: json, demo: demo)
+        case .appWindowProof(let json, let appId, let waitSeconds):
+            try await proveAppWindow(json: json, appId: appId, waitSeconds: waitSeconds)
         case .guestAgentWait(let json, let waitSeconds):
             try await waitForGuestAgent(json: json, waitSeconds: waitSeconds)
         case .markInstalled(let json):
@@ -478,6 +499,37 @@ struct VeilVMControl {
             fallback: DemoHostDashboardService(),
             primaryEndpointDescription: endpoint
         )
+    }
+
+    private static func proveAppWindow(json: Bool, appId: String, waitSeconds: Int) async throws {
+        let endpoint = ProcessInfo.processInfo.environment["VEIL_AGENT_URL"] ?? "ws://127.0.0.1:18444"
+        let url = URL(string: endpoint) ?? URL(string: "ws://127.0.0.1:18444")!
+        let boundedWaitSeconds = min(max(waitSeconds, 1), 60)
+        let transport = URLSessionWebSocketTransport(url: url)
+        let client = VeilHostClient(transport: transport)
+        let report = try await client.proveAppWindow(
+            appId: appId,
+            endpoint: endpoint,
+            eventSource: transport,
+            timeoutNanoseconds: UInt64(boundedWaitSeconds) * 1_000_000_000
+        )
+
+        if json {
+            let data = try JSONEncoder.veilDiagnostics.encode(report)
+            print(String(decoding: data, as: UTF8.self))
+            return
+        }
+
+        print("Windows app window proof: \(report.appId)")
+        print("Endpoint: \(report.endpoint)")
+        print("PID: \(report.launch.processId)")
+        print("Window: \(report.window.windowId) \(report.window.title)")
+        print("Frame: \(report.frame.width)x\(report.frame.height) \(report.frame.format) #\(report.frame.sequence)")
+        print("Frame bytes: \(report.frame.encodedByteCount)")
+        print("Next actions:")
+        for action in report.nextActions {
+            print("  - \(action)")
+        }
     }
 
     private static func waitForGuestAgent(json: Bool, waitSeconds: Int) async throws {

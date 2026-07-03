@@ -17,6 +17,7 @@ harness/
 ├─ fake-host/              CLI client that sends host messages to the agent
 ├─ runtime-provider-probe/ JSON shape validation for local VM providers
 ├─ app-runtime-status/     JSON shape validation for host app-runtime status/actions
+├─ app-window-proof/       JSON shape validation for launch/HWND/first-frame proof
 ├─ guest-agent-wait/       JSON shape validation for post-install guest-agent readiness
 ├─ qemu-boot-plan/         JSON shape validation for dry-run QEMU/HVF boot plans
 ├─ qemu-doctor/            JSON shape validation for QEMU/HVF readiness reports
@@ -36,6 +37,7 @@ Current executable pieces:
 - `harness/fake-host`: a CLI simulator for the future macOS host flow.
 - `harness/runtime-provider-probe`: a JSON validator for serverless local runtime provider output.
 - `harness/app-runtime-status`: a JSON validator for app runtime status, open HWND sessions, and supported actions.
+- `harness/app-window-proof`: a JSON validator for one app launch, one tracked HWND, and the first captured frame evidence.
 - `harness/guest-agent-wait`: a JSON validator for waiting until the installed Windows guest agent is reachable after setup/login.
 - `harness/qemu-boot-plan`: a JSON validator for dry-run QEMU/HVF Windows Arm boot plans.
 - `harness/qemu-doctor`: a JSON validator for QEMU/HVF readiness reports and next actions.
@@ -62,6 +64,21 @@ Use `--demo` for deterministic local harness checks. Without `--demo`, the
 command tries `VEIL_AGENT_URL` or `ws://127.0.0.1:18444` and falls back to demo
 metadata only for network availability errors.
 
+## App Window Proof Scenario
+
+The app-window proof command is the strongest local bridge check before a full
+manual UI run: it asks the guest agent to launch one app, validates the returned
+`window.created` HWND, subscribes to that HWND's frame stream, and records the
+first PNG frame metadata.
+
+```bash
+cd apps/mac-host
+swift run veil-vmctl app-window-proof --json --app-id winapp_notepad | node ../../harness/app-window-proof/src/validate-app-window-proof.mjs
+```
+
+Run this after `guest-agent-wait` reports connected. The command does not start
+or stop the VM; it only uses the forwarded guest-agent WebSocket.
+
 ## Guest Agent Wait Scenario
 
 The guest-agent wait command is the post-install readiness gate between
@@ -74,8 +91,8 @@ cd apps/mac-host
 swift run veil-vmctl guest-agent-wait --json --wait-seconds 30 | node ../../harness/guest-agent-wait/src/validate-guest-agent-wait.mjs
 ```
 
-A connected report must point automation at `app-runtime-status` and the
-Notepad frame probe. An unavailable report must keep the recovery path explicit:
+A connected report must point automation at `app-runtime-status` and
+`app-window-proof`. An unavailable report must keep the recovery path explicit:
 confirm the Windows desktop is running, install `Veil Guest Agent` from the
 shared media, collect the Windows-side diagnostics ZIP if needed, and verify
 QEMU/HVF port forwarding.

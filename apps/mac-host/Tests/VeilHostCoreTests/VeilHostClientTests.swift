@@ -87,6 +87,7 @@ struct VeilHostClientTests {
         #expect(report.connectedAt != nil)
         #expect(report.diagnostic.health?.agentVersion == "0.1.0")
         #expect(report.nextActions.contains("Run `veil-vmctl app-runtime-status --json` to inspect app launch readiness."))
+        #expect(report.nextActions.contains("Run `veil-vmctl app-window-proof --json --app-id winapp_notepad` to verify HWND launch, tracking, and first frame capture."))
     }
 
     @Test("wait reports unavailable Windows guest agent with recovery actions")
@@ -147,6 +148,43 @@ struct VeilHostClientTests {
         #expect(transport.sentAppIds == ["winapp_calculator"])
         #expect(result.window.appId == "winapp_calculator")
         #expect(result.window.title == "Calculator")
+    }
+
+    @Test("proves Windows app window launch with first frame evidence")
+    func provesWindowsAppWindowLaunchWithFirstFrameEvidence() async throws {
+        let transport = RecordingTransport(responses: [
+            #"{"type":"agent.health.response","requestId":"req_health","protocolVersion":1,"agentVersion":"0.1.0","os":"windows-arm64","session":{"interactive":true,"user":"veil-user"},"capabilities":{"appList":true,"appLaunch":true,"windowTracking":true,"windowCapture":true,"input":true,"clipboardText":true}}"#,
+            #"{"type":"app.list.response","requestId":"req_apps","apps":[{"id":"winapp_notepad","name":"Notepad","exePath":"C:\\Windows\\System32\\notepad.exe","publisher":"Microsoft","iconId":"icon_notepad"}]}"#,
+            #"{"type":"app.launch.response","requestId":"req_launch_winapp_notepad","accepted":true,"processId":4912}"#,
+            #"{"type":"window.created","windowId":"hwnd:0003029A","processId":4912,"appId":"winapp_notepad","title":"Untitled - Notepad","bounds":{"x":10,"y":10,"width":1280,"height":800},"state":"normal","focused":true}"#
+        ])
+        let eventSource = BufferedEventSource(messages: [
+            WindowFrameEvent.notepadFirstFrameJSON
+        ])
+        let client = VeilHostClient(transport: transport)
+
+        let report = try await client.proveAppWindow(
+            appId: "winapp_notepad",
+            endpoint: "ws://127.0.0.1:18444",
+            eventSource: eventSource,
+            timeoutNanoseconds: 1_000_000_000
+        )
+
+        #expect(report.kind == "windowsAppWindowProof")
+        #expect(report.endpoint == "ws://127.0.0.1:18444")
+        #expect(report.appId == "winapp_notepad")
+        #expect(report.launch.processId == 4912)
+        #expect(report.window.windowId == "hwnd:0003029A")
+        #expect(report.frame.windowId == "hwnd:0003029A")
+        #expect(report.frame.format == "png")
+        #expect(report.frame.encodedByteCount > 0)
+        #expect(report.nextActions.contains("Run `veil-vmctl app-runtime-status --json` to inspect active mirrored sessions and supported actions."))
+        #expect(transport.sentTypes == [
+            "agent.health.request",
+            "app.list.request",
+            "app.launch.request",
+            "window.frame.subscribe"
+        ])
     }
 
     @Test("fails when Notepad is missing from the app list")
@@ -301,5 +339,26 @@ private struct HangingTransport: HostTransport {
     func send(_ message: Data, expectedReplies: Int) async throws -> [Data] {
         try await Task.sleep(nanoseconds: 5_000_000_000)
         return []
+    }
+}
+
+private struct BufferedEventSource: HostEventSource {
+    var messages: [String]
+
+    func eventMessages() -> AsyncThrowingStream<Data, any Error> {
+        AsyncThrowingStream { continuation in
+            Task {
+                for message in messages {
+                    continuation.yield(Data(message.utf8))
+                }
+                continuation.finish()
+            }
+        }
+    }
+}
+
+private extension WindowFrameEvent {
+    static var notepadFirstFrameJSON: String {
+        #"{"type":"window.frame","windowId":"hwnd:0003029A","frameId":"frame_000001","sequence":1,"format":"png","width":1,"height":1,"scale":1,"encodedData":"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII="}"#
     }
 }

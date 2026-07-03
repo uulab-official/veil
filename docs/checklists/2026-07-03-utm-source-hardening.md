@@ -30,6 +30,7 @@ Goal: adapt concrete UTM source patterns into Veil while keeping Veil focused on
 - [x] Surface install-status recovery steps inside the main Windows setup screen, not only in CLI JSON.
 - [x] Expose running QEMU process evidence in install-status JSON so recovery guidance can name the exact PID and monitor/QMP sockets.
 - [x] Add `veil-vmctl guest-agent-wait --json` plus a Node harness validator for the post-install guest-agent readiness gate.
+- [x] Add `veil-vmctl app-window-proof --json` plus a Node harness validator for launch, HWND tracking, and first frame evidence.
 
 ## Next Hardening Pass
 
@@ -40,3 +41,4 @@ Goal: adapt concrete UTM source patterns into Veil while keeping Veil focused on
 - [x] Add an install-status command surface so persistent Windows setup evidence can be checked without manually inspecting raw launch records.
 - [x] Extend display evidence with dynamic resolution/scaling decisions for the embedded runtime surface.
 - [x] Add a guest-agent wait gate so automation can move from Windows desktop proof to app-window launch proof only after the forwarded agent endpoint is reachable.
+- [x] Add an app-window proof gate so automation can verify a real Windows app launch reaches first-frame mirror evidence before manual UI testing.

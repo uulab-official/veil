@@ -41,6 +41,9 @@ export function validateGuestAgentWait(report) {
     if (!report.nextActions.some((action) => action.includes("app-runtime-status"))) {
       throw new TypeError("connected guest agent reports must include app-runtime-status next action.");
     }
+    if (!report.nextActions.some((action) => action.includes("app-window-proof"))) {
+      throw new TypeError("connected guest agent reports must include app-window-proof next action.");
+    }
   }
 
   if (report.status === "unavailable") {

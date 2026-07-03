@@ -32,7 +32,7 @@
   "kind": "guestAgentWait",
   "nextActions": [
     "Run `veil-vmctl app-runtime-status --json` to inspect app launch readiness.",
-    "Run `veil-host-probe --launch-notepad-frame` to verify HWND launch, tracking, and first frame capture."
+    "Run `veil-vmctl app-window-proof --json --app-id winapp_notepad` to verify HWND launch, tracking, and first frame capture."
   ],
   "status": "connected",
   "waitedSeconds": 0

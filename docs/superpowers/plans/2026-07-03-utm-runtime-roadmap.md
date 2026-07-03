@@ -54,6 +54,7 @@
 - [x] Surface install-status recovery steps in the app setup screen.
 - [x] Add structured running QEMU process evidence so blocked setup reports name the exact PID and monitor/QMP sockets.
 - [x] Add a guest-agent wait gate that polls the forwarded agent health endpoint before app-window launch automation.
+- [x] Add an app-window proof gate that verifies app launch, HWND tracking, and first frame evidence through the forwarded agent endpoint.
 - [ ] Record a fresh live boot/install evidence pass under diagnostics, not in git.
 - [ ] Update install-flow docs with exact observed blockers and recovery steps.
 
@@ -251,6 +252,56 @@ Run:
 cd apps/mac-host && swift test --filter VeilHostClientTests
 cd harness/guest-agent-wait && npm test
 cd apps/mac-host && VEIL_AGENT_URL=ws://127.0.0.1:<fake-port> swift run veil-vmctl guest-agent-wait --json --wait-seconds 2 | node ../../harness/guest-agent-wait/src/validate-guest-agent-wait.mjs
+cd apps/mac-host && swift test
+./script/build_and_run.sh --verify
+git diff --check
+```
+
+Expected: all pass.
+
+## Task 13: App Window Proof Gate
+
+**Files:**
+- Modify: `apps/mac-host/Sources/VeilHostCore/VeilHostClient.swift`
+- Modify: `apps/mac-host/Tests/VeilHostCoreTests/VeilHostClientTests.swift`
+- Modify: `apps/mac-host/Sources/VeilVMControl/main.swift`
+- Create: `harness/app-window-proof/package.json`
+- Create: `harness/app-window-proof/src/validate-app-window-proof.mjs`
+- Create: `harness/app-window-proof/test/app-window-proof.test.mjs`
+- Create: `harness/app-window-proof/fixtures/app-window-proof.notepad.json`
+- Modify: `harness/guest-agent-wait/src/validate-guest-agent-wait.mjs`
+- Modify: `harness/guest-agent-wait/test/guest-agent-wait.test.mjs`
+- Modify: `harness/guest-agent-wait/fixtures/guest-agent-wait.connected.json`
+- Modify: `docs/harness/README.md`
+- Modify: `harness/README.md`
+- Modify: `docs/architecture.md`
+- Modify: `docs/install-flow.md`
+- Modify: `docs/checklists/2026-07-03-utm-source-hardening.md`
+
+- [x] **Step 1: Add app-window proof report**
+
+Expose `windowsAppWindowProof` reports with endpoint, app id, launch response,
+matching `window.created` HWND, first PNG frame metadata, and next actions.
+
+- [x] **Step 2: Add CLI command**
+
+Add `veil-vmctl app-window-proof [--json] [--app-id winapp_notepad]
+[--wait-seconds 10]` using `VEIL_AGENT_URL` or `ws://127.0.0.1:18444`.
+
+- [x] **Step 3: Add harness validation**
+
+Validate that launch, HWND, process id, frame window id, frame format, positive
+frame dimensions, and app-runtime next action all line up.
+
+- [x] **Step 4: Verify**
+
+Run:
+
+```bash
+cd apps/mac-host && swift test --filter VeilHostClientTests/provesWindowsAppWindowLaunchWithFirstFrameEvidence
+cd harness/app-window-proof && npm test
+cd harness/guest-agent-wait && npm test
+cd apps/mac-host && VEIL_AGENT_URL=ws://127.0.0.1:<fake-port> swift run veil-vmctl app-window-proof --json --app-id winapp_notepad --wait-seconds 5 | node ../../harness/app-window-proof/src/validate-app-window-proof.mjs
 cd apps/mac-host && swift test
 ./script/build_and_run.sh --verify
 git diff --check

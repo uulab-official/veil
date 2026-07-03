@@ -110,6 +110,7 @@ Current scaffold status:
 - After launch, a per-window stream loop continues broadcasting PNG `window.frame` events using monotonically increasing sequence numbers.
 - The default frame implementation uses Win32/GDI HWND capture behind `IWindowFrameCapture`; the deterministic bootstrap PNG implementation remains only as a fallback/test seam until Windows-side capture evidence is recorded.
 - The host-side `veil-vmctl guest-agent-wait --json` command is the post-install readiness gate: it waits for the installed agent's health response on the forwarded loopback endpoint before automation proceeds to app-runtime status or Notepad frame validation.
+- The host-side `veil-vmctl app-window-proof --json --app-id winapp_notepad` command records the first app-window bridge proof after the agent connects: app launch response, matching `window.created` HWND, frame-stream subscription, and first PNG frame metadata.
 
 ## Protocol Package
 

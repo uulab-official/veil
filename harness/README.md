@@ -12,6 +12,7 @@ harness/
 ├─ fake-host/              CLI client that sends host messages
 ├─ runtime-provider-probe/ Validates local VM provider JSON output
 ├─ app-runtime-status/     Validates host app-runtime status/actions JSON
+├─ app-window-proof/       Validates app launch/HWND/first-frame proof JSON
 ├─ guest-agent-wait/       Validates post-install guest-agent readiness JSON
 ├─ qemu-boot-plan/         Validates dry-run QEMU/HVF Windows boot plan JSON
 ├─ qemu-doctor/            Validates QEMU/HVF readiness report JSON
@@ -111,6 +112,16 @@ Expected: JSON reports `status: "connected"` once the Windows guest agent is
 reachable through QEMU/HVF port forwarding. If unavailable, the report remains
 valid JSON and lists the installer, diagnostics, and port-forwarding recovery
 steps.
+
+For the app-window proof:
+
+```bash
+swift run veil-vmctl app-window-proof --json --app-id winapp_notepad | node ../../harness/app-window-proof/src/validate-app-window-proof.mjs
+```
+
+Expected: JSON proves the host launched the requested Windows app, received a
+matching `window.created` event, subscribed to its HWND stream, and received the
+first PNG frame metadata.
 
 For the full launch acceptance flow:
 

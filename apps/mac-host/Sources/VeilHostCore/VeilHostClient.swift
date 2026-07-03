@@ -52,6 +52,59 @@ public struct WindowsAppLaunchResult: Codable, Equatable, Sendable {
 
 public typealias NotepadLaunchResult = WindowsAppLaunchResult
 
+public struct WindowFrameProofEvidence: Codable, Equatable, Sendable {
+    public var windowId: String
+    public var frameId: String
+    public var sequence: Int
+    public var format: String
+    public var width: Int
+    public var height: Int
+    public var scale: Double
+    public var encodedByteCount: Int
+
+    public init(frame: WindowFrameEvent) {
+        self.windowId = frame.windowId
+        self.frameId = frame.frameId
+        self.sequence = frame.sequence
+        self.format = frame.format
+        self.width = frame.width
+        self.height = frame.height
+        self.scale = frame.scale
+        self.encodedByteCount = frame.encodedPayloadData?.count ?? 0
+    }
+}
+
+public struct WindowsAppWindowProofReport: Codable, Equatable, Sendable {
+    public var kind: String
+    public var endpoint: String
+    public var appId: String
+    public var provedAt: Date
+    public var launch: AppLaunchResponse
+    public var window: WindowCreatedEvent
+    public var frame: WindowFrameProofEvidence
+    public var nextActions: [String]
+
+    public init(
+        kind: String = "windowsAppWindowProof",
+        endpoint: String,
+        appId: String,
+        provedAt: Date,
+        launch: AppLaunchResponse,
+        window: WindowCreatedEvent,
+        frame: WindowFrameProofEvidence,
+        nextActions: [String]
+    ) {
+        self.kind = kind
+        self.endpoint = endpoint
+        self.appId = appId
+        self.provedAt = provedAt
+        self.launch = launch
+        self.window = window
+        self.frame = frame
+        self.nextActions = nextActions
+    }
+}
+
 public enum AgentConnectionDiagnosticStatus: String, Codable, Equatable, Sendable {
     case connected
     case unavailable
@@ -152,6 +205,17 @@ private enum AgentConnectionProbeError: Error, LocalizedError {
     }
 }
 
+public enum WindowsAppWindowProofError: Error, Equatable, LocalizedError, Sendable {
+    case frameTimeout(windowId: String)
+
+    public var errorDescription: String? {
+        switch self {
+        case .frameTimeout(let windowId):
+            "Timed out waiting for the first window.frame event for \(windowId)."
+        }
+    }
+}
+
 public struct VeilHostClient: HostDashboardService, Sendable {
     private let transport: any HostTransport
     private let encoder: JSONEncoder
@@ -204,6 +268,36 @@ public struct VeilHostClient: HostDashboardService, Sendable {
         try await launchApp(appId: "winapp_notepad")
     }
 
+    public func proveAppWindow(
+        appId: String,
+        endpoint: String,
+        eventSource: any HostEventSource,
+        timeoutNanoseconds: UInt64 = 10_000_000_000
+    ) async throws -> WindowsAppWindowProofReport {
+        let launchResult = try await launchApp(appId: appId)
+        async let frame = firstFrame(
+            from: eventSource,
+            windowId: launchResult.window.windowId,
+            timeoutNanoseconds: timeoutNanoseconds
+        )
+        try? await Task.sleep(nanoseconds: 200_000_000)
+        try await subscribeWindowFrames(windowId: launchResult.window.windowId)
+        let firstFrame = try await frame
+
+        return WindowsAppWindowProofReport(
+            endpoint: endpoint,
+            appId: appId,
+            provedAt: Date(),
+            launch: launchResult.launch,
+            window: launchResult.window,
+            frame: WindowFrameProofEvidence(frame: firstFrame),
+            nextActions: [
+                "Open the mirrored HWND in the Veil host shell as a macOS window.",
+                "Run `veil-vmctl app-runtime-status --json` to inspect active mirrored sessions and supported actions."
+            ]
+        )
+    }
+
     public func loadHealth() async throws -> AgentHealthResponse {
         try await request(
             AgentHealthRequest(requestId: "req_health")
@@ -254,7 +348,7 @@ public struct VeilHostClient: HostDashboardService, Sendable {
                     diagnostic: latestDiagnostic,
                     nextActions: [
                         "Run `veil-vmctl app-runtime-status --json` to inspect app launch readiness.",
-                        "Run `veil-host-probe --launch-notepad-frame` to verify HWND launch, tracking, and first frame capture."
+                        "Run `veil-vmctl app-window-proof --json --app-id winapp_notepad` to verify HWND launch, tracking, and first frame capture."
                     ]
                 )
             }
@@ -352,6 +446,41 @@ public struct VeilHostClient: HostDashboardService, Sendable {
         }
 
         return try decoder.decode(Response.self, from: data)
+    }
+
+    private func firstFrame(
+        from eventSource: any HostEventSource,
+        windowId: String,
+        timeoutNanoseconds: UInt64
+    ) async throws -> WindowFrameEvent {
+        try await withThrowingTaskGroup(of: WindowFrameEvent.self) { group in
+            group.addTask {
+                for try await message in eventSource.eventMessages() {
+                    let envelope = try decoder.decode(ProtocolMessageEnvelope.self, from: message)
+                    guard envelope.type == .windowFrame else {
+                        continue
+                    }
+
+                    let frame = try decoder.decode(WindowFrameEvent.self, from: message)
+                    if frame.windowId == windowId {
+                        return frame
+                    }
+                }
+
+                throw WindowsAppWindowProofError.frameTimeout(windowId: windowId)
+            }
+
+            group.addTask {
+                try await Task.sleep(nanoseconds: timeoutNanoseconds)
+                throw WindowsAppWindowProofError.frameTimeout(windowId: windowId)
+            }
+
+            guard let frame = try await group.next() else {
+                throw WindowsAppWindowProofError.frameTimeout(windowId: windowId)
+            }
+            group.cancelAll()
+            return frame
+        }
     }
 
     private func requestIdSuffix(for windowId: String) -> String {

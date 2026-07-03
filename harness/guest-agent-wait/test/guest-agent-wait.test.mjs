@@ -20,6 +20,16 @@ test("rejects connected reports without app runtime next action", () => {
   );
 });
 
+test("rejects connected reports without app window proof next action", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/guest-agent-wait.connected.json", import.meta.url), "utf8"));
+  report.nextActions = report.nextActions.filter((action) => !action.includes("app-window-proof"));
+
+  assert.throws(
+    () => validateGuestAgentWait(report),
+    /app-window-proof/
+  );
+});
+
 test("rejects unavailable reports without install recovery guidance", () => {
   const report = JSON.parse(readFileSync(new URL("../fixtures/guest-agent-wait.connected.json", import.meta.url), "utf8"));
   report.status = "unavailable";
