@@ -184,6 +184,7 @@ struct VeilHostShellApp: App {
                 launchWindowsAppByIdAction: launchWindowsAppWindow(appId:),
                 focusWindowsAppWindowAction: focusWindowsAppWindow(windowId:),
                 closeWindowsAppWindowAction: closeWindowsAppWindow(windowId:),
+                closeAllWindowsAppWindowsAction: closeAllWindowsAppWindows,
                 recordAppFrameProofAction: recordAppFrameProof,
                 refreshAppsAction: refreshApps,
                 refreshRuntimeAction: refreshRuntime,
@@ -341,6 +342,15 @@ struct VeilHostShellApp: App {
             }
 
             windowsAppWindowPresenter.closeWindow(windowId: windowId)
+        }
+    }
+
+    private func closeAllWindowsAppWindows() {
+        Task { @MainActor in
+            let responses = await model.closeAllMirrorSessions()
+            for response in responses where response.accepted {
+                windowsAppWindowPresenter.closeWindow(windowId: response.windowId)
+            }
         }
     }
 
@@ -650,6 +660,7 @@ private struct VeilMenuBarMenu: View {
     var launchWindowsAppByIdAction: (String) -> Void
     var focusWindowsAppWindowAction: (String) -> Void
     var closeWindowsAppWindowAction: (String) -> Void
+    var closeAllWindowsAppWindowsAction: () -> Void
     var recordAppFrameProofAction: () -> Void
     var refreshAppsAction: () -> Void
     var refreshRuntimeAction: () -> Void
@@ -682,6 +693,12 @@ private struct VeilMenuBarMenu: View {
                             closeWindowsAppWindowAction(session.id)
                         }
                     }
+                }
+
+                Divider()
+
+                Button("Close All", systemImage: "xmark.circle.fill") {
+                    closeAllWindowsAppWindowsAction()
                 }
             }
 

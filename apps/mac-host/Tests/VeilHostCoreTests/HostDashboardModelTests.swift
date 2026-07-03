@@ -210,6 +210,25 @@ struct HostDashboardModelTests {
         #expect(model.lastLaunch?.window.windowId == "hwnd:0003029A")
     }
 
+    @Test("closes all mirrored Windows windows through the agent")
+    @MainActor
+    func closesAllMirroredWindowsThroughAgent() async throws {
+        let service = FakeDashboardService(health: .captureReady, apps: [.notepad, .calculator])
+        let model = HostDashboardModel(service: service)
+
+        await model.launchApp(appId: "winapp_notepad")
+        await model.launchApp(appId: "winapp_calculator")
+        let responses = await model.closeAllMirrorSessions()
+
+        #expect(responses.map(\.windowId) == ["hwnd:0003029A", "hwnd:0003030B"])
+        #expect(responses.map(\.accepted) == [true, true])
+        #expect(service.closedWindowIds == ["hwnd:0003029A", "hwnd:0003030B"])
+        #expect(service.frameUnsubscriptions == ["hwnd:0003029A", "hwnd:0003030B"])
+        #expect(model.activeWindows.isEmpty)
+        #expect(model.mirrorSessions.isEmpty)
+        #expect(model.phase == .connected)
+    }
+
     @Test("forwards mouse input for mirrored windows")
     @MainActor
     func forwardsMouseInputForMirroredWindows() async throws {

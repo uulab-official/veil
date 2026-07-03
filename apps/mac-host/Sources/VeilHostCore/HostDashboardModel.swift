@@ -369,6 +369,22 @@ public final class HostDashboardModel {
         }
     }
 
+    @discardableResult
+    public func closeAllMirrorSessions() async -> [WindowCloseResponse] {
+        let windowIds = mirrorSessions.map(\.id)
+        var responses: [WindowCloseResponse] = []
+
+        for windowId in windowIds {
+            guard let response = await closeMirrorSession(windowId: windowId) else {
+                continue
+            }
+
+            responses.append(response)
+        }
+
+        return responses
+    }
+
     public func sendMouseInput(
         windowId: String,
         event: String,

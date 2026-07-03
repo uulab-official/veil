@@ -51,6 +51,7 @@ Goal: move Veil from a Veil shell plus separate QEMU Cocoa display toward a UTM-
 - [x] Add menu-bar close for running Windows apps that asks the guest to close the HWND before removing the local macOS mirror window.
 - [x] Document the UTM/Parallels reference notes behind the running-app menu and HWND-to-NSWindow management direction.
 - [x] Surface Windows runtime status and running app count at the top of the menu bar menu, following UTM's first-class status model but scoped to Veil's app-runtime loop.
+- [x] Add menu-bar Close All for running Windows apps so multiple mirrored HWND sessions can be ended from one stable host surface.
 
 ## Next
 
