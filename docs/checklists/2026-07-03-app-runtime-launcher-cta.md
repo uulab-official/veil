@@ -12,6 +12,7 @@ Goal: make the installed Windows surface feel like an app runtime instead of a V
 - [x] Show the app chip as the selected Windows app name once the agent can launch it.
 - [x] Keep setup and install states unchanged when the guest agent is not connected.
 - [x] Render the latest mirrored app frame in the launcher when a stream is active.
+- [x] After Open Notepad, keep the launcher on the pending mirror surface until the first frame arrives.
 
 ## Review Notes
 
@@ -21,5 +22,5 @@ Goal: make the installed Windows surface feel like an app runtime instead of a V
 
 ## Next
 
-- [ ] Add a direct "Open Notepad and wait for first frame" UI action backed by the host probe path.
+- [ ] Add a diagnostic affordance that records the same launch-plus-first-frame proof as `veil-host-probe --launch-notepad-frame`.
 - [ ] Replace the secondary console handoff language once the QEMU display can be embedded or mirrored in-app.

@@ -45,6 +45,10 @@ struct WindowsAppFrameSurface: View {
                     .foregroundStyle(.secondary)
                 ProgressView()
                     .controlSize(.small)
+                Text("Opening \(session.window.title)")
+                    .font(.callout.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }

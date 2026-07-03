@@ -1190,8 +1190,7 @@ private struct WindowsSetupDisplayPanel: View {
 
     @ViewBuilder
     private var launcherDisplaySurface: some View {
-        if let activeMirrorSession,
-           activeMirrorSession.latestFrame != nil {
+        if let activeMirrorSession {
             mirroredAppDisplay(session: activeMirrorSession)
         } else {
             machineDisplay
@@ -1211,6 +1210,10 @@ private struct WindowsSetupDisplayPanel: View {
                 Text(session.window.title)
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.white.opacity(0.84))
+                    .lineLimit(1)
+                Text(session.latestFrame == nil ? "Waiting for first frame" : "Mirroring live frame")
+                    .font(.caption2.weight(.medium))
+                    .foregroundStyle(.white.opacity(0.62))
                     .lineLimit(1)
             }
             .padding(.horizontal, 12)
@@ -1644,11 +1647,27 @@ private struct WindowsSetupDisplayPanel: View {
             ),
             LauncherMetadataItem(
                 title: "Apps",
-                value: activeMirrorSession?.latestFrame != nil ? "Mirroring" : (canLaunchWindowsApp ? appDisplayName : "After agent"),
+                value: appMetadataValue,
                 symbolName: "macwindow",
-                tint: activeMirrorSession?.latestFrame != nil || canLaunchWindowsApp ? .green : .secondary
+                tint: appMetadataTint
             )
         ]
+    }
+
+    private var appMetadataValue: String {
+        guard let activeMirrorSession else {
+            return canLaunchWindowsApp ? appDisplayName : "After agent"
+        }
+
+        return activeMirrorSession.latestFrame == nil ? "Waiting" : "Mirroring"
+    }
+
+    private var appMetadataTint: Color {
+        guard let activeMirrorSession else {
+            return canLaunchWindowsApp ? .green : .secondary
+        }
+
+        return activeMirrorSession.latestFrame == nil ? .orange : .green
     }
 
     private var appDisplayName: String {
