@@ -54,7 +54,7 @@ enum VMControlError: Error, LocalizedError {
         }
     }
 
-    private static let usage = "Usage: veil-vmctl prepare --installer /path/to/Windows.iso [--drivers /path/to/virtio-win.iso] | veil-vmctl providers [--json] | veil-vmctl qemu-plan [--json] | veil-vmctl qemu-doctor [--json] | veil-vmctl qemu-smoke [--json] [--seconds 45] | veil-vmctl qemu-start [--json] [--wait-seconds 15] | veil-vmctl qemu-capture [--json] [--output /path/to/console.png] | veil-vmctl qemu-powerdown [--json] [--wait-seconds 30] | veil-vmctl qemu-force-stop [--json] --i-understand-data-loss [--wait-seconds 10] | veil-vmctl qemu-sendkey [--json] key [key ...] | veil-vmctl qemu-type-text [--json] --text \"...\" | veil-vmctl qemu-click [--json] --x 0...32767 --y 0...32767 | veil-vmctl qemu-oobe-bypass [--json]"
+    private static let usage = "Usage: veil-vmctl prepare --installer /path/to/Windows.iso [--drivers /path/to/virtio-win.iso] | veil-vmctl providers [--json] | veil-vmctl qemu-plan [--json] | veil-vmctl qemu-doctor [--json] | veil-vmctl qemu-smoke [--json] [--seconds 45] | veil-vmctl qemu-start [--json] [--wait-seconds 15] | veil-vmctl qemu-capture [--json] [--output /path/to/console.png] | veil-vmctl qemu-powerdown [--json] [--wait-seconds 30] | veil-vmctl qemu-force-stop [--json] --i-understand-data-loss [--wait-seconds 10] | veil-vmctl qemu-sendkey [--json] key [key ...] | veil-vmctl qemu-type-text [--json] --text \"...\" | veil-vmctl qemu-click [--json] --x 0...32767 --y 0...32767 | veil-vmctl qemu-oobe-bypass [--json] | veil-vmctl qemu-install-agent [--json]"
 }
 
 struct VMControlArguments {
@@ -72,6 +72,7 @@ struct VMControlArguments {
         case qemuTypeText(json: Bool, text: String)
         case qemuClick(json: Bool, x: Int, y: Int)
         case qemuOOBEBypass(json: Bool)
+        case qemuInstallAgent(json: Bool)
     }
 
     var command: Command
@@ -156,6 +157,10 @@ struct VMControlArguments {
 
         if command == "qemu-oobe-bypass" {
             return VMControlArguments(command: .qemuOOBEBypass(json: arguments.contains("--json")))
+        }
+
+        if command == "qemu-install-agent" {
+            return VMControlArguments(command: .qemuInstallAgent(json: arguments.contains("--json")))
         }
 
         guard command == "prepare" else {
@@ -314,6 +319,8 @@ struct VeilVMControl {
             try await clickQEMU(json: json, x: x, y: y)
         case .qemuOOBEBypass(let json):
             try await sendQEMUOOBEBypass(json: json)
+        case .qemuInstallAgent(let json):
+            try await sendQEMUGuestAgentInstall(json: json)
         }
     }
 
@@ -741,6 +748,10 @@ struct VeilVMControl {
 
     private static func sendQEMUOOBEBypass(json: Bool) async throws {
         try await sendQEMUKeySteps(json: json, steps: QEMUOOBEBypassKeySequence.steps)
+    }
+
+    private static func sendQEMUGuestAgentInstall(json: Bool) async throws {
+        try await sendQEMUKeySteps(json: json, steps: QEMUGuestAgentInstallKeySequence.steps)
     }
 
     private static func sendQEMUKeys(

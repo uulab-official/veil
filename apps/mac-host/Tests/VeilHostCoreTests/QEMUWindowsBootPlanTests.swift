@@ -913,6 +913,20 @@ struct QEMUWindowsBootPlanTests {
         #expect(keys.contains("spc"))
     }
 
+    @Test("guest agent install sequence opens run dialog and invokes VEIL_AUTO bootstrap")
+    func guestAgentInstallSequenceOpensRunDialogAndInvokesVEILAUTOBootstrap() throws {
+        let steps = try QEMUGuestAgentInstallKeySequence.steps
+        let keys = steps.map(\.key)
+
+        #expect(keys.first == "cmd-r")
+        #expect(keys.last == "ret")
+        #expect(QEMUGuestAgentInstallKeySequence.commandText.contains("Get-Volume -FileSystemLabel 'VEIL_AUTO'"))
+        #expect(QEMUGuestAgentInstallKeySequence.commandText.contains("Bootstrap-VeilAgentFromMedia.ps1"))
+        #expect(keys.contains("shift-backslash"))
+        #expect(keys.contains("shift-4"))
+        #expect(keys.count < 2_048)
+    }
+
     @Test("QMP keyboard command builder rejects unsupported text")
     func qmpKeyboardCommandBuilderRejectsUnsupportedText() throws {
         #expect(throws: QEMUQMPKeyboardCommandError.unsupportedCharacter("한")) {

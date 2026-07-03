@@ -1435,6 +1435,24 @@ public enum QEMUOOBEBypassKeySequence {
     ]
 }
 
+public enum QEMUGuestAgentInstallKeySequence {
+    public static let commandText =
+        #"powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "$volume = Get-Volume -FileSystemLabel 'VEIL_AUTO' -ErrorAction SilentlyContinue | Select-Object -First 1; if ($volume -and $volume.DriveLetter) { $script = Join-Path ($volume.DriveLetter + ':\') 'Veil Guest Agent\scripts\Bootstrap-VeilAgentFromMedia.ps1'; if (Test-Path $script) { powershell.exe -NoProfile -ExecutionPolicy Bypass -File $script } }""#
+
+    public static var steps: [QEMUKeySequenceStep] {
+        get throws {
+            let textSteps = try QEMUQMPKeyboardCommandBuilder
+                .keySequence(forText: commandText)
+                .map { QEMUKeySequenceStep(key: $0, delayAfterSend: 0.035) }
+            return [
+                QEMUKeySequenceStep(key: "cmd-r", delayAfterSend: 0.8)
+            ] + textSteps + [
+                QEMUKeySequenceStep(key: "ret", delayAfterSend: 1.0)
+            ]
+        }
+    }
+}
+
 public enum QEMUQMPControlCommandBuilder {
     public static func powerDownCommand() throws -> String {
         try QEMUQMPCommandJSONEncoder.jsonLine([

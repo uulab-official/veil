@@ -121,6 +121,13 @@ live recovery commands such as guest-agent install attempts when the Windows
 desktop is visible but no guest agent is connected yet. It intentionally rejects
 unsupported characters and long payloads; it is not a general remote shell.
 
+`veil-vmctl qemu-install-agent [--json]` is the safer one-command form for the
+common post-desktop recovery path: it opens the Windows Run dialog, finds the
+attached `VEIL_AUTO` media by volume label, and runs
+`Veil Guest Agent\scripts\Bootstrap-VeilAgentFromMedia.ps1` with
+`-ExecutionPolicy Bypass`. Use it only when the Windows desktop is visible in
+the console and the host probe still reports the guest agent unavailable.
+
 `veil-vmctl qemu-click [--json] --x <0...32767> --y <0...32767>` sends a bounded
 absolute left-click through QMP `input-send-event`. It is intended for
 screenshot-backed OOBE recovery steps such as activating "I do not have
