@@ -61,6 +61,9 @@ The app runtime status command exposes the same host-side model used by the
 macOS app so automation can inspect Windows app availability, mirrored HWND
 sessions, Dock integration, quiet-runtime readiness, restore intent, and
 supported actions without clicking the UI.
+`launchPlan` records whether the selected Windows app can launch immediately or
+whether Veil must start the local Windows runtime, wait for the guest agent, and
+then replay the pending app launch command.
 `macWindowIntegration` records whether a live agent can feed guest HWND events
 into automatic macOS app-window presentation, including mirrored, pending-frame,
 and streaming window counts.

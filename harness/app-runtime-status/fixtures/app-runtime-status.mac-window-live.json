@@ -60,6 +60,16 @@
     "recommendedAction": "keep-running",
     "reason": "Windows app windows are still open."
   },
+  "launchPlan": {
+    "selectedAppId": "winapp_notepad",
+    "canRequestSelectedAppLaunch": true,
+    "canLaunchSelectedAppNow": true,
+    "requiresRuntimeStart": false,
+    "requiresGuestAgent": false,
+    "recommendedAction": "launch-now",
+    "recommendedLaunchCommand": "veil-vmctl app-runtime-action --json --action launch --app-id winapp_notepad",
+    "reason": "The live Windows agent can launch the selected app now."
+  },
   "actions": [
     {
       "id": "dock.openMainWindow",
@@ -85,6 +95,11 @@
       "id": "macWindows.autoOpen",
       "title": "Auto Open Windows App Windows",
       "isAvailable": true
+    },
+    {
+      "id": "runtime.startWindowsForApp",
+      "title": "Start Windows For App Launch",
+      "isAvailable": false
     },
     {
       "id": "runtime.quietWhenIdle",

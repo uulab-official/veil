@@ -32,7 +32,8 @@ export function validateAppRuntimeStatus(report) {
   validateDockIntegration(report.dockIntegration, report.mirrorSessions);
   validateMacWindowIntegration(report.macWindowIntegration, report.mirrorSessions, report.connection);
   validateQuietRuntime(report.quietRuntime, report.mirrorSessions);
-  validateActions(report.actions);
+  validateLaunchPlan(report.launchPlan, report);
+  validateActions(report.actions, report.launchPlan);
 
   if (report.selectedAppId !== undefined) {
     requireString(report.selectedAppId, "selectedAppId");
@@ -198,6 +199,88 @@ function validateQuietRuntime(quietRuntime, mirrorSessions) {
   }
 }
 
+function validateLaunchPlan(launchPlan, report) {
+  if (!launchPlan || typeof launchPlan !== "object" || Array.isArray(launchPlan)) {
+    throw new TypeError("launchPlan must be an object.");
+  }
+
+  requireBoolean(launchPlan.canRequestSelectedAppLaunch, "launchPlan.canRequestSelectedAppLaunch");
+  requireBoolean(launchPlan.canLaunchSelectedAppNow, "launchPlan.canLaunchSelectedAppNow");
+  requireBoolean(launchPlan.requiresRuntimeStart, "launchPlan.requiresRuntimeStart");
+  requireBoolean(launchPlan.requiresGuestAgent, "launchPlan.requiresGuestAgent");
+  requireString(launchPlan.recommendedAction, "launchPlan.recommendedAction");
+  requireString(launchPlan.reason, "launchPlan.reason");
+
+  if (launchPlan.selectedAppId !== undefined) {
+    requireString(launchPlan.selectedAppId, "launchPlan.selectedAppId");
+    if (report.selectedAppId !== launchPlan.selectedAppId) {
+      throw new TypeError("launchPlan.selectedAppId must match selectedAppId.");
+    }
+  }
+
+  if (launchPlan.pendingLaunchAppId !== undefined) {
+    requireString(launchPlan.pendingLaunchAppId, "launchPlan.pendingLaunchAppId");
+    if (report.pendingLaunchAppId !== launchPlan.pendingLaunchAppId) {
+      throw new TypeError("launchPlan.pendingLaunchAppId must match pendingLaunchAppId.");
+    }
+  }
+
+  if (launchPlan.recommendedStartCommand !== undefined) {
+    requireString(launchPlan.recommendedStartCommand, "launchPlan.recommendedStartCommand");
+  }
+
+  if (launchPlan.recommendedWaitCommand !== undefined) {
+    requireString(launchPlan.recommendedWaitCommand, "launchPlan.recommendedWaitCommand");
+  }
+
+  if (launchPlan.recommendedLaunchCommand !== undefined) {
+    requireString(launchPlan.recommendedLaunchCommand, "launchPlan.recommendedLaunchCommand");
+  }
+
+  if (launchPlan.canLaunchSelectedAppNow && !launchPlan.canRequestSelectedAppLaunch) {
+    throw new TypeError("launchPlan.canLaunchSelectedAppNow requires canRequestSelectedAppLaunch.");
+  }
+
+  if (launchPlan.canLaunchSelectedAppNow && !report.connection.hasLiveAgentConnection) {
+    throw new TypeError("launchPlan.canLaunchSelectedAppNow requires a live agent connection.");
+  }
+
+  if (launchPlan.requiresRuntimeStart && report.connection.hasLiveAgentConnection) {
+    throw new TypeError("launchPlan.requiresRuntimeStart is only valid before the live agent connects.");
+  }
+
+  if (launchPlan.requiresGuestAgent && report.connection.hasLiveAgentConnection) {
+    throw new TypeError("launchPlan.requiresGuestAgent is only valid before the live agent connects.");
+  }
+
+  if (launchPlan.requiresRuntimeStart && launchPlan.recommendedStartCommand === undefined) {
+    throw new TypeError("launchPlan.requiresRuntimeStart requires recommendedStartCommand.");
+  }
+
+  if (launchPlan.requiresGuestAgent && launchPlan.recommendedWaitCommand === undefined) {
+    throw new TypeError("launchPlan.requiresGuestAgent requires recommendedWaitCommand.");
+  }
+
+  if (launchPlan.canRequestSelectedAppLaunch && launchPlan.recommendedLaunchCommand === undefined) {
+    throw new TypeError("launchPlan.canRequestSelectedAppLaunch requires recommendedLaunchCommand.");
+  }
+
+  const selectedApp = report.apps.find((app) => app.id === launchPlan.selectedAppId);
+  if (launchPlan.selectedAppId !== undefined && selectedApp === undefined) {
+    throw new TypeError("launchPlan.selectedAppId must reference an app entry.");
+  }
+
+  if (selectedApp !== undefined) {
+    if (launchPlan.canRequestSelectedAppLaunch !== selectedApp.canRequestLaunch) {
+      throw new TypeError("launchPlan.canRequestSelectedAppLaunch must match the selected app.");
+    }
+
+    if (launchPlan.canLaunchSelectedAppNow !== selectedApp.canLaunchNow) {
+      throw new TypeError("launchPlan.canLaunchSelectedAppNow must match the selected app.");
+    }
+  }
+}
+
 function validateDockIntegration(dockIntegration, mirrorSessions) {
   if (!dockIntegration || typeof dockIntegration !== "object" || Array.isArray(dockIntegration)) {
     throw new TypeError("dockIntegration must be an object.");
@@ -230,7 +313,7 @@ function validateDockIntegration(dockIntegration, mirrorSessions) {
   }
 }
 
-function validateActions(actions) {
+function validateActions(actions, launchPlan) {
   if (!Array.isArray(actions)) {
     throw new TypeError("actions must be an array.");
   }
@@ -242,6 +325,7 @@ function validateActions(actions) {
     "windowsApps.restorePrevious",
     "windowsApps.closeAll",
     "macWindows.autoOpen",
+    "runtime.startWindowsForApp",
     "runtime.quietWhenIdle",
     "clipboard.setText"
   ]) {
@@ -258,6 +342,11 @@ function validateActions(actions) {
     requireString(action.id, "action.id");
     requireString(action.title, "action.title");
     requireBoolean(action.isAvailable, "action.isAvailable");
+  }
+
+  const startAction = actions.find((action) => action.id === "runtime.startWindowsForApp");
+  if (startAction.isAvailable !== launchPlan.requiresRuntimeStart) {
+    throw new TypeError("runtime.startWindowsForApp availability must match launchPlan.requiresRuntimeStart.");
   }
 }
 

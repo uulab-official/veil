@@ -68,3 +68,4 @@ Goal: adapt concrete UTM source patterns into Veil while keeping Veil focused on
 - [x] Strengthen `restore` app-runtime-action validation so persisted app ids must match restored HWNDs and post-restore mirrored window status.
 - [x] Add `close-all` to `app-runtime-action` so Dock/menu close-all behavior proves all mirrored HWNDs are closed and quiet-runtime readiness is visible.
 - [x] Add `quietRuntime.recommendedStopCommand` so automation can move from closed Windows app windows to bounded QEMU powerdown without guessing the command.
+- [x] Add `launchPlan` to `app-runtime-status` so app-first launch automation can prove when Veil must start Windows, wait for the guest agent, and replay the selected app launch.

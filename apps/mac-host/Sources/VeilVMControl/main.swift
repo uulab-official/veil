@@ -606,6 +606,17 @@ struct VeilVMControl {
         print("Mac window integration: \(report.macWindowIntegration.isEnabled ? "enabled" : "disabled")")
         print("Mac windows auto-open: \(report.macWindowIntegration.acceptsGuestWindowEvents ? "ready" : "waiting")")
         print("Mac mirrored windows: \(report.macWindowIntegration.mirroredWindowCount)")
+        print("Launch plan: \(report.launchPlan.recommendedAction)")
+        print("Launch plan reason: \(report.launchPlan.reason)")
+        if let startCommand = report.launchPlan.recommendedStartCommand {
+            print("Launch start command: \(startCommand)")
+        }
+        if let waitCommand = report.launchPlan.recommendedWaitCommand {
+            print("Launch wait command: \(waitCommand)")
+        }
+        if let launchCommand = report.launchPlan.recommendedLaunchCommand {
+            print("Launch app command: \(launchCommand)")
+        }
         print("Quiet runtime ready: \(report.quietRuntime.canQuietRuntime ? "yes" : "no")")
         print("Quiet runtime auto: \(report.quietRuntime.willQuietAutomatically ? "yes" : "no")")
         print("Quiet runtime delay: \(report.quietRuntime.automaticQuietDelaySeconds)s")

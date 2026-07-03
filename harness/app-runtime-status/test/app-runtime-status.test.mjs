@@ -56,6 +56,16 @@ test("rejects reports without quiet runtime policy status", () => {
   );
 });
 
+test("rejects reports without launch plan status", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.demo.json", import.meta.url), "utf8"));
+  delete report.launchPlan;
+
+  assert.throws(
+    () => validateAppRuntimeStatus(report),
+    /launchPlan/
+  );
+});
+
 test("rejects Dock integration counts that drift from mirrored sessions", () => {
   const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.demo.json", import.meta.url), "utf8"));
   report.mirrorSessions.push({
@@ -104,6 +114,26 @@ test("rejects unavailable quiet runtime reports with a stop command", () => {
   assert.throws(
     () => validateAppRuntimeStatus(report),
     /recommendedStopCommand/
+  );
+});
+
+test("rejects launch plans that drift from selected app readiness", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.demo.json", import.meta.url), "utf8"));
+  report.launchPlan.canLaunchSelectedAppNow = true;
+
+  assert.throws(
+    () => validateAppRuntimeStatus(report),
+    /canLaunchSelectedAppNow/
+  );
+});
+
+test("rejects start action availability that drifts from launch plan", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.demo.json", import.meta.url), "utf8"));
+  report.actions.find((action) => action.id === "runtime.startWindowsForApp").isAvailable = false;
+
+  assert.throws(
+    () => validateAppRuntimeStatus(report),
+    /runtime\.startWindowsForApp/
   );
 });
 

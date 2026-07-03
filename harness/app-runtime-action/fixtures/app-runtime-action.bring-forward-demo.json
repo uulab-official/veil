@@ -57,6 +57,18 @@
       "recommendedAction": "keep-running",
       "reason": "Windows app windows are still open."
     },
+    "launchPlan": {
+      "selectedAppId": "winapp_notepad",
+      "canRequestSelectedAppLaunch": true,
+      "canLaunchSelectedAppNow": false,
+      "requiresRuntimeStart": true,
+      "requiresGuestAgent": true,
+      "recommendedAction": "start-runtime-and-wait-for-agent",
+      "recommendedStartCommand": "veil-vmctl qemu-start --json --wait-seconds 30",
+      "recommendedWaitCommand": "veil-vmctl guest-agent-wait --json --wait-seconds 30",
+      "recommendedLaunchCommand": "veil-vmctl app-runtime-action --json --action launch --app-id winapp_notepad",
+      "reason": "Start Windows, wait for the guest agent, then launch the selected app."
+    },
     "apps": [
       {
         "id": "winapp_notepad",
@@ -104,6 +116,11 @@
         "id": "macWindows.autoOpen",
         "title": "Auto Open Windows App Windows",
         "isAvailable": false
+      },
+      {
+        "id": "runtime.startWindowsForApp",
+        "title": "Start Windows For App Launch",
+        "isAvailable": true
       },
       {
         "id": "runtime.quietWhenIdle",

@@ -275,6 +275,46 @@ public struct WindowsAppRuntimeQuietPolicyStatus: Codable, Equatable, Sendable {
     }
 }
 
+public struct WindowsAppRuntimeLaunchPlanStatus: Codable, Equatable, Sendable {
+    public var selectedAppId: String?
+    public var pendingLaunchAppId: String?
+    public var canRequestSelectedAppLaunch: Bool
+    public var canLaunchSelectedAppNow: Bool
+    public var requiresRuntimeStart: Bool
+    public var requiresGuestAgent: Bool
+    public var recommendedAction: String
+    public var recommendedStartCommand: String?
+    public var recommendedWaitCommand: String?
+    public var recommendedLaunchCommand: String?
+    public var reason: String
+
+    public init(
+        selectedAppId: String?,
+        pendingLaunchAppId: String?,
+        canRequestSelectedAppLaunch: Bool,
+        canLaunchSelectedAppNow: Bool,
+        requiresRuntimeStart: Bool,
+        requiresGuestAgent: Bool,
+        recommendedAction: String,
+        recommendedStartCommand: String? = nil,
+        recommendedWaitCommand: String? = nil,
+        recommendedLaunchCommand: String? = nil,
+        reason: String
+    ) {
+        self.selectedAppId = selectedAppId
+        self.pendingLaunchAppId = pendingLaunchAppId
+        self.canRequestSelectedAppLaunch = canRequestSelectedAppLaunch
+        self.canLaunchSelectedAppNow = canLaunchSelectedAppNow
+        self.requiresRuntimeStart = requiresRuntimeStart
+        self.requiresGuestAgent = requiresGuestAgent
+        self.recommendedAction = recommendedAction
+        self.recommendedStartCommand = recommendedStartCommand
+        self.recommendedWaitCommand = recommendedWaitCommand
+        self.recommendedLaunchCommand = recommendedLaunchCommand
+        self.reason = reason
+    }
+}
+
 public struct WindowsAppRuntimeStatusReport: Codable, Equatable, Sendable {
     public var kind: String
     public var generatedAt: Date
@@ -288,6 +328,7 @@ public struct WindowsAppRuntimeStatusReport: Codable, Equatable, Sendable {
     public var dockIntegration: WindowsAppRuntimeDockIntegrationStatus
     public var macWindowIntegration: WindowsAppRuntimeMacWindowIntegrationStatus
     public var quietRuntime: WindowsAppRuntimeQuietPolicyStatus
+    public var launchPlan: WindowsAppRuntimeLaunchPlanStatus
     public var actions: [WindowsAppRuntimeActionStatus]
 
     public init(
@@ -303,6 +344,7 @@ public struct WindowsAppRuntimeStatusReport: Codable, Equatable, Sendable {
         dockIntegration: WindowsAppRuntimeDockIntegrationStatus,
         macWindowIntegration: WindowsAppRuntimeMacWindowIntegrationStatus,
         quietRuntime: WindowsAppRuntimeQuietPolicyStatus,
+        launchPlan: WindowsAppRuntimeLaunchPlanStatus,
         actions: [WindowsAppRuntimeActionStatus]
     ) {
         self.kind = kind
@@ -317,6 +359,7 @@ public struct WindowsAppRuntimeStatusReport: Codable, Equatable, Sendable {
         self.dockIntegration = dockIntegration
         self.macWindowIntegration = macWindowIntegration
         self.quietRuntime = quietRuntime
+        self.launchPlan = launchPlan
         self.actions = actions
     }
 }
@@ -468,6 +511,7 @@ public final class HostDashboardModel {
     public func runtimeStatusReport(generatedAt: Date = Date()) -> WindowsAppRuntimeStatusReport {
         let quietRuntime = quietRuntimeStatus()
         let macWindowIntegration = macWindowIntegrationStatus()
+        let launchPlan = launchPlanStatus()
         return WindowsAppRuntimeStatusReport(
             generatedAt: generatedAt,
             phase: phase,
@@ -511,6 +555,7 @@ public final class HostDashboardModel {
             ),
             macWindowIntegration: macWindowIntegration,
             quietRuntime: quietRuntime,
+            launchPlan: launchPlan,
             actions: [
                 WindowsAppRuntimeActionStatus(
                     id: "dock.openMainWindow",
@@ -538,6 +583,11 @@ public final class HostDashboardModel {
                     isAvailable: macWindowIntegration.acceptsGuestWindowEvents
                 ),
                 WindowsAppRuntimeActionStatus(
+                    id: "runtime.startWindowsForApp",
+                    title: "Start Windows For App Launch",
+                    isAvailable: launchPlan.requiresRuntimeStart
+                ),
+                WindowsAppRuntimeActionStatus(
                     id: "runtime.quietWhenIdle",
                     title: "Quiet Runtime When Idle",
                     isAvailable: quietRuntime.canQuietRuntime
@@ -548,6 +598,72 @@ public final class HostDashboardModel {
                     isAvailable: canSendHostClipboardText
                 )
             ]
+        )
+    }
+
+    public func launchPlanStatus() -> WindowsAppRuntimeLaunchPlanStatus {
+        guard let selectedAppId else {
+            return WindowsAppRuntimeLaunchPlanStatus(
+                selectedAppId: nil,
+                pendingLaunchAppId: pendingLaunchAppId,
+                canRequestSelectedAppLaunch: false,
+                canLaunchSelectedAppNow: false,
+                requiresRuntimeStart: false,
+                requiresGuestAgent: false,
+                recommendedAction: "select-app",
+                reason: "Select a Windows app before opening the app runtime."
+            )
+        }
+
+        let canRequest = canRequestAppLaunch(appId: selectedAppId)
+        let canLaunchNow = canLaunchApp(appId: selectedAppId)
+        let launchCommand = "veil-vmctl app-runtime-action --json --action launch --app-id \(selectedAppId)"
+
+        if canLaunchNow {
+            return WindowsAppRuntimeLaunchPlanStatus(
+                selectedAppId: selectedAppId,
+                pendingLaunchAppId: pendingLaunchAppId,
+                canRequestSelectedAppLaunch: canRequest,
+                canLaunchSelectedAppNow: true,
+                requiresRuntimeStart: false,
+                requiresGuestAgent: false,
+                recommendedAction: "launch-now",
+                recommendedLaunchCommand: launchCommand,
+                reason: "The live Windows agent can launch the selected app now."
+            )
+        }
+
+        if canRequest {
+            let recommendedAction = pendingLaunchAppId == selectedAppId
+                ? "start-runtime-for-pending-launch"
+                : "start-runtime-and-wait-for-agent"
+            return WindowsAppRuntimeLaunchPlanStatus(
+                selectedAppId: selectedAppId,
+                pendingLaunchAppId: pendingLaunchAppId,
+                canRequestSelectedAppLaunch: true,
+                canLaunchSelectedAppNow: false,
+                requiresRuntimeStart: !hasLiveAgentConnection,
+                requiresGuestAgent: !hasLiveAgentConnection,
+                recommendedAction: recommendedAction,
+                recommendedStartCommand: hasLiveAgentConnection ? nil : "veil-vmctl qemu-start --json --wait-seconds 30",
+                recommendedWaitCommand: hasLiveAgentConnection ? nil : "veil-vmctl guest-agent-wait --json --wait-seconds 30",
+                recommendedLaunchCommand: launchCommand,
+                reason: pendingLaunchAppId == selectedAppId
+                    ? "The selected app launch is queued until Windows starts and the guest agent connects."
+                    : "Start Windows, wait for the guest agent, then launch the selected app."
+            )
+        }
+
+        return WindowsAppRuntimeLaunchPlanStatus(
+            selectedAppId: selectedAppId,
+            pendingLaunchAppId: pendingLaunchAppId,
+            canRequestSelectedAppLaunch: false,
+            canLaunchSelectedAppNow: false,
+            requiresRuntimeStart: false,
+            requiresGuestAgent: !hasLiveAgentConnection,
+            recommendedAction: "unavailable",
+            recommendedWaitCommand: hasLiveAgentConnection ? nil : "veil-vmctl guest-agent-wait --json --wait-seconds 30",
+            reason: "The selected Windows app is not available for launch."
         )
     }
 
