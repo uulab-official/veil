@@ -124,7 +124,12 @@ public struct QEMUWindowsBootPlanner: Sendable {
     }
 
     public func makePlan(for profile: VMProfile) throws -> QEMUWindowsBootPlan {
-        guard let installerMediaPath = nonEmpty(profile.installerMediaPath) else {
+        let windowsInstalled = profile.windowsInstalled == true
+        let shouldAttachInstallerMedia = !windowsInstalled
+        let shouldAttachAutomaticInstallMedia = !windowsInstalled || profile.guestAgentVersion == nil
+        let installerMediaPath = nonEmpty(profile.installerMediaPath)
+
+        guard !shouldAttachInstallerMedia || installerMediaPath != nil else {
             throw QEMUWindowsBootPlanError.missingInstallerMedia
         }
 
@@ -134,9 +139,11 @@ public struct QEMUWindowsBootPlanner: Sendable {
 
         let cpuCount = max(2, profile.cpuCount)
         let memoryMB = max(4_096, profile.memoryMB)
-        let automaticInstallMediaPath = URL(fileURLWithPath: profile.sharedFolderPath)
-            .appendingPathComponent("VeilAutoInstall.iso")
-            .path
+        let automaticInstallMediaPath = shouldAttachAutomaticInstallMedia
+            ? URL(fileURLWithPath: profile.sharedFolderPath)
+                .appendingPathComponent("VeilAutoInstall.iso")
+                .path
+            : nil
         let driverMediaPath = nonEmpty(profile.driverMediaPath)
         var warnings: [String] = []
 
@@ -184,15 +191,11 @@ public struct QEMUWindowsBootPlanner: Sendable {
         let guestAgentForward = "hostfwd=tcp::\(Self.guestAgentHostPort)-:\(Self.guestAgentGuestPort)"
 
         arguments.append(contentsOf: [
-            "-boot", "order=d",
+            "-boot", windowsInstalled ? "order=c" : "order=d",
             "-cpu", "host",
             "-smp", "\(cpuCount)",
             "-m", "\(memoryMB)M",
-            "-drive", "driver=raw,file.driver=file,file.locking=off,file.filename=\(installerMediaPath),if=none,id=installer,media=cdrom,readonly=on",
-            "-drive", "driver=raw,file.driver=file,file.locking=off,file.filename=\(automaticInstallMediaPath),if=none,id=autounattend,media=cdrom,readonly=on",
             "-device", "qemu-xhci,id=usb0",
-            "-device", "usb-storage,drive=installer",
-            "-device", "usb-storage,drive=autounattend",
             "-drive", "if=none,id=system,format=raw,file=\(virtualDiskPath)",
             "-device", "nvme,drive=system,serial=veil-system",
             "-netdev", "user,id=net0,\(guestAgentForward)",
@@ -204,6 +207,20 @@ public struct QEMUWindowsBootPlanner: Sendable {
             "-device", "usb-kbd",
             "-device", "usb-tablet"
         ])
+
+        if let installerMediaPath, shouldAttachInstallerMedia {
+            arguments.append(contentsOf: [
+                "-drive", "driver=raw,file.driver=file,file.locking=off,file.filename=\(installerMediaPath),if=none,id=installer,media=cdrom,readonly=on",
+                "-device", "usb-storage,drive=installer"
+            ])
+        }
+
+        if let automaticInstallMediaPath {
+            arguments.append(contentsOf: [
+                "-drive", "driver=raw,file.driver=file,file.locking=off,file.filename=\(automaticInstallMediaPath),if=none,id=autounattend,media=cdrom,readonly=on",
+                "-device", "usb-storage,drive=autounattend"
+            ])
+        }
 
         if let driverMediaPath {
             arguments.append(contentsOf: [
@@ -225,7 +242,9 @@ public struct QEMUWindowsBootPlanner: Sendable {
             isTPMEmulatorAvailable: isTPMEmulatorAvailable,
             tpmStateDirectoryPath: tpmStateDirectoryPath,
             automaticInstallMediaPath: automaticInstallMediaPath,
-            summary: "Dry-run QEMU/HVF command plan for \(profile.name). Veil does not execute this plan yet.",
+            summary: windowsInstalled
+                ? "Dry-run QEMU/HVF command plan for \(profile.name). Windows boots from the installed system disk; installer media is not attached."
+                : "Dry-run QEMU/HVF command plan for \(profile.name). Veil does not execute this plan yet.",
             arguments: arguments,
             warnings: warnings
         )
@@ -403,7 +422,7 @@ public struct QEMUWindowsReadinessDoctor: Sendable {
         let checks = [
             profileCheck(profile),
             installerMediaCheck(profile),
-            automaticInstallMediaCheck(plan),
+            automaticInstallMediaCheck(profile: profile, plan: plan),
             systemDiskCheck(profile),
             qemuExecutableCheck(plan),
             uefiFirmwareCheck(plan),
@@ -441,6 +460,15 @@ public struct QEMUWindowsReadinessDoctor: Sendable {
     }
 
     private func installerMediaCheck(_ profile: VMProfile?) -> QEMUWindowsReadinessCheck {
+        if profile?.windowsInstalled == true {
+            return QEMUWindowsReadinessCheck(
+                id: "installer-media",
+                title: "Installer media",
+                state: .passed,
+                detail: "Windows is installed on the system disk; the installer ISO is no longer required for boot."
+            )
+        }
+
         guard let path = nonEmpty(profile?.installerMediaPath) else {
             return QEMUWindowsReadinessCheck(
                 id: "installer-media",
@@ -467,7 +495,17 @@ public struct QEMUWindowsReadinessDoctor: Sendable {
         )
     }
 
-    private func automaticInstallMediaCheck(_ plan: QEMUWindowsBootPlan?) -> QEMUWindowsReadinessCheck {
+    private func automaticInstallMediaCheck(profile: VMProfile?, plan: QEMUWindowsBootPlan?) -> QEMUWindowsReadinessCheck {
+        if profile?.windowsInstalled == true,
+           profile?.guestAgentVersion != nil {
+            return QEMUWindowsReadinessCheck(
+                id: "automatic-install-media",
+                title: "Automatic install media",
+                state: .passed,
+                detail: "Guest agent evidence is present; automatic install media is no longer attached at boot."
+            )
+        }
+
         guard let path = nonEmpty(plan?.automaticInstallMediaPath) else {
             return QEMUWindowsReadinessCheck(
                 id: "automatic-install-media",

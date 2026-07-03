@@ -23,7 +23,7 @@ The first four are local host prerequisites. The guest agent step remains pendin
 - Prepare VM creates the default Windows 11 Arm profile, the macOS shared folder at `~/Veil Shared`, and the default sparse disk in one action.
 - Prepare VM does not scan Downloads or any other broad user folder for installer media. The user chooses the Windows ISO explicitly in the host app, or passes it through `veil-vmctl prepare --installer <path>`.
 - Prepare VM creates `~/Veil Shared/Autounattend.xml` with Windows Setup language/OOBE inputs, Windows 11 Pro image selection, UEFI/GPT disk partitioning for the blank VM disk, an offline OOBE registry fallback, and no product key value.
-- Prepare VM creates `~/Veil Shared/VeilAutoInstall.iso`, a small local ISO containing only `Autounattend.xml`, so Windows Setup can read unattended inputs as a VM-attached device.
+- Prepare VM creates `~/Veil Shared/VeilAutoInstall.iso`, a small local ISO containing `Autounattend.xml` and, when available, the Veil guest-agent bootstrap payload. Veil only rebuilds this media when setup or guest-agent recovery payloads are needed and have changed.
 - Prepare VM applies an adaptive resource profile from the current Mac: half of host CPU cores up to a safe cap, 25% of physical memory rounded down to a conservative VM cap, and a 128 GB default sparse disk.
 - `veil-vmctl prepare --installer <path>` prepares the same local profile, shared folder, default sparse disk, installer path, and diagnostics bundle from the command line.
 - `veil-vmctl prepare --installer <path> --drivers <path>` also stores an optional user-provided Windows driver ISO path. Veil attaches that media read-only during QEMU/HVF boots, but does not download, bundle, or license driver media.
@@ -37,10 +37,10 @@ The first four are local host prerequisites. The guest agent step remains pendin
 - The host now prefers the local QEMU/HVF compatibility provider when it is installed and ready, because that is the clearest path to a UTM-style visible Windows installer console. Apple Virtualization remains the fallback feasibility provider.
 - While a QEMU/HVF VM is starting or running, the host shell quietly refreshes the latest VM-console screenshot through the recorded monitor socket so the main window can keep showing Windows setup progress without requiring the separate QEMU display to be frontmost.
 - The runtime snapshot reports structured setup steps so the UI can show what is complete, blocked, or pending.
-- The runtime snapshot reports preflight checks for installer media, guest OS, CPU, memory, and disk size.
-- A profile becomes boot-ready only when installer media, virtual disk, shared folder, automatic install media, and preflight checks all pass.
+- The runtime snapshot reports preflight checks for installer media, guest OS, CPU, memory, and disk size. Installer media is required before Windows is installed; after the profile is marked installed, the ISO is no longer required for normal boot.
+- Before installation, a profile becomes boot-ready only when installer media, virtual disk, shared folder, automatic install media, and preflight checks all pass. After installation, boot readiness is based on the installed system disk, shared folder, and non-installer preflight checks.
 - Pressing Start in the macOS app builds the active local runtime plan and starts QEMU/HVF in headless single-window preview mode. The app keeps runtime status and screenshot evidence in the main Veil window; set `VEIL_USE_NATIVE_QEMU_DISPLAY=1` to opt into the temporary Cocoa display fallback.
-- QEMU/HVF attaches the user-provided Windows ISO, the generated automatic install ISO, optional external driver media, and the writable NVMe system disk when starting the VM. NVMe is used for the install-time system disk because the Windows 11 Arm installer sees it without a separate VirtIO storage driver. The QEMU network adapter is currently `usb-net` because the first real OOBE passes did not find an inbox driver for `virtio-net-pci` or `e1000`.
+- Before installation, QEMU/HVF attaches the user-provided Windows ISO, the generated automatic install ISO, optional external driver media, and the writable NVMe system disk when starting the VM. After Windows is installed, Veil boots from the NVMe system disk and does not attach the Windows installer ISO. If the guest agent is already connected, Veil also stops attaching automatic install media. NVMe is used for the install-time system disk because the Windows 11 Arm installer sees it without a separate VirtIO storage driver. The QEMU network adapter is currently `usb-net` because the first real OOBE passes did not find an inbox driver for `virtio-net-pci` or `e1000`.
 - Apple Virtualization can still build a `VZVirtualMachine` with the same profile, ISO, automatic install media, and writable disk, but it is no longer the preferred visible-console path while Windows installer display support remains unproven.
 - While the VM is running with native display fallback enabled, Open Recovery Display in the app menu or menu bar brings the active QEMU Cocoa window forward. In the default app path there is no second native display window, and the main VM screen does not expose a native-display control.
 - While the VM is running and the guest agent is not connected, the host shell exposes an Install Guest Agent recovery action in the VM controls and menu bar. It sends the same bounded QMP/HMP key sequence as `veil-vmctl qemu-install-agent`, so a visible Windows desktop can run the `VEIL_AUTO` bootstrap without requiring the user to leave the app.
@@ -60,7 +60,7 @@ Diagnostics bundles and boot reports are metadata only. They may include local f
 
 Before the VM boot implementation lands, Veil already blocks obviously invalid profiles:
 
-- Installer media must be a local bootable ISO file. VHD/VHDX files are treated as disk images, not installer media.
+- Before installation, installer media must be a local bootable ISO file. VHD/VHDX files are treated as disk images, not installer media. After Windows is installed, this check becomes informational and the ISO may be removed from the normal profile.
 - Guest OS must be `windows-arm64`.
 - CPU allocation must be at least 2 virtual CPUs.
 - Memory allocation must be at least 4096 MB.
@@ -149,6 +149,8 @@ Reconnect host to agent through QEMU `hostfwd` at ws://127.0.0.1:18444
 ↓
 Enable app launcher and coherence windows
 ```
+
+After that first setup, the normal boot loop starts from the installed system disk and skips Windows installer ISO validation/attachment.
 
 ## macOS Integration Requirements
 

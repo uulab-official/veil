@@ -781,6 +781,39 @@ struct VMProfileStoreTests {
         ])
     }
 
+    @Test("installed Windows runtime does not require installer media")
+    func installedWindowsRuntimeDoesNotRequireInstallerMedia() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let diskURL = directory.appendingPathComponent("Windows.img")
+        let sharedFolderURL = directory.appendingPathComponent("Veil Shared", isDirectory: true)
+        try Data("installed disk".utf8).write(to: diskURL)
+        try FileManager.default.createDirectory(at: sharedFolderURL, withIntermediateDirectories: true)
+
+        let store = JSONVMProfileStore(directory: directory)
+        var profile = VMProfile.defaultWindows11Arm(createdAt: Date(timeIntervalSince1970: 1_782_752_400))
+        profile.windowsInstalled = true
+        profile.guestAgentVersion = "0.1.0"
+        profile.installerMediaPath = nil
+        profile.virtualDiskPath = diskURL.path
+        profile.sharedFolderPath = sharedFolderURL.path
+        try await store.save(profile)
+
+        let service = LocalVMRuntimeService(profileStore: store)
+        let snapshot = try await service.loadSnapshot()
+        let devices = try #require(snapshot.deviceSummary)
+
+        #expect(snapshot.bootReady)
+        #expect(snapshot.installerMediaPath == nil)
+        #expect(snapshot.installEvidence.isInstalled)
+        #expect(snapshot.detail == "Windows is installed and can be started.")
+        #expect(snapshot.installationSteps.first { $0.id == "windows-installer" }?.detail.contains("no longer required") == true)
+        #expect(snapshot.preflightChecks.first { $0.id == "installer-media" }?.state == .passed)
+        #expect(devices.storageDevices.map(\.role) == ["system-disk"])
+        #expect(devices.storageDevices.map(\.path) == [diskURL.path])
+    }
+
     @Test("prepare default VM applies injected adaptive resource plan")
     func prepareDefaultVMAppliesInjectedAdaptiveResourcePlan() async throws {
         let directory = FileManager.default.temporaryDirectory
@@ -1424,6 +1457,34 @@ struct VMProfileStoreTests {
         #expect(snapshot.detail == "Windows VM is running.")
         #expect(bootRunner.startCount == 1)
         #expect(bootRunner.startedProfile?.installerMediaPath == installerURL.path)
+        #expect(bootRunner.startedProfile?.virtualDiskPath == diskURL.path)
+    }
+
+    @Test("local runtime starts installed Windows without installer media")
+    func localRuntimeStartsInstalledWindowsWithoutInstallerMedia() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let diskURL = directory.appendingPathComponent("Windows.img")
+        let sharedFolderURL = directory.appendingPathComponent("Veil Shared", isDirectory: true)
+        try Data("installed disk".utf8).write(to: diskURL)
+        try FileManager.default.createDirectory(at: sharedFolderURL, withIntermediateDirectories: true)
+        let store = JSONVMProfileStore(directory: directory)
+        var profile = VMProfile.defaultWindows11Arm(createdAt: Date(timeIntervalSince1970: 1_782_752_400))
+        profile.windowsInstalled = true
+        profile.guestAgentVersion = "0.1.0"
+        profile.installerMediaPath = nil
+        profile.virtualDiskPath = diskURL.path
+        profile.sharedFolderPath = sharedFolderURL.path
+        try await store.save(profile)
+        let bootRunner = FakeVMRuntimeBooter(startState: .running)
+        let service = LocalVMRuntimeService(profileStore: store, bootRunner: bootRunner)
+
+        let snapshot = try await service.start()
+
+        #expect(snapshot.state == .running)
+        #expect(bootRunner.startCount == 1)
+        #expect(bootRunner.startedProfile?.installerMediaPath == nil)
         #expect(bootRunner.startedProfile?.virtualDiskPath == diskURL.path)
     }
 

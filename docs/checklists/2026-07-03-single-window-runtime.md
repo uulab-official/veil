@@ -32,6 +32,8 @@ Goal: move Veil from a Veil shell plus separate QEMU Cocoa display toward a UTM-
 - [x] Guard the runtime booter so frontmost/System Events automation only runs for the explicit native display fallback.
 - [x] Detect already-running orphan QEMU processes by configured Windows disk path so an old native Cocoa display cannot silently coexist with a new embedded launch.
 - [x] Remove normal VM-screen Native Display buttons so the product surface stays one-window by default.
+- [x] Treat the Windows installer ISO as install-time media only: installed Windows profiles boot from disk without requiring or attaching the ISO.
+- [x] Stop regenerating/attaching automatic install media after guest-agent evidence exists, and avoid recopied guest-agent bundle directories when contents are unchanged.
 
 ## Next
 

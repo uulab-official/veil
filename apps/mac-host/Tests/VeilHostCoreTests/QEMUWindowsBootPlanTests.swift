@@ -152,6 +152,58 @@ struct QEMUWindowsBootPlanTests {
         }
     }
 
+    @Test("installed Windows plan does not require installer media")
+    func installedWindowsPlanDoesNotRequireInstallerMedia() throws {
+        var profile = VMProfile.defaultWindows11Arm(createdAt: Date(timeIntervalSince1970: 1_782_752_400))
+        profile.windowsInstalled = true
+        profile.guestAgentVersion = "0.1.0"
+        profile.installerMediaPath = nil
+        profile.virtualDiskPath = "/Users/test/Virtual Machines/Veil/Windows 11 Arm.img"
+        profile.sharedFolderPath = "/Users/test/Veil Shared"
+
+        let plan = try QEMUWindowsBootPlanner(
+            executablePath: "/opt/homebrew/bin/qemu-system-aarch64",
+            isExecutableAvailable: true,
+            firmwarePath: "/opt/homebrew/share/qemu/edk2-aarch64-code.fd",
+            isFirmwareAvailable: true,
+            firmwareVarsTemplatePath: "/opt/homebrew/share/qemu/edk2-arm-vars.fd",
+            isFirmwareVarsTemplateAvailable: true,
+            firmwareVarsPath: "/Users/test/Virtual Machines/Veil/uefi-vars.fd",
+            isSecureBootFirmwareAvailable: true,
+            tpmEmulatorPath: "/opt/homebrew/bin/swtpm",
+            isTPMEmulatorAvailable: true,
+            tpmStateDirectoryPath: "/Users/test/Virtual Machines/Veil/tpm"
+        ).makePlan(for: profile)
+
+        #expect(plan.arguments.containsSequence(["-boot", "order=c"]))
+        #expect(plan.automaticInstallMediaPath == nil)
+        #expect(!plan.arguments.contains { $0.contains("id=installer") })
+        #expect(!plan.arguments.contains { $0.contains("id=autounattend") })
+        #expect(plan.arguments.contains("if=none,id=system,format=raw,file=/Users/test/Virtual Machines/Veil/Windows 11 Arm.img"))
+        #expect(plan.summary.contains("installer media is not attached"))
+    }
+
+    @Test("installed Windows without guest agent keeps only agent media attached")
+    func installedWindowsWithoutGuestAgentKeepsOnlyAgentMediaAttached() throws {
+        var profile = VMProfile.defaultWindows11Arm(createdAt: Date(timeIntervalSince1970: 1_782_752_400))
+        profile.windowsInstalled = true
+        profile.installerMediaPath = nil
+        profile.virtualDiskPath = "/Users/test/Virtual Machines/Veil/Windows 11 Arm.img"
+        profile.sharedFolderPath = "/Users/test/Veil Shared"
+
+        let plan = try QEMUWindowsBootPlanner(
+            executablePath: "/opt/homebrew/bin/qemu-system-aarch64",
+            isExecutableAvailable: true,
+            firmwarePath: "/opt/homebrew/share/qemu/edk2-aarch64-code.fd",
+            isFirmwareAvailable: true
+        ).makePlan(for: profile)
+
+        #expect(plan.arguments.containsSequence(["-boot", "order=c"]))
+        #expect(!plan.arguments.contains { $0.contains("id=installer") })
+        #expect(plan.automaticInstallMediaPath == "/Users/test/Veil Shared/VeilAutoInstall.iso")
+        #expect(plan.arguments.contains("driver=raw,file.driver=file,file.locking=off,file.filename=/Users/test/Veil Shared/VeilAutoInstall.iso,if=none,id=autounattend,media=cdrom,readonly=on"))
+    }
+
     @Test("warns when QEMU executable is unavailable")
     func warnsWhenExecutableUnavailable() throws {
         var profile = VMProfile.defaultWindows11Arm(createdAt: Date(timeIntervalSince1970: 1_782_752_400))
@@ -882,6 +934,43 @@ struct QEMUWindowsBootPlanTests {
             false,
             false
         ])
+    }
+
+    @Test("doctor treats installer media as optional after Windows install")
+    func doctorTreatsInstallerMediaAsOptionalAfterWindowsInstall() throws {
+        var profile = VMProfile.defaultWindows11Arm(createdAt: Date(timeIntervalSince1970: 1_782_752_400))
+        profile.windowsInstalled = true
+        profile.guestAgentVersion = "0.1.0"
+        profile.installerMediaPath = nil
+        profile.virtualDiskPath = "/Users/test/Virtual Machines/Veil/Windows 11 Arm.img"
+        profile.sharedFolderPath = "/Users/test/Veil Shared"
+
+        let plan = try QEMUWindowsBootPlanner(
+            executablePath: "/opt/homebrew/bin/qemu-system-aarch64",
+            isExecutableAvailable: true,
+            firmwarePath: "/opt/homebrew/share/qemu/edk2-aarch64-code.fd",
+            isFirmwareAvailable: true,
+            firmwareVarsTemplatePath: "/opt/homebrew/share/qemu/edk2-arm-vars.fd",
+            isFirmwareVarsTemplateAvailable: true,
+            firmwareVarsPath: "/Users/test/Virtual Machines/Veil/uefi-vars.fd",
+            isSecureBootFirmwareAvailable: true,
+            tpmEmulatorPath: "/opt/homebrew/bin/swtpm",
+            isTPMEmulatorAvailable: true,
+            tpmStateDirectoryPath: "/Users/test/Virtual Machines/Veil/tpm"
+        ).makePlan(for: profile)
+        let report = QEMUWindowsReadinessDoctor(fileExists: { path in
+            path == "/Users/test/Virtual Machines/Veil/Windows 11 Arm.img"
+                || path == "/opt/homebrew/bin/qemu-system-aarch64"
+                || path == "/opt/homebrew/share/qemu/edk2-aarch64-code.fd"
+                || path == "/opt/homebrew/share/qemu/edk2-arm-vars.fd"
+                || path == "/Users/test/Virtual Machines/Veil/uefi-vars.fd"
+                || path == "/opt/homebrew/bin/swtpm"
+                || path == "/Users/test/Virtual Machines/Veil/tpm"
+        }).makeReport(profile: profile, plan: plan)
+
+        #expect(report.overallState == .ready)
+        #expect(report.checks.first { $0.id == "installer-media" }?.detail.contains("no longer required") == true)
+        #expect(report.checks.first { $0.id == "automatic-install-media" }?.detail.contains("no longer attached") == true)
     }
 
     @Test("smoke boot prompt automation retries when the monitor socket is not ready")

@@ -137,27 +137,33 @@ public final class VirtualizationVMRuntimeBooter: VMRuntimeBooting, @unchecked S
     }
 
     private func storageDevices(for profile: VMProfile) throws -> [VZStorageDeviceConfiguration] {
-        guard let installerMediaPath = profile.installerMediaPath,
-              let virtualDiskPath = profile.virtualDiskPath else {
+        guard let virtualDiskPath = profile.virtualDiskPath else {
             throw VMRuntimeError.bootPrerequisitesMissing
         }
 
-        let installerAttachment = try VZDiskImageStorageDeviceAttachment(
-            url: URL(fileURLWithPath: installerMediaPath),
-            readOnly: true
-        )
         let diskAttachment = try VZDiskImageStorageDeviceAttachment(
             url: URL(fileURLWithPath: virtualDiskPath),
             readOnly: false
         )
 
-        let installerDevice = VZUSBMassStorageDeviceConfiguration(attachment: installerAttachment)
-        let autoInstallDevice = try autoInstallMediaDevice(for: profile)
         let diskDevice = VZVirtioBlockDeviceConfiguration(attachment: diskAttachment)
         diskDevice.blockDeviceIdentifier = VMRuntimeDeviceDefaults.systemDiskIdentifier
 
-        var devices: [VZStorageDeviceConfiguration] = [installerDevice]
-        if let autoInstallDevice {
+        var devices: [VZStorageDeviceConfiguration] = []
+        if profile.windowsInstalled != true {
+            guard let installerMediaPath = profile.installerMediaPath else {
+                throw VMRuntimeError.bootPrerequisitesMissing
+            }
+
+            let installerAttachment = try VZDiskImageStorageDeviceAttachment(
+                url: URL(fileURLWithPath: installerMediaPath),
+                readOnly: true
+            )
+            devices.append(VZUSBMassStorageDeviceConfiguration(attachment: installerAttachment))
+        }
+
+        if (profile.windowsInstalled != true || profile.guestAgentVersion == nil),
+           let autoInstallDevice = try autoInstallMediaDevice(for: profile) {
             devices.append(autoInstallDevice)
         }
         devices.append(diskDevice)

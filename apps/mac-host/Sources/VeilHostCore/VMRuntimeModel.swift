@@ -722,7 +722,7 @@ public enum VMRuntimeError: Error, LocalizedError, Equatable, Sendable {
         case .bootNotImplemented:
             "VM boot is not implemented yet."
         case .bootPrerequisitesMissing:
-            "Installer media, virtual disk, shared folder, and preflight checks must be ready before starting Windows."
+            "Windows setup media is required before installation; after Windows is installed, the system disk, shared folder, and preflight checks must be ready before starting."
         case let .automaticInstallMediaCreationFailed(message):
             "Unable to create automatic Windows install media: \(message)"
         case let .qemuNotReady(message):
@@ -1317,12 +1317,14 @@ public struct LocalVMRuntimeService: VMRuntimeService {
             atPath: profile.sharedFolderPath,
             withIntermediateDirectories: true
         )
-        try Self.prepareGuestAgentInstallerBundle(for: profile)
-        try Self.prepareAutomaticInstallAnswerFile(for: profile)
-        try automaticInstallMediaBuilder.prepareMedia(
-            answerFileURL: Self.automaticInstallAnswerFileURL(for: profile),
-            mediaURL: Self.automaticInstallMediaURL(for: profile)
-        )
+        if Self.shouldPrepareAutomaticInstallMedia(for: profile) {
+            try Self.prepareGuestAgentInstallerBundle(for: profile)
+            try Self.prepareAutomaticInstallAnswerFile(for: profile)
+            try automaticInstallMediaBuilder.prepareMedia(
+                answerFileURL: Self.automaticInstallAnswerFileURL(for: profile),
+                mediaURL: Self.automaticInstallMediaURL(for: profile)
+            )
+        }
 
         if let virtualDiskPath = profile.virtualDiskPath {
             try Self.prepareTPMStateDirectory(virtualDiskPath: virtualDiskPath)
@@ -1416,6 +1418,10 @@ public struct LocalVMRuntimeService: VMRuntimeService {
             .appendingPathComponent("Veil Guest Agent", isDirectory: true)
     }
 
+    private static func shouldPrepareAutomaticInstallMedia(for profile: VMProfile) -> Bool {
+        profile.windowsInstalled != true || profile.guestAgentVersion == nil
+    }
+
     private static func prepareGuestAgentInstallerBundle(for profile: VMProfile) throws {
         let fileManager = FileManager.default
         let bundleURL = guestAgentInstallerBundleURL(for: profile)
@@ -1470,6 +1476,10 @@ public struct LocalVMRuntimeService: VMRuntimeService {
             )
         }
 
+        if directoryContentsMatch(sourceURL, destinationURL) {
+            return
+        }
+
         if fileManager.fileExists(atPath: destinationURL.path) {
             try fileManager.removeItem(at: destinationURL)
         }
@@ -1484,10 +1494,56 @@ public struct LocalVMRuntimeService: VMRuntimeService {
         }
 
         let destinationURL = bundleURL.appendingPathComponent(name, isDirectory: true)
+        if directoryContentsMatch(sourceURL, destinationURL) {
+            return
+        }
+
         if fileManager.fileExists(atPath: destinationURL.path) {
             try fileManager.removeItem(at: destinationURL)
         }
         try fileManager.copyItem(at: sourceURL, to: destinationURL)
+    }
+
+    private struct DirectoryFileManifestEntry: Equatable {
+        var relativePath: String
+        var byteCount: Int?
+        var modifiedAt: Date?
+    }
+
+    private static func directoryContentsMatch(_ sourceURL: URL, _ destinationURL: URL) -> Bool {
+        guard FileManager.default.fileExists(atPath: sourceURL.path),
+              FileManager.default.fileExists(atPath: destinationURL.path) else {
+            return false
+        }
+
+        return directoryFileManifest(for: sourceURL) == directoryFileManifest(for: destinationURL)
+    }
+
+    private static func directoryFileManifest(for directoryURL: URL) -> [DirectoryFileManifestEntry] {
+        guard let enumerator = FileManager.default.enumerator(
+            at: directoryURL,
+            includingPropertiesForKeys: [.isRegularFileKey, .fileSizeKey, .contentModificationDateKey],
+            options: [.skipsHiddenFiles]
+        ) else {
+            return []
+        }
+
+        return enumerator
+            .compactMap { item -> DirectoryFileManifestEntry? in
+                guard let url = item as? URL,
+                      (try? url.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true else {
+                    return nil
+                }
+
+                let values = try? url.resourceValues(forKeys: [.fileSizeKey, .contentModificationDateKey])
+                let relativePath = String(url.path.dropFirst(directoryURL.path.count + 1))
+                return DirectoryFileManifestEntry(
+                    relativePath: relativePath,
+                    byteCount: values?.fileSize,
+                    modifiedAt: values?.contentModificationDate
+                )
+            }
+            .sorted { $0.relativePath < $1.relativePath }
     }
 
     private static func windowsAgentSourceURL() -> URL {
@@ -2337,13 +2393,19 @@ public struct LocalVMRuntimeService: VMRuntimeService {
     }
 
     private static func installationSteps(for profile: VMProfile) -> [VMInstallationStep] {
-        let installerState = fileStepState(
-            path: profile.installerMediaPath,
-            bookmarkData: profile.installerMediaBookmarkData,
-            bookmarkRole: .installer,
-            missingDetail: "Select a Windows 11 Arm installer before setup can continue.",
-            validationLabel: "Installer media"
-        )
+        let windowsInstalled = profile.windowsInstalled == true
+        let installerState = windowsInstalled
+            ? (
+                state: VMInstallationStepState.complete,
+                detail: "Windows is installed on the selected disk. The installer ISO is no longer required for normal boot."
+            )
+            : fileStepState(
+                path: profile.installerMediaPath,
+                bookmarkData: profile.installerMediaBookmarkData,
+                bookmarkRole: .installer,
+                missingDetail: "Select a Windows 11 Arm installer before setup can continue.",
+                validationLabel: "Installer media"
+            )
         let diskState = fileStepState(
             path: profile.virtualDiskPath,
             bookmarkData: profile.virtualDiskBookmarkData,
@@ -2364,6 +2426,20 @@ public struct LocalVMRuntimeService: VMRuntimeService {
             missingDetail: "Run Prepare VM to create the Windows unattended setup media.",
             validationLabel: "Automatic install media"
         )
+        let automaticInstallDetail: String
+        let automaticInstallStepState: VMInstallationStepState
+        if windowsInstalled {
+            automaticInstallDetail = profile.guestAgentVersion == nil
+                ? "Windows is installed. Guest-agent media can be rebuilt only when agent recovery is needed."
+                : "Guest agent evidence is present. Automatic install media is no longer required at boot."
+            automaticInstallStepState = .complete
+        } else {
+            automaticInstallDetail = automaticInstallStepDetail(
+                answerFileState: answerFileState,
+                answerMediaState: answerMediaState
+            )
+            automaticInstallStepState = answerFileState.state == .complete && answerMediaState.state == .complete ? .complete : .blocked
+        }
 
         return [
             VMInstallationStep(
@@ -2387,36 +2463,40 @@ public struct LocalVMRuntimeService: VMRuntimeService {
             VMInstallationStep(
                 id: "auto-install-answer-file",
                 title: "Automatic install media",
-                detail: automaticInstallStepDetail(
-                    answerFileState: answerFileState,
-                    answerMediaState: answerMediaState
-                ),
-                state: answerFileState.state == .complete && answerMediaState.state == .complete ? .complete : .blocked
+                detail: automaticInstallDetail,
+                state: automaticInstallStepState
             ),
             VMInstallationStep(
                 id: "guest-agent",
                 title: "Veil guest agent",
-                detail: "Install the guest agent inside Windows after the VM boot spike lands.",
-                state: .pending
+                detail: profile.guestAgentVersion == nil
+                    ? "Install the guest agent inside Windows after setup."
+                    : "Guest agent \(profile.guestAgentVersion ?? "") is connected.",
+                state: profile.guestAgentVersion == nil ? .pending : .complete
             )
         ]
     }
 
     private static func deviceSummary(for profile: VMProfile) -> VMRuntimeDeviceSummary {
-        var storageDevices = [
-            VMRuntimeStorageDeviceSummary(
+        var storageDevices: [VMRuntimeStorageDeviceSummary] = []
+
+        if profile.windowsInstalled != true {
+            storageDevices.append(VMRuntimeStorageDeviceSummary(
                 role: "installer",
                 attachment: "USB mass storage",
                 path: profile.installerMediaPath,
                 readOnly: true
-            ),
-            VMRuntimeStorageDeviceSummary(
+            ))
+        }
+
+        if shouldPrepareAutomaticInstallMedia(for: profile) {
+            storageDevices.append(VMRuntimeStorageDeviceSummary(
                 role: "auto-install",
                 attachment: "USB mass storage",
                 path: automaticInstallMediaPathIfExists(for: profile),
                 readOnly: true
-            )
-        ]
+            ))
+        }
 
         if let driverMediaPath = profile.driverMediaPath {
             storageDevices.append(
@@ -2514,10 +2594,7 @@ public struct LocalVMRuntimeService: VMRuntimeService {
 
     private static func preflightChecks(for profile: VMProfile) -> [VMPreflightCheck] {
         [
-            installerMediaPreflightCheck(
-                for: profile.installerMediaPath,
-                bookmarkData: profile.installerMediaBookmarkData
-            ),
+            installerMediaPreflightCheck(for: profile),
             VMPreflightCheck(
                 id: "guest-os",
                 title: "Windows Arm guest",
@@ -2551,6 +2628,22 @@ public struct LocalVMRuntimeService: VMRuntimeService {
                 state: profile.diskGB >= 64 ? .passed : .failed
             )
         ]
+    }
+
+    private static func installerMediaPreflightCheck(for profile: VMProfile) -> VMPreflightCheck {
+        if profile.windowsInstalled == true {
+            return VMPreflightCheck(
+                id: "installer-media",
+                title: "Installer media",
+                detail: "Windows is installed on the system disk; the installer ISO is no longer required for boot.",
+                state: .passed
+            )
+        }
+
+        return installerMediaPreflightCheck(
+            for: profile.installerMediaPath,
+            bookmarkData: profile.installerMediaBookmarkData
+        )
     }
 
     private static func installerMediaPreflightCheck(

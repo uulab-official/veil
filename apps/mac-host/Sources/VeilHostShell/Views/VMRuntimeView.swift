@@ -52,7 +52,7 @@ struct VMRuntimeView: View {
                         } else if model.canStart {
                             startDisplayHandoffProgress()
                             startVMAction()
-                        } else if snapshot.installerMediaPath == nil || needsInstallerPickerAccess(snapshot) {
+                        } else if !snapshot.windowsInstalled && (snapshot.installerMediaPath == nil || needsInstallerPickerAccess(snapshot)) {
                             pathPicker = .installerMedia
                         } else {
                             Task {
@@ -362,7 +362,7 @@ private struct InstallSimulationState: Equatable {
     var progress: Double
 
     static let steps = [
-        "Checking Windows ISO",
+        "Checking boot media",
         "Validating local VM profile",
         "Starting local Windows",
         "Attaching embedded preview",
@@ -453,7 +453,7 @@ private struct SimpleRuntimePanel: View {
                         .buttonStyle(.borderedProminent)
                         .disabled(primaryDisabled)
 
-                        if !canStart && installSimulation.phase == .idle {
+                        if !canStart && !snapshot.windowsInstalled && installSimulation.phase == .idle {
                             Button(action: chooseISOAction) {
                                 Label("Choose ISO", systemImage: "opticaldisc")
                             }
@@ -518,6 +518,10 @@ private struct SimpleRuntimePanel: View {
     }
 
     private var installerDetail: String {
+        if snapshot.windowsInstalled {
+            return "Not required after install"
+        }
+
         if let path = snapshot.installerMediaPath {
             return URL(fileURLWithPath: path).lastPathComponent
         }
@@ -526,6 +530,10 @@ private struct SimpleRuntimePanel: View {
     }
 
     private var installerState: SetupStatusState {
+        if snapshot.windowsInstalled {
+            return .complete
+        }
+
         if snapshot.installerMediaPath != nil {
             return .complete
         }
@@ -550,6 +558,10 @@ private struct SimpleRuntimePanel: View {
         case .stopped:
             if installSimulation.phase == .complete {
                 return "Windows start handoff finished. Start again if setup did not continue."
+            }
+
+            if snapshot.windowsInstalled {
+                return "Start installed Windows from this main window."
             }
 
             return snapshot.bootReady ? "Start Windows setup from this main window." : statusText
@@ -580,7 +592,7 @@ private struct SimpleRuntimePanel: View {
             }
         }
 
-        if snapshot.installerMediaPath == nil {
+        if !snapshot.windowsInstalled && snapshot.installerMediaPath == nil {
             return "Choose Windows ISO"
         }
 
@@ -596,7 +608,7 @@ private struct SimpleRuntimePanel: View {
             return "play.fill"
         }
 
-        if snapshot.installerMediaPath == nil {
+        if !snapshot.windowsInstalled && snapshot.installerMediaPath == nil {
             return "opticaldisc"
         }
 
@@ -1229,6 +1241,10 @@ private struct ControlCenterHero: View {
     }
 
     private var installerStatusTitle: String {
+        if snapshot.windowsInstalled {
+            return "Detached"
+        }
+
         if snapshot.installerMediaPath != nil {
             return "Selected"
         }
@@ -1237,6 +1253,10 @@ private struct ControlCenterHero: View {
     }
 
     private var installerStatusTint: Color {
+        if snapshot.windowsInstalled {
+            return .green
+        }
+
         if snapshot.installerMediaPath != nil {
             return .green
         }
@@ -1652,12 +1672,14 @@ private struct WindowsSetupDisplayPanel: View {
             .disabled(isLoading || snapshot.state == .running || snapshot.state == .starting)
             .help("Prepare Windows")
 
-            Button(action: selectInstallerAction) {
-                Label("Choose ISO", systemImage: "opticaldisc")
-                    .labelStyle(.iconOnly)
+            if !effectiveInstallEvidence.isInstalled {
+                Button(action: selectInstallerAction) {
+                    Label("Choose ISO", systemImage: "opticaldisc")
+                        .labelStyle(.iconOnly)
+                }
+                .disabled(isLoading || snapshot.state == .running || snapshot.state == .starting)
+                .help("Choose ISO")
             }
-            .disabled(isLoading || snapshot.state == .running || snapshot.state == .starting)
-            .help("Choose ISO")
 
             Spacer(minLength: 4)
 
@@ -1716,7 +1738,13 @@ private struct WindowsSetupDisplayPanel: View {
 
     private var controlBarSubtitle: String {
         if canStop {
-            return selectedInstallerName ?? "Local Windows display"
+            return effectiveInstallEvidence.isInstalled
+                ? "Installed Windows disk"
+                : (selectedInstallerName ?? "Local Windows display")
+        }
+
+        if effectiveInstallEvidence.isInstalled {
+            return "Installer ISO detached after setup"
         }
 
         if installerNeedsFilePickerAccess, let selectedInstallerName {
@@ -1776,7 +1804,10 @@ private struct WindowsSetupDisplayPanel: View {
     private var flowItems: [InstallFlowItem] {
         let installerDetail: String
         let installerState: InstallFlowState
-        if let selectedInstallerName {
+        if effectiveInstallEvidence.isInstalled {
+            installerDetail = "Installed; ISO no longer required"
+            installerState = .complete
+        } else if let selectedInstallerName {
             installerDetail = installerNeedsFilePickerAccess ? "Re-select \(selectedInstallerName)" : selectedInstallerName
             installerState = installerNeedsFilePickerAccess ? .current : .complete
         } else {
@@ -1820,9 +1851,11 @@ private struct WindowsSetupDisplayPanel: View {
         [
             LauncherMetadataItem(
                 title: "ISO",
-                value: selectedInstallerName ?? "Missing",
+                value: effectiveInstallEvidence.isInstalled
+                    ? "Detached"
+                    : (selectedInstallerName ?? "Missing"),
                 symbolName: "opticaldisc",
-                tint: snapshot.installerMediaPath != nil && !installerNeedsFilePickerAccess ? .green : .orange
+                tint: effectiveInstallEvidence.isInstalled || (snapshot.installerMediaPath != nil && !installerNeedsFilePickerAccess) ? .green : .orange
             ),
             LauncherMetadataItem(
                 title: "Disk",
@@ -2438,7 +2471,7 @@ private struct SetupAssistantPanel: View {
                 title: "Installer Media",
                 detail: installerMediaDetail,
                 symbolName: "opticaldisc",
-                isComplete: snapshot.installerMediaPath != nil
+                isComplete: snapshot.windowsInstalled || snapshot.installerMediaPath != nil
             ),
             SetupItem(
                 title: "Virtual Disk",
@@ -2460,6 +2493,10 @@ private struct SetupAssistantPanel: View {
     }
 
     private var installerMediaDetail: String {
+        if snapshot.windowsInstalled {
+            return "Windows is installed; installer media is no longer required."
+        }
+
         if let path = snapshot.installerMediaPath {
             return path
         }
@@ -2495,10 +2532,12 @@ private struct SetupAssistantPanel: View {
                     .disabled(isLoading)
                 }
 
-                Button(action: selectInstallerAction) {
-                    Label("Installer", systemImage: "opticaldisc")
+                if !snapshot.windowsInstalled {
+                    Button(action: selectInstallerAction) {
+                        Label("Installer", systemImage: "opticaldisc")
+                    }
+                    .disabled(snapshot.profileName == nil || isLoading)
                 }
-                .disabled(snapshot.profileName == nil || isLoading)
 
                 Button(action: selectDiskAction) {
                     Label("Disk", systemImage: "externaldrive")
@@ -2561,6 +2600,10 @@ private struct MachineSummaryPanel: View {
     }
 
     private var installerResourceName: String {
+        if snapshot.windowsInstalled {
+            return "Not required after install"
+        }
+
         if let selected = snapshot.installerMediaPath {
             return resourceName(from: selected)
         }

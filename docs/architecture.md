@@ -53,7 +53,7 @@ The QEMU boot plan remains inspectable before execution. `veil-vmctl qemu-plan -
 
 ## Windows Arm Install Flow
 
-Veil treats Windows setup as a staged runtime prerequisite rather than a generic VM wizard. The host profile tracks installer media, virtual disk, and a narrow macOS shared folder before VM boot work begins. The guest agent remains a separate pending step until Windows can boot and run an installer inside the guest.
+Veil treats Windows setup as a staged runtime prerequisite rather than a generic VM wizard. Before installation, the host profile tracks installer media, virtual disk, and a narrow macOS shared folder. After Windows is installed on the virtual disk, the installer ISO is no longer part of the normal boot path; it remains only user-owned reinstall/recovery media. The guest agent remains a separate pending step until Windows can boot and run an installer inside the guest.
 
 See [Windows Arm install flow](install-flow.md) for the user-facing setup sequence and non-goals.
 
