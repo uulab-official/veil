@@ -35,9 +35,9 @@
 
 ### Slice 3: Coherence Restore Loop
 
-- [ ] Add a menu bar restore action for restorable Windows apps after VM reconnect.
-- [ ] Ensure restore uses the same `WindowRestoreIntentStore` as close and launch.
-- [ ] Verify reconnect and restore behavior with fake-agent tests.
+- [x] Add a menu bar restore action for restorable Windows apps after VM reconnect.
+- [x] Ensure restore uses the same `WindowRestoreIntentStore` as close and launch.
+- [x] Verify reconnect and restore behavior with fake-agent tests.
 
 ### Slice 4: Harness-Driven Automation Surface
 
@@ -194,6 +194,39 @@ Add `canRequestAppLaunch(appId:)`, `canLaunchApp(appId:)`, `canFocusMirrorSessio
 - [x] **Step 3: Bind menu bar disabled states**
 
 Use those model APIs for Windows Apps, Running Windows Apps, Close All, and the app command menu.
+
+- [x] **Step 4: Verify**
+
+Run:
+
+```bash
+cd apps/mac-host && swift test --filter HostDashboardModelTests
+cd apps/mac-host && swift test
+./script/build_and_run.sh --verify
+git diff --check
+```
+
+Expected: all pass.
+
+## Task 5: Menu Bar Coherence Restore Action
+
+**Files:**
+- Modify: `apps/mac-host/Sources/VeilHostCore/HostDashboardModel.swift`
+- Modify: `apps/mac-host/Sources/VeilHostShell/App/VeilHostShellApp.swift`
+- Modify: `apps/mac-host/Tests/VeilHostCoreTests/HostDashboardModelTests.swift`
+- Modify: `docs/checklists/2026-07-03-utm-source-hardening.md`
+
+- [x] **Step 1: Tighten restore availability**
+
+Make `canRestoreMirrorSessions` true only when the live agent is connected, persisted app IDs exist, no mirror sessions are currently open, and the model is not loading or launching.
+
+- [x] **Step 2: Verify persisted restore availability**
+
+Extend `loadsPersistedMappedAppIntentOnStartup` so it loads the live agent after `loadRestoreIntent()` and expects `canRestoreMirrorSessions == true`.
+
+- [x] **Step 3: Add menu bar restore action**
+
+Pass a `restoreWindowsAppWindowsAction` into `VeilMenuBarMenu`, add a `Restore Previous Apps` button, and route it to `model.restoreMirroredWindowsAfterReconnect()` plus `showWindowsAppWindow(for:)`.
 
 - [x] **Step 4: Verify**
 

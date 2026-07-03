@@ -351,7 +351,7 @@ struct HostDashboardModelTests {
         #expect(model.canCloseAllMirrorSessions)
         #expect(model.canSendInput(to: "hwnd:0003029A"))
         #expect(model.canSendHostClipboardText)
-        #expect(model.canRestoreMirrorSessions)
+        #expect(!model.canRestoreMirrorSessions)
     }
 
     @Test("disables unsupported input and clipboard commands")
@@ -579,8 +579,10 @@ struct HostDashboardModelTests {
         )
 
         await model.loadRestoreIntent()
+        await model.load()
 
         #expect(model.restorableAppIds == ["winapp_notepad"])
+        #expect(model.canRestoreMirrorSessions)
     }
 
     @Test("does not hide primary agent protocol failures behind demo fallback")

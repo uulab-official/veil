@@ -182,6 +182,7 @@ struct VeilHostShellApp: App {
                 installGuestAgentAction: installGuestAgentFromDisplay,
                 launchWindowsAppAction: launchSelectedWindowsAppWindow,
                 launchWindowsAppByIdAction: launchWindowsAppWindow(appId:),
+                restoreWindowsAppWindowsAction: restoreWindowsAppWindows,
                 focusWindowsAppWindowAction: focusWindowsAppWindow(windowId:),
                 closeWindowsAppWindowAction: closeWindowsAppWindow(windowId:),
                 closeAllWindowsAppWindowsAction: closeAllWindowsAppWindows,
@@ -324,6 +325,16 @@ struct VeilHostShellApp: App {
     private func launchWindowsAppWindow(appId: String) {
         model.selectedAppId = appId
         launchSelectedWindowsAppWindow()
+    }
+
+    private func restoreWindowsAppWindows() {
+        Task { @MainActor in
+            let restoredLaunches = await model.restoreMirroredWindowsAfterReconnect()
+            for launch in restoredLaunches {
+                showWindowsAppWindow(for: launch)
+            }
+            hideMainWindowForCoherenceIfNeeded()
+        }
     }
 
     private func focusWindowsAppWindow(windowId: String) {
@@ -658,6 +669,7 @@ private struct VeilMenuBarMenu: View {
     var installGuestAgentAction: () -> Void
     var launchWindowsAppAction: () -> Void
     var launchWindowsAppByIdAction: (String) -> Void
+    var restoreWindowsAppWindowsAction: () -> Void
     var focusWindowsAppWindowAction: (String) -> Void
     var closeWindowsAppWindowAction: (String) -> Void
     var closeAllWindowsAppWindowsAction: () -> Void
@@ -726,6 +738,13 @@ private struct VeilMenuBarMenu: View {
                     .disabled(!model.canRequestAppLaunch(appId: app.id))
                 }
             }
+        }
+
+        if !model.restorableAppIds.isEmpty {
+            Button("Restore Previous Apps", systemImage: "arrow.clockwise.square") {
+                restoreWindowsAppWindowsAction()
+            }
+            .disabled(!model.canRestoreMirrorSessions)
         }
 
         Button("Record App Proof", systemImage: "checkmark.seal") {

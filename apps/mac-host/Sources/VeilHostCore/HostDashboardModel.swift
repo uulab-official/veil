@@ -197,6 +197,7 @@ public final class HostDashboardModel {
     public var canRestoreMirrorSessions: Bool {
         hasLiveAgentConnection
             && !restorableAppIds.isEmpty
+            && mirrorSessions.isEmpty
             && phase != .loading
             && phase != .launching
     }
