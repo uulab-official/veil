@@ -86,9 +86,11 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
         window.title = session.window.title
         window.tabbingMode = .disallowed
         window.collectionBehavior = [.managed, .fullScreenPrimary]
-        window.backgroundColor = .windowBackgroundColor
-        window.titleVisibility = .visible
-        window.titlebarAppearsTransparent = false
+        window.backgroundColor = .black
+        window.titleVisibility = .hidden
+        window.titlebarAppearsTransparent = true
+        window.styleMask.insert(.fullSizeContentView)
+        window.toolbar = nil
     }
 
     private func frame(for bounds: WindowBounds, existingWindowCount: Int) -> NSRect {
