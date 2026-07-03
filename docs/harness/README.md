@@ -40,7 +40,7 @@ Current executable pieces:
 - `harness/fake-host`: a CLI simulator for the future macOS host flow.
 - `harness/runtime-provider-probe`: a JSON validator for serverless local runtime provider output.
 - `harness/app-runtime-status`: a JSON validator for app runtime status, open HWND sessions, Dock integration state, and supported actions.
-- `harness/app-runtime-action`: a JSON validator for launch, bring-forward, focus, close, close-all, restore, input, clipboard, and quiet-runtime app-runtime actions.
+- `harness/app-runtime-action`: a JSON validator for launch, pending-launch fulfillment, bring-forward, focus, close, close-all, restore, input, clipboard, and quiet-runtime app-runtime actions.
 - `harness/app-window-proof`: a JSON validator for one app launch, one tracked HWND, and the first captured frame evidence.
 - `harness/coherence-proof`: a JSON validator for one app launch, one tracked HWND, first and post-input frame evidence, mouse/key input, and host clipboard send evidence.
 - `harness/mvp-proof`: a JSON validator for the full Notepad MVP gate: guest-agent readiness plus Coherence proof evidence.
@@ -100,12 +100,13 @@ metadata only for network availability errors.
 
 The app runtime action command lets automation press the same narrow product
 buttons that the macOS shell exposes: launch an app, bring tracked Windows app
-windows forward from Dock/menu state, focus a mirrored HWND, close a mirrored
-HWND, close all mirrored Windows app windows, click inside a mirrored HWND, set
-Windows clipboard text, type bounded ASCII text, restore persisted app-window
-intent after reconnect with requested app ids matched to restored HWNDs, or
-confirm that the runtime is ready to quiet after every mirrored Windows app
-window has closed.
+windows forward from Dock/menu state, fulfill a persisted pending launch after
+the guest agent reconnects, focus a mirrored HWND, close a mirrored HWND, close
+all mirrored Windows app windows, click inside a mirrored HWND, set Windows
+clipboard text, type bounded ASCII text, restore persisted app-window intent
+after reconnect with requested app ids matched to restored HWNDs, or confirm
+that the runtime is ready to quiet after every mirrored Windows app window has
+closed.
 In real-agent mode, a launch request must not fabricate a demo HWND when the
 guest agent is unavailable; it returns a rejected pending-launch action with
 top-level `pendingLaunchAppId` and `launchPlan` fields that must match
@@ -124,6 +125,7 @@ For real guest-agent runs, omit `--demo` and use the HWND returned by
 ```bash
 cd apps/mac-host
 swift run veil-vmctl app-runtime-action --json --action focus --window-id hwnd:0003029A | node ../../harness/app-runtime-action/src/validate-app-runtime-action.mjs
+swift run veil-vmctl app-runtime-action --json --action fulfill-pending | node ../../harness/app-runtime-action/src/validate-app-runtime-action.mjs
 swift run veil-vmctl app-runtime-action --json --action bring-forward | node ../../harness/app-runtime-action/src/validate-app-runtime-action.mjs
 swift run veil-vmctl app-runtime-action --json --action click --window-id hwnd:0003029A --x 240 --y 130 | node ../../harness/app-runtime-action/src/validate-app-runtime-action.mjs
 swift run veil-vmctl app-runtime-action --json --action clipboard --text "hello from macOS" | node ../../harness/app-runtime-action/src/validate-app-runtime-action.mjs

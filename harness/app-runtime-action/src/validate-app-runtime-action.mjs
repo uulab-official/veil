@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 
 import { validateAppRuntimeStatus } from "../../app-runtime-status/src/validate-app-runtime-status.mjs";
 
-const VALID_ACTIONS = new Set(["launch", "focus", "close", "close-all", "restore", "bring-forward", "quiet-when-idle", "clipboard", "type-text", "click"]);
+const VALID_ACTIONS = new Set(["launch", "fulfill-pending", "focus", "close", "close-all", "restore", "bring-forward", "quiet-when-idle", "clipboard", "type-text", "click"]);
 const VALID_CONNECTION_MODES = new Set(["agent", "demo"]);
 
 export function validateAppRuntimeAction(report) {
@@ -44,6 +44,9 @@ export function validateAppRuntimeAction(report) {
     case "launch":
       validateLaunchAction(report);
       break;
+    case "fulfill-pending":
+      validateFulfillPendingAction(report);
+      break;
     case "focus":
       validateFocusAction(report);
       break;
@@ -75,6 +78,45 @@ export function validateAppRuntimeAction(report) {
 
   validateStringArray(report.nextActions, "nextActions");
   return report;
+}
+
+function validateFulfillPendingAction(report) {
+  if (report.launchPlan === undefined) {
+    throw new TypeError("fulfill-pending actions must include top-level launchPlan.");
+  }
+
+  if (!report.accepted) {
+    if (report.launch !== undefined && report.launch !== null) {
+      throw new TypeError("rejected fulfill-pending actions cannot include launch.");
+    }
+
+    if (report.window !== undefined && report.window !== null) {
+      throw new TypeError("rejected fulfill-pending actions cannot include window.");
+    }
+
+    return;
+  }
+
+  requireString(report.appId, "appId");
+  requireString(report.windowId, "windowId");
+  validateLaunchResponse(report.launch);
+  validateWindow(report.window);
+
+  if (report.window.appId !== report.appId) {
+    throw new TypeError("fulfill-pending window appId must match report.appId.");
+  }
+
+  if (report.window.windowId !== report.windowId) {
+    throw new TypeError("fulfill-pending window must match report.windowId.");
+  }
+
+  if (report.status.pendingLaunch.isQueued) {
+    throw new TypeError("accepted fulfill-pending actions must clear status.pendingLaunch.");
+  }
+
+  if (report.status.pendingLaunchAppId !== undefined) {
+    throw new TypeError("accepted fulfill-pending actions must clear status.pendingLaunchAppId.");
+  }
 }
 
 function validateQuietWhenIdleAction(report) {

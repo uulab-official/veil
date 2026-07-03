@@ -16,6 +16,12 @@ test("validates app runtime pending launch fixture", () => {
   assert.equal(validateAppRuntimeAction(report), report);
 });
 
+test("validates app runtime fulfill-pending fixture", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-action.fulfill-pending-live.json", import.meta.url), "utf8"));
+
+  assert.equal(validateAppRuntimeAction(report), report);
+});
+
 test("validates quiet runtime readiness action fixture", () => {
   const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-action.quiet-ready.json", import.meta.url), "utf8"));
 
@@ -92,6 +98,35 @@ test("rejects launch actions without top-level launch plan", () => {
   assert.throws(
     () => validateAppRuntimeAction(report),
     /top-level launchPlan/
+  );
+});
+
+test("rejects accepted fulfill-pending actions that leave pending launch queued", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-action.fulfill-pending-live.json", import.meta.url), "utf8"));
+  report.status.pendingLaunchAppId = "winapp_notepad";
+  report.status.pendingLaunch = {
+    isQueued: true,
+    appId: "winapp_notepad",
+    willLaunchOnAgentReconnect: false,
+    recommendedAction: "launch-pending-now",
+    reason: "The live Windows agent is connected; retry the queued app launch now."
+  };
+  report.status.launchPlan.pendingLaunchAppId = "winapp_notepad";
+  report.launchPlan.pendingLaunchAppId = "winapp_notepad";
+
+  assert.throws(
+    () => validateAppRuntimeAction(report),
+    /clear status\.pendingLaunch/
+  );
+});
+
+test("rejects accepted fulfill-pending actions without a window", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-action.fulfill-pending-live.json", import.meta.url), "utf8"));
+  delete report.window;
+
+  assert.throws(
+    () => validateAppRuntimeAction(report),
+    /window must be an object/
   );
 });
 
