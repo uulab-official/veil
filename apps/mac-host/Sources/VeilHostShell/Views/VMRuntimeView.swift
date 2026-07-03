@@ -8,6 +8,9 @@ struct VMRuntimeView: View {
     var guestAgentInstallEvidence: VMInstallEvidenceSummary?
     var canLaunchWindowsApp: Bool
     var selectedWindowsAppName: String?
+    var pendingLaunch: WindowsAppRuntimePendingLaunchStatus
+    var canFulfillPendingLaunch: Bool
+    var pendingWindowsAppName: String?
     var activeMirrorSession: WindowMirrorSession?
     var startVMAction: () -> Void
     var stopVMAction: () -> Void
@@ -46,7 +49,7 @@ struct VMRuntimeView: View {
                         pathPicker = .driverMedia
                     },
                     primaryAction: {
-                        if canLaunchWindowsApp {
+                        if canOpenWindowsApp {
                             launchWindowsAppAction()
                         } else if canInstallGuestAgent(for: snapshot) {
                             installGuestAgentAction()
@@ -68,6 +71,9 @@ struct VMRuntimeView: View {
                     installGuestAgentAction: installGuestAgentAction,
                     canLaunchWindowsApp: canLaunchWindowsApp,
                     selectedWindowsAppName: selectedWindowsAppName,
+                    pendingLaunch: pendingLaunch,
+                    canFulfillPendingLaunch: canFulfillPendingLaunch,
+                    pendingWindowsAppName: pendingWindowsAppName,
                     activeMirrorSession: activeMirrorSession,
                     recordAppFrameProofAction: recordAppFrameProofAction,
                     refreshAction: {
@@ -356,6 +362,10 @@ struct VMRuntimeView: View {
         default:
             break
         }
+    }
+
+    private var canOpenWindowsApp: Bool {
+        canLaunchWindowsApp || canFulfillPendingLaunch
     }
 }
 
@@ -1298,6 +1308,9 @@ private struct WindowsSetupDisplayPanel: View {
     var installGuestAgentAction: () -> Void
     var canLaunchWindowsApp: Bool
     var selectedWindowsAppName: String?
+    var pendingLaunch: WindowsAppRuntimePendingLaunchStatus
+    var canFulfillPendingLaunch: Bool
+    var pendingWindowsAppName: String?
     var activeMirrorSession: WindowMirrorSession?
     var recordAppFrameProofAction: () -> Void
     var refreshAction: () -> Void
@@ -1547,6 +1560,9 @@ private struct WindowsSetupDisplayPanel: View {
                     AssistantProgressStrip(simulation: installSimulation)
                         .frame(maxWidth: 420)
                         .foregroundStyle(.primary)
+                } else if effectiveInstallEvidence.isInstalled {
+                    AppRuntimeProgressStrip(items: appOpenFlowItems)
+                        .frame(maxWidth: 560)
                 } else {
                     ProgressView(value: progressFraction)
                         .tint(progressTint)
@@ -1595,7 +1611,11 @@ private struct WindowsSetupDisplayPanel: View {
     }
 
     private var displayEyebrow: String {
-        switch snapshot.state {
+        if pendingLaunch.isQueued || activeMirrorSession != nil || canOpenWindowsApp {
+            return "WINDOWS APP RUNTIME"
+        }
+
+        return switch snapshot.state {
         case .running:
             "WINDOWS DISPLAY"
         case .starting:
@@ -1606,7 +1626,28 @@ private struct WindowsSetupDisplayPanel: View {
     }
 
     private var displayStatus: String {
-        switch snapshot.state {
+        if let activeMirrorSession {
+            return "\(activeMirrorSession.window.title) is open as a Mac window."
+        }
+
+        if canFulfillPendingLaunch {
+            return "The queued Windows app is ready to open."
+        }
+
+        if pendingLaunch.willLaunchOnAgentReconnect {
+            switch snapshot.state {
+            case .running, .starting:
+                return "Waiting for the guest agent to open \(pendingAppDisplayName)."
+            default:
+                return "\(pendingAppDisplayName) is queued. Start Windows to continue."
+            }
+        }
+
+        if pendingLaunch.isQueued {
+            return pendingLaunch.reason
+        }
+
+        return switch snapshot.state {
         case .running:
             "Windows is running locally."
         case .starting:
@@ -1635,6 +1676,19 @@ private struct WindowsSetupDisplayPanel: View {
     }
 
     private var installPrimaryTitle: String {
+        if canFulfillPendingLaunch {
+            return "Open \(pendingAppDisplayName)"
+        }
+
+        if pendingLaunch.willLaunchOnAgentReconnect {
+            switch snapshot.state {
+            case .running, .starting:
+                return "Waiting for Agent"
+            default:
+                return "Continue Opening \(pendingAppDisplayName)"
+            }
+        }
+
         if canLaunchWindowsApp {
             return selectedWindowsAppName.map { "Open \($0)" } ?? "Open Windows App"
         }
@@ -1693,9 +1747,9 @@ private struct WindowsSetupDisplayPanel: View {
 
             Spacer(minLength: 4)
 
-            if canLaunchWindowsApp {
+            if canOpenWindowsApp {
                 Button(action: primaryAction) {
-                    Label(selectedWindowsAppName ?? "Open App", systemImage: "macwindow.badge.plus")
+                    Label(appDisplayName, systemImage: "macwindow.badge.plus")
                 }
                 .buttonStyle(.borderedProminent)
                 .disabled(isLoading)
@@ -1727,7 +1781,7 @@ private struct WindowsSetupDisplayPanel: View {
                 .help("Mark Windows setup complete and detach installer media")
             }
 
-            if canLaunchWindowsApp || activeMirrorSession != nil {
+            if canOpenWindowsApp || activeMirrorSession != nil {
                 Button(action: recordAppFrameProofAction) {
                     Label("Record App Frame Proof", systemImage: "checkmark.seal")
                         .labelStyle(.iconOnly)
@@ -1914,6 +1968,19 @@ private struct WindowsSetupDisplayPanel: View {
 
     private var appMetadataValue: String {
         guard let activeMirrorSession else {
+            if canFulfillPendingLaunch {
+                return "Ready"
+            }
+
+            if pendingLaunch.willLaunchOnAgentReconnect {
+                switch snapshot.state {
+                case .running, .starting:
+                    return "Waiting Agent"
+                default:
+                    return "Queued"
+                }
+            }
+
             return canLaunchWindowsApp ? appDisplayName : "After agent"
         }
 
@@ -1922,6 +1989,14 @@ private struct WindowsSetupDisplayPanel: View {
 
     private var appMetadataTint: Color {
         guard let activeMirrorSession else {
+            if canFulfillPendingLaunch {
+                return .green
+            }
+
+            if pendingLaunch.isQueued {
+                return .blue
+            }
+
             return canLaunchWindowsApp ? .green : .secondary
         }
 
@@ -1929,7 +2004,15 @@ private struct WindowsSetupDisplayPanel: View {
     }
 
     private var appDisplayName: String {
-        selectedWindowsAppName ?? "Windows App"
+        if pendingLaunch.isQueued {
+            return pendingAppDisplayName
+        }
+
+        return selectedWindowsAppName ?? "Windows App"
+    }
+
+    private var pendingAppDisplayName: String {
+        pendingWindowsAppName ?? "Windows App"
     }
 
     private var machineTitle: String {
@@ -1939,6 +2022,19 @@ private struct WindowsSetupDisplayPanel: View {
     private var machineSubtitle: String {
         if let activeMirrorSession {
             return "\(activeMirrorSession.window.title) is open as a Mac window"
+        }
+
+        if canFulfillPendingLaunch {
+            return "Open \(pendingAppDisplayName) as a Mac window"
+        }
+
+        if pendingLaunch.willLaunchOnAgentReconnect {
+            switch snapshot.state {
+            case .running, .starting:
+                return "\(pendingAppDisplayName) will open when the guest agent connects"
+            default:
+                return "\(pendingAppDisplayName) is queued. Start Windows to continue"
+            }
         }
 
         if canLaunchWindowsApp {
@@ -1986,6 +2082,19 @@ private struct WindowsSetupDisplayPanel: View {
     }
 
     private var primaryTitle: String {
+        if canFulfillPendingLaunch {
+            return "Open \(pendingAppDisplayName)"
+        }
+
+        if pendingLaunch.willLaunchOnAgentReconnect {
+            switch snapshot.state {
+            case .running, .starting:
+                return "Waiting for Agent"
+            default:
+                return "Continue Opening \(pendingAppDisplayName)"
+            }
+        }
+
         if canLaunchWindowsApp {
             return "Open \(appDisplayName)"
         }
@@ -2014,7 +2123,7 @@ private struct WindowsSetupDisplayPanel: View {
     }
 
     private var primarySymbol: String {
-        if canLaunchWindowsApp {
+        if canFulfillPendingLaunch || pendingLaunch.willLaunchOnAgentReconnect {
             return "macwindow.badge.plus"
         }
 
@@ -2038,6 +2147,19 @@ private struct WindowsSetupDisplayPanel: View {
     }
 
     private var primaryHint: String {
+        if canFulfillPendingLaunch {
+            return "Open the queued \(pendingAppDisplayName) launch as a Mac-managed window."
+        }
+
+        if pendingLaunch.willLaunchOnAgentReconnect {
+            switch snapshot.state {
+            case .running, .starting:
+                return "Windows is running; Veil is waiting for the guest agent before opening \(pendingAppDisplayName)."
+            default:
+                return "Start Windows, wait for the guest agent, then open \(pendingAppDisplayName)."
+            }
+        }
+
         if canLaunchWindowsApp {
             return "Launch \(appDisplayName) as a Mac-managed window."
         }
@@ -2068,12 +2190,20 @@ private struct WindowsSetupDisplayPanel: View {
     }
 
     private var primaryDisabled: Bool {
-        isLoading || snapshot.state == .unsupported || installSimulation.phase == .running
+        isLoading
+            || snapshot.state == .unsupported
+            || installSimulation.phase == .running
+            || isWaitingForQueuedAppAgent
     }
 
     private var progressFraction: Double {
         if installSimulation.phase == .running {
             return installSimulation.progress
+        }
+
+        if effectiveInstallEvidence.isInstalled {
+            let completed = appOpenFlowItems.filter { $0.state == .complete }.count
+            return Double(completed) / Double(appOpenFlowItems.count)
         }
 
         let completed = flowItems.filter { $0.state == .complete }.count
@@ -2097,6 +2227,44 @@ private struct WindowsSetupDisplayPanel: View {
 
     private var progressTint: Color {
         installSimulation.phase == .running ? .blue : phaseTint
+    }
+
+    private var canOpenWindowsApp: Bool {
+        canLaunchWindowsApp || canFulfillPendingLaunch
+    }
+
+    private var isWaitingForQueuedAppAgent: Bool {
+        pendingLaunch.willLaunchOnAgentReconnect
+            && !canFulfillPendingLaunch
+            && (snapshot.state == .running || snapshot.state == .starting)
+    }
+
+    private var appOpenFlowItems: [InstallFlowItem] {
+        [
+            InstallFlowItem(
+                title: "Windows",
+                detail: snapshot.state == .running || snapshot.state == .starting
+                    ? "Running locally"
+                    : "Start local runtime",
+                symbolName: "play.rectangle",
+                state: snapshot.state == .running || snapshot.state == .starting ? .complete : .current
+            ),
+            InstallFlowItem(
+                title: "Agent",
+                detail: canOpenWindowsApp
+                    ? "Connected"
+                    : (pendingLaunch.isQueued ? "Waiting for reconnect" : "Waiting for app catalog"),
+                symbolName: "bolt.horizontal.circle",
+                state: canOpenWindowsApp ? .complete : (snapshot.state == .running || snapshot.state == .starting ? .current : .pending)
+            ),
+            InstallFlowItem(
+                title: "App Window",
+                detail: activeMirrorSession?.window.title
+                    ?? (pendingLaunch.isQueued ? pendingAppDisplayName : appDisplayName),
+                symbolName: "macwindow",
+                state: activeMirrorSession != nil ? .complete : (canOpenWindowsApp ? .current : .pending)
+            )
+        ]
     }
 }
 
@@ -2372,6 +2540,66 @@ private struct AssistantProgressStrip: View {
         }
         .padding(12)
         .background(.blue.opacity(0.08), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+    }
+}
+
+private struct AppRuntimeProgressStrip: View {
+    var items: [InstallFlowItem]
+
+    var body: some View {
+        HStack(spacing: 8) {
+            ForEach(items) { item in
+                HStack(spacing: 7) {
+                    Image(systemName: item.symbolName)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(tint(for: item.state))
+                        .frame(width: 22, height: 22)
+                        .background(tint(for: item.state).opacity(0.16), in: Circle())
+
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(item.title)
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(.white.opacity(0.62))
+                        Text(item.detail)
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.white.opacity(0.88))
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
+                    .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
+                }
+                .padding(.horizontal, 9)
+                .padding(.vertical, 8)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(.white.opacity(backgroundOpacity(for: item.state)), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .strokeBorder(.white.opacity(0.12), lineWidth: 1)
+                }
+            }
+        }
+    }
+
+    private func tint(for state: InstallFlowState) -> Color {
+        switch state {
+        case .complete:
+            return .green
+        case .current:
+            return .blue
+        case .pending:
+            return .white.opacity(0.58)
+        }
+    }
+
+    private func backgroundOpacity(for state: InstallFlowState) -> Double {
+        switch state {
+        case .complete:
+            return 0.14
+        case .current:
+            return 0.18
+        case .pending:
+            return 0.08
+        }
     }
 }
 

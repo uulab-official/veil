@@ -20,6 +20,9 @@ struct DetailView: View {
                 guestAgentInstallEvidence: model.guestAgentInstallEvidence,
                 canLaunchWindowsApp: model.canLaunchSelectedApp,
                 selectedWindowsAppName: model.selectedApp?.name,
+                pendingLaunch: model.pendingLaunchStatus(),
+                canFulfillPendingLaunch: model.canFulfillPendingLaunch,
+                pendingWindowsAppName: pendingWindowsAppName,
                 activeMirrorSession: activeMirrorSession,
                 startVMAction: startVMAction,
                 stopVMAction: stopVMAction,
@@ -63,6 +66,14 @@ struct DetailView: View {
     private var activeMirrorSession: WindowMirrorSession? {
         model.mirrorSessions.first { $0.latestFrame != nil }
             ?? model.mirrorSessions.first
+    }
+
+    private var pendingWindowsAppName: String? {
+        guard let pendingAppId = model.pendingLaunchAppId else {
+            return nil
+        }
+
+        return model.apps.first { $0.id == pendingAppId }?.name
     }
 }
 
