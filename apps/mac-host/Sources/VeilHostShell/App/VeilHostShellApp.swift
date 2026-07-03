@@ -183,6 +183,7 @@ struct VeilHostShellApp: App {
                 launchWindowsAppAction: launchSelectedWindowsAppWindow,
                 launchWindowsAppByIdAction: launchWindowsAppWindow(appId:),
                 focusWindowsAppWindowAction: focusWindowsAppWindow(windowId:),
+                closeWindowsAppWindowAction: closeWindowsAppWindow(windowId:),
                 recordAppFrameProofAction: recordAppFrameProof,
                 refreshAppsAction: refreshApps,
                 refreshRuntimeAction: refreshRuntime,
@@ -330,6 +331,17 @@ struct VeilHostShellApp: App {
         }
 
         windowsAppWindowPresenter.showWindow(for: session)
+    }
+
+    private func closeWindowsAppWindow(windowId: String) {
+        Task { @MainActor in
+            let response = await model.closeMirrorSession(windowId: windowId)
+            guard response?.accepted == true else {
+                return
+            }
+
+            windowsAppWindowPresenter.closeWindow(windowId: windowId)
+        }
     }
 
     private func showWindowsAppWindow(for result: NotepadLaunchResult) {
@@ -637,6 +649,7 @@ private struct VeilMenuBarMenu: View {
     var launchWindowsAppAction: () -> Void
     var launchWindowsAppByIdAction: (String) -> Void
     var focusWindowsAppWindowAction: (String) -> Void
+    var closeWindowsAppWindowAction: (String) -> Void
     var recordAppFrameProofAction: () -> Void
     var refreshAppsAction: () -> Void
     var refreshRuntimeAction: () -> Void
@@ -652,8 +665,14 @@ private struct VeilMenuBarMenu: View {
         if !model.mirrorSessions.isEmpty {
             Menu("Running Windows Apps", systemImage: "rectangle.3.group") {
                 ForEach(model.mirrorSessions) { session in
-                    Button(session.window.title, systemImage: "macwindow") {
-                        focusWindowsAppWindowAction(session.id)
+                    Menu(session.window.title, systemImage: "macwindow") {
+                        Button("Bring to Front", systemImage: "arrow.up.forward.app") {
+                            focusWindowsAppWindowAction(session.id)
+                        }
+
+                        Button("Close", systemImage: "xmark.circle") {
+                            closeWindowsAppWindowAction(session.id)
+                        }
                     }
                 }
             }

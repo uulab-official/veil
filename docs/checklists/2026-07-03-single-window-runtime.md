@@ -48,6 +48,7 @@ Goal: move Veil from a Veil shell plus separate QEMU Cocoa display toward a UTM-
 - [x] Hide the Veil launcher after a real guest-agent app launch so the mirrored Windows app becomes the foreground Coherence-style experience.
 - [x] Use edge-to-edge transparent host chrome for mirrored Windows app windows while keeping the logical app title for accessibility and Window menu identity.
 - [x] Add a menu bar Running Windows Apps section so hidden or covered mirrored app windows can be brought forward without reopening the Veil launcher.
+- [x] Add menu-bar close for running Windows apps that asks the guest to close the HWND before removing the local macOS mirror window.
 
 ## Next
 

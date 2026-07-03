@@ -50,6 +50,16 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
         windowsById.removeAll()
     }
 
+    func closeWindow(windowId: String) {
+        guard let window = windowsById[windowId] else {
+            return
+        }
+
+        suppressedCloseWindowIds.insert(windowId)
+        window.close()
+        windowsById[windowId] = nil
+    }
+
     func windowWillClose(_ notification: Notification) {
         guard let window = notification.object as? NSWindow,
               let windowId = window.identifier?.rawValue else {
