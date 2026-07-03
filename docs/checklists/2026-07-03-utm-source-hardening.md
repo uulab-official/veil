@@ -19,10 +19,11 @@ Goal: adapt concrete UTM source patterns into Veil while keeping Veil focused on
 - [x] Add menu-bar `Close All` for mirrored Windows app windows using the same guest-agent close path as individual windows.
 - [x] Add model-level test coverage for closing multiple mirrored Windows app sessions and unsubscribing frame streams.
 - [x] Record UTM source-file lessons in `docs/research/2026-07-03-utm-reference-notes.md`.
+- [x] Create an implementation roadmap plan for the next UTM-source hardening slices.
 
 ## Next Hardening Pass
 
-- [ ] Add a typed runtime configuration summary that separates system, display, sharing, storage, network, and guest-agent readiness without exposing a full UTM-style settings editor.
+- [x] Add a typed runtime configuration summary that separates system, display, sharing, storage, network, input, and guest-agent readiness without exposing a full UTM-style settings editor.
 - [ ] Add state-gated host commands for app-window focus, close, input, clipboard, and launch so disabled UI mirrors actual guest-agent capability.
 - [ ] Add a menu bar restore action for the last restorable Windows apps after VM reconnect, matching the current restore-intent store.
 - [ ] Add an automation-facing command surface for app launch/close/status so harnesses can drive the same path as the UI.

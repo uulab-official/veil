@@ -786,6 +786,7 @@ struct VMProfileStoreTests {
         let service = LocalVMRuntimeService(profileStore: store)
         let snapshot = try await service.loadSnapshot()
         let devices = try #require(snapshot.deviceSummary)
+        let configuration = try #require(snapshot.configurationSummary)
 
         #expect(devices.platform == "Generic")
         #expect(devices.bootLoader == "EFI")
@@ -803,6 +804,19 @@ struct VMProfileStoreTests {
             driverURL.path,
             diskURL.path
         ])
+        #expect(configuration.system.name == "Windows 11 Arm")
+        #expect(configuration.system.cpuCount == profile.cpuCount)
+        #expect(configuration.system.memoryMB == profile.memoryMB)
+        #expect(configuration.system.diskGB == profile.diskGB)
+        #expect(configuration.display.surface == "Embedded VNC loopback")
+        #expect(configuration.display.widthInPixels == 1440)
+        #expect(configuration.display.heightInPixels == 900)
+        #expect(configuration.sharing.sharedFolderPath == sharedFolderURL.path)
+        #expect(configuration.storage.devices.map(\.role) == ["installer", "auto-install", "drivers", "system-disk"])
+        #expect(configuration.network.mode == "NAT")
+        #expect(configuration.input.devices == ["USB keyboard", "USB screen-coordinate pointer"])
+        #expect(configuration.guestAgent.isInstalled == false)
+        #expect(configuration.guestAgent.version == nil)
     }
 
     @Test("installed Windows runtime does not require installer media")

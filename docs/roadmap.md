@@ -128,10 +128,10 @@ Exit criteria:
 
 ## Current Next Step
 
-The protocol harness is now executable from JavaScript, the Swift host probe, and the SwiftUI host shell. The shell also has a VM Runtime status boundary, one-click VM preparation, adaptive host-sized resource caps, local boot-path checks, installer media role validation, shared-folder preparation, default sparse-disk creation, a setup-step checklist, profile preflight checks, metadata-only diagnostics export, latest boot-attempt reporting, a typed local runtime provider device summary, and an Apple Virtualization boot spike that opens and stops a VM console. The next implementation step is the v0.1/v0.2 overlap:
+Veil now has the local QEMU/HVF boot path, embedded display evidence, fake-agent harnesses, and the first Coherence-style app-window controls. The next work is to close the gap between "can boot and mirror a window" and "daily usable Windows App Runtime" without expanding into a generic VM manager.
 
-1. Harden the Virtualization.framework boot spike against real Windows 11 Arm installer variants.
-2. Decide whether the reliable Windows path stays on Apple Virtualization.framework or needs a UTM-style local QEMU/HVF provider for installer display and device compatibility.
-3. Add deeper validation for selected installer media and virtual disk paths, including file format and bootability checks proven by the spike.
-4. Keep the fake-agent path available so UI and protocol work stay testable without Windows.
-5. Validate the actual Windows 11 Arm VM path separately.
+1. UTM-style runtime configuration contract: expose typed system, display, sharing, storage, network, input, and guest-agent readiness summaries.
+2. State-gated app runtime commands: launch, focus, close, input, clipboard, restore, and stop actions should be available only when the VM and guest-agent state support them.
+3. Coherence restore loop: after VM reconnect, restore selected Windows apps and keep the Veil launcher hidden unless recovery is needed.
+4. Harness automation surface: add a status/action command that proves the same runtime loop works without clicking the UI.
+5. Real Windows validation: rerun the installed Windows 11 Arm path, capture diagnostics, and update docs with exact setup blockers.

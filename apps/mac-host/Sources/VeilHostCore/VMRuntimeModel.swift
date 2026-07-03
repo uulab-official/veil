@@ -246,6 +246,7 @@ public struct VMRuntimeSnapshot: Codable, Equatable, Sendable {
     public var installationSteps: [VMInstallationStep]
     public var preflightChecks: [VMPreflightCheck]
     public var deviceSummary: VMRuntimeDeviceSummary?
+    public var configurationSummary: VMRuntimeConfigurationSummary?
     public var installEvidence: VMInstallEvidenceSummary
     public var bootReady: Bool
     public var windowsInstalled: Bool
@@ -274,6 +275,7 @@ public struct VMRuntimeSnapshot: Codable, Equatable, Sendable {
         installationSteps: [VMInstallationStep] = [],
         preflightChecks: [VMPreflightCheck] = [],
         deviceSummary: VMRuntimeDeviceSummary? = nil,
+        configurationSummary: VMRuntimeConfigurationSummary? = nil,
         installEvidence: VMInstallEvidenceSummary = .notConfigured,
         bootReady: Bool = false,
         windowsInstalled: Bool = false,
@@ -301,6 +303,7 @@ public struct VMRuntimeSnapshot: Codable, Equatable, Sendable {
         self.installationSteps = installationSteps
         self.preflightChecks = preflightChecks
         self.deviceSummary = deviceSummary
+        self.configurationSummary = configurationSummary
         self.installEvidence = installEvidence
         self.bootReady = bootReady
         self.windowsInstalled = windowsInstalled
@@ -492,6 +495,104 @@ public struct VMRuntimeDeviceSummary: Codable, Equatable, Sendable {
         self.graphics = graphics
         self.inputDevices = inputDevices
         self.entropyDevice = entropyDevice
+    }
+}
+
+public struct VMRuntimeSystemConfigurationSummary: Codable, Equatable, Sendable {
+    public var name: String
+    public var architecture: String
+    public var cpuCount: Int
+    public var memoryMB: Int
+    public var diskGB: Int
+
+    public init(name: String, architecture: String, cpuCount: Int, memoryMB: Int, diskGB: Int) {
+        self.name = name
+        self.architecture = architecture
+        self.cpuCount = cpuCount
+        self.memoryMB = memoryMB
+        self.diskGB = diskGB
+    }
+}
+
+public struct VMRuntimeDisplayConfigurationSummary: Codable, Equatable, Sendable {
+    public var surface: String
+    public var widthInPixels: Int
+    public var heightInPixels: Int
+
+    public init(surface: String, widthInPixels: Int, heightInPixels: Int) {
+        self.surface = surface
+        self.widthInPixels = widthInPixels
+        self.heightInPixels = heightInPixels
+    }
+}
+
+public struct VMRuntimeSharingConfigurationSummary: Codable, Equatable, Sendable {
+    public var sharedFolderPath: String
+
+    public init(sharedFolderPath: String) {
+        self.sharedFolderPath = sharedFolderPath
+    }
+}
+
+public struct VMRuntimeStorageConfigurationSummary: Codable, Equatable, Sendable {
+    public var devices: [VMRuntimeStorageDeviceSummary]
+
+    public init(devices: [VMRuntimeStorageDeviceSummary]) {
+        self.devices = devices
+    }
+}
+
+public struct VMRuntimeNetworkConfigurationSummary: Codable, Equatable, Sendable {
+    public var mode: String
+
+    public init(mode: String) {
+        self.mode = mode
+    }
+}
+
+public struct VMRuntimeInputConfigurationSummary: Codable, Equatable, Sendable {
+    public var devices: [String]
+
+    public init(devices: [String]) {
+        self.devices = devices
+    }
+}
+
+public struct VMRuntimeGuestAgentConfigurationSummary: Codable, Equatable, Sendable {
+    public var isInstalled: Bool
+    public var version: String?
+
+    public init(isInstalled: Bool, version: String?) {
+        self.isInstalled = isInstalled
+        self.version = version
+    }
+}
+
+public struct VMRuntimeConfigurationSummary: Codable, Equatable, Sendable {
+    public var system: VMRuntimeSystemConfigurationSummary
+    public var display: VMRuntimeDisplayConfigurationSummary
+    public var sharing: VMRuntimeSharingConfigurationSummary
+    public var storage: VMRuntimeStorageConfigurationSummary
+    public var network: VMRuntimeNetworkConfigurationSummary
+    public var input: VMRuntimeInputConfigurationSummary
+    public var guestAgent: VMRuntimeGuestAgentConfigurationSummary
+
+    public init(
+        system: VMRuntimeSystemConfigurationSummary,
+        display: VMRuntimeDisplayConfigurationSummary,
+        sharing: VMRuntimeSharingConfigurationSummary,
+        storage: VMRuntimeStorageConfigurationSummary,
+        network: VMRuntimeNetworkConfigurationSummary,
+        input: VMRuntimeInputConfigurationSummary,
+        guestAgent: VMRuntimeGuestAgentConfigurationSummary
+    ) {
+        self.system = system
+        self.display = display
+        self.sharing = sharing
+        self.storage = storage
+        self.network = network
+        self.input = input
+        self.guestAgent = guestAgent
     }
 }
 
@@ -1236,6 +1337,7 @@ public struct LocalVMRuntimeService: VMRuntimeService {
                 bookmarkData: profile.virtualDiskBookmarkData
             )
             let windowsInstalled = profile.windowsInstalled == true
+            let deviceSummary = Self.deviceSummary(for: profile)
             let installEvidence = Self.installEvidence(
                 bootPathReadiness: bootPathReadiness,
                 windowsInstalled: windowsInstalled,
@@ -1267,7 +1369,8 @@ public struct LocalVMRuntimeService: VMRuntimeService {
                 runtimeProviders: runtimeProviders,
                 installationSteps: installationSteps,
                 preflightChecks: preflightChecks,
-                deviceSummary: Self.deviceSummary(for: profile),
+                deviceSummary: deviceSummary,
+                configurationSummary: Self.configurationSummary(for: profile, devices: deviceSummary),
                 installEvidence: installEvidence,
                 bootReady: bootPathReadiness.isReady,
                 windowsInstalled: windowsInstalled,
@@ -2554,6 +2657,42 @@ public struct LocalVMRuntimeService: VMRuntimeService {
             ),
             inputDevices: ["USB keyboard", "USB screen-coordinate pointer"],
             entropyDevice: "Virtio entropy"
+        )
+    }
+
+    private static func configurationSummary(
+        for profile: VMProfile,
+        devices: VMRuntimeDeviceSummary
+    ) -> VMRuntimeConfigurationSummary {
+        VMRuntimeConfigurationSummary(
+            system: VMRuntimeSystemConfigurationSummary(
+                name: profile.name,
+                architecture: "arm64",
+                cpuCount: profile.cpuCount,
+                memoryMB: profile.memoryMB,
+                diskGB: profile.diskGB
+            ),
+            display: VMRuntimeDisplayConfigurationSummary(
+                surface: "Embedded VNC loopback",
+                widthInPixels: devices.graphics.widthInPixels,
+                heightInPixels: devices.graphics.heightInPixels
+            ),
+            sharing: VMRuntimeSharingConfigurationSummary(
+                sharedFolderPath: profile.sharedFolderPath
+            ),
+            storage: VMRuntimeStorageConfigurationSummary(
+                devices: devices.storageDevices
+            ),
+            network: VMRuntimeNetworkConfigurationSummary(
+                mode: devices.networkMode
+            ),
+            input: VMRuntimeInputConfigurationSummary(
+                devices: devices.inputDevices
+            ),
+            guestAgent: VMRuntimeGuestAgentConfigurationSummary(
+                isInstalled: profile.guestAgentVersion != nil,
+                version: profile.guestAgentVersion
+            )
         )
     }
 
