@@ -111,7 +111,10 @@ swift run veil-vmctl qemu-install-status --json | node ../../harness/qemu-instal
 
 Use this before and after `qemu-capture`, `qemu-oobe-bypass`, and
 `qemu-install-agent` so issue reports can point at diagnostics metadata rather
-than desktop screenshots.
+than desktop screenshots. If Veil detects the configured disk is already
+attached to a running QEMU process but the current diagnostics directory has no
+launch record, the report must first tell the contributor to close the existing
+QEMU/Windows process before reselecting media or relaunching.
 
 ## QEMU Smoke Scenario
 

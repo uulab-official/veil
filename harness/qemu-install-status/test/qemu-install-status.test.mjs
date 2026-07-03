@@ -17,9 +17,27 @@ test("accepts running blocked reports without launch evidence", () => {
   report.installEvidence.kind = "setupBlocked";
   report.installEvidence.title = "Setup blocked";
   report.installEvidence.detail = "Installer media requires re-selection.";
-  report.nextActions = ["Installer media: Installer media requires re-selection."];
+  report.nextActions = [
+    "Close the existing QEMU/Windows process before preparing or relaunching; Veil detected the configured disk is already attached but has no current launch record.",
+    "Installer media: Installer media requires re-selection."
+  ];
 
   assert.equal(validateQEMUInstallStatus(report), report);
+});
+
+test("rejects running reports without launch evidence or recovery guidance", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/qemu-install-status.running.json", import.meta.url), "utf8"));
+  delete report.latestConsoleLaunch;
+  report.bootReady = false;
+  report.installEvidence.kind = "setupBlocked";
+  report.installEvidence.title = "Setup blocked";
+  report.installEvidence.detail = "Installer media requires re-selection.";
+  report.nextActions = ["Installer media: Installer media requires re-selection."];
+
+  assert.throws(
+    () => validateQEMUInstallStatus(report),
+    /existing QEMU/
+  );
 });
 
 test("rejects running reports with launch evidence but without capture guidance", () => {

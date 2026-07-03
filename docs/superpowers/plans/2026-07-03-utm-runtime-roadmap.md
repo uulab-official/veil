@@ -50,6 +50,7 @@
 - [ ] Run the current Windows 11 Arm ISO through QEMU/HVF embedded display.
 - [x] Add a read-only install-status command for boot/install evidence under diagnostics, not in git.
 - [x] Extend install-status display evidence with resolution, scaling, Retina, and live validation policy.
+- [x] Add recovery guidance when install status is blocked but the configured disk is already attached to a running QEMU process.
 - [ ] Record a fresh live boot/install evidence pass under diagnostics, not in git.
 - [ ] Update install-flow docs with exact observed blockers and recovery steps.
 
@@ -364,6 +365,44 @@ Run:
 ```bash
 cd apps/mac-host && swift test --filter VMProfileStoreTests/buildsWindowsInstallStatusReportFromLaunchEvidence
 cd apps/mac-host && swift test --filter VMProfileStoreTests/localRuntimeReportsVirtualizationDeviceSummary
+cd harness/qemu-install-status && npm test
+cd apps/mac-host && swift run veil-vmctl qemu-install-status --json | node ../../harness/qemu-install-status/src/validate-qemu-install-status.mjs
+cd apps/mac-host && swift test
+./script/build_and_run.sh --verify
+git diff --check
+```
+
+Expected: all pass.
+
+## Task 9: Blocked Running Install Recovery Guidance
+
+**Files:**
+- Modify: `apps/mac-host/Sources/VeilHostCore/VMRuntimeModel.swift`
+- Modify: `apps/mac-host/Tests/VeilHostCoreTests/VMProfileStoreTests.swift`
+- Modify: `harness/qemu-install-status/src/validate-qemu-install-status.mjs`
+- Modify: `harness/qemu-install-status/test/qemu-install-status.test.mjs`
+- Modify: `docs/harness/README.md`
+- Modify: `docs/install-flow.md`
+- Modify: `docs/checklists/2026-07-03-utm-source-hardening.md`
+
+- [x] **Step 1: Add blocked-running recovery tests**
+
+Add coverage for a running runtime snapshot with no current launch record and a failed installer preflight check. The install-status report should put the existing QEMU recovery action before media re-selection blockers.
+
+- [x] **Step 2: Update next-action policy**
+
+Make `VMRuntimeSnapshot.windowsInstallStatusReport` include running QEMU recovery guidance even when `bootReady == false`.
+
+- [x] **Step 3: Harden harness validation**
+
+Require running install-status reports without `latestConsoleLaunch` to include existing QEMU recovery guidance.
+
+- [x] **Step 4: Verify**
+
+Run:
+
+```bash
+cd apps/mac-host && swift test --filter VMProfileStoreTests/reportsRunningQEMURecoveryBeforeBlockedInstallActions
 cd harness/qemu-install-status && npm test
 cd apps/mac-host && swift run veil-vmctl qemu-install-status --json | node ../../harness/qemu-install-status/src/validate-qemu-install-status.mjs
 cd apps/mac-host && swift test

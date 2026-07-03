@@ -51,6 +51,12 @@ export function validateQEMUInstallStatus(report) {
     throw new TypeError("running install status reports with launch evidence must include qemu-capture recovery guidance.");
   }
 
+  if (report.state === "running"
+    && report.latestConsoleLaunch === undefined
+    && !report.nextActions.some((action) => action.includes("existing QEMU"))) {
+    throw new TypeError("running install status reports without launch evidence must include existing QEMU recovery guidance.");
+  }
+
   return report;
 }
 

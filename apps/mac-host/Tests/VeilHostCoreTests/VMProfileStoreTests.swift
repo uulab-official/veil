@@ -318,6 +318,45 @@ struct VMProfileStoreTests {
         #expect(report.nextActions.contains("Continue Windows Setup in the console; use `veil-vmctl qemu-oobe-bypass --json` only when OOBE network setup blocks local account creation."))
     }
 
+    @Test("reports running QEMU recovery before blocked install actions")
+    func reportsRunningQEMURecoveryBeforeBlockedInstallActions() {
+        let snapshot = VMRuntimeSnapshot(
+            state: .running,
+            virtualizationAvailable: true,
+            architecture: "arm64",
+            minimumOSSupported: true,
+            profileName: "Windows 11 Arm",
+            installerMediaPath: "/Users/test/Downloads/Win11_25H2_Korean_Arm64_v2.iso",
+            virtualDiskPath: "/Users/test/Virtual Machines/Windows.img",
+            preflightChecks: [
+                VMPreflightCheck(
+                    id: "installer-media",
+                    title: "Installer media",
+                    detail: "Installer media is in Downloads. Re-select it with the file picker so Veil can store macOS file access before starting Windows.",
+                    state: .failed
+                )
+            ],
+            installEvidence: VMInstallEvidenceSummary(
+                kind: .setupBlocked,
+                isInstalled: false,
+                title: "Setup blocked",
+                detail: "Installer media is in Downloads."
+            ),
+            bootReady: false,
+            windowsInstalled: false,
+            detail: "Installer media requires file picker access."
+        )
+
+        let report = snapshot.windowsInstallStatusReport(
+            generatedAt: Date(timeIntervalSince1970: 1_782_918_000)
+        )
+
+        #expect(report.state == .running)
+        #expect(report.latestConsoleLaunch == nil)
+        #expect(report.nextActions.first == "Close the existing QEMU/Windows process before preparing or relaunching; Veil detected the configured disk is already attached but has no current launch record.")
+        #expect(report.nextActions.dropFirst().first == "Installer media: Installer media is in Downloads. Re-select it with the file picker so Veil can store macOS file access before starting Windows.")
+    }
+
     @Test("local runtime avoids protected Downloads console screenshot during snapshot load")
     func localRuntimeAvoidsProtectedDownloadsConsoleScreenshotDuringSnapshotLoad() async throws {
         let directory = FileManager.default.temporaryDirectory

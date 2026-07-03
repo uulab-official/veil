@@ -26,6 +26,7 @@ Goal: adapt concrete UTM source patterns into Veil while keeping Veil focused on
 - [x] Add `veil-vmctl app-runtime-status --json` plus a Node harness validator for app-runtime status/actions.
 - [x] Add `veil-vmctl qemu-install-status --json` plus a Node harness validator for persistent Windows install evidence.
 - [x] Extend display evidence with planned resolution, aspect-fit scaling, Retina rendering policy, and live VNC validation guidance.
+- [x] Add install-status recovery guidance for blocked installs that still have a running QEMU process attached to the configured disk.
 
 ## Next Hardening Pass
 

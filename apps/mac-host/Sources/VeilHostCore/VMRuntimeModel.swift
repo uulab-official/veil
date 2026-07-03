@@ -385,25 +385,29 @@ public extension VMRuntimeSnapshot {
 
     private func windowsInstallNextActions() -> [String] {
         if !bootReady {
+            var actions = runningRecoveryActions()
             let blockers = preflightChecks
                 .filter { $0.state == .failed }
                 .map { "\($0.title): \($0.detail)" }
             if !blockers.isEmpty {
-                return blockers
+                actions.append(contentsOf: blockers)
+                return actions
             }
 
             let blockedSteps = installationSteps
                 .filter { $0.state == .blocked }
                 .map { "\($0.title): \($0.detail)" }
             if !blockedSteps.isEmpty {
-                return blockedSteps
+                actions.append(contentsOf: blockedSteps)
+                return actions
             }
 
-            return ["Run `veil-vmctl qemu-doctor --json` to identify the missing Windows install prerequisite."]
+            actions.append("Run `veil-vmctl qemu-doctor --json` to identify the missing Windows install prerequisite.")
+            return actions
         }
 
         if state == .running {
-            var actions: [String] = []
+            var actions = runningRecoveryActions()
             if latestConsoleLaunch?.displaySurface.isLiveCapable == true {
                 actions.append("Validate the embedded console with `veil-vmctl qemu-display-smoke --json`.")
             }
@@ -432,6 +436,22 @@ public extension VMRuntimeSnapshot {
         }
 
         return ["Start the visible install with `veil-vmctl qemu-start --wait-seconds 15`."]
+    }
+
+    private func runningRecoveryActions() -> [String] {
+        guard state == .running else {
+            return []
+        }
+
+        if latestConsoleLaunch == nil {
+            return [
+                "Close the existing QEMU/Windows process before preparing or relaunching; Veil detected the configured disk is already attached but has no current launch record."
+            ]
+        }
+
+        return [
+            "Capture the current console before changing setup state, then shut down with `veil-vmctl qemu-powerdown --json` if you need to reselect media or relaunch."
+        ]
     }
 
     private func displaySurfaceEvidence() -> VMConsoleDisplaySurface {
