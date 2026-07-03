@@ -78,6 +78,28 @@ struct HostDashboardModelTests {
         #expect(session.latestFrame?.sequence == 1)
         #expect(session.latestFrame?.format == "png")
         #expect(session.latestFrame?.encodedData.hasPrefix("iVBOR") == true)
+        #expect(session.frameTiming?.receivedFrameCount == 1)
+        #expect(session.frameTiming?.latestFrameIntervalMilliseconds == nil)
+    }
+
+    @Test("records frame timing and cadence for mirrored windows")
+    @MainActor
+    func recordsFrameTimingAndCadenceForMirroredWindows() async throws {
+        let service = FakeDashboardService(health: .captureReady)
+        let model = HostDashboardModel(service: service)
+        let firstFrameAt = Date(timeIntervalSince1970: 1_000)
+        let secondFrameAt = Date(timeIntervalSince1970: 1_000.125)
+
+        await model.launchNotepad()
+        model.receiveWindowFrame(.notepadFirstFrame, receivedAt: firstFrameAt)
+        model.receiveWindowFrame(.notepadSecondFrame, receivedAt: secondFrameAt)
+
+        let session = try #require(model.mirrorSessions.first)
+        #expect(session.latestFrame?.frameId == "frame_000002")
+        #expect(session.frameTiming?.firstFrameReceivedAt == firstFrameAt)
+        #expect(session.frameTiming?.latestFrameReceivedAt == secondFrameAt)
+        #expect(session.frameTiming?.latestFrameIntervalMilliseconds == 125)
+        #expect(session.frameTiming?.receivedFrameCount == 2)
     }
 
     @Test("routes a protocol frame message into the matching mirror session")
@@ -798,6 +820,20 @@ private extension WindowFrameEvent {
             windowId: "hwnd:0003029A",
             frameId: "frame_000001",
             sequence: 1,
+            format: "png",
+            width: 1,
+            height: 1,
+            scale: 1,
+            encodedData: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII="
+        )
+    }
+
+    static var notepadSecondFrame: WindowFrameEvent {
+        WindowFrameEvent(
+            type: .windowFrame,
+            windowId: "hwnd:0003029A",
+            frameId: "frame_000002",
+            sequence: 2,
             format: "png",
             width: 1,
             height: 1,

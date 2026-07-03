@@ -45,23 +45,45 @@ public enum WindowCaptureState: String, Codable, Equatable, Sendable {
     case streaming
 }
 
+public struct WindowFrameTiming: Codable, Equatable, Sendable {
+    public var firstFrameReceivedAt: Date
+    public var latestFrameReceivedAt: Date
+    public var latestFrameIntervalMilliseconds: Int?
+    public var receivedFrameCount: Int
+
+    public init(
+        firstFrameReceivedAt: Date,
+        latestFrameReceivedAt: Date,
+        latestFrameIntervalMilliseconds: Int? = nil,
+        receivedFrameCount: Int = 1
+    ) {
+        self.firstFrameReceivedAt = firstFrameReceivedAt
+        self.latestFrameReceivedAt = latestFrameReceivedAt
+        self.latestFrameIntervalMilliseconds = latestFrameIntervalMilliseconds
+        self.receivedFrameCount = receivedFrameCount
+    }
+}
+
 public struct WindowMirrorSession: Codable, Equatable, Identifiable, Sendable {
     public var id: String { window.windowId }
     public var window: WindowCreatedEvent
     public var connectionMode: HostConnectionMode
     public var captureState: WindowCaptureState
     public var latestFrame: WindowFrameEvent?
+    public var frameTiming: WindowFrameTiming?
 
     public init(
         window: WindowCreatedEvent,
         connectionMode: HostConnectionMode,
         captureState: WindowCaptureState,
-        latestFrame: WindowFrameEvent? = nil
+        latestFrame: WindowFrameEvent? = nil,
+        frameTiming: WindowFrameTiming? = nil
     ) {
         self.window = window
         self.connectionMode = connectionMode
         self.captureState = captureState
         self.latestFrame = latestFrame
+        self.frameTiming = frameTiming
     }
 }
 
@@ -299,13 +321,22 @@ public final class HostDashboardModel {
         }
     }
 
-    public func receiveWindowFrame(_ frame: WindowFrameEvent) {
+    public func receiveWindowFrame(_ frame: WindowFrameEvent, receivedAt: Date = Date()) {
         guard let index = mirrorSessions.firstIndex(where: { $0.id == frame.windowId }) else {
             return
         }
 
+        let priorTiming = mirrorSessions[index].frameTiming
         mirrorSessions[index].latestFrame = frame
         mirrorSessions[index].captureState = .streaming
+        mirrorSessions[index].frameTiming = WindowFrameTiming(
+            firstFrameReceivedAt: priorTiming?.firstFrameReceivedAt ?? receivedAt,
+            latestFrameReceivedAt: receivedAt,
+            latestFrameIntervalMilliseconds: priorTiming.map {
+                max(0, Int((receivedAt.timeIntervalSince($0.latestFrameReceivedAt) * 1000).rounded()))
+            },
+            receivedFrameCount: (priorTiming?.receivedFrameCount ?? 0) + 1
+        )
     }
 
     @discardableResult

@@ -32,8 +32,9 @@ Goal: make Veil's product direction visible as "Windows app as a macOS window" i
 - [x] Extend Notepad input smoke to wait for a post-input capture frame.
 - [x] Save initial and post-input Notepad smoke frames as PNG evidence when an output directory is provided.
 - [x] Replace the mirrored-window blank placeholder with capture-state-aware pending, unavailable, and undecodable-frame surfaces.
+- [x] Track first-frame receipt, frame count, and latest frame interval on mirrored app sessions.
 
 ## Next
 
 - [ ] Validate keyboard input inside Windows 11 Arm with Notepad focused.
-- [ ] Measure first-frame time and frame cadence from the real Windows guest agent.
+- [ ] Record real Windows 11 Arm first-frame time and frame cadence evidence from the guest agent.

@@ -22,6 +22,7 @@ struct WindowsAppFrameSurface: View {
             }
         }
         .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+        .help(frameStatusHelp)
         .accessibilityLabel(accessibilityLabel)
     }
 
@@ -134,6 +135,28 @@ struct WindowsAppFrameSurface: View {
         session.latestFrame != nil && !hasRenderableFrame
     }
 
+    private var frameTimingSummary: String? {
+        guard let timing = session.frameTiming else {
+            return nil
+        }
+
+        if let interval = timing.latestFrameIntervalMilliseconds {
+            return "\(timing.receivedFrameCount) frames, latest interval \(interval) ms"
+        }
+
+        return "First frame received"
+    }
+
+    private var frameStatusHelp: String {
+        [
+            session.window.title,
+            frameTimingSummary,
+            session.latestFrame.map { "Frame \($0.sequence), \($0.width)x\($0.height), \($0.format.uppercased())" }
+        ]
+        .compactMap { $0 }
+        .joined(separator: "\n")
+    }
+
     private var accessibilityLabel: String {
         if session.captureState == .unavailable {
             return "\(session.window.title) window capture unavailable"
@@ -145,6 +168,10 @@ struct WindowsAppFrameSurface: View {
 
         if session.latestFrame == nil {
             return "Waiting for \(session.window.title) frame"
+        }
+
+        if let frameTimingSummary {
+            return "\(session.window.title) mirrored Windows app frame, \(frameTimingSummary)"
         }
 
         return "\(session.window.title) mirrored Windows app frame"

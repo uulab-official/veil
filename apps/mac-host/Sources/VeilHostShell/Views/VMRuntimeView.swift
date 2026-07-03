@@ -1214,7 +1214,7 @@ private struct WindowsSetupDisplayPanel: View {
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.white.opacity(0.84))
                     .lineLimit(1)
-                Text(session.latestFrame == nil ? "Waiting for first frame" : "Mirroring live frame")
+                Text(mirroredAppFrameStatus(for: session))
                     .font(.caption2.weight(.medium))
                     .foregroundStyle(.white.opacity(0.62))
                     .lineLimit(1)
@@ -1228,6 +1228,18 @@ private struct WindowsSetupDisplayPanel: View {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .strokeBorder(.white.opacity(0.16), lineWidth: 1)
         }
+    }
+
+    private func mirroredAppFrameStatus(for session: WindowMirrorSession) -> String {
+        guard let timing = session.frameTiming else {
+            return session.latestFrame == nil ? "Waiting for first frame" : "Mirroring live frame"
+        }
+
+        if let interval = timing.latestFrameIntervalMilliseconds {
+            return "Live frame \(timing.receivedFrameCount) · \(interval) ms"
+        }
+
+        return "First frame received"
     }
 
     private var installControlBar: some View {
