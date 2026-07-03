@@ -120,7 +120,14 @@ swift test
 swift run veil-host-probe
 ```
 
-Expected output is a JSON launch result with Notepad app metadata and a `window.created` event.
+Expected output is a JSON `agent.health.response`. Use the broader probes when needed:
+
+```bash
+swift run veil-host-probe --overview
+swift run veil-host-probe --launch-notepad
+```
+
+`--overview` requests health and app metadata. `--launch-notepad` runs the full Notepad acceptance flow and should include a `window.created` event.
 
 ## macOS Host Shell
 

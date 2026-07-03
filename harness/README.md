@@ -87,6 +87,14 @@ swift test
 swift run veil-host-probe
 ```
 
+Expected: pretty-printed JSON includes `agent.health.response`.
+
+For the full launch acceptance flow:
+
+```bash
+swift run veil-host-probe --launch-notepad
+```
+
 Expected: pretty-printed JSON includes Notepad app metadata and `window.created` for `hwnd:0003029A`.
 
 ## SwiftUI Host Shell Smoke Test

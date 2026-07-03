@@ -5,6 +5,21 @@ import Testing
 
 @Suite("Veil host client")
 struct VeilHostClientTests {
+    @Test("loads agent health without launching an app")
+    func loadsAgentHealthOnly() async throws {
+        let transport = RecordingTransport(responses: [
+            #"{"type":"agent.health.response","requestId":"req_health","protocolVersion":1,"agentVersion":"0.1.0","os":"windows-arm64","session":{"interactive":true,"user":"veil-user"},"capabilities":{"appList":true,"appLaunch":true,"windowTracking":true,"windowCapture":false,"input":false,"clipboardText":false}}"#
+        ])
+        let client = VeilHostClient(transport: transport)
+
+        let health = try await client.loadHealth()
+
+        #expect(transport.sentTypes == ["agent.health.request"])
+        #expect(transport.expectedReplyCounts == [1])
+        #expect(health.agentVersion == "0.1.0")
+        #expect(health.os == "windows-arm64")
+    }
+
     @Test("runs the Notepad launch flow in protocol order")
     func runsNotepadLaunchFlow() async throws {
         let transport = RecordingTransport(responses: [

@@ -18,6 +18,7 @@ Goal: create the first macOS host-side Swift package that can talk to the fake W
 - [x] Add typed Swift protocol models for health, app list, app launch, and window created messages.
 - [x] Add unit tests for decoding fixture-compatible JSON.
 - [x] Add a host client abstraction that can run `health -> app list -> launch`.
+- [x] Add a health-only host probe mode for guest-agent install verification without launching Notepad.
 - [x] Add tests for host client sequencing with a fake transport.
 - [x] Add `veil-host-probe` executable.
 - [x] Run `swift test` in `apps/mac-host`.
