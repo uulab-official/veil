@@ -62,7 +62,7 @@ enum VMControlError: Error, LocalizedError {
         }
     }
 
-    private static let usage = "Usage: veil-vmctl prepare --installer /path/to/Windows.iso [--drivers /path/to/virtio-win.iso] | veil-vmctl app-runtime-status [--json] [--demo] | veil-vmctl mark-installed [--json] | veil-vmctl providers [--json] | veil-vmctl qemu-plan [--json] | veil-vmctl qemu-doctor [--json] | veil-vmctl qemu-smoke [--json] [--seconds 45] | veil-vmctl qemu-start [--json] [--wait-seconds 15] [--native-display] | veil-vmctl qemu-display-smoke [--json] [--wait-seconds 5] | veil-vmctl qemu-capture [--json] [--output /path/to/console.png] | veil-vmctl qemu-powerdown [--json] [--wait-seconds 30] | veil-vmctl qemu-force-stop [--json] --i-understand-data-loss [--wait-seconds 10] | veil-vmctl qemu-sendkey [--json] key [key ...] | veil-vmctl qemu-type-text [--json] --text \"...\" | veil-vmctl qemu-click [--json] --x 0...32767 --y 0...32767 | veil-vmctl qemu-oobe-bypass [--json] | veil-vmctl qemu-install-agent [--json]"
+    private static let usage = "Usage: veil-vmctl prepare --installer /path/to/Windows.iso [--drivers /path/to/virtio-win.iso] | veil-vmctl app-runtime-status [--json] [--demo] | veil-vmctl mark-installed [--json] | veil-vmctl providers [--json] | veil-vmctl qemu-plan [--json] | veil-vmctl qemu-doctor [--json] | veil-vmctl qemu-install-status [--json] | veil-vmctl qemu-smoke [--json] [--seconds 45] | veil-vmctl qemu-start [--json] [--wait-seconds 15] [--native-display] | veil-vmctl qemu-display-smoke [--json] [--wait-seconds 5] | veil-vmctl qemu-capture [--json] [--output /path/to/console.png] | veil-vmctl qemu-powerdown [--json] [--wait-seconds 30] | veil-vmctl qemu-force-stop [--json] --i-understand-data-loss [--wait-seconds 10] | veil-vmctl qemu-sendkey [--json] key [key ...] | veil-vmctl qemu-type-text [--json] --text \"...\" | veil-vmctl qemu-click [--json] --x 0...32767 --y 0...32767 | veil-vmctl qemu-oobe-bypass [--json] | veil-vmctl qemu-install-agent [--json]"
 }
 
 struct VMControlArguments {
@@ -78,6 +78,7 @@ struct VMControlArguments {
         case providers(json: Bool)
         case qemuPlan(json: Bool)
         case qemuDoctor(json: Bool)
+        case qemuInstallStatus(json: Bool)
         case qemuSmoke(json: Bool, seconds: Int)
         case qemuStart(json: Bool, waitSeconds: Int, displayMode: QEMUStartDisplayMode)
         case qemuDisplaySmoke(json: Bool, waitSeconds: Int)
@@ -121,6 +122,10 @@ struct VMControlArguments {
 
         if command == "qemu-doctor" {
             return VMControlArguments(command: .qemuDoctor(json: arguments.contains("--json")))
+        }
+
+        if command == "qemu-install-status" {
+            return VMControlArguments(command: .qemuInstallStatus(json: arguments.contains("--json")))
         }
 
         if command == "qemu-smoke" {
@@ -360,6 +365,8 @@ struct VeilVMControl {
             try await printQEMUPlan(json: json)
         case .qemuDoctor(let json):
             try await printQEMUDoctor(json: json)
+        case .qemuInstallStatus(let json):
+            try await printQEMUInstallStatus(json: json)
         case .qemuSmoke(let json, let seconds):
             try await printQEMUSmoke(json: json, seconds: seconds)
         case .qemuStart(let json, let waitSeconds, let displayMode):
@@ -551,6 +558,39 @@ struct VeilVMControl {
             print("\(check.title): \(check.state.rawValue)")
             print("  \(check.detail)")
         }
+        print("Next actions:")
+        for action in report.nextActions {
+            print("  - \(action)")
+        }
+    }
+
+    private static func printQEMUInstallStatus(json: Bool) async throws {
+        let snapshot = try await LocalVMRuntimeService().loadSnapshot()
+        let report = snapshot.windowsInstallStatusReport()
+
+        if json {
+            let data = try JSONEncoder.veilDiagnostics.encode(report)
+            print(String(decoding: data, as: UTF8.self))
+            return
+        }
+
+        print("Windows install status: \(report.installEvidence.title)")
+        print("State: \(report.state.rawValue)")
+        print("Profile: \(report.profileName ?? "Not configured")")
+        print("Boot ready: \(report.bootReady ? "yes" : "no")")
+        print("Windows installed: \(report.windowsInstalled ? "yes" : "no")")
+        print("Installer: \(report.installerMediaPath ?? "Not selected")")
+        print("Drivers: \(report.driverMediaPath ?? "Not selected")")
+        print("Virtual disk: \(report.virtualDiskPath ?? "Not selected")")
+        print("Console screenshot: \(report.latestConsoleScreenshotPath ?? "Not captured")")
+        if let launch = report.latestConsoleLaunch {
+            print("Latest QEMU PID: \(launch.pid.map(String.init) ?? "unknown")")
+            print("Display surface: \(launch.displaySurface.kind.rawValue)")
+            if let endpoint = launch.displaySurface.endpoint {
+                print("Display endpoint: \(endpoint)")
+            }
+        }
+        print("Detail: \(report.installEvidence.detail)")
         print("Next actions:")
         for action in report.nextActions {
             print("  - \(action)")

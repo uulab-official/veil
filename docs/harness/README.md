@@ -19,6 +19,7 @@ harness/
 ├─ app-runtime-status/     JSON shape validation for host app-runtime status/actions
 ├─ qemu-boot-plan/         JSON shape validation for dry-run QEMU/HVF boot plans
 ├─ qemu-doctor/            JSON shape validation for QEMU/HVF readiness reports
+├─ qemu-install-status/    JSON shape validation for visible Windows install evidence
 ├─ qemu-smoke/             JSON shape validation for bounded QEMU/HVF boot smoke reports
 ├─ qemu-display-smoke/     JSON shape validation for live embedded VNC frame evidence
 ├─ windows-agent-contract/ JSON and project-shape validation for the C# Windows agent
@@ -36,6 +37,7 @@ Current executable pieces:
 - `harness/app-runtime-status`: a JSON validator for app runtime status, open HWND sessions, and supported actions.
 - `harness/qemu-boot-plan`: a JSON validator for dry-run QEMU/HVF Windows Arm boot plans.
 - `harness/qemu-doctor`: a JSON validator for QEMU/HVF readiness reports and next actions.
+- `harness/qemu-install-status`: a JSON validator for the latest Windows install state, launch evidence, console screenshot, and recovery actions.
 - `harness/qemu-smoke`: a JSON validator for bounded QEMU/HVF boot smoke reports.
 - `harness/qemu-display-smoke`: a JSON validator for app-launched loopback VNC frame evidence.
 - `harness/windows-agent-contract`: a contract validator for the first C# Windows agent scaffold, inbox app catalog, and app launch transcript.
@@ -91,6 +93,23 @@ swift run veil-vmctl qemu-doctor --json | node ../../harness/qemu-doctor/src/val
 ```
 
 The report includes named checks for VM profile, installer media, automatic install media, system disk, QEMU executable, Arm UEFI firmware plus writable `uefi-vars.fd`, Secure Boot candidate status, `swtpm` TPM 2.0 emulator, and HVF command plan. Blocked reports must include next actions that a contributor can follow without guessing. Secure Boot candidate status requires the UTM-style `edk2-aarch64-secure-code.fd` plus `edk2-arm-secure-vars.fd` pair, and still stays a warning until a bounded live Windows Setup smoke proves the requirement page is gone.
+
+## QEMU Install Status Scenario
+
+The QEMU install status command is the read-only checkpoint for persistent
+Windows setup runs. It reports the local profile, boot readiness, Windows
+install evidence, the latest QEMU launch record, the latest VM-console
+screenshot path, and safe next actions. It never starts, stops, copies, or
+modifies Windows media or virtual disks.
+
+```bash
+cd apps/mac-host
+swift run veil-vmctl qemu-install-status --json | node ../../harness/qemu-install-status/src/validate-qemu-install-status.mjs
+```
+
+Use this before and after `qemu-capture`, `qemu-oobe-bypass`, and
+`qemu-install-agent` so issue reports can point at diagnostics metadata rather
+than desktop screenshots.
 
 ## QEMU Smoke Scenario
 

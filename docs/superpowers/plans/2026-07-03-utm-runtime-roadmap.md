@@ -48,7 +48,8 @@
 ### Slice 5: Real Windows Install Validation
 
 - [ ] Run the current Windows 11 Arm ISO through QEMU/HVF embedded display.
-- [ ] Record boot/install evidence under diagnostics, not in git.
+- [x] Add a read-only install-status command for boot/install evidence under diagnostics, not in git.
+- [ ] Record a fresh live boot/install evidence pass under diagnostics, not in git.
 - [ ] Update install-flow docs with exact observed blockers and recovery steps.
 
 ---
@@ -279,6 +280,51 @@ cd apps/mac-host && swift test --filter HostDashboardModelTests
 cd apps/mac-host && swift run veil-vmctl app-runtime-status --json --demo | node ../../harness/app-runtime-status/src/validate-app-runtime-status.mjs
 cd apps/mac-host && swift test
 cd harness/app-runtime-status && npm test
+./script/build_and_run.sh --verify
+git diff --check
+```
+
+Expected: all pass.
+
+## Task 7: QEMU Install Status Evidence Harness
+
+**Files:**
+- Modify: `apps/mac-host/Sources/VeilHostCore/VMRuntimeModel.swift`
+- Modify: `apps/mac-host/Sources/VeilVMControl/main.swift`
+- Modify: `apps/mac-host/Tests/VeilHostCoreTests/VMProfileStoreTests.swift`
+- Create: `harness/qemu-install-status/package.json`
+- Create: `harness/qemu-install-status/src/validate-qemu-install-status.mjs`
+- Create: `harness/qemu-install-status/test/qemu-install-status.test.mjs`
+- Create: `harness/qemu-install-status/fixtures/qemu-install-status.running.json`
+- Modify: `docs/harness/README.md`
+- Modify: `docs/install-flow.md`
+- Modify: `docs/checklists/2026-07-03-utm-source-hardening.md`
+
+- [x] **Step 1: Add install status report tests**
+
+Add `VMProfileStoreTests` coverage that loads a profile with a latest QEMU launch record, console screenshot, and loopback VNC endpoint, then asserts the install-status report exposes running state, setup evidence, paths, console evidence, and recovery actions.
+
+- [x] **Step 2: Add Core report type**
+
+Add a codable `VMWindowsInstallStatusReport` plus `VMRuntimeSnapshot.windowsInstallStatusReport(generatedAt:)`.
+
+- [x] **Step 3: Add CLI command**
+
+Add `veil-vmctl qemu-install-status [--json]`. The command must be read-only: it loads the local runtime snapshot and emits install evidence without starting, stopping, copying, or modifying Windows media or virtual disks.
+
+- [x] **Step 4: Add Node harness validator**
+
+Add `harness/qemu-install-status` with a validator and fixture proving the JSON has `kind`, `generatedAt`, runtime state, install evidence, console launch evidence, screenshot path, and next actions.
+
+- [x] **Step 5: Verify**
+
+Run:
+
+```bash
+cd apps/mac-host && swift test --filter VMProfileStoreTests/buildsWindowsInstallStatusReportFromLaunchEvidence
+cd apps/mac-host && swift run veil-vmctl qemu-install-status --json | node ../../harness/qemu-install-status/src/validate-qemu-install-status.mjs
+cd harness/qemu-install-status && npm test
+cd apps/mac-host && swift test
 ./script/build_and_run.sh --verify
 git diff --check
 ```

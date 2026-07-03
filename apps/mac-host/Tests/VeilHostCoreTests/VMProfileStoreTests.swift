@@ -235,6 +235,81 @@ struct VMProfileStoreTests {
         ])
     }
 
+    @Test("builds Windows install status report from launch evidence")
+    func buildsWindowsInstallStatusReportFromLaunchEvidence() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let installerURL = directory.appendingPathComponent("Windows.iso")
+        let driverURL = directory.appendingPathComponent("virtio-win.iso")
+        let diskURL = directory.appendingPathComponent("Windows.vhdx")
+        let sharedFolderURL = directory.appendingPathComponent("Veil Shared", isDirectory: true)
+        try Data("installer".utf8).write(to: installerURL)
+        try Data("drivers".utf8).write(to: driverURL)
+        try Data("disk".utf8).write(to: diskURL)
+        try FileManager.default.createDirectory(at: sharedFolderURL, withIntermediateDirectories: true)
+        try Data("<unattend />".utf8).write(to: sharedFolderURL.appendingPathComponent("Autounattend.xml"))
+        try Data("auto install media".utf8).write(to: sharedFolderURL.appendingPathComponent("VeilAutoInstall.iso"))
+
+        let qemuLaunchDirectory = directory.appendingPathComponent("QEMU Launch", isDirectory: true)
+        try FileManager.default.createDirectory(at: qemuLaunchDirectory, withIntermediateDirectories: true)
+        let processLogURL = qemuLaunchDirectory.appendingPathComponent("qemu-launch.log")
+        let consoleScreenshotURL = qemuLaunchDirectory.appendingPathComponent("qemu-console-2026-07-03T08-40-00Z.png")
+        try Data("qemu log".utf8).write(to: processLogURL)
+        try Data("png".utf8).write(to: consoleScreenshotURL)
+        let launchRecord = QEMULaunchRecord(
+            pid: 2345,
+            executablePath: "/opt/homebrew/bin/qemu-system-aarch64",
+            arguments: ["-drive", "file=\(diskURL.path),if=none", "-display", "vnc=127.0.0.1:7"],
+            displayMode: .vncLoopback,
+            processLogPath: processLogURL.path,
+            monitorSocketPath: "/tmp/vq-install-status.sock",
+            qmpSocketPath: "/tmp/vq-install-status.qmp.sock",
+            vncHost: "127.0.0.1",
+            vncPort: 5_907,
+            consoleScreenshotPath: consoleScreenshotURL.path,
+            startedAt: Date(timeIntervalSince1970: 1_782_914_400)
+        )
+        try JSONEncoder.veilDiagnostics.encode(launchRecord)
+            .write(to: qemuLaunchDirectory.appendingPathComponent("qemu-launch-latest.json"), options: .atomic)
+
+        let store = JSONVMProfileStore(directory: directory)
+        var profile = VMProfile.defaultWindows11Arm(createdAt: Date(timeIntervalSince1970: 1_782_752_400))
+        profile.installerMediaPath = installerURL.path
+        profile.driverMediaPath = driverURL.path
+        profile.virtualDiskPath = diskURL.path
+        profile.sharedFolderPath = sharedFolderURL.path
+        try await store.save(profile)
+
+        let service = LocalVMRuntimeService(
+            profileStore: store,
+            qemuLaunchRecordStore: JSONQEMULaunchRecordStore(directory: qemuLaunchDirectory),
+            qemuLaunchProcessIsRunning: { $0 == 2345 }
+        )
+        let snapshot = try await service.loadSnapshot()
+        let report = snapshot.windowsInstallStatusReport(
+            generatedAt: Date(timeIntervalSince1970: 1_782_914_800)
+        )
+
+        #expect(report.kind == "qemuWindowsInstallStatus")
+        #expect(report.generatedAt == Date(timeIntervalSince1970: 1_782_914_800))
+        #expect(report.state == .running)
+        #expect(report.profileName == "Windows 11 Arm")
+        #expect(report.bootReady)
+        #expect(report.windowsInstalled == false)
+        #expect(report.installEvidence.kind == .sparseDisk)
+        #expect(report.installerMediaPath == installerURL.path)
+        #expect(report.driverMediaPath == driverURL.path)
+        #expect(report.virtualDiskPath == diskURL.path)
+        #expect(report.automaticInstallMediaPath == sharedFolderURL.appendingPathComponent("VeilAutoInstall.iso").path)
+        #expect(report.latestConsoleScreenshotPath == consoleScreenshotURL.path)
+        #expect(report.latestConsoleLaunch?.displaySurface.kind == .vncLoopback)
+        #expect(report.latestConsoleLaunch?.displaySurface.endpoint == "127.0.0.1:5907")
+        #expect(report.nextActions.contains("Validate the embedded console with `veil-vmctl qemu-display-smoke --json`."))
+        #expect(report.nextActions.contains("Refresh install evidence with `veil-vmctl qemu-capture --json` before changing recovery steps."))
+        #expect(report.nextActions.contains("Continue Windows Setup in the console; use `veil-vmctl qemu-oobe-bypass --json` only when OOBE network setup blocks local account creation."))
+    }
+
     @Test("local runtime avoids protected Downloads console screenshot during snapshot load")
     func localRuntimeAvoidsProtectedDownloadsConsoleScreenshotDuringSnapshotLoad() async throws {
         let directory = FileManager.default.temporaryDirectory

@@ -1,0 +1,36 @@
+{
+  "automaticInstallMediaPath": "/Users/test/Virtual Machines/Veil Shared/VeilAutoInstall.iso",
+  "bootReady": true,
+  "driverMediaPath": "/Users/test/Downloads/virtio-win.iso",
+  "generatedAt": "2026-07-03T12:00:00Z",
+  "installEvidence": {
+    "detail": "The Windows disk exists and setup can continue, but Windows has not been marked installed yet.",
+    "isInstalled": false,
+    "kind": "sparseDisk",
+    "title": "Windows setup in progress"
+  },
+  "installerMediaPath": "/Users/test/Downloads/Win11_25H2_Korean_Arm64_v2.iso",
+  "kind": "qemuWindowsInstallStatus",
+  "latestConsoleLaunch": {
+    "consoleScreenshotPath": "/Users/test/Library/Application Support/Veil/Diagnostics/QEMU Launch/qemu-console-2026-07-03T12-00-00Z.png",
+    "monitorSocketPath": "/tmp/vq-install-status.sock",
+    "pid": 2345,
+    "previewStatus": "stale",
+    "processLogPath": "/Users/test/Library/Application Support/Veil/Diagnostics/QEMU Launch/qemu-launch-2026-07-03T12-00-00Z.log",
+    "provider": "QEMU/HVF",
+    "qmpSocketPath": "/tmp/vq-install-status.qmp.sock",
+    "startedAt": "2026-07-03T11:58:00Z",
+    "vncHost": "127.0.0.1",
+    "vncPort": 5907
+  },
+  "latestConsoleScreenshotPath": "/Users/test/Library/Application Support/Veil/Diagnostics/QEMU Launch/qemu-console-2026-07-03T12-00-00Z.png",
+  "nextActions": [
+    "Validate the embedded console with `veil-vmctl qemu-display-smoke --json`.",
+    "Refresh install evidence with `veil-vmctl qemu-capture --json` before changing recovery steps.",
+    "Continue Windows Setup in the console; use `veil-vmctl qemu-oobe-bypass --json` only when OOBE network setup blocks local account creation."
+  ],
+  "profileName": "Windows 11 Arm",
+  "state": "running",
+  "virtualDiskPath": "/Users/test/Virtual Machines/Windows.vhdx",
+  "windowsInstalled": false
+}

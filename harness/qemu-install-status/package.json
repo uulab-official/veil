@@ -1,0 +1,13 @@
+{
+  "name": "@veil/qemu-install-status-harness",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test",
+    "validate": "node src/validate-qemu-install-status.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

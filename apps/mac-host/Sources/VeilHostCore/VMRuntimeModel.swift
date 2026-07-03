@@ -311,6 +311,126 @@ public struct VMRuntimeSnapshot: Codable, Equatable, Sendable {
     }
 }
 
+public struct VMWindowsInstallStatusReport: Codable, Equatable, Sendable {
+    public var kind: String
+    public var generatedAt: Date
+    public var state: VMRuntimeState
+    public var profileName: String?
+    public var bootReady: Bool
+    public var windowsInstalled: Bool
+    public var installEvidence: VMInstallEvidenceSummary
+    public var installerMediaPath: String?
+    public var driverMediaPath: String?
+    public var virtualDiskPath: String?
+    public var automaticInstallMediaPath: String?
+    public var latestConsoleScreenshotPath: String?
+    public var latestConsoleLaunch: VMConsoleLaunchEvidence?
+    public var nextActions: [String]
+
+    public init(
+        kind: String = "qemuWindowsInstallStatus",
+        generatedAt: Date,
+        state: VMRuntimeState,
+        profileName: String?,
+        bootReady: Bool,
+        windowsInstalled: Bool,
+        installEvidence: VMInstallEvidenceSummary,
+        installerMediaPath: String?,
+        driverMediaPath: String?,
+        virtualDiskPath: String?,
+        automaticInstallMediaPath: String?,
+        latestConsoleScreenshotPath: String?,
+        latestConsoleLaunch: VMConsoleLaunchEvidence?,
+        nextActions: [String]
+    ) {
+        self.kind = kind
+        self.generatedAt = generatedAt
+        self.state = state
+        self.profileName = profileName
+        self.bootReady = bootReady
+        self.windowsInstalled = windowsInstalled
+        self.installEvidence = installEvidence
+        self.installerMediaPath = installerMediaPath
+        self.driverMediaPath = driverMediaPath
+        self.virtualDiskPath = virtualDiskPath
+        self.automaticInstallMediaPath = automaticInstallMediaPath
+        self.latestConsoleScreenshotPath = latestConsoleScreenshotPath
+        self.latestConsoleLaunch = latestConsoleLaunch
+        self.nextActions = nextActions
+    }
+}
+
+public extension VMRuntimeSnapshot {
+    func windowsInstallStatusReport(generatedAt: Date = Date()) -> VMWindowsInstallStatusReport {
+        VMWindowsInstallStatusReport(
+            generatedAt: generatedAt,
+            state: state,
+            profileName: profileName,
+            bootReady: bootReady,
+            windowsInstalled: windowsInstalled,
+            installEvidence: installEvidence,
+            installerMediaPath: installerMediaPath,
+            driverMediaPath: driverMediaPath,
+            virtualDiskPath: virtualDiskPath,
+            automaticInstallMediaPath: automaticInstallMediaPath,
+            latestConsoleScreenshotPath: latestConsoleScreenshotPath,
+            latestConsoleLaunch: latestConsoleLaunch,
+            nextActions: windowsInstallNextActions()
+        )
+    }
+
+    private func windowsInstallNextActions() -> [String] {
+        if !bootReady {
+            let blockers = preflightChecks
+                .filter { $0.state == .failed }
+                .map { "\($0.title): \($0.detail)" }
+            if !blockers.isEmpty {
+                return blockers
+            }
+
+            let blockedSteps = installationSteps
+                .filter { $0.state == .blocked }
+                .map { "\($0.title): \($0.detail)" }
+            if !blockedSteps.isEmpty {
+                return blockedSteps
+            }
+
+            return ["Run `veil-vmctl qemu-doctor --json` to identify the missing Windows install prerequisite."]
+        }
+
+        if state == .running {
+            var actions: [String] = []
+            if latestConsoleLaunch?.displaySurface.isLiveCapable == true {
+                actions.append("Validate the embedded console with `veil-vmctl qemu-display-smoke --json`.")
+            }
+            if latestConsoleLaunch?.monitorSocketPath.isEmpty == false {
+                actions.append("Refresh install evidence with `veil-vmctl qemu-capture --json` before changing recovery steps.")
+            }
+            if !windowsInstalled {
+                actions.append("Continue Windows Setup in the console; use `veil-vmctl qemu-oobe-bypass --json` only when OOBE network setup blocks local account creation.")
+            } else if installEvidence.kind != .guestAgent {
+                actions.append("Install the guest agent with `veil-vmctl qemu-install-agent --json` once the Windows desktop is visible.")
+            } else {
+                actions.append("Check the app runtime bridge with `veil-vmctl app-runtime-status --json`.")
+            }
+            return actions
+        }
+
+        if windowsInstalled, installEvidence.kind != .guestAgent {
+            return [
+                "Start the installed Windows disk with `veil-vmctl qemu-start --wait-seconds 15`.",
+                "Install the guest agent with `veil-vmctl qemu-install-agent --json` once the Windows desktop is visible."
+            ]
+        }
+
+        if windowsInstalled {
+            return ["Start Windows and verify the app runtime bridge with `veil-vmctl app-runtime-status --json`."]
+        }
+
+        return ["Start the visible install with `veil-vmctl qemu-start --wait-seconds 15`."]
+    }
+}
+
 public struct VMConsoleLaunchEvidence: Codable, Equatable, Sendable {
     public var provider: String
     public var pid: Int32?
