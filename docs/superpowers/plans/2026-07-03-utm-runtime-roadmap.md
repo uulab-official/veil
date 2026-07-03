@@ -56,6 +56,7 @@
 - [x] Add a guest-agent wait gate that polls the forwarded agent health endpoint before app-window launch automation.
 - [x] Add an app-window proof gate that verifies app launch, HWND tracking, and first frame evidence through the forwarded agent endpoint.
 - [x] Save app-window proof JSON artifacts so the same launch/HWND/frame evidence can be attached to diagnostics and revalidated by harnesses.
+- [x] Add a Coherence-style proof gate that verifies launch, first frame, post-input frame, mouse input, key input, and host clipboard send evidence through the forwarded agent endpoint.
 - [ ] Record a fresh live boot/install evidence pass under diagnostics, not in git.
 - [ ] Update install-flow docs with exact observed blockers and recovery steps.
 
@@ -345,6 +346,55 @@ cd apps/mac-host && swift test --filter VeilHostClientTests/provesWindowsAppWind
 cd harness/app-window-proof && npm test
 cd apps/mac-host && VEIL_AGENT_URL=ws://127.0.0.1:<fake-port> swift run veil-vmctl app-window-proof --json --app-id winapp_notepad --wait-seconds 5 --output /tmp/veil-proof.json | node ../../harness/app-window-proof/src/validate-app-window-proof.mjs
 node harness/app-window-proof/src/validate-app-window-proof.mjs < /tmp/veil-proof.json
+cd apps/mac-host && swift test
+./script/build_and_run.sh --verify
+git diff --check
+```
+
+Expected: all pass.
+
+## Task 15: Coherence Proof Gate
+
+**Files:**
+- Modify: `apps/mac-host/Sources/VeilHostCore/VeilHostClient.swift`
+- Modify: `apps/mac-host/Tests/VeilHostCoreTests/VeilHostClientTests.swift`
+- Modify: `apps/mac-host/Sources/VeilVMControl/main.swift`
+- Create: `harness/coherence-proof/package.json`
+- Create: `harness/coherence-proof/src/validate-coherence-proof.mjs`
+- Create: `harness/coherence-proof/test/coherence-proof.test.mjs`
+- Create: `harness/coherence-proof/fixtures/coherence-proof.notepad.json`
+- Modify: `docs/harness/README.md`
+- Modify: `harness/README.md`
+- Modify: `docs/architecture.md`
+- Modify: `docs/checklists/2026-07-03-utm-source-hardening.md`
+
+- [x] **Step 1: Add Coherence proof report**
+
+Expose `windowsAppCoherenceProof` reports with app launch, matching HWND,
+initial frame evidence, post-input frame evidence, mouse/key input evidence, and
+host clipboard send evidence.
+
+- [x] **Step 2: Add CLI command**
+
+Add `veil-vmctl coherence-proof [--json] [--app-id winapp_notepad]
+[--wait-seconds 10] [--output /path/to/proof.json]` using `VEIL_AGENT_URL` or
+`ws://127.0.0.1:18444`.
+
+- [x] **Step 3: Add harness validation**
+
+Validate launch/HWND alignment, increasing frame sequence after input, mouse
+click evidence, keyboard event evidence, host clipboard evidence, and optional
+saved proof path.
+
+- [x] **Step 4: Verify**
+
+Run:
+
+```bash
+cd apps/mac-host && swift test --filter VeilHostClientTests/provesWindowsAppCoherenceWithInputAndClipboardEvidence
+cd harness/coherence-proof && npm test
+cd apps/mac-host && VEIL_AGENT_URL=ws://127.0.0.1:<fake-port> swift run veil-vmctl coherence-proof --json --app-id winapp_notepad --wait-seconds 5 --output /tmp/veil-coherence-proof.json | node ../../harness/coherence-proof/src/validate-coherence-proof.mjs
+node harness/coherence-proof/src/validate-coherence-proof.mjs < /tmp/veil-coherence-proof.json
 cd apps/mac-host && swift test
 ./script/build_and_run.sh --verify
 git diff --check

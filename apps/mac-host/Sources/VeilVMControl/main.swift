@@ -65,7 +65,7 @@ enum VMControlError: Error, LocalizedError {
         }
     }
 
-    private static let usage = "Usage: veil-vmctl prepare --installer /path/to/Windows.iso [--drivers /path/to/virtio-win.iso] | veil-vmctl app-runtime-status [--json] [--demo] | veil-vmctl app-window-proof [--json] [--app-id winapp_notepad] [--wait-seconds 10] [--output /path/to/proof.json] | veil-vmctl guest-agent-wait [--json] [--wait-seconds 30] | veil-vmctl mark-installed [--json] | veil-vmctl providers [--json] | veil-vmctl qemu-plan [--json] | veil-vmctl qemu-doctor [--json] | veil-vmctl qemu-install-status [--json] | veil-vmctl qemu-smoke [--json] [--seconds 45] | veil-vmctl qemu-start [--json] [--wait-seconds 15] [--native-display] | veil-vmctl qemu-display-smoke [--json] [--wait-seconds 5] | veil-vmctl qemu-capture [--json] [--output /path/to/console.png] | veil-vmctl qemu-powerdown [--json] [--wait-seconds 30] | veil-vmctl qemu-force-stop [--json] --i-understand-data-loss [--wait-seconds 10] | veil-vmctl qemu-sendkey [--json] key [key ...] | veil-vmctl qemu-type-text [--json] --text \"...\" | veil-vmctl qemu-click [--json] --x 0...32767 --y 0...32767 | veil-vmctl qemu-oobe-bypass [--json] | veil-vmctl qemu-install-agent [--json]"
+    private static let usage = "Usage: veil-vmctl prepare --installer /path/to/Windows.iso [--drivers /path/to/virtio-win.iso] | veil-vmctl app-runtime-status [--json] [--demo] | veil-vmctl app-window-proof [--json] [--app-id winapp_notepad] [--wait-seconds 10] [--output /path/to/proof.json] | veil-vmctl coherence-proof [--json] [--app-id winapp_notepad] [--wait-seconds 10] [--output /path/to/proof.json] | veil-vmctl guest-agent-wait [--json] [--wait-seconds 30] | veil-vmctl mark-installed [--json] | veil-vmctl providers [--json] | veil-vmctl qemu-plan [--json] | veil-vmctl qemu-doctor [--json] | veil-vmctl qemu-install-status [--json] | veil-vmctl qemu-smoke [--json] [--seconds 45] | veil-vmctl qemu-start [--json] [--wait-seconds 15] [--native-display] | veil-vmctl qemu-display-smoke [--json] [--wait-seconds 5] | veil-vmctl qemu-capture [--json] [--output /path/to/console.png] | veil-vmctl qemu-powerdown [--json] [--wait-seconds 30] | veil-vmctl qemu-force-stop [--json] --i-understand-data-loss [--wait-seconds 10] | veil-vmctl qemu-sendkey [--json] key [key ...] | veil-vmctl qemu-type-text [--json] --text \"...\" | veil-vmctl qemu-click [--json] --x 0...32767 --y 0...32767 | veil-vmctl qemu-oobe-bypass [--json] | veil-vmctl qemu-install-agent [--json]"
 }
 
 struct VMControlArguments {
@@ -78,6 +78,7 @@ struct VMControlArguments {
         case prepare(installerPath: String, driverMediaPath: String?)
         case appRuntimeStatus(json: Bool, demo: Bool)
         case appWindowProof(json: Bool, appId: String, waitSeconds: Int, outputPath: String?)
+        case coherenceProof(json: Bool, appId: String, waitSeconds: Int, outputPath: String?)
         case guestAgentWait(json: Bool, waitSeconds: Int)
         case markInstalled(json: Bool)
         case providers(json: Bool)
@@ -125,6 +126,22 @@ struct VMControlArguments {
             let waitSeconds = waitSecondsArgument(from: arguments) ?? 10
             return VMControlArguments(
                 command: .appWindowProof(
+                    json: arguments.contains("--json"),
+                    appId: appId,
+                    waitSeconds: waitSeconds,
+                    outputPath: stringArgument(named: "--output", from: arguments)
+                )
+            )
+        }
+
+        if command == "coherence-proof" {
+            let appId = stringArgument(named: "--app-id", from: arguments) ?? "winapp_notepad"
+            guard !appId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                throw VMControlError.missingAppId
+            }
+            let waitSeconds = waitSecondsArgument(from: arguments) ?? 10
+            return VMControlArguments(
+                command: .coherenceProof(
                     json: arguments.contains("--json"),
                     appId: appId,
                     waitSeconds: waitSeconds,
@@ -385,6 +402,8 @@ struct VeilVMControl {
             try await printAppRuntimeStatus(json: json, demo: demo)
         case .appWindowProof(let json, let appId, let waitSeconds, let outputPath):
             try await proveAppWindow(json: json, appId: appId, waitSeconds: waitSeconds, outputPath: outputPath)
+        case .coherenceProof(let json, let appId, let waitSeconds, let outputPath):
+            try await proveCoherence(json: json, appId: appId, waitSeconds: waitSeconds, outputPath: outputPath)
         case .guestAgentWait(let json, let waitSeconds):
             try await waitForGuestAgent(json: json, waitSeconds: waitSeconds)
         case .markInstalled(let json):
@@ -540,6 +559,48 @@ struct VeilVMControl {
         }
     }
 
+    private static func proveCoherence(json: Bool, appId: String, waitSeconds: Int, outputPath: String?) async throws {
+        let endpoint = ProcessInfo.processInfo.environment["VEIL_AGENT_URL"] ?? "ws://127.0.0.1:18444"
+        let url = URL(string: endpoint) ?? URL(string: "ws://127.0.0.1:18444")!
+        let boundedWaitSeconds = min(max(waitSeconds, 1), 60)
+        let transport = URLSessionWebSocketTransport(url: url)
+        let client = VeilHostClient(transport: transport)
+        var report = try await client.proveCoherenceAppWindow(
+            appId: appId,
+            endpoint: endpoint,
+            eventSource: transport,
+            timeoutNanoseconds: UInt64(boundedWaitSeconds) * 1_000_000_000
+        )
+        if let outputURL = proofOutputURL(from: outputPath) {
+            report.savedProofPath = outputURL.path
+            try writeProof(report, to: outputURL)
+        }
+
+        if json {
+            let data = try JSONEncoder.veilDiagnostics.encode(report)
+            print(String(decoding: data, as: UTF8.self))
+            return
+        }
+
+        print("Windows app coherence proof: \(report.appId)")
+        print("Endpoint: \(report.endpoint)")
+        print("PID: \(report.launch.processId)")
+        print("Window: \(report.window.windowId) \(report.window.title)")
+        print("Initial frame: \(report.initialFrame.width)x\(report.initialFrame.height) \(report.initialFrame.format) #\(report.initialFrame.sequence)")
+        print("Post-input frame: \(report.postInputFrame.width)x\(report.postInputFrame.height) \(report.postInputFrame.format) #\(report.postInputFrame.sequence)")
+        let mouseEvents = report.input.mouseEventsPosted.joined(separator: ", ")
+        print("Mouse events: \(mouseEvents)")
+        print("Key events: \(report.input.keyEventsPosted.count)")
+        print("Clipboard bytes: \(report.input.clipboardTextByteCount)")
+        if let savedProofPath = report.savedProofPath {
+            print("Saved proof: \(savedProofPath)")
+        }
+        print("Next actions:")
+        for action in report.nextActions {
+            print("  - \(action)")
+        }
+    }
+
     private static func proofOutputURL(from outputPath: String?) -> URL? {
         guard let outputPath,
               !outputPath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
@@ -549,7 +610,7 @@ struct VeilVMControl {
         return URL(fileURLWithPath: outputPath)
     }
 
-    private static func writeProof(_ report: WindowsAppWindowProofReport, to outputURL: URL) throws {
+    private static func writeProof<T: Encodable>(_ report: T, to outputURL: URL) throws {
         let directory = outputURL.deletingLastPathComponent()
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let data = try JSONEncoder.veilDiagnostics.encode(report)

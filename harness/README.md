@@ -13,6 +13,7 @@ harness/
 ├─ runtime-provider-probe/ Validates local VM provider JSON output
 ├─ app-runtime-status/     Validates host app-runtime status/actions JSON
 ├─ app-window-proof/       Validates app launch/HWND/first-frame proof JSON
+├─ coherence-proof/        Validates launch/HWND/frame/input/clipboard proof JSON
 ├─ guest-agent-wait/       Validates post-install guest-agent readiness JSON
 ├─ qemu-boot-plan/         Validates dry-run QEMU/HVF Windows boot plan JSON
 ├─ qemu-doctor/            Validates QEMU/HVF readiness report JSON
@@ -125,6 +126,18 @@ Expected: JSON proves the host launched the requested Windows app, received a
 matching `window.created` event, subscribed to its HWND stream, and received the
 first PNG frame metadata. The saved proof file can be attached to diagnostics
 without committing Windows media or screenshots.
+
+For the Coherence-style MVP proof:
+
+```bash
+proof="$HOME/Library/Application Support/Veil/Diagnostics/Coherence Proof/notepad-proof.json"
+swift run veil-vmctl coherence-proof --json --app-id winapp_notepad --output "$proof" | node ../../harness/coherence-proof/src/validate-coherence-proof.mjs
+node ../../harness/coherence-proof/src/validate-coherence-proof.mjs < "$proof"
+```
+
+Expected: JSON proves the host launched the requested Windows app, received
+initial and post-input HWND frames, posted a click, posted keyboard input, and
+sent host clipboard text.
 
 For the full launch acceptance flow:
 

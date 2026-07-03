@@ -18,6 +18,7 @@ harness/
 ├─ runtime-provider-probe/ JSON shape validation for local VM providers
 ├─ app-runtime-status/     JSON shape validation for host app-runtime status/actions
 ├─ app-window-proof/       JSON shape validation for launch/HWND/first-frame proof
+├─ coherence-proof/        JSON shape validation for launch/HWND/frame/input/clipboard proof
 ├─ guest-agent-wait/       JSON shape validation for post-install guest-agent readiness
 ├─ qemu-boot-plan/         JSON shape validation for dry-run QEMU/HVF boot plans
 ├─ qemu-doctor/            JSON shape validation for QEMU/HVF readiness reports
@@ -38,6 +39,7 @@ Current executable pieces:
 - `harness/runtime-provider-probe`: a JSON validator for serverless local runtime provider output.
 - `harness/app-runtime-status`: a JSON validator for app runtime status, open HWND sessions, and supported actions.
 - `harness/app-window-proof`: a JSON validator for one app launch, one tracked HWND, and the first captured frame evidence.
+- `harness/coherence-proof`: a JSON validator for one app launch, one tracked HWND, first and post-input frame evidence, mouse/key input, and host clipboard send evidence.
 - `harness/guest-agent-wait`: a JSON validator for waiting until the installed Windows guest agent is reachable after setup/login.
 - `harness/qemu-boot-plan`: a JSON validator for dry-run QEMU/HVF Windows Arm boot plans.
 - `harness/qemu-doctor`: a JSON validator for QEMU/HVF readiness reports and next actions.
@@ -88,6 +90,23 @@ node ../../harness/app-window-proof/src/validate-app-window-proof.mjs < "$proof"
 
 Run this after `guest-agent-wait` reports connected. The command does not start
 or stop the VM; it only uses the forwarded guest-agent WebSocket.
+
+## Coherence Proof Scenario
+
+The coherence proof command is the MVP bridge check closest to the product
+demo: it launches a Windows app, captures the first HWND frame, posts a click,
+posts keyboard input, sends host clipboard text, and then waits for a newer
+frame from the same HWND stream.
+
+```bash
+cd apps/mac-host
+proof="$HOME/Library/Application Support/Veil/Diagnostics/Coherence Proof/notepad-proof.json"
+swift run veil-vmctl coherence-proof --json --app-id winapp_notepad --output "$proof" | node ../../harness/coherence-proof/src/validate-coherence-proof.mjs
+node ../../harness/coherence-proof/src/validate-coherence-proof.mjs < "$proof"
+```
+
+Run this after `guest-agent-wait` reports connected and before claiming the
+Notepad MVP loop is usable. The command does not start or stop the VM.
 
 ## Guest Agent Wait Scenario
 

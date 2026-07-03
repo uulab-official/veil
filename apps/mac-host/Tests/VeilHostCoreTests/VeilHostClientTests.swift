@@ -187,6 +187,67 @@ struct VeilHostClientTests {
         ])
     }
 
+    @Test("proves Windows app coherence with input and clipboard evidence")
+    func provesWindowsAppCoherenceWithInputAndClipboardEvidence() async throws {
+        let transport = RecordingTransport(responses: [
+            #"{"type":"agent.health.response","requestId":"req_health","protocolVersion":1,"agentVersion":"0.1.0","os":"windows-arm64","session":{"interactive":true,"user":"veil-user"},"capabilities":{"appList":true,"appLaunch":true,"windowTracking":true,"windowCapture":true,"input":true,"clipboardText":true}}"#,
+            #"{"type":"app.list.response","requestId":"req_apps","apps":[{"id":"winapp_notepad","name":"Notepad","exePath":"C:\\Windows\\System32\\notepad.exe","publisher":"Microsoft","iconId":"icon_notepad"}]}"#,
+            #"{"type":"app.launch.response","requestId":"req_launch_winapp_notepad","accepted":true,"processId":4912}"#,
+            #"{"type":"window.created","windowId":"hwnd:0003029A","processId":4912,"appId":"winapp_notepad","title":"Untitled - Notepad","bounds":{"x":10,"y":10,"width":1280,"height":800},"state":"normal","focused":true}"#
+        ])
+        let eventSource = BufferedEventSource(messages: [
+            WindowFrameEvent.notepadFirstFrameJSON,
+            WindowFrameEvent.notepadPostInputFrameJSON
+        ])
+        let client = VeilHostClient(transport: transport)
+
+        let report = try await client.proveCoherenceAppWindow(
+            appId: "winapp_notepad",
+            endpoint: "ws://127.0.0.1:18444",
+            eventSource: eventSource,
+            timeoutNanoseconds: 1_000_000_000
+        )
+
+        #expect(report.kind == "windowsAppCoherenceProof")
+        #expect(report.endpoint == "ws://127.0.0.1:18444")
+        #expect(report.window.windowId == "hwnd:0003029A")
+        #expect(report.initialFrame.sequence == 1)
+        #expect(report.postInputFrame.sequence == 2)
+        #expect(report.input.mouseEventsPosted == ["leftDown", "leftUp"])
+        #expect(report.input.keyEventsPosted == [
+            "keyDown:v",
+            "keyUp:v",
+            "keyDown:e",
+            "keyUp:e",
+            "keyDown:i",
+            "keyUp:i",
+            "keyDown:l",
+            "keyUp:l"
+        ])
+        #expect(report.input.typedTextCharacterCount == 4)
+        #expect(report.input.clipboardOrigin == "host")
+        #expect(report.input.clipboardSequence == 1)
+        #expect(report.input.clipboardTextByteCount > 0)
+        #expect(transport.sentTypes == [
+            "agent.health.request",
+            "app.list.request",
+            "app.launch.request",
+            "window.frame.subscribe",
+            "input.mouse",
+            "input.mouse",
+            "input.key",
+            "input.key",
+            "input.key",
+            "input.key",
+            "input.key",
+            "input.key",
+            "input.key",
+            "input.key",
+            "clipboard.text.set"
+        ])
+        #expect(transport.expectedReplyCounts == [1, 1, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+    }
+
     @Test("fails when Notepad is missing from the app list")
     func failsWhenNotepadIsMissing() async throws {
         let transport = RecordingTransport(responses: [
@@ -360,5 +421,9 @@ private struct BufferedEventSource: HostEventSource {
 private extension WindowFrameEvent {
     static var notepadFirstFrameJSON: String {
         #"{"type":"window.frame","windowId":"hwnd:0003029A","frameId":"frame_000001","sequence":1,"format":"png","width":1,"height":1,"scale":1,"encodedData":"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII="}"#
+    }
+
+    static var notepadPostInputFrameJSON: String {
+        #"{"type":"window.frame","windowId":"hwnd:0003029A","frameId":"frame_000002","sequence":2,"format":"png","width":1,"height":1,"scale":1,"encodedData":"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII="}"#
     }
 }

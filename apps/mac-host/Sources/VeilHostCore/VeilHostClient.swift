@@ -108,6 +108,71 @@ public struct WindowsAppWindowProofReport: Codable, Equatable, Sendable {
     }
 }
 
+public struct WindowsAppInputProofEvidence: Codable, Equatable, Sendable {
+    public var mouseEventsPosted: [String]
+    public var keyEventsPosted: [String]
+    public var typedTextCharacterCount: Int
+    public var clipboardOrigin: String
+    public var clipboardSequence: Int
+    public var clipboardTextByteCount: Int
+
+    public init(
+        mouseEventsPosted: [String],
+        keyEventsPosted: [String],
+        typedTextCharacterCount: Int,
+        clipboardOrigin: String,
+        clipboardSequence: Int,
+        clipboardTextByteCount: Int
+    ) {
+        self.mouseEventsPosted = mouseEventsPosted
+        self.keyEventsPosted = keyEventsPosted
+        self.typedTextCharacterCount = typedTextCharacterCount
+        self.clipboardOrigin = clipboardOrigin
+        self.clipboardSequence = clipboardSequence
+        self.clipboardTextByteCount = clipboardTextByteCount
+    }
+}
+
+public struct WindowsAppCoherenceProofReport: Codable, Equatable, Sendable {
+    public var kind: String
+    public var endpoint: String
+    public var appId: String
+    public var provedAt: Date
+    public var launch: AppLaunchResponse
+    public var window: WindowCreatedEvent
+    public var initialFrame: WindowFrameProofEvidence
+    public var postInputFrame: WindowFrameProofEvidence
+    public var input: WindowsAppInputProofEvidence
+    public var savedProofPath: String?
+    public var nextActions: [String]
+
+    public init(
+        kind: String = "windowsAppCoherenceProof",
+        endpoint: String,
+        appId: String,
+        provedAt: Date,
+        launch: AppLaunchResponse,
+        window: WindowCreatedEvent,
+        initialFrame: WindowFrameProofEvidence,
+        postInputFrame: WindowFrameProofEvidence,
+        input: WindowsAppInputProofEvidence,
+        savedProofPath: String? = nil,
+        nextActions: [String]
+    ) {
+        self.kind = kind
+        self.endpoint = endpoint
+        self.appId = appId
+        self.provedAt = provedAt
+        self.launch = launch
+        self.window = window
+        self.initialFrame = initialFrame
+        self.postInputFrame = postInputFrame
+        self.input = input
+        self.savedProofPath = savedProofPath
+        self.nextActions = nextActions
+    }
+}
+
 public enum AgentConnectionDiagnosticStatus: String, Codable, Equatable, Sendable {
     case connected
     case unavailable
@@ -219,6 +284,20 @@ public enum WindowsAppWindowProofError: Error, Equatable, LocalizedError, Sendab
     }
 }
 
+public enum WindowsAppCoherenceProofError: Error, Equatable, LocalizedError, Sendable {
+    case capabilityUnavailable(String)
+    case unsupportedProofText(String)
+
+    public var errorDescription: String? {
+        switch self {
+        case .capabilityUnavailable(let capability):
+            "The Windows agent does not report \(capability) support, so Veil cannot prove Coherence-style app input yet."
+        case .unsupportedProofText(let text):
+            "The Coherence proof text contains unsupported keyboard characters: \(text)"
+        }
+    }
+}
+
 public struct VeilHostClient: HostDashboardService, Sendable {
     private let transport: any HostTransport
     private let encoder: JSONEncoder
@@ -297,6 +376,85 @@ public struct VeilHostClient: HostDashboardService, Sendable {
             nextActions: [
                 "Open the mirrored HWND in the Veil host shell as a macOS window.",
                 "Run `veil-vmctl app-runtime-status --json` to inspect active mirrored sessions and supported actions."
+            ]
+        )
+    }
+
+    public func proveCoherenceAppWindow(
+        appId: String,
+        endpoint: String,
+        eventSource: any HostEventSource,
+        timeoutNanoseconds: UInt64 = 10_000_000_000,
+        typedText: String = "veil",
+        clipboardText: String = "Veil coherence proof"
+    ) async throws -> WindowsAppCoherenceProofReport {
+        let launchResult = try await launchApp(appId: appId)
+        guard launchResult.health.capabilities.input else {
+            throw WindowsAppCoherenceProofError.capabilityUnavailable("input")
+        }
+        guard launchResult.health.capabilities.clipboardText else {
+            throw WindowsAppCoherenceProofError.capabilityUnavailable("clipboardText")
+        }
+
+        async let frame = firstFrame(
+            from: eventSource,
+            windowId: launchResult.window.windowId,
+            timeoutNanoseconds: timeoutNanoseconds
+        )
+        try? await Task.sleep(nanoseconds: 200_000_000)
+        try await subscribeWindowFrames(windowId: launchResult.window.windowId)
+        let initialFrame = try await frame
+
+        async let postInputFrame = firstFrame(
+            from: eventSource,
+            windowId: launchResult.window.windowId,
+            minimumSequenceExclusive: initialFrame.sequence,
+            timeoutNanoseconds: timeoutNanoseconds
+        )
+        try? await Task.sleep(nanoseconds: 100_000_000)
+
+        let click = Self.proofClickPoint(for: launchResult.window.bounds)
+        let mouseInputs = [
+            InputMouseEvent(windowId: launchResult.window.windowId, event: "leftDown", x: click.x, y: click.y),
+            InputMouseEvent(windowId: launchResult.window.windowId, event: "leftUp", x: click.x, y: click.y)
+        ]
+        for input in mouseInputs {
+            try await sendMouseInput(input)
+        }
+
+        let keyInputs = try Self.proofKeyInputs(windowId: launchResult.window.windowId, text: typedText)
+        for input in keyInputs {
+            try await sendKeyInput(input)
+        }
+
+        let clipboard = ClipboardTextSet(
+            requestId: "req_clipboard_coherence_proof",
+            origin: "host",
+            sequence: 1,
+            text: clipboardText
+        )
+        try await sendClipboardText(clipboard)
+        let frameAfterInput = try await postInputFrame
+
+        return WindowsAppCoherenceProofReport(
+            endpoint: endpoint,
+            appId: appId,
+            provedAt: Date(),
+            launch: launchResult.launch,
+            window: launchResult.window,
+            initialFrame: WindowFrameProofEvidence(frame: initialFrame),
+            postInputFrame: WindowFrameProofEvidence(frame: frameAfterInput),
+            input: WindowsAppInputProofEvidence(
+                mouseEventsPosted: mouseInputs.map(\.event),
+                keyEventsPosted: keyInputs.map { "\($0.event):\($0.key)" },
+                typedTextCharacterCount: typedText.count,
+                clipboardOrigin: clipboard.origin,
+                clipboardSequence: clipboard.sequence,
+                clipboardTextByteCount: Data(clipboardText.utf8).count
+            ),
+            nextActions: [
+                "Open the mirrored HWND in the Veil host shell as a macOS window.",
+                "Use the saved proof artifact when filing app-runtime bugs or release gate evidence."
             ]
         )
     }
@@ -454,6 +612,7 @@ public struct VeilHostClient: HostDashboardService, Sendable {
     private func firstFrame(
         from eventSource: any HostEventSource,
         windowId: String,
+        minimumSequenceExclusive: Int? = nil,
         timeoutNanoseconds: UInt64
     ) async throws -> WindowFrameEvent {
         try await withThrowingTaskGroup(of: WindowFrameEvent.self) { group in
@@ -465,7 +624,8 @@ public struct VeilHostClient: HostDashboardService, Sendable {
                     }
 
                     let frame = try decoder.decode(WindowFrameEvent.self, from: message)
-                    if frame.windowId == windowId {
+                    if frame.windowId == windowId,
+                       minimumSequenceExclusive.map({ frame.sequence > $0 }) ?? true {
                         return frame
                     }
                 }
@@ -492,6 +652,38 @@ public struct VeilHostClient: HostDashboardService, Sendable {
         }
         .map(String.init)
         .joined()
+    }
+
+    private static func proofClickPoint(for bounds: WindowBounds) -> (x: Int, y: Int) {
+        let maxX = max(bounds.width - 1, 1)
+        let maxY = max(bounds.height - 1, 1)
+        return (
+            x: min(max(240, 1), maxX),
+            y: min(max(130, 1), maxY)
+        )
+    }
+
+    private static func proofKeyInputs(windowId: String, text: String) throws -> [InputKeyEvent] {
+        var inputs: [InputKeyEvent] = []
+        for scalar in text.unicodeScalars {
+            let value = scalar.value
+            guard (65...90).contains(value) || (97...122).contains(value) || (48...57).contains(value) else {
+                throw WindowsAppCoherenceProofError.unsupportedProofText(text)
+            }
+
+            let key = String(scalar).lowercased()
+            let virtualKey: Int
+            if (97...122).contains(value) {
+                virtualKey = Int(value - 32)
+            } else {
+                virtualKey = Int(value)
+            }
+
+            inputs.append(InputKeyEvent(windowId: windowId, event: "keyDown", key: key, windowsVirtualKey: virtualKey))
+            inputs.append(InputKeyEvent(windowId: windowId, event: "keyUp", key: key, windowsVirtualKey: virtualKey))
+        }
+
+        return inputs
     }
 
     private static func errorMessage(for error: any Error) -> String {
