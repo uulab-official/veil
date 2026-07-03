@@ -596,6 +596,9 @@ struct VeilVMControl {
         print("Dock integration: \(report.dockIntegration.isEnabled ? "enabled" : "disabled")")
         print("Dock app-window badge: \(report.dockIntegration.badgeLabel ?? "none")")
         print("Dock can bring apps forward: \(report.dockIntegration.canBringWindowsAppsForward ? "yes" : "no")")
+        print("Quiet runtime ready: \(report.quietRuntime.canQuietRuntime ? "yes" : "no")")
+        print("Quiet runtime recommendation: \(report.quietRuntime.recommendedAction)")
+        print("Quiet runtime reason: \(report.quietRuntime.reason)")
         print("Restorable apps: \(report.restorableAppIds.joined(separator: ", "))")
         print("Actions:")
         for action in report.actions {

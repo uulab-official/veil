@@ -51,6 +51,14 @@
       "canRestorePreviousApps": false,
       "canLaunchSelectedApp": true
     },
+    "quietRuntime": {
+      "isEnabled": true,
+      "hasOpenedAppWindowThisSession": true,
+      "openWindowCount": 1,
+      "canQuietRuntime": false,
+      "recommendedAction": "keep-running",
+      "reason": "Windows app windows are still open."
+    },
     "apps": [
       {
         "id": "winapp_notepad",
@@ -93,6 +101,11 @@
         "id": "windowsApps.closeAll",
         "title": "Close All Windows Apps",
         "isAvailable": true
+      },
+      {
+        "id": "runtime.quietWhenIdle",
+        "title": "Quiet Runtime When Idle",
+        "isAvailable": false
       },
       {
         "id": "clipboard.setText",

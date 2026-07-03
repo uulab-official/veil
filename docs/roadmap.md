@@ -131,7 +131,7 @@ Exit criteria:
 Veil now has the local QEMU/HVF boot path, embedded display evidence, fake-agent harnesses, and the first Coherence-style app-window controls. The next work is to close the gap between "can boot and mirror a window" and "daily usable Windows App Runtime" without expanding into a generic VM manager.
 
 1. UTM-style runtime configuration contract: expose typed system, display, sharing, storage, network, input, and guest-agent readiness summaries.
-2. State-gated app runtime commands: launch, focus, close, input, clipboard, restore, and stop actions should be available only when the VM and guest-agent state support them.
+2. State-gated app runtime commands: launch, focus, close, input, clipboard, restore, quiet-runtime readiness, and stop actions should be available only when the VM and guest-agent state support them.
 3. Coherence restore loop: after VM reconnect, restore selected Windows apps and keep the Veil launcher hidden unless recovery is needed.
 4. Harness automation surface: keep expanding the `app-runtime-status` and `app-runtime-action` commands so launch, focus, close, restore, input, clipboard, and proof runs share the same host model boundaries.
 5. Real Windows validation: rerun the installed Windows 11 Arm path, capture diagnostics, and update docs with exact setup blockers.

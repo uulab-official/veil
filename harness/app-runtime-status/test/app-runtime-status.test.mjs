@@ -30,6 +30,16 @@ test("rejects reports without Dock integration status", () => {
   );
 });
 
+test("rejects reports without quiet runtime policy status", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.demo.json", import.meta.url), "utf8"));
+  delete report.quietRuntime;
+
+  assert.throws(
+    () => validateAppRuntimeStatus(report),
+    /quietRuntime/
+  );
+});
+
 test("rejects Dock integration counts that drift from mirrored sessions", () => {
   const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.demo.json", import.meta.url), "utf8"));
   report.mirrorSessions.push({
@@ -45,6 +55,16 @@ test("rejects Dock integration counts that drift from mirrored sessions", () => 
   assert.throws(
     () => validateAppRuntimeStatus(report),
     /openWindowCount/
+  );
+});
+
+test("rejects quiet runtime counts that drift from mirrored sessions", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.demo.json", import.meta.url), "utf8"));
+  report.quietRuntime.openWindowCount = 1;
+
+  assert.throws(
+    () => validateAppRuntimeStatus(report),
+    /quietRuntime\.openWindowCount/
   );
 });
 

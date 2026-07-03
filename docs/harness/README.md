@@ -59,8 +59,8 @@ The macOS host shell also includes an internal demo agent fallback. If the WebSo
 
 The app runtime status command exposes the same host-side model used by the
 macOS app so automation can inspect Windows app availability, mirrored HWND
-sessions, Dock integration, restore intent, and supported actions without
-clicking the UI.
+sessions, Dock integration, quiet-runtime readiness, restore intent, and
+supported actions without clicking the UI.
 
 ```bash
 cd apps/mac-host

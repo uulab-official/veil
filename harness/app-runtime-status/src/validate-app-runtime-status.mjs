@@ -30,6 +30,7 @@ export function validateAppRuntimeStatus(report) {
   validateMirrorSessions(report.mirrorSessions);
   validateStringArray(report.restorableAppIds, "restorableAppIds");
   validateDockIntegration(report.dockIntegration, report.mirrorSessions);
+  validateQuietRuntime(report.quietRuntime, report.mirrorSessions);
   validateActions(report.actions);
 
   if (report.selectedAppId !== undefined) {
@@ -114,6 +115,31 @@ function validateMirrorSessions(sessions) {
   }
 }
 
+function validateQuietRuntime(quietRuntime, mirrorSessions) {
+  if (!quietRuntime || typeof quietRuntime !== "object" || Array.isArray(quietRuntime)) {
+    throw new TypeError("quietRuntime must be an object.");
+  }
+
+  requireBoolean(quietRuntime.isEnabled, "quietRuntime.isEnabled");
+  requireBoolean(quietRuntime.hasOpenedAppWindowThisSession, "quietRuntime.hasOpenedAppWindowThisSession");
+  requireNonNegativeInteger(quietRuntime.openWindowCount, "quietRuntime.openWindowCount");
+  requireBoolean(quietRuntime.canQuietRuntime, "quietRuntime.canQuietRuntime");
+  requireString(quietRuntime.recommendedAction, "quietRuntime.recommendedAction");
+  requireString(quietRuntime.reason, "quietRuntime.reason");
+
+  if (quietRuntime.openWindowCount !== mirrorSessions.length) {
+    throw new TypeError("quietRuntime.openWindowCount must match mirrorSessions length.");
+  }
+
+  if (quietRuntime.canQuietRuntime && !quietRuntime.hasOpenedAppWindowThisSession) {
+    throw new TypeError("quietRuntime.canQuietRuntime requires a Windows app window to have opened this session.");
+  }
+
+  if (quietRuntime.canQuietRuntime && quietRuntime.openWindowCount !== 0) {
+    throw new TypeError("quietRuntime.canQuietRuntime requires zero open Windows app windows.");
+  }
+}
+
 function validateDockIntegration(dockIntegration, mirrorSessions) {
   if (!dockIntegration || typeof dockIntegration !== "object" || Array.isArray(dockIntegration)) {
     throw new TypeError("dockIntegration must be an object.");
@@ -157,6 +183,7 @@ function validateActions(actions) {
     "dock.bringWindowsAppsForward",
     "windowsApps.restorePrevious",
     "windowsApps.closeAll",
+    "runtime.quietWhenIdle",
     "clipboard.setText"
   ]) {
     if (!actionIds.has(requiredAction)) {

@@ -210,6 +210,31 @@ public struct WindowsAppRuntimeDockIntegrationStatus: Codable, Equatable, Sendab
     }
 }
 
+public struct WindowsAppRuntimeQuietPolicyStatus: Codable, Equatable, Sendable {
+    public var isEnabled: Bool
+    public var hasOpenedAppWindowThisSession: Bool
+    public var openWindowCount: Int
+    public var canQuietRuntime: Bool
+    public var recommendedAction: String
+    public var reason: String
+
+    public init(
+        isEnabled: Bool,
+        hasOpenedAppWindowThisSession: Bool,
+        openWindowCount: Int,
+        canQuietRuntime: Bool,
+        recommendedAction: String,
+        reason: String
+    ) {
+        self.isEnabled = isEnabled
+        self.hasOpenedAppWindowThisSession = hasOpenedAppWindowThisSession
+        self.openWindowCount = openWindowCount
+        self.canQuietRuntime = canQuietRuntime
+        self.recommendedAction = recommendedAction
+        self.reason = reason
+    }
+}
+
 public struct WindowsAppRuntimeStatusReport: Codable, Equatable, Sendable {
     public var kind: String
     public var generatedAt: Date
@@ -221,6 +246,7 @@ public struct WindowsAppRuntimeStatusReport: Codable, Equatable, Sendable {
     public var mirrorSessions: [WindowsAppRuntimeWindowStatus]
     public var restorableAppIds: [String]
     public var dockIntegration: WindowsAppRuntimeDockIntegrationStatus
+    public var quietRuntime: WindowsAppRuntimeQuietPolicyStatus
     public var actions: [WindowsAppRuntimeActionStatus]
 
     public init(
@@ -234,6 +260,7 @@ public struct WindowsAppRuntimeStatusReport: Codable, Equatable, Sendable {
         mirrorSessions: [WindowsAppRuntimeWindowStatus],
         restorableAppIds: [String],
         dockIntegration: WindowsAppRuntimeDockIntegrationStatus,
+        quietRuntime: WindowsAppRuntimeQuietPolicyStatus,
         actions: [WindowsAppRuntimeActionStatus]
     ) {
         self.kind = kind
@@ -246,6 +273,7 @@ public struct WindowsAppRuntimeStatusReport: Codable, Equatable, Sendable {
         self.mirrorSessions = mirrorSessions
         self.restorableAppIds = restorableAppIds
         self.dockIntegration = dockIntegration
+        self.quietRuntime = quietRuntime
         self.actions = actions
     }
 }
@@ -268,6 +296,7 @@ public final class HostDashboardModel {
     public private(set) var latestGuestClipboardText: String?
     public private(set) var lastGuestClipboardSequence = 0
     public private(set) var restorableAppIds: [String] = []
+    public private(set) var hasOpenedAppWindowThisSession = false
     public var selectedAppId: String?
 
     private let service: any HostDashboardService
@@ -350,6 +379,13 @@ public final class HostDashboardModel {
             && phase != .launching
     }
 
+    public var canQuietRuntimeWhenIdle: Bool {
+        hasOpenedAppWindowThisSession
+            && mirrorSessions.isEmpty
+            && hasLiveAgentConnection
+            && phase == .connected
+    }
+
     public func canRequestAppLaunch(appId: String) -> Bool {
         apps.contains { $0.id == appId }
             && phase != .loading
@@ -386,7 +422,8 @@ public final class HostDashboardModel {
     }
 
     public func runtimeStatusReport(generatedAt: Date = Date()) -> WindowsAppRuntimeStatusReport {
-        WindowsAppRuntimeStatusReport(
+        let quietRuntime = quietRuntimeStatus()
+        return WindowsAppRuntimeStatusReport(
             generatedAt: generatedAt,
             phase: phase,
             selectedAppId: selectedAppId,
@@ -427,6 +464,7 @@ public final class HostDashboardModel {
                 canRestorePreviousApps: canRestoreMirrorSessions,
                 canLaunchSelectedApp: canRequestSelectedAppLaunch
             ),
+            quietRuntime: quietRuntime,
             actions: [
                 WindowsAppRuntimeActionStatus(
                     id: "dock.openMainWindow",
@@ -449,11 +487,44 @@ public final class HostDashboardModel {
                     isAvailable: canCloseAllMirrorSessions
                 ),
                 WindowsAppRuntimeActionStatus(
+                    id: "runtime.quietWhenIdle",
+                    title: "Quiet Runtime When Idle",
+                    isAvailable: quietRuntime.canQuietRuntime
+                ),
+                WindowsAppRuntimeActionStatus(
                     id: "clipboard.setText",
                     title: "Set Windows Clipboard Text",
                     isAvailable: canSendHostClipboardText
                 )
             ]
+        )
+    }
+
+    public func quietRuntimeStatus() -> WindowsAppRuntimeQuietPolicyStatus {
+        let recommendedAction: String
+        let reason: String
+
+        if !hasOpenedAppWindowThisSession {
+            recommendedAction = "none"
+            reason = "No Windows app window has opened in this host session."
+        } else if !mirrorSessions.isEmpty {
+            recommendedAction = "keep-running"
+            reason = "Windows app windows are still open."
+        } else if canQuietRuntimeWhenIdle {
+            recommendedAction = "stop-or-suspend-runtime"
+            reason = "All Windows app windows are closed and the live agent is connected."
+        } else {
+            recommendedAction = "wait-for-agent"
+            reason = "Wait for a live Windows agent before quieting the runtime."
+        }
+
+        return WindowsAppRuntimeQuietPolicyStatus(
+            isEnabled: true,
+            hasOpenedAppWindowThisSession: hasOpenedAppWindowThisSession,
+            openWindowCount: mirrorSessions.count,
+            canQuietRuntime: canQuietRuntimeWhenIdle,
+            recommendedAction: recommendedAction,
+            reason: reason
         )
     }
 
@@ -858,6 +929,7 @@ public final class HostDashboardModel {
         supportsCapture: Bool
     ) {
         let captureState: WindowCaptureState = connectionMode == .agent && supportsCapture ? .pending : .unavailable
+        hasOpenedAppWindowThisSession = true
         let session = WindowMirrorSession(
             window: window,
             connectionMode: connectionMode,

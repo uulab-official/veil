@@ -481,10 +481,36 @@ struct HostDashboardModelTests {
         #expect(report.dockIntegration.canOpenMainWindow)
         #expect(report.dockIntegration.canBringWindowsAppsForward)
         #expect(report.dockIntegration.canLaunchSelectedApp)
+        #expect(report.quietRuntime.isEnabled)
+        #expect(report.quietRuntime.hasOpenedAppWindowThisSession)
+        #expect(report.quietRuntime.openWindowCount == 1)
+        #expect(report.quietRuntime.canQuietRuntime == false)
+        #expect(report.quietRuntime.recommendedAction == "keep-running")
         #expect(report.actions.first { $0.id == "dock.openMainWindow" }?.isAvailable == true)
         #expect(report.actions.first { $0.id == "dock.bringWindowsAppsForward" }?.isAvailable == true)
         #expect(report.actions.first { $0.id == "clipboard.setText" }?.isAvailable == true)
         #expect(report.actions.first { $0.id == "windowsApps.restorePrevious" }?.isAvailable == false)
+        #expect(report.actions.first { $0.id == "runtime.quietWhenIdle" }?.isAvailable == false)
+    }
+
+    @Test("reports quiet runtime readiness after the final Windows app window closes")
+    @MainActor
+    func reportsQuietRuntimeReadinessAfterFinalWindowCloses() async throws {
+        let service = FakeDashboardService(health: .captureReady)
+        let model = HostDashboardModel(service: service)
+
+        await model.launchNotepad()
+        _ = await model.closeMirrorSession(windowId: "hwnd:0003029A")
+        let report = model.runtimeStatusReport()
+
+        #expect(model.hasOpenedAppWindowThisSession)
+        #expect(model.canQuietRuntimeWhenIdle)
+        #expect(report.mirrorSessions.isEmpty)
+        #expect(report.quietRuntime.hasOpenedAppWindowThisSession)
+        #expect(report.quietRuntime.openWindowCount == 0)
+        #expect(report.quietRuntime.canQuietRuntime)
+        #expect(report.quietRuntime.recommendedAction == "stop-or-suspend-runtime")
+        #expect(report.actions.first { $0.id == "runtime.quietWhenIdle" }?.isAvailable == true)
     }
 
     @Test("updates active window sessions by HWND")

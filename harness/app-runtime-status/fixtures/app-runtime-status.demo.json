@@ -21,6 +21,11 @@
       "title": "Close All Windows Apps"
     },
     {
+      "id": "runtime.quietWhenIdle",
+      "isAvailable": false,
+      "title": "Quiet Runtime When Idle"
+    },
+    {
       "id": "clipboard.setText",
       "isAvailable": false,
       "title": "Set Windows Clipboard Text"
@@ -53,6 +58,14 @@
     "canRestorePreviousApps": false,
     "isEnabled": true,
     "openWindowCount": 0
+  },
+  "quietRuntime": {
+    "canQuietRuntime": false,
+    "hasOpenedAppWindowThisSession": false,
+    "isEnabled": true,
+    "openWindowCount": 0,
+    "reason": "No Windows app window has opened in this host session.",
+    "recommendedAction": "none"
   },
   "generatedAt": "2026-07-03T08:53:35Z",
   "kind": "windowsAppRuntimeStatus",
