@@ -91,7 +91,7 @@ Exit criteria:
 - Coherence window bridge for common desktop apps.
 - Text clipboard.
 - Shared folder.
-- Basic Dock integration.
+- Basic Dock integration for reopening, focusing, closing, restoring, and launching Windows app windows while the main Veil window is hidden.
 - Automatic VM start and suspend.
 - Recovery instructions and diagnostics bundle.
 

@@ -60,6 +60,17 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
         windowsById[windowId] = nil
     }
 
+    func bringAllToFront() {
+        guard !windowsById.isEmpty else {
+            return
+        }
+
+        for window in windowsById.values {
+            window.makeKeyAndOrderFront(nil)
+        }
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
     func windowWillClose(_ notification: Notification) {
         guard let window = notification.object as? NSWindow,
               let windowId = window.identifier?.rawValue else {

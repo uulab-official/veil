@@ -77,6 +77,7 @@ struct VeilHostShellApp: App {
             )
                 .frame(minWidth: 1120, idealWidth: 1440, minHeight: 700, idealHeight: 900)
                 .task {
+                    configureDockMenuBridge()
                     configureWindowsAppWindowCloseBridge()
                     startAgentEventPumpIfNeeded()
                     startAgentReconnectPollerIfNeeded()
@@ -371,6 +372,13 @@ struct VeilHostShellApp: App {
         }
     }
 
+    private func bringAllWindowsAppWindowsToFront() {
+        windowsAppWindowPresenter.bringAllToFront()
+        if let focusedSession = model.mirrorSessions.last {
+            focusWindowsAppWindow(windowId: focusedSession.id)
+        }
+    }
+
     private func closeWindowsAppWindow(windowId: String) {
         Task { @MainActor in
             let response = await model.closeMirrorSession(windowId: windowId)
@@ -388,6 +396,31 @@ struct VeilHostShellApp: App {
             for response in responses where response.accepted {
                 windowsAppWindowPresenter.closeWindow(windowId: response.windowId)
             }
+        }
+    }
+
+    private func configureDockMenuBridge() {
+        appDelegate.reopenHandler = {
+            if model.mirrorSessions.isEmpty {
+                activateMainWindow()
+            } else {
+                bringAllWindowsAppWindowsToFront()
+            }
+        }
+        appDelegate.dockMenuProvider = {
+            AppRuntimeDockMenuFactory.makeMenu(
+                model: model,
+                vmModel: vmModel,
+                activateMainWindowAction: activateMainWindow,
+                bringAllWindowsAppWindowsToFrontAction: bringAllWindowsAppWindowsToFront,
+                focusWindowsAppWindowAction: focusWindowsAppWindow(windowId:),
+                closeWindowsAppWindowAction: closeWindowsAppWindow(windowId:),
+                closeAllWindowsAppWindowsAction: closeAllWindowsAppWindows,
+                restoreWindowsAppWindowsAction: restoreWindowsAppWindows,
+                launchWindowsAppByIdAction: launchWindowsAppWindow(appId:),
+                startVMAction: startWindowsAndShowDisplay,
+                stopVMAction: stopWindowsAndCloseDisplay
+            )
         }
     }
 
@@ -646,7 +679,11 @@ struct VeilHostShellApp: App {
     }
 }
 
+@MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    var dockMenuProvider: (() -> NSMenu?)?
+    var reopenHandler: (() -> Void)?
+
     func applicationWillFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
         NSWindow.allowsAutomaticWindowTabbing = false
@@ -662,12 +699,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-        if !flag {
-            Task { @MainActor in
-                MainWindowChrome.showMainWindow()
-            }
-        }
+        reopenHandler?()
         return true
+    }
+
+    func applicationDockMenu(_ sender: NSApplication) -> NSMenu? {
+        dockMenuProvider?()
     }
 
     @MainActor

@@ -56,3 +56,4 @@ Goal: adapt concrete UTM source patterns into Veil while keeping Veil focused on
 - [x] Split MVP proof validation into recovery-report validation and release-proof validation with `--require-proved`.
 - [x] Make the CLI and harness both enforce proved status in release mode.
 - [x] Reject untracked HWND close, focus, frame-subscribe, mouse, and key actions in both the real Windows agent boundary and the fake-agent harness.
+- [x] Add Dock-level Windows app runtime actions so hidden coherence sessions can be focused, closed, restored, or launched without reopening the full VM console.
