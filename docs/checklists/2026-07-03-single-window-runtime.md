@@ -35,6 +35,8 @@ Goal: move Veil from a Veil shell plus separate QEMU Cocoa display toward a UTM-
 - [x] Treat the Windows installer ISO as install-time media only: installed Windows profiles boot from disk without requiring or attaching the ISO.
 - [x] Stop regenerating/attaching automatic install media after guest-agent evidence exists, and avoid recopied guest-agent bundle directories when contents are unchanged.
 - [x] Add a Mark Windows Installed app/CLI transition so desktop proof can detach installer media before the guest agent connects.
+- [x] Convert the main shell to a single-window scene and close duplicate main windows so Veil cannot present two primary VM control surfaces.
+- [x] Prioritize the installed-runtime CTA as Open Windows App, then Install Agent, then Stop Windows, matching the app-runtime product loop.
 
 ## Next
 

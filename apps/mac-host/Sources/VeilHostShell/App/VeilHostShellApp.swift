@@ -63,7 +63,7 @@ struct VeilHostShellApp: App {
     }
 
     var body: some Scene {
-        WindowGroup("Veil", id: "main") {
+        Window("Veil", id: "main") {
             ContentView(
                 model: model,
                 vmModel: vmModel,
@@ -557,6 +557,7 @@ struct VeilHostShellApp: App {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
+        NSWindow.allowsAutomaticWindowTabbing = false
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -696,11 +697,14 @@ private struct VeilMenuBarMenu: View {
 
 @MainActor
 private enum MainWindowChrome {
-    private static var fallbackWindowController: NSWindowController?
-
     static func configureAndCompactMainWindow() {
-        guard let window = mainWindow ?? createFallbackMainWindow() else {
+        let windows = mainWindows
+        guard let window = windows.first else {
             return
+        }
+
+        for duplicate in windows.dropFirst() {
+            duplicate.close()
         }
 
         configure(window)
@@ -715,30 +719,13 @@ private enum MainWindowChrome {
     }
 
     private static var mainWindow: NSWindow? {
-        NSApp.windows.first { window in
-            window.identifier?.rawValue == "main" || window.title == "Veil"
-        }
+        mainWindows.first
     }
 
-    private static func createFallbackMainWindow() -> NSWindow? {
-        if let window = fallbackWindowController?.window {
-            return window
+    private static var mainWindows: [NSWindow] {
+        NSApp.windows.filter { window in
+            window.identifier?.rawValue == "main" || window.title == "Veil"
         }
-
-        let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 1440, height: 900),
-            styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
-            backing: .buffered,
-            defer: false
-        )
-        window.identifier = NSUserInterfaceItemIdentifier("main")
-        window.title = "Veil"
-        window.contentViewController = NSHostingController(rootView: StandaloneMainWindowRoot())
-
-        let controller = NSWindowController(window: window)
-        fallbackWindowController = controller
-        controller.showWindow(nil)
-        return window
     }
 
     private static func configure(_ window: NSWindow) {

@@ -48,6 +48,8 @@ struct VMRuntimeView: View {
                     primaryAction: {
                         if canLaunchWindowsApp {
                             launchWindowsAppAction()
+                        } else if canInstallGuestAgent(for: snapshot) {
+                            installGuestAgentAction()
                         } else if model.canStop {
                             stopVMAction()
                         } else if model.canStart {
@@ -176,6 +178,11 @@ struct VMRuntimeView: View {
 
     private func canShowDisplay(for snapshot: VMRuntimeSnapshot) -> Bool {
         snapshot.state == .running || snapshot.state == .starting
+    }
+
+    private func canInstallGuestAgent(for snapshot: VMRuntimeSnapshot) -> Bool {
+        canShowDisplay(for: snapshot)
+            && (guestAgentInstallEvidence ?? snapshot.installEvidence).kind != .guestAgent
     }
 
     private func refreshRuntimeEvidenceWhileRunning() async {
@@ -1645,6 +1652,14 @@ private struct WindowsSetupDisplayPanel: View {
     }
 
     private var installPrimaryTitle: String {
+        if canLaunchWindowsApp {
+            return selectedWindowsAppName.map { "Open \($0)" } ?? "Open Windows App"
+        }
+
+        if canInstallGuestAgent {
+            return "Install Agent"
+        }
+
         if canStop {
             return "Stop Windows"
         }
@@ -1669,7 +1684,7 @@ private struct WindowsSetupDisplayPanel: View {
             Spacer(minLength: 12)
 
             horizontalActions
-                .frame(width: 236)
+                .frame(minWidth: 300, alignment: .trailing)
         }
         .padding(.horizontal, 22)
         .padding(.vertical, 14)
@@ -1694,6 +1709,15 @@ private struct WindowsSetupDisplayPanel: View {
             }
 
             Spacer(minLength: 4)
+
+            if canLaunchWindowsApp {
+                Button(action: primaryAction) {
+                    Label(selectedWindowsAppName ?? "Open App", systemImage: "macwindow.badge.plus")
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(isLoading)
+                .help("Open Windows app")
+            }
 
             Button(action: refreshAction) {
                 Label("Refresh", systemImage: "arrow.clockwise")
@@ -1979,6 +2003,10 @@ private struct WindowsSetupDisplayPanel: View {
             return "Open \(appDisplayName)"
         }
 
+        if canInstallGuestAgent {
+            return "Install Agent"
+        }
+
         if canStop {
             return "Stop Windows"
         }
@@ -2001,6 +2029,10 @@ private struct WindowsSetupDisplayPanel: View {
     private var primarySymbol: String {
         if canLaunchWindowsApp {
             return "macwindow.badge.plus"
+        }
+
+        if canInstallGuestAgent {
+            return "person.crop.circle.badge.plus"
         }
 
         if canStop {
