@@ -488,6 +488,8 @@ struct HostDashboardModelTests {
         #expect(report.macWindowIntegration.hidesLauncherWhenMirroring)
         #expect(report.macWindowIntegration.mirroredWindowCount == 1)
         #expect(report.macWindowIntegration.foregroundableWindowCount == 1)
+        #expect(report.macWindowIntegration.foregroundWindowId == "hwnd:0003029A")
+        #expect(report.macWindowIntegration.foregroundWindowTitle == "Untitled - Notepad")
         #expect(report.macWindowIntegration.pendingFrameWindowCount == 1)
         #expect(report.macWindowIntegration.streamingWindowCount == 0)
         #expect(report.quietRuntime.isEnabled)
@@ -538,6 +540,8 @@ struct HostDashboardModelTests {
         #expect(report.macWindowIntegration.acceptsGuestWindowEvents)
         #expect(report.macWindowIntegration.hidesLauncherWhenMirroring == false)
         #expect(report.macWindowIntegration.mirroredWindowCount == 0)
+        #expect(report.macWindowIntegration.foregroundWindowId == nil)
+        #expect(report.macWindowIntegration.foregroundWindowTitle == nil)
         #expect(report.actions.first { $0.id == "runtime.quietWhenIdle" }?.isAvailable == true)
     }
 
@@ -708,6 +712,7 @@ struct HostDashboardModelTests {
         #expect(fulfilledReport.dockIntegration.pendingLaunchCount == 0)
         #expect(fulfilledReport.dockIntegration.badgeLabel == "1")
         #expect(fulfilledReport.macWindowIntegration.foregroundableWindowCount == 1)
+        #expect(fulfilledReport.macWindowIntegration.foregroundWindowTitle == "Untitled - Notepad")
         #expect(fulfilledReport.pendingLaunch.isQueued == false)
         #expect(fulfilledReport.pendingLaunch.appId == nil)
         #expect(fulfilledReport.pendingLaunch.willLaunchOnAgentReconnect == false)

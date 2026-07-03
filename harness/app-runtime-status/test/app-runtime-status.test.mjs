@@ -122,6 +122,16 @@ test("rejects Mac foregroundable window counts that drift from mirrored sessions
   );
 });
 
+test("rejects Mac foreground window identity that drifts from mirrored sessions", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.mac-window-live.json", import.meta.url), "utf8"));
+  report.macWindowIntegration.foregroundWindowId = "hwnd:DIFFERENT";
+
+  assert.throws(
+    () => validateAppRuntimeStatus(report),
+    /foregroundWindowId/
+  );
+});
+
 test("rejects quiet runtime counts that drift from mirrored sessions", () => {
   const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.demo.json", import.meta.url), "utf8"));
   report.quietRuntime.openWindowCount = 1;

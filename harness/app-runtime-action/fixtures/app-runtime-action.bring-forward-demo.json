@@ -53,7 +53,9 @@
       "pendingFrameWindowCount": 0,
       "streamingWindowCount": 0,
       "reason": "Waiting for the live Windows agent before guest HWND events can open macOS windows automatically.",
-      "foregroundableWindowCount": 1
+      "foregroundableWindowCount": 1,
+      "foregroundWindowId": "hwnd:DEMO0001",
+      "foregroundWindowTitle": "Untitled - Notepad"
     },
     "quietRuntime": {
       "isEnabled": true,

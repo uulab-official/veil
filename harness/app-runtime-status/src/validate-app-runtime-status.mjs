@@ -189,6 +189,22 @@ function validateMacWindowIntegration(macWindowIntegration, mirrorSessions, conn
     throw new TypeError("macWindowIntegration.foregroundableWindowCount must match mirrorSessions length.");
   }
 
+  if (mirrorSessions.length === 0) {
+    if (macWindowIntegration.foregroundWindowId !== undefined || macWindowIntegration.foregroundWindowTitle !== undefined) {
+      throw new TypeError("macWindowIntegration foreground window fields must be omitted when no mirrored sessions exist.");
+    }
+  } else {
+    const foregroundSession = mirrorSessions.at(-1);
+    requireString(macWindowIntegration.foregroundWindowId, "macWindowIntegration.foregroundWindowId");
+    requireString(macWindowIntegration.foregroundWindowTitle, "macWindowIntegration.foregroundWindowTitle");
+    if (macWindowIntegration.foregroundWindowId !== foregroundSession.windowId) {
+      throw new TypeError("macWindowIntegration.foregroundWindowId must match the foreground mirror session.");
+    }
+    if (macWindowIntegration.foregroundWindowTitle !== foregroundSession.title) {
+      throw new TypeError("macWindowIntegration.foregroundWindowTitle must match the foreground mirror session.");
+    }
+  }
+
   if (macWindowIntegration.pendingFrameWindowCount !== mirrorSessions.filter((session) => session.captureState === "pending").length) {
     throw new TypeError("macWindowIntegration.pendingFrameWindowCount must match pending mirror sessions.");
   }

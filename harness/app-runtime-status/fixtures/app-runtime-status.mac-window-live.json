@@ -56,7 +56,9 @@
     "pendingFrameWindowCount": 1,
     "streamingWindowCount": 0,
     "reason": "Guest HWND sessions are mirrored as macOS windows.",
-    "foregroundableWindowCount": 1
+    "foregroundableWindowCount": 1,
+    "foregroundWindowId": "hwnd:0003029A",
+    "foregroundWindowTitle": "Untitled - Notepad"
   },
   "quietRuntime": {
     "isEnabled": true,

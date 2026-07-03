@@ -83,3 +83,4 @@ Goal: adapt concrete UTM source patterns into Veil while keeping Veil focused on
 - [x] Add foregroundable macOS window counts to app-runtime status so successful Windows app launch, restore, and pending-launch fulfillment prove the app can be brought forward like a native Mac window.
 - [x] Track visible Windows app window ids and the active foreground HWND inside the AppKit presenter, with Shell tests covering launch, refocus, and close cleanup.
 - [x] Add foreground window titles to app-runtime action reports and shell status messages so Dock/menu bring-forward flows name the Windows app window that is now frontmost.
+- [x] Add foreground HWND id/title to app-runtime status so Dock/menu automation can identify the current macOS-frontmost Windows app window before pressing an action.

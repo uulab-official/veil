@@ -87,7 +87,9 @@ into automatic macOS app-window presentation, including mirrored, pending-frame,
 streaming, and foregroundable window counts. The foregroundable count must move
 with mirrored HWND sessions so successful launch, restore, and pending-launch
 fulfillment reports prove the Windows app can be brought forward as a macOS
-window instead of merely existing inside the guest.
+window instead of merely existing inside the guest. When mirrored windows are
+open, `foregroundWindowId` and `foregroundWindowTitle` name the HWND that
+Dock/menu bring-forward actions should make frontmost.
 When every mirrored Windows app window has closed, `quietRuntime` also reports
 whether Veil will automatically quiet the local runtime and the current delay
 before that stop/suspend policy is attempted. When quieting is allowed, the

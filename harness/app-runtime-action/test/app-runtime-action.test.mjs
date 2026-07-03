@@ -270,6 +270,8 @@ test("rejects close-all actions that leave mirrored sessions open", () => {
   report.status.dockIntegration.canBringWindowsAppsForward = true;
   report.status.macWindowIntegration.mirroredWindowCount = 1;
   report.status.macWindowIntegration.foregroundableWindowCount = 1;
+  report.status.macWindowIntegration.foregroundWindowId = "hwnd:STILL_OPEN";
+  report.status.macWindowIntegration.foregroundWindowTitle = "Untitled - Notepad";
   report.status.macWindowIntegration.pendingFrameWindowCount = 1;
   report.status.macWindowIntegration.hidesLauncherWhenMirroring = true;
   report.status.quietRuntime.openWindowCount = 1;
@@ -314,6 +316,8 @@ test("allows rejected restore actions to keep requested app ids", () => {
   report.status.macWindowIntegration.hidesLauncherWhenMirroring = false;
   report.status.macWindowIntegration.mirroredWindowCount = 0;
   report.status.macWindowIntegration.foregroundableWindowCount = 0;
+  delete report.status.macWindowIntegration.foregroundWindowId;
+  delete report.status.macWindowIntegration.foregroundWindowTitle;
   report.status.macWindowIntegration.pendingFrameWindowCount = 0;
   report.status.quietRuntime.openWindowCount = 0;
 
@@ -329,6 +333,8 @@ test("rejects restore actions whose windows are absent from status", () => {
   report.status.macWindowIntegration.hidesLauncherWhenMirroring = false;
   report.status.macWindowIntegration.mirroredWindowCount = 0;
   report.status.macWindowIntegration.foregroundableWindowCount = 0;
+  delete report.status.macWindowIntegration.foregroundWindowId;
+  delete report.status.macWindowIntegration.foregroundWindowTitle;
   report.status.macWindowIntegration.pendingFrameWindowCount = 0;
   report.status.quietRuntime.openWindowCount = 0;
 

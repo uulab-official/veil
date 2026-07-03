@@ -220,6 +220,8 @@ public struct WindowsAppRuntimeMacWindowIntegrationStatus: Codable, Equatable, S
     public var hidesLauncherWhenMirroring: Bool
     public var mirroredWindowCount: Int
     public var foregroundableWindowCount: Int
+    public var foregroundWindowId: String?
+    public var foregroundWindowTitle: String?
     public var pendingFrameWindowCount: Int
     public var streamingWindowCount: Int
     public var reason: String
@@ -231,6 +233,8 @@ public struct WindowsAppRuntimeMacWindowIntegrationStatus: Codable, Equatable, S
         hidesLauncherWhenMirroring: Bool,
         mirroredWindowCount: Int,
         foregroundableWindowCount: Int,
+        foregroundWindowId: String? = nil,
+        foregroundWindowTitle: String? = nil,
         pendingFrameWindowCount: Int,
         streamingWindowCount: Int,
         reason: String
@@ -241,6 +245,8 @@ public struct WindowsAppRuntimeMacWindowIntegrationStatus: Codable, Equatable, S
         self.hidesLauncherWhenMirroring = hidesLauncherWhenMirroring
         self.mirroredWindowCount = mirroredWindowCount
         self.foregroundableWindowCount = foregroundableWindowCount
+        self.foregroundWindowId = foregroundWindowId
+        self.foregroundWindowTitle = foregroundWindowTitle
         self.pendingFrameWindowCount = pendingFrameWindowCount
         self.streamingWindowCount = streamingWindowCount
         self.reason = reason
@@ -825,6 +831,8 @@ public final class HostDashboardModel {
             hidesLauncherWhenMirroring: hasLiveAgentConnection && !mirrorSessions.isEmpty,
             mirroredWindowCount: mirrorSessions.count,
             foregroundableWindowCount: mirrorSessions.count,
+            foregroundWindowId: mirrorSessions.last?.id,
+            foregroundWindowTitle: mirrorSessions.last?.window.title,
             pendingFrameWindowCount: pendingFrameWindowCount,
             streamingWindowCount: streamingWindowCount,
             reason: reason
