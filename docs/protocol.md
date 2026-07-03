@@ -91,6 +91,20 @@ Response:
       "exePath": "C:\\Windows\\System32\\notepad.exe",
       "publisher": "Microsoft",
       "iconId": "icon_notepad"
+    },
+    {
+      "id": "winapp_calculator",
+      "name": "Calculator",
+      "exePath": "calc.exe",
+      "publisher": "Microsoft",
+      "iconId": "icon_calculator"
+    },
+    {
+      "id": "winapp_paint",
+      "name": "Paint",
+      "exePath": "mspaint.exe",
+      "publisher": "Microsoft",
+      "iconId": "icon_paint"
     }
   ]
 }
@@ -104,7 +118,7 @@ Request:
 {
   "type": "app.launch.request",
   "requestId": "req_003",
-  "appId": "winapp_notepad",
+  "appId": "winapp_calculator",
   "args": []
 }
 ```

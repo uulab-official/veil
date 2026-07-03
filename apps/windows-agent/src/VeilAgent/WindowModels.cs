@@ -2,6 +2,14 @@ namespace Veil.Agent;
 
 public sealed record WindowRect(int X, int Y, int Width, int Height);
 
+public sealed record WindowsAppDescriptor(
+    string Id,
+    string Name,
+    string Executable,
+    string Publisher,
+    string IconId
+);
+
 public sealed record LaunchedWindow(
     string WindowId,
     nint Hwnd,

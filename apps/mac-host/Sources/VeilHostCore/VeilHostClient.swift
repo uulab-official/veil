@@ -9,26 +9,23 @@ public protocol HostEventSource: Sendable {
 }
 
 public enum VeilHostError: Error, Equatable, LocalizedError, Sendable {
-    case notepadMissing
-    case notepadWindowMismatch
+    case appMissing(String)
+    case appWindowMismatch(String)
     case missingReply(String)
-    case unsupportedHarnessApp
 
     public var errorDescription: String? {
         switch self {
-        case .notepadMissing:
-            "Notepad is not available from the Windows agent."
-        case .notepadWindowMismatch:
-            "The Windows agent launched Notepad, but the tracked HWND did not match the launch response."
+        case .appMissing(let appId):
+            "The Windows app \(appId) is not available from the Windows agent."
+        case .appWindowMismatch(let appId):
+            "The Windows agent launched \(appId), but the tracked HWND did not match the launch response."
         case .missingReply(let context):
             "The Windows agent did not return the expected reply: \(context)."
-        case .unsupportedHarnessApp:
-            "The current harness can only launch Notepad."
         }
     }
 }
 
-public struct NotepadLaunchResult: Codable, Equatable, Sendable {
+public struct WindowsAppLaunchResult: Codable, Equatable, Sendable {
     public var health: AgentHealthResponse
     public var apps: [WindowsApp]
     public var launch: AppLaunchResponse
@@ -52,6 +49,8 @@ public struct NotepadLaunchResult: Codable, Equatable, Sendable {
         self.connectionDetail = connectionDetail
     }
 }
+
+public typealias NotepadLaunchResult = WindowsAppLaunchResult
 
 public enum AgentConnectionDiagnosticStatus: String, Codable, Equatable, Sendable {
     case connected
@@ -132,15 +131,15 @@ public struct VeilHostClient: HostDashboardService, Sendable {
         self.decoder = decoder
     }
 
-    public func launchNotepad() async throws -> NotepadLaunchResult {
+    public func launchApp(appId: String) async throws -> WindowsAppLaunchResult {
         let overview = try await loadOverview()
 
-        guard overview.apps.contains(where: { $0.id == "winapp_notepad" }) else {
-            throw VeilHostError.notepadMissing
+        guard overview.apps.contains(where: { $0.id == appId }) else {
+            throw VeilHostError.appMissing(appId)
         }
 
         let launchReplies = try await transport.send(
-            encoder.encode(AppLaunchRequest(requestId: "req_launch_notepad", appId: "winapp_notepad")),
+            encoder.encode(AppLaunchRequest(requestId: "req_launch_\(requestIdSuffix(for: appId))", appId: appId)),
             expectedReplies: 2
         )
 
@@ -153,16 +152,20 @@ public struct VeilHostClient: HostDashboardService, Sendable {
 
         guard launch.accepted,
               launch.processId == window.processId,
-              window.appId == "winapp_notepad" else {
-            throw VeilHostError.notepadWindowMismatch
+              window.appId == appId else {
+            throw VeilHostError.appWindowMismatch(appId)
         }
 
-        return NotepadLaunchResult(
+        return WindowsAppLaunchResult(
             health: overview.health,
             apps: overview.apps,
             launch: launch,
             window: window
         )
+    }
+
+    public func launchNotepad() async throws -> NotepadLaunchResult {
+        try await launchApp(appId: "winapp_notepad")
     }
 
     public func loadHealth() async throws -> AgentHealthResponse {

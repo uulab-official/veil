@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.InteropServices;
+using System.Text;
 using System.Windows.Forms;
 
 namespace Veil.Agent;
@@ -27,7 +28,21 @@ public sealed class WindowsDesktop : IWindowsDesktop
     private string? lastHostClipboardText;
     private int lastHostClipboardSequence;
 
-    public async Task<LaunchedWindow> LaunchNotepadAsync(CancellationToken cancellationToken)
+    public Task<LaunchedWindow> LaunchNotepadAsync(CancellationToken cancellationToken)
+    {
+        return LaunchAppAsync(
+            new WindowsAppDescriptor(
+                Id: "winapp_notepad",
+                Name: "Notepad",
+                Executable: "notepad.exe",
+                Publisher: "Microsoft",
+                IconId: "icon_notepad"
+            ),
+            cancellationToken
+        );
+    }
+
+    public async Task<LaunchedWindow> LaunchAppAsync(WindowsAppDescriptor app, CancellationToken cancellationToken)
     {
         if (!OperatingSystem.IsWindows())
         {
@@ -36,9 +51,9 @@ public sealed class WindowsDesktop : IWindowsDesktop
 
         using var process = Process.Start(new ProcessStartInfo
         {
-            FileName = "notepad.exe",
+            FileName = app.Executable,
             UseShellExecute = true
-        }) ?? throw new InvalidOperationException("Could not start notepad.exe.");
+        }) ?? throw new InvalidOperationException($"Could not start {app.Executable}.");
 
         for (var attempt = 0; attempt < 50; attempt += 1)
         {
@@ -47,25 +62,92 @@ public sealed class WindowsDesktop : IWindowsDesktop
 
             if (process.MainWindowHandle != IntPtr.Zero)
             {
-                var title = string.IsNullOrWhiteSpace(process.MainWindowTitle)
-                    ? "Untitled - Notepad"
-                    : process.MainWindowTitle;
+                return CreateLaunchedWindow(process.MainWindowHandle, process.Id, process.MainWindowTitle, app.Name);
+            }
 
-                return new LaunchedWindow(
-                    WindowId: $"hwnd:{process.MainWindowHandle.ToInt64():X8}",
-                    Hwnd: process.MainWindowHandle,
-                    ProcessId: process.Id,
-                    Title: title,
-                    Bounds: new WindowRect(0, 0, 1280, 800),
-                    State: "normal",
-                    Focused: true
-                );
+            if (TryFindTopLevelWindow(app, process.Id, out var launched))
+            {
+                return launched;
             }
 
             await Task.Delay(100, cancellationToken);
         }
 
-        throw new TimeoutException("notepad.exe started but no top-level window was discovered.");
+        throw new TimeoutException($"{app.Executable} started but no top-level window was discovered.");
+    }
+
+    private static bool TryFindTopLevelWindow(WindowsAppDescriptor app, int launchedProcessId, out LaunchedWindow launched)
+    {
+        LaunchedWindow? matchedWindow = null;
+        EnumWindows((hwnd, _) =>
+        {
+            if (!IsWindowVisible(hwnd))
+            {
+                return true;
+            }
+
+            _ = GetWindowThreadProcessId(hwnd, out var windowProcessId);
+            var title = GetWindowTitle(hwnd);
+            var matchesProcess = windowProcessId == launchedProcessId;
+            var matchesTitle = !string.IsNullOrWhiteSpace(title)
+                && title.Contains(app.Name, StringComparison.OrdinalIgnoreCase);
+
+            if (!matchesProcess && !matchesTitle)
+            {
+                return true;
+            }
+
+            matchedWindow = CreateLaunchedWindow(hwnd, (int)windowProcessId, title, app.Name);
+            return false;
+        }, IntPtr.Zero);
+
+        launched = matchedWindow!;
+        return matchedWindow is not null;
+    }
+
+    private static LaunchedWindow CreateLaunchedWindow(IntPtr hwnd, int processId, string? title, string fallbackTitle)
+    {
+        var resolvedTitle = string.IsNullOrWhiteSpace(title)
+            ? fallbackTitle
+            : title;
+
+        return new LaunchedWindow(
+            WindowId: $"hwnd:{hwnd.ToInt64():X8}",
+            Hwnd: hwnd,
+            ProcessId: processId,
+            Title: resolvedTitle,
+            Bounds: GetWindowBounds(hwnd),
+            State: "normal",
+            Focused: true
+        );
+    }
+
+    private static string GetWindowTitle(IntPtr hwnd)
+    {
+        var length = GetWindowTextLength(hwnd);
+        if (length <= 0)
+        {
+            return string.Empty;
+        }
+
+        var builder = new StringBuilder(length + 1);
+        _ = GetWindowText(hwnd, builder, builder.Capacity);
+        return builder.ToString();
+    }
+
+    private static WindowRect GetWindowBounds(IntPtr hwnd)
+    {
+        if (GetWindowRect(hwnd, out var rect))
+        {
+            return new WindowRect(
+                rect.Left,
+                rect.Top,
+                Math.Max(1, rect.Right - rect.Left),
+                Math.Max(1, rect.Bottom - rect.Top)
+            );
+        }
+
+        return new WindowRect(0, 0, 1280, 800);
     }
 
     public Task<bool> CloseWindowAsync(string windowId, CancellationToken cancellationToken)
@@ -340,6 +422,9 @@ public sealed class WindowsDesktop : IWindowsDesktop
     private static extern bool IsWindow(IntPtr hWnd);
 
     [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool IsWindowVisible(IntPtr hWnd);
+
+    [DllImport("user32.dll", SetLastError = true)]
     private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
 
     [DllImport("user32.dll", SetLastError = true)]
@@ -347,4 +432,29 @@ public sealed class WindowsDesktop : IWindowsDesktop
 
     [DllImport("user32.dll", SetLastError = true)]
     private static extern IntPtr SetFocus(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    private static extern bool EnumWindows(EnumWindowsProc lpEnumFunc, IntPtr lParam);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern int GetWindowText(IntPtr hWnd, StringBuilder lpString, int nMaxCount);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern int GetWindowTextLength(IntPtr hWnd);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool GetWindowRect(IntPtr hWnd, out NativeRect lpRect);
+
+    private delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+
+    private struct NativeRect
+    {
+        public int Left;
+        public int Top;
+        public int Right;
+        public int Bottom;
+    }
 }

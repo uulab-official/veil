@@ -170,6 +170,28 @@ test("windows agent broadcasts guest clipboard text changes without host echo lo
   assert.match(desktop, /lastHostClipboardSequence/);
 });
 
+test("windows agent exposes an inbox app catalog for native-style Mac windows", async () => {
+  const session = await readFile(resolve(agentRoot, "src/VeilAgent/AgentSession.cs"), "utf8");
+  const desktopInterface = await readFile(resolve(agentRoot, "src/VeilAgent/IWindowsDesktop.cs"), "utf8");
+  const desktop = await readFile(resolve(agentRoot, "src/VeilAgent/WindowsDesktop.cs"), "utf8");
+  const models = await readFile(resolve(agentRoot, "src/VeilAgent/WindowModels.cs"), "utf8");
+
+  assert.match(models, /WindowsAppDescriptor/);
+  assert.match(desktopInterface, /LaunchAppAsync\(WindowsAppDescriptor app,\s*CancellationToken cancellationToken\)/);
+  assert.match(desktop, /LaunchAppAsync\(WindowsAppDescriptor app,\s*CancellationToken cancellationToken\)/);
+  assert.match(session, /AppCatalog/);
+  assert.match(session, /winapp_notepad/);
+  assert.match(session, /winapp_calculator/);
+  assert.match(session, /winapp_paint/);
+  assert.match(session, /desktop\.LaunchAppAsync\(app,\s*cancellationToken\)/);
+  assert.match(session, /WindowCreatedEvent\(app,\s*launched\)/);
+  assert.match(desktop, /TryFindTopLevelWindow\(app,\s*process\.Id,\s*out var launched\)/);
+  assert.match(desktop, /EnumWindows/);
+  assert.match(desktop, /GetWindowThreadProcessId/);
+  assert.match(desktop, /GetWindowText/);
+  assert.match(desktop, /GetWindowRect/);
+});
+
 test("windows agent sample launch flow emits Notepad window and first frame", async () => {
   const transcript = JSON.parse(
     await readFile(resolve(agentRoot, "fixtures/notepad-launch-with-frame.json"), "utf8")

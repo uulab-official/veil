@@ -105,8 +105,8 @@ Current scaffold status:
 
 - `apps/windows-agent` contains the first C#/.NET 8 agent project.
 - The agent exposes a WebSocket listener intended for `127.0.0.1:18444`.
-- It handles health, app list, and Notepad launch messages.
-- Notepad launch is structured to emit direct launch/window replies and broadcast a first `window.frame` event to event-subscriber sockets.
+- It handles health, app list, and selected app launch messages.
+- The first app catalog covers Notepad, Calculator, and Paint; launches are structured to emit direct launch/window replies and broadcast a first `window.frame` event to event-subscriber sockets.
 - After launch, a per-window stream loop continues broadcasting PNG `window.frame` events using monotonically increasing sequence numbers.
 - The default frame implementation uses Win32/GDI HWND capture behind `IWindowFrameCapture`; the deterministic bootstrap PNG implementation remains only as a fallback/test seam until Windows-side capture evidence is recorded.
 

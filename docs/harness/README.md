@@ -36,10 +36,10 @@ Current executable pieces:
 - `harness/qemu-doctor`: a JSON validator for QEMU/HVF readiness reports and next actions.
 - `harness/qemu-smoke`: a JSON validator for bounded QEMU/HVF boot smoke reports.
 - `harness/qemu-display-smoke`: a JSON validator for app-launched loopback VNC frame evidence.
-- `harness/windows-agent-contract`: a contract validator for the first C# Windows agent scaffold and Notepad launch transcript.
+- `harness/windows-agent-contract`: a contract validator for the first C# Windows agent scaffold, inbox app catalog, and Notepad launch transcript.
 - `packages/protocol`: shared protocol constants and validation helpers.
 
-The macOS host shell also includes an internal demo agent fallback. If the WebSocket agent is unavailable, the app still loads demo Windows app metadata and can run the Notepad demo launch flow. The header and Agent view label this as Demo mode and include the unreachable endpoint. The fallback is limited to network availability errors; protocol and agent errors remain visible. Use the external fake agent when testing the transport boundary itself.
+The macOS host shell also includes an internal demo agent fallback. If the WebSocket agent is unavailable, the app still loads demo Windows app metadata and can run selected-app demo launch flows for the first inbox app catalog. The header and Agent view label this as Demo mode and include the unreachable endpoint. The fallback is limited to network availability errors; protocol and agent errors remain visible. Use the external fake agent when testing the transport boundary itself.
 
 ## Provider Probe Scenario
 

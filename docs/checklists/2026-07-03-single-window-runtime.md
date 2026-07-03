@@ -39,6 +39,8 @@ Goal: move Veil from a Veil shell plus separate QEMU Cocoa display toward a UTM-
 - [x] Prioritize the installed-runtime CTA as Open Windows App, then Install Agent, then Stop Windows, matching the app-runtime product loop.
 - [x] Keep mirrored Windows apps out of the main VM screen: Notepad renders in its own macOS window while the main shell remains a launcher/status surface.
 - [x] Size the Notepad bridge window from the guest HWND bounds so it opens like a real desktop app instead of a small preview.
+- [x] Generalize host launch from Notepad-only to selected `appId` so inbox apps can open as separate macOS windows.
+- [x] Add a first Windows agent app catalog for Notepad, Calculator, and Paint instead of hard-coding a single launch target.
 
 ## Next
 

@@ -22,9 +22,11 @@ struct ProtocolMessageTests {
         let response: AppListResponse = try decodeFixture("app.list.response")
 
         #expect(response.type == .appListResponse)
-        #expect(response.apps.count == 1)
+        #expect(response.apps.count == 3)
         #expect(response.apps[0].id == "winapp_notepad")
         #expect(response.apps[0].name == "Notepad")
+        #expect(response.apps.map(\.id).contains("winapp_calculator"))
+        #expect(response.apps.map(\.id).contains("winapp_paint"))
     }
 
     @Test("decodes window created event")

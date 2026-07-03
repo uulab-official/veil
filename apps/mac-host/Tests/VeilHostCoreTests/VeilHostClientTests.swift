@@ -89,6 +89,23 @@ struct VeilHostClientTests {
         #expect(result.window.windowId == "hwnd:0003029A")
     }
 
+    @Test("launches a selected Windows app id")
+    func launchesSelectedWindowsAppId() async throws {
+        let transport = RecordingTransport(responses: [
+            #"{"type":"agent.health.response","requestId":"req_health","protocolVersion":1,"agentVersion":"0.1.0","os":"windows-arm64","session":{"interactive":true,"user":"veil-user"},"capabilities":{"appList":true,"appLaunch":true,"windowTracking":true,"windowCapture":false,"input":false,"clipboardText":false}}"#,
+            #"{"type":"app.list.response","requestId":"req_apps","apps":[{"id":"winapp_calculator","name":"Calculator","exePath":"calc.exe","publisher":"Microsoft","iconId":"icon_calculator"}]}"#,
+            #"{"type":"app.launch.response","requestId":"req_launch_winapp_calculator","accepted":true,"processId":5010}"#,
+            #"{"type":"window.created","windowId":"hwnd:0003030B","processId":5010,"appId":"winapp_calculator","title":"Calculator","bounds":{"x":10,"y":10,"width":520,"height":720},"state":"normal","focused":true}"#
+        ])
+        let client = VeilHostClient(transport: transport)
+
+        let result = try await client.launchApp(appId: "winapp_calculator")
+
+        #expect(transport.sentAppIds == ["winapp_calculator"])
+        #expect(result.window.appId == "winapp_calculator")
+        #expect(result.window.title == "Calculator")
+    }
+
     @Test("fails when Notepad is missing from the app list")
     func failsWhenNotepadIsMissing() async throws {
         let transport = RecordingTransport(responses: [
@@ -112,7 +129,7 @@ struct VeilHostClientTests {
         ])
         let client = VeilHostClient(transport: transport)
 
-        await #expect(throws: VeilHostError.notepadWindowMismatch) {
+        await #expect(throws: VeilHostError.appWindowMismatch("winapp_notepad")) {
             _ = try await client.launchNotepad()
         }
     }
@@ -197,6 +214,7 @@ struct VeilHostClientTests {
 private final class RecordingTransport: HostTransport, @unchecked Sendable {
     private var responses: [String]
     private(set) var sentTypes: [String] = []
+    private(set) var sentAppIds: [String] = []
     private(set) var expectedReplyCounts: [Int] = []
 
     init(responses: [String]) {
@@ -206,6 +224,9 @@ private final class RecordingTransport: HostTransport, @unchecked Sendable {
     func send(_ message: Data, expectedReplies: Int) async throws -> [Data] {
         let object = try JSONSerialization.jsonObject(with: message) as? [String: Any]
         sentTypes.append(object?["type"] as? String ?? "")
+        if let appId = object?["appId"] as? String {
+            sentAppIds.append(appId)
+        }
         expectedReplyCounts.append(expectedReplies)
 
         let replyStrings = Array(responses.prefix(expectedReplies))

@@ -33,18 +33,22 @@ public struct FallbackHostDashboardService: HostDashboardService, Sendable {
         }
     }
 
-    public func launchNotepad() async throws -> NotepadLaunchResult {
+    public func launchApp(appId: String) async throws -> WindowsAppLaunchResult {
         do {
-            return try await primary.launchNotepad()
+            return try await primary.launchApp(appId: appId)
         } catch {
             guard shouldUseFallback(for: error) else {
                 throw error
             }
 
-            var result = try await fallback.launchNotepad()
+            var result = try await fallback.launchApp(appId: appId)
             result.connectionDetail = fallbackDetail
             return result
         }
+    }
+
+    public func launchNotepad() async throws -> NotepadLaunchResult {
+        try await launchApp(appId: "winapp_notepad")
     }
 
     public func closeWindow(windowId: String) async throws -> WindowCloseResponse {
@@ -113,14 +117,19 @@ public struct DemoHostDashboardService: HostDashboardService, Sendable {
         )
     }
 
-    public func launchNotepad() async throws -> NotepadLaunchResult {
-        NotepadLaunchResult(
+    public func launchApp(appId: String) async throws -> WindowsAppLaunchResult {
+        let app = try Self.demoApp(for: appId)
+        return WindowsAppLaunchResult(
             health: .demo,
-            apps: [.demoNotepad, .demoCalculator],
-            launch: .demoNotepad,
-            window: .demoNotepad,
+            apps: Self.demoApps,
+            launch: .demo(app: app),
+            window: .demo(app: app),
             connectionMode: .demo
         )
+    }
+
+    public func launchNotepad() async throws -> NotepadLaunchResult {
+        try await launchApp(appId: "winapp_notepad")
     }
 
     public func closeWindow(windowId: String) async throws -> WindowCloseResponse {
@@ -141,6 +150,18 @@ public struct DemoHostDashboardService: HostDashboardService, Sendable {
     public func subscribeWindowFrames(windowId: String) async throws {}
 
     public func unsubscribeWindowFrames(windowId: String) async throws {}
+
+    private static var demoApps: [WindowsApp] {
+        [.demoNotepad, .demoCalculator, .demoPaint]
+    }
+
+    private static func demoApp(for appId: String) throws -> WindowsApp {
+        guard let app = demoApps.first(where: { $0.id == appId }) else {
+            throw VeilHostError.appMissing(appId)
+        }
+
+        return app
+    }
 }
 
 private extension AgentHealthResponse {
@@ -184,30 +205,71 @@ private extension WindowsApp {
             iconId: "icon_calculator"
         )
     }
-}
 
-private extension AppLaunchResponse {
-    static var demoNotepad: AppLaunchResponse {
-        AppLaunchResponse(
-            type: .appLaunchResponse,
-            requestId: "demo_launch_notepad",
-            accepted: true,
-            processId: 4912
+    static var demoPaint: WindowsApp {
+        WindowsApp(
+            id: "winapp_paint",
+            name: "Paint",
+            exePath: "C:\\Windows\\System32\\mspaint.exe",
+            publisher: "Microsoft",
+            iconId: "icon_paint"
         )
     }
 }
 
+private extension AppLaunchResponse {
+    static func demo(app: WindowsApp) -> AppLaunchResponse {
+        AppLaunchResponse(
+            type: .appLaunchResponse,
+            requestId: "demo_launch_\(app.id)",
+            accepted: true,
+            processId: Self.demoProcessId(for: app.id)
+        )
+    }
+
+    private static func demoProcessId(for appId: String) -> Int {
+        switch appId {
+        case "winapp_calculator":
+            return 5010
+        case "winapp_paint":
+            return 5020
+        default:
+            return 4912
+        }
+    }
+}
+
 private extension WindowCreatedEvent {
-    static var demoNotepad: WindowCreatedEvent {
+    static func demo(app: WindowsApp) -> WindowCreatedEvent {
         WindowCreatedEvent(
             type: .windowCreated,
-            windowId: "hwnd:0003029A",
-            processId: 4912,
-            appId: "winapp_notepad",
-            title: "Untitled - Notepad",
-            bounds: WindowBounds(x: 10, y: 10, width: 1280, height: 800),
+            windowId: demoWindowId(for: app.id),
+            processId: AppLaunchResponse.demo(app: app).processId,
+            appId: app.id,
+            title: demoTitle(for: app),
+            bounds: WindowBounds(x: 10, y: 10, width: app.id == "winapp_calculator" ? 520 : 1280, height: app.id == "winapp_calculator" ? 720 : 800),
             state: "normal",
             focused: true
         )
+    }
+
+    private static func demoWindowId(for appId: String) -> String {
+        switch appId {
+        case "winapp_calculator":
+            return "hwnd:0003030B"
+        case "winapp_paint":
+            return "hwnd:0003040C"
+        default:
+            return "hwnd:0003029A"
+        }
+    }
+
+    private static func demoTitle(for app: WindowsApp) -> String {
+        switch app.id {
+        case "winapp_notepad":
+            return "Untitled - Notepad"
+        default:
+            return app.name
+        }
     }
 }

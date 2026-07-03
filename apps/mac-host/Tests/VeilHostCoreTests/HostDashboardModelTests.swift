@@ -325,13 +325,13 @@ struct HostDashboardModelTests {
     @Test("stores service failures as user visible errors")
     @MainActor
     func storesServiceFailures() async throws {
-        let service = FakeDashboardService(error: VeilHostError.notepadMissing)
+        let service = FakeDashboardService(error: VeilHostError.appMissing("winapp_notepad"))
         let model = HostDashboardModel(service: service)
 
         await model.load()
 
         #expect(model.phase == .failed)
-        #expect(model.errorMessage == "Notepad is not available from the Windows agent.")
+        #expect(model.errorMessage == "The Windows app winapp_notepad is not available from the Windows agent.")
         #expect(model.canLaunchSelectedApp == false)
     }
 
@@ -348,9 +348,9 @@ struct HostDashboardModelTests {
         #expect(service.launchCount == 0)
     }
 
-    @Test("does not launch unsupported selected apps")
+    @Test("launches the selected Windows app")
     @MainActor
-    func doesNotLaunchUnsupportedSelectedApps() async throws {
+    func launchesSelectedWindowsApp() async throws {
         let service = FakeDashboardService(apps: [.calculator])
         let model = HostDashboardModel(service: service)
 
@@ -358,10 +358,11 @@ struct HostDashboardModelTests {
         await model.launchSelectedApp()
 
         #expect(model.selectedAppId == "winapp_calculator")
-        #expect(model.canLaunchSelectedApp == false)
-        #expect(model.phase == .failed)
-        #expect(model.errorMessage == "The current harness can only launch Notepad.")
-        #expect(service.launchCount == 0)
+        #expect(model.canLaunchSelectedApp)
+        #expect(model.phase == .connected)
+        #expect(model.lastLaunch?.window.appId == "winapp_calculator")
+        #expect(model.lastLaunch?.window.title == "Calculator")
+        #expect(service.launchedAppIds == ["winapp_calculator"])
     }
 
     @Test("loads demo overview when primary agent is unavailable")
@@ -524,7 +525,7 @@ struct HostDashboardModelTests {
     @MainActor
     func doesNotHidePrimaryAgentProtocolFailuresBehindDemoFallback() async throws {
         let service = FallbackHostDashboardService(
-            primary: FakeDashboardService(error: VeilHostError.notepadMissing),
+            primary: FakeDashboardService(error: VeilHostError.appMissing("winapp_notepad")),
             fallback: DemoHostDashboardService(),
             primaryEndpointDescription: "ws://127.0.0.1:18444"
         )
@@ -533,9 +534,9 @@ struct HostDashboardModelTests {
         await model.load()
 
         #expect(model.phase == .failed)
-        #expect(model.errorMessage == "Notepad is not available from the Windows agent.")
+        #expect(model.errorMessage == "The Windows app winapp_notepad is not available from the Windows agent.")
         #expect(model.agentDiagnostic?.status == .unavailable)
-        #expect(model.agentDiagnostic?.errorMessage == "Notepad is not available from the Windows agent.")
+        #expect(model.agentDiagnostic?.errorMessage == "The Windows app winapp_notepad is not available from the Windows agent.")
         #expect(model.health == nil)
         #expect(model.apps.isEmpty)
     }
@@ -570,6 +571,7 @@ private final class FakeDashboardService: HostDashboardService {
     var closeAccepted: Bool
     private(set) var loadCount = 0
     private(set) var launchCount = 0
+    private(set) var launchedAppIds: [String] = []
     private(set) var closedWindowIds: [String] = []
     private(set) var mouseInputs: [InputMouseEvent] = []
     private(set) var keyInputs: [InputKeyEvent] = []
@@ -601,18 +603,23 @@ private final class FakeDashboardService: HostDashboardService {
         )
     }
 
-    func launchNotepad() async throws -> NotepadLaunchResult {
+    func launchApp(appId: String) async throws -> WindowsAppLaunchResult {
         if let error {
             throw error
         }
 
         launchCount += 1
-        return NotepadLaunchResult(
+        launchedAppIds.append(appId)
+        return WindowsAppLaunchResult(
             health: health,
             apps: apps,
             launch: .fixture,
-            window: .notepad
+            window: .fixture(appId: appId)
         )
+    }
+
+    func launchNotepad() async throws -> NotepadLaunchResult {
+        try await launchApp(appId: "winapp_notepad")
     }
 
     func closeWindow(windowId: String) async throws -> WindowCloseResponse {
@@ -795,6 +802,23 @@ private extension AppLaunchResponse {
 }
 
 private extension WindowCreatedEvent {
+    static func fixture(appId: String) -> WindowCreatedEvent {
+        if appId == "winapp_calculator" {
+            return WindowCreatedEvent(
+                type: .windowCreated,
+                windowId: "hwnd:0003030B",
+                processId: 4912,
+                appId: "winapp_calculator",
+                title: "Calculator",
+                bounds: WindowBounds(x: 10, y: 10, width: 520, height: 720),
+                state: "normal",
+                focused: true
+            )
+        }
+
+        return .notepad
+    }
+
     static var notepad: WindowCreatedEvent {
         WindowCreatedEvent(
             type: .windowCreated,

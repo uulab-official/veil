@@ -3,6 +3,7 @@ import Observation
 
 public protocol HostDashboardService: Sendable {
     func loadOverview() async throws -> HostOverview
+    func launchApp(appId: String) async throws -> WindowsAppLaunchResult
     func launchNotepad() async throws -> NotepadLaunchResult
     func closeWindow(windowId: String) async throws -> WindowCloseResponse
     func sendMouseInput(_ input: InputMouseEvent) async throws
@@ -166,14 +167,13 @@ public final class HostDashboardModel {
     }
 
     public var canLaunchSelectedApp: Bool {
-        selectedApp?.id == "winapp_notepad"
-            && hasLiveAgentConnection
+        selectedApp != nil && hasLiveAgentConnection
             && phase != .loading
             && phase != .launching
     }
 
     public var canRequestSelectedAppLaunch: Bool {
-        selectedApp?.id == "winapp_notepad" && phase != .loading && phase != .launching
+        selectedApp != nil && phase != .loading && phase != .launching
     }
 
     public var hasLiveAgentConnection: Bool {
@@ -224,9 +224,9 @@ public final class HostDashboardModel {
         await load()
 
         if hasLiveAgentConnection,
-           pendingLaunchAppId == "winapp_notepad" {
+           let pendingAppId = pendingLaunchAppId {
             pendingLaunchAppId = nil
-            return await launchNotepad()
+            return await launchApp(appId: pendingAppId)
         }
 
         return nil
@@ -254,8 +254,8 @@ public final class HostDashboardModel {
         }
 
         var restored: [NotepadLaunchResult] = []
-        for appId in restorableAppIds where appId == "winapp_notepad" {
-            if let result = await launchNotepad() {
+        for appId in restorableAppIds {
+            if let result = await launchApp(appId: appId) {
                 restored.append(result)
             }
         }
@@ -276,22 +276,27 @@ public final class HostDashboardModel {
             return
         }
 
-        guard canLaunchSelectedApp else {
-            errorMessage = userMessage(for: VeilHostError.unsupportedHarnessApp)
+        guard let selectedAppId, canLaunchSelectedApp else {
+            errorMessage = "The selected Windows app is not available."
             phase = .failed
             return
         }
 
-        _ = await launchNotepad()
+        _ = await launchApp(appId: selectedAppId)
     }
 
     @discardableResult
     public func launchNotepad() async -> NotepadLaunchResult? {
+        await launchApp(appId: "winapp_notepad")
+    }
+
+    @discardableResult
+    public func launchApp(appId: String) async -> WindowsAppLaunchResult? {
         phase = .launching
         errorMessage = nil
 
         do {
-            let result = try await service.launchNotepad()
+            let result = try await service.launchApp(appId: appId)
             health = result.health
             apps = result.apps
             connectionMode = result.connectionMode

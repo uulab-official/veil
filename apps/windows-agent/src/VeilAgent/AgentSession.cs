@@ -5,6 +5,31 @@ namespace Veil.Agent;
 
 public sealed class AgentSession
 {
+    private static readonly IReadOnlyList<WindowsAppDescriptor> AppCatalog = new[]
+    {
+        new WindowsAppDescriptor(
+            Id: "winapp_notepad",
+            Name: "Notepad",
+            Executable: "notepad.exe",
+            Publisher: "Microsoft",
+            IconId: "icon_notepad"
+        ),
+        new WindowsAppDescriptor(
+            Id: "winapp_calculator",
+            Name: "Calculator",
+            Executable: "calc.exe",
+            Publisher: "Microsoft",
+            IconId: "icon_calculator"
+        ),
+        new WindowsAppDescriptor(
+            Id: "winapp_paint",
+            Name: "Paint",
+            Executable: "mspaint.exe",
+            Publisher: "Microsoft",
+            IconId: "icon_paint"
+        )
+    };
+
     private readonly IWindowsDesktop desktop;
     private readonly IWindowFrameCapture capture;
     private readonly Dictionary<string, LaunchedWindow> trackedWindowsById = new();
@@ -43,12 +68,13 @@ public sealed class AgentSession
     )
     {
         var appId = request["appId"]?.GetValue<string>();
-        if (appId != "winapp_notepad")
+        var app = AppCatalog.FirstOrDefault(candidate => candidate.Id == appId);
+        if (app is null)
         {
             return AgentReplies.Direct(ErrorResponse(requestId, "app_not_found", $"No app exists for id {appId}"));
         }
 
-        var launched = await desktop.LaunchNotepadAsync(cancellationToken);
+        var launched = await desktop.LaunchAppAsync(app, cancellationToken);
         TrackWindow(launched);
         var frame = await capture.CaptureFrameAsync(launched, sequence: 1, cancellationToken);
 
@@ -56,7 +82,7 @@ public sealed class AgentSession
             DirectReplies: new List<JsonObject>
             {
                 LaunchResponse(requestId, launched.ProcessId),
-                WindowCreatedEvent(launched)
+                WindowCreatedEvent(app, launched)
             },
             BroadcastEvents: new List<JsonObject>
             {
@@ -251,17 +277,16 @@ public sealed class AgentSession
     {
         ["type"] = MessageTypes.AppListResponse,
         ["requestId"] = requestId,
-        ["apps"] = new JsonArray
-        {
-            new JsonObject
-            {
-                ["id"] = "winapp_notepad",
-                ["name"] = "Notepad",
-                ["exePath"] = @"C:\Windows\System32\notepad.exe",
-                ["publisher"] = "Microsoft",
-                ["iconId"] = "icon_notepad"
-            }
-        }
+        ["apps"] = new JsonArray(AppCatalog.Select(AppObject).ToArray<JsonNode?>())
+    };
+
+    private static JsonObject AppObject(WindowsAppDescriptor app) => new()
+    {
+        ["id"] = app.Id,
+        ["name"] = app.Name,
+        ["exePath"] = app.Executable,
+        ["publisher"] = app.Publisher,
+        ["iconId"] = app.IconId
     };
 
     private static JsonObject LaunchResponse(string? requestId, int processId) => new()
@@ -272,12 +297,12 @@ public sealed class AgentSession
         ["processId"] = processId
     };
 
-    private static JsonObject WindowCreatedEvent(LaunchedWindow window) => new()
+    private static JsonObject WindowCreatedEvent(WindowsAppDescriptor app, LaunchedWindow window) => new()
     {
         ["type"] = MessageTypes.WindowCreated,
         ["windowId"] = window.WindowId,
         ["processId"] = window.ProcessId,
-        ["appId"] = "winapp_notepad",
+        ["appId"] = app.Id,
         ["title"] = window.Title,
         ["bounds"] = new JsonObject
         {

@@ -2,6 +2,8 @@ namespace Veil.Agent;
 
 public interface IWindowsDesktop
 {
+    Task<LaunchedWindow> LaunchAppAsync(WindowsAppDescriptor app, CancellationToken cancellationToken);
+
     Task<LaunchedWindow> LaunchNotepadAsync(CancellationToken cancellationToken);
 
     Task<bool> CloseWindowAsync(string windowId, CancellationToken cancellationToken);

@@ -129,11 +129,11 @@ swift run veil-host-probe --launch-notepad
 ```
 
 `--diagnose-agent` prints a connection diagnostic JSON. When the real Windows guest agent is unavailable, it includes recovery actions for installing the guest agent, collecting the Windows-side diagnostics ZIP, and checking QEMU/HVF port forwarding.
-`--overview` requests health and app metadata. `--launch-notepad` runs the full Notepad acceptance flow and should include a `window.created` event.
+`--overview` requests health and app metadata. `--launch-notepad` remains the narrow Notepad acceptance probe and should include a `window.created` event.
 
 ## macOS Host Shell
 
-The first SwiftUI shell shows agent status, Windows app metadata, and the latest Notepad launch event.
+The first SwiftUI shell shows agent status, Windows app metadata, and the latest launched Windows app window.
 
 Run it directly:
 
@@ -151,9 +151,9 @@ For the Codex desktop Run button, use:
 
 That script builds `veil-host-shell`, stages `dist/Veil.app`, and launches it as a macOS app bundle.
 
-If no external agent is listening at `VEIL_AGENT_URL` or `ws://127.0.0.1:18444`, the shell falls back to an internal demo agent so the Windows Apps and Notepad launch flow still work. The header and Agent view label this as Demo mode and show the endpoint that could not be reached. Protocol and agent errors are still surfaced instead of being hidden by the demo fallback. Run `harness/fake-agent` when you want to test the real WebSocket harness path.
+If no external agent is listening at `VEIL_AGENT_URL` or `ws://127.0.0.1:18444`, the shell falls back to an internal demo agent so the Windows Apps launcher can still show Notepad, Calculator, and Paint as separate macOS window targets. The header and Agent view label this as Demo mode and show the endpoint that could not be reached. Protocol and agent errors are still surfaced instead of being hidden by the demo fallback. Run `harness/fake-agent` when you want to test the real WebSocket harness path.
 
-The app list supports selection. The current fake-agent harness can only launch Notepad, so other app ids are shown but blocked from launch until generic app launch support lands.
+The app list supports selection. The real Windows agent and built-in demo launch by selected `appId`; the external fake-agent harness remains a narrow Notepad transport contract.
 
 The shell also includes a VM Runtime panel. That panel is a capability, profile-status, disk-preparation, and local runtime provider boot spike for Windows 11 Arm. The current active provider prefers the UTM-style QEMU/HVF path when the local machine has the required QEMU, firmware, and TPM pieces; Apple Virtualization remains a fallback feasibility provider.
 
