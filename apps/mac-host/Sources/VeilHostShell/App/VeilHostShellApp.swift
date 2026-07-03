@@ -170,7 +170,7 @@ struct VeilHostShellApp: App {
                     launchSelectedWindowsAppWindow()
                 }
                 .keyboardShortcut(.return, modifiers: [.command])
-                .disabled(!model.canRequestSelectedAppLaunch)
+                .disabled(!model.canRequestSelectedAppLaunch && !model.canFulfillPendingLaunch)
 
                 Button("Record App Frame Proof") {
                     recordAppFrameProof()
@@ -192,6 +192,7 @@ struct VeilHostShellApp: App {
                 installGuestAgentAction: installGuestAgentFromDisplay,
                 launchWindowsAppAction: launchSelectedWindowsAppWindow,
                 launchWindowsAppByIdAction: launchWindowsAppWindow(appId:),
+                fulfillPendingLaunchAction: fulfillPendingWindowsAppWindow,
                 restoreWindowsAppWindowsAction: restoreWindowsAppWindows,
                 focusWindowsAppWindowAction: focusWindowsAppWindow(windowId:),
                 closeWindowsAppWindowAction: closeWindowsAppWindow(windowId:),
@@ -395,6 +396,11 @@ struct VeilHostShellApp: App {
                 await model.load()
             }
 
+            if model.canFulfillPendingLaunch {
+                await fulfillPendingWindowsAppWindowFromCurrentState()
+                return
+            }
+
             await model.launchSelectedApp()
 
             if model.pendingLaunchAppId != nil,
@@ -417,6 +423,39 @@ struct VeilHostShellApp: App {
     private func launchWindowsAppWindow(appId: String) {
         model.selectedAppId = appId
         launchSelectedWindowsAppWindow()
+    }
+
+    private func fulfillPendingWindowsAppWindow() {
+        Task { @MainActor in
+            await fulfillPendingWindowsAppWindowFromCurrentState()
+        }
+    }
+
+    private func fulfillPendingWindowsAppWindowFromCurrentState() async {
+        cancelAutomaticQuietRuntime()
+        if model.apps.isEmpty {
+            await model.load()
+        }
+
+        guard model.canFulfillPendingLaunch else {
+            if model.pendingLaunchStatus().willLaunchOnAgentReconnect,
+               vmModel.canStart {
+                displayMessage = "Starting Windows. Veil will open the queued app when the guest agent connects."
+                startWindowsAndShowDisplay()
+            } else {
+                displayMessage = model.pendingLaunchStatus().reason
+            }
+            return
+        }
+
+        guard let result = await model.fulfillPendingLaunch() else {
+            displayMessage = model.errorMessage ?? "Queued Windows app could not open."
+            return
+        }
+
+        displayMessage = "\(result.window.title) opened as a macOS window."
+        showWindowsAppWindow(for: result)
+        hideMainWindowForCoherenceIfNeeded()
     }
 
     private func restoreWindowsAppWindows() {
@@ -490,6 +529,7 @@ struct VeilHostShellApp: App {
                 closeAllWindowsAppWindowsAction: closeAllWindowsAppWindows,
                 restoreWindowsAppWindowsAction: restoreWindowsAppWindows,
                 launchWindowsAppByIdAction: launchWindowsAppWindow(appId:),
+                fulfillPendingLaunchAction: fulfillPendingWindowsAppWindow,
                 startVMAction: startWindowsAndShowDisplay,
                 stopVMAction: stopWindowsAndCloseDisplay,
                 quietWindowsWhenIdleAction: quietWindowsWhenIdle
@@ -810,6 +850,7 @@ private struct VeilMenuBarMenu: View {
     var installGuestAgentAction: () -> Void
     var launchWindowsAppAction: () -> Void
     var launchWindowsAppByIdAction: (String) -> Void
+    var fulfillPendingLaunchAction: () -> Void
     var restoreWindowsAppWindowsAction: () -> Void
     var focusWindowsAppWindowAction: (String) -> Void
     var closeWindowsAppWindowAction: (String) -> Void
@@ -887,6 +928,14 @@ private struct VeilMenuBarMenu: View {
                 restoreWindowsAppWindowsAction()
             }
             .disabled(!model.canRestoreMirrorSessions)
+        }
+
+        if model.pendingLaunchAppId != nil {
+            Button("Open Queued App", systemImage: "arrow.up.forward.app") {
+                openMainWindow()
+                fulfillPendingLaunchAction()
+            }
+            .disabled(!model.canFulfillPendingLaunch)
         }
 
         Button("Record App Proof", systemImage: "checkmark.seal") {

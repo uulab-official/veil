@@ -12,6 +12,7 @@ private final class AppRuntimeDockMenuTarget: NSObject {
     var closeAllWindowsAppWindowsAction: (() -> Void)?
     var restoreWindowsAppWindowsAction: (() -> Void)?
     var launchWindowsAppByIdAction: ((String) -> Void)?
+    var fulfillPendingLaunchAction: (() -> Void)?
     var startVMAction: (() -> Void)?
     var stopVMAction: (() -> Void)?
     var quietWindowsWhenIdleAction: (() -> Void)?
@@ -56,6 +57,10 @@ private final class AppRuntimeDockMenuTarget: NSObject {
         launchWindowsAppByIdAction?(appId)
     }
 
+    @objc func fulfillPendingLaunch(_ sender: NSMenuItem) {
+        fulfillPendingLaunchAction?()
+    }
+
     @objc func startWindows(_ sender: NSMenuItem) {
         startVMAction?()
     }
@@ -81,6 +86,7 @@ enum AppRuntimeDockMenuFactory {
         closeAllWindowsAppWindowsAction: @escaping () -> Void,
         restoreWindowsAppWindowsAction: @escaping () -> Void,
         launchWindowsAppByIdAction: @escaping (String) -> Void,
+        fulfillPendingLaunchAction: @escaping () -> Void,
         startVMAction: @escaping () -> Void,
         stopVMAction: @escaping () -> Void,
         quietWindowsWhenIdleAction: @escaping () -> Void
@@ -93,6 +99,7 @@ enum AppRuntimeDockMenuFactory {
         target.closeAllWindowsAppWindowsAction = closeAllWindowsAppWindowsAction
         target.restoreWindowsAppWindowsAction = restoreWindowsAppWindowsAction
         target.launchWindowsAppByIdAction = launchWindowsAppByIdAction
+        target.fulfillPendingLaunchAction = fulfillPendingLaunchAction
         target.startVMAction = startVMAction
         target.stopVMAction = stopVMAction
         target.quietWindowsWhenIdleAction = quietWindowsWhenIdleAction
@@ -151,6 +158,18 @@ enum AppRuntimeDockMenuFactory {
                     "Restore Previous Apps",
                     action: #selector(AppRuntimeDockMenuTarget.restoreWindowsApps(_:)),
                     target: target
+                )
+            )
+        }
+
+        if let pendingAppId = model.pendingLaunchAppId {
+            menu.addItem(.separator())
+            menu.addItem(
+                item(
+                    "Open Queued \(shortTitle(appName(for: pendingAppId, model: model)))",
+                    action: #selector(AppRuntimeDockMenuTarget.fulfillPendingLaunch(_:)),
+                    target: target,
+                    isEnabled: model.canFulfillPendingLaunch
                 )
             )
         }
@@ -223,5 +242,9 @@ enum AppRuntimeDockMenuFactory {
         }
 
         return "\(title.prefix(25))..."
+    }
+
+    private static func appName(for appId: String, model: HostDashboardModel) -> String {
+        model.apps.first { $0.id == appId }?.name ?? "Windows App"
     }
 }

@@ -38,7 +38,11 @@ struct WindowsAppBridgePanel: View {
                         .frame(minWidth: 210)
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(!model.canRequestSelectedAppLaunch || model.phase == .loading || model.phase == .launching)
+                .disabled(
+                    (!model.canRequestSelectedAppLaunch && !model.canFulfillPendingLaunch)
+                        || model.phase == .loading
+                        || model.phase == .launching
+                )
 
                 if let lastSession = model.mirrorSessions.last {
                     Label("\(lastSession.window.title) mapped", systemImage: "checkmark.circle.fill")
@@ -89,8 +93,16 @@ struct WindowsAppBridgePanel: View {
             return "Opening..."
         }
 
+        if model.canFulfillPendingLaunch {
+            return "Open Queued App"
+        }
+
+        if model.pendingLaunchStatus().willLaunchOnAgentReconnect {
+            return "Opening When Ready"
+        }
+
         if model.pendingLaunchAppId != nil {
-            return "Queued For Agent"
+            return "Queued App Unavailable"
         }
 
         if !model.hasLiveAgentConnection {

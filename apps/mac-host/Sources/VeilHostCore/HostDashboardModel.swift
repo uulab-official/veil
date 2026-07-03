@@ -474,6 +474,14 @@ public final class HostDashboardModel {
         return canRequestAppLaunch(appId: selectedAppId)
     }
 
+    public var canFulfillPendingLaunch: Bool {
+        guard let pendingLaunchAppId else {
+            return false
+        }
+
+        return canLaunchApp(appId: pendingLaunchAppId)
+    }
+
     public var hasLiveAgentConnection: Bool {
         phase == .connected && connectionMode == .agent && health != nil
     }
@@ -541,7 +549,6 @@ public final class HostDashboardModel {
         let macWindowIntegration = macWindowIntegrationStatus()
         let launchPlan = launchPlanStatus()
         let pendingLaunch = pendingLaunchStatus()
-        let canFulfillPendingLaunch = pendingLaunch.appId.map { canLaunchApp(appId: $0) } ?? false
         return WindowsAppRuntimeStatusReport(
             generatedAt: generatedAt,
             phase: phase,
@@ -842,8 +849,8 @@ public final class HostDashboardModel {
 
     public func refreshLiveAgentIfNeeded() async -> NotepadLaunchResult? {
         if hasLiveAgentConnection,
-           let pendingAppId = pendingLaunchAppId {
-            return await launchApp(appId: pendingAppId)
+           canFulfillPendingLaunch {
+            return await fulfillPendingLaunch()
         }
 
         if hasLiveAgentConnection {
@@ -853,11 +860,21 @@ public final class HostDashboardModel {
         await load()
 
         if hasLiveAgentConnection,
-           let pendingAppId = pendingLaunchAppId {
-            return await launchApp(appId: pendingAppId)
+           canFulfillPendingLaunch {
+            return await fulfillPendingLaunch()
         }
 
         return nil
+    }
+
+    @discardableResult
+    public func fulfillPendingLaunch() async -> WindowsAppLaunchResult? {
+        guard canFulfillPendingLaunch,
+              let pendingLaunchAppId else {
+            return nil
+        }
+
+        return await launchApp(appId: pendingLaunchAppId)
     }
 
     public func loadRestoreIntent() async {

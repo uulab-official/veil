@@ -76,3 +76,4 @@ Goal: adapt concrete UTM source patterns into Veil while keeping Veil focused on
 - [x] Persist pending app-launch intent locally so the Windows-start handoff survives host/CLI process restarts and clears only after the requested app launches.
 - [x] Add `app-runtime-action --action fulfill-pending` so automation can consume a persisted pending app launch after guest-agent reconnect without reconstructing the original launch command.
 - [x] Expose `runtime.fulfillPendingLaunch` in app-runtime status actions so UI/CLI surfaces can show the queued Windows app is ready to open after reconnect.
+- [x] Wire pending-launch fulfillment into the macOS app button, menu bar menu, Dock menu, and command shortcut so reconnect recovery feels app-first instead of VM-first.

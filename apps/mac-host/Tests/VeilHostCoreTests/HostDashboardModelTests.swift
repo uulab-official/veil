@@ -509,6 +509,7 @@ struct HostDashboardModelTests {
         #expect(report.actions.first { $0.id == "windowsApps.restorePrevious" }?.isAvailable == false)
         #expect(report.actions.first { $0.id == "macWindows.autoOpen" }?.isAvailable == true)
         #expect(report.actions.first { $0.id == "runtime.startWindowsForApp" }?.isAvailable == false)
+        #expect(report.actions.first { $0.id == "runtime.fulfillPendingLaunch" }?.isAvailable == false)
         #expect(report.actions.first { $0.id == "runtime.quietWhenIdle" }?.isAvailable == false)
     }
 
@@ -687,6 +688,7 @@ struct HostDashboardModelTests {
         #expect(queuedReport.pendingLaunch.willLaunchOnAgentReconnect)
         #expect(queuedReport.pendingLaunch.recommendedAction == "auto-launch-on-agent-reconnect")
         #expect(queuedReport.pendingLaunch.reason == "Veil will launch the queued Windows app after the guest agent reconnects.")
+        #expect(model.canFulfillPendingLaunch == false)
         #expect(queuedReport.actions.first { $0.id == "runtime.startWindowsForApp" }?.isAvailable == true)
         #expect(queuedReport.actions.first { $0.id == "runtime.fulfillPendingLaunch" }?.isAvailable == false)
         #expect(try await pendingLaunchStore.load()?.appId == "winapp_notepad")
@@ -697,6 +699,7 @@ struct HostDashboardModelTests {
 
         #expect(model.connectionMode == .agent)
         #expect(model.pendingLaunchAppId == nil)
+        #expect(model.canFulfillPendingLaunch == false)
         #expect(fulfilledReport.pendingLaunch.isQueued == false)
         #expect(fulfilledReport.pendingLaunch.appId == nil)
         #expect(fulfilledReport.pendingLaunch.willLaunchOnAgentReconnect == false)
@@ -730,12 +733,14 @@ struct HostDashboardModelTests {
         #expect(model.runtimeStatusReport().pendingLaunch.recommendedAction == "launch-pending-now")
         #expect(model.runtimeStatusReport().launchPlan.recommendedAction == "fulfill-pending-now")
         #expect(model.runtimeStatusReport().launchPlan.recommendedLaunchCommand == "veil-vmctl app-runtime-action --json --action fulfill-pending")
+        #expect(model.canFulfillPendingLaunch)
         #expect(model.runtimeStatusReport().actions.first { $0.id == "runtime.fulfillPendingLaunch" }?.isAvailable == true)
 
-        let fulfilledLaunch = await model.refreshLiveAgentIfNeeded()
+        let fulfilledLaunch = await model.fulfillPendingLaunch()
 
         #expect(fulfilledLaunch?.window.windowId == "hwnd:0003029A")
         #expect(model.pendingLaunchAppId == nil)
+        #expect(model.canFulfillPendingLaunch == false)
         #expect(model.runtimeStatusReport().actions.first { $0.id == "runtime.fulfillPendingLaunch" }?.isAvailable == false)
         #expect(try await pendingLaunchStore.load()?.appId == nil)
         #expect(service.launchCount == 1)
