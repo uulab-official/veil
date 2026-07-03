@@ -210,6 +210,37 @@ public struct WindowsAppRuntimeDockIntegrationStatus: Codable, Equatable, Sendab
     }
 }
 
+public struct WindowsAppRuntimeMacWindowIntegrationStatus: Codable, Equatable, Sendable {
+    public var isEnabled: Bool
+    public var acceptsGuestWindowEvents: Bool
+    public var opensMacWindowsAutomatically: Bool
+    public var hidesLauncherWhenMirroring: Bool
+    public var mirroredWindowCount: Int
+    public var pendingFrameWindowCount: Int
+    public var streamingWindowCount: Int
+    public var reason: String
+
+    public init(
+        isEnabled: Bool,
+        acceptsGuestWindowEvents: Bool,
+        opensMacWindowsAutomatically: Bool,
+        hidesLauncherWhenMirroring: Bool,
+        mirroredWindowCount: Int,
+        pendingFrameWindowCount: Int,
+        streamingWindowCount: Int,
+        reason: String
+    ) {
+        self.isEnabled = isEnabled
+        self.acceptsGuestWindowEvents = acceptsGuestWindowEvents
+        self.opensMacWindowsAutomatically = opensMacWindowsAutomatically
+        self.hidesLauncherWhenMirroring = hidesLauncherWhenMirroring
+        self.mirroredWindowCount = mirroredWindowCount
+        self.pendingFrameWindowCount = pendingFrameWindowCount
+        self.streamingWindowCount = streamingWindowCount
+        self.reason = reason
+    }
+}
+
 public struct WindowsAppRuntimeQuietPolicyStatus: Codable, Equatable, Sendable {
     public var isEnabled: Bool
     public var hasOpenedAppWindowThisSession: Bool
@@ -252,6 +283,7 @@ public struct WindowsAppRuntimeStatusReport: Codable, Equatable, Sendable {
     public var mirrorSessions: [WindowsAppRuntimeWindowStatus]
     public var restorableAppIds: [String]
     public var dockIntegration: WindowsAppRuntimeDockIntegrationStatus
+    public var macWindowIntegration: WindowsAppRuntimeMacWindowIntegrationStatus
     public var quietRuntime: WindowsAppRuntimeQuietPolicyStatus
     public var actions: [WindowsAppRuntimeActionStatus]
 
@@ -266,6 +298,7 @@ public struct WindowsAppRuntimeStatusReport: Codable, Equatable, Sendable {
         mirrorSessions: [WindowsAppRuntimeWindowStatus],
         restorableAppIds: [String],
         dockIntegration: WindowsAppRuntimeDockIntegrationStatus,
+        macWindowIntegration: WindowsAppRuntimeMacWindowIntegrationStatus,
         quietRuntime: WindowsAppRuntimeQuietPolicyStatus,
         actions: [WindowsAppRuntimeActionStatus]
     ) {
@@ -279,6 +312,7 @@ public struct WindowsAppRuntimeStatusReport: Codable, Equatable, Sendable {
         self.mirrorSessions = mirrorSessions
         self.restorableAppIds = restorableAppIds
         self.dockIntegration = dockIntegration
+        self.macWindowIntegration = macWindowIntegration
         self.quietRuntime = quietRuntime
         self.actions = actions
     }
@@ -430,6 +464,7 @@ public final class HostDashboardModel {
 
     public func runtimeStatusReport(generatedAt: Date = Date()) -> WindowsAppRuntimeStatusReport {
         let quietRuntime = quietRuntimeStatus()
+        let macWindowIntegration = macWindowIntegrationStatus()
         return WindowsAppRuntimeStatusReport(
             generatedAt: generatedAt,
             phase: phase,
@@ -471,6 +506,7 @@ public final class HostDashboardModel {
                 canRestorePreviousApps: canRestoreMirrorSessions,
                 canLaunchSelectedApp: canRequestSelectedAppLaunch
             ),
+            macWindowIntegration: macWindowIntegration,
             quietRuntime: quietRuntime,
             actions: [
                 WindowsAppRuntimeActionStatus(
@@ -492,6 +528,11 @@ public final class HostDashboardModel {
                     id: "windowsApps.closeAll",
                     title: "Close All Windows Apps",
                     isAvailable: canCloseAllMirrorSessions
+                ),
+                WindowsAppRuntimeActionStatus(
+                    id: "macWindows.autoOpen",
+                    title: "Auto Open Windows App Windows",
+                    isAvailable: macWindowIntegration.acceptsGuestWindowEvents
                 ),
                 WindowsAppRuntimeActionStatus(
                     id: "runtime.quietWhenIdle",
@@ -533,6 +574,31 @@ public final class HostDashboardModel {
             willQuietAutomatically: canQuietRuntimeWhenIdle,
             automaticQuietDelaySeconds: automaticQuietDelaySeconds,
             recommendedAction: recommendedAction,
+            reason: reason
+        )
+    }
+
+    public func macWindowIntegrationStatus() -> WindowsAppRuntimeMacWindowIntegrationStatus {
+        let pendingFrameWindowCount = mirrorSessions.filter { $0.captureState == .pending }.count
+        let streamingWindowCount = mirrorSessions.filter { $0.captureState == .streaming }.count
+        let reason: String
+
+        if !hasLiveAgentConnection {
+            reason = "Waiting for the live Windows agent before guest HWND events can open macOS windows automatically."
+        } else if mirrorSessions.isEmpty {
+            reason = "Ready to open the next guest HWND as a macOS window."
+        } else {
+            reason = "Guest HWND sessions are mirrored as macOS windows."
+        }
+
+        return WindowsAppRuntimeMacWindowIntegrationStatus(
+            isEnabled: true,
+            acceptsGuestWindowEvents: hasLiveAgentConnection,
+            opensMacWindowsAutomatically: true,
+            hidesLauncherWhenMirroring: hasLiveAgentConnection && !mirrorSessions.isEmpty,
+            mirroredWindowCount: mirrorSessions.count,
+            pendingFrameWindowCount: pendingFrameWindowCount,
+            streamingWindowCount: streamingWindowCount,
             reason: reason
         )
     }

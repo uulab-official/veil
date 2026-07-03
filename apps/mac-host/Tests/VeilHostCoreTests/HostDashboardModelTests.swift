@@ -481,6 +481,13 @@ struct HostDashboardModelTests {
         #expect(report.dockIntegration.canOpenMainWindow)
         #expect(report.dockIntegration.canBringWindowsAppsForward)
         #expect(report.dockIntegration.canLaunchSelectedApp)
+        #expect(report.macWindowIntegration.isEnabled)
+        #expect(report.macWindowIntegration.acceptsGuestWindowEvents)
+        #expect(report.macWindowIntegration.opensMacWindowsAutomatically)
+        #expect(report.macWindowIntegration.hidesLauncherWhenMirroring)
+        #expect(report.macWindowIntegration.mirroredWindowCount == 1)
+        #expect(report.macWindowIntegration.pendingFrameWindowCount == 1)
+        #expect(report.macWindowIntegration.streamingWindowCount == 0)
         #expect(report.quietRuntime.isEnabled)
         #expect(report.quietRuntime.hasOpenedAppWindowThisSession)
         #expect(report.quietRuntime.openWindowCount == 1)
@@ -492,6 +499,7 @@ struct HostDashboardModelTests {
         #expect(report.actions.first { $0.id == "dock.bringWindowsAppsForward" }?.isAvailable == true)
         #expect(report.actions.first { $0.id == "clipboard.setText" }?.isAvailable == true)
         #expect(report.actions.first { $0.id == "windowsApps.restorePrevious" }?.isAvailable == false)
+        #expect(report.actions.first { $0.id == "macWindows.autoOpen" }?.isAvailable == true)
         #expect(report.actions.first { $0.id == "runtime.quietWhenIdle" }?.isAvailable == false)
     }
 
@@ -514,6 +522,9 @@ struct HostDashboardModelTests {
         #expect(report.quietRuntime.willQuietAutomatically)
         #expect(report.quietRuntime.automaticQuietDelaySeconds == 8)
         #expect(report.quietRuntime.recommendedAction == "stop-or-suspend-runtime")
+        #expect(report.macWindowIntegration.acceptsGuestWindowEvents)
+        #expect(report.macWindowIntegration.hidesLauncherWhenMirroring == false)
+        #expect(report.macWindowIntegration.mirroredWindowCount == 0)
         #expect(report.actions.first { $0.id == "runtime.quietWhenIdle" }?.isAvailable == true)
     }
 

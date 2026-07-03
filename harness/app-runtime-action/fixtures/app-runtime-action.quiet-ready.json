@@ -45,6 +45,16 @@
       "canRestorePreviousApps": false,
       "canLaunchSelectedApp": true
     },
+    "macWindowIntegration": {
+      "isEnabled": true,
+      "acceptsGuestWindowEvents": true,
+      "opensMacWindowsAutomatically": true,
+      "hidesLauncherWhenMirroring": false,
+      "mirroredWindowCount": 0,
+      "pendingFrameWindowCount": 0,
+      "streamingWindowCount": 0,
+      "reason": "Ready to open the next guest HWND as a macOS window."
+    },
     "quietRuntime": {
       "isEnabled": true,
       "hasOpenedAppWindowThisSession": true,
@@ -75,6 +85,11 @@
         "id": "windowsApps.closeAll",
         "title": "Close All Windows Apps",
         "isAvailable": false
+      },
+      {
+        "id": "macWindows.autoOpen",
+        "title": "Auto Open Windows App Windows",
+        "isAvailable": true
       },
       {
         "id": "runtime.quietWhenIdle",

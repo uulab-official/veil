@@ -21,6 +21,11 @@
       "title": "Close All Windows Apps"
     },
     {
+      "id": "macWindows.autoOpen",
+      "isAvailable": false,
+      "title": "Auto Open Windows App Windows"
+    },
+    {
       "id": "runtime.quietWhenIdle",
       "isAvailable": false,
       "title": "Quiet Runtime When Idle"
@@ -58,6 +63,16 @@
     "canRestorePreviousApps": false,
     "isEnabled": true,
     "openWindowCount": 0
+  },
+  "macWindowIntegration": {
+    "acceptsGuestWindowEvents": false,
+    "hidesLauncherWhenMirroring": false,
+    "isEnabled": true,
+    "mirroredWindowCount": 0,
+    "opensMacWindowsAutomatically": true,
+    "pendingFrameWindowCount": 0,
+    "reason": "Waiting for the live Windows agent before guest HWND events can open macOS windows automatically.",
+    "streamingWindowCount": 0
   },
   "quietRuntime": {
     "canQuietRuntime": false,

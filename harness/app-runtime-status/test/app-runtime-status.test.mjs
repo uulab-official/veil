@@ -30,6 +30,16 @@ test("rejects reports without Dock integration status", () => {
   );
 });
 
+test("rejects reports without Mac window integration status", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.demo.json", import.meta.url), "utf8"));
+  delete report.macWindowIntegration;
+
+  assert.throws(
+    () => validateAppRuntimeStatus(report),
+    /macWindowIntegration/
+  );
+});
+
 test("rejects reports without quiet runtime policy status", () => {
   const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.demo.json", import.meta.url), "utf8"));
   delete report.quietRuntime;

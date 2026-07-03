@@ -30,6 +30,7 @@ export function validateAppRuntimeStatus(report) {
   validateMirrorSessions(report.mirrorSessions);
   validateStringArray(report.restorableAppIds, "restorableAppIds");
   validateDockIntegration(report.dockIntegration, report.mirrorSessions);
+  validateMacWindowIntegration(report.macWindowIntegration, report.mirrorSessions, report.connection);
   validateQuietRuntime(report.quietRuntime, report.mirrorSessions);
   validateActions(report.actions);
 
@@ -115,6 +116,37 @@ function validateMirrorSessions(sessions) {
   }
 }
 
+function validateMacWindowIntegration(macWindowIntegration, mirrorSessions, connection) {
+  if (!macWindowIntegration || typeof macWindowIntegration !== "object" || Array.isArray(macWindowIntegration)) {
+    throw new TypeError("macWindowIntegration must be an object.");
+  }
+
+  requireBoolean(macWindowIntegration.isEnabled, "macWindowIntegration.isEnabled");
+  requireBoolean(macWindowIntegration.acceptsGuestWindowEvents, "macWindowIntegration.acceptsGuestWindowEvents");
+  requireBoolean(macWindowIntegration.opensMacWindowsAutomatically, "macWindowIntegration.opensMacWindowsAutomatically");
+  requireBoolean(macWindowIntegration.hidesLauncherWhenMirroring, "macWindowIntegration.hidesLauncherWhenMirroring");
+  requireNonNegativeInteger(macWindowIntegration.mirroredWindowCount, "macWindowIntegration.mirroredWindowCount");
+  requireNonNegativeInteger(macWindowIntegration.pendingFrameWindowCount, "macWindowIntegration.pendingFrameWindowCount");
+  requireNonNegativeInteger(macWindowIntegration.streamingWindowCount, "macWindowIntegration.streamingWindowCount");
+  requireString(macWindowIntegration.reason, "macWindowIntegration.reason");
+
+  if (macWindowIntegration.mirroredWindowCount !== mirrorSessions.length) {
+    throw new TypeError("macWindowIntegration.mirroredWindowCount must match mirrorSessions length.");
+  }
+
+  if (macWindowIntegration.pendingFrameWindowCount !== mirrorSessions.filter((session) => session.captureState === "pending").length) {
+    throw new TypeError("macWindowIntegration.pendingFrameWindowCount must match pending mirror sessions.");
+  }
+
+  if (macWindowIntegration.streamingWindowCount !== mirrorSessions.filter((session) => session.captureState === "streaming").length) {
+    throw new TypeError("macWindowIntegration.streamingWindowCount must match streaming mirror sessions.");
+  }
+
+  if (macWindowIntegration.acceptsGuestWindowEvents !== connection.hasLiveAgentConnection) {
+    throw new TypeError("macWindowIntegration.acceptsGuestWindowEvents must reflect live agent connection.");
+  }
+}
+
 function validateQuietRuntime(quietRuntime, mirrorSessions) {
   if (!quietRuntime || typeof quietRuntime !== "object" || Array.isArray(quietRuntime)) {
     throw new TypeError("quietRuntime must be an object.");
@@ -189,6 +221,7 @@ function validateActions(actions) {
     "dock.bringWindowsAppsForward",
     "windowsApps.restorePrevious",
     "windowsApps.closeAll",
+    "macWindows.autoOpen",
     "runtime.quietWhenIdle",
     "clipboard.setText"
   ]) {

@@ -62,3 +62,4 @@ Goal: adapt concrete UTM source patterns into Veil while keeping Veil focused on
 - [x] Add `quietRuntime` readiness to `app-runtime-status` so the host can identify when all mirrored Windows app windows are closed before a future suspend/stop action.
 - [x] Add `quiet-when-idle` to `app-runtime-action` and expose a gated Quiet Windows command in Dock/menu surfaces when all mirrored Windows app windows are closed.
 - [x] Add automatic Quiet Windows scheduling after the final mirrored app window closes, with `quietRuntime.willQuietAutomatically` and `automaticQuietDelaySeconds` exposed to harnesses.
+- [x] Add `macWindowIntegration` to `app-runtime-status` so automation can verify guest HWND events are promoted into macOS app windows automatically.
