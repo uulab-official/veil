@@ -168,7 +168,7 @@ test("rejects quiet-ready reports without a stop command", () => {
 
 test("rejects unavailable quiet runtime reports with a stop command", () => {
   const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.demo.json", import.meta.url), "utf8"));
-  report.quietRuntime.recommendedStopCommand = "veil-vmctl qemu-powerdown --json --wait-seconds 30";
+  report.quietRuntime.recommendedStopCommand = "veil-vmctl app-runtime-action --json --action stop-runtime";
 
   assert.throws(
     () => validateAppRuntimeStatus(report),

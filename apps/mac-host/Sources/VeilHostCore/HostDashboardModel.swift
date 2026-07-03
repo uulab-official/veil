@@ -838,7 +838,7 @@ public final class HostDashboardModel {
             willQuietAutomatically: canQuietRuntimeWhenIdle,
             automaticQuietDelaySeconds: automaticQuietDelaySeconds,
             recommendedAction: recommendedAction,
-            recommendedStopCommand: canQuietRuntimeWhenIdle ? "veil-vmctl qemu-powerdown --json --wait-seconds 30" : nil,
+            recommendedStopCommand: canQuietRuntimeWhenIdle ? "veil-vmctl app-runtime-action --json --action stop-runtime" : nil,
             reason: reason
         )
     }

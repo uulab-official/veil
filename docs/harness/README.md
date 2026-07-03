@@ -117,9 +117,10 @@ windows forward from Dock/menu state, fulfill a persisted pending launch after
 the guest agent reconnects, focus a mirrored HWND, close a mirrored HWND, close
 all mirrored Windows app windows, click inside a mirrored HWND, set Windows
 clipboard text, type bounded ASCII text, restore persisted app-window intent
-after reconnect with requested app ids matched to restored HWNDs, or confirm
-that the runtime is ready to quiet after every mirrored Windows app window has
-closed.
+after reconnect with requested app ids matched to restored HWNDs, confirm that
+the runtime is ready to quiet after every mirrored Windows app window has
+closed, or request the local runtime stop from the same app-runtime action
+surface.
 Accepted launch, restore, pending-launch fulfillment, and bring-forward reports
 also include `foregroundWindowId` and `foregroundWindowTitle` so automation and
 logs can identify the Windows app window that should now feel frontmost on
@@ -153,6 +154,7 @@ swift run veil-vmctl app-runtime-action --json --action type-text --window-id hw
 swift run veil-vmctl app-runtime-action --json --action close --window-id hwnd:0003029A | node ../../harness/app-runtime-action/src/validate-app-runtime-action.mjs
 swift run veil-vmctl app-runtime-action --json --action close-all | node ../../harness/app-runtime-action/src/validate-app-runtime-action.mjs
 swift run veil-vmctl app-runtime-action --json --action quiet-when-idle | node ../../harness/app-runtime-action/src/validate-app-runtime-action.mjs
+swift run veil-vmctl app-runtime-action --json --action stop-runtime | node ../../harness/app-runtime-action/src/validate-app-runtime-action.mjs
 ```
 
 ## App Window Proof Scenario

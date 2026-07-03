@@ -28,6 +28,12 @@ test("validates quiet runtime readiness action fixture", () => {
   assert.equal(validateAppRuntimeAction(report), report);
 });
 
+test("validates app runtime stop action fixture", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-action.stop-runtime-live.json", import.meta.url), "utf8"));
+
+  assert.equal(validateAppRuntimeAction(report), report);
+});
+
 test("validates app runtime bring-forward action fixture", () => {
   const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-action.bring-forward-demo.json", import.meta.url), "utf8"));
 
@@ -232,9 +238,31 @@ test("rejects quiet-ready actions without a stop command", () => {
   );
 });
 
+test("rejects accepted stop-runtime actions without a stopped runtime snapshot", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-action.stop-runtime-live.json", import.meta.url), "utf8"));
+  report.runtimeStop.state = "running";
+
+  assert.throws(
+    () => validateAppRuntimeAction(report),
+    /runtimeStop\.state stopped/
+  );
+});
+
+test("rejects runtimeStop evidence on non-stop actions", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-action.launch-demo.json", import.meta.url), "utf8"));
+  report.runtimeStop = {
+    state: "stopped"
+  };
+
+  assert.throws(
+    () => validateAppRuntimeAction(report),
+    /only allowed for stop-runtime/
+  );
+});
+
 test("rejects unavailable quiet runtime status with a stop command", () => {
   const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-action.launch-demo.json", import.meta.url), "utf8"));
-  report.status.quietRuntime.recommendedStopCommand = "veil-vmctl qemu-powerdown --json --wait-seconds 30";
+  report.status.quietRuntime.recommendedStopCommand = "veil-vmctl app-runtime-action --json --action stop-runtime";
 
   assert.throws(
     () => validateAppRuntimeAction(report),

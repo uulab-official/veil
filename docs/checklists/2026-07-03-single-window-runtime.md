@@ -55,6 +55,7 @@ Goal: move Veil from a Veil shell plus separate QEMU Cocoa display toward a UTM-
 - [x] Route Dock reopen and main-window hiding through launcher visibility status so Coherence runs bring Windows app windows forward instead of reopening duplicate launchers.
 - [x] Open queued Windows apps from the menu bar without first reopening the main launcher once the guest agent can fulfill the pending launch.
 - [x] Add a menu-bar Bring Windows Apps Forward command so hidden Coherence windows can be restored from the stable menu surface without opening the launcher.
+- [x] Add `app-runtime-action --action stop-runtime` so automation can move from quiet-ready Windows app sessions to local runtime stop without dropping into QEMU-specific commands.
 
 ## Next
 

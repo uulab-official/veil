@@ -13,7 +13,7 @@
     "willQuietAutomatically": true,
     "automaticQuietDelaySeconds": 8,
     "recommendedAction": "stop-or-suspend-runtime",
-    "recommendedStopCommand": "veil-vmctl qemu-powerdown --json --wait-seconds 30",
+    "recommendedStopCommand": "veil-vmctl app-runtime-action --json --action stop-runtime",
     "reason": "All Windows app windows are closed and the live agent is connected."
   },
   "restoredWindows": [],
@@ -70,7 +70,7 @@
       "willQuietAutomatically": true,
       "automaticQuietDelaySeconds": 8,
       "recommendedAction": "stop-or-suspend-runtime",
-      "recommendedStopCommand": "veil-vmctl qemu-powerdown --json --wait-seconds 30",
+      "recommendedStopCommand": "veil-vmctl app-runtime-action --json --action stop-runtime",
       "reason": "All Windows app windows are closed and the live agent is connected."
     },
     "launchPlan": {
@@ -142,7 +142,8 @@
     ]
   },
   "nextActions": [
-    "Run `veil-vmctl qemu-powerdown --json --wait-seconds 30` or use Stop Windows once the local runtime reports it can stop safely.",
+    "Run `veil-vmctl app-runtime-action --json --action stop-runtime` to stop the idle local Windows runtime.",
+    "Use `veil-vmctl qemu-powerdown --json --wait-seconds 30` only as a lower-level recovery command.",
     "Run `veil-vmctl app-runtime-status --json` before relaunching a Windows app."
   ]
 }

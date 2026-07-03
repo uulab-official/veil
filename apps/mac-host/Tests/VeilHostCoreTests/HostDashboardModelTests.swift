@@ -541,7 +541,7 @@ struct HostDashboardModelTests {
         #expect(report.quietRuntime.willQuietAutomatically)
         #expect(report.quietRuntime.automaticQuietDelaySeconds == 8)
         #expect(report.quietRuntime.recommendedAction == "stop-or-suspend-runtime")
-        #expect(report.quietRuntime.recommendedStopCommand == "veil-vmctl qemu-powerdown --json --wait-seconds 30")
+        #expect(report.quietRuntime.recommendedStopCommand == "veil-vmctl app-runtime-action --json --action stop-runtime")
         #expect(report.macWindowIntegration.acceptsGuestWindowEvents)
         #expect(report.macWindowIntegration.hidesLauncherWhenMirroring == false)
         #expect(report.macWindowIntegration.mirroredWindowCount == 0)

@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 
 import { validateAppRuntimeStatus } from "../../app-runtime-status/src/validate-app-runtime-status.mjs";
 
-const VALID_ACTIONS = new Set(["launch", "fulfill-pending", "focus", "close", "close-all", "restore", "bring-forward", "quiet-when-idle", "clipboard", "type-text", "click"]);
+const VALID_ACTIONS = new Set(["launch", "fulfill-pending", "focus", "close", "close-all", "restore", "bring-forward", "quiet-when-idle", "stop-runtime", "clipboard", "type-text", "click"]);
 const VALID_CONNECTION_MODES = new Set(["agent", "demo"]);
 
 export function validateAppRuntimeAction(report) {
@@ -40,6 +40,10 @@ export function validateAppRuntimeAction(report) {
     throw new TypeError("restoredWindows must be an array.");
   }
 
+  if (report.action !== "stop-runtime" && report.runtimeStop !== undefined && report.runtimeStop !== null) {
+    throw new TypeError("runtimeStop is only allowed for stop-runtime actions.");
+  }
+
   switch (report.action) {
     case "launch":
       validateLaunchAction(report);
@@ -64,6 +68,9 @@ export function validateAppRuntimeAction(report) {
       break;
     case "quiet-when-idle":
       validateQuietWhenIdleAction(report);
+      break;
+    case "stop-runtime":
+      validateStopRuntimeAction(report);
       break;
     case "clipboard":
       validateClipboardAction(report);
@@ -133,6 +140,27 @@ function validateQuietWhenIdleAction(report) {
   if (report.accepted !== report.quietRuntime.canQuietRuntime) {
     throw new TypeError("quiet-when-idle accepted must match quietRuntime.canQuietRuntime.");
   }
+}
+
+function validateStopRuntimeAction(report) {
+  validateQuietRuntime(report.quietRuntime, "quietRuntime");
+
+  if (JSON.stringify(report.quietRuntime) !== JSON.stringify(report.status.quietRuntime)) {
+    throw new TypeError("stop-runtime action status must match report.status.quietRuntime.");
+  }
+
+  if (!report.accepted) {
+    if (report.runtimeStop !== undefined && report.runtimeStop !== null) {
+      throw new TypeError("rejected stop-runtime actions cannot include runtimeStop.");
+    }
+    return;
+  }
+
+  if (!report.quietRuntime.canQuietRuntime) {
+    throw new TypeError("accepted stop-runtime actions require quietRuntime.canQuietRuntime.");
+  }
+
+  validateRuntimeStop(report.runtimeStop);
 }
 
 function validateLaunchAction(report) {
@@ -480,6 +508,24 @@ function validateQuietRuntime(quietRuntime, fieldName) {
   if (!quietRuntime.canQuietRuntime && quietRuntime.recommendedStopCommand !== undefined) {
     throw new TypeError(`${fieldName}.recommendedStopCommand is only allowed when ${fieldName}.canQuietRuntime is true.`);
   }
+}
+
+function validateRuntimeStop(runtimeStop) {
+  if (!runtimeStop || typeof runtimeStop !== "object" || Array.isArray(runtimeStop)) {
+    throw new TypeError("runtimeStop must be an object for accepted stop-runtime actions.");
+  }
+
+  requireString(runtimeStop.state, "runtimeStop.state");
+  if (runtimeStop.state !== "stopped") {
+    throw new TypeError("accepted stop-runtime actions must report runtimeStop.state stopped.");
+  }
+
+  requireBoolean(runtimeStop.virtualizationAvailable, "runtimeStop.virtualizationAvailable");
+  requireString(runtimeStop.architecture, "runtimeStop.architecture");
+  requireBoolean(runtimeStop.minimumOSSupported, "runtimeStop.minimumOSSupported");
+  requireBoolean(runtimeStop.bootReady, "runtimeStop.bootReady");
+  requireBoolean(runtimeStop.windowsInstalled, "runtimeStop.windowsInstalled");
+  requireString(runtimeStop.detail, "runtimeStop.detail");
 }
 
 function validateClipboard(clipboard) {

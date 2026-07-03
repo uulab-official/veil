@@ -1,32 +1,50 @@
 {
   "kind": "windowsAppRuntimeAction",
-  "action": "close-all",
-  "requestedAt": "2026-07-04T00:05:00Z",
+  "action": "stop-runtime",
+  "requestedAt": "2026-07-03T13:10:00Z",
   "endpoint": "ws://127.0.0.1:18444",
   "connectionMode": "agent",
   "accepted": true,
-  "closedWindows": [
-    {
-      "type": "window.close.response",
-      "requestId": "req_close_notepad",
-      "windowId": "hwnd:0003029A",
-      "accepted": true
+  "quietRuntime": {
+    "isEnabled": true,
+    "hasOpenedAppWindowThisSession": true,
+    "openWindowCount": 0,
+    "canQuietRuntime": true,
+    "willQuietAutomatically": true,
+    "automaticQuietDelaySeconds": 8,
+    "recommendedAction": "stop-or-suspend-runtime",
+    "recommendedStopCommand": "veil-vmctl app-runtime-action --json --action stop-runtime",
+    "reason": "All Windows app windows are closed and the live agent is connected."
+  },
+  "runtimeStop": {
+    "state": "stopped",
+    "virtualizationAvailable": true,
+    "architecture": "arm64",
+    "minimumOSSupported": true,
+    "profileName": "Windows 11",
+    "cpuCount": 6,
+    "memoryMB": 8192,
+    "diskGB": 96,
+    "virtualDiskPath": "/Users/example/Library/Application Support/Veil/VMs/Windows11.qcow2",
+    "runtimeProviders": [],
+    "installationSteps": [],
+    "preflightChecks": [],
+    "installEvidence": {
+      "windowsInstalled": true,
+      "guestAgentInstalled": true,
+      "summary": "Windows is installed and the guest agent has connected.",
+      "signals": []
     },
-    {
-      "type": "window.close.response",
-      "requestId": "req_close_calculator",
-      "windowId": "hwnd:0003030B",
-      "accepted": true
-    }
-  ],
+    "bootReady": true,
+    "windowsInstalled": true,
+    "detail": "Windows VM is stopped."
+  },
   "restoredWindows": [],
-  "restoreRequestedAppIds": [],
-  "broughtForwardWindowIds": [],
   "status": {
     "kind": "windowsAppRuntimeStatus",
-    "generatedAt": "2026-07-04T00:05:01Z",
+    "generatedAt": "2026-07-03T13:10:01Z",
     "phase": "connected",
-    "selectedAppId": "winapp_calculator",
+    "selectedAppId": "winapp_notepad",
     "pendingLaunch": {
       "isQueued": false,
       "willLaunchOnAgentReconnect": false,
@@ -79,25 +97,19 @@
       "reason": "All Windows app windows are closed and the live agent is connected."
     },
     "launchPlan": {
-      "selectedAppId": "winapp_calculator",
+      "selectedAppId": "winapp_notepad",
       "canRequestSelectedAppLaunch": true,
       "canLaunchSelectedAppNow": true,
       "requiresRuntimeStart": false,
       "requiresGuestAgent": false,
       "recommendedAction": "launch-now",
-      "recommendedLaunchCommand": "veil-vmctl app-runtime-action --json --action launch --app-id winapp_calculator",
+      "recommendedLaunchCommand": "veil-vmctl app-runtime-action --json --action launch --app-id winapp_notepad",
       "reason": "The live Windows agent can launch the selected app now."
     },
     "apps": [
       {
         "id": "winapp_notepad",
         "name": "Notepad",
-        "canRequestLaunch": true,
-        "canLaunchNow": true
-      },
-      {
-        "id": "winapp_calculator",
-        "name": "Calculator",
         "canRequestLaunch": true,
         "canLaunchNow": true
       }
@@ -153,7 +165,7 @@
     ]
   },
   "nextActions": [
-    "Run `veil-vmctl app-runtime-status --json` to confirm no mirrored Windows app windows remain.",
-    "Run `veil-vmctl app-runtime-action --json --action quiet-when-idle` if the runtime is ready to quiet."
+    "Run `veil-vmctl app-runtime-status --json` before relaunching a Windows app.",
+    "If Windows did not stop cleanly, export diagnostics before using force stop."
   ]
 }
