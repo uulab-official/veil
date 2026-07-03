@@ -22,10 +22,11 @@ Goal: move Veil from a Veil shell plus separate QEMU Cocoa display toward a UTM-
 - [x] Capture keyboard focus on the single-window setup preview and route Mac key events to QEMU key sequences.
 - [x] Launch app-started QEMU with a loopback VNC display endpoint so the next embedded surface can consume live frames without opening a native QEMU window.
 - [x] Promote the loopback endpoint into an explicit embedded display surface contract used by runtime evidence and the main SwiftUI display area.
+- [x] Add a tested RFB parser for protocol handshake, server init, and raw framebuffer updates for the loopback VNC display surface.
 
 ## Next
 
-- [ ] Attach an RFB/VNC frame receiver to the embedded display surface inside the main SwiftUI/AppKit window.
+- [ ] Connect the RFB parser to a loopback socket reader and render decoded frames inside the main SwiftUI/AppKit window.
 - [ ] Replace screenshot-only setup evidence with the VNC-backed installer surface.
 - [ ] Keep native QEMU display available only as an advanced recovery fallback.
 - [ ] Verify one-window startup with a running Windows 11 Arm install and guest-agent connection.
