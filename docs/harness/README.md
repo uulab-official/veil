@@ -113,6 +113,9 @@ top-level `pendingLaunchAppId` and `launchPlan` fields that must match
 `status.pendingLaunchAppId` and `status.launchPlan`. Those fields expose the
 bounded start/wait/retry commands without forcing automation to infer the
 handoff path from a fake Windows window.
+When a launch has already been queued, the retry command is
+`veil-vmctl app-runtime-action --json --action fulfill-pending` so the stored
+intent, not a reconstructed app id, is consumed after the guest agent connects.
 
 ```bash
 cd apps/mac-host

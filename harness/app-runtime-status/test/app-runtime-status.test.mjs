@@ -146,11 +146,29 @@ test("rejects queued pending launch status without matching app id", () => {
   report.pendingLaunch.recommendedAction = "auto-launch-on-agent-reconnect";
   report.launchPlan.pendingLaunchAppId = "winapp_notepad";
   report.launchPlan.recommendedAction = "start-runtime-for-pending-launch";
+  report.launchPlan.recommendedLaunchCommand = "veil-vmctl app-runtime-action --json --action fulfill-pending";
   report.launchPlan.reason = "The selected app launch is queued until Windows starts and the guest agent connects.";
 
   assert.throws(
     () => validateAppRuntimeStatus(report),
     /pendingLaunch\.appId/
+  );
+});
+
+test("rejects queued pending launch plans without fulfill-pending recovery", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.demo.json", import.meta.url), "utf8"));
+  report.pendingLaunchAppId = "winapp_notepad";
+  report.pendingLaunch.isQueued = true;
+  report.pendingLaunch.appId = "winapp_notepad";
+  report.pendingLaunch.willLaunchOnAgentReconnect = true;
+  report.pendingLaunch.recommendedAction = "auto-launch-on-agent-reconnect";
+  report.launchPlan.pendingLaunchAppId = "winapp_notepad";
+  report.launchPlan.recommendedAction = "start-runtime-for-pending-launch";
+  report.launchPlan.reason = "The selected app launch is queued until Windows starts and the guest agent connects.";
+
+  assert.throws(
+    () => validateAppRuntimeStatus(report),
+    /fulfill-pending/
   );
 });
 

@@ -17,7 +17,7 @@
     "recommendedAction": "start-runtime-for-pending-launch",
     "recommendedStartCommand": "veil-vmctl qemu-start --json --wait-seconds 30",
     "recommendedWaitCommand": "veil-vmctl guest-agent-wait --json --wait-seconds 30",
-    "recommendedLaunchCommand": "veil-vmctl app-runtime-action --json --action launch --app-id winapp_notepad",
+    "recommendedLaunchCommand": "veil-vmctl app-runtime-action --json --action fulfill-pending",
     "reason": "The selected app launch is queued until Windows starts and the guest agent connects."
   },
   "closedWindows": [],
@@ -100,7 +100,7 @@
       "recommendedAction": "start-runtime-for-pending-launch",
       "recommendedStartCommand": "veil-vmctl qemu-start --json --wait-seconds 30",
       "recommendedWaitCommand": "veil-vmctl guest-agent-wait --json --wait-seconds 30",
-      "recommendedLaunchCommand": "veil-vmctl app-runtime-action --json --action launch --app-id winapp_notepad",
+      "recommendedLaunchCommand": "veil-vmctl app-runtime-action --json --action fulfill-pending",
       "reason": "The selected app launch is queued until Windows starts and the guest agent connects."
     },
     "actions": [
@@ -149,6 +149,6 @@
   "nextActions": [
     "Run `veil-vmctl qemu-start --json --wait-seconds 30` to start the local Windows runtime for the selected app.",
     "Run `veil-vmctl guest-agent-wait --json --wait-seconds 30` to wait for the Windows guest agent.",
-    "Run `veil-vmctl app-runtime-action --json --action launch --app-id winapp_notepad` after the guest agent connects."
+    "Run `veil-vmctl app-runtime-action --json --action fulfill-pending` after the guest agent connects."
   ]
 }

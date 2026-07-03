@@ -680,6 +680,7 @@ struct HostDashboardModelTests {
         #expect(model.launchPlanStatus().recommendedAction == "start-runtime-for-pending-launch")
         #expect(model.launchPlanStatus().recommendedStartCommand == "veil-vmctl qemu-start --json --wait-seconds 30")
         #expect(model.launchPlanStatus().recommendedWaitCommand == "veil-vmctl guest-agent-wait --json --wait-seconds 30")
+        #expect(model.launchPlanStatus().recommendedLaunchCommand == "veil-vmctl app-runtime-action --json --action fulfill-pending")
         let queuedReport = model.runtimeStatusReport()
         #expect(queuedReport.pendingLaunch.isQueued)
         #expect(queuedReport.pendingLaunch.appId == "winapp_notepad")
@@ -725,6 +726,8 @@ struct HostDashboardModelTests {
         #expect(model.pendingLaunchAppId == "winapp_notepad")
         #expect(model.runtimeStatusReport().pendingLaunch.isQueued)
         #expect(model.runtimeStatusReport().pendingLaunch.recommendedAction == "launch-pending-now")
+        #expect(model.runtimeStatusReport().launchPlan.recommendedAction == "fulfill-pending-now")
+        #expect(model.runtimeStatusReport().launchPlan.recommendedLaunchCommand == "veil-vmctl app-runtime-action --json --action fulfill-pending")
 
         let fulfilledLaunch = await model.refreshLiveAgentIfNeeded()
 

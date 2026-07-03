@@ -112,7 +112,9 @@ test("rejects accepted fulfill-pending actions that leave pending launch queued"
     reason: "The live Windows agent is connected; retry the queued app launch now."
   };
   report.status.launchPlan.pendingLaunchAppId = "winapp_notepad";
+  report.status.launchPlan.recommendedLaunchCommand = "veil-vmctl app-runtime-action --json --action fulfill-pending";
   report.launchPlan.pendingLaunchAppId = "winapp_notepad";
+  report.launchPlan.recommendedLaunchCommand = "veil-vmctl app-runtime-action --json --action fulfill-pending";
 
   assert.throws(
     () => validateAppRuntimeAction(report),

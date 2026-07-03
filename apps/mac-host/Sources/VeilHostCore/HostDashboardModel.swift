@@ -689,6 +689,8 @@ public final class HostDashboardModel {
         let canRequest = canRequestAppLaunch(appId: selectedAppId)
         let canLaunchNow = canLaunchApp(appId: selectedAppId)
         let launchCommand = "veil-vmctl app-runtime-action --json --action launch --app-id \(selectedAppId)"
+        let fulfillPendingCommand = "veil-vmctl app-runtime-action --json --action fulfill-pending"
+        let hasPendingSelectedAppLaunch = pendingLaunchAppId == selectedAppId
 
         if canLaunchNow {
             return WindowsAppRuntimeLaunchPlanStatus(
@@ -698,14 +700,16 @@ public final class HostDashboardModel {
                 canLaunchSelectedAppNow: true,
                 requiresRuntimeStart: false,
                 requiresGuestAgent: false,
-                recommendedAction: "launch-now",
-                recommendedLaunchCommand: launchCommand,
-                reason: "The live Windows agent can launch the selected app now."
+                recommendedAction: hasPendingSelectedAppLaunch ? "fulfill-pending-now" : "launch-now",
+                recommendedLaunchCommand: hasPendingSelectedAppLaunch ? fulfillPendingCommand : launchCommand,
+                reason: hasPendingSelectedAppLaunch
+                    ? "The live Windows agent can fulfill the queued app launch now."
+                    : "The live Windows agent can launch the selected app now."
             )
         }
 
         if canRequest {
-            let recommendedAction = pendingLaunchAppId == selectedAppId
+            let recommendedAction = hasPendingSelectedAppLaunch
                 ? "start-runtime-for-pending-launch"
                 : "start-runtime-and-wait-for-agent"
             return WindowsAppRuntimeLaunchPlanStatus(
@@ -718,8 +722,8 @@ public final class HostDashboardModel {
                 recommendedAction: recommendedAction,
                 recommendedStartCommand: hasLiveAgentConnection ? nil : "veil-vmctl qemu-start --json --wait-seconds 30",
                 recommendedWaitCommand: hasLiveAgentConnection ? nil : "veil-vmctl guest-agent-wait --json --wait-seconds 30",
-                recommendedLaunchCommand: launchCommand,
-                reason: pendingLaunchAppId == selectedAppId
+                recommendedLaunchCommand: hasPendingSelectedAppLaunch ? fulfillPendingCommand : launchCommand,
+                reason: hasPendingSelectedAppLaunch
                     ? "The selected app launch is queued until Windows starts and the guest agent connects."
                     : "Start Windows, wait for the guest agent, then launch the selected app."
             )

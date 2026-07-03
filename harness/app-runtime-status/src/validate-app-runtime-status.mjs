@@ -278,6 +278,10 @@ function validateLaunchPlan(launchPlan, report) {
     throw new TypeError("launchPlan.pendingLaunchAppId must match pendingLaunch.appId while a launch is queued.");
   }
 
+  if (report.pendingLaunch.isQueued && launchPlan.recommendedLaunchCommand !== "veil-vmctl app-runtime-action --json --action fulfill-pending") {
+    throw new TypeError("queued pending launches must recommend the fulfill-pending action.");
+  }
+
   if (report.pendingLaunch.willLaunchOnAgentReconnect && !launchPlan.requiresGuestAgent) {
     throw new TypeError("pendingLaunch.willLaunchOnAgentReconnect requires launchPlan.requiresGuestAgent.");
   }
