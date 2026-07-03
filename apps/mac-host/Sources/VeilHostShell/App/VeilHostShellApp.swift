@@ -662,6 +662,14 @@ private struct VeilMenuBarMenu: View {
 
         Divider()
 
+        Label(runtimeStatusTitle, systemImage: runtimeStatusSymbolName)
+
+        if !model.mirrorSessions.isEmpty {
+            Label(runningAppsTitle, systemImage: "rectangle.3.group")
+        }
+
+        Divider()
+
         if !model.mirrorSessions.isEmpty {
             Menu("Running Windows Apps", systemImage: "rectangle.3.group") {
                 ForEach(model.mirrorSessions) { session in
@@ -765,6 +773,47 @@ private struct VeilMenuBarMenu: View {
     private var canMarkWindowsInstalled: Bool {
         (vmModel.snapshot?.state == .running || vmModel.snapshot?.state == .starting)
             && vmModel.snapshot?.installEvidence.isInstalled != true
+    }
+
+    private var runtimeStatusTitle: String {
+        switch vmModel.snapshot?.state {
+        case .running:
+            "Windows Running"
+        case .starting:
+            "Windows Starting"
+        case .suspended:
+            "Windows Suspended"
+        case .failed:
+            "Windows Needs Attention"
+        case .unsupported:
+            "Windows Unsupported"
+        case .notConfigured:
+            "Windows Not Configured"
+        case .stopped, nil:
+            "Windows Stopped"
+        }
+    }
+
+    private var runtimeStatusSymbolName: String {
+        switch vmModel.snapshot?.state {
+        case .running:
+            "play.circle.fill"
+        case .starting:
+            "arrow.triangle.2.circlepath"
+        case .suspended:
+            "pause.circle"
+        case .failed, .unsupported:
+            "exclamationmark.triangle"
+        case .notConfigured:
+            "plus.circle"
+        case .stopped, nil:
+            "stop.circle"
+        }
+    }
+
+    private var runningAppsTitle: String {
+        let count = model.mirrorSessions.count
+        return count == 1 ? "1 Windows App Running" : "\(count) Windows Apps Running"
     }
 
     private func openMainWindow() {
