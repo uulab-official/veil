@@ -472,6 +472,25 @@ struct VMRuntimeModelTests {
         #expect(service.pointerTapCoordinates.first?.0 == 0.25)
         #expect(service.pointerTapCoordinates.first?.1 == 0.75)
     }
+
+    @Test("sends console keys through the service boundary")
+    @MainActor
+    func sendsConsoleKeysThroughServiceBoundary() async throws {
+        let service = FakeVMRuntimeService(
+            keySendRecord: QEMUKeySendRecord(
+                monitorSocketPath: "/tmp/veil-monitor.sock",
+                keys: ["ctrl-c"],
+                results: [],
+                sentAt: Date(timeIntervalSince1970: 1)
+            )
+        )
+        let model = VMRuntimeModel(service: service)
+
+        await model.sendConsoleKey("ctrl-c")
+
+        #expect(model.errorMessage == nil)
+        #expect(service.consoleKeys == ["ctrl-c"])
+    }
 }
 
 @MainActor
@@ -486,6 +505,7 @@ private final class FakeVMRuntimeService: VMRuntimeService {
     var stoppedSnapshot: VMRuntimeSnapshot?
     var diagnosticsURL: URL?
     var pointerTapRecord: QEMUPointerTapRecord?
+    var keySendRecord: QEMUKeySendRecord?
     var error: (any Error)?
     var startError: (any Error)?
     private(set) var updatedInstallerMediaPath: String?
@@ -500,6 +520,7 @@ private final class FakeVMRuntimeService: VMRuntimeService {
     private(set) var stopCount = 0
     private(set) var diagnosticsDirectory: URL?
     private(set) var pointerTapCoordinates: [(Double, Double)] = []
+    private(set) var consoleKeys: [String] = []
 
     init(
         snapshot: VMRuntimeSnapshot? = nil,
@@ -512,6 +533,7 @@ private final class FakeVMRuntimeService: VMRuntimeService {
         stoppedSnapshot: VMRuntimeSnapshot? = nil,
         diagnosticsURL: URL? = nil,
         pointerTapRecord: QEMUPointerTapRecord? = nil,
+        keySendRecord: QEMUKeySendRecord? = nil,
         error: (any Error)? = nil,
         startError: (any Error)? = nil
     ) {
@@ -525,6 +547,7 @@ private final class FakeVMRuntimeService: VMRuntimeService {
         self.stoppedSnapshot = stoppedSnapshot
         self.diagnosticsURL = diagnosticsURL
         self.pointerTapRecord = pointerTapRecord
+        self.keySendRecord = keySendRecord
         self.error = error
         self.startError = startError
     }
@@ -628,6 +651,15 @@ private final class FakeVMRuntimeService: VMRuntimeService {
 
         pointerTapCoordinates.append((normalizedX, normalizedY))
         return try #require(pointerTapRecord)
+    }
+
+    func sendConsoleKey(_ key: String) async throws -> QEMUKeySendRecord {
+        if let error {
+            throw error
+        }
+
+        consoleKeys.append(key)
+        return try #require(keySendRecord)
     }
 
     func exportDiagnostics(to directory: URL) async throws -> URL {

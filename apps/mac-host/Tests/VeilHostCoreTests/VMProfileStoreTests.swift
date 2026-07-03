@@ -1686,7 +1686,10 @@ struct VMProfileStoreTests {
         try Data("disk".utf8).write(to: diskURL)
         try Data("old-insecure-vars".utf8).write(to: existingVarsURL)
         let store = JSONVMProfileStore(directory: directory)
-        var profile = VMProfile.defaultWindows11Arm(createdAt: Date(timeIntervalSince1970: 1_782_752_400))
+        var profile = VMProfile.defaultWindows11Arm(
+            createdAt: Date(timeIntervalSince1970: 1_782_752_400),
+            homeDirectory: homeDirectory
+        )
         profile.virtualDiskPath = diskURL.path
         profile.windowsInstalled = false
         try await store.save(profile)

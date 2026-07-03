@@ -81,6 +81,11 @@ struct VMRuntimeView: View {
                             )
                         }
                     },
+                    consoleKeyAction: { key in
+                        Task {
+                            await model.sendConsoleKey(key)
+                        }
+                    },
                     detailsAction: {
                         showsAdvancedDetails.toggle()
                     },
@@ -802,29 +807,22 @@ private struct WindowsDisplayScreenshotPreview: View {
     var path: String
     var revisionID: String
     var pointerTapAction: (Double, Double) -> Void
+    var keyAction: (String) -> Void
 
     var body: some View {
-        GeometryReader { proxy in
-            ZStack {
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(.black)
+        ZStack {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(.black)
 
-                Image(nsImage: image)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .id(revisionID)
-            }
-            .contentShape(Rectangle())
-            .gesture(
-                DragGesture(minimumDistance: 0, coordinateSpace: .local)
-                    .onEnded { value in
-                        let normalized = normalizedPoint(
-                            value.location,
-                            in: proxy.size
-                        )
-                        pointerTapAction(normalized.x, normalized.y)
-                    }
+            Image(nsImage: image)
+                .resizable()
+                .scaledToFit()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .id(revisionID)
+
+            ConsolePreviewInputCaptureView(
+                pointerTapAction: pointerTapAction,
+                keyAction: keyAction
             )
         }
         .aspectRatio(16 / 9, contentMode: .fit)
@@ -836,16 +834,95 @@ private struct WindowsDisplayScreenshotPreview: View {
         .accessibilityLabel("Latest Windows display screenshot")
         .accessibilityValue(path)
     }
+}
 
-    private func normalizedPoint(_ point: CGPoint, in size: CGSize) -> (x: Double, y: Double) {
-        guard size.width > 0, size.height > 0 else {
-            return (0, 0)
+private struct ConsolePreviewInputCaptureView: NSViewRepresentable {
+    var pointerTapAction: (Double, Double) -> Void
+    var keyAction: (String) -> Void
+
+    func makeNSView(context: Context) -> ConsolePreviewInputCaptureNSView {
+        let view = ConsolePreviewInputCaptureNSView()
+        view.pointerTapAction = pointerTapAction
+        view.keyAction = keyAction
+        return view
+    }
+
+    func updateNSView(_ nsView: ConsolePreviewInputCaptureNSView, context: Context) {
+        nsView.pointerTapAction = pointerTapAction
+        nsView.keyAction = keyAction
+    }
+}
+
+private final class ConsolePreviewInputCaptureNSView: NSView {
+    var pointerTapAction: ((Double, Double) -> Void)?
+    var keyAction: ((String) -> Void)?
+    private let keyboardMapper = QEMUConsoleKeyboardInputMapper()
+
+    override var acceptsFirstResponder: Bool { true }
+
+    override func mouseDown(with event: NSEvent) {
+        window?.makeFirstResponder(self)
+        sendPointerTap(event)
+    }
+
+    override func keyDown(with event: NSEvent) {
+        if !sendKey(event) {
+            super.keyDown(with: event)
+        }
+    }
+
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        guard event.type == .keyDown,
+              event.modifierFlags.contains(.command),
+              sendKey(event) else {
+            return super.performKeyEquivalent(with: event)
         }
 
-        return (
-            x: Double(min(max(point.x / size.width, 0), 1)),
-            y: Double(min(max(point.y / size.height, 0), 1))
-        )
+        return true
+    }
+
+    private func sendPointerTap(_ event: NSEvent) {
+        guard bounds.width > 0, bounds.height > 0 else {
+            return
+        }
+
+        let point = convert(event.locationInWindow, from: nil)
+        let normalizedX = min(max(point.x / bounds.width, 0), 1)
+        let normalizedY = min(max(1 - (point.y / bounds.height), 0), 1)
+        pointerTapAction?(Double(normalizedX), Double(normalizedY))
+    }
+
+    private func sendKey(_ event: NSEvent) -> Bool {
+        guard let key = keyboardMapper.key(
+            charactersIgnoringModifiers: event.charactersIgnoringModifiers,
+            keyCode: event.keyCode,
+            modifiers: qemuKeyboardModifiers(from: event)
+        ) else {
+            return false
+        }
+
+        keyAction?(key)
+        return true
+    }
+
+    private func qemuKeyboardModifiers(from event: NSEvent) -> QEMUConsoleKeyboardModifier {
+        let flags = event.modifierFlags
+        var modifiers: QEMUConsoleKeyboardModifier = []
+
+        if flags.contains(.command) {
+            modifiers.insert(.command)
+        }
+        if flags.contains(.control) {
+            modifiers.insert(.control)
+        }
+        if flags.contains(.shift) {
+            modifiers.insert(.shift)
+        }
+        if flags.contains(.option) {
+            modifiers.insert(.option)
+        }
+
+        return modifiers
     }
 }
 
@@ -1172,6 +1249,7 @@ private struct WindowsSetupDisplayPanel: View {
     var recordAppFrameProofAction: () -> Void
     var refreshAction: () -> Void
     var consolePointerTapAction: (Double, Double) -> Void
+    var consoleKeyAction: (String) -> Void
     var detailsAction: () -> Void
     var isShowingDetails: Bool
     var installSimulation: InstallSimulationState
@@ -1224,7 +1302,8 @@ private struct WindowsSetupDisplayPanel: View {
                     image: displayScreenshotImage,
                     path: snapshot.latestConsoleScreenshotPath ?? "",
                     revisionID: displayScreenshotRevisionID,
-                    pointerTapAction: consolePointerTapAction
+                    pointerTapAction: consolePointerTapAction,
+                    keyAction: consoleKeyAction
                 )
             } else {
                 machineDisplay

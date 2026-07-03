@@ -10,6 +10,7 @@ public protocol VMRuntimeService: Sendable {
     func start() async throws -> VMRuntimeSnapshot
     func stop() async throws -> VMRuntimeSnapshot
     func sendConsolePointerTap(normalizedX: Double, normalizedY: Double) async throws -> QEMUPointerTapRecord
+    func sendConsoleKey(_ key: String) async throws -> QEMUKeySendRecord
     func exportDiagnostics(to directory: URL) async throws -> URL
 }
 
@@ -697,9 +698,9 @@ public struct HdiutilAutomaticInstallMediaBuilder: AutomaticInstallMediaBuilding
             return
         }
 
+        let buildID = UUID().uuidString
         let stagingDirectory = mediaURL.deletingLastPathComponent()
-            .appendingPathComponent(".veil-auto-install-media", isDirectory: true)
-        try? fileManager.removeItem(at: stagingDirectory)
+            .appendingPathComponent(".veil-auto-install-media-\(buildID)", isDirectory: true)
         try fileManager.createDirectory(at: stagingDirectory, withIntermediateDirectories: true)
         defer {
             try? fileManager.removeItem(at: stagingDirectory)
@@ -716,10 +717,14 @@ public struct HdiutilAutomaticInstallMediaBuilder: AutomaticInstallMediaBuilding
             )
         }
 
-        let temporaryOutputURL = mediaURL.deletingPathExtension()
+        let temporaryOutputURL = mediaURL.deletingLastPathComponent()
+            .appendingPathComponent("\(mediaURL.deletingPathExtension().lastPathComponent)-\(buildID)")
             .appendingPathExtension("iso.tmp")
-        try? fileManager.removeItem(at: temporaryOutputURL)
-        try? fileManager.removeItem(at: mediaURL)
+        let generatedURL = temporaryOutputURL.appendingPathExtension("iso")
+        defer {
+            try? fileManager.removeItem(at: temporaryOutputURL)
+            try? fileManager.removeItem(at: generatedURL)
+        }
 
         let exitCode = try processRunner(
             "/usr/bin/hdiutil",
@@ -739,10 +744,11 @@ public struct HdiutilAutomaticInstallMediaBuilder: AutomaticInstallMediaBuilding
             throw VMRuntimeError.automaticInstallMediaCreationFailed("hdiutil exited with code \(exitCode).")
         }
 
-        let generatedURL = temporaryOutputURL.appendingPathExtension("iso")
         if fileManager.fileExists(atPath: generatedURL.path) {
+            try? fileManager.removeItem(at: mediaURL)
             try fileManager.moveItem(at: generatedURL, to: mediaURL)
         } else if fileManager.fileExists(atPath: temporaryOutputURL.path) {
+            try? fileManager.removeItem(at: mediaURL)
             try fileManager.moveItem(at: temporaryOutputURL, to: mediaURL)
         } else {
             throw VMRuntimeError.automaticInstallMediaCreationFailed("hdiutil did not produce an ISO image.")
@@ -1019,6 +1025,15 @@ public final class VMRuntimeModel {
         }
     }
 
+    public func sendConsoleKey(_ key: String) async {
+        do {
+            _ = try await service.sendConsoleKey(key)
+            errorMessage = nil
+        } catch {
+            errorMessage = userMessage(for: error)
+        }
+    }
+
     public func exportDiagnostics(to directory: URL) async {
         phase = .loading
         errorMessage = nil
@@ -1056,6 +1071,7 @@ public struct LocalVMRuntimeService: VMRuntimeService {
     private let automaticInstallMediaBuilder: any AutomaticInstallMediaBuilding
     private let consoleScreenshotRefresher: @Sendable (URL, URL) -> Void
     private let pointerEventSender: (any QEMUPointerEventSending)?
+    private let keySequenceSender: (any QEMUKeySequenceSending)?
     private let qemuLaunchProcessIsRunning: @Sendable (Int32) -> Bool
     private let qemuLaunchProcessTerminator: @Sendable (Int32) -> Bool
     private let firmwareVarsTemplatePaths: [String]
@@ -1072,6 +1088,7 @@ public struct LocalVMRuntimeService: VMRuntimeService {
         automaticInstallMediaBuilder: any AutomaticInstallMediaBuilding = HdiutilAutomaticInstallMediaBuilder(),
         consoleScreenshotRefresher: @escaping @Sendable (URL, URL) -> Void = QEMUVMRuntimeBooter.captureConsoleScreenshot,
         pointerEventSender: (any QEMUPointerEventSending)? = nil,
+        keySequenceSender: (any QEMUKeySequenceSending)? = nil,
         qemuLaunchProcessIsRunning: @escaping @Sendable (Int32) -> Bool = LocalVMRuntimeService.processIsRunning,
         qemuLaunchProcessTerminator: @escaping @Sendable (Int32) -> Bool = LocalVMRuntimeService.terminateProcess,
         firmwareVarsTemplatePaths: [String]? = nil
@@ -1087,6 +1104,7 @@ public struct LocalVMRuntimeService: VMRuntimeService {
         self.automaticInstallMediaBuilder = automaticInstallMediaBuilder
         self.consoleScreenshotRefresher = consoleScreenshotRefresher
         self.pointerEventSender = pointerEventSender
+        self.keySequenceSender = keySequenceSender
         self.qemuLaunchProcessIsRunning = qemuLaunchProcessIsRunning
         self.qemuLaunchProcessTerminator = qemuLaunchProcessTerminator
         self.firmwareVarsTemplatePaths = firmwareVarsTemplatePaths
@@ -1903,6 +1921,13 @@ public struct LocalVMRuntimeService: VMRuntimeService {
     public func sendConsolePointerTap(normalizedX: Double, normalizedY: Double) async throws -> QEMUPointerTapRecord {
         let sender = pointerEventSender ?? QEMUPointerEventSender(launchRecordStore: qemuLaunchRecordStore)
         return try await sender.sendTap(normalizedX: normalizedX, normalizedY: normalizedY)
+    }
+
+    public func sendConsoleKey(_ key: String) async throws -> QEMUKeySendRecord {
+        let sender = keySequenceSender ?? QEMUKeySequenceSender(launchRecordStore: qemuLaunchRecordStore)
+        return try await sender.send(steps: [
+            QEMUKeySequenceStep(key: key, delayAfterSend: 0)
+        ])
     }
 
     public func exportDiagnostics(to directory: URL) async throws -> URL {

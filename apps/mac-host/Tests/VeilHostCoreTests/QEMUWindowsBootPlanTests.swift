@@ -950,6 +950,18 @@ struct QEMUWindowsBootPlanTests {
         #expect(keys.contains("spc"))
     }
 
+    @Test("QEMU console keyboard input mapper converts Mac keys to QMP keys")
+    func qemuConsoleKeyboardInputMapperConvertsMacKeysToQMPKeys() {
+        let mapper = QEMUConsoleKeyboardInputMapper()
+
+        #expect(mapper.key(charactersIgnoringModifiers: "c", keyCode: 8, modifiers: [.command]) == "ctrl-c")
+        #expect(mapper.key(charactersIgnoringModifiers: "a", keyCode: 0, modifiers: [.shift]) == "shift-a")
+        #expect(mapper.key(charactersIgnoringModifiers: "/", keyCode: 44, modifiers: [.shift]) == "shift-slash")
+        #expect(mapper.key(charactersIgnoringModifiers: nil, keyCode: 123) == "left")
+        #expect(mapper.key(charactersIgnoringModifiers: nil, keyCode: 36) == "enter")
+        #expect(mapper.key(charactersIgnoringModifiers: nil, keyCode: 109) == "f10")
+    }
+
     @Test("guest agent install sequence opens run dialog and invokes VEIL_AUTO bootstrap")
     func guestAgentInstallSequenceOpensRunDialogAndInvokesVEILAUTOBootstrap() throws {
         let steps = try QEMUGuestAgentInstallKeySequence.steps

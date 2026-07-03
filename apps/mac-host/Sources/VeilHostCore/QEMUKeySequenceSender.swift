@@ -61,7 +61,11 @@ public enum QEMUKeySequenceSenderError: Error, LocalizedError, Equatable, Sendab
     }
 }
 
-public struct QEMUKeySequenceSender: Sendable {
+public protocol QEMUKeySequenceSending: Sendable {
+    func send(steps: [QEMUKeySequenceStep]) async throws -> QEMUKeySendRecord
+}
+
+public struct QEMUKeySequenceSender: QEMUKeySequenceSending {
     private let launchRecordStore: any QEMULaunchRecordStore
     private let fileExists: @Sendable (String) -> Bool
     private let processRunner: @Sendable (String, [String]) -> Int32?
