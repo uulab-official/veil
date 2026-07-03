@@ -463,6 +463,7 @@ struct AppRuntimeActionReport: Codable, Equatable {
     var keyInputs: [InputKeyEvent]
     var typedTextCharacterCount: Int?
     var restoredWindows: [WindowCreatedEvent]
+    var restoreRequestedAppIds: [String]
     var broughtForwardWindowIds: [String]
     var quietRuntime: WindowsAppRuntimeQuietPolicyStatus?
     var status: WindowsAppRuntimeStatusReport
@@ -659,6 +660,7 @@ struct VeilVMControl {
         var keyInputs: [InputKeyEvent] = []
         var typedTextCharacterCount: Int?
         var restoredWindows: [WindowCreatedEvent] = []
+        var restoreRequestedAppIds: [String] = []
         var broughtForwardWindowIds: [String] = []
         var quietRuntime: WindowsAppRuntimeQuietPolicyStatus?
         var accepted = false
@@ -700,6 +702,7 @@ struct VeilVMControl {
             accepted = close?.accepted == true
             resolvedWindowId = closeWindowId
         case .restore:
+            restoreRequestedAppIds = model.restorableAppIds
             let restored = await model.restoreMirroredWindowsAfterReconnect()
             restoredWindows = restored.map(\.window)
             accepted = !restored.isEmpty
@@ -791,6 +794,7 @@ struct VeilVMControl {
             keyInputs: keyInputs,
             typedTextCharacterCount: typedTextCharacterCount,
             restoredWindows: restoredWindows,
+            restoreRequestedAppIds: restoreRequestedAppIds,
             broughtForwardWindowIds: broughtForwardWindowIds,
             quietRuntime: quietRuntime,
             status: status,
@@ -826,6 +830,9 @@ struct VeilVMControl {
         }
         if !report.broughtForwardWindowIds.isEmpty {
             print("Brought forward windows: \(report.broughtForwardWindowIds.joined(separator: ", "))")
+        }
+        if !report.restoreRequestedAppIds.isEmpty {
+            print("Restore requested apps: \(report.restoreRequestedAppIds.joined(separator: ", "))")
         }
         print("Open Windows app windows: \(report.status.mirrorSessions.count)")
         print("Next actions:")

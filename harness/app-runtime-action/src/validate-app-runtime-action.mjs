@@ -124,8 +124,42 @@ function validateCloseAction(report) {
 }
 
 function validateRestoreAction(report) {
+  validateStringArray(report.restoreRequestedAppIds, "restoreRequestedAppIds");
+
+  if (!report.accepted) {
+    if (report.restoredWindows.length !== 0) {
+      throw new TypeError("rejected restore actions cannot include restored windows.");
+    }
+    return;
+  }
+
+  if (report.restoreRequestedAppIds.length === 0) {
+    throw new TypeError("accepted restore actions must include restoreRequestedAppIds.");
+  }
+
+  if (report.restoredWindows.length === 0) {
+    throw new TypeError("accepted restore actions must include restoredWindows.");
+  }
+
+  const restoredAppIds = report.restoredWindows.map((window) => window.appId);
+  if (JSON.stringify(restoredAppIds) !== JSON.stringify(report.restoreRequestedAppIds)) {
+    throw new TypeError("restoredWindows appIds must match restoreRequestedAppIds order.");
+  }
+
+  const mirrorWindowIds = new Set(report.status.mirrorSessions.map((session) => session.windowId));
   for (const window of report.restoredWindows) {
     validateWindow(window);
+    if (!mirrorWindowIds.has(window.windowId)) {
+      throw new TypeError("restoredWindows must be present in status.mirrorSessions.");
+    }
+  }
+
+  if (!report.status.dockIntegration.canBringWindowsAppsForward) {
+    throw new TypeError("accepted restore actions must leave Windows app windows available to bring forward.");
+  }
+
+  if (report.status.dockIntegration.canRestorePreviousApps) {
+    throw new TypeError("accepted restore actions should consume the immediate restore availability while windows are open.");
   }
 }
 

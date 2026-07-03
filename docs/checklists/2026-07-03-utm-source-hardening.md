@@ -65,3 +65,4 @@ Goal: adapt concrete UTM source patterns into Veil while keeping Veil focused on
 - [x] Add `macWindowIntegration` to `app-runtime-status` so automation can verify guest HWND events are promoted into macOS app windows automatically.
 - [x] Add a live Mac-window integration fixture proving a live agent HWND session drives Dock badge, auto-open, launcher-hide, and pending-frame status together.
 - [x] Add `bring-forward` to `app-runtime-action` so Dock/menu foreground behavior is automation-visible and checked against mirrored HWND status.
+- [x] Strengthen `restore` app-runtime-action validation so persisted app ids must match restored HWNDs and post-restore mirrored window status.

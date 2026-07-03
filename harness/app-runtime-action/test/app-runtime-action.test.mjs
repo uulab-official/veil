@@ -22,6 +22,12 @@ test("validates app runtime bring-forward action fixture", () => {
   assert.equal(validateAppRuntimeAction(report), report);
 });
 
+test("validates app runtime restore action fixture", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-action.restore-live.json", import.meta.url), "utf8"));
+
+  assert.equal(validateAppRuntimeAction(report), report);
+});
+
 test("rejects accepted launch actions without a window", () => {
   const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-action.launch-demo.json", import.meta.url), "utf8"));
   delete report.window;
@@ -76,6 +82,49 @@ test("rejects bring-forward actions whose windows drift from status", () => {
   assert.throws(
     () => validateAppRuntimeAction(report),
     /broughtForwardWindowIds/
+  );
+});
+
+test("rejects restore actions whose app ids drift from request", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-action.restore-live.json", import.meta.url), "utf8"));
+  report.restoredWindows[0].appId = "winapp_paint";
+
+  assert.throws(
+    () => validateAppRuntimeAction(report),
+    /restoredWindows appIds/
+  );
+});
+
+test("allows rejected restore actions to keep requested app ids", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-action.restore-live.json", import.meta.url), "utf8"));
+  report.accepted = false;
+  report.restoredWindows = [];
+  report.status.mirrorSessions = [];
+  report.status.dockIntegration.openWindowCount = 0;
+  report.status.dockIntegration.badgeLabel = undefined;
+  report.status.dockIntegration.canBringWindowsAppsForward = false;
+  report.status.macWindowIntegration.hidesLauncherWhenMirroring = false;
+  report.status.macWindowIntegration.mirroredWindowCount = 0;
+  report.status.macWindowIntegration.pendingFrameWindowCount = 0;
+  report.status.quietRuntime.openWindowCount = 0;
+
+  assert.equal(validateAppRuntimeAction(report), report);
+});
+
+test("rejects restore actions whose windows are absent from status", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-action.restore-live.json", import.meta.url), "utf8"));
+  report.status.mirrorSessions = [];
+  report.status.dockIntegration.openWindowCount = 0;
+  report.status.dockIntegration.badgeLabel = undefined;
+  report.status.dockIntegration.canBringWindowsAppsForward = false;
+  report.status.macWindowIntegration.hidesLauncherWhenMirroring = false;
+  report.status.macWindowIntegration.mirroredWindowCount = 0;
+  report.status.macWindowIntegration.pendingFrameWindowCount = 0;
+  report.status.quietRuntime.openWindowCount = 0;
+
+  assert.throws(
+    () => validateAppRuntimeAction(report),
+    /restoredWindows must be present/
   );
 });
 

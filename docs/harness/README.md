@@ -84,9 +84,9 @@ The app runtime action command lets automation press the same narrow product
 buttons that the macOS shell exposes: launch an app, bring tracked Windows app
 windows forward from Dock/menu state, focus a mirrored HWND, close a mirrored
 HWND, click inside a mirrored HWND, set Windows clipboard text, type bounded
-ASCII text, restore persisted app-window intent after reconnect, or confirm
-that the runtime is ready to quiet after every mirrored Windows app window has
-closed.
+ASCII text, restore persisted app-window intent after reconnect with requested
+app ids matched to restored HWNDs, or confirm that the runtime is ready to quiet
+after every mirrored Windows app window has closed.
 
 ```bash
 cd apps/mac-host
