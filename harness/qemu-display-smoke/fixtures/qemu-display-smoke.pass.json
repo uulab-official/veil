@@ -1,0 +1,11 @@
+{
+  "kind": "qemuDisplaySmoke",
+  "pid": 1234,
+  "endpoint": "127.0.0.1:5907",
+  "width": 1024,
+  "height": 768,
+  "frameSequence": 1,
+  "pixelByteCount": 3145728,
+  "waitedSeconds": 5,
+  "capturedAt": "2026-07-03T03:30:00Z"
+}

@@ -13,6 +13,7 @@ enum VMControlError: Error, LocalizedError {
     case missingQEMULaunchRecord
     case qemuMonitorUnavailable(String)
     case qemuScreenshotCaptureFailed(String)
+    case missingQEMUDisplayEndpoint
     case missingQEMUKeySequence
     case missingQEMUText
     case missingQEMUPointerCoordinate
@@ -41,6 +42,8 @@ enum VMControlError: Error, LocalizedError {
             "QEMU monitor socket is not available: \(path)"
         case .qemuScreenshotCaptureFailed(let path):
             "QEMU console screenshot could not be captured: \(path)"
+        case .missingQEMUDisplayEndpoint:
+            "No loopback VNC display endpoint found in the latest QEMU launch record. Start the VM from Veil.app's embedded display path first."
         case .missingQEMUKeySequence:
             "Missing QEMU key sequence. Pass keys such as shift-f10, esc, tab, ret, or spc."
         case .missingQEMUText:
@@ -54,7 +57,7 @@ enum VMControlError: Error, LocalizedError {
         }
     }
 
-    private static let usage = "Usage: veil-vmctl prepare --installer /path/to/Windows.iso [--drivers /path/to/virtio-win.iso] | veil-vmctl providers [--json] | veil-vmctl qemu-plan [--json] | veil-vmctl qemu-doctor [--json] | veil-vmctl qemu-smoke [--json] [--seconds 45] | veil-vmctl qemu-start [--json] [--wait-seconds 15] | veil-vmctl qemu-capture [--json] [--output /path/to/console.png] | veil-vmctl qemu-powerdown [--json] [--wait-seconds 30] | veil-vmctl qemu-force-stop [--json] --i-understand-data-loss [--wait-seconds 10] | veil-vmctl qemu-sendkey [--json] key [key ...] | veil-vmctl qemu-type-text [--json] --text \"...\" | veil-vmctl qemu-click [--json] --x 0...32767 --y 0...32767 | veil-vmctl qemu-oobe-bypass [--json] | veil-vmctl qemu-install-agent [--json]"
+    private static let usage = "Usage: veil-vmctl prepare --installer /path/to/Windows.iso [--drivers /path/to/virtio-win.iso] | veil-vmctl providers [--json] | veil-vmctl qemu-plan [--json] | veil-vmctl qemu-doctor [--json] | veil-vmctl qemu-smoke [--json] [--seconds 45] | veil-vmctl qemu-start [--json] [--wait-seconds 15] | veil-vmctl qemu-display-smoke [--json] [--wait-seconds 5] | veil-vmctl qemu-capture [--json] [--output /path/to/console.png] | veil-vmctl qemu-powerdown [--json] [--wait-seconds 30] | veil-vmctl qemu-force-stop [--json] --i-understand-data-loss [--wait-seconds 10] | veil-vmctl qemu-sendkey [--json] key [key ...] | veil-vmctl qemu-type-text [--json] --text \"...\" | veil-vmctl qemu-click [--json] --x 0...32767 --y 0...32767 | veil-vmctl qemu-oobe-bypass [--json] | veil-vmctl qemu-install-agent [--json]"
 }
 
 struct VMControlArguments {
@@ -65,6 +68,7 @@ struct VMControlArguments {
         case qemuDoctor(json: Bool)
         case qemuSmoke(json: Bool, seconds: Int)
         case qemuStart(json: Bool, waitSeconds: Int)
+        case qemuDisplaySmoke(json: Bool, waitSeconds: Int)
         case qemuCapture(json: Bool, outputPath: String?)
         case qemuPowerDown(json: Bool, waitSeconds: Int)
         case qemuForceStop(json: Bool, waitSeconds: Int, isAuthorized: Bool)
@@ -102,6 +106,11 @@ struct VMControlArguments {
         if command == "qemu-start" {
             let waitSeconds = waitSecondsArgument(from: arguments) ?? 15
             return VMControlArguments(command: .qemuStart(json: arguments.contains("--json"), waitSeconds: waitSeconds))
+        }
+
+        if command == "qemu-display-smoke" {
+            let waitSeconds = waitSecondsArgument(from: arguments) ?? 5
+            return VMControlArguments(command: .qemuDisplaySmoke(json: arguments.contains("--json"), waitSeconds: waitSeconds))
         }
 
         if command == "qemu-capture" {
@@ -271,6 +280,18 @@ struct QEMUForceStopRecord: Codable, Equatable {
     var requestedAt: Date
 }
 
+struct QEMUDisplaySmokeRecord: Codable, Equatable {
+    var kind: String = "qemuDisplaySmoke"
+    var pid: Int32?
+    var endpoint: String
+    var width: Int
+    var height: Int
+    var frameSequence: Int
+    var pixelByteCount: Int
+    var waitedSeconds: Int
+    var capturedAt: Date
+}
+
 @main
 struct VeilVMControl {
     static func main() async {
@@ -305,6 +326,8 @@ struct VeilVMControl {
             try await printQEMUSmoke(json: json, seconds: seconds)
         case .qemuStart(let json, let waitSeconds):
             try await startQEMU(json: json, waitSeconds: waitSeconds)
+        case .qemuDisplaySmoke(let json, let waitSeconds):
+            try smokeQEMUDisplay(json: json, waitSeconds: waitSeconds)
         case .qemuCapture(let json, let outputPath):
             try await captureQEMUConsole(json: json, outputPath: outputPath)
         case .qemuPowerDown(let json, let waitSeconds):
@@ -598,6 +621,48 @@ struct VeilVMControl {
         let data = try JSONEncoder.veilDiagnostics.encode(record)
         try data.write(to: directory.appendingPathComponent("qemu-launch-\(stamp).json"), options: .atomic)
         try data.write(to: directory.appendingPathComponent("qemu-launch-latest.json"), options: .atomic)
+    }
+
+    private static func smokeQEMUDisplay(json: Bool, waitSeconds: Int) throws {
+        let launchRecord = try latestQEMULaunchRecord()
+        guard let host = launchRecord.vncHost?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !host.isEmpty,
+              let port = launchRecord.vncPort else {
+            throw VMControlError.missingQEMUDisplayEndpoint
+        }
+
+        let boundedWaitSeconds = min(max(waitSeconds, 1), 30)
+        let socket = try RFBLoopbackSocket(host: host, port: port, timeoutSeconds: boundedWaitSeconds)
+        let client = RFBFrameStreamClient(stream: socket)
+        let serverInit = try client.startSharedSession()
+        let renderer = try RFBFramebufferRenderer(serverInit: serverInit)
+        try client.requestFramebufferUpdate(incremental: false)
+        let update = try client.readFramebufferUpdate()
+        let frame = try renderer.apply(update)
+        socket.close()
+
+        let record = QEMUDisplaySmokeRecord(
+            pid: launchRecord.pid,
+            endpoint: "\(host):\(port)",
+            width: frame.width,
+            height: frame.height,
+            frameSequence: frame.sequence,
+            pixelByteCount: frame.rgbaPixels.count,
+            waitedSeconds: boundedWaitSeconds,
+            capturedAt: Date()
+        )
+
+        if json {
+            let data = try JSONEncoder.veilDiagnostics.encode(record)
+            print(String(decoding: data, as: UTF8.self))
+            return
+        }
+
+        print("QEMU embedded display smoke passed")
+        print("PID: \(record.pid.map(String.init) ?? "unknown")")
+        print("Endpoint: \(record.endpoint)")
+        print("Frame: \(record.width)x\(record.height) #\(record.frameSequence)")
+        print("RGBA bytes: \(record.pixelByteCount)")
     }
 
     private static func captureQEMUConsole(json: Bool, outputPath: String?) async throws {

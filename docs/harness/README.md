@@ -19,6 +19,7 @@ harness/
 ├─ qemu-boot-plan/         JSON shape validation for dry-run QEMU/HVF boot plans
 ├─ qemu-doctor/            JSON shape validation for QEMU/HVF readiness reports
 ├─ qemu-smoke/             JSON shape validation for bounded QEMU/HVF boot smoke reports
+├─ qemu-display-smoke/     JSON shape validation for live embedded VNC frame evidence
 ├─ windows-agent-contract/ JSON and project-shape validation for the C# Windows agent
 ├─ protocol-fixtures/      JSON fixtures for every stable message
 └─ scenarios/              scripted flows such as launch-notepad and clipboard-sync
@@ -34,6 +35,7 @@ Current executable pieces:
 - `harness/qemu-boot-plan`: a JSON validator for dry-run QEMU/HVF Windows Arm boot plans.
 - `harness/qemu-doctor`: a JSON validator for QEMU/HVF readiness reports and next actions.
 - `harness/qemu-smoke`: a JSON validator for bounded QEMU/HVF boot smoke reports.
+- `harness/qemu-display-smoke`: a JSON validator for app-launched loopback VNC frame evidence.
 - `harness/windows-agent-contract`: a contract validator for the first C# Windows agent scaffold and Notepad launch transcript.
 - `packages/protocol`: shared protocol constants and validation helpers.
 
@@ -91,6 +93,13 @@ The command uses snapshot mode and records logs plus a `qemu-smoke-*.console.png
 The macOS app's QEMU launch boundary writes process logs under `~/Library/Application Support/Veil/Diagnostics/QEMU Launch`, reports the launched PID, and records a `qemu-console-*.png` path in `qemu-launch-latest.json`. The app asks QEMU's HMP monitor to write that screenshot from the VM display, converts the raw frame to PNG, and surfaces the latest existing screenshot plus launch metadata in the Windows setup screen. New launch records also include a QMP socket path so recovery commands can use QEMU's structured `send-key` command instead of relying only on HMP `sendkey`. The evidence is the guest console frame rather than a macOS desktop capture. It still does not distribute Windows media, activation keys, QEMU binaries, or firmware.
 
 `veil-vmctl qemu-capture [--json] [--output /path/to/console.png]` refreshes the latest launch record's VM-console screenshot through the recorded QEMU monitor socket. Use this instead of manually typing monitor commands: it sends only `screendump`, preserves the running VM, updates `qemu-launch-latest.json` when an output path is chosen, and returns a small capture record for evidence collection.
+
+`veil-vmctl qemu-display-smoke [--json] [--wait-seconds 5]` validates the UTM-style embedded display path for the latest app-launched QEMU session. It reads the loopback VNC endpoint from `qemu-launch-latest.json`, opens an RFB session, requests raw encoding, reads one framebuffer update, renders it to RGBA in memory, and reports the frame dimensions plus byte count. Use the harness validator to keep the evidence shape stable:
+
+```bash
+cd apps/mac-host
+swift run veil-vmctl qemu-display-smoke --json | node ../../harness/qemu-display-smoke/src/validate-qemu-display-smoke.mjs
+```
 
 `veil-vmctl qemu-powerdown [--json] [--wait-seconds 30]` sends the bounded
 `system_powerdown` command through the latest launch record and waits for the
