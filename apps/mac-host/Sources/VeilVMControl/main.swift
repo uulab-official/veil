@@ -610,6 +610,9 @@ struct VeilVMControl {
         print("Quiet runtime auto: \(report.quietRuntime.willQuietAutomatically ? "yes" : "no")")
         print("Quiet runtime delay: \(report.quietRuntime.automaticQuietDelaySeconds)s")
         print("Quiet runtime recommendation: \(report.quietRuntime.recommendedAction)")
+        if let stopCommand = report.quietRuntime.recommendedStopCommand {
+            print("Quiet runtime stop command: \(stopCommand)")
+        }
         print("Quiet runtime reason: \(report.quietRuntime.reason)")
         print("Restorable apps: \(report.restorableAppIds.joined(separator: ", "))")
         print("Actions:")
@@ -889,7 +892,7 @@ struct VeilVMControl {
                 ]
             case .quietWhenIdle:
                 return [
-                    "Run `veil-vmctl qemu-powerdown --json` or use Stop Windows once the local runtime reports it can stop safely.",
+                    "Run `veil-vmctl qemu-powerdown --json --wait-seconds 30` or use Stop Windows once the local runtime reports it can stop safely.",
                     "Run `veil-vmctl app-runtime-status --json` before relaunching a Windows app."
                 ]
             case .clipboard:

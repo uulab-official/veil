@@ -66,7 +66,9 @@ into automatic macOS app-window presentation, including mirrored, pending-frame,
 and streaming window counts.
 When every mirrored Windows app window has closed, `quietRuntime` also reports
 whether Veil will automatically quiet the local runtime and the current delay
-before that stop/suspend policy is attempted.
+before that stop/suspend policy is attempted. When quieting is allowed, the
+same status includes `recommendedStopCommand` so automation can hand off to the
+bounded local runtime shutdown command without guessing.
 
 ```bash
 cd apps/mac-host

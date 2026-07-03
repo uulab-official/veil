@@ -84,6 +84,29 @@ test("rejects quiet runtime counts that drift from mirrored sessions", () => {
   );
 });
 
+test("rejects quiet-ready reports without a stop command", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.demo.json", import.meta.url), "utf8"));
+  report.quietRuntime.hasOpenedAppWindowThisSession = true;
+  report.quietRuntime.canQuietRuntime = true;
+  report.quietRuntime.willQuietAutomatically = true;
+  report.quietRuntime.recommendedAction = "stop-or-suspend-runtime";
+
+  assert.throws(
+    () => validateAppRuntimeStatus(report),
+    /recommendedStopCommand/
+  );
+});
+
+test("rejects unavailable quiet runtime reports with a stop command", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.demo.json", import.meta.url), "utf8"));
+  report.quietRuntime.recommendedStopCommand = "veil-vmctl qemu-powerdown --json --wait-seconds 30";
+
+  assert.throws(
+    () => validateAppRuntimeStatus(report),
+    /recommendedStopCommand/
+  );
+});
+
 test("rejects launcher hiding without live mirrored windows", () => {
   const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.demo.json", import.meta.url), "utf8"));
   report.macWindowIntegration.hidesLauncherWhenMirroring = true;

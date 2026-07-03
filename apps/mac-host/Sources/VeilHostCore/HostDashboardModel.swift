@@ -249,6 +249,7 @@ public struct WindowsAppRuntimeQuietPolicyStatus: Codable, Equatable, Sendable {
     public var willQuietAutomatically: Bool
     public var automaticQuietDelaySeconds: Int
     public var recommendedAction: String
+    public var recommendedStopCommand: String?
     public var reason: String
 
     public init(
@@ -259,6 +260,7 @@ public struct WindowsAppRuntimeQuietPolicyStatus: Codable, Equatable, Sendable {
         willQuietAutomatically: Bool,
         automaticQuietDelaySeconds: Int,
         recommendedAction: String,
+        recommendedStopCommand: String? = nil,
         reason: String
     ) {
         self.isEnabled = isEnabled
@@ -268,6 +270,7 @@ public struct WindowsAppRuntimeQuietPolicyStatus: Codable, Equatable, Sendable {
         self.willQuietAutomatically = willQuietAutomatically
         self.automaticQuietDelaySeconds = automaticQuietDelaySeconds
         self.recommendedAction = recommendedAction
+        self.recommendedStopCommand = recommendedStopCommand
         self.reason = reason
     }
 }
@@ -574,6 +577,7 @@ public final class HostDashboardModel {
             willQuietAutomatically: canQuietRuntimeWhenIdle,
             automaticQuietDelaySeconds: automaticQuietDelaySeconds,
             recommendedAction: recommendedAction,
+            recommendedStopCommand: canQuietRuntimeWhenIdle ? "veil-vmctl qemu-powerdown --json --wait-seconds 30" : nil,
             reason: reason
         )
     }

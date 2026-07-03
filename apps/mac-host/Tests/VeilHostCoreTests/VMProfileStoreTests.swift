@@ -3,6 +3,20 @@ import Testing
 
 @testable import VeilHostCore
 
+private struct FakeAutomaticInstallMediaBuilder: AutomaticInstallMediaBuilding {
+    func prepareMedia(answerFileURL: URL, mediaURL: URL) throws {
+        guard FileManager.default.fileExists(atPath: answerFileURL.path) else {
+            throw VMRuntimeError.automaticInstallMediaCreationFailed("Autounattend.xml is missing.")
+        }
+
+        try FileManager.default.createDirectory(
+            at: mediaURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try Data("fake auto install media".utf8).write(to: mediaURL)
+    }
+}
+
 @Suite("VM profile store")
 struct VMProfileStoreTests {
     @Test("automatic resource policy scales with host resources")
@@ -996,7 +1010,8 @@ struct VMProfileStoreTests {
         let service = LocalVMRuntimeService(
             profileStore: store,
             defaultHomeDirectory: homeDirectory,
-            resourcePlan: resourcePlan
+            resourcePlan: resourcePlan,
+            automaticInstallMediaBuilder: FakeAutomaticInstallMediaBuilder()
         )
 
         _ = try await service.prepareDefaultVM()
@@ -1148,7 +1163,8 @@ struct VMProfileStoreTests {
         let store = JSONVMProfileStore(directory: directory)
         let service = LocalVMRuntimeService(
             profileStore: store,
-            defaultHomeDirectory: homeDirectory
+            defaultHomeDirectory: homeDirectory,
+            automaticInstallMediaBuilder: FakeAutomaticInstallMediaBuilder()
         )
 
         let snapshot = try await service.createDefaultProfile()
@@ -1169,7 +1185,8 @@ struct VMProfileStoreTests {
         let store = JSONVMProfileStore(directory: directory)
         let service = LocalVMRuntimeService(
             profileStore: store,
-            defaultHomeDirectory: homeDirectory
+            defaultHomeDirectory: homeDirectory,
+            automaticInstallMediaBuilder: FakeAutomaticInstallMediaBuilder()
         )
 
         let snapshot = try await service.createDefaultVirtualDisk()
@@ -1195,7 +1212,8 @@ struct VMProfileStoreTests {
         let store = JSONVMProfileStore(directory: directory)
         let service = LocalVMRuntimeService(
             profileStore: store,
-            defaultHomeDirectory: homeDirectory
+            defaultHomeDirectory: homeDirectory,
+            automaticInstallMediaBuilder: FakeAutomaticInstallMediaBuilder()
         )
 
         let snapshot = try await service.prepareDefaultVM()
@@ -1320,7 +1338,8 @@ struct VMProfileStoreTests {
         let store = JSONVMProfileStore(directory: directory)
         let service = LocalVMRuntimeService(
             profileStore: store,
-            defaultHomeDirectory: homeDirectory
+            defaultHomeDirectory: homeDirectory,
+            automaticInstallMediaBuilder: FakeAutomaticInstallMediaBuilder()
         )
 
         let snapshot = try await service.prepareDefaultVM()
@@ -1433,7 +1452,8 @@ struct VMProfileStoreTests {
         let store = JSONVMProfileStore(directory: directory)
         let service = LocalVMRuntimeService(
             profileStore: store,
-            defaultHomeDirectory: homeDirectory
+            defaultHomeDirectory: homeDirectory,
+            automaticInstallMediaBuilder: FakeAutomaticInstallMediaBuilder()
         )
 
         let snapshot = try await service.loadSnapshot()
@@ -1459,7 +1479,8 @@ struct VMProfileStoreTests {
         try await store.save(profile)
         let service = LocalVMRuntimeService(
             profileStore: store,
-            defaultHomeDirectory: homeDirectory
+            defaultHomeDirectory: homeDirectory,
+            automaticInstallMediaBuilder: FakeAutomaticInstallMediaBuilder()
         )
 
         let snapshot = try await service.loadSnapshot()
@@ -1488,7 +1509,8 @@ struct VMProfileStoreTests {
         try await store.save(profile)
         let service = LocalVMRuntimeService(
             profileStore: store,
-            defaultHomeDirectory: homeDirectory
+            defaultHomeDirectory: homeDirectory,
+            automaticInstallMediaBuilder: FakeAutomaticInstallMediaBuilder()
         )
 
         let snapshot = try await service.prepareDefaultVM()
@@ -1513,7 +1535,8 @@ struct VMProfileStoreTests {
         try await store.save(profile)
         let service = LocalVMRuntimeService(
             profileStore: store,
-            defaultHomeDirectory: homeDirectory
+            defaultHomeDirectory: homeDirectory,
+            automaticInstallMediaBuilder: FakeAutomaticInstallMediaBuilder()
         )
 
         let snapshot = try await service.prepareDefaultVM()
@@ -1540,7 +1563,8 @@ struct VMProfileStoreTests {
         try await store.save(profile)
         let service = LocalVMRuntimeService(
             profileStore: store,
-            defaultHomeDirectory: homeDirectory
+            defaultHomeDirectory: homeDirectory,
+            automaticInstallMediaBuilder: FakeAutomaticInstallMediaBuilder()
         )
 
         let snapshot = try await service.createDefaultVirtualDisk()
@@ -1891,6 +1915,7 @@ struct VMProfileStoreTests {
         let service = LocalVMRuntimeService(
             profileStore: store,
             defaultHomeDirectory: homeDirectory,
+            automaticInstallMediaBuilder: FakeAutomaticInstallMediaBuilder(),
             firmwareVarsTemplatePaths: [secureVarsTemplateURL.path]
         )
 
@@ -1936,6 +1961,7 @@ struct VMProfileStoreTests {
         let service = LocalVMRuntimeService(
             profileStore: store,
             defaultHomeDirectory: homeDirectory,
+            automaticInstallMediaBuilder: FakeAutomaticInstallMediaBuilder(),
             firmwareVarsTemplatePaths: [secureVarsTemplateURL.path]
         )
 

@@ -169,6 +169,10 @@ function validateQuietRuntime(quietRuntime, mirrorSessions) {
   requireString(quietRuntime.recommendedAction, "quietRuntime.recommendedAction");
   requireString(quietRuntime.reason, "quietRuntime.reason");
 
+  if (quietRuntime.recommendedStopCommand !== undefined) {
+    requireString(quietRuntime.recommendedStopCommand, "quietRuntime.recommendedStopCommand");
+  }
+
   if (quietRuntime.openWindowCount !== mirrorSessions.length) {
     throw new TypeError("quietRuntime.openWindowCount must match mirrorSessions length.");
   }
@@ -183,6 +187,14 @@ function validateQuietRuntime(quietRuntime, mirrorSessions) {
 
   if (quietRuntime.willQuietAutomatically && !quietRuntime.canQuietRuntime) {
     throw new TypeError("quietRuntime.willQuietAutomatically requires quietRuntime.canQuietRuntime.");
+  }
+
+  if (quietRuntime.canQuietRuntime && quietRuntime.recommendedStopCommand === undefined) {
+    throw new TypeError("quietRuntime.canQuietRuntime requires quietRuntime.recommendedStopCommand.");
+  }
+
+  if (!quietRuntime.canQuietRuntime && quietRuntime.recommendedStopCommand !== undefined) {
+    throw new TypeError("quietRuntime.recommendedStopCommand is only allowed when quietRuntime.canQuietRuntime is true.");
   }
 }
 

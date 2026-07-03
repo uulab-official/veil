@@ -81,6 +81,27 @@ test("rejects quiet runtime actions whose decision drifts from status", () => {
   );
 });
 
+test("rejects quiet-ready actions without a stop command", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-action.quiet-ready.json", import.meta.url), "utf8"));
+  delete report.quietRuntime.recommendedStopCommand;
+  delete report.status.quietRuntime.recommendedStopCommand;
+
+  assert.throws(
+    () => validateAppRuntimeAction(report),
+    /recommendedStopCommand/
+  );
+});
+
+test("rejects unavailable quiet runtime status with a stop command", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-action.launch-demo.json", import.meta.url), "utf8"));
+  report.status.quietRuntime.recommendedStopCommand = "veil-vmctl qemu-powerdown --json --wait-seconds 30";
+
+  assert.throws(
+    () => validateAppRuntimeAction(report),
+    /recommendedStopCommand/
+  );
+});
+
 test("rejects bring-forward actions whose windows drift from status", () => {
   const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-action.bring-forward-demo.json", import.meta.url), "utf8"));
   report.broughtForwardWindowIds = ["hwnd:DIFFERENT"];
@@ -113,6 +134,7 @@ test("rejects close-all actions that leave mirrored sessions open", () => {
   report.status.quietRuntime.openWindowCount = 1;
   report.status.quietRuntime.canQuietRuntime = false;
   report.status.quietRuntime.willQuietAutomatically = false;
+  delete report.status.quietRuntime.recommendedStopCommand;
 
   assert.throws(
     () => validateAppRuntimeAction(report),

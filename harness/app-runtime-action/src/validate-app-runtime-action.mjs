@@ -320,8 +320,20 @@ function validateQuietRuntime(quietRuntime, fieldName) {
   requireString(quietRuntime.recommendedAction, `${fieldName}.recommendedAction`);
   requireString(quietRuntime.reason, `${fieldName}.reason`);
 
+  if (quietRuntime.recommendedStopCommand !== undefined) {
+    requireString(quietRuntime.recommendedStopCommand, `${fieldName}.recommendedStopCommand`);
+  }
+
   if (quietRuntime.willQuietAutomatically && !quietRuntime.canQuietRuntime) {
     throw new TypeError(`${fieldName}.willQuietAutomatically requires ${fieldName}.canQuietRuntime.`);
+  }
+
+  if (quietRuntime.canQuietRuntime && quietRuntime.recommendedStopCommand === undefined) {
+    throw new TypeError(`${fieldName}.canQuietRuntime requires ${fieldName}.recommendedStopCommand.`);
+  }
+
+  if (!quietRuntime.canQuietRuntime && quietRuntime.recommendedStopCommand !== undefined) {
+    throw new TypeError(`${fieldName}.recommendedStopCommand is only allowed when ${fieldName}.canQuietRuntime is true.`);
   }
 }
 

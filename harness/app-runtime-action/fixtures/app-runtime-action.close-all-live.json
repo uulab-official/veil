@@ -75,6 +75,7 @@
       "willQuietAutomatically": true,
       "automaticQuietDelaySeconds": 8,
       "recommendedAction": "stop-or-suspend-runtime",
+      "recommendedStopCommand": "veil-vmctl qemu-powerdown --json --wait-seconds 30",
       "reason": "All Windows app windows are closed and the live agent is connected."
     },
     "actions": [
