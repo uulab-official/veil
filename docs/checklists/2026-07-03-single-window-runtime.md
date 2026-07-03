@@ -27,6 +27,7 @@ Goal: move Veil from a Veil shell plus separate QEMU Cocoa display toward a UTM-
 - [x] Bind the RFB framebuffer renderer to the main SwiftUI/AppKit display surface so live VNC frames can replace screenshot fallback inside the Veil window.
 - [x] Request raw RFB encoding during VNC session setup so QEMU sends frames the embedded renderer can decode reliably.
 - [x] Add `veil-vmctl qemu-display-smoke` plus a Node harness validator to prove a live app-launched VNC endpoint can deliver one decoded frame.
+- [x] Add `veil-vmctl qemu-start --embedded-display` so CLI persistent launches can use the same single-window loopback display path as the app.
 
 ## Next
 

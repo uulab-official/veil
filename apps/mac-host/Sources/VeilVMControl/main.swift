@@ -14,6 +14,7 @@ enum VMControlError: Error, LocalizedError {
     case qemuMonitorUnavailable(String)
     case qemuScreenshotCaptureFailed(String)
     case missingQEMUDisplayEndpoint
+    case qemuDisplayPortUnavailable
     case missingQEMUKeySequence
     case missingQEMUText
     case missingQEMUPointerCoordinate
@@ -43,7 +44,9 @@ enum VMControlError: Error, LocalizedError {
         case .qemuScreenshotCaptureFailed(let path):
             "QEMU console screenshot could not be captured: \(path)"
         case .missingQEMUDisplayEndpoint:
-            "No loopback VNC display endpoint found in the latest QEMU launch record. Start the VM from Veil.app's embedded display path first."
+            "No loopback VNC display endpoint found in the latest QEMU launch record. Start the VM from Veil.app or run veil-vmctl qemu-start --embedded-display first."
+        case .qemuDisplayPortUnavailable:
+            "No loopback VNC display port is available. Close stale QEMU/VNC listeners and try again."
         case .missingQEMUKeySequence:
             "Missing QEMU key sequence. Pass keys such as shift-f10, esc, tab, ret, or spc."
         case .missingQEMUText:
@@ -57,17 +60,22 @@ enum VMControlError: Error, LocalizedError {
         }
     }
 
-    private static let usage = "Usage: veil-vmctl prepare --installer /path/to/Windows.iso [--drivers /path/to/virtio-win.iso] | veil-vmctl providers [--json] | veil-vmctl qemu-plan [--json] | veil-vmctl qemu-doctor [--json] | veil-vmctl qemu-smoke [--json] [--seconds 45] | veil-vmctl qemu-start [--json] [--wait-seconds 15] | veil-vmctl qemu-display-smoke [--json] [--wait-seconds 5] | veil-vmctl qemu-capture [--json] [--output /path/to/console.png] | veil-vmctl qemu-powerdown [--json] [--wait-seconds 30] | veil-vmctl qemu-force-stop [--json] --i-understand-data-loss [--wait-seconds 10] | veil-vmctl qemu-sendkey [--json] key [key ...] | veil-vmctl qemu-type-text [--json] --text \"...\" | veil-vmctl qemu-click [--json] --x 0...32767 --y 0...32767 | veil-vmctl qemu-oobe-bypass [--json] | veil-vmctl qemu-install-agent [--json]"
+    private static let usage = "Usage: veil-vmctl prepare --installer /path/to/Windows.iso [--drivers /path/to/virtio-win.iso] | veil-vmctl providers [--json] | veil-vmctl qemu-plan [--json] | veil-vmctl qemu-doctor [--json] | veil-vmctl qemu-smoke [--json] [--seconds 45] | veil-vmctl qemu-start [--json] [--wait-seconds 15] [--embedded-display] | veil-vmctl qemu-display-smoke [--json] [--wait-seconds 5] | veil-vmctl qemu-capture [--json] [--output /path/to/console.png] | veil-vmctl qemu-powerdown [--json] [--wait-seconds 30] | veil-vmctl qemu-force-stop [--json] --i-understand-data-loss [--wait-seconds 10] | veil-vmctl qemu-sendkey [--json] key [key ...] | veil-vmctl qemu-type-text [--json] --text \"...\" | veil-vmctl qemu-click [--json] --x 0...32767 --y 0...32767 | veil-vmctl qemu-oobe-bypass [--json] | veil-vmctl qemu-install-agent [--json]"
 }
 
 struct VMControlArguments {
+    enum QEMUStartDisplayMode: Equatable {
+        case nativeCocoa
+        case embedded
+    }
+
     enum Command: Equatable {
         case prepare(installerPath: String, driverMediaPath: String?)
         case providers(json: Bool)
         case qemuPlan(json: Bool)
         case qemuDoctor(json: Bool)
         case qemuSmoke(json: Bool, seconds: Int)
-        case qemuStart(json: Bool, waitSeconds: Int)
+        case qemuStart(json: Bool, waitSeconds: Int, displayMode: QEMUStartDisplayMode)
         case qemuDisplaySmoke(json: Bool, waitSeconds: Int)
         case qemuCapture(json: Bool, outputPath: String?)
         case qemuPowerDown(json: Bool, waitSeconds: Int)
@@ -105,7 +113,16 @@ struct VMControlArguments {
 
         if command == "qemu-start" {
             let waitSeconds = waitSecondsArgument(from: arguments) ?? 15
-            return VMControlArguments(command: .qemuStart(json: arguments.contains("--json"), waitSeconds: waitSeconds))
+            let displayMode: QEMUStartDisplayMode = arguments.contains("--embedded-display")
+                ? .embedded
+                : .nativeCocoa
+            return VMControlArguments(
+                command: .qemuStart(
+                    json: arguments.contains("--json"),
+                    waitSeconds: waitSeconds,
+                    displayMode: displayMode
+                )
+            )
         }
 
         if command == "qemu-display-smoke" {
@@ -324,8 +341,8 @@ struct VeilVMControl {
             try await printQEMUDoctor(json: json)
         case .qemuSmoke(let json, let seconds):
             try await printQEMUSmoke(json: json, seconds: seconds)
-        case .qemuStart(let json, let waitSeconds):
-            try await startQEMU(json: json, waitSeconds: waitSeconds)
+        case .qemuStart(let json, let waitSeconds, let displayMode):
+            try await startQEMU(json: json, waitSeconds: waitSeconds, displayMode: displayMode)
         case .qemuDisplaySmoke(let json, let waitSeconds):
             try smokeQEMUDisplay(json: json, waitSeconds: waitSeconds)
         case .qemuCapture(let json, let outputPath):
@@ -522,7 +539,11 @@ struct VeilVMControl {
         }
     }
 
-    private static func startQEMU(json: Bool, waitSeconds: Int) async throws {
+    private static func startQEMU(
+        json: Bool,
+        waitSeconds: Int,
+        displayMode: VMControlArguments.QEMUStartDisplayMode
+    ) async throws {
         try rejectDuplicateQEMULaunchIfNeeded()
 
         guard let profile = try await JSONVMProfileStore().load() else {
@@ -558,6 +579,14 @@ struct VeilVMControl {
             .appendingPathComponent("vq-\(UUID().uuidString.prefix(8)).sock")
         let qmpSocketURL = URL(fileURLWithPath: "/tmp")
             .appendingPathComponent("vq-\(UUID().uuidString.prefix(8)).qmp.sock")
+        let bootDisplayMode: QEMUWindowsBootDisplayMode = displayMode == .embedded
+            ? .vncLoopback
+            : .nativeCocoa
+        let vncPort = displayMode == .embedded ? QEMUVMRuntimeBooter.allocateLoopbackVNCPort() : nil
+        if displayMode == .embedded, vncPort == nil {
+            throw VMControlError.qemuDisplayPortUnavailable
+        }
+        let vncDisplay = vncPort.map { max($0 - 5_900, 0) }
         FileManager.default.createFile(atPath: processLogURL.path, contents: nil)
         let logHandle = try FileHandle(forWritingTo: processLogURL)
         let launchArguments = QEMUWindowsBootLaunchPlanner().makeArguments(
@@ -565,7 +594,9 @@ struct VeilVMControl {
             serialLogPath: serialLogURL.path,
             monitorSocketPath: monitorSocketURL.path,
             qmpSocketPath: qmpSocketURL.path,
-            bootDiskFirst: !shouldSendInstallerBootKey
+            bootDiskFirst: !shouldSendInstallerBootKey,
+            displayMode: bootDisplayMode,
+            vncDisplay: vncDisplay
         )
 
         let process = Process()
@@ -575,7 +606,9 @@ struct VeilVMControl {
         process.standardError = logHandle
         try QEMUVMRuntimeBooter.startTPMEmulatorIfNeeded(plan: plan)
         try process.run()
-        bringQEMUToFront()
+        if bootDisplayMode == .nativeCocoa {
+            bringQEMUToFrontIfAllowed()
+        }
         driveInitialQEMULaunch(
             process: process,
             waitSeconds: waitSeconds,
@@ -589,9 +622,12 @@ struct VeilVMControl {
             pid: process.processIdentifier,
             executablePath: plan.executablePath,
             arguments: launchArguments,
+            displayMode: bootDisplayMode,
             processLogPath: processLogURL.path,
             monitorSocketPath: monitorSocketURL.path,
             qmpSocketPath: qmpSocketURL.path,
+            vncHost: vncPort == nil ? nil : "127.0.0.1",
+            vncPort: vncPort,
             consoleScreenshotPath: consoleScreenshotURL.path,
             startedAt: Date()
         )
@@ -610,6 +646,10 @@ struct VeilVMControl {
         print("Serial log: \(serialLogURL.path)")
         print("Monitor socket: \(record.monitorSocketPath)")
         print("QMP socket: \(record.qmpSocketPath ?? "not attached")")
+        print("Display mode: \(record.displayMode?.rawValue ?? "unknown")")
+        if let vncHost = record.vncHost, let vncPort = record.vncPort {
+            print("VNC display: \(vncHost):\(vncPort)")
+        }
         print("Console screenshot: \(record.consoleScreenshotPath ?? "pending")")
     }
 
@@ -1081,7 +1121,11 @@ struct VeilVMControl {
         }
     }
 
-    private static func bringQEMUToFront() {
+    private static func bringQEMUToFrontIfAllowed() {
+        guard ProcessInfo.processInfo.environment["VEIL_ALLOW_SYSTEM_EVENTS_FRONTMOST"] == "1" else {
+            return
+        }
+
         Thread.sleep(forTimeInterval: 0.5)
 
         let process = Process()
