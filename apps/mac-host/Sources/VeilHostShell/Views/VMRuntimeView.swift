@@ -8,6 +8,7 @@ struct VMRuntimeView: View {
     var guestAgentInstallEvidence: VMInstallEvidenceSummary?
     var canLaunchWindowsApp: Bool
     var selectedWindowsAppName: String?
+    var activeMirrorSession: WindowMirrorSession?
     var startVMAction: () -> Void
     var stopVMAction: () -> Void
     var showVMConsoleAction: () -> Void
@@ -64,6 +65,7 @@ struct VMRuntimeView: View {
                     installGuestAgentAction: installGuestAgentAction,
                     canLaunchWindowsApp: canLaunchWindowsApp,
                     selectedWindowsAppName: selectedWindowsAppName,
+                    activeMirrorSession: activeMirrorSession,
                     refreshAction: {
                         Task {
                             await model.load()
@@ -1125,6 +1127,7 @@ private struct WindowsSetupDisplayPanel: View {
     var installGuestAgentAction: () -> Void
     var canLaunchWindowsApp: Bool
     var selectedWindowsAppName: String?
+    var activeMirrorSession: WindowMirrorSession?
     var refreshAction: () -> Void
     var detailsAction: () -> Void
     var isShowingDetails: Bool
@@ -1143,7 +1146,7 @@ private struct WindowsSetupDisplayPanel: View {
 
     private var installedLauncherStage: some View {
         ZStack(alignment: .bottom) {
-            machineDisplay
+            launcherDisplaySurface
 
             launcherFooter
                 .background(.black.opacity(0.18))
@@ -1182,7 +1185,43 @@ private struct WindowsSetupDisplayPanel: View {
                 machineDisplay
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    @ViewBuilder
+    private var launcherDisplaySurface: some View {
+        if let activeMirrorSession,
+           activeMirrorSession.latestFrame != nil {
+            mirroredAppDisplay(session: activeMirrorSession)
+        } else {
+            machineDisplay
+        }
+    }
+
+    private func mirroredAppDisplay(session: WindowMirrorSession) -> some View {
+        ZStack(alignment: .topLeading) {
+            WindowsAppFrameSurface(session: session, cornerRadius: 8)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(.black, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+
+            VStack(alignment: .leading, spacing: 5) {
+                Text("WINDOWS APP")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.white.opacity(0.62))
+                Text(session.window.title)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.white.opacity(0.84))
+                    .lineLimit(1)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 9)
+            .background(.black.opacity(0.24), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .padding(16)
+        }
+        .overlay {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .strokeBorder(.white.opacity(0.16), lineWidth: 1)
+        }
     }
 
     private var installControlBar: some View {
@@ -1605,9 +1644,9 @@ private struct WindowsSetupDisplayPanel: View {
             ),
             LauncherMetadataItem(
                 title: "Apps",
-                value: canLaunchWindowsApp ? appDisplayName : "After agent",
+                value: activeMirrorSession?.latestFrame != nil ? "Mirroring" : (canLaunchWindowsApp ? appDisplayName : "After agent"),
                 symbolName: "macwindow",
-                tint: canLaunchWindowsApp ? .green : .secondary
+                tint: activeMirrorSession?.latestFrame != nil || canLaunchWindowsApp ? .green : .secondary
             )
         ]
     }

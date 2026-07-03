@@ -11,6 +11,7 @@ Goal: make the installed Windows surface feel like an app runtime instead of a V
 - [x] Preserve VM stop as a secondary footer control so app launch does not remove runtime control.
 - [x] Show the app chip as the selected Windows app name once the agent can launch it.
 - [x] Keep setup and install states unchanged when the guest agent is not connected.
+- [x] Render the latest mirrored app frame in the launcher when a stream is active.
 
 ## Review Notes
 
@@ -20,6 +21,5 @@ Goal: make the installed Windows surface feel like an app runtime instead of a V
 
 ## Next
 
-- [ ] Render the latest mirrored app frame in the launcher when a stream is active.
 - [ ] Add a direct "Open Notepad and wait for first frame" UI action backed by the host probe path.
 - [ ] Replace the secondary console handoff language once the QEMU display can be embedded or mirrored in-app.

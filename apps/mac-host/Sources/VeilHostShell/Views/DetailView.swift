@@ -19,6 +19,7 @@ struct DetailView: View {
                 guestAgentInstallEvidence: model.guestAgentInstallEvidence,
                 canLaunchWindowsApp: model.canLaunchSelectedApp,
                 selectedWindowsAppName: model.selectedApp?.name,
+                activeMirrorSession: activeMirrorSession,
                 startVMAction: startVMAction,
                 stopVMAction: stopVMAction,
                 showVMConsoleAction: showVMConsoleAction,
@@ -55,6 +56,11 @@ struct DetailView: View {
             .padding(.vertical, 24)
         }
         }
+    }
+
+    private var activeMirrorSession: WindowMirrorSession? {
+        model.mirrorSessions.first { $0.latestFrame != nil }
+            ?? model.mirrorSessions.first
     }
 }
 
