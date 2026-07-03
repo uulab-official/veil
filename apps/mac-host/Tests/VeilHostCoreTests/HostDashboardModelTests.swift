@@ -326,6 +326,49 @@ struct HostDashboardModelTests {
         #expect(model.phase == .connected)
     }
 
+    @Test("reports command availability from live agent capabilities")
+    @MainActor
+    func reportsCommandAvailabilityFromLiveAgentCapabilities() async throws {
+        let service = FakeDashboardService(health: .clipboardReady)
+        let model = HostDashboardModel(service: service)
+
+        await model.load()
+
+        #expect(model.canRequestAppLaunch(appId: "winapp_notepad"))
+        #expect(model.canLaunchApp(appId: "winapp_notepad"))
+        #expect(!model.canRequestAppLaunch(appId: "winapp_missing"))
+        #expect(!model.canFocusMirrorSession(windowId: "hwnd:0003029A"))
+        #expect(!model.canCloseMirrorSession(windowId: "hwnd:0003029A"))
+        #expect(!model.canCloseAllMirrorSessions)
+        #expect(!model.canSendInput(to: "hwnd:0003029A"))
+        #expect(model.canSendHostClipboardText)
+        #expect(!model.canRestoreMirrorSessions)
+
+        await model.launchNotepad()
+
+        #expect(model.canFocusMirrorSession(windowId: "hwnd:0003029A"))
+        #expect(model.canCloseMirrorSession(windowId: "hwnd:0003029A"))
+        #expect(model.canCloseAllMirrorSessions)
+        #expect(model.canSendInput(to: "hwnd:0003029A"))
+        #expect(model.canSendHostClipboardText)
+        #expect(model.canRestoreMirrorSessions)
+    }
+
+    @Test("disables unsupported input and clipboard commands")
+    @MainActor
+    func disablesUnsupportedInputAndClipboardCommands() async throws {
+        let service = FakeDashboardService(health: .captureReady)
+        let model = HostDashboardModel(service: service)
+
+        await model.load()
+        await model.launchNotepad()
+
+        #expect(model.canRequestAppLaunch(appId: "winapp_notepad"))
+        #expect(model.canLaunchApp(appId: "winapp_notepad"))
+        #expect(!model.canSendInput(to: "hwnd:0003029A"))
+        #expect(!model.canSendHostClipboardText)
+    }
+
     @Test("updates active window sessions by HWND")
     @MainActor
     func updatesActiveWindowSessionsByHWND() async throws {

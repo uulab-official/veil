@@ -167,17 +167,69 @@ public final class HostDashboardModel {
     }
 
     public var canLaunchSelectedApp: Bool {
-        selectedApp != nil && hasLiveAgentConnection
-            && phase != .loading
-            && phase != .launching
+        guard let selectedAppId else {
+            return false
+        }
+
+        return canLaunchApp(appId: selectedAppId)
     }
 
     public var canRequestSelectedAppLaunch: Bool {
-        selectedApp != nil && phase != .loading && phase != .launching
+        guard let selectedAppId else {
+            return false
+        }
+
+        return canRequestAppLaunch(appId: selectedAppId)
     }
 
     public var hasLiveAgentConnection: Bool {
         phase == .connected && connectionMode == .agent && health != nil
+    }
+
+    public var canCloseAllMirrorSessions: Bool {
+        !mirrorSessions.isEmpty && phase != .loading
+    }
+
+    public var canSendHostClipboardText: Bool {
+        hasLiveAgentConnection && health?.capabilities.clipboardText == true
+    }
+
+    public var canRestoreMirrorSessions: Bool {
+        hasLiveAgentConnection
+            && !restorableAppIds.isEmpty
+            && phase != .loading
+            && phase != .launching
+    }
+
+    public func canRequestAppLaunch(appId: String) -> Bool {
+        apps.contains { $0.id == appId }
+            && phase != .loading
+            && phase != .launching
+            && (!hasLiveAgentConnection || health?.capabilities.appLaunch == true)
+    }
+
+    public func canLaunchApp(appId: String) -> Bool {
+        canRequestAppLaunch(appId: appId)
+            && hasLiveAgentConnection
+            && health?.capabilities.appLaunch == true
+    }
+
+    public func canFocusMirrorSession(windowId: String) -> Bool {
+        mirrorSessions.contains { $0.id == windowId }
+    }
+
+    public func canCloseMirrorSession(windowId: String) -> Bool {
+        phase != .loading
+            && (
+                mirrorSessions.contains { $0.id == windowId }
+                    || activeWindows.contains { $0.windowId == windowId }
+            )
+    }
+
+    public func canSendInput(to windowId: String) -> Bool {
+        mirrorSessions.contains { $0.id == windowId }
+            && hasLiveAgentConnection
+            && health?.capabilities.input == true
     }
 
     public var guestAgentInstallEvidence: VMInstallEvidenceSummary? {
@@ -346,8 +398,7 @@ public final class HostDashboardModel {
 
     @discardableResult
     public func closeMirrorSession(windowId: String) async -> WindowCloseResponse? {
-        guard mirrorSessions.contains(where: { $0.id == windowId })
-                || activeWindows.contains(where: { $0.windowId == windowId }) else {
+        guard canCloseMirrorSession(windowId: windowId) else {
             return nil
         }
 
@@ -392,9 +443,7 @@ public final class HostDashboardModel {
         y: Int,
         modifiers: [String] = []
     ) async {
-        guard mirrorSessions.contains(where: { $0.id == windowId }),
-              hasLiveAgentConnection,
-              health?.capabilities.input == true else {
+        guard canSendInput(to: windowId) else {
             return
         }
 
@@ -415,9 +464,7 @@ public final class HostDashboardModel {
         windowsVirtualKey: Int,
         modifiers: [String] = []
     ) async {
-        guard mirrorSessions.contains(where: { $0.id == windowId }),
-              hasLiveAgentConnection,
-              health?.capabilities.input == true else {
+        guard canSendInput(to: windowId) else {
             return
         }
 
@@ -438,8 +485,7 @@ public final class HostDashboardModel {
     }
 
     public func sendHostClipboardText(_ text: String) async {
-        guard hasLiveAgentConnection,
-              health?.capabilities.clipboardText == true else {
+        guard canSendHostClipboardText else {
             return
         }
 

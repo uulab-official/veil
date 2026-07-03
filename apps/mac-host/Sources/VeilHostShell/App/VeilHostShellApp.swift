@@ -160,7 +160,7 @@ struct VeilHostShellApp: App {
                     launchSelectedWindowsAppWindow()
                 }
                 .keyboardShortcut(.return, modifiers: [.command])
-                .disabled(!model.canRequestSelectedAppLaunch || model.phase == .loading || model.phase == .launching)
+                .disabled(!model.canRequestSelectedAppLaunch)
 
                 Button("Record App Frame Proof") {
                     recordAppFrameProof()
@@ -688,10 +688,12 @@ private struct VeilMenuBarMenu: View {
                         Button("Bring to Front", systemImage: "arrow.up.forward.app") {
                             focusWindowsAppWindowAction(session.id)
                         }
+                        .disabled(!model.canFocusMirrorSession(windowId: session.id))
 
                         Button("Close", systemImage: "xmark.circle") {
                             closeWindowsAppWindowAction(session.id)
                         }
+                        .disabled(!model.canCloseMirrorSession(windowId: session.id))
                     }
                 }
 
@@ -700,6 +702,7 @@ private struct VeilMenuBarMenu: View {
                 Button("Close All", systemImage: "xmark.circle.fill") {
                     closeAllWindowsAppWindowsAction()
                 }
+                .disabled(!model.canCloseAllMirrorSessions)
             }
 
             Divider()
@@ -720,7 +723,7 @@ private struct VeilMenuBarMenu: View {
                         }
                         launchWindowsAppByIdAction(app.id)
                     }
-                    .disabled(model.phase == .loading || model.phase == .launching)
+                    .disabled(!model.canRequestAppLaunch(appId: app.id))
                 }
             }
         }

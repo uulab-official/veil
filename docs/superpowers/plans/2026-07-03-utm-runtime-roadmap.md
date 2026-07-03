@@ -29,9 +29,9 @@
 
 ### Slice 2: State-Gated App Runtime Commands
 
-- [ ] Add model-level capability checks for launch, focus, close, input, clipboard, and restore.
-- [ ] Bind menu bar actions to those checks so the UI cannot issue unsupported guest-agent commands.
-- [ ] Verify with `HostDashboardModelTests`.
+- [x] Add model-level capability checks for launch, focus, close, input, clipboard, and restore.
+- [x] Bind menu bar actions to those checks so the UI cannot issue unsupported guest-agent commands.
+- [x] Verify with `HostDashboardModelTests`.
 
 ### Slice 3: Coherence Restore Loop
 
@@ -174,3 +174,36 @@ git add docs/superpowers/plans/2026-07-03-utm-runtime-roadmap.md docs/roadmap.md
 git commit -m "feat: add typed runtime configuration summary"
 git push origin main
 ```
+
+## Task 4: State-Gated App Runtime Commands
+
+**Files:**
+- Modify: `apps/mac-host/Sources/VeilHostCore/HostDashboardModel.swift`
+- Modify: `apps/mac-host/Sources/VeilHostShell/App/VeilHostShellApp.swift`
+- Modify: `apps/mac-host/Tests/VeilHostCoreTests/HostDashboardModelTests.swift`
+- Modify: `docs/checklists/2026-07-03-utm-source-hardening.md`
+
+- [x] **Step 1: Add model availability tests**
+
+Add tests that prove the model reports launch, focus, close, input, clipboard, and restore availability from tracked HWND state and guest-agent capabilities.
+
+- [x] **Step 2: Add model availability API**
+
+Add `canRequestAppLaunch(appId:)`, `canLaunchApp(appId:)`, `canFocusMirrorSession(windowId:)`, `canCloseMirrorSession(windowId:)`, `canCloseAllMirrorSessions`, `canSendInput(to:)`, `canSendHostClipboardText`, and `canRestoreMirrorSessions`.
+
+- [x] **Step 3: Bind menu bar disabled states**
+
+Use those model APIs for Windows Apps, Running Windows Apps, Close All, and the app command menu.
+
+- [x] **Step 4: Verify**
+
+Run:
+
+```bash
+cd apps/mac-host && swift test --filter HostDashboardModelTests
+cd apps/mac-host && swift test
+./script/build_and_run.sh --verify
+git diff --check
+```
+
+Expected: all pass.
