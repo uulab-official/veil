@@ -328,6 +328,8 @@ test("rejects close-all actions that leave mirrored sessions open", () => {
   report.status.quietRuntime.canQuietRuntime = false;
   report.status.quietRuntime.willQuietAutomatically = false;
   delete report.status.quietRuntime.recommendedStopCommand;
+  report.status.actions.find((action) => action.id === "runtime.quietWhenIdle").isAvailable = false;
+  report.status.actions.find((action) => action.id === "runtime.stopWhenIdle").isAvailable = false;
 
   assert.throws(
     () => validateAppRuntimeAction(report),

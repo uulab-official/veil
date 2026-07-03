@@ -97,7 +97,9 @@ When every mirrored Windows app window has closed, `quietRuntime` also reports
 whether Veil will automatically quiet the local runtime and the current delay
 before that stop/suspend policy is attempted. When quieting is allowed, the
 same status includes `recommendedStopCommand` so automation can hand off to the
-bounded local runtime shutdown command without guessing.
+bounded local runtime shutdown command without guessing. The `actions` list
+also exposes `runtime.stopWhenIdle` so callers can gate the actual stop command
+from the same app-runtime status contract.
 
 ```bash
 cd apps/mac-host

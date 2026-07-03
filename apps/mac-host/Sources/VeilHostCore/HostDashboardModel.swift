@@ -681,6 +681,11 @@ public final class HostDashboardModel {
                     isAvailable: quietRuntime.canQuietRuntime
                 ),
                 WindowsAppRuntimeActionStatus(
+                    id: "runtime.stopWhenIdle",
+                    title: "Stop Runtime When Idle",
+                    isAvailable: quietRuntime.canQuietRuntime
+                ),
+                WindowsAppRuntimeActionStatus(
                     id: "clipboard.setText",
                     title: "Set Windows Clipboard Text",
                     isAvailable: canSendHostClipboardText

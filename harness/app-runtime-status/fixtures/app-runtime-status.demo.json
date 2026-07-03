@@ -41,6 +41,11 @@
       "title": "Quiet Runtime When Idle"
     },
     {
+      "id": "runtime.stopWhenIdle",
+      "title": "Stop Runtime When Idle",
+      "isAvailable": false
+    },
+    {
       "id": "clipboard.setText",
       "isAvailable": false,
       "title": "Set Windows Clipboard Text"

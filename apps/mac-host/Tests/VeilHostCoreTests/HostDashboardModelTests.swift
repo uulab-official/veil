@@ -520,6 +520,7 @@ struct HostDashboardModelTests {
         #expect(report.actions.first { $0.id == "runtime.startWindowsForApp" }?.isAvailable == false)
         #expect(report.actions.first { $0.id == "runtime.fulfillPendingLaunch" }?.isAvailable == false)
         #expect(report.actions.first { $0.id == "runtime.quietWhenIdle" }?.isAvailable == false)
+        #expect(report.actions.first { $0.id == "runtime.stopWhenIdle" }?.isAvailable == false)
     }
 
     @Test("reports quiet runtime readiness after the final Windows app window closes")
@@ -550,6 +551,7 @@ struct HostDashboardModelTests {
         #expect(report.launcherVisibility.shouldHideMainWindow == false)
         #expect(report.launcherVisibility.recommendedAction == "show-launcher")
         #expect(report.actions.first { $0.id == "runtime.quietWhenIdle" }?.isAvailable == true)
+        #expect(report.actions.first { $0.id == "runtime.stopWhenIdle" }?.isAvailable == true)
     }
 
     @Test("updates active window sessions by HWND")

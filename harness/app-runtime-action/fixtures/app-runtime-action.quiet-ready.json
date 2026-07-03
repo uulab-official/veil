@@ -135,6 +135,11 @@
         "isAvailable": true
       },
       {
+        "id": "runtime.stopWhenIdle",
+        "title": "Stop Runtime When Idle",
+        "isAvailable": true
+      },
+      {
         "id": "clipboard.setText",
         "title": "Set Windows Clipboard Text",
         "isAvailable": true

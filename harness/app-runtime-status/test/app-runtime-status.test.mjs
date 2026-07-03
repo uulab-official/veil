@@ -272,6 +272,16 @@ test("rejects fulfill-pending action availability that drifts from queued launch
   );
 });
 
+test("rejects stop action availability that drifts from quiet runtime readiness", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.demo.json", import.meta.url), "utf8"));
+  report.actions.find((action) => action.id === "runtime.stopWhenIdle").isAvailable = true;
+
+  assert.throws(
+    () => validateAppRuntimeStatus(report),
+    /runtime\.stopWhenIdle/
+  );
+});
+
 test("rejects launcher hiding without live mirrored windows", () => {
   const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.demo.json", import.meta.url), "utf8"));
   report.macWindowIntegration.hidesLauncherWhenMirroring = true;

@@ -461,6 +461,7 @@ function validateActions(actions, report) {
     "runtime.startWindowsForApp",
     "runtime.fulfillPendingLaunch",
     "runtime.quietWhenIdle",
+    "runtime.stopWhenIdle",
     "clipboard.setText"
   ]) {
     if (!actionIds.has(requiredAction)) {
@@ -490,6 +491,16 @@ function validateActions(actions, report) {
   const fulfillPendingAction = actions.find((action) => action.id === "runtime.fulfillPendingLaunch");
   if (fulfillPendingAction.isAvailable !== canFulfillPendingLaunch) {
     throw new TypeError("runtime.fulfillPendingLaunch availability must match queued launch readiness.");
+  }
+
+  const quietAction = actions.find((action) => action.id === "runtime.quietWhenIdle");
+  if (quietAction.isAvailable !== report.quietRuntime.canQuietRuntime) {
+    throw new TypeError("runtime.quietWhenIdle availability must match quietRuntime.canQuietRuntime.");
+  }
+
+  const stopWhenIdleAction = actions.find((action) => action.id === "runtime.stopWhenIdle");
+  if (stopWhenIdleAction.isAvailable !== report.quietRuntime.canQuietRuntime) {
+    throw new TypeError("runtime.stopWhenIdle availability must match quietRuntime.canQuietRuntime.");
   }
 }
 
