@@ -1531,6 +1531,12 @@ public struct LocalVMRuntimeService: VMRuntimeService {
         var refreshedAt: Date?
     }
 
+    private struct ConsoleScreenshotFileEvidence: Equatable {
+        var modifiedAt: Date?
+        var byteCount: Int?
+        var digest: UInt64?
+    }
+
     private func refreshedConsoleScreenshot(from launchRecord: QEMULaunchRecord?) -> ConsoleScreenshotRefresh {
         guard let path = Self.existingConsoleScreenshotPath(from: launchRecord),
               let monitorSocketPath = launchRecord?.monitorSocketPath,
@@ -1541,12 +1547,52 @@ public struct LocalVMRuntimeService: VMRuntimeService {
             )
         }
 
+        let beforeEvidence = Self.consoleScreenshotFileEvidence(atPath: path)
         consoleScreenshotRefresher(
             URL(fileURLWithPath: monitorSocketPath),
             URL(fileURLWithPath: path)
         )
         let refreshedPath = Self.existingConsoleScreenshotPath(from: launchRecord) ?? path
-        return ConsoleScreenshotRefresh(path: refreshedPath, refreshedAt: diagnosticDate())
+        let afterEvidence = Self.consoleScreenshotFileEvidence(atPath: refreshedPath)
+        let refreshedAt = Self.consoleScreenshotDidRefresh(
+            before: beforeEvidence,
+            after: afterEvidence
+        ) ? diagnosticDate() : nil
+        return ConsoleScreenshotRefresh(path: refreshedPath, refreshedAt: refreshedAt)
+    }
+
+    private static func consoleScreenshotFileEvidence(atPath path: String) -> ConsoleScreenshotFileEvidence? {
+        let url = URL(fileURLWithPath: path)
+        guard FileManager.default.fileExists(atPath: path) else {
+            return nil
+        }
+
+        let values = try? url.resourceValues(forKeys: [.contentModificationDateKey, .fileSizeKey])
+        let data = try? Data(contentsOf: url)
+        return ConsoleScreenshotFileEvidence(
+            modifiedAt: values?.contentModificationDate,
+            byteCount: values?.fileSize ?? data?.count,
+            digest: data.map(stableDigest)
+        )
+    }
+
+    private static func consoleScreenshotDidRefresh(
+        before: ConsoleScreenshotFileEvidence?,
+        after: ConsoleScreenshotFileEvidence?
+    ) -> Bool {
+        guard let after else {
+            return false
+        }
+        guard let before else {
+            return true
+        }
+        return before != after
+    }
+
+    private static func stableDigest(for data: Data) -> UInt64 {
+        data.reduce(0xcbf2_9ce4_8422_2325) { hash, byte in
+            (hash ^ UInt64(byte)).multipliedReportingOverflow(by: 0x0000_0100_0000_01b3).partialValue
+        }
     }
 
     private static func consoleLaunchEvidence(

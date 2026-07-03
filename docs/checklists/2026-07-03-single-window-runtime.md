@@ -16,6 +16,7 @@ Goal: move Veil from a Veil shell plus separate QEMU Cocoa display toward a UTM-
 - [x] Record the display mode in QEMU launch diagnostics.
 - [x] Surface the latest setup screenshot refresh time in runtime evidence so the single-window preview shows whether it is updating.
 - [x] Classify setup preview evidence as fresh, stale, or unavailable so the main window can distinguish a live preview from old proof.
+- [x] Mark the single-window preview live only when screenshot evidence actually changes after a capture refresh.
 
 ## Next
 
