@@ -207,6 +207,7 @@ struct VMProfileStoreTests {
         #expect(snapshot.latestConsoleLaunch?.monitorSocketPath == "/tmp/vq-test.sock")
         #expect(snapshot.latestConsoleLaunch?.qmpSocketPath == "/tmp/vq-test.qmp.sock")
         #expect(snapshot.latestConsoleLaunch?.consoleScreenshotPath == consoleScreenshotURL.path)
+        #expect(snapshot.latestConsoleLaunch?.previewStatus == .stale)
         #expect(snapshot.latestConsoleLaunch?.startedAt == Date(timeIntervalSince1970: 1_782_838_800))
         #expect(snapshot.detail == "Windows is not installed yet.")
         #expect(snapshot.installEvidence.kind == .sparseDisk)
@@ -277,6 +278,7 @@ struct VMProfileStoreTests {
         #expect(snapshot.bootReady)
         #expect(snapshot.latestConsoleScreenshotPath == nil)
         #expect(snapshot.latestConsoleLaunch?.consoleScreenshotPath == nil)
+        #expect(snapshot.latestConsoleLaunch?.previewStatus == .unavailable)
     }
 
     @Test("Downloads installer without security bookmark requires file picker")
@@ -409,6 +411,7 @@ struct VMProfileStoreTests {
         #expect(snapshot.latestConsoleScreenshotPath == consoleScreenshotURL.path)
         #expect(snapshot.latestConsoleLaunch?.consoleScreenshotPath == consoleScreenshotURL.path)
         #expect(snapshot.latestConsoleLaunch?.consoleScreenshotRefreshedAt == Date(timeIntervalSince1970: 1_782_838_860))
+        #expect(snapshot.latestConsoleLaunch?.previewStatus == .fresh)
         #expect(try String(contentsOf: consoleScreenshotURL, encoding: .utf8) == "fresh")
     }
 

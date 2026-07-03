@@ -313,6 +313,7 @@ public struct VMConsoleLaunchEvidence: Codable, Equatable, Sendable {
     public var qmpSocketPath: String?
     public var consoleScreenshotPath: String?
     public var consoleScreenshotRefreshedAt: Date?
+    public var previewStatus: VMConsolePreviewStatus
     public var startedAt: Date
 
     public init(
@@ -323,6 +324,7 @@ public struct VMConsoleLaunchEvidence: Codable, Equatable, Sendable {
         qmpSocketPath: String? = nil,
         consoleScreenshotPath: String?,
         consoleScreenshotRefreshedAt: Date? = nil,
+        previewStatus: VMConsolePreviewStatus = .unavailable,
         startedAt: Date
     ) {
         self.provider = provider
@@ -332,8 +334,15 @@ public struct VMConsoleLaunchEvidence: Codable, Equatable, Sendable {
         self.qmpSocketPath = qmpSocketPath
         self.consoleScreenshotPath = consoleScreenshotPath
         self.consoleScreenshotRefreshedAt = consoleScreenshotRefreshedAt
+        self.previewStatus = previewStatus
         self.startedAt = startedAt
     }
+}
+
+public enum VMConsolePreviewStatus: String, Codable, Equatable, Sendable {
+    case fresh
+    case stale
+    case unavailable
 }
 
 public enum VMInstallEvidenceKind: String, Codable, Equatable, Sendable {
@@ -1557,8 +1566,23 @@ public struct LocalVMRuntimeService: VMRuntimeService {
             qmpSocketPath: launchRecord.qmpSocketPath,
             consoleScreenshotPath: consoleScreenshotPath ?? existingConsoleScreenshotPath(from: launchRecord),
             consoleScreenshotRefreshedAt: consoleScreenshotRefreshedAt,
+            previewStatus: consolePreviewStatus(
+                consoleScreenshotPath: consoleScreenshotPath ?? existingConsoleScreenshotPath(from: launchRecord),
+                consoleScreenshotRefreshedAt: consoleScreenshotRefreshedAt
+            ),
             startedAt: launchRecord.startedAt
         )
+    }
+
+    private static func consolePreviewStatus(
+        consoleScreenshotPath: String?,
+        consoleScreenshotRefreshedAt: Date?
+    ) -> VMConsolePreviewStatus {
+        guard consoleScreenshotPath != nil else {
+            return .unavailable
+        }
+
+        return consoleScreenshotRefreshedAt == nil ? .stale : .fresh
     }
 
     private static func prepareAutomaticInstallAnswerFile(for profile: VMProfile) throws {

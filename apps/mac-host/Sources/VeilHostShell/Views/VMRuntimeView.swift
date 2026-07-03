@@ -1946,9 +1946,9 @@ private struct WindowsDisplayLaunchEvidenceStrip: View {
                 .background(.blue.opacity(0.11), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
 
             VStack(alignment: .leading, spacing: 2) {
-                Text("Last Evidence")
+                Text(previewTitle)
                     .font(.caption2.weight(.semibold))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(previewTint)
 
                 Text(displaySummary)
                     .font(.caption.weight(.semibold))
@@ -1985,12 +1985,35 @@ private struct WindowsDisplayLaunchEvidenceStrip: View {
         return "\(evidence.provider) started \(startedAt) · \(logName)"
     }
 
+    private var previewTitle: String {
+        switch evidence.previewStatus {
+        case .fresh:
+            return "Preview Live"
+        case .stale:
+            return "Preview Stale"
+        case .unavailable:
+            return "Preview Pending"
+        }
+    }
+
+    private var previewTint: Color {
+        switch evidence.previewStatus {
+        case .fresh:
+            return .green
+        case .stale:
+            return .orange
+        case .unavailable:
+            return .secondary
+        }
+    }
+
     private var helpText: String {
         [
             "Log: \(evidence.processLogPath)",
             "Monitor: \(evidence.monitorSocketPath)",
             evidence.qmpSocketPath.map { "QMP: \($0)" },
             evidence.consoleScreenshotPath.map { "Screenshot: \($0)" },
+            "Preview status: \(evidence.previewStatus.rawValue)",
             evidence.consoleScreenshotRefreshedAt.map { "Screenshot refreshed: \($0.formatted(date: .abbreviated, time: .standard))" }
         ]
         .compactMap { $0 }
