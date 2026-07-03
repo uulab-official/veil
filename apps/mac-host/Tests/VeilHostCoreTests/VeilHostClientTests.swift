@@ -20,6 +20,52 @@ struct VeilHostClientTests {
         #expect(health.os == "windows-arm64")
     }
 
+    @Test("diagnoses connected Windows agent")
+    func diagnosesConnectedAgent() async throws {
+        let transport = RecordingTransport(responses: [
+            #"{"type":"agent.health.response","requestId":"req_health","protocolVersion":1,"agentVersion":"0.1.0","os":"windows-arm64","session":{"interactive":true,"user":"veil-user"},"capabilities":{"appList":true,"appLaunch":true,"windowTracking":true,"windowCapture":true,"input":true,"clipboardText":true}}"#
+        ])
+        let client = VeilHostClient(transport: transport)
+
+        let diagnostic = await client.diagnoseAgentConnection(endpoint: "ws://127.0.0.1:18444")
+
+        #expect(diagnostic.status == .connected)
+        #expect(diagnostic.endpoint == "ws://127.0.0.1:18444")
+        #expect(diagnostic.health?.agentVersion == "0.1.0")
+        #expect(diagnostic.errorMessage == nil)
+        #expect(diagnostic.nextActions.contains("Run veil-host-probe --launch-notepad to verify HWND launch and tracking."))
+        #expect(transport.sentTypes == ["agent.health.request"])
+    }
+
+    @Test("diagnoses unavailable Windows agent with recovery actions")
+    func diagnosesUnavailableAgentWithRecoveryActions() async throws {
+        let transport = FailingTransport(error: DiagnosticTransportError.connectionRefused)
+        let client = VeilHostClient(transport: transport)
+
+        let diagnostic = await client.diagnoseAgentConnection(endpoint: "ws://127.0.0.1:18444")
+
+        #expect(diagnostic.status == .unavailable)
+        #expect(diagnostic.endpoint == "ws://127.0.0.1:18444")
+        #expect(diagnostic.health == nil)
+        #expect(diagnostic.errorMessage == "Connection refused.")
+        #expect(diagnostic.nextActions.contains("Inside Windows, run Veil Shared\\Veil Guest Agent\\Install Veil Agent.cmd."))
+        #expect(diagnostic.nextActions.contains("If the agent still does not connect, run Veil Shared\\Veil Guest Agent\\Collect Veil Agent Diagnostics.cmd and inspect the desktop ZIP."))
+    }
+
+    @Test("diagnoses stalled Windows agent with bounded timeout")
+    func diagnosesStalledAgentWithBoundedTimeout() async throws {
+        let client = VeilHostClient(transport: HangingTransport())
+
+        let diagnostic = await client.diagnoseAgentConnection(
+            endpoint: "ws://127.0.0.1:18444",
+            timeoutNanoseconds: 1_000_000
+        )
+
+        #expect(diagnostic.status == .unavailable)
+        #expect(diagnostic.errorMessage == "Timed out waiting for Windows agent health.")
+        #expect(diagnostic.nextActions.contains("Confirm the Windows 11 Arm VM is running and has reached the desktop."))
+    }
+
     @Test("runs the Notepad launch flow in protocol order")
     func runsNotepadLaunchFlow() async throws {
         let transport = RecordingTransport(responses: [
@@ -165,5 +211,31 @@ private final class RecordingTransport: HostTransport, @unchecked Sendable {
         let replyStrings = Array(responses.prefix(expectedReplies))
         responses.removeFirst(expectedReplies)
         return replyStrings.map { Data($0.utf8) }
+    }
+}
+
+private enum DiagnosticTransportError: Error, LocalizedError {
+    case connectionRefused
+
+    var errorDescription: String? {
+        switch self {
+        case .connectionRefused:
+            "Connection refused."
+        }
+    }
+}
+
+private struct FailingTransport: HostTransport {
+    var error: any Error
+
+    func send(_ message: Data, expectedReplies: Int) async throws -> [Data] {
+        throw error
+    }
+}
+
+private struct HangingTransport: HostTransport {
+    func send(_ message: Data, expectedReplies: Int) async throws -> [Data] {
+        try await Task.sleep(nanoseconds: 5_000_000_000)
+        return []
     }
 }

@@ -11,6 +11,7 @@ guard let url = URL(string: rawURL) else {
 
 enum ProbeMode {
     case health
+    case diagnoseAgent
     case overview
     case launchNotepad
 }
@@ -23,6 +24,8 @@ func parseMode(_ arguments: [String]) -> ProbeMode? {
     switch first {
     case "--health", "health":
         return .health
+    case "--diagnose-agent", "diagnose-agent", "diagnose":
+        return .diagnoseAgent
     case "--overview", "overview":
         return .overview
     case "--launch-notepad", "launch-notepad":
@@ -36,9 +39,10 @@ func parseMode(_ arguments: [String]) -> ProbeMode? {
 
 func printUsage() {
     FileHandle.standardError.write(Data("""
-    Usage: veil-host-probe [--health|--overview|--launch-notepad]
+    Usage: veil-host-probe [--health|--diagnose-agent|--overview|--launch-notepad]
 
       --health          Request only agent.health.response. This is the default.
+      --diagnose-agent  Print a connection diagnostic JSON with next actions.
       --overview        Request health and app list.
       --launch-notepad  Run the full health -> app list -> Notepad launch acceptance flow.
 
@@ -53,11 +57,18 @@ guard let mode = parseMode(arguments) else {
 }
 
 do {
-    let transport = URLSessionWebSocketTransport(url: url)
+    let transport = switch mode {
+    case .diagnoseAgent:
+        URLSessionWebSocketTransport(url: url, requestTimeout: 5)
+    case .health, .overview, .launchNotepad:
+        URLSessionWebSocketTransport(url: url)
+    }
     let client = VeilHostClient(transport: transport)
     let result: any Encodable = switch mode {
     case .health:
         try await client.loadHealth()
+    case .diagnoseAgent:
+        await client.diagnoseAgentConnection(endpoint: rawURL)
     case .overview:
         try await client.loadOverview()
     case .launchNotepad:

@@ -89,6 +89,14 @@ swift run veil-host-probe
 
 Expected: pretty-printed JSON includes `agent.health.response`.
 
+When the Windows guest agent is not reachable, run:
+
+```bash
+swift run veil-host-probe --diagnose-agent
+```
+
+Expected: pretty-printed JSON reports `status: "unavailable"` and includes next actions for installing `Veil Guest Agent`, collecting the Windows-side diagnostics ZIP, and checking QEMU/HVF port forwarding.
+
 For the full launch acceptance flow:
 
 ```bash

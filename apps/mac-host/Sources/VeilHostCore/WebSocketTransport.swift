@@ -9,6 +9,14 @@ public struct URLSessionWebSocketTransport: HostTransport, HostEventSource {
         self.session = session
     }
 
+    public init(url: URL, requestTimeout: TimeInterval) {
+        let configuration = URLSessionConfiguration.default
+        configuration.timeoutIntervalForRequest = requestTimeout
+        configuration.timeoutIntervalForResource = requestTimeout
+        self.url = url
+        self.session = URLSession(configuration: configuration)
+    }
+
     public func send(_ message: Data, expectedReplies: Int) async throws -> [Data] {
         let task = session.webSocketTask(with: url)
         task.resume()

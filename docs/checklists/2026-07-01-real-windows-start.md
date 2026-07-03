@@ -160,10 +160,12 @@ Goal: keep the main Veil experience pointed at real local Windows boot and conso
 - [x] Verify direct `& E:/.../Bootstrap-VeilAgentFromMedia.ps1` is blocked by Windows PowerShell execution policy, reinforcing that first-logon/manual launch paths must use `-ExecutionPolicy Bypass`.
 - [x] Retry bootstrap from the live desktop with `-ExecutionPolicy Bypass`; the VM rebooted or returned to firmware/boot flow afterward, and `veil-host-probe` still timed out, so guest-agent connection remains unproven.
 - [x] Add `Collect Veil Agent Diagnostics.cmd` and `Collect-VeilAgentDiagnostics.ps1` to the guest-agent bundle so Windows-side install/start logs can be zipped from the desktop.
+- [x] Add `veil-host-probe --diagnose-agent` so host-side agent connection checks return actionable JSON instead of only a timeout.
 
 ## Next
 
 - [ ] Run `Veil Shared\Veil Guest Agent\Install Veil Agent.cmd` inside Windows 11 Arm and verify the current-session agent plus the `VeilAgent` logon task both start.
+- [ ] Run `swift run veil-host-probe --diagnose-agent` before and after the next guest-agent install attempt.
 - [ ] Run `Veil Shared\Veil Guest Agent\Collect Veil Agent Diagnostics.cmd` after the next bootstrap attempt and capture the generated desktop ZIP.
 - [ ] If the current VM remains on a black screen, recover with a clean disk-first relaunch and verify Windows reaches the desktop before retrying the agent installer.
 - [ ] Verify the Win32/GDI HWND capture path inside Windows 11 Arm and record the captured Notepad frame evidence.

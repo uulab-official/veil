@@ -53,6 +53,44 @@ public struct NotepadLaunchResult: Codable, Equatable, Sendable {
     }
 }
 
+public enum AgentConnectionDiagnosticStatus: String, Codable, Equatable, Sendable {
+    case connected
+    case unavailable
+}
+
+public struct AgentConnectionDiagnostic: Codable, Equatable, Sendable {
+    public var status: AgentConnectionDiagnosticStatus
+    public var endpoint: String
+    public var health: AgentHealthResponse?
+    public var errorMessage: String?
+    public var nextActions: [String]
+
+    public init(
+        status: AgentConnectionDiagnosticStatus,
+        endpoint: String,
+        health: AgentHealthResponse? = nil,
+        errorMessage: String? = nil,
+        nextActions: [String]
+    ) {
+        self.status = status
+        self.endpoint = endpoint
+        self.health = health
+        self.errorMessage = errorMessage
+        self.nextActions = nextActions
+    }
+}
+
+private enum AgentConnectionProbeError: Error, LocalizedError {
+    case timeout
+
+    var errorDescription: String? {
+        switch self {
+        case .timeout:
+            "Timed out waiting for Windows agent health."
+        }
+    }
+}
+
 public struct VeilHostClient: HostDashboardService, Sendable {
     private let transport: any HostTransport
     private let encoder: JSONEncoder
@@ -105,6 +143,54 @@ public struct VeilHostClient: HostDashboardService, Sendable {
         try await request(
             AgentHealthRequest(requestId: "req_health")
         )
+    }
+
+    public func diagnoseAgentConnection(
+        endpoint: String,
+        timeoutNanoseconds: UInt64 = 5_000_000_000
+    ) async -> AgentConnectionDiagnostic {
+        do {
+            let health = try await loadHealth(timeoutNanoseconds: timeoutNanoseconds)
+            return AgentConnectionDiagnostic(
+                status: .connected,
+                endpoint: endpoint,
+                health: health,
+                nextActions: [
+                    "Run veil-host-probe --overview to verify app metadata.",
+                    "Run veil-host-probe --launch-notepad to verify HWND launch and tracking."
+                ]
+            )
+        } catch {
+            return AgentConnectionDiagnostic(
+                status: .unavailable,
+                endpoint: endpoint,
+                errorMessage: Self.errorMessage(for: error),
+                nextActions: [
+                    "Confirm the Windows 11 Arm VM is running and has reached the desktop.",
+                    "Inside Windows, run Veil Shared\\Veil Guest Agent\\Install Veil Agent.cmd.",
+                    "If the agent still does not connect, run Veil Shared\\Veil Guest Agent\\Collect Veil Agent Diagnostics.cmd and inspect the desktop ZIP.",
+                    "Confirm the QEMU/HVF plan includes hostfwd=tcp::18444-:18444 and restart the VM after changing the launch plan."
+                ]
+            )
+        }
+    }
+
+    private func loadHealth(timeoutNanoseconds: UInt64) async throws -> AgentHealthResponse {
+        try await withThrowingTaskGroup(of: AgentHealthResponse.self) { group in
+            group.addTask {
+                try await loadHealth()
+            }
+            group.addTask {
+                try await Task.sleep(nanoseconds: timeoutNanoseconds)
+                throw AgentConnectionProbeError.timeout
+            }
+
+            guard let health = try await group.next() else {
+                throw AgentConnectionProbeError.timeout
+            }
+            group.cancelAll()
+            return health
+        }
     }
 
     public func closeWindow(windowId: String) async throws -> WindowCloseResponse {
@@ -174,5 +260,14 @@ public struct VeilHostClient: HostDashboardService, Sendable {
         }
         .map(String.init)
         .joined()
+    }
+
+    private static func errorMessage(for error: any Error) -> String {
+        if let localized = error as? LocalizedError,
+           let description = localized.errorDescription {
+            return description
+        }
+
+        return String(describing: error)
     }
 }

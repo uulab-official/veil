@@ -123,10 +123,12 @@ swift run veil-host-probe
 Expected output is a JSON `agent.health.response`. Use the broader probes when needed:
 
 ```bash
+swift run veil-host-probe --diagnose-agent
 swift run veil-host-probe --overview
 swift run veil-host-probe --launch-notepad
 ```
 
+`--diagnose-agent` prints a connection diagnostic JSON. When the real Windows guest agent is unavailable, it includes recovery actions for installing the guest agent, collecting the Windows-side diagnostics ZIP, and checking QEMU/HVF port forwarding.
 `--overview` requests health and app metadata. `--launch-notepad` runs the full Notepad acceptance flow and should include a `window.created` event.
 
 ## macOS Host Shell
