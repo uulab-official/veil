@@ -10,6 +10,12 @@ test("validates app runtime status fixture", () => {
   assert.equal(validateAppRuntimeStatus(report), report);
 });
 
+test("validates live Mac window integration status fixture", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.mac-window-live.json", import.meta.url), "utf8"));
+
+  assert.equal(validateAppRuntimeStatus(report), report);
+});
+
 test("rejects reports without required actions", () => {
   const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.demo.json", import.meta.url), "utf8"));
   report.actions = report.actions.filter((action) => action.id !== "clipboard.setText");
@@ -75,6 +81,16 @@ test("rejects quiet runtime counts that drift from mirrored sessions", () => {
   assert.throws(
     () => validateAppRuntimeStatus(report),
     /quietRuntime\.openWindowCount/
+  );
+});
+
+test("rejects launcher hiding without live mirrored windows", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.demo.json", import.meta.url), "utf8"));
+  report.macWindowIntegration.hidesLauncherWhenMirroring = true;
+
+  assert.throws(
+    () => validateAppRuntimeStatus(report),
+    /hidesLauncherWhenMirroring/
   );
 });
 

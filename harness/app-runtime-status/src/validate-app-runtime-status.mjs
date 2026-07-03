@@ -142,8 +142,16 @@ function validateMacWindowIntegration(macWindowIntegration, mirrorSessions, conn
     throw new TypeError("macWindowIntegration.streamingWindowCount must match streaming mirror sessions.");
   }
 
+  if (macWindowIntegration.pendingFrameWindowCount + macWindowIntegration.streamingWindowCount > macWindowIntegration.mirroredWindowCount) {
+    throw new TypeError("macWindowIntegration frame counts cannot exceed mirroredWindowCount.");
+  }
+
   if (macWindowIntegration.acceptsGuestWindowEvents !== connection.hasLiveAgentConnection) {
     throw new TypeError("macWindowIntegration.acceptsGuestWindowEvents must reflect live agent connection.");
+  }
+
+  if (macWindowIntegration.hidesLauncherWhenMirroring && (!connection.hasLiveAgentConnection || mirrorSessions.length === 0)) {
+    throw new TypeError("macWindowIntegration.hidesLauncherWhenMirroring requires a live mirrored Windows app window.");
   }
 }
 

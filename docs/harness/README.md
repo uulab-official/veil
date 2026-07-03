@@ -71,6 +71,7 @@ before that stop/suspend policy is attempted.
 ```bash
 cd apps/mac-host
 swift run veil-vmctl app-runtime-status --json --demo | node ../../harness/app-runtime-status/src/validate-app-runtime-status.mjs
+node ../../harness/app-runtime-status/src/validate-app-runtime-status.mjs < ../../harness/app-runtime-status/fixtures/app-runtime-status.mac-window-live.json
 ```
 
 Use `--demo` for deterministic local harness checks. Without `--demo`, the
