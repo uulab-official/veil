@@ -20,6 +20,20 @@ test("windows agent is scaffolded as a .NET 8 project", async () => {
   assert.match(project, /<RootNamespace>Veil\.Agent<\/RootNamespace>/);
 });
 
+test("windows agent enforces one process per forwarded port", async () => {
+  const program = await readFile(resolve(agentRoot, "src/VeilAgent/Program.cs"), "utf8");
+  const guard = await readFile(resolve(agentRoot, "src/VeilAgent/SingleInstanceGuard.cs"), "utf8");
+
+  assert.match(program, /SingleInstanceGuard\.TryAcquire\(endpoint\)/);
+  assert.match(program, /if\s*\(!instanceGuard\.HasOwnership\)/);
+  assert.match(program, /already running for/);
+  assert.match(guard, /new Mutex\(initiallyOwned:\s*false,\s*name:\s*mutexName\)/);
+  assert.match(guard, /Local\\VeilAgent-\{endpoint\.Port\}/);
+  assert.match(guard, /mutex\.WaitOne\(TimeSpan\.Zero\)/);
+  assert.match(guard, /AbandonedMutexException/);
+  assert.match(guard, /ReleaseMutex\(\)/);
+});
+
 test("windows agent is wired to real HWND capture by default", async () => {
   const program = await readFile(resolve(agentRoot, "src/VeilAgent/Program.cs"), "utf8");
   const capture = await readFile(resolve(agentRoot, "src/VeilAgent/GdiWindowFrameCapture.cs"), "utf8");
