@@ -875,6 +875,18 @@ public final class VMRuntimeModel {
         }
     }
 
+    public func refreshRuntimeEvidence() async {
+        do {
+            snapshot = try await service.loadSnapshot()
+            errorMessage = nil
+            if phase == .idle || phase == .failed {
+                phase = .loaded
+            }
+        } catch {
+            errorMessage = userMessage(for: error)
+        }
+    }
+
     public func createDefaultProfile() async {
         phase = .loading
         errorMessage = nil

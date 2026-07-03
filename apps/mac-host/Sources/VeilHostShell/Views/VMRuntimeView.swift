@@ -121,6 +121,9 @@ struct VMRuntimeView: View {
         .onChange(of: model.snapshot?.state) { _, state in
             updateConsoleHandoffProgress(for: state)
         }
+        .task(id: model.snapshot?.state) {
+            await refreshRuntimeEvidenceWhileRunning()
+        }
         .popover(isPresented: $showsAdvancedDetails, arrowEdge: .bottom) {
             if let snapshot = model.snapshot {
                 ScrollView {
@@ -146,6 +149,20 @@ struct VMRuntimeView: View {
 
     private func canShowConsole(for snapshot: VMRuntimeSnapshot) -> Bool {
         snapshot.state == .running || snapshot.state == .starting
+    }
+
+    private func refreshRuntimeEvidenceWhileRunning() async {
+        while !Task.isCancelled {
+            guard model.snapshot?.state == .running || model.snapshot?.state == .starting else {
+                return
+            }
+
+            if model.phase != .loading {
+                await model.refreshRuntimeEvidence()
+            }
+
+            try? await Task.sleep(for: .seconds(3))
+        }
     }
 
     private func needsInstallerPickerAccess(_ snapshot: VMRuntimeSnapshot) -> Bool {

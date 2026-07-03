@@ -35,6 +35,7 @@ The first four are local host prerequisites. The guest agent step remains pendin
 - The virtual disk can be user-selected or created as a blank sparse disk at `~/Virtual Machines/Veil/Windows 11 Arm.img`.
 - The boot spike stores EFI variables and the generic machine identifier next to the virtual disk so repeated boots keep stable VM identity.
 - The host now prefers the local QEMU/HVF compatibility provider when it is installed and ready, because that is the clearest path to a UTM-style visible Windows installer console. Apple Virtualization remains the fallback feasibility provider.
+- While a QEMU/HVF VM is starting or running, the host shell quietly refreshes the latest VM-console screenshot through the recorded monitor socket so the main window can keep showing Windows setup progress without requiring the separate QEMU display to be frontmost.
 - The runtime snapshot reports structured setup steps so the UI can show what is complete, blocked, or pending.
 - The runtime snapshot reports preflight checks for installer media, guest OS, CPU, memory, and disk size.
 - A profile becomes boot-ready only when installer media, virtual disk, shared folder, automatic install media, and preflight checks all pass.

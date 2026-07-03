@@ -104,6 +104,35 @@ struct VMRuntimeModelTests {
         #expect(model.errorMessage == "Unable to inspect VM runtime capabilities.")
     }
 
+    @Test("refresh runtime evidence updates snapshot without loading phase")
+    @MainActor
+    func refreshRuntimeEvidenceUpdatesSnapshotWithoutLoadingPhase() async throws {
+        let service = FakeVMRuntimeService(
+            snapshot: VMRuntimeSnapshot(
+                state: .running,
+                virtualizationAvailable: true,
+                architecture: "arm64",
+                minimumOSSupported: true,
+                profileName: "Windows 11 Arm",
+                latestConsoleScreenshotPath: "/tmp/qemu-console-old.png",
+                bootReady: true,
+                detail: "Windows VM is running."
+            )
+        )
+        let model = VMRuntimeModel(service: service)
+
+        await model.load()
+        service.snapshot?.latestConsoleScreenshotPath = "/tmp/qemu-console-new.png"
+        service.snapshot?.detail = "Windows VM is running with refreshed console evidence."
+        await model.refreshRuntimeEvidence()
+
+        #expect(model.phase == .loaded)
+        #expect(model.errorMessage == nil)
+        #expect(model.snapshot?.latestConsoleScreenshotPath == "/tmp/qemu-console-new.png")
+        #expect(model.snapshot?.detail == "Windows VM is running with refreshed console evidence.")
+        #expect(service.loadCount == 2)
+    }
+
     @Test("creates default profile and refreshes runtime state")
     @MainActor
     func createsDefaultProfileAndRefreshesRuntimeState() async throws {
@@ -438,6 +467,7 @@ private final class FakeVMRuntimeService: VMRuntimeService {
     private(set) var markedGuestAgentVersion: String?
     private(set) var createCount = 0
     private(set) var createDiskCount = 0
+    private(set) var loadCount = 0
     private(set) var prepareCount = 0
     private(set) var startCount = 0
     private(set) var stopCount = 0
@@ -474,6 +504,7 @@ private final class FakeVMRuntimeService: VMRuntimeService {
             throw error
         }
 
+        loadCount += 1
         return try #require(snapshot)
     }
 
