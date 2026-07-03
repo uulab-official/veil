@@ -966,7 +966,6 @@ private struct VeilMenuBarMenu: View {
 
         if model.pendingLaunchAppId != nil {
             Button("Open Queued App", systemImage: "arrow.up.forward.app") {
-                openMainWindow()
                 fulfillPendingLaunchAction()
             }
             .disabled(!model.canFulfillPendingLaunch)

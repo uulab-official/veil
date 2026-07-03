@@ -53,6 +53,7 @@ Goal: move Veil from a Veil shell plus separate QEMU Cocoa display toward a UTM-
 - [x] Surface Windows runtime status and running app count at the top of the menu bar menu, following UTM's first-class status model but scoped to Veil's app-runtime loop.
 - [x] Add menu-bar Close All for running Windows apps so multiple mirrored HWND sessions can be ended from one stable host surface.
 - [x] Route Dock reopen and main-window hiding through launcher visibility status so Coherence runs bring Windows app windows forward instead of reopening duplicate launchers.
+- [x] Open queued Windows apps from the menu bar without first reopening the main launcher once the guest agent can fulfill the pending launch.
 
 ## Next
 
