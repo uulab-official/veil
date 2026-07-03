@@ -456,6 +456,7 @@ struct AppRuntimeActionReport: Codable, Equatable {
     var accepted: Bool
     var appId: String?
     var windowId: String?
+    var foregroundWindowTitle: String?
     var pendingLaunchAppId: String?
     var launchPlan: WindowsAppRuntimeLaunchPlanStatus?
     var launch: AppLaunchResponse?
@@ -690,6 +691,7 @@ struct VeilVMControl {
         var restoredWindows: [WindowCreatedEvent] = []
         var restoreRequestedAppIds: [String] = []
         var broughtForwardWindowIds: [String] = []
+        var foregroundWindowTitle: String?
         var quietRuntime: WindowsAppRuntimeQuietPolicyStatus?
         var accepted = false
         var resolvedAppId = appId
@@ -715,6 +717,7 @@ struct VeilVMControl {
             window = result?.window
             resolvedAppId = launchAppId
             resolvedWindowId = result?.window.windowId
+            foregroundWindowTitle = result?.window.title
             accepted = result?.launch.accepted == true
         case .fulfillPending:
             let result = await model.refreshLiveAgentIfNeeded()
@@ -722,6 +725,7 @@ struct VeilVMControl {
             window = result?.window
             resolvedAppId = result?.window.appId ?? model.pendingLaunchAppId
             resolvedWindowId = result?.window.windowId
+            foregroundWindowTitle = result?.window.title
             accepted = result?.launch.accepted == true
         case .focus:
             guard let focusWindowId = windowId,
@@ -734,6 +738,7 @@ struct VeilVMControl {
             }
             accepted = focus?.accepted == true
             resolvedWindowId = focusWindowId
+            foregroundWindowTitle = model.mirrorSessions.first { $0.id == focusWindowId }?.window.title
         case .close:
             guard let closeWindowId = windowId,
                   !closeWindowId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
@@ -752,12 +757,17 @@ struct VeilVMControl {
             restoreRequestedAppIds = model.restorableAppIds
             let restored = await model.restoreMirroredWindowsAfterReconnect()
             restoredWindows = restored.map(\.window)
+            if let foregroundWindow = restoredWindows.last {
+                resolvedWindowId = foregroundWindow.windowId
+                foregroundWindowTitle = foregroundWindow.title
+            }
             accepted = !restored.isEmpty
         case .bringForward:
             broughtForwardWindowIds = model.mirrorSessions.map(\.id)
             if let foregroundSession = model.mirrorSessions.last {
                 focus = await model.focusMirrorSession(windowId: foregroundSession.id)
                 resolvedWindowId = foregroundSession.id
+                foregroundWindowTitle = foregroundSession.window.title
             }
             accepted = !broughtForwardWindowIds.isEmpty
         case .quietWhenIdle:
@@ -833,6 +843,7 @@ struct VeilVMControl {
             accepted: accepted,
             appId: resolvedAppId,
             windowId: resolvedWindowId,
+            foregroundWindowTitle: foregroundWindowTitle,
             pendingLaunchAppId: status.pendingLaunchAppId,
             launchPlan: actionLaunchPlan,
             launch: launch,
@@ -866,6 +877,9 @@ struct VeilVMControl {
         }
         if let windowId = report.windowId {
             print("Window: \(windowId)")
+        }
+        if let foregroundWindowTitle = report.foregroundWindowTitle {
+            print("Foreground window: \(foregroundWindowTitle)")
         }
         if let pendingLaunchAppId = report.pendingLaunchAppId {
             print("Pending launch app: \(pendingLaunchAppId)")

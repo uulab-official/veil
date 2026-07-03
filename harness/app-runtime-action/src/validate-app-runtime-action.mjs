@@ -110,6 +110,8 @@ function validateFulfillPendingAction(report) {
     throw new TypeError("fulfill-pending window must match report.windowId.");
   }
 
+  requireForegroundWindowTitle(report, report.window.title, "accepted fulfill-pending actions");
+
   if (report.status.pendingLaunch.isQueued) {
     throw new TypeError("accepted fulfill-pending actions must clear status.pendingLaunch.");
   }
@@ -182,6 +184,7 @@ function validateLaunchAction(report) {
     throw new TypeError("launch window must match report.windowId.");
   }
 
+  requireForegroundWindowTitle(report, report.window.title, "accepted launch actions");
   requireForegroundableMacWindow(report, "accepted launch actions");
 }
 
@@ -298,6 +301,9 @@ function validateRestoreAction(report) {
     }
   }
 
+  const foregroundWindow = report.restoredWindows.at(-1);
+  requireForegroundWindowTitle(report, foregroundWindow.title, "accepted restore actions");
+
   if (!report.status.dockIntegration.canBringWindowsAppsForward) {
     throw new TypeError("accepted restore actions must leave Windows app windows available to bring forward.");
   }
@@ -337,6 +343,9 @@ function validateBringForwardAction(report) {
     throw new TypeError("bring-forward windowId must identify the foreground mirror session.");
   }
 
+  const foregroundSession = report.status.mirrorSessions.at(-1);
+  requireForegroundWindowTitle(report, foregroundSession.title, "accepted bring-forward actions");
+
   if (report.focus !== undefined && report.focus !== null) {
     validateBooleanResponse(report.focus, "window.focus.response");
     if (report.focus.windowId !== report.windowId) {
@@ -352,6 +361,13 @@ function requireForegroundableMacWindow(report, actionName) {
 
   if (report.status.macWindowIntegration.foregroundableWindowCount < 1) {
     throw new TypeError(`${actionName} must leave at least one foregroundable macOS app window.`);
+  }
+}
+
+function requireForegroundWindowTitle(report, expectedTitle, actionName) {
+  requireString(report.foregroundWindowTitle, "foregroundWindowTitle");
+  if (report.foregroundWindowTitle !== expectedTitle) {
+    throw new TypeError(`${actionName} must report the foreground Windows app window title.`);
   }
 }
 

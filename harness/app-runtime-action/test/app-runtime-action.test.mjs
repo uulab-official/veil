@@ -66,6 +66,16 @@ test("rejects accepted launch actions without a foregroundable Mac window", () =
   );
 });
 
+test("rejects accepted launch actions without a foreground window title", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-action.launch-demo.json", import.meta.url), "utf8"));
+  delete report.foregroundWindowTitle;
+
+  assert.throws(
+    () => validateAppRuntimeAction(report),
+    /foregroundWindowTitle/
+  );
+});
+
 test("rejects pending launch actions with a fake window", () => {
   const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-action.launch-pending.json", import.meta.url), "utf8"));
   report.window = {
@@ -229,6 +239,16 @@ test("rejects bring-forward actions whose windows drift from status", () => {
   assert.throws(
     () => validateAppRuntimeAction(report),
     /broughtForwardWindowIds/
+  );
+});
+
+test("rejects bring-forward actions whose foreground title drifts from status", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-action.bring-forward-demo.json", import.meta.url), "utf8"));
+  report.foregroundWindowTitle = "Different Window";
+
+  assert.throws(
+    () => validateAppRuntimeAction(report),
+    /foreground Windows app window title/
   );
 });
 

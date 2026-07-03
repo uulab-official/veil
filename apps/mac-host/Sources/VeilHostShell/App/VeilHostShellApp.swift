@@ -502,12 +502,14 @@ struct VeilHostShellApp: App {
             }
 
             windowsAppWindowPresenter.showWindow(for: session)
+            setForegroundWindowsAppMessage(windowId: windowId)
         }
     }
 
     private func bringAllWindowsAppWindowsToFront() {
         windowsAppWindowPresenter.bringAllToFront()
         if let focusedSession = model.mirrorSessions.last {
+            setForegroundWindowsAppMessage(windowId: focusedSession.id)
             focusWindowsAppWindow(windowId: focusedSession.id)
         }
     }
@@ -573,6 +575,14 @@ struct VeilHostShellApp: App {
                     captureState: .unavailable
                 )
         windowsAppWindowPresenter.showWindow(for: session)
+    }
+
+    private func setForegroundWindowsAppMessage(windowId: String) {
+        guard let title = model.mirrorSessions.first(where: { $0.id == windowId })?.window.title else {
+            return
+        }
+
+        displayMessage = "\(title) is frontmost as a macOS window."
     }
 
     private func hideMainWindowForCoherenceIfNeeded() {

@@ -156,5 +156,7 @@
   "nextActions": [
     "Open or focus restored mirrored windows from the menu bar.",
     "Run `veil-vmctl app-runtime-status --json` to inspect restored sessions."
-  ]
+  ],
+  "foregroundWindowTitle": "Untitled - Notepad",
+  "windowId": "hwnd:0003029A"
 }
