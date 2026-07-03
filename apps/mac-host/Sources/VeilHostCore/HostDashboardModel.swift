@@ -182,6 +182,34 @@ public struct WindowsAppRuntimeActionStatus: Codable, Equatable, Sendable {
     }
 }
 
+public struct WindowsAppRuntimeDockIntegrationStatus: Codable, Equatable, Sendable {
+    public var isEnabled: Bool
+    public var openWindowCount: Int
+    public var badgeLabel: String?
+    public var canOpenMainWindow: Bool
+    public var canBringWindowsAppsForward: Bool
+    public var canRestorePreviousApps: Bool
+    public var canLaunchSelectedApp: Bool
+
+    public init(
+        isEnabled: Bool,
+        openWindowCount: Int,
+        badgeLabel: String?,
+        canOpenMainWindow: Bool,
+        canBringWindowsAppsForward: Bool,
+        canRestorePreviousApps: Bool,
+        canLaunchSelectedApp: Bool
+    ) {
+        self.isEnabled = isEnabled
+        self.openWindowCount = openWindowCount
+        self.badgeLabel = badgeLabel
+        self.canOpenMainWindow = canOpenMainWindow
+        self.canBringWindowsAppsForward = canBringWindowsAppsForward
+        self.canRestorePreviousApps = canRestorePreviousApps
+        self.canLaunchSelectedApp = canLaunchSelectedApp
+    }
+}
+
 public struct WindowsAppRuntimeStatusReport: Codable, Equatable, Sendable {
     public var kind: String
     public var generatedAt: Date
@@ -192,6 +220,7 @@ public struct WindowsAppRuntimeStatusReport: Codable, Equatable, Sendable {
     public var apps: [WindowsAppRuntimeAppStatus]
     public var mirrorSessions: [WindowsAppRuntimeWindowStatus]
     public var restorableAppIds: [String]
+    public var dockIntegration: WindowsAppRuntimeDockIntegrationStatus
     public var actions: [WindowsAppRuntimeActionStatus]
 
     public init(
@@ -204,6 +233,7 @@ public struct WindowsAppRuntimeStatusReport: Codable, Equatable, Sendable {
         apps: [WindowsAppRuntimeAppStatus],
         mirrorSessions: [WindowsAppRuntimeWindowStatus],
         restorableAppIds: [String],
+        dockIntegration: WindowsAppRuntimeDockIntegrationStatus,
         actions: [WindowsAppRuntimeActionStatus]
     ) {
         self.kind = kind
@@ -215,6 +245,7 @@ public struct WindowsAppRuntimeStatusReport: Codable, Equatable, Sendable {
         self.apps = apps
         self.mirrorSessions = mirrorSessions
         self.restorableAppIds = restorableAppIds
+        self.dockIntegration = dockIntegration
         self.actions = actions
     }
 }
@@ -387,7 +418,26 @@ public final class HostDashboardModel {
                 )
             },
             restorableAppIds: restorableAppIds,
+            dockIntegration: WindowsAppRuntimeDockIntegrationStatus(
+                isEnabled: true,
+                openWindowCount: mirrorSessions.count,
+                badgeLabel: mirrorSessions.isEmpty ? nil : "\(mirrorSessions.count)",
+                canOpenMainWindow: true,
+                canBringWindowsAppsForward: !mirrorSessions.isEmpty,
+                canRestorePreviousApps: canRestoreMirrorSessions,
+                canLaunchSelectedApp: canRequestSelectedAppLaunch
+            ),
             actions: [
+                WindowsAppRuntimeActionStatus(
+                    id: "dock.openMainWindow",
+                    title: "Open Veil From Dock",
+                    isAvailable: true
+                ),
+                WindowsAppRuntimeActionStatus(
+                    id: "dock.bringWindowsAppsForward",
+                    title: "Bring Windows Apps Forward",
+                    isAvailable: !mirrorSessions.isEmpty
+                ),
                 WindowsAppRuntimeActionStatus(
                     id: "windowsApps.restorePrevious",
                     title: "Restore Previous Apps",

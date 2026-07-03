@@ -29,6 +29,7 @@ export function validateAppRuntimeStatus(report) {
   validateApps(report.apps);
   validateMirrorSessions(report.mirrorSessions);
   validateStringArray(report.restorableAppIds, "restorableAppIds");
+  validateDockIntegration(report.dockIntegration, report.mirrorSessions);
   validateActions(report.actions);
 
   if (report.selectedAppId !== undefined) {
@@ -113,13 +114,51 @@ function validateMirrorSessions(sessions) {
   }
 }
 
+function validateDockIntegration(dockIntegration, mirrorSessions) {
+  if (!dockIntegration || typeof dockIntegration !== "object" || Array.isArray(dockIntegration)) {
+    throw new TypeError("dockIntegration must be an object.");
+  }
+
+  requireBoolean(dockIntegration.isEnabled, "dockIntegration.isEnabled");
+  requireNonNegativeInteger(dockIntegration.openWindowCount, "dockIntegration.openWindowCount");
+  requireBoolean(dockIntegration.canOpenMainWindow, "dockIntegration.canOpenMainWindow");
+  requireBoolean(dockIntegration.canBringWindowsAppsForward, "dockIntegration.canBringWindowsAppsForward");
+  requireBoolean(dockIntegration.canRestorePreviousApps, "dockIntegration.canRestorePreviousApps");
+  requireBoolean(dockIntegration.canLaunchSelectedApp, "dockIntegration.canLaunchSelectedApp");
+
+  if (dockIntegration.openWindowCount !== mirrorSessions.length) {
+    throw new TypeError("dockIntegration.openWindowCount must match mirrorSessions length.");
+  }
+
+  if (dockIntegration.openWindowCount === 0 && dockIntegration.badgeLabel !== undefined) {
+    throw new TypeError("dockIntegration.badgeLabel must be omitted when no Windows app windows are open.");
+  }
+
+  if (dockIntegration.openWindowCount > 0) {
+    requireString(dockIntegration.badgeLabel, "dockIntegration.badgeLabel");
+    if (dockIntegration.badgeLabel !== String(dockIntegration.openWindowCount)) {
+      throw new TypeError("dockIntegration.badgeLabel must match openWindowCount.");
+    }
+  }
+
+  if (dockIntegration.canBringWindowsAppsForward !== (mirrorSessions.length > 0)) {
+    throw new TypeError("dockIntegration.canBringWindowsAppsForward must reflect open mirrored sessions.");
+  }
+}
+
 function validateActions(actions) {
   if (!Array.isArray(actions)) {
     throw new TypeError("actions must be an array.");
   }
 
   const actionIds = new Set(actions.map((action) => action?.id));
-  for (const requiredAction of ["windowsApps.restorePrevious", "windowsApps.closeAll", "clipboard.setText"]) {
+  for (const requiredAction of [
+    "dock.openMainWindow",
+    "dock.bringWindowsAppsForward",
+    "windowsApps.restorePrevious",
+    "windowsApps.closeAll",
+    "clipboard.setText"
+  ]) {
     if (!actionIds.has(requiredAction)) {
       throw new TypeError(`actions must include ${requiredAction}.`);
     }
@@ -155,6 +194,12 @@ function requireString(value, fieldName) {
 function requireBoolean(value, fieldName) {
   if (typeof value !== "boolean") {
     throw new TypeError(`App runtime status field '${fieldName}' must be boolean.`);
+  }
+}
+
+function requireNonNegativeInteger(value, fieldName) {
+  if (!Number.isInteger(value) || value < 0) {
+    throw new TypeError(`App runtime status field '${fieldName}' must be a non-negative integer.`);
   }
 }
 

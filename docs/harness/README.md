@@ -39,7 +39,7 @@ Current executable pieces:
 - `harness/fake-agent`: a WebSocket simulator for the Windows guest agent.
 - `harness/fake-host`: a CLI simulator for the future macOS host flow.
 - `harness/runtime-provider-probe`: a JSON validator for serverless local runtime provider output.
-- `harness/app-runtime-status`: a JSON validator for app runtime status, open HWND sessions, and supported actions.
+- `harness/app-runtime-status`: a JSON validator for app runtime status, open HWND sessions, Dock integration state, and supported actions.
 - `harness/app-runtime-action`: a JSON validator for launch, focus, close, and restore app-runtime actions.
 - `harness/app-window-proof`: a JSON validator for one app launch, one tracked HWND, and the first captured frame evidence.
 - `harness/coherence-proof`: a JSON validator for one app launch, one tracked HWND, first and post-input frame evidence, mouse/key input, and host clipboard send evidence.
@@ -59,7 +59,8 @@ The macOS host shell also includes an internal demo agent fallback. If the WebSo
 
 The app runtime status command exposes the same host-side model used by the
 macOS app so automation can inspect Windows app availability, mirrored HWND
-sessions, restore intent, and supported actions without clicking the UI.
+sessions, Dock integration, restore intent, and supported actions without
+clicking the UI.
 
 ```bash
 cd apps/mac-host

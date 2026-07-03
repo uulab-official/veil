@@ -1,6 +1,16 @@
 {
   "actions": [
     {
+      "id": "dock.openMainWindow",
+      "isAvailable": true,
+      "title": "Open Veil From Dock"
+    },
+    {
+      "id": "dock.bringWindowsAppsForward",
+      "isAvailable": false,
+      "title": "Bring Windows Apps Forward"
+    },
+    {
       "id": "windowsApps.restorePrevious",
       "isAvailable": false,
       "title": "Restore Previous Apps"
@@ -35,6 +45,14 @@
     "hasLiveAgentConnection": false,
     "mode": "demo",
     "os": "windows-arm64"
+  },
+  "dockIntegration": {
+    "canBringWindowsAppsForward": false,
+    "canLaunchSelectedApp": true,
+    "canOpenMainWindow": true,
+    "canRestorePreviousApps": false,
+    "isEnabled": true,
+    "openWindowCount": 0
   },
   "generatedAt": "2026-07-03T08:53:35Z",
   "kind": "windowsAppRuntimeStatus",

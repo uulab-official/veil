@@ -593,6 +593,9 @@ struct VeilVMControl {
         }
         print("Apps: \(report.apps.count)")
         print("Open Windows app windows: \(report.mirrorSessions.count)")
+        print("Dock integration: \(report.dockIntegration.isEnabled ? "enabled" : "disabled")")
+        print("Dock app-window badge: \(report.dockIntegration.badgeLabel ?? "none")")
+        print("Dock can bring apps forward: \(report.dockIntegration.canBringWindowsAppsForward ? "yes" : "no")")
         print("Restorable apps: \(report.restorableAppIds.joined(separator: ", "))")
         print("Actions:")
         for action in report.actions {

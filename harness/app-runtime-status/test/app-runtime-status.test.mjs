@@ -20,6 +20,34 @@ test("rejects reports without required actions", () => {
   );
 });
 
+test("rejects reports without Dock integration status", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.demo.json", import.meta.url), "utf8"));
+  delete report.dockIntegration;
+
+  assert.throws(
+    () => validateAppRuntimeStatus(report),
+    /dockIntegration/
+  );
+});
+
+test("rejects Dock integration counts that drift from mirrored sessions", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.demo.json", import.meta.url), "utf8"));
+  report.mirrorSessions.push({
+    windowId: "hwnd:0003029A",
+    appId: "winapp_notepad",
+    title: "Untitled - Notepad",
+    captureState: "streaming",
+    canFocus: true,
+    canClose: true,
+    canSendInput: true
+  });
+
+  assert.throws(
+    () => validateAppRuntimeStatus(report),
+    /openWindowCount/
+  );
+});
+
 test("rejects live agent reports outside agent mode", () => {
   const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.demo.json", import.meta.url), "utf8"));
   report.connection.hasLiveAgentConnection = true;
