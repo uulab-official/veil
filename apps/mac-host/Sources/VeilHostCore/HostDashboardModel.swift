@@ -98,6 +98,7 @@ public enum HostDashboardPhase: String, Codable, Equatable, Sendable {
 
 public enum HostProtocolMessageResult: Equatable, Sendable {
     case handledWindowCreated(windowId: String)
+    case handledWindowUpdated(windowId: String)
     case handledWindowFrame(windowId: String)
     case handledWindowClosed(windowId: String)
     case handledClipboardText(sequence: Int)
@@ -711,6 +712,14 @@ public final class HostDashboardModel {
                 }
             }
             return .handledWindowCreated(windowId: event.windowId)
+        case .windowUpdated:
+            let event = try decoder.decode(WindowUpdatedEvent.self, from: message)
+            let window = WindowCreatedEvent(updated: event)
+            guard updateWindowState(window) else {
+                return .ignored
+            }
+
+            return .handledWindowUpdated(windowId: event.windowId)
         case .windowFrame:
             let frame = try decoder.decode(WindowFrameEvent.self, from: message)
             receiveWindowFrame(frame)
@@ -777,6 +786,23 @@ public final class HostDashboardModel {
         }
 
         mirrorSessions.append(session)
+    }
+
+    private func updateWindowState(_ window: WindowCreatedEvent) -> Bool {
+        let isTracked = activeWindows.contains { $0.windowId == window.windowId }
+            || mirrorSessions.contains { $0.id == window.windowId }
+        guard isTracked else {
+            return false
+        }
+
+        storeActiveWindow(window)
+
+        guard let index = mirrorSessions.firstIndex(where: { $0.id == window.windowId }) else {
+            return true
+        }
+
+        mirrorSessions[index].window = window
+        return true
     }
 
     private func removeWindowState(windowId: String) async {

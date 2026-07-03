@@ -8,6 +8,7 @@ public enum MessageType: String, Codable, Sendable {
     case appLaunchRequest = "app.launch.request"
     case appLaunchResponse = "app.launch.response"
     case windowCreated = "window.created"
+    case windowUpdated = "window.updated"
     case windowClosed = "window.closed"
     case windowFrame = "window.frame"
     case windowFrameSubscribe = "window.frame.subscribe"
@@ -116,6 +117,70 @@ public struct WindowCreatedEvent: Codable, Equatable, Sendable {
     public var bounds: WindowBounds
     public var state: String
     public var focused: Bool
+
+    public init(
+        type: MessageType = .windowCreated,
+        windowId: String,
+        processId: Int,
+        appId: String,
+        title: String,
+        bounds: WindowBounds,
+        state: String,
+        focused: Bool
+    ) {
+        self.type = type
+        self.windowId = windowId
+        self.processId = processId
+        self.appId = appId
+        self.title = title
+        self.bounds = bounds
+        self.state = state
+        self.focused = focused
+    }
+
+    public init(updated event: WindowUpdatedEvent) {
+        self.init(
+            type: .windowCreated,
+            windowId: event.windowId,
+            processId: event.processId,
+            appId: event.appId,
+            title: event.title,
+            bounds: event.bounds,
+            state: event.state,
+            focused: event.focused
+        )
+    }
+}
+
+public struct WindowUpdatedEvent: Codable, Equatable, Sendable {
+    public var type: MessageType
+    public var windowId: String
+    public var processId: Int
+    public var appId: String
+    public var title: String
+    public var bounds: WindowBounds
+    public var state: String
+    public var focused: Bool
+
+    public init(
+        type: MessageType = .windowUpdated,
+        windowId: String,
+        processId: Int,
+        appId: String,
+        title: String,
+        bounds: WindowBounds,
+        state: String,
+        focused: Bool
+    ) {
+        self.type = type
+        self.windowId = windowId
+        self.processId = processId
+        self.appId = appId
+        self.title = title
+        self.bounds = bounds
+        self.state = state
+        self.focused = focused
+    }
 }
 
 public struct WindowClosedEvent: Codable, Equatable, Sendable {

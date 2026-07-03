@@ -16,7 +16,8 @@ import {
   validateWindowCloseResponse,
   validateWindowFrame,
   validateWindowFrameSubscribeRequest,
-  validateWindowFrameUnsubscribeRequest
+  validateWindowFrameUnsubscribeRequest,
+  validateWindowUpdated
 } from "../src/messages.mjs";
 
 const fixtures = resolve(import.meta.dirname, "../../../harness/protocol-fixtures");
@@ -34,6 +35,7 @@ test("parses every stable fixture", async () => {
     "app.launch.request.json",
     "app.launch.response.json",
     "window.created.json",
+    "window.updated.json",
     "window.closed.json",
     "window.frame.json",
     "window.frame.subscribe.json",
@@ -152,6 +154,15 @@ test("validates one window closed fixture", async () => {
 
   assert.equal(closed.type, MessageType.WindowClosed);
   assert.equal(closed.windowId, "hwnd:0003029A");
+});
+
+test("validates one window updated fixture", async () => {
+  const updated = validateWindowUpdated(await readFixture("window.updated.json"));
+
+  assert.equal(updated.type, MessageType.WindowUpdated);
+  assert.equal(updated.windowId, "hwnd:0003029A");
+  assert.equal(updated.title, "Notes.txt - Notepad");
+  assert.equal(updated.bounds.width, 1360);
 });
 
 test("validates window frame stream subscribe and unsubscribe fixtures", async () => {

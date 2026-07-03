@@ -6,6 +6,7 @@ export const MessageType = Object.freeze({
   AppLaunchRequest: "app.launch.request",
   AppLaunchResponse: "app.launch.response",
   WindowCreated: "window.created",
+  WindowUpdated: "window.updated",
   WindowClosed: "window.closed",
   WindowFrame: "window.frame",
   WindowFrameSubscribe: "window.frame.subscribe",
@@ -77,6 +78,28 @@ export function validateAppLaunchAcceptance(launch, window) {
 }
 
 export const validateNotepadAcceptance = validateAppLaunchAcceptance;
+
+export function validateWindowLifecycleMetadata(window, expectedType = MessageType.WindowCreated) {
+  if (!window || window.type !== expectedType) {
+    throw new TypeError(`Window lifecycle event must use type ${expectedType}.`);
+  }
+
+  requireNonEmptyString(window.windowId, "windowId", "Window lifecycle event");
+  requirePositiveInteger(window.processId, "processId", "Window lifecycle event");
+  requireNonEmptyString(window.appId, "appId", "Window lifecycle event");
+  requireNonEmptyString(window.title, "title", "Window lifecycle event");
+  requireWindowBounds(window.bounds, "Window lifecycle event");
+  requireNonEmptyString(window.state, "state", "Window lifecycle event");
+  if (typeof window.focused !== "boolean") {
+    throw new TypeError("Window lifecycle event field 'focused' must be a boolean.");
+  }
+
+  return window;
+}
+
+export function validateWindowUpdated(updated) {
+  return validateWindowLifecycleMetadata(updated, MessageType.WindowUpdated);
+}
 
 export function validateWindowClosed(closed) {
   if (!closed || closed.type !== MessageType.WindowClosed) {
@@ -231,4 +254,15 @@ function requireNonNegativeInteger(value, fieldName, context) {
   if (!Number.isInteger(value) || value < 0) {
     throw new TypeError(`${context} field '${fieldName}' must be a non-negative integer.`);
   }
+}
+
+function requireWindowBounds(bounds, context) {
+  if (!bounds || typeof bounds !== "object") {
+    throw new TypeError(`${context} field 'bounds' must be an object.`);
+  }
+
+  requireNonNegativeInteger(bounds.x, "bounds.x", context);
+  requireNonNegativeInteger(bounds.y, "bounds.y", context);
+  requirePositiveInteger(bounds.width, "bounds.width", context);
+  requirePositiveInteger(bounds.height, "bounds.height", context);
 }

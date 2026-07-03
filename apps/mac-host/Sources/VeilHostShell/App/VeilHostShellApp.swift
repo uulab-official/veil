@@ -234,6 +234,12 @@ struct VeilHostShellApp: App {
 
                         windowsAppWindowPresenter.showWindow(for: session)
                         hideMainWindowForCoherenceIfNeeded()
+                    case .handledWindowUpdated(let windowId):
+                        guard let session = model.mirrorSessions.first(where: { $0.id == windowId }) else {
+                            return
+                        }
+
+                        windowsAppWindowPresenter.showWindow(for: session)
                     case .handledWindowFrame(let windowId):
                         guard let session = model.mirrorSessions.first(where: { $0.id == windowId }) else {
                             return

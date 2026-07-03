@@ -167,6 +167,33 @@ Rules:
 - `window.created` can arrive as part of a host launch response or as an async guest lifecycle event.
 - The host tracks the HWND, opens a macOS mirror window, persists the app for reconnect restore, and subscribes to frame capture when the connected agent advertises `windowCapture`.
 
+## Window Updated
+
+Event:
+
+```json
+{
+  "type": "window.updated",
+  "windowId": "hwnd:0003029A",
+  "processId": 4912,
+  "appId": "winapp_notepad",
+  "title": "Notes.txt - Notepad",
+  "bounds": {
+    "x": 20,
+    "y": 24,
+    "width": 1360,
+    "height": 860
+  },
+  "state": "normal",
+  "focused": true
+}
+```
+
+Rules:
+
+- `window.updated` must refer to a tracked HWND.
+- The host updates title, bounds, state, and focus metadata without resetting the current frame stream or timing evidence.
+
 ## Window Frame
 
 Early harness event from guest to host:

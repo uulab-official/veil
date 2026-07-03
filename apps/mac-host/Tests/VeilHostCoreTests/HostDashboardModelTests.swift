@@ -138,6 +138,27 @@ struct HostDashboardModelTests {
         #expect(service.frameSubscriptions == ["hwnd:0005029C"])
     }
 
+    @Test("routes a protocol updated message into mirrored window metadata")
+    @MainActor
+    func routesProtocolUpdatedMessageIntoMirroredWindowMetadata() async throws {
+        let service = FakeDashboardService(health: .captureReady)
+        let model = HostDashboardModel(service: service)
+        let message = Data(WindowUpdatedEvent.notepadUpdatedJSON.utf8)
+
+        await model.launchNotepad()
+        model.receiveWindowFrame(.notepadFirstFrame, receivedAt: Date(timeIntervalSince1970: 1_000))
+        let result = try await model.receiveProtocolMessage(message)
+
+        let session = try #require(model.mirrorSessions.first)
+        #expect(result == .handledWindowUpdated(windowId: "hwnd:0003029A"))
+        #expect(model.activeWindows.first?.title == "Notes.txt - Notepad")
+        #expect(model.activeWindows.first?.bounds.width == 1360)
+        #expect(session.window.title == "Notes.txt - Notepad")
+        #expect(session.window.bounds.height == 860)
+        #expect(session.latestFrame?.frameId == "frame_000001")
+        #expect(session.frameTiming?.receivedFrameCount == 1)
+    }
+
     @Test("routes a protocol closed message into mirrored window cleanup")
     @MainActor
     func routesProtocolClosedMessageIntoMirroredWindowCleanup() async throws {
@@ -1028,6 +1049,12 @@ private extension WindowFrameEvent {
 private extension WindowClosedEvent {
     static var notepadClosedJSON: String {
         #"{"type":"window.closed","windowId":"hwnd:0003029A"}"#
+    }
+}
+
+private extension WindowUpdatedEvent {
+    static var notepadUpdatedJSON: String {
+        #"{"type":"window.updated","windowId":"hwnd:0003029A","processId":4912,"appId":"winapp_notepad","title":"Notes.txt - Notepad","bounds":{"x":20,"y":24,"width":1360,"height":860},"state":"normal","focused":true}"#
     }
 }
 
