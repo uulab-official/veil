@@ -78,6 +78,32 @@ public struct AgentConnectionDiagnostic: Codable, Equatable, Sendable {
         self.errorMessage = errorMessage
         self.nextActions = nextActions
     }
+
+    public static func connected(endpoint: String, health: AgentHealthResponse) -> AgentConnectionDiagnostic {
+        AgentConnectionDiagnostic(
+            status: .connected,
+            endpoint: endpoint,
+            health: health,
+            nextActions: [
+                "Run veil-host-probe --overview to verify app metadata.",
+                "Run veil-host-probe --launch-notepad to verify HWND launch and tracking."
+            ]
+        )
+    }
+
+    public static func unavailable(endpoint: String, errorMessage: String) -> AgentConnectionDiagnostic {
+        AgentConnectionDiagnostic(
+            status: .unavailable,
+            endpoint: endpoint,
+            errorMessage: errorMessage,
+            nextActions: [
+                "Confirm the Windows 11 Arm VM is running and has reached the desktop.",
+                "Inside Windows, run Veil Shared\\Veil Guest Agent\\Install Veil Agent.cmd.",
+                "If the agent still does not connect, run Veil Shared\\Veil Guest Agent\\Collect Veil Agent Diagnostics.cmd and inspect the desktop ZIP.",
+                "Confirm the QEMU/HVF plan includes hostfwd=tcp::18444-:18444 and restart the VM after changing the launch plan."
+            ]
+        )
+    }
 }
 
 private enum AgentConnectionProbeError: Error, LocalizedError {
@@ -151,27 +177,9 @@ public struct VeilHostClient: HostDashboardService, Sendable {
     ) async -> AgentConnectionDiagnostic {
         do {
             let health = try await loadHealth(timeoutNanoseconds: timeoutNanoseconds)
-            return AgentConnectionDiagnostic(
-                status: .connected,
-                endpoint: endpoint,
-                health: health,
-                nextActions: [
-                    "Run veil-host-probe --overview to verify app metadata.",
-                    "Run veil-host-probe --launch-notepad to verify HWND launch and tracking."
-                ]
-            )
+            return .connected(endpoint: endpoint, health: health)
         } catch {
-            return AgentConnectionDiagnostic(
-                status: .unavailable,
-                endpoint: endpoint,
-                errorMessage: Self.errorMessage(for: error),
-                nextActions: [
-                    "Confirm the Windows 11 Arm VM is running and has reached the desktop.",
-                    "Inside Windows, run Veil Shared\\Veil Guest Agent\\Install Veil Agent.cmd.",
-                    "If the agent still does not connect, run Veil Shared\\Veil Guest Agent\\Collect Veil Agent Diagnostics.cmd and inspect the desktop ZIP.",
-                    "Confirm the QEMU/HVF plan includes hostfwd=tcp::18444-:18444 and restart the VM after changing the launch plan."
-                ]
-            )
+            return .unavailable(endpoint: endpoint, errorMessage: Self.errorMessage(for: error))
         }
     }
 

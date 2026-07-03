@@ -227,6 +227,58 @@ struct VMProfileStoreTests {
         ])
     }
 
+    @Test("local runtime avoids protected Downloads console screenshot during snapshot load")
+    func localRuntimeAvoidsProtectedDownloadsConsoleScreenshotDuringSnapshotLoad() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let installerURL = directory.appendingPathComponent("Windows.iso")
+        let diskURL = directory.appendingPathComponent("Windows.vhdx")
+        let sharedFolderURL = directory.appendingPathComponent("Veil Shared", isDirectory: true)
+        try Data("installer".utf8).write(to: installerURL)
+        try Data("disk".utf8).write(to: diskURL)
+        try FileManager.default.createDirectory(at: sharedFolderURL, withIntermediateDirectories: true)
+        try Data("<unattend />".utf8).write(to: sharedFolderURL.appendingPathComponent("Autounattend.xml"))
+        try Data("auto install media".utf8).write(to: sharedFolderURL.appendingPathComponent("VeilAutoInstall.iso"))
+
+        let downloadsDirectory = directory.appendingPathComponent("Home/Downloads", isDirectory: true)
+        try FileManager.default.createDirectory(at: downloadsDirectory, withIntermediateDirectories: true)
+        let consoleScreenshotURL = downloadsDirectory.appendingPathComponent("qemu-console.png")
+        try Data("png".utf8).write(to: consoleScreenshotURL)
+
+        let qemuLaunchDirectory = directory.appendingPathComponent("QEMU Launch", isDirectory: true)
+        try FileManager.default.createDirectory(at: qemuLaunchDirectory, withIntermediateDirectories: true)
+        let launchRecord = QEMULaunchRecord(
+            pid: 1234,
+            executablePath: "/opt/homebrew/bin/qemu-system-aarch64",
+            arguments: ["-display", "cocoa"],
+            processLogPath: qemuLaunchDirectory.appendingPathComponent("qemu-launch.log").path,
+            monitorSocketPath: "/tmp/vq-test.sock",
+            consoleScreenshotPath: consoleScreenshotURL.path,
+            startedAt: Date(timeIntervalSince1970: 1_782_838_800)
+        )
+        try JSONEncoder.veilDiagnostics.encode(launchRecord)
+            .write(to: qemuLaunchDirectory.appendingPathComponent("qemu-launch-latest.json"), options: .atomic)
+
+        let store = JSONVMProfileStore(directory: directory)
+        var profile = VMProfile.defaultWindows11Arm(createdAt: Date(timeIntervalSince1970: 1_782_752_400))
+        profile.installerMediaPath = installerURL.path
+        profile.virtualDiskPath = diskURL.path
+        profile.sharedFolderPath = sharedFolderURL.path
+        try await store.save(profile)
+
+        let service = LocalVMRuntimeService(
+            profileStore: store,
+            qemuLaunchRecordStore: JSONQEMULaunchRecordStore(directory: qemuLaunchDirectory)
+        )
+
+        let snapshot = try await service.loadSnapshot()
+
+        #expect(snapshot.bootReady)
+        #expect(snapshot.latestConsoleScreenshotPath == nil)
+        #expect(snapshot.latestConsoleLaunch?.consoleScreenshotPath == nil)
+    }
+
     @Test("Downloads installer without security bookmark requires file picker")
     func downloadsInstallerWithoutSecurityBookmarkRequiresFilePicker() async throws {
         let directory = FileManager.default.temporaryDirectory

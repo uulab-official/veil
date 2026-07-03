@@ -363,6 +363,10 @@ struct HostDashboardModelTests {
         #expect(model.guestAgentInstallEvidence == nil)
         #expect(model.statusText == "Demo mode: Windows agent unavailable")
         #expect(model.connectionDetail == "No Windows agent reachable at ws://127.0.0.1:18444. Showing built-in demo data.")
+        #expect(model.agentDiagnostic?.status == .unavailable)
+        #expect(model.agentDiagnostic?.endpoint == "ws://127.0.0.1:18444")
+        #expect(model.agentDiagnostic?.nextActions.contains("Inside Windows, run Veil Shared\\Veil Guest Agent\\Install Veil Agent.cmd.") == true)
+        #expect(model.agentDiagnostic?.nextActions.contains("If the agent still does not connect, run Veil Shared\\Veil Guest Agent\\Collect Veil Agent Diagnostics.cmd and inspect the desktop ZIP.") == true)
         #expect(model.apps.map(\.id).contains("winapp_notepad"))
         #expect(model.canLaunchSelectedApp == false)
     }
@@ -387,6 +391,7 @@ struct HostDashboardModelTests {
         #expect(model.health?.agentVersion == "0.1.0")
         #expect(model.hasLiveAgentConnection)
         #expect(model.connectionDetail == nil)
+        #expect(model.agentDiagnostic == nil)
         #expect(primary.loadCount == 2)
     }
 
@@ -507,6 +512,8 @@ struct HostDashboardModelTests {
 
         #expect(model.phase == .failed)
         #expect(model.errorMessage == "Notepad is not available from the Windows agent.")
+        #expect(model.agentDiagnostic?.status == .unavailable)
+        #expect(model.agentDiagnostic?.errorMessage == "Notepad is not available from the Windows agent.")
         #expect(model.health == nil)
         #expect(model.apps.isEmpty)
     }

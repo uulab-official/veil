@@ -1087,7 +1087,10 @@ public struct LocalVMRuntimeService: VMRuntimeService {
                     processIsRunning: qemuLaunchProcessIsRunning
                 )
                 ?? .stopped
-            let virtualDiskAllocatedBytes = Self.allocatedFileSize(path: profile.virtualDiskPath)
+            let virtualDiskAllocatedBytes = Self.allocatedFileSize(
+                path: profile.virtualDiskPath,
+                bookmarkData: profile.virtualDiskBookmarkData
+            )
             let windowsInstalled = profile.windowsInstalled == true
             let installEvidence = Self.installEvidence(
                 bootPathReadiness: bootPathReadiness,
@@ -1427,6 +1430,7 @@ public struct LocalVMRuntimeService: VMRuntimeService {
     private static func existingConsoleScreenshotPath(from launchRecord: QEMULaunchRecord?) -> String? {
         guard let path = launchRecord?.consoleScreenshotPath,
               !path.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              !protectedPathNeedsFilePicker(path, bookmarkData: nil),
               FileManager.default.fileExists(atPath: path) else {
             return nil
         }
@@ -1657,12 +1661,20 @@ public struct LocalVMRuntimeService: VMRuntimeService {
         """
     }
 
-    private static func allocatedFileSize(path: String?) -> Int64? {
+    private static func allocatedFileSize(path: String?, bookmarkData: Data? = nil) -> Int64? {
         guard let path, !path.isEmpty else {
             return nil
         }
 
-        let url = URL(fileURLWithPath: path)
+        if protectedPathNeedsFilePicker(path, bookmarkData: bookmarkData) {
+            return nil
+        }
+
+        let access = securityScopedAccess(role: .disk, bookmarkData: bookmarkData)
+        defer {
+            access?.stop()
+        }
+        let url = access?.url ?? URL(fileURLWithPath: path)
         let values = try? url.resourceValues(forKeys: [
             .totalFileAllocatedSizeKey,
             .fileAllocatedSizeKey
@@ -2398,12 +2410,15 @@ public struct LocalVMRuntimeService: VMRuntimeService {
     ) -> String? {
         guard let path,
               !path.isEmpty,
-              bookmarkData == nil,
-              isDownloadsPath(path) else {
+              protectedPathNeedsFilePicker(path, bookmarkData: bookmarkData) else {
             return nil
         }
 
         return "\(label) is in Downloads. Re-select it with the file picker so Veil can store macOS file access before starting Windows."
+    }
+
+    private static func protectedPathNeedsFilePicker(_ path: String, bookmarkData: Data?) -> Bool {
+        bookmarkData == nil && isDownloadsPath(path)
     }
 
     private static func isDownloadsPath(_ path: String) -> Bool {

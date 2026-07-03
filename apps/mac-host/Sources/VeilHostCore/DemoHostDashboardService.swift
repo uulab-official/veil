@@ -25,6 +25,10 @@ public struct FallbackHostDashboardService: HostDashboardService, Sendable {
 
             var overview = try await fallback.loadOverview()
             overview.connectionDetail = fallbackDetail
+            overview.agentDiagnostic = AgentConnectionDiagnostic.unavailable(
+                endpoint: primaryEndpointDescription,
+                errorMessage: errorMessage(for: error)
+            )
             return overview
         }
     }
@@ -69,6 +73,15 @@ public struct FallbackHostDashboardService: HostDashboardService, Sendable {
 
     private var fallbackDetail: String {
         "No Windows agent reachable at \(primaryEndpointDescription). Showing built-in demo data."
+    }
+
+    private func errorMessage(for error: any Error) -> String {
+        if let localized = error as? LocalizedError,
+           let description = localized.errorDescription {
+            return description
+        }
+
+        return String(describing: error)
     }
 
     private func shouldUseFallback(for error: any Error) -> Bool {

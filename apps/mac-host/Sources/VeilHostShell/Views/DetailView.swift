@@ -36,6 +36,7 @@ struct DetailView: View {
                         health: model.health,
                         connectionMode: model.connectionMode,
                         connectionDetail: model.connectionDetail,
+                        agentDiagnostic: model.agentDiagnostic,
                         errorMessage: model.errorMessage
                     )
                 case .vm:

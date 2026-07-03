@@ -17,17 +17,20 @@ public struct HostOverview: Codable, Equatable, Sendable {
     public var apps: [WindowsApp]
     public var connectionMode: HostConnectionMode
     public var connectionDetail: String?
+    public var agentDiagnostic: AgentConnectionDiagnostic?
 
     public init(
         health: AgentHealthResponse,
         apps: [WindowsApp],
         connectionMode: HostConnectionMode = .agent,
-        connectionDetail: String? = nil
+        connectionDetail: String? = nil,
+        agentDiagnostic: AgentConnectionDiagnostic? = nil
     ) {
         self.health = health
         self.apps = apps
         self.connectionMode = connectionMode
         self.connectionDetail = connectionDetail
+        self.agentDiagnostic = agentDiagnostic
     }
 }
 
@@ -88,6 +91,7 @@ public final class HostDashboardModel {
     public private(set) var errorMessage: String?
     public private(set) var connectionMode: HostConnectionMode = .agent
     public private(set) var connectionDetail: String?
+    public private(set) var agentDiagnostic: AgentConnectionDiagnostic?
     public private(set) var pendingLaunchAppId: String?
     public private(set) var clipboardSequence = 0
     public private(set) var latestGuestClipboardText: String?
@@ -177,10 +181,15 @@ public final class HostDashboardModel {
             apps = overview.apps
             connectionMode = overview.connectionMode
             connectionDetail = overview.connectionDetail
+            agentDiagnostic = overview.agentDiagnostic
             selectDefaultAppIfNeeded()
             phase = .connected
         } catch {
             errorMessage = userMessage(for: error)
+            agentDiagnostic = AgentConnectionDiagnostic.unavailable(
+                endpoint: "configured Windows agent",
+                errorMessage: userMessage(for: error)
+            )
             phase = .failed
         }
     }
@@ -265,6 +274,9 @@ public final class HostDashboardModel {
             apps = result.apps
             connectionMode = result.connectionMode
             connectionDetail = result.connectionDetail
+            agentDiagnostic = result.connectionMode == .agent
+                ? AgentConnectionDiagnostic.connected(endpoint: "configured Windows agent", health: result.health)
+                : agentDiagnostic
             selectedAppId = result.window.appId
             lastLaunch = result
             await rememberRestorableAppId(result.window.appId)

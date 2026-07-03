@@ -5,6 +5,7 @@ struct AgentView: View {
     var health: AgentHealthResponse?
     var connectionMode: HostConnectionMode
     var connectionDetail: String?
+    var agentDiagnostic: AgentConnectionDiagnostic?
     var errorMessage: String?
 
     var body: some View {
@@ -61,6 +62,10 @@ struct AgentView: View {
                         CapabilityPill(title: "Clipboard", isEnabled: health.capabilities.clipboardText)
                     }
                 }
+
+                if let agentDiagnostic {
+                    AgentDiagnosticPanel(diagnostic: agentDiagnostic)
+                }
             } else if let errorMessage {
                 ShellPanel {
                     ContentUnavailableView(
@@ -69,6 +74,10 @@ struct AgentView: View {
                         description: Text(errorMessage)
                     )
                     .frame(maxWidth: .infinity, minHeight: 260)
+                }
+
+                if let agentDiagnostic {
+                    AgentDiagnosticPanel(diagnostic: agentDiagnostic)
                 }
             } else {
                 ShellPanel {
@@ -80,6 +89,90 @@ struct AgentView: View {
                     .frame(maxWidth: .infinity, minHeight: 260)
                 }
             }
+        }
+    }
+}
+
+private struct AgentDiagnosticPanel: View {
+    var diagnostic: AgentConnectionDiagnostic
+
+    var body: some View {
+        ShellPanel(spacing: 12) {
+            HStack(alignment: .center, spacing: 12) {
+                ShellPanelHeader(
+                    title: "Connection Check",
+                    subtitle: diagnostic.endpoint,
+                    symbolName: diagnostic.status == .connected ? "checkmark.circle" : "exclamationmark.triangle"
+                )
+
+                Spacer()
+
+                StatusPill(
+                    title: diagnostic.status == .connected ? "Connected" : "Needs Action",
+                    symbolName: diagnostic.status == .connected ? "checkmark.circle.fill" : "wrench.and.screwdriver",
+                    tint: diagnostic.status == .connected ? .green : .orange
+                )
+            }
+
+            Text(summary)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .textSelection(.enabled)
+
+            VStack(alignment: .leading, spacing: 8) {
+                ForEach(Array(primaryActions.enumerated()), id: \.offset) { _, action in
+                    Label(action, systemImage: "chevron.right.circle")
+                        .font(.callout)
+                        .foregroundStyle(.primary)
+                        .textSelection(.enabled)
+                }
+            }
+
+            DisclosureGroup("Advanced details") {
+                VStack(alignment: .leading, spacing: 8) {
+                    if let errorMessage = diagnostic.errorMessage {
+                        Text(errorMessage)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .textSelection(.enabled)
+                    }
+
+                    ForEach(Array(diagnostic.nextActions.enumerated()), id: \.offset) { _, action in
+                        Text(action)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .textSelection(.enabled)
+                    }
+                }
+                .padding(.top, 6)
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        }
+    }
+
+    private var summary: String {
+        switch diagnostic.status {
+        case .connected:
+            "Windows is reachable. Open a Windows app to verify the window bridge."
+        case .unavailable:
+            "Veil can start Windows, but the macOS app cannot talk to the Windows guest agent yet."
+        }
+    }
+
+    private var primaryActions: [String] {
+        switch diagnostic.status {
+        case .connected:
+            [
+                "Open Notepad from Apps to verify window mirroring.",
+                "Use input and clipboard checks after the window appears."
+            ]
+        case .unavailable:
+            [
+                "Keep the Windows desktop open.",
+                "Run Install Veil Agent.cmd from the Veil Shared drive.",
+                "If it still does not connect, run Collect Veil Agent Diagnostics.cmd in Windows."
+            ]
         }
     }
 }
