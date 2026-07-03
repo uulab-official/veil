@@ -82,6 +82,7 @@ public struct WindowsAppWindowProofReport: Codable, Equatable, Sendable {
     public var launch: AppLaunchResponse
     public var window: WindowCreatedEvent
     public var frame: WindowFrameProofEvidence
+    public var savedProofPath: String?
     public var nextActions: [String]
 
     public init(
@@ -92,6 +93,7 @@ public struct WindowsAppWindowProofReport: Codable, Equatable, Sendable {
         launch: AppLaunchResponse,
         window: WindowCreatedEvent,
         frame: WindowFrameProofEvidence,
+        savedProofPath: String? = nil,
         nextActions: [String]
     ) {
         self.kind = kind
@@ -101,6 +103,7 @@ public struct WindowsAppWindowProofReport: Codable, Equatable, Sendable {
         self.launch = launch
         self.window = window
         self.frame = frame
+        self.savedProofPath = savedProofPath
         self.nextActions = nextActions
     }
 }

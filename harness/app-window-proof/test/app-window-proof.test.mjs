@@ -10,6 +10,13 @@ test("validates app window proof fixture", () => {
   assert.equal(validateAppWindowProof(report), report);
 });
 
+test("validates saved app window proof path", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-window-proof.notepad.json", import.meta.url), "utf8"));
+  report.savedProofPath = "/Users/test/Library/Application Support/Veil/Diagnostics/App Window Proof/notepad-proof.json";
+
+  assert.equal(validateAppWindowProof(report), report);
+});
+
 test("rejects mismatched frame window id", () => {
   const report = JSON.parse(readFileSync(new URL("../fixtures/app-window-proof.notepad.json", import.meta.url), "utf8"));
   report.frame.windowId = "hwnd:00000001";
@@ -27,5 +34,15 @@ test("rejects proof without app runtime next action", () => {
   assert.throws(
     () => validateAppWindowProof(report),
     /app-runtime-status/
+  );
+});
+
+test("rejects non-JSON saved proof path", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-window-proof.notepad.json", import.meta.url), "utf8"));
+  report.savedProofPath = "/tmp/notepad-proof.txt";
+
+  assert.throws(
+    () => validateAppWindowProof(report),
+    /savedProofPath/
   );
 });

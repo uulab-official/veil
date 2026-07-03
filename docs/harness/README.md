@@ -76,6 +76,16 @@ cd apps/mac-host
 swift run veil-vmctl app-window-proof --json --app-id winapp_notepad | node ../../harness/app-window-proof/src/validate-app-window-proof.mjs
 ```
 
+To keep a durable proof artifact for bug reports or release gates, pass
+`--output` and validate the saved JSON as well:
+
+```bash
+cd apps/mac-host
+proof="$HOME/Library/Application Support/Veil/Diagnostics/App Window Proof/notepad-proof.json"
+swift run veil-vmctl app-window-proof --json --app-id winapp_notepad --output "$proof" | node ../../harness/app-window-proof/src/validate-app-window-proof.mjs
+node ../../harness/app-window-proof/src/validate-app-window-proof.mjs < "$proof"
+```
+
 Run this after `guest-agent-wait` reports connected. The command does not start
 or stop the VM; it only uses the forwarded guest-agent WebSocket.
 

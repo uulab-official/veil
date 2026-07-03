@@ -23,6 +23,7 @@ export function validateAppWindowProof(report) {
   validateLaunch(report.launch);
   validateWindow(report.window, report.appId, report.launch.processId);
   validateFrame(report.frame, report.window.windowId);
+  validateSavedProofPath(report.savedProofPath);
   validateNextActions(report.nextActions);
 
   if (!report.nextActions.some((action) => action.includes("app-runtime-status"))) {
@@ -30,6 +31,17 @@ export function validateAppWindowProof(report) {
   }
 
   return report;
+}
+
+function validateSavedProofPath(savedProofPath) {
+  if (savedProofPath === undefined || savedProofPath === null) {
+    return;
+  }
+
+  requireString(savedProofPath, "savedProofPath");
+  if (!savedProofPath.endsWith(".json")) {
+    throw new TypeError("savedProofPath must point to a JSON proof artifact.");
+  }
 }
 
 function validateLaunch(launch) {

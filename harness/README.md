@@ -116,12 +116,15 @@ steps.
 For the app-window proof:
 
 ```bash
-swift run veil-vmctl app-window-proof --json --app-id winapp_notepad | node ../../harness/app-window-proof/src/validate-app-window-proof.mjs
+proof="$HOME/Library/Application Support/Veil/Diagnostics/App Window Proof/notepad-proof.json"
+swift run veil-vmctl app-window-proof --json --app-id winapp_notepad --output "$proof" | node ../../harness/app-window-proof/src/validate-app-window-proof.mjs
+node ../../harness/app-window-proof/src/validate-app-window-proof.mjs < "$proof"
 ```
 
 Expected: JSON proves the host launched the requested Windows app, received a
 matching `window.created` event, subscribed to its HWND stream, and received the
-first PNG frame metadata.
+first PNG frame metadata. The saved proof file can be attached to diagnostics
+without committing Windows media or screenshots.
 
 For the full launch acceptance flow:
 
