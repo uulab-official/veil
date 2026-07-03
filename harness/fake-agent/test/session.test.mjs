@@ -105,6 +105,49 @@ test("accepts a window close request for a tracked HWND", async () => {
   assert.equal(closed.windowId, "hwnd:0003029A");
 });
 
+test("declines window close requests for untracked HWNDs", async () => {
+  const broadcastEvents = [];
+  const session = createSession({
+    broadcast: async (event) => {
+      broadcastEvents.push(event);
+    }
+  });
+
+  const replies = await session.handle({
+    type: "window.close.request",
+    requestId: "req_close_missing",
+    windowId: "hwnd:DEADBEEF"
+  });
+
+  assert.equal(replies.length, 1);
+  const response = validateWindowCloseResponse(replies[0]);
+  assert.equal(response.requestId, "req_close_missing");
+  assert.equal(response.windowId, "hwnd:DEADBEEF");
+  assert.equal(response.accepted, false);
+  assert.equal(broadcastEvents.length, 0);
+});
+
+test("untracks a HWND after accepting a close request", async () => {
+  const session = createSession();
+
+  await session.handle({
+    type: "window.close.request",
+    requestId: "req_close_notepad",
+    windowId: "hwnd:0003029A"
+  });
+
+  const replies = await session.handle({
+    type: "window.focus.request",
+    requestId: "req_focus_after_close",
+    windowId: "hwnd:0003029A"
+  });
+
+  assert.equal(replies.length, 1);
+  const response = validateWindowFocusResponse(replies[0]);
+  assert.equal(response.windowId, "hwnd:0003029A");
+  assert.equal(response.accepted, false);
+});
+
 test("rejects window close requests without a HWND", async () => {
   const session = createSession();
 
@@ -137,6 +180,22 @@ test("accepts a window focus request for a tracked HWND", async () => {
   assert.equal(response.requestId, "req_focus_notepad");
   assert.equal(response.windowId, "hwnd:0003029A");
   assert.equal(response.accepted, true);
+});
+
+test("declines window focus requests for untracked HWNDs", async () => {
+  const session = createSession();
+
+  const replies = await session.handle({
+    type: "window.focus.request",
+    requestId: "req_focus_missing",
+    windowId: "hwnd:DEADBEEF"
+  });
+
+  assert.equal(replies.length, 1);
+  const response = validateWindowFocusResponse(replies[0]);
+  assert.equal(response.requestId, "req_focus_missing");
+  assert.equal(response.windowId, "hwnd:DEADBEEF");
+  assert.equal(response.accepted, false);
 });
 
 test("rejects window focus requests without a HWND", async () => {
@@ -172,6 +231,39 @@ test("accepts mouse input events without a reply", async () => {
   assert.deepEqual(replies, []);
 });
 
+test("rejects mouse input events for untracked HWNDs", async () => {
+  const inputEvents = [];
+  const broadcastEvents = [];
+  const session = createSession({
+    broadcast: async (event) => {
+      broadcastEvents.push(event);
+    },
+    onInput: async (input) => {
+      inputEvents.push(input);
+    }
+  });
+
+  const replies = await session.handle({
+    type: "input.mouse",
+    windowId: "hwnd:DEADBEEF",
+    event: "leftDown",
+    x: 240,
+    y: 130,
+    modifiers: []
+  });
+
+  assert.deepEqual(replies, [
+    {
+      type: "error",
+      requestId: undefined,
+      code: "window_not_tracked",
+      message: "No tracked window exists for id hwnd:DEADBEEF."
+    }
+  ]);
+  assert.deepEqual(inputEvents, []);
+  assert.deepEqual(broadcastEvents, []);
+});
+
 test("accepts key input events without a reply", async () => {
   const session = createSession();
 
@@ -185,6 +277,39 @@ test("accepts key input events without a reply", async () => {
   });
 
   assert.deepEqual(replies, []);
+});
+
+test("rejects key input events for untracked HWNDs", async () => {
+  const inputEvents = [];
+  const broadcastEvents = [];
+  const session = createSession({
+    broadcast: async (event) => {
+      broadcastEvents.push(event);
+    },
+    onInput: async (input) => {
+      inputEvents.push(input);
+    }
+  });
+
+  const replies = await session.handle({
+    type: "input.key",
+    windowId: "hwnd:DEADBEEF",
+    event: "keyDown",
+    key: "c",
+    windowsVirtualKey: 67,
+    modifiers: ["ctrl"]
+  });
+
+  assert.deepEqual(replies, [
+    {
+      type: "error",
+      requestId: undefined,
+      code: "window_not_tracked",
+      message: "No tracked window exists for id hwnd:DEADBEEF."
+    }
+  ]);
+  assert.deepEqual(inputEvents, []);
+  assert.deepEqual(broadcastEvents, []);
 });
 
 test("accepts host clipboard text without a reply", async () => {
@@ -221,6 +346,32 @@ test("broadcasts a fixture frame when a capture stream is subscribed", async () 
   assert.equal(broadcastEvents[0].type, "window.frame");
   assert.equal(broadcastEvents[0].windowId, "hwnd:0003029A");
   assert.equal(broadcastEvents[0].format, "png");
+});
+
+test("rejects capture stream subscription for untracked HWNDs", async () => {
+  const broadcastEvents = [];
+  const session = createSession({
+    broadcast: async (event) => {
+      broadcastEvents.push(event);
+    }
+  });
+
+  const subscribeReplies = await session.handle({
+    type: "window.frame.subscribe",
+    requestId: "req_frame_subscribe_missing",
+    windowId: "hwnd:DEADBEEF",
+    format: "png"
+  });
+
+  assert.deepEqual(subscribeReplies, [
+    {
+      type: "error",
+      requestId: "req_frame_subscribe_missing",
+      code: "window_not_tracked",
+      message: "No tracked window exists for id hwnd:DEADBEEF."
+    }
+  ]);
+  assert.deepEqual(broadcastEvents, []);
 });
 
 test("accepts frame stream unsubscribe without a reply", async () => {

@@ -316,6 +316,7 @@ Rules:
 - `windowId` must match the HWND-shaped id from a tracked `window.created` event.
 - On Windows, the first implementation maps this to `WM_CLOSE` for the target HWND.
 - `accepted: true` means the close message was posted to the window.
+- `accepted: false` means the HWND is no longer tracked or the OS rejected the close request; the host must not emit a synthetic `window.closed` event.
 - `window.closed` tells the host to remove the tracked HWND, close the macOS mirror window without sending another close request, and forget the persisted restore intent for that app.
 
 ## Input Mouse
@@ -344,6 +345,11 @@ Allowed mouse events:
 
 Implementation note: the first Windows agent implementation maps these host events to HWND `PostMessage` calls with client-area coordinates.
 
+Rules:
+
+- `windowId` must match the HWND-shaped id from a tracked `window.created` event.
+- If the HWND is not tracked, the guest rejects the input with `window_not_tracked` and must not post mouse messages.
+
 ## Input Key
 
 Event from host to guest:
@@ -362,6 +368,11 @@ Event from host to guest:
 The host maps macOS command shortcuts to Windows control shortcuts for app windows.
 
 Implementation note: the first Windows agent implementation maps `input.key` to HWND `WM_KEYDOWN` and `WM_KEYUP` messages. Modifier entries such as `ctrl`, `shift`, and `alt` are posted around the key event.
+
+Rules:
+
+- `windowId` must match the HWND-shaped id from a tracked `window.created` event.
+- If the HWND is not tracked, the guest rejects the input with `window_not_tracked` and must not post key messages.
 
 ## Clipboard Text
 

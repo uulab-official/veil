@@ -170,6 +170,11 @@ public sealed class AgentSession
             return AgentReplies.Direct(ErrorResponse(requestId, "invalid_message", "window.close.request requires windowId."));
         }
 
+        if (!TryGetTrackedWindow(windowId, out _))
+        {
+            return AgentReplies.Direct(WindowCloseResponse(requestId, windowId, accepted: false));
+        }
+
         try
         {
             var accepted = await desktop.CloseWindowAsync(windowId, cancellationToken);
@@ -207,6 +212,11 @@ public sealed class AgentSession
             return AgentReplies.Direct(ErrorResponse(requestId, "invalid_message", "input.mouse requires windowId, event, x, and y."));
         }
 
+        if (!TryGetTrackedWindow(windowId, out _))
+        {
+            return AgentReplies.Direct(ErrorResponse(requestId, "window_not_tracked", $"No tracked window exists for id {windowId}."));
+        }
+
         var modifiers = request["modifiers"] is JsonArray modifierArray
             ? modifierArray.Select(modifier => modifier?.GetValue<string>() ?? string.Empty).Where(modifier => modifier.Length > 0).ToArray()
             : Array.Empty<string>();
@@ -240,6 +250,11 @@ public sealed class AgentSession
             || !TryReadInt(request, "windowsVirtualKey", out var windowsVirtualKey))
         {
             return AgentReplies.Direct(ErrorResponse(requestId, "invalid_message", "input.key requires windowId, event, key, and windowsVirtualKey."));
+        }
+
+        if (!TryGetTrackedWindow(windowId, out _))
+        {
+            return AgentReplies.Direct(ErrorResponse(requestId, "window_not_tracked", $"No tracked window exists for id {windowId}."));
         }
 
         var modifiers = request["modifiers"] is JsonArray modifierArray

@@ -91,6 +91,7 @@ test("windows agent accepts host window close requests", async () => {
   assert.match(desktop, /PostMessage/);
   assert.match(session, /MessageTypes\.WindowCloseRequest/);
   assert.match(session, /HandleWindowCloseAsync/);
+  assert.match(session, /TryGetTrackedWindow\(windowId,\s*out _\)/);
   assert.match(session, /MessageTypes\.WindowCloseResponse/);
 });
 
@@ -107,6 +108,7 @@ test("windows agent accepts host window focus requests", async () => {
   assert.match(desktop, /EnsureWindowReadyForInput\(hwnd\)/);
   assert.match(session, /MessageTypes\.WindowFocusRequest/);
   assert.match(session, /HandleWindowFocusAsync/);
+  assert.match(session, /TryGetTrackedWindow\(windowId,\s*out _\)/);
   assert.match(session, /MessageTypes\.WindowFocusResponse/);
 });
 
@@ -126,6 +128,7 @@ test("windows agent accepts host mouse input events", async () => {
   assert.match(desktop, /PostMessage/);
   assert.match(session, /MessageTypes\.InputMouse/);
   assert.match(session, /HandleMouseInputAsync/);
+  assert.match(session, /window_not_tracked/);
   assert.match(session, /\["input"\]\s*=\s*true/);
 });
 
@@ -145,6 +148,7 @@ test("windows agent accepts host key input events", async () => {
   assert.match(desktop, /PostMessage/);
   assert.match(session, /MessageTypes\.InputKey/);
   assert.match(session, /HandleKeyInputAsync/);
+  assert.match(session, /window_not_tracked/);
 });
 
 test("windows agent foregrounds the HWND before forwarding host input", async () => {
