@@ -11,6 +11,8 @@ public struct QEMULaunchRecord: Codable, Equatable, Sendable {
     public var processLogPath: String
     public var monitorSocketPath: String
     public var qmpSocketPath: String?
+    public var vncHost: String?
+    public var vncPort: Int?
     public var consoleScreenshotPath: String?
     public var startedAt: Date
 
@@ -25,6 +27,8 @@ public struct QEMULaunchRecord: Codable, Equatable, Sendable {
         processLogPath: String,
         monitorSocketPath: String,
         qmpSocketPath: String? = nil,
+        vncHost: String? = nil,
+        vncPort: Int? = nil,
         consoleScreenshotPath: String? = nil,
         startedAt: Date
     ) {
@@ -38,6 +42,8 @@ public struct QEMULaunchRecord: Codable, Equatable, Sendable {
         self.processLogPath = processLogPath
         self.monitorSocketPath = monitorSocketPath
         self.qmpSocketPath = qmpSocketPath
+        self.vncHost = vncHost
+        self.vncPort = vncPort
         self.consoleScreenshotPath = consoleScreenshotPath
         self.startedAt = startedAt
     }
@@ -81,6 +87,7 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
     private let frontmostRunner: @Sendable () -> Void
     private let bootKeySender: @Sendable (URL) -> Bool
     private let consoleScreenshotCapturer: @Sendable (URL, URL) -> Void
+    private let vncPortAllocator: @Sendable () -> Int?
     private let displayMode: QEMUWindowsBootDisplayMode
     private var process: Process?
     private var monitorSocketURL: URL?
@@ -94,6 +101,7 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
         frontmostRunner: @escaping @Sendable () -> Void = QEMUVMRuntimeBooter.bringQEMUToFrontIfAllowed,
         bootKeySender: @escaping @Sendable (URL) -> Bool = QEMUVMRuntimeBooter.sendWindowsInstallerBootKey,
         consoleScreenshotCapturer: @escaping @Sendable (URL, URL) -> Void = QEMUVMRuntimeBooter.captureConsoleScreenshot,
+        vncPortAllocator: @escaping @Sendable () -> Int? = QEMUVMRuntimeBooter.allocateLoopbackVNCPort,
         displayMode: QEMUWindowsBootDisplayMode = .nativeCocoa
     ) {
         self.diagnosticsDirectory = diagnosticsDirectory
@@ -103,6 +111,7 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
         self.frontmostRunner = frontmostRunner
         self.bootKeySender = bootKeySender
         self.consoleScreenshotCapturer = consoleScreenshotCapturer
+        self.vncPortAllocator = vncPortAllocator
         self.displayMode = displayMode
     }
 
@@ -145,6 +154,8 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
         let logHandle = try FileHandle(forWritingTo: logURL)
         let monitorSocketURL = Self.monitorSocketURL()
         let qmpSocketURL = Self.qmpSocketURL()
+        let vncPort = displayMode == .vncLoopback ? vncPortAllocator() : nil
+        let vncDisplay = vncPort.map { max($0 - 5_900, 0) }
         try tpmEmulatorRunner(plan)
 
         let process = Process()
@@ -155,7 +166,8 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
             monitorSocketPath: monitorSocketURL.path,
             qmpSocketPath: qmpSocketURL.path,
             bootDiskFirst: !shouldSendInstallerBootKey,
-            displayMode: displayMode
+            displayMode: displayMode,
+            vncDisplay: vncDisplay
         )
         process.standardOutput = logHandle
         process.standardError = logHandle
@@ -170,6 +182,7 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
             processLogURL: logURL,
             monitorSocketURL: monitorSocketURL,
             qmpSocketURL: qmpSocketURL,
+            vncPort: vncPort,
             consoleScreenshotURL: consoleScreenshotURL,
             directory: launchDirectory,
             stamp: stamp
@@ -243,6 +256,7 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
         processLogURL: URL,
         monitorSocketURL: URL,
         qmpSocketURL: URL,
+        vncPort: Int?,
         consoleScreenshotURL: URL,
         directory: URL,
         stamp: String
@@ -256,6 +270,8 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
             processLogPath: processLogURL.path,
             monitorSocketPath: monitorSocketURL.path,
             qmpSocketPath: qmpSocketURL.path,
+            vncHost: vncPort == nil ? nil : "127.0.0.1",
+            vncPort: vncPort,
             consoleScreenshotPath: consoleScreenshotURL.path,
             startedAt: Date()
         )
@@ -447,6 +463,28 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
     private static func qmpSocketURL() -> URL {
         URL(fileURLWithPath: "/tmp")
             .appendingPathComponent("vq-\(UUID().uuidString.prefix(8)).qmp.sock")
+    }
+
+    public static func allocateLoopbackVNCPort() -> Int? {
+        for port in 5_900...5_999 {
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/usr/sbin/lsof")
+            process.arguments = ["-nP", "-iTCP:\(port)", "-sTCP:LISTEN"]
+            process.standardOutput = nil
+            process.standardError = nil
+
+            do {
+                try process.run()
+                process.waitUntilExit()
+                if process.terminationStatus != 0 {
+                    return port
+                }
+            } catch {
+                return port
+            }
+        }
+
+        return nil
     }
 
     private static func hostArchitecture() -> String {

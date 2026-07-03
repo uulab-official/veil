@@ -20,10 +20,11 @@ Goal: move Veil from a Veil shell plus separate QEMU Cocoa display toward a UTM-
 - [x] Refresh running console screenshot evidence every second once a preview file exists and force the SwiftUI image surface to rerender on each capture revision.
 - [x] Route clicks on the single-window setup preview to QEMU QMP absolute pointer tap events so the embedded surface can become interactive.
 - [x] Capture keyboard focus on the single-window setup preview and route Mac key events to QEMU key sequences.
+- [x] Launch app-started QEMU with a loopback VNC display endpoint so the next embedded surface can consume live frames without opening a native QEMU window.
 
 ## Next
 
-- [ ] Turn the current screenshot evidence refresh into a live embedded display provider inside the main SwiftUI/AppKit window.
-- [ ] Replace screenshot-only setup evidence with a live embedded installer surface.
+- [ ] Turn the loopback VNC endpoint into a live embedded display provider inside the main SwiftUI/AppKit window.
+- [ ] Replace screenshot-only setup evidence with the VNC-backed installer surface.
 - [ ] Keep native QEMU display available only as an advanced recovery fallback.
 - [ ] Verify one-window startup with a running Windows 11 Arm install and guest-agent connection.

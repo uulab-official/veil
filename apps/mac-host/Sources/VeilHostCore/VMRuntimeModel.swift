@@ -313,6 +313,8 @@ public struct VMConsoleLaunchEvidence: Codable, Equatable, Sendable {
     public var processLogPath: String
     public var monitorSocketPath: String
     public var qmpSocketPath: String?
+    public var vncHost: String?
+    public var vncPort: Int?
     public var consoleScreenshotPath: String?
     public var consoleScreenshotRefreshedAt: Date?
     public var previewStatus: VMConsolePreviewStatus
@@ -324,6 +326,8 @@ public struct VMConsoleLaunchEvidence: Codable, Equatable, Sendable {
         processLogPath: String,
         monitorSocketPath: String,
         qmpSocketPath: String? = nil,
+        vncHost: String? = nil,
+        vncPort: Int? = nil,
         consoleScreenshotPath: String?,
         consoleScreenshotRefreshedAt: Date? = nil,
         previewStatus: VMConsolePreviewStatus = .unavailable,
@@ -334,6 +338,8 @@ public struct VMConsoleLaunchEvidence: Codable, Equatable, Sendable {
         self.processLogPath = processLogPath
         self.monitorSocketPath = monitorSocketPath
         self.qmpSocketPath = qmpSocketPath
+        self.vncHost = vncHost
+        self.vncPort = vncPort
         self.consoleScreenshotPath = consoleScreenshotPath
         self.consoleScreenshotRefreshedAt = consoleScreenshotRefreshedAt
         self.previewStatus = previewStatus
@@ -1644,6 +1650,8 @@ public struct LocalVMRuntimeService: VMRuntimeService {
             processLogPath: launchRecord.processLogPath,
             monitorSocketPath: launchRecord.monitorSocketPath,
             qmpSocketPath: launchRecord.qmpSocketPath,
+            vncHost: launchRecord.vncHost,
+            vncPort: launchRecord.vncPort,
             consoleScreenshotPath: consoleScreenshotPath ?? existingConsoleScreenshotPath(from: launchRecord),
             consoleScreenshotRefreshedAt: consoleScreenshotRefreshedAt,
             previewStatus: consolePreviewStatus(

@@ -2103,12 +2103,21 @@ private struct WindowsDisplayLaunchEvidenceStrip: View {
 
     private var displaySummary: String {
         let logName = URL(fileURLWithPath: evidence.processLogPath).lastPathComponent
+        let liveEndpoint = evidence.vncHost.flatMap { host in
+            evidence.vncPort.map { "\(host):\($0)" }
+        }
         if let refreshedAt = evidence.consoleScreenshotRefreshedAt {
             let refreshed = refreshedAt.formatted(date: .omitted, time: .shortened)
+            if let liveEndpoint {
+                return "Preview refreshed \(refreshed) · VNC \(liveEndpoint)"
+            }
             return "Preview refreshed \(refreshed) · \(logName)"
         }
 
         let startedAt = evidence.startedAt.formatted(date: .omitted, time: .shortened)
+        if let liveEndpoint {
+            return "\(evidence.provider) live endpoint \(liveEndpoint) · started \(startedAt)"
+        }
         return "\(evidence.provider) started \(startedAt) · \(logName)"
     }
 
@@ -2139,6 +2148,7 @@ private struct WindowsDisplayLaunchEvidenceStrip: View {
             "Log: \(evidence.processLogPath)",
             "Monitor: \(evidence.monitorSocketPath)",
             evidence.qmpSocketPath.map { "QMP: \($0)" },
+            evidence.vncHost.flatMap { host in evidence.vncPort.map { "VNC: \(host):\($0)" } },
             evidence.consoleScreenshotPath.map { "Screenshot: \($0)" },
             "Preview status: \(evidence.previewStatus.rawValue)",
             evidence.consoleScreenshotRefreshedAt.map { "Screenshot refreshed: \($0.formatted(date: .abbreviated, time: .standard))" }

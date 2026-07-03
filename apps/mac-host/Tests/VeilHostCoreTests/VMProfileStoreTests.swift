@@ -173,6 +173,8 @@ struct VMProfileStoreTests {
             processLogPath: processLogURL.path,
             monitorSocketPath: "/tmp/vq-test.sock",
             qmpSocketPath: "/tmp/vq-test.qmp.sock",
+            vncHost: "127.0.0.1",
+            vncPort: 5_907,
             consoleScreenshotPath: consoleScreenshotURL.path,
             startedAt: Date(timeIntervalSince1970: 1_782_838_800)
         )
@@ -206,6 +208,8 @@ struct VMProfileStoreTests {
         #expect(snapshot.latestConsoleLaunch?.processLogPath == processLogURL.path)
         #expect(snapshot.latestConsoleLaunch?.monitorSocketPath == "/tmp/vq-test.sock")
         #expect(snapshot.latestConsoleLaunch?.qmpSocketPath == "/tmp/vq-test.qmp.sock")
+        #expect(snapshot.latestConsoleLaunch?.vncHost == "127.0.0.1")
+        #expect(snapshot.latestConsoleLaunch?.vncPort == 5_907)
         #expect(snapshot.latestConsoleLaunch?.consoleScreenshotPath == consoleScreenshotURL.path)
         #expect(snapshot.latestConsoleLaunch?.previewStatus == .stale)
         #expect(snapshot.latestConsoleLaunch?.startedAt == Date(timeIntervalSince1970: 1_782_838_800))

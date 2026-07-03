@@ -20,7 +20,7 @@ private enum AppRuntimeBooterFactory {
 
         return QEMUVMRuntimeBooter(
             frontmostRunner: {},
-            displayMode: .headless
+            displayMode: .vncLoopback
         )
     }
 }

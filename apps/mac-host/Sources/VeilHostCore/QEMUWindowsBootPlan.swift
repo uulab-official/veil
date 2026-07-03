@@ -78,6 +78,7 @@ public struct QEMUWindowsBootPlan: Codable, Equatable, Sendable {
 public enum QEMUWindowsBootDisplayMode: String, Codable, Equatable, Sendable {
     case nativeCocoa
     case headless
+    case vncLoopback
 }
 
 public struct QEMUWindowsBootPlanner: Sendable {
@@ -1061,19 +1062,25 @@ public struct QEMUWindowsBootLaunchPlanner: Sendable {
         monitorSocketPath: String,
         qmpSocketPath: String,
         bootDiskFirst: Bool = false,
-        displayMode: QEMUWindowsBootDisplayMode = .nativeCocoa
+        displayMode: QEMUWindowsBootDisplayMode = .nativeCocoa,
+        vncDisplay: Int? = nil
     ) -> [String] {
         var arguments = plan.arguments.map(QEMUWindowsBootArgumentRewriter.lockSafeSystemDriveArgument)
         if bootDiskFirst {
             arguments = QEMUWindowsBootArgumentRewriter.bootDiskFirstArguments(arguments)
         }
-        if displayMode == .headless {
+        if displayMode == .headless || displayMode == .vncLoopback {
             if let displayIndex = arguments.firstIndex(of: "-display"),
                arguments.indices.contains(displayIndex + 1) {
                 arguments[displayIndex + 1] = "none"
             } else {
                 arguments.append(contentsOf: ["-display", "none"])
             }
+        }
+        if displayMode == .vncLoopback, let vncDisplay {
+            arguments.append(contentsOf: [
+                "-vnc", "127.0.0.1:\(vncDisplay)"
+            ])
         }
 
         arguments.append(contentsOf: [

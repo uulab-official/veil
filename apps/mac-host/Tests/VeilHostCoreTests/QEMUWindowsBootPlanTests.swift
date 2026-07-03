@@ -757,6 +757,34 @@ struct QEMUWindowsBootPlanTests {
         #expect(arguments.containsSequence(["-qmp", "unix:/tmp/veil-qemu-launch.qmp.sock,server,nowait"]))
     }
 
+    @Test("launch planner supports VNC loopback embedded display endpoint")
+    func launchPlannerSupportsVNCLoopbackEmbeddedDisplayEndpoint() throws {
+        var profile = VMProfile.defaultWindows11Arm(createdAt: Date(timeIntervalSince1970: 1_782_752_400))
+        profile.installerMediaPath = "/Users/test/Downloads/Win11_25H2_Korean_Arm64_v2.iso"
+        profile.virtualDiskPath = "/Users/test/Virtual Machines/Veil/Windows 11 Arm.img"
+        profile.sharedFolderPath = "/Users/test/Veil Shared"
+        let plan = try QEMUWindowsBootPlanner(
+            executablePath: "/opt/homebrew/bin/qemu-system-aarch64",
+            isExecutableAvailable: true,
+            firmwarePath: "/opt/homebrew/share/qemu/edk2-aarch64-code.fd",
+            isFirmwareAvailable: true
+        ).makePlan(for: profile)
+
+        let arguments = QEMUWindowsBootLaunchPlanner().makeArguments(
+            from: plan,
+            serialLogPath: "/tmp/veil-qemu-launch.serial.log",
+            monitorSocketPath: "/tmp/veil-qemu-launch.sock",
+            qmpSocketPath: "/tmp/veil-qemu-launch.qmp.sock",
+            displayMode: .vncLoopback,
+            vncDisplay: 7
+        )
+
+        #expect(arguments.containsSequence(["-display", "none"]))
+        #expect(arguments.containsSequence(["-vnc", "127.0.0.1:7"]))
+        #expect(!arguments.containsSequence(["-display", "cocoa"]))
+        #expect(arguments.containsSequence(["-qmp", "unix:/tmp/veil-qemu-launch.qmp.sock,server,nowait"]))
+    }
+
     @Test("launch planner can prefer the installed disk after Windows setup has started")
     func launchPlannerCanPreferInstalledDiskAfterSetupHasStarted() throws {
         var profile = VMProfile.defaultWindows11Arm(createdAt: Date(timeIntervalSince1970: 1_782_752_400))
