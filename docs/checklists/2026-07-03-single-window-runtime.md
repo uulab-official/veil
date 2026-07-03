@@ -54,6 +54,7 @@ Goal: move Veil from a Veil shell plus separate QEMU Cocoa display toward a UTM-
 - [x] Add menu-bar Close All for running Windows apps so multiple mirrored HWND sessions can be ended from one stable host surface.
 - [x] Route Dock reopen and main-window hiding through launcher visibility status so Coherence runs bring Windows app windows forward instead of reopening duplicate launchers.
 - [x] Open queued Windows apps from the menu bar without first reopening the main launcher once the guest agent can fulfill the pending launch.
+- [x] Add a menu-bar Bring Windows Apps Forward command so hidden Coherence windows can be restored from the stable menu surface without opening the launcher.
 
 ## Next
 

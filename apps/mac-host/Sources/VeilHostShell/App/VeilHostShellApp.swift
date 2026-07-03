@@ -194,6 +194,7 @@ struct VeilHostShellApp: App {
                 launchWindowsAppByIdAction: launchWindowsAppWindow(appId:),
                 fulfillPendingLaunchAction: fulfillPendingWindowsAppWindow,
                 restoreWindowsAppWindowsAction: restoreWindowsAppWindows,
+                bringAllWindowsAppWindowsToFrontAction: bringAllWindowsAppWindowsToFront,
                 focusWindowsAppWindowAction: focusWindowsAppWindow(windowId:),
                 closeWindowsAppWindowAction: closeWindowsAppWindow(windowId:),
                 closeAllWindowsAppWindowsAction: closeAllWindowsAppWindows,
@@ -886,6 +887,7 @@ private struct VeilMenuBarMenu: View {
     var launchWindowsAppByIdAction: (String) -> Void
     var fulfillPendingLaunchAction: () -> Void
     var restoreWindowsAppWindowsAction: () -> Void
+    var bringAllWindowsAppWindowsToFrontAction: () -> Void
     var focusWindowsAppWindowAction: (String) -> Void
     var closeWindowsAppWindowAction: (String) -> Void
     var closeAllWindowsAppWindowsAction: () -> Void
@@ -912,6 +914,15 @@ private struct VeilMenuBarMenu: View {
 
         if !model.mirrorSessions.isEmpty {
             Menu("Running Windows Apps", systemImage: "rectangle.3.group") {
+                Button(
+                    model.mirrorSessions.count == 1 ? "Bring Windows App Forward" : "Bring Windows Apps Forward",
+                    systemImage: "arrow.up.forward.app"
+                ) {
+                    bringAllWindowsAppWindowsToFrontAction()
+                }
+
+                Divider()
+
                 ForEach(model.mirrorSessions) { session in
                     Menu(session.window.title, systemImage: "macwindow") {
                         Button("Bring to Front", systemImage: "arrow.up.forward.app") {
