@@ -89,6 +89,9 @@ struct VeilHostShellApp: App {
                     for launch in restoredLaunches {
                         showWindowsAppWindow(for: launch)
                     }
+                    if !restoredLaunches.isEmpty {
+                        hideMainWindowForCoherenceIfNeeded()
+                    }
                     await recordGuestAgentInstallEvidenceIfNeeded()
 
                     if Self.shouldStartVMOnLaunch {
@@ -256,10 +259,14 @@ struct VeilHostShellApp: App {
                     for launch in restoredLaunches {
                         showWindowsAppWindow(for: launch)
                     }
+                    if !restoredLaunches.isEmpty {
+                        hideMainWindowForCoherenceIfNeeded()
+                    }
 
                     if restoredLaunches.isEmpty,
                        let fulfilledLaunch = await model.refreshLiveAgentIfNeeded() {
                         showWindowsAppWindow(for: fulfilledLaunch)
+                        hideMainWindowForCoherenceIfNeeded()
                     }
                     await recordGuestAgentInstallEvidenceIfNeeded()
                 }
