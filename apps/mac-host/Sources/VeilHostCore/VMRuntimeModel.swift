@@ -1057,14 +1057,6 @@ public struct LocalVMRuntimeService: VMRuntimeService {
         let activeProvider = runtimeProviders.first { $0.kind == .qemuHypervisor && $0.status == .active }
             ?? runtimeProviders.first { $0.kind == .appleVirtualization }
         let profile = try await profileStore.load()
-        let discoveredInstallerMediaPath: String?
-        if let profile {
-            discoveredInstallerMediaPath = profile.installerMediaPath == nil
-                ? discoverDefaultInstallerMedia()?.path
-                : nil
-        } else {
-            discoveredInstallerMediaPath = discoverDefaultInstallerMedia()?.path
-        }
 
         if virtualizationAvailable, let profile {
             let latestLaunchRecord = try? await qemuLaunchRecordStore.loadLatest()
@@ -1101,7 +1093,6 @@ public struct LocalVMRuntimeService: VMRuntimeService {
                 memoryMB: profile.memoryMB,
                 diskGB: profile.diskGB,
                 installerMediaPath: profile.installerMediaPath,
-                discoveredInstallerMediaPath: profile.installerMediaPath == nil ? discoveredInstallerMediaPath : nil,
                 driverMediaPath: profile.driverMediaPath,
                 virtualDiskPath: profile.virtualDiskPath,
                 virtualDiskAllocatedBytes: virtualDiskAllocatedBytes,
@@ -1136,7 +1127,6 @@ public struct LocalVMRuntimeService: VMRuntimeService {
             architecture: architecture,
             minimumOSSupported: minimumOSSupported,
             profileName: nil,
-            discoveredInstallerMediaPath: discoveredInstallerMediaPath,
             runtimeProvider: activeProvider,
             runtimeProviders: runtimeProviders,
             detail: virtualizationAvailable

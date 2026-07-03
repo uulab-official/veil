@@ -941,8 +941,8 @@ struct VMProfileStoreTests {
         #expect(capture.stagedScriptExists)
     }
 
-    @Test("load snapshot reports discovered installer before profile exists")
-    func loadSnapshotReportsDiscoveredInstallerBeforeProfileExists() async throws {
+    @Test("load snapshot avoids Downloads installer discovery before profile exists")
+    func loadSnapshotAvoidsDownloadsInstallerDiscoveryBeforeProfileExists() async throws {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
         let homeDirectory = directory.appendingPathComponent("Home", isDirectory: true)
@@ -959,15 +959,14 @@ struct VMProfileStoreTests {
         let snapshot = try await service.loadSnapshot()
         let storedProfile = try await store.load()
 
-        let discoveredPath = try #require(snapshot.discoveredInstallerMediaPath)
-        #expect(URL(fileURLWithPath: discoveredPath).lastPathComponent == installerURL.lastPathComponent)
-        #expect(FileManager.default.fileExists(atPath: discoveredPath))
+        #expect(FileManager.default.fileExists(atPath: installerURL.path))
+        #expect(snapshot.discoveredInstallerMediaPath == nil)
         #expect(snapshot.installerMediaPath == nil)
         #expect(storedProfile == nil)
     }
 
-    @Test("load snapshot reports discovered installer without mutating profile")
-    func loadSnapshotReportsDiscoveredInstallerWithoutMutatingProfile() async throws {
+    @Test("load snapshot avoids Downloads installer discovery without mutating profile")
+    func loadSnapshotAvoidsDownloadsInstallerDiscoveryWithoutMutatingProfile() async throws {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
         let homeDirectory = directory.appendingPathComponent("Home", isDirectory: true)
@@ -986,9 +985,8 @@ struct VMProfileStoreTests {
         let snapshot = try await service.loadSnapshot()
         let storedProfile = try #require(await store.load())
 
-        let discoveredPath = try #require(snapshot.discoveredInstallerMediaPath)
-        #expect(URL(fileURLWithPath: discoveredPath).lastPathComponent == installerURL.lastPathComponent)
-        #expect(FileManager.default.fileExists(atPath: discoveredPath))
+        #expect(FileManager.default.fileExists(atPath: installerURL.path))
+        #expect(snapshot.discoveredInstallerMediaPath == nil)
         #expect(snapshot.installerMediaPath == nil)
         #expect(storedProfile.installerMediaPath == nil)
     }
