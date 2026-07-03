@@ -27,6 +27,12 @@
     "generatedAt": "2026-07-04T00:05:01Z",
     "phase": "connected",
     "selectedAppId": "winapp_calculator",
+    "pendingLaunch": {
+      "isQueued": false,
+      "willLaunchOnAgentReconnect": false,
+      "recommendedAction": "none",
+      "reason": "No Windows app launch is queued."
+    },
     "connection": {
       "mode": "agent",
       "hasLiveAgentConnection": true,

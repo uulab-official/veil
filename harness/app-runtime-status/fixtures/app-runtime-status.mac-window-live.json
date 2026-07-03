@@ -3,6 +3,12 @@
   "generatedAt": "2026-07-03T13:20:00Z",
   "phase": "connected",
   "selectedAppId": "winapp_notepad",
+  "pendingLaunch": {
+    "isQueued": false,
+    "willLaunchOnAgentReconnect": false,
+    "recommendedAction": "none",
+    "reason": "No Windows app launch is queued."
+  },
   "connection": {
     "mode": "agent",
     "hasLiveAgentConnection": true,

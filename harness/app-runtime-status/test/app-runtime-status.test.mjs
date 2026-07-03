@@ -66,6 +66,16 @@ test("rejects reports without launch plan status", () => {
   );
 });
 
+test("rejects reports without pending launch status", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.demo.json", import.meta.url), "utf8"));
+  delete report.pendingLaunch;
+
+  assert.throws(
+    () => validateAppRuntimeStatus(report),
+    /pendingLaunch/
+  );
+});
+
 test("rejects Dock integration counts that drift from mirrored sessions", () => {
   const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.demo.json", import.meta.url), "utf8"));
   report.mirrorSessions.push({
@@ -124,6 +134,38 @@ test("rejects launch plans that drift from selected app readiness", () => {
   assert.throws(
     () => validateAppRuntimeStatus(report),
     /canLaunchSelectedAppNow/
+  );
+});
+
+test("rejects queued pending launch status without matching app id", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.demo.json", import.meta.url), "utf8"));
+  report.pendingLaunchAppId = "winapp_notepad";
+  report.pendingLaunch.isQueued = true;
+  report.pendingLaunch.appId = "winapp_calculator";
+  report.pendingLaunch.willLaunchOnAgentReconnect = true;
+  report.pendingLaunch.recommendedAction = "auto-launch-on-agent-reconnect";
+  report.launchPlan.pendingLaunchAppId = "winapp_notepad";
+  report.launchPlan.recommendedAction = "start-runtime-for-pending-launch";
+  report.launchPlan.reason = "The selected app launch is queued until Windows starts and the guest agent connects.";
+
+  assert.throws(
+    () => validateAppRuntimeStatus(report),
+    /pendingLaunch\.appId/
+  );
+});
+
+test("rejects reconnect auto-launch after live agent connects", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.mac-window-live.json", import.meta.url), "utf8"));
+  report.pendingLaunchAppId = "winapp_notepad";
+  report.pendingLaunch.isQueued = true;
+  report.pendingLaunch.appId = "winapp_notepad";
+  report.pendingLaunch.willLaunchOnAgentReconnect = true;
+  report.pendingLaunch.recommendedAction = "auto-launch-on-agent-reconnect";
+  report.launchPlan.pendingLaunchAppId = "winapp_notepad";
+
+  assert.throws(
+    () => validateAppRuntimeStatus(report),
+    /willLaunchOnAgentReconnect/
   );
 });
 

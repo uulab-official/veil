@@ -72,3 +72,4 @@ Goal: adapt concrete UTM source patterns into Veil while keeping Veil focused on
 - [x] Make real `app-runtime-action launch` queue a pending app launch instead of returning a fake demo HWND when the Windows guest agent is unavailable.
 - [x] Keep `FallbackHostDashboardService` demo fallback limited to overview metadata so live app launches cannot turn network failures into fake mirrored windows.
 - [x] Expose pending-launch `pendingLaunchAppId` and `launchPlan` at the top level of launch action reports so automation can start Windows, wait for the guest agent, and retry the selected app without parsing a fake HWND.
+- [x] Add `pendingLaunch` to app-runtime status so UI, CLI, and harnesses can prove queued app launches will auto-run when the Windows guest agent reconnects.

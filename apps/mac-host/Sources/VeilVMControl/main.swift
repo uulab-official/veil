@@ -600,6 +600,12 @@ struct VeilVMControl {
         if let detail = report.connection.connectionDetail {
             print("Detail: \(detail)")
         }
+        print("Pending launch queued: \(report.pendingLaunch.isQueued ? "yes" : "no")")
+        if let pendingLaunchAppId = report.pendingLaunch.appId {
+            print("Pending launch app: \(pendingLaunchAppId)")
+        }
+        print("Pending launch auto-reconnect: \(report.pendingLaunch.willLaunchOnAgentReconnect ? "yes" : "no")")
+        print("Pending launch action: \(report.pendingLaunch.recommendedAction)")
         print("Apps: \(report.apps.count)")
         print("Open Windows app windows: \(report.mirrorSessions.count)")
         print("Dock integration: \(report.dockIntegration.isEnabled ? "enabled" : "disabled")")

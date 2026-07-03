@@ -27,6 +27,7 @@ export function validateAppRuntimeStatus(report) {
 
   validateConnection(report.connection);
   validateApps(report.apps);
+  validatePendingLaunch(report.pendingLaunch, report);
   validateMirrorSessions(report.mirrorSessions);
   validateStringArray(report.restorableAppIds, "restorableAppIds");
   validateDockIntegration(report.dockIntegration, report.mirrorSessions);
@@ -91,6 +92,54 @@ function validateApps(apps) {
     requireString(app.name, "app.name");
     requireBoolean(app.canRequestLaunch, "app.canRequestLaunch");
     requireBoolean(app.canLaunchNow, "app.canLaunchNow");
+  }
+}
+
+function validatePendingLaunch(pendingLaunch, report) {
+  if (!pendingLaunch || typeof pendingLaunch !== "object" || Array.isArray(pendingLaunch)) {
+    throw new TypeError("pendingLaunch must be an object.");
+  }
+
+  requireBoolean(pendingLaunch.isQueued, "pendingLaunch.isQueued");
+  requireBoolean(pendingLaunch.willLaunchOnAgentReconnect, "pendingLaunch.willLaunchOnAgentReconnect");
+  requireString(pendingLaunch.recommendedAction, "pendingLaunch.recommendedAction");
+  requireString(pendingLaunch.reason, "pendingLaunch.reason");
+
+  if (pendingLaunch.appId !== undefined) {
+    requireString(pendingLaunch.appId, "pendingLaunch.appId");
+  }
+
+  if (report.pendingLaunchAppId === undefined && pendingLaunch.isQueued) {
+    throw new TypeError("pendingLaunch.isQueued requires pendingLaunchAppId.");
+  }
+
+  if (report.pendingLaunchAppId !== undefined) {
+    if (!pendingLaunch.isQueued) {
+      throw new TypeError("pendingLaunchAppId requires pendingLaunch.isQueued.");
+    }
+
+    if (pendingLaunch.appId !== report.pendingLaunchAppId) {
+      throw new TypeError("pendingLaunch.appId must match pendingLaunchAppId.");
+    }
+  }
+
+  if (!pendingLaunch.isQueued && pendingLaunch.appId !== undefined) {
+    throw new TypeError("pendingLaunch.appId is only allowed when pendingLaunch.isQueued is true.");
+  }
+
+  if (pendingLaunch.willLaunchOnAgentReconnect) {
+    if (!pendingLaunch.isQueued) {
+      throw new TypeError("pendingLaunch.willLaunchOnAgentReconnect requires pendingLaunch.isQueued.");
+    }
+
+    if (report.connection.hasLiveAgentConnection) {
+      throw new TypeError("pendingLaunch.willLaunchOnAgentReconnect is only valid before the live agent connects.");
+    }
+
+    const pendingApp = report.apps.find((app) => app.id === pendingLaunch.appId);
+    if (pendingApp === undefined || !pendingApp.canRequestLaunch) {
+      throw new TypeError("pendingLaunch.willLaunchOnAgentReconnect requires a requestable pending app.");
+    }
   }
 }
 
@@ -223,6 +272,14 @@ function validateLaunchPlan(launchPlan, report) {
     if (report.pendingLaunchAppId !== launchPlan.pendingLaunchAppId) {
       throw new TypeError("launchPlan.pendingLaunchAppId must match pendingLaunchAppId.");
     }
+  }
+
+  if (report.pendingLaunch.isQueued && launchPlan.pendingLaunchAppId !== report.pendingLaunch.appId) {
+    throw new TypeError("launchPlan.pendingLaunchAppId must match pendingLaunch.appId while a launch is queued.");
+  }
+
+  if (report.pendingLaunch.willLaunchOnAgentReconnect && !launchPlan.requiresGuestAgent) {
+    throw new TypeError("pendingLaunch.willLaunchOnAgentReconnect requires launchPlan.requiresGuestAgent.");
   }
 
   if (launchPlan.recommendedStartCommand !== undefined) {

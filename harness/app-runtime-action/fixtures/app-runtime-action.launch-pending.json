@@ -32,6 +32,13 @@
     "phase": "connected",
     "selectedAppId": "winapp_notepad",
     "pendingLaunchAppId": "winapp_notepad",
+    "pendingLaunch": {
+      "isQueued": true,
+      "appId": "winapp_notepad",
+      "willLaunchOnAgentReconnect": true,
+      "recommendedAction": "auto-launch-on-agent-reconnect",
+      "reason": "Veil will launch the queued Windows app after the guest agent reconnects."
+    },
     "connection": {
       "mode": "demo",
       "hasLiveAgentConnection": false,

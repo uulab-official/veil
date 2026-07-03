@@ -315,12 +315,35 @@ public struct WindowsAppRuntimeLaunchPlanStatus: Codable, Equatable, Sendable {
     }
 }
 
+public struct WindowsAppRuntimePendingLaunchStatus: Codable, Equatable, Sendable {
+    public var isQueued: Bool
+    public var appId: String?
+    public var willLaunchOnAgentReconnect: Bool
+    public var recommendedAction: String
+    public var reason: String
+
+    public init(
+        isQueued: Bool,
+        appId: String?,
+        willLaunchOnAgentReconnect: Bool,
+        recommendedAction: String,
+        reason: String
+    ) {
+        self.isQueued = isQueued
+        self.appId = appId
+        self.willLaunchOnAgentReconnect = willLaunchOnAgentReconnect
+        self.recommendedAction = recommendedAction
+        self.reason = reason
+    }
+}
+
 public struct WindowsAppRuntimeStatusReport: Codable, Equatable, Sendable {
     public var kind: String
     public var generatedAt: Date
     public var phase: HostDashboardPhase
     public var selectedAppId: String?
     public var pendingLaunchAppId: String?
+    public var pendingLaunch: WindowsAppRuntimePendingLaunchStatus
     public var connection: WindowsAppRuntimeConnectionStatus
     public var apps: [WindowsAppRuntimeAppStatus]
     public var mirrorSessions: [WindowsAppRuntimeWindowStatus]
@@ -337,6 +360,7 @@ public struct WindowsAppRuntimeStatusReport: Codable, Equatable, Sendable {
         phase: HostDashboardPhase,
         selectedAppId: String?,
         pendingLaunchAppId: String?,
+        pendingLaunch: WindowsAppRuntimePendingLaunchStatus,
         connection: WindowsAppRuntimeConnectionStatus,
         apps: [WindowsAppRuntimeAppStatus],
         mirrorSessions: [WindowsAppRuntimeWindowStatus],
@@ -352,6 +376,7 @@ public struct WindowsAppRuntimeStatusReport: Codable, Equatable, Sendable {
         self.phase = phase
         self.selectedAppId = selectedAppId
         self.pendingLaunchAppId = pendingLaunchAppId
+        self.pendingLaunch = pendingLaunch
         self.connection = connection
         self.apps = apps
         self.mirrorSessions = mirrorSessions
@@ -512,11 +537,13 @@ public final class HostDashboardModel {
         let quietRuntime = quietRuntimeStatus()
         let macWindowIntegration = macWindowIntegrationStatus()
         let launchPlan = launchPlanStatus()
+        let pendingLaunch = pendingLaunchStatus()
         return WindowsAppRuntimeStatusReport(
             generatedAt: generatedAt,
             phase: phase,
             selectedAppId: selectedAppId,
             pendingLaunchAppId: pendingLaunchAppId,
+            pendingLaunch: pendingLaunch,
             connection: WindowsAppRuntimeConnectionStatus(
                 mode: connectionMode,
                 hasLiveAgentConnection: hasLiveAgentConnection,
@@ -598,6 +625,47 @@ public final class HostDashboardModel {
                     isAvailable: canSendHostClipboardText
                 )
             ]
+        )
+    }
+
+    public func pendingLaunchStatus() -> WindowsAppRuntimePendingLaunchStatus {
+        guard let pendingLaunchAppId else {
+            return WindowsAppRuntimePendingLaunchStatus(
+                isQueued: false,
+                appId: nil,
+                willLaunchOnAgentReconnect: false,
+                recommendedAction: "none",
+                reason: "No Windows app launch is queued."
+            )
+        }
+
+        let appCanBeRequested = canRequestAppLaunch(appId: pendingLaunchAppId)
+        if hasLiveAgentConnection && canLaunchApp(appId: pendingLaunchAppId) {
+            return WindowsAppRuntimePendingLaunchStatus(
+                isQueued: true,
+                appId: pendingLaunchAppId,
+                willLaunchOnAgentReconnect: false,
+                recommendedAction: "launch-pending-now",
+                reason: "The live Windows agent is connected; retry the queued app launch now."
+            )
+        }
+
+        if appCanBeRequested && !hasLiveAgentConnection {
+            return WindowsAppRuntimePendingLaunchStatus(
+                isQueued: true,
+                appId: pendingLaunchAppId,
+                willLaunchOnAgentReconnect: true,
+                recommendedAction: "auto-launch-on-agent-reconnect",
+                reason: "Veil will launch the queued Windows app after the guest agent reconnects."
+            )
+        }
+
+        return WindowsAppRuntimePendingLaunchStatus(
+            isQueued: true,
+            appId: pendingLaunchAppId,
+            willLaunchOnAgentReconnect: false,
+            recommendedAction: "select-supported-app",
+            reason: "The queued Windows app is not available in the current app catalog."
         )
     }
 
