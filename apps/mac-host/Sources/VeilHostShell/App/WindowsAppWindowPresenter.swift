@@ -5,12 +5,18 @@ import VeilHostCore
 @MainActor
 final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
     private var windowsById: [String: NSWindow] = [:]
+    private var windowOrder: [String] = []
     private var suppressedCloseWindowIds: Set<String> = []
+    private(set) var foregroundWindowId: String?
 
     var onUserWindowClose: ((String) -> Void)?
     var onMouseInput: ((String, String, Int, Int) -> Void)?
     var onKeyInput: ((String, String, String, Int, [String]) -> Void)?
     var onPasteShortcut: ((String, String, Int, [String], String) -> Void)?
+
+    var visibleWindowIds: [String] {
+        windowOrder.filter { windowsById[$0] != nil }
+    }
 
     func showWindow(for session: WindowMirrorSession) {
         if let window = windowsById[session.id] {
@@ -18,8 +24,7 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
             window.contentView = hostingView(
                 for: session
             )
-            window.makeKeyAndOrderFront(nil)
-            NSApp.activate(ignoringOtherApps: true)
+            present(window, windowId: session.id)
             return
         }
 
@@ -37,9 +42,8 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
         window.contentView = hostingView(
             for: session
         )
-        window.makeKeyAndOrderFront(nil)
         windowsById[session.id] = window
-        NSApp.activate(ignoringOtherApps: true)
+        present(window, windowId: session.id)
     }
 
     func closeAll() {
@@ -48,6 +52,8 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
             window.close()
         }
         windowsById.removeAll()
+        windowOrder.removeAll()
+        foregroundWindowId = nil
     }
 
     func closeWindow(windowId: String) {
@@ -58,6 +64,7 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
         suppressedCloseWindowIds.insert(windowId)
         window.close()
         windowsById[windowId] = nil
+        forgetWindowId(windowId)
     }
 
     func bringAllToFront() {
@@ -65,9 +72,12 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
             return
         }
 
-        for window in windowsById.values {
-            window.makeKeyAndOrderFront(nil)
+        for windowId in visibleWindowIds {
+            if let window = windowsById[windowId] {
+                window.makeKeyAndOrderFront(nil)
+            }
         }
+        foregroundWindowId = visibleWindowIds.last
         NSApp.activate(ignoringOtherApps: true)
     }
 
@@ -78,9 +88,29 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
         }
 
         windowsById[windowId] = nil
+        forgetWindowId(windowId)
 
         if suppressedCloseWindowIds.remove(windowId) == nil {
             onUserWindowClose?(windowId)
+        }
+    }
+
+    private func present(_ window: NSWindow, windowId: String) {
+        rememberWindowId(windowId)
+        foregroundWindowId = windowId
+        window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    private func rememberWindowId(_ windowId: String) {
+        windowOrder.removeAll { $0 == windowId }
+        windowOrder.append(windowId)
+    }
+
+    private func forgetWindowId(_ windowId: String) {
+        windowOrder.removeAll { $0 == windowId }
+        if foregroundWindowId == windowId {
+            foregroundWindowId = visibleWindowIds.last
         }
     }
 

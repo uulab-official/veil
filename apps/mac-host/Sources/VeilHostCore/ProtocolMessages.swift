@@ -200,6 +200,13 @@ public struct WindowBounds: Codable, Equatable, Sendable {
     public var y: Int
     public var width: Int
     public var height: Int
+
+    public init(x: Int, y: Int, width: Int, height: Int) {
+        self.x = x
+        self.y = y
+        self.width = width
+        self.height = height
+    }
 }
 
 public struct WindowFrameEvent: Codable, Equatable, Sendable {

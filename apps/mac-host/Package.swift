@@ -47,6 +47,10 @@ let package = Package(
             resources: [
                 .process("Fixtures")
             ]
+        ),
+        .testTarget(
+            name: "VeilHostShellTests",
+            dependencies: ["VeilHostCore", "VeilHostShell"]
         )
     ]
 )
