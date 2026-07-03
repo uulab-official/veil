@@ -45,6 +45,7 @@ Goal: move Veil from a Veil shell plus separate QEMU Cocoa display toward a UTM-
 - [x] Generalize protocol launch acceptance helpers and fake-agent launch replies beyond Notepad while preserving the Notepad MVP fixture.
 - [x] Preserve guest HWND aspect ratio when opening macOS app windows so compact apps like Calculator are not inflated into generic VM-sized panes.
 - [x] Cascade multiple mirrored Windows app windows within the visible display instead of stacking every app at the same centered origin.
+- [x] Hide the Veil launcher after a real guest-agent app launch so the mirrored Windows app becomes the foreground Coherence-style experience.
 
 ## Next
 

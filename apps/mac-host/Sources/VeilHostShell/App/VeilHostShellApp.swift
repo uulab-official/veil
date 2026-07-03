@@ -314,6 +314,7 @@ struct VeilHostShellApp: App {
             }
 
             showWindowsAppWindow(for: result)
+            hideMainWindowForCoherenceIfNeeded()
         }
     }
 
@@ -330,6 +331,14 @@ struct VeilHostShellApp: App {
                     captureState: .unavailable
                 )
         windowsAppWindowPresenter.showWindow(for: session)
+    }
+
+    private func hideMainWindowForCoherenceIfNeeded() {
+        guard model.connectionMode == .agent else {
+            return
+        }
+
+        MainWindowChrome.hideMainWindow()
     }
 
     private func recordAppFrameProof() {
@@ -760,6 +769,10 @@ private enum MainWindowChrome {
         configureAndCompactMainWindow()
         mainWindow?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+    }
+
+    static func hideMainWindow() {
+        mainWindow?.orderOut(nil)
     }
 
     private static var mainWindow: NSWindow? {
