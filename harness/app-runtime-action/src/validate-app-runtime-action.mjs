@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 
 import { validateAppRuntimeStatus } from "../../app-runtime-status/src/validate-app-runtime-status.mjs";
 
-const VALID_ACTIONS = new Set(["launch", "focus", "close", "restore", "bring-forward", "quiet-when-idle", "clipboard", "type-text", "click"]);
+const VALID_ACTIONS = new Set(["launch", "focus", "close", "close-all", "restore", "bring-forward", "quiet-when-idle", "clipboard", "type-text", "click"]);
 const VALID_CONNECTION_MODES = new Set(["agent", "demo"]);
 
 export function validateAppRuntimeAction(report) {
@@ -48,6 +48,9 @@ export function validateAppRuntimeAction(report) {
       break;
     case "close":
       validateCloseAction(report);
+      break;
+    case "close-all":
+      validateCloseAllAction(report);
       break;
     case "restore":
       validateRestoreAction(report);
@@ -120,6 +123,43 @@ function validateCloseAction(report) {
   validateBooleanResponse(report.close, "window.close.response");
   if (report.close.windowId !== report.windowId) {
     throw new TypeError("close response must match report.windowId.");
+  }
+}
+
+function validateCloseAllAction(report) {
+  if (!Array.isArray(report.closedWindows)) {
+    throw new TypeError("closedWindows must be an array.");
+  }
+
+  if (!report.accepted) {
+    if (report.closedWindows.length !== 0) {
+      throw new TypeError("rejected close-all actions cannot include closedWindows.");
+    }
+    return;
+  }
+
+  if (report.closedWindows.length === 0) {
+    throw new TypeError("accepted close-all actions must include closedWindows.");
+  }
+
+  for (const response of report.closedWindows) {
+    validateBooleanResponse(response, "window.close.response");
+    if (!response.accepted) {
+      throw new TypeError("accepted close-all actions cannot include rejected close responses.");
+    }
+  }
+
+  if (report.status.mirrorSessions.length !== 0) {
+    throw new TypeError("accepted close-all actions must leave no mirrored Windows app windows.");
+  }
+
+  if (report.status.dockIntegration.openWindowCount !== 0 || report.status.dockIntegration.canBringWindowsAppsForward) {
+    throw new TypeError("accepted close-all actions must clear Dock open-window state.");
+  }
+
+  const closeAllAction = report.status.actions.find((action) => action.id === "windowsApps.closeAll");
+  if (!closeAllAction || closeAllAction.isAvailable) {
+    throw new TypeError("accepted close-all actions must make windowsApps.closeAll unavailable.");
   }
 }
 

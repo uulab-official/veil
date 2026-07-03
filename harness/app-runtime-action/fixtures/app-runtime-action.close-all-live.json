@@ -1,0 +1,122 @@
+{
+  "kind": "windowsAppRuntimeAction",
+  "action": "close-all",
+  "requestedAt": "2026-07-04T00:05:00Z",
+  "endpoint": "ws://127.0.0.1:18444",
+  "connectionMode": "agent",
+  "accepted": true,
+  "closedWindows": [
+    {
+      "type": "window.close.response",
+      "requestId": "req_close_notepad",
+      "windowId": "hwnd:0003029A",
+      "accepted": true
+    },
+    {
+      "type": "window.close.response",
+      "requestId": "req_close_calculator",
+      "windowId": "hwnd:0003030B",
+      "accepted": true
+    }
+  ],
+  "restoredWindows": [],
+  "restoreRequestedAppIds": [],
+  "broughtForwardWindowIds": [],
+  "status": {
+    "kind": "windowsAppRuntimeStatus",
+    "generatedAt": "2026-07-04T00:05:01Z",
+    "phase": "connected",
+    "selectedAppId": "winapp_calculator",
+    "connection": {
+      "mode": "agent",
+      "hasLiveAgentConnection": true,
+      "agentVersion": "0.1.0",
+      "os": "windows-arm64"
+    },
+    "apps": [
+      {
+        "id": "winapp_notepad",
+        "name": "Notepad",
+        "canRequestLaunch": true,
+        "canLaunchNow": true
+      },
+      {
+        "id": "winapp_calculator",
+        "name": "Calculator",
+        "canRequestLaunch": true,
+        "canLaunchNow": true
+      }
+    ],
+    "mirrorSessions": [],
+    "restorableAppIds": [],
+    "dockIntegration": {
+      "isEnabled": true,
+      "openWindowCount": 0,
+      "canOpenMainWindow": true,
+      "canBringWindowsAppsForward": false,
+      "canRestorePreviousApps": false,
+      "canLaunchSelectedApp": true
+    },
+    "macWindowIntegration": {
+      "isEnabled": true,
+      "acceptsGuestWindowEvents": true,
+      "opensMacWindowsAutomatically": true,
+      "hidesLauncherWhenMirroring": false,
+      "mirroredWindowCount": 0,
+      "pendingFrameWindowCount": 0,
+      "streamingWindowCount": 0,
+      "reason": "Ready to open the next guest HWND as a macOS window."
+    },
+    "quietRuntime": {
+      "isEnabled": true,
+      "hasOpenedAppWindowThisSession": true,
+      "openWindowCount": 0,
+      "canQuietRuntime": true,
+      "willQuietAutomatically": true,
+      "automaticQuietDelaySeconds": 8,
+      "recommendedAction": "stop-or-suspend-runtime",
+      "reason": "All Windows app windows are closed and the live agent is connected."
+    },
+    "actions": [
+      {
+        "id": "dock.openMainWindow",
+        "title": "Open Veil From Dock",
+        "isAvailable": true
+      },
+      {
+        "id": "dock.bringWindowsAppsForward",
+        "title": "Bring Windows Apps Forward",
+        "isAvailable": false
+      },
+      {
+        "id": "windowsApps.restorePrevious",
+        "title": "Restore Previous Apps",
+        "isAvailable": false
+      },
+      {
+        "id": "windowsApps.closeAll",
+        "title": "Close All Windows Apps",
+        "isAvailable": false
+      },
+      {
+        "id": "macWindows.autoOpen",
+        "title": "Auto Open Windows App Windows",
+        "isAvailable": true
+      },
+      {
+        "id": "runtime.quietWhenIdle",
+        "title": "Quiet Runtime When Idle",
+        "isAvailable": true
+      },
+      {
+        "id": "clipboard.setText",
+        "title": "Set Windows Clipboard Text",
+        "isAvailable": true
+      }
+    ]
+  },
+  "nextActions": [
+    "Run `veil-vmctl app-runtime-status --json` to confirm no mirrored Windows app windows remain.",
+    "Run `veil-vmctl app-runtime-action --json --action quiet-when-idle` if the runtime is ready to quiet."
+  ]
+}

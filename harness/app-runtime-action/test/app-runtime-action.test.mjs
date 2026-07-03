@@ -28,6 +28,12 @@ test("validates app runtime restore action fixture", () => {
   assert.equal(validateAppRuntimeAction(report), report);
 });
 
+test("validates app runtime close-all action fixture", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-action.close-all-live.json", import.meta.url), "utf8"));
+
+  assert.equal(validateAppRuntimeAction(report), report);
+});
+
 test("rejects accepted launch actions without a window", () => {
   const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-action.launch-demo.json", import.meta.url), "utf8"));
   delete report.window;
@@ -82,6 +88,45 @@ test("rejects bring-forward actions whose windows drift from status", () => {
   assert.throws(
     () => validateAppRuntimeAction(report),
     /broughtForwardWindowIds/
+  );
+});
+
+test("rejects close-all actions that leave mirrored sessions open", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-action.close-all-live.json", import.meta.url), "utf8"));
+  report.status.mirrorSessions = [
+    {
+      windowId: "hwnd:STILL_OPEN",
+      appId: "winapp_notepad",
+      title: "Untitled - Notepad",
+      captureState: "pending",
+      canFocus: true,
+      canClose: true,
+      canSendInput: true
+    }
+  ];
+  report.status.dockIntegration.openWindowCount = 1;
+  report.status.dockIntegration.badgeLabel = "1";
+  report.status.dockIntegration.canBringWindowsAppsForward = true;
+  report.status.macWindowIntegration.mirroredWindowCount = 1;
+  report.status.macWindowIntegration.pendingFrameWindowCount = 1;
+  report.status.macWindowIntegration.hidesLauncherWhenMirroring = true;
+  report.status.quietRuntime.openWindowCount = 1;
+  report.status.quietRuntime.canQuietRuntime = false;
+  report.status.quietRuntime.willQuietAutomatically = false;
+
+  assert.throws(
+    () => validateAppRuntimeAction(report),
+    /must leave no mirrored/
+  );
+});
+
+test("rejects close-all actions with rejected close responses", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-action.close-all-live.json", import.meta.url), "utf8"));
+  report.closedWindows[1].accepted = false;
+
+  assert.throws(
+    () => validateAppRuntimeAction(report),
+    /rejected close responses/
   );
 });
 
