@@ -2215,6 +2215,14 @@ public struct LocalVMRuntimeService: VMRuntimeService {
         missingDetail: String,
         validationLabel: String
     ) -> (state: VMInstallationStepState, detail: String?) {
+        if let detail = protectedFolderAccessDetail(
+            path: path,
+            bookmarkData: bookmarkData,
+            label: validationLabel
+        ) {
+            return (.blocked, detail)
+        }
+
         let access = securityScopedAccess(role: bookmarkRole, bookmarkData: bookmarkData)
         defer {
             access?.stop()
@@ -2305,6 +2313,19 @@ public struct LocalVMRuntimeService: VMRuntimeService {
         for path: String?,
         bookmarkData: Data? = nil
     ) -> VMPreflightCheck {
+        if let detail = protectedFolderAccessDetail(
+            path: path,
+            bookmarkData: bookmarkData,
+            label: "Installer media"
+        ) {
+            return VMPreflightCheck(
+                id: "installer-media",
+                title: "Installer media",
+                detail: detail,
+                state: .failed
+            )
+        }
+
         let access = securityScopedAccess(role: .installer, bookmarkData: bookmarkData)
         defer {
             access?.stop()
@@ -2353,5 +2374,27 @@ public struct LocalVMRuntimeService: VMRuntimeService {
                 state: .failed
             )
         }
+    }
+
+    private static func protectedFolderAccessDetail(
+        path: String?,
+        bookmarkData: Data?,
+        label: String
+    ) -> String? {
+        guard let path,
+              !path.isEmpty,
+              bookmarkData == nil,
+              isDownloadsPath(path) else {
+            return nil
+        }
+
+        return "\(label) is in Downloads. Re-select it with the file picker so Veil can store macOS file access before starting Windows."
+    }
+
+    private static func isDownloadsPath(_ path: String) -> Bool {
+        URL(fileURLWithPath: path)
+            .standardizedFileURL
+            .pathComponents
+            .contains("Downloads")
     }
 }

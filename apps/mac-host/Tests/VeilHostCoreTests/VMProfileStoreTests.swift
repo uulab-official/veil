@@ -227,6 +227,74 @@ struct VMProfileStoreTests {
         ])
     }
 
+    @Test("Downloads installer without security bookmark requires file picker")
+    func downloadsInstallerWithoutSecurityBookmarkRequiresFilePicker() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let downloadsDirectory = directory.appendingPathComponent("Downloads", isDirectory: true)
+        try FileManager.default.createDirectory(at: downloadsDirectory, withIntermediateDirectories: true)
+        let installerURL = downloadsDirectory.appendingPathComponent("Win11_25H2_Korean_Arm64_v2.iso")
+        let diskURL = directory.appendingPathComponent("Windows.img")
+        let sharedFolderURL = directory.appendingPathComponent("Veil Shared", isDirectory: true)
+        try Data("installer".utf8).write(to: installerURL)
+        try Data("disk".utf8).write(to: diskURL)
+        try FileManager.default.createDirectory(at: sharedFolderURL, withIntermediateDirectories: true)
+        try Data("<unattend />".utf8).write(to: sharedFolderURL.appendingPathComponent("Autounattend.xml"))
+        try Data("auto install media".utf8).write(to: sharedFolderURL.appendingPathComponent("VeilAutoInstall.iso"))
+        let store = JSONVMProfileStore(directory: directory)
+        var profile = VMProfile.defaultWindows11Arm(createdAt: Date(timeIntervalSince1970: 1_782_752_400))
+        profile.installerMediaPath = installerURL.path
+        profile.virtualDiskPath = diskURL.path
+        profile.sharedFolderPath = sharedFolderURL.path
+        try await store.save(profile)
+        let bootRunner = FakeVMRuntimeBooter(startState: .running)
+        let service = LocalVMRuntimeService(profileStore: store, bootRunner: bootRunner)
+
+        let snapshot = try await service.loadSnapshot()
+
+        #expect(!snapshot.bootReady)
+        #expect(snapshot.detail == "Installer media is in Downloads. Re-select it with the file picker so Veil can store macOS file access before starting Windows.")
+        #expect(snapshot.installationSteps.first { $0.id == "windows-installer" }?.state == .blocked)
+        #expect(snapshot.preflightChecks.first { $0.id == "installer-media" }?.state == .failed)
+        await #expect(throws: VMRuntimeError.bootPrerequisitesMissing) {
+            try await service.start()
+        }
+        #expect(bootRunner.startCount == 0)
+    }
+
+    @Test("Downloads installer with security bookmark is boot ready")
+    func downloadsInstallerWithSecurityBookmarkIsBootReady() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let downloadsDirectory = directory.appendingPathComponent("Downloads", isDirectory: true)
+        try FileManager.default.createDirectory(at: downloadsDirectory, withIntermediateDirectories: true)
+        let installerURL = downloadsDirectory.appendingPathComponent("Win11_25H2_Korean_Arm64_v2.iso")
+        let diskURL = directory.appendingPathComponent("Windows.img")
+        let sharedFolderURL = directory.appendingPathComponent("Veil Shared", isDirectory: true)
+        try Data("installer".utf8).write(to: installerURL)
+        try Data("disk".utf8).write(to: diskURL)
+        try FileManager.default.createDirectory(at: sharedFolderURL, withIntermediateDirectories: true)
+        try Data("<unattend />".utf8).write(to: sharedFolderURL.appendingPathComponent("Autounattend.xml"))
+        try Data("auto install media".utf8).write(to: sharedFolderURL.appendingPathComponent("VeilAutoInstall.iso"))
+        let store = JSONVMProfileStore(directory: directory)
+        var profile = VMProfile.defaultWindows11Arm(createdAt: Date(timeIntervalSince1970: 1_782_752_400))
+        profile.installerMediaPath = installerURL.path
+        profile.installerMediaBookmarkData = try installerURL.bookmarkData(
+            options: [.withSecurityScope],
+            includingResourceValuesForKeys: nil,
+            relativeTo: nil
+        )
+        profile.virtualDiskPath = diskURL.path
+        profile.sharedFolderPath = sharedFolderURL.path
+        try await store.save(profile)
+        let service = LocalVMRuntimeService(profileStore: store)
+
+        let snapshot = try await service.loadSnapshot()
+
+        #expect(snapshot.bootReady)
+        #expect(snapshot.preflightChecks.first { $0.id == "installer-media" }?.state == .passed)
+    }
+
     @Test("local runtime refreshes live QEMU console screenshot")
     func localRuntimeRefreshesLiveQEMUConsoleScreenshot() async throws {
         let directory = FileManager.default.temporaryDirectory

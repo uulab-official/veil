@@ -30,6 +30,7 @@ The first four are local host prerequisites. The guest agent step remains pendin
 - Profile-only creation is still available for low-level setup testing.
 - Installer media is a user-selected local file. Veil stores the selected path and a security-scoped bookmark in the local profile, but does not copy, redistribute, or auto-discover Windows media.
 - VM start resolves stored security-scoped bookmarks before file validation and local QEMU/HVF launch, reducing repeated macOS file-access prompts after the user has explicitly selected the ISO, driver media, or disk.
+- If an older profile points at `~/Downloads` media without a stored security-scoped bookmark, Veil blocks boot readiness and asks the user to re-select the ISO in the app instead of touching the protected Downloads path during snapshot loading.
 - The virtual disk can be user-selected or created as a blank sparse disk at `~/Virtual Machines/Veil/Windows 11 Arm.img`.
 - The boot spike stores EFI variables and the generic machine identifier next to the virtual disk so repeated boots keep stable VM identity.
 - The host now prefers the local QEMU/HVF compatibility provider when it is installed and ready, because that is the clearest path to a UTM-style visible Windows installer console. Apple Virtualization remains the fallback feasibility provider.

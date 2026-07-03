@@ -45,7 +45,7 @@ struct VMRuntimeView: View {
                         } else if model.canStart {
                             startConsoleHandoffProgress()
                             startVMAction()
-                        } else if snapshot.installerMediaPath == nil {
+                        } else if snapshot.installerMediaPath == nil || needsInstallerPickerAccess(snapshot) {
                             pathPicker = .installerMedia
                         } else {
                             Task {
@@ -146,6 +146,12 @@ struct VMRuntimeView: View {
 
     private func canShowConsole(for snapshot: VMRuntimeSnapshot) -> Bool {
         snapshot.state == .running || snapshot.state == .starting
+    }
+
+    private func needsInstallerPickerAccess(_ snapshot: VMRuntimeSnapshot) -> Bool {
+        snapshot.preflightChecks.contains { check in
+            check.id == "installer-media" && check.detail.contains("Re-select it with the file picker")
+        }
     }
 
     @ViewBuilder
@@ -1340,7 +1346,7 @@ private struct WindowsSetupDisplayPanel: View {
             return installSimulation.phase == .running ? "Opening..." : installActionTitle
         }
 
-        if snapshot.installerMediaPath == nil {
+        if snapshot.installerMediaPath == nil || installerNeedsFilePickerAccess {
             return "Choose ISO"
         }
 
@@ -1420,6 +1426,10 @@ private struct WindowsSetupDisplayPanel: View {
             return selectedInstallerName ?? "Local VM display"
         }
 
+        if installerNeedsFilePickerAccess, let selectedInstallerName {
+            return "Re-select \(selectedInstallerName)"
+        }
+
         if let selectedInstallerName {
             return selectedInstallerName
         }
@@ -1470,8 +1480,8 @@ private struct WindowsSetupDisplayPanel: View {
         let installerDetail: String
         let installerState: InstallFlowState
         if let selectedInstallerName {
-            installerDetail = selectedInstallerName
-            installerState = .complete
+            installerDetail = installerNeedsFilePickerAccess ? "Re-select \(selectedInstallerName)" : selectedInstallerName
+            installerState = installerNeedsFilePickerAccess ? .current : .complete
         } else {
             installerDetail = "Select the Windows 11 Arm ISO"
             installerState = .current
@@ -1515,7 +1525,7 @@ private struct WindowsSetupDisplayPanel: View {
                 title: "ISO",
                 value: selectedInstallerName ?? "Missing",
                 symbolName: "opticaldisc",
-                tint: snapshot.installerMediaPath != nil ? .green : .orange
+                tint: snapshot.installerMediaPath != nil && !installerNeedsFilePickerAccess ? .green : .orange
             ),
             LauncherMetadataItem(
                 title: "Disk",
@@ -1553,6 +1563,10 @@ private struct WindowsSetupDisplayPanel: View {
 
         if snapshot.bootReady {
             return "Press play to open the Windows display"
+        }
+
+        if installerNeedsFilePickerAccess {
+            return "Re-select the ISO to grant macOS file access"
         }
 
         return "Bring your own Windows 11 Arm installer"
@@ -1594,6 +1608,10 @@ private struct WindowsSetupDisplayPanel: View {
             return installSimulation.phase == .running ? "Starting..." : "Start Windows"
         }
 
+        if installerNeedsFilePickerAccess {
+            return "Choose ISO"
+        }
+
         return snapshot.profileName == nil ? "Prepare Windows" : "Continue Setup"
     }
 
@@ -1604,6 +1622,10 @@ private struct WindowsSetupDisplayPanel: View {
 
         if canStart {
             return "play.fill"
+        }
+
+        if installerNeedsFilePickerAccess {
+            return "opticaldisc"
         }
 
         return "wand.and.stars"
@@ -1622,7 +1644,17 @@ private struct WindowsSetupDisplayPanel: View {
             return "Start the VM and open the Windows console."
         }
 
+        if installerNeedsFilePickerAccess {
+            return "Re-select the ISO so Veil can store macOS file access."
+        }
+
         return "Create the profile, disk, shared folder, and install media."
+    }
+
+    private var installerNeedsFilePickerAccess: Bool {
+        snapshot.preflightChecks.contains { check in
+            check.id == "installer-media" && check.detail.contains("Re-select it with the file picker")
+        }
     }
 
     private var primaryDisabled: Bool {
