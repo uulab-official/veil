@@ -97,9 +97,11 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
         window.tabbingMode = .disallowed
         window.collectionBehavior = [.managed, .fullScreenPrimary]
         window.backgroundColor = .black
+        window.isOpaque = true
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
         window.styleMask.insert(.fullSizeContentView)
+        window.isMovableByWindowBackground = true
         window.toolbar = nil
     }
 
@@ -144,7 +146,8 @@ private struct WindowsAppMirrorView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(nsColor: .windowBackgroundColor))
+        .background(Color.black)
+        .ignoresSafeArea()
     }
 }
 

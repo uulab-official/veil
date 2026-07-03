@@ -33,6 +33,8 @@ Goal: make Veil's product direction visible as "Windows app as a macOS window" i
 - [x] Save initial and post-input Notepad smoke frames as PNG evidence when an output directory is provided.
 - [x] Replace the mirrored-window blank placeholder with capture-state-aware pending, unavailable, and undecodable-frame surfaces.
 - [x] Track first-frame receipt, frame count, and latest frame interval on mirrored app sessions.
+- [x] Make normal mirrored Windows app windows open as a large work surface instead of inheriting small HWND bounds.
+- [x] Keep mirrored app-window chrome frame-first with a black full-window surface and hidden title text.
 
 ## Next
 

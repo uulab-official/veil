@@ -24,8 +24,13 @@ public enum WindowsAppWindowPlacement {
         let sourceHeight = max(Double(bounds.height), 1)
         let maximumWidth = max(320, visibleFrame.width * 0.92)
         let maximumHeight = max(240, visibleFrame.height * 0.88)
-        let minimumWidth = min(520, maximumWidth)
-        let minimumHeight = min(360, maximumHeight)
+        let isCompactUtilityWindow = sourceWidth <= 640
+            && sourceHeight >= 640
+            && sourceHeight >= sourceWidth * 1.1
+        let preferredMinimumWidth = isCompactUtilityWindow ? 520.0 : 1040.0
+        let preferredMinimumHeight = isCompactUtilityWindow ? 360.0 : 640.0
+        let minimumWidth = min(preferredMinimumWidth, maximumWidth)
+        let minimumHeight = min(preferredMinimumHeight, maximumHeight)
 
         var targetWidth = sourceWidth
         var targetHeight = sourceHeight

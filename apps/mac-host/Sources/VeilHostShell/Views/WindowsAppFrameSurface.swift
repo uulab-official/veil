@@ -38,33 +38,27 @@ struct WindowsAppFrameSurface: View {
 
     private var statusSurface: some View {
         ZStack {
-            LinearGradient(
-                colors: [
-                    Color(nsColor: .textBackgroundColor),
-                    Color(nsColor: .underPageBackgroundColor)
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
+            Color.black
 
-            VStack(spacing: 14) {
+            VStack(spacing: 16) {
                 Image(systemName: statusSymbolName)
-                    .font(.system(size: 42, weight: .semibold))
+                    .font(.system(size: 46, weight: .semibold))
                     .foregroundStyle(statusTint)
 
                 if session.captureState == .pending {
                     ProgressView()
                         .controlSize(.small)
+                        .tint(.white.opacity(0.88))
                 }
 
-                VStack(spacing: 5) {
+                VStack(spacing: 6) {
                     Text(statusTitle)
                         .font(.callout.weight(.semibold))
-                        .foregroundStyle(.primary)
+                        .foregroundStyle(.white.opacity(0.92))
                         .lineLimit(1)
                     Text(statusDetail)
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(.white.opacity(0.58))
                         .multilineTextAlignment(.center)
                         .lineLimit(2)
                 }
@@ -89,11 +83,11 @@ struct WindowsAppFrameSurface: View {
     private var statusTint: Color {
         switch session.captureState {
         case .pending:
-            return .blue
+            return .white.opacity(0.9)
         case .streaming:
             return .orange
         case .unavailable:
-            return .secondary
+            return .white.opacity(0.62)
         }
     }
 
