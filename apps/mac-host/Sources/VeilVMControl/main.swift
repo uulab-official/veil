@@ -455,6 +455,8 @@ struct AppRuntimeActionReport: Codable, Equatable {
     var accepted: Bool
     var appId: String?
     var windowId: String?
+    var pendingLaunchAppId: String?
+    var launchPlan: WindowsAppRuntimeLaunchPlanStatus?
     var launch: AppLaunchResponse?
     var window: WindowCreatedEvent?
     var focus: WindowFocusResponse?
@@ -806,6 +808,7 @@ struct VeilVMControl {
         }
 
         let status = model.runtimeStatusReport()
+        let actionLaunchPlan = action == .launch ? status.launchPlan : nil
         let report = AppRuntimeActionReport(
             action: action,
             requestedAt: Date(),
@@ -814,6 +817,8 @@ struct VeilVMControl {
             accepted: accepted,
             appId: resolvedAppId,
             windowId: resolvedWindowId,
+            pendingLaunchAppId: status.pendingLaunchAppId,
+            launchPlan: actionLaunchPlan,
             launch: launch,
             window: window,
             focus: focus,
@@ -845,6 +850,22 @@ struct VeilVMControl {
         }
         if let windowId = report.windowId {
             print("Window: \(windowId)")
+        }
+        if let pendingLaunchAppId = report.pendingLaunchAppId {
+            print("Pending launch app: \(pendingLaunchAppId)")
+        }
+        if let launchPlan = report.launchPlan {
+            print("Launch plan: \(launchPlan.recommendedAction)")
+            print("Launch plan reason: \(launchPlan.reason)")
+            if let startCommand = launchPlan.recommendedStartCommand {
+                print("Launch start command: \(startCommand)")
+            }
+            if let waitCommand = launchPlan.recommendedWaitCommand {
+                print("Launch wait command: \(waitCommand)")
+            }
+            if let launchCommand = launchPlan.recommendedLaunchCommand {
+                print("Launch app command: \(launchCommand)")
+            }
         }
         if let window = report.window {
             print("Window title: \(window.title)")

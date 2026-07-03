@@ -85,6 +85,36 @@ test("rejects pending launch actions whose app id drifts", () => {
   );
 });
 
+test("rejects launch actions without top-level launch plan", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-action.launch-pending.json", import.meta.url), "utf8"));
+  delete report.launchPlan;
+
+  assert.throws(
+    () => validateAppRuntimeAction(report),
+    /top-level launchPlan/
+  );
+});
+
+test("rejects pending launch actions whose top-level app id drifts", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-action.launch-pending.json", import.meta.url), "utf8"));
+  report.pendingLaunchAppId = "winapp_calculator";
+
+  assert.throws(
+    () => validateAppRuntimeAction(report),
+    /pendingLaunchAppId must match/
+  );
+});
+
+test("rejects launch actions whose top-level launch plan drifts from status", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-action.launch-pending.json", import.meta.url), "utf8"));
+  report.launchPlan.recommendedLaunchCommand = "veil-vmctl app-runtime-action --json --action launch --app-id winapp_calculator";
+
+  assert.throws(
+    () => validateAppRuntimeAction(report),
+    /top-level launchPlan/
+  );
+});
+
 test("rejects unsupported app runtime actions", () => {
   const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-action.launch-demo.json", import.meta.url), "utf8"));
   report.action = "teleport";

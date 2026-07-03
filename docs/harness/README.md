@@ -103,8 +103,10 @@ confirm that the runtime is ready to quiet after every mirrored Windows app
 window has closed.
 In real-agent mode, a launch request must not fabricate a demo HWND when the
 guest agent is unavailable; it returns a rejected pending-launch action with
-`status.pendingLaunchAppId` and `status.launchPlan` start/wait/retry commands
-instead.
+top-level `pendingLaunchAppId` and `launchPlan` fields that must match
+`status.pendingLaunchAppId` and `status.launchPlan`. Those fields expose the
+bounded start/wait/retry commands without forcing automation to infer the
+handoff path from a fake Windows window.
 
 ```bash
 cd apps/mac-host

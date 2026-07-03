@@ -34,6 +34,7 @@ export function validateAppRuntimeAction(report) {
 
   requireBoolean(report.accepted, "accepted");
   validateAppRuntimeStatus(report.status);
+  validateActionLaunchPlan(report);
 
   if (!Array.isArray(report.restoredWindows)) {
     throw new TypeError("restoredWindows must be an array.");
@@ -90,6 +91,9 @@ function validateQuietWhenIdleAction(report) {
 
 function validateLaunchAction(report) {
   requireString(report.appId, "appId");
+  if (report.launchPlan === undefined) {
+    throw new TypeError("launch actions must include top-level launchPlan.");
+  }
 
   if (!report.accepted) {
     if (report.launch !== undefined && report.launch !== null) {
@@ -108,6 +112,22 @@ function validateLaunchAction(report) {
       throw new TypeError("rejected app-first launch actions must queue pendingLaunchAppId for the requested app.");
     }
 
+    if (report.pendingLaunchAppId !== report.appId) {
+      throw new TypeError("rejected app-first launch actions must expose pendingLaunchAppId for the requested app.");
+    }
+
+    if (report.launchPlan.recommendedStartCommand === undefined) {
+      throw new TypeError("rejected app-first launch actions must expose launchPlan.recommendedStartCommand.");
+    }
+
+    if (report.launchPlan.recommendedWaitCommand === undefined) {
+      throw new TypeError("rejected app-first launch actions must expose launchPlan.recommendedWaitCommand.");
+    }
+
+    if (report.launchPlan.recommendedLaunchCommand === undefined) {
+      throw new TypeError("rejected app-first launch actions must expose launchPlan.recommendedLaunchCommand.");
+    }
+
     return;
   }
 
@@ -116,6 +136,27 @@ function validateLaunchAction(report) {
   validateWindow(report.window);
   if (report.window.windowId !== report.windowId) {
     throw new TypeError("launch window must match report.windowId.");
+  }
+}
+
+function validateActionLaunchPlan(report) {
+  if (report.pendingLaunchAppId !== undefined) {
+    requireString(report.pendingLaunchAppId, "pendingLaunchAppId");
+    if (report.pendingLaunchAppId !== report.status.pendingLaunchAppId) {
+      throw new TypeError("pendingLaunchAppId must match report.status.pendingLaunchAppId.");
+    }
+  }
+
+  if (report.launchPlan === undefined) {
+    return;
+  }
+
+  if (!report.launchPlan || typeof report.launchPlan !== "object" || Array.isArray(report.launchPlan)) {
+    throw new TypeError("launchPlan must be an object when present.");
+  }
+
+  if (JSON.stringify(report.launchPlan) !== JSON.stringify(report.status.launchPlan)) {
+    throw new TypeError("top-level launchPlan must match report.status.launchPlan.");
   }
 }
 
