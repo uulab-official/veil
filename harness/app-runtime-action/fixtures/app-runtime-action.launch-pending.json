@@ -46,22 +46,6 @@
       "os": "windows-arm64",
       "connectionDetail": "No Windows agent reachable at ws://127.0.0.1:9. Showing built-in demo data."
     },
-    "apps": [
-      {
-        "id": "winapp_notepad",
-        "name": "Notepad",
-        "canRequestLaunch": true,
-        "canLaunchNow": false
-      },
-      {
-        "id": "winapp_calculator",
-        "name": "Calculator",
-        "canRequestLaunch": true,
-        "canLaunchNow": false
-      }
-    ],
-    "mirrorSessions": [],
-    "restorableAppIds": [],
     "dockIntegration": {
       "isEnabled": true,
       "openWindowCount": 0,
@@ -71,6 +55,14 @@
       "canBringWindowsAppsForward": false,
       "canRestorePreviousApps": false,
       "canLaunchSelectedApp": true
+    },
+    "launcherVisibility": {
+      "isEnabled": true,
+      "canOpenMainWindow": true,
+      "shouldHideMainWindow": false,
+      "keepsDockMenuAvailable": true,
+      "recommendedAction": "show-launcher-for-pending-launch",
+      "reason": "A Windows app launch is queued and may need the launcher to show start or reconnect recovery."
     },
     "macWindowIntegration": {
       "isEnabled": true,
@@ -106,6 +98,22 @@
       "recommendedLaunchCommand": "veil-vmctl app-runtime-action --json --action fulfill-pending",
       "reason": "The selected app launch is queued until Windows starts and the guest agent connects."
     },
+    "apps": [
+      {
+        "id": "winapp_notepad",
+        "name": "Notepad",
+        "canRequestLaunch": true,
+        "canLaunchNow": false
+      },
+      {
+        "id": "winapp_calculator",
+        "name": "Calculator",
+        "canRequestLaunch": true,
+        "canLaunchNow": false
+      }
+    ],
+    "mirrorSessions": [],
+    "restorableAppIds": [],
     "actions": [
       {
         "id": "dock.openMainWindow",

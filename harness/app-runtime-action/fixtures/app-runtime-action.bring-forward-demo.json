@@ -46,6 +46,14 @@
       "canRestorePreviousApps": false,
       "canLaunchSelectedApp": true
     },
+    "launcherVisibility": {
+      "isEnabled": true,
+      "canOpenMainWindow": true,
+      "shouldHideMainWindow": false,
+      "keepsDockMenuAvailable": true,
+      "recommendedAction": "show-launcher-or-restore-apps",
+      "reason": "No mirrored app window is open, but previous Windows app intent can be restored."
+    },
     "macWindowIntegration": {
       "isEnabled": true,
       "acceptsGuestWindowEvents": false,

@@ -132,6 +132,17 @@ test("rejects Mac foreground window identity that drifts from mirrored sessions"
   );
 });
 
+test("rejects launcher visibility that drifts from mirrored app windows", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.mac-window-live.json", import.meta.url), "utf8"));
+  report.launcherVisibility.shouldHideMainWindow = false;
+  report.launcherVisibility.recommendedAction = "show-launcher";
+
+  assert.throws(
+    () => validateAppRuntimeStatus(report),
+    /launcherVisibility/
+  );
+});
+
 test("rejects quiet runtime counts that drift from mirrored sessions", () => {
   const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.demo.json", import.meta.url), "utf8"));
   report.quietRuntime.openWindowCount = 1;

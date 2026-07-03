@@ -75,6 +75,14 @@
     "openWindowCount": 0,
     "pendingLaunchCount": 0
   },
+  "launcherVisibility": {
+    "isEnabled": true,
+    "canOpenMainWindow": true,
+    "shouldHideMainWindow": false,
+    "keepsDockMenuAvailable": true,
+    "recommendedAction": "show-launcher",
+    "reason": "No live mirrored Windows app window needs the launcher hidden."
+  },
   "macWindowIntegration": {
     "acceptsGuestWindowEvents": false,
     "hidesLauncherWhenMirroring": false,

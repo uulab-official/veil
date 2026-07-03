@@ -90,6 +90,9 @@ fulfillment reports prove the Windows app can be brought forward as a macOS
 window instead of merely existing inside the guest. When mirrored windows are
 open, `foregroundWindowId` and `foregroundWindowTitle` name the HWND that
 Dock/menu bring-forward actions should make frontmost.
+`launcherVisibility` records the matching Coherence policy: while live mirrored
+Windows app windows are open, the main Veil launcher should stay hidden and
+Dock/menu controls should remain available for recovery and window management.
 When every mirrored Windows app window has closed, `quietRuntime` also reports
 whether Veil will automatically quiet the local runtime and the current delay
 before that stop/suspend policy is attempted. When quieting is allowed, the

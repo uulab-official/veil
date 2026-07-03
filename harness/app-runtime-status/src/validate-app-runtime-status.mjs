@@ -32,6 +32,7 @@ export function validateAppRuntimeStatus(report) {
   validateStringArray(report.restorableAppIds, "restorableAppIds");
   validateDockIntegration(report.dockIntegration, report.mirrorSessions, report);
   validateMacWindowIntegration(report.macWindowIntegration, report.mirrorSessions, report.connection);
+  validateLauncherVisibility(report.launcherVisibility, report);
   validateQuietRuntime(report.quietRuntime, report.mirrorSessions);
   validateLaunchPlan(report.launchPlan, report);
   validateActions(report.actions, report);
@@ -405,6 +406,43 @@ function validateDockIntegration(dockIntegration, mirrorSessions, report) {
 
   if (dockIntegration.canBringWindowsAppsForward !== (mirrorSessions.length > 0)) {
     throw new TypeError("dockIntegration.canBringWindowsAppsForward must reflect open mirrored sessions.");
+  }
+}
+
+function validateLauncherVisibility(launcherVisibility, report) {
+  if (!launcherVisibility || typeof launcherVisibility !== "object" || Array.isArray(launcherVisibility)) {
+    throw new TypeError("launcherVisibility must be an object.");
+  }
+
+  requireBoolean(launcherVisibility.isEnabled, "launcherVisibility.isEnabled");
+  requireBoolean(launcherVisibility.canOpenMainWindow, "launcherVisibility.canOpenMainWindow");
+  requireBoolean(launcherVisibility.shouldHideMainWindow, "launcherVisibility.shouldHideMainWindow");
+  requireBoolean(launcherVisibility.keepsDockMenuAvailable, "launcherVisibility.keepsDockMenuAvailable");
+  requireString(launcherVisibility.recommendedAction, "launcherVisibility.recommendedAction");
+  requireString(launcherVisibility.reason, "launcherVisibility.reason");
+
+  if (launcherVisibility.canOpenMainWindow !== report.dockIntegration.canOpenMainWindow) {
+    throw new TypeError("launcherVisibility.canOpenMainWindow must match dockIntegration.canOpenMainWindow.");
+  }
+
+  if (!launcherVisibility.keepsDockMenuAvailable) {
+    throw new TypeError("launcherVisibility.keepsDockMenuAvailable must keep Dock/menu recovery available.");
+  }
+
+  if (launcherVisibility.shouldHideMainWindow !== report.macWindowIntegration.hidesLauncherWhenMirroring) {
+    throw new TypeError("launcherVisibility.shouldHideMainWindow must match macWindowIntegration.hidesLauncherWhenMirroring.");
+  }
+
+  if (launcherVisibility.shouldHideMainWindow) {
+    if (!report.connection.hasLiveAgentConnection || report.mirrorSessions.length === 0) {
+      throw new TypeError("launcherVisibility.shouldHideMainWindow requires a live mirrored Windows app window.");
+    }
+
+    if (launcherVisibility.recommendedAction !== "hide-main-window-use-app-windows") {
+      throw new TypeError("launcherVisibility.recommendedAction must hide the launcher while mirrored Windows app windows are open.");
+    }
+  } else if (launcherVisibility.recommendedAction === "hide-main-window-use-app-windows") {
+    throw new TypeError("launcherVisibility.recommendedAction cannot hide the launcher without mirrored Windows app windows.");
   }
 }
 

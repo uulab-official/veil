@@ -253,6 +253,31 @@ public struct WindowsAppRuntimeMacWindowIntegrationStatus: Codable, Equatable, S
     }
 }
 
+public struct WindowsAppRuntimeLauncherVisibilityStatus: Codable, Equatable, Sendable {
+    public var isEnabled: Bool
+    public var canOpenMainWindow: Bool
+    public var shouldHideMainWindow: Bool
+    public var keepsDockMenuAvailable: Bool
+    public var recommendedAction: String
+    public var reason: String
+
+    public init(
+        isEnabled: Bool,
+        canOpenMainWindow: Bool,
+        shouldHideMainWindow: Bool,
+        keepsDockMenuAvailable: Bool,
+        recommendedAction: String,
+        reason: String
+    ) {
+        self.isEnabled = isEnabled
+        self.canOpenMainWindow = canOpenMainWindow
+        self.shouldHideMainWindow = shouldHideMainWindow
+        self.keepsDockMenuAvailable = keepsDockMenuAvailable
+        self.recommendedAction = recommendedAction
+        self.reason = reason
+    }
+}
+
 public struct WindowsAppRuntimeQuietPolicyStatus: Codable, Equatable, Sendable {
     public var isEnabled: Bool
     public var hasOpenedAppWindowThisSession: Bool
@@ -361,6 +386,7 @@ public struct WindowsAppRuntimeStatusReport: Codable, Equatable, Sendable {
     public var mirrorSessions: [WindowsAppRuntimeWindowStatus]
     public var restorableAppIds: [String]
     public var dockIntegration: WindowsAppRuntimeDockIntegrationStatus
+    public var launcherVisibility: WindowsAppRuntimeLauncherVisibilityStatus
     public var macWindowIntegration: WindowsAppRuntimeMacWindowIntegrationStatus
     public var quietRuntime: WindowsAppRuntimeQuietPolicyStatus
     public var launchPlan: WindowsAppRuntimeLaunchPlanStatus
@@ -378,6 +404,7 @@ public struct WindowsAppRuntimeStatusReport: Codable, Equatable, Sendable {
         mirrorSessions: [WindowsAppRuntimeWindowStatus],
         restorableAppIds: [String],
         dockIntegration: WindowsAppRuntimeDockIntegrationStatus,
+        launcherVisibility: WindowsAppRuntimeLauncherVisibilityStatus,
         macWindowIntegration: WindowsAppRuntimeMacWindowIntegrationStatus,
         quietRuntime: WindowsAppRuntimeQuietPolicyStatus,
         launchPlan: WindowsAppRuntimeLaunchPlanStatus,
@@ -394,6 +421,7 @@ public struct WindowsAppRuntimeStatusReport: Codable, Equatable, Sendable {
         self.mirrorSessions = mirrorSessions
         self.restorableAppIds = restorableAppIds
         self.dockIntegration = dockIntegration
+        self.launcherVisibility = launcherVisibility
         self.macWindowIntegration = macWindowIntegration
         self.quietRuntime = quietRuntime
         self.launchPlan = launchPlan
@@ -559,6 +587,9 @@ public final class HostDashboardModel {
     public func runtimeStatusReport(generatedAt: Date = Date()) -> WindowsAppRuntimeStatusReport {
         let quietRuntime = quietRuntimeStatus()
         let macWindowIntegration = macWindowIntegrationStatus()
+        let launcherVisibility = launcherVisibilityStatus(
+            macWindowIntegration: macWindowIntegration
+        )
         let launchPlan = launchPlanStatus()
         let pendingLaunch = pendingLaunchStatus()
         return WindowsAppRuntimeStatusReport(
@@ -604,6 +635,7 @@ public final class HostDashboardModel {
                 canRestorePreviousApps: canRestoreMirrorSessions,
                 canLaunchSelectedApp: canRequestSelectedAppLaunch
             ),
+            launcherVisibility: launcherVisibility,
             macWindowIntegration: macWindowIntegration,
             quietRuntime: quietRuntime,
             launchPlan: launchPlan,
@@ -835,6 +867,38 @@ public final class HostDashboardModel {
             foregroundWindowTitle: mirrorSessions.last?.window.title,
             pendingFrameWindowCount: pendingFrameWindowCount,
             streamingWindowCount: streamingWindowCount,
+            reason: reason
+        )
+    }
+
+    public func launcherVisibilityStatus(
+        macWindowIntegration: WindowsAppRuntimeMacWindowIntegrationStatus? = nil
+    ) -> WindowsAppRuntimeLauncherVisibilityStatus {
+        let macWindowIntegration = macWindowIntegration ?? macWindowIntegrationStatus()
+        let shouldHideMainWindow = macWindowIntegration.hidesLauncherWhenMirroring
+        let recommendedAction: String
+        let reason: String
+
+        if shouldHideMainWindow {
+            recommendedAction = "hide-main-window-use-app-windows"
+            reason = "A live Windows app window is mirrored, so the main launcher should stay hidden while Dock and menu controls remain available."
+        } else if pendingLaunchAppId != nil {
+            recommendedAction = "show-launcher-for-pending-launch"
+            reason = "A Windows app launch is queued and may need the launcher to show start or reconnect recovery."
+        } else if canRestoreMirrorSessions {
+            recommendedAction = "show-launcher-or-restore-apps"
+            reason = "No mirrored app window is open, but previous Windows app intent can be restored."
+        } else {
+            recommendedAction = "show-launcher"
+            reason = "No live mirrored Windows app window needs the launcher hidden."
+        }
+
+        return WindowsAppRuntimeLauncherVisibilityStatus(
+            isEnabled: true,
+            canOpenMainWindow: true,
+            shouldHideMainWindow: shouldHideMainWindow,
+            keepsDockMenuAvailable: true,
+            recommendedAction: recommendedAction,
             reason: reason
         )
     }

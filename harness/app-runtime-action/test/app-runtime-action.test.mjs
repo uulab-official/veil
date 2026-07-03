@@ -294,6 +294,8 @@ test("rejects close-all actions that leave mirrored sessions open", () => {
   report.status.macWindowIntegration.foregroundWindowTitle = "Untitled - Notepad";
   report.status.macWindowIntegration.pendingFrameWindowCount = 1;
   report.status.macWindowIntegration.hidesLauncherWhenMirroring = true;
+  report.status.launcherVisibility.shouldHideMainWindow = true;
+  report.status.launcherVisibility.recommendedAction = "hide-main-window-use-app-windows";
   report.status.quietRuntime.openWindowCount = 1;
   report.status.quietRuntime.canQuietRuntime = false;
   report.status.quietRuntime.willQuietAutomatically = false;
@@ -339,6 +341,8 @@ test("allows rejected restore actions to keep requested app ids", () => {
   delete report.status.macWindowIntegration.foregroundWindowId;
   delete report.status.macWindowIntegration.foregroundWindowTitle;
   report.status.macWindowIntegration.pendingFrameWindowCount = 0;
+  report.status.launcherVisibility.shouldHideMainWindow = false;
+  report.status.launcherVisibility.recommendedAction = "show-launcher-or-restore-apps";
   report.status.quietRuntime.openWindowCount = 0;
 
   assert.equal(validateAppRuntimeAction(report), report);
@@ -356,6 +360,8 @@ test("rejects restore actions whose windows are absent from status", () => {
   delete report.status.macWindowIntegration.foregroundWindowId;
   delete report.status.macWindowIntegration.foregroundWindowTitle;
   report.status.macWindowIntegration.pendingFrameWindowCount = 0;
+  report.status.launcherVisibility.shouldHideMainWindow = false;
+  report.status.launcherVisibility.recommendedAction = "show-launcher-or-restore-apps";
   report.status.quietRuntime.openWindowCount = 0;
 
   assert.throws(

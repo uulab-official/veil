@@ -45,28 +45,6 @@
       "agentVersion": "0.1.0",
       "os": "windows-arm64"
     },
-    "apps": [
-      {
-        "id": "winapp_notepad",
-        "name": "Notepad",
-        "canRequestLaunch": true,
-        "canLaunchNow": true
-      }
-    ],
-    "mirrorSessions": [
-      {
-        "windowId": "hwnd:0003029A",
-        "appId": "winapp_notepad",
-        "title": "Untitled - Notepad",
-        "captureState": "pending",
-        "canFocus": true,
-        "canClose": true,
-        "canSendInput": true
-      }
-    ],
-    "restorableAppIds": [
-      "winapp_notepad"
-    ],
     "dockIntegration": {
       "isEnabled": true,
       "openWindowCount": 1,
@@ -76,6 +54,14 @@
       "canBringWindowsAppsForward": true,
       "canRestorePreviousApps": false,
       "canLaunchSelectedApp": true
+    },
+    "launcherVisibility": {
+      "isEnabled": true,
+      "canOpenMainWindow": true,
+      "shouldHideMainWindow": true,
+      "keepsDockMenuAvailable": true,
+      "recommendedAction": "hide-main-window-use-app-windows",
+      "reason": "A live Windows app window is mirrored, so the main launcher should stay hidden while Dock and menu controls remain available."
     },
     "macWindowIntegration": {
       "isEnabled": true,
@@ -110,6 +96,28 @@
       "recommendedLaunchCommand": "veil-vmctl app-runtime-action --json --action launch --app-id winapp_notepad",
       "reason": "The live Windows agent can launch the selected app now."
     },
+    "apps": [
+      {
+        "id": "winapp_notepad",
+        "name": "Notepad",
+        "canRequestLaunch": true,
+        "canLaunchNow": true
+      }
+    ],
+    "mirrorSessions": [
+      {
+        "windowId": "hwnd:0003029A",
+        "appId": "winapp_notepad",
+        "title": "Untitled - Notepad",
+        "captureState": "pending",
+        "canFocus": true,
+        "canClose": true,
+        "canSendInput": true
+      }
+    ],
+    "restorableAppIds": [
+      "winapp_notepad"
+    ],
     "actions": [
       {
         "id": "dock.openMainWindow",

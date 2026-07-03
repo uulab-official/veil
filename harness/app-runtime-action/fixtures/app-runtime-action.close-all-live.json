@@ -39,22 +39,6 @@
       "agentVersion": "0.1.0",
       "os": "windows-arm64"
     },
-    "apps": [
-      {
-        "id": "winapp_notepad",
-        "name": "Notepad",
-        "canRequestLaunch": true,
-        "canLaunchNow": true
-      },
-      {
-        "id": "winapp_calculator",
-        "name": "Calculator",
-        "canRequestLaunch": true,
-        "canLaunchNow": true
-      }
-    ],
-    "mirrorSessions": [],
-    "restorableAppIds": [],
     "dockIntegration": {
       "isEnabled": true,
       "openWindowCount": 0,
@@ -63,6 +47,14 @@
       "canBringWindowsAppsForward": false,
       "canRestorePreviousApps": false,
       "canLaunchSelectedApp": true
+    },
+    "launcherVisibility": {
+      "isEnabled": true,
+      "canOpenMainWindow": true,
+      "shouldHideMainWindow": false,
+      "keepsDockMenuAvailable": true,
+      "recommendedAction": "show-launcher",
+      "reason": "No live mirrored Windows app window needs the launcher hidden."
     },
     "macWindowIntegration": {
       "isEnabled": true,
@@ -96,6 +88,22 @@
       "recommendedLaunchCommand": "veil-vmctl app-runtime-action --json --action launch --app-id winapp_calculator",
       "reason": "The live Windows agent can launch the selected app now."
     },
+    "apps": [
+      {
+        "id": "winapp_notepad",
+        "name": "Notepad",
+        "canRequestLaunch": true,
+        "canLaunchNow": true
+      },
+      {
+        "id": "winapp_calculator",
+        "name": "Calculator",
+        "canRequestLaunch": true,
+        "canLaunchNow": true
+      }
+    ],
+    "mirrorSessions": [],
+    "restorableAppIds": [],
     "actions": [
       {
         "id": "dock.openMainWindow",

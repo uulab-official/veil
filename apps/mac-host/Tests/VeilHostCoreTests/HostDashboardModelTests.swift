@@ -482,6 +482,11 @@ struct HostDashboardModelTests {
         #expect(report.dockIntegration.canOpenMainWindow)
         #expect(report.dockIntegration.canBringWindowsAppsForward)
         #expect(report.dockIntegration.canLaunchSelectedApp)
+        #expect(report.launcherVisibility.isEnabled)
+        #expect(report.launcherVisibility.canOpenMainWindow)
+        #expect(report.launcherVisibility.shouldHideMainWindow)
+        #expect(report.launcherVisibility.keepsDockMenuAvailable)
+        #expect(report.launcherVisibility.recommendedAction == "hide-main-window-use-app-windows")
         #expect(report.macWindowIntegration.isEnabled)
         #expect(report.macWindowIntegration.acceptsGuestWindowEvents)
         #expect(report.macWindowIntegration.opensMacWindowsAutomatically)
@@ -542,6 +547,8 @@ struct HostDashboardModelTests {
         #expect(report.macWindowIntegration.mirroredWindowCount == 0)
         #expect(report.macWindowIntegration.foregroundWindowId == nil)
         #expect(report.macWindowIntegration.foregroundWindowTitle == nil)
+        #expect(report.launcherVisibility.shouldHideMainWindow == false)
+        #expect(report.launcherVisibility.recommendedAction == "show-launcher")
         #expect(report.actions.first { $0.id == "runtime.quietWhenIdle" }?.isAvailable == true)
     }
 

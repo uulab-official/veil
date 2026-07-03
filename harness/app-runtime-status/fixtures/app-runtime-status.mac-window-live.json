@@ -47,6 +47,14 @@
     "canRestorePreviousApps": false,
     "canLaunchSelectedApp": true
   },
+  "launcherVisibility": {
+    "isEnabled": true,
+    "canOpenMainWindow": true,
+    "shouldHideMainWindow": true,
+    "keepsDockMenuAvailable": true,
+    "recommendedAction": "hide-main-window-use-app-windows",
+    "reason": "A live Windows app window is mirrored, so the main launcher should stay hidden while Dock and menu controls remain available."
+  },
   "macWindowIntegration": {
     "isEnabled": true,
     "acceptsGuestWindowEvents": true,

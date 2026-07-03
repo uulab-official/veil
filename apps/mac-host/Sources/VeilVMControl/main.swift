@@ -615,6 +615,8 @@ struct VeilVMControl {
         print("Dock pending launches: \(report.dockIntegration.pendingLaunchCount)")
         print("Dock runtime badge: \(report.dockIntegration.badgeLabel ?? "none")")
         print("Dock can bring apps forward: \(report.dockIntegration.canBringWindowsAppsForward ? "yes" : "no")")
+        print("Launcher action: \(report.launcherVisibility.recommendedAction)")
+        print("Launcher hidden for apps: \(report.launcherVisibility.shouldHideMainWindow ? "yes" : "no")")
         print("Mac window integration: \(report.macWindowIntegration.isEnabled ? "enabled" : "disabled")")
         print("Mac windows auto-open: \(report.macWindowIntegration.acceptsGuestWindowEvents ? "ready" : "waiting")")
         print("Mac mirrored windows: \(report.macWindowIntegration.mirroredWindowCount)")
