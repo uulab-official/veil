@@ -55,7 +55,8 @@
     "mirroredWindowCount": 1,
     "pendingFrameWindowCount": 1,
     "streamingWindowCount": 0,
-    "reason": "Guest HWND sessions are mirrored as macOS windows."
+    "reason": "Guest HWND sessions are mirrored as macOS windows.",
+    "foregroundableWindowCount": 1
   },
   "quietRuntime": {
     "isEnabled": true,

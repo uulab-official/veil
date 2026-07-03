@@ -112,6 +112,16 @@ test("rejects Dock integration pending launch count drift", () => {
   );
 });
 
+test("rejects Mac foregroundable window counts that drift from mirrored sessions", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.mac-window-live.json", import.meta.url), "utf8"));
+  report.macWindowIntegration.foregroundableWindowCount = 0;
+
+  assert.throws(
+    () => validateAppRuntimeStatus(report),
+    /foregroundableWindowCount/
+  );
+});
+
 test("rejects quiet runtime counts that drift from mirrored sessions", () => {
   const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.demo.json", import.meta.url), "utf8"));
   report.quietRuntime.openWindowCount = 1;

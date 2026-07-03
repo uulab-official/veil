@@ -84,7 +84,10 @@ becomes available after a queued app launch has a live guest agent capable of
 opening that app.
 `macWindowIntegration` records whether a live agent can feed guest HWND events
 into automatic macOS app-window presentation, including mirrored, pending-frame,
-and streaming window counts.
+streaming, and foregroundable window counts. The foregroundable count must move
+with mirrored HWND sessions so successful launch, restore, and pending-launch
+fulfillment reports prove the Windows app can be brought forward as a macOS
+window instead of merely existing inside the guest.
 When every mirrored Windows app window has closed, `quietRuntime` also reports
 whether Veil will automatically quiet the local runtime and the current delay
 before that stop/suspend policy is attempted. When quieting is allowed, the

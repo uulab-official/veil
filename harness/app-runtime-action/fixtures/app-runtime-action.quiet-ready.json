@@ -61,7 +61,8 @@
       "mirroredWindowCount": 0,
       "pendingFrameWindowCount": 0,
       "streamingWindowCount": 0,
-      "reason": "Ready to open the next guest HWND as a macOS window."
+      "reason": "Ready to open the next guest HWND as a macOS window.",
+      "foregroundableWindowCount": 0
     },
     "quietRuntime": {
       "isEnabled": true,

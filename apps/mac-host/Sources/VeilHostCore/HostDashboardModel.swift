@@ -219,6 +219,7 @@ public struct WindowsAppRuntimeMacWindowIntegrationStatus: Codable, Equatable, S
     public var opensMacWindowsAutomatically: Bool
     public var hidesLauncherWhenMirroring: Bool
     public var mirroredWindowCount: Int
+    public var foregroundableWindowCount: Int
     public var pendingFrameWindowCount: Int
     public var streamingWindowCount: Int
     public var reason: String
@@ -229,6 +230,7 @@ public struct WindowsAppRuntimeMacWindowIntegrationStatus: Codable, Equatable, S
         opensMacWindowsAutomatically: Bool,
         hidesLauncherWhenMirroring: Bool,
         mirroredWindowCount: Int,
+        foregroundableWindowCount: Int,
         pendingFrameWindowCount: Int,
         streamingWindowCount: Int,
         reason: String
@@ -238,6 +240,7 @@ public struct WindowsAppRuntimeMacWindowIntegrationStatus: Codable, Equatable, S
         self.opensMacWindowsAutomatically = opensMacWindowsAutomatically
         self.hidesLauncherWhenMirroring = hidesLauncherWhenMirroring
         self.mirroredWindowCount = mirroredWindowCount
+        self.foregroundableWindowCount = foregroundableWindowCount
         self.pendingFrameWindowCount = pendingFrameWindowCount
         self.streamingWindowCount = streamingWindowCount
         self.reason = reason
@@ -821,6 +824,7 @@ public final class HostDashboardModel {
             opensMacWindowsAutomatically: true,
             hidesLauncherWhenMirroring: hasLiveAgentConnection && !mirrorSessions.isEmpty,
             mirroredWindowCount: mirrorSessions.count,
+            foregroundableWindowCount: mirrorSessions.count,
             pendingFrameWindowCount: pendingFrameWindowCount,
             streamingWindowCount: streamingWindowCount,
             reason: reason

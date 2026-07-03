@@ -117,6 +117,8 @@ function validateFulfillPendingAction(report) {
   if (report.status.pendingLaunchAppId !== undefined) {
     throw new TypeError("accepted fulfill-pending actions must clear status.pendingLaunchAppId.");
   }
+
+  requireForegroundableMacWindow(report, "accepted fulfill-pending actions");
 }
 
 function validateQuietWhenIdleAction(report) {
@@ -179,6 +181,8 @@ function validateLaunchAction(report) {
   if (report.window.windowId !== report.windowId) {
     throw new TypeError("launch window must match report.windowId.");
   }
+
+  requireForegroundableMacWindow(report, "accepted launch actions");
 }
 
 function validateActionLaunchPlan(report) {
@@ -301,6 +305,8 @@ function validateRestoreAction(report) {
   if (report.status.dockIntegration.canRestorePreviousApps) {
     throw new TypeError("accepted restore actions should consume the immediate restore availability while windows are open.");
   }
+
+  requireForegroundableMacWindow(report, "accepted restore actions");
 }
 
 function validateBringForwardAction(report) {
@@ -336,6 +342,16 @@ function validateBringForwardAction(report) {
     if (report.focus.windowId !== report.windowId) {
       throw new TypeError("bring-forward focus response must match report.windowId.");
     }
+  }
+}
+
+function requireForegroundableMacWindow(report, actionName) {
+  if (!report.status.dockIntegration.canBringWindowsAppsForward) {
+    throw new TypeError(`${actionName} must leave Windows app windows available to bring forward.`);
+  }
+
+  if (report.status.macWindowIntegration.foregroundableWindowCount < 1) {
+    throw new TypeError(`${actionName} must leave at least one foregroundable macOS app window.`);
   }
 }
 

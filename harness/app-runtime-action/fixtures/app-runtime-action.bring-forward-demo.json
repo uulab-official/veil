@@ -52,7 +52,8 @@
       "mirroredWindowCount": 1,
       "pendingFrameWindowCount": 0,
       "streamingWindowCount": 0,
-      "reason": "Waiting for the live Windows agent before guest HWND events can open macOS windows automatically."
+      "reason": "Waiting for the live Windows agent before guest HWND events can open macOS windows automatically.",
+      "foregroundableWindowCount": 1
     },
     "quietRuntime": {
       "isEnabled": true,

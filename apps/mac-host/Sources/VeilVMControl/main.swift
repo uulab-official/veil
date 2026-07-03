@@ -616,6 +616,7 @@ struct VeilVMControl {
         print("Mac window integration: \(report.macWindowIntegration.isEnabled ? "enabled" : "disabled")")
         print("Mac windows auto-open: \(report.macWindowIntegration.acceptsGuestWindowEvents ? "ready" : "waiting")")
         print("Mac mirrored windows: \(report.macWindowIntegration.mirroredWindowCount)")
+        print("Mac foregroundable windows: \(report.macWindowIntegration.foregroundableWindowCount)")
         print("Launch plan: \(report.launchPlan.recommendedAction)")
         print("Launch plan reason: \(report.launchPlan.reason)")
         if let startCommand = report.launchPlan.recommendedStartCommand {

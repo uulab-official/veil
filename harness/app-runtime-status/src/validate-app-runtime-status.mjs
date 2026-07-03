@@ -176,12 +176,17 @@ function validateMacWindowIntegration(macWindowIntegration, mirrorSessions, conn
   requireBoolean(macWindowIntegration.opensMacWindowsAutomatically, "macWindowIntegration.opensMacWindowsAutomatically");
   requireBoolean(macWindowIntegration.hidesLauncherWhenMirroring, "macWindowIntegration.hidesLauncherWhenMirroring");
   requireNonNegativeInteger(macWindowIntegration.mirroredWindowCount, "macWindowIntegration.mirroredWindowCount");
+  requireNonNegativeInteger(macWindowIntegration.foregroundableWindowCount, "macWindowIntegration.foregroundableWindowCount");
   requireNonNegativeInteger(macWindowIntegration.pendingFrameWindowCount, "macWindowIntegration.pendingFrameWindowCount");
   requireNonNegativeInteger(macWindowIntegration.streamingWindowCount, "macWindowIntegration.streamingWindowCount");
   requireString(macWindowIntegration.reason, "macWindowIntegration.reason");
 
   if (macWindowIntegration.mirroredWindowCount !== mirrorSessions.length) {
     throw new TypeError("macWindowIntegration.mirroredWindowCount must match mirrorSessions length.");
+  }
+
+  if (macWindowIntegration.foregroundableWindowCount !== mirrorSessions.length) {
+    throw new TypeError("macWindowIntegration.foregroundableWindowCount must match mirrorSessions length.");
   }
 
   if (macWindowIntegration.pendingFrameWindowCount !== mirrorSessions.filter((session) => session.captureState === "pending").length) {

@@ -56,6 +56,16 @@ test("rejects accepted launch actions without a window", () => {
   );
 });
 
+test("rejects accepted launch actions without a foregroundable Mac window", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-action.launch-demo.json", import.meta.url), "utf8"));
+  report.status.macWindowIntegration.foregroundableWindowCount = 0;
+
+  assert.throws(
+    () => validateAppRuntimeAction(report),
+    /foregroundable/
+  );
+});
+
 test("rejects pending launch actions with a fake window", () => {
   const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-action.launch-pending.json", import.meta.url), "utf8"));
   report.window = {
@@ -239,6 +249,7 @@ test("rejects close-all actions that leave mirrored sessions open", () => {
   report.status.dockIntegration.badgeLabel = "1";
   report.status.dockIntegration.canBringWindowsAppsForward = true;
   report.status.macWindowIntegration.mirroredWindowCount = 1;
+  report.status.macWindowIntegration.foregroundableWindowCount = 1;
   report.status.macWindowIntegration.pendingFrameWindowCount = 1;
   report.status.macWindowIntegration.hidesLauncherWhenMirroring = true;
   report.status.quietRuntime.openWindowCount = 1;
@@ -282,6 +293,7 @@ test("allows rejected restore actions to keep requested app ids", () => {
   report.status.dockIntegration.canBringWindowsAppsForward = false;
   report.status.macWindowIntegration.hidesLauncherWhenMirroring = false;
   report.status.macWindowIntegration.mirroredWindowCount = 0;
+  report.status.macWindowIntegration.foregroundableWindowCount = 0;
   report.status.macWindowIntegration.pendingFrameWindowCount = 0;
   report.status.quietRuntime.openWindowCount = 0;
 
@@ -296,6 +308,7 @@ test("rejects restore actions whose windows are absent from status", () => {
   report.status.dockIntegration.canBringWindowsAppsForward = false;
   report.status.macWindowIntegration.hidesLauncherWhenMirroring = false;
   report.status.macWindowIntegration.mirroredWindowCount = 0;
+  report.status.macWindowIntegration.foregroundableWindowCount = 0;
   report.status.macWindowIntegration.pendingFrameWindowCount = 0;
   report.status.quietRuntime.openWindowCount = 0;
 
