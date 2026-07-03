@@ -251,9 +251,15 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
     }
 
     public static func defaultDiagnosticsDirectory() -> URL {
-        let downloads = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first
-            ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Downloads", isDirectory: true)
-        return downloads.appendingPathComponent("Veil Diagnostics", isDirectory: true)
+        let applicationSupport = FileManager.default.urls(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask
+        ).first
+            ?? FileManager.default.homeDirectoryForCurrentUser
+                .appendingPathComponent("Library/Application Support", isDirectory: true)
+        return applicationSupport
+            .appendingPathComponent("Veil", isDirectory: true)
+            .appendingPathComponent("Diagnostics", isDirectory: true)
     }
 
     public static func bringQEMUToFrontIfAllowed() {

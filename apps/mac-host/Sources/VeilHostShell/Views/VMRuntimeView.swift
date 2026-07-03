@@ -265,9 +265,7 @@ struct VMRuntimeView: View {
     }
 
     private func diagnosticsDirectory() -> URL {
-        let downloads = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first
-            ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Downloads", isDirectory: true)
-        return downloads.appendingPathComponent("Veil Diagnostics", isDirectory: true)
+        QEMUVMRuntimeBooter.defaultDiagnosticsDirectory()
     }
 
     @MainActor
@@ -1117,7 +1115,7 @@ private struct WindowsSetupDisplayPanel: View {
                 .background(.black.opacity(0.18))
                 .background(.ultraThinMaterial)
                 .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                .padding(14)
+                .padding(10)
         }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -1130,7 +1128,7 @@ private struct WindowsSetupDisplayPanel: View {
                 .background(.black.opacity(0.18))
                 .background(.ultraThinMaterial)
                 .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                .padding(14)
+                .padding(10)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
         .overlay {
@@ -1213,14 +1211,6 @@ private struct WindowsSetupDisplayPanel: View {
             .controlSize(.large)
             .disabled(primaryDisabled)
 
-            if canShowConsole {
-                Button(action: consoleAction) {
-                    Label("Console", systemImage: "display")
-                        .labelStyle(.iconOnly)
-                }
-                .disabled(isLoading)
-                .help("Open Console")
-            }
         }
         .controlSize(.regular)
         .padding(.horizontal, 14)
@@ -1346,7 +1336,7 @@ private struct WindowsSetupDisplayPanel: View {
 
     private var installPrimaryTitle: String {
         if canStop {
-            return "Stop Setup"
+            return "Stop Windows"
         }
 
         if canStart {
@@ -1386,13 +1376,6 @@ private struct WindowsSetupDisplayPanel: View {
             }
             .disabled(isLoading || snapshot.state == .running || snapshot.state == .starting)
             .help("Choose ISO")
-
-            Button(action: consoleAction) {
-                Label("Open Console", systemImage: "display")
-                    .labelStyle(.iconOnly)
-            }
-            .disabled(!canShowConsole || isLoading)
-            .help("Open Console")
 
             Spacer(minLength: 4)
 

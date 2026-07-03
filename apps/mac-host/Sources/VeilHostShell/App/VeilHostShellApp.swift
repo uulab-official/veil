@@ -45,7 +45,7 @@ struct VeilHostShellApp: App {
                 launchWindowsAppAction: launchSelectedWindowsAppWindow,
                 consoleMessage: consoleMessage
             )
-                .frame(minWidth: 1040, idealWidth: 1280, minHeight: 660, idealHeight: 760)
+                .frame(minWidth: 1120, idealWidth: 1440, minHeight: 700, idealHeight: 900)
                 .task {
                     configureWindowsAppWindowCloseBridge()
                     startAgentEventPumpIfNeeded()
@@ -67,13 +67,13 @@ struct VeilHostShellApp: App {
                 }
         }
         .defaultLaunchBehavior(.presented)
-        .defaultSize(width: 1280, height: 760)
+        .defaultSize(width: 1440, height: 900)
         .defaultWindowPlacement { _, context in
             let visibleRect = context.defaultDisplay.visibleRect
-            let preferredSize = CGSize(width: 1280, height: 760)
+            let preferredSize = CGSize(width: 1440, height: 900)
             let size = CGSize(
-                width: min(preferredSize.width, visibleRect.width * 0.90),
-                height: min(preferredSize.height, visibleRect.height * 0.84)
+                width: min(preferredSize.width, visibleRect.width * 0.96),
+                height: min(preferredSize.height, visibleRect.height * 0.96)
             )
             return WindowPlacement(size: size)
         }
@@ -494,7 +494,7 @@ private enum MainWindowChrome {
         }
 
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 1280, height: 760),
+            contentRect: NSRect(x: 0, y: 0, width: 1440, height: 900),
             styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
             backing: .buffered,
             defer: false
@@ -510,7 +510,7 @@ private enum MainWindowChrome {
     }
 
     private static func configure(_ window: NSWindow) {
-        window.minSize = NSSize(width: 1040, height: 660)
+        window.minSize = NSSize(width: 1120, height: 700)
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
         window.styleMask.insert(.fullSizeContentView)
@@ -521,10 +521,10 @@ private enum MainWindowChrome {
 
     private static func fitToPreferredSize(_ window: NSWindow) {
         let visibleFrame = window.screen?.visibleFrame ?? NSScreen.main?.visibleFrame ?? window.frame
-        let preferredSize = NSSize(width: 1280, height: 760)
+        let preferredSize = NSSize(width: 1440, height: 900)
         let targetSize = NSSize(
-            width: min(preferredSize.width, visibleFrame.width * 0.90),
-            height: min(preferredSize.height, visibleFrame.height * 0.84)
+            width: min(preferredSize.width, visibleFrame.width * 0.96),
+            height: min(preferredSize.height, visibleFrame.height * 0.96)
         )
         let sizeDelta = abs(window.frame.width - targetSize.width) + abs(window.frame.height - targetSize.height)
         guard sizeDelta > 16 else {
@@ -572,7 +572,7 @@ private struct StandaloneMainWindowRoot: View {
             launchWindowsAppAction: launchSelectedWindowsApp,
             consoleMessage: consoleMessage
         )
-        .frame(minWidth: 1040, idealWidth: 1280, minHeight: 660, idealHeight: 760)
+        .frame(minWidth: 1120, idealWidth: 1440, minHeight: 700, idealHeight: 900)
         .task {
             async let hostLoad: Void = model.load()
             async let vmLoad: Void = vmModel.load()

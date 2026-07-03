@@ -22,8 +22,6 @@ struct ContentView: View {
                     statusTitle: headerStatusTitle,
                     statusSymbol: headerStatusSymbol,
                     statusTint: headerStatusTint,
-                    canShowConsole: canShowConsole,
-                    showConsoleAction: showVMConsoleAction,
                     isRefreshing: isRefreshing,
                     refreshAction: refreshAll
                 )
@@ -106,10 +104,6 @@ struct ContentView: View {
         }
     }
 
-    private var canShowConsole: Bool {
-        vmModel.snapshot?.state == .running || vmModel.snapshot?.state == .starting
-    }
-
     private func refreshAll() {
         Task {
             async let hostLoad: Void = model.load()
@@ -143,8 +137,6 @@ private struct VeilWindowHeader: View {
     var statusTitle: String
     var statusSymbol: String
     var statusTint: Color
-    var canShowConsole: Bool
-    var showConsoleAction: () -> Void
     var isRefreshing: Bool
     var refreshAction: () -> Void
 
@@ -176,14 +168,6 @@ private struct VeilWindowHeader: View {
             .frame(maxWidth: .infinity, alignment: .leading)
 
             Spacer()
-
-            Button(action: showConsoleAction) {
-                Label("Open Display", systemImage: "display")
-                    .labelStyle(.iconOnly)
-            }
-            .buttonStyle(TitlebarIconButtonStyle())
-            .disabled(!canShowConsole)
-            .help("Open Windows Display")
 
             Button(action: refreshAction) {
                 Label("Refresh", systemImage: "arrow.clockwise")
