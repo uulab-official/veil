@@ -37,6 +37,8 @@ Goal: move Veil from a Veil shell plus separate QEMU Cocoa display toward a UTM-
 - [x] Add a Mark Windows Installed app/CLI transition so desktop proof can detach installer media before the guest agent connects.
 - [x] Convert the main shell to a single-window scene and close duplicate main windows so Veil cannot present two primary VM control surfaces.
 - [x] Prioritize the installed-runtime CTA as Open Windows App, then Install Agent, then Stop Windows, matching the app-runtime product loop.
+- [x] Keep mirrored Windows apps out of the main VM screen: Notepad renders in its own macOS window while the main shell remains a launcher/status surface.
+- [x] Size the Notepad bridge window from the guest HWND bounds so it opens like a real desktop app instead of a small preview.
 
 ## Next
 

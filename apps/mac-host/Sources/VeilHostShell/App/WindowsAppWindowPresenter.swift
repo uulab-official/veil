@@ -14,7 +14,7 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
 
     func showWindow(for session: WindowMirrorSession) {
         if let window = windowsById[session.id] {
-            window.title = session.window.title
+            configure(window, for: session)
             window.contentView = hostingView(
                 for: session
             )
@@ -30,14 +30,13 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
             defer: false
         )
         window.identifier = NSUserInterfaceItemIdentifier(session.id)
-        window.title = session.window.title
         window.delegate = self
         window.isReleasedWhenClosed = false
         window.contentMinSize = NSSize(width: 520, height: 360)
+        configure(window, for: session)
         window.contentView = hostingView(
             for: session
         )
-        window.center()
         window.makeKeyAndOrderFront(nil)
         windowsById[session.id] = window
         NSApp.activate(ignoringOtherApps: true)
@@ -83,10 +82,24 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
         )
     }
 
+    private func configure(_ window: NSWindow, for session: WindowMirrorSession) {
+        window.title = session.window.title
+        window.tabbingMode = .disallowed
+        window.collectionBehavior = [.managed, .fullScreenPrimary]
+        window.backgroundColor = .windowBackgroundColor
+        window.titleVisibility = .visible
+        window.titlebarAppearsTransparent = false
+    }
+
     private func frame(for bounds: WindowBounds) -> NSRect {
-        let width = min(max(CGFloat(bounds.width), 760), 1040)
-        let height = min(max(CGFloat(bounds.height) * 0.70, 440), 620)
-        return NSRect(x: 0, y: 0, width: width, height: height)
+        let visibleFrame = NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
+        let width = min(max(CGFloat(bounds.width), 900), visibleFrame.width * 0.92)
+        let height = min(max(CGFloat(bounds.height), 620), visibleFrame.height * 0.88)
+        let origin = NSPoint(
+            x: visibleFrame.midX - width / 2,
+            y: visibleFrame.midY - height / 2
+        )
+        return NSRect(x: origin.x, y: origin.y, width: width, height: height)
     }
 }
 

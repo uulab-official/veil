@@ -1368,53 +1368,7 @@ private struct WindowsSetupDisplayPanel: View {
 
     @ViewBuilder
     private var launcherDisplaySurface: some View {
-        if let activeMirrorSession {
-            mirroredAppDisplay(session: activeMirrorSession)
-        } else {
-            machineDisplay
-        }
-    }
-
-    private func mirroredAppDisplay(session: WindowMirrorSession) -> some View {
-        ZStack(alignment: .topLeading) {
-            WindowsAppFrameSurface(session: session, cornerRadius: 8)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(.black, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-
-            VStack(alignment: .leading, spacing: 5) {
-                Text("WINDOWS APP")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.white.opacity(0.62))
-                Text(session.window.title)
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.white.opacity(0.84))
-                    .lineLimit(1)
-                Text(mirroredAppFrameStatus(for: session))
-                    .font(.caption2.weight(.medium))
-                    .foregroundStyle(.white.opacity(0.62))
-                    .lineLimit(1)
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 9)
-            .background(.black.opacity(0.24), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-            .padding(16)
-        }
-        .overlay {
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .strokeBorder(.white.opacity(0.16), lineWidth: 1)
-        }
-    }
-
-    private func mirroredAppFrameStatus(for session: WindowMirrorSession) -> String {
-        guard let timing = session.frameTiming else {
-            return session.latestFrame == nil ? "Waiting for first frame" : "Mirroring live frame"
-        }
-
-        if let interval = timing.latestFrameIntervalMilliseconds {
-            return "Live frame \(timing.receivedFrameCount) · \(interval) ms"
-        }
-
-        return "First frame received"
+        machineDisplay
     }
 
     private var installControlBar: some View {
@@ -1934,7 +1888,7 @@ private struct WindowsSetupDisplayPanel: View {
             return canLaunchWindowsApp ? appDisplayName : "After agent"
         }
 
-        return activeMirrorSession.latestFrame == nil ? "Waiting" : "Mirroring"
+        return activeMirrorSession.latestFrame == nil ? "Opening" : "Mac Window"
     }
 
     private var appMetadataTint: Color {
@@ -1954,6 +1908,10 @@ private struct WindowsSetupDisplayPanel: View {
     }
 
     private var machineSubtitle: String {
+        if let activeMirrorSession {
+            return "\(activeMirrorSession.window.title) is open as a Mac window"
+        }
+
         if canLaunchWindowsApp {
             return "Open Windows apps from macOS"
         }
