@@ -21,7 +21,7 @@ struct VeilHostShellApp: App {
     @State private var vmModel = VMRuntimeModel(
         service: LocalVMRuntimeService(bootRunner: QEMUVMRuntimeBooter.shared)
     )
-    @State private var consoleMessage: String?
+    @State private var displayMessage: String?
     @State private var agentEventTask: Task<Void, Never>?
     @State private var agentReconnectTask: Task<Void, Never>?
 
@@ -48,13 +48,13 @@ struct VeilHostShellApp: App {
             ContentView(
                 model: model,
                 vmModel: vmModel,
-                startVMAction: startVMAndShowConsole,
-                stopVMAction: stopVMAndCloseConsole,
-                showVMConsoleAction: showVMConsole,
-                installGuestAgentAction: installGuestAgentFromConsole,
+                startVMAction: startWindowsAndShowDisplay,
+                stopVMAction: stopWindowsAndCloseDisplay,
+                showWindowsDisplayAction: showWindowsDisplay,
+                installGuestAgentAction: installGuestAgentFromDisplay,
                 launchWindowsAppAction: launchSelectedWindowsAppWindow,
                 recordAppFrameProofAction: recordAppFrameProof,
-                consoleMessage: consoleMessage
+                displayMessage: displayMessage
             )
                 .frame(minWidth: 1120, idealWidth: 1440, minHeight: 700, idealHeight: 900)
                 .task {
@@ -73,7 +73,7 @@ struct VeilHostShellApp: App {
                     await recordGuestAgentInstallEvidenceIfNeeded()
 
                     if Self.shouldStartVMOnLaunch {
-                        startVMAndShowConsole()
+                        startWindowsAndShowDisplay()
                     }
                 }
         }
@@ -108,25 +108,25 @@ struct VeilHostShellApp: App {
                 .keyboardShortcut("r", modifiers: [.command, .shift])
 
                 Button("Start Windows") {
-                    startVMAndShowConsole()
+                    startWindowsAndShowDisplay()
                 }
                 .keyboardShortcut("b", modifiers: [.command])
                 .disabled(!vmModel.canStart || vmModel.phase == .loading)
 
                 Button("Stop Windows") {
-                    stopVMAndCloseConsole()
+                    stopWindowsAndCloseDisplay()
                 }
                 .keyboardShortcut(".", modifiers: [.command])
                 .disabled(!vmModel.canStop || vmModel.phase == .loading)
 
                 Button("Show Windows Display") {
-                    showVMConsole()
+                    showWindowsDisplay()
                 }
                 .keyboardShortcut("b", modifiers: [.command, .shift])
-                .disabled(!canShowVMConsole)
+                .disabled(!canShowWindowsDisplay)
 
                 Button("Install Guest Agent") {
-                    installGuestAgentFromConsole()
+                    installGuestAgentFromDisplay()
                 }
                 .keyboardShortcut("i", modifiers: [.command, .shift])
                 .disabled(!canInstallGuestAgent)
@@ -149,10 +149,10 @@ struct VeilHostShellApp: App {
                 model: model,
                 vmModel: vmModel,
                 activateMainWindowAction: activateMainWindow,
-                startVMAction: startVMAndShowConsole,
-                stopVMAction: stopVMAndCloseConsole,
-                showVMConsoleAction: showVMConsole,
-                installGuestAgentAction: installGuestAgentFromConsole,
+                startVMAction: startWindowsAndShowDisplay,
+                stopVMAction: stopWindowsAndCloseDisplay,
+                showWindowsDisplayAction: showWindowsDisplay,
+                installGuestAgentAction: installGuestAgentFromDisplay,
                 launchWindowsAppAction: launchSelectedWindowsAppWindow,
                 recordAppFrameProofAction: recordAppFrameProof,
                 refreshRuntimeAction: refreshRuntime
@@ -235,32 +235,32 @@ struct VeilHostShellApp: App {
         }
     }
 
-    private func startVMAndShowConsole() {
+    private func startWindowsAndShowDisplay() {
         Task { @MainActor in
             activateMainWindow()
-            consoleMessage = "Opening the local Windows display."
+            displayMessage = "Opening the local Windows display."
             await vmModel.start()
 
             if vmModel.snapshot?.state == .running || vmModel.snapshot?.state == .starting {
                 if vmRuntimeBooter.showConsoleIfRunning() {
-                    consoleMessage = "Windows display is open."
+                    displayMessage = "Windows display is open."
                 } else {
-                    consoleMessage = "Windows runtime is starting, but the display is not frontmost yet. Try Show Windows Display again after a moment."
+                    displayMessage = "Windows runtime is starting, but the display is not frontmost yet. Try Show Windows Display again after a moment."
                 }
             } else if let errorMessage = vmModel.errorMessage {
-                consoleMessage = "Windows display could not start: \(errorMessage)"
+                displayMessage = "Windows display could not start: \(errorMessage)"
             }
         }
     }
 
-    private func stopVMAndCloseConsole() {
+    private func stopWindowsAndCloseDisplay() {
         Task { @MainActor in
             activateMainWindow()
             await vmModel.stop()
 
             if vmModel.snapshot?.state == .stopped {
                 windowsAppWindowPresenter.closeAll()
-                consoleMessage = "Windows display closed."
+                displayMessage = "Windows display closed."
             }
         }
     }
@@ -276,8 +276,8 @@ struct VeilHostShellApp: App {
             if model.pendingLaunchAppId != nil,
                !model.hasLiveAgentConnection,
                vmModel.canStart {
-                consoleMessage = "Starting Windows. Veil will open the app when the guest agent connects."
-                startVMAndShowConsole()
+                displayMessage = "Starting Windows. Veil will open the app when the guest agent connects."
+                startWindowsAndShowDisplay()
                 return
             }
 
@@ -302,7 +302,7 @@ struct VeilHostShellApp: App {
     private func recordAppFrameProof() {
         Task { @MainActor in
             activateMainWindow()
-            consoleMessage = "Recording Windows app launch and first-frame proof."
+            displayMessage = "Recording Windows app launch and first-frame proof."
 
             if model.apps.isEmpty {
                 await model.load()
@@ -316,10 +316,10 @@ struct VeilHostShellApp: App {
                 if model.pendingLaunchAppId != nil,
                    !model.hasLiveAgentConnection,
                    vmModel.canStart {
-                    consoleMessage = "Windows will start first. Run proof recording again after the guest agent connects."
-                    startVMAndShowConsole()
+                    displayMessage = "Windows will start first. Run proof recording again after the guest agent connects."
+                    startWindowsAndShowDisplay()
                 } else {
-                    consoleMessage = "App frame proof could not start: \(model.errorMessage ?? "No Windows app launch result.")"
+                    displayMessage = "App frame proof could not start: \(model.errorMessage ?? "No Windows app launch result.")"
                 }
                 return
             }
@@ -327,15 +327,15 @@ struct VeilHostShellApp: App {
             showWindowsAppWindow(for: result)
 
             guard let frame = await waitForFirstFrame(windowId: result.window.windowId) else {
-                consoleMessage = "App frame proof timed out waiting for the first frame from \(result.window.title)."
+                displayMessage = "App frame proof timed out waiting for the first frame from \(result.window.title)."
                 return
             }
 
             do {
                 let url = try writeAppFrameProof(launchResult: result, frame: frame)
-                consoleMessage = "App frame proof saved: \(url.path)"
+                displayMessage = "App frame proof saved: \(url.path)"
             } catch {
-                consoleMessage = "App frame proof could not be saved: \(userMessage(for: error))"
+                displayMessage = "App frame proof could not be saved: \(userMessage(for: error))"
             }
         }
     }
@@ -441,26 +441,26 @@ struct VeilHostShellApp: App {
         pasteboard.setString(text, forType: .string)
     }
 
-    private func showVMConsole() {
+    private func showWindowsDisplay() {
         activateMainWindow()
         if vmRuntimeBooter.showConsoleIfRunning() {
-            consoleMessage = "Windows display is open."
+            displayMessage = "Windows display is open."
         } else {
-            consoleMessage = "No active Windows display is attached yet. Start Windows first, then open the display."
+            displayMessage = "No active Windows display is attached yet. Start Windows first, then open the display."
         }
     }
 
-    private func installGuestAgentFromConsole() {
+    private func installGuestAgentFromDisplay() {
         Task { @MainActor in
             activateMainWindow()
-            consoleMessage = "Sending the Veil guest agent installer to Windows."
+            displayMessage = "Sending the Veil guest agent installer to Windows."
             do {
                 _ = try await vmRuntimeBooter.installGuestAgentFromAttachedMedia()
-                consoleMessage = "Guest agent installer sent. Veil will connect when the Windows agent starts."
+                displayMessage = "Guest agent installer sent. Veil will connect when the Windows agent starts."
                 await vmModel.refreshRuntimeEvidence()
                 await recordGuestAgentInstallEvidenceIfNeeded()
             } catch {
-                consoleMessage = "Guest agent install could not start: \(userMessage(for: error))"
+                displayMessage = "Guest agent install could not start: \(userMessage(for: error))"
             }
         }
     }
@@ -477,12 +477,12 @@ struct VeilHostShellApp: App {
         }
     }
 
-    private var canShowVMConsole: Bool {
+    private var canShowWindowsDisplay: Bool {
         vmModel.snapshot?.state == .running || vmModel.snapshot?.state == .starting
     }
 
     private var canInstallGuestAgent: Bool {
-        canShowVMConsole && vmModel.snapshot?.installEvidence.kind != .guestAgent
+        canShowWindowsDisplay && vmModel.snapshot?.installEvidence.kind != .guestAgent
     }
 
     private var menuBarSymbolName: String {
@@ -551,7 +551,7 @@ private struct VeilMenuBarMenu: View {
     var activateMainWindowAction: () -> Void
     var startVMAction: () -> Void
     var stopVMAction: () -> Void
-    var showVMConsoleAction: () -> Void
+    var showWindowsDisplayAction: () -> Void
     var installGuestAgentAction: () -> Void
     var launchWindowsAppAction: () -> Void
     var recordAppFrameProofAction: () -> Void
@@ -586,9 +586,9 @@ private struct VeilMenuBarMenu: View {
 
         Button("Show Windows Display", systemImage: "display") {
             openMainWindow()
-            showVMConsoleAction()
+            showWindowsDisplayAction()
         }
-        .disabled(!canShowVMConsole)
+        .disabled(!canShowWindowsDisplay)
 
         Button("Install Guest Agent", systemImage: "person.crop.circle.badge.plus") {
             openMainWindow()
@@ -616,12 +616,12 @@ private struct VeilMenuBarMenu: View {
         }
     }
 
-    private var canShowVMConsole: Bool {
+    private var canShowWindowsDisplay: Bool {
         vmModel.snapshot?.state == .running || vmModel.snapshot?.state == .starting
     }
 
     private var canInstallGuestAgent: Bool {
-        canShowVMConsole && vmModel.snapshot?.installEvidence.kind != .guestAgent
+        canShowWindowsDisplay && vmModel.snapshot?.installEvidence.kind != .guestAgent
     }
 
     private func openMainWindow() {
@@ -716,7 +716,7 @@ private struct StandaloneMainWindowRoot: View {
     @State private var vmModel = VMRuntimeModel(
         service: LocalVMRuntimeService(bootRunner: QEMUVMRuntimeBooter.shared)
     )
-    @State private var consoleMessage: String?
+    @State private var displayMessage: String?
 
     init() {
         let transport = URLSessionWebSocketTransport(
@@ -737,13 +737,13 @@ private struct StandaloneMainWindowRoot: View {
         ContentView(
             model: model,
             vmModel: vmModel,
-            startVMAction: startVMAndShowConsole,
-            stopVMAction: stopVMAndCloseConsole,
-            showVMConsoleAction: showVMConsole,
-            installGuestAgentAction: installGuestAgentFromConsole,
+            startVMAction: startWindowsAndShowDisplay,
+            stopVMAction: stopWindowsAndCloseDisplay,
+            showWindowsDisplayAction: showWindowsDisplay,
+            installGuestAgentAction: installGuestAgentFromDisplay,
             launchWindowsAppAction: launchSelectedWindowsApp,
             recordAppFrameProofAction: {},
-            consoleMessage: consoleMessage
+            displayMessage: displayMessage
         )
         .frame(minWidth: 1120, idealWidth: 1440, minHeight: 700, idealHeight: 900)
         .task {
@@ -758,50 +758,50 @@ private struct StandaloneMainWindowRoot: View {
         ProcessInfo.processInfo.environment["VEIL_AGENT_URL"] ?? "ws://127.0.0.1:18444"
     }
 
-    private func startVMAndShowConsole() {
+    private func startWindowsAndShowDisplay() {
         Task { @MainActor in
-            consoleMessage = "Opening the local Windows display."
+            displayMessage = "Opening the local Windows display."
             await vmModel.start()
 
             if vmModel.snapshot?.state == .running || vmModel.snapshot?.state == .starting {
                 if vmRuntimeBooter.showConsoleIfRunning() {
-                    consoleMessage = "Windows display is open."
+                    displayMessage = "Windows display is open."
                 } else {
-                    consoleMessage = "Windows runtime is starting, but the display is not frontmost yet."
+                    displayMessage = "Windows runtime is starting, but the display is not frontmost yet."
                 }
             } else if let errorMessage = vmModel.errorMessage {
-                consoleMessage = "Windows display could not start: \(errorMessage)"
+                displayMessage = "Windows display could not start: \(errorMessage)"
             }
         }
     }
 
-    private func stopVMAndCloseConsole() {
+    private func stopWindowsAndCloseDisplay() {
         Task { @MainActor in
             await vmModel.stop()
             if vmModel.snapshot?.state == .stopped {
-                consoleMessage = "Windows display closed."
+                displayMessage = "Windows display closed."
             }
         }
     }
 
-    private func showVMConsole() {
+    private func showWindowsDisplay() {
         if vmRuntimeBooter.showConsoleIfRunning() {
-            consoleMessage = "Windows display is open."
+            displayMessage = "Windows display is open."
         } else {
-            consoleMessage = "No active Windows display is attached yet. Start Windows first, then open the display."
+            displayMessage = "No active Windows display is attached yet. Start Windows first, then open the display."
         }
     }
 
-    private func installGuestAgentFromConsole() {
+    private func installGuestAgentFromDisplay() {
         Task { @MainActor in
-            consoleMessage = "Sending the Veil guest agent installer to Windows."
+            displayMessage = "Sending the Veil guest agent installer to Windows."
             do {
                 _ = try await vmRuntimeBooter.installGuestAgentFromAttachedMedia()
-                consoleMessage = "Guest agent installer sent. Veil will connect when the Windows agent starts."
+                displayMessage = "Guest agent installer sent. Veil will connect when the Windows agent starts."
                 await vmModel.refreshRuntimeEvidence()
                 await recordGuestAgentInstallEvidenceIfNeeded()
             } catch {
-                consoleMessage = "Guest agent install could not start: \(userMessage(for: error))"
+                displayMessage = "Guest agent install could not start: \(userMessage(for: error))"
             }
         }
     }

@@ -17,6 +17,7 @@ Goal: make the installed Windows surface feel like an app runtime instead of a V
 - [x] Expose Open Notepad and Record App Proof directly from the menu bar.
 - [x] Rename primary commands and setup handoff copy from VM/console wording toward Windows display/app wording.
 - [x] Remove product-facing Console/Prepare VM/QEMU-console wording from the main runtime surface.
+- [x] Rename host shell and SwiftUI display-action plumbing away from console terminology.
 
 ## Review Notes
 
@@ -27,4 +28,4 @@ Goal: make the installed Windows surface feel like an app runtime instead of a V
 ## Next
 
 - [ ] Move remaining QEMU/VM internals into an advanced diagnostics view so the default app surface stays product-grade.
-- [ ] Rename internal host action symbols away from console terminology after the display bridge API stabilizes.
+- [ ] Keep QEMU-specific evidence names isolated to runtime diagnostics and core boot records.

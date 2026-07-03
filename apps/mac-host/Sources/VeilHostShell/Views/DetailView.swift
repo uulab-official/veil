@@ -7,11 +7,11 @@ struct DetailView: View {
     var selectedSection: ShellSection
     var startVMAction: () -> Void
     var stopVMAction: () -> Void
-    var showVMConsoleAction: () -> Void
+    var showWindowsDisplayAction: () -> Void
     var installGuestAgentAction: () -> Void
     var launchWindowsAppAction: () -> Void
     var recordAppFrameProofAction: () -> Void
-    var consoleMessage: String?
+    var displayMessage: String?
 
     var body: some View {
         if selectedSection == .vm {
@@ -23,11 +23,11 @@ struct DetailView: View {
                 activeMirrorSession: activeMirrorSession,
                 startVMAction: startVMAction,
                 stopVMAction: stopVMAction,
-                showVMConsoleAction: showVMConsoleAction,
+                showWindowsDisplayAction: showWindowsDisplayAction,
                 installGuestAgentAction: installGuestAgentAction,
                 launchWindowsAppAction: launchWindowsAppAction,
                 recordAppFrameProofAction: recordAppFrameProofAction,
-                consoleMessage: consoleMessage
+                displayMessage: displayMessage
             )
             .padding(6)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)

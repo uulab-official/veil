@@ -11,11 +11,11 @@ struct VMRuntimeView: View {
     var activeMirrorSession: WindowMirrorSession?
     var startVMAction: () -> Void
     var stopVMAction: () -> Void
-    var showVMConsoleAction: () -> Void
+    var showWindowsDisplayAction: () -> Void
     var installGuestAgentAction: () -> Void
     var launchWindowsAppAction: () -> Void
     var recordAppFrameProofAction: () -> Void
-    var consoleMessage: String?
+    var displayMessage: String?
     @State private var pathPicker: PathPicker?
     @State private var showsAdvancedDetails = false
     @State private var installSimulation = InstallSimulationState.idle
@@ -32,8 +32,8 @@ struct VMRuntimeView: View {
                     isLoading: model.phase == .loading,
                     errorMessage: model.errorMessage,
                     diagnosticsURL: model.diagnosticsURL,
-                    consoleMessage: consoleMessage,
-                    canShowConsole: canShowConsole(for: snapshot),
+                    displayMessage: displayMessage,
+                    canShowDisplay: canShowDisplay(for: snapshot),
                     prepareAction: {
                         Task {
                             await model.prepareDefaultVM()
@@ -51,7 +51,7 @@ struct VMRuntimeView: View {
                         } else if model.canStop {
                             stopVMAction()
                         } else if model.canStart {
-                            startConsoleHandoffProgress()
+                            startDisplayHandoffProgress()
                             startVMAction()
                         } else if snapshot.installerMediaPath == nil || needsInstallerPickerAccess(snapshot) {
                             pathPicker = .installerMedia
@@ -61,7 +61,7 @@ struct VMRuntimeView: View {
                             }
                         }
                     },
-                    consoleAction: showVMConsoleAction,
+                    displayAction: showWindowsDisplayAction,
                     stopAction: stopVMAction,
                     installGuestAgentAction: installGuestAgentAction,
                     canLaunchWindowsApp: canLaunchWindowsApp,
@@ -133,7 +133,7 @@ struct VMRuntimeView: View {
             handlePathImport(result)
         }
         .onChange(of: model.snapshot?.state) { _, state in
-            updateConsoleHandoffProgress(for: state)
+            updateDisplayHandoffProgress(for: state)
         }
         .task(id: model.snapshot?.state) {
             await refreshRuntimeEvidenceWhileRunning()
@@ -161,7 +161,7 @@ struct VMRuntimeView: View {
         }
     }
 
-    private func canShowConsole(for snapshot: VMRuntimeSnapshot) -> Bool {
+    private func canShowDisplay(for snapshot: VMRuntimeSnapshot) -> Bool {
         snapshot.state == .running || snapshot.state == .starting
     }
 
@@ -313,7 +313,7 @@ struct VMRuntimeView: View {
     }
 
     @MainActor
-    private func startConsoleHandoffProgress() {
+    private func startDisplayHandoffProgress() {
         guard installSimulation.phase != .running else {
             return
         }
@@ -322,7 +322,7 @@ struct VMRuntimeView: View {
     }
 
     @MainActor
-    private func updateConsoleHandoffProgress(for state: VMRuntimeState?) {
+    private func updateDisplayHandoffProgress(for state: VMRuntimeState?) {
         switch state {
         case .starting:
             installSimulation = .running(stepIndex: 3, progress: 0.66)
@@ -380,11 +380,11 @@ private struct SimpleRuntimePanel: View {
     var isLoading: Bool
     var errorMessage: String?
     var diagnosticsURL: URL?
-    var consoleMessage: String?
+    var displayMessage: String?
     var installSimulation: InstallSimulationState
     var primaryAction: () -> Void
     var chooseISOAction: () -> Void
-    var consoleAction: () -> Void
+    var displayAction: () -> Void
     var refreshAction: () -> Void
     var detailsAction: () -> Void
     var resetSimulationAction: () -> Void
@@ -423,8 +423,8 @@ private struct SimpleRuntimePanel: View {
                         )
                     }
 
-                    if let consoleMessage {
-                        Label(consoleMessage, systemImage: "info.circle")
+                    if let displayMessage {
+                        Label(displayMessage, systemImage: "info.circle")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .textSelection(.enabled)
@@ -451,8 +451,8 @@ private struct SimpleRuntimePanel: View {
                             .buttonStyle(.bordered)
                         }
 
-                        if canShowConsole {
-                            Button(action: consoleAction) {
+                        if canShowDisplay {
+                            Button(action: displayAction) {
                                 Label("Display", systemImage: "display")
                             }
                             .disabled(isLoading)
@@ -604,7 +604,7 @@ private struct SimpleRuntimePanel: View {
         return isLoading || snapshot.state == .unsupported || installSimulation.phase == .running
     }
 
-    private var canShowConsole: Bool {
+    private var canShowDisplay: Bool {
         snapshot.state == .running || snapshot.state == .starting
     }
 }
@@ -786,7 +786,7 @@ private struct RuntimeLandingPanel: View {
     }
 }
 
-private struct ConsoleScreenshotPreview: View {
+private struct WindowsDisplayScreenshotPreview: View {
     var image: NSImage
     var path: String
 
@@ -861,7 +861,7 @@ private struct QuickActionsPanel: View {
     var isLoading: Bool
     var startAction: () -> Void
     var stopAction: () -> Void
-    var consoleAction: () -> Void
+    var displayAction: () -> Void
     var refreshAction: () -> Void
     var prepareAction: () -> Void
     var createDiskAction: () -> Void
@@ -894,13 +894,13 @@ private struct QuickActionsPanel: View {
 
                 ControlActionTile(
                     title: "Display",
-                    detail: canShowConsole ? "Open the Windows installer display." : "Display appears after Windows starts.",
+                    detail: canShowDisplay ? "Open the Windows installer display." : "Display appears after Windows starts.",
                     symbolName: "display",
                     tint: .blue,
-                    state: canShowConsole ? .ready : .blocked,
-                    action: consoleAction
+                    state: canShowDisplay ? .ready : .blocked,
+                    action: displayAction
                 )
-                .disabled(!canShowConsole || isLoading)
+                .disabled(!canShowDisplay || isLoading)
 
                 ControlActionTile(
                     title: "Prepare Windows",
@@ -969,7 +969,7 @@ private struct QuickActionsPanel: View {
         }
     }
 
-    private var canShowConsole: Bool {
+    private var canShowDisplay: Bool {
         snapshot.state == .running || snapshot.state == .starting
     }
 }
@@ -982,7 +982,7 @@ private struct ControlCenterHero: View {
     var isLoading: Bool
     var startAction: () -> Void
     var stopAction: () -> Void
-    var consoleAction: () -> Void
+    var displayAction: () -> Void
     var refreshAction: () -> Void
     var runtimeTitle: String
     var runtimeSymbol: String
@@ -1061,8 +1061,8 @@ private struct ControlCenterHero: View {
                             .disabled(true)
                         }
 
-                        if canShowConsole {
-                            Button(action: consoleAction) {
+                        if canShowDisplay {
+                            Button(action: displayAction) {
                                 Label("Display", systemImage: "display")
                             }
                             .disabled(isLoading)
@@ -1084,7 +1084,7 @@ private struct ControlCenterHero: View {
         }
     }
 
-    private var canShowConsole: Bool {
+    private var canShowDisplay: Bool {
         snapshot.state == .running || snapshot.state == .starting
     }
 
@@ -1118,13 +1118,13 @@ private struct WindowsSetupDisplayPanel: View {
     var isLoading: Bool
     var errorMessage: String?
     var diagnosticsURL: URL?
-    var consoleMessage: String?
-    var canShowConsole: Bool
+    var displayMessage: String?
+    var canShowDisplay: Bool
     var prepareAction: () -> Void
     var selectInstallerAction: () -> Void
     var selectDriverAction: () -> Void
     var primaryAction: () -> Void
-    var consoleAction: () -> Void
+    var displayAction: () -> Void
     var stopAction: () -> Void
     var installGuestAgentAction: () -> Void
     var canLaunchWindowsApp: Bool
@@ -1179,9 +1179,9 @@ private struct WindowsSetupDisplayPanel: View {
 
     private var installDisplaySurface: some View {
         ZStack {
-            if let consoleScreenshotImage {
-                ConsoleScreenshotPreview(
-                    image: consoleScreenshotImage,
+            if let displayScreenshotImage {
+                WindowsDisplayScreenshotPreview(
+                    image: displayScreenshotImage,
                     path: snapshot.latestConsoleScreenshotPath ?? ""
                 )
             } else {
@@ -1314,7 +1314,7 @@ private struct WindowsSetupDisplayPanel: View {
         .padding(.vertical, 10)
     }
 
-    private var consoleScreenshotImage: NSImage? {
+    private var displayScreenshotImage: NSImage? {
         guard let path = snapshot.latestConsoleScreenshotPath else {
             return nil
         }
@@ -1554,7 +1554,7 @@ private struct WindowsSetupDisplayPanel: View {
     }
 
     private var canInstallGuestAgent: Bool {
-        canShowConsole && effectiveInstallEvidence.kind != .guestAgent
+        canShowDisplay && effectiveInstallEvidence.kind != .guestAgent
     }
 
     private var agentSummary: String {
@@ -1620,11 +1620,11 @@ private struct WindowsSetupDisplayPanel: View {
             ),
             InstallFlowItem(
                 title: "Installer",
-                detail: canShowConsole
+                detail: canShowDisplay
                     ? "Windows display is open"
                     : (canStart ? "Open Windows Setup" : "Waiting for preparation"),
                 symbolName: "display",
-                state: canShowConsole ? .complete : (canStart ? .current : .pending)
+                state: canShowDisplay ? .complete : (canStart ? .current : .pending)
             ),
             InstallFlowItem(
                 title: "Mac Integration",
@@ -1922,7 +1922,7 @@ private struct InstallStatusSummary: View {
     }
 }
 
-private struct ConsoleLaunchEvidenceStrip: View {
+private struct WindowsDisplayLaunchEvidenceStrip: View {
     var evidence: VMConsoleLaunchEvidence
 
     var body: some View {
@@ -1938,7 +1938,7 @@ private struct ConsoleLaunchEvidenceStrip: View {
                     .font(.caption2.weight(.semibold))
                     .foregroundStyle(.secondary)
 
-                Text(consoleSummary)
+                Text(displaySummary)
                     .font(.caption.weight(.semibold))
                     .lineLimit(1)
                     .truncationMode(.middle)
@@ -1962,7 +1962,7 @@ private struct ConsoleLaunchEvidenceStrip: View {
         .help(helpText)
     }
 
-    private var consoleSummary: String {
+    private var displaySummary: String {
         let logName = URL(fileURLWithPath: evidence.processLogPath).lastPathComponent
         let startedAt = evidence.startedAt.formatted(date: .omitted, time: .shortened)
         return "\(evidence.provider) started \(startedAt) · \(logName)"

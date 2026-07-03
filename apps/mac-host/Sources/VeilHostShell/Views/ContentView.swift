@@ -6,11 +6,11 @@ struct ContentView: View {
     @Bindable var vmModel: VMRuntimeModel
     var startVMAction: () -> Void
     var stopVMAction: () -> Void
-    var showVMConsoleAction: () -> Void
+    var showWindowsDisplayAction: () -> Void
     var installGuestAgentAction: () -> Void
     var launchWindowsAppAction: () -> Void
     var recordAppFrameProofAction: () -> Void
-    var consoleMessage: String?
+    var displayMessage: String?
 
     var body: some View {
         ZStack {
@@ -34,11 +34,11 @@ struct ContentView: View {
                     selectedSection: .vm,
                     startVMAction: startVMAction,
                     stopVMAction: stopVMAction,
-                    showVMConsoleAction: showVMConsoleAction,
+                    showWindowsDisplayAction: showWindowsDisplayAction,
                     installGuestAgentAction: installGuestAgentAction,
                     launchWindowsAppAction: launchWindowsAppAction,
                     recordAppFrameProofAction: recordAppFrameProofAction,
-                    consoleMessage: consoleMessage
+                    displayMessage: displayMessage
                 )
             }
         }
