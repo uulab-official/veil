@@ -14,6 +14,7 @@ struct VMRuntimeView: View {
     var showVMConsoleAction: () -> Void
     var installGuestAgentAction: () -> Void
     var launchWindowsAppAction: () -> Void
+    var recordAppFrameProofAction: () -> Void
     var consoleMessage: String?
     @State private var pathPicker: PathPicker?
     @State private var showsAdvancedDetails = false
@@ -66,6 +67,7 @@ struct VMRuntimeView: View {
                     canLaunchWindowsApp: canLaunchWindowsApp,
                     selectedWindowsAppName: selectedWindowsAppName,
                     activeMirrorSession: activeMirrorSession,
+                    recordAppFrameProofAction: recordAppFrameProofAction,
                     refreshAction: {
                         Task {
                             await model.load()
@@ -1128,6 +1130,7 @@ private struct WindowsSetupDisplayPanel: View {
     var canLaunchWindowsApp: Bool
     var selectedWindowsAppName: String?
     var activeMirrorSession: WindowMirrorSession?
+    var recordAppFrameProofAction: () -> Void
     var refreshAction: () -> Void
     var detailsAction: () -> Void
     var isShowingDetails: Bool
@@ -1491,6 +1494,15 @@ private struct WindowsSetupDisplayPanel: View {
                 }
                 .disabled(isLoading)
                 .help("Install Veil guest agent")
+            }
+
+            if canLaunchWindowsApp || activeMirrorSession != nil {
+                Button(action: recordAppFrameProofAction) {
+                    Label("Record App Frame Proof", systemImage: "checkmark.seal")
+                        .labelStyle(.iconOnly)
+                }
+                .disabled(isLoading)
+                .help("Record app launch and first frame proof")
             }
 
             Button(action: detailsAction) {

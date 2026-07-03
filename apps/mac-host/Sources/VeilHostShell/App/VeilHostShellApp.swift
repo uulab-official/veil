@@ -2,6 +2,15 @@ import AppKit
 import SwiftUI
 import VeilHostCore
 
+private struct AppFrameProofRecord: Codable {
+    var kind = "veilAppFrameProof"
+    var generatedAt: Date
+    var endpoint: String
+    var launchResult: NotepadLaunchResult
+    var frame: WindowFrameEvent
+    var frameImagePath: String?
+}
+
 @main
 struct VeilHostShellApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
@@ -44,6 +53,7 @@ struct VeilHostShellApp: App {
                 showVMConsoleAction: showVMConsole,
                 installGuestAgentAction: installGuestAgentFromConsole,
                 launchWindowsAppAction: launchSelectedWindowsAppWindow,
+                recordAppFrameProofAction: recordAppFrameProof,
                 consoleMessage: consoleMessage
             )
                 .frame(minWidth: 1120, idealWidth: 1440, minHeight: 700, idealHeight: 900)
@@ -125,6 +135,12 @@ struct VeilHostShellApp: App {
                     launchSelectedWindowsAppWindow()
                 }
                 .keyboardShortcut(.return, modifiers: [.command])
+
+                Button("Record App Frame Proof") {
+                    recordAppFrameProof()
+                }
+                .keyboardShortcut("p", modifiers: [.command, .shift])
+                .disabled(!model.canRequestSelectedAppLaunch && model.mirrorSessions.isEmpty)
             }
         }
 
@@ -278,6 +294,94 @@ struct VeilHostShellApp: App {
                     captureState: .unavailable
                 )
         windowsAppWindowPresenter.showWindow(for: session)
+    }
+
+    private func recordAppFrameProof() {
+        Task { @MainActor in
+            activateMainWindow()
+            consoleMessage = "Recording Windows app launch and first-frame proof."
+
+            if model.apps.isEmpty {
+                await model.load()
+            }
+
+            if model.lastLaunch == nil {
+                await model.launchSelectedApp()
+            }
+
+            guard let result = model.lastLaunch else {
+                if model.pendingLaunchAppId != nil,
+                   !model.hasLiveAgentConnection,
+                   vmModel.canStart {
+                    consoleMessage = "Windows will start first. Run proof recording again after the guest agent connects."
+                    startVMAndShowConsole()
+                } else {
+                    consoleMessage = "App frame proof could not start: \(model.errorMessage ?? "No Windows app launch result.")"
+                }
+                return
+            }
+
+            showWindowsAppWindow(for: result)
+
+            guard let frame = await waitForFirstFrame(windowId: result.window.windowId) else {
+                consoleMessage = "App frame proof timed out waiting for the first frame from \(result.window.title)."
+                return
+            }
+
+            do {
+                let url = try writeAppFrameProof(launchResult: result, frame: frame)
+                consoleMessage = "App frame proof saved: \(url.path)"
+            } catch {
+                consoleMessage = "App frame proof could not be saved: \(userMessage(for: error))"
+            }
+        }
+    }
+
+    private func waitForFirstFrame(windowId: String, timeoutSeconds: Double = 10) async -> WindowFrameEvent? {
+        let deadline = Date().addingTimeInterval(timeoutSeconds)
+        while Date() < deadline {
+            if let frame = model.mirrorSessions.first(where: { $0.id == windowId })?.latestFrame {
+                return frame
+            }
+
+            try? await Task.sleep(for: .milliseconds(150))
+        }
+
+        return nil
+    }
+
+    private func writeAppFrameProof(
+        launchResult: NotepadLaunchResult,
+        frame: WindowFrameEvent
+    ) throws -> URL {
+        let directory = QEMUVMRuntimeBooter.defaultDiagnosticsDirectory()
+            .appendingPathComponent("App Frame Proof", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+
+        let stamp = Self.diagnosticTimestamp()
+        let imageURL = directory.appendingPathComponent("app-frame-\(stamp).png")
+        if let data = frame.encodedPayloadData {
+            try data.write(to: imageURL, options: .atomic)
+        }
+
+        let proof = AppFrameProofRecord(
+            generatedAt: Date(),
+            endpoint: Self.agentURLString,
+            launchResult: launchResult,
+            frame: frame,
+            frameImagePath: FileManager.default.fileExists(atPath: imageURL.path) ? imageURL.path : nil
+        )
+        let outputURL = directory.appendingPathComponent("app-frame-proof-\(stamp).json")
+        let data = try JSONEncoder.veilDiagnostics.encode(proof)
+        try data.write(to: outputURL, options: .atomic)
+        return outputURL
+    }
+
+    private static func diagnosticTimestamp(date: Date = Date()) -> String {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime]
+        return formatter.string(from: date)
+            .replacingOccurrences(of: ":", with: "-")
     }
 
     private func configureWindowsAppWindowCloseBridge() {
@@ -618,6 +722,7 @@ private struct StandaloneMainWindowRoot: View {
             showVMConsoleAction: showVMConsole,
             installGuestAgentAction: installGuestAgentFromConsole,
             launchWindowsAppAction: launchSelectedWindowsApp,
+            recordAppFrameProofAction: {},
             consoleMessage: consoleMessage
         )
         .frame(minWidth: 1120, idealWidth: 1440, minHeight: 700, idealHeight: 900)
