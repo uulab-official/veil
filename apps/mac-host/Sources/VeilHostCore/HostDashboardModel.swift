@@ -88,7 +88,7 @@ public struct WindowMirrorSession: Codable, Equatable, Identifiable, Sendable {
     }
 }
 
-public enum HostDashboardPhase: Equatable, Sendable {
+public enum HostDashboardPhase: String, Codable, Equatable, Sendable {
     case idle
     case loading
     case connected
@@ -100,6 +100,119 @@ public enum HostProtocolMessageResult: Equatable, Sendable {
     case handledWindowFrame(windowId: String)
     case handledClipboardText(sequence: Int)
     case ignored
+}
+
+public struct WindowsAppRuntimeConnectionStatus: Codable, Equatable, Sendable {
+    public var mode: HostConnectionMode
+    public var hasLiveAgentConnection: Bool
+    public var agentVersion: String?
+    public var os: String?
+    public var connectionDetail: String?
+
+    public init(
+        mode: HostConnectionMode,
+        hasLiveAgentConnection: Bool,
+        agentVersion: String?,
+        os: String?,
+        connectionDetail: String?
+    ) {
+        self.mode = mode
+        self.hasLiveAgentConnection = hasLiveAgentConnection
+        self.agentVersion = agentVersion
+        self.os = os
+        self.connectionDetail = connectionDetail
+    }
+}
+
+public struct WindowsAppRuntimeAppStatus: Codable, Equatable, Sendable {
+    public var id: String
+    public var name: String
+    public var canRequestLaunch: Bool
+    public var canLaunchNow: Bool
+
+    public init(id: String, name: String, canRequestLaunch: Bool, canLaunchNow: Bool) {
+        self.id = id
+        self.name = name
+        self.canRequestLaunch = canRequestLaunch
+        self.canLaunchNow = canLaunchNow
+    }
+}
+
+public struct WindowsAppRuntimeWindowStatus: Codable, Equatable, Sendable {
+    public var windowId: String
+    public var appId: String
+    public var title: String
+    public var captureState: WindowCaptureState
+    public var canFocus: Bool
+    public var canClose: Bool
+    public var canSendInput: Bool
+
+    public init(
+        windowId: String,
+        appId: String,
+        title: String,
+        captureState: WindowCaptureState,
+        canFocus: Bool,
+        canClose: Bool,
+        canSendInput: Bool
+    ) {
+        self.windowId = windowId
+        self.appId = appId
+        self.title = title
+        self.captureState = captureState
+        self.canFocus = canFocus
+        self.canClose = canClose
+        self.canSendInput = canSendInput
+    }
+}
+
+public struct WindowsAppRuntimeActionStatus: Codable, Equatable, Sendable {
+    public var id: String
+    public var title: String
+    public var isAvailable: Bool
+
+    public init(id: String, title: String, isAvailable: Bool) {
+        self.id = id
+        self.title = title
+        self.isAvailable = isAvailable
+    }
+}
+
+public struct WindowsAppRuntimeStatusReport: Codable, Equatable, Sendable {
+    public var kind: String
+    public var generatedAt: Date
+    public var phase: HostDashboardPhase
+    public var selectedAppId: String?
+    public var pendingLaunchAppId: String?
+    public var connection: WindowsAppRuntimeConnectionStatus
+    public var apps: [WindowsAppRuntimeAppStatus]
+    public var mirrorSessions: [WindowsAppRuntimeWindowStatus]
+    public var restorableAppIds: [String]
+    public var actions: [WindowsAppRuntimeActionStatus]
+
+    public init(
+        kind: String = "windowsAppRuntimeStatus",
+        generatedAt: Date,
+        phase: HostDashboardPhase,
+        selectedAppId: String?,
+        pendingLaunchAppId: String?,
+        connection: WindowsAppRuntimeConnectionStatus,
+        apps: [WindowsAppRuntimeAppStatus],
+        mirrorSessions: [WindowsAppRuntimeWindowStatus],
+        restorableAppIds: [String],
+        actions: [WindowsAppRuntimeActionStatus]
+    ) {
+        self.kind = kind
+        self.generatedAt = generatedAt
+        self.phase = phase
+        self.selectedAppId = selectedAppId
+        self.pendingLaunchAppId = pendingLaunchAppId
+        self.connection = connection
+        self.apps = apps
+        self.mirrorSessions = mirrorSessions
+        self.restorableAppIds = restorableAppIds
+        self.actions = actions
+    }
 }
 
 @MainActor
@@ -231,6 +344,59 @@ public final class HostDashboardModel {
         mirrorSessions.contains { $0.id == windowId }
             && hasLiveAgentConnection
             && health?.capabilities.input == true
+    }
+
+    public func runtimeStatusReport(generatedAt: Date = Date()) -> WindowsAppRuntimeStatusReport {
+        WindowsAppRuntimeStatusReport(
+            generatedAt: generatedAt,
+            phase: phase,
+            selectedAppId: selectedAppId,
+            pendingLaunchAppId: pendingLaunchAppId,
+            connection: WindowsAppRuntimeConnectionStatus(
+                mode: connectionMode,
+                hasLiveAgentConnection: hasLiveAgentConnection,
+                agentVersion: health?.agentVersion,
+                os: health?.os,
+                connectionDetail: connectionDetail
+            ),
+            apps: apps.map { app in
+                WindowsAppRuntimeAppStatus(
+                    id: app.id,
+                    name: app.name,
+                    canRequestLaunch: canRequestAppLaunch(appId: app.id),
+                    canLaunchNow: canLaunchApp(appId: app.id)
+                )
+            },
+            mirrorSessions: mirrorSessions.map { session in
+                WindowsAppRuntimeWindowStatus(
+                    windowId: session.id,
+                    appId: session.window.appId,
+                    title: session.window.title,
+                    captureState: session.captureState,
+                    canFocus: canFocusMirrorSession(windowId: session.id),
+                    canClose: canCloseMirrorSession(windowId: session.id),
+                    canSendInput: canSendInput(to: session.id)
+                )
+            },
+            restorableAppIds: restorableAppIds,
+            actions: [
+                WindowsAppRuntimeActionStatus(
+                    id: "windowsApps.restorePrevious",
+                    title: "Restore Previous Apps",
+                    isAvailable: canRestoreMirrorSessions
+                ),
+                WindowsAppRuntimeActionStatus(
+                    id: "windowsApps.closeAll",
+                    title: "Close All Windows Apps",
+                    isAvailable: canCloseAllMirrorSessions
+                ),
+                WindowsAppRuntimeActionStatus(
+                    id: "clipboard.setText",
+                    title: "Set Windows Clipboard Text",
+                    isAvailable: canSendHostClipboardText
+                )
+            ]
+        )
     }
 
     public var guestAgentInstallEvidence: VMInstallEvidenceSummary? {

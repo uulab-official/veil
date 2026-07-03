@@ -62,7 +62,7 @@ enum VMControlError: Error, LocalizedError {
         }
     }
 
-    private static let usage = "Usage: veil-vmctl prepare --installer /path/to/Windows.iso [--drivers /path/to/virtio-win.iso] | veil-vmctl mark-installed [--json] | veil-vmctl providers [--json] | veil-vmctl qemu-plan [--json] | veil-vmctl qemu-doctor [--json] | veil-vmctl qemu-smoke [--json] [--seconds 45] | veil-vmctl qemu-start [--json] [--wait-seconds 15] [--native-display] | veil-vmctl qemu-display-smoke [--json] [--wait-seconds 5] | veil-vmctl qemu-capture [--json] [--output /path/to/console.png] | veil-vmctl qemu-powerdown [--json] [--wait-seconds 30] | veil-vmctl qemu-force-stop [--json] --i-understand-data-loss [--wait-seconds 10] | veil-vmctl qemu-sendkey [--json] key [key ...] | veil-vmctl qemu-type-text [--json] --text \"...\" | veil-vmctl qemu-click [--json] --x 0...32767 --y 0...32767 | veil-vmctl qemu-oobe-bypass [--json] | veil-vmctl qemu-install-agent [--json]"
+    private static let usage = "Usage: veil-vmctl prepare --installer /path/to/Windows.iso [--drivers /path/to/virtio-win.iso] | veil-vmctl app-runtime-status [--json] [--demo] | veil-vmctl mark-installed [--json] | veil-vmctl providers [--json] | veil-vmctl qemu-plan [--json] | veil-vmctl qemu-doctor [--json] | veil-vmctl qemu-smoke [--json] [--seconds 45] | veil-vmctl qemu-start [--json] [--wait-seconds 15] [--native-display] | veil-vmctl qemu-display-smoke [--json] [--wait-seconds 5] | veil-vmctl qemu-capture [--json] [--output /path/to/console.png] | veil-vmctl qemu-powerdown [--json] [--wait-seconds 30] | veil-vmctl qemu-force-stop [--json] --i-understand-data-loss [--wait-seconds 10] | veil-vmctl qemu-sendkey [--json] key [key ...] | veil-vmctl qemu-type-text [--json] --text \"...\" | veil-vmctl qemu-click [--json] --x 0...32767 --y 0...32767 | veil-vmctl qemu-oobe-bypass [--json] | veil-vmctl qemu-install-agent [--json]"
 }
 
 struct VMControlArguments {
@@ -73,6 +73,7 @@ struct VMControlArguments {
 
     enum Command: Equatable {
         case prepare(installerPath: String, driverMediaPath: String?)
+        case appRuntimeStatus(json: Bool, demo: Bool)
         case markInstalled(json: Bool)
         case providers(json: Bool)
         case qemuPlan(json: Bool)
@@ -99,6 +100,15 @@ struct VMControlArguments {
 
         if command == "providers" {
             return VMControlArguments(command: .providers(json: arguments.contains("--json")))
+        }
+
+        if command == "app-runtime-status" {
+            return VMControlArguments(
+                command: .appRuntimeStatus(
+                    json: arguments.contains("--json"),
+                    demo: arguments.contains("--demo")
+                )
+            )
         }
 
         if command == "mark-installed" {
@@ -340,6 +350,8 @@ struct VeilVMControl {
         switch arguments.command {
         case .prepare(let installerPath, let driverMediaPath):
             try await prepare(installerPath: installerPath, driverMediaPath: driverMediaPath)
+        case .appRuntimeStatus(let json, let demo):
+            try await printAppRuntimeStatus(json: json, demo: demo)
         case .markInstalled(let json):
             try await markInstalled(json: json)
         case .providers(let json):
@@ -404,6 +416,53 @@ struct VeilVMControl {
         print("Boot ready: \(configuredSnapshot.bootReady ? "yes" : "no")")
         print("Detail: \(configuredSnapshot.detail)")
         print("Diagnostics: \(diagnosticsURL.path)")
+    }
+
+    @MainActor
+    private static func printAppRuntimeStatus(json: Bool, demo: Bool) async throws {
+        let model = HostDashboardModel(service: appRuntimeStatusService(demo: demo))
+
+        await model.loadRestoreIntent()
+        await model.load()
+
+        let report = model.runtimeStatusReport()
+        if json {
+            let data = try JSONEncoder.veilDiagnostics.encode(report)
+            print(String(decoding: data, as: UTF8.self))
+            return
+        }
+
+        print("Windows app runtime: \(report.connection.mode.rawValue)")
+        print("Live agent: \(report.connection.hasLiveAgentConnection ? "yes" : "no")")
+        if let agentVersion = report.connection.agentVersion {
+            print("Agent: \(agentVersion)")
+        }
+        if let detail = report.connection.connectionDetail {
+            print("Detail: \(detail)")
+        }
+        print("Apps: \(report.apps.count)")
+        print("Open Windows app windows: \(report.mirrorSessions.count)")
+        print("Restorable apps: \(report.restorableAppIds.joined(separator: ", "))")
+        print("Actions:")
+        for action in report.actions {
+            print("  - \(action.id): \(action.isAvailable ? "available" : "unavailable")")
+        }
+    }
+
+    private static func appRuntimeStatusService(demo: Bool) -> any HostDashboardService {
+        if demo {
+            return DemoHostDashboardService()
+        }
+
+        let endpoint = ProcessInfo.processInfo.environment["VEIL_AGENT_URL"] ?? "ws://127.0.0.1:18444"
+        let url = URL(string: endpoint) ?? URL(string: "ws://127.0.0.1:18444")!
+        return FallbackHostDashboardService(
+            primary: VeilHostClient(
+                transport: URLSessionWebSocketTransport(url: url)
+            ),
+            fallback: DemoHostDashboardService(),
+            primaryEndpointDescription: endpoint
+        )
     }
 
     private static func markInstalled(json: Bool) async throws {

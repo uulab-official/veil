@@ -1,0 +1,45 @@
+{
+  "actions": [
+    {
+      "id": "windowsApps.restorePrevious",
+      "isAvailable": false,
+      "title": "Restore Previous Apps"
+    },
+    {
+      "id": "windowsApps.closeAll",
+      "isAvailable": false,
+      "title": "Close All Windows Apps"
+    },
+    {
+      "id": "clipboard.setText",
+      "isAvailable": false,
+      "title": "Set Windows Clipboard Text"
+    }
+  ],
+  "apps": [
+    {
+      "canLaunchNow": false,
+      "canRequestLaunch": true,
+      "id": "winapp_notepad",
+      "name": "Notepad"
+    },
+    {
+      "canLaunchNow": false,
+      "canRequestLaunch": true,
+      "id": "winapp_calculator",
+      "name": "Calculator"
+    }
+  ],
+  "connection": {
+    "agentVersion": "demo-0.1.0",
+    "hasLiveAgentConnection": false,
+    "mode": "demo",
+    "os": "windows-arm64"
+  },
+  "generatedAt": "2026-07-03T08:53:35Z",
+  "kind": "windowsAppRuntimeStatus",
+  "mirrorSessions": [],
+  "phase": "connected",
+  "restorableAppIds": [],
+  "selectedAppId": "winapp_notepad"
+}

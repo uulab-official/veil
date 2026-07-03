@@ -369,6 +369,35 @@ struct HostDashboardModelTests {
         #expect(!model.canSendHostClipboardText)
     }
 
+    @Test("builds app runtime status report for harness automation")
+    @MainActor
+    func buildsAppRuntimeStatusReportForHarnessAutomation() async throws {
+        let service = FakeDashboardService(health: .clipboardReady)
+        let model = HostDashboardModel(service: service)
+        let generatedAt = Date(timeIntervalSince1970: 1_782_800_000)
+
+        await model.load()
+        await model.launchNotepad()
+        let report = model.runtimeStatusReport(generatedAt: generatedAt)
+
+        #expect(report.kind == "windowsAppRuntimeStatus")
+        #expect(report.generatedAt == generatedAt)
+        #expect(report.connection.mode == .agent)
+        #expect(report.connection.hasLiveAgentConnection)
+        #expect(report.connection.agentVersion == "0.1.0")
+        #expect(report.apps.map(\.id) == ["winapp_notepad"])
+        #expect(report.apps.map(\.canRequestLaunch) == [true])
+        #expect(report.apps.map(\.canLaunchNow) == [true])
+        #expect(report.mirrorSessions.map(\.windowId) == ["hwnd:0003029A"])
+        #expect(report.mirrorSessions.map(\.title) == ["Untitled - Notepad"])
+        #expect(report.mirrorSessions.map(\.canFocus) == [true])
+        #expect(report.mirrorSessions.map(\.canClose) == [true])
+        #expect(report.mirrorSessions.map(\.canSendInput) == [true])
+        #expect(report.restorableAppIds == ["winapp_notepad"])
+        #expect(report.actions.first { $0.id == "clipboard.setText" }?.isAvailable == true)
+        #expect(report.actions.first { $0.id == "windowsApps.restorePrevious" }?.isAvailable == false)
+    }
+
     @Test("updates active window sessions by HWND")
     @MainActor
     func updatesActiveWindowSessionsByHWND() async throws {

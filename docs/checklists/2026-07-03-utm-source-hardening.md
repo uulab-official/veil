@@ -23,11 +23,12 @@ Goal: adapt concrete UTM source patterns into Veil while keeping Veil focused on
 - [x] Add state-gated host command checks for app launch, focus, close, input, clipboard, and restore.
 - [x] Bind menu bar Windows app commands to model-level availability checks.
 - [x] Add a menu bar restore action for restorable Windows apps after guest-agent reconnect.
+- [x] Add `veil-vmctl app-runtime-status --json` plus a Node harness validator for app-runtime status/actions.
 
 ## Next Hardening Pass
 
 - [x] Add a typed runtime configuration summary that separates system, display, sharing, storage, network, input, and guest-agent readiness without exposing a full UTM-style settings editor.
 - [x] Add state-gated host commands for app-window focus, close, input, clipboard, and launch so disabled UI mirrors actual guest-agent capability.
 - [x] Add a menu bar restore action for the last restorable Windows apps after VM reconnect, matching the current restore-intent store.
-- [ ] Add an automation-facing command surface for app launch/close/status so harnesses can drive the same path as the UI.
+- [x] Add an automation-facing command surface for app launch/close/status so harnesses can drive the same path as the UI.
 - [ ] Extend display evidence with dynamic resolution/scaling decisions for the embedded runtime surface.

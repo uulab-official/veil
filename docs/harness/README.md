@@ -16,6 +16,7 @@ harness/
 ├─ fake-agent/             WebSocket server that behaves like the Windows agent
 ├─ fake-host/              CLI client that sends host messages to the agent
 ├─ runtime-provider-probe/ JSON shape validation for local VM providers
+├─ app-runtime-status/     JSON shape validation for host app-runtime status/actions
 ├─ qemu-boot-plan/         JSON shape validation for dry-run QEMU/HVF boot plans
 ├─ qemu-doctor/            JSON shape validation for QEMU/HVF readiness reports
 ├─ qemu-smoke/             JSON shape validation for bounded QEMU/HVF boot smoke reports
@@ -32,6 +33,7 @@ Current executable pieces:
 - `harness/fake-agent`: a WebSocket simulator for the Windows guest agent.
 - `harness/fake-host`: a CLI simulator for the future macOS host flow.
 - `harness/runtime-provider-probe`: a JSON validator for serverless local runtime provider output.
+- `harness/app-runtime-status`: a JSON validator for app runtime status, open HWND sessions, and supported actions.
 - `harness/qemu-boot-plan`: a JSON validator for dry-run QEMU/HVF Windows Arm boot plans.
 - `harness/qemu-doctor`: a JSON validator for QEMU/HVF readiness reports and next actions.
 - `harness/qemu-smoke`: a JSON validator for bounded QEMU/HVF boot smoke reports.
@@ -40,6 +42,21 @@ Current executable pieces:
 - `packages/protocol`: shared protocol constants and validation helpers.
 
 The macOS host shell also includes an internal demo agent fallback. If the WebSocket agent is unavailable, the app still loads demo Windows app metadata and can run selected-app demo launch flows for the first inbox app catalog. The header and Agent view label this as Demo mode and include the unreachable endpoint. The fallback is limited to network availability errors; protocol and agent errors remain visible. Use the external fake agent when testing the transport boundary itself.
+
+## App Runtime Status Scenario
+
+The app runtime status command exposes the same host-side model used by the
+macOS app so automation can inspect Windows app availability, mirrored HWND
+sessions, restore intent, and supported actions without clicking the UI.
+
+```bash
+cd apps/mac-host
+swift run veil-vmctl app-runtime-status --json --demo | node ../../harness/app-runtime-status/src/validate-app-runtime-status.mjs
+```
+
+Use `--demo` for deterministic local harness checks. Without `--demo`, the
+command tries `VEIL_AGENT_URL` or `ws://127.0.0.1:18444` and falls back to demo
+metadata only for network availability errors.
 
 ## Provider Probe Scenario
 

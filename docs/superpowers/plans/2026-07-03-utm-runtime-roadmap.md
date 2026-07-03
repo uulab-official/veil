@@ -41,9 +41,9 @@
 
 ### Slice 4: Harness-Driven Automation Surface
 
-- [ ] Add a CLI or harness command that reports app runtime status, open HWND sessions, and supported actions.
-- [ ] Keep protocol fixtures stable unless message shapes change.
-- [ ] Verify the command through JavaScript harness validation.
+- [x] Add a CLI or harness command that reports app runtime status, open HWND sessions, and supported actions.
+- [x] Keep protocol fixtures stable unless message shapes change.
+- [x] Verify the command through JavaScript harness validation.
 
 ### Slice 5: Real Windows Install Validation
 
@@ -235,6 +235,50 @@ Run:
 ```bash
 cd apps/mac-host && swift test --filter HostDashboardModelTests
 cd apps/mac-host && swift test
+./script/build_and_run.sh --verify
+git diff --check
+```
+
+Expected: all pass.
+
+## Task 6: App Runtime Status Harness
+
+**Files:**
+- Modify: `apps/mac-host/Sources/VeilHostCore/HostDashboardModel.swift`
+- Modify: `apps/mac-host/Sources/VeilVMControl/main.swift`
+- Modify: `apps/mac-host/Tests/VeilHostCoreTests/HostDashboardModelTests.swift`
+- Create: `harness/app-runtime-status/package.json`
+- Create: `harness/app-runtime-status/src/validate-app-runtime-status.mjs`
+- Create: `harness/app-runtime-status/test/app-runtime-status.test.mjs`
+- Create: `harness/app-runtime-status/fixtures/app-runtime-status.demo.json`
+- Modify: `docs/harness/README.md`
+- Modify: `docs/checklists/2026-07-03-utm-source-hardening.md`
+
+- [x] **Step 1: Add report model tests**
+
+Add `HostDashboardModelTests` coverage that builds a status report after loading and launching a fake Windows app, then asserts connection, app, HWND session, restore intent, and action availability fields.
+
+- [x] **Step 2: Add Core report types**
+
+Add a codable `WindowsAppRuntimeStatusReport` plus child structs and `HostDashboardModel.runtimeStatusReport(generatedAt:)`.
+
+- [x] **Step 3: Add CLI command**
+
+Add `veil-vmctl app-runtime-status [--json] [--demo]`. `--demo` must use `DemoHostDashboardService` only. The default should try `VEIL_AGENT_URL` or `ws://127.0.0.1:18444` through `VeilHostClient` and fall back to demo only for network errors.
+
+- [x] **Step 4: Add Node harness validator**
+
+Add `harness/app-runtime-status` with a validator and fixture proving the JSON has `kind`, `connection`, `apps`, `mirrorSessions`, `restorableAppIds`, and `actions`.
+
+- [x] **Step 5: Verify**
+
+Run:
+
+```bash
+cd apps/mac-host && swift test --filter HostDashboardModelTests
+cd apps/mac-host && swift run veil-vmctl app-runtime-status --json --demo | node ../../harness/app-runtime-status/src/validate-app-runtime-status.mjs
+cd apps/mac-host && swift test
+cd harness/app-runtime-status && npm test
 ./script/build_and_run.sh --verify
 git diff --check
 ```
