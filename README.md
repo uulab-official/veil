@@ -188,7 +188,7 @@ Export a dry-run QEMU/HVF command plan without launching QEMU or mutating the VM
 swift run veil-vmctl qemu-plan --json
 ```
 
-The plan includes the local executable path Veil would use, whether that executable is currently available, Arm UEFI firmware, the Windows installer ISO, the writable NVMe system disk, HVF acceleration, ISO boot order, NAT networking, display, graphics, and input devices. Validate it with:
+The plan includes the local executable path Veil would use, whether that executable is currently available, Arm UEFI firmware, install-time media when Windows is not installed yet, the writable NVMe system disk, HVF acceleration, boot order, NAT networking, display, graphics, and input devices. Validate it with:
 
 ```bash
 swift run veil-vmctl qemu-plan --json | node ../../harness/qemu-boot-plan/src/validate-qemu-plan.mjs
@@ -208,7 +208,13 @@ Validate it with:
 swift run veil-vmctl qemu-doctor --json | node ../../harness/qemu-doctor/src/validate-qemu-doctor.mjs
 ```
 
-The doctor checks the stored VM profile, installer ISO, writable system disk, local QEMU executable, Arm UEFI firmware, and HVF command plan. It is read-only and does not launch QEMU.
+The doctor checks the stored VM profile, install-time media before Windows is installed, writable system disk, local QEMU executable, Arm UEFI firmware, and HVF command plan. It is read-only and does not launch QEMU.
+
+After Windows reaches the desktop, mark the profile installed so later boots detach the Windows installer ISO:
+
+```bash
+swift run veil-vmctl mark-installed
+```
 
 Run a bounded QEMU/HVF boot smoke test with serial logging:
 

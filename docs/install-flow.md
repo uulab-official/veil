@@ -143,6 +143,8 @@ Boot Windows 11 Arm
 ↓
 Guide user through Windows setup when needed
 ↓
+Mark Windows installed after the first desktop proof
+↓
 Install Veil guest agent inside Windows
 ↓
 Reconnect host to agent through QEMU `hostfwd` at ws://127.0.0.1:18444
@@ -150,7 +152,7 @@ Reconnect host to agent through QEMU `hostfwd` at ws://127.0.0.1:18444
 Enable app launcher and coherence windows
 ```
 
-After that first setup, the normal boot loop starts from the installed system disk and skips Windows installer ISO validation/attachment.
+After that first setup, the normal boot loop starts from the installed system disk and skips Windows installer ISO validation/attachment. The transition is automatic once the guest agent connects; before that, the host shell's Mark Windows Installed action or `veil-vmctl mark-installed` can record the same state after the desktop is visible.
 
 ## macOS Integration Requirements
 

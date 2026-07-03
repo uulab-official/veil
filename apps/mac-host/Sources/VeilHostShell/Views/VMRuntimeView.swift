@@ -11,6 +11,7 @@ struct VMRuntimeView: View {
     var activeMirrorSession: WindowMirrorSession?
     var startVMAction: () -> Void
     var stopVMAction: () -> Void
+    var markWindowsInstalledAction: () -> Void
     var installGuestAgentAction: () -> Void
     var launchWindowsAppAction: () -> Void
     var recordAppFrameProofAction: () -> Void
@@ -61,6 +62,7 @@ struct VMRuntimeView: View {
                         }
                     },
                     stopAction: stopVMAction,
+                    markWindowsInstalledAction: markWindowsInstalledAction,
                     installGuestAgentAction: installGuestAgentAction,
                     canLaunchWindowsApp: canLaunchWindowsApp,
                     selectedWindowsAppName: selectedWindowsAppName,
@@ -1285,6 +1287,7 @@ private struct WindowsSetupDisplayPanel: View {
     var selectDriverAction: () -> Void
     var primaryAction: () -> Void
     var stopAction: () -> Void
+    var markWindowsInstalledAction: () -> Void
     var installGuestAgentAction: () -> Void
     var canLaunchWindowsApp: Bool
     var selectedWindowsAppName: String?
@@ -1459,6 +1462,15 @@ private struct WindowsSetupDisplayPanel: View {
                 }
                 .disabled(isLoading)
                 .help("Install Veil guest agent")
+            }
+
+            if canMarkWindowsInstalled {
+                Button(action: markWindowsInstalledAction) {
+                    Label("Mark Installed", systemImage: "checkmark.seal")
+                        .labelStyle(.iconOnly)
+                }
+                .disabled(isLoading)
+                .help("Mark Windows setup complete and detach installer media")
             }
 
             if canStop {
@@ -1699,6 +1711,15 @@ private struct WindowsSetupDisplayPanel: View {
                 .help("Install Veil guest agent")
             }
 
+            if canMarkWindowsInstalled {
+                Button(action: markWindowsInstalledAction) {
+                    Label("Mark Installed", systemImage: "checkmark.seal")
+                        .labelStyle(.iconOnly)
+                }
+                .disabled(isLoading)
+                .help("Mark Windows setup complete and detach installer media")
+            }
+
             if canLaunchWindowsApp || activeMirrorSession != nil {
                 Button(action: recordAppFrameProofAction) {
                     Label("Record App Frame Proof", systemImage: "checkmark.seal")
@@ -1764,6 +1785,10 @@ private struct WindowsSetupDisplayPanel: View {
 
     private var canInstallGuestAgent: Bool {
         canShowDisplay && effectiveInstallEvidence.kind != .guestAgent
+    }
+
+    private var canMarkWindowsInstalled: Bool {
+        canShowDisplay && !effectiveInstallEvidence.isInstalled
     }
 
     private var agentSummary: String {

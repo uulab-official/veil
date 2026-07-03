@@ -6,6 +6,7 @@ public protocol VMRuntimeService: Sendable {
     func createDefaultProfile() async throws -> VMRuntimeSnapshot
     func createDefaultVirtualDisk() async throws -> VMRuntimeSnapshot
     func updateProfilePaths(installerMediaPath: String?, driverMediaPath: String?, virtualDiskPath: String?) async throws -> VMRuntimeSnapshot
+    func markWindowsInstalled() async throws -> VMRuntimeSnapshot
     func markGuestAgentConnected(agentVersion: String) async throws -> VMRuntimeSnapshot
     func start() async throws -> VMRuntimeSnapshot
     func stop() async throws -> VMRuntimeSnapshot
@@ -1041,6 +1042,19 @@ public final class VMRuntimeModel {
         }
     }
 
+    public func markWindowsInstalled() async {
+        phase = .loading
+        errorMessage = nil
+
+        do {
+            snapshot = try await service.markWindowsInstalled()
+            phase = .loaded
+        } catch {
+            errorMessage = userMessage(for: error)
+            phase = .failed
+        }
+    }
+
     public func start() async {
         phase = .loading
         errorMessage = nil
@@ -1985,6 +1999,17 @@ public struct LocalVMRuntimeService: VMRuntimeService {
         profile.windowsInstalled = true
         profile.guestAgentVersion = agentVersion
         profile.guestAgentConnectedAt = diagnosticDate()
+        try await profileStore.save(profile)
+        return try await loadSnapshot()
+    }
+
+    public func markWindowsInstalled() async throws -> VMRuntimeSnapshot {
+        guard var profile = try await profileStore.load(),
+              profile.virtualDiskPath != nil else {
+            throw VMRuntimeError.bootPrerequisitesMissing
+        }
+
+        profile.windowsInstalled = true
         try await profileStore.save(profile)
         return try await loadSnapshot()
     }

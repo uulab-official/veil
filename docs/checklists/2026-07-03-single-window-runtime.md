@@ -34,6 +34,7 @@ Goal: move Veil from a Veil shell plus separate QEMU Cocoa display toward a UTM-
 - [x] Remove normal VM-screen Native Display buttons so the product surface stays one-window by default.
 - [x] Treat the Windows installer ISO as install-time media only: installed Windows profiles boot from disk without requiring or attaching the ISO.
 - [x] Stop regenerating/attaching automatic install media after guest-agent evidence exists, and avoid recopied guest-agent bundle directories when contents are unchanged.
+- [x] Add a Mark Windows Installed app/CLI transition so desktop proof can detach installer media before the guest agent connects.
 
 ## Next
 

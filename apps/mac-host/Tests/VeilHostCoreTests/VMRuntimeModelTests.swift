@@ -289,6 +289,54 @@ struct VMRuntimeModelTests {
         #expect(service.markedGuestAgentVersion == "0.1.0")
     }
 
+    @Test("marks Windows installed through the runtime model")
+    @MainActor
+    func marksWindowsInstalledThroughRuntimeModel() async throws {
+        let service = FakeVMRuntimeService(
+            snapshot: VMRuntimeSnapshot(
+                state: .running,
+                virtualizationAvailable: true,
+                architecture: "arm64",
+                minimumOSSupported: true,
+                profileName: "Windows 11 Arm",
+                installEvidence: VMInstallEvidenceSummary(
+                    kind: .setupReady,
+                    isInstalled: false,
+                    title: "Windows setup ready",
+                    detail: "Boot the installer, complete Windows setup, then connect the Veil guest agent."
+                ),
+                bootReady: true,
+                windowsInstalled: false,
+                detail: "Windows VM is running."
+            ),
+            windowsInstalledSnapshot: VMRuntimeSnapshot(
+                state: .running,
+                virtualizationAvailable: true,
+                architecture: "arm64",
+                minimumOSSupported: true,
+                profileName: "Windows 11 Arm",
+                installEvidence: VMInstallEvidenceSummary(
+                    kind: .profileFlag,
+                    isInstalled: true,
+                    title: "Windows installed",
+                    detail: "The local profile is marked installed."
+                ),
+                bootReady: true,
+                windowsInstalled: true,
+                detail: "Windows VM is running."
+            )
+        )
+        let model = VMRuntimeModel(service: service)
+
+        await model.markWindowsInstalled()
+
+        #expect(model.phase == .loaded)
+        #expect(model.snapshot?.installEvidence.kind == .profileFlag)
+        #expect(model.snapshot?.windowsInstalled == true)
+        #expect(model.errorMessage == nil)
+        #expect(service.markWindowsInstalledCount == 1)
+    }
+
     @Test("creates default virtual disk through the service boundary")
     @MainActor
     func createsDefaultVirtualDiskThroughServiceBoundary() async throws {
@@ -500,6 +548,7 @@ private final class FakeVMRuntimeService: VMRuntimeService {
     var diskSnapshot: VMRuntimeSnapshot?
     var preparedSnapshot: VMRuntimeSnapshot?
     var updatedSnapshot: VMRuntimeSnapshot?
+    var windowsInstalledSnapshot: VMRuntimeSnapshot?
     var guestAgentConnectedSnapshot: VMRuntimeSnapshot?
     var startedSnapshot: VMRuntimeSnapshot?
     var stoppedSnapshot: VMRuntimeSnapshot?
@@ -511,6 +560,7 @@ private final class FakeVMRuntimeService: VMRuntimeService {
     private(set) var updatedInstallerMediaPath: String?
     private(set) var updatedDriverMediaPath: String?
     private(set) var updatedVirtualDiskPath: String?
+    private(set) var markWindowsInstalledCount = 0
     private(set) var markedGuestAgentVersion: String?
     private(set) var createCount = 0
     private(set) var createDiskCount = 0
@@ -528,6 +578,7 @@ private final class FakeVMRuntimeService: VMRuntimeService {
         diskSnapshot: VMRuntimeSnapshot? = nil,
         preparedSnapshot: VMRuntimeSnapshot? = nil,
         updatedSnapshot: VMRuntimeSnapshot? = nil,
+        windowsInstalledSnapshot: VMRuntimeSnapshot? = nil,
         guestAgentConnectedSnapshot: VMRuntimeSnapshot? = nil,
         startedSnapshot: VMRuntimeSnapshot? = nil,
         stoppedSnapshot: VMRuntimeSnapshot? = nil,
@@ -542,6 +593,7 @@ private final class FakeVMRuntimeService: VMRuntimeService {
         self.diskSnapshot = diskSnapshot
         self.preparedSnapshot = preparedSnapshot
         self.updatedSnapshot = updatedSnapshot
+        self.windowsInstalledSnapshot = windowsInstalledSnapshot
         self.guestAgentConnectedSnapshot = guestAgentConnectedSnapshot
         self.startedSnapshot = startedSnapshot
         self.stoppedSnapshot = stoppedSnapshot
@@ -616,6 +668,17 @@ private final class FakeVMRuntimeService: VMRuntimeService {
         let guestAgentConnectedSnapshot = try #require(guestAgentConnectedSnapshot ?? snapshot)
         snapshot = guestAgentConnectedSnapshot
         return guestAgentConnectedSnapshot
+    }
+
+    func markWindowsInstalled() async throws -> VMRuntimeSnapshot {
+        if let error {
+            throw error
+        }
+
+        markWindowsInstalledCount += 1
+        let windowsInstalledSnapshot = try #require(windowsInstalledSnapshot ?? snapshot)
+        snapshot = windowsInstalledSnapshot
+        return windowsInstalledSnapshot
     }
 
     func start() async throws -> VMRuntimeSnapshot {

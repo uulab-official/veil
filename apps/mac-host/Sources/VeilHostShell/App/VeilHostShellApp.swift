@@ -69,6 +69,7 @@ struct VeilHostShellApp: App {
                 vmModel: vmModel,
                 startVMAction: startWindowsAndShowDisplay,
                 stopVMAction: stopWindowsAndCloseDisplay,
+                markWindowsInstalledAction: markWindowsInstalledFromSetup,
                 installGuestAgentAction: installGuestAgentFromDisplay,
                 launchWindowsAppAction: launchSelectedWindowsAppWindow,
                 recordAppFrameProofAction: recordAppFrameProof,
@@ -150,6 +151,11 @@ struct VeilHostShellApp: App {
                 .keyboardShortcut("i", modifiers: [.command, .shift])
                 .disabled(!canInstallGuestAgent)
 
+                Button("Mark Windows Installed") {
+                    markWindowsInstalledFromSetup()
+                }
+                .disabled(!canMarkWindowsInstalled)
+
                 Button("Open Notepad") {
                     launchSelectedWindowsAppWindow()
                 }
@@ -171,6 +177,7 @@ struct VeilHostShellApp: App {
                 startVMAction: startWindowsAndShowDisplay,
                 stopVMAction: stopWindowsAndCloseDisplay,
                 showWindowsDisplayAction: showWindowsDisplay,
+                markWindowsInstalledAction: markWindowsInstalledFromSetup,
                 installGuestAgentAction: installGuestAgentFromDisplay,
                 launchWindowsAppAction: launchSelectedWindowsAppWindow,
                 recordAppFrameProofAction: recordAppFrameProof,
@@ -486,6 +493,18 @@ struct VeilHostShellApp: App {
         }
     }
 
+    private func markWindowsInstalledFromSetup() {
+        Task { @MainActor in
+            activateMainWindow()
+            await vmModel.markWindowsInstalled()
+            if vmModel.snapshot?.windowsInstalled == true {
+                displayMessage = "Windows is marked installed. Veil will boot from the local disk and leave the installer ISO detached."
+            } else if let errorMessage = vmModel.errorMessage {
+                displayMessage = "Windows install state could not be updated: \(errorMessage)"
+            }
+        }
+    }
+
     private func refreshRuntime() {
         Task {
             await vmModel.load()
@@ -505,6 +524,11 @@ struct VeilHostShellApp: App {
 
     private var canInstallGuestAgent: Bool {
         canShowWindowsDisplay && vmModel.snapshot?.installEvidence.kind != .guestAgent
+    }
+
+    private var canMarkWindowsInstalled: Bool {
+        (vmModel.snapshot?.state == .running || vmModel.snapshot?.state == .starting)
+            && vmModel.snapshot?.installEvidence.isInstalled != true
     }
 
     private var menuBarSymbolName: String {
@@ -574,6 +598,7 @@ private struct VeilMenuBarMenu: View {
     var startVMAction: () -> Void
     var stopVMAction: () -> Void
     var showWindowsDisplayAction: () -> Void
+    var markWindowsInstalledAction: () -> Void
     var installGuestAgentAction: () -> Void
     var launchWindowsAppAction: () -> Void
     var recordAppFrameProofAction: () -> Void
@@ -620,6 +645,12 @@ private struct VeilMenuBarMenu: View {
         }
         .disabled(!canInstallGuestAgent)
 
+        Button("Mark Windows Installed", systemImage: "checkmark.seal") {
+            openMainWindow()
+            markWindowsInstalledAction()
+        }
+        .disabled(!canMarkWindowsInstalled)
+
         Button("Stop Windows", systemImage: "stop.fill") {
             openMainWindow()
             stopVMAction()
@@ -647,6 +678,11 @@ private struct VeilMenuBarMenu: View {
 
     private var canInstallGuestAgent: Bool {
         canShowWindowsDisplay && vmModel.snapshot?.installEvidence.kind != .guestAgent
+    }
+
+    private var canMarkWindowsInstalled: Bool {
+        (vmModel.snapshot?.state == .running || vmModel.snapshot?.state == .starting)
+            && vmModel.snapshot?.installEvidence.isInstalled != true
     }
 
     private func openMainWindow() {
@@ -769,6 +805,7 @@ private struct StandaloneMainWindowRoot: View {
             vmModel: vmModel,
             startVMAction: startWindowsAndShowDisplay,
             stopVMAction: stopWindowsAndCloseDisplay,
+            markWindowsInstalledAction: markWindowsInstalledFromSetup,
             installGuestAgentAction: installGuestAgentFromDisplay,
             launchWindowsAppAction: launchSelectedWindowsApp,
             recordAppFrameProofAction: {},
@@ -829,6 +866,17 @@ private struct StandaloneMainWindowRoot: View {
                 await recordGuestAgentInstallEvidenceIfNeeded()
             } catch {
                 displayMessage = "Guest agent install could not start: \(userMessage(for: error))"
+            }
+        }
+    }
+
+    private func markWindowsInstalledFromSetup() {
+        Task { @MainActor in
+            await vmModel.markWindowsInstalled()
+            if vmModel.snapshot?.windowsInstalled == true {
+                displayMessage = "Windows is marked installed. Veil will boot from the local disk and leave the installer ISO detached."
+            } else if let errorMessage = vmModel.errorMessage {
+                displayMessage = "Windows install state could not be updated: \(errorMessage)"
             }
         }
     }

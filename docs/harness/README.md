@@ -131,6 +131,13 @@ live recovery commands such as guest-agent install attempts when the Windows
 desktop is visible but no guest agent is connected yet. It intentionally rejects
 unsupported characters and long payloads; it is not a general remote shell.
 
+`veil-vmctl mark-installed [--json]` records that the selected VM disk has
+reached an installed Windows desktop. It does not start, stop, or mutate the VM
+disk; it only updates the local profile so later QEMU/HVF plans boot from the
+system disk without requiring or attaching the Windows installer ISO. The macOS
+host shell exposes the same transition as Mark Windows Installed while the
+console is running and no guest-agent evidence exists yet.
+
 `veil-vmctl qemu-install-agent [--json]` is the safer one-command form for the
 common post-desktop recovery path: it opens the Windows Run dialog, finds the
 attached `VEIL_AUTO` media by volume label, and runs

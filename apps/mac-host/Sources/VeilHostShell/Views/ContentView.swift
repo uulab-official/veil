@@ -6,6 +6,7 @@ struct ContentView: View {
     @Bindable var vmModel: VMRuntimeModel
     var startVMAction: () -> Void
     var stopVMAction: () -> Void
+    var markWindowsInstalledAction: () -> Void
     var installGuestAgentAction: () -> Void
     var launchWindowsAppAction: () -> Void
     var recordAppFrameProofAction: () -> Void
@@ -33,6 +34,7 @@ struct ContentView: View {
                     selectedSection: .vm,
                     startVMAction: startVMAction,
                     stopVMAction: stopVMAction,
+                    markWindowsInstalledAction: markWindowsInstalledAction,
                     installGuestAgentAction: installGuestAgentAction,
                     launchWindowsAppAction: launchWindowsAppAction,
                     recordAppFrameProofAction: recordAppFrameProofAction,
