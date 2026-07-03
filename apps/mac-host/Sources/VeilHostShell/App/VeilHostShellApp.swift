@@ -195,6 +195,7 @@ struct VeilHostShellApp: App {
                 closeWindowsAppWindowAction: closeWindowsAppWindow(windowId:),
                 closeAllWindowsAppWindowsAction: closeAllWindowsAppWindows,
                 recordAppFrameProofAction: recordAppFrameProof,
+                quietWindowsWhenIdleAction: quietWindowsWhenIdle,
                 refreshAppsAction: refreshApps,
                 refreshRuntimeAction: refreshRuntime,
                 supportsNativeDisplayWindow: vmRuntimeBooter.supportsNativeDisplayWindow
@@ -324,6 +325,27 @@ struct VeilHostShellApp: App {
         }
     }
 
+    private func quietWindowsWhenIdle() {
+        Task { @MainActor in
+            guard model.canQuietRuntimeWhenIdle else {
+                displayMessage = model.quietRuntimeStatus().reason
+                return
+            }
+
+            guard vmModel.canStop && vmModel.phase != .loading else {
+                displayMessage = "Windows app windows are closed. Runtime stop will be available after the local VM state refreshes."
+                return
+            }
+
+            await vmModel.stop()
+            if vmModel.snapshot?.state == .stopped {
+                displayMessage = "Windows is quiet. No Windows app windows are open."
+            } else if let errorMessage = vmModel.errorMessage {
+                displayMessage = "Windows could not quiet: \(errorMessage)"
+            }
+        }
+    }
+
     private func launchSelectedWindowsAppWindow() {
         Task { @MainActor in
             if model.apps.isEmpty {
@@ -423,7 +445,8 @@ struct VeilHostShellApp: App {
                 restoreWindowsAppWindowsAction: restoreWindowsAppWindows,
                 launchWindowsAppByIdAction: launchWindowsAppWindow(appId:),
                 startVMAction: startWindowsAndShowDisplay,
-                stopVMAction: stopWindowsAndCloseDisplay
+                stopVMAction: stopWindowsAndCloseDisplay,
+                quietWindowsWhenIdleAction: quietWindowsWhenIdle
             )
         }
     }
@@ -745,6 +768,7 @@ private struct VeilMenuBarMenu: View {
     var closeWindowsAppWindowAction: (String) -> Void
     var closeAllWindowsAppWindowsAction: () -> Void
     var recordAppFrameProofAction: () -> Void
+    var quietWindowsWhenIdleAction: () -> Void
     var refreshAppsAction: () -> Void
     var refreshRuntimeAction: () -> Void
     var supportsNativeDisplayWindow: Bool
@@ -856,6 +880,13 @@ private struct VeilMenuBarMenu: View {
             stopVMAction()
         }
         .disabled(!vmModel.canStop || vmModel.phase == .loading)
+
+        if model.canQuietRuntimeWhenIdle {
+            Button("Quiet Windows", systemImage: "moon.zzz.fill") {
+                quietWindowsWhenIdleAction()
+            }
+            .disabled(!vmModel.canStop || vmModel.phase == .loading)
+        }
 
         Divider()
 

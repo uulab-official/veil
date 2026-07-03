@@ -1,0 +1,91 @@
+{
+  "kind": "windowsAppRuntimeAction",
+  "action": "quiet-when-idle",
+  "requestedAt": "2026-07-03T13:10:00Z",
+  "endpoint": "ws://127.0.0.1:18444",
+  "connectionMode": "agent",
+  "accepted": true,
+  "quietRuntime": {
+    "isEnabled": true,
+    "hasOpenedAppWindowThisSession": true,
+    "openWindowCount": 0,
+    "canQuietRuntime": true,
+    "recommendedAction": "stop-or-suspend-runtime",
+    "reason": "All Windows app windows are closed and the live agent is connected."
+  },
+  "restoredWindows": [],
+  "status": {
+    "kind": "windowsAppRuntimeStatus",
+    "generatedAt": "2026-07-03T13:10:01Z",
+    "phase": "connected",
+    "selectedAppId": "winapp_notepad",
+    "connection": {
+      "mode": "agent",
+      "hasLiveAgentConnection": true,
+      "agentVersion": "0.1.0",
+      "os": "windows-arm64"
+    },
+    "apps": [
+      {
+        "id": "winapp_notepad",
+        "name": "Notepad",
+        "canRequestLaunch": true,
+        "canLaunchNow": true
+      }
+    ],
+    "mirrorSessions": [],
+    "restorableAppIds": [],
+    "dockIntegration": {
+      "isEnabled": true,
+      "openWindowCount": 0,
+      "canOpenMainWindow": true,
+      "canBringWindowsAppsForward": false,
+      "canRestorePreviousApps": false,
+      "canLaunchSelectedApp": true
+    },
+    "quietRuntime": {
+      "isEnabled": true,
+      "hasOpenedAppWindowThisSession": true,
+      "openWindowCount": 0,
+      "canQuietRuntime": true,
+      "recommendedAction": "stop-or-suspend-runtime",
+      "reason": "All Windows app windows are closed and the live agent is connected."
+    },
+    "actions": [
+      {
+        "id": "dock.openMainWindow",
+        "title": "Open Veil From Dock",
+        "isAvailable": true
+      },
+      {
+        "id": "dock.bringWindowsAppsForward",
+        "title": "Bring Windows Apps Forward",
+        "isAvailable": false
+      },
+      {
+        "id": "windowsApps.restorePrevious",
+        "title": "Restore Previous Apps",
+        "isAvailable": false
+      },
+      {
+        "id": "windowsApps.closeAll",
+        "title": "Close All Windows Apps",
+        "isAvailable": false
+      },
+      {
+        "id": "runtime.quietWhenIdle",
+        "title": "Quiet Runtime When Idle",
+        "isAvailable": true
+      },
+      {
+        "id": "clipboard.setText",
+        "title": "Set Windows Clipboard Text",
+        "isAvailable": true
+      }
+    ]
+  },
+  "nextActions": [
+    "Run `veil-vmctl qemu-powerdown --json` or use Stop Windows once the local runtime reports it can stop safely.",
+    "Run `veil-vmctl app-runtime-status --json` before relaunching a Windows app."
+  ]
+}

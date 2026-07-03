@@ -14,6 +14,7 @@ private final class AppRuntimeDockMenuTarget: NSObject {
     var launchWindowsAppByIdAction: ((String) -> Void)?
     var startVMAction: (() -> Void)?
     var stopVMAction: (() -> Void)?
+    var quietWindowsWhenIdleAction: (() -> Void)?
 
     @objc func openVeil(_ sender: NSMenuItem) {
         activateMainWindowAction?()
@@ -62,6 +63,10 @@ private final class AppRuntimeDockMenuTarget: NSObject {
     @objc func stopWindows(_ sender: NSMenuItem) {
         stopVMAction?()
     }
+
+    @objc func quietWindowsWhenIdle(_ sender: NSMenuItem) {
+        quietWindowsWhenIdleAction?()
+    }
 }
 
 @MainActor
@@ -77,7 +82,8 @@ enum AppRuntimeDockMenuFactory {
         restoreWindowsAppWindowsAction: @escaping () -> Void,
         launchWindowsAppByIdAction: @escaping (String) -> Void,
         startVMAction: @escaping () -> Void,
-        stopVMAction: @escaping () -> Void
+        stopVMAction: @escaping () -> Void,
+        quietWindowsWhenIdleAction: @escaping () -> Void
     ) -> NSMenu {
         let target = AppRuntimeDockMenuTarget.shared
         target.activateMainWindowAction = activateMainWindowAction
@@ -89,6 +95,7 @@ enum AppRuntimeDockMenuFactory {
         target.launchWindowsAppByIdAction = launchWindowsAppByIdAction
         target.startVMAction = startVMAction
         target.stopVMAction = stopVMAction
+        target.quietWindowsWhenIdleAction = quietWindowsWhenIdleAction
 
         let menu = NSMenu(title: "Veil")
         menu.addItem(item("Open Veil", action: #selector(AppRuntimeDockMenuTarget.openVeil(_:)), target: target))
@@ -161,6 +168,18 @@ enum AppRuntimeDockMenuFactory {
                     )
                 )
             }
+        }
+
+        if model.canQuietRuntimeWhenIdle {
+            menu.addItem(.separator())
+            menu.addItem(
+                item(
+                    "Quiet Windows",
+                    action: #selector(AppRuntimeDockMenuTarget.quietWindowsWhenIdle(_:)),
+                    target: target,
+                    isEnabled: vmModel.canStop && vmModel.phase != .loading
+                )
+            )
         }
 
         menu.addItem(.separator())

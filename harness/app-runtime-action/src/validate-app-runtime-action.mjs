@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 
 import { validateAppRuntimeStatus } from "../../app-runtime-status/src/validate-app-runtime-status.mjs";
 
-const VALID_ACTIONS = new Set(["launch", "focus", "close", "restore", "clipboard", "type-text", "click"]);
+const VALID_ACTIONS = new Set(["launch", "focus", "close", "restore", "quiet-when-idle", "clipboard", "type-text", "click"]);
 const VALID_CONNECTION_MODES = new Set(["agent", "demo"]);
 
 export function validateAppRuntimeAction(report) {
@@ -52,6 +52,9 @@ export function validateAppRuntimeAction(report) {
     case "restore":
       validateRestoreAction(report);
       break;
+    case "quiet-when-idle":
+      validateQuietWhenIdleAction(report);
+      break;
     case "clipboard":
       validateClipboardAction(report);
       break;
@@ -65,6 +68,18 @@ export function validateAppRuntimeAction(report) {
 
   validateStringArray(report.nextActions, "nextActions");
   return report;
+}
+
+function validateQuietWhenIdleAction(report) {
+  validateQuietRuntime(report.quietRuntime, "quietRuntime");
+
+  if (JSON.stringify(report.quietRuntime) !== JSON.stringify(report.status.quietRuntime)) {
+    throw new TypeError("quietRuntime action status must match report.status.quietRuntime.");
+  }
+
+  if (report.accepted !== report.quietRuntime.canQuietRuntime) {
+    throw new TypeError("quiet-when-idle accepted must match quietRuntime.canQuietRuntime.");
+  }
 }
 
 function validateLaunchAction(report) {
@@ -176,6 +191,19 @@ function validateLaunchResponse(launch) {
   requireString(launch.requestId, "launch.requestId");
   requireBoolean(launch.accepted, "launch.accepted");
   requirePositiveInteger(launch.processId, "launch.processId");
+}
+
+function validateQuietRuntime(quietRuntime, fieldName) {
+  if (!quietRuntime || typeof quietRuntime !== "object" || Array.isArray(quietRuntime)) {
+    throw new TypeError(`${fieldName} must be an object.`);
+  }
+
+  requireBoolean(quietRuntime.isEnabled, `${fieldName}.isEnabled`);
+  requireBoolean(quietRuntime.hasOpenedAppWindowThisSession, `${fieldName}.hasOpenedAppWindowThisSession`);
+  requireNonNegativeInteger(quietRuntime.openWindowCount, `${fieldName}.openWindowCount`);
+  requireBoolean(quietRuntime.canQuietRuntime, `${fieldName}.canQuietRuntime`);
+  requireString(quietRuntime.recommendedAction, `${fieldName}.recommendedAction`);
+  requireString(quietRuntime.reason, `${fieldName}.reason`);
 }
 
 function validateClipboard(clipboard) {

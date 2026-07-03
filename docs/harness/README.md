@@ -76,8 +76,9 @@ metadata only for network availability errors.
 The app runtime action command lets automation press the same narrow product
 buttons that the macOS shell exposes: launch an app, focus a mirrored HWND,
 close a mirrored HWND, click inside a mirrored HWND, set Windows clipboard
-text, type bounded ASCII text, or restore persisted app-window intent after
-reconnect.
+text, type bounded ASCII text, restore persisted app-window intent after
+reconnect, or confirm that the runtime is ready to quiet after every mirrored
+Windows app window has closed.
 
 ```bash
 cd apps/mac-host
@@ -94,6 +95,7 @@ swift run veil-vmctl app-runtime-action --json --action click --window-id hwnd:0
 swift run veil-vmctl app-runtime-action --json --action clipboard --text "hello from macOS" | node ../../harness/app-runtime-action/src/validate-app-runtime-action.mjs
 swift run veil-vmctl app-runtime-action --json --action type-text --window-id hwnd:0003029A --text "veil" | node ../../harness/app-runtime-action/src/validate-app-runtime-action.mjs
 swift run veil-vmctl app-runtime-action --json --action close --window-id hwnd:0003029A | node ../../harness/app-runtime-action/src/validate-app-runtime-action.mjs
+swift run veil-vmctl app-runtime-action --json --action quiet-when-idle | node ../../harness/app-runtime-action/src/validate-app-runtime-action.mjs
 ```
 
 ## App Window Proof Scenario

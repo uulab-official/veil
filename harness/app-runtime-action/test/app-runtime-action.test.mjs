@@ -10,6 +10,12 @@ test("validates app runtime launch action fixture", () => {
   assert.equal(validateAppRuntimeAction(report), report);
 });
 
+test("validates quiet runtime readiness action fixture", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-action.quiet-ready.json", import.meta.url), "utf8"));
+
+  assert.equal(validateAppRuntimeAction(report), report);
+});
+
 test("rejects accepted launch actions without a window", () => {
   const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-action.launch-demo.json", import.meta.url), "utf8"));
   delete report.window;
@@ -45,6 +51,16 @@ test("validates app runtime clipboard actions", () => {
   };
 
   assert.equal(validateAppRuntimeAction(report), report);
+});
+
+test("rejects quiet runtime actions whose decision drifts from status", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-action.quiet-ready.json", import.meta.url), "utf8"));
+  report.quietRuntime.canQuietRuntime = false;
+
+  assert.throws(
+    () => validateAppRuntimeAction(report),
+    /must match report\.status\.quietRuntime/
+  );
 });
 
 test("validates app runtime type-text actions", () => {
