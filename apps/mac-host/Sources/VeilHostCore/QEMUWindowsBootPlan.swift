@@ -797,9 +797,9 @@ public struct QEMUWindowsReadinessDoctor: Sendable {
         }
 
         if actions.isEmpty {
-            actions.append("Run veil-vmctl qemu-start to launch the local QEMU/HVF Windows setup window.")
+            actions.append("Run veil-vmctl qemu-start to launch Windows with Veil's embedded display.")
         } else if !checks.contains(where: { $0.state == .blocked }) {
-            actions.append("Run veil-vmctl qemu-start to launch the local QEMU/HVF Windows setup window.")
+            actions.append("Run veil-vmctl qemu-start to launch Windows with Veil's embedded display.")
         }
 
         return actions

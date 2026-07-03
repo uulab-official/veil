@@ -27,10 +27,12 @@ Goal: move Veil from a Veil shell plus separate QEMU Cocoa display toward a UTM-
 - [x] Bind the RFB framebuffer renderer to the main SwiftUI/AppKit display surface so live VNC frames can replace screenshot fallback inside the Veil window.
 - [x] Request raw RFB encoding during VNC session setup so QEMU sends frames the embedded renderer can decode reliably.
 - [x] Add `veil-vmctl qemu-display-smoke` plus a Node harness validator to prove a live app-launched VNC endpoint can deliver one decoded frame.
-- [x] Add `veil-vmctl qemu-start --embedded-display` so CLI persistent launches can use the same single-window loopback display path as the app.
+- [x] Add CLI persistent launch support for the same single-window loopback display path as the app.
+- [x] Make embedded display the default `veil-vmctl qemu-start` path and keep native QEMU Cocoa display behind `--native-display`.
+- [x] Guard the runtime booter so frontmost/System Events automation only runs for the explicit native display fallback.
+- [x] Detect already-running orphan QEMU processes by configured Windows disk path so an old native Cocoa display cannot silently coexist with a new embedded launch.
 
 ## Next
 
 - [ ] Replace screenshot-only setup evidence with the VNC-backed installer surface.
-- [ ] Keep native QEMU display available only as an advanced recovery fallback.
 - [ ] Verify one-window startup with a running Windows 11 Arm install and guest-agent connection.

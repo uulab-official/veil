@@ -88,17 +88,17 @@ The command uses snapshot mode and records logs plus a `qemu-smoke-*.console.png
 
 ## QEMU Start Scenario
 
-`veil-vmctl qemu-start [--json] [--wait-seconds 15] [--embedded-display]` is the guarded persistent-launch spike for the local QEMU/HVF provider. Unlike `qemu-plan`, it starts a local QEMU process with the stored Windows Arm profile. The default remains the native Cocoa QEMU display for recovery testing, while `--embedded-display` starts QEMU with `-display none` plus a loopback VNC endpoint so Veil can render the console inside its own window. Unlike `qemu-smoke`, it is not snapshot-only; it is meant for interactive Windows setup testing after `qemu-doctor` reports ready. The optional wait window keeps the CLI alive long enough to send boot-prompt key input through QEMU's monitor, attach a QMP socket for structured recovery input on new launches, and capture the first VM-console screenshot before returning.
+`veil-vmctl qemu-start [--json] [--wait-seconds 15] [--native-display]` is the guarded persistent-launch spike for the local QEMU/HVF provider. Unlike `qemu-plan`, it starts a local QEMU process with the stored Windows Arm profile. The default starts QEMU with `-display none` plus a loopback VNC endpoint so Veil can render the console inside its own window. `--native-display` is the advanced recovery fallback that opens QEMU's Cocoa display directly. Unlike `qemu-smoke`, it is not snapshot-only; it is meant for interactive Windows setup testing after `qemu-doctor` reports ready. The optional wait window keeps the CLI alive long enough to send boot-prompt key input through QEMU's monitor, attach a QMP socket for structured recovery input on new launches, and capture the first VM-console screenshot before returning.
 
 The macOS app's QEMU launch boundary writes process logs under `~/Library/Application Support/Veil/Diagnostics/QEMU Launch`, reports the launched PID, and records a `qemu-console-*.png` path in `qemu-launch-latest.json`. The app asks QEMU's HMP monitor to write that screenshot from the VM display, converts the raw frame to PNG, and surfaces the latest existing screenshot plus launch metadata in the Windows setup screen. New launch records also include a QMP socket path so recovery commands can use QEMU's structured `send-key` command instead of relying only on HMP `sendkey`. The evidence is the guest console frame rather than a macOS desktop capture. It still does not distribute Windows media, activation keys, QEMU binaries, or firmware.
 
 `veil-vmctl qemu-capture [--json] [--output /path/to/console.png]` refreshes the latest launch record's VM-console screenshot through the recorded QEMU monitor socket. Use this instead of manually typing monitor commands: it sends only `screendump`, preserves the running VM, updates `qemu-launch-latest.json` when an output path is chosen, and returns a small capture record for evidence collection.
 
-`veil-vmctl qemu-display-smoke [--json] [--wait-seconds 5]` validates the UTM-style embedded display path for the latest app-launched or `qemu-start --embedded-display` QEMU session. It reads the loopback VNC endpoint from `qemu-launch-latest.json`, opens an RFB session, requests raw encoding, reads one framebuffer update, renders it to RGBA in memory, and reports the frame dimensions plus byte count. Use the harness validator to keep the evidence shape stable:
+`veil-vmctl qemu-display-smoke [--json] [--wait-seconds 5]` validates the UTM-style embedded display path for the latest app-launched or default `qemu-start` QEMU session. It reads the loopback VNC endpoint from `qemu-launch-latest.json`, opens an RFB session, requests raw encoding, reads one framebuffer update, renders it to RGBA in memory, and reports the frame dimensions plus byte count. Use the harness validator to keep the evidence shape stable:
 
 ```bash
 cd apps/mac-host
-swift run veil-vmctl qemu-start --embedded-display --wait-seconds 15
+swift run veil-vmctl qemu-start --wait-seconds 15
 swift run veil-vmctl qemu-display-smoke --json | node ../../harness/qemu-display-smoke/src/validate-qemu-display-smoke.mjs
 ```
 

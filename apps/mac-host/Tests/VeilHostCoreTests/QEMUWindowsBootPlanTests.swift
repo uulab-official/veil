@@ -14,6 +14,23 @@ struct QEMUWindowsBootPlanTests {
         #expect(!components.contains("Downloads"))
     }
 
+    @Test("running QEMU process detector matches disk paths with spaces")
+    func runningQEMUProcessDetectorMatchesDiskPathsWithSpaces() {
+        let output = """
+          60454 /opt/homebrew/bin/qemu-system-aarch64 -name Windows 11 Arm -drive driver=raw,file.driver=file,file.locking=off,file.filename=/Users/bonjin/Virtual Machines/Veil/Windows 11 Arm.img,if=none,id=system -display cocoa -monitor unix:/tmp/vq-81D25B2D.sock,server,nowait -qmp unix:/tmp/vq-FAF748D6.qmp.sock,server,nowait
+          70000 /usr/bin/true
+        """
+
+        let process = QEMUVMRuntimeBooter.runningProcess(
+            attachedToVirtualDiskPath: "/Users/bonjin/Virtual Machines/Veil/Windows 11 Arm.img",
+            processListOutput: output
+        )
+
+        #expect(process?.pid == 60_454)
+        #expect(process?.monitorSocketPath == "/tmp/vq-81D25B2D.sock")
+        #expect(process?.qmpSocketPath == "/tmp/vq-FAF748D6.qmp.sock")
+    }
+
     @Test("builds a Windows 11 Arm install plan")
     func buildsWindowsArmInstallPlan() throws {
         var profile = VMProfile.defaultWindows11Arm(createdAt: Date(timeIntervalSince1970: 1_782_752_400))
@@ -207,7 +224,7 @@ struct QEMUWindowsBootPlanTests {
         ])
         #expect(report.checks.filter { $0.id != "secure-boot" }.allSatisfy { $0.state == .passed })
         #expect(report.checks.first { $0.id == "secure-boot" }?.state == .warning)
-        #expect(report.nextActions.contains("Run veil-vmctl qemu-start to launch the local QEMU/HVF Windows setup window."))
+        #expect(report.nextActions.contains("Run veil-vmctl qemu-start to launch Windows with Veil's embedded display."))
         #expect(report.nextActions.contains("Run veil-vmctl qemu-smoke --json --seconds 120 and confirm Windows Setup no longer reports Secure Boot before marking Secure Boot support complete."))
     }
 
@@ -1334,6 +1351,92 @@ struct QEMUWindowsBootPlanTests {
         #expect(record.arguments.contains("-qmp"))
         #expect(record.consoleScreenshotPath?.contains("qemu-console-") == true)
         #expect(record.consoleScreenshotPath?.hasSuffix(".png") == true)
+    }
+
+    @Test("QEMU runtime booter embeds VNC display without foregrounding QEMU")
+    func qemuRuntimeBooterEmbedsVNCDisplayWithoutForegroundingQEMU() async throws {
+        let directory = try temporaryDirectory()
+        let installerURL = directory.appendingPathComponent("Windows.iso")
+        let diskURL = directory.appendingPathComponent("Windows.img")
+        let sharedFolderURL = directory.appendingPathComponent("Veil Shared", isDirectory: true)
+        let autoInstallURL = sharedFolderURL.appendingPathComponent("VeilAutoInstall.iso")
+        let qemuURL = directory.appendingPathComponent("qemu-system-aarch64")
+        let firmwareURL = directory.appendingPathComponent("edk2-aarch64-code.fd")
+        let firmwareVarsTemplateURL = directory.appendingPathComponent("edk2-arm-vars.fd")
+        let firmwareVarsURL = directory.appendingPathComponent("uefi-vars.fd")
+        let swtpmURL = directory.appendingPathComponent("swtpm")
+        let tpmStateURL = directory.appendingPathComponent("tpm", isDirectory: true)
+        try FileManager.default.createDirectory(at: sharedFolderURL, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: tpmStateURL, withIntermediateDirectories: true)
+        try Data("installer".utf8).write(to: installerURL)
+        try Data("disk".utf8).write(to: diskURL)
+        try Data("auto".utf8).write(to: autoInstallURL)
+        try Data("qemu".utf8).write(to: qemuURL)
+        try Data("firmware".utf8).write(to: firmwareURL)
+        try Data("vars-template".utf8).write(to: firmwareVarsTemplateURL)
+        try Data("vars".utf8).write(to: firmwareVarsURL)
+        try Data("swtpm".utf8).write(to: swtpmURL)
+
+        var profile = VMProfile.defaultWindows11Arm(createdAt: Date(timeIntervalSince1970: 1_782_752_400))
+        profile.installerMediaPath = installerURL.path
+        profile.virtualDiskPath = diskURL.path
+        profile.sharedFolderPath = sharedFolderURL.path
+
+        let plan = try QEMUWindowsBootPlanner(
+            executablePath: qemuURL.path,
+            isExecutableAvailable: true,
+            firmwarePath: firmwareURL.path,
+            isFirmwareAvailable: true,
+            firmwareVarsTemplatePath: firmwareVarsTemplateURL.path,
+            isFirmwareVarsTemplateAvailable: true,
+            firmwareVarsPath: firmwareVarsURL.path,
+            isSecureBootFirmwareAvailable: false,
+            tpmEmulatorPath: swtpmURL.path,
+            isTPMEmulatorAvailable: true,
+            tpmStateDirectoryPath: tpmStateURL.path
+        ).makePlan(for: profile)
+        final class Capture: @unchecked Sendable {
+            var executablePath: String?
+            var arguments: [String] = []
+            var frontmostCallCount = 0
+        }
+        let capture = Capture()
+        let booter = QEMUVMRuntimeBooter(
+            diagnosticsDirectory: directory,
+            planBuilder: { _ in plan },
+            tpmEmulatorRunner: { _ in },
+            processRunner: { process in
+                capture.executablePath = process.executableURL?.path
+                capture.arguments = process.arguments ?? []
+            },
+            frontmostRunner: {
+                capture.frontmostCallCount += 1
+            },
+            bootKeySender: { _ in true },
+            vncPortAllocator: { 5_907 },
+            displayMode: .vncLoopback
+        )
+
+        let state = try await booter.start(profile: profile)
+
+        #expect(state == .running)
+        #expect(capture.executablePath == qemuURL.path)
+        #expect(capture.arguments.containsSequence(["-display", "none"]))
+        #expect(capture.arguments.containsSequence(["-vnc", "127.0.0.1:7"]))
+        #expect(!capture.arguments.containsSequence(["-display", "cocoa"]))
+        #expect(capture.frontmostCallCount == 0)
+
+        let recordURL = directory
+            .appendingPathComponent("QEMU Launch", isDirectory: true)
+            .appendingPathComponent("qemu-launch-latest.json")
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let record = try decoder.decode(QEMULaunchRecord.self, from: Data(contentsOf: recordURL))
+        #expect(record.displayMode == .vncLoopback)
+        #expect(record.vncHost == "127.0.0.1")
+        #expect(record.vncPort == 5_907)
+        #expect(record.arguments.containsSequence(["-display", "none"]))
+        #expect(record.arguments.containsSequence(["-vnc", "127.0.0.1:7"]))
     }
 }
 

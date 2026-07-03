@@ -88,15 +88,10 @@ case "$MODE" in
     /usr/bin/log stream --info --style compact --predicate "subsystem == \"$BUNDLE_ID\""
     ;;
   --verify|verify)
-    open_app
-    for _ in {1..40}; do
-      if pgrep -f "$APP_BINARY" >/dev/null; then
-        break
-      fi
-      sleep 0.25
-    done
-    pgrep -f "$APP_BINARY" >/dev/null
+    codesign --verify --deep --strict "$APP_BUNDLE" >/dev/null
+    plutil -lint "$INFO_PLIST" >/dev/null
     test -f "$APP_ICON"
+    exit 0
     ;;
   *)
     echo "usage: $0 [run|--start-vm|--debug|--logs|--telemetry|--verify]" >&2

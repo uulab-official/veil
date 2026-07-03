@@ -18,7 +18,7 @@ enum VMControlError: Error, LocalizedError {
     case missingQEMUKeySequence
     case missingQEMUText
     case missingQEMUPointerCoordinate
-    case qemuAlreadyRunning(pid: Int32, monitorSocketPath: String)
+    case qemuAlreadyRunning(pid: Int32, monitorSocketPath: String?)
     case missingForceStopAcknowledgement
 
     var errorDescription: String? {
@@ -44,7 +44,7 @@ enum VMControlError: Error, LocalizedError {
         case .qemuScreenshotCaptureFailed(let path):
             "QEMU console screenshot could not be captured: \(path)"
         case .missingQEMUDisplayEndpoint:
-            "No loopback VNC display endpoint found in the latest QEMU launch record. Start the VM from Veil.app or run veil-vmctl qemu-start --embedded-display first."
+            "No loopback VNC display endpoint found in the latest QEMU launch record. Start the VM from Veil.app or run veil-vmctl qemu-start first."
         case .qemuDisplayPortUnavailable:
             "No loopback VNC display port is available. Close stale QEMU/VNC listeners and try again."
         case .missingQEMUKeySequence:
@@ -54,13 +54,15 @@ enum VMControlError: Error, LocalizedError {
         case .missingQEMUPointerCoordinate:
             "Missing QEMU pointer coordinates. Pass --x and --y as absolute values from 0 to 32767."
         case .qemuAlreadyRunning(let pid, let monitorSocketPath):
-            "QEMU is already running as PID \(pid). Use qemu-capture to inspect it or qemu-powerdown to request a safe shutdown before starting another VM. Monitor socket: \(monitorSocketPath)"
+            monitorSocketPath.map {
+                "QEMU is already running as PID \(pid). Close the existing QEMU/Windows window, or use qemu-powerdown when the process was launched from the current Veil diagnostics path. Monitor socket: \($0)"
+            } ?? "QEMU is already running as PID \(pid) with the configured Windows disk attached. Shut down that VM before starting another one."
         case .missingForceStopAcknowledgement:
             "Force stop can interrupt Windows disk writes. Re-run with \(QEMUForceStopAuthorization.acknowledgementFlag) only when the VM cannot shut down normally."
         }
     }
 
-    private static let usage = "Usage: veil-vmctl prepare --installer /path/to/Windows.iso [--drivers /path/to/virtio-win.iso] | veil-vmctl providers [--json] | veil-vmctl qemu-plan [--json] | veil-vmctl qemu-doctor [--json] | veil-vmctl qemu-smoke [--json] [--seconds 45] | veil-vmctl qemu-start [--json] [--wait-seconds 15] [--embedded-display] | veil-vmctl qemu-display-smoke [--json] [--wait-seconds 5] | veil-vmctl qemu-capture [--json] [--output /path/to/console.png] | veil-vmctl qemu-powerdown [--json] [--wait-seconds 30] | veil-vmctl qemu-force-stop [--json] --i-understand-data-loss [--wait-seconds 10] | veil-vmctl qemu-sendkey [--json] key [key ...] | veil-vmctl qemu-type-text [--json] --text \"...\" | veil-vmctl qemu-click [--json] --x 0...32767 --y 0...32767 | veil-vmctl qemu-oobe-bypass [--json] | veil-vmctl qemu-install-agent [--json]"
+    private static let usage = "Usage: veil-vmctl prepare --installer /path/to/Windows.iso [--drivers /path/to/virtio-win.iso] | veil-vmctl providers [--json] | veil-vmctl qemu-plan [--json] | veil-vmctl qemu-doctor [--json] | veil-vmctl qemu-smoke [--json] [--seconds 45] | veil-vmctl qemu-start [--json] [--wait-seconds 15] [--native-display] | veil-vmctl qemu-display-smoke [--json] [--wait-seconds 5] | veil-vmctl qemu-capture [--json] [--output /path/to/console.png] | veil-vmctl qemu-powerdown [--json] [--wait-seconds 30] | veil-vmctl qemu-force-stop [--json] --i-understand-data-loss [--wait-seconds 10] | veil-vmctl qemu-sendkey [--json] key [key ...] | veil-vmctl qemu-type-text [--json] --text \"...\" | veil-vmctl qemu-click [--json] --x 0...32767 --y 0...32767 | veil-vmctl qemu-oobe-bypass [--json] | veil-vmctl qemu-install-agent [--json]"
 }
 
 struct VMControlArguments {
@@ -113,9 +115,9 @@ struct VMControlArguments {
 
         if command == "qemu-start" {
             let waitSeconds = waitSecondsArgument(from: arguments) ?? 15
-            let displayMode: QEMUStartDisplayMode = arguments.contains("--embedded-display")
-                ? .embedded
-                : .nativeCocoa
+            let displayMode: QEMUStartDisplayMode = arguments.contains("--native-display")
+                ? .nativeCocoa
+                : .embedded
             return VMControlArguments(
                 command: .qemuStart(
                     json: arguments.contains("--json"),
@@ -544,11 +546,10 @@ struct VeilVMControl {
         waitSeconds: Int,
         displayMode: VMControlArguments.QEMUStartDisplayMode
     ) async throws {
-        try rejectDuplicateQEMULaunchIfNeeded()
-
         guard let profile = try await JSONVMProfileStore().load() else {
             throw VMControlError.missingProfileForQEMUPlan
         }
+        try rejectDuplicateQEMULaunchIfNeeded(for: profile)
 
         let plan = try makeQEMUPlan(for: profile)
         let readiness = QEMUWindowsReadinessDoctor().makeReport(
@@ -972,10 +973,18 @@ struct VeilVMControl {
         return try JSONDecoder.veilDiagnostics.decode(QEMULaunchRecord.self, from: data)
     }
 
-    private static func rejectDuplicateQEMULaunchIfNeeded() throws {
+    private static func rejectDuplicateQEMULaunchIfNeeded(for profile: VMProfile) throws {
         guard let launchRecord = try? latestQEMULaunchRecord(),
               let pid = launchRecord.pid,
               isProcessRunning(pid: pid) else {
+            if let runningProcess = QEMUVMRuntimeBooter.runningProcess(
+                attachedToVirtualDiskPath: profile.virtualDiskPath
+            ) {
+                throw VMControlError.qemuAlreadyRunning(
+                    pid: runningProcess.pid,
+                    monitorSocketPath: runningProcess.monitorSocketPath
+                )
+            }
             return
         }
 

@@ -53,6 +53,25 @@ public protocol QEMULaunchRecordStore: Sendable {
     func loadLatest() async throws -> QEMULaunchRecord?
 }
 
+public struct QEMURunningProcess: Equatable, Sendable {
+    public var pid: Int32
+    public var commandLine: String
+    public var monitorSocketPath: String?
+    public var qmpSocketPath: String?
+
+    public init(
+        pid: Int32,
+        commandLine: String,
+        monitorSocketPath: String? = nil,
+        qmpSocketPath: String? = nil
+    ) {
+        self.pid = pid
+        self.commandLine = commandLine
+        self.monitorSocketPath = monitorSocketPath
+        self.qmpSocketPath = qmpSocketPath
+    }
+}
+
 public struct JSONQEMULaunchRecordStore: QEMULaunchRecordStore {
     private let directory: URL
     private let fileName: String
@@ -135,6 +154,10 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
             return .running
         }
 
+        if let runningProcess = Self.runningProcess(attachedToVirtualDiskPath: profile.virtualDiskPath) {
+            throw VMRuntimeError.qemuAlreadyRunning(pid: runningProcess.pid)
+        }
+
         let plan = try planBuilder(profile)
         let readiness = QEMUWindowsReadinessDoctor().makeReport(profile: profile, plan: plan)
         guard readiness.overallState == .ready else {
@@ -155,6 +178,9 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
         let monitorSocketURL = Self.monitorSocketURL()
         let qmpSocketURL = Self.qmpSocketURL()
         let vncPort = displayMode == .vncLoopback ? vncPortAllocator() : nil
+        if displayMode == .vncLoopback, vncPort == nil {
+            throw VMRuntimeError.qemuDisplayPortUnavailable
+        }
         let vncDisplay = vncPort.map { max($0 - 5_900, 0) }
         try tpmEmulatorRunner(plan)
 
@@ -187,7 +213,9 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
             directory: launchDirectory,
             stamp: stamp
         )
-        frontmostRunner()
+        if displayMode == .nativeCocoa {
+            frontmostRunner()
+        }
         if shouldSendInstallerBootKey {
             scheduleWindowsInstallerBootKeySend(monitorSocketURL: monitorSocketURL)
         }
@@ -317,6 +345,99 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
         process.standardOutput = nil
         process.standardError = nil
         try? process.run()
+    }
+
+    public static func runningProcess(attachedToVirtualDiskPath virtualDiskPath: String?) -> QEMURunningProcess? {
+        guard let virtualDiskPath = normalizedNonEmptyPath(virtualDiskPath) else {
+            return nil
+        }
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/sh")
+        process.arguments = [
+            "-c",
+            "/bin/ps axww -o pid=,command= | /usr/bin/grep qemu-system-aarch64 || true"
+        ]
+        let outputPipe = Pipe()
+        process.standardOutput = outputPipe
+        process.standardError = Pipe()
+
+        do {
+            try process.run()
+            process.waitUntilExit()
+        } catch {
+            return nil
+        }
+
+        guard process.terminationStatus == 0 else {
+            return nil
+        }
+
+        let output = String(
+            decoding: outputPipe.fileHandleForReading.readDataToEndOfFile(),
+            as: UTF8.self
+        )
+        return runningProcess(
+            attachedToVirtualDiskPath: virtualDiskPath,
+            processListOutput: output
+        )
+    }
+
+    static func runningProcess(
+        attachedToVirtualDiskPath virtualDiskPath: String?,
+        processListOutput: String
+    ) -> QEMURunningProcess? {
+        guard let virtualDiskPath = normalizedNonEmptyPath(virtualDiskPath) else {
+            return nil
+        }
+
+        for line in processListOutput.split(separator: "\n", omittingEmptySubsequences: true) {
+            let trimmedLine = line.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard let separator = trimmedLine.firstIndex(where: { $0 == " " || $0 == "\t" }) else {
+                continue
+            }
+            let pidText = trimmedLine[..<separator].trimmingCharacters(in: .whitespacesAndNewlines)
+            let commandLine = String(trimmedLine[separator...]).trimmingCharacters(in: .whitespacesAndNewlines)
+            guard let pid = Int32(pidText),
+                  commandLine.contains("qemu-system-aarch64"),
+                  commandLine.contains(virtualDiskPath) else {
+                continue
+            }
+
+            return QEMURunningProcess(
+                pid: pid,
+                commandLine: commandLine,
+                monitorSocketPath: socketPath(after: "-monitor", in: commandLine),
+                qmpSocketPath: socketPath(after: "-qmp", in: commandLine)
+            )
+        }
+
+        return nil
+    }
+
+    private static func normalizedNonEmptyPath(_ path: String?) -> String? {
+        guard let path = path?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !path.isEmpty else {
+            return nil
+        }
+
+        return path
+    }
+
+    private static func socketPath(after flag: String, in commandLine: String) -> String? {
+        let parts = commandLine.split(whereSeparator: { $0 == " " || $0 == "\t" }).map(String.init)
+        guard let flagIndex = parts.firstIndex(of: flag),
+              parts.indices.contains(flagIndex + 1) else {
+            return nil
+        }
+
+        let endpoint = parts[flagIndex + 1]
+        guard endpoint.hasPrefix("unix:") else {
+            return nil
+        }
+
+        let withoutScheme = endpoint.dropFirst("unix:".count)
+        return String(withoutScheme.split(separator: ",", maxSplits: 1).first ?? "")
     }
 
     public static func startTPMEmulatorIfNeeded(plan: QEMUWindowsBootPlan) throws {

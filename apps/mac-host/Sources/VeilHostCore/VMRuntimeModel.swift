@@ -712,6 +712,8 @@ public enum VMRuntimeError: Error, LocalizedError, Equatable, Sendable {
     case bootPrerequisitesMissing
     case automaticInstallMediaCreationFailed(String)
     case qemuNotReady(String)
+    case qemuDisplayPortUnavailable
+    case qemuAlreadyRunning(pid: Int32)
 
     public var errorDescription: String? {
         switch self {
@@ -725,6 +727,10 @@ public enum VMRuntimeError: Error, LocalizedError, Equatable, Sendable {
             "Unable to create automatic Windows install media: \(message)"
         case let .qemuNotReady(message):
             "QEMU/HVF is not ready: \(message)"
+        case .qemuDisplayPortUnavailable:
+            "No loopback VNC display port is available. Close stale QEMU/VNC listeners and try again."
+        case let .qemuAlreadyRunning(pid):
+            "QEMU is already running as PID \(pid) with the configured Windows disk attached. Shut down that VM before starting another one."
         }
     }
 }
@@ -1198,12 +1204,18 @@ public struct LocalVMRuntimeService: VMRuntimeService {
                 preflightChecks: preflightChecks
             )
             let runtimeState = await bootRunner.runtimeState()
-            let state = runtimeState
-                ?? Self.qemuLaunchRuntimeState(
-                    from: latestLaunchRecord,
-                    profile: profile,
-                    processIsRunning: qemuLaunchProcessIsRunning
-                )
+            let orphanQEMUProcess = QEMUVMRuntimeBooter.runningProcess(
+                attachedToVirtualDiskPath: profile.virtualDiskPath
+            )
+            let recordedQEMUState = Self.qemuLaunchRuntimeState(
+                from: latestLaunchRecord,
+                profile: profile,
+                processIsRunning: qemuLaunchProcessIsRunning
+            )
+            let inferredRuntimeState = runtimeState
+                ?? recordedQEMUState
+                ?? (orphanQEMUProcess == nil ? nil : .running)
+            let state = inferredRuntimeState
                 ?? .stopped
             let virtualDiskAllocatedBytes = Self.allocatedFileSize(
                 path: profile.virtualDiskPath,
@@ -1245,7 +1257,7 @@ public struct LocalVMRuntimeService: VMRuntimeService {
                 installEvidence: installEvidence,
                 bootReady: bootPathReadiness.isReady,
                 windowsInstalled: windowsInstalled,
-                detail: runtimeState.map(Self.runtimeDetail(for:)) ?? (
+                detail: inferredRuntimeState.map(Self.runtimeDetail(for:)) ?? (
                     Self.stoppedDetail(
                         bootPathReadiness: bootPathReadiness,
                         windowsInstalled: windowsInstalled,
