@@ -33,7 +33,7 @@ struct VeilHostClientTests {
         #expect(diagnostic.endpoint == "ws://127.0.0.1:18444")
         #expect(diagnostic.health?.agentVersion == "0.1.0")
         #expect(diagnostic.errorMessage == nil)
-        #expect(diagnostic.nextActions.contains("Run veil-host-probe --launch-notepad to verify HWND launch and tracking."))
+        #expect(diagnostic.nextActions.contains("Run veil-host-probe --launch-notepad-frame to verify HWND launch, tracking, and first frame capture."))
         #expect(transport.sentTypes == ["agent.health.request"])
     }
 

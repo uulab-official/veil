@@ -14,6 +14,7 @@ enum ProbeMode {
     case diagnoseAgent
     case overview
     case launchNotepad
+    case launchNotepadFrame
 }
 
 func parseMode(_ arguments: [String]) -> ProbeMode? {
@@ -30,6 +31,8 @@ func parseMode(_ arguments: [String]) -> ProbeMode? {
         return .overview
     case "--launch-notepad", "launch-notepad":
         return .launchNotepad
+    case "--launch-notepad-frame", "launch-notepad-frame":
+        return .launchNotepadFrame
     case "--help", "-h", "help":
         return nil
     default:
@@ -39,16 +42,78 @@ func parseMode(_ arguments: [String]) -> ProbeMode? {
 
 func printUsage() {
     FileHandle.standardError.write(Data("""
-    Usage: veil-host-probe [--health|--diagnose-agent|--overview|--launch-notepad]
+    Usage: veil-host-probe [--health|--diagnose-agent|--overview|--launch-notepad|--launch-notepad-frame]
 
       --health          Request only agent.health.response. This is the default.
       --diagnose-agent  Print a connection diagnostic JSON with next actions.
       --overview        Request health and app list.
       --launch-notepad  Run the full health -> app list -> Notepad launch acceptance flow.
+      --launch-notepad-frame
+                        Launch Notepad, subscribe to its HWND stream, and wait for the first PNG frame.
 
     Set VEIL_AGENT_URL to override the endpoint. Default: ws://127.0.0.1:18444
 
     """.utf8))
+}
+
+struct NotepadFrameProbeResult: Encodable {
+    var launchResult: NotepadLaunchResult
+    var frame: WindowFrameEvent
+}
+
+enum HostProbeError: Error, LocalizedError {
+    case frameTimeout(windowId: String)
+
+    var errorDescription: String? {
+        switch self {
+        case .frameTimeout(let windowId):
+            "Timed out waiting for the first window.frame event for \(windowId)."
+        }
+    }
+}
+
+func firstFrame(
+    from eventSource: any HostEventSource,
+    windowId: String,
+    timeoutNanoseconds: UInt64 = 10_000_000_000
+) async throws -> WindowFrameEvent {
+    try await withThrowingTaskGroup(of: WindowFrameEvent.self) { group in
+        group.addTask {
+            for try await message in eventSource.eventMessages() {
+                let envelope = try JSONDecoder.veilProtocol.decode(ProtocolMessageEnvelope.self, from: message)
+                guard envelope.type == .windowFrame else {
+                    continue
+                }
+
+                let frame = try JSONDecoder.veilProtocol.decode(WindowFrameEvent.self, from: message)
+                if frame.windowId == windowId {
+                    return frame
+                }
+            }
+
+            throw HostProbeError.frameTimeout(windowId: windowId)
+        }
+
+        group.addTask {
+            try await Task.sleep(nanoseconds: timeoutNanoseconds)
+            throw HostProbeError.frameTimeout(windowId: windowId)
+        }
+
+        let frame = try await group.next()!
+        group.cancelAll()
+        return frame
+    }
+}
+
+func runNotepadFrameProbe(
+    client: VeilHostClient,
+    eventSource: any HostEventSource
+) async throws -> NotepadFrameProbeResult {
+    let launchResult = try await client.launchNotepad()
+    async let frame = firstFrame(from: eventSource, windowId: launchResult.window.windowId)
+    try? await Task.sleep(nanoseconds: 200_000_000)
+    try await client.subscribeWindowFrames(windowId: launchResult.window.windowId)
+    return try await NotepadFrameProbeResult(launchResult: launchResult, frame: frame)
 }
 
 guard let mode = parseMode(arguments) else {
@@ -60,7 +125,7 @@ do {
     let transport = switch mode {
     case .diagnoseAgent:
         URLSessionWebSocketTransport(url: url, requestTimeout: 5)
-    case .health, .overview, .launchNotepad:
+    case .health, .overview, .launchNotepad, .launchNotepadFrame:
         URLSessionWebSocketTransport(url: url)
     }
     let client = VeilHostClient(transport: transport)
@@ -73,6 +138,8 @@ do {
         try await client.loadOverview()
     case .launchNotepad:
         try await client.launchNotepad()
+    case .launchNotepadFrame:
+        try await runNotepadFrameProbe(client: client, eventSource: transport)
     }
 
     let encoder = JSONEncoder()

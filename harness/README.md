@@ -105,6 +105,17 @@ swift run veil-host-probe --launch-notepad
 
 Expected: pretty-printed JSON includes Notepad app metadata and `window.created` for `hwnd:0003029A`.
 
+For the stronger app-window proof:
+
+```bash
+swift run veil-host-probe --launch-notepad-frame
+```
+
+Expected: pretty-printed JSON includes the same launch result plus a PNG
+`window.frame` for the launched HWND. Use this against the real Windows guest
+agent when checking whether host-visible app mirroring is working, not just
+whether Notepad launched inside the VM.
+
 ## SwiftUI Host Shell Smoke Test
 
 Terminal 1:

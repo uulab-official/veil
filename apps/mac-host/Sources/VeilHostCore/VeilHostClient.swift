@@ -86,7 +86,7 @@ public struct AgentConnectionDiagnostic: Codable, Equatable, Sendable {
             health: health,
             nextActions: [
                 "Run veil-host-probe --overview to verify app metadata.",
-                "Run veil-host-probe --launch-notepad to verify HWND launch and tracking."
+                "Run veil-host-probe --launch-notepad-frame to verify HWND launch, tracking, and first frame capture."
             ]
         )
     }
