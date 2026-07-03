@@ -538,10 +538,10 @@ struct VeilHostShellApp: App {
 
     private func configureDockMenuBridge() {
         appDelegate.reopenHandler = {
-            if model.mirrorSessions.isEmpty {
-                activateMainWindow()
-            } else {
+            if model.runtimeStatusReport().launcherVisibility.shouldHideMainWindow {
                 bringAllWindowsAppWindowsToFront()
+            } else {
+                activateMainWindow()
             }
         }
         appDelegate.dockMenuProvider = {
@@ -586,7 +586,7 @@ struct VeilHostShellApp: App {
     }
 
     private func hideMainWindowForCoherenceIfNeeded() {
-        guard model.connectionMode == .agent else {
+        guard model.runtimeStatusReport().launcherVisibility.shouldHideMainWindow else {
             return
         }
 
@@ -1133,7 +1133,16 @@ private enum MainWindowChrome {
     }
 
     static func hideMainWindow() {
-        mainWindow?.orderOut(nil)
+        let windows = mainWindows
+        guard let window = windows.first else {
+            return
+        }
+
+        for duplicate in windows.dropFirst() {
+            duplicate.close()
+        }
+
+        window.orderOut(nil)
     }
 
     private static var mainWindow: NSWindow? {
