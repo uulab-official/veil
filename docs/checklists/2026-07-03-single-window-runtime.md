@@ -25,6 +25,7 @@ Goal: move Veil from a Veil shell plus separate QEMU Cocoa display toward a UTM-
 - [x] Add a tested RFB parser for protocol handshake, server init, and raw framebuffer updates for the loopback VNC display surface.
 - [x] Add a loopback RFB socket client and framebuffer renderer that converts raw VNC rectangles into RGBA frames.
 - [x] Bind the RFB framebuffer renderer to the main SwiftUI/AppKit display surface so live VNC frames can replace screenshot fallback inside the Veil window.
+- [x] Request raw RFB encoding during VNC session setup so QEMU sends frames the embedded renderer can decode reliably.
 
 ## Next
 

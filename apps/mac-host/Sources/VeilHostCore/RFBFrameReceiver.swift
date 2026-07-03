@@ -11,6 +11,7 @@ public enum RFBError: Error, LocalizedError, Equatable, Sendable {
     case invalidPixelFormatBitsPerPixel(UInt8)
     case sessionNotStarted
     case invalidRectangleBounds
+    case invalidFramebufferSize(width: Int, height: Int)
 
     public var errorDescription: String? {
         switch self {
@@ -32,6 +33,8 @@ public enum RFBError: Error, LocalizedError, Equatable, Sendable {
             "RFB framebuffer updates cannot be read before the server init handshake completes."
         case .invalidRectangleBounds:
             "RFB framebuffer update contains a rectangle outside the display bounds."
+        case .invalidFramebufferSize(let width, let height):
+            "RFB framebuffer size \(width)x\(height) cannot be requested by the client."
         }
     }
 }
@@ -135,6 +138,21 @@ public enum RFBClientMessageBuilder {
 
     public static func sharedClientInit() -> Data {
         Data([1])
+    }
+
+    public static func setRawEncoding() -> Data {
+        setEncodings([0])
+    }
+
+    public static func setEncodings(_ encodings: [Int32]) -> Data {
+        var data = Data([2, 0])
+        data.appendBigEndian(UInt16(encodings.count))
+
+        for encoding in encodings {
+            data.appendBigEndian(encoding)
+        }
+
+        return data
     }
 
     public static func framebufferUpdateRequest(
@@ -388,12 +406,19 @@ public final class RFBFrameStreamClient {
         let desktopNameData = try stream.readExactly(desktopNameLength)
         let serverInit = try RFBFrameParser.parseServerInit(serverInitHeader + desktopNameData)
         self.serverInit = serverInit
+        try stream.write(RFBClientMessageBuilder.setRawEncoding())
         return serverInit
     }
 
     public func requestFramebufferUpdate(incremental: Bool = true) throws {
         guard let serverInit else {
             throw RFBError.sessionNotStarted
+        }
+        guard serverInit.width > 0,
+              serverInit.height > 0,
+              serverInit.width <= Int(UInt16.max),
+              serverInit.height <= Int(UInt16.max) else {
+            throw RFBError.invalidFramebufferSize(width: serverInit.width, height: serverInit.height)
         }
 
         try stream.write(RFBClientMessageBuilder.framebufferUpdateRequest(
@@ -601,6 +626,17 @@ private struct RFBReader {
 
 private extension Data {
     mutating func appendBigEndian(_ value: UInt16) {
+        append(UInt8((value >> 8) & 0xff))
+        append(UInt8(value & 0xff))
+    }
+
+    mutating func appendBigEndian(_ value: Int32) {
+        appendBigEndian(UInt32(bitPattern: value))
+    }
+
+    mutating func appendBigEndian(_ value: UInt32) {
+        append(UInt8((value >> 24) & 0xff))
+        append(UInt8((value >> 16) & 0xff))
         append(UInt8((value >> 8) & 0xff))
         append(UInt8(value & 0xff))
     }

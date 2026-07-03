@@ -10,6 +10,11 @@ struct RFBFrameReceiverTests {
         #expect(String(decoding: RFBClientMessageBuilder.clientProtocolVersion(), as: UTF8.self) == "RFB 003.008\n")
         #expect(RFBClientMessageBuilder.selectNoneSecurity() == Data([1]))
         #expect(RFBClientMessageBuilder.sharedClientInit() == Data([1]))
+        #expect(RFBClientMessageBuilder.setRawEncoding() == Data([
+            2, 0,
+            0, 1,
+            0, 0, 0, 0
+        ]))
 
         let request = RFBClientMessageBuilder.framebufferUpdateRequest(
             incremental: true,
@@ -133,7 +138,8 @@ struct RFBFrameReceiverTests {
         #expect(stream.writes[0] == RFBClientMessageBuilder.clientProtocolVersion())
         #expect(stream.writes[1] == RFBClientMessageBuilder.selectNoneSecurity())
         #expect(stream.writes[2] == RFBClientMessageBuilder.sharedClientInit())
-        #expect(stream.writes[3] == Data([
+        #expect(stream.writes[3] == RFBClientMessageBuilder.setRawEncoding())
+        #expect(stream.writes[4] == Data([
             3, 0,
             0, 0,
             0, 0,
