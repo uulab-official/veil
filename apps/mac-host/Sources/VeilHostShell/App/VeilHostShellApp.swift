@@ -260,7 +260,7 @@ struct VeilHostShellApp: App {
 
             if vmModel.snapshot?.state == .stopped {
                 windowsAppWindowPresenter.closeAll()
-                consoleMessage = "Windows console closed."
+                consoleMessage = "Windows display closed."
             }
         }
     }

@@ -16,6 +16,7 @@ Goal: make the installed Windows surface feel like an app runtime instead of a V
 - [x] Add a menu and launcher affordance that records app launch plus first-frame proof.
 - [x] Expose Open Notepad and Record App Proof directly from the menu bar.
 - [x] Rename primary commands and setup handoff copy from VM/console wording toward Windows display/app wording.
+- [x] Remove product-facing Console/Prepare VM/QEMU-console wording from the main runtime surface.
 
 ## Review Notes
 
@@ -25,5 +26,5 @@ Goal: make the installed Windows surface feel like an app runtime instead of a V
 
 ## Next
 
-- [ ] Replace the secondary console handoff language once the QEMU display can be embedded or mirrored in-app.
 - [ ] Move remaining QEMU/VM internals into an advanced diagnostics view so the default app surface stays product-grade.
+- [ ] Rename internal host action symbols away from console terminology after the display bridge API stabilizes.

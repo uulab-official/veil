@@ -453,7 +453,7 @@ private struct SimpleRuntimePanel: View {
 
                         if canShowConsole {
                             Button(action: consoleAction) {
-                                Label("Console", systemImage: "display")
+                                Label("Display", systemImage: "display")
                             }
                             .disabled(isLoading)
                         }
@@ -539,7 +539,7 @@ private struct SimpleRuntimePanel: View {
         case .unsupported:
             return "This Mac cannot run the current local Windows Arm runtime."
         case .notConfigured:
-            return "Choose a Windows 11 Arm ISO, then prepare the VM."
+            return "Choose a Windows 11 Arm ISO, then prepare Windows."
         case .stopped:
             if installSimulation.phase == .complete {
                 return "Windows display handoff finished. Start again if the setup window did not appear."
@@ -551,7 +551,7 @@ private struct SimpleRuntimePanel: View {
         case .running:
             return "Windows is running locally. Open a Windows app once the guest agent connects."
         case .suspended:
-            return "The VM is suspended."
+            return "Windows is paused."
         case .failed:
             return "The last start attempt failed. Open details for diagnostics."
         }
@@ -577,7 +577,7 @@ private struct SimpleRuntimePanel: View {
             return "Choose Windows ISO"
         }
 
-        return snapshot.profileName == nil ? "Prepare VM" : "Continue Setup"
+        return snapshot.profileName == nil ? "Prepare Windows" : "Continue Setup"
     }
 
     private var primarySymbol: String {
@@ -806,7 +806,7 @@ private struct ConsoleScreenshotPreview: View {
                 .strokeBorder(.white.opacity(0.16), lineWidth: 1)
         }
         .help("Latest Windows display")
-        .accessibilityLabel("Latest QEMU console screenshot")
+        .accessibilityLabel("Latest Windows display screenshot")
     }
 }
 
@@ -884,7 +884,7 @@ private struct QuickActionsPanel: View {
             ) {
                 ControlActionTile(
                     title: canStop ? "Stop" : "Start",
-                    detail: canStop ? "Shut down the running VM process." : (canStart ? "Boot the configured Windows machine." : "Complete setup before booting."),
+                    detail: canStop ? "Shut down the local Windows runtime." : (canStart ? "Boot the configured Windows machine." : "Complete setup before booting."),
                     symbolName: canStop ? "stop.fill" : "power",
                     tint: canStop ? .orange : .green,
                     state: (canStart || canStop) ? .ready : .blocked,
@@ -903,8 +903,8 @@ private struct QuickActionsPanel: View {
                 .disabled(!canShowConsole || isLoading)
 
                 ControlActionTile(
-                    title: "Prepare VM",
-                    detail: snapshot.profileName == nil ? "Create the profile, shared folder, auto-install media, and default disk." : "Base VM resources are ready.",
+                    title: "Prepare Windows",
+                    detail: snapshot.profileName == nil ? "Create the local profile, shared folder, install media, and default disk." : "Base Windows resources are ready.",
                     symbolName: "wand.and.stars",
                     tint: .blue,
                     state: snapshot.profileName == nil ? .ready : .partial,
@@ -944,7 +944,7 @@ private struct QuickActionsPanel: View {
 
                 ControlActionTile(
                     title: "Configure",
-                    detail: "Advanced VM settings follow the boot spike.",
+                    detail: "Advanced runtime settings follow boot validation.",
                     symbolName: "slider.horizontal.3",
                     tint: .blue,
                     state: .planned
@@ -952,7 +952,7 @@ private struct QuickActionsPanel: View {
 
                 ControlActionTile(
                     title: "Snapshots",
-                    detail: "Checkpoints follow persistent VM boot.",
+                    detail: "Checkpoints follow persistent Windows boot.",
                     symbolName: "camera.metering.matrix",
                     tint: .purple,
                     state: .planned
@@ -1063,7 +1063,7 @@ private struct ControlCenterHero: View {
 
                         if canShowConsole {
                             Button(action: consoleAction) {
-                                Label("Console", systemImage: "display")
+                                Label("Display", systemImage: "display")
                             }
                             .disabled(isLoading)
                         }
@@ -1266,7 +1266,7 @@ private struct WindowsSetupDisplayPanel: View {
                         .labelStyle(.iconOnly)
                 }
                 .disabled(isLoading)
-                .help("Prepare Windows VM")
+                .help("Prepare Windows")
             }
 
             Button(action: detailsAction) {
@@ -1444,7 +1444,7 @@ private struct WindowsSetupDisplayPanel: View {
             return "Choose ISO"
         }
 
-        return snapshot.profileName == nil ? "Prepare VM" : "Continue Setup"
+        return snapshot.profileName == nil ? "Prepare Windows" : "Continue Setup"
     }
 
     private var launcherFooter: some View {
@@ -1469,7 +1469,7 @@ private struct WindowsSetupDisplayPanel: View {
                     .labelStyle(.iconOnly)
             }
             .disabled(isLoading || snapshot.state == .running || snapshot.state == .starting)
-            .help("Prepare VM")
+            .help("Prepare Windows")
 
             Button(action: selectInstallerAction) {
                 Label("Choose ISO", systemImage: "opticaldisc")
@@ -2124,7 +2124,7 @@ private struct ResourcePlanPanel: View {
         ShellPanel(spacing: 12) {
             ShellPanelHeader(
                 title: "Resource Plan",
-                subtitle: "The VM resource model Veil applies and hardens through the boot spike.",
+                subtitle: "The local Windows resource model Veil applies and hardens through the boot spike.",
                 symbolName: "gauge.with.dots.needle.50percent"
             )
 
