@@ -57,6 +57,7 @@
 - [x] Add an app-window proof gate that verifies app launch, HWND tracking, and first frame evidence through the forwarded agent endpoint.
 - [x] Save app-window proof JSON artifacts so the same launch/HWND/frame evidence can be attached to diagnostics and revalidated by harnesses.
 - [x] Add a Coherence-style proof gate that verifies launch, first frame, post-input frame, mouse input, key input, and host clipboard send evidence through the forwarded agent endpoint.
+- [x] Add a one-command MVP proof gate that waits for the guest agent and then runs the Coherence proof as the Notepad release gate.
 - [ ] Record a fresh live boot/install evidence pass under diagnostics, not in git.
 - [ ] Update install-flow docs with exact observed blockers and recovery steps.
 
@@ -395,6 +396,55 @@ cd apps/mac-host && swift test --filter VeilHostClientTests/provesWindowsAppCohe
 cd harness/coherence-proof && npm test
 cd apps/mac-host && VEIL_AGENT_URL=ws://127.0.0.1:<fake-port> swift run veil-vmctl coherence-proof --json --app-id winapp_notepad --wait-seconds 5 --output /tmp/veil-coherence-proof.json | node ../../harness/coherence-proof/src/validate-coherence-proof.mjs
 node harness/coherence-proof/src/validate-coherence-proof.mjs < /tmp/veil-coherence-proof.json
+cd apps/mac-host && swift test
+./script/build_and_run.sh --verify
+git diff --check
+```
+
+Expected: all pass.
+
+## Task 16: MVP Proof Gate
+
+**Files:**
+- Modify: `apps/mac-host/Sources/VeilHostCore/VeilHostClient.swift`
+- Modify: `apps/mac-host/Tests/VeilHostCoreTests/VeilHostClientTests.swift`
+- Modify: `apps/mac-host/Sources/VeilVMControl/main.swift`
+- Create: `harness/mvp-proof/package.json`
+- Create: `harness/mvp-proof/src/validate-mvp-proof.mjs`
+- Create: `harness/mvp-proof/test/mvp-proof.test.mjs`
+- Create: `harness/mvp-proof/fixtures/mvp-proof.proved.json`
+- Create: `harness/mvp-proof/fixtures/mvp-proof.unavailable.json`
+- Modify: `docs/harness/README.md`
+- Modify: `harness/README.md`
+- Modify: `docs/architecture.md`
+- Modify: `docs/checklists/2026-07-03-utm-source-hardening.md`
+
+- [x] **Step 1: Add MVP proof report**
+
+Expose `windowsMVPProof` reports that include guest-agent wait evidence and,
+when connected, a nested `windowsAppCoherenceProof`.
+
+- [x] **Step 2: Add CLI command**
+
+Add `veil-vmctl mvp-proof [--json] [--app-id winapp_notepad]
+[--wait-seconds 30] [--output /path/to/proof.json]`.
+
+- [x] **Step 3: Add harness validation**
+
+Validate that proved reports contain connected wait evidence, Coherence proof
+evidence, increasing post-input frames, and saved proof artifact metadata.
+Unavailable reports remain valid recovery JSON but are rejected as release
+proof when piped through the harness.
+
+- [x] **Step 4: Verify**
+
+Run:
+
+```bash
+cd apps/mac-host && swift test --filter VeilHostClientTests/provesWindowsMVPRuntimeAfterGuestAgentWait
+cd harness/mvp-proof && npm test
+cd apps/mac-host && VEIL_AGENT_URL=ws://127.0.0.1:<fake-port> swift run veil-vmctl mvp-proof --json --app-id winapp_notepad --wait-seconds 5 --output /tmp/veil-mvp-proof.json | node ../../harness/mvp-proof/src/validate-mvp-proof.mjs
+node harness/mvp-proof/src/validate-mvp-proof.mjs < /tmp/veil-mvp-proof.json
 cd apps/mac-host && swift test
 ./script/build_and_run.sh --verify
 git diff --check

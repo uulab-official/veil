@@ -14,6 +14,7 @@ harness/
 ├─ app-runtime-status/     Validates host app-runtime status/actions JSON
 ├─ app-window-proof/       Validates app launch/HWND/first-frame proof JSON
 ├─ coherence-proof/        Validates launch/HWND/frame/input/clipboard proof JSON
+├─ mvp-proof/              Validates guest wait plus Coherence proof JSON
 ├─ guest-agent-wait/       Validates post-install guest-agent readiness JSON
 ├─ qemu-boot-plan/         Validates dry-run QEMU/HVF Windows boot plan JSON
 ├─ qemu-doctor/            Validates QEMU/HVF readiness report JSON
@@ -138,6 +139,17 @@ node ../../harness/coherence-proof/src/validate-coherence-proof.mjs < "$proof"
 Expected: JSON proves the host launched the requested Windows app, received
 initial and post-input HWND frames, posted a click, posted keyboard input, and
 sent host clipboard text.
+
+For the one-command MVP proof:
+
+```bash
+proof="$HOME/Library/Application Support/Veil/Diagnostics/MVP Proof/notepad-proof.json"
+swift run veil-vmctl mvp-proof --json --app-id winapp_notepad --output "$proof" | node ../../harness/mvp-proof/src/validate-mvp-proof.mjs
+node ../../harness/mvp-proof/src/validate-mvp-proof.mjs < "$proof"
+```
+
+Expected: JSON proves the guest agent became reachable and the Notepad
+Coherence-style launch/frame/input/clipboard loop completed.
 
 For the full launch acceptance flow:
 

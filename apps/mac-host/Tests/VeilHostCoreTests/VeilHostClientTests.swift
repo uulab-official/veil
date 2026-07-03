@@ -248,6 +248,58 @@ struct VeilHostClientTests {
         #expect(transport.expectedReplyCounts == [1, 1, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
     }
 
+    @Test("proves Windows MVP runtime after guest agent wait")
+    func provesWindowsMVPRuntimeAfterGuestAgentWait() async throws {
+        let transport = RecordingTransport(responses: [
+            #"{"type":"agent.health.response","requestId":"req_health","protocolVersion":1,"agentVersion":"0.1.0","os":"windows-arm64","session":{"interactive":true,"user":"veil-user"},"capabilities":{"appList":true,"appLaunch":true,"windowTracking":true,"windowCapture":true,"input":true,"clipboardText":true}}"#,
+            #"{"type":"agent.health.response","requestId":"req_health","protocolVersion":1,"agentVersion":"0.1.0","os":"windows-arm64","session":{"interactive":true,"user":"veil-user"},"capabilities":{"appList":true,"appLaunch":true,"windowTracking":true,"windowCapture":true,"input":true,"clipboardText":true}}"#,
+            #"{"type":"app.list.response","requestId":"req_apps","apps":[{"id":"winapp_notepad","name":"Notepad","exePath":"C:\\Windows\\System32\\notepad.exe","publisher":"Microsoft","iconId":"icon_notepad"}]}"#,
+            #"{"type":"app.launch.response","requestId":"req_launch_winapp_notepad","accepted":true,"processId":4912}"#,
+            #"{"type":"window.created","windowId":"hwnd:0003029A","processId":4912,"appId":"winapp_notepad","title":"Untitled - Notepad","bounds":{"x":10,"y":10,"width":1280,"height":800},"state":"normal","focused":true}"#
+        ])
+        let eventSource = BufferedEventSource(messages: [
+            WindowFrameEvent.notepadFirstFrameJSON,
+            WindowFrameEvent.notepadPostInputFrameJSON
+        ])
+        let client = VeilHostClient(transport: transport)
+
+        let report = try await client.proveMVPAppRuntime(
+            appId: "winapp_notepad",
+            endpoint: "ws://127.0.0.1:18444",
+            eventSource: eventSource,
+            waitSeconds: 10,
+            proofTimeoutNanoseconds: 1_000_000_000
+        )
+
+        #expect(report.kind == "windowsMVPProof")
+        #expect(report.status == .proved)
+        #expect(report.wait.status == .connected)
+        #expect(report.coherence?.kind == "windowsAppCoherenceProof")
+        #expect(report.coherence?.postInputFrame.sequence == 2)
+        #expect(report.nextActions.contains("Attach the saved MVP proof artifact to release gates and app-runtime bug reports."))
+        #expect(transport.sentTypes.first == "agent.health.request")
+        #expect(transport.sentTypes.contains("clipboard.text.set"))
+    }
+
+    @Test("reports unavailable Windows MVP runtime without launching an app")
+    func reportsUnavailableWindowsMVPRuntimeWithoutLaunchingApp() async throws {
+        let client = VeilHostClient(transport: FailingTransport(error: DiagnosticTransportError.connectionRefused))
+
+        let report = try await client.proveMVPAppRuntime(
+            appId: "winapp_notepad",
+            endpoint: "ws://127.0.0.1:18444",
+            eventSource: BufferedEventSource(messages: []),
+            waitSeconds: 0,
+            proofTimeoutNanoseconds: 1_000_000
+        )
+
+        #expect(report.kind == "windowsMVPProof")
+        #expect(report.status == .unavailable)
+        #expect(report.wait.status == .unavailable)
+        #expect(report.coherence == nil)
+        #expect(report.nextActions.contains("Inside Windows, run Veil Shared\\Veil Guest Agent\\Install Veil Agent.cmd."))
+    }
+
     @Test("fails when Notepad is missing from the app list")
     func failsWhenNotepadIsMissing() async throws {
         let transport = RecordingTransport(responses: [

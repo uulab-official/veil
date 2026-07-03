@@ -1,0 +1,122 @@
+{
+  "kind": "windowsMVPProof",
+  "endpoint": "ws://127.0.0.1:18444",
+  "appId": "winapp_notepad",
+  "status": "proved",
+  "provedAt": "2026-07-03T12:00:00Z",
+  "wait": {
+    "kind": "guestAgentWait",
+    "endpoint": "ws://127.0.0.1:18444",
+    "status": "connected",
+    "waitedSeconds": 0,
+    "attempts": 1,
+    "connectedAt": "2026-07-03T12:00:00Z",
+    "diagnostic": {
+      "status": "connected",
+      "endpoint": "ws://127.0.0.1:18444",
+      "health": {
+        "type": "agent.health.response",
+        "requestId": "req_health",
+        "protocolVersion": 1,
+        "agentVersion": "0.1.0",
+        "os": "windows-arm64",
+        "session": {
+          "interactive": true,
+          "user": "veil-user"
+        },
+        "capabilities": {
+          "appList": true,
+          "appLaunch": true,
+          "windowTracking": true,
+          "windowCapture": true,
+          "input": true,
+          "clipboardText": true
+        }
+      },
+      "nextActions": [
+        "Run veil-host-probe --overview to verify app metadata.",
+        "Run veil-host-probe --launch-notepad-frame to verify HWND launch, tracking, and first frame capture."
+      ]
+    },
+    "nextActions": [
+      "Run `veil-vmctl app-runtime-status --json` to inspect app launch readiness.",
+      "Run `veil-vmctl app-window-proof --json --app-id winapp_notepad` to verify HWND launch, tracking, and first frame capture.",
+      "Run `veil-vmctl mvp-proof --json --app-id winapp_notepad` to verify the Notepad launch, frame, input, and clipboard MVP loop."
+    ]
+  },
+  "coherence": {
+    "kind": "windowsAppCoherenceProof",
+    "endpoint": "ws://127.0.0.1:18444",
+    "appId": "winapp_notepad",
+    "provedAt": "2026-07-03T12:00:00Z",
+    "launch": {
+      "type": "app.launch.response",
+      "requestId": "req_launch_winapp_notepad",
+      "accepted": true,
+      "processId": 4912
+    },
+    "window": {
+      "type": "window.created",
+      "windowId": "hwnd:0003029A",
+      "processId": 4912,
+      "appId": "winapp_notepad",
+      "title": "Untitled - Notepad",
+      "bounds": {
+        "x": 10,
+        "y": 10,
+        "width": 1280,
+        "height": 800
+      },
+      "state": "normal",
+      "focused": true
+    },
+    "initialFrame": {
+      "windowId": "hwnd:0003029A",
+      "frameId": "frame_000001",
+      "sequence": 1,
+      "format": "png",
+      "width": 1,
+      "height": 1,
+      "scale": 1,
+      "encodedByteCount": 68
+    },
+    "postInputFrame": {
+      "windowId": "hwnd:0003029A",
+      "frameId": "frame_000002",
+      "sequence": 2,
+      "format": "png",
+      "width": 1,
+      "height": 1,
+      "scale": 1,
+      "encodedByteCount": 68
+    },
+    "input": {
+      "mouseEventsPosted": [
+        "leftDown",
+        "leftUp"
+      ],
+      "keyEventsPosted": [
+        "keyDown:v",
+        "keyUp:v",
+        "keyDown:e",
+        "keyUp:e",
+        "keyDown:i",
+        "keyUp:i",
+        "keyDown:l",
+        "keyUp:l"
+      ],
+      "typedTextCharacterCount": 4,
+      "clipboardOrigin": "host",
+      "clipboardSequence": 1,
+      "clipboardTextByteCount": 20
+    },
+    "nextActions": [
+      "Open the mirrored HWND in the Veil host shell as a macOS window.",
+      "Use the saved proof artifact when filing app-runtime bugs or release gate evidence."
+    ]
+  },
+  "nextActions": [
+    "Open the mirrored HWND in the Veil host shell as a macOS window.",
+    "Attach the saved MVP proof artifact to release gates and app-runtime bug reports."
+  ]
+}

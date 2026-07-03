@@ -33,6 +33,7 @@ Goal: adapt concrete UTM source patterns into Veil while keeping Veil focused on
 - [x] Add `veil-vmctl app-window-proof --json` plus a Node harness validator for launch, HWND tracking, and first frame evidence.
 - [x] Add `veil-vmctl app-window-proof --output /path/proof.json` so app launch/HWND/frame proof can be saved and revalidated as a diagnostics artifact.
 - [x] Add `veil-vmctl coherence-proof --json --output /path/proof.json` plus a Node harness validator for launch, HWND tracking, first frame, post-input frame, mouse/key input, and host clipboard send evidence.
+- [x] Add `veil-vmctl mvp-proof --json --output /path/proof.json` plus a Node harness validator that chains guest-agent wait with the Coherence proof.
 
 ## Next Hardening Pass
 
@@ -46,3 +47,4 @@ Goal: adapt concrete UTM source patterns into Veil while keeping Veil focused on
 - [x] Add an app-window proof gate so automation can verify a real Windows app launch reaches first-frame mirror evidence before manual UI testing.
 - [x] Add saved app-window proof artifacts so CLI automation can attach the same evidence the harness validates.
 - [x] Add a Coherence-style proof gate so automation can verify launch, frame freshness after input, keyboard input, mouse input, and host clipboard send in one Notepad MVP loop.
+- [x] Add a one-command MVP proof gate so release checks can wait for the guest agent and then validate the Notepad Coherence loop.

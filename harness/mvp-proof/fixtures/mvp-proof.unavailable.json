@@ -1,0 +1,37 @@
+{
+  "kind": "windowsMVPProof",
+  "endpoint": "ws://127.0.0.1:18444",
+  "appId": "winapp_notepad",
+  "status": "unavailable",
+  "provedAt": "2026-07-03T12:00:00Z",
+  "wait": {
+    "kind": "guestAgentWait",
+    "endpoint": "ws://127.0.0.1:18444",
+    "status": "unavailable",
+    "waitedSeconds": 0,
+    "attempts": 1,
+    "diagnostic": {
+      "status": "unavailable",
+      "endpoint": "ws://127.0.0.1:18444",
+      "errorMessage": "Connection refused.",
+      "nextActions": [
+        "Confirm the Windows 11 Arm VM is running and has reached the desktop.",
+        "Inside Windows, run Veil Shared\\Veil Guest Agent\\Install Veil Agent.cmd.",
+        "If the agent still does not connect, run Veil Shared\\Veil Guest Agent\\Collect Veil Agent Diagnostics.cmd and inspect the desktop ZIP.",
+        "Confirm the QEMU/HVF plan includes hostfwd=tcp::18444-:18444 and restart the VM after changing the launch plan."
+      ]
+    },
+    "nextActions": [
+      "Confirm the Windows 11 Arm VM is running and has reached the desktop.",
+      "Inside Windows, run Veil Shared\\Veil Guest Agent\\Install Veil Agent.cmd.",
+      "If the agent still does not connect, run Veil Shared\\Veil Guest Agent\\Collect Veil Agent Diagnostics.cmd and inspect the desktop ZIP.",
+      "Confirm the QEMU/HVF plan includes hostfwd=tcp::18444-:18444 and restart the VM after changing the launch plan."
+    ]
+  },
+  "nextActions": [
+    "Confirm the Windows 11 Arm VM is running and has reached the desktop.",
+    "Inside Windows, run Veil Shared\\Veil Guest Agent\\Install Veil Agent.cmd.",
+    "If the agent still does not connect, run Veil Shared\\Veil Guest Agent\\Collect Veil Agent Diagnostics.cmd and inspect the desktop ZIP.",
+    "Confirm the QEMU/HVF plan includes hostfwd=tcp::18444-:18444 and restart the VM after changing the launch plan."
+  ]
+}

@@ -19,6 +19,7 @@ harness/
 ├─ app-runtime-status/     JSON shape validation for host app-runtime status/actions
 ├─ app-window-proof/       JSON shape validation for launch/HWND/first-frame proof
 ├─ coherence-proof/        JSON shape validation for launch/HWND/frame/input/clipboard proof
+├─ mvp-proof/              JSON shape validation for guest wait plus Coherence proof
 ├─ guest-agent-wait/       JSON shape validation for post-install guest-agent readiness
 ├─ qemu-boot-plan/         JSON shape validation for dry-run QEMU/HVF boot plans
 ├─ qemu-doctor/            JSON shape validation for QEMU/HVF readiness reports
@@ -40,6 +41,7 @@ Current executable pieces:
 - `harness/app-runtime-status`: a JSON validator for app runtime status, open HWND sessions, and supported actions.
 - `harness/app-window-proof`: a JSON validator for one app launch, one tracked HWND, and the first captured frame evidence.
 - `harness/coherence-proof`: a JSON validator for one app launch, one tracked HWND, first and post-input frame evidence, mouse/key input, and host clipboard send evidence.
+- `harness/mvp-proof`: a JSON validator for the full Notepad MVP gate: guest-agent readiness plus Coherence proof evidence.
 - `harness/guest-agent-wait`: a JSON validator for waiting until the installed Windows guest agent is reachable after setup/login.
 - `harness/qemu-boot-plan`: a JSON validator for dry-run QEMU/HVF Windows Arm boot plans.
 - `harness/qemu-doctor`: a JSON validator for QEMU/HVF readiness reports and next actions.
@@ -107,6 +109,23 @@ node ../../harness/coherence-proof/src/validate-coherence-proof.mjs < "$proof"
 
 Run this after `guest-agent-wait` reports connected and before claiming the
 Notepad MVP loop is usable. The command does not start or stop the VM.
+
+## MVP Proof Scenario
+
+The MVP proof command is the one-command release gate for the first success
+demo. It waits for the guest agent and, when connected, runs the Coherence proof
+for Notepad.
+
+```bash
+cd apps/mac-host
+proof="$HOME/Library/Application Support/Veil/Diagnostics/MVP Proof/notepad-proof.json"
+swift run veil-vmctl mvp-proof --json --app-id winapp_notepad --output "$proof" | node ../../harness/mvp-proof/src/validate-mvp-proof.mjs
+node ../../harness/mvp-proof/src/validate-mvp-proof.mjs < "$proof"
+```
+
+Use this before claiming the MVP loop is ready on a real Windows VM. If the
+agent is unavailable, the command returns recovery JSON instead of launching an
+app; the harness will reject that as a release proof.
 
 ## Guest Agent Wait Scenario
 

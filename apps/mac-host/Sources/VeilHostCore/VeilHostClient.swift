@@ -173,6 +173,45 @@ public struct WindowsAppCoherenceProofReport: Codable, Equatable, Sendable {
     }
 }
 
+public enum WindowsMVPProofStatus: String, Codable, Equatable, Sendable {
+    case proved
+    case unavailable
+}
+
+public struct WindowsMVPProofReport: Codable, Equatable, Sendable {
+    public var kind: String
+    public var endpoint: String
+    public var appId: String
+    public var status: WindowsMVPProofStatus
+    public var provedAt: Date
+    public var wait: AgentConnectionWaitReport
+    public var coherence: WindowsAppCoherenceProofReport?
+    public var savedProofPath: String?
+    public var nextActions: [String]
+
+    public init(
+        kind: String = "windowsMVPProof",
+        endpoint: String,
+        appId: String,
+        status: WindowsMVPProofStatus,
+        provedAt: Date,
+        wait: AgentConnectionWaitReport,
+        coherence: WindowsAppCoherenceProofReport? = nil,
+        savedProofPath: String? = nil,
+        nextActions: [String]
+    ) {
+        self.kind = kind
+        self.endpoint = endpoint
+        self.appId = appId
+        self.status = status
+        self.provedAt = provedAt
+        self.wait = wait
+        self.coherence = coherence
+        self.savedProofPath = savedProofPath
+        self.nextActions = nextActions
+    }
+}
+
 public enum AgentConnectionDiagnosticStatus: String, Codable, Equatable, Sendable {
     case connected
     case unavailable
@@ -459,6 +498,46 @@ public struct VeilHostClient: HostDashboardService, Sendable {
         )
     }
 
+    public func proveMVPAppRuntime(
+        appId: String,
+        endpoint: String,
+        eventSource: any HostEventSource,
+        waitSeconds: Int = 30,
+        proofTimeoutNanoseconds: UInt64 = 10_000_000_000
+    ) async throws -> WindowsMVPProofReport {
+        let wait = await waitForAgentConnection(endpoint: endpoint, timeoutSeconds: waitSeconds)
+        guard wait.status == .connected else {
+            return WindowsMVPProofReport(
+                endpoint: endpoint,
+                appId: appId,
+                status: .unavailable,
+                provedAt: Date(),
+                wait: wait,
+                nextActions: wait.nextActions
+            )
+        }
+
+        let coherence = try await proveCoherenceAppWindow(
+            appId: appId,
+            endpoint: endpoint,
+            eventSource: eventSource,
+            timeoutNanoseconds: proofTimeoutNanoseconds
+        )
+
+        return WindowsMVPProofReport(
+            endpoint: endpoint,
+            appId: appId,
+            status: .proved,
+            provedAt: Date(),
+            wait: wait,
+            coherence: coherence,
+            nextActions: [
+                "Open the mirrored HWND in the Veil host shell as a macOS window.",
+                "Attach the saved MVP proof artifact to release gates and app-runtime bug reports."
+            ]
+        )
+    }
+
     public func loadHealth() async throws -> AgentHealthResponse {
         try await request(
             AgentHealthRequest(requestId: "req_health")
@@ -509,7 +588,8 @@ public struct VeilHostClient: HostDashboardService, Sendable {
                     diagnostic: latestDiagnostic,
                     nextActions: [
                         "Run `veil-vmctl app-runtime-status --json` to inspect app launch readiness.",
-                        "Run `veil-vmctl app-window-proof --json --app-id winapp_notepad` to verify HWND launch, tracking, and first frame capture."
+                        "Run `veil-vmctl app-window-proof --json --app-id winapp_notepad` to verify HWND launch, tracking, and first frame capture.",
+                        "Run `veil-vmctl mvp-proof --json --app-id winapp_notepad` to verify the Notepad launch, frame, input, and clipboard MVP loop."
                     ]
                 )
             }
