@@ -485,6 +485,8 @@ struct HostDashboardModelTests {
         #expect(report.quietRuntime.hasOpenedAppWindowThisSession)
         #expect(report.quietRuntime.openWindowCount == 1)
         #expect(report.quietRuntime.canQuietRuntime == false)
+        #expect(report.quietRuntime.willQuietAutomatically == false)
+        #expect(report.quietRuntime.automaticQuietDelaySeconds == 8)
         #expect(report.quietRuntime.recommendedAction == "keep-running")
         #expect(report.actions.first { $0.id == "dock.openMainWindow" }?.isAvailable == true)
         #expect(report.actions.first { $0.id == "dock.bringWindowsAppsForward" }?.isAvailable == true)
@@ -509,6 +511,8 @@ struct HostDashboardModelTests {
         #expect(report.quietRuntime.hasOpenedAppWindowThisSession)
         #expect(report.quietRuntime.openWindowCount == 0)
         #expect(report.quietRuntime.canQuietRuntime)
+        #expect(report.quietRuntime.willQuietAutomatically)
+        #expect(report.quietRuntime.automaticQuietDelaySeconds == 8)
         #expect(report.quietRuntime.recommendedAction == "stop-or-suspend-runtime")
         #expect(report.actions.first { $0.id == "runtime.quietWhenIdle" }?.isAvailable == true)
     }

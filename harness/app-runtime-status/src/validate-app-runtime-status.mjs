@@ -124,6 +124,8 @@ function validateQuietRuntime(quietRuntime, mirrorSessions) {
   requireBoolean(quietRuntime.hasOpenedAppWindowThisSession, "quietRuntime.hasOpenedAppWindowThisSession");
   requireNonNegativeInteger(quietRuntime.openWindowCount, "quietRuntime.openWindowCount");
   requireBoolean(quietRuntime.canQuietRuntime, "quietRuntime.canQuietRuntime");
+  requireBoolean(quietRuntime.willQuietAutomatically, "quietRuntime.willQuietAutomatically");
+  requireNonNegativeInteger(quietRuntime.automaticQuietDelaySeconds, "quietRuntime.automaticQuietDelaySeconds");
   requireString(quietRuntime.recommendedAction, "quietRuntime.recommendedAction");
   requireString(quietRuntime.reason, "quietRuntime.reason");
 
@@ -137,6 +139,10 @@ function validateQuietRuntime(quietRuntime, mirrorSessions) {
 
   if (quietRuntime.canQuietRuntime && quietRuntime.openWindowCount !== 0) {
     throw new TypeError("quietRuntime.canQuietRuntime requires zero open Windows app windows.");
+  }
+
+  if (quietRuntime.willQuietAutomatically && !quietRuntime.canQuietRuntime) {
+    throw new TypeError("quietRuntime.willQuietAutomatically requires quietRuntime.canQuietRuntime.");
   }
 }
 

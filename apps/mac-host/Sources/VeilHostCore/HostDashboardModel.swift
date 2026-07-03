@@ -215,6 +215,8 @@ public struct WindowsAppRuntimeQuietPolicyStatus: Codable, Equatable, Sendable {
     public var hasOpenedAppWindowThisSession: Bool
     public var openWindowCount: Int
     public var canQuietRuntime: Bool
+    public var willQuietAutomatically: Bool
+    public var automaticQuietDelaySeconds: Int
     public var recommendedAction: String
     public var reason: String
 
@@ -223,6 +225,8 @@ public struct WindowsAppRuntimeQuietPolicyStatus: Codable, Equatable, Sendable {
         hasOpenedAppWindowThisSession: Bool,
         openWindowCount: Int,
         canQuietRuntime: Bool,
+        willQuietAutomatically: Bool,
+        automaticQuietDelaySeconds: Int,
         recommendedAction: String,
         reason: String
     ) {
@@ -230,6 +234,8 @@ public struct WindowsAppRuntimeQuietPolicyStatus: Codable, Equatable, Sendable {
         self.hasOpenedAppWindowThisSession = hasOpenedAppWindowThisSession
         self.openWindowCount = openWindowCount
         self.canQuietRuntime = canQuietRuntime
+        self.willQuietAutomatically = willQuietAutomatically
+        self.automaticQuietDelaySeconds = automaticQuietDelaySeconds
         self.recommendedAction = recommendedAction
         self.reason = reason
     }
@@ -301,6 +307,7 @@ public final class HostDashboardModel {
 
     private let service: any HostDashboardService
     private let restoreIntentStore: any WindowRestoreIntentStore
+    private let automaticQuietDelaySeconds = 8
 
     public init(
         service: any HostDashboardService,
@@ -523,6 +530,8 @@ public final class HostDashboardModel {
             hasOpenedAppWindowThisSession: hasOpenedAppWindowThisSession,
             openWindowCount: mirrorSessions.count,
             canQuietRuntime: canQuietRuntimeWhenIdle,
+            willQuietAutomatically: canQuietRuntimeWhenIdle,
+            automaticQuietDelaySeconds: automaticQuietDelaySeconds,
             recommendedAction: recommendedAction,
             reason: reason
         )

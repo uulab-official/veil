@@ -36,6 +36,7 @@ struct VeilHostShellApp: App {
     @State private var displayMessage: String?
     @State private var agentEventTask: Task<Void, Never>?
     @State private var agentReconnectTask: Task<Void, Never>?
+    @State private var automaticQuietRuntimeTask: Task<Void, Never>?
 
     init() {
         let runtimeBooter = AppRuntimeBooterFactory.make()
@@ -102,6 +103,7 @@ struct VeilHostShellApp: App {
                 }
                 .onChange(of: model.mirrorSessions.count) {
                     syncDockTileRuntimeStatus()
+                    scheduleAutomaticQuietRuntimeIfNeeded()
                 }
         }
         .defaultLaunchBehavior(.presented)
@@ -299,6 +301,7 @@ struct VeilHostShellApp: App {
 
     private func startWindowsAndShowDisplay() {
         Task { @MainActor in
+            cancelAutomaticQuietRuntime()
             activateMainWindow()
             displayMessage = "Starting Windows locally. Veil stays in this main window while setup runs."
             await vmModel.start()
@@ -315,6 +318,7 @@ struct VeilHostShellApp: App {
 
     private func stopWindowsAndCloseDisplay() {
         Task { @MainActor in
+            cancelAutomaticQuietRuntime()
             activateMainWindow()
             await vmModel.stop()
 
@@ -327,6 +331,7 @@ struct VeilHostShellApp: App {
 
     private func quietWindowsWhenIdle() {
         Task { @MainActor in
+            cancelAutomaticQuietRuntime()
             guard model.canQuietRuntimeWhenIdle else {
                 displayMessage = model.quietRuntimeStatus().reason
                 return
@@ -346,8 +351,46 @@ struct VeilHostShellApp: App {
         }
     }
 
+    private func scheduleAutomaticQuietRuntimeIfNeeded() {
+        guard model.quietRuntimeStatus().willQuietAutomatically else {
+            cancelAutomaticQuietRuntime()
+            return
+        }
+
+        guard vmModel.canStop && vmModel.phase != .loading else {
+            cancelAutomaticQuietRuntime()
+            return
+        }
+
+        automaticQuietRuntimeTask?.cancel()
+        let quietRuntime = model.quietRuntimeStatus()
+        automaticQuietRuntimeTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(quietRuntime.automaticQuietDelaySeconds))
+            guard !Task.isCancelled,
+                  model.canQuietRuntimeWhenIdle,
+                  vmModel.canStop,
+                  vmModel.phase != .loading else {
+                return
+            }
+
+            displayMessage = "All Windows app windows closed. Quieting Windows."
+            await vmModel.stop()
+            if vmModel.snapshot?.state == .stopped {
+                displayMessage = "Windows is quiet. No Windows app windows are open."
+            } else if let errorMessage = vmModel.errorMessage {
+                displayMessage = "Windows could not quiet: \(errorMessage)"
+            }
+        }
+    }
+
+    private func cancelAutomaticQuietRuntime() {
+        automaticQuietRuntimeTask?.cancel()
+        automaticQuietRuntimeTask = nil
+    }
+
     private func launchSelectedWindowsAppWindow() {
         Task { @MainActor in
+            cancelAutomaticQuietRuntime()
             if model.apps.isEmpty {
                 await model.load()
             }
@@ -378,6 +421,7 @@ struct VeilHostShellApp: App {
 
     private func restoreWindowsAppWindows() {
         Task { @MainActor in
+            cancelAutomaticQuietRuntime()
             let restoredLaunches = await model.restoreMirroredWindowsAfterReconnect()
             for launch in restoredLaunches {
                 showWindowsAppWindow(for: launch)
@@ -413,6 +457,7 @@ struct VeilHostShellApp: App {
             }
 
             windowsAppWindowPresenter.closeWindow(windowId: windowId)
+            scheduleAutomaticQuietRuntimeIfNeeded()
         }
     }
 
@@ -422,6 +467,7 @@ struct VeilHostShellApp: App {
             for response in responses where response.accepted {
                 windowsAppWindowPresenter.closeWindow(windowId: response.windowId)
             }
+            scheduleAutomaticQuietRuntimeIfNeeded()
         }
     }
 
@@ -568,6 +614,7 @@ struct VeilHostShellApp: App {
         windowsAppWindowPresenter.onUserWindowClose = { windowId in
             Task { @MainActor in
                 _ = await model.closeMirrorSession(windowId: windowId)
+                scheduleAutomaticQuietRuntimeIfNeeded()
             }
         }
         windowsAppWindowPresenter.onMouseInput = { windowId, event, x, y in

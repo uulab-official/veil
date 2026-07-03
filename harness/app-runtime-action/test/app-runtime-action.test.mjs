@@ -55,7 +55,7 @@ test("validates app runtime clipboard actions", () => {
 
 test("rejects quiet runtime actions whose decision drifts from status", () => {
   const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-action.quiet-ready.json", import.meta.url), "utf8"));
-  report.quietRuntime.canQuietRuntime = false;
+  report.quietRuntime.reason = "Drifted from nested status.";
 
   assert.throws(
     () => validateAppRuntimeAction(report),

@@ -61,6 +61,9 @@ The app runtime status command exposes the same host-side model used by the
 macOS app so automation can inspect Windows app availability, mirrored HWND
 sessions, Dock integration, quiet-runtime readiness, restore intent, and
 supported actions without clicking the UI.
+When every mirrored Windows app window has closed, `quietRuntime` also reports
+whether Veil will automatically quiet the local runtime and the current delay
+before that stop/suspend policy is attempted.
 
 ```bash
 cd apps/mac-host

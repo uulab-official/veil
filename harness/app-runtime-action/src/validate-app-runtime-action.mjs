@@ -202,8 +202,14 @@ function validateQuietRuntime(quietRuntime, fieldName) {
   requireBoolean(quietRuntime.hasOpenedAppWindowThisSession, `${fieldName}.hasOpenedAppWindowThisSession`);
   requireNonNegativeInteger(quietRuntime.openWindowCount, `${fieldName}.openWindowCount`);
   requireBoolean(quietRuntime.canQuietRuntime, `${fieldName}.canQuietRuntime`);
+  requireBoolean(quietRuntime.willQuietAutomatically, `${fieldName}.willQuietAutomatically`);
+  requireNonNegativeInteger(quietRuntime.automaticQuietDelaySeconds, `${fieldName}.automaticQuietDelaySeconds`);
   requireString(quietRuntime.recommendedAction, `${fieldName}.recommendedAction`);
   requireString(quietRuntime.reason, `${fieldName}.reason`);
+
+  if (quietRuntime.willQuietAutomatically && !quietRuntime.canQuietRuntime) {
+    throw new TypeError(`${fieldName}.willQuietAutomatically requires ${fieldName}.canQuietRuntime.`);
+  }
 }
 
 function validateClipboard(clipboard) {

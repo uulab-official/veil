@@ -10,6 +10,8 @@
     "hasOpenedAppWindowThisSession": true,
     "openWindowCount": 0,
     "canQuietRuntime": true,
+    "willQuietAutomatically": true,
+    "automaticQuietDelaySeconds": 8,
     "recommendedAction": "stop-or-suspend-runtime",
     "reason": "All Windows app windows are closed and the live agent is connected."
   },
@@ -48,6 +50,8 @@
       "hasOpenedAppWindowThisSession": true,
       "openWindowCount": 0,
       "canQuietRuntime": true,
+      "willQuietAutomatically": true,
+      "automaticQuietDelaySeconds": 8,
       "recommendedAction": "stop-or-suspend-runtime",
       "reason": "All Windows app windows are closed and the live agent is connected."
     },
