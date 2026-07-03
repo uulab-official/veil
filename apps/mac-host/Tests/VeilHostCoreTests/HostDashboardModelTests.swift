@@ -652,13 +652,16 @@ struct HostDashboardModelTests {
     @Test("queues Notepad launch until live agent connects")
     @MainActor
     func queuesNotepadLaunchUntilLiveAgentConnects() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let pendingLaunchStore = JSONPendingLaunchIntentStore(directory: directory)
         let primary = FakeDashboardService(error: URLError(.cannotConnectToHost))
         let service = FallbackHostDashboardService(
             primary: primary,
             fallback: DemoHostDashboardService(),
             primaryEndpointDescription: "ws://127.0.0.1:18444"
         )
-        let model = HostDashboardModel(service: service)
+        let model = HostDashboardModel(service: service, pendingLaunchIntentStore: pendingLaunchStore)
 
         await model.load()
         await model.launchSelectedApp()
@@ -684,6 +687,7 @@ struct HostDashboardModelTests {
         #expect(queuedReport.pendingLaunch.recommendedAction == "auto-launch-on-agent-reconnect")
         #expect(queuedReport.pendingLaunch.reason == "Veil will launch the queued Windows app after the guest agent reconnects.")
         #expect(queuedReport.actions.first { $0.id == "runtime.startWindowsForApp" }?.isAvailable == true)
+        #expect(try await pendingLaunchStore.load()?.appId == "winapp_notepad")
 
         primary.error = nil
         let fulfilledLaunch = await model.refreshLiveAgentIfNeeded()
@@ -699,6 +703,35 @@ struct HostDashboardModelTests {
         #expect(fulfilledLaunch?.window.title == "Untitled - Notepad")
         #expect(model.mirrorSessions.map(\.id) == ["hwnd:0003029A"])
         #expect(primary.launchCount == 1)
+        #expect(try await pendingLaunchStore.load()?.appId == nil)
+    }
+
+    @Test("loads persisted pending app launch intent on startup")
+    @MainActor
+    func loadsPersistedPendingAppLaunchIntentOnStartup() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let pendingLaunchStore = JSONPendingLaunchIntentStore(directory: directory)
+        try await pendingLaunchStore.save(PendingLaunchIntent(appId: "winapp_notepad"))
+        let service = FakeDashboardService(health: .captureReady)
+        let model = HostDashboardModel(
+            service: service,
+            pendingLaunchIntentStore: pendingLaunchStore
+        )
+
+        await model.loadRestoreIntent()
+        await model.load()
+
+        #expect(model.pendingLaunchAppId == "winapp_notepad")
+        #expect(model.runtimeStatusReport().pendingLaunch.isQueued)
+        #expect(model.runtimeStatusReport().pendingLaunch.recommendedAction == "launch-pending-now")
+
+        let fulfilledLaunch = await model.refreshLiveAgentIfNeeded()
+
+        #expect(fulfilledLaunch?.window.windowId == "hwnd:0003029A")
+        #expect(model.pendingLaunchAppId == nil)
+        #expect(try await pendingLaunchStore.load()?.appId == nil)
+        #expect(service.launchCount == 1)
     }
 
     @Test("does not hide live launch failures behind demo fallback")

@@ -412,14 +412,17 @@ public final class HostDashboardModel {
 
     private let service: any HostDashboardService
     private let restoreIntentStore: any WindowRestoreIntentStore
+    private let pendingLaunchIntentStore: any PendingLaunchIntentStore
     private let automaticQuietDelaySeconds = 8
 
     public init(
         service: any HostDashboardService,
-        restoreIntentStore: any WindowRestoreIntentStore = JSONWindowRestoreIntentStore()
+        restoreIntentStore: any WindowRestoreIntentStore = JSONWindowRestoreIntentStore(),
+        pendingLaunchIntentStore: any PendingLaunchIntentStore = JSONPendingLaunchIntentStore()
     ) {
         self.service = service
         self.restoreIntentStore = restoreIntentStore
+        self.pendingLaunchIntentStore = pendingLaunchIntentStore
     }
 
     public var statusText: String {
@@ -828,7 +831,12 @@ public final class HostDashboardModel {
     }
 
     public func refreshLiveAgentIfNeeded() async -> NotepadLaunchResult? {
-        guard !hasLiveAgentConnection else {
+        if hasLiveAgentConnection,
+           let pendingAppId = pendingLaunchAppId {
+            return await launchApp(appId: pendingAppId)
+        }
+
+        if hasLiveAgentConnection {
             return nil
         }
 
@@ -836,7 +844,6 @@ public final class HostDashboardModel {
 
         if hasLiveAgentConnection,
            let pendingAppId = pendingLaunchAppId {
-            pendingLaunchAppId = nil
             return await launchApp(appId: pendingAppId)
         }
 
@@ -846,6 +853,7 @@ public final class HostDashboardModel {
     public func loadRestoreIntent() async {
         do {
             restorableAppIds = try await restoreIntentStore.load()?.appIds ?? []
+            pendingLaunchAppId = try await pendingLaunchIntentStore.load()?.appId
         } catch {
             errorMessage = userMessage(for: error)
         }
@@ -882,7 +890,7 @@ public final class HostDashboardModel {
         }
 
         guard hasLiveAgentConnection else {
-            pendingLaunchAppId = selectedAppId
+            await queuePendingLaunchIntent(appId: selectedAppId)
             errorMessage = nil
             return
         }
@@ -917,6 +925,9 @@ public final class HostDashboardModel {
                 : agentDiagnostic
             selectedAppId = result.window.appId
             lastLaunch = result
+            if pendingLaunchAppId == result.window.appId {
+                await clearPendingLaunchIntent()
+            }
             await rememberRestorableAppId(result.window.appId)
             storeActiveWindow(result.window)
             storeMirrorSession(
@@ -1275,6 +1286,25 @@ public final class HostDashboardModel {
     private func persistRestoreIntent() async {
         do {
             try await restoreIntentStore.save(WindowRestoreIntent(appIds: restorableAppIds))
+        } catch {
+            errorMessage = userMessage(for: error)
+            return
+        }
+    }
+
+    private func queuePendingLaunchIntent(appId: String?) async {
+        pendingLaunchAppId = appId
+        await persistPendingLaunchIntent()
+    }
+
+    private func clearPendingLaunchIntent() async {
+        pendingLaunchAppId = nil
+        await persistPendingLaunchIntent()
+    }
+
+    private func persistPendingLaunchIntent() async {
+        do {
+            try await pendingLaunchIntentStore.save(PendingLaunchIntent(appId: pendingLaunchAppId))
         } catch {
             errorMessage = userMessage(for: error)
             return
