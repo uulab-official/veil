@@ -144,7 +144,7 @@ For the one-command MVP proof:
 
 ```bash
 proof="$HOME/Library/Application Support/Veil/Diagnostics/MVP Proof/notepad-proof.json"
-swift run veil-vmctl mvp-proof --json --app-id winapp_notepad --output "$proof" | node ../../harness/mvp-proof/src/validate-mvp-proof.mjs --require-proved
+swift run veil-vmctl mvp-proof --json --app-id winapp_notepad --output "$proof" --require-proved | node ../../harness/mvp-proof/src/validate-mvp-proof.mjs --require-proved
 node ../../harness/mvp-proof/src/validate-mvp-proof.mjs --require-proved < "$proof"
 ```
 

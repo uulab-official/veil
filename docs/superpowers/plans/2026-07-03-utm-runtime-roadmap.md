@@ -443,7 +443,7 @@ Run:
 ```bash
 cd apps/mac-host && swift test --filter VeilHostClientTests/provesWindowsMVPRuntimeAfterGuestAgentWait
 cd harness/mvp-proof && npm test
-cd apps/mac-host && VEIL_AGENT_URL=ws://127.0.0.1:<fake-port> swift run veil-vmctl mvp-proof --json --app-id winapp_notepad --wait-seconds 5 --output /tmp/veil-mvp-proof.json | node ../../harness/mvp-proof/src/validate-mvp-proof.mjs --require-proved
+cd apps/mac-host && VEIL_AGENT_URL=ws://127.0.0.1:<fake-port> swift run veil-vmctl mvp-proof --json --app-id winapp_notepad --wait-seconds 5 --output /tmp/veil-mvp-proof.json --require-proved | node ../../harness/mvp-proof/src/validate-mvp-proof.mjs --require-proved
 node harness/mvp-proof/src/validate-mvp-proof.mjs --require-proved < /tmp/veil-mvp-proof.json
 cd apps/mac-host && swift test
 ./script/build_and_run.sh --verify
@@ -455,6 +455,7 @@ Expected: all pass.
 ## Task 17: MVP Proof Release Mode
 
 **Files:**
+- Modify: `apps/mac-host/Sources/VeilVMControl/main.swift`
 - Modify: `harness/mvp-proof/src/validate-mvp-proof.mjs`
 - Modify: `harness/mvp-proof/test/mvp-proof.test.mjs`
 - Modify: `docs/harness/README.md`
@@ -475,7 +476,8 @@ shape validation, and unavailable fixtures fail release validation.
 
 - [x] **Step 3: Update release commands**
 
-Use `node harness/mvp-proof/src/validate-mvp-proof.mjs --require-proved` in
+Use `veil-vmctl mvp-proof --require-proved` and
+`node harness/mvp-proof/src/validate-mvp-proof.mjs --require-proved` in
 release-gate documentation and roadmap verification commands.
 
 - [x] **Step 4: Verify**
@@ -486,13 +488,14 @@ Run:
 cd harness/mvp-proof && npm test
 node harness/mvp-proof/src/validate-mvp-proof.mjs --require-proved < harness/mvp-proof/fixtures/mvp-proof.proved.json
 node harness/mvp-proof/src/validate-mvp-proof.mjs < harness/mvp-proof/fixtures/mvp-proof.unavailable.json
+cd apps/mac-host && ! VEIL_AGENT_URL=ws://127.0.0.1:9 swift run veil-vmctl mvp-proof --json --wait-seconds 0 --require-proved
 cd apps/mac-host && swift test
 ./script/build_and_run.sh --verify
 git diff --check
 ```
 
-Expected: all pass, except unavailable plus `--require-proved` must fail in the
-dedicated harness test.
+Expected: all pass; the `! VEIL_AGENT_URL=... mvp-proof --require-proved`
+check passes only when the unavailable CLI path exits non-zero.
 
 ## Task 5: Menu Bar Coherence Restore Action
 
