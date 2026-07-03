@@ -17,10 +17,13 @@ struct DetailView: View {
             VMRuntimeView(
                 model: vmModel,
                 guestAgentInstallEvidence: model.guestAgentInstallEvidence,
+                canLaunchWindowsApp: model.canLaunchSelectedApp,
+                selectedWindowsAppName: model.selectedApp?.name,
                 startVMAction: startVMAction,
                 stopVMAction: stopVMAction,
                 showVMConsoleAction: showVMConsoleAction,
                 installGuestAgentAction: installGuestAgentAction,
+                launchWindowsAppAction: launchWindowsAppAction,
                 consoleMessage: consoleMessage
             )
             .padding(6)

@@ -6,10 +6,13 @@ import VeilHostCore
 struct VMRuntimeView: View {
     @Bindable var model: VMRuntimeModel
     var guestAgentInstallEvidence: VMInstallEvidenceSummary?
+    var canLaunchWindowsApp: Bool
+    var selectedWindowsAppName: String?
     var startVMAction: () -> Void
     var stopVMAction: () -> Void
     var showVMConsoleAction: () -> Void
     var installGuestAgentAction: () -> Void
+    var launchWindowsAppAction: () -> Void
     var consoleMessage: String?
     @State private var pathPicker: PathPicker?
     @State private var showsAdvancedDetails = false
@@ -41,7 +44,9 @@ struct VMRuntimeView: View {
                         pathPicker = .driverMedia
                     },
                     primaryAction: {
-                        if model.canStop {
+                        if canLaunchWindowsApp {
+                            launchWindowsAppAction()
+                        } else if model.canStop {
                             stopVMAction()
                         } else if model.canStart {
                             startConsoleHandoffProgress()
@@ -55,7 +60,10 @@ struct VMRuntimeView: View {
                         }
                     },
                     consoleAction: showVMConsoleAction,
+                    stopAction: stopVMAction,
                     installGuestAgentAction: installGuestAgentAction,
+                    canLaunchWindowsApp: canLaunchWindowsApp,
+                    selectedWindowsAppName: selectedWindowsAppName,
                     refreshAction: {
                         Task {
                             await model.load()
@@ -1113,7 +1121,10 @@ private struct WindowsSetupDisplayPanel: View {
     var selectDriverAction: () -> Void
     var primaryAction: () -> Void
     var consoleAction: () -> Void
+    var stopAction: () -> Void
     var installGuestAgentAction: () -> Void
+    var canLaunchWindowsApp: Bool
+    var selectedWindowsAppName: String?
     var refreshAction: () -> Void
     var detailsAction: () -> Void
     var isShowingDetails: Bool
@@ -1226,6 +1237,15 @@ private struct WindowsSetupDisplayPanel: View {
                 }
                 .disabled(isLoading)
                 .help("Install Veil guest agent")
+            }
+
+            if canStop {
+                Button(action: stopAction) {
+                    Label("Stop Windows", systemImage: "stop.fill")
+                        .labelStyle(.iconOnly)
+                }
+                .disabled(isLoading)
+                .help("Stop Windows")
             }
 
             Button(action: refreshAction) {
@@ -1585,11 +1605,15 @@ private struct WindowsSetupDisplayPanel: View {
             ),
             LauncherMetadataItem(
                 title: "Apps",
-                value: "After setup",
+                value: canLaunchWindowsApp ? appDisplayName : "After agent",
                 symbolName: "macwindow",
-                tint: .secondary
+                tint: canLaunchWindowsApp ? .green : .secondary
             )
         ]
+    }
+
+    private var appDisplayName: String {
+        selectedWindowsAppName ?? "Windows App"
     }
 
     private var machineTitle: String {
@@ -1597,6 +1621,10 @@ private struct WindowsSetupDisplayPanel: View {
     }
 
     private var machineSubtitle: String {
+        if canLaunchWindowsApp {
+            return "Open Windows apps from macOS"
+        }
+
         if effectiveInstallEvidence.isInstalled {
             return effectiveInstallEvidence.kind == .guestAgent
                 ? "Guest agent connected"
@@ -1638,6 +1666,10 @@ private struct WindowsSetupDisplayPanel: View {
     }
 
     private var primaryTitle: String {
+        if canLaunchWindowsApp {
+            return "Open \(appDisplayName)"
+        }
+
         if canStop {
             return "Stop Windows"
         }
@@ -1658,6 +1690,10 @@ private struct WindowsSetupDisplayPanel: View {
     }
 
     private var primarySymbol: String {
+        if canLaunchWindowsApp {
+            return "macwindow.badge.plus"
+        }
+
         if canStop {
             return "stop.fill"
         }
@@ -1674,6 +1710,10 @@ private struct WindowsSetupDisplayPanel: View {
     }
 
     private var primaryHint: String {
+        if canLaunchWindowsApp {
+            return "Launch \(appDisplayName) as a Mac-managed window."
+        }
+
         if canStop {
             return "Stop the current local Windows VM."
         }
