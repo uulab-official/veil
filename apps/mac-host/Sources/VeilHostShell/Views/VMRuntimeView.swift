@@ -73,6 +73,14 @@ struct VMRuntimeView: View {
                             await model.load()
                         }
                     },
+                    consolePointerTapAction: { normalizedX, normalizedY in
+                        Task {
+                            await model.sendConsolePointerTap(
+                                normalizedX: normalizedX,
+                                normalizedY: normalizedY
+                            )
+                        }
+                    },
                     detailsAction: {
                         showsAdvancedDetails.toggle()
                     },
@@ -793,17 +801,31 @@ private struct WindowsDisplayScreenshotPreview: View {
     var image: NSImage
     var path: String
     var revisionID: String
+    var pointerTapAction: (Double, Double) -> Void
 
     var body: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(.black)
+        GeometryReader { proxy in
+            ZStack {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(.black)
 
-            Image(nsImage: image)
-                .resizable()
-                .scaledToFit()
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .id(revisionID)
+                Image(nsImage: image)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .id(revisionID)
+            }
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 0, coordinateSpace: .local)
+                    .onEnded { value in
+                        let normalized = normalizedPoint(
+                            value.location,
+                            in: proxy.size
+                        )
+                        pointerTapAction(normalized.x, normalized.y)
+                    }
+            )
         }
         .aspectRatio(16 / 9, contentMode: .fit)
         .overlay {
@@ -813,6 +835,17 @@ private struct WindowsDisplayScreenshotPreview: View {
         .help("Latest Windows display")
         .accessibilityLabel("Latest Windows display screenshot")
         .accessibilityValue(path)
+    }
+
+    private func normalizedPoint(_ point: CGPoint, in size: CGSize) -> (x: Double, y: Double) {
+        guard size.width > 0, size.height > 0 else {
+            return (0, 0)
+        }
+
+        return (
+            x: Double(min(max(point.x / size.width, 0), 1)),
+            y: Double(min(max(point.y / size.height, 0), 1))
+        )
     }
 }
 
@@ -1138,6 +1171,7 @@ private struct WindowsSetupDisplayPanel: View {
     var activeMirrorSession: WindowMirrorSession?
     var recordAppFrameProofAction: () -> Void
     var refreshAction: () -> Void
+    var consolePointerTapAction: (Double, Double) -> Void
     var detailsAction: () -> Void
     var isShowingDetails: Bool
     var installSimulation: InstallSimulationState
@@ -1189,7 +1223,8 @@ private struct WindowsSetupDisplayPanel: View {
                 WindowsDisplayScreenshotPreview(
                     image: displayScreenshotImage,
                     path: snapshot.latestConsoleScreenshotPath ?? "",
-                    revisionID: displayScreenshotRevisionID
+                    revisionID: displayScreenshotRevisionID,
+                    pointerTapAction: consolePointerTapAction
                 )
             } else {
                 machineDisplay

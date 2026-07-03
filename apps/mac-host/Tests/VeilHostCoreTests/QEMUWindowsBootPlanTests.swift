@@ -1071,6 +1071,91 @@ struct QEMUWindowsBootPlanTests {
         }
     }
 
+    @Test("QEMU pointer event sender maps preview taps to QMP absolute pointer events")
+    func qemuPointerEventSenderMapsPreviewTapsToQMPAbsolutePointerEvents() async throws {
+        let launchRecord = QEMULaunchRecord(
+            pid: 123,
+            executablePath: "/opt/homebrew/bin/qemu-system-aarch64",
+            arguments: [],
+            processLogPath: "/tmp/qemu.log",
+            monitorSocketPath: "/tmp/veil-monitor.sock",
+            qmpSocketPath: "/tmp/veil-qmp.sock",
+            startedAt: Date(timeIntervalSince1970: 1)
+        )
+        final class Capture: @unchecked Sendable {
+            var calls: [[String]] = []
+        }
+        let capture = Capture()
+        let sender = QEMUPointerEventSender(
+            launchRecordStore: StaticQEMULaunchRecordStore(record: launchRecord),
+            fileExists: { $0 == "/tmp/veil-qmp.sock" },
+            processRunner: { executablePath, arguments in
+                capture.calls.append([executablePath] + arguments)
+                return 0
+            },
+            now: { Date(timeIntervalSince1970: 2) }
+        )
+
+        let record = try await sender.sendTap(normalizedX: 0.25, normalizedY: 0.75)
+
+        #expect(record.qmpSocketPath == "/tmp/veil-qmp.sock")
+        #expect(record.absoluteX == 8_192)
+        #expect(record.absoluteY == 24_575)
+        #expect(record.commands.count == 3)
+        #expect(record.commands[0].contains(#""axis":"x""#))
+        #expect(record.commands[0].contains(#""value":8192"#))
+        #expect(record.commands[1].contains(#""button":"left""#))
+        #expect(record.commands[1].contains(#""down":true"#))
+        #expect(record.commands[2].contains(#""down":false"#))
+        #expect(record.terminationStatus == 0)
+        #expect(record.didLaunchSender)
+        #expect(record.sentAt == Date(timeIntervalSince1970: 2))
+        #expect(capture.calls.first?.contains(QEMUQMPKeyboardCommandBuilder.capabilitiesCommand()) == true)
+        #expect(capture.calls.first?.contains(record.commands[0]) == true)
+        #expect(capture.calls.first?.contains(record.commands[1]) == true)
+        #expect(capture.calls.first?.contains(record.commands[2]) == true)
+    }
+
+    @Test("QEMU pointer event sender requires a QMP socket and valid normalized coordinates")
+    func qemuPointerEventSenderRequiresQMPSocketAndValidNormalizedCoordinates() async throws {
+        let launchRecord = QEMULaunchRecord(
+            pid: 123,
+            executablePath: "/opt/homebrew/bin/qemu-system-aarch64",
+            arguments: [],
+            processLogPath: "/tmp/qemu.log",
+            monitorSocketPath: "/tmp/veil-monitor.sock",
+            qmpSocketPath: nil,
+            startedAt: Date(timeIntervalSince1970: 1)
+        )
+        let missingQMPSender = QEMUPointerEventSender(
+            launchRecordStore: StaticQEMULaunchRecordStore(record: launchRecord),
+            fileExists: { _ in false },
+            processRunner: { _, _ in 0 }
+        )
+
+        await #expect(throws: QEMUPointerEventSenderError.qmpUnavailable) {
+            _ = try await missingQMPSender.sendTap(normalizedX: 0.5, normalizedY: 0.5)
+        }
+
+        let sender = QEMUPointerEventSender(
+            launchRecordStore: StaticQEMULaunchRecordStore(record: QEMULaunchRecord(
+                pid: 123,
+                executablePath: "/opt/homebrew/bin/qemu-system-aarch64",
+                arguments: [],
+                processLogPath: "/tmp/qemu.log",
+                monitorSocketPath: "/tmp/veil-monitor.sock",
+                qmpSocketPath: "/tmp/veil-qmp.sock",
+                startedAt: Date(timeIntervalSince1970: 1)
+            )),
+            fileExists: { $0 == "/tmp/veil-qmp.sock" },
+            processRunner: { _, _ in 0 }
+        )
+
+        await #expect(throws: QEMUPointerEventSenderError.normalizedCoordinateOutOfRange(axis: "x", value: -0.1)) {
+            _ = try await sender.sendTap(normalizedX: -0.1, normalizedY: 0.5)
+        }
+    }
+
     @Test("force stop authorization requires the exact risk acknowledgement flag")
     func forceStopAuthorizationRequiresTheExactRiskAcknowledgementFlag() {
         #expect(QEMUForceStopAuthorization.isAuthorized(arguments: []) == false)

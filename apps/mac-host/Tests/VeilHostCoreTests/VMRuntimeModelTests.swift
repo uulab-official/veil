@@ -446,6 +446,32 @@ struct VMRuntimeModelTests {
         #expect(model.errorMessage == nil)
         #expect(service.diagnosticsDirectory == directory)
     }
+
+    @Test("sends console pointer taps through the service boundary")
+    @MainActor
+    func sendsConsolePointerTapsThroughServiceBoundary() async throws {
+        let service = FakeVMRuntimeService(
+            pointerTapRecord: QEMUPointerTapRecord(
+                qmpSocketPath: "/tmp/veil-qmp.sock",
+                normalizedX: 0.25,
+                normalizedY: 0.75,
+                absoluteX: 8_192,
+                absoluteY: 24_575,
+                commands: [],
+                terminationStatus: 0,
+                didLaunchSender: true,
+                sentAt: Date(timeIntervalSince1970: 1)
+            )
+        )
+        let model = VMRuntimeModel(service: service)
+
+        await model.sendConsolePointerTap(normalizedX: 0.25, normalizedY: 0.75)
+
+        #expect(model.errorMessage == nil)
+        #expect(service.pointerTapCoordinates.count == 1)
+        #expect(service.pointerTapCoordinates.first?.0 == 0.25)
+        #expect(service.pointerTapCoordinates.first?.1 == 0.75)
+    }
 }
 
 @MainActor
@@ -459,6 +485,7 @@ private final class FakeVMRuntimeService: VMRuntimeService {
     var startedSnapshot: VMRuntimeSnapshot?
     var stoppedSnapshot: VMRuntimeSnapshot?
     var diagnosticsURL: URL?
+    var pointerTapRecord: QEMUPointerTapRecord?
     var error: (any Error)?
     var startError: (any Error)?
     private(set) var updatedInstallerMediaPath: String?
@@ -472,6 +499,7 @@ private final class FakeVMRuntimeService: VMRuntimeService {
     private(set) var startCount = 0
     private(set) var stopCount = 0
     private(set) var diagnosticsDirectory: URL?
+    private(set) var pointerTapCoordinates: [(Double, Double)] = []
 
     init(
         snapshot: VMRuntimeSnapshot? = nil,
@@ -483,6 +511,7 @@ private final class FakeVMRuntimeService: VMRuntimeService {
         startedSnapshot: VMRuntimeSnapshot? = nil,
         stoppedSnapshot: VMRuntimeSnapshot? = nil,
         diagnosticsURL: URL? = nil,
+        pointerTapRecord: QEMUPointerTapRecord? = nil,
         error: (any Error)? = nil,
         startError: (any Error)? = nil
     ) {
@@ -495,6 +524,7 @@ private final class FakeVMRuntimeService: VMRuntimeService {
         self.startedSnapshot = startedSnapshot
         self.stoppedSnapshot = stoppedSnapshot
         self.diagnosticsURL = diagnosticsURL
+        self.pointerTapRecord = pointerTapRecord
         self.error = error
         self.startError = startError
     }
@@ -589,6 +619,15 @@ private final class FakeVMRuntimeService: VMRuntimeService {
         let stoppedSnapshot = try #require(stoppedSnapshot)
         snapshot = stoppedSnapshot
         return stoppedSnapshot
+    }
+
+    func sendConsolePointerTap(normalizedX: Double, normalizedY: Double) async throws -> QEMUPointerTapRecord {
+        if let error {
+            throw error
+        }
+
+        pointerTapCoordinates.append((normalizedX, normalizedY))
+        return try #require(pointerTapRecord)
     }
 
     func exportDiagnostics(to directory: URL) async throws -> URL {

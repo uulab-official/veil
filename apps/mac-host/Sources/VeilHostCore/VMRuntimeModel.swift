@@ -9,6 +9,7 @@ public protocol VMRuntimeService: Sendable {
     func markGuestAgentConnected(agentVersion: String) async throws -> VMRuntimeSnapshot
     func start() async throws -> VMRuntimeSnapshot
     func stop() async throws -> VMRuntimeSnapshot
+    func sendConsolePointerTap(normalizedX: Double, normalizedY: Double) async throws -> QEMUPointerTapRecord
     func exportDiagnostics(to directory: URL) async throws -> URL
 }
 
@@ -1006,6 +1007,18 @@ public final class VMRuntimeModel {
         }
     }
 
+    public func sendConsolePointerTap(normalizedX: Double, normalizedY: Double) async {
+        do {
+            _ = try await service.sendConsolePointerTap(
+                normalizedX: normalizedX,
+                normalizedY: normalizedY
+            )
+            errorMessage = nil
+        } catch {
+            errorMessage = userMessage(for: error)
+        }
+    }
+
     public func exportDiagnostics(to directory: URL) async {
         phase = .loading
         errorMessage = nil
@@ -1042,6 +1055,7 @@ public struct LocalVMRuntimeService: VMRuntimeService {
     private let diagnosticDate: @Sendable () -> Date
     private let automaticInstallMediaBuilder: any AutomaticInstallMediaBuilding
     private let consoleScreenshotRefresher: @Sendable (URL, URL) -> Void
+    private let pointerEventSender: (any QEMUPointerEventSending)?
     private let qemuLaunchProcessIsRunning: @Sendable (Int32) -> Bool
     private let qemuLaunchProcessTerminator: @Sendable (Int32) -> Bool
     private let firmwareVarsTemplatePaths: [String]
@@ -1057,6 +1071,7 @@ public struct LocalVMRuntimeService: VMRuntimeService {
         diagnosticDate: @escaping @Sendable () -> Date = Date.init,
         automaticInstallMediaBuilder: any AutomaticInstallMediaBuilding = HdiutilAutomaticInstallMediaBuilder(),
         consoleScreenshotRefresher: @escaping @Sendable (URL, URL) -> Void = QEMUVMRuntimeBooter.captureConsoleScreenshot,
+        pointerEventSender: (any QEMUPointerEventSending)? = nil,
         qemuLaunchProcessIsRunning: @escaping @Sendable (Int32) -> Bool = LocalVMRuntimeService.processIsRunning,
         qemuLaunchProcessTerminator: @escaping @Sendable (Int32) -> Bool = LocalVMRuntimeService.terminateProcess,
         firmwareVarsTemplatePaths: [String]? = nil
@@ -1071,6 +1086,7 @@ public struct LocalVMRuntimeService: VMRuntimeService {
         self.diagnosticDate = diagnosticDate
         self.automaticInstallMediaBuilder = automaticInstallMediaBuilder
         self.consoleScreenshotRefresher = consoleScreenshotRefresher
+        self.pointerEventSender = pointerEventSender
         self.qemuLaunchProcessIsRunning = qemuLaunchProcessIsRunning
         self.qemuLaunchProcessTerminator = qemuLaunchProcessTerminator
         self.firmwareVarsTemplatePaths = firmwareVarsTemplatePaths
@@ -1882,6 +1898,11 @@ public struct LocalVMRuntimeService: VMRuntimeService {
             )
         }
         return try await loadSnapshot()
+    }
+
+    public func sendConsolePointerTap(normalizedX: Double, normalizedY: Double) async throws -> QEMUPointerTapRecord {
+        let sender = pointerEventSender ?? QEMUPointerEventSender(launchRecordStore: qemuLaunchRecordStore)
+        return try await sender.sendTap(normalizedX: normalizedX, normalizedY: normalizedY)
     }
 
     public func exportDiagnostics(to directory: URL) async throws -> URL {
