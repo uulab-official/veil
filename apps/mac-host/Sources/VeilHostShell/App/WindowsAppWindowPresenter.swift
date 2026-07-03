@@ -24,7 +24,7 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
         }
 
         let window = NSWindow(
-            contentRect: frame(for: session.window.bounds),
+            contentRect: frame(for: session.window.bounds, existingWindowCount: windowsById.count),
             styleMask: [.titled, .closable, .miniaturizable, .resizable],
             backing: .buffered,
             defer: false
@@ -91,15 +91,25 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
         window.titlebarAppearsTransparent = false
     }
 
-    private func frame(for bounds: WindowBounds) -> NSRect {
+    private func frame(for bounds: WindowBounds, existingWindowCount: Int) -> NSRect {
         let visibleFrame = NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
-        let width = min(max(CGFloat(bounds.width), 900), visibleFrame.width * 0.92)
-        let height = min(max(CGFloat(bounds.height), 620), visibleFrame.height * 0.88)
-        let origin = NSPoint(
-            x: visibleFrame.midX - width / 2,
-            y: visibleFrame.midY - height / 2
+        let frame = WindowsAppWindowPlacement.initialFrame(
+            for: bounds,
+            visibleFrame: HostVisibleFrameGeometry(
+                x: Double(visibleFrame.origin.x),
+                y: Double(visibleFrame.origin.y),
+                width: Double(visibleFrame.width),
+                height: Double(visibleFrame.height)
+            ),
+            existingWindowCount: existingWindowCount
         )
-        return NSRect(x: origin.x, y: origin.y, width: width, height: height)
+
+        return NSRect(
+            x: frame.x,
+            y: frame.y,
+            width: frame.width,
+            height: frame.height
+        )
     }
 }
 

@@ -43,6 +43,8 @@ Goal: move Veil from a Veil shell plus separate QEMU Cocoa display toward a UTM-
 - [x] Add a first Windows agent app catalog for Notepad, Calculator, and Paint instead of hard-coding a single launch target.
 - [x] Add a menu bar Windows Apps launcher so live agent app launches can start without opening the main Veil control window.
 - [x] Generalize protocol launch acceptance helpers and fake-agent launch replies beyond Notepad while preserving the Notepad MVP fixture.
+- [x] Preserve guest HWND aspect ratio when opening macOS app windows so compact apps like Calculator are not inflated into generic VM-sized panes.
+- [x] Cascade multiple mirrored Windows app windows within the visible display instead of stacking every app at the same centered origin.
 
 ## Next
 
