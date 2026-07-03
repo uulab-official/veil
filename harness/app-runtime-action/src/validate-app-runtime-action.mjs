@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 
 import { validateAppRuntimeStatus } from "../../app-runtime-status/src/validate-app-runtime-status.mjs";
 
-const VALID_ACTIONS = new Set(["launch", "focus", "close", "restore", "clipboard", "type-text"]);
+const VALID_ACTIONS = new Set(["launch", "focus", "close", "restore", "clipboard", "type-text", "click"]);
 const VALID_CONNECTION_MODES = new Set(["agent", "demo"]);
 
 export function validateAppRuntimeAction(report) {
@@ -57,6 +57,9 @@ export function validateAppRuntimeAction(report) {
       break;
     case "type-text":
       validateTypeTextAction(report);
+      break;
+    case "click":
+      validateClickAction(report);
       break;
   }
 
@@ -139,6 +142,29 @@ function validateTypeTextAction(report) {
   }
 }
 
+function validateClickAction(report) {
+  requireString(report.windowId, "windowId");
+  if (!Array.isArray(report.mouseInputs)) {
+    throw new TypeError("mouseInputs must be an array.");
+  }
+
+  if (!report.accepted) {
+    return;
+  }
+
+  if (report.mouseInputs.length !== 2) {
+    throw new TypeError("accepted click actions must include leftDown and leftUp mouseInputs.");
+  }
+
+  for (const input of report.mouseInputs) {
+    validateMouseInput(input);
+  }
+
+  if (report.mouseInputs[0].event !== "leftDown" || report.mouseInputs[1].event !== "leftUp") {
+    throw new TypeError("click mouseInputs must be ordered leftDown then leftUp.");
+  }
+}
+
 function validateLaunchResponse(launch) {
   if (!launch || typeof launch !== "object" || Array.isArray(launch)) {
     throw new TypeError("launch must be an object for accepted launch actions.");
@@ -184,6 +210,26 @@ function validateKeyInput(input) {
   }
   requireString(input.key, "input.key");
   requirePositiveInteger(input.windowsVirtualKey, "input.windowsVirtualKey");
+  if (!Array.isArray(input.modifiers) || input.modifiers.some((modifier) => typeof modifier !== "string")) {
+    throw new TypeError("input.modifiers must be an array of strings.");
+  }
+}
+
+function validateMouseInput(input) {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    throw new TypeError("mouse input entries must be objects.");
+  }
+
+  if (input.type !== "input.mouse") {
+    throw new TypeError("mouse input entries must use type input.mouse.");
+  }
+  requireString(input.windowId, "input.windowId");
+  requireString(input.event, "input.event");
+  if (!["leftDown", "leftUp", "rightDown", "rightUp", "move", "scroll"].includes(input.event)) {
+    throw new TypeError(`Unsupported mouse input event: ${input.event}`);
+  }
+  requireNonNegativeInteger(input.x, "input.x");
+  requireNonNegativeInteger(input.y, "input.y");
   if (!Array.isArray(input.modifiers) || input.modifiers.some((modifier) => typeof modifier !== "string")) {
     throw new TypeError("input.modifiers must be an array of strings.");
   }

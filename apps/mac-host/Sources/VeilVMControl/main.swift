@@ -23,6 +23,7 @@ enum VMControlError: Error, LocalizedError {
     case unsupportedAppRuntimeAction(String)
     case missingWindowId
     case missingAppRuntimeText
+    case missingAppRuntimePointerCoordinate
     case qemuAlreadyRunning(pid: Int32, monitorSocketPath: String?)
     case missingForceStopAcknowledgement
     case mvpProofNotProved([String])
@@ -69,6 +70,8 @@ enum VMControlError: Error, LocalizedError {
             "Missing Windows window id. Pass --window-id hwnd:XXXXXXXX from app-runtime-status or app-window-proof."
         case .missingAppRuntimeText:
             "Missing app runtime text. Pass --text \"...\" for clipboard or type-text actions."
+        case .missingAppRuntimePointerCoordinate:
+            "Missing app runtime pointer coordinates. Pass --x and --y as non-negative guest-window coordinates."
         case .qemuAlreadyRunning(let pid, let monitorSocketPath):
             monitorSocketPath.map {
                 "QEMU is already running as PID \(pid). Close the existing QEMU/Windows window, or use qemu-powerdown when the process was launched from the current Veil diagnostics path. Monitor socket: \($0)"
@@ -80,7 +83,7 @@ enum VMControlError: Error, LocalizedError {
         }
     }
 
-    private static let usage = "Usage: veil-vmctl prepare --installer /path/to/Windows.iso [--drivers /path/to/virtio-win.iso] | veil-vmctl app-runtime-status [--json] [--demo] | veil-vmctl app-runtime-action --action launch|focus|close|restore|clipboard|type-text [--json] [--demo] [--app-id winapp_notepad] [--window-id hwnd:XXXXXXXX] [--text \"...\"] | veil-vmctl app-window-proof [--json] [--app-id winapp_notepad] [--wait-seconds 10] [--output /path/to/proof.json] | veil-vmctl coherence-proof [--json] [--app-id winapp_notepad] [--wait-seconds 10] [--output /path/to/proof.json] | veil-vmctl mvp-proof [--json] [--app-id winapp_notepad] [--wait-seconds 30] [--output /path/to/proof.json] [--require-proved] | veil-vmctl guest-agent-wait [--json] [--wait-seconds 30] | veil-vmctl mark-installed [--json] | veil-vmctl providers [--json] | veil-vmctl qemu-plan [--json] | veil-vmctl qemu-doctor [--json] | veil-vmctl qemu-install-status [--json] | veil-vmctl qemu-smoke [--json] [--seconds 45] | veil-vmctl qemu-start [--json] [--wait-seconds 15] [--native-display] | veil-vmctl qemu-display-smoke [--json] [--wait-seconds 5] | veil-vmctl qemu-capture [--json] [--output /path/to/console.png] | veil-vmctl qemu-powerdown [--json] [--wait-seconds 30] | veil-vmctl qemu-force-stop [--json] --i-understand-data-loss [--wait-seconds 10] | veil-vmctl qemu-sendkey [--json] key [key ...] | veil-vmctl qemu-type-text [--json] --text \"...\" | veil-vmctl qemu-click [--json] --x 0...32767 --y 0...32767 | veil-vmctl qemu-oobe-bypass [--json] | veil-vmctl qemu-install-agent [--json]"
+    private static let usage = "Usage: veil-vmctl prepare --installer /path/to/Windows.iso [--drivers /path/to/virtio-win.iso] | veil-vmctl app-runtime-status [--json] [--demo] | veil-vmctl app-runtime-action --action launch|focus|close|restore|clipboard|type-text|click [--json] [--demo] [--app-id winapp_notepad] [--window-id hwnd:XXXXXXXX] [--text \"...\"] [--x 240 --y 130] | veil-vmctl app-window-proof [--json] [--app-id winapp_notepad] [--wait-seconds 10] [--output /path/to/proof.json] | veil-vmctl coherence-proof [--json] [--app-id winapp_notepad] [--wait-seconds 10] [--output /path/to/proof.json] | veil-vmctl mvp-proof [--json] [--app-id winapp_notepad] [--wait-seconds 30] [--output /path/to/proof.json] [--require-proved] | veil-vmctl guest-agent-wait [--json] [--wait-seconds 30] | veil-vmctl mark-installed [--json] | veil-vmctl providers [--json] | veil-vmctl qemu-plan [--json] | veil-vmctl qemu-doctor [--json] | veil-vmctl qemu-install-status [--json] | veil-vmctl qemu-smoke [--json] [--seconds 45] | veil-vmctl qemu-start [--json] [--wait-seconds 15] [--native-display] | veil-vmctl qemu-display-smoke [--json] [--wait-seconds 5] | veil-vmctl qemu-capture [--json] [--output /path/to/console.png] | veil-vmctl qemu-powerdown [--json] [--wait-seconds 30] | veil-vmctl qemu-force-stop [--json] --i-understand-data-loss [--wait-seconds 10] | veil-vmctl qemu-sendkey [--json] key [key ...] | veil-vmctl qemu-type-text [--json] --text \"...\" | veil-vmctl qemu-click [--json] --x 0...32767 --y 0...32767 | veil-vmctl qemu-oobe-bypass [--json] | veil-vmctl qemu-install-agent [--json]"
 }
 
 struct VMControlArguments {
@@ -91,6 +94,7 @@ struct VMControlArguments {
         case restore
         case clipboard
         case typeText = "type-text"
+        case click
     }
 
     enum QEMUStartDisplayMode: Equatable {
@@ -101,7 +105,7 @@ struct VMControlArguments {
     enum Command: Equatable {
         case prepare(installerPath: String, driverMediaPath: String?)
         case appRuntimeStatus(json: Bool, demo: Bool)
-        case appRuntimeAction(json: Bool, demo: Bool, action: AppRuntimeAction, appId: String?, windowId: String?, text: String?)
+        case appRuntimeAction(json: Bool, demo: Bool, action: AppRuntimeAction, appId: String?, windowId: String?, text: String?, x: Int?, y: Int?)
         case appWindowProof(json: Bool, appId: String, waitSeconds: Int, outputPath: String?)
         case coherenceProof(json: Bool, appId: String, waitSeconds: Int, outputPath: String?)
         case mvpProof(json: Bool, appId: String, waitSeconds: Int, outputPath: String?, requireProved: Bool)
@@ -159,7 +163,9 @@ struct VMControlArguments {
                     action: action,
                     appId: stringArgument(named: "--app-id", from: arguments),
                     windowId: stringArgument(named: "--window-id", from: arguments),
-                    text: stringArgument(named: "--text", from: arguments)
+                    text: stringArgument(named: "--text", from: arguments),
+                    x: intArgument(named: "--x", from: arguments),
+                    y: intArgument(named: "--y", from: arguments)
                 )
             )
         }
@@ -451,6 +457,7 @@ struct AppRuntimeActionReport: Codable, Equatable {
     var focus: WindowFocusResponse?
     var close: WindowCloseResponse?
     var clipboard: ClipboardTextSet?
+    var mouseInputs: [InputMouseEvent]
     var keyInputs: [InputKeyEvent]
     var typedTextCharacterCount: Int?
     var restoredWindows: [WindowCreatedEvent]
@@ -484,8 +491,8 @@ struct VeilVMControl {
             try await prepare(installerPath: installerPath, driverMediaPath: driverMediaPath)
         case .appRuntimeStatus(let json, let demo):
             try await printAppRuntimeStatus(json: json, demo: demo)
-        case .appRuntimeAction(let json, let demo, let action, let appId, let windowId, let text):
-            try await runAppRuntimeAction(json: json, demo: demo, action: action, appId: appId, windowId: windowId, text: text)
+        case .appRuntimeAction(let json, let demo, let action, let appId, let windowId, let text, let x, let y):
+            try await runAppRuntimeAction(json: json, demo: demo, action: action, appId: appId, windowId: windowId, text: text, x: x, y: y)
         case .appWindowProof(let json, let appId, let waitSeconds, let outputPath):
             try await proveAppWindow(json: json, appId: appId, waitSeconds: waitSeconds, outputPath: outputPath)
         case .coherenceProof(let json, let appId, let waitSeconds, let outputPath):
@@ -616,7 +623,9 @@ struct VeilVMControl {
         action: VMControlArguments.AppRuntimeAction,
         appId: String?,
         windowId: String?,
-        text: String?
+        text: String?,
+        x: Int?,
+        y: Int?
     ) async throws {
         let endpoint = demo
             ? "demo"
@@ -631,6 +640,7 @@ struct VeilVMControl {
         var focus: WindowFocusResponse?
         var close: WindowCloseResponse?
         var clipboard: ClipboardTextSet?
+        var mouseInputs: [InputMouseEvent] = []
         var keyInputs: [InputKeyEvent] = []
         var typedTextCharacterCount: Int?
         var restoredWindows: [WindowCreatedEvent] = []
@@ -711,6 +721,29 @@ struct VeilVMControl {
                 }
                 accepted = true
             }
+        case .click:
+            guard let inputWindowId = windowId,
+                  !inputWindowId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                throw VMControlError.missingWindowId
+            }
+            guard let x,
+                  let y,
+                  x >= 0,
+                  y >= 0 else {
+                throw VMControlError.missingAppRuntimePointerCoordinate
+            }
+            mouseInputs = [
+                InputMouseEvent(windowId: inputWindowId, event: "leftDown", x: x, y: y),
+                InputMouseEvent(windowId: inputWindowId, event: "leftUp", x: x, y: y)
+            ]
+            resolvedWindowId = inputWindowId
+            if model.hasLiveAgentConnection,
+               model.health?.capabilities.input == true {
+                for input in mouseInputs {
+                    try await service.sendMouseInput(input)
+                }
+                accepted = true
+            }
         }
 
         let status = model.runtimeStatusReport()
@@ -727,6 +760,7 @@ struct VeilVMControl {
             focus: focus,
             close: close,
             clipboard: clipboard,
+            mouseInputs: mouseInputs,
             keyInputs: keyInputs,
             typedTextCharacterCount: typedTextCharacterCount,
             restoredWindows: restoredWindows,
@@ -754,6 +788,9 @@ struct VeilVMControl {
         }
         if let clipboard = report.clipboard {
             print("Clipboard bytes: \(Data(clipboard.text.utf8).count)")
+        }
+        if !report.mouseInputs.isEmpty {
+            print("Mouse events: \(report.mouseInputs.count)")
         }
         if !report.keyInputs.isEmpty {
             print("Key events: \(report.keyInputs.count)")
@@ -800,6 +837,11 @@ struct VeilVMControl {
                 return [
                     "Confirm the text appears in the focused Windows app.",
                     "Run `veil-vmctl app-runtime-action --json --action clipboard --text \"...\"` to validate clipboard transfer as well."
+                ]
+            case .click:
+                return [
+                    "Confirm the clicked control or text area is focused inside the Windows app.",
+                    "Run `veil-vmctl app-runtime-action --json --action type-text --window-id ... --text veil` to validate keyboard input after the click."
                 ]
             }
         }

@@ -74,8 +74,9 @@ metadata only for network availability errors.
 
 The app runtime action command lets automation press the same narrow product
 buttons that the macOS shell exposes: launch an app, focus a mirrored HWND,
-close a mirrored HWND, set Windows clipboard text, type bounded ASCII text, or
-restore persisted app-window intent after reconnect.
+close a mirrored HWND, click inside a mirrored HWND, set Windows clipboard
+text, type bounded ASCII text, or restore persisted app-window intent after
+reconnect.
 
 ```bash
 cd apps/mac-host
@@ -88,6 +89,7 @@ For real guest-agent runs, omit `--demo` and use the HWND returned by
 ```bash
 cd apps/mac-host
 swift run veil-vmctl app-runtime-action --json --action focus --window-id hwnd:0003029A | node ../../harness/app-runtime-action/src/validate-app-runtime-action.mjs
+swift run veil-vmctl app-runtime-action --json --action click --window-id hwnd:0003029A --x 240 --y 130 | node ../../harness/app-runtime-action/src/validate-app-runtime-action.mjs
 swift run veil-vmctl app-runtime-action --json --action clipboard --text "hello from macOS" | node ../../harness/app-runtime-action/src/validate-app-runtime-action.mjs
 swift run veil-vmctl app-runtime-action --json --action type-text --window-id hwnd:0003029A --text "veil" | node ../../harness/app-runtime-action/src/validate-app-runtime-action.mjs
 swift run veil-vmctl app-runtime-action --json --action close --window-id hwnd:0003029A | node ../../harness/app-runtime-action/src/validate-app-runtime-action.mjs

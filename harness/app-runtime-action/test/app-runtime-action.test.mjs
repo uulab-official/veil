@@ -76,3 +76,32 @@ test("validates app runtime type-text actions", () => {
 
   assert.equal(validateAppRuntimeAction(report), report);
 });
+
+test("validates app runtime click actions", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-action.launch-demo.json", import.meta.url), "utf8"));
+  report.action = "click";
+  report.accepted = true;
+  delete report.launch;
+  delete report.window;
+  report.windowId = "hwnd:0003029A";
+  report.mouseInputs = [
+    {
+      type: "input.mouse",
+      windowId: "hwnd:0003029A",
+      event: "leftDown",
+      x: 240,
+      y: 130,
+      modifiers: []
+    },
+    {
+      type: "input.mouse",
+      windowId: "hwnd:0003029A",
+      event: "leftUp",
+      x: 240,
+      y: 130,
+      modifiers: []
+    }
+  ];
+
+  assert.equal(validateAppRuntimeAction(report), report);
+});
