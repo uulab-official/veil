@@ -19,6 +19,9 @@ enum VMControlError: Error, LocalizedError {
     case missingQEMUText
     case missingQEMUPointerCoordinate
     case missingAppId
+    case missingAppRuntimeAction
+    case unsupportedAppRuntimeAction(String)
+    case missingWindowId
     case qemuAlreadyRunning(pid: Int32, monitorSocketPath: String?)
     case missingForceStopAcknowledgement
     case mvpProofNotProved([String])
@@ -57,6 +60,12 @@ enum VMControlError: Error, LocalizedError {
             "Missing QEMU pointer coordinates. Pass --x and --y as absolute values from 0 to 32767."
         case .missingAppId:
             "Missing Windows app id. Pass --app-id winapp_notepad, winapp_calculator, or another id reported by app-runtime-status."
+        case .missingAppRuntimeAction:
+            "Missing app runtime action. Pass --action launch, focus, close, or restore."
+        case .unsupportedAppRuntimeAction(let action):
+            "Unsupported app runtime action '\(action)'. Pass --action launch, focus, close, or restore."
+        case .missingWindowId:
+            "Missing Windows window id. Pass --window-id hwnd:XXXXXXXX from app-runtime-status or app-window-proof."
         case .qemuAlreadyRunning(let pid, let monitorSocketPath):
             monitorSocketPath.map {
                 "QEMU is already running as PID \(pid). Close the existing QEMU/Windows window, or use qemu-powerdown when the process was launched from the current Veil diagnostics path. Monitor socket: \($0)"
@@ -68,10 +77,17 @@ enum VMControlError: Error, LocalizedError {
         }
     }
 
-    private static let usage = "Usage: veil-vmctl prepare --installer /path/to/Windows.iso [--drivers /path/to/virtio-win.iso] | veil-vmctl app-runtime-status [--json] [--demo] | veil-vmctl app-window-proof [--json] [--app-id winapp_notepad] [--wait-seconds 10] [--output /path/to/proof.json] | veil-vmctl coherence-proof [--json] [--app-id winapp_notepad] [--wait-seconds 10] [--output /path/to/proof.json] | veil-vmctl mvp-proof [--json] [--app-id winapp_notepad] [--wait-seconds 30] [--output /path/to/proof.json] [--require-proved] | veil-vmctl guest-agent-wait [--json] [--wait-seconds 30] | veil-vmctl mark-installed [--json] | veil-vmctl providers [--json] | veil-vmctl qemu-plan [--json] | veil-vmctl qemu-doctor [--json] | veil-vmctl qemu-install-status [--json] | veil-vmctl qemu-smoke [--json] [--seconds 45] | veil-vmctl qemu-start [--json] [--wait-seconds 15] [--native-display] | veil-vmctl qemu-display-smoke [--json] [--wait-seconds 5] | veil-vmctl qemu-capture [--json] [--output /path/to/console.png] | veil-vmctl qemu-powerdown [--json] [--wait-seconds 30] | veil-vmctl qemu-force-stop [--json] --i-understand-data-loss [--wait-seconds 10] | veil-vmctl qemu-sendkey [--json] key [key ...] | veil-vmctl qemu-type-text [--json] --text \"...\" | veil-vmctl qemu-click [--json] --x 0...32767 --y 0...32767 | veil-vmctl qemu-oobe-bypass [--json] | veil-vmctl qemu-install-agent [--json]"
+    private static let usage = "Usage: veil-vmctl prepare --installer /path/to/Windows.iso [--drivers /path/to/virtio-win.iso] | veil-vmctl app-runtime-status [--json] [--demo] | veil-vmctl app-runtime-action --action launch|focus|close|restore [--json] [--demo] [--app-id winapp_notepad] [--window-id hwnd:XXXXXXXX] | veil-vmctl app-window-proof [--json] [--app-id winapp_notepad] [--wait-seconds 10] [--output /path/to/proof.json] | veil-vmctl coherence-proof [--json] [--app-id winapp_notepad] [--wait-seconds 10] [--output /path/to/proof.json] | veil-vmctl mvp-proof [--json] [--app-id winapp_notepad] [--wait-seconds 30] [--output /path/to/proof.json] [--require-proved] | veil-vmctl guest-agent-wait [--json] [--wait-seconds 30] | veil-vmctl mark-installed [--json] | veil-vmctl providers [--json] | veil-vmctl qemu-plan [--json] | veil-vmctl qemu-doctor [--json] | veil-vmctl qemu-install-status [--json] | veil-vmctl qemu-smoke [--json] [--seconds 45] | veil-vmctl qemu-start [--json] [--wait-seconds 15] [--native-display] | veil-vmctl qemu-display-smoke [--json] [--wait-seconds 5] | veil-vmctl qemu-capture [--json] [--output /path/to/console.png] | veil-vmctl qemu-powerdown [--json] [--wait-seconds 30] | veil-vmctl qemu-force-stop [--json] --i-understand-data-loss [--wait-seconds 10] | veil-vmctl qemu-sendkey [--json] key [key ...] | veil-vmctl qemu-type-text [--json] --text \"...\" | veil-vmctl qemu-click [--json] --x 0...32767 --y 0...32767 | veil-vmctl qemu-oobe-bypass [--json] | veil-vmctl qemu-install-agent [--json]"
 }
 
 struct VMControlArguments {
+    enum AppRuntimeAction: String, Equatable, Codable {
+        case launch
+        case focus
+        case close
+        case restore
+    }
+
     enum QEMUStartDisplayMode: Equatable {
         case nativeCocoa
         case embedded
@@ -80,6 +96,7 @@ struct VMControlArguments {
     enum Command: Equatable {
         case prepare(installerPath: String, driverMediaPath: String?)
         case appRuntimeStatus(json: Bool, demo: Bool)
+        case appRuntimeAction(json: Bool, demo: Bool, action: AppRuntimeAction, appId: String?, windowId: String?)
         case appWindowProof(json: Bool, appId: String, waitSeconds: Int, outputPath: String?)
         case coherenceProof(json: Bool, appId: String, waitSeconds: Int, outputPath: String?)
         case mvpProof(json: Bool, appId: String, waitSeconds: Int, outputPath: String?, requireProved: Bool)
@@ -118,6 +135,25 @@ struct VMControlArguments {
                 command: .appRuntimeStatus(
                     json: arguments.contains("--json"),
                     demo: arguments.contains("--demo")
+                )
+            )
+        }
+
+        if command == "app-runtime-action" {
+            guard let actionValue = stringArgument(named: "--action", from: arguments) else {
+                throw VMControlError.missingAppRuntimeAction
+            }
+            guard let action = AppRuntimeAction(rawValue: actionValue) else {
+                throw VMControlError.unsupportedAppRuntimeAction(actionValue)
+            }
+
+            return VMControlArguments(
+                command: .appRuntimeAction(
+                    json: arguments.contains("--json"),
+                    demo: arguments.contains("--demo"),
+                    action: action,
+                    appId: stringArgument(named: "--app-id", from: arguments),
+                    windowId: stringArgument(named: "--window-id", from: arguments)
                 )
             )
         }
@@ -395,6 +431,24 @@ struct QEMUDisplaySmokeRecord: Codable, Equatable {
     var capturedAt: Date
 }
 
+struct AppRuntimeActionReport: Codable, Equatable {
+    var kind: String = "windowsAppRuntimeAction"
+    var action: VMControlArguments.AppRuntimeAction
+    var requestedAt: Date
+    var endpoint: String
+    var connectionMode: HostConnectionMode
+    var accepted: Bool
+    var appId: String?
+    var windowId: String?
+    var launch: AppLaunchResponse?
+    var window: WindowCreatedEvent?
+    var focus: WindowFocusResponse?
+    var close: WindowCloseResponse?
+    var restoredWindows: [WindowCreatedEvent]
+    var status: WindowsAppRuntimeStatusReport
+    var nextActions: [String]
+}
+
 @main
 struct VeilVMControl {
     static func main() async {
@@ -421,6 +475,8 @@ struct VeilVMControl {
             try await prepare(installerPath: installerPath, driverMediaPath: driverMediaPath)
         case .appRuntimeStatus(let json, let demo):
             try await printAppRuntimeStatus(json: json, demo: demo)
+        case .appRuntimeAction(let json, let demo, let action, let appId, let windowId):
+            try await runAppRuntimeAction(json: json, demo: demo, action: action, appId: appId, windowId: windowId)
         case .appWindowProof(let json, let appId, let waitSeconds, let outputPath):
             try await proveAppWindow(json: json, appId: appId, waitSeconds: waitSeconds, outputPath: outputPath)
         case .coherenceProof(let json, let appId, let waitSeconds, let outputPath):
@@ -542,6 +598,148 @@ struct VeilVMControl {
             fallback: DemoHostDashboardService(),
             primaryEndpointDescription: endpoint
         )
+    }
+
+    @MainActor
+    private static func runAppRuntimeAction(
+        json: Bool,
+        demo: Bool,
+        action: VMControlArguments.AppRuntimeAction,
+        appId: String?,
+        windowId: String?
+    ) async throws {
+        let endpoint = demo
+            ? "demo"
+            : ProcessInfo.processInfo.environment["VEIL_AGENT_URL"] ?? "ws://127.0.0.1:18444"
+        let model = HostDashboardModel(service: appRuntimeStatusService(demo: demo))
+        await model.loadRestoreIntent()
+        await model.load()
+
+        var launch: AppLaunchResponse?
+        var window: WindowCreatedEvent?
+        var focus: WindowFocusResponse?
+        var close: WindowCloseResponse?
+        var restoredWindows: [WindowCreatedEvent] = []
+        var accepted = false
+        var resolvedAppId = appId
+        var resolvedWindowId = windowId
+
+        switch action {
+        case .launch:
+            let launchAppId = appId ?? "winapp_notepad"
+            guard !launchAppId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                throw VMControlError.missingAppId
+            }
+            let result = await model.launchApp(appId: launchAppId)
+            launch = result?.launch
+            window = result?.window
+            resolvedAppId = launchAppId
+            resolvedWindowId = result?.window.windowId
+            accepted = result?.launch.accepted == true
+        case .focus:
+            guard let focusWindowId = windowId,
+                  !focusWindowId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                throw VMControlError.missingWindowId
+            }
+            focus = await model.focusMirrorSession(windowId: focusWindowId)
+            if focus == nil {
+                focus = try await appRuntimeStatusService(demo: demo).focusWindow(windowId: focusWindowId)
+            }
+            accepted = focus?.accepted == true
+            resolvedWindowId = focusWindowId
+        case .close:
+            guard let closeWindowId = windowId,
+                  !closeWindowId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                throw VMControlError.missingWindowId
+            }
+            close = await model.closeMirrorSession(windowId: closeWindowId)
+            if close == nil {
+                close = try await appRuntimeStatusService(demo: demo).closeWindow(windowId: closeWindowId)
+            }
+            accepted = close?.accepted == true
+            resolvedWindowId = closeWindowId
+        case .restore:
+            let restored = await model.restoreMirroredWindowsAfterReconnect()
+            restoredWindows = restored.map(\.window)
+            accepted = !restored.isEmpty
+        }
+
+        let status = model.runtimeStatusReport()
+        let report = AppRuntimeActionReport(
+            action: action,
+            requestedAt: Date(),
+            endpoint: endpoint,
+            connectionMode: status.connection.mode,
+            accepted: accepted,
+            appId: resolvedAppId,
+            windowId: resolvedWindowId,
+            launch: launch,
+            window: window,
+            focus: focus,
+            close: close,
+            restoredWindows: restoredWindows,
+            status: status,
+            nextActions: nextActions(for: action, accepted: accepted)
+        )
+
+        if json {
+            let data = try JSONEncoder.veilDiagnostics.encode(report)
+            print(String(decoding: data, as: UTF8.self))
+            return
+        }
+
+        print("Windows app runtime action: \(report.action.rawValue)")
+        print("Accepted: \(report.accepted ? "yes" : "no")")
+        print("Endpoint: \(report.endpoint)")
+        if let appId = report.appId {
+            print("App: \(appId)")
+        }
+        if let windowId = report.windowId {
+            print("Window: \(windowId)")
+        }
+        if let window = report.window {
+            print("Window title: \(window.title)")
+        }
+        print("Open Windows app windows: \(report.status.mirrorSessions.count)")
+        print("Next actions:")
+        for action in report.nextActions {
+            print("  - \(action)")
+        }
+    }
+
+    private static func nextActions(
+        for action: VMControlArguments.AppRuntimeAction,
+        accepted: Bool
+    ) -> [String] {
+        if accepted {
+            switch action {
+            case .launch:
+                return [
+                    "Open or focus the mirrored macOS app window from the menu bar.",
+                    "Run `veil-vmctl app-runtime-status --json` to inspect the tracked HWND and available actions."
+                ]
+            case .focus:
+                return [
+                    "Confirm the macOS mirror window is frontmost.",
+                    "Run `veil-vmctl coherence-proof --json --app-id winapp_notepad` before claiming input is production-ready."
+                ]
+            case .close:
+                return [
+                    "Run `veil-vmctl app-runtime-status --json` to confirm the HWND no longer appears.",
+                    "If Windows keeps the app open, collect guest-agent diagnostics from the shared folder."
+                ]
+            case .restore:
+                return [
+                    "Open or focus restored mirrored windows from the menu bar.",
+                    "Run `veil-vmctl app-runtime-status --json` to inspect restored sessions."
+                ]
+            }
+        }
+
+        return [
+            "Run `veil-vmctl guest-agent-wait --json` to confirm the Windows guest agent is connected.",
+            "Run `veil-vmctl app-runtime-status --json` and check the requested app or window id before retrying."
+        ]
     }
 
     private static func proveAppWindow(json: Bool, appId: String, waitSeconds: Int, outputPath: String?) async throws {

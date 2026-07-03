@@ -17,6 +17,7 @@ harness/
 ├─ fake-host/              CLI client that sends host messages to the agent
 ├─ runtime-provider-probe/ JSON shape validation for local VM providers
 ├─ app-runtime-status/     JSON shape validation for host app-runtime status/actions
+├─ app-runtime-action/     JSON shape validation for host app-runtime actions
 ├─ app-window-proof/       JSON shape validation for launch/HWND/first-frame proof
 ├─ coherence-proof/        JSON shape validation for launch/HWND/frame/input/clipboard proof
 ├─ mvp-proof/              JSON shape validation for guest wait plus Coherence proof
@@ -39,6 +40,7 @@ Current executable pieces:
 - `harness/fake-host`: a CLI simulator for the future macOS host flow.
 - `harness/runtime-provider-probe`: a JSON validator for serverless local runtime provider output.
 - `harness/app-runtime-status`: a JSON validator for app runtime status, open HWND sessions, and supported actions.
+- `harness/app-runtime-action`: a JSON validator for launch, focus, close, and restore app-runtime actions.
 - `harness/app-window-proof`: a JSON validator for one app launch, one tracked HWND, and the first captured frame evidence.
 - `harness/coherence-proof`: a JSON validator for one app launch, one tracked HWND, first and post-input frame evidence, mouse/key input, and host clipboard send evidence.
 - `harness/mvp-proof`: a JSON validator for the full Notepad MVP gate: guest-agent readiness plus Coherence proof evidence.
@@ -67,6 +69,26 @@ swift run veil-vmctl app-runtime-status --json --demo | node ../../harness/app-r
 Use `--demo` for deterministic local harness checks. Without `--demo`, the
 command tries `VEIL_AGENT_URL` or `ws://127.0.0.1:18444` and falls back to demo
 metadata only for network availability errors.
+
+## App Runtime Action Scenario
+
+The app runtime action command lets automation press the same narrow product
+buttons that the macOS shell exposes: launch an app, focus a mirrored HWND,
+close a mirrored HWND, or restore persisted app-window intent after reconnect.
+
+```bash
+cd apps/mac-host
+swift run veil-vmctl app-runtime-action --json --demo --action launch --app-id winapp_notepad | node ../../harness/app-runtime-action/src/validate-app-runtime-action.mjs
+```
+
+For real guest-agent runs, omit `--demo` and use the HWND returned by
+`app-window-proof`, `coherence-proof`, or `app-runtime-status`:
+
+```bash
+cd apps/mac-host
+swift run veil-vmctl app-runtime-action --json --action focus --window-id hwnd:0003029A | node ../../harness/app-runtime-action/src/validate-app-runtime-action.mjs
+swift run veil-vmctl app-runtime-action --json --action close --window-id hwnd:0003029A | node ../../harness/app-runtime-action/src/validate-app-runtime-action.mjs
+```
 
 ## App Window Proof Scenario
 

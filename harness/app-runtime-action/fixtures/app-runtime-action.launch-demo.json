@@ -1,0 +1,89 @@
+{
+  "kind": "windowsAppRuntimeAction",
+  "action": "launch",
+  "requestedAt": "2026-07-03T13:00:00Z",
+  "endpoint": "demo",
+  "connectionMode": "demo",
+  "accepted": true,
+  "appId": "winapp_notepad",
+  "windowId": "hwnd:DEMO0001",
+  "launch": {
+    "type": "app.launch.response",
+    "requestId": "demo_launch_window",
+    "accepted": true,
+    "processId": 4912
+  },
+  "window": {
+    "type": "window.created",
+    "windowId": "hwnd:DEMO0001",
+    "processId": 4912,
+    "appId": "winapp_notepad",
+    "title": "Untitled - Notepad",
+    "bounds": {
+      "x": 80,
+      "y": 80,
+      "width": 1180,
+      "height": 760
+    },
+    "state": "normal",
+    "focused": true
+  },
+  "focus": null,
+  "close": null,
+  "restoredWindows": [],
+  "status": {
+    "kind": "windowsAppRuntimeStatus",
+    "generatedAt": "2026-07-03T13:00:01Z",
+    "phase": "connected",
+    "selectedAppId": "winapp_notepad",
+    "connection": {
+      "mode": "demo",
+      "hasLiveAgentConnection": false,
+      "agentVersion": "demo-0.1.0",
+      "os": "windows-arm64"
+    },
+    "apps": [
+      {
+        "id": "winapp_notepad",
+        "name": "Notepad",
+        "canRequestLaunch": true,
+        "canLaunchNow": false
+      }
+    ],
+    "mirrorSessions": [
+      {
+        "windowId": "hwnd:DEMO0001",
+        "appId": "winapp_notepad",
+        "title": "Untitled - Notepad",
+        "captureState": "unavailable",
+        "canFocus": true,
+        "canClose": true,
+        "canSendInput": false
+      }
+    ],
+    "restorableAppIds": [
+      "winapp_notepad"
+    ],
+    "actions": [
+      {
+        "id": "windowsApps.restorePrevious",
+        "title": "Restore Previous Apps",
+        "isAvailable": false
+      },
+      {
+        "id": "windowsApps.closeAll",
+        "title": "Close All Windows Apps",
+        "isAvailable": true
+      },
+      {
+        "id": "clipboard.setText",
+        "title": "Set Windows Clipboard Text",
+        "isAvailable": false
+      }
+    ]
+  },
+  "nextActions": [
+    "Open or focus the mirrored macOS app window from the menu bar.",
+    "Run `veil-vmctl app-runtime-status --json` to inspect the tracked HWND and available actions."
+  ]
+}
