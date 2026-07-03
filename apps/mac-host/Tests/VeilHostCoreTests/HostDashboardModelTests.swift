@@ -690,6 +690,29 @@ struct HostDashboardModelTests {
         #expect(primary.launchCount == 1)
     }
 
+    @Test("does not hide live launch failures behind demo fallback")
+    @MainActor
+    func doesNotHideLiveLaunchFailuresBehindDemoFallback() async throws {
+        let primary = FakeDashboardService()
+        let service = FallbackHostDashboardService(
+            primary: primary,
+            fallback: DemoHostDashboardService(),
+            primaryEndpointDescription: "ws://127.0.0.1:18444"
+        )
+        let model = HostDashboardModel(service: service)
+
+        await model.load()
+        primary.error = URLError(.cannotConnectToHost)
+        await model.launchSelectedApp()
+
+        #expect(model.phase == .failed)
+        #expect(model.connectionMode == .agent)
+        #expect(model.lastLaunch == nil)
+        #expect(model.mirrorSessions.isEmpty)
+        #expect(model.errorMessage != nil)
+        #expect(primary.launchCount == 0)
+    }
+
     @Test("restores mapped app windows after the live agent reconnects")
     @MainActor
     func restoresMappedAppWindowsAfterReconnect() async throws {

@@ -34,17 +34,7 @@ public struct FallbackHostDashboardService: HostDashboardService, Sendable {
     }
 
     public func launchApp(appId: String) async throws -> WindowsAppLaunchResult {
-        do {
-            return try await primary.launchApp(appId: appId)
-        } catch {
-            guard shouldUseFallback(for: error) else {
-                throw error
-            }
-
-            var result = try await fallback.launchApp(appId: appId)
-            result.connectionDetail = fallbackDetail
-            return result
-        }
+        try await primary.launchApp(appId: appId)
     }
 
     public func launchNotepad() async throws -> NotepadLaunchResult {

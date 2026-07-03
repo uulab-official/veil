@@ -53,7 +53,15 @@ Current executable pieces:
 - `harness/windows-agent-contract`: a contract validator for the first C# Windows agent scaffold, inbox app catalog, and app launch transcript.
 - `packages/protocol`: shared protocol constants and validation helpers.
 
-The macOS host shell also includes an internal demo agent fallback. If the WebSocket agent is unavailable, the app still loads demo Windows app metadata and can run selected-app demo launch flows for the first inbox app catalog. The header and Agent view label this as Demo mode and include the unreachable endpoint. The fallback is limited to network availability errors; protocol and agent errors remain visible. Use the external fake agent when testing the transport boundary itself.
+The macOS host shell also includes an internal demo agent fallback. If the
+WebSocket agent is unavailable, the app still loads demo Windows app metadata so
+the shell can show launch readiness and recovery guidance. Real launch actions
+must not fabricate demo HWNDs; only explicit demo mode may run selected-app demo
+launch flows for the first inbox app catalog. The header and Agent view label
+fallback metadata as Demo mode and include the unreachable endpoint. The
+overview fallback is limited to network availability errors; protocol and agent
+errors remain visible. Use the external fake agent when testing the transport
+boundary itself.
 
 ## App Runtime Status Scenario
 
