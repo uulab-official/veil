@@ -5,6 +5,9 @@
   "endpoint": "ws://127.0.0.1:18444",
   "connectionMode": "agent",
   "accepted": true,
+  "windowId": "hwnd:0003029A",
+  "foregroundWindowId": "hwnd:0003029A",
+  "foregroundWindowTitle": "Untitled - Notepad",
   "restoredWindows": [
     {
       "type": "window.created",
@@ -158,7 +161,5 @@
   "nextActions": [
     "Open or focus restored mirrored windows from the menu bar.",
     "Run `veil-vmctl app-runtime-status --json` to inspect restored sessions."
-  ],
-  "foregroundWindowTitle": "Untitled - Notepad",
-  "windowId": "hwnd:0003029A"
+  ]
 }

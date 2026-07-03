@@ -7,6 +7,8 @@
   "accepted": true,
   "appId": "winapp_notepad",
   "windowId": "hwnd:0003029A",
+  "foregroundWindowId": "hwnd:0003029A",
+  "foregroundWindowTitle": "Untitled - Notepad",
   "launchPlan": {
     "selectedAppId": "winapp_notepad",
     "canRequestSelectedAppLaunch": true,
@@ -177,6 +179,5 @@
   "nextActions": [
     "Open or focus the mirrored macOS app window from the menu bar.",
     "Run `veil-vmctl app-runtime-status --json` to inspect the tracked HWND and available actions."
-  ],
-  "foregroundWindowTitle": "Untitled - Notepad"
+  ]
 }

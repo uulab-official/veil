@@ -76,6 +76,16 @@ test("rejects accepted launch actions without a foreground window title", () => 
   );
 });
 
+test("rejects accepted launch actions without a foreground window id", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-action.launch-demo.json", import.meta.url), "utf8"));
+  delete report.foregroundWindowId;
+
+  assert.throws(
+    () => validateAppRuntimeAction(report),
+    /foregroundWindowId/
+  );
+});
+
 test("rejects pending launch actions with a fake window", () => {
   const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-action.launch-pending.json", import.meta.url), "utf8"));
   report.window = {
@@ -249,6 +259,16 @@ test("rejects bring-forward actions whose foreground title drifts from status", 
   assert.throws(
     () => validateAppRuntimeAction(report),
     /foreground Windows app window title/
+  );
+});
+
+test("rejects bring-forward actions whose foreground id drifts from status", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-action.bring-forward-demo.json", import.meta.url), "utf8"));
+  report.foregroundWindowId = "hwnd:DIFFERENT";
+
+  assert.throws(
+    () => validateAppRuntimeAction(report),
+    /foreground Windows app window id/
   );
 });
 

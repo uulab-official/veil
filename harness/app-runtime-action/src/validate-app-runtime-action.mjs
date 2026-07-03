@@ -110,7 +110,7 @@ function validateFulfillPendingAction(report) {
     throw new TypeError("fulfill-pending window must match report.windowId.");
   }
 
-  requireForegroundWindowTitle(report, report.window.title, "accepted fulfill-pending actions");
+  requireForegroundWindowIdentity(report, report.window.windowId, report.window.title, "accepted fulfill-pending actions");
 
   if (report.status.pendingLaunch.isQueued) {
     throw new TypeError("accepted fulfill-pending actions must clear status.pendingLaunch.");
@@ -184,7 +184,7 @@ function validateLaunchAction(report) {
     throw new TypeError("launch window must match report.windowId.");
   }
 
-  requireForegroundWindowTitle(report, report.window.title, "accepted launch actions");
+  requireForegroundWindowIdentity(report, report.window.windowId, report.window.title, "accepted launch actions");
   requireForegroundableMacWindow(report, "accepted launch actions");
 }
 
@@ -218,6 +218,11 @@ function validateFocusAction(report) {
   validateBooleanResponse(report.focus, "window.focus.response");
   if (report.focus.windowId !== report.windowId) {
     throw new TypeError("focus response must match report.windowId.");
+  }
+
+  requireString(report.foregroundWindowId, "foregroundWindowId");
+  if (report.foregroundWindowId !== report.windowId) {
+    throw new TypeError("accepted focus actions must report the foreground Windows app window id.");
   }
 }
 
@@ -302,7 +307,7 @@ function validateRestoreAction(report) {
   }
 
   const foregroundWindow = report.restoredWindows.at(-1);
-  requireForegroundWindowTitle(report, foregroundWindow.title, "accepted restore actions");
+  requireForegroundWindowIdentity(report, foregroundWindow.windowId, foregroundWindow.title, "accepted restore actions");
 
   if (!report.status.dockIntegration.canBringWindowsAppsForward) {
     throw new TypeError("accepted restore actions must leave Windows app windows available to bring forward.");
@@ -344,7 +349,7 @@ function validateBringForwardAction(report) {
   }
 
   const foregroundSession = report.status.mirrorSessions.at(-1);
-  requireForegroundWindowTitle(report, foregroundSession.title, "accepted bring-forward actions");
+  requireForegroundWindowIdentity(report, foregroundSession.windowId, foregroundSession.title, "accepted bring-forward actions");
 
   if (report.focus !== undefined && report.focus !== null) {
     validateBooleanResponse(report.focus, "window.focus.response");
@@ -364,10 +369,18 @@ function requireForegroundableMacWindow(report, actionName) {
   }
 }
 
-function requireForegroundWindowTitle(report, expectedTitle, actionName) {
+function requireForegroundWindowIdentity(report, expectedWindowId, expectedTitle, actionName) {
+  requireString(report.foregroundWindowId, "foregroundWindowId");
   requireString(report.foregroundWindowTitle, "foregroundWindowTitle");
+  if (report.foregroundWindowId !== expectedWindowId) {
+    throw new TypeError(`${actionName} must report the foreground Windows app window id.`);
+  }
   if (report.foregroundWindowTitle !== expectedTitle) {
     throw new TypeError(`${actionName} must report the foreground Windows app window title.`);
+  }
+
+  if (report.status.macWindowIntegration.foregroundWindowId !== expectedWindowId) {
+    throw new TypeError(`${actionName} status must report the same foreground Windows app window id.`);
   }
 }
 

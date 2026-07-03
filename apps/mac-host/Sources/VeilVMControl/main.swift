@@ -456,6 +456,7 @@ struct AppRuntimeActionReport: Codable, Equatable {
     var accepted: Bool
     var appId: String?
     var windowId: String?
+    var foregroundWindowId: String?
     var foregroundWindowTitle: String?
     var pendingLaunchAppId: String?
     var launchPlan: WindowsAppRuntimeLaunchPlanStatus?
@@ -697,6 +698,7 @@ struct VeilVMControl {
         var restoredWindows: [WindowCreatedEvent] = []
         var restoreRequestedAppIds: [String] = []
         var broughtForwardWindowIds: [String] = []
+        var foregroundWindowId: String?
         var foregroundWindowTitle: String?
         var quietRuntime: WindowsAppRuntimeQuietPolicyStatus?
         var accepted = false
@@ -723,6 +725,7 @@ struct VeilVMControl {
             window = result?.window
             resolvedAppId = launchAppId
             resolvedWindowId = result?.window.windowId
+            foregroundWindowId = result?.window.windowId
             foregroundWindowTitle = result?.window.title
             accepted = result?.launch.accepted == true
         case .fulfillPending:
@@ -731,6 +734,7 @@ struct VeilVMControl {
             window = result?.window
             resolvedAppId = result?.window.appId ?? model.pendingLaunchAppId
             resolvedWindowId = result?.window.windowId
+            foregroundWindowId = result?.window.windowId
             foregroundWindowTitle = result?.window.title
             accepted = result?.launch.accepted == true
         case .focus:
@@ -744,6 +748,7 @@ struct VeilVMControl {
             }
             accepted = focus?.accepted == true
             resolvedWindowId = focusWindowId
+            foregroundWindowId = accepted ? focusWindowId : nil
             foregroundWindowTitle = model.mirrorSessions.first { $0.id == focusWindowId }?.window.title
         case .close:
             guard let closeWindowId = windowId,
@@ -765,6 +770,7 @@ struct VeilVMControl {
             restoredWindows = restored.map(\.window)
             if let foregroundWindow = restoredWindows.last {
                 resolvedWindowId = foregroundWindow.windowId
+                foregroundWindowId = foregroundWindow.windowId
                 foregroundWindowTitle = foregroundWindow.title
             }
             accepted = !restored.isEmpty
@@ -773,6 +779,7 @@ struct VeilVMControl {
             if let foregroundSession = model.mirrorSessions.last {
                 focus = await model.focusMirrorSession(windowId: foregroundSession.id)
                 resolvedWindowId = foregroundSession.id
+                foregroundWindowId = foregroundSession.id
                 foregroundWindowTitle = foregroundSession.window.title
             }
             accepted = !broughtForwardWindowIds.isEmpty
@@ -849,6 +856,7 @@ struct VeilVMControl {
             accepted: accepted,
             appId: resolvedAppId,
             windowId: resolvedWindowId,
+            foregroundWindowId: foregroundWindowId,
             foregroundWindowTitle: foregroundWindowTitle,
             pendingLaunchAppId: status.pendingLaunchAppId,
             launchPlan: actionLaunchPlan,
@@ -883,6 +891,9 @@ struct VeilVMControl {
         }
         if let windowId = report.windowId {
             print("Window: \(windowId)")
+        }
+        if let foregroundWindowId = report.foregroundWindowId {
+            print("Foreground window id: \(foregroundWindowId)")
         }
         if let foregroundWindowTitle = report.foregroundWindowTitle {
             print("Foreground window: \(foregroundWindowTitle)")

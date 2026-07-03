@@ -6,6 +6,8 @@
   "connectionMode": "demo",
   "accepted": true,
   "windowId": "hwnd:DEMO0001",
+  "foregroundWindowId": "hwnd:DEMO0001",
+  "foregroundWindowTitle": "Untitled - Notepad",
   "focus": {
     "type": "window.focus.response",
     "requestId": "local_focus_window",
@@ -152,6 +154,5 @@
   "nextActions": [
     "Confirm the mirrored Windows app windows are frontmost on macOS.",
     "Run `veil-vmctl app-runtime-action --json --action focus --window-id ...` if one app window needs explicit guest focus."
-  ],
-  "foregroundWindowTitle": "Untitled - Notepad"
+  ]
 }
