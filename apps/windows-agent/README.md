@@ -57,13 +57,17 @@ cd C:\Path\To\veil\apps\windows-agent
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\Install-VeilAgent.ps1
 ```
 
-The installer copies or publishes the agent to `%LOCALAPPDATA%\Veil\Agent\app`, copies the start/uninstall scripts to `%LOCALAPPDATA%\Veil\Agent\scripts`, sets user-level `VEIL_AGENT_HOST` and `VEIL_AGENT_PORT`, registers a user logon scheduled task named `VeilAgent`, and starts the agent immediately. The logon task points at the installed script copy, so agent auto-start does not depend on the original shared-folder path after installation. Pass `-NoStart` to install without starting the agent in the current session.
+The installer copies or publishes the agent to `%LOCALAPPDATA%\Veil\Agent\app`, copies the start/uninstall scripts to `%LOCALAPPDATA%\Veil\Agent\scripts`, sets user-level `VEIL_AGENT_HOST` and `VEIL_AGENT_PORT`, registers a user logon scheduled task named `VeilAgent`, and starts the agent immediately. The logon task points at the installed script copy, so agent auto-start does not depend on the original shared-folder path after installation. The start script is idempotent: it reuses an already-running installed `VeilAgent.exe`, waits briefly for `ws://127.0.0.1:18444/` to become reachable, and writes agent stdout/stderr logs for diagnosis. Pass `-NoStart` to install without starting the agent in the current session.
 
 Bootstrap, install, and start logs are written under:
 
 ```text
 %LOCALAPPDATA%\Veil\Agent\logs
 ```
+
+The same directory also contains `agent.stdout.log` and `agent.stderr.log` from
+the installed process. Check those files when the host cannot connect even
+though the scheduled task exists.
 
 Collect install/start diagnostics without copying Windows user data:
 

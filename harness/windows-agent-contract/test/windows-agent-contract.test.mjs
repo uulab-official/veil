@@ -203,6 +203,14 @@ test("windows agent includes user-logon install and uninstall scripts", async ()
   assert.match(start, /VeilAgent\.exe/);
   assert.match(start, /127\.0\.0\.1/);
   assert.match(start, /start\.log/);
+  assert.match(start, /agent\.stdout\.log/);
+  assert.match(start, /agent\.stderr\.log/);
+  assert.match(start, /Test-VeilAgentPort/);
+  assert.match(start, /Get-Process\s+-Name\s+"VeilAgent"/);
+  assert.match(start, /VeilAgent is already running/);
+  assert.match(start, /process is already running, but ws:\/\/127\.0\.0\.1:\$Port\/ is not reachable/);
+  assert.match(start, /RedirectStandardOutput\s+\$StdOutLogPath/);
+  assert.match(start, /RedirectStandardError\s+\$StdErrLogPath/);
   assert.match(diagnostics, /Compress-Archive/);
   assert.match(diagnostics, /veil-agent-diagnostics-\$Timestamp\.zip/);
   assert.match(diagnostics, /Get-ScheduledTask\s+-TaskName\s+\$TaskName/);
