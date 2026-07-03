@@ -461,7 +461,7 @@ public struct VeilHostClient: HostDashboardService, Sendable {
             try await sendMouseInput(input)
         }
 
-        let keyInputs = try Self.proofKeyInputs(windowId: launchResult.window.windowId, text: typedText)
+        let keyInputs = try Self.keyInputs(windowId: launchResult.window.windowId, text: typedText)
         for input in keyInputs {
             try await sendKeyInput(input)
         }
@@ -749,7 +749,7 @@ public struct VeilHostClient: HostDashboardService, Sendable {
         )
     }
 
-    private static func proofKeyInputs(windowId: String, text: String) throws -> [InputKeyEvent] {
+    public static func keyInputs(windowId: String, text: String) throws -> [InputKeyEvent] {
         var inputs: [InputKeyEvent] = []
         for scalar in text.unicodeScalars {
             let value = scalar.value

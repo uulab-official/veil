@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 
 import { validateAppRuntimeStatus } from "../../app-runtime-status/src/validate-app-runtime-status.mjs";
 
-const VALID_ACTIONS = new Set(["launch", "focus", "close", "restore"]);
+const VALID_ACTIONS = new Set(["launch", "focus", "close", "restore", "clipboard", "type-text"]);
 const VALID_CONNECTION_MODES = new Set(["agent", "demo"]);
 
 export function validateAppRuntimeAction(report) {
@@ -51,6 +51,12 @@ export function validateAppRuntimeAction(report) {
       break;
     case "restore":
       validateRestoreAction(report);
+      break;
+    case "clipboard":
+      validateClipboardAction(report);
+      break;
+    case "type-text":
+      validateTypeTextAction(report);
       break;
   }
 
@@ -102,6 +108,37 @@ function validateRestoreAction(report) {
   }
 }
 
+function validateClipboardAction(report) {
+  if (!report.accepted && report.clipboard === undefined) {
+    return;
+  }
+
+  validateClipboard(report.clipboard);
+}
+
+function validateTypeTextAction(report) {
+  requireString(report.windowId, "windowId");
+  if (!Array.isArray(report.keyInputs)) {
+    throw new TypeError("keyInputs must be an array.");
+  }
+
+  if (report.typedTextCharacterCount !== undefined) {
+    requireNonNegativeInteger(report.typedTextCharacterCount, "typedTextCharacterCount");
+  }
+
+  if (!report.accepted) {
+    return;
+  }
+
+  if (report.keyInputs.length === 0) {
+    throw new TypeError("accepted type-text actions must include keyInputs.");
+  }
+
+  for (const input of report.keyInputs) {
+    validateKeyInput(input);
+  }
+}
+
 function validateLaunchResponse(launch) {
   if (!launch || typeof launch !== "object" || Array.isArray(launch)) {
     throw new TypeError("launch must be an object for accepted launch actions.");
@@ -113,6 +150,43 @@ function validateLaunchResponse(launch) {
   requireString(launch.requestId, "launch.requestId");
   requireBoolean(launch.accepted, "launch.accepted");
   requirePositiveInteger(launch.processId, "launch.processId");
+}
+
+function validateClipboard(clipboard) {
+  if (!clipboard || typeof clipboard !== "object" || Array.isArray(clipboard)) {
+    throw new TypeError("clipboard must be an object when present.");
+  }
+
+  if (clipboard.type !== "clipboard.text.set") {
+    throw new TypeError("clipboard must use type clipboard.text.set.");
+  }
+  requireString(clipboard.requestId, "clipboard.requestId");
+  requireString(clipboard.origin, "clipboard.origin");
+  if (clipboard.origin !== "host") {
+    throw new TypeError("app runtime clipboard actions must use host origin.");
+  }
+  requirePositiveInteger(clipboard.sequence, "clipboard.sequence");
+  requireString(clipboard.text, "clipboard.text");
+}
+
+function validateKeyInput(input) {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    throw new TypeError("key input entries must be objects.");
+  }
+
+  if (input.type !== "input.key") {
+    throw new TypeError("key input entries must use type input.key.");
+  }
+  requireString(input.windowId, "input.windowId");
+  requireString(input.event, "input.event");
+  if (!["keyDown", "keyUp"].includes(input.event)) {
+    throw new TypeError(`Unsupported key input event: ${input.event}`);
+  }
+  requireString(input.key, "input.key");
+  requirePositiveInteger(input.windowsVirtualKey, "input.windowsVirtualKey");
+  if (!Array.isArray(input.modifiers) || input.modifiers.some((modifier) => typeof modifier !== "string")) {
+    throw new TypeError("input.modifiers must be an array of strings.");
+  }
 }
 
 function validateBooleanResponse(response, type) {
@@ -169,6 +243,12 @@ function requireBoolean(value, fieldName) {
 function requirePositiveInteger(value, fieldName) {
   if (!Number.isInteger(value) || value <= 0) {
     throw new TypeError(`App runtime action field '${fieldName}' must be a positive integer.`);
+  }
+}
+
+function requireNonNegativeInteger(value, fieldName) {
+  if (!Number.isInteger(value) || value < 0) {
+    throw new TypeError(`App runtime action field '${fieldName}' must be a non-negative integer.`);
   }
 }
 
