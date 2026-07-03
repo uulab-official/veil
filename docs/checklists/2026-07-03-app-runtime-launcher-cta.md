@@ -14,6 +14,8 @@ Goal: make the installed Windows surface feel like an app runtime instead of a V
 - [x] Render the latest mirrored app frame in the launcher when a stream is active.
 - [x] After Open Notepad, keep the launcher on the pending mirror surface until the first frame arrives.
 - [x] Add a menu and launcher affordance that records app launch plus first-frame proof.
+- [x] Expose Open Notepad and Record App Proof directly from the menu bar.
+- [x] Rename primary commands and setup handoff copy from VM/console wording toward Windows display/app wording.
 
 ## Review Notes
 
@@ -24,3 +26,4 @@ Goal: make the installed Windows surface feel like an app runtime instead of a V
 ## Next
 
 - [ ] Replace the secondary console handoff language once the QEMU display can be embedded or mirrored in-app.
+- [ ] Move remaining QEMU/VM internals into an advanced diagnostics view so the default app surface stays product-grade.

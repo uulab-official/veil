@@ -100,26 +100,26 @@ struct VeilHostShellApp: App {
                 }
                 .keyboardShortcut("r", modifiers: [.command])
 
-                Button("Refresh Runtime") {
+                Button("Refresh Windows") {
                     Task {
                         await vmModel.load()
                     }
                 }
                 .keyboardShortcut("r", modifiers: [.command, .shift])
 
-                Button("Start VM") {
+                Button("Start Windows") {
                     startVMAndShowConsole()
                 }
                 .keyboardShortcut("b", modifiers: [.command])
                 .disabled(!vmModel.canStart || vmModel.phase == .loading)
 
-                Button("Stop VM") {
+                Button("Stop Windows") {
                     stopVMAndCloseConsole()
                 }
                 .keyboardShortcut(".", modifiers: [.command])
                 .disabled(!vmModel.canStop || vmModel.phase == .loading)
 
-                Button("Show VM Console") {
+                Button("Show Windows Display") {
                     showVMConsole()
                 }
                 .keyboardShortcut("b", modifiers: [.command, .shift])
@@ -131,7 +131,7 @@ struct VeilHostShellApp: App {
                 .keyboardShortcut("i", modifiers: [.command, .shift])
                 .disabled(!canInstallGuestAgent)
 
-                Button("Open Windows App Window") {
+                Button("Open Notepad") {
                     launchSelectedWindowsAppWindow()
                 }
                 .keyboardShortcut(.return, modifiers: [.command])
@@ -146,12 +146,15 @@ struct VeilHostShellApp: App {
 
         MenuBarExtra("Veil", systemImage: menuBarSymbolName) {
             VeilMenuBarMenu(
+                model: model,
                 vmModel: vmModel,
                 activateMainWindowAction: activateMainWindow,
                 startVMAction: startVMAndShowConsole,
                 stopVMAction: stopVMAndCloseConsole,
                 showVMConsoleAction: showVMConsole,
                 installGuestAgentAction: installGuestAgentFromConsole,
+                launchWindowsAppAction: launchSelectedWindowsAppWindow,
+                recordAppFrameProofAction: recordAppFrameProof,
                 refreshRuntimeAction: refreshRuntime
             )
         }
@@ -235,17 +238,17 @@ struct VeilHostShellApp: App {
     private func startVMAndShowConsole() {
         Task { @MainActor in
             activateMainWindow()
-            consoleMessage = "Opening the local QEMU Windows console."
+            consoleMessage = "Opening the local Windows display."
             await vmModel.start()
 
             if vmModel.snapshot?.state == .running || vmModel.snapshot?.state == .starting {
                 if vmRuntimeBooter.showConsoleIfRunning() {
-                    consoleMessage = "QEMU Console is open. If it lands in UEFI Shell, the Windows boot recipe still needs work."
+                    consoleMessage = "Windows display is open."
                 } else {
-                    consoleMessage = "Windows runtime is starting, but the QEMU display is not frontmost yet. Try Show Console again after a moment."
+                    consoleMessage = "Windows runtime is starting, but the display is not frontmost yet. Try Show Windows Display again after a moment."
                 }
             } else if let errorMessage = vmModel.errorMessage {
-                consoleMessage = "Windows console could not start: \(errorMessage)"
+                consoleMessage = "Windows display could not start: \(errorMessage)"
             }
         }
     }
@@ -441,9 +444,9 @@ struct VeilHostShellApp: App {
     private func showVMConsole() {
         activateMainWindow()
         if vmRuntimeBooter.showConsoleIfRunning() {
-            consoleMessage = "QEMU Console is open. If it lands in UEFI Shell, the Windows boot recipe still needs work."
+            consoleMessage = "Windows display is open."
         } else {
-            consoleMessage = "No active QEMU display is attached yet. Start Windows first, then open the console."
+            consoleMessage = "No active Windows display is attached yet. Start Windows first, then open the display."
         }
     }
 
@@ -543,12 +546,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 private struct VeilMenuBarMenu: View {
     @Environment(\.openWindow) private var openWindow
 
+    var model: HostDashboardModel
     var vmModel: VMRuntimeModel
     var activateMainWindowAction: () -> Void
     var startVMAction: () -> Void
     var stopVMAction: () -> Void
     var showVMConsoleAction: () -> Void
     var installGuestAgentAction: () -> Void
+    var launchWindowsAppAction: () -> Void
+    var recordAppFrameProofAction: () -> Void
     var refreshRuntimeAction: () -> Void
 
     var body: some View {
@@ -558,13 +564,27 @@ private struct VeilMenuBarMenu: View {
 
         Divider()
 
+        Button("Open Notepad", systemImage: "macwindow.badge.plus") {
+            openMainWindow()
+            launchWindowsAppAction()
+        }
+        .disabled(!model.canRequestSelectedAppLaunch || model.phase == .loading || model.phase == .launching)
+
+        Button("Record App Proof", systemImage: "checkmark.seal") {
+            openMainWindow()
+            recordAppFrameProofAction()
+        }
+        .disabled(!model.canRequestSelectedAppLaunch && model.mirrorSessions.isEmpty)
+
+        Divider()
+
         Button("Start Windows", systemImage: "play.fill") {
             openMainWindow()
             startVMAction()
         }
         .disabled(!vmModel.canStart || vmModel.phase == .loading)
 
-        Button("Show Console", systemImage: "display") {
+        Button("Show Windows Display", systemImage: "display") {
             openMainWindow()
             showVMConsoleAction()
         }
@@ -584,7 +604,7 @@ private struct VeilMenuBarMenu: View {
 
         Divider()
 
-        Button("Refresh Runtime", systemImage: "arrow.clockwise") {
+        Button("Refresh Windows", systemImage: "arrow.clockwise") {
             refreshRuntimeAction()
         }
         .disabled(vmModel.phase == .loading)
@@ -740,17 +760,17 @@ private struct StandaloneMainWindowRoot: View {
 
     private func startVMAndShowConsole() {
         Task { @MainActor in
-            consoleMessage = "Opening the local QEMU Windows console."
+            consoleMessage = "Opening the local Windows display."
             await vmModel.start()
 
             if vmModel.snapshot?.state == .running || vmModel.snapshot?.state == .starting {
                 if vmRuntimeBooter.showConsoleIfRunning() {
-                    consoleMessage = "QEMU Console is open."
+                    consoleMessage = "Windows display is open."
                 } else {
-                    consoleMessage = "Windows runtime is starting, but the QEMU display is not frontmost yet."
+                    consoleMessage = "Windows runtime is starting, but the display is not frontmost yet."
                 }
             } else if let errorMessage = vmModel.errorMessage {
-                consoleMessage = "Windows console could not start: \(errorMessage)"
+                consoleMessage = "Windows display could not start: \(errorMessage)"
             }
         }
     }
@@ -759,16 +779,16 @@ private struct StandaloneMainWindowRoot: View {
         Task { @MainActor in
             await vmModel.stop()
             if vmModel.snapshot?.state == .stopped {
-                consoleMessage = "Windows console closed."
+                consoleMessage = "Windows display closed."
             }
         }
     }
 
     private func showVMConsole() {
         if vmRuntimeBooter.showConsoleIfRunning() {
-            consoleMessage = "QEMU Console is open."
+            consoleMessage = "Windows display is open."
         } else {
-            consoleMessage = "No active QEMU display is attached yet. Start Windows first, then open the console."
+            consoleMessage = "No active Windows display is attached yet. Start Windows first, then open the display."
         }
     }
 

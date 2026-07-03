@@ -350,9 +350,9 @@ private struct InstallSimulationState: Equatable {
     static let steps = [
         "Checking Windows ISO",
         "Validating local VM profile",
-        "Starting QEMU/HVF",
+        "Starting local Windows",
         "Attaching local display",
-        "Opening QEMU console",
+        "Opening Windows display",
         "Checking Windows Setup boot"
     ]
 
@@ -542,14 +542,14 @@ private struct SimpleRuntimePanel: View {
             return "Choose a Windows 11 Arm ISO, then prepare the VM."
         case .stopped:
             if installSimulation.phase == .complete {
-                return "Console handoff finished. Start again if the Windows setup window did not appear."
+                return "Windows display handoff finished. Start again if the setup window did not appear."
             }
 
-            return snapshot.bootReady ? "Install Windows to open the local console." : statusText
+            return snapshot.bootReady ? "Install Windows to open the local display." : statusText
         case .starting:
-            return "Starting QEMU/HVF. The Windows display opens in a separate console."
+            return "Starting local Windows. The display opens in a separate window."
         case .running:
-            return "QEMU/HVF is running. If UEFI Shell appears, the boot recipe still needs work."
+            return "Windows is running locally. Open a Windows app once the guest agent connects."
         case .suspended:
             return "The VM is suspended."
         case .failed:
@@ -565,7 +565,7 @@ private struct SimpleRuntimePanel: View {
         if canStart {
             switch installSimulation.phase {
             case .idle:
-                return "Open Windows Console"
+                return "Open Windows Display"
             case .running:
                 return "Starting..."
             case .complete:
@@ -673,11 +673,11 @@ private struct InstallSimulationProgressView: View {
     private var title: String {
         switch simulation.phase {
         case .idle:
-            return "Windows console ready"
+            return "Windows display ready"
         case .running:
-            return "Opening QEMU console"
+            return "Opening Windows display"
         case .complete:
-            return "Console opened"
+            return "Windows display opened"
         }
     }
 
@@ -893,8 +893,8 @@ private struct QuickActionsPanel: View {
                 .disabled((!canStart && !canStop) || isLoading)
 
                 ControlActionTile(
-                    title: "Console",
-                    detail: canShowConsole ? "Open the Windows installer display." : "Console appears after the VM starts.",
+                    title: "Display",
+                    detail: canShowConsole ? "Open the Windows installer display." : "Display appears after Windows starts.",
                     symbolName: "display",
                     tint: .blue,
                     state: canShowConsole ? .ready : .blocked,
@@ -1535,7 +1535,7 @@ private struct WindowsSetupDisplayPanel: View {
 
     private var controlBarSubtitle: String {
         if canStop {
-            return selectedInstallerName ?? "Local VM display"
+            return selectedInstallerName ?? "Local Windows display"
         }
 
         if installerNeedsFilePickerAccess, let selectedInstallerName {
@@ -1621,7 +1621,7 @@ private struct WindowsSetupDisplayPanel: View {
             InstallFlowItem(
                 title: "Installer",
                 detail: canShowConsole
-                    ? "VM console is open"
+                    ? "Windows display is open"
                     : (canStart ? "Open Windows Setup" : "Waiting for preparation"),
                 symbolName: "display",
                 state: canShowConsole ? .complete : (canStart ? .current : .pending)
@@ -1785,7 +1785,7 @@ private struct WindowsSetupDisplayPanel: View {
         }
 
         if canStop {
-            return "Stop the current local Windows VM."
+            return "Stop the current local Windows runtime."
         }
 
         if effectiveInstallEvidence.isInstalled {
@@ -1793,7 +1793,7 @@ private struct WindowsSetupDisplayPanel: View {
         }
 
         if canStart {
-            return "Start the VM and open the Windows console."
+            return "Start Windows and open the local display."
         }
 
         if installerNeedsFilePickerAccess {
@@ -1934,7 +1934,7 @@ private struct ConsoleLaunchEvidenceStrip: View {
                 .background(.blue.opacity(0.11), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
 
             VStack(alignment: .leading, spacing: 2) {
-                Text("Last Console")
+                Text("Last Display")
                     .font(.caption2.weight(.semibold))
                     .foregroundStyle(.secondary)
 
