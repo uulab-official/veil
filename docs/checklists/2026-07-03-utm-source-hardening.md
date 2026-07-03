@@ -75,3 +75,4 @@ Goal: adapt concrete UTM source patterns into Veil while keeping Veil focused on
 - [x] Add `pendingLaunch` to app-runtime status so UI, CLI, and harnesses can prove queued app launches will auto-run when the Windows guest agent reconnects.
 - [x] Persist pending app-launch intent locally so the Windows-start handoff survives host/CLI process restarts and clears only after the requested app launches.
 - [x] Add `app-runtime-action --action fulfill-pending` so automation can consume a persisted pending app launch after guest-agent reconnect without reconstructing the original launch command.
+- [x] Expose `runtime.fulfillPendingLaunch` in app-runtime status actions so UI/CLI surfaces can show the queued Windows app is ready to open after reconnect.

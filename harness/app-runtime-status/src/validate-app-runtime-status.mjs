@@ -34,7 +34,7 @@ export function validateAppRuntimeStatus(report) {
   validateMacWindowIntegration(report.macWindowIntegration, report.mirrorSessions, report.connection);
   validateQuietRuntime(report.quietRuntime, report.mirrorSessions);
   validateLaunchPlan(report.launchPlan, report);
-  validateActions(report.actions, report.launchPlan);
+  validateActions(report.actions, report);
 
   if (report.selectedAppId !== undefined) {
     requireString(report.selectedAppId, "selectedAppId");
@@ -374,7 +374,7 @@ function validateDockIntegration(dockIntegration, mirrorSessions) {
   }
 }
 
-function validateActions(actions, launchPlan) {
+function validateActions(actions, report) {
   if (!Array.isArray(actions)) {
     throw new TypeError("actions must be an array.");
   }
@@ -387,6 +387,7 @@ function validateActions(actions, launchPlan) {
     "windowsApps.closeAll",
     "macWindows.autoOpen",
     "runtime.startWindowsForApp",
+    "runtime.fulfillPendingLaunch",
     "runtime.quietWhenIdle",
     "clipboard.setText"
   ]) {
@@ -406,8 +407,17 @@ function validateActions(actions, launchPlan) {
   }
 
   const startAction = actions.find((action) => action.id === "runtime.startWindowsForApp");
-  if (startAction.isAvailable !== launchPlan.requiresRuntimeStart) {
+  if (startAction.isAvailable !== report.launchPlan.requiresRuntimeStart) {
     throw new TypeError("runtime.startWindowsForApp availability must match launchPlan.requiresRuntimeStart.");
+  }
+
+  const pendingApp = report.apps.find((app) => app.id === report.pendingLaunch.appId);
+  const canFulfillPendingLaunch = report.pendingLaunch.isQueued
+    && report.connection.hasLiveAgentConnection
+    && pendingApp?.canLaunchNow === true;
+  const fulfillPendingAction = actions.find((action) => action.id === "runtime.fulfillPendingLaunch");
+  if (fulfillPendingAction.isAvailable !== canFulfillPendingLaunch) {
+    throw new TypeError("runtime.fulfillPendingLaunch availability must match queued launch readiness.");
   }
 }
 

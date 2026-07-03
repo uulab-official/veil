@@ -197,6 +197,27 @@ test("rejects start action availability that drifts from launch plan", () => {
   );
 });
 
+test("rejects fulfill-pending action availability that drifts from queued launch readiness", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.mac-window-live.json", import.meta.url), "utf8"));
+  report.pendingLaunchAppId = "winapp_notepad";
+  report.pendingLaunch = {
+    isQueued: true,
+    appId: "winapp_notepad",
+    willLaunchOnAgentReconnect: false,
+    recommendedAction: "launch-pending-now",
+    reason: "The live Windows agent is connected; retry the queued app launch now."
+  };
+  report.launchPlan.pendingLaunchAppId = "winapp_notepad";
+  report.launchPlan.recommendedAction = "fulfill-pending-now";
+  report.launchPlan.recommendedLaunchCommand = "veil-vmctl app-runtime-action --json --action fulfill-pending";
+  report.launchPlan.reason = "The live Windows agent can fulfill the queued app launch now.";
+
+  assert.throws(
+    () => validateAppRuntimeStatus(report),
+    /runtime\.fulfillPendingLaunch/
+  );
+});
+
 test("rejects launcher hiding without live mirrored windows", () => {
   const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.demo.json", import.meta.url), "utf8"));
   report.macWindowIntegration.hidesLauncherWhenMirroring = true;

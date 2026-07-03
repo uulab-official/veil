@@ -688,6 +688,7 @@ struct HostDashboardModelTests {
         #expect(queuedReport.pendingLaunch.recommendedAction == "auto-launch-on-agent-reconnect")
         #expect(queuedReport.pendingLaunch.reason == "Veil will launch the queued Windows app after the guest agent reconnects.")
         #expect(queuedReport.actions.first { $0.id == "runtime.startWindowsForApp" }?.isAvailable == true)
+        #expect(queuedReport.actions.first { $0.id == "runtime.fulfillPendingLaunch" }?.isAvailable == false)
         #expect(try await pendingLaunchStore.load()?.appId == "winapp_notepad")
 
         primary.error = nil
@@ -700,6 +701,7 @@ struct HostDashboardModelTests {
         #expect(fulfilledReport.pendingLaunch.appId == nil)
         #expect(fulfilledReport.pendingLaunch.willLaunchOnAgentReconnect == false)
         #expect(fulfilledReport.pendingLaunch.recommendedAction == "none")
+        #expect(fulfilledReport.actions.first { $0.id == "runtime.fulfillPendingLaunch" }?.isAvailable == false)
         #expect(model.lastLaunch?.window.title == "Untitled - Notepad")
         #expect(fulfilledLaunch?.window.title == "Untitled - Notepad")
         #expect(model.mirrorSessions.map(\.id) == ["hwnd:0003029A"])
@@ -728,11 +730,13 @@ struct HostDashboardModelTests {
         #expect(model.runtimeStatusReport().pendingLaunch.recommendedAction == "launch-pending-now")
         #expect(model.runtimeStatusReport().launchPlan.recommendedAction == "fulfill-pending-now")
         #expect(model.runtimeStatusReport().launchPlan.recommendedLaunchCommand == "veil-vmctl app-runtime-action --json --action fulfill-pending")
+        #expect(model.runtimeStatusReport().actions.first { $0.id == "runtime.fulfillPendingLaunch" }?.isAvailable == true)
 
         let fulfilledLaunch = await model.refreshLiveAgentIfNeeded()
 
         #expect(fulfilledLaunch?.window.windowId == "hwnd:0003029A")
         #expect(model.pendingLaunchAppId == nil)
+        #expect(model.runtimeStatusReport().actions.first { $0.id == "runtime.fulfillPendingLaunch" }?.isAvailable == false)
         #expect(try await pendingLaunchStore.load()?.appId == nil)
         #expect(service.launchCount == 1)
     }

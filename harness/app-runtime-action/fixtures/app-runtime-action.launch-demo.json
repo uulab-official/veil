@@ -155,6 +155,11 @@
         "isAvailable": true
       },
       {
+        "id": "runtime.fulfillPendingLaunch",
+        "title": "Open Queued Windows App",
+        "isAvailable": false
+      },
+      {
         "id": "runtime.quietWhenIdle",
         "title": "Quiet Runtime When Idle",
         "isAvailable": false

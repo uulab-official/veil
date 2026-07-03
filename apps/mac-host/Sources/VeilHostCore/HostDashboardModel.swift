@@ -541,6 +541,7 @@ public final class HostDashboardModel {
         let macWindowIntegration = macWindowIntegrationStatus()
         let launchPlan = launchPlanStatus()
         let pendingLaunch = pendingLaunchStatus()
+        let canFulfillPendingLaunch = pendingLaunch.appId.map { canLaunchApp(appId: $0) } ?? false
         return WindowsAppRuntimeStatusReport(
             generatedAt: generatedAt,
             phase: phase,
@@ -616,6 +617,11 @@ public final class HostDashboardModel {
                     id: "runtime.startWindowsForApp",
                     title: "Start Windows For App Launch",
                     isAvailable: launchPlan.requiresRuntimeStart
+                ),
+                WindowsAppRuntimeActionStatus(
+                    id: "runtime.fulfillPendingLaunch",
+                    title: "Open Queued Windows App",
+                    isAvailable: pendingLaunch.isQueued && canFulfillPendingLaunch
                 ),
                 WindowsAppRuntimeActionStatus(
                     id: "runtime.quietWhenIdle",

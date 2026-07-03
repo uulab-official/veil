@@ -77,6 +77,9 @@ automatically fulfill it when the guest agent reconnects, so a product surface
 can show "Windows is starting, your app will open" without inventing a window.
 The queued app id is persisted locally as a pending-launch intent, allowing the
 handoff to survive a host process restart while Windows is still starting.
+The supported actions include `runtime.fulfillPendingLaunch`, which only
+becomes available after a queued app launch has a live guest agent capable of
+opening that app.
 `macWindowIntegration` records whether a live agent can feed guest HWND events
 into automatic macOS app-window presentation, including mirrored, pending-frame,
 and streaming window counts.

@@ -31,6 +31,11 @@
       "title": "Start Windows For App Launch"
     },
     {
+      "id": "runtime.fulfillPendingLaunch",
+      "isAvailable": false,
+      "title": "Open Queued Windows App"
+    },
+    {
       "id": "runtime.quietWhenIdle",
       "isAvailable": false,
       "title": "Quiet Runtime When Idle"
