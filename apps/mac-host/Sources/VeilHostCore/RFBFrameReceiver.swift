@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 
 public enum RFBError: Error, LocalizedError, Equatable, Sendable {
@@ -8,6 +9,8 @@ public enum RFBError: Error, LocalizedError, Equatable, Sendable {
     case unsupportedServerMessage(UInt8)
     case unsupportedEncoding(Int32)
     case invalidPixelFormatBitsPerPixel(UInt8)
+    case sessionNotStarted
+    case invalidRectangleBounds
 
     public var errorDescription: String? {
         switch self {
@@ -25,6 +28,27 @@ public enum RFBError: Error, LocalizedError, Equatable, Sendable {
             "Unsupported RFB rectangle encoding \(encoding)."
         case .invalidPixelFormatBitsPerPixel(let bitsPerPixel):
             "Unsupported RFB pixel format depth \(bitsPerPixel)."
+        case .sessionNotStarted:
+            "RFB framebuffer updates cannot be read before the server init handshake completes."
+        case .invalidRectangleBounds:
+            "RFB framebuffer update contains a rectangle outside the display bounds."
+        }
+    }
+}
+
+public enum RFBLoopbackSocketError: Error, LocalizedError, Equatable, Sendable {
+    case invalidEndpoint(String)
+    case socketOperationFailed(String)
+    case connectionClosed
+
+    public var errorDescription: String? {
+        switch self {
+        case .invalidEndpoint(let endpoint):
+            "Invalid RFB loopback endpoint '\(endpoint)'."
+        case .socketOperationFailed(let operation):
+            "RFB loopback socket operation failed: \(operation)."
+        case .connectionClosed:
+            "RFB loopback socket closed before the requested bytes were received."
         }
     }
 }
@@ -93,6 +117,13 @@ public struct RFBFramebufferUpdate: Codable, Equatable, Sendable {
     public var rectangles: [RFBRawRectangle]
 }
 
+public struct RFBRenderedFrame: Codable, Equatable, Sendable {
+    public var width: Int
+    public var height: Int
+    public var rgbaPixels: Data
+    public var sequence: Int
+}
+
 public enum RFBClientMessageBuilder {
     public static func clientProtocolVersion() -> Data {
         Data("RFB 003.008\n".utf8)
@@ -126,7 +157,7 @@ public enum RFBFrameParser {
     public static func parseProtocolVersion(_ data: Data) throws -> String {
         try require(data, count: 12)
         let version = String(decoding: data.prefix(12), as: UTF8.self)
-        guard version == "RFB 003.008\n" || version == "RFB 003.007\n" || version == "RFB 003.003\n" else {
+        guard version == "RFB 003.008\n" || version == "RFB 003.007\n" else {
             throw RFBError.unsupportedProtocol(version.trimmingCharacters(in: .whitespacesAndNewlines))
         }
         return version
@@ -215,6 +246,287 @@ public enum RFBFrameParser {
     }
 }
 
+public protocol RFBByteStream: AnyObject {
+    func readExactly(_ byteCount: Int) throws -> Data
+    func write(_ data: Data) throws
+    func close()
+}
+
+public final class RFBLoopbackSocket: RFBByteStream {
+    private var fileDescriptor: Int32 = -1
+
+    public init(host: String, port: Int, timeoutSeconds: Int = 3) throws {
+        guard port > 0 && port <= 65_535 else {
+            throw RFBLoopbackSocketError.invalidEndpoint("\(host):\(port)")
+        }
+
+        let descriptor = socket(AF_INET, SOCK_STREAM, 0)
+        guard descriptor >= 0 else {
+            throw RFBLoopbackSocketError.socketOperationFailed(Self.lastErrnoDescription("socket"))
+        }
+        fileDescriptor = descriptor
+
+        var timeout = timeval(tv_sec: timeoutSeconds, tv_usec: 0)
+        setsockopt(fileDescriptor, SOL_SOCKET, SO_RCVTIMEO, &timeout, socklen_t(MemoryLayout<timeval>.size))
+        setsockopt(fileDescriptor, SOL_SOCKET, SO_SNDTIMEO, &timeout, socklen_t(MemoryLayout<timeval>.size))
+
+        var address = sockaddr_in()
+        address.sin_len = UInt8(MemoryLayout<sockaddr_in>.size)
+        address.sin_family = sa_family_t(AF_INET)
+        address.sin_port = in_port_t(port).bigEndian
+
+        guard inet_pton(AF_INET, host, &address.sin_addr) == 1 else {
+            close()
+            throw RFBLoopbackSocketError.invalidEndpoint("\(host):\(port)")
+        }
+
+        let result = withUnsafePointer(to: &address) { pointer in
+            pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) { sockaddrPointer in
+                Darwin.connect(fileDescriptor, sockaddrPointer, socklen_t(MemoryLayout<sockaddr_in>.size))
+            }
+        }
+
+        guard result == 0 else {
+            let reason = Self.lastErrnoDescription("connect")
+            close()
+            throw RFBLoopbackSocketError.socketOperationFailed(reason)
+        }
+    }
+
+    deinit {
+        close()
+    }
+
+    public func readExactly(_ byteCount: Int) throws -> Data {
+        guard byteCount >= 0 else {
+            throw RFBError.messageTooShort(expected: 0, actual: byteCount)
+        }
+
+        var buffer = [UInt8](repeating: 0, count: byteCount)
+        var bytesRead = 0
+
+        while bytesRead < byteCount {
+            let result = buffer.withUnsafeMutableBytes { rawBuffer in
+                Darwin.read(fileDescriptor, rawBuffer.baseAddress!.advanced(by: bytesRead), byteCount - bytesRead)
+            }
+
+            if result == 0 {
+                throw RFBLoopbackSocketError.connectionClosed
+            }
+
+            if result < 0 {
+                throw RFBLoopbackSocketError.socketOperationFailed(Self.lastErrnoDescription("read"))
+            }
+
+            bytesRead += result
+        }
+
+        return Data(buffer)
+    }
+
+    public func write(_ data: Data) throws {
+        var bytesWritten = 0
+
+        try data.withUnsafeBytes { rawBuffer in
+            while bytesWritten < data.count {
+                let result = Darwin.write(
+                    fileDescriptor,
+                    rawBuffer.baseAddress!.advanced(by: bytesWritten),
+                    data.count - bytesWritten
+                )
+
+                if result == 0 {
+                    throw RFBLoopbackSocketError.connectionClosed
+                }
+
+                if result < 0 {
+                    throw RFBLoopbackSocketError.socketOperationFailed(Self.lastErrnoDescription("write"))
+                }
+
+                bytesWritten += result
+            }
+        }
+    }
+
+    public func close() {
+        guard fileDescriptor >= 0 else {
+            return
+        }
+
+        Darwin.close(fileDescriptor)
+        fileDescriptor = -1
+    }
+
+    private static func lastErrnoDescription(_ operation: String) -> String {
+        "\(operation): \(String(cString: strerror(errno)))"
+    }
+}
+
+public final class RFBFrameStreamClient {
+    private let stream: RFBByteStream
+    public private(set) var serverInit: RFBServerInit?
+
+    public init(stream: RFBByteStream) {
+        self.stream = stream
+    }
+
+    public func startSharedSession() throws -> RFBServerInit {
+        _ = try RFBFrameParser.parseProtocolVersion(stream.readExactly(12))
+        try stream.write(RFBClientMessageBuilder.clientProtocolVersion())
+
+        let securityCountData = try stream.readExactly(1)
+        let securityCount = Int(securityCountData[0])
+        let securityTypesData = try stream.readExactly(securityCount)
+        _ = try RFBFrameParser.parseSecurityTypes(securityCountData + securityTypesData)
+        try stream.write(RFBClientMessageBuilder.selectNoneSecurity())
+
+        try RFBFrameParser.parseSecurityResult(stream.readExactly(4))
+        try stream.write(RFBClientMessageBuilder.sharedClientInit())
+
+        let serverInitHeader = try stream.readExactly(24)
+        let desktopNameLength = Int(serverInitHeader.readUInt32BigEndian(at: 20))
+        let desktopNameData = try stream.readExactly(desktopNameLength)
+        let serverInit = try RFBFrameParser.parseServerInit(serverInitHeader + desktopNameData)
+        self.serverInit = serverInit
+        return serverInit
+    }
+
+    public func requestFramebufferUpdate(incremental: Bool = true) throws {
+        guard let serverInit else {
+            throw RFBError.sessionNotStarted
+        }
+
+        try stream.write(RFBClientMessageBuilder.framebufferUpdateRequest(
+            incremental: incremental,
+            x: 0,
+            y: 0,
+            width: UInt16(serverInit.width),
+            height: UInt16(serverInit.height)
+        ))
+    }
+
+    public func readFramebufferUpdate() throws -> RFBFramebufferUpdate {
+        guard let serverInit else {
+            throw RFBError.sessionNotStarted
+        }
+        guard let bytesPerPixel = serverInit.pixelFormat.bytesPerPixel else {
+            throw RFBError.invalidPixelFormatBitsPerPixel(serverInit.pixelFormat.bitsPerPixel)
+        }
+
+        let messageHeader = try stream.readExactly(4)
+        let rectangleCount = Int(messageHeader.readUInt16BigEndian(at: 2))
+        var update = messageHeader
+
+        for _ in 0..<rectangleCount {
+            let rectangleHeader = try stream.readExactly(12)
+            update.append(rectangleHeader)
+
+            let width = Int(rectangleHeader.readUInt16BigEndian(at: 4))
+            let height = Int(rectangleHeader.readUInt16BigEndian(at: 6))
+            let encoding = rectangleHeader.readInt32BigEndian(at: 8)
+
+            guard encoding == 0 else {
+                return try RFBFrameParser.parseFramebufferUpdate(update, pixelFormat: serverInit.pixelFormat)
+            }
+
+            let pixelByteCount = width * height * bytesPerPixel
+            update.append(try stream.readExactly(pixelByteCount))
+        }
+
+        return try RFBFrameParser.parseFramebufferUpdate(update, pixelFormat: serverInit.pixelFormat)
+    }
+}
+
+public final class RFBFramebufferRenderer {
+    public let width: Int
+    public let height: Int
+
+    private let pixelFormat: RFBPixelFormat
+    private var rgbaPixels: [UInt8]
+    private var sequence = 0
+
+    public init(serverInit: RFBServerInit) throws {
+        guard serverInit.pixelFormat.bytesPerPixel != nil else {
+            throw RFBError.invalidPixelFormatBitsPerPixel(serverInit.pixelFormat.bitsPerPixel)
+        }
+
+        self.width = serverInit.width
+        self.height = serverInit.height
+        self.pixelFormat = serverInit.pixelFormat
+        self.rgbaPixels = [UInt8](repeating: 0, count: serverInit.width * serverInit.height * 4)
+    }
+
+    public func apply(_ update: RFBFramebufferUpdate) throws -> RFBRenderedFrame {
+        guard let bytesPerPixel = pixelFormat.bytesPerPixel else {
+            throw RFBError.invalidPixelFormatBitsPerPixel(pixelFormat.bitsPerPixel)
+        }
+
+        for rectangle in update.rectangles {
+            guard rectangle.x >= 0,
+                  rectangle.y >= 0,
+                  rectangle.width >= 0,
+                  rectangle.height >= 0,
+                  rectangle.x + rectangle.width <= width,
+                  rectangle.y + rectangle.height <= height else {
+                throw RFBError.invalidRectangleBounds
+            }
+
+            let expectedPixelByteCount = rectangle.width * rectangle.height * bytesPerPixel
+            guard rectangle.pixels.count >= expectedPixelByteCount else {
+                throw RFBError.messageTooShort(expected: expectedPixelByteCount, actual: rectangle.pixels.count)
+            }
+
+            for row in 0..<rectangle.height {
+                for column in 0..<rectangle.width {
+                    let sourceOffset = ((row * rectangle.width) + column) * bytesPerPixel
+                    let destinationX = rectangle.x + column
+                    let destinationY = rectangle.y + row
+                    let destinationOffset = ((destinationY * width) + destinationX) * 4
+                    let pixelValue = rectangle.pixels.rfbPixelValue(
+                        at: sourceOffset,
+                        bytesPerPixel: bytesPerPixel,
+                        isBigEndian: pixelFormat.isBigEndian
+                    )
+
+                    rgbaPixels[destinationOffset] = Self.component(
+                        from: pixelValue,
+                        shift: pixelFormat.redShift,
+                        max: pixelFormat.redMax
+                    )
+                    rgbaPixels[destinationOffset + 1] = Self.component(
+                        from: pixelValue,
+                        shift: pixelFormat.greenShift,
+                        max: pixelFormat.greenMax
+                    )
+                    rgbaPixels[destinationOffset + 2] = Self.component(
+                        from: pixelValue,
+                        shift: pixelFormat.blueShift,
+                        max: pixelFormat.blueMax
+                    )
+                    rgbaPixels[destinationOffset + 3] = 255
+                }
+            }
+        }
+
+        sequence += 1
+        return RFBRenderedFrame(
+            width: width,
+            height: height,
+            rgbaPixels: Data(rgbaPixels),
+            sequence: sequence
+        )
+    }
+
+    private static func component(from pixelValue: UInt32, shift: UInt8, max: UInt16) -> UInt8 {
+        guard max > 0 else {
+            return 0
+        }
+
+        let rawComponent = (pixelValue >> UInt32(shift)) & UInt32(max)
+        return UInt8((rawComponent * 255) / UInt32(max))
+    }
+}
+
 private struct RFBReader {
     private let data: Data
     private var offset = 0
@@ -291,5 +603,31 @@ private extension Data {
     mutating func appendBigEndian(_ value: UInt16) {
         append(UInt8((value >> 8) & 0xff))
         append(UInt8(value & 0xff))
+    }
+
+    func readUInt16BigEndian(at offset: Int) -> UInt16 {
+        (UInt16(self[offset]) << 8) | UInt16(self[offset + 1])
+    }
+
+    func readUInt32BigEndian(at offset: Int) -> UInt32 {
+        (UInt32(self[offset]) << 24)
+            | (UInt32(self[offset + 1]) << 16)
+            | (UInt32(self[offset + 2]) << 8)
+            | UInt32(self[offset + 3])
+    }
+
+    func readInt32BigEndian(at offset: Int) -> Int32 {
+        Int32(bitPattern: readUInt32BigEndian(at: offset))
+    }
+
+    func rfbPixelValue(at offset: Int, bytesPerPixel: Int, isBigEndian: Bool) -> UInt32 {
+        var value: UInt32 = 0
+
+        for byteIndex in 0..<bytesPerPixel {
+            let sourceIndex = isBigEndian ? offset + byteIndex : offset + (bytesPerPixel - 1 - byteIndex)
+            value = (value << 8) | UInt32(self[sourceIndex])
+        }
+
+        return value
     }
 }

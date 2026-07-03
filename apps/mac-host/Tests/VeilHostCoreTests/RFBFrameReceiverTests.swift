@@ -118,6 +118,113 @@ struct RFBFrameReceiverTests {
         }
     }
 
+    @Test("stream client handshakes and reads a raw framebuffer update")
+    func streamClientHandshakesAndReadsFrame() throws {
+        let stream = FakeRFBByteStream(inbound: Self.serverStreamData())
+        let client = RFBFrameStreamClient(stream: stream)
+
+        let serverInit = try client.startSharedSession()
+        try client.requestFramebufferUpdate(incremental: false)
+        let update = try client.readFramebufferUpdate()
+
+        #expect(serverInit.width == 2)
+        #expect(serverInit.height == 1)
+        #expect(serverInit.desktopName == "QEMU")
+        #expect(stream.writes[0] == RFBClientMessageBuilder.clientProtocolVersion())
+        #expect(stream.writes[1] == RFBClientMessageBuilder.selectNoneSecurity())
+        #expect(stream.writes[2] == RFBClientMessageBuilder.sharedClientInit())
+        #expect(stream.writes[3] == Data([
+            3, 0,
+            0, 0,
+            0, 0,
+            0, 2,
+            0, 1
+        ]))
+        #expect(update.rectangles.count == 1)
+        #expect(update.rectangles.first?.pixels == Data([
+            0, 0, 255, 0,
+            0, 255, 0, 0
+        ]))
+    }
+
+    @Test("framebuffer renderer applies raw rectangles into RGBA pixels")
+    func framebufferRendererAppliesRawRectangles() throws {
+        let serverInit = try RFBFrameParser.parseServerInit(Self.serverInitData(
+            width: 2,
+            height: 1,
+            desktopName: "QEMU"
+        ))
+        let renderer = try RFBFramebufferRenderer(serverInit: serverInit)
+        let update = RFBFramebufferUpdate(rectangles: [
+            RFBRawRectangle(
+                x: 0,
+                y: 0,
+                width: 2,
+                height: 1,
+                pixels: Data([
+                    0, 0, 255, 0,
+                    0, 255, 0, 0
+                ])
+            )
+        ])
+
+        let frame = try renderer.apply(update)
+
+        #expect(frame.width == 2)
+        #expect(frame.height == 1)
+        #expect(frame.sequence == 1)
+        #expect(frame.rgbaPixels == Data([
+            255, 0, 0, 255,
+            0, 255, 0, 255
+        ]))
+    }
+
+    @Test("framebuffer renderer rejects rectangles outside display bounds")
+    func framebufferRendererRejectsOutOfBoundsRectangles() throws {
+        let serverInit = try RFBFrameParser.parseServerInit(Self.serverInitData(
+            width: 2,
+            height: 1,
+            desktopName: "QEMU"
+        ))
+        let renderer = try RFBFramebufferRenderer(serverInit: serverInit)
+        let update = RFBFramebufferUpdate(rectangles: [
+            RFBRawRectangle(
+                x: 1,
+                y: 0,
+                width: 2,
+                height: 1,
+                pixels: Data(repeating: 0, count: 8)
+            )
+        ])
+
+        #expect(throws: RFBError.invalidRectangleBounds) {
+            _ = try renderer.apply(update)
+        }
+    }
+
+    @Test("framebuffer renderer rejects short pixel buffers")
+    func framebufferRendererRejectsShortPixelBuffers() throws {
+        let serverInit = try RFBFrameParser.parseServerInit(Self.serverInitData(
+            width: 2,
+            height: 1,
+            desktopName: "QEMU"
+        ))
+        let renderer = try RFBFramebufferRenderer(serverInit: serverInit)
+        let update = RFBFramebufferUpdate(rectangles: [
+            RFBRawRectangle(
+                x: 0,
+                y: 0,
+                width: 2,
+                height: 1,
+                pixels: Data([0, 0, 255, 0])
+            )
+        ])
+
+        #expect(throws: RFBError.messageTooShort(expected: 8, actual: 4)) {
+            _ = try renderer.apply(update)
+        }
+    }
+
     private static func serverInitData(width: UInt16, height: UInt16, desktopName: String) -> Data {
         var data = Data()
         data.appendBigEndian(width)
@@ -140,6 +247,50 @@ struct RFBFrameReceiverTests {
         data.append(contentsOf: nameBytes)
         return data
     }
+
+    private static func serverStreamData() -> Data {
+        var data = Data("RFB 003.008\n".utf8)
+        data.append(contentsOf: [1, 1])
+        data.append(contentsOf: [0, 0, 0, 0])
+        data.append(serverInitData(width: 2, height: 1, desktopName: "QEMU"))
+        data.append(contentsOf: [
+            0, 0,
+            0, 1,
+            0, 0,
+            0, 0,
+            0, 2,
+            0, 1,
+            0, 0, 0, 0,
+            0, 0, 255, 0,
+            0, 255, 0, 0
+        ])
+        return data
+    }
+}
+
+private final class FakeRFBByteStream: RFBByteStream {
+    private var inbound: Data
+    private var offset = 0
+    private(set) var writes: [Data] = []
+
+    init(inbound: Data) {
+        self.inbound = inbound
+    }
+
+    func readExactly(_ byteCount: Int) throws -> Data {
+        guard inbound.count >= offset + byteCount else {
+            throw RFBLoopbackSocketError.connectionClosed
+        }
+
+        defer { offset += byteCount }
+        return inbound.subdata(in: offset..<(offset + byteCount))
+    }
+
+    func write(_ data: Data) throws {
+        writes.append(data)
+    }
+
+    func close() {}
 }
 
 private extension Data {
