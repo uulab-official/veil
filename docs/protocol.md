@@ -162,6 +162,11 @@ Event:
 }
 ```
 
+Rules:
+
+- `window.created` can arrive as part of a host launch response or as an async guest lifecycle event.
+- The host tracks the HWND, opens a macOS mirror window, persists the app for reconnect restore, and subscribes to frame capture when the connected agent advertises `windowCapture`.
+
 ## Window Frame
 
 Early harness event from guest to host:

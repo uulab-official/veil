@@ -97,6 +97,7 @@ public enum HostDashboardPhase: String, Codable, Equatable, Sendable {
 }
 
 public enum HostProtocolMessageResult: Equatable, Sendable {
+    case handledWindowCreated(windowId: String)
     case handledWindowFrame(windowId: String)
     case handledWindowClosed(windowId: String)
     case handledClipboardText(sequence: Int)
@@ -692,6 +693,24 @@ public final class HostDashboardModel {
         let envelope = try decoder.decode(ProtocolMessageEnvelope.self, from: message)
 
         switch envelope.type {
+        case .windowCreated:
+            let event = try decoder.decode(WindowCreatedEvent.self, from: message)
+            storeActiveWindow(event)
+            storeMirrorSession(
+                window: event,
+                connectionMode: connectionMode,
+                supportsCapture: hasLiveAgentConnection && health?.capabilities.windowCapture == true
+            )
+            await rememberRestorableAppId(event.appId)
+            if hasLiveAgentConnection, health?.capabilities.windowCapture == true {
+                do {
+                    try await service.subscribeWindowFrames(windowId: event.windowId)
+                } catch {
+                    errorMessage = userMessage(for: error)
+                    phase = .failed
+                }
+            }
+            return .handledWindowCreated(windowId: event.windowId)
         case .windowFrame:
             let frame = try decoder.decode(WindowFrameEvent.self, from: message)
             receiveWindowFrame(frame)

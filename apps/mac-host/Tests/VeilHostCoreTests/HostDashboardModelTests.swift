@@ -118,6 +118,26 @@ struct HostDashboardModelTests {
         #expect(session.latestFrame?.frameId == "frame_000001")
     }
 
+    @Test("routes a protocol created message into automatic mirrored window setup")
+    @MainActor
+    func routesProtocolCreatedMessageIntoAutomaticMirrorSession() async throws {
+        let service = FakeDashboardService(health: .captureReady, apps: [.notepad, .paint])
+        let model = HostDashboardModel(service: service)
+        let message = Data(WindowCreatedEvent.paintCreatedJSON.utf8)
+
+        await model.load()
+        let result = try await model.receiveProtocolMessage(message)
+
+        let session = try #require(model.mirrorSessions.first)
+        #expect(result == .handledWindowCreated(windowId: "hwnd:0005029C"))
+        #expect(model.activeWindows.map(\.windowId) == ["hwnd:0005029C"])
+        #expect(session.id == "hwnd:0005029C")
+        #expect(session.window.appId == "winapp_paint")
+        #expect(session.captureState == .pending)
+        #expect(model.restorableAppIds == ["winapp_paint"])
+        #expect(service.frameSubscriptions == ["hwnd:0005029C"])
+    }
+
     @Test("routes a protocol closed message into mirrored window cleanup")
     @MainActor
     func routesProtocolClosedMessageIntoMirroredWindowCleanup() async throws {
@@ -898,6 +918,16 @@ private extension WindowsApp {
             iconId: "icon_calculator"
         )
     }
+
+    static var paint: WindowsApp {
+        WindowsApp(
+            id: "winapp_paint",
+            name: "Paint",
+            exePath: "C:\\Windows\\System32\\mspaint.exe",
+            publisher: "Microsoft",
+            iconId: "icon_paint"
+        )
+    }
 }
 
 private extension AppLaunchResponse {
@@ -940,6 +970,10 @@ private extension WindowCreatedEvent {
             state: "normal",
             focused: true
         )
+    }
+
+    static var paintCreatedJSON: String {
+        #"{"type":"window.created","windowId":"hwnd:0005029C","processId":4948,"appId":"winapp_paint","title":"Untitled - Paint","bounds":{"x":40,"y":40,"width":1280,"height":800},"state":"normal","focused":true}"#
     }
 }
 

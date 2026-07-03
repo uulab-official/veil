@@ -227,6 +227,13 @@ struct VeilHostShellApp: App {
             while !Task.isCancelled {
                 await model.consumeProtocolMessages(from: agentTransport) { result in
                     switch result {
+                    case .handledWindowCreated(let windowId):
+                        guard let session = model.mirrorSessions.first(where: { $0.id == windowId }) else {
+                            return
+                        }
+
+                        windowsAppWindowPresenter.showWindow(for: session)
+                        hideMainWindowForCoherenceIfNeeded()
                     case .handledWindowFrame(let windowId):
                         guard let session = model.mirrorSessions.first(where: { $0.id == windowId }) else {
                             return
