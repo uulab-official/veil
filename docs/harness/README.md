@@ -36,7 +36,7 @@ Current executable pieces:
 - `harness/qemu-doctor`: a JSON validator for QEMU/HVF readiness reports and next actions.
 - `harness/qemu-smoke`: a JSON validator for bounded QEMU/HVF boot smoke reports.
 - `harness/qemu-display-smoke`: a JSON validator for app-launched loopback VNC frame evidence.
-- `harness/windows-agent-contract`: a contract validator for the first C# Windows agent scaffold, inbox app catalog, and Notepad launch transcript.
+- `harness/windows-agent-contract`: a contract validator for the first C# Windows agent scaffold, inbox app catalog, and app launch transcript.
 - `packages/protocol`: shared protocol constants and validation helpers.
 
 The macOS host shell also includes an internal demo agent fallback. If the WebSocket agent is unavailable, the app still loads demo Windows app metadata and can run selected-app demo launch flows for the first inbox app catalog. The header and Agent view label this as Demo mode and include the unreachable endpoint. The fallback is limited to network availability errors; protocol and agent errors remain visible. Use the external fake agent when testing the transport boundary itself.
@@ -186,6 +186,10 @@ The executable fake-host scenario now validates this full local loop against
 `harness/fake-agent`: direct request/reply sockets launch Notepad, a separate
 event socket receives the subscribed `window.frame`, and the protocol package
 validates the captured frame shape.
+
+Notepad remains the minimum MVP proof app, but the fake agent and shared
+protocol acceptance helper are app-generic so Calculator and Paint can exercise
+the same HWND/window bridge.
 
 ## Notepad Input Smoke Scenario
 

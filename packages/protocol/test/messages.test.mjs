@@ -7,9 +7,9 @@ import {
   MessageType,
   createError,
   parseMessage,
+  validateAppLaunchAcceptance,
   validateClipboardTextSet,
   validateInputKey,
-  validateNotepadAcceptance,
   validateInputMouse,
   validateWindowCloseRequest,
   validateWindowCloseResponse,
@@ -88,11 +88,11 @@ test("creates structured errors", () => {
   });
 });
 
-test("validates the Notepad launch acceptance pair", async () => {
+test("validates an app launch acceptance pair", async () => {
   const launch = await readFixture("app.launch.response.json");
   const window = await readFixture("window.created.json");
 
-  assert.deepEqual(validateNotepadAcceptance(launch, window), {
+  assert.deepEqual(validateAppLaunchAcceptance(launch, window), {
     appId: "winapp_notepad",
     processId: 4912,
     windowId: "hwnd:0003029A",
@@ -100,7 +100,28 @@ test("validates the Notepad launch acceptance pair", async () => {
   });
 });
 
-test("rejects Notepad acceptance when the HWND event belongs to another process", async () => {
+test("validates launch acceptance for non-Notepad windows", async () => {
+  const launch = {
+    ...(await readFixture("app.launch.response.json")),
+    processId: 4930
+  };
+  const window = {
+    ...(await readFixture("window.created.json")),
+    windowId: "hwnd:0004029B",
+    processId: 4930,
+    appId: "winapp_calculator",
+    title: "Calculator"
+  };
+
+  assert.deepEqual(validateAppLaunchAcceptance(launch, window), {
+    appId: "winapp_calculator",
+    processId: 4930,
+    windowId: "hwnd:0004029B",
+    title: "Calculator"
+  });
+});
+
+test("rejects launch acceptance when the HWND event belongs to another process", async () => {
   const launch = await readFixture("app.launch.response.json");
   const window = {
     ...(await readFixture("window.created.json")),
@@ -108,8 +129,8 @@ test("rejects Notepad acceptance when the HWND event belongs to another process"
   };
 
   assert.throws(
-    () => validateNotepadAcceptance(launch, window),
-    /Notepad window event must match launch process/
+    () => validateAppLaunchAcceptance(launch, window),
+    /Window created event must match launch process/
   );
 });
 

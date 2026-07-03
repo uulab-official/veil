@@ -134,6 +134,12 @@ Response:
 }
 ```
 
+Rules:
+
+- `appId` must be one of the IDs returned by the latest `app.list.response`.
+- `app.launch.response.processId` must match the subsequent `window.created.processId`.
+- `window.created.appId` identifies the launched app; the launch/window acceptance contract is not Notepad-specific.
+
 ## Window Created
 
 Event:

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { validateNotepadAcceptance, validateWindowCloseResponse } from "@veil/protocol";
+import { validateAppLaunchAcceptance, validateWindowCloseResponse } from "@veil/protocol";
 
 import { createSession } from "../src/session.mjs";
 
@@ -35,11 +35,30 @@ test("launches Notepad and emits a tracked window event", async () => {
   assert.equal(replies[0].accepted, true);
   assert.equal(replies[1].type, "window.created");
   assert.equal(replies[1].windowId, "hwnd:0003029A");
-  assert.deepEqual(validateNotepadAcceptance(replies[0], replies[1]), {
+  assert.deepEqual(validateAppLaunchAcceptance(replies[0], replies[1]), {
     appId: "winapp_notepad",
     processId: 4912,
     windowId: "hwnd:0003029A",
     title: "Untitled - Notepad"
+  });
+});
+
+test("launches Calculator and emits a distinct tracked window event", async () => {
+  const session = createSession();
+
+  const replies = await session.handle({
+    type: "app.launch.request",
+    requestId: "req_calc",
+    appId: "winapp_calculator",
+    args: []
+  });
+
+  assert.equal(replies.length, 2);
+  assert.deepEqual(validateAppLaunchAcceptance(replies[0], replies[1]), {
+    appId: "winapp_calculator",
+    processId: 4930,
+    windowId: "hwnd:0004029B",
+    title: "Calculator"
   });
 });
 

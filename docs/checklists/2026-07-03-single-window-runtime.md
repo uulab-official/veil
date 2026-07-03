@@ -41,6 +41,8 @@ Goal: move Veil from a Veil shell plus separate QEMU Cocoa display toward a UTM-
 - [x] Size the Notepad bridge window from the guest HWND bounds so it opens like a real desktop app instead of a small preview.
 - [x] Generalize host launch from Notepad-only to selected `appId` so inbox apps can open as separate macOS windows.
 - [x] Add a first Windows agent app catalog for Notepad, Calculator, and Paint instead of hard-coding a single launch target.
+- [x] Add a menu bar Windows Apps launcher so live agent app launches can start without opening the main Veil control window.
+- [x] Generalize protocol launch acceptance helpers and fake-agent launch replies beyond Notepad while preserving the Notepad MVP fixture.
 
 ## Next
 

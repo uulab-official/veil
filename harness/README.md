@@ -25,9 +25,9 @@ The first fake agent should:
 
 1. listen on `127.0.0.1:18444`,
 2. respond to `agent.health.request`,
-3. respond to `app.list.request` with Notepad,
-4. accept `app.launch.request` for `winapp_notepad`,
-5. emit `window.created` for `hwnd:0003029A`.
+3. respond to `app.list.request` with the first inbox app catalog,
+4. accept `app.launch.request` for Notepad, Calculator, and Paint,
+5. emit app-specific `window.created` events with stable fake HWND metadata.
 
 ## Run the Fake Agent
 
@@ -134,7 +134,7 @@ swift run veil-host-shell
 
 The shell opens a macOS window with agent status, app list, and launch controls. The Codex Run button uses `./script/build_and_run.sh`, which stages and opens `dist/Veil.app`.
 
-The fake agent currently accepts launch requests only for `winapp_notepad`. The SwiftUI shell keeps that limit visible by disabling unsupported launches at the model boundary.
+The fake agent currently accepts launch requests for the first inbox app catalog: Notepad, Calculator, and Paint. Unsupported IDs still return the shared `app_not_found` error shape.
 
 The VM Runtime section does not depend on the fake agent. It reports local host capability and whether a Windows VM profile has been configured.
 

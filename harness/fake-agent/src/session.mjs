@@ -45,14 +45,55 @@ export function createSession(options = {}) {
 }
 
 async function handleAppLaunch(message) {
-  if (message.appId !== "winapp_notepad") {
+  const catalog = await readFixture("app.list.response.json");
+  const app = catalog.apps.find((candidate) => candidate.id === message.appId);
+  if (!app) {
     return [createError(message.requestId, "app_not_found", `No app exists for id ${message.appId}`)];
   }
 
+  const launch = await readFixture("app.launch.response.json");
+  const window = await readFixture("window.created.json");
+  const windowMetadata = windowMetadataForApp(app.id);
+
   return [
-    withRequestId(await readFixture("app.launch.response.json"), message.requestId),
-    await readFixture("window.created.json")
+    {
+      ...withRequestId(launch, message.requestId),
+      processId: windowMetadata.processId
+    },
+    {
+      ...window,
+      ...windowMetadata,
+      appId: app.id,
+      title: windowMetadata.title ?? app.name
+    }
   ];
+}
+
+function windowMetadataForApp(appId) {
+  switch (appId) {
+    case "winapp_calculator":
+      return {
+        windowId: "hwnd:0004029B",
+        processId: 4930,
+        title: "Calculator",
+        bounds: { x: 80, y: 80, width: 520, height: 720 }
+      };
+    case "winapp_paint":
+      return {
+        windowId: "hwnd:0005029C",
+        processId: 4948,
+        title: "Untitled - Paint",
+        bounds: { x: 40, y: 40, width: 1280, height: 800 }
+      };
+    case "winapp_notepad":
+    default:
+      return {
+        windowId: "hwnd:0003029A",
+        processId: 4912,
+        title: "Untitled - Notepad",
+        bounds: { x: 10, y: 10, width: 1280, height: 800 }
+      };
+  }
 }
 
 async function handleWindowFrameSubscribe(message, broadcast) {

@@ -128,6 +128,10 @@ private struct WindowsAppCard: View {
         switch app.id {
         case "winapp_notepad":
             .blue
+        case "winapp_calculator":
+            .green
+        case "winapp_paint":
+            .orange
         default:
             .teal
         }
@@ -137,6 +141,10 @@ private struct WindowsAppCard: View {
         switch app.id {
         case "winapp_notepad":
             "note.text"
+        case "winapp_calculator":
+            "plus.forwardslash.minus"
+        case "winapp_paint":
+            "paintpalette"
         default:
             "app.window"
         }

@@ -52,21 +52,19 @@ export function createError(requestId, code, message) {
   };
 }
 
-export function validateNotepadAcceptance(launch, window) {
+export function validateAppLaunchAcceptance(launch, window) {
   if (!launch || launch.type !== MessageType.AppLaunchResponse || launch.accepted !== true) {
-    throw new TypeError("Notepad launch response must be accepted.");
+    throw new TypeError("App launch response must be accepted.");
   }
 
   if (!window || window.type !== MessageType.WindowCreated) {
-    throw new TypeError("Notepad launch must emit a window.created event.");
+    throw new TypeError("App launch must emit a window.created event.");
   }
 
-  if (window.appId !== "winapp_notepad") {
-    throw new TypeError("Notepad window event must reference winapp_notepad.");
-  }
+  requireNonEmptyString(window.appId, "appId", "Window created event");
 
   if (window.processId !== launch.processId) {
-    throw new TypeError("Notepad window event must match launch process.");
+    throw new TypeError("Window created event must match launch process.");
   }
 
   return {
@@ -76,6 +74,8 @@ export function validateNotepadAcceptance(launch, window) {
     title: window.title
   };
 }
+
+export const validateNotepadAcceptance = validateAppLaunchAcceptance;
 
 export function validateWindowFrame(frame) {
   if (!frame || frame.type !== MessageType.WindowFrame) {

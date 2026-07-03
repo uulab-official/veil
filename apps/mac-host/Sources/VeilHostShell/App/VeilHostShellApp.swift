@@ -156,10 +156,11 @@ struct VeilHostShellApp: App {
                 }
                 .disabled(!canMarkWindowsInstalled)
 
-                Button("Open Notepad") {
+                Button("Open Windows App") {
                     launchSelectedWindowsAppWindow()
                 }
                 .keyboardShortcut(.return, modifiers: [.command])
+                .disabled(!model.canRequestSelectedAppLaunch || model.phase == .loading || model.phase == .launching)
 
                 Button("Record App Frame Proof") {
                     recordAppFrameProof()
@@ -180,7 +181,9 @@ struct VeilHostShellApp: App {
                 markWindowsInstalledAction: markWindowsInstalledFromSetup,
                 installGuestAgentAction: installGuestAgentFromDisplay,
                 launchWindowsAppAction: launchSelectedWindowsAppWindow,
+                launchWindowsAppByIdAction: launchWindowsAppWindow(appId:),
                 recordAppFrameProofAction: recordAppFrameProof,
+                refreshAppsAction: refreshApps,
                 refreshRuntimeAction: refreshRuntime,
                 supportsNativeDisplayWindow: vmRuntimeBooter.supportsNativeDisplayWindow
             )
@@ -312,6 +315,11 @@ struct VeilHostShellApp: App {
 
             showWindowsAppWindow(for: result)
         }
+    }
+
+    private func launchWindowsAppWindow(appId: String) {
+        model.selectedAppId = appId
+        launchSelectedWindowsAppWindow()
     }
 
     private func showWindowsAppWindow(for result: NotepadLaunchResult) {
@@ -511,6 +519,13 @@ struct VeilHostShellApp: App {
         }
     }
 
+    private func refreshApps() {
+        Task { @MainActor in
+            await model.load()
+            await recordGuestAgentInstallEvidenceIfNeeded()
+        }
+    }
+
     private func activateMainWindow() {
         Task { @MainActor in
             MainWindowChrome.showMainWindow()
@@ -602,7 +617,9 @@ private struct VeilMenuBarMenu: View {
     var markWindowsInstalledAction: () -> Void
     var installGuestAgentAction: () -> Void
     var launchWindowsAppAction: () -> Void
+    var launchWindowsAppByIdAction: (String) -> Void
     var recordAppFrameProofAction: () -> Void
+    var refreshAppsAction: () -> Void
     var refreshRuntimeAction: () -> Void
     var supportsNativeDisplayWindow: Bool
 
@@ -613,11 +630,25 @@ private struct VeilMenuBarMenu: View {
 
         Divider()
 
-        Button("Open Notepad", systemImage: "macwindow.badge.plus") {
-            openMainWindow()
-            launchWindowsAppAction()
+        if model.apps.isEmpty {
+            Button("Load Windows Apps", systemImage: "square.grid.2x2") {
+                openMainWindow()
+                refreshAppsAction()
+            }
+            .disabled(model.phase == .loading || model.phase == .launching)
+        } else {
+            Menu("Windows Apps", systemImage: "square.grid.2x2") {
+                ForEach(model.apps) { app in
+                    Button(app.name, systemImage: symbolName(for: app)) {
+                        if !model.hasLiveAgentConnection {
+                            openMainWindow()
+                        }
+                        launchWindowsAppByIdAction(app.id)
+                    }
+                    .disabled(model.phase == .loading || model.phase == .launching)
+                }
+            }
         }
-        .disabled(!model.canRequestSelectedAppLaunch || model.phase == .loading || model.phase == .launching)
 
         Button("Record App Proof", systemImage: "checkmark.seal") {
             openMainWindow()
@@ -691,6 +722,19 @@ private struct VeilMenuBarMenu: View {
         activateMainWindowAction()
         DispatchQueue.main.async {
             MainWindowChrome.showMainWindow()
+        }
+    }
+
+    private func symbolName(for app: WindowsApp) -> String {
+        switch app.iconId {
+        case "icon_notepad":
+            "note.text"
+        case "icon_calculator":
+            "plus.forwardslash.minus"
+        case "icon_paint":
+            "paintpalette"
+        default:
+            "macwindow"
         }
     }
 }
