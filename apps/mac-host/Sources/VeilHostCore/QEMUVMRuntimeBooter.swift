@@ -53,7 +53,7 @@ public protocol QEMULaunchRecordStore: Sendable {
     func loadLatest() async throws -> QEMULaunchRecord?
 }
 
-public struct QEMURunningProcess: Equatable, Sendable {
+public struct QEMURunningProcess: Codable, Equatable, Sendable {
     public var pid: Int32
     public var commandLine: String
     public var monitorSocketPath: String?

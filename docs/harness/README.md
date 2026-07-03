@@ -113,8 +113,9 @@ Use this before and after `qemu-capture`, `qemu-oobe-bypass`, and
 `qemu-install-agent` so issue reports can point at diagnostics metadata rather
 than desktop screenshots. If Veil detects the configured disk is already
 attached to a running QEMU process but the current diagnostics directory has no
-launch record, the report must first tell the contributor to close the existing
-QEMU/Windows process before reselecting media or relaunching.
+launch record, the report must include `runningQEMUProcess` evidence with the
+PID, command line, and detected HMP/QMP socket paths before telling the
+contributor to close that existing QEMU/Windows process.
 
 ## QEMU Smoke Scenario
 

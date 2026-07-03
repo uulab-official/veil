@@ -45,6 +45,10 @@ export function validateQEMUInstallStatus(report) {
     validateConsoleLaunch(report.latestConsoleLaunch);
   }
 
+  if (report.runningQEMUProcess !== undefined) {
+    validateRunningQEMUProcess(report.runningQEMUProcess);
+  }
+
   if (report.state === "running"
     && report.latestConsoleLaunch !== undefined
     && !report.nextActions.some((action) => action.includes("qemu-capture"))) {
@@ -53,7 +57,13 @@ export function validateQEMUInstallStatus(report) {
 
   if (report.state === "running"
     && report.latestConsoleLaunch === undefined
-    && !report.nextActions.some((action) => action.includes("existing QEMU"))) {
+    && report.runningQEMUProcess === undefined) {
+    throw new TypeError("running install status reports without launch evidence must include runningQEMUProcess evidence.");
+  }
+
+  if (report.state === "running"
+    && report.latestConsoleLaunch === undefined
+    && !report.nextActions.some((action) => action.includes("existing QEMU") && action.includes("PID"))) {
     throw new TypeError("running install status reports without launch evidence must include existing QEMU recovery guidance.");
   }
 
@@ -170,6 +180,27 @@ function validateConsoleLaunch(launch) {
     if (launch.vncPort < 5900 || launch.vncPort > 5999) {
       throw new TypeError("latestConsoleLaunch.vncPort must be a loopback VNC port.");
     }
+  }
+}
+
+function validateRunningQEMUProcess(process) {
+  if (!process || typeof process !== "object" || Array.isArray(process)) {
+    throw new TypeError("runningQEMUProcess must be an object.");
+  }
+
+  requireInteger(process.pid, "runningQEMUProcess.pid");
+  if (process.pid <= 0) {
+    throw new TypeError("runningQEMUProcess.pid must be positive.");
+  }
+  requireString(process.commandLine, "runningQEMUProcess.commandLine");
+  if (!process.commandLine.includes("qemu-system-aarch64")) {
+    throw new TypeError("runningQEMUProcess.commandLine must identify qemu-system-aarch64.");
+  }
+  if (process.monitorSocketPath !== undefined) {
+    requireString(process.monitorSocketPath, "runningQEMUProcess.monitorSocketPath");
+  }
+  if (process.qmpSocketPath !== undefined) {
+    requireString(process.qmpSocketPath, "runningQEMUProcess.qmpSocketPath");
   }
 }
 

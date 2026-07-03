@@ -328,6 +328,12 @@ struct VMProfileStoreTests {
             profileName: "Windows 11 Arm",
             installerMediaPath: "/Users/test/Downloads/Win11_25H2_Korean_Arm64_v2.iso",
             virtualDiskPath: "/Users/test/Virtual Machines/Windows.img",
+            runningQEMUProcess: QEMURunningProcess(
+                pid: 2468,
+                commandLine: "qemu-system-aarch64 -drive file=/Users/test/Virtual Machines/Windows.img,if=none -monitor unix:/tmp/vq-recovery.sock,server,nowait -qmp unix:/tmp/vq-recovery.qmp.sock,server,nowait",
+                monitorSocketPath: "/tmp/vq-recovery.sock",
+                qmpSocketPath: "/tmp/vq-recovery.qmp.sock"
+            ),
             preflightChecks: [
                 VMPreflightCheck(
                     id: "installer-media",
@@ -353,7 +359,10 @@ struct VMProfileStoreTests {
 
         #expect(report.state == .running)
         #expect(report.latestConsoleLaunch == nil)
-        #expect(report.nextActions.first == "Close the existing QEMU/Windows process before preparing or relaunching; Veil detected the configured disk is already attached but has no current launch record.")
+        #expect(report.runningQEMUProcess?.pid == 2468)
+        #expect(report.runningQEMUProcess?.monitorSocketPath == "/tmp/vq-recovery.sock")
+        #expect(report.runningQEMUProcess?.qmpSocketPath == "/tmp/vq-recovery.qmp.sock")
+        #expect(report.nextActions.first == "Close existing QEMU/Windows PID 2468 before preparing or relaunching; Veil detected the configured disk is already attached but has no current launch record.")
         #expect(report.nextActions.dropFirst().first == "Installer media: Installer media is in Downloads. Re-select it with the file picker so Veil can store macOS file access before starting Windows.")
     }
 

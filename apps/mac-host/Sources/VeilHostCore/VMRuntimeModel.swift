@@ -241,6 +241,7 @@ public struct VMRuntimeSnapshot: Codable, Equatable, Sendable {
     public var automaticInstallMediaPath: String?
     public var latestConsoleScreenshotPath: String?
     public var latestConsoleLaunch: VMConsoleLaunchEvidence?
+    public var runningQEMUProcess: QEMURunningProcess?
     public var runtimeProvider: VMRuntimeProviderSummary?
     public var runtimeProviders: [VMRuntimeProviderSummary]
     public var installationSteps: [VMInstallationStep]
@@ -270,6 +271,7 @@ public struct VMRuntimeSnapshot: Codable, Equatable, Sendable {
         automaticInstallMediaPath: String? = nil,
         latestConsoleScreenshotPath: String? = nil,
         latestConsoleLaunch: VMConsoleLaunchEvidence? = nil,
+        runningQEMUProcess: QEMURunningProcess? = nil,
         runtimeProvider: VMRuntimeProviderSummary? = nil,
         runtimeProviders: [VMRuntimeProviderSummary] = [],
         installationSteps: [VMInstallationStep] = [],
@@ -298,6 +300,7 @@ public struct VMRuntimeSnapshot: Codable, Equatable, Sendable {
         self.automaticInstallMediaPath = automaticInstallMediaPath
         self.latestConsoleScreenshotPath = latestConsoleScreenshotPath
         self.latestConsoleLaunch = latestConsoleLaunch
+        self.runningQEMUProcess = runningQEMUProcess
         self.runtimeProvider = runtimeProvider
         self.runtimeProviders = runtimeProviders
         self.installationSteps = installationSteps
@@ -326,6 +329,7 @@ public struct VMWindowsInstallStatusReport: Codable, Equatable, Sendable {
     public var latestConsoleScreenshotPath: String?
     public var displaySurface: VMConsoleDisplaySurface
     public var latestConsoleLaunch: VMConsoleLaunchEvidence?
+    public var runningQEMUProcess: QEMURunningProcess?
     public var nextActions: [String]
 
     public init(
@@ -343,6 +347,7 @@ public struct VMWindowsInstallStatusReport: Codable, Equatable, Sendable {
         latestConsoleScreenshotPath: String?,
         displaySurface: VMConsoleDisplaySurface,
         latestConsoleLaunch: VMConsoleLaunchEvidence?,
+        runningQEMUProcess: QEMURunningProcess?,
         nextActions: [String]
     ) {
         self.kind = kind
@@ -359,6 +364,7 @@ public struct VMWindowsInstallStatusReport: Codable, Equatable, Sendable {
         self.latestConsoleScreenshotPath = latestConsoleScreenshotPath
         self.displaySurface = displaySurface
         self.latestConsoleLaunch = latestConsoleLaunch
+        self.runningQEMUProcess = runningQEMUProcess
         self.nextActions = nextActions
     }
 }
@@ -379,6 +385,7 @@ public extension VMRuntimeSnapshot {
             latestConsoleScreenshotPath: latestConsoleScreenshotPath,
             displaySurface: displaySurfaceEvidence(),
             latestConsoleLaunch: latestConsoleLaunch,
+            runningQEMUProcess: runningQEMUProcess,
             nextActions: windowsInstallNextActions()
         )
     }
@@ -441,6 +448,12 @@ public extension VMRuntimeSnapshot {
     private func runningRecoveryActions() -> [String] {
         guard state == .running else {
             return []
+        }
+
+        if latestConsoleLaunch == nil, let runningQEMUProcess {
+            return [
+                "Close existing QEMU/Windows PID \(runningQEMUProcess.pid) before preparing or relaunching; Veil detected the configured disk is already attached but has no current launch record."
+            ]
         }
 
         if latestConsoleLaunch == nil {
@@ -1565,6 +1578,7 @@ public struct LocalVMRuntimeService: VMRuntimeService {
                     consoleScreenshotPath: latestConsoleScreenshot.path,
                     consoleScreenshotRefreshedAt: latestConsoleScreenshot.refreshedAt
                 ),
+                runningQEMUProcess: orphanQEMUProcess,
                 runtimeProvider: activeProvider,
                 runtimeProviders: runtimeProviders,
                 installationSteps: installationSteps,

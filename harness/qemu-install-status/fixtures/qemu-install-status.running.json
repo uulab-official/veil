@@ -42,6 +42,12 @@
     "Continue Windows Setup in the console; use `veil-vmctl qemu-oobe-bypass --json` only when OOBE network setup blocks local account creation."
   ],
   "profileName": "Windows 11 Arm",
+  "runningQEMUProcess": {
+    "commandLine": "qemu-system-aarch64 -drive file=/Users/test/Virtual Machines/Windows.vhdx,if=none -monitor unix:/tmp/vq-install-status.sock,server,nowait -qmp unix:/tmp/vq-install-status.qmp.sock,server,nowait",
+    "monitorSocketPath": "/tmp/vq-install-status.sock",
+    "pid": 2345,
+    "qmpSocketPath": "/tmp/vq-install-status.qmp.sock"
+  },
   "state": "running",
   "virtualDiskPath": "/Users/test/Virtual Machines/Windows.vhdx",
   "windowsInstalled": false

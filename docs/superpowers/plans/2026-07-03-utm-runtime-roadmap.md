@@ -52,6 +52,7 @@
 - [x] Extend install-status display evidence with resolution, scaling, Retina, and live validation policy.
 - [x] Add recovery guidance when install status is blocked but the configured disk is already attached to a running QEMU process.
 - [x] Surface install-status recovery steps in the app setup screen.
+- [x] Add structured running QEMU process evidence so blocked setup reports name the exact PID and monitor/QMP sockets.
 - [ ] Record a fresh live boot/install evidence pass under diagnostics, not in git.
 - [ ] Update install-flow docs with exact observed blockers and recovery steps.
 
@@ -428,13 +429,56 @@ Make the main Windows setup surface derive recovery guidance from `VMRuntimeSnap
 
 Render up to three recovery steps over the setup display when Windows is blocked, running, or failed and not yet installed.
 
-- [ ] **Step 3: Verify**
+- [x] **Step 3: Verify**
 
 Run:
 
 ```bash
 cd apps/mac-host && swift build --product veil-host-shell
 cd apps/mac-host && swift test --filter VMProfileStoreTests/reportsRunningQEMURecoveryBeforeBlockedInstallActions
+cd apps/mac-host && swift test
+./script/build_and_run.sh --verify
+git diff --check
+```
+
+Expected: all pass.
+
+## Task 11: Running QEMU Process Evidence
+
+**Files:**
+- Modify: `apps/mac-host/Sources/VeilHostCore/QEMUVMRuntimeBooter.swift`
+- Modify: `apps/mac-host/Sources/VeilHostCore/VMRuntimeModel.swift`
+- Modify: `apps/mac-host/Tests/VeilHostCoreTests/VMProfileStoreTests.swift`
+- Modify: `harness/qemu-install-status/src/validate-qemu-install-status.mjs`
+- Modify: `harness/qemu-install-status/test/qemu-install-status.test.mjs`
+- Modify: `harness/qemu-install-status/fixtures/qemu-install-status.running.json`
+- Modify: `docs/harness/README.md`
+- Modify: `docs/install-flow.md`
+- Modify: `docs/checklists/2026-07-03-utm-source-hardening.md`
+
+- [x] **Step 1: Make running process evidence codable**
+
+Expose detected QEMU PID, command line, HMP monitor socket, and QMP socket in
+runtime snapshots and install-status reports.
+
+- [x] **Step 2: Use process evidence in recovery guidance**
+
+When the configured disk is already attached but no launch record exists, put
+the exact PID in the first recovery action before installer/preflight blockers.
+
+- [x] **Step 3: Harden harness validation**
+
+Require `runningQEMUProcess` evidence for running install-status reports that
+have no `latestConsoleLaunch`, and validate the PID plus QEMU command line.
+
+- [x] **Step 4: Verify**
+
+Run:
+
+```bash
+cd apps/mac-host && swift test --filter VMProfileStoreTests/reportsRunningQEMURecoveryBeforeBlockedInstallActions
+cd harness/qemu-install-status && npm test
+cd apps/mac-host && swift run veil-vmctl qemu-install-status --json | node ../../harness/qemu-install-status/src/validate-qemu-install-status.mjs
 cd apps/mac-host && swift test
 ./script/build_and_run.sh --verify
 git diff --check
