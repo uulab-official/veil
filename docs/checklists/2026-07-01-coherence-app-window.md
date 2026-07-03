@@ -31,8 +31,9 @@ Goal: make Veil's product direction visible as "Windows app as a macOS window" i
 - [x] Add an executable fake-host Notepad input smoke scenario for real-agent keyboard validation.
 - [x] Extend Notepad input smoke to wait for a post-input capture frame.
 - [x] Save initial and post-input Notepad smoke frames as PNG evidence when an output directory is provided.
+- [x] Replace the mirrored-window blank placeholder with capture-state-aware pending, unavailable, and undecodable-frame surfaces.
 
 ## Next
 
-- [ ] Replace the placeholder surface with captured Notepad frames from the Windows guest agent.
 - [ ] Validate keyboard input inside Windows 11 Arm with Notepad focused.
+- [ ] Measure first-frame time and frame cadence from the real Windows guest agent.

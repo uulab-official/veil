@@ -18,7 +18,7 @@ struct WindowsAppFrameSurface: View {
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
             } else {
-                pendingSurface
+                statusSurface
             }
         }
         .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
@@ -35,26 +35,114 @@ struct WindowsAppFrameSurface: View {
         return NSImage(data: data)
     }
 
-    private var pendingSurface: some View {
+    private var statusSurface: some View {
         ZStack {
-            Color(nsColor: .textBackgroundColor)
+            LinearGradient(
+                colors: [
+                    Color(nsColor: .textBackgroundColor),
+                    Color(nsColor: .underPageBackgroundColor)
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
 
             VStack(spacing: 14) {
-                Image(systemName: "note.text")
+                Image(systemName: statusSymbolName)
                     .font(.system(size: 42, weight: .semibold))
-                    .foregroundStyle(.secondary)
-                ProgressView()
-                    .controlSize(.small)
-                Text("Opening \(session.window.title)")
-                    .font(.callout.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
+                    .foregroundStyle(statusTint)
+
+                if session.captureState == .pending {
+                    ProgressView()
+                        .controlSize(.small)
+                }
+
+                VStack(spacing: 5) {
+                    Text(statusTitle)
+                        .font(.callout.weight(.semibold))
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                    Text(statusDetail)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .lineLimit(2)
+                }
+                .frame(maxWidth: 360)
             }
+            .padding(24)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 
+    private var statusSymbolName: String {
+        switch session.captureState {
+        case .pending:
+            return "macwindow.badge.plus"
+        case .streaming:
+            return "exclamationmark.triangle"
+        case .unavailable:
+            return "display"
+        }
+    }
+
+    private var statusTint: Color {
+        switch session.captureState {
+        case .pending:
+            return .blue
+        case .streaming:
+            return .orange
+        case .unavailable:
+            return .secondary
+        }
+    }
+
+    private var statusTitle: String {
+        switch session.captureState {
+        case .pending:
+            return "Opening \(session.window.title)"
+        case .streaming:
+            return "Frame could not be displayed"
+        case .unavailable:
+            return "Window capture unavailable"
+        }
+    }
+
+    private var statusDetail: String {
+        switch session.captureState {
+        case .pending:
+            return "Waiting for the first frame from Windows."
+        case .streaming:
+            guard let latestFrame = session.latestFrame else {
+                return "Waiting for the next frame from Windows."
+            }
+
+            return "Received \(latestFrame.format.uppercased()) frame \(latestFrame.sequence), but the image data could not be decoded."
+        case .unavailable:
+            if session.connectionMode == .demo {
+                return "Connect the real guest agent to mirror this app as a Mac window."
+            }
+
+            return "The connected guest agent does not advertise window capture."
+        }
+    }
+
+    private var hasRenderableFrame: Bool {
+        latestFrameImage != nil
+    }
+
+    private var hasUndisplayableFrame: Bool {
+        session.latestFrame != nil && !hasRenderableFrame
+    }
+
     private var accessibilityLabel: String {
+        if session.captureState == .unavailable {
+            return "\(session.window.title) window capture unavailable"
+        }
+
+        if hasUndisplayableFrame {
+            return "\(session.window.title) frame could not be displayed"
+        }
+
         if session.latestFrame == nil {
             return "Waiting for \(session.window.title) frame"
         }
