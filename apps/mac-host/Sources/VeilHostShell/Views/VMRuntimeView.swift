@@ -236,11 +236,18 @@ struct VMRuntimeView: View {
         }
 
         let path = url.path
+        let didStartSecurityScope = url.startAccessingSecurityScopedResource()
         let currentInstaller = model.snapshot?.installerMediaPath
         let currentDriver = model.snapshot?.driverMediaPath
         let currentDisk = model.snapshot?.virtualDiskPath
 
         Task {
+            defer {
+                if didStartSecurityScope {
+                    url.stopAccessingSecurityScopedResource()
+                }
+            }
+
             switch picker {
             case .installerMedia:
                 await model.updateProfilePaths(

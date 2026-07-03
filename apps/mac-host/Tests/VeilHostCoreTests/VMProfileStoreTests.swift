@@ -65,6 +65,49 @@ struct VMProfileStoreTests {
         #expect(loaded?.virtualDiskPath == "/Users/test/Virtual Machines/Windows.vhdx")
     }
 
+    @Test("profile path updates persist security scoped bookmarks")
+    func profilePathUpdatesPersistSecurityScopedBookmarks() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let installerURL = directory.appendingPathComponent("Windows.iso")
+        let driverURL = directory.appendingPathComponent("virtio-win.iso")
+        let diskURL = directory.appendingPathComponent("Windows.img")
+        try Data("installer".utf8).write(to: installerURL)
+        try Data("drivers".utf8).write(to: driverURL)
+        try Data("disk".utf8).write(to: diskURL)
+        let store = JSONVMProfileStore(directory: directory)
+        let service = LocalVMRuntimeService(profileStore: store)
+
+        _ = try await service.updateProfilePaths(
+            installerMediaPath: installerURL.path,
+            driverMediaPath: driverURL.path,
+            virtualDiskPath: diskURL.path
+        )
+        let profile = try #require(await store.load())
+
+        let installerBookmark = try #require(profile.installerMediaBookmarkData)
+        let driverBookmark = try #require(profile.driverMediaBookmarkData)
+        let diskBookmark = try #require(profile.virtualDiskBookmarkData)
+        #expect(try resolvedBookmarkPath(installerBookmark) == canonicalPath(installerURL))
+        #expect(try resolvedBookmarkPath(driverBookmark) == canonicalPath(driverURL))
+        #expect(try resolvedBookmarkPath(diskBookmark) == canonicalPath(diskURL))
+
+        let replacementInstallerURL = directory.appendingPathComponent("Windows-2.iso")
+        try Data("replacement installer".utf8).write(to: replacementInstallerURL)
+        _ = try await service.updateProfilePaths(
+            installerMediaPath: replacementInstallerURL.path,
+            driverMediaPath: driverURL.path,
+            virtualDiskPath: diskURL.path
+        )
+        let updatedProfile = try #require(await store.load())
+
+        #expect(updatedProfile.installerMediaBookmarkData != installerBookmark)
+        #expect(updatedProfile.driverMediaBookmarkData == driverBookmark)
+        #expect(updatedProfile.virtualDiskBookmarkData == diskBookmark)
+        #expect(try resolvedBookmarkPath(try #require(updatedProfile.installerMediaBookmarkData)) == canonicalPath(replacementInstallerURL))
+    }
+
     @Test("local runtime service reports stopped when profile exists")
     func localRuntimeReportsStoppedProfile() async throws {
         let directory = FileManager.default.temporaryDirectory
@@ -609,7 +652,19 @@ struct VMProfileStoreTests {
         let store = JSONVMProfileStore(directory: directory)
         var profile = VMProfile.defaultWindows11Arm(createdAt: Date(timeIntervalSince1970: 1_782_752_400))
         profile.installerMediaPath = installerURL.path
+        profile.installerMediaBookmarkData = try installerURL.bookmarkData(
+            options: [.withSecurityScope],
+            includingResourceValuesForKeys: nil,
+            relativeTo: nil
+        )
         profile.virtualDiskPath = diskURL.path
+        profile.virtualDiskBookmarkData = try diskURL.bookmarkData(
+            options: [.withSecurityScope],
+            includingResourceValuesForKeys: nil,
+            relativeTo: nil
+        )
+        let installerBookmarkBase64 = try #require(profile.installerMediaBookmarkData?.base64EncodedString())
+        let diskBookmarkBase64 = try #require(profile.virtualDiskBookmarkData?.base64EncodedString())
         profile.sharedFolderPath = sharedFolderURL.path
         try await store.save(profile)
         let service = LocalVMRuntimeService(
@@ -627,12 +682,16 @@ struct VMProfileStoreTests {
         #expect(bundle.generatedAt == Date(timeIntervalSince1970: 1_782_838_800))
         #expect(bundle.snapshot.profileName == "Windows 11 Arm")
         #expect(bundle.profile?.installerMediaPath == installerURL.path)
+        #expect(bundle.profile?.installerMediaBookmarkData == nil)
         #expect(bundle.profile?.virtualDiskPath == diskURL.path)
+        #expect(bundle.profile?.virtualDiskBookmarkData == nil)
         #expect(bundle.host.architecture == "arm64")
         #expect(bundle.host.processorCount >= 1)
         #expect(bundle.host.physicalMemoryBytes > 0)
         #expect(!json.contains("secret installer bytes"))
         #expect(!json.contains("secret disk bytes"))
+        #expect(!json.contains(installerBookmarkBase64))
+        #expect(!json.contains(diskBookmarkBase64))
     }
 
     @Test("local runtime is not boot ready when VM profile resources are invalid")
@@ -1152,6 +1211,46 @@ struct VMProfileStoreTests {
         #expect(bootRunner.startedProfile?.virtualDiskPath == diskURL.path)
     }
 
+    @Test("local runtime starts with paths resolved from security scoped bookmarks")
+    func localRuntimeStartsWithPathsResolvedFromSecurityScopedBookmarks() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let installerURL = directory.appendingPathComponent("Windows.iso")
+        let diskURL = directory.appendingPathComponent("Windows.img")
+        let sharedFolderURL = directory.appendingPathComponent("Veil Shared", isDirectory: true)
+        try Data("installer".utf8).write(to: installerURL)
+        try Data("disk".utf8).write(to: diskURL)
+        try FileManager.default.createDirectory(at: sharedFolderURL, withIntermediateDirectories: true)
+        try Data("<unattend />".utf8).write(to: sharedFolderURL.appendingPathComponent("Autounattend.xml"))
+        try Data("auto install media".utf8).write(to: sharedFolderURL.appendingPathComponent("VeilAutoInstall.iso"))
+        let store = JSONVMProfileStore(directory: directory)
+        var profile = VMProfile.defaultWindows11Arm(createdAt: Date(timeIntervalSince1970: 1_782_752_400))
+        profile.installerMediaPath = directory.appendingPathComponent("Moved-Windows.iso").path
+        profile.installerMediaBookmarkData = try installerURL.bookmarkData(
+            options: [.withSecurityScope],
+            includingResourceValuesForKeys: nil,
+            relativeTo: nil
+        )
+        profile.virtualDiskPath = directory.appendingPathComponent("Moved-Windows.img").path
+        profile.virtualDiskBookmarkData = try diskURL.bookmarkData(
+            options: [.withSecurityScope],
+            includingResourceValuesForKeys: nil,
+            relativeTo: nil
+        )
+        profile.sharedFolderPath = sharedFolderURL.path
+        try await store.save(profile)
+        let bootRunner = FakeVMRuntimeBooter(startState: .running)
+        let service = LocalVMRuntimeService(profileStore: store, bootRunner: bootRunner)
+
+        let snapshot = try await service.start()
+
+        #expect(snapshot.state == .running)
+        #expect(bootRunner.startCount == 1)
+        #expect(bootRunner.startedProfile?.installerMediaPath == canonicalPath(installerURL))
+        #expect(bootRunner.startedProfile?.virtualDiskPath == canonicalPath(diskURL))
+    }
+
     @Test("local runtime records successful boot report")
     func localRuntimeRecordsSuccessfulBootReport() async throws {
         let directory = FileManager.default.temporaryDirectory
@@ -1240,8 +1339,12 @@ struct VMProfileStoreTests {
         #expect(report.result == .failed)
         #expect(report.resultingState == .failed)
         #expect(report.errorMessage == "Simulated boot failure.")
+        #expect(report.profile.installerMediaBookmarkData == nil)
+        #expect(report.profile.virtualDiskBookmarkData == nil)
         #expect(bundle.lastBootReport?.result == .failed)
         #expect(bundle.lastBootReport?.errorMessage == "Simulated boot failure.")
+        #expect(bundle.lastBootReport?.profile.installerMediaBookmarkData == nil)
+        #expect(bundle.lastBootReport?.profile.virtualDiskBookmarkData == nil)
     }
 
     @Test("local runtime stops a running profile")
@@ -1409,6 +1512,32 @@ struct VMProfileStoreTests {
         }
         #expect(bootRunner.startCount == 0)
     }
+}
+
+private func resolvedBookmarkPath(_ data: Data) throws -> String {
+    var isStale = false
+    let url = try URL(
+        resolvingBookmarkData: data,
+        options: [.withSecurityScope],
+        relativeTo: nil,
+        bookmarkDataIsStale: &isStale
+    )
+    let didStart = url.startAccessingSecurityScopedResource()
+    defer {
+        if didStart {
+            url.stopAccessingSecurityScopedResource()
+        }
+    }
+    #expect(!isStale)
+    return canonicalPath(url)
+}
+
+private func canonicalPath(_ url: URL) -> String {
+    let path = url.resolvingSymlinksInPath().path
+    if path.hasPrefix("/var/") {
+        return "/private\(path)"
+    }
+    return path
 }
 
 private enum FakeBootError: Error, LocalizedError {

@@ -47,8 +47,11 @@ public struct VMProfile: Codable, Equatable, Identifiable, Sendable {
     public var suspendOnQuit: Bool
     public var sharedFolderPath: String
     public var installerMediaPath: String?
+    public var installerMediaBookmarkData: Data?
     public var driverMediaPath: String?
+    public var driverMediaBookmarkData: Data?
     public var virtualDiskPath: String?
+    public var virtualDiskBookmarkData: Data?
     public var windowsInstalled: Bool?
     public var guestAgentVersion: String?
     public var guestAgentConnectedAt: Date?
@@ -65,8 +68,11 @@ public struct VMProfile: Codable, Equatable, Identifiable, Sendable {
         suspendOnQuit: Bool,
         sharedFolderPath: String,
         installerMediaPath: String? = nil,
+        installerMediaBookmarkData: Data? = nil,
         driverMediaPath: String? = nil,
+        driverMediaBookmarkData: Data? = nil,
         virtualDiskPath: String? = nil,
+        virtualDiskBookmarkData: Data? = nil,
         windowsInstalled: Bool? = nil,
         guestAgentVersion: String? = nil,
         guestAgentConnectedAt: Date? = nil,
@@ -82,8 +88,11 @@ public struct VMProfile: Codable, Equatable, Identifiable, Sendable {
         self.suspendOnQuit = suspendOnQuit
         self.sharedFolderPath = sharedFolderPath
         self.installerMediaPath = installerMediaPath
+        self.installerMediaBookmarkData = installerMediaBookmarkData
         self.driverMediaPath = driverMediaPath
+        self.driverMediaBookmarkData = driverMediaBookmarkData
         self.virtualDiskPath = virtualDiskPath
+        self.virtualDiskBookmarkData = virtualDiskBookmarkData
         self.windowsInstalled = windowsInstalled
         self.guestAgentVersion = guestAgentVersion
         self.guestAgentConnectedAt = guestAgentConnectedAt
@@ -106,6 +115,14 @@ public struct VMProfile: Codable, Equatable, Identifiable, Sendable {
             sharedFolderPath: homeDirectory.appendingPathComponent("Veil Shared").path,
             createdAt: createdAt
         )
+    }
+
+    public func withoutSecurityScopedBookmarks() -> VMProfile {
+        var profile = self
+        profile.installerMediaBookmarkData = nil
+        profile.driverMediaBookmarkData = nil
+        profile.virtualDiskBookmarkData = nil
+        return profile
     }
 }
 

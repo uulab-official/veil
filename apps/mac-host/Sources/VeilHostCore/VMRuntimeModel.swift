@@ -547,6 +547,18 @@ public struct VMRuntimeBootReport: Codable, Equatable, Sendable {
         self.profile = profile
         self.deviceSummary = deviceSummary
     }
+
+    public func withoutSecurityScopedBookmarks() -> VMRuntimeBootReport {
+        VMRuntimeBootReport(
+            startedAt: startedAt,
+            completedAt: completedAt,
+            result: result,
+            resultingState: resultingState,
+            errorMessage: errorMessage,
+            profile: profile.withoutSecurityScopedBookmarks(),
+            deviceSummary: deviceSummary
+        )
+    }
 }
 
 public protocol VMRuntimeBootReportStore: Sendable {
@@ -1654,9 +1666,25 @@ public struct LocalVMRuntimeService: VMRuntimeService {
 
     public func updateProfilePaths(installerMediaPath: String?, driverMediaPath: String?, virtualDiskPath: String?) async throws -> VMRuntimeSnapshot {
         var profile = try await profileStore.load() ?? defaultProfile()
+        let existingProfile = profile
         profile.installerMediaPath = installerMediaPath
+        profile.installerMediaBookmarkData = Self.bookmarkData(
+            for: installerMediaPath,
+            existingPath: existingProfile.installerMediaPath,
+            existingBookmarkData: existingProfile.installerMediaBookmarkData
+        )
         profile.driverMediaPath = driverMediaPath
+        profile.driverMediaBookmarkData = Self.bookmarkData(
+            for: driverMediaPath,
+            existingPath: existingProfile.driverMediaPath,
+            existingBookmarkData: existingProfile.driverMediaBookmarkData
+        )
         profile.virtualDiskPath = virtualDiskPath
+        profile.virtualDiskBookmarkData = Self.bookmarkData(
+            for: virtualDiskPath,
+            existingPath: existingProfile.virtualDiskPath,
+            existingBookmarkData: existingProfile.virtualDiskBookmarkData
+        )
         try await profileStore.save(profile)
         return try await loadSnapshot()
     }
@@ -1682,17 +1710,25 @@ public struct LocalVMRuntimeService: VMRuntimeService {
         guard let profile = try await profileStore.load() else {
             throw VMRuntimeError.bootPrerequisitesMissing
         }
+        let securityScopedAccesses = Self.startSecurityScopedAccesses(for: profile)
+        defer {
+            securityScopedAccesses.forEach { $0.stop() }
+        }
+        let bootProfile = Self.profileByResolvingSecurityScopedURLs(
+            profile,
+            accesses: securityScopedAccesses
+        )
 
         let startedAt = diagnosticDate()
         do {
-            let resultingState = try await bootRunner.start(profile: profile)
+            let resultingState = try await bootRunner.start(profile: bootProfile)
             try? await bootReportStore.save(Self.bootReport(
                 startedAt: startedAt,
                 completedAt: diagnosticDate(),
                 result: .succeeded,
                 resultingState: resultingState,
                 errorMessage: nil,
-                profile: profile
+                profile: bootProfile
             ))
             return try await loadSnapshot()
         } catch {
@@ -1703,7 +1739,7 @@ public struct LocalVMRuntimeService: VMRuntimeService {
                 result: .failed,
                 resultingState: resultingState,
                 errorMessage: Self.errorMessage(for: error),
-                profile: profile
+                profile: bootProfile
             ))
             throw error
         }
@@ -1733,8 +1769,8 @@ public struct LocalVMRuntimeService: VMRuntimeService {
             generatedAt: generatedAt,
             host: Self.diagnosticHost(),
             snapshot: snapshot,
-            profile: profile,
-            lastBootReport: lastBootReport
+            profile: profile?.withoutSecurityScopedBookmarks(),
+            lastBootReport: lastBootReport?.withoutSecurityScopedBookmarks()
         )
 
         try FileManager.default.createDirectory(
@@ -1745,6 +1781,105 @@ public struct LocalVMRuntimeService: VMRuntimeService {
         let data = try JSONEncoder.veilDiagnostics.encode(bundle)
         try data.write(to: outputURL, options: [.atomic])
         return outputURL
+    }
+
+    private struct SecurityScopedFileAccess {
+        var role: Role
+        var url: URL
+        var didStart: Bool
+
+        enum Role {
+            case installer
+            case drivers
+            case disk
+        }
+
+        func stop() {
+            if didStart {
+                url.stopAccessingSecurityScopedResource()
+            }
+        }
+    }
+
+    private static func bookmarkData(
+        for path: String?,
+        existingPath: String? = nil,
+        existingBookmarkData: Data? = nil
+    ) -> Data? {
+        guard let path, !path.isEmpty else {
+            return nil
+        }
+
+        if path == existingPath, let existingBookmarkData {
+            return existingBookmarkData
+        }
+
+        return try? URL(fileURLWithPath: path).bookmarkData(
+            options: [.withSecurityScope],
+            includingResourceValuesForKeys: nil,
+            relativeTo: nil
+        )
+    }
+
+    private static func startSecurityScopedAccesses(for profile: VMProfile) -> [SecurityScopedFileAccess] {
+        [
+            securityScopedAccess(
+                role: .installer,
+                bookmarkData: profile.installerMediaBookmarkData
+            ),
+            securityScopedAccess(
+                role: .drivers,
+                bookmarkData: profile.driverMediaBookmarkData
+            ),
+            securityScopedAccess(
+                role: .disk,
+                bookmarkData: profile.virtualDiskBookmarkData
+            )
+        ].compactMap { $0 }
+    }
+
+    private static func securityScopedAccess(
+        role: SecurityScopedFileAccess.Role,
+        bookmarkData: Data?
+    ) -> SecurityScopedFileAccess? {
+        guard let bookmarkData else {
+            return nil
+        }
+
+        do {
+            var isStale = false
+            let url = try URL(
+                resolvingBookmarkData: bookmarkData,
+                options: [.withSecurityScope],
+                relativeTo: nil,
+                bookmarkDataIsStale: &isStale
+            )
+            return SecurityScopedFileAccess(
+                role: role,
+                url: url,
+                didStart: url.startAccessingSecurityScopedResource()
+            )
+        } catch {
+            return nil
+        }
+    }
+
+    private static func profileByResolvingSecurityScopedURLs(
+        _ profile: VMProfile,
+        accesses: [SecurityScopedFileAccess]
+    ) -> VMProfile {
+        var profile = profile
+        for access in accesses {
+            switch access.role {
+            case .installer:
+                profile.installerMediaPath = access.url.path
+            case .drivers:
+                profile.driverMediaPath = access.url.path
+            case .disk:
+                profile.virtualDiskPath = access.url.path
+            }
+        }
+        return profile
     }
 
     private static func hostArchitecture() -> String {
@@ -1824,7 +1959,7 @@ public struct LocalVMRuntimeService: VMRuntimeService {
             result: result,
             resultingState: resultingState,
             errorMessage: errorMessage,
-            profile: profile,
+            profile: profile.withoutSecurityScopedBookmarks(),
             deviceSummary: deviceSummary(for: profile)
         )
     }
@@ -1960,11 +2095,15 @@ public struct LocalVMRuntimeService: VMRuntimeService {
     private static func installationSteps(for profile: VMProfile) -> [VMInstallationStep] {
         let installerState = fileStepState(
             path: profile.installerMediaPath,
+            bookmarkData: profile.installerMediaBookmarkData,
+            bookmarkRole: .installer,
             missingDetail: "Select a Windows 11 Arm installer before setup can continue.",
             validationLabel: "Installer media"
         )
         let diskState = fileStepState(
             path: profile.virtualDiskPath,
+            bookmarkData: profile.virtualDiskBookmarkData,
+            bookmarkRole: .disk,
             missingDetail: "Select a virtual disk file before setup can continue.",
             validationLabel: "Virtual disk"
         )
@@ -2071,10 +2210,18 @@ public struct LocalVMRuntimeService: VMRuntimeService {
 
     private static func fileStepState(
         path: String?,
+        bookmarkData: Data? = nil,
+        bookmarkRole: SecurityScopedFileAccess.Role = .installer,
         missingDetail: String,
         validationLabel: String
     ) -> (state: VMInstallationStepState, detail: String?) {
-        guard let path, !path.isEmpty else {
+        let access = securityScopedAccess(role: bookmarkRole, bookmarkData: bookmarkData)
+        defer {
+            access?.stop()
+        }
+        let resolvedPath = access?.url.path ?? path
+
+        guard let path = resolvedPath, !path.isEmpty else {
             return (.blocked, missingDetail)
         }
 
@@ -2115,7 +2262,10 @@ public struct LocalVMRuntimeService: VMRuntimeService {
 
     private static func preflightChecks(for profile: VMProfile) -> [VMPreflightCheck] {
         [
-            installerMediaPreflightCheck(for: profile.installerMediaPath),
+            installerMediaPreflightCheck(
+                for: profile.installerMediaPath,
+                bookmarkData: profile.installerMediaBookmarkData
+            ),
             VMPreflightCheck(
                 id: "guest-os",
                 title: "Windows Arm guest",
@@ -2151,8 +2301,17 @@ public struct LocalVMRuntimeService: VMRuntimeService {
         ]
     }
 
-    private static func installerMediaPreflightCheck(for path: String?) -> VMPreflightCheck {
-        guard let path, !path.isEmpty else {
+    private static func installerMediaPreflightCheck(
+        for path: String?,
+        bookmarkData: Data? = nil
+    ) -> VMPreflightCheck {
+        let access = securityScopedAccess(role: .installer, bookmarkData: bookmarkData)
+        defer {
+            access?.stop()
+        }
+        let resolvedPath = access?.url.path ?? path
+
+        guard let path = resolvedPath, !path.isEmpty else {
             return VMPreflightCheck(
                 id: "installer-media",
                 title: "Installer media",
