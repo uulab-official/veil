@@ -809,18 +809,19 @@ private struct WindowsEmbeddedDisplayPreview: View {
     var revisionID: String
     var pointerTapAction: (Double, Double) -> Void
     var keyAction: (String) -> Void
+    @State private var rfbDisplayModel = RFBEmbeddedDisplayModel()
 
     var body: some View {
         ZStack {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .fill(.black)
 
-            if let image {
-                Image(nsImage: image)
+            if let renderedImage {
+                Image(nsImage: renderedImage)
                     .resizable()
                     .scaledToFit()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .id(revisionID)
+                    .id(displayRevisionID)
             } else {
                 WindowsDisplayGrid()
                     .opacity(0.10)
@@ -832,9 +833,11 @@ private struct WindowsEmbeddedDisplayPreview: View {
             if surface.kind == .vncLoopback {
                 VStack {
                     HStack {
-                        Label(surface.endpoint ?? "Loopback display", systemImage: "dot.radiowaves.left.and.right")
+                        Label(rfbDisplayModel.statusTitle(for: surface), systemImage: rfbDisplayModel.statusSymbolName)
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(.white.opacity(0.82))
+                            .lineLimit(1)
+                            .truncationMode(.middle)
                             .padding(.horizontal, 10)
                             .padding(.vertical, 7)
                             .background(.black.opacity(0.30), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
@@ -859,6 +862,27 @@ private struct WindowsEmbeddedDisplayPreview: View {
         .help("Latest Windows display")
         .accessibilityLabel(surface.kind == .vncLoopback ? "Embedded Windows display endpoint" : "Latest Windows display screenshot")
         .accessibilityValue(surface.endpoint ?? path)
+        .onAppear {
+            rfbDisplayModel.connectIfNeeded(to: surface)
+        }
+        .onChange(of: surface.endpoint) { _, _ in
+            rfbDisplayModel.connectIfNeeded(to: surface)
+        }
+        .onDisappear {
+            rfbDisplayModel.stop()
+        }
+    }
+
+    private var renderedImage: NSImage? {
+        rfbDisplayModel.image ?? image
+    }
+
+    private var displayRevisionID: String {
+        if let sequence = rfbDisplayModel.frameSequence {
+            return "\(surface.endpoint ?? "rfb")#\(sequence)"
+        }
+
+        return revisionID
     }
 }
 

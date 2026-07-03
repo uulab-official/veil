@@ -24,10 +24,10 @@ Goal: move Veil from a Veil shell plus separate QEMU Cocoa display toward a UTM-
 - [x] Promote the loopback endpoint into an explicit embedded display surface contract used by runtime evidence and the main SwiftUI display area.
 - [x] Add a tested RFB parser for protocol handshake, server init, and raw framebuffer updates for the loopback VNC display surface.
 - [x] Add a loopback RFB socket client and framebuffer renderer that converts raw VNC rectangles into RGBA frames.
+- [x] Bind the RFB framebuffer renderer to the main SwiftUI/AppKit display surface so live VNC frames can replace screenshot fallback inside the Veil window.
 
 ## Next
 
-- [ ] Bind the RFB framebuffer renderer to the main SwiftUI/AppKit display surface.
 - [ ] Replace screenshot-only setup evidence with the VNC-backed installer surface.
 - [ ] Keep native QEMU display available only as an advanced recovery fallback.
 - [ ] Verify one-window startup with a running Windows 11 Arm install and guest-agent connection.
