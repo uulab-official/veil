@@ -321,6 +321,16 @@ test("rejects display recovery action availability that drifts from local runtim
   );
 });
 
+test("rejects reconnect restore action availability that drifts from restorable apps", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.demo.json", import.meta.url), "utf8"));
+  report.actions.find((action) => action.id === "windowsApps.reconnectRestore").isAvailable = true;
+
+  assert.throws(
+    () => validateAppRuntimeStatus(report),
+    /windowsApps\.reconnectRestore/
+  );
+});
+
 test("rejects reconnect auto-launch after live agent connects", () => {
   const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.mac-window-live.json", import.meta.url), "utf8"));
   report.pendingLaunchAppId = "winapp_notepad";

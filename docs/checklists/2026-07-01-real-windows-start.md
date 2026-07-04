@@ -232,11 +232,11 @@ Goal: keep the main Veil experience pointed at real local Windows boot and conso
 - [x] Expose stale/unavailable running console evidence in app-runtime status as `localRuntime.recommendedAction=recover-runtime-display`, including `qemu-display-smoke` and `qemu-capture` commands, so the launcher can distinguish a recoverable black display from a healthy running VM.
 - [x] Add `app-runtime-action --action recover-display` and `runtime.recoverDisplay` harness gating so stale-display recovery is executable through the same product automation surface as launch, repair, proof, and quiet-runtime actions.
 - [x] Surface stale-display recovery in the app shell as Refresh Display across the main play flow, toolbar, app commands, and menu bar, and gate app-open menu actions while the embedded display evidence is stale.
+- [x] Add explicit `app-runtime-action --action reconnect-restore` plus `windowsApps.reconnectRestore` status gating so reconnect/restore can be validated even before the live guest agent is back. The current live run found persisted Notepad restore intent but remained rejected because the guest agent is still unreachable.
 
 ## Next
 
 - [ ] Finish turning the proven CLI MVP path into the default app flow by exercising the built app end to end: Start VM, Continue/auto-repair guest agent when needed, and open the mirrored Notepad/macOS window from the main play action without terminal commands.
-- [ ] Add an explicit app-runtime reconnect/restore proof so Veil can boot an installed VM, reconnect to the guest agent, and restore a previously mirrored app window.
 - [ ] Expand the live app proof from Notepad to Calculator and Paint, keeping each app behind the same launch, HWND, frame, input, and close contract.
 - [ ] Collect `%LOCALAPPDATA%\Veil\Agent\logs` from the Windows guest after the successful virtio-net repair path and confirm logs match the host-side proof artifacts.
 - [ ] Run `Veil Shared\Veil Guest Agent\Collect Veil Agent Diagnostics.cmd` after the proven path and capture the generated desktop ZIP for diagnostic review.

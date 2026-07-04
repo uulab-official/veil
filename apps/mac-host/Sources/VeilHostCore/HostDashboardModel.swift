@@ -749,6 +749,13 @@ public final class HostDashboardModel {
             && phase != .launching
     }
 
+    public var canReconnectRestoreMirrorSessions: Bool {
+        !restorableAppIds.isEmpty
+            && mirrorSessions.isEmpty
+            && phase != .loading
+            && phase != .launching
+    }
+
     public var canQuietRuntimeWhenIdle: Bool {
         hasOpenedAppWindowThisSession
             && mirrorSessions.isEmpty
@@ -878,6 +885,11 @@ public final class HostDashboardModel {
                     id: "windowsApps.restorePrevious",
                     title: "Restore Previous Apps",
                     isAvailable: canRestoreMirrorSessions
+                ),
+                WindowsAppRuntimeActionStatus(
+                    id: "windowsApps.reconnectRestore",
+                    title: "Reconnect And Restore Apps",
+                    isAvailable: canReconnectRestoreMirrorSessions
                 ),
                 WindowsAppRuntimeActionStatus(
                     id: "windowsApps.closeAll",

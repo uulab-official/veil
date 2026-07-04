@@ -131,6 +131,11 @@
         "isAvailable": false
       },
       {
+        "id": "windowsApps.reconnectRestore",
+        "title": "Reconnect And Restore Apps",
+        "isAvailable": false
+      },
+      {
         "id": "windowsApps.closeAll",
         "title": "Close All Windows Apps",
         "isAvailable": false

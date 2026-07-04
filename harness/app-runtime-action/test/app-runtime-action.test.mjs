@@ -134,6 +134,18 @@ test("validates app runtime restore action fixture", () => {
   assert.equal(validateAppRuntimeAction(report), report);
 });
 
+test("validates app runtime reconnect restore from restored windows", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-action.restore-live.json", import.meta.url), "utf8"));
+  report.action = "reconnect-restore";
+  report.nextActions = [
+    "Open or focus reconnected Windows app windows from the menu bar.",
+    "Run `veil-vmctl mvp-proof --json --app-id winapp_notepad --require-proved` to verify the full Windows app runtime loop.",
+    "Run `veil-vmctl app-runtime-status --json` to inspect restored sessions."
+  ];
+
+  assert.equal(validateAppRuntimeAction(report), report);
+});
+
 test("validates app runtime close-all action fixture", () => {
   const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-action.close-all-live.json", import.meta.url), "utf8"));
 
@@ -556,6 +568,7 @@ test("allows rejected restore actions to keep requested app ids", () => {
   report.status.visibleSurfacePolicy.expectedVisibleSurfaceCount = 1;
   report.status.visibleSurfacePolicy.shouldHideLauncher = false;
   report.status.quietRuntime.openWindowCount = 0;
+  report.status.actions.find((action) => action.id === "windowsApps.reconnectRestore").isAvailable = true;
 
   assert.equal(validateAppRuntimeAction(report), report);
 });
@@ -578,6 +591,7 @@ test("rejects restore actions whose windows are absent from status", () => {
   report.status.visibleSurfacePolicy.expectedVisibleSurfaceCount = 1;
   report.status.visibleSurfacePolicy.shouldHideLauncher = false;
   report.status.quietRuntime.openWindowCount = 0;
+  report.status.actions.find((action) => action.id === "windowsApps.reconnectRestore").isAvailable = true;
 
   assert.throws(
     () => validateAppRuntimeAction(report),

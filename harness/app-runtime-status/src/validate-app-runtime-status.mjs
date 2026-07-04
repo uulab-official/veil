@@ -794,6 +794,7 @@ function validateActions(actions, report) {
     "dock.openMainWindow",
     "dock.bringWindowsAppsForward",
     "windowsApps.restorePrevious",
+    "windowsApps.reconnectRestore",
     "windowsApps.closeAll",
     "macWindows.autoOpen",
     "runtime.startWindowsForApp",
@@ -836,6 +837,12 @@ function validateActions(actions, report) {
   const recoverDisplayAction = actions.find((action) => action.id === "runtime.recoverDisplay");
   if (recoverDisplayAction.isAvailable !== (report.localRuntime.recommendedRecoveryCommand !== undefined)) {
     throw new TypeError("runtime.recoverDisplay availability must match localRuntime.recommendedRecoveryCommand.");
+  }
+
+  const reconnectRestoreAction = actions.find((action) => action.id === "windowsApps.reconnectRestore");
+  const canReconnectRestore = report.restorableAppIds.length > 0 && report.mirrorSessions.length === 0;
+  if (reconnectRestoreAction.isAvailable !== canReconnectRestore) {
+    throw new TypeError("windowsApps.reconnectRestore availability must match restorable app readiness.");
   }
 
   const pendingApp = report.apps.find((app) => app.id === report.pendingLaunch.appId);

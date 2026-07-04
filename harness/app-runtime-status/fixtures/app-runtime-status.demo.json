@@ -16,6 +16,11 @@
       "title": "Restore Previous Apps"
     },
     {
+      "id": "windowsApps.reconnectRestore",
+      "title": "Reconnect And Restore Apps",
+      "isAvailable": false
+    },
+    {
       "id": "windowsApps.closeAll",
       "isAvailable": false,
       "title": "Close All Windows Apps"

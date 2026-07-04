@@ -1087,6 +1087,35 @@ struct HostDashboardModelTests {
 
         #expect(model.restorableAppIds == ["winapp_notepad"])
         #expect(model.canRestoreMirrorSessions)
+        #expect(model.canReconnectRestoreMirrorSessions)
+        #expect(model.runtimeStatusReport().actions.first { $0.id == "windowsApps.reconnectRestore" }?.isAvailable == true)
+    }
+
+    @Test("reports reconnect restore availability before the live agent reconnects")
+    @MainActor
+    func reportsReconnectRestoreAvailabilityBeforeLiveAgentReconnects() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let intentStore = JSONWindowRestoreIntentStore(directory: directory)
+        try await intentStore.save(WindowRestoreIntent(appIds: ["winapp_notepad"]))
+        let primary = FakeDashboardService(health: .captureReady)
+        primary.error = URLError(.cannotConnectToHost)
+        let service = FallbackHostDashboardService(
+            primary: primary,
+            fallback: DemoHostDashboardService(),
+            primaryEndpointDescription: "ws://127.0.0.1:18444"
+        )
+        let model = HostDashboardModel(service: service, restoreIntentStore: intentStore)
+
+        await model.loadRestoreIntent()
+        await model.load()
+        let report = model.runtimeStatusReport()
+
+        #expect(model.hasLiveAgentConnection == false)
+        #expect(model.canRestoreMirrorSessions == false)
+        #expect(model.canReconnectRestoreMirrorSessions)
+        #expect(report.actions.first { $0.id == "windowsApps.restorePrevious" }?.isAvailable == false)
+        #expect(report.actions.first { $0.id == "windowsApps.reconnectRestore" }?.isAvailable == true)
     }
 
     @Test("does not hide primary agent protocol failures behind demo fallback")

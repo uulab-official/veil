@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 
 import { validateAppRuntimeStatus } from "../../app-runtime-status/src/validate-app-runtime-status.mjs";
 
-const VALID_ACTIONS = new Set(["launch", "fulfill-pending", "focus", "close", "close-all", "restore", "bring-forward", "recover-display", "quiet-when-idle", "stop-runtime", "clipboard", "type-text", "click", "proof-recommended"]);
+const VALID_ACTIONS = new Set(["launch", "fulfill-pending", "focus", "close", "close-all", "restore", "reconnect-restore", "bring-forward", "recover-display", "quiet-when-idle", "stop-runtime", "clipboard", "type-text", "click", "proof-recommended"]);
 const VALID_CONNECTION_MODES = new Set(["agent", "demo"]);
 const VALID_CONSOLE_PREVIEW_STATES = new Set(["fresh", "stale", "unavailable"]);
 
@@ -72,6 +72,9 @@ export function validateAppRuntimeAction(report) {
       break;
     case "restore":
       validateRestoreAction(report);
+      break;
+    case "reconnect-restore":
+      validateReconnectRestoreAction(report);
       break;
     case "bring-forward":
       validateBringForwardAction(report);
@@ -427,7 +430,7 @@ function validateProofNextActions(report) {
     return;
   }
 
-  if (!["launch", "fulfill-pending", "focus", "restore", "bring-forward", "clipboard"].includes(report.action)) {
+  if (!["launch", "fulfill-pending", "focus", "restore", "reconnect-restore", "bring-forward", "clipboard"].includes(report.action)) {
     return;
   }
 
@@ -508,6 +511,19 @@ function validateCloseAllAction(report) {
 }
 
 function validateRestoreAction(report) {
+  validateRestoredWindowsAction(report, "restore");
+}
+
+function validateReconnectRestoreAction(report) {
+  validateRestoredWindowsAction(report, "reconnect-restore");
+
+  const reconnectRestoreAction = report.status.actions.find((action) => action.id === "windowsApps.reconnectRestore");
+  if (!reconnectRestoreAction) {
+    throw new TypeError("reconnect-restore status must include windowsApps.reconnectRestore.");
+  }
+}
+
+function validateRestoredWindowsAction(report, actionName) {
   validateStringArray(report.restoreRequestedAppIds, "restoreRequestedAppIds");
 
   if (!report.accepted) {
@@ -518,11 +534,11 @@ function validateRestoreAction(report) {
   }
 
   if (report.restoreRequestedAppIds.length === 0) {
-    throw new TypeError("accepted restore actions must include restoreRequestedAppIds.");
+    throw new TypeError(`accepted ${actionName} actions must include restoreRequestedAppIds.`);
   }
 
   if (report.restoredWindows.length === 0) {
-    throw new TypeError("accepted restore actions must include restoredWindows.");
+    throw new TypeError(`accepted ${actionName} actions must include restoredWindows.`);
   }
 
   const restoredAppIds = report.restoredWindows.map((window) => window.appId);
@@ -539,17 +555,17 @@ function validateRestoreAction(report) {
   }
 
   const foregroundWindow = report.restoredWindows.at(-1);
-  requireForegroundWindowIdentity(report, foregroundWindow.windowId, foregroundWindow.title, "accepted restore actions");
+  requireForegroundWindowIdentity(report, foregroundWindow.windowId, foregroundWindow.title, `accepted ${actionName} actions`);
 
   if (!report.status.dockIntegration.canBringWindowsAppsForward) {
-    throw new TypeError("accepted restore actions must leave Windows app windows available to bring forward.");
+    throw new TypeError(`accepted ${actionName} actions must leave Windows app windows available to bring forward.`);
   }
 
   if (report.status.dockIntegration.canRestorePreviousApps) {
-    throw new TypeError("accepted restore actions should consume the immediate restore availability while windows are open.");
+    throw new TypeError(`accepted ${actionName} actions should consume the immediate restore availability while windows are open.`);
   }
 
-  requireForegroundableMacWindow(report, "accepted restore actions");
+  requireForegroundableMacWindow(report, `accepted ${actionName} actions`);
 }
 
 function validateBringForwardAction(report) {
