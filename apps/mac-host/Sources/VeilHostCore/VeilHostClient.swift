@@ -12,6 +12,7 @@ public protocol HostEventSource: Sendable {
 public enum VeilHostError: Error, Equatable, LocalizedError, Sendable {
     case appMissing(String)
     case appWindowMismatch(String)
+    case agentError(code: String, message: String)
     case missingReply(String)
 
     public var errorDescription: String? {
@@ -20,6 +21,8 @@ public enum VeilHostError: Error, Equatable, LocalizedError, Sendable {
             "The Windows app \(appId) is not available from the Windows agent."
         case .appWindowMismatch(let appId):
             "The Windows agent launched \(appId), but the tracked HWND did not match the launch response."
+        case .agentError(let code, let message):
+            "The Windows agent returned \(code): \(message)"
         case .missingReply(let context):
             "The Windows agent did not return the expected reply: \(context)."
         }
@@ -413,6 +416,12 @@ public struct VeilHostClient: HostDashboardService, Sendable {
             encoder.encode(AppLaunchRequest(requestId: "req_launch_\(requestIdSuffix(for: appId))", appId: appId)),
             expectedReplies: 2
         )
+
+        if launchReplies.count == 1,
+           let error = try? decoder.decode(ErrorResponse.self, from: launchReplies[0]),
+           error.type == .error {
+            throw VeilHostError.agentError(code: error.code, message: error.message)
+        }
 
         guard launchReplies.count >= 2 else {
             throw VeilHostError.missingReply("app launch requires response and window event")

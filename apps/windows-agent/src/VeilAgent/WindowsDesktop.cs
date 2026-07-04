@@ -51,6 +51,7 @@ public sealed class WindowsDesktop : IWindowsDesktop
             throw new PlatformNotSupportedException("The Veil Windows agent must run inside Windows.");
         }
 
+        var existingWindowHandles = SnapshotAppWindowHandles(app);
         using var process = Process.Start(new ProcessStartInfo
         {
             FileName = app.Executable,
@@ -67,7 +68,7 @@ public sealed class WindowsDesktop : IWindowsDesktop
                 return CreateLaunchedWindow(process.MainWindowHandle, process.Id, process.MainWindowTitle, app.Name);
             }
 
-            if (TryFindTopLevelWindow(app, process.Id, out var launched))
+            if (TryFindTopLevelWindow(app, process.Id, existingWindowHandles, out var launched))
             {
                 return launched;
             }
@@ -78,9 +79,36 @@ public sealed class WindowsDesktop : IWindowsDesktop
         throw new TimeoutException($"{app.Executable} started but no top-level window was discovered.");
     }
 
-    private static bool TryFindTopLevelWindow(WindowsAppDescriptor app, int launchedProcessId, out LaunchedWindow launched)
+    private static HashSet<IntPtr> SnapshotAppWindowHandles(WindowsAppDescriptor app)
     {
-        LaunchedWindow? matchedWindow = null;
+        var handles = new HashSet<IntPtr>();
+        EnumWindows((hwnd, unused) =>
+        {
+            if (!IsWindowVisible(hwnd))
+            {
+                return true;
+            }
+
+            _ = GetWindowThreadProcessId(hwnd, out var windowProcessId);
+            if (DoesProcessMatchApp(windowProcessId, app))
+            {
+                handles.Add(hwnd);
+            }
+
+            return true;
+        }, IntPtr.Zero);
+
+        return handles;
+    }
+
+    private static bool TryFindTopLevelWindow(
+        WindowsAppDescriptor app,
+        int launchedProcessId,
+        HashSet<IntPtr> existingWindowHandles,
+        out LaunchedWindow launched
+    )
+    {
+        var candidates = new List<WindowCandidate>();
         EnumWindows((hwnd, unused) =>
         {
             if (!IsWindowVisible(hwnd))
@@ -91,20 +119,63 @@ public sealed class WindowsDesktop : IWindowsDesktop
             _ = GetWindowThreadProcessId(hwnd, out var windowProcessId);
             var title = GetWindowTitle(hwnd);
             var matchesProcess = windowProcessId == launchedProcessId;
+            var matchesExecutable = DoesProcessMatchApp(windowProcessId, app);
             var matchesTitle = !string.IsNullOrWhiteSpace(title)
                 && title.Contains(app.Name, StringComparison.OrdinalIgnoreCase);
 
-            if (!matchesProcess && !matchesTitle)
+            if (matchesProcess || matchesExecutable || matchesTitle)
             {
-                return true;
+                candidates.Add(new WindowCandidate(
+                    Hwnd: hwnd,
+                    ProcessId: (int)windowProcessId,
+                    Title: title,
+                    IsNewWindow: !existingWindowHandles.Contains(hwnd),
+                    MatchesLaunchedProcess: matchesProcess,
+                    MatchesExecutable: matchesExecutable,
+                    MatchesTitle: matchesTitle
+                ));
             }
 
-            matchedWindow = CreateLaunchedWindow(hwnd, (int)windowProcessId, title, app.Name);
-            return false;
+            return true;
         }, IntPtr.Zero);
 
-        launched = matchedWindow!;
-        return matchedWindow is not null;
+        var candidate = candidates
+            .OrderByDescending(candidate => candidate.IsNewWindow)
+            .ThenByDescending(candidate => candidate.MatchesLaunchedProcess)
+            .ThenByDescending(candidate => candidate.MatchesExecutable)
+            .ThenByDescending(candidate => candidate.MatchesTitle)
+            .FirstOrDefault();
+
+        if (candidate is null)
+        {
+            launched = null!;
+            return false;
+        }
+
+        launched = CreateLaunchedWindow(candidate.Hwnd, candidate.ProcessId, candidate.Title, app.Name);
+        return true;
+    }
+
+    private static bool DoesProcessMatchApp(uint processId, WindowsAppDescriptor app)
+    {
+        try
+        {
+            using var process = Process.GetProcessById((int)processId);
+            var executableName = Path.GetFileNameWithoutExtension(app.Executable);
+            return string.Equals(process.ProcessName, executableName, StringComparison.OrdinalIgnoreCase);
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
+        catch (InvalidOperationException)
+        {
+            return false;
+        }
+        catch (Win32Exception)
+        {
+            return false;
+        }
     }
 
     private static LaunchedWindow CreateLaunchedWindow(IntPtr hwnd, int processId, string? title, string fallbackTitle)
@@ -582,4 +653,14 @@ public sealed class WindowsDesktop : IWindowsDesktop
         public int Right;
         public int Bottom;
     }
+
+    private sealed record WindowCandidate(
+        IntPtr Hwnd,
+        int ProcessId,
+        string Title,
+        bool IsNewWindow,
+        bool MatchesLaunchedProcess,
+        bool MatchesExecutable,
+        bool MatchesTitle
+    );
 }

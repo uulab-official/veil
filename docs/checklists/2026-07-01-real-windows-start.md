@@ -216,19 +216,19 @@ Goal: keep the main Veil experience pointed at real local Windows boot and conso
 - [x] Add `veil-host-probe --diagnose-agent` so host-side agent connection checks return actionable JSON instead of only a timeout.
 - [x] Expose `guestAgentDiagnostics` in app-runtime status so the host shell, CLI, and harness point at the same pre/post install diagnostic gate.
 - [x] Gate app-runtime Start actions on real local VM boot readiness so bootReady=false reports `prepare-local-runtime` instead of exposing a failing start path.
+- [x] Harden Windows app HWND discovery for localized Windows 11 Arm apps by preferring newly created matching process windows over English title matching.
+- [x] Make host launch requests surface a single `type=error` agent reply immediately instead of waiting for a second launch/window reply.
+- [x] Republish the win-arm64 guest-agent bundle, regenerate `VeilAutoInstall.iso`, relaunch QEMU with `virtio-net-pci` plus `/Users/bonjin/Downloads/virtio-win.iso`, and verify the guest agent connects through `ws://127.0.0.1:18444`.
+- [x] Verify live `app-window-proof --app-id winapp_notepad`: Windows launched Notepad, returned `app.launch.response`, emitted `window.created` for `hwnd:000200B0`, and captured a 600 x 393 PNG frame.
+- [x] Verify live `mvp-proof --app-id winapp_notepad --require-proved`: guest-agent health, Notepad HWND tracking, initial frame, post-input frame, mouse input, keyboard input, and host-to-guest clipboard text all completed with `status=proved`.
 
 ## Next
 
-- [ ] Regenerate `VeilAutoInstall.iso` again after the UAC keyboard approval change, then retry `qemu-install-agent` against the visible Windows desktop.
-- [ ] Inspect the next `postAttemptConsole.capture.consoleScreenshotPath`; success should show the waiting launcher completing after `guestAgentHealthSucceeded`, while failure should leave a visible PowerShell error or timeout instead of a stuck UAC prompt.
-- [ ] Investigate the live app launch reply blocker: `app-window-proof --wait-seconds 8` now returns `launchTimeout` while the Windows desktop visibly opens Notepad, so the next proof gap is guest launch direct replies and first-frame event delivery rather than VM boot, NIC, firewall, or basic agent health.
-- [ ] Collect `%LOCALAPPDATA%\Veil\Agent\logs` from the Windows guest after the pointer-activated install attempt.
-- [ ] Use the new `qemu-install-agent` install-attempt report to capture key-send evidence plus guest-agent wait status for the next live retry.
-- [ ] Run `Veil Shared\Veil Guest Agent\Install Veil Agent.cmd` inside Windows 11 Arm and verify the current-session agent plus the `VeilAgent` logon task both start.
-- [ ] Run `swift run veil-host-probe --diagnose-agent` before and after the next guest-agent install attempt.
-- [ ] Run `Veil Shared\Veil Guest Agent\Collect Veil Agent Diagnostics.cmd` after the next bootstrap attempt and capture the generated desktop ZIP.
-- [ ] Verify the Win32/GDI HWND capture path inside Windows 11 Arm and record the captured Notepad frame evidence.
-- [ ] Resolve the remaining host-forwarded WebSocket no-response case: Windows local probe succeeds on `0.0.0.0:18444`, Mac TCP connect to QEMU `127.0.0.1:18444` succeeds, but WebSocket health times out without an elevated firewall rule or alternate host/guest transport.
+- [ ] Turn the proven CLI MVP path into the default app flow: Start VM, auto-repair guest agent when needed, and open the mirrored Notepad/macOS window without terminal commands.
+- [ ] Add an explicit app-runtime reconnect/restore proof so Veil can boot an installed VM, reconnect to the guest agent, and restore a previously mirrored app window.
+- [ ] Expand the live app proof from Notepad to Calculator and Paint, keeping each app behind the same launch, HWND, frame, input, and close contract.
+- [ ] Collect `%LOCALAPPDATA%\Veil\Agent\logs` from the Windows guest after the successful virtio-net repair path and confirm logs match the host-side proof artifacts.
+- [ ] Run `Veil Shared\Veil Guest Agent\Collect Veil Agent Diagnostics.cmd` after the proven path and capture the generated desktop ZIP for diagnostic review.
 - [ ] Tune the Windows agent frame stream for lower latency after correctness is verified.
 - [ ] Replace remaining static setup preview states with real VM screenshots whenever QEMU launch evidence exists.
 - [ ] Replace remaining manual installed-state copy with guest-agent evidence in the first-run setup flow.

@@ -10,6 +10,7 @@ Current scope:
 - The first app catalog includes Notepad, Calculator, and Paint as Windows inbox app targets.
 - App launch emits `app.launch.response`, `window.created`, and the first HWND-captured `window.frame` event through the event broadcast path.
 - After the first frame, a per-window frame streamer continues broadcasting PNG `window.frame` events until the agent process stops or the window stream is replaced.
+- HWND discovery is localization-tolerant: before launching an app the agent snapshots matching existing process windows, then prefers newly created windows matching the launched process id, executable process name, or title. This avoids depending on English window titles for Windows 11 Arm images.
 
 This project intentionally does not ship Windows media, licenses, product keys, or proprietary SDKs.
 
@@ -146,3 +147,5 @@ npm test
 ```
 
 The default frame path uses Win32/GDI capture behind `IWindowFrameCapture`. The current stream interval is 250 ms for correctness-first validation. The next capture milestone is to verify Notepad, Calculator, and Paint frames inside Windows 11 Arm and then evaluate Windows Graphics Capture or a lower-latency stream.
+
+On July 4, 2026, the live Notepad MVP proof passed on Windows 11 Arm with QEMU/HVF, `virtio-net-pci`, user-provided virtio-win media, guest-agent health over `ws://127.0.0.1:18444`, HWND tracking, PNG frame capture, mouse input, keyboard input, and host-to-guest clipboard text. Keep this as the minimum live release gate while expanding beyond Notepad.

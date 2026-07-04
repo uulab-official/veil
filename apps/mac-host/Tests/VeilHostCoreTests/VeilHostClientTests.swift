@@ -177,6 +177,25 @@ struct VeilHostClientTests {
         #expect(result.window.title == "Calculator")
     }
 
+    @Test("surfaces agent launch errors without waiting for a second launch reply")
+    func surfacesAgentLaunchErrorsWithoutWaitingForSecondLaunchReply() async throws {
+        let transport = RecordingTransport(responses: [
+            #"{"type":"agent.health.response","requestId":"req_health","protocolVersion":1,"agentVersion":"0.1.0","os":"windows-arm64","session":{"interactive":true,"user":"veil-user"},"capabilities":{"appList":true,"appLaunch":true,"windowTracking":true,"windowCapture":false,"input":false,"clipboardText":false}}"#,
+            #"{"type":"app.list.response","requestId":"req_apps","apps":[{"id":"winapp_notepad","name":"Notepad","exePath":"notepad.exe","publisher":"Microsoft","iconId":"icon_notepad"}]}"#,
+            #"{"type":"error","requestId":"req_launch_winapp_notepad","code":"app_launch_failed","message":"notepad.exe started but no top-level window was discovered."}"#
+        ])
+        let client = VeilHostClient(transport: transport)
+
+        await #expect(throws: VeilHostError.agentError(
+            code: "app_launch_failed",
+            message: "notepad.exe started but no top-level window was discovered."
+        )) {
+            try await client.launchApp(appId: "winapp_notepad")
+        }
+
+        #expect(transport.expectedReplyCounts == [1, 1, 2])
+    }
+
     @Test("proves Windows app window launch with first frame evidence")
     func provesWindowsAppWindowLaunchWithFirstFrameEvidence() async throws {
         let transport = RecordingTransport(responses: [
@@ -467,7 +486,7 @@ private final class RecordingTransport: HostTransport, @unchecked Sendable {
         expectedReplyCounts.append(expectedReplies)
 
         let replyStrings = Array(responses.prefix(expectedReplies))
-        responses.removeFirst(expectedReplies)
+        responses.removeFirst(replyStrings.count)
         return replyStrings.map { Data($0.utf8) }
     }
 }

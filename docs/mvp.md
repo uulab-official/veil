@@ -32,6 +32,10 @@ Acceptance criteria:
 - The agent returns version, OS, session, and capability data.
 - A local harness can simulate the agent response without a VM.
 
+Live status:
+
+- Proved on July 4, 2026 with Windows 11 Arm running under QEMU/HVF, `virtio-net-pci`, user-provided virtio-win driver media, and host access through `ws://127.0.0.1:18444`.
+
 ## Milestone v0.3: App Launch and HWND Tracking
 
 Acceptance criteria:
@@ -42,6 +46,10 @@ Acceptance criteria:
 - The event includes window id, process id, title, bounds, and state.
 - The host stores the active window session.
 
+Live status:
+
+- Proved on July 4, 2026 with `winapp_notepad`, `window.created` for `hwnd:000200B0`, localized Korean Notepad title handling, and launch metadata from the real guest agent.
+
 ## Milestone v0.4: Window Mirroring
 
 Acceptance criteria:
@@ -50,6 +58,10 @@ Acceptance criteria:
 - The host displays that capture stream in a separate macOS window.
 - Closing the macOS window sends a guest close request.
 - The host does not require the user to interact with the full Windows desktop.
+
+Live status:
+
+- First-frame proof passed on July 4, 2026 with a real 600 x 393 PNG frame captured from the Notepad HWND. The next product step is making this proof path open from the default app shell without terminal commands.
 
 ## Milestone v0.5: Input and Clipboard
 
@@ -60,6 +72,10 @@ Acceptance criteria:
 - `Cmd+C`, `Cmd+V`, `Cmd+X`, `Cmd+A`, and `Cmd+S` map to Windows control shortcuts.
 - Text clipboard sync works in both directions.
 - Clipboard sync loop prevention is tested in the harness.
+
+Live status:
+
+- `veil-vmctl mvp-proof --json --app-id winapp_notepad --require-proved` passed on July 4, 2026 with guest-agent health, Notepad HWND tracking, initial frame, post-input frame, mouse input, keyboard input, and host-to-guest clipboard text.
 
 ## MVP Non-Goals
 

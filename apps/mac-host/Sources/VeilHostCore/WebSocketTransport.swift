@@ -29,13 +29,19 @@ public struct URLSessionWebSocketTransport: HostTransport, HostEventSource {
 
             var replies: [Data] = []
             for _ in 0..<expectedReplies {
+                let reply: Data
                 switch try await task.receive() {
                 case .data(let data):
-                    replies.append(data)
+                    reply = data
                 case .string(let text):
-                    replies.append(Data(text.utf8))
+                    reply = Data(text.utf8)
                 @unknown default:
                     throw VeilHostError.missingReply("unsupported websocket message type")
+                }
+
+                replies.append(reply)
+                if Self.isProtocolError(reply) {
+                    break
                 }
             }
 
@@ -43,6 +49,14 @@ public struct URLSessionWebSocketTransport: HostTransport, HostEventSource {
         } onCancel: {
             task.cancel(with: .goingAway, reason: nil)
         }
+    }
+
+    private static func isProtocolError(_ data: Data) -> Bool {
+        guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let type = object["type"] as? String else {
+            return false
+        }
+        return type == MessageType.error.rawValue
     }
 
     public func eventMessages() -> AsyncThrowingStream<Data, any Error> {

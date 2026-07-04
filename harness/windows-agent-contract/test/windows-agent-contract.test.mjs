@@ -228,7 +228,11 @@ test("windows agent exposes an inbox app catalog for native-style Mac windows", 
   assert.match(session, /app_launch_failed/);
   assert.match(session, /handler_failed/);
   assert.match(session, /WindowCreatedEvent\(app,\s*launched\)/);
-  assert.match(desktop, /TryFindTopLevelWindow\(app,\s*process\.Id,\s*out var launched\)/);
+  assert.match(desktop, /SnapshotAppWindowHandles\(app\)/);
+  assert.match(desktop, /DoesProcessMatchApp\(windowProcessId,\s*app\)/);
+  assert.match(desktop, /Path\.GetFileNameWithoutExtension\(app\.Executable\)/);
+  assert.match(desktop, /OrderByDescending\(candidate\s*=>\s*candidate\.IsNewWindow\)/);
+  assert.match(desktop, /TryFindTopLevelWindow\(app,\s*process\.Id,\s*existingWindowHandles,\s*out var launched\)/);
   assert.match(desktop, /EnumWindows/);
   assert.match(desktop, /GetWindowThreadProcessId/);
   assert.match(desktop, /GetWindowText/);
