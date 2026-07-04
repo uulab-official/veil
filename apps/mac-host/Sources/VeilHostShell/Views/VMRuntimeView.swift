@@ -18,6 +18,7 @@ struct VMRuntimeView: View {
     var stopVMAction: () -> Void
     var markWindowsInstalledAction: () -> Void
     var installGuestAgentAction: () -> Void
+    var repairGuestAgentForAppLaunchAction: () -> Void
     var launchWindowsAppAction: () -> Void
     var runRecommendedProofAction: () -> Void
     var displayMessage: String?
@@ -53,6 +54,8 @@ struct VMRuntimeView: View {
                     primaryAction: {
                         if canOpenWindowsApp {
                             launchWindowsAppAction()
+                        } else if pendingLaunch.willLaunchOnAgentReconnect && canShowDisplay(for: snapshot) {
+                            repairGuestAgentForAppLaunchAction()
                         } else if canInstallGuestAgent(for: snapshot) {
                             installGuestAgentAction()
                         } else if model.canStop {
@@ -71,6 +74,7 @@ struct VMRuntimeView: View {
                     stopAction: stopVMAction,
                     markWindowsInstalledAction: markWindowsInstalledAction,
                     installGuestAgentAction: installGuestAgentAction,
+                    repairGuestAgentForAppLaunchAction: repairGuestAgentForAppLaunchAction,
                     canLaunchWindowsApp: canLaunchWindowsApp,
                     selectedWindowsAppName: selectedWindowsAppName,
                     pendingLaunch: pendingLaunch,
@@ -1310,6 +1314,7 @@ private struct WindowsSetupDisplayPanel: View {
     var stopAction: () -> Void
     var markWindowsInstalledAction: () -> Void
     var installGuestAgentAction: () -> Void
+    var repairGuestAgentForAppLaunchAction: () -> Void
     var canLaunchWindowsApp: Bool
     var selectedWindowsAppName: String?
     var pendingLaunch: WindowsAppRuntimePendingLaunchStatus
@@ -1689,7 +1694,7 @@ private struct WindowsSetupDisplayPanel: View {
         if pendingLaunch.willLaunchOnAgentReconnect {
             switch snapshot.state {
             case .running, .starting:
-                return "Waiting for Agent"
+                return "Repair Agent"
             default:
                 return "Continue Opening \(pendingAppDisplayName)"
             }
@@ -1760,6 +1765,13 @@ private struct WindowsSetupDisplayPanel: View {
                 .buttonStyle(.borderedProminent)
                 .disabled(isLoading)
                 .help("Open Windows app")
+            } else if canRepairGuestAgentForAppLaunch {
+                Button(action: repairGuestAgentForAppLaunchAction) {
+                    Label("Continue \(pendingAppDisplayName)", systemImage: "bolt.horizontal.circle")
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(isLoading)
+                .help("Repair the guest agent and continue opening the queued Windows app")
             }
 
             Button(action: refreshAction) {
@@ -2095,7 +2107,7 @@ private struct WindowsSetupDisplayPanel: View {
         if pendingLaunch.willLaunchOnAgentReconnect {
             switch snapshot.state {
             case .running, .starting:
-                return "Waiting for Agent"
+                return "Repair Agent"
             default:
                 return "Continue Opening \(pendingAppDisplayName)"
             }
@@ -2130,7 +2142,9 @@ private struct WindowsSetupDisplayPanel: View {
 
     private var primarySymbol: String {
         if canFulfillPendingLaunch || pendingLaunch.willLaunchOnAgentReconnect {
-            return "macwindow.badge.plus"
+            return pendingLaunch.willLaunchOnAgentReconnect && !canFulfillPendingLaunch
+                ? "bolt.horizontal.circle"
+                : "macwindow.badge.plus"
         }
 
         if canInstallGuestAgent {
@@ -2199,7 +2213,6 @@ private struct WindowsSetupDisplayPanel: View {
         isLoading
             || snapshot.state == .unsupported
             || installSimulation.phase == .running
-            || isWaitingForQueuedAppAgent
     }
 
     private var progressFraction: Double {
@@ -2239,7 +2252,7 @@ private struct WindowsSetupDisplayPanel: View {
         canLaunchWindowsApp || canFulfillPendingLaunch
     }
 
-    private var isWaitingForQueuedAppAgent: Bool {
+    private var canRepairGuestAgentForAppLaunch: Bool {
         pendingLaunch.willLaunchOnAgentReconnect
             && !canFulfillPendingLaunch
             && (snapshot.state == .running || snapshot.state == .starting)

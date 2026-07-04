@@ -8,6 +8,7 @@ struct ContentView: View {
     var stopVMAction: () -> Void
     var markWindowsInstalledAction: () -> Void
     var installGuestAgentAction: () -> Void
+    var repairGuestAgentForAppLaunchAction: () -> Void
     var launchWindowsAppAction: () -> Void
     var runRecommendedProofAction: () -> Void
     var displayMessage: String?
@@ -36,6 +37,7 @@ struct ContentView: View {
                     stopVMAction: stopVMAction,
                     markWindowsInstalledAction: markWindowsInstalledAction,
                     installGuestAgentAction: installGuestAgentAction,
+                    repairGuestAgentForAppLaunchAction: repairGuestAgentForAppLaunchAction,
                     launchWindowsAppAction: launchWindowsAppAction,
                     runRecommendedProofAction: runRecommendedProofAction,
                     displayMessage: displayMessage

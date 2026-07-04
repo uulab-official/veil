@@ -130,7 +130,7 @@ Exit criteria:
 
 Veil now has the local QEMU/HVF boot path, embedded display evidence, fake-agent harnesses, a live Windows 11 Arm guest-agent connection through QEMU host forwarding, and a proven Notepad MVP loop: app launch, HWND tracking, PNG frame capture, mouse input, keyboard input, and host-to-guest clipboard text. The next work is to close the gap between "the CLI can prove the loop" and "the app feels like a daily usable Windows App Runtime" without expanding into a generic VM manager.
 
-1. Productize the proven path: Start VM, auto-repair/reconnect the guest agent when needed, launch Notepad, and open the mirrored macOS window from the app shell without terminal commands. The automatic recovery handoff and status command are now wired; the remaining gate is built-app end-to-end UX validation.
+1. Productize the proven path: Start VM, auto-repair/reconnect the guest agent when needed, launch Notepad, and open the mirrored macOS window from the app shell without terminal commands. The automatic recovery handoff, status command, and user-actionable Continue/Repair Agent launcher path are now wired; the remaining gate is built-app end-to-end UX validation.
 2. State-gated app runtime commands: launch, focus, close, input, clipboard, restore, quiet-runtime readiness, repair guest agent, and stop actions should be available only when the VM and guest-agent state support them.
 3. Coherence restore loop: after VM reconnect, restore selected Windows apps and keep the Veil launcher hidden unless recovery is needed.
 4. UTM-style runtime configuration contract: expose typed system, display, sharing, storage, network, input, guest-agent readiness, and recovery command summaries in one supportable diagnostic surface.

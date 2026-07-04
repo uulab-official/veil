@@ -222,6 +222,7 @@ Goal: keep the main Veil experience pointed at real local Windows boot and conso
 - [x] Verify live `app-window-proof --app-id winapp_notepad`: Windows launched Notepad, returned `app.launch.response`, emitted `window.created` for `hwnd:000200B0`, and captured a 600 x 393 PNG frame.
 - [x] Verify live `mvp-proof --app-id winapp_notepad --require-proved`: guest-agent health, Notepad HWND tracking, initial frame, post-input frame, mouse input, keyboard input, and host-to-guest clipboard text all completed with `status=proved`.
 - [x] Add an app-shell automatic guest-agent recovery handoff: when a Windows app launch is queued and the VM is already running without a live agent, Veil sends the bounded attached-media `V.cmd` repair/install path once for that QEMU runtime, then lets the reconnect poller open the queued macOS app window.
+- [x] Keep the queued Windows app launcher actionable while waiting for the guest agent: the main play button and menu bar now expose a Continue/Repair Agent path instead of freezing at a disabled waiting state.
 - [x] Add `recommendedRepairCommand` and `runtime.repairGuestAgentForApp` to app-runtime status so CLI, harness, menu, and app surfaces share the same repair gate instead of only reporting a vague wait state.
 - [x] Harden WebSocket request/reply handling so background `window.frame`, `window.updated`, `window.closed`, or guest clipboard events cannot be decoded as `app.launch.response` during a live launch request.
 - [x] Verify live `app-runtime-action --action launch --app-id winapp_notepad` after frame filtering: accepted launch, live guest agent, `hwnd:0001056E`, Korean Notepad title, and app-runtime status marked the launcher as hidden for Windows app windows.
@@ -229,7 +230,7 @@ Goal: keep the main Veil experience pointed at real local Windows boot and conso
 
 ## Next
 
-- [ ] Finish turning the proven CLI MVP path into the default app flow by exercising the built app end to end: Start VM, auto-repair guest agent when needed, and open the mirrored Notepad/macOS window from the main play action without terminal commands.
+- [ ] Finish turning the proven CLI MVP path into the default app flow by exercising the built app end to end: Start VM, Continue/auto-repair guest agent when needed, and open the mirrored Notepad/macOS window from the main play action without terminal commands.
 - [ ] Add an explicit app-runtime reconnect/restore proof so Veil can boot an installed VM, reconnect to the guest agent, and restore a previously mirrored app window.
 - [ ] Expand the live app proof from Notepad to Calculator and Paint, keeping each app behind the same launch, HWND, frame, input, and close contract.
 - [ ] Collect `%LOCALAPPDATA%\Veil\Agent\logs` from the Windows guest after the successful virtio-net repair path and confirm logs match the host-side proof artifacts.
