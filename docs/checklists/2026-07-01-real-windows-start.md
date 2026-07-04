@@ -120,6 +120,7 @@ Goal: keep the main Veil experience pointed at real local Windows boot and conso
 - [x] Make the guest installer stop an existing `VeilAgent.exe` before replacing `%LOCALAPPDATA%\Veil\Agent\app` so repeated installs do not fail on locked runtime DLLs.
 - [x] Add a best-effort Windows Firewall inbound rule during elevated guest-agent installs and log a clear warning when standard-user installs cannot add it.
 - [x] Capture live evidence that the agent starts inside Windows and local probe succeeds, while macOS `guest-agent-wait` still times out until the firewall/NIC boundary is resolved.
+- [x] Add host-side `hostForwardProbe` diagnostics so `guest-agent-wait` distinguishes TCP-open/no-WebSocket-health from a closed forwarded port.
 - [x] Replace the Windows agent's `HttpListener` server with a `TcpListener` WebSocket handshake and bind the guest listener to `0.0.0.0:18444`, keeping macOS access through QEMU `ws://127.0.0.1:18444`.
 - [x] Add recovery copy to QEMU smoke reports for common boot failures.
 - [x] Convert QEMU monitor screenshots to PNG paths so users can inspect boot evidence directly.

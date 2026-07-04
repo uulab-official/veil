@@ -54,7 +54,7 @@ struct VeilHostClientTests {
 
     @Test("diagnoses stalled Windows agent with bounded timeout")
     func diagnosesStalledAgentWithBoundedTimeout() async throws {
-        let client = VeilHostClient(transport: HangingTransport())
+        let client = VeilHostClient(transport: HangingTransport(), hostForwardProbe: { _, _ in nil })
 
         let diagnostic = await client.diagnoseAgentConnection(
             endpoint: "ws://127.0.0.1:18444",
@@ -64,6 +64,32 @@ struct VeilHostClientTests {
         #expect(diagnostic.status == .unavailable)
         #expect(diagnostic.errorMessage == "Timed out waiting for Windows agent health.")
         #expect(diagnostic.nextActions.contains("Confirm the Windows 11 Arm VM is running and has reached the desktop."))
+    }
+
+    @Test("diagnoses host-forwarded TCP without WebSocket health")
+    func diagnosesHostForwardedTCPWithoutWebSocketHealth() async throws {
+        let client = VeilHostClient(
+            transport: HangingTransport(),
+            hostForwardProbe: { endpoint, _ in
+                HostForwardProbeResult(
+                    endpoint: endpoint,
+                    host: "127.0.0.1",
+                    port: 18444,
+                    status: .tcpOpen,
+                    detail: "TCP connection to the host-forwarded endpoint succeeded."
+                )
+            }
+        )
+
+        let diagnostic = await client.diagnoseAgentConnection(
+            endpoint: "ws://127.0.0.1:18444",
+            timeoutNanoseconds: 1_000_000
+        )
+
+        #expect(diagnostic.status == .unavailable)
+        #expect(diagnostic.hostForwardProbe?.status == .tcpOpen)
+        #expect(diagnostic.nextActions.contains("Mac can open the QEMU hostfwd TCP port, but WebSocket health did not respond; check Windows Firewall, guest NIC driver state, or rerun the guest installer as an elevated user."))
+        #expect(diagnostic.nextActions.contains("If Windows shows a disconnected network icon, attach a driver ISO or retry with an alternate QEMU NIC before relying on hostfwd for app mirroring."))
     }
 
     @Test("waits for connected Windows guest agent")

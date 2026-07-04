@@ -1,4 +1,5 @@
 import Foundation
+import Darwin
 
 public protocol HostTransport: Sendable {
     func send(_ message: Data, expectedReplies: Int) async throws -> [Data]
@@ -222,6 +223,7 @@ public struct AgentConnectionDiagnostic: Codable, Equatable, Sendable {
     public var endpoint: String
     public var health: AgentHealthResponse?
     public var errorMessage: String?
+    public var hostForwardProbe: HostForwardProbeResult?
     public var nextActions: [String]
 
     public init(
@@ -229,17 +231,19 @@ public struct AgentConnectionDiagnostic: Codable, Equatable, Sendable {
         endpoint: String,
         health: AgentHealthResponse? = nil,
         errorMessage: String? = nil,
+        hostForwardProbe: HostForwardProbeResult? = nil,
         nextActions: [String]
     ) {
         self.status = status
         self.endpoint = endpoint
         self.health = health
         self.errorMessage = errorMessage
+        self.hostForwardProbe = hostForwardProbe
         self.nextActions = nextActions
     }
 
     public static func connected(endpoint: String, health: AgentHealthResponse) -> AgentConnectionDiagnostic {
-        AgentConnectionDiagnostic(
+        return AgentConnectionDiagnostic(
             status: .connected,
             endpoint: endpoint,
             health: health,
@@ -250,18 +254,57 @@ public struct AgentConnectionDiagnostic: Codable, Equatable, Sendable {
         )
     }
 
-    public static func unavailable(endpoint: String, errorMessage: String) -> AgentConnectionDiagnostic {
-        AgentConnectionDiagnostic(
+    public static func unavailable(
+        endpoint: String,
+        errorMessage: String,
+        hostForwardProbe: HostForwardProbeResult? = nil
+    ) -> AgentConnectionDiagnostic {
+        var nextActions = [
+            "Confirm the Windows 11 Arm VM is running and has reached the desktop.",
+            "Inside Windows, run Veil Shared\\Veil Guest Agent\\Install Veil Agent.cmd.",
+            "If the agent still does not connect, run Veil Shared\\Veil Guest Agent\\Collect Veil Agent Diagnostics.cmd and inspect the desktop ZIP.",
+            "Confirm the QEMU/HVF plan includes hostfwd=tcp::18444-:18444 and restart the VM after changing the launch plan."
+        ]
+        if hostForwardProbe?.status == .tcpOpen {
+            nextActions.append("Mac can open the QEMU hostfwd TCP port, but WebSocket health did not respond; check Windows Firewall, guest NIC driver state, or rerun the guest installer as an elevated user.")
+            nextActions.append("If Windows shows a disconnected network icon, attach a driver ISO or retry with an alternate QEMU NIC before relying on hostfwd for app mirroring.")
+        }
+
+        return AgentConnectionDiagnostic(
             status: .unavailable,
             endpoint: endpoint,
             errorMessage: errorMessage,
-            nextActions: [
-                "Confirm the Windows 11 Arm VM is running and has reached the desktop.",
-                "Inside Windows, run Veil Shared\\Veil Guest Agent\\Install Veil Agent.cmd.",
-                "If the agent still does not connect, run Veil Shared\\Veil Guest Agent\\Collect Veil Agent Diagnostics.cmd and inspect the desktop ZIP.",
-                "Confirm the QEMU/HVF plan includes hostfwd=tcp::18444-:18444 and restart the VM after changing the launch plan."
-            ]
+            hostForwardProbe: hostForwardProbe,
+            nextActions: nextActions
         )
+    }
+}
+
+public enum HostForwardProbeStatus: String, Codable, Equatable, Sendable {
+    case tcpOpen
+    case tcpUnavailable
+    case unsupportedEndpoint
+}
+
+public struct HostForwardProbeResult: Codable, Equatable, Sendable {
+    public var endpoint: String
+    public var host: String?
+    public var port: Int?
+    public var status: HostForwardProbeStatus
+    public var detail: String
+
+    public init(
+        endpoint: String,
+        host: String? = nil,
+        port: Int? = nil,
+        status: HostForwardProbeStatus,
+        detail: String
+    ) {
+        self.endpoint = endpoint
+        self.host = host
+        self.port = port
+        self.status = status
+        self.detail = detail
     }
 }
 
@@ -341,15 +384,18 @@ public struct VeilHostClient: HostDashboardService, Sendable {
     private let transport: any HostTransport
     private let encoder: JSONEncoder
     private let decoder: JSONDecoder
+    private let hostForwardProbe: @Sendable (String, UInt64) async -> HostForwardProbeResult?
 
     public init(
         transport: any HostTransport,
         encoder: JSONEncoder = .veilProtocol,
-        decoder: JSONDecoder = .veilProtocol
+        decoder: JSONDecoder = .veilProtocol,
+        hostForwardProbe: @escaping @Sendable (String, UInt64) async -> HostForwardProbeResult? = Self.probeHostForward
     ) {
         self.transport = transport
         self.encoder = encoder
         self.decoder = decoder
+        self.hostForwardProbe = hostForwardProbe
     }
 
     public func launchApp(appId: String) async throws -> WindowsAppLaunchResult {
@@ -552,7 +598,12 @@ public struct VeilHostClient: HostDashboardService, Sendable {
             let health = try await loadHealth(timeoutNanoseconds: timeoutNanoseconds)
             return .connected(endpoint: endpoint, health: health)
         } catch {
-            return .unavailable(endpoint: endpoint, errorMessage: Self.errorMessage(for: error))
+            let probe = await hostForwardProbe(endpoint, min(timeoutNanoseconds, 750_000_000))
+            return .unavailable(
+                endpoint: endpoint,
+                errorMessage: Self.errorMessage(for: error),
+                hostForwardProbe: probe
+            )
         }
     }
 
@@ -626,6 +677,121 @@ public struct VeilHostClient: HostDashboardService, Sendable {
             group.cancelAll()
             return health
         }
+    }
+
+    public static func probeHostForward(
+        endpoint: String,
+        timeoutNanoseconds: UInt64 = 750_000_000
+    ) async -> HostForwardProbeResult? {
+        guard let url = URL(string: endpoint),
+              let host = url.host,
+              let port = url.port else {
+            return HostForwardProbeResult(
+                endpoint: endpoint,
+                status: .unsupportedEndpoint,
+                detail: "Endpoint is not a host/port WebSocket URL."
+            )
+        }
+
+        return await Task.detached(priority: .utility) {
+            probeTCP(endpoint: endpoint, host: host, port: port, timeoutNanoseconds: timeoutNanoseconds)
+        }.value
+    }
+
+    private static func probeTCP(
+        endpoint: String,
+        host: String,
+        port: Int,
+        timeoutNanoseconds: UInt64
+    ) -> HostForwardProbeResult {
+        var hints = addrinfo()
+        hints.ai_family = AF_UNSPEC
+        hints.ai_socktype = SOCK_STREAM
+        hints.ai_protocol = IPPROTO_TCP
+
+        var resultPointer: UnsafeMutablePointer<addrinfo>?
+        let lookupStatus = getaddrinfo(host, "\(port)", &hints, &resultPointer)
+        guard lookupStatus == 0, let firstResult = resultPointer else {
+            return HostForwardProbeResult(
+                endpoint: endpoint,
+                host: host,
+                port: port,
+                status: .tcpUnavailable,
+                detail: String(cString: gai_strerror(lookupStatus))
+            )
+        }
+        defer {
+            freeaddrinfo(firstResult)
+        }
+
+        var candidate: UnsafeMutablePointer<addrinfo>? = firstResult
+        var lastError = "TCP connection attempt failed."
+        let timeoutMilliseconds = max(1, Int32(timeoutNanoseconds / 1_000_000))
+
+        while let addressInfo = candidate {
+            let descriptor = socket(addressInfo.pointee.ai_family, addressInfo.pointee.ai_socktype, addressInfo.pointee.ai_protocol)
+            if descriptor < 0 {
+                lastError = String(cString: strerror(errno))
+                candidate = addressInfo.pointee.ai_next
+                continue
+            }
+            defer {
+                close(descriptor)
+            }
+
+            let flags = fcntl(descriptor, F_GETFL, 0)
+            if flags >= 0 {
+                _ = fcntl(descriptor, F_SETFL, flags | O_NONBLOCK)
+            }
+
+            let connectStatus = connect(descriptor, addressInfo.pointee.ai_addr, addressInfo.pointee.ai_addrlen)
+            if connectStatus == 0 || errno == EISCONN {
+                return HostForwardProbeResult(
+                    endpoint: endpoint,
+                    host: host,
+                    port: port,
+                    status: .tcpOpen,
+                    detail: "TCP connection to the host-forwarded endpoint succeeded."
+                )
+            }
+
+            if errno == EINPROGRESS {
+                var pollDescriptor = pollfd(fd: descriptor, events: Int16(POLLOUT), revents: 0)
+                let pollStatus = poll(&pollDescriptor, 1, timeoutMilliseconds)
+                if pollStatus > 0 {
+                    var socketError: Int32 = 0
+                    var socketErrorLength = socklen_t(MemoryLayout<Int32>.size)
+                    if getsockopt(descriptor, SOL_SOCKET, SO_ERROR, &socketError, &socketErrorLength) == 0,
+                       socketError == 0 {
+                        return HostForwardProbeResult(
+                            endpoint: endpoint,
+                            host: host,
+                            port: port,
+                            status: .tcpOpen,
+                            detail: "TCP connection to the host-forwarded endpoint succeeded."
+                        )
+                    }
+
+                    lastError = String(cString: strerror(socketError == 0 ? errno : socketError))
+                } else if pollStatus == 0 {
+                    lastError = "TCP connection attempt timed out."
+                } else {
+                    lastError = String(cString: strerror(errno))
+                }
+            } else {
+                lastError = String(cString: strerror(errno))
+            }
+
+            candidate = addressInfo.pointee.ai_next
+        }
+
+        return HostForwardProbeResult(
+            endpoint: endpoint,
+            host: host,
+            port: port,
+            status: .tcpUnavailable,
+            detail: lastError
+        )
     }
 
     public func closeWindow(windowId: String) async throws -> WindowCloseResponse {

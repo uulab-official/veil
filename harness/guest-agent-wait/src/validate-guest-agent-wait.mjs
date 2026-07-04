@@ -68,6 +68,9 @@ function validateDiagnostic(diagnostic, expectedStatus) {
     throw new TypeError("diagnostic.status must match report status.");
   }
   requireString(diagnostic.endpoint, "diagnostic.endpoint");
+  if (diagnostic.hostForwardProbe !== undefined) {
+    validateHostForwardProbe(diagnostic.hostForwardProbe);
+  }
   validateNextActions(diagnostic.nextActions);
 
   if (expectedStatus === "connected") {
@@ -93,6 +96,25 @@ function validateHealth(health) {
   }
   for (const field of ["appList", "appLaunch", "windowTracking", "windowCapture", "input", "clipboardText"]) {
     requireBoolean(health.capabilities[field], `diagnostic.health.capabilities.${field}`);
+  }
+}
+
+function validateHostForwardProbe(probe) {
+  if (!probe || typeof probe !== "object" || Array.isArray(probe)) {
+    throw new TypeError("diagnostic.hostForwardProbe must be an object.");
+  }
+
+  requireString(probe.endpoint, "diagnostic.hostForwardProbe.endpoint");
+  requireString(probe.status, "diagnostic.hostForwardProbe.status");
+  if (!["tcpOpen", "tcpUnavailable", "unsupportedEndpoint"].includes(probe.status)) {
+    throw new TypeError("diagnostic.hostForwardProbe.status is unsupported.");
+  }
+  requireString(probe.detail, "diagnostic.hostForwardProbe.detail");
+  if (probe.host !== undefined) {
+    requireString(probe.host, "diagnostic.hostForwardProbe.host");
+  }
+  if (probe.port !== undefined) {
+    requireInteger(probe.port, "diagnostic.hostForwardProbe.port");
   }
 }
 

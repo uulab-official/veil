@@ -282,6 +282,13 @@ explicit: confirm the Windows desktop is running, install `Veil Guest Agent`
 from the shared media, collect the Windows-side diagnostics ZIP if needed, and
 verify QEMU/HVF port forwarding.
 
+When the host can open the QEMU `hostfwd` TCP port but `agent.health.response`
+still times out, unavailable reports include `diagnostic.hostForwardProbe` with
+`status: "tcpOpen"`. Treat that as a narrower transport failure: QEMU is
+listening on macOS, but the guest-side WebSocket protocol is not completing.
+Current recovery guidance points at Windows Firewall, guest NIC driver state,
+or an elevated guest-agent install that can add the inbound firewall rule.
+
 ## Provider Probe Scenario
 
 The provider probe checks the local VM runtime boundary separately from Windows boot. It should be run before real Windows installer testing so the team knows whether the machine has only Apple Virtualization available or also a local QEMU/HVF candidate.
