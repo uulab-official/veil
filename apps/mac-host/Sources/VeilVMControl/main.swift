@@ -702,6 +702,9 @@ struct VeilVMControl {
         if let waitCommand = report.launchPlan.recommendedWaitCommand {
             print("Launch wait command: \(waitCommand)")
         }
+        if let repairCommand = report.launchPlan.recommendedRepairCommand {
+            print("Launch repair command: \(repairCommand)")
+        }
         if let launchCommand = report.launchPlan.recommendedLaunchCommand {
             print("Launch app command: \(launchCommand)")
         }
@@ -1033,6 +1036,9 @@ struct VeilVMControl {
             if let waitCommand = launchPlan.recommendedWaitCommand {
                 print("Launch wait command: \(waitCommand)")
             }
+            if let repairCommand = launchPlan.recommendedRepairCommand {
+                print("Launch repair command: \(repairCommand)")
+            }
             if let launchCommand = launchPlan.recommendedLaunchCommand {
                 print("Launch app command: \(launchCommand)")
             }
@@ -1324,6 +1330,10 @@ struct VeilVMControl {
 
         if let waitCommand = launchPlan.recommendedWaitCommand {
             actions.append("Run `\(waitCommand)` to wait for the Windows guest agent.")
+        }
+
+        if let repairCommand = launchPlan.recommendedRepairCommand {
+            actions.append("Run `\(repairCommand)` to repair or start the Windows guest agent from attached media.")
         }
 
         if let launchCommand = launchPlan.recommendedLaunchCommand {

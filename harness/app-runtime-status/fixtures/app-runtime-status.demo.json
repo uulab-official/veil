@@ -31,6 +31,11 @@
       "title": "Start Windows For App Launch"
     },
     {
+      "id": "runtime.repairGuestAgentForApp",
+      "isAvailable": false,
+      "title": "Repair Guest Agent For App Launch"
+    },
+    {
       "id": "runtime.fulfillPendingLaunch",
       "isAvailable": false,
       "title": "Open Queued Windows App"

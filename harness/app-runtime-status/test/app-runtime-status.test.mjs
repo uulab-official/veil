@@ -235,6 +235,43 @@ test("rejects queued pending launch plans without fulfill-pending recovery", () 
   );
 });
 
+test("accepts queued pending launch repair while local Windows is already running", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.demo.json", import.meta.url), "utf8"));
+  report.pendingLaunchAppId = "winapp_notepad";
+  report.pendingLaunch.isQueued = true;
+  report.pendingLaunch.appId = "winapp_notepad";
+  report.pendingLaunch.willLaunchOnAgentReconnect = true;
+  report.pendingLaunch.recommendedAction = "auto-launch-on-agent-reconnect";
+  report.dockIntegration.pendingLaunchCount = 1;
+  report.dockIntegration.badgeLabel = "...";
+  report.localRuntime.state = "running";
+  report.localRuntime.canStart = false;
+  report.localRuntime.isRunning = true;
+  report.localRuntime.windowsInstalled = true;
+  report.localRuntime.recommendedAction = "wait-for-guest-agent";
+  report.launchPlan.pendingLaunchAppId = "winapp_notepad";
+  report.launchPlan.requiresRuntimeStart = false;
+  report.launchPlan.recommendedAction = "repair-guest-agent-for-pending-launch";
+  delete report.launchPlan.recommendedStartCommand;
+  report.launchPlan.recommendedRepairCommand = "veil-vmctl qemu-install-agent --json --wait-seconds 120";
+  report.launchPlan.recommendedLaunchCommand = "veil-vmctl app-runtime-action --json --action fulfill-pending";
+  report.launchPlan.reason = "Windows is running and the selected app launch is queued; repair or start the guest agent, then open the app automatically.";
+  report.actions.find((action) => action.id === "runtime.startWindowsForApp").isAvailable = false;
+  report.actions.find((action) => action.id === "runtime.repairGuestAgentForApp").isAvailable = true;
+
+  assert.doesNotThrow(() => validateAppRuntimeStatus(report));
+});
+
+test("rejects repair action availability that drifts from launch plan", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.demo.json", import.meta.url), "utf8"));
+  report.actions.find((action) => action.id === "runtime.repairGuestAgentForApp").isAvailable = true;
+
+  assert.throws(
+    () => validateAppRuntimeStatus(report),
+    /runtime\.repairGuestAgentForApp/
+  );
+});
+
 test("rejects reconnect auto-launch after live agent connects", () => {
   const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.mac-window-live.json", import.meta.url), "utf8"));
   report.pendingLaunchAppId = "winapp_notepad";

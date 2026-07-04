@@ -28,7 +28,8 @@ public struct URLSessionWebSocketTransport: HostTransport, HostEventSource {
             try await task.send(.data(message))
 
             var replies: [Data] = []
-            for _ in 0..<expectedReplies {
+            var ignoredEventCount = 0
+            while replies.count < expectedReplies {
                 let reply: Data
                 switch try await task.receive() {
                 case .data(let data):
@@ -37,6 +38,14 @@ public struct URLSessionWebSocketTransport: HostTransport, HostEventSource {
                     reply = Data(text.utf8)
                 @unknown default:
                     throw VeilHostError.missingReply("unsupported websocket message type")
+                }
+
+                if Self.isUnsolicitedEvent(reply) {
+                    ignoredEventCount += 1
+                    if ignoredEventCount > 64 {
+                        throw VeilHostError.missingReply("too many unsolicited websocket events while waiting for replies")
+                    }
+                    continue
                 }
 
                 replies.append(reply)
@@ -57,6 +66,18 @@ public struct URLSessionWebSocketTransport: HostTransport, HostEventSource {
             return false
         }
         return type == MessageType.error.rawValue
+    }
+
+    private static func isUnsolicitedEvent(_ data: Data) -> Bool {
+        guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let type = object["type"] as? String else {
+            return false
+        }
+
+        return type == MessageType.windowFrame.rawValue
+            || type == MessageType.windowUpdated.rawValue
+            || type == MessageType.windowClosed.rawValue
+            || type == MessageType.clipboardTextSet.rawValue
     }
 
     public func eventMessages() -> AsyncThrowingStream<Data, any Error> {

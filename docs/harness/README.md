@@ -82,6 +82,13 @@ app visible even before a guest HWND exists.
 The supported actions include `runtime.fulfillPendingLaunch`, which only
 becomes available after a queued app launch has a live guest agent capable of
 opening that app.
+When Windows is already running but the live guest agent is not connected,
+`launchPlan.recommendedRepairCommand` points at
+`veil-vmctl qemu-install-agent --json --wait-seconds 120`, and the matching
+`runtime.repairGuestAgentForApp` action becomes available. This gives the app
+shell and CLI one shared gate for the Parallels-style path: queue the Windows
+app, repair or start the guest agent from attached media, then fulfill the
+pending launch when the agent reconnects.
 `macWindowIntegration` records whether a live agent can feed guest HWND events
 into automatic macOS app-window presentation, including mirrored, pending-frame,
 streaming, and foregroundable window counts. The foregroundable count must move

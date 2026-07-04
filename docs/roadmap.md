@@ -130,9 +130,9 @@ Exit criteria:
 
 Veil now has the local QEMU/HVF boot path, embedded display evidence, fake-agent harnesses, a live Windows 11 Arm guest-agent connection through QEMU host forwarding, and a proven Notepad MVP loop: app launch, HWND tracking, PNG frame capture, mouse input, keyboard input, and host-to-guest clipboard text. The next work is to close the gap between "the CLI can prove the loop" and "the app feels like a daily usable Windows App Runtime" without expanding into a generic VM manager.
 
-1. Productize the proven path: Start VM, repair/reconnect the guest agent when needed, launch Notepad, and open the mirrored macOS window without terminal commands.
-2. State-gated app runtime commands: launch, focus, close, input, clipboard, restore, quiet-runtime readiness, and stop actions should be available only when the VM and guest-agent state support them.
+1. Productize the proven path: Start VM, auto-repair/reconnect the guest agent when needed, launch Notepad, and open the mirrored macOS window from the app shell without terminal commands. The automatic recovery handoff and status command are now wired; the remaining gate is built-app end-to-end UX validation.
+2. State-gated app runtime commands: launch, focus, close, input, clipboard, restore, quiet-runtime readiness, repair guest agent, and stop actions should be available only when the VM and guest-agent state support them.
 3. Coherence restore loop: after VM reconnect, restore selected Windows apps and keep the Veil launcher hidden unless recovery is needed.
-4. UTM-style runtime configuration contract: expose typed system, display, sharing, storage, network, input, and guest-agent readiness summaries in one supportable diagnostic surface.
-5. Harness automation surface: keep expanding the `app-runtime-status` and `app-runtime-action` commands so launch, focus, close, restore, input, clipboard, stop, and proof runs share the same host model boundaries.
+4. UTM-style runtime configuration contract: expose typed system, display, sharing, storage, network, input, guest-agent readiness, and recovery command summaries in one supportable diagnostic surface.
+5. Harness automation surface: keep expanding the `app-runtime-status` and `app-runtime-action` commands so launch, focus, close, restore, input, clipboard, stop, repair, and proof runs share the same host model boundaries.
 6. Multi-app validation: repeat the live proof for Calculator and Paint, then tune frame latency after correctness holds across more than Notepad.

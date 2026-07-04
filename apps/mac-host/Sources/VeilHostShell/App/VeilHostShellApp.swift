@@ -38,6 +38,8 @@ struct VeilHostShellApp: App {
     @State private var agentEventTask: Task<Void, Never>?
     @State private var agentReconnectTask: Task<Void, Never>?
     @State private var automaticQuietRuntimeTask: Task<Void, Never>?
+    @State private var automaticGuestAgentRecoveryTask: Task<Void, Never>?
+    @State private var automaticGuestAgentRecoveryAttemptedTokens: Set<String> = []
 
     init() {
         let runtimeBooter = AppRuntimeBooterFactory.make()
@@ -281,6 +283,8 @@ struct VeilHostShellApp: App {
                 let vmState = vmModel.snapshot?.state
                 let shouldPoll = (vmState == .running || vmState == .starting) && !model.hasLiveAgentConnection
                 if shouldPoll {
+                    scheduleAutomaticGuestAgentRecoveryIfNeeded()
+
                     let restoredLaunches = await model.restoreMirroredWindowsAfterReconnect()
                     for launch in restoredLaunches {
                         showWindowsAppWindow(for: launch)
@@ -313,6 +317,7 @@ struct VeilHostShellApp: App {
                 displayMessage = vmRuntimeBooter.supportsNativeDisplayWindow
                     ? "Windows is running in recovery display mode."
                     : "Windows is running inside the main Veil window. Setup evidence refreshes here."
+                scheduleAutomaticGuestAgentRecoveryIfNeeded()
             } else if let errorMessage = vmModel.errorMessage {
                 displayMessage = "Windows display could not start: \(errorMessage)"
             }
@@ -461,7 +466,8 @@ struct VeilHostShellApp: App {
         switch vmModel.snapshot?.state {
         case .running, .starting:
             activateMainWindow()
-            displayMessage = "Windows is running. Veil is waiting for the guest agent to open \(appName)."
+            displayMessage = "Windows is running. Veil is preparing the guest agent so \(appName) can open as a Mac window."
+            scheduleAutomaticGuestAgentRecoveryIfNeeded()
             if vmRuntimeBooter.supportsNativeDisplayWindow {
                 showWindowsDisplay()
             }
@@ -474,6 +480,72 @@ struct VeilHostShellApp: App {
             displayMessage = "Starting Windows. Veil will open \(appName) when the guest agent connects."
             startWindowsAndShowDisplay()
         }
+    }
+
+    private func scheduleAutomaticGuestAgentRecoveryIfNeeded() {
+        guard automaticGuestAgentRecoveryTask == nil,
+              !model.hasLiveAgentConnection,
+              model.phase != .launching,
+              shouldRecoverGuestAgentForPendingApp,
+              let recoveryToken = currentGuestAgentRecoveryToken,
+              !automaticGuestAgentRecoveryAttemptedTokens.contains(recoveryToken) else {
+            return
+        }
+
+        automaticGuestAgentRecoveryAttemptedTokens.insert(recoveryToken)
+        automaticGuestAgentRecoveryTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(10))
+
+            guard !Task.isCancelled,
+                  !model.hasLiveAgentConnection,
+                  shouldRecoverGuestAgentForPendingApp else {
+                automaticGuestAgentRecoveryTask = nil
+                return
+            }
+
+            displayMessage = "Windows is running. Veil is starting the guest agent for \(pendingLaunchDisplayName())."
+
+            do {
+                _ = try await vmRuntimeBooter.installGuestAgentFromAttachedMedia()
+                displayMessage = "Guest agent recovery sent. Veil will open \(pendingLaunchDisplayName()) when Windows responds."
+                await vmModel.refreshRuntimeEvidence()
+            } catch {
+                displayMessage = "Guest agent recovery could not start: \(userMessage(for: error))"
+            }
+
+            automaticGuestAgentRecoveryTask = nil
+        }
+    }
+
+    private var shouldRecoverGuestAgentForPendingApp: Bool {
+        let hasQueuedLaunch = model.pendingLaunchStatus().willLaunchOnAgentReconnect
+            || model.pendingLaunchAppId != nil
+        let hasRestoreIntent = !model.restorableAppIds.isEmpty && model.mirrorSessions.isEmpty
+        let runtimeIsRunning = vmModel.snapshot?.state == .running
+            || vmModel.snapshot?.state == .starting
+
+        return runtimeIsRunning && (hasQueuedLaunch || hasRestoreIntent)
+    }
+
+    private var currentGuestAgentRecoveryToken: String? {
+        guard let snapshot = vmModel.snapshot,
+              snapshot.state == .running || snapshot.state == .starting else {
+            return nil
+        }
+
+        if let pid = snapshot.latestConsoleLaunch?.pid {
+            return "qemu-pid:\(pid)"
+        }
+
+        if let pid = snapshot.runningQEMUProcess?.pid {
+            return "detected-qemu-pid:\(pid)"
+        }
+
+        if let diskPath = snapshot.virtualDiskPath {
+            return "disk:\(diskPath)"
+        }
+
+        return snapshot.profileName.map { "profile:\($0)" }
     }
 
     private func pendingLaunchDisplayName() -> String {

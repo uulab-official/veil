@@ -417,18 +417,21 @@ public struct VeilHostClient: HostDashboardService, Sendable {
             expectedReplies: 2
         )
 
-        if launchReplies.count == 1,
-           let error = try? decoder.decode(ErrorResponse.self, from: launchReplies[0]),
-           error.type == .error {
+        if let error = launchReplies.compactMap({ try? decoder.decode(ErrorResponse.self, from: $0) })
+            .first(where: { $0.type == .error }) {
             throw VeilHostError.agentError(code: error.code, message: error.message)
         }
 
-        guard launchReplies.count >= 2 else {
-            throw VeilHostError.missingReply("app launch requires response and window event")
+        guard let launch = launchReplies
+            .compactMap({ try? decoder.decode(AppLaunchResponse.self, from: $0) })
+            .first(where: { $0.type == .appLaunchResponse }) else {
+            throw VeilHostError.missingReply("app launch requires app.launch.response")
         }
-
-        let launch = try decoder.decode(AppLaunchResponse.self, from: launchReplies[0])
-        let window = try decoder.decode(WindowCreatedEvent.self, from: launchReplies[1])
+        guard let window = launchReplies
+            .compactMap({ try? decoder.decode(WindowCreatedEvent.self, from: $0) })
+            .first(where: { $0.type == .windowCreated }) else {
+            throw VeilHostError.missingReply("app launch requires window.created")
+        }
 
         guard launch.accepted,
               launch.processId == window.processId,

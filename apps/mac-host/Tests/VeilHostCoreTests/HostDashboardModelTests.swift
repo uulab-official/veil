@@ -543,6 +543,7 @@ struct HostDashboardModelTests {
         #expect(report.actions.first { $0.id == "windowsApps.restorePrevious" }?.isAvailable == false)
         #expect(report.actions.first { $0.id == "macWindows.autoOpen" }?.isAvailable == true)
         #expect(report.actions.first { $0.id == "runtime.startWindowsForApp" }?.isAvailable == false)
+        #expect(report.actions.first { $0.id == "runtime.repairGuestAgentForApp" }?.isAvailable == false)
         #expect(report.actions.first { $0.id == "runtime.fulfillPendingLaunch" }?.isAvailable == false)
         #expect(report.actions.first { $0.id == "runtime.quietWhenIdle" }?.isAvailable == false)
         #expect(report.actions.first { $0.id == "runtime.stopWhenIdle" }?.isAvailable == false)
@@ -862,8 +863,31 @@ struct HostDashboardModelTests {
         #expect(queuedReport.dockIntegration.badgeLabel == "...")
         #expect(model.canFulfillPendingLaunch == false)
         #expect(queuedReport.actions.first { $0.id == "runtime.startWindowsForApp" }?.isAvailable == true)
+        #expect(queuedReport.actions.first { $0.id == "runtime.repairGuestAgentForApp" }?.isAvailable == false)
         #expect(queuedReport.actions.first { $0.id == "runtime.fulfillPendingLaunch" }?.isAvailable == false)
         #expect(try await pendingLaunchStore.load()?.appId == "winapp_notepad")
+
+        let runningRuntime = WindowsAppRuntimeLocalRuntimeStatus(
+            isKnown: true,
+            state: .running,
+            bootReady: true,
+            canStart: false,
+            isRunning: true,
+            windowsInstalled: true,
+            recommendedAction: "wait-for-guest-agent",
+            recommendedInstallStatusCommand: "veil-vmctl qemu-install-status --json",
+            reason: "The local Windows runtime is already running."
+        )
+        let runningQueuedReport = model.runtimeStatusReport(localRuntime: runningRuntime)
+        #expect(runningQueuedReport.launchPlan.recommendedAction == "repair-guest-agent-for-pending-launch")
+        #expect(runningQueuedReport.launchPlan.recommendedStartCommand == nil)
+        #expect(runningQueuedReport.launchPlan.recommendedWaitCommand == "veil-vmctl guest-agent-wait --json --wait-seconds 30")
+        #expect(runningQueuedReport.launchPlan.recommendedRepairCommand == "veil-vmctl qemu-install-agent --json --wait-seconds 120")
+        #expect(runningQueuedReport.launchPlan.recommendedLaunchCommand == "veil-vmctl app-runtime-action --json --action fulfill-pending")
+        #expect(runningQueuedReport.launchPlan.reason == "Windows is running and the selected app launch is queued; repair or start the guest agent, then open the app automatically.")
+        #expect(runningQueuedReport.actions.first { $0.id == "runtime.startWindowsForApp" }?.isAvailable == false)
+        #expect(runningQueuedReport.actions.first { $0.id == "runtime.repairGuestAgentForApp" }?.isAvailable == true)
+        #expect(runningQueuedReport.actions.first { $0.id == "runtime.fulfillPendingLaunch" }?.isAvailable == false)
 
         primary.error = nil
         let fulfilledLaunch = await model.refreshLiveAgentIfNeeded()

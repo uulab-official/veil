@@ -196,6 +196,30 @@ struct VeilHostClientTests {
         #expect(transport.expectedReplyCounts == [1, 1, 2])
     }
 
+    @Test("ignores unsolicited frame events mixed into app launch replies")
+    func ignoresUnsolicitedFrameEventsMixedIntoAppLaunchReplies() async throws {
+        let transport = BatchRecordingTransport(responseBatches: [
+            [
+                #"{"type":"agent.health.response","requestId":"req_health","protocolVersion":1,"agentVersion":"0.1.0","os":"windows-arm64","session":{"interactive":true,"user":"veil-user"},"capabilities":{"appList":true,"appLaunch":true,"windowTracking":true,"windowCapture":true,"input":true,"clipboardText":true}}"#
+            ],
+            [
+                #"{"type":"app.list.response","requestId":"req_apps","apps":[{"id":"winapp_notepad","name":"Notepad","exePath":"notepad.exe","publisher":"Microsoft","iconId":"icon_notepad"}]}"#
+            ],
+            [
+                WindowFrameEvent.notepadFirstFrameJSON,
+                #"{"type":"app.launch.response","requestId":"req_launch_winapp_notepad","accepted":true,"processId":4912}"#,
+                #"{"type":"window.created","windowId":"hwnd:0003029A","processId":4912,"appId":"winapp_notepad","title":"Untitled - Notepad","bounds":{"x":10,"y":10,"width":1280,"height":800},"state":"normal","focused":true}"#
+            ]
+        ])
+        let client = VeilHostClient(transport: transport)
+
+        let result = try await client.launchApp(appId: "winapp_notepad")
+
+        #expect(result.launch.processId == 4912)
+        #expect(result.window.windowId == "hwnd:0003029A")
+        #expect(transport.expectedReplyCounts == [1, 1, 2])
+    }
+
     @Test("proves Windows app window launch with first frame evidence")
     func provesWindowsAppWindowLaunchWithFirstFrameEvidence() async throws {
         let transport = RecordingTransport(responses: [
@@ -488,6 +512,25 @@ private final class RecordingTransport: HostTransport, @unchecked Sendable {
         let replyStrings = Array(responses.prefix(expectedReplies))
         responses.removeFirst(replyStrings.count)
         return replyStrings.map { Data($0.utf8) }
+    }
+}
+
+private final class BatchRecordingTransport: HostTransport, @unchecked Sendable {
+    private var responseBatches: [[String]]
+    private(set) var expectedReplyCounts: [Int] = []
+
+    init(responseBatches: [[String]]) {
+        self.responseBatches = responseBatches
+    }
+
+    func send(_ message: Data, expectedReplies: Int) async throws -> [Data] {
+        expectedReplyCounts.append(expectedReplies)
+        guard !responseBatches.isEmpty else {
+            return []
+        }
+
+        let batch = responseBatches.removeFirst()
+        return batch.map { Data($0.utf8) }
     }
 }
 

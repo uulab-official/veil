@@ -399,6 +399,10 @@ function validateLaunchPlan(launchPlan, report) {
     requireString(launchPlan.recommendedWaitCommand, "launchPlan.recommendedWaitCommand");
   }
 
+  if (launchPlan.recommendedRepairCommand !== undefined) {
+    requireString(launchPlan.recommendedRepairCommand, "launchPlan.recommendedRepairCommand");
+  }
+
   if (launchPlan.recommendedLaunchCommand !== undefined) {
     requireString(launchPlan.recommendedLaunchCommand, "launchPlan.recommendedLaunchCommand");
   }
@@ -438,6 +442,15 @@ function validateLaunchPlan(launchPlan, report) {
     && launchPlan.recommendedWaitCommand === undefined
     && launchPlan.recommendedAction !== "prepare-local-runtime") {
     throw new TypeError("launchPlan.requiresGuestAgent requires recommendedWaitCommand.");
+  }
+
+  if (launchPlan.recommendedRepairCommand !== undefined) {
+    if (!launchPlan.requiresGuestAgent || !report.localRuntime.isRunning || report.connection.hasLiveAgentConnection) {
+      throw new TypeError("launchPlan.recommendedRepairCommand is only allowed for a running local runtime waiting for the guest agent.");
+    }
+    if (!launchPlan.recommendedAction.includes("repair-guest-agent")) {
+      throw new TypeError("launchPlan.recommendedRepairCommand requires a repair-guest-agent recommendedAction.");
+    }
   }
 
   if (launchPlan.canRequestSelectedAppLaunch && launchPlan.recommendedLaunchCommand === undefined) {
@@ -753,6 +766,7 @@ function validateActions(actions, report) {
     "windowsApps.closeAll",
     "macWindows.autoOpen",
     "runtime.startWindowsForApp",
+    "runtime.repairGuestAgentForApp",
     "runtime.fulfillPendingLaunch",
     "runtime.quietWhenIdle",
     "runtime.stopWhenIdle",
@@ -780,6 +794,11 @@ function validateActions(actions, report) {
   const startAction = actions.find((action) => action.id === "runtime.startWindowsForApp");
   if (startAction.isAvailable !== (report.launchPlan.recommendedStartCommand !== undefined)) {
     throw new TypeError("runtime.startWindowsForApp availability must match launchPlan.recommendedStartCommand.");
+  }
+
+  const repairAction = actions.find((action) => action.id === "runtime.repairGuestAgentForApp");
+  if (repairAction.isAvailable !== (report.launchPlan.recommendedRepairCommand !== undefined)) {
+    throw new TypeError("runtime.repairGuestAgentForApp availability must match launchPlan.recommendedRepairCommand.");
   }
 
   const pendingApp = report.apps.find((app) => app.id === report.pendingLaunch.appId);

@@ -412,6 +412,7 @@ public struct WindowsAppRuntimeLaunchPlanStatus: Codable, Equatable, Sendable {
     public var recommendedAction: String
     public var recommendedStartCommand: String?
     public var recommendedWaitCommand: String?
+    public var recommendedRepairCommand: String?
     public var recommendedLaunchCommand: String?
     public var reason: String
 
@@ -425,6 +426,7 @@ public struct WindowsAppRuntimeLaunchPlanStatus: Codable, Equatable, Sendable {
         recommendedAction: String,
         recommendedStartCommand: String? = nil,
         recommendedWaitCommand: String? = nil,
+        recommendedRepairCommand: String? = nil,
         recommendedLaunchCommand: String? = nil,
         reason: String
     ) {
@@ -437,6 +439,7 @@ public struct WindowsAppRuntimeLaunchPlanStatus: Codable, Equatable, Sendable {
         self.recommendedAction = recommendedAction
         self.recommendedStartCommand = recommendedStartCommand
         self.recommendedWaitCommand = recommendedWaitCommand
+        self.recommendedRepairCommand = recommendedRepairCommand
         self.recommendedLaunchCommand = recommendedLaunchCommand
         self.reason = reason
     }
@@ -883,6 +886,11 @@ public final class HostDashboardModel {
                     isAvailable: launchPlan.recommendedStartCommand != nil
                 ),
                 WindowsAppRuntimeActionStatus(
+                    id: "runtime.repairGuestAgentForApp",
+                    title: "Repair Guest Agent For App Launch",
+                    isAvailable: launchPlan.recommendedRepairCommand != nil
+                ),
+                WindowsAppRuntimeActionStatus(
                     id: "runtime.fulfillPendingLaunch",
                     title: "Open Queued Windows App",
                     isAvailable: pendingLaunch.isQueued && canFulfillPendingLaunch
@@ -999,6 +1007,7 @@ public final class HostDashboardModel {
         let canLaunchNow = canLaunchApp(appId: selectedAppId)
         let launchCommand = "veil-vmctl app-runtime-action --json --action launch --app-id \(selectedAppId)"
         let fulfillPendingCommand = "veil-vmctl app-runtime-action --json --action fulfill-pending"
+        let repairCommand = "veil-vmctl qemu-install-agent --json --wait-seconds 120"
         let hasPendingSelectedAppLaunch = pendingLaunchAppId == selectedAppId
         let localRuntime = localRuntime ?? localRuntimeStatus(snapshot: nil)
 
@@ -1037,7 +1046,9 @@ public final class HostDashboardModel {
 
             let recommendedAction: String
             if runtimeIsAlreadyRunning {
-                recommendedAction = "wait-for-guest-agent"
+                recommendedAction = hasPendingSelectedAppLaunch
+                    ? "repair-guest-agent-for-pending-launch"
+                    : "repair-guest-agent-for-app-launch"
             } else {
                 recommendedAction = hasPendingSelectedAppLaunch
                     ? "start-runtime-for-pending-launch"
@@ -1053,11 +1064,14 @@ public final class HostDashboardModel {
                 recommendedAction: recommendedAction,
                 recommendedStartCommand: requiresRuntimeStart ? "veil-vmctl qemu-start --json --wait-seconds 30" : nil,
                 recommendedWaitCommand: hasLiveAgentConnection ? nil : "veil-vmctl guest-agent-wait --json --wait-seconds 30",
+                recommendedRepairCommand: runtimeIsAlreadyRunning ? repairCommand : nil,
                 recommendedLaunchCommand: hasPendingSelectedAppLaunch ? fulfillPendingCommand : launchCommand,
                 reason: hasPendingSelectedAppLaunch
-                    ? "The selected app launch is queued until Windows starts and the guest agent connects."
+                    ? (runtimeIsAlreadyRunning
+                        ? "Windows is running and the selected app launch is queued; repair or start the guest agent, then open the app automatically."
+                        : "The selected app launch is queued until Windows starts and the guest agent connects.")
                     : (runtimeIsAlreadyRunning
-                        ? "Windows is running; wait for the guest agent, then launch the selected app."
+                        ? "Windows is running; repair or start the guest agent, then launch the selected app."
                         : "Start Windows, wait for the guest agent, then launch the selected app.")
             )
         }
