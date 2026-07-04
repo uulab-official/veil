@@ -225,6 +225,17 @@
       "shouldHideLauncher": true,
       "keepsRecoveryDisplayManual": true,
       "reason": "Only mirrored Windows app windows should be visible during normal app runtime use; the main launcher and VM display stay out of the way unless recovery is requested."
+    },
+    "localRuntime": {
+      "isKnown": true,
+      "state": "running",
+      "bootReady": true,
+      "canStart": false,
+      "isRunning": true,
+      "windowsInstalled": true,
+      "recommendedAction": "wait-for-guest-agent",
+      "recommendedInstallStatusCommand": "veil-vmctl qemu-install-status --json",
+      "reason": "The local Windows runtime is already running; wait for the guest agent before opening Windows apps."
     }
   },
   "nextActions": [

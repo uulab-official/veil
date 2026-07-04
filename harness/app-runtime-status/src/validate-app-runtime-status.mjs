@@ -27,6 +27,7 @@ export function validateAppRuntimeStatus(report) {
 
   validateConnection(report.connection);
   validateGuestAgentDiagnostics(report.guestAgentDiagnostics, report);
+  validateLocalRuntime(report.localRuntime);
   validateApps(report.apps);
   validatePendingLaunch(report.pendingLaunch, report);
   validateMirrorSessions(report.mirrorSessions);
@@ -127,6 +128,37 @@ function validateGuestAgentDiagnostics(guestAgentDiagnostics, report) {
   const expectedAction = report.connection.hasLiveAgentConnection ? "run-app-window-proof" : "diagnose-agent";
   if (guestAgentDiagnostics.recommendedAction !== expectedAction) {
     throw new TypeError("guestAgentDiagnostics.recommendedAction must match live agent readiness.");
+  }
+}
+
+function validateLocalRuntime(localRuntime) {
+  if (!localRuntime || typeof localRuntime !== "object" || Array.isArray(localRuntime)) {
+    throw new TypeError("localRuntime must be an object.");
+  }
+
+  requireBoolean(localRuntime.isKnown, "localRuntime.isKnown");
+  requireBoolean(localRuntime.bootReady, "localRuntime.bootReady");
+  requireBoolean(localRuntime.canStart, "localRuntime.canStart");
+  requireBoolean(localRuntime.isRunning, "localRuntime.isRunning");
+  requireBoolean(localRuntime.windowsInstalled, "localRuntime.windowsInstalled");
+  requireString(localRuntime.recommendedAction, "localRuntime.recommendedAction");
+  requireString(localRuntime.recommendedInstallStatusCommand, "localRuntime.recommendedInstallStatusCommand");
+  requireString(localRuntime.reason, "localRuntime.reason");
+
+  if (localRuntime.state !== undefined) {
+    requireString(localRuntime.state, "localRuntime.state");
+  }
+
+  if (localRuntime.recommendedPrepareCommand !== undefined) {
+    requireString(localRuntime.recommendedPrepareCommand, "localRuntime.recommendedPrepareCommand");
+  }
+
+  if (localRuntime.recommendedInstallStatusCommand !== "veil-vmctl qemu-install-status --json") {
+    throw new TypeError("localRuntime.recommendedInstallStatusCommand must point at qemu-install-status.");
+  }
+
+  if (localRuntime.isRunning && localRuntime.canStart) {
+    throw new TypeError("localRuntime.canStart must be false while the runtime is already running.");
   }
 }
 
@@ -387,11 +419,24 @@ function validateLaunchPlan(launchPlan, report) {
     throw new TypeError("launchPlan.requiresGuestAgent is only valid before the live agent connects.");
   }
 
-  if (launchPlan.requiresRuntimeStart && launchPlan.recommendedStartCommand === undefined) {
-    throw new TypeError("launchPlan.requiresRuntimeStart requires recommendedStartCommand.");
+  if (launchPlan.requiresRuntimeStart
+    && launchPlan.recommendedStartCommand === undefined
+    && launchPlan.recommendedAction !== "prepare-local-runtime") {
+    throw new TypeError("launchPlan.requiresRuntimeStart requires recommendedStartCommand unless local runtime preparation is required.");
   }
 
-  if (launchPlan.requiresGuestAgent && launchPlan.recommendedWaitCommand === undefined) {
+  if (launchPlan.recommendedAction === "prepare-local-runtime") {
+    if (!launchPlan.requiresRuntimeStart || report.localRuntime.canStart || report.localRuntime.isRunning) {
+      throw new TypeError("launchPlan.prepare-local-runtime requires a blocked local runtime start.");
+    }
+    if (launchPlan.recommendedStartCommand !== undefined) {
+      throw new TypeError("launchPlan.prepare-local-runtime must not expose qemu-start.");
+    }
+  }
+
+  if (launchPlan.requiresGuestAgent
+    && launchPlan.recommendedWaitCommand === undefined
+    && launchPlan.recommendedAction !== "prepare-local-runtime") {
     throw new TypeError("launchPlan.requiresGuestAgent requires recommendedWaitCommand.");
   }
 
@@ -733,8 +778,8 @@ function validateActions(actions, report) {
   }
 
   const startAction = actions.find((action) => action.id === "runtime.startWindowsForApp");
-  if (startAction.isAvailable !== report.launchPlan.requiresRuntimeStart) {
-    throw new TypeError("runtime.startWindowsForApp availability must match launchPlan.requiresRuntimeStart.");
+  if (startAction.isAvailable !== (report.launchPlan.recommendedStartCommand !== undefined)) {
+    throw new TypeError("runtime.startWindowsForApp availability must match launchPlan.recommendedStartCommand.");
   }
 
   const pendingApp = report.apps.find((app) => app.id === report.pendingLaunch.appId);

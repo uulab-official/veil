@@ -162,6 +162,7 @@ Goal: keep the main Veil experience pointed at real local Windows boot and conso
 - [x] Add `Collect Veil Agent Diagnostics.cmd` and `Collect-VeilAgentDiagnostics.ps1` to the guest-agent bundle so Windows-side install/start logs can be zipped from the desktop.
 - [x] Add `veil-host-probe --diagnose-agent` so host-side agent connection checks return actionable JSON instead of only a timeout.
 - [x] Expose `guestAgentDiagnostics` in app-runtime status so the host shell, CLI, and harness point at the same pre/post install diagnostic gate.
+- [x] Gate app-runtime Start actions on real local VM boot readiness so bootReady=false reports `prepare-local-runtime` instead of exposing a failing start path.
 
 ## Next
 

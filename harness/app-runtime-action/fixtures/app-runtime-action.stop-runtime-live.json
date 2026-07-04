@@ -223,6 +223,17 @@
       "shouldHideLauncher": false,
       "keepsRecoveryDisplayManual": true,
       "reason": "The main Veil launcher is the single normal surface until a live Windows app window is mirrored."
+    },
+    "localRuntime": {
+      "isKnown": true,
+      "state": "running",
+      "bootReady": true,
+      "canStart": false,
+      "isRunning": true,
+      "windowsInstalled": true,
+      "recommendedAction": "wait-for-guest-agent",
+      "recommendedInstallStatusCommand": "veil-vmctl qemu-install-status --json",
+      "reason": "The local Windows runtime is already running; wait for the guest agent before opening Windows apps."
     }
   },
   "nextActions": [

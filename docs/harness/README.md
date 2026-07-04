@@ -128,6 +128,12 @@ guest-agent readiness gate: run `veil-host-probe --diagnose-agent` before and
 after a Windows-side install attempt, then use
 `veil-vmctl guest-agent-wait --json --wait-seconds 30` before app-window proof.
 
+`localRuntime` keeps app-first actions honest about the VM layer. When
+`qemu-install-status` says the local Windows runtime is not boot ready,
+`launchPlan.recommendedAction` becomes `prepare-local-runtime` and
+`runtime.startWindowsForApp` stays unavailable instead of exposing a Start
+button that cannot succeed.
+
 ```bash
 cd apps/mac-host
 swift run veil-vmctl app-runtime-status --json --demo | node ../../harness/app-runtime-status/src/validate-app-runtime-status.mjs

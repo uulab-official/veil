@@ -613,7 +613,10 @@ struct VeilVMControl {
         await model.loadRestoreIntent()
         await model.load()
 
-        let report = model.runtimeStatusReport()
+        let localRuntimeSnapshot = try? await LocalVMRuntimeService().loadSnapshot()
+        let report = model.runtimeStatusReport(
+            localRuntime: model.localRuntimeStatus(snapshot: localRuntimeSnapshot)
+        )
         if json {
             let data = try JSONEncoder.veilDiagnostics.encode(report)
             print(String(decoding: data, as: UTF8.self))
@@ -632,6 +635,9 @@ struct VeilVMControl {
         print("Guest agent endpoint: \(report.guestAgentDiagnostics.endpoint)")
         print("Guest agent diagnostic command: \(report.guestAgentDiagnostics.diagnosticCommand)")
         print("Guest agent wait command: \(report.guestAgentDiagnostics.waitCommand)")
+        print("Local runtime: \(report.localRuntime.recommendedAction)")
+        print("Local runtime boot ready: \(report.localRuntime.bootReady ? "yes" : "no")")
+        print("Local runtime reason: \(report.localRuntime.reason)")
         print("Pending launch queued: \(report.pendingLaunch.isQueued ? "yes" : "no")")
         if let pendingLaunchAppId = report.pendingLaunch.appId {
             print("Pending launch app: \(pendingLaunchAppId)")
@@ -907,7 +913,10 @@ struct VeilVMControl {
                 accepted = true
             }
         case .proofRecommended:
-            let currentStatus = model.runtimeStatusReport()
+            let localRuntimeSnapshot = try? await LocalVMRuntimeService().loadSnapshot()
+            let currentStatus = model.runtimeStatusReport(
+                localRuntime: model.localRuntimeStatus(snapshot: localRuntimeSnapshot)
+            )
             if let proofCommand = currentStatus.proofPlan.recommendedProofCommand,
                let proofKind = currentStatus.proofPlan.recommendedProofKind,
                let proofAppId = currentStatus.proofPlan.selectedAppId {
@@ -925,7 +934,10 @@ struct VeilVMControl {
             }
         }
 
-        let status = model.runtimeStatusReport()
+        let localRuntimeSnapshot = try? await LocalVMRuntimeService().loadSnapshot()
+        let status = model.runtimeStatusReport(
+            localRuntime: model.localRuntimeStatus(snapshot: localRuntimeSnapshot)
+        )
         let actionLaunchPlan = action == .launch || action == .fulfillPending ? status.launchPlan : nil
         let report = AppRuntimeActionReport(
             action: action,
@@ -1271,6 +1283,11 @@ struct VeilVMControl {
 
     private static func launchRecoveryActions(from launchPlan: WindowsAppRuntimeLaunchPlanStatus) -> [String] {
         var actions: [String] = []
+
+        if launchPlan.recommendedAction == "prepare-local-runtime" {
+            actions.append("Run `veil-vmctl qemu-install-status --json` and resolve the local Windows runtime blocker before starting Windows.")
+            return actions
+        }
 
         if let startCommand = launchPlan.recommendedStartCommand {
             actions.append("Run `\(startCommand)` to start the local Windows runtime for the selected app.")

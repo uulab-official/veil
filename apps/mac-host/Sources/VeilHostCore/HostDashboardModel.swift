@@ -156,6 +156,43 @@ public struct WindowsAppRuntimeGuestAgentDiagnosticsStatus: Codable, Equatable, 
     }
 }
 
+public struct WindowsAppRuntimeLocalRuntimeStatus: Codable, Equatable, Sendable {
+    public var isKnown: Bool
+    public var state: VMRuntimeState?
+    public var bootReady: Bool
+    public var canStart: Bool
+    public var isRunning: Bool
+    public var windowsInstalled: Bool
+    public var recommendedAction: String
+    public var recommendedInstallStatusCommand: String
+    public var recommendedPrepareCommand: String?
+    public var reason: String
+
+    public init(
+        isKnown: Bool,
+        state: VMRuntimeState?,
+        bootReady: Bool,
+        canStart: Bool,
+        isRunning: Bool,
+        windowsInstalled: Bool,
+        recommendedAction: String,
+        recommendedInstallStatusCommand: String,
+        recommendedPrepareCommand: String? = nil,
+        reason: String
+    ) {
+        self.isKnown = isKnown
+        self.state = state
+        self.bootReady = bootReady
+        self.canStart = canStart
+        self.isRunning = isRunning
+        self.windowsInstalled = windowsInstalled
+        self.recommendedAction = recommendedAction
+        self.recommendedInstallStatusCommand = recommendedInstallStatusCommand
+        self.recommendedPrepareCommand = recommendedPrepareCommand
+        self.reason = reason
+    }
+}
+
 public struct WindowsAppRuntimeAppStatus: Codable, Equatable, Sendable {
     public var id: String
     public var name: String
@@ -501,6 +538,7 @@ public struct WindowsAppRuntimeStatusReport: Codable, Equatable, Sendable {
     public var pendingLaunch: WindowsAppRuntimePendingLaunchStatus
     public var connection: WindowsAppRuntimeConnectionStatus
     public var guestAgentDiagnostics: WindowsAppRuntimeGuestAgentDiagnosticsStatus
+    public var localRuntime: WindowsAppRuntimeLocalRuntimeStatus
     public var apps: [WindowsAppRuntimeAppStatus]
     public var mirrorSessions: [WindowsAppRuntimeWindowStatus]
     public var restorableAppIds: [String]
@@ -523,6 +561,7 @@ public struct WindowsAppRuntimeStatusReport: Codable, Equatable, Sendable {
         pendingLaunch: WindowsAppRuntimePendingLaunchStatus,
         connection: WindowsAppRuntimeConnectionStatus,
         guestAgentDiagnostics: WindowsAppRuntimeGuestAgentDiagnosticsStatus,
+        localRuntime: WindowsAppRuntimeLocalRuntimeStatus,
         apps: [WindowsAppRuntimeAppStatus],
         mirrorSessions: [WindowsAppRuntimeWindowStatus],
         restorableAppIds: [String],
@@ -544,6 +583,7 @@ public struct WindowsAppRuntimeStatusReport: Codable, Equatable, Sendable {
         self.pendingLaunch = pendingLaunch
         self.connection = connection
         self.guestAgentDiagnostics = guestAgentDiagnostics
+        self.localRuntime = localRuntime
         self.apps = apps
         self.mirrorSessions = mirrorSessions
         self.restorableAppIds = restorableAppIds
@@ -741,8 +781,10 @@ public final class HostDashboardModel {
 
     public func runtimeStatusReport(
         generatedAt: Date = Date(),
-        agentEndpoint: String = HostDashboardModel.defaultAgentEndpoint
+        agentEndpoint: String = HostDashboardModel.defaultAgentEndpoint,
+        localRuntime: WindowsAppRuntimeLocalRuntimeStatus? = nil
     ) -> WindowsAppRuntimeStatusReport {
+        let localRuntime = localRuntime ?? localRuntimeStatus(snapshot: nil)
         let quietRuntime = quietRuntimeStatus()
         let macWindowIntegration = macWindowIntegrationStatus()
         let launcherVisibility = launcherVisibilityStatus(
@@ -752,7 +794,7 @@ public final class HostDashboardModel {
             launcherVisibility: launcherVisibility,
             macWindowIntegration: macWindowIntegration
         )
-        let launchPlan = launchPlanStatus()
+        let launchPlan = launchPlanStatus(localRuntime: localRuntime)
         let proofPlan = proofPlanStatus()
         let proofArtifacts = proofArtifactStatus()
         let pendingLaunch = pendingLaunchStatus()
@@ -771,6 +813,7 @@ public final class HostDashboardModel {
                 connectionDetail: connectionDetail
             ),
             guestAgentDiagnostics: guestAgentDiagnosticsStatus(endpoint: agentEndpoint),
+            localRuntime: localRuntime,
             apps: apps.map { app in
                 WindowsAppRuntimeAppStatus(
                     id: app.id,
@@ -837,7 +880,7 @@ public final class HostDashboardModel {
                 WindowsAppRuntimeActionStatus(
                     id: "runtime.startWindowsForApp",
                     title: "Start Windows For App Launch",
-                    isAvailable: launchPlan.requiresRuntimeStart
+                    isAvailable: launchPlan.recommendedStartCommand != nil
                 ),
                 WindowsAppRuntimeActionStatus(
                     id: "runtime.fulfillPendingLaunch",
@@ -936,7 +979,9 @@ public final class HostDashboardModel {
         return nil
     }
 
-    public func launchPlanStatus() -> WindowsAppRuntimeLaunchPlanStatus {
+    public func launchPlanStatus(
+        localRuntime: WindowsAppRuntimeLocalRuntimeStatus? = nil
+    ) -> WindowsAppRuntimeLaunchPlanStatus {
         guard let selectedAppId else {
             return WindowsAppRuntimeLaunchPlanStatus(
                 selectedAppId: nil,
@@ -955,6 +1000,7 @@ public final class HostDashboardModel {
         let launchCommand = "veil-vmctl app-runtime-action --json --action launch --app-id \(selectedAppId)"
         let fulfillPendingCommand = "veil-vmctl app-runtime-action --json --action fulfill-pending"
         let hasPendingSelectedAppLaunch = pendingLaunchAppId == selectedAppId
+        let localRuntime = localRuntime ?? localRuntimeStatus(snapshot: nil)
 
         if canLaunchNow {
             return WindowsAppRuntimeLaunchPlanStatus(
@@ -973,23 +1019,46 @@ public final class HostDashboardModel {
         }
 
         if canRequest {
-            let recommendedAction = hasPendingSelectedAppLaunch
-                ? "start-runtime-for-pending-launch"
-                : "start-runtime-and-wait-for-agent"
+            let runtimeIsAlreadyRunning = localRuntime.isKnown && localRuntime.isRunning
+            let requiresRuntimeStart = !hasLiveAgentConnection && !runtimeIsAlreadyRunning
+            if requiresRuntimeStart && localRuntime.isKnown && !localRuntime.canStart {
+                return WindowsAppRuntimeLaunchPlanStatus(
+                    selectedAppId: selectedAppId,
+                    pendingLaunchAppId: pendingLaunchAppId,
+                    canRequestSelectedAppLaunch: true,
+                    canLaunchSelectedAppNow: false,
+                    requiresRuntimeStart: true,
+                    requiresGuestAgent: true,
+                    recommendedAction: "prepare-local-runtime",
+                    recommendedLaunchCommand: hasPendingSelectedAppLaunch ? fulfillPendingCommand : launchCommand,
+                    reason: "The selected Windows app can be requested, but the local Windows runtime is not boot ready. \(localRuntime.reason)"
+                )
+            }
+
+            let recommendedAction: String
+            if runtimeIsAlreadyRunning {
+                recommendedAction = "wait-for-guest-agent"
+            } else {
+                recommendedAction = hasPendingSelectedAppLaunch
+                    ? "start-runtime-for-pending-launch"
+                    : "start-runtime-and-wait-for-agent"
+            }
             return WindowsAppRuntimeLaunchPlanStatus(
                 selectedAppId: selectedAppId,
                 pendingLaunchAppId: pendingLaunchAppId,
                 canRequestSelectedAppLaunch: true,
                 canLaunchSelectedAppNow: false,
-                requiresRuntimeStart: !hasLiveAgentConnection,
+                requiresRuntimeStart: requiresRuntimeStart,
                 requiresGuestAgent: !hasLiveAgentConnection,
                 recommendedAction: recommendedAction,
-                recommendedStartCommand: hasLiveAgentConnection ? nil : "veil-vmctl qemu-start --json --wait-seconds 30",
+                recommendedStartCommand: requiresRuntimeStart ? "veil-vmctl qemu-start --json --wait-seconds 30" : nil,
                 recommendedWaitCommand: hasLiveAgentConnection ? nil : "veil-vmctl guest-agent-wait --json --wait-seconds 30",
                 recommendedLaunchCommand: hasPendingSelectedAppLaunch ? fulfillPendingCommand : launchCommand,
                 reason: hasPendingSelectedAppLaunch
                     ? "The selected app launch is queued until Windows starts and the guest agent connects."
-                    : "Start Windows, wait for the guest agent, then launch the selected app."
+                    : (runtimeIsAlreadyRunning
+                        ? "Windows is running; wait for the guest agent, then launch the selected app."
+                        : "Start Windows, wait for the guest agent, then launch the selected app.")
             )
         }
 
@@ -1293,6 +1362,61 @@ public final class HostDashboardModel {
             waitCommand: "veil-vmctl guest-agent-wait --json --wait-seconds 30",
             recommendedAction: "diagnose-agent",
             reason: "Run the guest-agent diagnostic before and after installing the Windows agent so setup evidence is captured consistently."
+        )
+    }
+
+    public func localRuntimeStatus(
+        snapshot: VMRuntimeSnapshot?
+    ) -> WindowsAppRuntimeLocalRuntimeStatus {
+        guard let snapshot else {
+            return WindowsAppRuntimeLocalRuntimeStatus(
+                isKnown: false,
+                state: nil,
+                bootReady: false,
+                canStart: true,
+                isRunning: false,
+                windowsInstalled: false,
+                recommendedAction: "inspect-local-runtime",
+                recommendedInstallStatusCommand: "veil-vmctl qemu-install-status --json",
+                reason: "Local Windows runtime readiness has not been loaded for this status report."
+            )
+        }
+
+        let isRunning = snapshot.state == .running || snapshot.state == .starting
+        let canStart = snapshot.virtualizationAvailable
+            && snapshot.minimumOSSupported
+            && snapshot.profileName != nil
+            && snapshot.bootReady
+            && (snapshot.state == .stopped || snapshot.state == .suspended)
+        let recommendedAction: String
+        let recommendedPrepareCommand: String?
+        let reason: String
+
+        if isRunning {
+            recommendedAction = "wait-for-guest-agent"
+            recommendedPrepareCommand = nil
+            reason = "The local Windows runtime is already running; wait for the guest agent before opening Windows apps."
+        } else if canStart {
+            recommendedAction = "start-runtime"
+            recommendedPrepareCommand = nil
+            reason = "The local Windows runtime is boot ready."
+        } else {
+            recommendedAction = "prepare-local-runtime"
+            recommendedPrepareCommand = "veil-vmctl prepare --installer /path/to/Windows.iso"
+            reason = snapshot.detail
+        }
+
+        return WindowsAppRuntimeLocalRuntimeStatus(
+            isKnown: true,
+            state: snapshot.state,
+            bootReady: snapshot.bootReady,
+            canStart: canStart,
+            isRunning: isRunning,
+            windowsInstalled: snapshot.windowsInstalled,
+            recommendedAction: recommendedAction,
+            recommendedInstallStatusCommand: "veil-vmctl qemu-install-status --json",
+            recommendedPrepareCommand: recommendedPrepareCommand,
+            reason: reason
         )
     }
 

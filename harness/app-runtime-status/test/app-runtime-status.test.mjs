@@ -260,6 +260,23 @@ test("rejects start action availability that drifts from launch plan", () => {
   );
 });
 
+test("rejects start action availability when local runtime is not boot ready", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.demo.json", import.meta.url), "utf8"));
+  report.localRuntime.bootReady = false;
+  report.localRuntime.canStart = false;
+  report.localRuntime.recommendedAction = "prepare-local-runtime";
+  report.localRuntime.recommendedPrepareCommand = "veil-vmctl prepare --installer /path/to/Windows.iso";
+  report.localRuntime.reason = "Installer media must be re-selected before boot.";
+  report.launchPlan.recommendedAction = "prepare-local-runtime";
+  delete report.launchPlan.recommendedStartCommand;
+  delete report.launchPlan.recommendedWaitCommand;
+
+  assert.throws(
+    () => validateAppRuntimeStatus(report),
+    /runtime\.startWindowsForApp/
+  );
+});
+
 test("rejects fulfill-pending action availability that drifts from queued launch readiness", () => {
   const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.mac-window-live.json", import.meta.url), "utf8"));
   report.pendingLaunchAppId = "winapp_notepad";

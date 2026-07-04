@@ -474,6 +474,9 @@ struct HostDashboardModelTests {
         #expect(report.guestAgentDiagnostics.diagnosticCommand == "veil-host-probe --diagnose-agent")
         #expect(report.guestAgentDiagnostics.waitCommand == "veil-vmctl guest-agent-wait --json --wait-seconds 30")
         #expect(report.guestAgentDiagnostics.recommendedAction == "run-app-window-proof")
+        #expect(report.localRuntime.isKnown == false)
+        #expect(report.localRuntime.canStart)
+        #expect(report.localRuntime.recommendedAction == "inspect-local-runtime")
         #expect(report.apps.map(\.id) == ["winapp_notepad"])
         #expect(report.apps.map(\.canRequestLaunch) == [true])
         #expect(report.apps.map(\.canLaunchNow) == [true])
@@ -728,6 +731,27 @@ struct HostDashboardModelTests {
         #expect(report.guestAgentDiagnostics.recommendedAction == "diagnose-agent")
         #expect(report.guestAgentDiagnostics.diagnosticCommand == "veil-host-probe --diagnose-agent")
         #expect(report.guestAgentDiagnostics.waitCommand == "veil-vmctl guest-agent-wait --json --wait-seconds 30")
+        let blockedRuntime = WindowsAppRuntimeLocalRuntimeStatus(
+            isKnown: true,
+            state: .stopped,
+            bootReady: false,
+            canStart: false,
+            isRunning: false,
+            windowsInstalled: false,
+            recommendedAction: "prepare-local-runtime",
+            recommendedInstallStatusCommand: "veil-vmctl qemu-install-status --json",
+            recommendedPrepareCommand: "veil-vmctl prepare --installer /path/to/Windows.iso",
+            reason: "Installer media must be re-selected before boot."
+        )
+        let blockedReport = model.runtimeStatusReport(
+            agentEndpoint: "ws://127.0.0.1:18444",
+            localRuntime: blockedRuntime
+        )
+        #expect(blockedReport.localRuntime.bootReady == false)
+        #expect(blockedReport.launchPlan.recommendedAction == "prepare-local-runtime")
+        #expect(blockedReport.launchPlan.requiresRuntimeStart)
+        #expect(blockedReport.launchPlan.recommendedStartCommand == nil)
+        #expect(blockedReport.actions.first { $0.id == "runtime.startWindowsForApp" }?.isAvailable == false)
         #expect(model.apps.map(\.id).contains("winapp_notepad"))
         #expect(model.canLaunchSelectedApp == false)
     }

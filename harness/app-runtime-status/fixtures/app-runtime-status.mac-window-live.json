@@ -204,5 +204,16 @@
     "latestProofPath": "/Users/test/Library/Application Support/Veil/Diagnostics/Recommended Proof/mvp-proof-latest.json",
     "latestProofFileName": "mvp-proof-latest.json",
     "latestProofModifiedAt": "2026-07-04T10:00:00Z"
+  },
+  "localRuntime": {
+    "isKnown": true,
+    "state": "running",
+    "bootReady": true,
+    "canStart": false,
+    "isRunning": true,
+    "windowsInstalled": true,
+    "recommendedAction": "wait-for-guest-agent",
+    "recommendedInstallStatusCommand": "veil-vmctl qemu-install-status --json",
+    "reason": "The local Windows runtime is already running; wait for the guest agent before opening Windows apps."
   }
 }
