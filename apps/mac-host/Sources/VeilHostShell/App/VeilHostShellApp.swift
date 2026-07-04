@@ -76,6 +76,7 @@ struct VeilHostShellApp: App {
                 markWindowsInstalledAction: markWindowsInstalledFromSetup,
                 installGuestAgentAction: installGuestAgentFromDisplay,
                 repairGuestAgentForAppLaunchAction: repairGuestAgentForAppLaunch,
+                recoverRuntimeDisplayAction: recoverRuntimeDisplayEvidence,
                 launchWindowsAppAction: launchSelectedWindowsAppWindow,
                 runRecommendedProofAction: runRecommendedProof,
                 displayMessage: displayMessage
@@ -159,6 +160,12 @@ struct VeilHostShellApp: App {
                     .keyboardShortcut("b", modifiers: [.command, .shift])
                 }
 
+                Button("Refresh Display") {
+                    recoverRuntimeDisplayEvidence()
+                }
+                .keyboardShortcut("d", modifiers: [.command, .shift])
+                .disabled(!canRecoverRuntimeDisplay)
+
                 Button("Install Guest Agent") {
                     installGuestAgentFromDisplay()
                 }
@@ -174,7 +181,7 @@ struct VeilHostShellApp: App {
                     launchSelectedWindowsAppWindow()
                 }
                 .keyboardShortcut(.return, modifiers: [.command])
-                .disabled(!model.canRequestSelectedAppLaunch && !model.canFulfillPendingLaunch)
+                .disabled(canRecoverRuntimeDisplay || (!model.canRequestSelectedAppLaunch && !model.canFulfillPendingLaunch))
 
                 Button("Run Recommended Proof") {
                     runRecommendedProof()
@@ -195,6 +202,7 @@ struct VeilHostShellApp: App {
                 markWindowsInstalledAction: markWindowsInstalledFromSetup,
                 installGuestAgentAction: installGuestAgentFromDisplay,
                 repairGuestAgentForAppLaunchAction: repairGuestAgentForAppLaunch,
+                recoverRuntimeDisplayAction: recoverRuntimeDisplayEvidence,
                 launchWindowsAppAction: launchSelectedWindowsAppWindow,
                 launchWindowsAppByIdAction: launchWindowsAppWindow(appId:),
                 fulfillPendingLaunchAction: fulfillPendingWindowsAppWindow,
@@ -897,6 +905,23 @@ struct VeilHostShellApp: App {
         }
     }
 
+    private func recoverRuntimeDisplayEvidence() {
+        Task { @MainActor in
+            activateMainWindow()
+            let beforeStatus = vmModel.snapshot?.latestConsoleLaunch?.previewStatus
+            displayMessage = "Refreshing the embedded Windows display."
+            await vmModel.refreshRuntimeEvidence()
+
+            let afterStatus = vmModel.snapshot?.latestConsoleLaunch?.previewStatus
+            if afterStatus == .fresh {
+                displayMessage = "Windows display evidence refreshed."
+            } else {
+                let statusText = afterStatus?.rawValue ?? beforeStatus?.rawValue ?? "unavailable"
+                displayMessage = "Display is still \(statusText). Open recovery display or check QEMU display smoke before app launch."
+            }
+        }
+    }
+
     private func refreshApps() {
         Task { @MainActor in
             await model.load()
@@ -918,6 +943,15 @@ struct VeilHostShellApp: App {
     private var canInstallGuestAgent: Bool {
         (vmModel.snapshot?.state == .running || vmModel.snapshot?.state == .starting)
             && (vmModel.snapshot?.installEvidence.kind != .guestAgent || !model.hasLiveAgentConnection)
+    }
+
+    private var canRecoverRuntimeDisplay: Bool {
+        guard vmModel.snapshot?.state == .running || vmModel.snapshot?.state == .starting else {
+            return false
+        }
+
+        return vmModel.snapshot?.latestConsoleLaunch?.previewStatus == .stale
+            || vmModel.snapshot?.latestConsoleLaunch?.previewStatus == .unavailable
     }
 
     private var canMarkWindowsInstalled: Bool {
@@ -1000,6 +1034,7 @@ private struct VeilMenuBarMenu: View {
     var markWindowsInstalledAction: () -> Void
     var installGuestAgentAction: () -> Void
     var repairGuestAgentForAppLaunchAction: () -> Void
+    var recoverRuntimeDisplayAction: () -> Void
     var launchWindowsAppAction: () -> Void
     var launchWindowsAppByIdAction: (String) -> Void
     var fulfillPendingLaunchAction: () -> Void
@@ -1080,7 +1115,7 @@ private struct VeilMenuBarMenu: View {
                         }
                         launchWindowsAppByIdAction(app.id)
                     }
-                    .disabled(!model.canRequestAppLaunch(appId: app.id))
+                    .disabled(canRecoverRuntimeDisplay || !model.canRequestAppLaunch(appId: app.id))
                 }
             }
         }
@@ -1094,14 +1129,17 @@ private struct VeilMenuBarMenu: View {
 
         if model.pendingLaunchAppId != nil {
             Button(queuedAppMenuTitle, systemImage: queuedAppMenuSymbolName) {
-                if model.canFulfillPendingLaunch {
+                if canRecoverRuntimeDisplay {
+                    openMainWindow()
+                    recoverRuntimeDisplayAction()
+                } else if model.canFulfillPendingLaunch {
                     fulfillPendingLaunchAction()
                 } else {
                     openMainWindow()
                     repairGuestAgentForAppLaunchAction()
                 }
             }
-            .disabled(!model.canFulfillPendingLaunch && !canRepairQueuedAppLaunch)
+            .disabled(!canRecoverRuntimeDisplay && !model.canFulfillPendingLaunch && !canRepairQueuedAppLaunch)
         }
 
         Button("Run Recommended Proof", systemImage: "checkmark.seal") {
@@ -1124,6 +1162,12 @@ private struct VeilMenuBarMenu: View {
                 showWindowsDisplayAction()
             }
         }
+
+        Button("Refresh Display", systemImage: "display.trianglebadge.exclamationmark") {
+            openMainWindow()
+            recoverRuntimeDisplayAction()
+        }
+        .disabled(!canRecoverRuntimeDisplay)
 
         Button("Install Guest Agent", systemImage: "person.crop.circle.badge.plus") {
             openMainWindow()
@@ -1174,6 +1218,15 @@ private struct VeilMenuBarMenu: View {
             && (vmModel.snapshot?.installEvidence.kind != .guestAgent || !model.hasLiveAgentConnection)
     }
 
+    private var canRecoverRuntimeDisplay: Bool {
+        guard vmModel.snapshot?.state == .running || vmModel.snapshot?.state == .starting else {
+            return false
+        }
+
+        return vmModel.snapshot?.latestConsoleLaunch?.previewStatus == .stale
+            || vmModel.snapshot?.latestConsoleLaunch?.previewStatus == .unavailable
+    }
+
     private var canRepairQueuedAppLaunch: Bool {
         model.pendingLaunchStatus().willLaunchOnAgentReconnect
             && (vmModel.snapshot?.state == .running || vmModel.snapshot?.state == .starting)
@@ -1181,11 +1234,19 @@ private struct VeilMenuBarMenu: View {
     }
 
     private var queuedAppMenuTitle: String {
-        model.canFulfillPendingLaunch ? "Open Queued App" : "Continue Queued App"
+        if canRecoverRuntimeDisplay {
+            return "Refresh Display"
+        }
+
+        return model.canFulfillPendingLaunch ? "Open Queued App" : "Continue Queued App"
     }
 
     private var queuedAppMenuSymbolName: String {
-        model.canFulfillPendingLaunch ? "arrow.up.forward.app" : "bolt.horizontal.circle"
+        if canRecoverRuntimeDisplay {
+            return "display.trianglebadge.exclamationmark"
+        }
+
+        return model.canFulfillPendingLaunch ? "arrow.up.forward.app" : "bolt.horizontal.circle"
     }
 
     private var canMarkWindowsInstalled: Bool {
@@ -1369,6 +1430,7 @@ private struct StandaloneMainWindowRoot: View {
             markWindowsInstalledAction: markWindowsInstalledFromSetup,
             installGuestAgentAction: installGuestAgentFromDisplay,
             repairGuestAgentForAppLaunchAction: installGuestAgentFromDisplay,
+            recoverRuntimeDisplayAction: recoverRuntimeDisplayEvidence,
             launchWindowsAppAction: launchSelectedWindowsApp,
             runRecommendedProofAction: {},
             displayMessage: displayMessage
@@ -1439,6 +1501,18 @@ private struct StandaloneMainWindowRoot: View {
                 displayMessage = "Windows is marked installed. Veil will boot from the local disk and leave the installer ISO detached."
             } else if let errorMessage = vmModel.errorMessage {
                 displayMessage = "Windows install state could not be updated: \(errorMessage)"
+            }
+        }
+    }
+
+    private func recoverRuntimeDisplayEvidence() {
+        Task { @MainActor in
+            displayMessage = "Refreshing the embedded Windows display."
+            await vmModel.refreshRuntimeEvidence()
+            if vmModel.snapshot?.latestConsoleLaunch?.previewStatus == .fresh {
+                displayMessage = "Windows display evidence refreshed."
+            } else {
+                displayMessage = "Display still needs recovery. Open details or retry after Windows responds."
             }
         }
     }

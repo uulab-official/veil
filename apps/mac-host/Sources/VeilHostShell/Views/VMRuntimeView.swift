@@ -20,6 +20,7 @@ struct VMRuntimeView: View {
     var markWindowsInstalledAction: () -> Void
     var installGuestAgentAction: () -> Void
     var repairGuestAgentForAppLaunchAction: () -> Void
+    var recoverRuntimeDisplayAction: () -> Void
     var launchWindowsAppAction: () -> Void
     var runRecommendedProofAction: () -> Void
     var displayMessage: String?
@@ -53,7 +54,11 @@ struct VMRuntimeView: View {
                         pathPicker = .driverMedia
                     },
                     primaryAction: {
-                        if canOpenWindowsApp {
+                        if canFulfillPendingLaunch {
+                            launchWindowsAppAction()
+                        } else if canRecoverRuntimeDisplay(for: snapshot) {
+                            recoverRuntimeDisplayAction()
+                        } else if canRequestWindowsAppLaunch {
                             launchWindowsAppAction()
                         } else if pendingLaunch.willLaunchOnAgentReconnect && canShowDisplay(for: snapshot) {
                             repairGuestAgentForAppLaunchAction()
@@ -76,6 +81,7 @@ struct VMRuntimeView: View {
                     markWindowsInstalledAction: markWindowsInstalledAction,
                     installGuestAgentAction: installGuestAgentAction,
                     repairGuestAgentForAppLaunchAction: repairGuestAgentForAppLaunchAction,
+                    recoverRuntimeDisplayAction: recoverRuntimeDisplayAction,
                     canLaunchWindowsApp: canLaunchWindowsApp,
                     canRequestWindowsAppLaunch: canRequestWindowsAppLaunch,
                     selectedWindowsAppName: selectedWindowsAppName,
@@ -199,6 +205,15 @@ struct VMRuntimeView: View {
     private func canInstallGuestAgent(for snapshot: VMRuntimeSnapshot) -> Bool {
         canShowDisplay(for: snapshot)
             && (guestAgentInstallEvidence ?? snapshot.installEvidence).kind != .guestAgent
+    }
+
+    private func canRecoverRuntimeDisplay(for snapshot: VMRuntimeSnapshot) -> Bool {
+        guard canShowDisplay(for: snapshot) else {
+            return false
+        }
+
+        return snapshot.latestConsoleLaunch?.previewStatus == .stale
+            || snapshot.latestConsoleLaunch?.previewStatus == .unavailable
     }
 
     private func refreshRuntimeEvidenceWhileRunning() async {
@@ -1317,6 +1332,7 @@ private struct WindowsSetupDisplayPanel: View {
     var markWindowsInstalledAction: () -> Void
     var installGuestAgentAction: () -> Void
     var repairGuestAgentForAppLaunchAction: () -> Void
+    var recoverRuntimeDisplayAction: () -> Void
     var canLaunchWindowsApp: Bool
     var canRequestWindowsAppLaunch: Bool
     var selectedWindowsAppName: String?
@@ -1450,6 +1466,15 @@ private struct WindowsSetupDisplayPanel: View {
                 }
                 .disabled(isLoading)
                 .help("Install Veil guest agent")
+            }
+
+            if canRecoverRuntimeDisplay {
+                Button(action: recoverRuntimeDisplayAction) {
+                    Label("Refresh Display", systemImage: "display.trianglebadge.exclamationmark")
+                        .labelStyle(.iconOnly)
+                }
+                .disabled(isLoading)
+                .help("Refresh embedded Windows display evidence")
             }
 
             if canMarkWindowsInstalled {
@@ -1648,6 +1673,10 @@ private struct WindowsSetupDisplayPanel: View {
             return "The queued Windows app is ready to open."
         }
 
+        if canRecoverRuntimeDisplay {
+            return "The embedded Windows display needs fresh evidence."
+        }
+
         if pendingLaunch.willLaunchOnAgentReconnect {
             switch snapshot.state {
             case .running, .starting:
@@ -1692,6 +1721,10 @@ private struct WindowsSetupDisplayPanel: View {
     private var installPrimaryTitle: String {
         if canFulfillPendingLaunch {
             return "Open \(pendingAppDisplayName)"
+        }
+
+        if canRecoverRuntimeDisplay {
+            return "Refresh Display"
         }
 
         if pendingLaunch.willLaunchOnAgentReconnect {
@@ -1761,7 +1794,14 @@ private struct WindowsSetupDisplayPanel: View {
 
             Spacer(minLength: 4)
 
-            if canOpenWindowsApp {
+            if canRecoverRuntimeDisplay {
+                Button(action: recoverRuntimeDisplayAction) {
+                    Label("Refresh Display", systemImage: "display.trianglebadge.exclamationmark")
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(isLoading)
+                .help("Refresh embedded Windows display evidence")
+            } else if canOpenWindowsApp {
                 Button(action: primaryAction) {
                     Label(appDisplayName, systemImage: "macwindow.badge.plus")
                 }
@@ -2115,6 +2155,10 @@ private struct WindowsSetupDisplayPanel: View {
             return "Open \(pendingAppDisplayName)"
         }
 
+        if canRecoverRuntimeDisplay {
+            return "Refresh Display"
+        }
+
         if pendingLaunch.willLaunchOnAgentReconnect {
             switch snapshot.state {
             case .running, .starting:
@@ -2152,6 +2196,10 @@ private struct WindowsSetupDisplayPanel: View {
     }
 
     private var primarySymbol: String {
+        if canRecoverRuntimeDisplay {
+            return "display.trianglebadge.exclamationmark"
+        }
+
         if canFulfillPendingLaunch || pendingLaunch.willLaunchOnAgentReconnect {
             return pendingLaunch.willLaunchOnAgentReconnect && !canFulfillPendingLaunch
                 ? "bolt.horizontal.circle"
@@ -2271,6 +2319,15 @@ private struct WindowsSetupDisplayPanel: View {
         pendingLaunch.willLaunchOnAgentReconnect
             && !canFulfillPendingLaunch
             && (snapshot.state == .running || snapshot.state == .starting)
+    }
+
+    private var canRecoverRuntimeDisplay: Bool {
+        guard canShowDisplay else {
+            return false
+        }
+
+        return snapshot.latestConsoleLaunch?.previewStatus == .stale
+            || snapshot.latestConsoleLaunch?.previewStatus == .unavailable
     }
 
     private var appOpenFlowItems: [InstallFlowItem] {

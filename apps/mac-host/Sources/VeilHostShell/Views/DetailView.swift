@@ -10,6 +10,7 @@ struct DetailView: View {
     var markWindowsInstalledAction: () -> Void
     var installGuestAgentAction: () -> Void
     var repairGuestAgentForAppLaunchAction: () -> Void
+    var recoverRuntimeDisplayAction: () -> Void
     var launchWindowsAppAction: () -> Void
     var runRecommendedProofAction: () -> Void
     var displayMessage: String?
@@ -33,6 +34,7 @@ struct DetailView: View {
                 markWindowsInstalledAction: markWindowsInstalledAction,
                 installGuestAgentAction: installGuestAgentAction,
                 repairGuestAgentForAppLaunchAction: repairGuestAgentForAppLaunchAction,
+                recoverRuntimeDisplayAction: recoverRuntimeDisplayAction,
                 launchWindowsAppAction: launchWindowsAppAction,
                 runRecommendedProofAction: runRecommendedProofAction,
                 displayMessage: displayMessage
