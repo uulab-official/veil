@@ -418,12 +418,18 @@ for `Veil Guest Agent\V.cmd`, and runs that short automation entrypoint. `V.cmd`
 runs `Repair Veil Agent Connectivity.cmd` when present and falls back to
 `Install Veil Agent.cmd` for older media layouts. Use it only when the Windows
 desktop is visible in the console and the host probe still reports the guest
-agent unavailable. The
-JSON report includes the desktop activation tap, bounded key-send evidence, and a
+agent unavailable. The repair path writes
+`%LOCALAPPDATA%\Veil\Agent\logs\repair-status.json` from the elevated Windows
+process; success now means the guest itself received `agent.health.response`
+over `ws://127.0.0.1:18444/` and over a non-loopback Windows guest IPv4 address,
+not just that TCP port 18444 opened. The JSON report includes the desktop activation tap, bounded key-send evidence, and a
 guest-agent wait result. It sends one bounded UAC approval tap after the command
-sequence, then captures `postAttemptConsole` with a screenshot path and review
-hints, so a failed attempt records whether the command reached a live agent or
-needs screenshot-backed Run/UAC/PowerShell inspection. The macOS host shell uses the same
+sequence, then sends the same keyboard approval that worked in live Korean
+Windows UAC (`left`, `ret`) because the prompt often focuses No by default. It
+keeps the `V.cmd` console visible briefly after the repair command returns, then
+captures `postAttemptConsole` with a screenshot path and review hints, so a
+failed attempt records whether the command reached a live agent or needs
+screenshot-backed Run/UAC/PowerShell inspection. The macOS host shell uses the same
 Core activation and key-sequence path for its Install Guest Agent button and
 menu bar item, so CLI and GUI recovery stay on the same bounded QMP path with a
 keyboard fallback for older launch records.

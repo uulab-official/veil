@@ -419,6 +419,7 @@ struct QEMUGuestAgentInstallAttemptReport: Codable, Equatable {
     var commandText: String
     var activationTap: QEMUPointerTapRecord?
     var uacApprovalTap: QEMUPointerTapRecord?
+    var uacApprovalKeySend: QEMUKeySendRecord?
     var keySend: QEMUKeySendRecord
     var agentWait: AgentConnectionWaitReport
     var postAttemptConsole: QEMUGuestAgentInstallConsoleEvidence
@@ -2055,11 +2056,13 @@ struct VeilVMControl {
             steps = try QEMUGuestAgentInstallKeySequence.stepsAfterRunOpened
         }
         let keySend = try await qemuKeySendRecord(steps: steps)
-        try? await Task.sleep(nanoseconds: 1_500_000_000)
+        try? await Task.sleep(nanoseconds: 5_000_000_000)
         let uacApprovalTap = try? await qemuGuestAgentInstallUACApprovalTapRecord()
         if uacApprovalTap != nil {
-            try? await Task.sleep(nanoseconds: 1_500_000_000)
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
         }
+        let uacApprovalKeySend = try? await qemuKeySendRecord(steps: QEMUGuestAgentInstallKeySequence.uacApproveKeySteps)
+        try? await Task.sleep(nanoseconds: 1_500_000_000)
         let agentWait = await guestAgentWaitReport(waitSeconds: waitSeconds)
         let postAttemptConsole = qemuGuestAgentInstallConsoleEvidence()
         let nextActions = guestAgentInstallNextActions(
@@ -2071,6 +2074,7 @@ struct VeilVMControl {
             commandText: QEMUGuestAgentInstallKeySequence.commandText,
             activationTap: activationTap,
             uacApprovalTap: uacApprovalTap,
+            uacApprovalKeySend: uacApprovalKeySend,
             keySend: keySend,
             agentWait: agentWait,
             postAttemptConsole: postAttemptConsole,
@@ -2087,6 +2091,7 @@ struct VeilVMControl {
         print("QEMU guest agent install attempt: \(report.status.rawValue)")
         print("Activation tap: \(report.activationTap == nil ? "fallback keyboard" : "sent")")
         print("UAC approval tap: \(report.uacApprovalTap == nil ? "not sent" : "sent")")
+        print("UAC approval keys: \(report.uacApprovalKeySend == nil ? "not sent" : "sent")")
         print("Keys sent: \(report.keySend.keys.count)")
         print("Waited seconds: \(report.agentWait.waitedSeconds)")
         print("Attempts: \(report.agentWait.attempts)")
@@ -2100,7 +2105,7 @@ struct VeilVMControl {
     private static func qemuGuestAgentInstallConsoleEvidence() -> QEMUGuestAgentInstallConsoleEvidence {
         let expectedVisibleStates = [
             "Windows Run dialog with the V.cmd command",
-            "Windows administrator approval prompt for Repair Veil Agent Connectivity",
+            "Windows administrator approval prompt for Repair Veil Agent Connectivity, often with No focused by default",
             "PowerShell or Command Prompt running the Veil repair/install script",
             "Windows desktop with no visible installer window, which means the QMP command likely did not reach the shell"
         ]
@@ -2160,6 +2165,7 @@ struct VeilVMControl {
         var actions = agentWait.nextActions
         if let capture = consoleEvidence.capture {
             actions.append("Inspect postAttemptConsole.capture.consoleScreenshotPath at \(capture.consoleScreenshotPath) for Run, UAC, PowerShell, or desktop-only evidence.")
+            actions.append("If the screenshot still shows the Windows administrator approval prompt, send `veil-vmctl qemu-sendkey --json left ret` or retry `qemu-install-agent`; the automated path now sends the same keyboard approval after the pointer tap.")
         } else {
             actions.append("Run `veil-vmctl qemu-capture --json` and confirm whether the Windows desktop showed Run, UAC, or PowerShell during the install attempt.")
         }

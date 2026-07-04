@@ -1965,11 +1965,20 @@ public struct LocalVMRuntimeService: VMRuntimeService {
     @echo off
     setlocal
     cd /d "%~dp0"
+    if "%VEIL_AGENT_AUTOMATION_HOLD%"=="" set VEIL_AGENT_AUTOMATION_HOLD=75
     if exist "%~dp0Repair Veil Agent Connectivity.cmd" (
         call "%~dp0Repair Veil Agent Connectivity.cmd" %*
-        exit /b %errorlevel%
+        goto veil_after_agent_command
     )
     call "%~dp0Install Veil Agent.cmd" %*
+    :veil_after_agent_command
+    set VEIL_EXIT_CODE=%errorlevel%
+    if not "%VEIL_AGENT_AUTOMATION_HOLD%"=="0" (
+        echo.
+        echo Veil automation status will remain visible for %VEIL_AGENT_AUTOMATION_HOLD% seconds.
+        timeout /t %VEIL_AGENT_AUTOMATION_HOLD% /nobreak >nul
+    )
+    exit /b %VEIL_EXIT_CODE%
 
     """
 
@@ -1977,13 +1986,13 @@ public struct LocalVMRuntimeService: VMRuntimeService {
     Veil Guest Agent
 
     Run Install Veil Agent.cmd after Windows 11 reaches the desktop.
-    V.cmd is the short automation entrypoint used by the macOS host. It runs Repair Veil Agent Connectivity.cmd when present and falls back to Install Veil Agent.cmd for older media layouts.
+    V.cmd is the short automation entrypoint used by the macOS host. It runs Repair Veil Agent Connectivity.cmd when present, falls back to Install Veil Agent.cmd for older media layouts, and keeps the console visible briefly so macOS post-attempt screenshots can capture success or failure text.
     The installer uses the packaged VeilAgent.exe bundle when present, registers the VeilAgent user logon task when Windows allows it, and listens inside Windows on 0.0.0.0:18444 so the macOS host can connect through QEMU at ws://127.0.0.1:18444/.
     Bootstrap and installer logs are written under %LOCALAPPDATA%\\Veil\\Agent\\logs.
     If this media does not include app\\VeilAgent.exe, build it on the Mac with apps/windows-agent/scripts/publish-veil-agent-bundle.sh before preparing the VM again.
 
     Run Start Veil Agent.cmd to start the agent immediately after installation.
-    Run Repair Veil Agent Connectivity.cmd when macOS can open QEMU port 18444 but the agent health check still times out. The repair path requests administrator approval, refreshes Windows Firewall rules, and restarts VeilAgent.
+    Run Repair Veil Agent Connectivity.cmd when macOS can open QEMU port 18444 but the agent health check still times out. The repair path requests administrator approval, refreshes Windows Firewall rules, restarts VeilAgent, and writes repair-status.json when the in-guest loopback plus guest IPv4 agent.health.response probes succeed or fail.
     Run Collect Veil Agent Diagnostics.cmd to write a metadata-only diagnostics ZIP to the Windows desktop when install, start, or connection checks fail.
     Keep this folder in the Veil Shared drive while Veil is in pre-alpha.
 

@@ -193,15 +193,29 @@ Goal: keep the main Veil experience pointed at real local Windows boot and conso
 - [x] Fix repair logging so the non-elevated launcher does not hold `repair.log` open while the elevated repair process starts.
 - [x] Live retry with auto UAC tap on QEMU PID 5279 recorded `activationTap=true`, `uacApprovalTap=true`, `keyCount=145`, and post-attempt console evidence returning to the Windows desktop.
 - [x] Live retry still ended with `hostForwardProbe.status=tcpOpen` plus WebSocket health timeout, narrowing the remaining blocker to elevated repair completion evidence, agent process health, or the WebSocket handshake path inside Windows.
-- [ ] Add screenshot-backed elevated-repair completion detection or a more deterministic guest command channel, because the current path can launch and approve UAC but still needs proof that the elevated repair completed and agent health connected.
+- [x] Add deterministic elevated-repair status evidence: the non-elevated repair launcher now waits on `%LOCALAPPDATA%\Veil\Agent\logs\repair-status.json`, and the elevated repair writes `started`, `firewallRulesReady`, `guestAgentHealthSucceeded`, or `failed`.
+- [x] Strengthen the guest-side start proof from TCP-only to real in-guest WebSocket protocol health: `Start-VeilAgent.ps1` now sends `agent.health.request` to `ws://127.0.0.1:18444/` and requires `agent.health.response` before reporting success.
+- [x] Regenerate `VeilAutoInstall.iso` after the repair-status and in-guest WebSocket health changes; mount verification showed `repair-status.json`, `guestAgentHealthSucceeded`, `ClientWebSocket`, and `agent.health.request` in the staged media.
+- [x] Relaunch QEMU as PID 39131 with the regenerated media; `lsof` verified the running process held the current `VeilAutoInstall.iso` inode 240885467.
+- [x] Capture live UAC evidence: `qemu-install-agent` still timed out, and the post-attempt screenshot showed the Korean Windows administrator prompt with No focused despite the pointer tap landing over Yes.
+- [x] Prove the keyboard approval recovery: `veil-vmctl qemu-sendkey --json left ret` dismissed the UAC prompt on the live VM.
+- [x] Add UAC keyboard approval to `qemu-install-agent` reports so the automated path sends and records `left`, `ret` after the pointer tap.
+- [x] Keep `V.cmd` automation status visible briefly after success so `postAttemptConsole` can capture repair status text instead of only the desktop.
+- [x] Live retry after UAC keyboard approval showed `guestAgentHealthSucceeded` inside Windows (`ws://127.0.0.1:18444/`) while macOS `guest-agent-wait` still timed out through QEMU `hostfwd`, narrowing the blocker to guest NIC/IP reachability or host-forward delivery.
+- [x] Strengthen `Start-VeilAgent.ps1` again so success requires loopback health plus a non-loopback Windows guest IPv4 health probe; this should expose missing guest IP/NIC driver evidence instead of reporting local-only success.
+- [x] Identify why the first non-loopback probe did not appear in the live console: repair preferred the previously installed `%LOCALAPPDATA%\Veil\Agent\scripts\Start-VeilAgent.ps1` over the refreshed ISO copy.
+- [x] Update repair to refresh installed support scripts from the current media before restarting the agent, so repeated `qemu-install-agent` attempts use the latest diagnostics without requiring a full reinstall.
+- [x] Regenerate and relaunch with the support-script refresh; live console evidence now shows the refreshed start script running and failing with `Guest IPv4 addresses: none`.
+- [x] Confirm the current blocker: Windows 11 Arm has no usable non-loopback guest IPv4 on the tested QEMU `e1000e` path, so macOS `hostfwd` can appear TCP-open while WebSocket health still cannot reach the guest agent.
 - [x] Add `veil-host-probe --diagnose-agent` so host-side agent connection checks return actionable JSON instead of only a timeout.
 - [x] Expose `guestAgentDiagnostics` in app-runtime status so the host shell, CLI, and harness point at the same pre/post install diagnostic gate.
 - [x] Gate app-runtime Start actions on real local VM boot readiness so bootReady=false reports `prepare-local-runtime` instead of exposing a failing start path.
 
 ## Next
 
-- [ ] Investigate any remaining guest-agent bootstrap failure after the new pointer-activated Start search opens Run reliably.
-- [ ] Regenerate the local `VeilAgent.exe` bundle and `VeilAutoInstall.iso` after the raw WebSocket listener change, then retry `qemu-install-agent` against the visible Windows desktop.
+- [ ] Regenerate `VeilAutoInstall.iso` again after the UAC keyboard approval change, then retry `qemu-install-agent` against the visible Windows desktop.
+- [ ] Inspect the next `postAttemptConsole.capture.consoleScreenshotPath`; success should show the waiting launcher completing after `guestAgentHealthSucceeded`, while failure should leave a visible PowerShell error or timeout instead of a stuck UAC prompt.
+- [ ] Prioritize the Windows Arm NIC driver path or another adapter strategy before continuing app-window mirroring; current live evidence reports `Guest IPv4 addresses: none`.
 - [ ] Collect `%LOCALAPPDATA%\Veil\Agent\logs` from the Windows guest after the pointer-activated install attempt.
 - [ ] Use the new `qemu-install-agent` install-attempt report to capture key-send evidence plus guest-agent wait status for the next live retry.
 - [ ] Run `Veil Shared\Veil Guest Agent\Install Veil Agent.cmd` inside Windows 11 Arm and verify the current-session agent plus the `VeilAgent` logon task both start.

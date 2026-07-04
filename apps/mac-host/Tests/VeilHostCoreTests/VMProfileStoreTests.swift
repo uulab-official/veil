@@ -1335,6 +1335,8 @@ struct VMProfileStoreTests {
         #expect(repairCommand.contains("-ExecutionPolicy Bypass"))
         #expect(bootstrapCommand.contains("Repair Veil Agent Connectivity.cmd"))
         #expect(bootstrapCommand.contains("Install Veil Agent.cmd"))
+        #expect(bootstrapCommand.contains("VEIL_AGENT_AUTOMATION_HOLD"))
+        #expect(bootstrapCommand.contains("Veil automation status will remain visible"))
         #expect(FileManager.default.fileExists(atPath: repairScriptURL.path))
         #expect(agentReadme.contains("Install Veil Agent.cmd"))
         #expect(agentReadme.contains("V.cmd"))

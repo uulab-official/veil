@@ -85,11 +85,17 @@ Veil Shared\Veil Guest Agent\Repair Veil Agent Connectivity.cmd
 
 The repair command requests Windows administrator approval through UAC when
 needed, refreshes the VeilAgent program rule plus a TCP port rule for 18444, and
-then starts the installed agent again.
+then starts the installed agent again. It writes
+`%LOCALAPPDATA%\Veil\Agent\logs\repair-status.json`, and the final success state
+requires in-guest `agent.health.response` over both `ws://127.0.0.1:18444/` and
+a non-loopback Windows guest IPv4 address. This keeps a local-only agent from
+looking ready when QEMU host forwarding still cannot reach the guest.
 
 The media also contains `V.cmd`, a short automation entrypoint used by the macOS
 host when sending QMP keyboard input. It runs the repair command when available
-and falls back to the installer command for older staged media.
+and falls back to the installer command for older staged media. `V.cmd` keeps
+its console visible briefly after the command returns so host-side
+`postAttemptConsole` screenshots can capture the final success or failure text.
 
 Collect install/start diagnostics without copying Windows user data:
 

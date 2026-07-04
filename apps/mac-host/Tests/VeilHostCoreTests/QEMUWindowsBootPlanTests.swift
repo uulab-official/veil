@@ -1201,6 +1201,7 @@ struct QEMUWindowsBootPlanTests {
         #expect(keys.contains("backslash"))
         #expect(keys.contains("shift-5"))
         #expect(keys.count < 200)
+        #expect(QEMUGuestAgentInstallKeySequence.uacApproveKeySteps.map(\.key) == ["left", "ret"])
     }
 
     @Test("guest agent install sequence supports direct Run dialog input")
