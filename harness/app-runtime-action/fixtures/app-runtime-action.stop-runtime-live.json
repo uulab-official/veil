@@ -205,5 +205,15 @@
   "nextActions": [
     "Run `veil-vmctl app-runtime-status --json` before relaunching a Windows app.",
     "If Windows did not stop cleanly, export diagnostics before using force stop."
-  ]
+  ],
+  "proofPlan": {
+    "selectedAppId": "winapp_notepad",
+    "canRunAppWindowProof": true,
+    "canRunCoherenceProof": true,
+    "canRunMVPProof": true,
+    "recommendedAppWindowProofCommand": "veil-vmctl app-window-proof --json --app-id winapp_notepad",
+    "recommendedCoherenceProofCommand": "veil-vmctl coherence-proof --json --app-id winapp_notepad",
+    "recommendedMVPProofCommand": "veil-vmctl mvp-proof --json --app-id winapp_notepad --require-proved",
+    "reason": "The live Windows agent can run app-window, coherence, and MVP proof commands for the selected app."
+  }
 }

@@ -141,6 +141,10 @@ top-level `pendingLaunchAppId` and `launchPlan` fields that must match
 `status.pendingLaunchAppId` and `status.launchPlan`. Those fields expose the
 bounded start/wait/retry commands without forcing automation to infer the
 handoff path from a fake Windows window.
+Every action report also promotes `status.proofPlan` to a top-level
+`proofPlan`, and successful launch, restore, bring-forward, focus, and
+clipboard-oriented actions include the strongest currently available proof
+command in `nextActions`.
 When a launch has already been queued, the retry command is
 `veil-vmctl app-runtime-action --json --action fulfill-pending` so the stored
 intent, not a reconstructed app id, is consumed after the guest agent connects.

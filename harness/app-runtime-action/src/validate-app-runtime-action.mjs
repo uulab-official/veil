@@ -35,6 +35,7 @@ export function validateAppRuntimeAction(report) {
   requireBoolean(report.accepted, "accepted");
   validateAppRuntimeStatus(report.status);
   validateActionLaunchPlan(report);
+  validateActionProofPlan(report);
 
   if (!Array.isArray(report.restoredWindows)) {
     throw new TypeError("restoredWindows must be an array.");
@@ -84,6 +85,7 @@ export function validateAppRuntimeAction(report) {
   }
 
   validateStringArray(report.nextActions, "nextActions");
+  validateProofNextActions(report);
   return report;
 }
 
@@ -234,6 +236,37 @@ function validateActionLaunchPlan(report) {
 
   if (JSON.stringify(report.launchPlan) !== JSON.stringify(report.status.launchPlan)) {
     throw new TypeError("top-level launchPlan must match report.status.launchPlan.");
+  }
+}
+
+function validateActionProofPlan(report) {
+  if (!report.proofPlan || typeof report.proofPlan !== "object" || Array.isArray(report.proofPlan)) {
+    throw new TypeError("proofPlan must be an object.");
+  }
+
+  if (JSON.stringify(report.proofPlan) !== JSON.stringify(report.status.proofPlan)) {
+    throw new TypeError("top-level proofPlan must match report.status.proofPlan.");
+  }
+}
+
+function validateProofNextActions(report) {
+  if (!report.accepted) {
+    return;
+  }
+
+  if (!["launch", "fulfill-pending", "focus", "restore", "bring-forward", "clipboard"].includes(report.action)) {
+    return;
+  }
+
+  const command = report.proofPlan.recommendedMVPProofCommand
+    ?? report.proofPlan.recommendedCoherenceProofCommand
+    ?? report.proofPlan.recommendedAppWindowProofCommand;
+  if (command === undefined) {
+    return;
+  }
+
+  if (!report.nextActions.some((action) => action.includes(command))) {
+    throw new TypeError("accepted app-runtime actions with an available proof command must include that command in nextActions.");
   }
 }
 

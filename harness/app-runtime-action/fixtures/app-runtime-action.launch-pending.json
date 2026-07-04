@@ -193,5 +193,12 @@
     "Run `veil-vmctl qemu-start --json --wait-seconds 30` to start the local Windows runtime for the selected app.",
     "Run `veil-vmctl guest-agent-wait --json --wait-seconds 30` to wait for the Windows guest agent.",
     "Run `veil-vmctl app-runtime-action --json --action fulfill-pending` after the guest agent connects."
-  ]
+  ],
+  "proofPlan": {
+    "selectedAppId": "winapp_notepad",
+    "canRunAppWindowProof": false,
+    "canRunCoherenceProof": false,
+    "canRunMVPProof": false,
+    "reason": "Wait for the live Windows agent before running proof commands."
+  }
 }

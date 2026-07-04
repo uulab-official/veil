@@ -215,5 +215,12 @@
   "nextActions": [
     "Open or focus the mirrored macOS app window from the menu bar.",
     "Run `veil-vmctl app-runtime-status --json` to inspect the tracked HWND and available actions."
-  ]
+  ],
+  "proofPlan": {
+    "selectedAppId": "winapp_notepad",
+    "canRunAppWindowProof": false,
+    "canRunCoherenceProof": false,
+    "canRunMVPProof": false,
+    "reason": "Wait for the live Windows agent before running proof commands."
+  }
 }

@@ -461,6 +461,7 @@ struct AppRuntimeActionReport: Codable, Equatable {
     var foregroundWindowTitle: String?
     var pendingLaunchAppId: String?
     var launchPlan: WindowsAppRuntimeLaunchPlanStatus?
+    var proofPlan: WindowsAppRuntimeProofPlanStatus
     var launch: AppLaunchResponse?
     var window: WindowCreatedEvent?
     var focus: WindowFocusResponse?
@@ -884,6 +885,7 @@ struct VeilVMControl {
             foregroundWindowTitle: foregroundWindowTitle,
             pendingLaunchAppId: status.pendingLaunchAppId,
             launchPlan: actionLaunchPlan,
+            proofPlan: status.proofPlan,
             launch: launch,
             window: window,
             focus: focus,
@@ -939,6 +941,16 @@ struct VeilVMControl {
                 print("Launch app command: \(launchCommand)")
             }
         }
+        print("Proof plan: \(report.proofPlan.reason)")
+        if let proofCommand = report.proofPlan.recommendedAppWindowProofCommand {
+            print("Proof app-window command: \(proofCommand)")
+        }
+        if let proofCommand = report.proofPlan.recommendedCoherenceProofCommand {
+            print("Proof coherence command: \(proofCommand)")
+        }
+        if let proofCommand = report.proofPlan.recommendedMVPProofCommand {
+            print("Proof MVP command: \(proofCommand)")
+        }
         if let window = report.window {
             print("Window title: \(window.title)")
         }
@@ -979,15 +991,16 @@ struct VeilVMControl {
         if accepted {
             switch action {
             case .launch, .fulfillPending:
-                return [
+                return compactActions([
                     "Open or focus the mirrored macOS app window from the menu bar.",
+                    proofNextAction(from: status.proofPlan),
                     "Run `veil-vmctl app-runtime-status --json` to inspect the tracked HWND and available actions."
-                ]
+                ])
             case .focus:
-                return [
+                return compactActions([
                     "Confirm the macOS mirror window is frontmost.",
-                    "Run `veil-vmctl coherence-proof --json --app-id winapp_notepad` before claiming input is production-ready."
-                ]
+                    proofNextAction(from: status.proofPlan)
+                ])
             case .close:
                 return [
                     "Run `veil-vmctl app-runtime-status --json` to confirm the HWND no longer appears.",
@@ -999,15 +1012,17 @@ struct VeilVMControl {
                     "Run `veil-vmctl app-runtime-action --json --action quiet-when-idle` if the runtime is ready to quiet."
                 ]
             case .restore:
-                return [
+                return compactActions([
                     "Open or focus restored mirrored windows from the menu bar.",
+                    proofNextAction(from: status.proofPlan),
                     "Run `veil-vmctl app-runtime-status --json` to inspect restored sessions."
-                ]
+                ])
             case .bringForward:
-                return [
+                return compactActions([
                     "Confirm the mirrored Windows app windows are frontmost on macOS.",
+                    proofNextAction(from: status.proofPlan),
                     "Run `veil-vmctl app-runtime-action --json --action focus --window-id ...` if one app window needs explicit guest focus."
-                ]
+                ])
             case .quietWhenIdle:
                 return [
                     "Run `\(status.quietRuntime.recommendedStopCommand ?? "veil-vmctl app-runtime-action --json --action stop-runtime")` to stop the idle local Windows runtime.",
@@ -1020,10 +1035,10 @@ struct VeilVMControl {
                     "If Windows did not stop cleanly, export diagnostics before using force stop."
                 ]
             case .clipboard:
-                return [
+                return compactActions([
                     "Use Cmd+V inside the mirrored Windows app window to paste the synced text.",
-                    "Run `veil-vmctl coherence-proof --json --app-id winapp_notepad` to verify clipboard plus input together."
-                ]
+                    proofNextAction(from: status.proofPlan)
+                ])
             case .typeText:
                 return [
                     "Confirm the text appears in the focused Windows app.",
@@ -1052,6 +1067,32 @@ struct VeilVMControl {
             "Run `veil-vmctl guest-agent-wait --json` to confirm the Windows guest agent is connected.",
             "Run `veil-vmctl app-runtime-status --json` and check the requested app or window id before retrying."
         ]
+    }
+
+    private static func proofNextAction(from proofPlan: WindowsAppRuntimeProofPlanStatus) -> String? {
+        if let command = proofPlan.recommendedMVPProofCommand {
+            return "Run `\(command)` to verify the full Windows app runtime loop."
+        }
+
+        if let command = proofPlan.recommendedCoherenceProofCommand {
+            return "Run `\(command)` to verify input and clipboard before MVP release."
+        }
+
+        if let command = proofPlan.recommendedAppWindowProofCommand {
+            return "Run `\(command)` to verify launch, HWND tracking, and first frame capture."
+        }
+
+        return nil
+    }
+
+    private static func compactActions(_ actions: [String?]) -> [String] {
+        actions.compactMap { action in
+            guard let action,
+                  !action.isEmpty else {
+                return nil
+            }
+            return action
+        }
     }
 
     private static func launchRecoveryActions(from launchPlan: WindowsAppRuntimeLaunchPlanStatus) -> [String] {

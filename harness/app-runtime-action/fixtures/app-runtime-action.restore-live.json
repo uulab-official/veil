@@ -206,6 +206,17 @@
   },
   "nextActions": [
     "Open or focus restored mirrored windows from the menu bar.",
+    "Run `veil-vmctl mvp-proof --json --app-id winapp_notepad --require-proved` to verify the full Windows app runtime loop.",
     "Run `veil-vmctl app-runtime-status --json` to inspect restored sessions."
-  ]
+  ],
+  "proofPlan": {
+    "selectedAppId": "winapp_notepad",
+    "canRunAppWindowProof": true,
+    "canRunCoherenceProof": true,
+    "canRunMVPProof": true,
+    "recommendedAppWindowProofCommand": "veil-vmctl app-window-proof --json --app-id winapp_notepad",
+    "recommendedCoherenceProofCommand": "veil-vmctl coherence-proof --json --app-id winapp_notepad",
+    "recommendedMVPProofCommand": "veil-vmctl mvp-proof --json --app-id winapp_notepad --require-proved",
+    "reason": "The live Windows agent can run app-window, coherence, and MVP proof commands for the selected app."
+  }
 }

@@ -183,5 +183,15 @@
     "Run `veil-vmctl app-runtime-action --json --action stop-runtime` to stop the idle local Windows runtime.",
     "Use `veil-vmctl qemu-powerdown --json --wait-seconds 30` only as a lower-level recovery command.",
     "Run `veil-vmctl app-runtime-status --json` before relaunching a Windows app."
-  ]
+  ],
+  "proofPlan": {
+    "selectedAppId": "winapp_notepad",
+    "canRunAppWindowProof": true,
+    "canRunCoherenceProof": true,
+    "canRunMVPProof": true,
+    "recommendedAppWindowProofCommand": "veil-vmctl app-window-proof --json --app-id winapp_notepad",
+    "recommendedCoherenceProofCommand": "veil-vmctl coherence-proof --json --app-id winapp_notepad",
+    "recommendedMVPProofCommand": "veil-vmctl mvp-proof --json --app-id winapp_notepad --require-proved",
+    "reason": "The live Windows agent can run app-window, coherence, and MVP proof commands for the selected app."
+  }
 }

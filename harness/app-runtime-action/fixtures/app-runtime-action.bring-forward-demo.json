@@ -189,5 +189,12 @@
   "nextActions": [
     "Confirm the mirrored Windows app windows are frontmost on macOS.",
     "Run `veil-vmctl app-runtime-action --json --action focus --window-id ...` if one app window needs explicit guest focus."
-  ]
+  ],
+  "proofPlan": {
+    "selectedAppId": "winapp_notepad",
+    "canRunAppWindowProof": false,
+    "canRunCoherenceProof": false,
+    "canRunMVPProof": false,
+    "reason": "Wait for the live Windows agent before running proof commands."
+  }
 }

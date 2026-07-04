@@ -190,6 +190,36 @@ test("rejects launch actions whose top-level launch plan drifts from status", ()
   );
 });
 
+test("rejects actions without top-level proof plan", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-action.launch-demo.json", import.meta.url), "utf8"));
+  delete report.proofPlan;
+
+  assert.throws(
+    () => validateAppRuntimeAction(report),
+    /proofPlan/
+  );
+});
+
+test("rejects actions whose top-level proof plan drifts from status", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-action.fulfill-pending-live.json", import.meta.url), "utf8"));
+  report.proofPlan.recommendedMVPProofCommand = "veil-vmctl mvp-proof --json --app-id winapp_calculator --require-proved";
+
+  assert.throws(
+    () => validateAppRuntimeAction(report),
+    /top-level proofPlan/
+  );
+});
+
+test("rejects accepted actions without proof handoff in next actions", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-action.fulfill-pending-live.json", import.meta.url), "utf8"));
+  report.nextActions = report.nextActions.filter((action) => !action.includes("mvp-proof"));
+
+  assert.throws(
+    () => validateAppRuntimeAction(report),
+    /nextActions/
+  );
+});
+
 test("rejects unsupported app runtime actions", () => {
   const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-action.launch-demo.json", import.meta.url), "utf8"));
   report.action = "teleport";
