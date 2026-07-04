@@ -207,6 +207,22 @@
       "reason": "The live Windows agent can run app-window, coherence, and MVP proof commands for the selected app.",
       "recommendedProofKind": "mvp",
       "recommendedProofCommand": "veil-vmctl mvp-proof --json --app-id winapp_notepad --require-proved"
+    },
+    "guestAgentDiagnostics": {
+      "endpoint": "ws://127.0.0.1:18444",
+      "isConnected": true,
+      "diagnosticCommand": "veil-host-probe --diagnose-agent",
+      "waitCommand": "veil-vmctl guest-agent-wait --json --wait-seconds 30",
+      "recommendedAction": "run-app-window-proof",
+      "reason": "The live Windows guest agent is connected; proceed to app launch and HWND frame proof."
+    },
+    "visibleSurfacePolicy": {
+      "isEnabled": true,
+      "primarySurface": "launcher",
+      "expectedVisibleSurfaceCount": 1,
+      "shouldHideLauncher": false,
+      "keepsRecoveryDisplayManual": true,
+      "reason": "The main Veil launcher is the single normal surface until a live Windows app window is mirrored."
     }
   },
   "nextActions": [

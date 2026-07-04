@@ -123,6 +123,11 @@ mirrored Windows app opens, the launcher is the single expected surface; after a
 live mirrored HWND opens, the Windows app windows become the expected surfaces
 and the VM display remains a manual recovery surface.
 
+`guestAgentDiagnostics` points every app-runtime status report at the same
+guest-agent readiness gate: run `veil-host-probe --diagnose-agent` before and
+after a Windows-side install attempt, then use
+`veil-vmctl guest-agent-wait --json --wait-seconds 30` before app-window proof.
+
 ```bash
 cd apps/mac-host
 swift run veil-vmctl app-runtime-status --json --demo | node ../../harness/app-runtime-status/src/validate-app-runtime-status.mjs

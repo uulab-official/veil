@@ -302,6 +302,16 @@ test("rejects live agent reports without structured capabilities", () => {
   );
 });
 
+test("rejects guest-agent diagnostics that drift from live connection readiness", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.mac-window-live.json", import.meta.url), "utf8"));
+  report.guestAgentDiagnostics.isConnected = false;
+
+  assert.throws(
+    () => validateAppRuntimeStatus(report),
+    /guestAgentDiagnostics\.isConnected/
+  );
+});
+
 test("rejects proof action availability that drifts from capture readiness", () => {
   const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.mac-window-live.json", import.meta.url), "utf8"));
   report.actions.find((action) => action.id === "proof.appWindow").isAvailable = false;

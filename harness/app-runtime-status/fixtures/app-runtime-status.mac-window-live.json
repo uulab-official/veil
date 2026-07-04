@@ -23,6 +23,14 @@
       "clipboardText": true
     }
   },
+  "guestAgentDiagnostics": {
+    "endpoint": "ws://127.0.0.1:18444",
+    "isConnected": true,
+    "diagnosticCommand": "veil-host-probe --diagnose-agent",
+    "waitCommand": "veil-vmctl guest-agent-wait --json --wait-seconds 30",
+    "recommendedAction": "run-app-window-proof",
+    "reason": "The live Windows guest agent is connected; proceed to app launch and HWND frame proof."
+  },
   "apps": [
     {
       "id": "winapp_notepad",

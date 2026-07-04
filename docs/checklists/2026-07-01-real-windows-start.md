@@ -161,6 +161,7 @@ Goal: keep the main Veil experience pointed at real local Windows boot and conso
 - [x] Retry bootstrap from the live desktop with `-ExecutionPolicy Bypass`; the VM rebooted or returned to firmware/boot flow afterward, and `veil-host-probe` still timed out, so guest-agent connection remains unproven.
 - [x] Add `Collect Veil Agent Diagnostics.cmd` and `Collect-VeilAgentDiagnostics.ps1` to the guest-agent bundle so Windows-side install/start logs can be zipped from the desktop.
 - [x] Add `veil-host-probe --diagnose-agent` so host-side agent connection checks return actionable JSON instead of only a timeout.
+- [x] Expose `guestAgentDiagnostics` in app-runtime status so the host shell, CLI, and harness point at the same pre/post install diagnostic gate.
 
 ## Next
 

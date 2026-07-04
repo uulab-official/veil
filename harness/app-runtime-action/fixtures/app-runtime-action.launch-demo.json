@@ -215,6 +215,22 @@
       "canRunCoherenceProof": false,
       "canRunMVPProof": false,
       "reason": "Wait for the live Windows agent before running proof commands."
+    },
+    "guestAgentDiagnostics": {
+      "endpoint": "ws://127.0.0.1:18444",
+      "isConnected": false,
+      "diagnosticCommand": "veil-host-probe --diagnose-agent",
+      "waitCommand": "veil-vmctl guest-agent-wait --json --wait-seconds 30",
+      "recommendedAction": "diagnose-agent",
+      "reason": "Run the guest-agent diagnostic before and after installing the Windows agent so setup evidence is captured consistently."
+    },
+    "visibleSurfacePolicy": {
+      "isEnabled": true,
+      "primarySurface": "launcher",
+      "expectedVisibleSurfaceCount": 1,
+      "shouldHideLauncher": false,
+      "keepsRecoveryDisplayManual": true,
+      "reason": "The main Veil launcher is the single normal surface until a live Windows app window is mirrored."
     }
   },
   "nextActions": [

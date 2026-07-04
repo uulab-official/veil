@@ -131,6 +131,31 @@ public struct WindowsAppRuntimeConnectionStatus: Codable, Equatable, Sendable {
     }
 }
 
+public struct WindowsAppRuntimeGuestAgentDiagnosticsStatus: Codable, Equatable, Sendable {
+    public var endpoint: String
+    public var isConnected: Bool
+    public var diagnosticCommand: String
+    public var waitCommand: String
+    public var recommendedAction: String
+    public var reason: String
+
+    public init(
+        endpoint: String,
+        isConnected: Bool,
+        diagnosticCommand: String,
+        waitCommand: String,
+        recommendedAction: String,
+        reason: String
+    ) {
+        self.endpoint = endpoint
+        self.isConnected = isConnected
+        self.diagnosticCommand = diagnosticCommand
+        self.waitCommand = waitCommand
+        self.recommendedAction = recommendedAction
+        self.reason = reason
+    }
+}
+
 public struct WindowsAppRuntimeAppStatus: Codable, Equatable, Sendable {
     public var id: String
     public var name: String
@@ -475,6 +500,7 @@ public struct WindowsAppRuntimeStatusReport: Codable, Equatable, Sendable {
     public var pendingLaunchAppId: String?
     public var pendingLaunch: WindowsAppRuntimePendingLaunchStatus
     public var connection: WindowsAppRuntimeConnectionStatus
+    public var guestAgentDiagnostics: WindowsAppRuntimeGuestAgentDiagnosticsStatus
     public var apps: [WindowsAppRuntimeAppStatus]
     public var mirrorSessions: [WindowsAppRuntimeWindowStatus]
     public var restorableAppIds: [String]
@@ -496,6 +522,7 @@ public struct WindowsAppRuntimeStatusReport: Codable, Equatable, Sendable {
         pendingLaunchAppId: String?,
         pendingLaunch: WindowsAppRuntimePendingLaunchStatus,
         connection: WindowsAppRuntimeConnectionStatus,
+        guestAgentDiagnostics: WindowsAppRuntimeGuestAgentDiagnosticsStatus,
         apps: [WindowsAppRuntimeAppStatus],
         mirrorSessions: [WindowsAppRuntimeWindowStatus],
         restorableAppIds: [String],
@@ -516,6 +543,7 @@ public struct WindowsAppRuntimeStatusReport: Codable, Equatable, Sendable {
         self.pendingLaunchAppId = pendingLaunchAppId
         self.pendingLaunch = pendingLaunch
         self.connection = connection
+        self.guestAgentDiagnostics = guestAgentDiagnostics
         self.apps = apps
         self.mirrorSessions = mirrorSessions
         self.restorableAppIds = restorableAppIds
@@ -540,6 +568,10 @@ private struct ProofArtifactCandidate {
 @MainActor
 @Observable
 public final class HostDashboardModel {
+    public static var defaultAgentEndpoint: String {
+        ProcessInfo.processInfo.environment["VEIL_AGENT_URL"] ?? "ws://127.0.0.1:18444"
+    }
+
     public private(set) var phase: HostDashboardPhase = .idle
     public private(set) var health: AgentHealthResponse?
     public private(set) var apps: [WindowsApp] = []
@@ -707,7 +739,10 @@ public final class HostDashboardModel {
             && health?.capabilities.input == true
     }
 
-    public func runtimeStatusReport(generatedAt: Date = Date()) -> WindowsAppRuntimeStatusReport {
+    public func runtimeStatusReport(
+        generatedAt: Date = Date(),
+        agentEndpoint: String = HostDashboardModel.defaultAgentEndpoint
+    ) -> WindowsAppRuntimeStatusReport {
         let quietRuntime = quietRuntimeStatus()
         let macWindowIntegration = macWindowIntegrationStatus()
         let launcherVisibility = launcherVisibilityStatus(
@@ -735,6 +770,7 @@ public final class HostDashboardModel {
                 capabilities: hasLiveAgentConnection ? health?.capabilities : nil,
                 connectionDetail: connectionDetail
             ),
+            guestAgentDiagnostics: guestAgentDiagnosticsStatus(endpoint: agentEndpoint),
             apps: apps.map { app in
                 WindowsAppRuntimeAppStatus(
                     id: app.id,
@@ -1233,6 +1269,30 @@ public final class HostDashboardModel {
             shouldHideLauncher: false,
             keepsRecoveryDisplayManual: true,
             reason: "The main Veil launcher is the single normal surface until a live Windows app window is mirrored."
+        )
+    }
+
+    public func guestAgentDiagnosticsStatus(
+        endpoint: String = HostDashboardModel.defaultAgentEndpoint
+    ) -> WindowsAppRuntimeGuestAgentDiagnosticsStatus {
+        if hasLiveAgentConnection {
+            return WindowsAppRuntimeGuestAgentDiagnosticsStatus(
+                endpoint: endpoint,
+                isConnected: true,
+                diagnosticCommand: "veil-host-probe --diagnose-agent",
+                waitCommand: "veil-vmctl guest-agent-wait --json --wait-seconds 30",
+                recommendedAction: "run-app-window-proof",
+                reason: "The live Windows guest agent is connected; proceed to app launch and HWND frame proof."
+            )
+        }
+
+        return WindowsAppRuntimeGuestAgentDiagnosticsStatus(
+            endpoint: endpoint,
+            isConnected: false,
+            diagnosticCommand: "veil-host-probe --diagnose-agent",
+            waitCommand: "veil-vmctl guest-agent-wait --json --wait-seconds 30",
+            recommendedAction: "diagnose-agent",
+            reason: "Run the guest-agent diagnostic before and after installing the Windows agent so setup evidence is captured consistently."
         )
     }
 

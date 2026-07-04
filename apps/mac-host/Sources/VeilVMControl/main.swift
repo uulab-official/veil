@@ -628,6 +628,10 @@ struct VeilVMControl {
         if let detail = report.connection.connectionDetail {
             print("Detail: \(detail)")
         }
+        print("Guest agent diagnostics: \(report.guestAgentDiagnostics.recommendedAction)")
+        print("Guest agent endpoint: \(report.guestAgentDiagnostics.endpoint)")
+        print("Guest agent diagnostic command: \(report.guestAgentDiagnostics.diagnosticCommand)")
+        print("Guest agent wait command: \(report.guestAgentDiagnostics.waitCommand)")
         print("Pending launch queued: \(report.pendingLaunch.isQueued ? "yes" : "no")")
         if let pendingLaunchAppId = report.pendingLaunch.appId {
             print("Pending launch app: \(pendingLaunchAppId)")

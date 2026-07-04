@@ -26,6 +26,7 @@ export function validateAppRuntimeStatus(report) {
   }
 
   validateConnection(report.connection);
+  validateGuestAgentDiagnostics(report.guestAgentDiagnostics, report);
   validateApps(report.apps);
   validatePendingLaunch(report.pendingLaunch, report);
   validateMirrorSessions(report.mirrorSessions);
@@ -96,6 +97,36 @@ function validateCapabilities(capabilities) {
 
   for (const field of ["appList", "appLaunch", "windowTracking", "windowCapture", "input", "clipboardText"]) {
     requireBoolean(capabilities[field], `connection.capabilities.${field}`);
+  }
+}
+
+function validateGuestAgentDiagnostics(guestAgentDiagnostics, report) {
+  if (!guestAgentDiagnostics || typeof guestAgentDiagnostics !== "object" || Array.isArray(guestAgentDiagnostics)) {
+    throw new TypeError("guestAgentDiagnostics must be an object.");
+  }
+
+  requireString(guestAgentDiagnostics.endpoint, "guestAgentDiagnostics.endpoint");
+  requireBoolean(guestAgentDiagnostics.isConnected, "guestAgentDiagnostics.isConnected");
+  requireString(guestAgentDiagnostics.diagnosticCommand, "guestAgentDiagnostics.diagnosticCommand");
+  requireString(guestAgentDiagnostics.waitCommand, "guestAgentDiagnostics.waitCommand");
+  requireString(guestAgentDiagnostics.recommendedAction, "guestAgentDiagnostics.recommendedAction");
+  requireString(guestAgentDiagnostics.reason, "guestAgentDiagnostics.reason");
+
+  if (guestAgentDiagnostics.isConnected !== report.connection.hasLiveAgentConnection) {
+    throw new TypeError("guestAgentDiagnostics.isConnected must match connection.hasLiveAgentConnection.");
+  }
+
+  if (guestAgentDiagnostics.diagnosticCommand !== "veil-host-probe --diagnose-agent") {
+    throw new TypeError("guestAgentDiagnostics.diagnosticCommand must point at the host probe diagnostic.");
+  }
+
+  if (guestAgentDiagnostics.waitCommand !== "veil-vmctl guest-agent-wait --json --wait-seconds 30") {
+    throw new TypeError("guestAgentDiagnostics.waitCommand must point at the guest-agent wait harness gate.");
+  }
+
+  const expectedAction = report.connection.hasLiveAgentConnection ? "run-app-window-proof" : "diagnose-agent";
+  if (guestAgentDiagnostics.recommendedAction !== expectedAction) {
+    throw new TypeError("guestAgentDiagnostics.recommendedAction must match live agent readiness.");
   }
 }
 

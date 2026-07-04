@@ -400,6 +400,9 @@ test("rejects close-all actions that leave mirrored sessions open", () => {
   report.status.macWindowIntegration.hidesLauncherWhenMirroring = true;
   report.status.launcherVisibility.shouldHideMainWindow = true;
   report.status.launcherVisibility.recommendedAction = "hide-main-window-use-app-windows";
+  report.status.visibleSurfacePolicy.primarySurface = "windows-app-windows";
+  report.status.visibleSurfacePolicy.expectedVisibleSurfaceCount = 1;
+  report.status.visibleSurfacePolicy.shouldHideLauncher = true;
   report.status.quietRuntime.openWindowCount = 1;
   report.status.quietRuntime.canQuietRuntime = false;
   report.status.quietRuntime.willQuietAutomatically = false;
@@ -449,6 +452,9 @@ test("allows rejected restore actions to keep requested app ids", () => {
   report.status.macWindowIntegration.pendingFrameWindowCount = 0;
   report.status.launcherVisibility.shouldHideMainWindow = false;
   report.status.launcherVisibility.recommendedAction = "show-launcher-or-restore-apps";
+  report.status.visibleSurfacePolicy.primarySurface = "launcher";
+  report.status.visibleSurfacePolicy.expectedVisibleSurfaceCount = 1;
+  report.status.visibleSurfacePolicy.shouldHideLauncher = false;
   report.status.quietRuntime.openWindowCount = 0;
 
   assert.equal(validateAppRuntimeAction(report), report);
@@ -468,6 +474,9 @@ test("rejects restore actions whose windows are absent from status", () => {
   report.status.macWindowIntegration.pendingFrameWindowCount = 0;
   report.status.launcherVisibility.shouldHideMainWindow = false;
   report.status.launcherVisibility.recommendedAction = "show-launcher-or-restore-apps";
+  report.status.visibleSurfacePolicy.primarySurface = "launcher";
+  report.status.visibleSurfacePolicy.expectedVisibleSurfaceCount = 1;
+  report.status.visibleSurfacePolicy.shouldHideLauncher = false;
   report.status.quietRuntime.openWindowCount = 0;
 
   assert.throws(
