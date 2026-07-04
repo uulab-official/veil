@@ -426,6 +426,16 @@ test("rejects launcher hiding without live mirrored windows", () => {
   );
 });
 
+test("rejects visible surface counts that drift from mirrored app windows", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.mac-window-live.json", import.meta.url), "utf8"));
+  report.visibleSurfacePolicy.expectedVisibleSurfaceCount = 2;
+
+  assert.throws(
+    () => validateAppRuntimeStatus(report),
+    /visibleSurfacePolicy expected surface count/
+  );
+});
+
 test("rejects live agent reports outside agent mode", () => {
   const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.demo.json", import.meta.url), "utf8"));
   report.connection.hasLiveAgentConnection = true;

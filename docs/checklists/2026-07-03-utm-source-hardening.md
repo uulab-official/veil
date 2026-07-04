@@ -96,3 +96,4 @@ Goal: adapt concrete UTM source patterns into Veil while keeping Veil focused on
 - [x] Add `proof-recommended` to `app-runtime-action` with harness validation so UTM-style automation can execute the strongest proof gate through the same command surface.
 - [x] Replace the shell's first-frame-only proof button with a recommended proof action so the app UI and command automation share the same proof priority.
 - [x] Expose latest proof artifact metadata in app-runtime status so UTM-style diagnostics can point to saved proof evidence without bundling guest data.
+- [x] Expose normal visible-surface policy in app-runtime status so Parallels-style app-window mode does not regress into a visible launcher plus VM display stack.

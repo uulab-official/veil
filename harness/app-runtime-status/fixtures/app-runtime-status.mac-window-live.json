@@ -63,6 +63,14 @@
     "recommendedAction": "hide-main-window-use-app-windows",
     "reason": "A live Windows app window is mirrored, so the main launcher should stay hidden while Dock and menu controls remain available."
   },
+  "visibleSurfacePolicy": {
+    "isEnabled": true,
+    "primarySurface": "windows-app-windows",
+    "expectedVisibleSurfaceCount": 1,
+    "shouldHideLauncher": true,
+    "keepsRecoveryDisplayManual": true,
+    "reason": "Only mirrored Windows app windows should be visible during normal app runtime use; the main launcher and VM display stay out of the way unless recovery is requested."
+  },
   "macWindowIntegration": {
     "isEnabled": true,
     "acceptsGuestWindowEvents": true,

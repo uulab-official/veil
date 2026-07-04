@@ -33,6 +33,7 @@ export function validateAppRuntimeStatus(report) {
   validateDockIntegration(report.dockIntegration, report.mirrorSessions, report);
   validateMacWindowIntegration(report.macWindowIntegration, report.mirrorSessions, report.connection);
   validateLauncherVisibility(report.launcherVisibility, report);
+  validateVisibleSurfacePolicy(report.visibleSurfacePolicy, report);
   validateQuietRuntime(report.quietRuntime, report.mirrorSessions);
   validateLaunchPlan(report.launchPlan, report);
   validateProofPlan(report.proofPlan, report);
@@ -616,6 +617,50 @@ function validateLauncherVisibility(launcherVisibility, report) {
     }
   } else if (launcherVisibility.recommendedAction === "hide-main-window-use-app-windows") {
     throw new TypeError("launcherVisibility.recommendedAction cannot hide the launcher without mirrored Windows app windows.");
+  }
+}
+
+function validateVisibleSurfacePolicy(visibleSurfacePolicy, report) {
+  if (!visibleSurfacePolicy || typeof visibleSurfacePolicy !== "object" || Array.isArray(visibleSurfacePolicy)) {
+    throw new TypeError("visibleSurfacePolicy must be an object.");
+  }
+
+  requireBoolean(visibleSurfacePolicy.isEnabled, "visibleSurfacePolicy.isEnabled");
+  requireString(visibleSurfacePolicy.primarySurface, "visibleSurfacePolicy.primarySurface");
+  requireNonNegativeInteger(visibleSurfacePolicy.expectedVisibleSurfaceCount, "visibleSurfacePolicy.expectedVisibleSurfaceCount");
+  requireBoolean(visibleSurfacePolicy.shouldHideLauncher, "visibleSurfacePolicy.shouldHideLauncher");
+  requireBoolean(visibleSurfacePolicy.keepsRecoveryDisplayManual, "visibleSurfacePolicy.keepsRecoveryDisplayManual");
+  requireString(visibleSurfacePolicy.reason, "visibleSurfacePolicy.reason");
+
+  if (!["launcher", "windows-app-windows"].includes(visibleSurfacePolicy.primarySurface)) {
+    throw new TypeError("visibleSurfacePolicy.primarySurface must identify a known surface.");
+  }
+
+  if (visibleSurfacePolicy.shouldHideLauncher !== report.launcherVisibility.shouldHideMainWindow) {
+    throw new TypeError("visibleSurfacePolicy.shouldHideLauncher must match launcherVisibility.shouldHideMainWindow.");
+  }
+
+  if (!visibleSurfacePolicy.keepsRecoveryDisplayManual) {
+    throw new TypeError("visibleSurfacePolicy.keepsRecoveryDisplayManual must keep VM display recovery manual.");
+  }
+
+  if (visibleSurfacePolicy.primarySurface === "windows-app-windows") {
+    if (!report.connection.hasLiveAgentConnection || report.mirrorSessions.length === 0) {
+      throw new TypeError("visibleSurfacePolicy windows-app-windows requires live mirrored Windows app windows.");
+    }
+    if (visibleSurfacePolicy.expectedVisibleSurfaceCount !== report.mirrorSessions.length) {
+      throw new TypeError("visibleSurfacePolicy expected surface count must match mirrored Windows app windows.");
+    }
+    if (!visibleSurfacePolicy.shouldHideLauncher) {
+      throw new TypeError("visibleSurfacePolicy windows-app-windows must hide the launcher.");
+    }
+  } else {
+    if (visibleSurfacePolicy.expectedVisibleSurfaceCount !== 1) {
+      throw new TypeError("visibleSurfacePolicy launcher mode must expect one visible surface.");
+    }
+    if (visibleSurfacePolicy.shouldHideLauncher) {
+      throw new TypeError("visibleSurfacePolicy launcher mode cannot hide the launcher.");
+    }
   }
 }
 

@@ -108,6 +108,14 @@
     "recommendedAction": "show-launcher",
     "reason": "No live mirrored Windows app window needs the launcher hidden."
   },
+  "visibleSurfacePolicy": {
+    "isEnabled": true,
+    "primarySurface": "launcher",
+    "expectedVisibleSurfaceCount": 1,
+    "shouldHideLauncher": false,
+    "keepsRecoveryDisplayManual": true,
+    "reason": "The main Veil launcher is the single normal surface until a live Windows app window is mirrored."
+  },
   "macWindowIntegration": {
     "acceptsGuestWindowEvents": false,
     "hidesLauncherWhenMirroring": false,

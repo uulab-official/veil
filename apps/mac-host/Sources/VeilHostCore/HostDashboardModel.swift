@@ -281,6 +281,31 @@ public struct WindowsAppRuntimeLauncherVisibilityStatus: Codable, Equatable, Sen
     }
 }
 
+public struct WindowsAppRuntimeVisibleSurfacePolicyStatus: Codable, Equatable, Sendable {
+    public var isEnabled: Bool
+    public var primarySurface: String
+    public var expectedVisibleSurfaceCount: Int
+    public var shouldHideLauncher: Bool
+    public var keepsRecoveryDisplayManual: Bool
+    public var reason: String
+
+    public init(
+        isEnabled: Bool,
+        primarySurface: String,
+        expectedVisibleSurfaceCount: Int,
+        shouldHideLauncher: Bool,
+        keepsRecoveryDisplayManual: Bool,
+        reason: String
+    ) {
+        self.isEnabled = isEnabled
+        self.primarySurface = primarySurface
+        self.expectedVisibleSurfaceCount = expectedVisibleSurfaceCount
+        self.shouldHideLauncher = shouldHideLauncher
+        self.keepsRecoveryDisplayManual = keepsRecoveryDisplayManual
+        self.reason = reason
+    }
+}
+
 public struct WindowsAppRuntimeQuietPolicyStatus: Codable, Equatable, Sendable {
     public var isEnabled: Bool
     public var hasOpenedAppWindowThisSession: Bool
@@ -455,6 +480,7 @@ public struct WindowsAppRuntimeStatusReport: Codable, Equatable, Sendable {
     public var restorableAppIds: [String]
     public var dockIntegration: WindowsAppRuntimeDockIntegrationStatus
     public var launcherVisibility: WindowsAppRuntimeLauncherVisibilityStatus
+    public var visibleSurfacePolicy: WindowsAppRuntimeVisibleSurfacePolicyStatus
     public var macWindowIntegration: WindowsAppRuntimeMacWindowIntegrationStatus
     public var quietRuntime: WindowsAppRuntimeQuietPolicyStatus
     public var launchPlan: WindowsAppRuntimeLaunchPlanStatus
@@ -475,6 +501,7 @@ public struct WindowsAppRuntimeStatusReport: Codable, Equatable, Sendable {
         restorableAppIds: [String],
         dockIntegration: WindowsAppRuntimeDockIntegrationStatus,
         launcherVisibility: WindowsAppRuntimeLauncherVisibilityStatus,
+        visibleSurfacePolicy: WindowsAppRuntimeVisibleSurfacePolicyStatus,
         macWindowIntegration: WindowsAppRuntimeMacWindowIntegrationStatus,
         quietRuntime: WindowsAppRuntimeQuietPolicyStatus,
         launchPlan: WindowsAppRuntimeLaunchPlanStatus,
@@ -494,6 +521,7 @@ public struct WindowsAppRuntimeStatusReport: Codable, Equatable, Sendable {
         self.restorableAppIds = restorableAppIds
         self.dockIntegration = dockIntegration
         self.launcherVisibility = launcherVisibility
+        self.visibleSurfacePolicy = visibleSurfacePolicy
         self.macWindowIntegration = macWindowIntegration
         self.quietRuntime = quietRuntime
         self.launchPlan = launchPlan
@@ -685,6 +713,10 @@ public final class HostDashboardModel {
         let launcherVisibility = launcherVisibilityStatus(
             macWindowIntegration: macWindowIntegration
         )
+        let visibleSurfacePolicy = visibleSurfacePolicyStatus(
+            launcherVisibility: launcherVisibility,
+            macWindowIntegration: macWindowIntegration
+        )
         let launchPlan = launchPlanStatus()
         let proofPlan = proofPlanStatus()
         let proofArtifacts = proofArtifactStatus()
@@ -734,6 +766,7 @@ public final class HostDashboardModel {
                 canLaunchSelectedApp: canRequestSelectedAppLaunch
             ),
             launcherVisibility: launcherVisibility,
+            visibleSurfacePolicy: visibleSurfacePolicy,
             macWindowIntegration: macWindowIntegration,
             quietRuntime: quietRuntime,
             launchPlan: launchPlan,
@@ -1170,6 +1203,36 @@ public final class HostDashboardModel {
             keepsDockMenuAvailable: true,
             recommendedAction: recommendedAction,
             reason: reason
+        )
+    }
+
+    public func visibleSurfacePolicyStatus(
+        launcherVisibility: WindowsAppRuntimeLauncherVisibilityStatus? = nil,
+        macWindowIntegration: WindowsAppRuntimeMacWindowIntegrationStatus? = nil
+    ) -> WindowsAppRuntimeVisibleSurfacePolicyStatus {
+        let macWindowIntegration = macWindowIntegration ?? macWindowIntegrationStatus()
+        let launcherVisibility = launcherVisibility ?? launcherVisibilityStatus(
+            macWindowIntegration: macWindowIntegration
+        )
+
+        if launcherVisibility.shouldHideMainWindow && macWindowIntegration.mirroredWindowCount > 0 {
+            return WindowsAppRuntimeVisibleSurfacePolicyStatus(
+                isEnabled: true,
+                primarySurface: "windows-app-windows",
+                expectedVisibleSurfaceCount: macWindowIntegration.mirroredWindowCount,
+                shouldHideLauncher: true,
+                keepsRecoveryDisplayManual: true,
+                reason: "Only mirrored Windows app windows should be visible during normal app runtime use; the main launcher and VM display stay out of the way unless recovery is requested."
+            )
+        }
+
+        return WindowsAppRuntimeVisibleSurfacePolicyStatus(
+            isEnabled: true,
+            primarySurface: "launcher",
+            expectedVisibleSurfaceCount: 1,
+            shouldHideLauncher: false,
+            keepsRecoveryDisplayManual: true,
+            reason: "The main Veil launcher is the single normal surface until a live Windows app window is mirrored."
         )
     }
 

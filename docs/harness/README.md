@@ -118,6 +118,11 @@ metadata-only pointer to the latest saved proof JSON under Veil diagnostics so
 automation can attach or inspect the current proof evidence without copying
 Windows media, disk contents, product keys, or guest data.
 
+`visibleSurfacePolicy` captures the normal user-facing window contract: before a
+mirrored Windows app opens, the launcher is the single expected surface; after a
+live mirrored HWND opens, the Windows app windows become the expected surfaces
+and the VM display remains a manual recovery surface.
+
 ```bash
 cd apps/mac-host
 swift run veil-vmctl app-runtime-status --json --demo | node ../../harness/app-runtime-status/src/validate-app-runtime-status.mjs
