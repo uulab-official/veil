@@ -41,6 +41,7 @@ test("windows agent is wired to real HWND capture by default", async () => {
   assert.match(program, /new GdiWindowFrameCapture\(\)/);
   assert.match(program, /new WindowFrameStreamer\(/);
   assert.doesNotMatch(program, /new BootstrapPngFrameCapture\(\)/);
+  assert.match(capture, /Task\.Run/);
   assert.match(capture, /PrintWindow/);
   assert.match(capture, /GetWindowRect/);
   assert.match(capture, /ImageFormat\.Png/);
@@ -55,13 +56,18 @@ test("windows agent streams continuing window frames after launch", async () => 
   assert.match(captureInterface, /CaptureFrameAsync\([^)]*int sequence/);
   assert.match(session, /StreamWindow:\s*launched/);
   assert.match(session, /NextFrameSequence:\s*2/);
+  assert.match(session, /CaptureInitialFrameWithFallbackAsync/);
+  assert.match(session, /BootstrapPngFrameCapture/);
+  assert.match(session, /WaitAsync\(InitialFrameCaptureTimeout/);
   assert.match(session, /SerializeFrame\(WindowFrame frame\)/);
   assert.match(server, /StartFrameStream/);
   assert.match(server, /WindowFrameStreamer/);
   assert.match(server, /SerializeFrame\(frame\)/);
   assert.match(streamer, /PeriodicTimer/);
   assert.match(streamer, /firstSequence/);
-  assert.match(streamer, /CaptureFrameAsync\(window,\s*sequence/);
+  assert.match(streamer, /CaptureFrameWithFallbackAsync/);
+  assert.match(streamer, /WaitAsync\(CaptureTimeout/);
+  assert.match(streamer, /BootstrapPngFrameCapture/);
 });
 
 test("windows agent listens without HttpListener URL ACL requirements", async () => {
@@ -219,6 +225,8 @@ test("windows agent exposes an inbox app catalog for native-style Mac windows", 
   assert.match(session, /winapp_calculator/);
   assert.match(session, /winapp_paint/);
   assert.match(session, /desktop\.LaunchAppAsync\(app,\s*cancellationToken\)/);
+  assert.match(session, /app_launch_failed/);
+  assert.match(session, /handler_failed/);
   assert.match(session, /WindowCreatedEvent\(app,\s*launched\)/);
   assert.match(desktop, /TryFindTopLevelWindow\(app,\s*process\.Id,\s*out var launched\)/);
   assert.match(desktop, /EnumWindows/);
@@ -312,6 +320,13 @@ test("windows agent includes user-logon install and uninstall scripts", async ()
   assert.match(repair, /Copy-Item[\s\S]+-Destination\s+\$InstalledScriptsRoot/);
   assert.match(repair, /"Start-VeilAgent\.ps1"/);
   assert.match(repair, /"Collect-VeilAgentDiagnostics\.ps1"/);
+  assert.match(repair, /Sync-VeilInstalledAppBundle/);
+  assert.match(repair, /\$BundledAppRoot\s*=\s*Join-Path\s+\$AgentRoot\s+"app"/);
+  assert.match(repair, /Refreshed installed VeilAgent app bundle/);
+  assert.match(repair, /Install-VeilVirtIONetworkDriver/);
+  assert.match(repair, /NetKVM\\w11\\ARM64/);
+  assert.match(repair, /pnputil\s+\/add-driver/);
+  assert.match(repair, /networkDriverInstalled/);
   assert.match(repair, /guestAgentHealthSucceeded/);
   assert.match(bootstrap, /Bootstrap-VeilAgentFromMedia/);
   assert.match(bootstrap, /Install Veil Agent\.cmd/);

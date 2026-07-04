@@ -92,29 +92,42 @@ public enum QEMUWindowsNetworkAdapter: String, Codable, CaseIterable, Equatable,
 
     public static let environmentVariableName = "VEIL_QEMU_NETWORK_DEVICE"
 
+    public struct Selection: Equatable, Sendable {
+        public var adapter: QEMUWindowsNetworkAdapter
+        public var warning: String?
+        public var isExplicit: Bool
+
+        public init(adapter: QEMUWindowsNetworkAdapter, warning: String?, isExplicit: Bool) {
+            self.adapter = adapter
+            self.warning = warning
+            self.isExplicit = isExplicit
+        }
+    }
+
     public var deviceArgument: String {
         "\(rawValue),netdev=net0"
     }
 
     public static func selected(
         from rawValue: String?
-    ) -> (adapter: QEMUWindowsNetworkAdapter, warning: String?) {
+    ) -> Selection {
         guard let rawValue,
               !rawValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            return (.usbNet, nil)
+            return Selection(adapter: .usbNet, warning: nil, isExplicit: false)
         }
 
         let normalizedValue = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
         if let adapter = QEMUWindowsNetworkAdapter(rawValue: normalizedValue) {
-            return (adapter, nil)
+            return Selection(adapter: adapter, warning: nil, isExplicit: true)
         }
 
         let supportedValues = QEMUWindowsNetworkAdapter.allCases
             .map(\.rawValue)
             .joined(separator: ", ")
-        return (
-            .usbNet,
-            "Ignoring unsupported \(environmentVariableName)=\(normalizedValue). Supported values: \(supportedValues)."
+        return Selection(
+            adapter: .usbNet,
+            warning: "Ignoring unsupported \(environmentVariableName)=\(normalizedValue). Supported values: \(supportedValues).",
+            isExplicit: true
         )
     }
 }
@@ -394,6 +407,17 @@ public enum LocalQEMUWindowsBootPlanFactory {
         let networkSelection = QEMUWindowsNetworkAdapter.selected(
             from: environment[QEMUWindowsNetworkAdapter.environmentVariableName]
         )
+        var configurationWarnings = networkSelection.warning.map { [$0] } ?? []
+        let hasDriverMedia = profile.driverMediaPath?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+        let networkAdapter: QEMUWindowsNetworkAdapter
+        if hasDriverMedia && !networkSelection.isExplicit {
+            networkAdapter = .virtioNetPCI
+            configurationWarnings.append(
+                "Using virtio-net-pci because driver media is configured. Set \(QEMUWindowsNetworkAdapter.environmentVariableName) to override this compatibility choice."
+            )
+        } else {
+            networkAdapter = networkSelection.adapter
+        }
         let planner = QEMUWindowsBootPlanner(
             executablePath: executablePath,
             isExecutableAvailable: qemuProvider?.status == .active && qemuProvider?.executablePath != nil,
@@ -406,8 +430,8 @@ public enum LocalQEMUWindowsBootPlanFactory {
             tpmEmulatorPath: tpmEmulatorPath ?? defaultTPMEmulatorPaths[0],
             isTPMEmulatorAvailable: tpmEmulatorPath != nil,
             tpmStateDirectoryPath: tpmStateDirectoryPath,
-            networkAdapter: networkSelection.adapter,
-            configurationWarnings: networkSelection.warning.map { [$0] } ?? []
+            networkAdapter: networkAdapter,
+            configurationWarnings: configurationWarnings
         )
         return try planner.makePlan(for: profile)
     }

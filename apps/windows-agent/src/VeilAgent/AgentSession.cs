@@ -5,6 +5,7 @@ namespace Veil.Agent;
 
 public sealed class AgentSession
 {
+    private static readonly TimeSpan InitialFrameCaptureTimeout = TimeSpan.FromSeconds(2);
     private static readonly IReadOnlyList<WindowsAppDescriptor> AppCatalog = new[]
     {
         new WindowsAppDescriptor(
@@ -46,20 +47,27 @@ public sealed class AgentSession
         var type = request["type"]?.GetValue<string>();
         var requestId = request["requestId"]?.GetValue<string>();
 
-        return type switch
+        try
         {
-            MessageTypes.AgentHealthRequest => AgentReplies.Direct(HealthResponse(requestId)),
-            MessageTypes.AppListRequest => AgentReplies.Direct(AppListResponse(requestId)),
-            MessageTypes.AppLaunchRequest => await HandleAppLaunchAsync(request, requestId, cancellationToken),
-            MessageTypes.WindowFrameSubscribe => HandleWindowFrameSubscribeAsync(request, requestId),
-            MessageTypes.WindowFrameUnsubscribe => HandleWindowFrameUnsubscribeAsync(request, requestId),
-            MessageTypes.WindowFocusRequest => await HandleWindowFocusAsync(request, requestId, cancellationToken),
-            MessageTypes.WindowCloseRequest => await HandleWindowCloseAsync(request, requestId, cancellationToken),
-            MessageTypes.InputMouse => await HandleMouseInputAsync(request, requestId, cancellationToken),
-            MessageTypes.InputKey => await HandleKeyInputAsync(request, requestId, cancellationToken),
-            MessageTypes.ClipboardTextSet => await HandleClipboardTextSetAsync(request, requestId, cancellationToken),
-            _ => AgentReplies.Direct(ErrorResponse(requestId, "unknown_message_type", $"Unsupported message type {type}"))
-        };
+            return type switch
+            {
+                MessageTypes.AgentHealthRequest => AgentReplies.Direct(HealthResponse(requestId)),
+                MessageTypes.AppListRequest => AgentReplies.Direct(AppListResponse(requestId)),
+                MessageTypes.AppLaunchRequest => await HandleAppLaunchAsync(request, requestId, cancellationToken),
+                MessageTypes.WindowFrameSubscribe => HandleWindowFrameSubscribeAsync(request, requestId),
+                MessageTypes.WindowFrameUnsubscribe => HandleWindowFrameUnsubscribeAsync(request, requestId),
+                MessageTypes.WindowFocusRequest => await HandleWindowFocusAsync(request, requestId, cancellationToken),
+                MessageTypes.WindowCloseRequest => await HandleWindowCloseAsync(request, requestId, cancellationToken),
+                MessageTypes.InputMouse => await HandleMouseInputAsync(request, requestId, cancellationToken),
+                MessageTypes.InputKey => await HandleKeyInputAsync(request, requestId, cancellationToken),
+                MessageTypes.ClipboardTextSet => await HandleClipboardTextSetAsync(request, requestId, cancellationToken),
+                _ => AgentReplies.Direct(ErrorResponse(requestId, "unknown_message_type", $"Unsupported message type {type}"))
+            };
+        }
+        catch (Exception error) when (error is not OperationCanceledException)
+        {
+            return AgentReplies.Direct(ErrorResponse(requestId, "handler_failed", error.Message));
+        }
     }
 
     private async Task<AgentReplies> HandleAppLaunchAsync(
@@ -75,9 +83,18 @@ public sealed class AgentSession
             return AgentReplies.Direct(ErrorResponse(requestId, "app_not_found", $"No app exists for id {appId}"));
         }
 
-        var launched = await desktop.LaunchAppAsync(app, cancellationToken);
+        LaunchedWindow launched;
+        try
+        {
+            launched = await desktop.LaunchAppAsync(app, cancellationToken);
+        }
+        catch (Exception error) when (error is not OperationCanceledException)
+        {
+            return AgentReplies.Direct(ErrorResponse(requestId, "app_launch_failed", error.Message));
+        }
+
         TrackWindow(launched);
-        var frame = await capture.CaptureFrameAsync(launched, sequence: 1, cancellationToken);
+        var frame = await CaptureInitialFrameWithFallbackAsync(launched, cancellationToken);
 
         return new AgentReplies(
             DirectReplies: new List<JsonObject>
@@ -92,6 +109,26 @@ public sealed class AgentSession
             StreamWindow: launched,
             NextFrameSequence: 2
         );
+    }
+
+    private async Task<WindowFrame> CaptureInitialFrameWithFallbackAsync(
+        LaunchedWindow launched,
+        CancellationToken cancellationToken
+    )
+    {
+        try
+        {
+            return await capture
+                .CaptureFrameAsync(launched, sequence: 1, cancellationToken)
+                .WaitAsync(InitialFrameCaptureTimeout, cancellationToken);
+        }
+        catch (Exception error) when (error is not OperationCanceledException)
+        {
+            Console.Error.WriteLine(
+                $"Initial frame capture failed for {launched.WindowId}; using bootstrap frame. {error.GetType().Name}: {error.Message}"
+            );
+            return await new BootstrapPngFrameCapture().CaptureFrameAsync(launched, sequence: 1, cancellationToken);
+        }
     }
 
     private AgentReplies HandleWindowFrameSubscribeAsync(JsonObject request, string? requestId)

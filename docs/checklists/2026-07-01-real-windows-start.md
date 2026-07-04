@@ -207,6 +207,12 @@ Goal: keep the main Veil experience pointed at real local Windows boot and conso
 - [x] Update repair to refresh installed support scripts from the current media before restarting the agent, so repeated `qemu-install-agent` attempts use the latest diagnostics without requiring a full reinstall.
 - [x] Regenerate and relaunch with the support-script refresh; live console evidence now shows the refreshed start script running and failing with `Guest IPv4 addresses: none`.
 - [x] Confirm the current blocker: Windows 11 Arm has no usable non-loopback guest IPv4 on the tested QEMU `e1000e` path, so macOS `hostfwd` can appear TCP-open while WebSocket health still cannot reach the guest agent.
+- [x] Make driver-media plans use `virtio-net-pci` by default when a user-provided driver ISO is configured, while preserving explicit `VEIL_QEMU_NETWORK_DEVICE` overrides for compatibility probes.
+- [x] Teach `Repair-VeilAgentConnectivity.ps1` to search attached media for `NetKVM\w11\ARM64` and install matching INF files with `pnputil` before restarting the agent and checking guest IPv4 health.
+- [x] Keep repair moving when `pnputil` returns a non-zero code for the attached NetKVM INF, so an already-installed or pending driver state does not block firewall and agent health recovery.
+- [x] Attach `/Users/bonjin/Downloads/virtio-win.iso`, relaunch QEMU with `virtio-net-pci`, and verify macOS receives `agent.health.response` from the Windows 11 Arm guest through `ws://127.0.0.1:18444`.
+- [x] Refresh the installed Windows agent app bundle from the current `VEIL_AUTO` media during repair, so repeated `qemu-install-agent` attempts update `VeilAgent.exe` as well as support scripts.
+- [x] Add bounded host proof cancellation so `app-window-proof` returns `launchTimeout` instead of hanging when the guest opens Notepad but does not return app/window metadata.
 - [x] Add `veil-host-probe --diagnose-agent` so host-side agent connection checks return actionable JSON instead of only a timeout.
 - [x] Expose `guestAgentDiagnostics` in app-runtime status so the host shell, CLI, and harness point at the same pre/post install diagnostic gate.
 - [x] Gate app-runtime Start actions on real local VM boot readiness so bootReady=false reports `prepare-local-runtime` instead of exposing a failing start path.
@@ -215,7 +221,7 @@ Goal: keep the main Veil experience pointed at real local Windows boot and conso
 
 - [ ] Regenerate `VeilAutoInstall.iso` again after the UAC keyboard approval change, then retry `qemu-install-agent` against the visible Windows desktop.
 - [ ] Inspect the next `postAttemptConsole.capture.consoleScreenshotPath`; success should show the waiting launcher completing after `guestAgentHealthSucceeded`, while failure should leave a visible PowerShell error or timeout instead of a stuck UAC prompt.
-- [ ] Prioritize the Windows Arm NIC driver path or another adapter strategy before continuing app-window mirroring; current live evidence reports `Guest IPv4 addresses: none`.
+- [ ] Investigate the live app launch reply blocker: `app-window-proof --wait-seconds 8` now returns `launchTimeout` while the Windows desktop visibly opens Notepad, so the next proof gap is guest launch direct replies and first-frame event delivery rather than VM boot, NIC, firewall, or basic agent health.
 - [ ] Collect `%LOCALAPPDATA%\Veil\Agent\logs` from the Windows guest after the pointer-activated install attempt.
 - [ ] Use the new `qemu-install-agent` install-attempt report to capture key-send evidence plus guest-agent wait status for the next live retry.
 - [ ] Run `Veil Shared\Veil Guest Agent\Install Veil Agent.cmd` inside Windows 11 Arm and verify the current-session agent plus the `VeilAgent` logon task both start.

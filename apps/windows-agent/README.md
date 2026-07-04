@@ -91,6 +91,19 @@ requires in-guest `agent.health.response` over both `ws://127.0.0.1:18444/` and
 a non-loopback Windows guest IPv4 address. This keeps a local-only agent from
 looking ready when QEMU host forwarding still cannot reach the guest.
 
+The same repair path refreshes installed support scripts and, when the current
+media contains a packaged `app/VeilAgent.exe` bundle, replaces the installed app
+bundle before restarting the agent. This keeps repeated `qemu-install-agent`
+attempts aligned with the latest staged guest-agent code without requiring a
+full uninstall.
+
+If a virtio-win driver ISO is attached, the repair command searches attached
+drives for `NetKVM\w11\ARM64` and installs matching INF files with `pnputil`
+before restarting the agent. Non-zero `pnputil` exits are logged but do not stop
+the firewall and agent health checks, because the driver may already be installed
+or pending Windows device state. Veil does not ship those drivers; the ISO
+remains a user-provided local file.
+
 The media also contains `V.cmd`, a short automation entrypoint used by the macOS
 host when sending QMP keyboard input. It runs the repair command when available
 and falls back to the installer command for older staged media. `V.cmd` keeps

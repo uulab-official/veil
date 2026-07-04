@@ -404,6 +404,13 @@ live recovery commands such as guest-agent install attempts when the Windows
 desktop is visible but no guest agent is connected yet. It intentionally rejects
 unsupported characters and long payloads; it is not a general remote shell.
 
+When a VM profile has external driver media configured, the QEMU/HVF boot plan
+selects `virtio-net-pci` unless `VEIL_QEMU_NETWORK_DEVICE` is explicitly set.
+That keeps the planned NIC aligned with the virtio-win NetKVM driver folder used
+by the guest repair script. Veil still treats driver media as user-provided,
+read-only local input; it does not download, bundle, or redistribute virtio-win
+drivers.
+
 `veil-vmctl mark-installed [--json]` records that the selected VM disk has
 reached an installed Windows desktop. It does not start, stop, or mutate the VM
 disk; it only updates the local profile so later QEMU/HVF plans boot from the

@@ -121,6 +121,65 @@ function Sync-VeilInstalledSupportScripts {
     }
 }
 
+function Sync-VeilInstalledAppBundle {
+    $AgentRoot = (Resolve-Path (Join-Path $ScriptRoot "..")).Path
+    $BundledAppRoot = Join-Path $AgentRoot "app"
+    $BundledAgentExe = Join-Path $BundledAppRoot "VeilAgent.exe"
+
+    if (-not (Test-Path $BundledAgentExe)) {
+        Write-Host "No packaged VeilAgent app bundle found at $BundledAgentExe; keeping installed app files."
+        return $false
+    }
+
+    $RunningAgents = Get-Process -Name "VeilAgent" -ErrorAction SilentlyContinue
+    if ($RunningAgents) {
+        Write-Host "Stopping existing VeilAgent process before refreshing installed app bundle."
+        $RunningAgents | Stop-Process -Force
+        Start-Sleep -Milliseconds 500
+    }
+
+    New-Item -ItemType Directory -Force -Path $InstallRootApp | Out-Null
+    Get-ChildItem -Path $InstallRootApp -Force -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force
+    Copy-Item `
+        -Path (Join-Path $BundledAppRoot "*") `
+        -Destination $InstallRootApp `
+        -Recurse `
+        -Force
+    Write-Host "Refreshed installed VeilAgent app bundle from $BundledAppRoot."
+    return $true
+}
+
+function Install-VeilVirtIONetworkDriver {
+    $CandidateRoots = @()
+    foreach ($Drive in Get-PSDrive -PSProvider FileSystem) {
+        $CandidateRoots += Join-Path $Drive.Root "NetKVM\w11\ARM64"
+        $CandidateRoots += Join-Path $Drive.Root "NetKVM\w11\ARM64\2k22"
+    }
+
+    $DriverRoot = $CandidateRoots | Where-Object { Test-Path $_ } | Select-Object -First 1
+    if (-not $DriverRoot) {
+        Write-Host "No NetKVM Windows 11 ARM64 driver folder found on attached media."
+        return $false
+    }
+
+    $InfFiles = Get-ChildItem -Path $DriverRoot -Filter "*.inf" -File -ErrorAction SilentlyContinue
+    if (-not $InfFiles) {
+        Write-Host "NetKVM driver folder found at $DriverRoot, but no INF files were present."
+        return $false
+    }
+
+    foreach ($InfFile in $InfFiles) {
+        Write-Host "Installing VirtIO network driver from $($InfFile.FullName)."
+        pnputil /add-driver "$($InfFile.FullName)" /install | ForEach-Object { Write-Host $_ }
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "pnputil returned ExitCode=$LASTEXITCODE while installing $($InfFile.FullName); continuing repair so firewall and agent health can still be checked."
+        }
+    }
+
+    Write-Host "VirtIO NetKVM Windows 11 ARM64 driver install attempted from $DriverRoot."
+    return $true
+}
+
 if (-not (Test-VeilAdministrator)) {
     Write-Host "Repair-VeilAgentConnectivity.ps1 started at $(Get-Date -Format o)."
     Write-Host "InstallRoot=$InstallRoot"
@@ -144,7 +203,7 @@ try {
     Write-Host "IsAdministrator=True"
     Write-VeilRepairStatus -Stage "started" -Succeeded $false -Message "Elevated repair started."
 
-    if (-not (Test-Path $AgentExe)) {
+    if (-not (Sync-VeilInstalledAppBundle) -and -not (Test-Path $AgentExe)) {
         if (-not (Test-Path $InstallScript)) {
             throw "VeilAgent.exe was not found at $AgentExe and Install-VeilAgent.ps1 was not found at $InstallScript."
         }
@@ -153,6 +212,10 @@ try {
         & $InstallScript -InstallRoot $InstallRoot -Port $Port -NoStart
     }
     Sync-VeilInstalledSupportScripts
+    if (Install-VeilVirtIONetworkDriver) {
+        Write-VeilRepairStatus -Stage "networkDriverInstalled" -Succeeded $false -Message "VirtIO NetKVM Windows 11 ARM64 driver install was attempted from attached driver media."
+        Start-Sleep -Seconds 3
+    }
 
     $RunningAgents = Get-Process -Name "VeilAgent" -ErrorAction SilentlyContinue
     if ($RunningAgents) {
@@ -200,8 +263,8 @@ try {
     }
 
     & $StartScript -InstallRoot $InstallRoot -Port $Port
-    Write-VeilRepairStatus -Stage "guestAgentHealthSucceeded" -Succeeded $true -Message "VeilAgent answered agent.health.response inside Windows on ws://127.0.0.1:$Port/."
-    Write-Host "VeilAgent connectivity repair completed. Firewall rules are present and local agent start succeeded."
+    Write-VeilRepairStatus -Stage "guestAgentHealthSucceeded" -Succeeded $true -Message "VeilAgent answered agent.health.response inside Windows on loopback and guest IPv4."
+    Write-Host "VeilAgent connectivity repair completed. Firewall rules are present and loopback plus guest IPv4 health succeeded."
 } catch {
     Write-VeilRepairStatus -Stage "failed" -Succeeded $false -Message $_.Exception.Message
     throw

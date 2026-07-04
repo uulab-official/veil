@@ -357,10 +357,13 @@ private enum AgentConnectionProbeError: Error, LocalizedError {
 }
 
 public enum WindowsAppWindowProofError: Error, Equatable, LocalizedError, Sendable {
+    case launchTimeout(appId: String)
     case frameTimeout(windowId: String)
 
     public var errorDescription: String? {
         switch self {
+        case .launchTimeout(let appId):
+            "Timed out waiting for the Windows agent to launch \(appId) and return app/window metadata."
         case .frameTimeout(let windowId):
             "Timed out waiting for the first window.frame event for \(windowId)."
         }
@@ -442,7 +445,12 @@ public struct VeilHostClient: HostDashboardService, Sendable {
         eventSource: any HostEventSource,
         timeoutNanoseconds: UInt64 = 10_000_000_000
     ) async throws -> WindowsAppWindowProofReport {
-        let launchResult = try await launchApp(appId: appId)
+        let launchResult = try await Self.withTimeout(
+            timeoutNanoseconds: timeoutNanoseconds,
+            timeoutError: WindowsAppWindowProofError.launchTimeout(appId: appId)
+        ) {
+            try await launchApp(appId: appId)
+        }
         async let frame = firstFrame(
             from: eventSource,
             windowId: launchResult.window.windowId,
@@ -474,7 +482,12 @@ public struct VeilHostClient: HostDashboardService, Sendable {
         typedText: String = "veil",
         clipboardText: String = "Veil coherence proof"
     ) async throws -> WindowsAppCoherenceProofReport {
-        let launchResult = try await launchApp(appId: appId)
+        let launchResult = try await Self.withTimeout(
+            timeoutNanoseconds: timeoutNanoseconds,
+            timeoutError: WindowsAppWindowProofError.launchTimeout(appId: appId)
+        ) {
+            try await launchApp(appId: appId)
+        }
         guard launchResult.health.capabilities.input else {
             throw WindowsAppCoherenceProofError.capabilityUnavailable("input")
         }
@@ -663,20 +676,33 @@ public struct VeilHostClient: HostDashboardService, Sendable {
     }
 
     private func loadHealth(timeoutNanoseconds: UInt64) async throws -> AgentHealthResponse {
-        try await withThrowingTaskGroup(of: AgentHealthResponse.self) { group in
+        try await Self.withTimeout(
+            timeoutNanoseconds: timeoutNanoseconds,
+            timeoutError: AgentConnectionProbeError.timeout
+        ) {
+            try await loadHealth()
+        }
+    }
+
+    private static func withTimeout<T: Sendable>(
+        timeoutNanoseconds: UInt64,
+        timeoutError: any Error,
+        operation: @escaping @Sendable () async throws -> T
+    ) async throws -> T {
+        try await withThrowingTaskGroup(of: T.self) { group in
             group.addTask {
-                try await loadHealth()
+                try await operation()
             }
             group.addTask {
                 try await Task.sleep(nanoseconds: timeoutNanoseconds)
-                throw AgentConnectionProbeError.timeout
+                throw timeoutError
             }
 
-            guard let health = try await group.next() else {
-                throw AgentConnectionProbeError.timeout
+            guard let result = try await group.next() else {
+                throw timeoutError
             }
             group.cancelAll()
-            return health
+            return result
         }
     }
 
