@@ -583,6 +583,46 @@ struct HostDashboardModelTests {
         #expect(report.actions.first { $0.id == "proof.recommended" }?.isAvailable == true)
     }
 
+    @Test("reports latest proof artifact from diagnostics")
+    @MainActor
+    func reportsLatestProofArtifactFromDiagnostics() async throws {
+        let service = FakeDashboardService(health: .captureReady)
+        let model = HostDashboardModel(service: service)
+        let diagnosticsDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("veil-proof-artifacts-\(UUID().uuidString)", isDirectory: true)
+        let appWindowDirectory = diagnosticsDirectory
+            .appendingPathComponent("App Window Proof", isDirectory: true)
+        let recommendedDirectory = diagnosticsDirectory
+            .appendingPathComponent("Recommended Proof", isDirectory: true)
+        try FileManager.default.createDirectory(at: appWindowDirectory, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: recommendedDirectory, withIntermediateDirectories: true)
+        defer {
+            try? FileManager.default.removeItem(at: diagnosticsDirectory)
+        }
+
+        let olderProofURL = appWindowDirectory.appendingPathComponent("app-window-proof.json")
+        let latestProofURL = recommendedDirectory.appendingPathComponent("mvp-proof-latest.json")
+        try Data("{}".utf8).write(to: olderProofURL)
+        try Data("{}".utf8).write(to: latestProofURL)
+        try FileManager.default.setAttributes(
+            [.modificationDate: Date(timeIntervalSince1970: 1_700_000_000)],
+            ofItemAtPath: olderProofURL.path
+        )
+        try FileManager.default.setAttributes(
+            [.modificationDate: Date(timeIntervalSince1970: 1_700_000_100)],
+            ofItemAtPath: latestProofURL.path
+        )
+
+        let artifacts = model.proofArtifactStatus(diagnosticsDirectory: diagnosticsDirectory)
+
+        #expect(artifacts.diagnosticsDirectory == diagnosticsDirectory.path)
+        #expect(artifacts.recommendedProofDirectory == recommendedDirectory.path)
+        #expect(artifacts.latestProofKind == "mvp")
+        #expect(artifacts.latestProofPath?.hasSuffix("/Recommended Proof/mvp-proof-latest.json") == true)
+        #expect(artifacts.latestProofFileName == "mvp-proof-latest.json")
+        #expect(artifacts.latestProofModifiedAt == Date(timeIntervalSince1970: 1_700_000_100))
+    }
+
     @Test("updates active window sessions by HWND")
     @MainActor
     func updatesActiveWindowSessionsByHWND() async throws {

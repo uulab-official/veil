@@ -392,6 +392,34 @@ public struct WindowsAppRuntimeProofPlanStatus: Codable, Equatable, Sendable {
     }
 }
 
+public struct WindowsAppRuntimeProofArtifactStatus: Codable, Equatable, Sendable {
+    public var diagnosticsDirectory: String
+    public var recommendedProofDirectory: String
+    public var latestProofKind: String?
+    public var latestProofPath: String?
+    public var latestProofFileName: String?
+    public var latestProofModifiedAt: Date?
+    public var reason: String
+
+    public init(
+        diagnosticsDirectory: String,
+        recommendedProofDirectory: String,
+        latestProofKind: String? = nil,
+        latestProofPath: String? = nil,
+        latestProofFileName: String? = nil,
+        latestProofModifiedAt: Date? = nil,
+        reason: String
+    ) {
+        self.diagnosticsDirectory = diagnosticsDirectory
+        self.recommendedProofDirectory = recommendedProofDirectory
+        self.latestProofKind = latestProofKind
+        self.latestProofPath = latestProofPath
+        self.latestProofFileName = latestProofFileName
+        self.latestProofModifiedAt = latestProofModifiedAt
+        self.reason = reason
+    }
+}
+
 public struct WindowsAppRuntimePendingLaunchStatus: Codable, Equatable, Sendable {
     public var isQueued: Bool
     public var appId: String?
@@ -431,6 +459,7 @@ public struct WindowsAppRuntimeStatusReport: Codable, Equatable, Sendable {
     public var quietRuntime: WindowsAppRuntimeQuietPolicyStatus
     public var launchPlan: WindowsAppRuntimeLaunchPlanStatus
     public var proofPlan: WindowsAppRuntimeProofPlanStatus
+    public var proofArtifacts: WindowsAppRuntimeProofArtifactStatus
     public var actions: [WindowsAppRuntimeActionStatus]
 
     public init(
@@ -450,6 +479,7 @@ public struct WindowsAppRuntimeStatusReport: Codable, Equatable, Sendable {
         quietRuntime: WindowsAppRuntimeQuietPolicyStatus,
         launchPlan: WindowsAppRuntimeLaunchPlanStatus,
         proofPlan: WindowsAppRuntimeProofPlanStatus,
+        proofArtifacts: WindowsAppRuntimeProofArtifactStatus,
         actions: [WindowsAppRuntimeActionStatus]
     ) {
         self.kind = kind
@@ -468,8 +498,15 @@ public struct WindowsAppRuntimeStatusReport: Codable, Equatable, Sendable {
         self.quietRuntime = quietRuntime
         self.launchPlan = launchPlan
         self.proofPlan = proofPlan
+        self.proofArtifacts = proofArtifacts
         self.actions = actions
     }
+}
+
+private struct ProofArtifactCandidate {
+    var kind: String
+    var url: URL
+    var modifiedAt: Date
 }
 
 @MainActor
@@ -650,6 +687,7 @@ public final class HostDashboardModel {
         )
         let launchPlan = launchPlanStatus()
         let proofPlan = proofPlanStatus()
+        let proofArtifacts = proofArtifactStatus()
         let pendingLaunch = pendingLaunchStatus()
         return WindowsAppRuntimeStatusReport(
             generatedAt: generatedAt,
@@ -700,6 +738,7 @@ public final class HostDashboardModel {
             quietRuntime: quietRuntime,
             launchPlan: launchPlan,
             proofPlan: proofPlan,
+            proofArtifacts: proofArtifacts,
             actions: [
                 WindowsAppRuntimeActionStatus(
                     id: "dock.openMainWindow",
@@ -969,6 +1008,78 @@ public final class HostDashboardModel {
             recommendedMVPProofCommand: mvpCommand,
             reason: "The live Windows agent can run app-window, coherence, and MVP proof commands for the selected app."
         )
+    }
+
+    public func proofArtifactStatus(
+        diagnosticsDirectory: URL = QEMUVMRuntimeBooter.defaultDiagnosticsDirectory()
+    ) -> WindowsAppRuntimeProofArtifactStatus {
+        let recommendedProofDirectory = diagnosticsDirectory
+            .appendingPathComponent("Recommended Proof", isDirectory: true)
+        let searchDirectories: [(kind: String, url: URL)] = [
+            ("recommended", recommendedProofDirectory),
+            ("mvp", diagnosticsDirectory.appendingPathComponent("MVP Proof", isDirectory: true)),
+            ("coherence", diagnosticsDirectory.appendingPathComponent("Coherence Proof", isDirectory: true)),
+            ("app-window", diagnosticsDirectory.appendingPathComponent("App Window Proof", isDirectory: true))
+        ]
+
+        let latestProof = searchDirectories
+            .flatMap { proofArtifacts(in: $0.url, kind: $0.kind) }
+            .max { lhs, rhs in
+                lhs.modifiedAt < rhs.modifiedAt
+            }
+
+        guard let latestProof else {
+            return WindowsAppRuntimeProofArtifactStatus(
+                diagnosticsDirectory: diagnosticsDirectory.path,
+                recommendedProofDirectory: recommendedProofDirectory.path,
+                reason: "No proof artifact has been saved under Veil diagnostics yet."
+            )
+        }
+
+        return WindowsAppRuntimeProofArtifactStatus(
+            diagnosticsDirectory: diagnosticsDirectory.path,
+            recommendedProofDirectory: recommendedProofDirectory.path,
+            latestProofKind: latestProof.kind,
+            latestProofPath: latestProof.url.path,
+            latestProofFileName: latestProof.url.lastPathComponent,
+            latestProofModifiedAt: latestProof.modifiedAt,
+            reason: "Latest proof artifact is available in Veil diagnostics."
+        )
+    }
+
+    private func proofArtifacts(in directory: URL, kind: String) -> [ProofArtifactCandidate] {
+        guard let urls = try? FileManager.default.contentsOfDirectory(
+            at: directory,
+            includingPropertiesForKeys: [.contentModificationDateKey, .isRegularFileKey],
+            options: [.skipsHiddenFiles]
+        ) else {
+            return []
+        }
+
+        return urls.compactMap { url in
+            guard url.pathExtension.lowercased() == "json",
+                  let values = try? url.resourceValues(forKeys: [.contentModificationDateKey, .isRegularFileKey]),
+                  values.isRegularFile == true,
+                  let modifiedAt = values.contentModificationDate else {
+                return nil
+            }
+
+            return ProofArtifactCandidate(kind: proofKind(for: url, fallback: kind), url: url, modifiedAt: modifiedAt)
+        }
+    }
+
+    private func proofKind(for url: URL, fallback: String) -> String {
+        let fileName = url.lastPathComponent.lowercased()
+        if fileName.contains("mvp") {
+            return "mvp"
+        }
+        if fileName.contains("coherence") {
+            return "coherence"
+        }
+        if fileName.contains("app-window") || fileName.contains("appframe") || fileName.contains("app-frame") {
+            return "app-window"
+        }
+        return fallback
     }
 
     public func quietRuntimeStatus() -> WindowsAppRuntimeQuietPolicyStatus {

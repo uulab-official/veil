@@ -406,6 +406,16 @@ test("rejects MVP proof plans without require-proved", () => {
   );
 });
 
+test("rejects proof artifact paths that do not point to JSON", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.mac-window-live.json", import.meta.url), "utf8"));
+  report.proofArtifacts.latestProofPath = "/Users/test/Library/Application Support/Veil/Diagnostics/Recommended Proof/mvp-proof-latest.txt";
+
+  assert.throws(
+    () => validateAppRuntimeStatus(report),
+    /proofArtifacts latest artifact/
+  );
+});
+
 test("rejects launcher hiding without live mirrored windows", () => {
   const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.demo.json", import.meta.url), "utf8"));
   report.macWindowIntegration.hidesLauncherWhenMirroring = true;

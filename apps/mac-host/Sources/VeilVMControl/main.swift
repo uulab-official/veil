@@ -676,6 +676,13 @@ struct VeilVMControl {
         if let proofCommand = report.proofPlan.recommendedMVPProofCommand {
             print("Proof MVP command: \(proofCommand)")
         }
+        print("Proof artifacts: \(report.proofArtifacts.reason)")
+        if let latestProofKind = report.proofArtifacts.latestProofKind {
+            print("Latest proof kind: \(latestProofKind)")
+        }
+        if let latestProofPath = report.proofArtifacts.latestProofPath {
+            print("Latest proof artifact: \(latestProofPath)")
+        }
         print("Quiet runtime ready: \(report.quietRuntime.canQuietRuntime ? "yes" : "no")")
         print("Quiet runtime auto: \(report.quietRuntime.willQuietAutomatically ? "yes" : "no")")
         print("Quiet runtime delay: \(report.quietRuntime.automaticQuietDelaySeconds)s")

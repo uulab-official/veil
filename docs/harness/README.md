@@ -113,7 +113,10 @@ include `proof.recommended`, available exactly when that recommended command is
 present. The matching command surface is
 `veil-vmctl app-runtime-action --json --action proof-recommended`, which runs
 the strongest available proof and returns a `proof` evidence summary inside the
-same action report.
+same action report. The status report also includes `proofArtifacts`, a
+metadata-only pointer to the latest saved proof JSON under Veil diagnostics so
+automation can attach or inspect the current proof evidence without copying
+Windows media, disk contents, product keys, or guest data.
 
 ```bash
 cd apps/mac-host

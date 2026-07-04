@@ -36,6 +36,7 @@ export function validateAppRuntimeStatus(report) {
   validateQuietRuntime(report.quietRuntime, report.mirrorSessions);
   validateLaunchPlan(report.launchPlan, report);
   validateProofPlan(report.proofPlan, report);
+  validateProofArtifacts(report.proofArtifacts);
   validateActions(report.actions, report);
 
   if (report.selectedAppId !== undefined) {
@@ -481,6 +482,45 @@ function strongestProof(proofPlan) {
     return { kind: "app-window", command: proofPlan.recommendedAppWindowProofCommand };
   }
   return undefined;
+}
+
+function validateProofArtifacts(proofArtifacts) {
+  if (proofArtifacts === undefined) {
+    return;
+  }
+
+  if (!proofArtifacts || typeof proofArtifacts !== "object" || Array.isArray(proofArtifacts)) {
+    throw new TypeError("proofArtifacts must be an object when present.");
+  }
+
+  requireString(proofArtifacts.diagnosticsDirectory, "proofArtifacts.diagnosticsDirectory");
+  requireString(proofArtifacts.recommendedProofDirectory, "proofArtifacts.recommendedProofDirectory");
+  requireString(proofArtifacts.reason, "proofArtifacts.reason");
+
+  const hasLatest = proofArtifacts.latestProofKind !== undefined
+    || proofArtifacts.latestProofPath !== undefined
+    || proofArtifacts.latestProofFileName !== undefined
+    || proofArtifacts.latestProofModifiedAt !== undefined;
+
+  if (!hasLatest) {
+    return;
+  }
+
+  requireString(proofArtifacts.latestProofKind, "proofArtifacts.latestProofKind");
+  if (!["recommended", "app-window", "coherence", "mvp"].includes(proofArtifacts.latestProofKind)) {
+    throw new TypeError("proofArtifacts.latestProofKind must identify a known proof kind.");
+  }
+
+  requireString(proofArtifacts.latestProofPath, "proofArtifacts.latestProofPath");
+  requireString(proofArtifacts.latestProofFileName, "proofArtifacts.latestProofFileName");
+  requireString(proofArtifacts.latestProofModifiedAt, "proofArtifacts.latestProofModifiedAt");
+  if (!proofArtifacts.latestProofPath.endsWith(".json") || !proofArtifacts.latestProofFileName.endsWith(".json")) {
+    throw new TypeError("proofArtifacts latest artifact must point to a JSON file.");
+  }
+
+  if (Number.isNaN(Date.parse(proofArtifacts.latestProofModifiedAt))) {
+    throw new TypeError("proofArtifacts.latestProofModifiedAt must be an ISO date.");
+  }
 }
 
 function validateProofCommand(command, fieldName, isAvailable, expectedCommand) {

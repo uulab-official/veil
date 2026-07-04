@@ -159,5 +159,10 @@
     "canRunCoherenceProof": false,
     "canRunMVPProof": false,
     "reason": "Wait for the live Windows agent before running proof commands."
+  },
+  "proofArtifacts": {
+    "diagnosticsDirectory": "/Users/test/Library/Application Support/Veil/Diagnostics",
+    "recommendedProofDirectory": "/Users/test/Library/Application Support/Veil/Diagnostics/Recommended Proof",
+    "reason": "No proof artifact has been saved under Veil diagnostics yet."
   }
 }

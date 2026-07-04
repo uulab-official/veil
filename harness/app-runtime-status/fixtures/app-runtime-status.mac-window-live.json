@@ -179,5 +179,14 @@
     "reason": "The live Windows agent can run app-window, coherence, and MVP proof commands for the selected app.",
     "recommendedProofKind": "mvp",
     "recommendedProofCommand": "veil-vmctl mvp-proof --json --app-id winapp_notepad --require-proved"
+  },
+  "proofArtifacts": {
+    "diagnosticsDirectory": "/Users/test/Library/Application Support/Veil/Diagnostics",
+    "recommendedProofDirectory": "/Users/test/Library/Application Support/Veil/Diagnostics/Recommended Proof",
+    "reason": "Latest proof artifact is available in Veil diagnostics.",
+    "latestProofKind": "mvp",
+    "latestProofPath": "/Users/test/Library/Application Support/Veil/Diagnostics/Recommended Proof/mvp-proof-latest.json",
+    "latestProofFileName": "mvp-proof-latest.json",
+    "latestProofModifiedAt": "2026-07-04T10:00:00Z"
   }
 }
