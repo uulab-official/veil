@@ -1402,7 +1402,7 @@ public final class HostDashboardModel {
             reason = "The local Windows runtime is boot ready."
         } else {
             recommendedAction = "prepare-local-runtime"
-            recommendedPrepareCommand = "veil-vmctl prepare --installer /path/to/Windows.iso"
+            recommendedPrepareCommand = prepareCommand(for: snapshot)
             reason = snapshot.detail
         }
 
@@ -1418,6 +1418,25 @@ public final class HostDashboardModel {
             recommendedPrepareCommand: recommendedPrepareCommand,
             reason: reason
         )
+    }
+
+    private func prepareCommand(for snapshot: VMRuntimeSnapshot) -> String {
+        let installerPath = snapshot.installerMediaPath ?? "/path/to/Windows.iso"
+        var command = "veil-vmctl prepare --installer \(shellQuotedArgument(installerPath))"
+
+        if let driverPath = snapshot.driverMediaPath, !driverPath.isEmpty {
+            command += " --drivers \(shellQuotedArgument(driverPath))"
+        }
+
+        return command
+    }
+
+    private func shellQuotedArgument(_ value: String) -> String {
+        guard value.rangeOfCharacter(from: .whitespacesAndNewlines) != nil else {
+            return value
+        }
+
+        return "'\(value.replacingOccurrences(of: "'", with: "'\\''"))'"
     }
 
     public var guestAgentInstallEvidence: VMInstallEvidenceSummary? {

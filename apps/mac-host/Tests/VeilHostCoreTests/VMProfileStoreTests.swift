@@ -378,6 +378,7 @@ struct VMProfileStoreTests {
         #expect(report.runningQEMUProcess?.qmpSocketPath == "/tmp/vq-recovery.qmp.sock")
         #expect(report.nextActions.first == "Close existing QEMU/Windows PID 2468 before preparing or relaunching; Veil detected the configured disk is already attached but has no current launch record.")
         #expect(report.nextActions.dropFirst().first == "Installer media: Installer media is in Downloads. Re-select it with the file picker so Veil can store macOS file access before starting Windows.")
+        #expect(report.nextActions.contains("Re-register the selected installer with `veil-vmctl prepare --installer /Users/test/Downloads/Win11_25H2_Korean_Arm64_v2.iso`."))
     }
 
     @Test("local runtime avoids protected Downloads console screenshot during snapshot load")

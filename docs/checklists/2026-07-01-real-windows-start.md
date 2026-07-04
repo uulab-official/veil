@@ -104,6 +104,7 @@ Goal: keep the main Veil experience pointed at real local Windows boot and conso
 - [x] Add a safe `veil-vmctl qemu-capture` command so live console evidence can be refreshed without sending QEMU monitor quit commands.
 - [x] Make the app runtime snapshot treat a matching live QEMU launch record as `running`, even when the VM was started by the CLI.
 - [x] Verify the app shell displays the refreshed live QEMU console screenshot and running controls from the CLI launch record.
+- [x] Surface concrete `veil-vmctl prepare --installer ...` recovery commands when stored installer media needs macOS file access to be re-registered.
 - [x] Add recovery copy to QEMU smoke reports for common boot failures.
 - [x] Convert QEMU monitor screenshots to PNG paths so users can inspect boot evidence directly.
 - [x] Surface the latest QEMU console PNG inside the Windows setup screen when launch evidence exists.

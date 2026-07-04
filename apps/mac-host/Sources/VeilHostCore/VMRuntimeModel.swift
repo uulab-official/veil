@@ -398,6 +398,9 @@ public extension VMRuntimeSnapshot {
                 .map { "\($0.title): \($0.detail)" }
             if !blockers.isEmpty {
                 actions.append(contentsOf: blockers)
+                if let prepareCommand = windowsInstallPrepareCommand() {
+                    actions.append("Re-register the selected installer with `\(prepareCommand)`.")
+                }
                 return actions
             }
 
@@ -406,9 +409,15 @@ public extension VMRuntimeSnapshot {
                 .map { "\($0.title): \($0.detail)" }
             if !blockedSteps.isEmpty {
                 actions.append(contentsOf: blockedSteps)
+                if let prepareCommand = windowsInstallPrepareCommand() {
+                    actions.append("Re-register the selected installer with `\(prepareCommand)`.")
+                }
                 return actions
             }
 
+            if let prepareCommand = windowsInstallPrepareCommand() {
+                actions.append("Re-register the selected installer with `\(prepareCommand)`.")
+            }
             actions.append("Run `veil-vmctl qemu-doctor --json` to identify the missing Windows install prerequisite.")
             return actions
         }
@@ -443,6 +452,26 @@ public extension VMRuntimeSnapshot {
         }
 
         return ["Start the visible install with `veil-vmctl qemu-start --wait-seconds 15`."]
+    }
+
+    private func windowsInstallPrepareCommand() -> String? {
+        guard let installerMediaPath, !installerMediaPath.isEmpty else {
+            return nil
+        }
+
+        var command = "veil-vmctl prepare --installer \(shellQuotedArgument(installerMediaPath))"
+        if let driverMediaPath, !driverMediaPath.isEmpty {
+            command += " --drivers \(shellQuotedArgument(driverMediaPath))"
+        }
+        return command
+    }
+
+    private func shellQuotedArgument(_ value: String) -> String {
+        guard value.rangeOfCharacter(from: .whitespacesAndNewlines) != nil else {
+            return value
+        }
+
+        return "'\(value.replacingOccurrences(of: "'", with: "'\\''"))'"
     }
 
     private func runningRecoveryActions() -> [String] {

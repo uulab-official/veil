@@ -756,6 +756,45 @@ struct HostDashboardModelTests {
         #expect(model.canLaunchSelectedApp == false)
     }
 
+    @Test("local runtime prepare command uses selected installer and drivers")
+    @MainActor
+    func localRuntimePrepareCommandUsesSelectedMedia() {
+        let model = HostDashboardModel(service: FakeDashboardService())
+        let snapshot = VMRuntimeSnapshot(
+            state: .stopped,
+            virtualizationAvailable: true,
+            architecture: "arm64",
+            minimumOSSupported: true,
+            profileName: "Windows 11 Arm",
+            installerMediaPath: "/Users/test/Downloads/Win11_25H2_Korean_Arm64_v2.iso",
+            driverMediaPath: "/Users/test/Downloads/virtio drivers.iso",
+            virtualDiskPath: "/Users/test/Virtual Machines/Windows 11 Arm.img",
+            preflightChecks: [
+                VMPreflightCheck(
+                    id: "installer-media",
+                    title: "Installer media",
+                    detail: "Installer media is in Downloads. Re-select it with the file picker so Veil can store macOS file access before starting Windows.",
+                    state: .failed
+                )
+            ],
+            installEvidence: VMInstallEvidenceSummary(
+                kind: .setupBlocked,
+                isInstalled: false,
+                title: "Setup blocked",
+                detail: "Installer media is in Downloads."
+            ),
+            bootReady: false,
+            windowsInstalled: false,
+            detail: "Installer media requires file picker access."
+        )
+
+        let status = model.localRuntimeStatus(snapshot: snapshot)
+
+        #expect(status.recommendedAction == "prepare-local-runtime")
+        #expect(status.canStart == false)
+        #expect(status.recommendedPrepareCommand == "veil-vmctl prepare --installer /Users/test/Downloads/Win11_25H2_Korean_Arm64_v2.iso --drivers '/Users/test/Downloads/virtio drivers.iso'")
+    }
+
     @Test("refresh live agent retries after demo fallback")
     @MainActor
     func refreshLiveAgentRetriesAfterDemoFallback() async throws {
