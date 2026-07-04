@@ -310,7 +310,7 @@ cd apps/mac-host
 swift run veil-vmctl qemu-plan --json | node ../../harness/qemu-boot-plan/src/validate-qemu-plan.mjs
 ```
 
-The command must not launch QEMU, start a VM, stop a VM, or mutate local VM files. It only validates the dry-run plan shape: local provider, HVF acceleration, installer ISO as read-only cdrom media, automatic install media, optional read-only driver media, writable NVMe system disk, NAT networking with the current `usb-net` device, Cocoa display, graphics, and input devices.
+The command must not launch QEMU, start a VM, stop a VM, or mutate local VM files. It only validates the dry-run plan shape: local provider, HVF acceleration, installer ISO as read-only cdrom media for installer boots, disk-first `order=c` for installed Windows boots, optional automatic install media, optional read-only driver media, writable NVMe system disk, NAT networking with guest-agent host forwarding, the declared `networkAdapter`/`networkDeviceArgument` pair, Cocoa display, graphics, and input devices. The default adapter is `usb-net`; bounded live probes can set `VEIL_QEMU_NETWORK_DEVICE=e1000e` or another supported candidate before generating the plan.
 
 ## QEMU Doctor Scenario
 

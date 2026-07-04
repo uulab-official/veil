@@ -67,6 +67,8 @@
   "isTPMEmulatorAvailable": true,
   "isServerBacked": false,
   "kind": "qemuWindowsArmBootPlan",
+  "networkAdapter": "usb-net",
+  "networkDeviceArgument": "usb-net,netdev=net0",
   "provider": "QEMU/HVF",
   "summary": "Dry-run QEMU/HVF command plan for Windows 11 Arm. Veil does not execute this plan yet.",
   "tpmEmulatorPath": "/opt/homebrew/bin/swtpm",

@@ -4,16 +4,24 @@ import { fileURLToPath } from "node:url";
 const REQUIRED_SEQUENCES = [
   ["-machine", "virt,highmem=on"],
   ["-accel", "hvf"],
-  ["-boot", "order=d"],
   ["-cpu", "host"],
   ["-netdev", "user,id=net0,hostfwd=tcp::18444-:18444"],
-  ["-device", "usb-net,netdev=net0"],
   ["-display", "cocoa"]
 ];
 
+const SUPPORTED_NETWORK_ADAPTERS = new Map([
+  ["usb-net", "usb-net,netdev=net0"],
+  ["e1000", "e1000,netdev=net0"],
+  ["e1000e", "e1000e,netdev=net0"],
+  ["rtl8139", "rtl8139,netdev=net0"],
+  ["vmxnet3", "vmxnet3,netdev=net0"],
+  ["virtio-net-pci", "virtio-net-pci,netdev=net0"],
+  ["virtio-net-device", "virtio-net-device,netdev=net0"]
+]);
+
+const SUPPORTED_BOOT_ORDERS = new Set(["order=c", "order=d"]);
+
 const REQUIRED_DEVICES = [
-  "usb-storage,drive=installer",
-  "usb-storage,drive=autounattend",
   "qemu-xhci,id=usb0",
   "nvme,drive=system,serial=veil-system",
   "virtio-rng-pci",
@@ -36,8 +44,12 @@ export function validateQEMUPlan(plan) {
   requireString(plan.firmwareVarsPath, "firmwareVarsPath");
   requireString(plan.tpmEmulatorPath, "tpmEmulatorPath");
   requireString(plan.tpmStateDirectoryPath, "tpmStateDirectoryPath");
-  requireString(plan.automaticInstallMediaPath, "automaticInstallMediaPath");
+  requireString(plan.networkAdapter, "networkAdapter");
+  requireString(plan.networkDeviceArgument, "networkDeviceArgument");
   requireString(plan.summary, "summary");
+  if (plan.automaticInstallMediaPath != null) {
+    requireString(plan.automaticInstallMediaPath, "automaticInstallMediaPath");
+  }
 
   if (plan.kind !== "qemuWindowsArmBootPlan") {
     throw new TypeError(`Unsupported QEMU plan kind: ${plan.kind}`);
@@ -91,6 +103,27 @@ export function validateQEMUPlan(plan) {
     if (!containsSequence(plan.arguments, sequence)) {
       throw new TypeError(`QEMU plan arguments must include sequence: ${sequence.join(" ")}`);
     }
+  }
+
+  const bootIndex = plan.arguments.indexOf("-boot");
+  const bootOrder = bootIndex === -1 ? undefined : plan.arguments[bootIndex + 1];
+  if (!SUPPORTED_BOOT_ORDERS.has(bootOrder)) {
+    throw new TypeError("QEMU plan arguments must include -boot order=c for installed disks or -boot order=d for installer media.");
+  }
+
+  const expectedNetworkDeviceArgument = SUPPORTED_NETWORK_ADAPTERS.get(plan.networkAdapter);
+  if (!expectedNetworkDeviceArgument) {
+    throw new TypeError(
+      `QEMU plan networkAdapter must be one of: ${[...SUPPORTED_NETWORK_ADAPTERS.keys()].join(", ")}`
+    );
+  }
+
+  if (plan.networkDeviceArgument !== expectedNetworkDeviceArgument) {
+    throw new TypeError("QEMU plan networkDeviceArgument must match the declared networkAdapter.");
+  }
+
+  if (!containsSequence(plan.arguments, ["-device", plan.networkDeviceArgument])) {
+    throw new TypeError(`QEMU plan arguments must include network device: ${plan.networkDeviceArgument}`);
   }
 
   if (containsSequence(plan.arguments, ["-device", "virtio-blk-pci,drive=system"])) {
@@ -151,24 +184,42 @@ export function validateQEMUPlan(plan) {
     throw new TypeError("QEMU plan must attach the TPM chardev socket in the declared TPM state directory.");
   }
 
-  if (!installerDrive || !installerDrive.includes("media=cdrom") || !installerDrive.includes("readonly=on")) {
-    throw new TypeError("QEMU plan must attach installer media as a read-only cdrom drive.");
-  }
-
-  if (!installerDrive.includes("file.locking=off")) {
-    throw new TypeError("QEMU installer media must disable file locking for read-only ISO reuse.");
-  }
-
   if (!systemDrive || !systemDrive.includes("format=raw")) {
     throw new TypeError("QEMU plan must attach a writable raw system disk.");
   }
 
-  if (!autoInstallDrive || !autoInstallDrive.includes("media=cdrom") || !autoInstallDrive.includes("readonly=on")) {
-    throw new TypeError("QEMU plan must attach automatic install media as a read-only cdrom drive.");
+  if (bootOrder === "order=d" && !installerDrive) {
+    throw new TypeError("QEMU installer boot plans must attach installer media as a read-only cdrom drive.");
   }
 
-  if (!autoInstallDrive.includes(plan.automaticInstallMediaPath)) {
-    throw new TypeError("QEMU automatic install drive must point to the declared automatic install media path.");
+  if (installerDrive) {
+    if (!installerDrive.includes("media=cdrom") || !installerDrive.includes("readonly=on")) {
+      throw new TypeError("QEMU plan must attach installer media as a read-only cdrom drive.");
+    }
+
+    if (!installerDrive.includes("file.locking=off")) {
+      throw new TypeError("QEMU installer media must disable file locking for read-only ISO reuse.");
+    }
+
+    if (!containsSequence(plan.arguments, ["-device", "usb-storage,drive=installer"])) {
+      throw new TypeError("QEMU installer media drive must be exposed as USB mass storage.");
+    }
+  }
+
+  if (plan.automaticInstallMediaPath != null) {
+    if (!autoInstallDrive || !autoInstallDrive.includes("media=cdrom") || !autoInstallDrive.includes("readonly=on")) {
+      throw new TypeError("QEMU plan must attach automatic install media as a read-only cdrom drive.");
+    }
+
+    if (!autoInstallDrive.includes(plan.automaticInstallMediaPath)) {
+      throw new TypeError("QEMU automatic install drive must point to the declared automatic install media path.");
+    }
+
+    if (!containsSequence(plan.arguments, ["-device", "usb-storage,drive=autounattend"])) {
+      throw new TypeError("QEMU automatic install media drive must be exposed as USB mass storage.");
+    }
+  } else if (autoInstallDrive || containsSequence(plan.arguments, ["-device", "usb-storage,drive=autounattend"])) {
+    throw new TypeError("QEMU plan must not attach automatic install media when automaticInstallMediaPath is absent.");
   }
 
   if (driverMediaDrive) {
@@ -181,11 +232,11 @@ export function validateQEMUPlan(plan) {
     }
   }
 
-  if (!plan.automaticInstallMediaPath.endsWith("VeilAutoInstall.iso")) {
+  if (plan.automaticInstallMediaPath != null && !plan.automaticInstallMediaPath.endsWith("VeilAutoInstall.iso")) {
     throw new TypeError("QEMU automatic install media must point to VeilAutoInstall.iso.");
   }
 
-  if (!installerDrive.includes(".iso")) {
+  if (installerDrive && !installerDrive.includes(".iso")) {
     throw new TypeError("QEMU installer media should point to an ISO path.");
   }
 

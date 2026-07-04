@@ -178,6 +178,11 @@ Goal: keep the main Veil experience pointed at real local Windows boot and conso
 - [x] Verify direct `& E:/.../Bootstrap-VeilAgentFromMedia.ps1` is blocked by Windows PowerShell execution policy, reinforcing that first-logon/manual launch paths must use `-ExecutionPolicy Bypass`.
 - [x] Retry bootstrap from the live desktop with `-ExecutionPolicy Bypass`; the VM rebooted or returned to firmware/boot flow afterward, and `veil-host-probe` still timed out, so guest-agent connection remains unproven.
 - [x] Add `Collect Veil Agent Diagnostics.cmd` and `Collect-VeilAgentDiagnostics.ps1` to the guest-agent bundle so Windows-side install/start logs can be zipped from the desktop.
+- [x] Make the QEMU network adapter a typed boot-plan setting instead of a hidden `usb-net` constant, while keeping `usb-net` as the default.
+- [x] Add `VEIL_QEMU_NETWORK_DEVICE` support for bounded live probes with `e1000`, `e1000e`, `rtl8139`, `vmxnet3`, `virtio-net-pci`, and `virtio-net-device`.
+- [x] Update the QEMU boot-plan harness to validate the declared `networkAdapter` and matching QEMU `networkDeviceArgument`.
+- [x] Run a live alternate-NIC probe with `VEIL_QEMU_NETWORK_DEVICE=e1000e`: QEMU PID 14085 launched with `-device e1000e,netdev=net0`, display smoke passed, and `guest-agent-wait` still returned `hostForwardProbe.status=tcpOpen` plus WebSocket health timeout.
+- [ ] Add a guest-side elevated firewall/agent repair path so TCP-open/no-response can be fixed without hand-driving Windows Security.
 - [x] Add `veil-host-probe --diagnose-agent` so host-side agent connection checks return actionable JSON instead of only a timeout.
 - [x] Expose `guestAgentDiagnostics` in app-runtime status so the host shell, CLI, and harness point at the same pre/post install diagnostic gate.
 - [x] Gate app-runtime Start actions on real local VM boot readiness so bootReady=false reports `prepare-local-runtime` instead of exposing a failing start path.

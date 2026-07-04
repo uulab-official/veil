@@ -30,6 +30,8 @@ public struct QEMUWindowsBootPlan: Codable, Equatable, Sendable {
     public var isTPMEmulatorAvailable: Bool
     public var tpmStateDirectoryPath: String?
     public var automaticInstallMediaPath: String?
+    public var networkAdapter: QEMUWindowsNetworkAdapter
+    public var networkDeviceArgument: String
     public var summary: String
     public var arguments: [String]
     public var warnings: [String]
@@ -50,6 +52,8 @@ public struct QEMUWindowsBootPlan: Codable, Equatable, Sendable {
         isTPMEmulatorAvailable: Bool = false,
         tpmStateDirectoryPath: String? = nil,
         automaticInstallMediaPath: String? = nil,
+        networkAdapter: QEMUWindowsNetworkAdapter = .usbNet,
+        networkDeviceArgument: String = QEMUWindowsNetworkAdapter.usbNet.deviceArgument,
         summary: String,
         arguments: [String],
         warnings: [String]
@@ -69,9 +73,49 @@ public struct QEMUWindowsBootPlan: Codable, Equatable, Sendable {
         self.isTPMEmulatorAvailable = isTPMEmulatorAvailable
         self.tpmStateDirectoryPath = tpmStateDirectoryPath
         self.automaticInstallMediaPath = automaticInstallMediaPath
+        self.networkAdapter = networkAdapter
+        self.networkDeviceArgument = networkDeviceArgument
         self.summary = summary
         self.arguments = arguments
         self.warnings = warnings
+    }
+}
+
+public enum QEMUWindowsNetworkAdapter: String, Codable, CaseIterable, Equatable, Sendable {
+    case usbNet = "usb-net"
+    case e1000 = "e1000"
+    case e1000e = "e1000e"
+    case rtl8139 = "rtl8139"
+    case vmxnet3 = "vmxnet3"
+    case virtioNetPCI = "virtio-net-pci"
+    case virtioNetDevice = "virtio-net-device"
+
+    public static let environmentVariableName = "VEIL_QEMU_NETWORK_DEVICE"
+
+    public var deviceArgument: String {
+        "\(rawValue),netdev=net0"
+    }
+
+    public static func selected(
+        from rawValue: String?
+    ) -> (adapter: QEMUWindowsNetworkAdapter, warning: String?) {
+        guard let rawValue,
+              !rawValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return (.usbNet, nil)
+        }
+
+        let normalizedValue = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let adapter = QEMUWindowsNetworkAdapter(rawValue: normalizedValue) {
+            return (adapter, nil)
+        }
+
+        let supportedValues = QEMUWindowsNetworkAdapter.allCases
+            .map(\.rawValue)
+            .joined(separator: ", ")
+        return (
+            .usbNet,
+            "Ignoring unsupported \(environmentVariableName)=\(normalizedValue). Supported values: \(supportedValues)."
+        )
     }
 }
 
@@ -96,6 +140,8 @@ public struct QEMUWindowsBootPlanner: Sendable {
     private let tpmEmulatorPath: String?
     private let isTPMEmulatorAvailable: Bool
     private let tpmStateDirectoryPath: String?
+    private let networkAdapter: QEMUWindowsNetworkAdapter
+    private let configurationWarnings: [String]
 
     public init(
         executablePath: String,
@@ -108,7 +154,9 @@ public struct QEMUWindowsBootPlanner: Sendable {
         isSecureBootFirmwareAvailable: Bool = false,
         tpmEmulatorPath: String? = nil,
         isTPMEmulatorAvailable: Bool = false,
-        tpmStateDirectoryPath: String? = nil
+        tpmStateDirectoryPath: String? = nil,
+        networkAdapter: QEMUWindowsNetworkAdapter = .usbNet,
+        configurationWarnings: [String] = []
     ) {
         self.executablePath = executablePath
         self.isExecutableAvailable = isExecutableAvailable
@@ -121,6 +169,8 @@ public struct QEMUWindowsBootPlanner: Sendable {
         self.tpmEmulatorPath = tpmEmulatorPath
         self.isTPMEmulatorAvailable = isTPMEmulatorAvailable
         self.tpmStateDirectoryPath = tpmStateDirectoryPath
+        self.networkAdapter = networkAdapter
+        self.configurationWarnings = configurationWarnings
     }
 
     public func makePlan(for profile: VMProfile) throws -> QEMUWindowsBootPlan {
@@ -145,7 +195,7 @@ public struct QEMUWindowsBootPlanner: Sendable {
                 .path
             : nil
         let driverMediaPath = nonEmpty(profile.driverMediaPath)
-        var warnings: [String] = []
+        var warnings = configurationWarnings
 
         if !isExecutableAvailable {
             warnings.append(
@@ -199,7 +249,7 @@ public struct QEMUWindowsBootPlanner: Sendable {
             "-drive", "if=none,id=system,format=raw,file=\(virtualDiskPath)",
             "-device", "nvme,drive=system,serial=veil-system",
             "-netdev", "user,id=net0,\(guestAgentForward)",
-            "-device", "usb-net,netdev=net0",
+            "-device", networkAdapter.deviceArgument,
             "-device", "virtio-rng-pci",
             "-display", "cocoa",
             "-device", "ramfb",
@@ -242,6 +292,8 @@ public struct QEMUWindowsBootPlanner: Sendable {
             isTPMEmulatorAvailable: isTPMEmulatorAvailable,
             tpmStateDirectoryPath: tpmStateDirectoryPath,
             automaticInstallMediaPath: automaticInstallMediaPath,
+            networkAdapter: networkAdapter,
+            networkDeviceArgument: networkAdapter.deviceArgument,
             summary: windowsInstalled
                 ? "Dry-run QEMU/HVF command plan for \(profile.name). Windows boots from the installed system disk; installer media is not attached."
                 : "Dry-run QEMU/HVF command plan for \(profile.name). Veil does not execute this plan yet.",
@@ -313,7 +365,8 @@ public enum LocalQEMUWindowsBootPlanFactory {
         fileExists: @escaping @Sendable (String) -> Bool = { FileManager.default.fileExists(atPath: $0) },
         secureFirmwarePaths: [String] = defaultSecureFirmwarePaths(),
         secureVarsTemplatePaths: [String] = defaultSecureFirmwareVarsTemplatePaths(),
-        firmwareVarsTemplatePaths: [String] = defaultFirmwareVarsTemplatePaths
+        firmwareVarsTemplatePaths: [String] = defaultFirmwareVarsTemplatePaths,
+        environment: [String: String] = ProcessInfo.processInfo.environment
     ) throws -> QEMUWindowsBootPlan {
         let qemuProvider = providerProbe
             .localProviders(
@@ -338,6 +391,9 @@ public enum LocalQEMUWindowsBootPlanFactory {
         let tpmEmulatorPath = defaultTPMEmulatorPaths.first(where: fileExists)
         let tpmStateDirectoryPath = profile.virtualDiskPath
             .map { URL(fileURLWithPath: $0).deletingLastPathComponent().appendingPathComponent("tpm", isDirectory: true).path }
+        let networkSelection = QEMUWindowsNetworkAdapter.selected(
+            from: environment[QEMUWindowsNetworkAdapter.environmentVariableName]
+        )
         let planner = QEMUWindowsBootPlanner(
             executablePath: executablePath,
             isExecutableAvailable: qemuProvider?.status == .active && qemuProvider?.executablePath != nil,
@@ -349,7 +405,9 @@ public enum LocalQEMUWindowsBootPlanFactory {
             isSecureBootFirmwareAvailable: isSecureBootFirmwareAvailable,
             tpmEmulatorPath: tpmEmulatorPath ?? defaultTPMEmulatorPaths[0],
             isTPMEmulatorAvailable: tpmEmulatorPath != nil,
-            tpmStateDirectoryPath: tpmStateDirectoryPath
+            tpmStateDirectoryPath: tpmStateDirectoryPath,
+            networkAdapter: networkSelection.adapter,
+            configurationWarnings: networkSelection.warning.map { [$0] } ?? []
         )
         return try planner.makePlan(for: profile)
     }
