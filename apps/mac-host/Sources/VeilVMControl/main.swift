@@ -640,6 +640,19 @@ struct VeilVMControl {
         if let launchCommand = report.launchPlan.recommendedLaunchCommand {
             print("Launch app command: \(launchCommand)")
         }
+        print("Proof plan reason: \(report.proofPlan.reason)")
+        print("Proof app-window ready: \(report.proofPlan.canRunAppWindowProof ? "yes" : "no")")
+        print("Proof coherence ready: \(report.proofPlan.canRunCoherenceProof ? "yes" : "no")")
+        print("Proof MVP ready: \(report.proofPlan.canRunMVPProof ? "yes" : "no")")
+        if let proofCommand = report.proofPlan.recommendedAppWindowProofCommand {
+            print("Proof app-window command: \(proofCommand)")
+        }
+        if let proofCommand = report.proofPlan.recommendedCoherenceProofCommand {
+            print("Proof coherence command: \(proofCommand)")
+        }
+        if let proofCommand = report.proofPlan.recommendedMVPProofCommand {
+            print("Proof MVP command: \(proofCommand)")
+        }
         print("Quiet runtime ready: \(report.quietRuntime.canQuietRuntime ? "yes" : "no")")
         print("Quiet runtime auto: \(report.quietRuntime.willQuietAutomatically ? "yes" : "no")")
         print("Quiet runtime delay: \(report.quietRuntime.automaticQuietDelaySeconds)s")

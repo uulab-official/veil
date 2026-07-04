@@ -180,7 +180,14 @@
         "title": "Set Windows Clipboard Text",
         "isAvailable": false
       }
-    ]
+    ],
+    "proofPlan": {
+      "selectedAppId": "winapp_notepad",
+      "canRunAppWindowProof": false,
+      "canRunCoherenceProof": false,
+      "canRunMVPProof": false,
+      "reason": "Wait for the live Windows agent before running proof commands."
+    }
   },
   "nextActions": [
     "Run `veil-vmctl qemu-start --json --wait-seconds 30` to start the local Windows runtime for the selected app.",

@@ -147,5 +147,12 @@
   },
   "phase": "connected",
   "restorableAppIds": [],
-  "selectedAppId": "winapp_notepad"
+  "selectedAppId": "winapp_notepad",
+  "proofPlan": {
+    "selectedAppId": "winapp_notepad",
+    "canRunAppWindowProof": false,
+    "canRunCoherenceProof": false,
+    "canRunMVPProof": false,
+    "reason": "Wait for the live Windows agent before running proof commands."
+  }
 }

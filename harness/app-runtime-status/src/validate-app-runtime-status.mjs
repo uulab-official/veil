@@ -35,6 +35,7 @@ export function validateAppRuntimeStatus(report) {
   validateLauncherVisibility(report.launcherVisibility, report);
   validateQuietRuntime(report.quietRuntime, report.mirrorSessions);
   validateLaunchPlan(report.launchPlan, report);
+  validateProofPlan(report.proofPlan, report);
   validateActions(report.actions, report);
 
   if (report.selectedAppId !== undefined) {
@@ -381,6 +382,92 @@ function validateLaunchPlan(launchPlan, report) {
   }
 }
 
+function validateProofPlan(proofPlan, report) {
+  if (!proofPlan || typeof proofPlan !== "object" || Array.isArray(proofPlan)) {
+    throw new TypeError("proofPlan must be an object.");
+  }
+
+  requireBoolean(proofPlan.canRunAppWindowProof, "proofPlan.canRunAppWindowProof");
+  requireBoolean(proofPlan.canRunCoherenceProof, "proofPlan.canRunCoherenceProof");
+  requireBoolean(proofPlan.canRunMVPProof, "proofPlan.canRunMVPProof");
+  requireString(proofPlan.reason, "proofPlan.reason");
+
+  if (proofPlan.selectedAppId !== undefined) {
+    requireString(proofPlan.selectedAppId, "proofPlan.selectedAppId");
+    if (report.selectedAppId !== proofPlan.selectedAppId) {
+      throw new TypeError("proofPlan.selectedAppId must match selectedAppId.");
+    }
+  }
+
+  if (report.selectedAppId !== undefined && proofPlan.selectedAppId !== report.selectedAppId) {
+    throw new TypeError("proofPlan.selectedAppId must be present when selectedAppId is present.");
+  }
+
+  const selectedApp = report.apps.find((app) => app.id === report.selectedAppId);
+  const capabilities = report.connection.capabilities;
+  const canRunAppWindowProof = report.connection.hasLiveAgentConnection
+    && selectedApp?.canLaunchNow === true
+    && capabilities?.windowCapture === true;
+  const canRunCoherenceProof = canRunAppWindowProof
+    && capabilities?.input === true
+    && capabilities?.clipboardText === true;
+
+  if (proofPlan.canRunAppWindowProof !== canRunAppWindowProof) {
+    throw new TypeError("proofPlan.canRunAppWindowProof must match live app launch and window capture readiness.");
+  }
+
+  if (proofPlan.canRunCoherenceProof !== canRunCoherenceProof) {
+    throw new TypeError("proofPlan.canRunCoherenceProof must match input and clipboard proof readiness.");
+  }
+
+  if (proofPlan.canRunMVPProof !== canRunCoherenceProof) {
+    throw new TypeError("proofPlan.canRunMVPProof must match coherence proof readiness.");
+  }
+
+  const expectedAppWindowCommand = report.selectedAppId === undefined
+    ? undefined
+    : `veil-vmctl app-window-proof --json --app-id ${report.selectedAppId}`;
+  const expectedCoherenceCommand = report.selectedAppId === undefined
+    ? undefined
+    : `veil-vmctl coherence-proof --json --app-id ${report.selectedAppId}`;
+  const expectedMVPCommand = report.selectedAppId === undefined
+    ? undefined
+    : `veil-vmctl mvp-proof --json --app-id ${report.selectedAppId} --require-proved`;
+
+  validateProofCommand(
+    proofPlan.recommendedAppWindowProofCommand,
+    "proofPlan.recommendedAppWindowProofCommand",
+    proofPlan.canRunAppWindowProof,
+    expectedAppWindowCommand
+  );
+  validateProofCommand(
+    proofPlan.recommendedCoherenceProofCommand,
+    "proofPlan.recommendedCoherenceProofCommand",
+    proofPlan.canRunCoherenceProof,
+    expectedCoherenceCommand
+  );
+  validateProofCommand(
+    proofPlan.recommendedMVPProofCommand,
+    "proofPlan.recommendedMVPProofCommand",
+    proofPlan.canRunMVPProof,
+    expectedMVPCommand
+  );
+}
+
+function validateProofCommand(command, fieldName, isAvailable, expectedCommand) {
+  if (isAvailable) {
+    requireString(command, fieldName);
+    if (command !== expectedCommand) {
+      throw new TypeError(`${fieldName} must match the selected app proof command.`);
+    }
+    return;
+  }
+
+  if (command !== undefined) {
+    throw new TypeError(`${fieldName} is only allowed when the matching proof is available.`);
+  }
+}
+
 function validateDockIntegration(dockIntegration, mirrorSessions, report) {
   if (!dockIntegration || typeof dockIntegration !== "object" || Array.isArray(dockIntegration)) {
     throw new TypeError("dockIntegration must be an object.");
@@ -533,18 +620,21 @@ function validateActions(actions, report) {
     && capabilities?.clipboardText === true;
 
   const appWindowProofAction = actions.find((action) => action.id === "proof.appWindow");
-  if (appWindowProofAction.isAvailable !== canRunAppWindowProof) {
-    throw new TypeError("proof.appWindow availability must match live app launch and window capture readiness.");
+  if (appWindowProofAction.isAvailable !== canRunAppWindowProof
+      || appWindowProofAction.isAvailable !== report.proofPlan.canRunAppWindowProof) {
+    throw new TypeError("proof.appWindow availability must match live app launch, window capture readiness, and proofPlan.");
   }
 
   const coherenceProofAction = actions.find((action) => action.id === "proof.coherence");
-  if (coherenceProofAction.isAvailable !== canRunCoherenceProof) {
-    throw new TypeError("proof.coherence availability must match input and clipboard proof readiness.");
+  if (coherenceProofAction.isAvailable !== canRunCoherenceProof
+      || coherenceProofAction.isAvailable !== report.proofPlan.canRunCoherenceProof) {
+    throw new TypeError("proof.coherence availability must match input, clipboard proof readiness, and proofPlan.");
   }
 
   const mvpProofAction = actions.find((action) => action.id === "proof.mvp");
-  if (mvpProofAction.isAvailable !== canRunCoherenceProof) {
-    throw new TypeError("proof.mvp availability must match coherence proof readiness.");
+  if (mvpProofAction.isAvailable !== canRunCoherenceProof
+      || mvpProofAction.isAvailable !== report.proofPlan.canRunMVPProof) {
+    throw new TypeError("proof.mvp availability must match coherence proof readiness and proofPlan.");
   }
 }
 

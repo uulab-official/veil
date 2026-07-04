@@ -58,6 +58,7 @@ Goal: move Veil from a Veil shell plus separate QEMU Cocoa display toward a UTM-
 - [x] Add `app-runtime-action --action stop-runtime` so automation can move from quiet-ready Windows app sessions to local runtime stop without dropping into QEMU-specific commands.
 - [x] Add `runtime.stopWhenIdle` to app-runtime status actions so stop-runtime availability is state-gated beside quiet-runtime readiness.
 - [x] Surface live guest-agent capabilities and proof action availability in app-runtime status so app-window, coherence, and MVP proof runs are gated before real Windows validation.
+- [x] Add a `proofPlan` status contract with exact app-window, coherence, and MVP proof commands so the single-window runtime can hand off to validation without guessing.
 
 ## Next
 

@@ -355,6 +355,37 @@ public struct WindowsAppRuntimeLaunchPlanStatus: Codable, Equatable, Sendable {
     }
 }
 
+public struct WindowsAppRuntimeProofPlanStatus: Codable, Equatable, Sendable {
+    public var selectedAppId: String?
+    public var canRunAppWindowProof: Bool
+    public var canRunCoherenceProof: Bool
+    public var canRunMVPProof: Bool
+    public var recommendedAppWindowProofCommand: String?
+    public var recommendedCoherenceProofCommand: String?
+    public var recommendedMVPProofCommand: String?
+    public var reason: String
+
+    public init(
+        selectedAppId: String?,
+        canRunAppWindowProof: Bool,
+        canRunCoherenceProof: Bool,
+        canRunMVPProof: Bool,
+        recommendedAppWindowProofCommand: String? = nil,
+        recommendedCoherenceProofCommand: String? = nil,
+        recommendedMVPProofCommand: String? = nil,
+        reason: String
+    ) {
+        self.selectedAppId = selectedAppId
+        self.canRunAppWindowProof = canRunAppWindowProof
+        self.canRunCoherenceProof = canRunCoherenceProof
+        self.canRunMVPProof = canRunMVPProof
+        self.recommendedAppWindowProofCommand = recommendedAppWindowProofCommand
+        self.recommendedCoherenceProofCommand = recommendedCoherenceProofCommand
+        self.recommendedMVPProofCommand = recommendedMVPProofCommand
+        self.reason = reason
+    }
+}
+
 public struct WindowsAppRuntimePendingLaunchStatus: Codable, Equatable, Sendable {
     public var isQueued: Bool
     public var appId: String?
@@ -393,6 +424,7 @@ public struct WindowsAppRuntimeStatusReport: Codable, Equatable, Sendable {
     public var macWindowIntegration: WindowsAppRuntimeMacWindowIntegrationStatus
     public var quietRuntime: WindowsAppRuntimeQuietPolicyStatus
     public var launchPlan: WindowsAppRuntimeLaunchPlanStatus
+    public var proofPlan: WindowsAppRuntimeProofPlanStatus
     public var actions: [WindowsAppRuntimeActionStatus]
 
     public init(
@@ -411,6 +443,7 @@ public struct WindowsAppRuntimeStatusReport: Codable, Equatable, Sendable {
         macWindowIntegration: WindowsAppRuntimeMacWindowIntegrationStatus,
         quietRuntime: WindowsAppRuntimeQuietPolicyStatus,
         launchPlan: WindowsAppRuntimeLaunchPlanStatus,
+        proofPlan: WindowsAppRuntimeProofPlanStatus,
         actions: [WindowsAppRuntimeActionStatus]
     ) {
         self.kind = kind
@@ -428,6 +461,7 @@ public struct WindowsAppRuntimeStatusReport: Codable, Equatable, Sendable {
         self.macWindowIntegration = macWindowIntegration
         self.quietRuntime = quietRuntime
         self.launchPlan = launchPlan
+        self.proofPlan = proofPlan
         self.actions = actions
     }
 }
@@ -609,6 +643,7 @@ public final class HostDashboardModel {
             macWindowIntegration: macWindowIntegration
         )
         let launchPlan = launchPlanStatus()
+        let proofPlan = proofPlanStatus()
         let pendingLaunch = pendingLaunchStatus()
         return WindowsAppRuntimeStatusReport(
             generatedAt: generatedAt,
@@ -658,6 +693,7 @@ public final class HostDashboardModel {
             macWindowIntegration: macWindowIntegration,
             quietRuntime: quietRuntime,
             launchPlan: launchPlan,
+            proofPlan: proofPlan,
             actions: [
                 WindowsAppRuntimeActionStatus(
                     id: "dock.openMainWindow",
@@ -848,6 +884,73 @@ public final class HostDashboardModel {
             recommendedAction: "unavailable",
             recommendedWaitCommand: hasLiveAgentConnection ? nil : "veil-vmctl guest-agent-wait --json --wait-seconds 30",
             reason: "The selected Windows app is not available for launch."
+        )
+    }
+
+    public func proofPlanStatus() -> WindowsAppRuntimeProofPlanStatus {
+        guard let selectedAppId else {
+            return WindowsAppRuntimeProofPlanStatus(
+                selectedAppId: nil,
+                canRunAppWindowProof: false,
+                canRunCoherenceProof: false,
+                canRunMVPProof: false,
+                reason: "Select a Windows app before running proof commands."
+            )
+        }
+
+        guard hasLiveAgentConnection else {
+            return WindowsAppRuntimeProofPlanStatus(
+                selectedAppId: selectedAppId,
+                canRunAppWindowProof: false,
+                canRunCoherenceProof: false,
+                canRunMVPProof: false,
+                reason: "Wait for the live Windows agent before running proof commands."
+            )
+        }
+
+        guard canLaunchApp(appId: selectedAppId) else {
+            return WindowsAppRuntimeProofPlanStatus(
+                selectedAppId: selectedAppId,
+                canRunAppWindowProof: false,
+                canRunCoherenceProof: false,
+                canRunMVPProof: false,
+                reason: "The selected Windows app is not available for proof launch."
+            )
+        }
+
+        let appWindowCommand = "veil-vmctl app-window-proof --json --app-id \(selectedAppId)"
+
+        guard health?.capabilities.windowCapture == true else {
+            return WindowsAppRuntimeProofPlanStatus(
+                selectedAppId: selectedAppId,
+                canRunAppWindowProof: false,
+                canRunCoherenceProof: false,
+                canRunMVPProof: false,
+                reason: "The live Windows agent must report windowCapture before app-window proof can run."
+            )
+        }
+
+        guard health?.capabilities.input == true,
+              health?.capabilities.clipboardText == true else {
+            return WindowsAppRuntimeProofPlanStatus(
+                selectedAppId: selectedAppId,
+                canRunAppWindowProof: true,
+                canRunCoherenceProof: false,
+                canRunMVPProof: false,
+                recommendedAppWindowProofCommand: appWindowCommand,
+                reason: "The live Windows agent must report input and clipboardText before coherence and MVP proof can run."
+            )
+        }
+
+        return WindowsAppRuntimeProofPlanStatus(
+            selectedAppId: selectedAppId,
+            canRunAppWindowProof: true,
+            canRunCoherenceProof: true,
+            canRunMVPProof: true,
+            recommendedAppWindowProofCommand: appWindowCommand,
+            recommendedCoherenceProofCommand: "veil-vmctl coherence-proof --json --app-id \(selectedAppId)",
+            recommendedMVPProofCommand: "veil-vmctl mvp-proof --json --app-id \(selectedAppId) --require-proved",
+            reason: "The live Windows agent can run app-window, coherence, and MVP proof commands for the selected app."
         )
     }
 

@@ -66,6 +66,16 @@ test("rejects reports without launch plan status", () => {
   );
 });
 
+test("rejects reports without proof plan status", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.demo.json", import.meta.url), "utf8"));
+  delete report.proofPlan;
+
+  assert.throws(
+    () => validateAppRuntimeStatus(report),
+    /proofPlan/
+  );
+});
+
 test("rejects reports without pending launch status", () => {
   const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.demo.json", import.meta.url), "utf8"));
   delete report.pendingLaunch;
@@ -294,7 +304,7 @@ test("rejects live agent reports without structured capabilities", () => {
 
 test("rejects proof action availability that drifts from capture readiness", () => {
   const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.mac-window-live.json", import.meta.url), "utf8"));
-  report.connection.capabilities.windowCapture = false;
+  report.actions.find((action) => action.id === "proof.appWindow").isAvailable = false;
 
   assert.throws(
     () => validateAppRuntimeStatus(report),
@@ -304,8 +314,7 @@ test("rejects proof action availability that drifts from capture readiness", () 
 
 test("rejects coherence proof availability that drifts from input readiness", () => {
   const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.mac-window-live.json", import.meta.url), "utf8"));
-  report.connection.capabilities.input = false;
-  report.actions.find((action) => action.id === "proof.mvp").isAvailable = false;
+  report.actions.find((action) => action.id === "proof.coherence").isAvailable = false;
 
   assert.throws(
     () => validateAppRuntimeStatus(report),
@@ -320,6 +329,49 @@ test("rejects MVP proof availability that drifts from coherence readiness", () =
   assert.throws(
     () => validateAppRuntimeStatus(report),
     /proof\.mvp/
+  );
+});
+
+test("rejects proof plan availability that drifts from capture readiness", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.mac-window-live.json", import.meta.url), "utf8"));
+  report.connection.capabilities.windowCapture = false;
+  delete report.proofPlan.recommendedAppWindowProofCommand;
+  delete report.proofPlan.recommendedCoherenceProofCommand;
+  delete report.proofPlan.recommendedMVPProofCommand;
+
+  assert.throws(
+    () => validateAppRuntimeStatus(report),
+    /proofPlan\.canRunAppWindowProof/
+  );
+});
+
+test("rejects proof plan commands that drift from selected app", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.mac-window-live.json", import.meta.url), "utf8"));
+  report.proofPlan.recommendedAppWindowProofCommand = "veil-vmctl app-window-proof --json --app-id winapp_calculator";
+
+  assert.throws(
+    () => validateAppRuntimeStatus(report),
+    /recommendedAppWindowProofCommand/
+  );
+});
+
+test("rejects proof plans without the selected app id", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.mac-window-live.json", import.meta.url), "utf8"));
+  delete report.proofPlan.selectedAppId;
+
+  assert.throws(
+    () => validateAppRuntimeStatus(report),
+    /proofPlan\.selectedAppId/
+  );
+});
+
+test("rejects MVP proof plans without require-proved", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.mac-window-live.json", import.meta.url), "utf8"));
+  report.proofPlan.recommendedMVPProofCommand = "veil-vmctl mvp-proof --json --app-id winapp_notepad";
+
+  assert.throws(
+    () => validateAppRuntimeStatus(report),
+    /recommendedMVPProofCommand/
   );
 });
 

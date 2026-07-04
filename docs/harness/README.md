@@ -103,7 +103,11 @@ from the same app-runtime status contract.
 When a live agent is connected, `connection.capabilities` mirrors the agent's
 app launch, window capture, input, and clipboard support. The proof actions
 `proof.appWindow`, `proof.coherence`, and `proof.mvp` are available only when
-those capabilities can support the matching proof command.
+those capabilities can support the matching proof command. The sibling
+`proofPlan` object carries the selected app id, readiness booleans, and exact
+`veil-vmctl app-window-proof`, `coherence-proof`, and `mvp-proof --require-proved`
+commands so automation can move from status to proof without rebuilding command
+strings.
 
 ```bash
 cd apps/mac-host
@@ -236,11 +240,11 @@ cd apps/mac-host
 swift run veil-vmctl guest-agent-wait --json --wait-seconds 30 | node ../../harness/guest-agent-wait/src/validate-guest-agent-wait.mjs
 ```
 
-A connected report must point automation at `app-runtime-status` and
-`app-window-proof`. An unavailable report must keep the recovery path explicit:
-confirm the Windows desktop is running, install `Veil Guest Agent` from the
-shared media, collect the Windows-side diagnostics ZIP if needed, and verify
-QEMU/HVF port forwarding.
+A connected report must point automation at `app-runtime-status` plus the
+current `proofPlan` command. An unavailable report must keep the recovery path
+explicit: confirm the Windows desktop is running, install `Veil Guest Agent`
+from the shared media, collect the Windows-side diagnostics ZIP if needed, and
+verify QEMU/HVF port forwarding.
 
 ## Provider Probe Scenario
 
