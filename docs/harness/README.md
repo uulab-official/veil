@@ -40,7 +40,7 @@ Current executable pieces:
 - `harness/fake-host`: a CLI simulator for the future macOS host flow.
 - `harness/runtime-provider-probe`: a JSON validator for serverless local runtime provider output.
 - `harness/app-runtime-status`: a JSON validator for app runtime status, open HWND sessions, Dock integration state, and supported actions.
-- `harness/app-runtime-action`: a JSON validator for launch, pending-launch fulfillment, bring-forward, focus, close, close-all, restore, input, clipboard, and quiet-runtime app-runtime actions.
+- `harness/app-runtime-action`: a JSON validator for launch, pending-launch fulfillment, bring-forward, focus, close, close-all, restore, input, clipboard, quiet-runtime, and recommended proof app-runtime actions.
 - `harness/app-window-proof`: a JSON validator for one app launch, one tracked HWND, and the first captured frame evidence.
 - `harness/coherence-proof`: a JSON validator for one app launch, one tracked HWND, first and post-input frame evidence, mouse/key input, and host clipboard send evidence.
 - `harness/mvp-proof`: a JSON validator for the full Notepad MVP gate: guest-agent readiness plus Coherence proof evidence.
@@ -110,7 +110,10 @@ commands so automation can move from status to proof without rebuilding command
 strings. It also exposes `recommendedProofKind` and `recommendedProofCommand`
 as the strongest currently available single proof CTA. The `actions` list must
 include `proof.recommended`, available exactly when that recommended command is
-present.
+present. The matching command surface is
+`veil-vmctl app-runtime-action --json --action proof-recommended`, which runs
+the strongest available proof and returns a `proof` evidence summary inside the
+same action report.
 
 ```bash
 cd apps/mac-host
@@ -168,6 +171,7 @@ swift run veil-vmctl app-runtime-action --json --action bring-forward | node ../
 swift run veil-vmctl app-runtime-action --json --action click --window-id hwnd:0003029A --x 240 --y 130 | node ../../harness/app-runtime-action/src/validate-app-runtime-action.mjs
 swift run veil-vmctl app-runtime-action --json --action clipboard --text "hello from macOS" | node ../../harness/app-runtime-action/src/validate-app-runtime-action.mjs
 swift run veil-vmctl app-runtime-action --json --action type-text --window-id hwnd:0003029A --text "veil" | node ../../harness/app-runtime-action/src/validate-app-runtime-action.mjs
+swift run veil-vmctl app-runtime-action --json --action proof-recommended | node ../../harness/app-runtime-action/src/validate-app-runtime-action.mjs
 swift run veil-vmctl app-runtime-action --json --action close --window-id hwnd:0003029A | node ../../harness/app-runtime-action/src/validate-app-runtime-action.mjs
 swift run veil-vmctl app-runtime-action --json --action close-all | node ../../harness/app-runtime-action/src/validate-app-runtime-action.mjs
 swift run veil-vmctl app-runtime-action --json --action quiet-when-idle | node ../../harness/app-runtime-action/src/validate-app-runtime-action.mjs

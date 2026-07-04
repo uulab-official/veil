@@ -52,6 +52,12 @@ test("validates app runtime close-all action fixture", () => {
   assert.equal(validateAppRuntimeAction(report), report);
 });
 
+test("validates recommended proof action fixture", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-action.proof-recommended-live.json", import.meta.url), "utf8"));
+
+  assert.equal(validateAppRuntimeAction(report), report);
+});
+
 test("rejects accepted launch actions without a window", () => {
   const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-action.launch-demo.json", import.meta.url), "utf8"));
   delete report.window;
@@ -217,6 +223,46 @@ test("rejects accepted actions without proof handoff in next actions", () => {
   assert.throws(
     () => validateAppRuntimeAction(report),
     /nextActions/
+  );
+});
+
+test("rejects recommended proof actions whose proof command drifts from proof plan", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-action.proof-recommended-live.json", import.meta.url), "utf8"));
+  report.proof.command = "veil-vmctl app-window-proof --json --app-id winapp_notepad";
+
+  assert.throws(
+    () => validateAppRuntimeAction(report),
+    /proof\.command/
+  );
+});
+
+test("rejects accepted recommended proof actions without proof evidence", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-action.proof-recommended-live.json", import.meta.url), "utf8"));
+  delete report.proof;
+
+  assert.throws(
+    () => validateAppRuntimeAction(report),
+    /proof-recommended actions must include proof/
+  );
+});
+
+test("rejects proof evidence on non-proof actions", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-action.launch-demo.json", import.meta.url), "utf8"));
+  report.proof = {
+    kind: "windowsAppRuntimeRecommendedProofRun",
+    proofKind: "app-window",
+    command: "veil-vmctl app-window-proof --json --app-id winapp_notepad",
+    appId: "winapp_notepad",
+    status: "proved",
+    windowId: "hwnd:0003029A",
+    windowTitle: "Untitled - Notepad",
+    frameSequence: 1,
+    nextActions: []
+  };
+
+  assert.throws(
+    () => validateAppRuntimeAction(report),
+    /proof is only allowed/
   );
 });
 

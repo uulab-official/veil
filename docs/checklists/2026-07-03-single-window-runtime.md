@@ -63,6 +63,7 @@ Goal: move Veil from a Veil shell plus separate QEMU Cocoa display toward a UTM-
 - [x] Add a single recommended proof CTA to `proofPlan` so UI and automation can launch the strongest available proof without reimplementing priority rules.
 - [x] Add `proof.recommended` to app-runtime actions so the launcher/menu can expose one proof button gated by `recommendedProofCommand`.
 - [x] Surface the recommended proof readiness in the installed Windows launcher strip so the single-window UI shows when app-window, coherence, or MVP proof is the next gate.
+- [x] Add `app-runtime-action --action proof-recommended` so the same action surface can run the strongest available app-window, coherence, or MVP proof and return evidence.
 
 ## Next
 

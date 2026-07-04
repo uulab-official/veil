@@ -1,0 +1,233 @@
+{
+  "kind": "windowsAppRuntimeAction",
+  "action": "proof-recommended",
+  "requestedAt": "2026-07-04T03:05:00Z",
+  "endpoint": "ws://127.0.0.1:18444",
+  "connectionMode": "agent",
+  "accepted": true,
+  "appId": "winapp_notepad",
+  "windowId": "hwnd:0003029A",
+  "foregroundWindowId": "hwnd:0003029A",
+  "foregroundWindowTitle": "Untitled - Notepad",
+  "closedWindows": [],
+  "mouseInputs": [],
+  "keyInputs": [],
+  "restoredWindows": [],
+  "restoreRequestedAppIds": [],
+  "broughtForwardWindowIds": [],
+  "status": {
+    "kind": "windowsAppRuntimeStatus",
+    "generatedAt": "2026-07-04T03:05:01Z",
+    "phase": "connected",
+    "selectedAppId": "winapp_notepad",
+    "pendingLaunch": {
+      "isQueued": false,
+      "willLaunchOnAgentReconnect": false,
+      "recommendedAction": "none",
+      "reason": "No Windows app launch is queued."
+    },
+    "connection": {
+      "mode": "agent",
+      "hasLiveAgentConnection": true,
+      "agentVersion": "0.1.0",
+      "os": "windows-arm64",
+      "capabilities": {
+        "appList": true,
+        "appLaunch": true,
+        "windowTracking": true,
+        "windowCapture": true,
+        "input": true,
+        "clipboardText": true
+      }
+    },
+    "dockIntegration": {
+      "isEnabled": true,
+      "openWindowCount": 1,
+      "pendingLaunchCount": 0,
+      "badgeLabel": "1",
+      "canOpenMainWindow": true,
+      "canBringWindowsAppsForward": true,
+      "canRestorePreviousApps": false,
+      "canLaunchSelectedApp": true
+    },
+    "launcherVisibility": {
+      "isEnabled": true,
+      "canOpenMainWindow": true,
+      "shouldHideMainWindow": true,
+      "keepsDockMenuAvailable": true,
+      "recommendedAction": "hide-main-window-use-app-windows",
+      "reason": "A live Windows app window is mirrored, so the main launcher should stay hidden while Dock and menu controls remain available."
+    },
+    "macWindowIntegration": {
+      "isEnabled": true,
+      "acceptsGuestWindowEvents": true,
+      "opensMacWindowsAutomatically": true,
+      "hidesLauncherWhenMirroring": true,
+      "mirroredWindowCount": 1,
+      "pendingFrameWindowCount": 1,
+      "streamingWindowCount": 0,
+      "reason": "Guest HWND sessions are mirrored as macOS windows.",
+      "foregroundableWindowCount": 1,
+      "foregroundWindowId": "hwnd:0003029A",
+      "foregroundWindowTitle": "Untitled - Notepad"
+    },
+    "quietRuntime": {
+      "isEnabled": true,
+      "hasOpenedAppWindowThisSession": true,
+      "openWindowCount": 1,
+      "canQuietRuntime": false,
+      "willQuietAutomatically": false,
+      "automaticQuietDelaySeconds": 8,
+      "recommendedAction": "keep-running",
+      "reason": "Windows app windows are still open."
+    },
+    "launchPlan": {
+      "selectedAppId": "winapp_notepad",
+      "canRequestSelectedAppLaunch": true,
+      "canLaunchSelectedAppNow": true,
+      "requiresRuntimeStart": false,
+      "requiresGuestAgent": false,
+      "recommendedAction": "launch-now",
+      "recommendedLaunchCommand": "veil-vmctl app-runtime-action --json --action launch --app-id winapp_notepad",
+      "reason": "The live Windows agent can launch the selected app now."
+    },
+    "apps": [
+      {
+        "id": "winapp_notepad",
+        "name": "Notepad",
+        "canRequestLaunch": true,
+        "canLaunchNow": true
+      }
+    ],
+    "mirrorSessions": [
+      {
+        "windowId": "hwnd:0003029A",
+        "appId": "winapp_notepad",
+        "title": "Untitled - Notepad",
+        "captureState": "pending",
+        "canFocus": true,
+        "canClose": true,
+        "canSendInput": true
+      }
+    ],
+    "restorableAppIds": [
+      "winapp_notepad"
+    ],
+    "actions": [
+      {
+        "id": "dock.openMainWindow",
+        "title": "Open Veil From Dock",
+        "isAvailable": true
+      },
+      {
+        "id": "dock.bringWindowsAppsForward",
+        "title": "Bring Windows Apps Forward",
+        "isAvailable": true
+      },
+      {
+        "id": "windowsApps.restorePrevious",
+        "title": "Restore Previous Apps",
+        "isAvailable": false
+      },
+      {
+        "id": "windowsApps.closeAll",
+        "title": "Close All Windows Apps",
+        "isAvailable": true
+      },
+      {
+        "id": "macWindows.autoOpen",
+        "title": "Auto Open Windows App Windows",
+        "isAvailable": true
+      },
+      {
+        "id": "runtime.startWindowsForApp",
+        "title": "Start Windows For App Launch",
+        "isAvailable": false
+      },
+      {
+        "id": "runtime.fulfillPendingLaunch",
+        "title": "Open Queued Windows App",
+        "isAvailable": false
+      },
+      {
+        "id": "runtime.quietWhenIdle",
+        "title": "Quiet Runtime When Idle",
+        "isAvailable": false
+      },
+      {
+        "id": "runtime.stopWhenIdle",
+        "title": "Stop Runtime When Idle",
+        "isAvailable": false
+      },
+      {
+        "id": "proof.appWindow",
+        "title": "Run App Window Proof",
+        "isAvailable": true
+      },
+      {
+        "id": "proof.coherence",
+        "title": "Run Coherence Proof",
+        "isAvailable": true
+      },
+      {
+        "id": "proof.mvp",
+        "title": "Run MVP Proof",
+        "isAvailable": true
+      },
+      {
+        "id": "proof.recommended",
+        "title": "Run Recommended Proof",
+        "isAvailable": true
+      },
+      {
+        "id": "clipboard.setText",
+        "title": "Set Windows Clipboard Text",
+        "isAvailable": true
+      }
+    ],
+    "proofPlan": {
+      "selectedAppId": "winapp_notepad",
+      "canRunAppWindowProof": true,
+      "canRunCoherenceProof": true,
+      "canRunMVPProof": true,
+      "recommendedAppWindowProofCommand": "veil-vmctl app-window-proof --json --app-id winapp_notepad",
+      "recommendedCoherenceProofCommand": "veil-vmctl coherence-proof --json --app-id winapp_notepad",
+      "recommendedMVPProofCommand": "veil-vmctl mvp-proof --json --app-id winapp_notepad --require-proved",
+      "reason": "The live Windows agent can run app-window, coherence, and MVP proof commands for the selected app.",
+      "recommendedProofKind": "mvp",
+      "recommendedProofCommand": "veil-vmctl mvp-proof --json --app-id winapp_notepad --require-proved"
+    }
+  },
+  "nextActions": [
+    "Attach the proof artifact or JSON report to the current runtime gate.",
+    "Run `veil-vmctl app-runtime-status --json` to inspect the next available Windows app runtime action."
+  ],
+  "proofPlan": {
+    "selectedAppId": "winapp_notepad",
+    "canRunAppWindowProof": true,
+    "canRunCoherenceProof": true,
+    "canRunMVPProof": true,
+    "recommendedAppWindowProofCommand": "veil-vmctl app-window-proof --json --app-id winapp_notepad",
+    "recommendedCoherenceProofCommand": "veil-vmctl coherence-proof --json --app-id winapp_notepad",
+    "recommendedMVPProofCommand": "veil-vmctl mvp-proof --json --app-id winapp_notepad --require-proved",
+    "reason": "The live Windows agent can run app-window, coherence, and MVP proof commands for the selected app.",
+    "recommendedProofKind": "mvp",
+    "recommendedProofCommand": "veil-vmctl mvp-proof --json --app-id winapp_notepad --require-proved"
+  },
+  "proof": {
+    "kind": "windowsAppRuntimeRecommendedProofRun",
+    "proofKind": "mvp",
+    "command": "veil-vmctl mvp-proof --json --app-id winapp_notepad --require-proved",
+    "appId": "winapp_notepad",
+    "status": "proved",
+    "windowId": "hwnd:0003029A",
+    "windowTitle": "Untitled - Notepad",
+    "frameSequence": 7,
+    "inputEventCount": 10,
+    "clipboardTextByteCount": 19,
+    "nextActions": [
+      "Open the mirrored HWND in the Veil host shell as a macOS window.",
+      "Attach the saved MVP proof artifact to release gates and app-runtime bug reports."
+    ]
+  }
+}

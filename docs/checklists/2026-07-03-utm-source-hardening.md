@@ -93,3 +93,4 @@ Goal: adapt concrete UTM source patterns into Veil while keeping Veil focused on
 - [x] Add `recommendedProofKind` and `recommendedProofCommand` so UTM-style command surfaces can show one proof CTA instead of re-sorting proof capability fields.
 - [x] Add `proof.recommended` to the status action list so UTM-style command surfaces can gate a single proof CTA from the same action contract as launch, stop, and restore.
 - [x] Show the recommended proof gate in the installed Windows launcher flow so UTM-style status automation has a matching macOS UI surface.
+- [x] Add `proof-recommended` to `app-runtime-action` with harness validation so UTM-style automation can execute the strongest proof gate through the same command surface.

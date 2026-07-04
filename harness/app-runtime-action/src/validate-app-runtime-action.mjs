@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 
 import { validateAppRuntimeStatus } from "../../app-runtime-status/src/validate-app-runtime-status.mjs";
 
-const VALID_ACTIONS = new Set(["launch", "fulfill-pending", "focus", "close", "close-all", "restore", "bring-forward", "quiet-when-idle", "stop-runtime", "clipboard", "type-text", "click"]);
+const VALID_ACTIONS = new Set(["launch", "fulfill-pending", "focus", "close", "close-all", "restore", "bring-forward", "quiet-when-idle", "stop-runtime", "clipboard", "type-text", "click", "proof-recommended"]);
 const VALID_CONNECTION_MODES = new Set(["agent", "demo"]);
 
 export function validateAppRuntimeAction(report) {
@@ -45,6 +45,10 @@ export function validateAppRuntimeAction(report) {
     throw new TypeError("runtimeStop is only allowed for stop-runtime actions.");
   }
 
+  if (report.action !== "proof-recommended" && report.proof !== undefined && report.proof !== null) {
+    throw new TypeError("proof is only allowed for proof-recommended actions.");
+  }
+
   switch (report.action) {
     case "launch":
       validateLaunchAction(report);
@@ -82,11 +86,25 @@ export function validateAppRuntimeAction(report) {
     case "click":
       validateClickAction(report);
       break;
+    case "proof-recommended":
+      validateProofRecommendedAction(report);
+      break;
   }
 
   validateStringArray(report.nextActions, "nextActions");
   validateProofNextActions(report);
   return report;
+}
+
+function validateProofRecommendedAction(report) {
+  if (!report.accepted) {
+    if (report.proof !== undefined && report.proof !== null) {
+      throw new TypeError("rejected proof-recommended actions cannot include proof.");
+    }
+    return;
+  }
+
+  validateRecommendedProofRun(report.proof, report);
 }
 
 function validateFulfillPendingAction(report) {
@@ -246,6 +264,67 @@ function validateActionProofPlan(report) {
 
   if (JSON.stringify(report.proofPlan) !== JSON.stringify(report.status.proofPlan)) {
     throw new TypeError("top-level proofPlan must match report.status.proofPlan.");
+  }
+}
+
+function validateRecommendedProofRun(proof, report) {
+  if (!proof || typeof proof !== "object" || Array.isArray(proof)) {
+    throw new TypeError("proof-recommended actions must include proof.");
+  }
+
+  requireString(proof.kind, "proof.kind");
+  if (proof.kind !== "windowsAppRuntimeRecommendedProofRun") {
+    throw new TypeError("Unsupported proof.kind.");
+  }
+
+  requireString(proof.proofKind, "proof.proofKind");
+  requireString(proof.command, "proof.command");
+  requireString(proof.appId, "proof.appId");
+  requireString(proof.status, "proof.status");
+  if (!["proved", "unavailable"].includes(proof.status)) {
+    throw new TypeError("proof.status must be proved or unavailable.");
+  }
+
+  if (proof.proofKind !== report.proofPlan.recommendedProofKind) {
+    throw new TypeError("proof.proofKind must match proofPlan.recommendedProofKind.");
+  }
+
+  if (proof.command !== report.proofPlan.recommendedProofCommand) {
+    throw new TypeError("proof.command must match proofPlan.recommendedProofCommand.");
+  }
+
+  if (proof.appId !== report.proofPlan.selectedAppId) {
+    throw new TypeError("proof.appId must match proofPlan.selectedAppId.");
+  }
+
+  if (report.appId !== proof.appId) {
+    throw new TypeError("proof-recommended appId must match proof.appId.");
+  }
+
+  if (proof.status !== "proved") {
+    throw new TypeError("accepted proof-recommended actions must prove the recommended gate.");
+  }
+
+  requireString(proof.windowId, "proof.windowId");
+  requireString(proof.windowTitle, "proof.windowTitle");
+  requireNumber(proof.frameSequence, "proof.frameSequence");
+  validateStringArray(proof.nextActions, "proof.nextActions");
+
+  if (report.windowId !== proof.windowId) {
+    throw new TypeError("proof-recommended windowId must match proof.windowId.");
+  }
+
+  if (report.foregroundWindowId !== proof.windowId) {
+    throw new TypeError("accepted proof-recommended actions must report the proof window as foreground.");
+  }
+
+  if (report.foregroundWindowTitle !== proof.windowTitle) {
+    throw new TypeError("accepted proof-recommended actions must report the proof window title.");
+  }
+
+  if (proof.proofKind === "coherence" || proof.proofKind === "mvp") {
+    requireNumber(proof.inputEventCount, "proof.inputEventCount");
+    requireNumber(proof.clipboardTextByteCount, "proof.clipboardTextByteCount");
   }
 }
 
@@ -664,6 +743,12 @@ function requireString(value, fieldName) {
 function requireBoolean(value, fieldName) {
   if (typeof value !== "boolean") {
     throw new TypeError(`App runtime action field '${fieldName}' must be boolean.`);
+  }
+}
+
+function requireNumber(value, fieldName) {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    throw new TypeError(`App runtime action field '${fieldName}' must be number.`);
   }
 }
 

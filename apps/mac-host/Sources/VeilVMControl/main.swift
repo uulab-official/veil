@@ -63,9 +63,9 @@ enum VMControlError: Error, LocalizedError {
         case .missingAppId:
             "Missing Windows app id. Pass --app-id winapp_notepad, winapp_calculator, or another id reported by app-runtime-status."
         case .missingAppRuntimeAction:
-            "Missing app runtime action. Pass --action launch, fulfill-pending, focus, close, close-all, restore, bring-forward, quiet-when-idle, stop-runtime, clipboard, type-text, or click."
+            "Missing app runtime action. Pass --action launch, fulfill-pending, focus, close, close-all, restore, bring-forward, quiet-when-idle, stop-runtime, clipboard, type-text, click, or proof-recommended."
         case .unsupportedAppRuntimeAction(let action):
-            "Unsupported app runtime action '\(action)'. Pass --action launch, fulfill-pending, focus, close, close-all, restore, bring-forward, quiet-when-idle, stop-runtime, clipboard, type-text, or click."
+            "Unsupported app runtime action '\(action)'. Pass --action launch, fulfill-pending, focus, close, close-all, restore, bring-forward, quiet-when-idle, stop-runtime, clipboard, type-text, click, or proof-recommended."
         case .missingWindowId:
             "Missing Windows window id. Pass --window-id hwnd:XXXXXXXX from app-runtime-status or app-window-proof."
         case .missingAppRuntimeText:
@@ -83,7 +83,7 @@ enum VMControlError: Error, LocalizedError {
         }
     }
 
-    private static let usage = "Usage: veil-vmctl prepare --installer /path/to/Windows.iso [--drivers /path/to/virtio-win.iso] | veil-vmctl app-runtime-status [--json] [--demo] | veil-vmctl app-runtime-action --action launch|fulfill-pending|focus|close|close-all|restore|bring-forward|quiet-when-idle|stop-runtime|clipboard|type-text|click [--json] [--demo] [--app-id winapp_notepad] [--window-id hwnd:XXXXXXXX] [--text \"...\"] [--x 240 --y 130] | veil-vmctl app-window-proof [--json] [--app-id winapp_notepad] [--wait-seconds 10] [--output /path/to/proof.json] | veil-vmctl coherence-proof [--json] [--app-id winapp_notepad] [--wait-seconds 10] [--output /path/to/proof.json] | veil-vmctl mvp-proof [--json] [--app-id winapp_notepad] [--wait-seconds 30] [--output /path/to/proof.json] [--require-proved] | veil-vmctl guest-agent-wait [--json] [--wait-seconds 30] | veil-vmctl mark-installed [--json] | veil-vmctl providers [--json] | veil-vmctl qemu-plan [--json] | veil-vmctl qemu-doctor [--json] | veil-vmctl qemu-install-status [--json] | veil-vmctl qemu-smoke [--json] [--seconds 45] | veil-vmctl qemu-start [--json] [--wait-seconds 15] [--native-display] | veil-vmctl qemu-display-smoke [--json] [--wait-seconds 5] | veil-vmctl qemu-capture [--json] [--output /path/to/console.png] | veil-vmctl qemu-powerdown [--json] [--wait-seconds 30] | veil-vmctl qemu-force-stop [--json] --i-understand-data-loss [--wait-seconds 10] | veil-vmctl qemu-sendkey [--json] key [key ...] | veil-vmctl qemu-type-text [--json] --text \"...\" | veil-vmctl qemu-click [--json] --x 0...32767 --y 0...32767 | veil-vmctl qemu-oobe-bypass [--json] | veil-vmctl qemu-install-agent [--json]"
+    private static let usage = "Usage: veil-vmctl prepare --installer /path/to/Windows.iso [--drivers /path/to/virtio-win.iso] | veil-vmctl app-runtime-status [--json] [--demo] | veil-vmctl app-runtime-action --action launch|fulfill-pending|focus|close|close-all|restore|bring-forward|quiet-when-idle|stop-runtime|clipboard|type-text|click|proof-recommended [--json] [--demo] [--app-id winapp_notepad] [--window-id hwnd:XXXXXXXX] [--text \"...\"] [--x 240 --y 130] | veil-vmctl app-window-proof [--json] [--app-id winapp_notepad] [--wait-seconds 10] [--output /path/to/proof.json] | veil-vmctl coherence-proof [--json] [--app-id winapp_notepad] [--wait-seconds 10] [--output /path/to/proof.json] | veil-vmctl mvp-proof [--json] [--app-id winapp_notepad] [--wait-seconds 30] [--output /path/to/proof.json] [--require-proved] | veil-vmctl guest-agent-wait [--json] [--wait-seconds 30] | veil-vmctl mark-installed [--json] | veil-vmctl providers [--json] | veil-vmctl qemu-plan [--json] | veil-vmctl qemu-doctor [--json] | veil-vmctl qemu-install-status [--json] | veil-vmctl qemu-smoke [--json] [--seconds 45] | veil-vmctl qemu-start [--json] [--wait-seconds 15] [--native-display] | veil-vmctl qemu-display-smoke [--json] [--wait-seconds 5] | veil-vmctl qemu-capture [--json] [--output /path/to/console.png] | veil-vmctl qemu-powerdown [--json] [--wait-seconds 30] | veil-vmctl qemu-force-stop [--json] --i-understand-data-loss [--wait-seconds 10] | veil-vmctl qemu-sendkey [--json] key [key ...] | veil-vmctl qemu-type-text [--json] --text \"...\" | veil-vmctl qemu-click [--json] --x 0...32767 --y 0...32767 | veil-vmctl qemu-oobe-bypass [--json] | veil-vmctl qemu-install-agent [--json]"
 }
 
 struct VMControlArguments {
@@ -100,6 +100,7 @@ struct VMControlArguments {
         case clipboard
         case typeText = "type-text"
         case click
+        case proofRecommended = "proof-recommended"
     }
 
     enum QEMUStartDisplayMode: Equatable {
@@ -448,6 +449,26 @@ struct QEMUDisplaySmokeRecord: Codable, Equatable {
     var capturedAt: Date
 }
 
+enum AppRuntimeRecommendedProofRunStatus: String, Codable, Equatable {
+    case proved
+    case unavailable
+}
+
+struct AppRuntimeRecommendedProofRun: Codable, Equatable {
+    var kind: String = "windowsAppRuntimeRecommendedProofRun"
+    var proofKind: String
+    var command: String
+    var appId: String
+    var status: AppRuntimeRecommendedProofRunStatus
+    var savedProofPath: String?
+    var windowId: String?
+    var windowTitle: String?
+    var frameSequence: Int?
+    var inputEventCount: Int?
+    var clipboardTextByteCount: Int?
+    var nextActions: [String]
+}
+
 struct AppRuntimeActionReport: Codable, Equatable {
     var kind: String = "windowsAppRuntimeAction"
     var action: VMControlArguments.AppRuntimeAction
@@ -474,6 +495,7 @@ struct AppRuntimeActionReport: Codable, Equatable {
     var restoredWindows: [WindowCreatedEvent]
     var restoreRequestedAppIds: [String]
     var broughtForwardWindowIds: [String]
+    var proof: AppRuntimeRecommendedProofRun?
     var quietRuntime: WindowsAppRuntimeQuietPolicyStatus?
     var runtimeStop: VMRuntimeSnapshot?
     var status: WindowsAppRuntimeStatusReport
@@ -716,6 +738,7 @@ struct VeilVMControl {
         var restoredWindows: [WindowCreatedEvent] = []
         var restoreRequestedAppIds: [String] = []
         var broughtForwardWindowIds: [String] = []
+        var proof: AppRuntimeRecommendedProofRun?
         var foregroundWindowId: String?
         var foregroundWindowTitle: String?
         var quietRuntime: WindowsAppRuntimeQuietPolicyStatus?
@@ -869,6 +892,23 @@ struct VeilVMControl {
                 }
                 accepted = true
             }
+        case .proofRecommended:
+            let currentStatus = model.runtimeStatusReport()
+            if let proofCommand = currentStatus.proofPlan.recommendedProofCommand,
+               let proofKind = currentStatus.proofPlan.recommendedProofKind,
+               let proofAppId = currentStatus.proofPlan.selectedAppId {
+                proof = try await runRecommendedProof(
+                    proofKind: proofKind,
+                    command: proofCommand,
+                    appId: proofAppId,
+                    endpoint: endpoint
+                )
+                resolvedAppId = proofAppId
+                resolvedWindowId = proof?.windowId
+                foregroundWindowId = proof?.windowId
+                foregroundWindowTitle = proof?.windowTitle
+                accepted = proof?.status == .proved
+            }
         }
 
         let status = model.runtimeStatusReport()
@@ -898,6 +938,7 @@ struct VeilVMControl {
             restoredWindows: restoredWindows,
             restoreRequestedAppIds: restoreRequestedAppIds,
             broughtForwardWindowIds: broughtForwardWindowIds,
+            proof: proof,
             quietRuntime: quietRuntime,
             runtimeStop: runtimeStop,
             status: status,
@@ -978,6 +1019,16 @@ struct VeilVMControl {
         if !report.restoreRequestedAppIds.isEmpty {
             print("Restore requested apps: \(report.restoreRequestedAppIds.joined(separator: ", "))")
         }
+        if let proof = report.proof {
+            print("Recommended proof: \(proof.proofKind) \(proof.status.rawValue)")
+            print("Proof command: \(proof.command)")
+            if let windowId = proof.windowId {
+                print("Proof window: \(windowId)")
+            }
+            if let savedProofPath = proof.savedProofPath {
+                print("Proof artifact: \(savedProofPath)")
+            }
+        }
         if let runtimeStop = report.runtimeStop {
             print("Runtime stop state: \(runtimeStop.state.rawValue)")
             print("Runtime stop detail: \(runtimeStop.detail)")
@@ -986,6 +1037,93 @@ struct VeilVMControl {
         print("Next actions:")
         for action in report.nextActions {
             print("  - \(action)")
+        }
+    }
+
+    private static func runRecommendedProof(
+        proofKind: String,
+        command: String,
+        appId: String,
+        endpoint: String
+    ) async throws -> AppRuntimeRecommendedProofRun {
+        let url = URL(string: endpoint) ?? URL(string: "ws://127.0.0.1:18444")!
+        let transport = URLSessionWebSocketTransport(url: url)
+        let client = VeilHostClient(transport: transport)
+
+        switch proofKind {
+        case "app-window":
+            let report = try await client.proveAppWindow(
+                appId: appId,
+                endpoint: endpoint,
+                eventSource: transport
+            )
+            return AppRuntimeRecommendedProofRun(
+                proofKind: proofKind,
+                command: command,
+                appId: appId,
+                status: .proved,
+                savedProofPath: report.savedProofPath,
+                windowId: report.window.windowId,
+                windowTitle: report.window.title,
+                frameSequence: report.frame.sequence,
+                inputEventCount: nil,
+                clipboardTextByteCount: nil,
+                nextActions: report.nextActions
+            )
+        case "coherence":
+            let report = try await client.proveCoherenceAppWindow(
+                appId: appId,
+                endpoint: endpoint,
+                eventSource: transport
+            )
+            return AppRuntimeRecommendedProofRun(
+                proofKind: proofKind,
+                command: command,
+                appId: appId,
+                status: .proved,
+                savedProofPath: report.savedProofPath,
+                windowId: report.window.windowId,
+                windowTitle: report.window.title,
+                frameSequence: report.postInputFrame.sequence,
+                inputEventCount: report.input.mouseEventsPosted.count + report.input.keyEventsPosted.count,
+                clipboardTextByteCount: report.input.clipboardTextByteCount,
+                nextActions: report.nextActions
+            )
+        case "mvp":
+            let report = try await client.proveMVPAppRuntime(
+                appId: appId,
+                endpoint: endpoint,
+                eventSource: transport
+            )
+            return AppRuntimeRecommendedProofRun(
+                proofKind: proofKind,
+                command: command,
+                appId: appId,
+                status: report.status == .proved ? .proved : .unavailable,
+                savedProofPath: report.savedProofPath,
+                windowId: report.coherence?.window.windowId,
+                windowTitle: report.coherence?.window.title,
+                frameSequence: report.coherence?.postInputFrame.sequence,
+                inputEventCount: report.coherence.map { $0.input.mouseEventsPosted.count + $0.input.keyEventsPosted.count },
+                clipboardTextByteCount: report.coherence?.input.clipboardTextByteCount,
+                nextActions: report.nextActions
+            )
+        default:
+            return AppRuntimeRecommendedProofRun(
+                proofKind: proofKind,
+                command: command,
+                appId: appId,
+                status: .unavailable,
+                savedProofPath: nil,
+                windowId: nil,
+                windowTitle: nil,
+                frameSequence: nil,
+                inputEventCount: nil,
+                clipboardTextByteCount: nil,
+                nextActions: [
+                    "Run `veil-vmctl app-runtime-status --json` and check proofPlan.recommendedProofKind before retrying."
+                ]
+            )
         }
     }
 
@@ -1055,7 +1193,19 @@ struct VeilVMControl {
                     "Confirm the clicked control or text area is focused inside the Windows app.",
                     "Run `veil-vmctl app-runtime-action --json --action type-text --window-id ... --text veil` to validate keyboard input after the click."
                 ]
+            case .proofRecommended:
+                return [
+                    "Attach the proof artifact or JSON report to the current runtime gate.",
+                    "Run `veil-vmctl app-runtime-status --json` to inspect the next available Windows app runtime action."
+                ]
             }
+        }
+
+        if action == .proofRecommended {
+            return compactActions([
+                proofNextAction(from: status.proofPlan),
+                "Run `veil-vmctl guest-agent-wait --json` if no proof command is available yet."
+            ])
         }
 
         if action == .stopRuntime {
