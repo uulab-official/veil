@@ -1495,25 +1495,34 @@ public enum QEMUOOBEBypassKeySequence {
 }
 
 public enum QEMUGuestAgentInstallKeySequence {
+    public static let startButtonTapNormalizedX = 0.304
+    public static let startButtonTapNormalizedY = 0.958
+
     public static let commandText =
         #"powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "$volume = Get-Volume -FileSystemLabel 'VEIL_AUTO' -ErrorAction SilentlyContinue | Select-Object -First 1; if ($volume -and $volume.DriveLetter) { $script = Join-Path ($volume.DriveLetter + ':\') 'Veil Guest Agent\scripts\Bootstrap-VeilAgentFromMedia.ps1'; if (Test-Path $script) { powershell.exe -NoProfile -ExecutionPolicy Bypass -File $script } }""#
 
-    public static var steps: [QEMUKeySequenceStep] {
+    public static var stepsAfterStartMenuOpened: [QEMUKeySequenceStep] {
         get throws {
-            let textSteps = try QEMUQMPKeyboardCommandBuilder
-                .keySequence(forText: commandText)
-                .map { QEMUKeySequenceStep(key: $0, delayAfterSend: 0.035) }
             let runSearchSteps = try QEMUQMPKeyboardCommandBuilder
                 .keySequence(forText: "run")
                 .map { QEMUKeySequenceStep(key: $0, delayAfterSend: 0.08) }
-            return [
-                QEMUKeySequenceStep(key: "esc", delayAfterSend: 0.3),
-                QEMUKeySequenceStep(key: "ctrl-esc", delayAfterSend: 0.9)
-            ] + runSearchSteps + [
+            let textSteps = try QEMUQMPKeyboardCommandBuilder
+                .keySequence(forText: commandText)
+                .map { QEMUKeySequenceStep(key: $0, delayAfterSend: 0.035) }
+            return runSearchSteps + [
                 QEMUKeySequenceStep(key: "ret", delayAfterSend: 1.2)
             ] + textSteps + [
                 QEMUKeySequenceStep(key: "ret", delayAfterSend: 1.0)
             ]
+        }
+    }
+
+    public static var steps: [QEMUKeySequenceStep] {
+        get throws {
+            return [
+                QEMUKeySequenceStep(key: "esc", delayAfterSend: 0.3),
+                QEMUKeySequenceStep(key: "ctrl-esc", delayAfterSend: 0.9)
+            ] + (try stepsAfterStartMenuOpened)
         }
     }
 }

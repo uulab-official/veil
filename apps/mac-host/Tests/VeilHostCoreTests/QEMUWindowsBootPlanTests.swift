@@ -1110,6 +1110,20 @@ struct QEMUWindowsBootPlanTests {
         #expect(keys.count < 2_048)
     }
 
+    @Test("guest agent install sequence supports pointer-activated Start search")
+    func guestAgentInstallSequenceSupportsPointerActivatedStartSearch() throws {
+        let steps = try QEMUGuestAgentInstallKeySequence.stepsAfterStartMenuOpened
+        let fallbackSteps = try QEMUGuestAgentInstallKeySequence.steps
+        let keys = steps.map(\.key)
+
+        #expect(QEMUGuestAgentInstallKeySequence.startButtonTapNormalizedX > 0.25)
+        #expect(QEMUGuestAgentInstallKeySequence.startButtonTapNormalizedX < 0.35)
+        #expect(QEMUGuestAgentInstallKeySequence.startButtonTapNormalizedY > 0.9)
+        #expect(Array(keys.prefix(4)) == ["r", "u", "n", "ret"])
+        #expect(keys.last == "ret")
+        #expect(keys.count < fallbackSteps.count)
+    }
+
     @Test("QEMU key sequence sender prefers QMP when launch record has QMP socket")
     func qemuKeySequenceSenderPrefersQMPWhenLaunchRecordHasQMPSocket() async throws {
         let launchRecord = QEMULaunchRecord(

@@ -109,6 +109,9 @@ Goal: keep the main Veil experience pointed at real local Windows boot and conso
 - [x] Start the installed Windows 11 Arm disk without attaching the installer ISO and verify a fresh VM-console capture reaches the Windows desktop.
 - [x] Mark the visible Windows desktop as installed in the local profile so normal starts no longer require the installer ISO.
 - [x] Change `qemu-install-agent` from key-send-only output to a bounded install-attempt report that also waits for guest-agent health.
+- [x] Verify QMP pointer input opens the Windows Start search on the live Windows desktop, then route guest-agent install attempts through that Start activation before typing.
+- [x] Verify the running QEMU PID has the current 349 MB `VeilAutoInstall.iso` attached and that the ISO contains `VeilAgent.exe` plus bootstrap/install/start/diagnostics scripts.
+- [x] Retry the pointer-activated `qemu-install-agent` path and verify the host-forwarded guest-agent endpoint still times out, moving the next investigation to guest-side bootstrap logs.
 - [x] Add recovery copy to QEMU smoke reports for common boot failures.
 - [x] Convert QEMU monitor screenshots to PNG paths so users can inspect boot evidence directly.
 - [x] Surface the latest QEMU console PNG inside the Windows setup screen when launch evidence exists.
@@ -171,7 +174,8 @@ Goal: keep the main Veil experience pointed at real local Windows boot and conso
 
 ## Next
 
-- [ ] Investigate why QMP key-send reports success from the Windows desktop but the refreshed console does not show Start, Run, or PowerShell UI changes.
+- [ ] Investigate any remaining guest-agent bootstrap failure after the new pointer-activated Start search opens Run reliably.
+- [ ] Collect `%LOCALAPPDATA%\Veil\Agent\logs` from the Windows guest after the pointer-activated install attempt.
 - [ ] Use the new `qemu-install-agent` install-attempt report to capture key-send evidence plus guest-agent wait status for the next live retry.
 - [ ] Run `Veil Shared\Veil Guest Agent\Install Veil Agent.cmd` inside Windows 11 Arm and verify the current-session agent plus the `VeilAgent` logon task both start.
 - [ ] Run `swift run veil-host-probe --diagnose-agent` before and after the next guest-agent install attempt.

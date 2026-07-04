@@ -255,12 +255,26 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
     }
 
     public func installGuestAgentFromAttachedMedia() async throws -> QEMUKeySendRecord {
-        let sender = QEMUKeySequenceSender(
-            launchRecordStore: JSONQEMULaunchRecordStore(
-                directory: diagnosticsDirectory.appendingPathComponent("QEMU Launch", isDirectory: true)
-            )
+        let launchRecordStore = JSONQEMULaunchRecordStore(
+            directory: diagnosticsDirectory.appendingPathComponent("QEMU Launch", isDirectory: true)
         )
-        return try await sender.send(steps: QEMUGuestAgentInstallKeySequence.steps)
+        let steps: [QEMUKeySequenceStep]
+        do {
+            let pointerSender = QEMUPointerEventSender(launchRecordStore: launchRecordStore)
+            _ = try await pointerSender.sendTap(
+                normalizedX: QEMUGuestAgentInstallKeySequence.startButtonTapNormalizedX,
+                normalizedY: QEMUGuestAgentInstallKeySequence.startButtonTapNormalizedY
+            )
+            try? await Task.sleep(nanoseconds: 800_000_000)
+            steps = try QEMUGuestAgentInstallKeySequence.stepsAfterStartMenuOpened
+        } catch {
+            steps = try QEMUGuestAgentInstallKeySequence.steps
+        }
+
+        let sender = QEMUKeySequenceSender(
+            launchRecordStore: launchRecordStore
+        )
+        return try await sender.send(steps: steps)
     }
 
     public static func makePlan(for profile: VMProfile) throws -> QEMUWindowsBootPlan {

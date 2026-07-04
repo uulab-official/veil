@@ -397,16 +397,18 @@ host shell exposes the same transition as Mark Windows Installed while the
 console is running and no guest-agent evidence exists yet.
 
 `veil-vmctl qemu-install-agent [--json] [--wait-seconds 30]` is the safer one-command form for the
-common post-desktop recovery path: it opens the Windows Run dialog, finds the
-attached `VEIL_AUTO` media by volume label, and runs
+common post-desktop recovery path: it taps the Windows Start button through QMP
+pointer input, searches for Run, finds the attached `VEIL_AUTO` media by volume
+label, and runs
 `Veil Guest Agent\scripts\Bootstrap-VeilAgentFromMedia.ps1` with
 `-ExecutionPolicy Bypass`. Use it only when the Windows desktop is visible in
 the console and the host probe still reports the guest agent unavailable. The
-JSON report includes both the bounded key-send evidence and a guest-agent wait
-result, so a failed attempt records whether the command reached a live agent or
-needs console inspection. The macOS host shell uses the same Core key-sequence
-sender for its Install Guest Agent button and menu bar item, so CLI and GUI
-recovery stay on the same bounded QMP/HMP path.
+JSON report includes the Start activation tap, bounded key-send evidence, and a
+guest-agent wait result, so a failed attempt records whether the command reached
+a live agent or needs console inspection. The macOS host shell uses the same
+Core activation and key-sequence path for its Install Guest Agent button and
+menu bar item, so CLI and GUI recovery stay on the same bounded QMP path with a
+keyboard fallback for older launch records.
 
 `veil-vmctl qemu-click [--json] --x <0...32767> --y <0...32767>` sends a bounded
 absolute left-click through QMP `input-send-event`. It is intended for

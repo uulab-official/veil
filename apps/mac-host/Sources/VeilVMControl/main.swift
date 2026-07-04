@@ -410,6 +410,7 @@ struct QEMUKeySendRecord: Codable, Equatable {
 struct QEMUGuestAgentInstallAttemptReport: Codable, Equatable {
     var kind: String = "qemuGuestAgentInstallAttempt"
     var commandText: String
+    var activationTap: QEMUPointerTapRecord?
     var keySend: QEMUKeySendRecord
     var agentWait: AgentConnectionWaitReport
     var status: AgentConnectionWaitStatus
@@ -2029,11 +2030,22 @@ struct VeilVMControl {
     }
 
     private static func sendQEMUGuestAgentInstall(json: Bool, waitSeconds: Int) async throws {
-        let keySend = try await qemuKeySendRecord(steps: QEMUGuestAgentInstallKeySequence.steps)
+        let activationTap = try? await qemuGuestAgentInstallActivationTapRecord()
+        if activationTap != nil {
+            try? await Task.sleep(nanoseconds: 800_000_000)
+        }
+        let steps: [QEMUKeySequenceStep]
+        if activationTap == nil {
+            steps = try QEMUGuestAgentInstallKeySequence.steps
+        } else {
+            steps = try QEMUGuestAgentInstallKeySequence.stepsAfterStartMenuOpened
+        }
+        let keySend = try await qemuKeySendRecord(steps: steps)
         let agentWait = await guestAgentWaitReport(waitSeconds: waitSeconds)
         let nextActions = guestAgentInstallNextActions(agentWait: agentWait, waitSeconds: waitSeconds)
         let report = QEMUGuestAgentInstallAttemptReport(
             commandText: QEMUGuestAgentInstallKeySequence.commandText,
+            activationTap: activationTap,
             keySend: keySend,
             agentWait: agentWait,
             status: agentWait.status,
@@ -2047,6 +2059,7 @@ struct VeilVMControl {
         }
 
         print("QEMU guest agent install attempt: \(report.status.rawValue)")
+        print("Activation tap: \(report.activationTap == nil ? "fallback keyboard" : "sent")")
         print("Keys sent: \(report.keySend.keys.count)")
         print("Waited seconds: \(report.agentWait.waitedSeconds)")
         print("Attempts: \(report.agentWait.attempts)")
@@ -2054,6 +2067,18 @@ struct VeilVMControl {
         for action in report.nextActions {
             print("  - \(action)")
         }
+    }
+
+    private static func qemuGuestAgentInstallActivationTapRecord() async throws -> QEMUPointerTapRecord {
+        let launchRecordStore = JSONQEMULaunchRecordStore(
+            directory: diagnosticsDirectory()
+                .appendingPathComponent("QEMU Launch", isDirectory: true)
+        )
+        let sender = QEMUPointerEventSender(launchRecordStore: launchRecordStore)
+        return try await sender.sendTap(
+            normalizedX: QEMUGuestAgentInstallKeySequence.startButtonTapNormalizedX,
+            normalizedY: QEMUGuestAgentInstallKeySequence.startButtonTapNormalizedY
+        )
     }
 
     private static func guestAgentInstallNextActions(
