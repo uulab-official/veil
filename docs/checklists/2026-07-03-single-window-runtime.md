@@ -61,6 +61,7 @@ Goal: move Veil from a Veil shell plus separate QEMU Cocoa display toward a UTM-
 - [x] Add a `proofPlan` status contract with exact app-window, coherence, and MVP proof commands so the single-window runtime can hand off to validation without guessing.
 - [x] Carry `proofPlan` through app-runtime action reports so successful app-first actions point directly at the next single-window proof gate.
 - [x] Add a single recommended proof CTA to `proofPlan` so UI and automation can launch the strongest available proof without reimplementing priority rules.
+- [x] Add `proof.recommended` to app-runtime actions so the launcher/menu can expose one proof button gated by `recommendedProofCommand`.
 
 ## Next
 

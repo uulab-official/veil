@@ -762,6 +762,11 @@ public final class HostDashboardModel {
                     isAvailable: canRunCoherenceProof
                 ),
                 WindowsAppRuntimeActionStatus(
+                    id: "proof.recommended",
+                    title: "Run Recommended Proof",
+                    isAvailable: proofPlan.recommendedProofCommand != nil
+                ),
+                WindowsAppRuntimeActionStatus(
                     id: "clipboard.setText",
                     title: "Set Windows Clipboard Text",
                     isAvailable: canSendHostClipboardText

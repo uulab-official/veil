@@ -332,6 +332,16 @@ test("rejects MVP proof availability that drifts from coherence readiness", () =
   );
 });
 
+test("rejects recommended proof availability that drifts from proof plan", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.mac-window-live.json", import.meta.url), "utf8"));
+  report.actions.find((action) => action.id === "proof.recommended").isAvailable = false;
+
+  assert.throws(
+    () => validateAppRuntimeStatus(report),
+    /proof\.recommended/
+  );
+});
+
 test("rejects proof plan availability that drifts from capture readiness", () => {
   const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.mac-window-live.json", import.meta.url), "utf8"));
   report.connection.capabilities.windowCapture = false;

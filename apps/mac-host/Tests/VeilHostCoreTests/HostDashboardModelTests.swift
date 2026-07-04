@@ -536,6 +536,7 @@ struct HostDashboardModelTests {
         #expect(report.actions.first { $0.id == "proof.appWindow" }?.isAvailable == true)
         #expect(report.actions.first { $0.id == "proof.coherence" }?.isAvailable == true)
         #expect(report.actions.first { $0.id == "proof.mvp" }?.isAvailable == true)
+        #expect(report.actions.first { $0.id == "proof.recommended" }?.isAvailable == true)
     }
 
     @Test("reports quiet runtime readiness after the final Windows app window closes")
@@ -579,6 +580,7 @@ struct HostDashboardModelTests {
         #expect(report.actions.first { $0.id == "proof.appWindow" }?.isAvailable == true)
         #expect(report.actions.first { $0.id == "proof.coherence" }?.isAvailable == false)
         #expect(report.actions.first { $0.id == "proof.mvp" }?.isAvailable == false)
+        #expect(report.actions.first { $0.id == "proof.recommended" }?.isAvailable == true)
     }
 
     @Test("updates active window sessions by HWND")

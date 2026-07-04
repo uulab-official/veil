@@ -108,7 +108,9 @@ those capabilities can support the matching proof command. The sibling
 `veil-vmctl app-window-proof`, `coherence-proof`, and `mvp-proof --require-proved`
 commands so automation can move from status to proof without rebuilding command
 strings. It also exposes `recommendedProofKind` and `recommendedProofCommand`
-as the strongest currently available single proof CTA.
+as the strongest currently available single proof CTA. The `actions` list must
+include `proof.recommended`, available exactly when that recommended command is
+present.
 
 ```bash
 cd apps/mac-host

@@ -598,6 +598,7 @@ function validateActions(actions, report) {
     "proof.appWindow",
     "proof.coherence",
     "proof.mvp",
+    "proof.recommended",
     "clipboard.setText"
   ]) {
     if (!actionIds.has(requiredAction)) {
@@ -664,6 +665,11 @@ function validateActions(actions, report) {
   if (mvpProofAction.isAvailable !== canRunCoherenceProof
       || mvpProofAction.isAvailable !== report.proofPlan.canRunMVPProof) {
     throw new TypeError("proof.mvp availability must match coherence proof readiness and proofPlan.");
+  }
+
+  const recommendedProofAction = actions.find((action) => action.id === "proof.recommended");
+  if (recommendedProofAction.isAvailable !== (report.proofPlan.recommendedProofCommand !== undefined)) {
+    throw new TypeError("proof.recommended availability must match proofPlan.recommendedProofCommand.");
   }
 }
 

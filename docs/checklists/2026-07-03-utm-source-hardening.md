@@ -91,3 +91,4 @@ Goal: adapt concrete UTM source patterns into Veil while keeping Veil focused on
 - [x] Add `proofPlan` to app-runtime status so UTM-style automation can discover exact proof commands from the same status surface that gates actions.
 - [x] Promote `proofPlan` into app-runtime action reports so launch, restore, bring-forward, focus, and clipboard flows hand off to the strongest available proof command.
 - [x] Add `recommendedProofKind` and `recommendedProofCommand` so UTM-style command surfaces can show one proof CTA instead of re-sorting proof capability fields.
+- [x] Add `proof.recommended` to the status action list so UTM-style command surfaces can gate a single proof CTA from the same action contract as launch, stop, and restore.

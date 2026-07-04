@@ -173,6 +173,11 @@
         "isAvailable": false
       },
       {
+        "id": "proof.recommended",
+        "title": "Run Recommended Proof",
+        "isAvailable": false
+      },
+      {
         "id": "clipboard.setText",
         "title": "Set Windows Clipboard Text",
         "isAvailable": false
