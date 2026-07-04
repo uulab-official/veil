@@ -1946,7 +1946,7 @@ public struct LocalVMRuntimeService: VMRuntimeService {
     Veil Guest Agent
 
     Run Install Veil Agent.cmd after Windows 11 reaches the desktop.
-    The installer uses the packaged VeilAgent.exe bundle when present, registers the VeilAgent user logon task, and points it at ws://127.0.0.1:18444/.
+    The installer uses the packaged VeilAgent.exe bundle when present, registers the VeilAgent user logon task when Windows allows it, and listens inside Windows on 0.0.0.0:18444 so the macOS host can connect through QEMU at ws://127.0.0.1:18444/.
     Bootstrap and installer logs are written under %LOCALAPPDATA%\\Veil\\Agent\\logs.
     If this media does not include app\\VeilAgent.exe, build it on the Mac with apps/windows-agent/scripts/publish-veil-agent-bundle.sh before preparing the VM again.
 

@@ -112,6 +112,15 @@ Goal: keep the main Veil experience pointed at real local Windows boot and conso
 - [x] Verify QMP pointer input opens the Windows Start search on the live Windows desktop, then route guest-agent install attempts through that Start activation before typing.
 - [x] Verify the running QEMU PID has the current 349 MB `VeilAutoInstall.iso` attached and that the ISO contains `VeilAgent.exe` plus bootstrap/install/start/diagnostics scripts.
 - [x] Retry the pointer-activated `qemu-install-agent` path and verify the host-forwarded guest-agent endpoint still times out, moving the next investigation to guest-side bootstrap logs.
+- [x] Replace the long PowerShell Run command with a shorter `cmd.exe /c for %d ... Install Veil Agent.cmd` launcher so the live Run input is reliable.
+- [x] Replace the Start-search `run` path with direct `meta-r` Run activation for guest-agent install recovery.
+- [x] Fix the guest installer's scheduled-task run level from invalid `LeastPrivilege` to `Limited`.
+- [x] Make scheduled-task registration best-effort so standard-user permission denial does not prevent the current-session guest agent from starting.
+- [x] Fix the guest start script's PowerShell `$Host` variable collision by renaming the probe parameter.
+- [x] Make the guest installer stop an existing `VeilAgent.exe` before replacing `%LOCALAPPDATA%\Veil\Agent\app` so repeated installs do not fail on locked runtime DLLs.
+- [x] Add a best-effort Windows Firewall inbound rule during elevated guest-agent installs and log a clear warning when standard-user installs cannot add it.
+- [x] Capture live evidence that the agent starts inside Windows and local probe succeeds, while macOS `guest-agent-wait` still times out until the firewall/NIC boundary is resolved.
+- [x] Replace the Windows agent's `HttpListener` server with a `TcpListener` WebSocket handshake and bind the guest listener to `0.0.0.0:18444`, keeping macOS access through QEMU `ws://127.0.0.1:18444`.
 - [x] Add recovery copy to QEMU smoke reports for common boot failures.
 - [x] Convert QEMU monitor screenshots to PNG paths so users can inspect boot evidence directly.
 - [x] Surface the latest QEMU console PNG inside the Windows setup screen when launch evidence exists.
@@ -175,12 +184,14 @@ Goal: keep the main Veil experience pointed at real local Windows boot and conso
 ## Next
 
 - [ ] Investigate any remaining guest-agent bootstrap failure after the new pointer-activated Start search opens Run reliably.
+- [ ] Regenerate the local `VeilAgent.exe` bundle and `VeilAutoInstall.iso` after the raw WebSocket listener change, then retry `qemu-install-agent` against the visible Windows desktop.
 - [ ] Collect `%LOCALAPPDATA%\Veil\Agent\logs` from the Windows guest after the pointer-activated install attempt.
 - [ ] Use the new `qemu-install-agent` install-attempt report to capture key-send evidence plus guest-agent wait status for the next live retry.
 - [ ] Run `Veil Shared\Veil Guest Agent\Install Veil Agent.cmd` inside Windows 11 Arm and verify the current-session agent plus the `VeilAgent` logon task both start.
 - [ ] Run `swift run veil-host-probe --diagnose-agent` before and after the next guest-agent install attempt.
 - [ ] Run `Veil Shared\Veil Guest Agent\Collect Veil Agent Diagnostics.cmd` after the next bootstrap attempt and capture the generated desktop ZIP.
 - [ ] Verify the Win32/GDI HWND capture path inside Windows 11 Arm and record the captured Notepad frame evidence.
+- [ ] Resolve the remaining host-forwarded WebSocket no-response case: Windows local probe succeeds on `0.0.0.0:18444`, Mac TCP connect to QEMU `127.0.0.1:18444` succeeds, but WebSocket health times out without an elevated firewall rule or alternate host/guest transport.
 - [ ] Tune the Windows agent frame stream for lower latency after correctness is verified.
 - [ ] Replace remaining static setup preview states with real VM screenshots whenever QEMU launch evidence exists.
 - [ ] Replace remaining manual installed-state copy with guest-agent evidence in the first-run setup flow.

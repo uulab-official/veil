@@ -104,7 +104,7 @@ Responsibilities:
 Current scaffold status:
 
 - `apps/windows-agent` contains the first C#/.NET 8 agent project.
-- The agent exposes a WebSocket listener intended for `127.0.0.1:18444`.
+- The agent exposes a WebSocket listener intended for `0.0.0.0:18444` inside the Windows guest. The macOS host still uses `ws://127.0.0.1:18444` because QEMU host forwarding maps that loopback endpoint to the guest listener.
 - It handles health, app list, and selected app launch messages.
 - The first app catalog covers Notepad, Calculator, and Paint; launches are structured to emit direct launch/window replies and broadcast a first `window.frame` event to event-subscriber sockets.
 - After launch, a per-window stream loop continues broadcasting PNG `window.frame` events using monotonically increasing sequence numbers.

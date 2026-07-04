@@ -5,7 +5,7 @@ The Windows agent is the guest-side process for the Veil Windows App Runtime.
 Current scope:
 
 - .NET 8 console application.
-- WebSocket listener on `127.0.0.1:18444`.
+- WebSocket listener on `0.0.0.0:18444` inside Windows so QEMU host forwarding can expose it to macOS as `ws://127.0.0.1:18444/`.
 - Protocol handling for health, app list, and selected Windows app launch.
 - The first app catalog includes Notepad, Calculator, and Paint as Windows inbox app targets.
 - App launch emits `app.launch.response`, `window.created`, and the first HWND-captured `window.frame` event through the event broadcast path.
@@ -22,11 +22,13 @@ dotnet build apps/windows-agent/src/VeilAgent/VeilAgent.csproj
 dotnet run --project apps/windows-agent/src/VeilAgent/VeilAgent.csproj
 ```
 
-The executable listens at:
+By default the executable listens inside the Windows guest at:
 
 ```text
-ws://127.0.0.1:18444/
+ws://0.0.0.0:18444/
 ```
+
+The macOS host still connects to `ws://127.0.0.1:18444/`; QEMU maps that loopback endpoint to the guest listener with `hostfwd=tcp::18444-:18444`.
 
 The agent also takes a named mutex per configured port, so duplicate launches
 for the same forwarded WebSocket endpoint exit instead of racing for the
@@ -62,7 +64,7 @@ cd C:\Path\To\veil\apps\windows-agent
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\Install-VeilAgent.ps1
 ```
 
-The installer copies or publishes the agent to `%LOCALAPPDATA%\Veil\Agent\app`, copies the start/uninstall scripts to `%LOCALAPPDATA%\Veil\Agent\scripts`, sets user-level `VEIL_AGENT_HOST` and `VEIL_AGENT_PORT`, registers a user logon scheduled task named `VeilAgent`, and starts the agent immediately. The logon task points at the installed script copy, so agent auto-start does not depend on the original shared-folder path after installation. The start script is idempotent: it reuses an already-running installed `VeilAgent.exe`, waits briefly for `ws://127.0.0.1:18444/` to become reachable, and writes agent stdout/stderr logs for diagnosis. The agent process itself also enforces one instance per configured port. Pass `-NoStart` to install without starting the agent in the current session.
+The installer copies or publishes the agent to `%LOCALAPPDATA%\Veil\Agent\app`, copies the start/uninstall scripts to `%LOCALAPPDATA%\Veil\Agent\scripts`, sets user-level `VEIL_AGENT_HOST=0.0.0.0` and `VEIL_AGENT_PORT`, registers a user logon scheduled task named `VeilAgent` when Windows allows it, and starts the agent immediately. The logon task points at the installed script copy, so agent auto-start does not depend on the original shared-folder path after installation. The start script is idempotent: it reuses an already-running installed `VeilAgent.exe`, waits briefly for a guest-local `ws://127.0.0.1:18444/` probe to succeed, and writes agent stdout/stderr logs for diagnosis. The agent process itself also enforces one instance per configured port. Pass `-NoStart` to install without starting the agent in the current session.
 
 Bootstrap, install, and start logs are written under:
 

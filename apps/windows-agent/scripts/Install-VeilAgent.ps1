@@ -30,6 +30,13 @@ try {
     Write-Host "AgentRoot=$AgentRoot"
     Write-Host "InstallRoot=$InstallRoot"
 
+    $RunningAgents = Get-Process -Name "VeilAgent" -ErrorAction SilentlyContinue
+    if ($RunningAgents) {
+        Write-Host "Stopping existing VeilAgent process before updating installed files."
+        $RunningAgents | Stop-Process -Force
+        Start-Sleep -Milliseconds 500
+    }
+
     if (Test-Path $BundledAgentExe) {
         Get-ChildItem -Path $PublishRoot -Force | Remove-Item -Recurse -Force
         Copy-Item `
@@ -65,24 +72,53 @@ try {
         -Execute "powershell.exe" `
         -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$StartScript`" -InstallRoot `"$InstallRoot`" -Port $Port"
     $Trigger = New-ScheduledTaskTrigger -AtLogOn
-    $Principal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interactive -RunLevel LeastPrivilege
+    $Principal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interactive -RunLevel Limited
     $Settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
 
-    Register-ScheduledTask `
-        -TaskName $TaskName `
-        -Action $Action `
-        -Trigger $Trigger `
-        -Principal $Principal `
-        -Settings $Settings `
-        -Force | Out-Null
+    $TaskRegistered = $false
+    try {
+        Register-ScheduledTask `
+            -TaskName $TaskName `
+            -Action $Action `
+            -Trigger $Trigger `
+            -Principal $Principal `
+            -Settings $Settings `
+            -Force | Out-Null
+        $TaskRegistered = $true
+    } catch {
+        Write-Warning "VeilAgent logon task could not be registered: $($_.Exception.Message)"
+        Write-Host "Continuing with current-session agent start; run this installer as an elevated user later to enable logon auto-start."
+    }
 
-    [Environment]::SetEnvironmentVariable("VEIL_AGENT_HOST", "127.0.0.1", "User")
+    [Environment]::SetEnvironmentVariable("VEIL_AGENT_HOST", "0.0.0.0", "User")
     [Environment]::SetEnvironmentVariable("VEIL_AGENT_PORT", "$Port", "User")
 
-    Write-Host "VeilAgent installed to $PublishRoot and registered as user logon task '$TaskName'."
+    $FirewallProgram = Join-Path $PublishRoot "VeilAgent.exe"
+    try {
+        netsh advfirewall firewall add rule `
+            name="VeilAgent" `
+            dir=in `
+            action=allow `
+            program="$FirewallProgram" `
+            enable=yes `
+            profile=any | Out-Null
+        if ($LASTEXITCODE -ne 0) {
+            throw "netsh exited with code $LASTEXITCODE"
+        }
+        Write-Host "VeilAgent Windows Firewall inbound rule is present."
+    } catch {
+        Write-Warning "VeilAgent Windows Firewall rule could not be added: $($_.Exception.Message)"
+        Write-Host "Continuing with current-session agent start; if macOS cannot connect, allow VeilAgent in Windows Security or rerun this installer as an elevated user."
+    }
+
+    if ($TaskRegistered) {
+        Write-Host "VeilAgent installed to $PublishRoot and registered as user logon task '$TaskName'."
+    } else {
+        Write-Host "VeilAgent installed to $PublishRoot without a logon task."
+    }
     if (-not $NoStart) {
         & $StartScript -InstallRoot $InstallRoot -Port $Port
-        Write-Host "VeilAgent started and listening on ws://127.0.0.1:$Port/."
+        Write-Host "VeilAgent started inside Windows on 0.0.0.0:$Port. The macOS host connects through QEMU at ws://127.0.0.1:$Port/."
     } else {
         Write-Host "Start now with: powershell -NoProfile -ExecutionPolicy Bypass -File `"$StartScript`" -InstallRoot `"$InstallRoot`" -Port $Port"
     }

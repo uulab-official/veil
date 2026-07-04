@@ -1,8 +1,8 @@
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Text;
-using System.Windows.Forms;
 
 namespace Veil.Agent;
 
@@ -24,6 +24,8 @@ public sealed class WindowsDesktop : IWindowsDesktop
     private const int VK_CONTROL = 0x11;
     private const int VK_SHIFT = 0x10;
     private const int VK_MENU = 0x12;
+    private const uint CF_UNICODETEXT = 13;
+    private const uint GMEM_MOVEABLE = 0x0002;
     private readonly object clipboardGate = new();
     private string? lastHostClipboardText;
     private int lastHostClipboardSequence;
@@ -79,7 +81,7 @@ public sealed class WindowsDesktop : IWindowsDesktop
     private static bool TryFindTopLevelWindow(WindowsAppDescriptor app, int launchedProcessId, out LaunchedWindow launched)
     {
         LaunchedWindow? matchedWindow = null;
-        EnumWindows((hwnd, _) =>
+        EnumWindows((hwnd, unused) =>
         {
             if (!IsWindowVisible(hwnd))
             {
@@ -258,28 +260,15 @@ public sealed class WindowsDesktop : IWindowsDesktop
             throw new PlatformNotSupportedException("The Veil Windows agent must run inside Windows.");
         }
 
-        var completion = new TaskCompletionSource<object?>();
-        var thread = new Thread(() =>
+        return Task.Run(() =>
         {
-            try
+            SetClipboardUnicodeText(text);
+            lock (clipboardGate)
             {
-                Clipboard.SetText(text);
-                lock (clipboardGate)
-                {
-                    lastHostClipboardText = text;
-                    lastHostClipboardSequence += 1;
-                }
-                completion.SetResult(null);
+                lastHostClipboardText = text;
+                lastHostClipboardSequence += 1;
             }
-            catch (Exception error)
-            {
-                completion.SetException(error);
-            }
-        });
-
-        thread.SetApartmentState(ApartmentState.STA);
-        thread.Start();
-        return completion.Task.WaitAsync(cancellationToken);
+        }, cancellationToken);
     }
 
     public Task<string?> GetClipboardTextAsync(CancellationToken cancellationToken)
@@ -291,25 +280,7 @@ public sealed class WindowsDesktop : IWindowsDesktop
             throw new PlatformNotSupportedException("The Veil Windows agent must run inside Windows.");
         }
 
-        var completion = new TaskCompletionSource<string?>();
-        var thread = new Thread(() =>
-        {
-            try
-            {
-                var text = Clipboard.ContainsText()
-                    ? Clipboard.GetText()
-                    : null;
-                completion.SetResult(text);
-            }
-            catch (Exception error)
-            {
-                completion.SetException(error);
-            }
-        });
-
-        thread.SetApartmentState(ApartmentState.STA);
-        thread.Start();
-        return completion.Task.WaitAsync(cancellationToken);
+        return Task.Run(GetClipboardUnicodeText, cancellationToken);
     }
 
     public bool TryConsumeHostClipboardEcho(string text)
@@ -464,6 +435,143 @@ public sealed class WindowsDesktop : IWindowsDesktop
 
     [DllImport("user32.dll", SetLastError = true)]
     private static extern bool GetWindowRect(IntPtr hWnd, out NativeRect lpRect);
+
+    private static void SetClipboardUnicodeText(string text)
+    {
+        OpenClipboardWithRetry();
+        IntPtr handle = IntPtr.Zero;
+        try
+        {
+            if (!EmptyClipboard())
+            {
+                ThrowLastWin32Error("EmptyClipboard failed.");
+            }
+
+            var bytes = Encoding.Unicode.GetBytes(text + "\0");
+            handle = GlobalAlloc(GMEM_MOVEABLE, (UIntPtr)bytes.Length);
+            if (handle == IntPtr.Zero)
+            {
+                ThrowLastWin32Error("GlobalAlloc failed for clipboard text.");
+            }
+
+            var pointer = GlobalLock(handle);
+            if (pointer == IntPtr.Zero)
+            {
+                ThrowLastWin32Error("GlobalLock failed for clipboard text.");
+            }
+
+            try
+            {
+                Marshal.Copy(bytes, 0, pointer, bytes.Length);
+            }
+            finally
+            {
+                _ = GlobalUnlock(handle);
+            }
+
+            if (SetClipboardData(CF_UNICODETEXT, handle) == IntPtr.Zero)
+            {
+                ThrowLastWin32Error("SetClipboardData failed for clipboard text.");
+            }
+
+            handle = IntPtr.Zero;
+        }
+        finally
+        {
+            CloseClipboard();
+            if (handle != IntPtr.Zero)
+            {
+                _ = GlobalFree(handle);
+            }
+        }
+    }
+
+    private static string? GetClipboardUnicodeText()
+    {
+        OpenClipboardWithRetry();
+        try
+        {
+            if (!IsClipboardFormatAvailable(CF_UNICODETEXT))
+            {
+                return null;
+            }
+
+            var handle = GetClipboardData(CF_UNICODETEXT);
+            if (handle == IntPtr.Zero)
+            {
+                return null;
+            }
+
+            var pointer = GlobalLock(handle);
+            if (pointer == IntPtr.Zero)
+            {
+                return null;
+            }
+
+            try
+            {
+                return Marshal.PtrToStringUni(pointer);
+            }
+            finally
+            {
+                _ = GlobalUnlock(handle);
+            }
+        }
+        finally
+        {
+            CloseClipboard();
+        }
+    }
+
+    private static void OpenClipboardWithRetry()
+    {
+        for (var attempt = 0; attempt < 10; attempt += 1)
+        {
+            if (OpenClipboard(IntPtr.Zero))
+            {
+                return;
+            }
+
+            Thread.Sleep(25);
+        }
+
+        ThrowLastWin32Error("OpenClipboard failed.");
+    }
+
+    private static void ThrowLastWin32Error(string message)
+    {
+        throw new Win32Exception(Marshal.GetLastWin32Error(), message);
+    }
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool OpenClipboard(IntPtr hWndNewOwner);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool CloseClipboard();
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool EmptyClipboard();
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool IsClipboardFormatAvailable(uint format);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern IntPtr GetClipboardData(uint uFormat);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern IntPtr SetClipboardData(uint uFormat, IntPtr hMem);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern IntPtr GlobalAlloc(uint uFlags, UIntPtr dwBytes);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern IntPtr GlobalLock(IntPtr hMem);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool GlobalUnlock(IntPtr hMem);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern IntPtr GlobalFree(IntPtr hMem);
 
     private delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
 

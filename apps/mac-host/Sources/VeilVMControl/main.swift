@@ -2038,7 +2038,7 @@ struct VeilVMControl {
         if activationTap == nil {
             steps = try QEMUGuestAgentInstallKeySequence.steps
         } else {
-            steps = try QEMUGuestAgentInstallKeySequence.stepsAfterStartMenuOpened
+            steps = try QEMUGuestAgentInstallKeySequence.stepsAfterRunOpened
         }
         let keySend = try await qemuKeySendRecord(steps: steps)
         let agentWait = await guestAgentWaitReport(waitSeconds: waitSeconds)

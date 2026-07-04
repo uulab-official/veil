@@ -16,7 +16,7 @@ test("windows agent is scaffolded as a .NET 8 project", async () => {
   const project = await readFile(resolve(agentRoot, "src/VeilAgent/VeilAgent.csproj"), "utf8");
 
   assert.match(project, /<TargetFramework>net8\.0-windows<\/TargetFramework>/);
-  assert.match(project, /<UseWindowsForms>true<\/UseWindowsForms>/);
+  assert.doesNotMatch(project, /<UseWindowsForms>true<\/UseWindowsForms>/);
   assert.match(project, /<RootNamespace>Veil\.Agent<\/RootNamespace>/);
 });
 
@@ -62,6 +62,19 @@ test("windows agent streams continuing window frames after launch", async () => 
   assert.match(streamer, /PeriodicTimer/);
   assert.match(streamer, /firstSequence/);
   assert.match(streamer, /CaptureFrameAsync\(window,\s*sequence/);
+});
+
+test("windows agent listens without HttpListener URL ACL requirements", async () => {
+  const endpoint = await readFile(resolve(agentRoot, "src/VeilAgent/AgentEndpoint.cs"), "utf8");
+  const server = await readFile(resolve(agentRoot, "src/VeilAgent/WebSocketAgentServer.cs"), "utf8");
+
+  assert.match(endpoint, /VEIL_AGENT_HOST"\)\s*\?\?\s*"0\.0\.0\.0"/);
+  assert.match(endpoint, /IPAddress\.Any/);
+  assert.match(server, /TcpListener\(endpoint\.ListenAddress,\s*endpoint\.Port\)/);
+  assert.match(server, /AcceptTcpClientAsync\(cancellationToken\)/);
+  assert.match(server, /Sec-WebSocket-Accept/);
+  assert.match(server, /WebSocket\.CreateFromStream/);
+  assert.doesNotMatch(server, /HttpListener/);
 });
 
 test("windows agent supports host controlled frame stream subscribe and unsubscribe", async () => {
@@ -168,8 +181,9 @@ test("windows agent accepts host clipboard text updates", async () => {
 
   assert.match(messageTypes, /ClipboardTextSet\s*=\s*"clipboard\.text\.set"/);
   assert.match(desktopInterface, /SetClipboardTextAsync\(string text,\s*CancellationToken cancellationToken\)/);
-  assert.match(desktop, /Clipboard\.SetText/);
-  assert.match(desktop, /ApartmentState\.STA/);
+  assert.match(desktop, /SetClipboardUnicodeText/);
+  assert.match(desktop, /OpenClipboard/);
+  assert.match(desktop, /SetClipboardData/);
   assert.match(session, /MessageTypes\.ClipboardTextSet/);
   assert.match(session, /HandleClipboardTextSetAsync/);
   assert.match(session, /\["clipboardText"\]\s*=\s*true/);
@@ -185,7 +199,8 @@ test("windows agent broadcasts guest clipboard text changes without host echo lo
   assert.match(server, /ClipboardTextStreamer/);
   assert.match(server, /StartClipboardStream/);
   assert.match(desktopInterface, /GetClipboardTextAsync\(CancellationToken cancellationToken\)/);
-  assert.match(desktop, /Clipboard\.GetText/);
+  assert.match(desktop, /GetClipboardUnicodeText/);
+  assert.match(desktop, /GetClipboardData/);
   assert.match(desktop, /lastHostClipboardText/);
   assert.match(desktop, /lastHostClipboardSequence/);
 });
@@ -256,7 +271,12 @@ test("windows agent includes user-logon install and uninstall scripts", async ()
   assert.match(install, /Start-Transcript/);
   assert.match(install, /install\.log/);
   assert.match(install, /Collect-VeilAgentDiagnostics\.ps1/);
+  assert.match(install, /Get-Process\s+-Name\s+"VeilAgent"/);
+  assert.match(install, /Stop-Process\s+-Force/);
+  assert.match(install, /netsh\s+advfirewall\s+firewall\s+add\s+rule/);
+  assert.match(install, /Windows Firewall inbound rule/);
   assert.match(start, /VeilAgent\.exe/);
+  assert.match(start, /0\.0\.0\.0/);
   assert.match(start, /127\.0\.0\.1/);
   assert.match(start, /start\.log/);
   assert.match(start, /agent\.stdout\.log/);
@@ -264,7 +284,7 @@ test("windows agent includes user-logon install and uninstall scripts", async ()
   assert.match(start, /Test-VeilAgentPort/);
   assert.match(start, /Get-Process\s+-Name\s+"VeilAgent"/);
   assert.match(start, /VeilAgent is already running/);
-  assert.match(start, /process is already running, but ws:\/\/127\.0\.0\.1:\$Port\/ is not reachable/);
+  assert.match(start, /process is already running, but ws:\/\/\$\{ProbeHost\}:\$Port\/ is not reachable/);
   assert.match(start, /RedirectStandardOutput\s+\$StdOutLogPath/);
   assert.match(start, /RedirectStandardError\s+\$StdErrLogPath/);
   assert.match(diagnostics, /Compress-Archive/);
@@ -302,5 +322,5 @@ test("windows agent installer starts the installed agent immediately by default"
   assert.match(install, /\[switch\]\$NoStart/);
   assert.match(install, /if\s*\(-not\s+\$NoStart\)\s*{/);
   assert.match(install, /&\s+\$StartScript\s+-InstallRoot\s+\$InstallRoot\s+-Port\s+\$Port/);
-  assert.match(install, /Write-Host "VeilAgent started and listening on ws:\/\/127\.0\.0\.1:\$Port\/\."/);
+  assert.match(install, /Write-Host "VeilAgent started inside Windows on 0\.0\.0\.0:\$Port\. The macOS host connects through QEMU at ws:\/\/127\.0\.0\.1:\$Port\/\."/);
 });

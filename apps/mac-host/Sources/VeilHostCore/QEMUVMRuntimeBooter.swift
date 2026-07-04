@@ -266,7 +266,7 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
                 normalizedY: QEMUGuestAgentInstallKeySequence.startButtonTapNormalizedY
             )
             try? await Task.sleep(nanoseconds: 800_000_000)
-            steps = try QEMUGuestAgentInstallKeySequence.stepsAfterStartMenuOpened
+            steps = try QEMUGuestAgentInstallKeySequence.stepsAfterRunOpened
         } catch {
             steps = try QEMUGuestAgentInstallKeySequence.steps
         }

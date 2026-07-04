@@ -1096,30 +1096,30 @@ struct QEMUWindowsBootPlanTests {
         #expect(mapper.key(charactersIgnoringModifiers: nil, keyCode: 109) == "f10")
     }
 
-    @Test("guest agent install sequence opens run dialog and invokes VEIL_AUTO bootstrap")
-    func guestAgentInstallSequenceOpensRunDialogAndInvokesVEILAUTOBootstrap() throws {
+    @Test("guest agent install sequence opens run dialog and invokes VEIL_AUTO installer")
+    func guestAgentInstallSequenceOpensRunDialogAndInvokesVEILAUTOInstaller() throws {
         let steps = try QEMUGuestAgentInstallKeySequence.steps
         let keys = steps.map(\.key)
 
-        #expect(Array(keys.prefix(5)) == ["esc", "ctrl-esc", "r", "u", "n"])
+        #expect(Array(keys.prefix(2)) == ["esc", "meta-r"])
         #expect(keys.last == "ret")
-        #expect(QEMUGuestAgentInstallKeySequence.commandText.contains("Get-Volume -FileSystemLabel 'VEIL_AUTO'"))
-        #expect(QEMUGuestAgentInstallKeySequence.commandText.contains("Bootstrap-VeilAgentFromMedia.ps1"))
-        #expect(keys.contains("shift-backslash"))
-        #expect(keys.contains("shift-4"))
-        #expect(keys.count < 2_048)
+        #expect(QEMUGuestAgentInstallKeySequence.commandText.hasPrefix("cmd.exe /c for %d"))
+        #expect(QEMUGuestAgentInstallKeySequence.commandText.contains("Install Veil Agent.cmd"))
+        #expect(keys.contains("backslash"))
+        #expect(keys.contains("shift-5"))
+        #expect(keys.count < 1_000)
     }
 
-    @Test("guest agent install sequence supports pointer-activated Start search")
-    func guestAgentInstallSequenceSupportsPointerActivatedStartSearch() throws {
-        let steps = try QEMUGuestAgentInstallKeySequence.stepsAfterStartMenuOpened
+    @Test("guest agent install sequence supports direct Run dialog input")
+    func guestAgentInstallSequenceSupportsDirectRunDialogInput() throws {
+        let steps = try QEMUGuestAgentInstallKeySequence.stepsAfterRunOpened
         let fallbackSteps = try QEMUGuestAgentInstallKeySequence.steps
         let keys = steps.map(\.key)
 
         #expect(QEMUGuestAgentInstallKeySequence.startButtonTapNormalizedX > 0.25)
         #expect(QEMUGuestAgentInstallKeySequence.startButtonTapNormalizedX < 0.35)
         #expect(QEMUGuestAgentInstallKeySequence.startButtonTapNormalizedY > 0.9)
-        #expect(Array(keys.prefix(4)) == ["r", "u", "n", "ret"])
+        #expect(Array(keys.prefix(6)) == ["meta-r", "c", "m", "d", "dot", "e"])
         #expect(keys.last == "ret")
         #expect(keys.count < fallbackSteps.count)
     }

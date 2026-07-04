@@ -1499,18 +1499,15 @@ public enum QEMUGuestAgentInstallKeySequence {
     public static let startButtonTapNormalizedY = 0.958
 
     public static let commandText =
-        #"powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "$volume = Get-Volume -FileSystemLabel 'VEIL_AUTO' -ErrorAction SilentlyContinue | Select-Object -First 1; if ($volume -and $volume.DriveLetter) { $script = Join-Path ($volume.DriveLetter + ':\') 'Veil Guest Agent\scripts\Bootstrap-VeilAgentFromMedia.ps1'; if (Test-Path $script) { powershell.exe -NoProfile -ExecutionPolicy Bypass -File $script } }""#
+        #"cmd.exe /c for %d in (D E F G H I J K L M N O P Q R S T U V W X Y Z) do if exist "%d:\Veil Guest Agent\Install Veil Agent.cmd" "%d:\Veil Guest Agent\Install Veil Agent.cmd""#
 
-    public static var stepsAfterStartMenuOpened: [QEMUKeySequenceStep] {
+    public static var stepsAfterRunOpened: [QEMUKeySequenceStep] {
         get throws {
-            let runSearchSteps = try QEMUQMPKeyboardCommandBuilder
-                .keySequence(forText: "run")
-                .map { QEMUKeySequenceStep(key: $0, delayAfterSend: 0.08) }
             let textSteps = try QEMUQMPKeyboardCommandBuilder
                 .keySequence(forText: commandText)
                 .map { QEMUKeySequenceStep(key: $0, delayAfterSend: 0.035) }
-            return runSearchSteps + [
-                QEMUKeySequenceStep(key: "ret", delayAfterSend: 1.2)
+            return [
+                QEMUKeySequenceStep(key: "meta-r", delayAfterSend: 1.0)
             ] + textSteps + [
                 QEMUKeySequenceStep(key: "ret", delayAfterSend: 1.0)
             ]
@@ -1520,9 +1517,8 @@ public enum QEMUGuestAgentInstallKeySequence {
     public static var steps: [QEMUKeySequenceStep] {
         get throws {
             return [
-                QEMUKeySequenceStep(key: "esc", delayAfterSend: 0.3),
-                QEMUKeySequenceStep(key: "ctrl-esc", delayAfterSend: 0.9)
-            ] + (try stepsAfterStartMenuOpened)
+                QEMUKeySequenceStep(key: "esc", delayAfterSend: 0.3)
+            ] + (try stepsAfterRunOpened)
         }
     }
 }

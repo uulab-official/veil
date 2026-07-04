@@ -265,6 +265,12 @@ The guest-agent wait command is the post-install readiness gate between
 polls `VEIL_AGENT_URL` or `ws://127.0.0.1:18444` for `agent.health.response`
 without starting, stopping, or mutating the VM.
 
+For the QEMU/HVF path, `ws://127.0.0.1:18444` is the macOS side of
+`hostfwd=tcp::18444-:18444`. The Windows agent itself listens inside the guest
+on `0.0.0.0:18444`; a guest-local `127.0.0.1` probe only proves the process is
+running inside Windows, not that the macOS host has completed the forwarding
+proof.
+
 ```bash
 cd apps/mac-host
 swift run veil-vmctl guest-agent-wait --json --wait-seconds 30 | node ../../harness/guest-agent-wait/src/validate-guest-agent-wait.mjs
@@ -397,13 +403,12 @@ host shell exposes the same transition as Mark Windows Installed while the
 console is running and no guest-agent evidence exists yet.
 
 `veil-vmctl qemu-install-agent [--json] [--wait-seconds 30]` is the safer one-command form for the
-common post-desktop recovery path: it taps the Windows Start button through QMP
-pointer input, searches for Run, finds the attached `VEIL_AUTO` media by volume
-label, and runs
-`Veil Guest Agent\scripts\Bootstrap-VeilAgentFromMedia.ps1` with
-`-ExecutionPolicy Bypass`. Use it only when the Windows desktop is visible in
-the console and the host probe still reports the guest agent unavailable. The
-JSON report includes the Start activation tap, bounded key-send evidence, and a
+common post-desktop recovery path: it focuses the Windows desktop through QMP
+pointer input, opens Run with the Windows key, scans the attached drive letters
+for `Veil Guest Agent\Install Veil Agent.cmd`, and runs that short launcher. Use it
+only when the Windows desktop is visible in the console and the host probe still
+reports the guest agent unavailable. The
+JSON report includes the desktop activation tap, bounded key-send evidence, and a
 guest-agent wait result, so a failed attempt records whether the command reached
 a live agent or needs console inspection. The macOS host shell uses the same
 Core activation and key-sequence path for its Install Guest Agent button and
