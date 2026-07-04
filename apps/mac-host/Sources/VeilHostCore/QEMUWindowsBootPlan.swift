@@ -1503,8 +1503,14 @@ public enum QEMUGuestAgentInstallKeySequence {
             let textSteps = try QEMUQMPKeyboardCommandBuilder
                 .keySequence(forText: commandText)
                 .map { QEMUKeySequenceStep(key: $0, delayAfterSend: 0.035) }
+            let runSearchSteps = try QEMUQMPKeyboardCommandBuilder
+                .keySequence(forText: "run")
+                .map { QEMUKeySequenceStep(key: $0, delayAfterSend: 0.08) }
             return [
-                QEMUKeySequenceStep(key: "cmd-r", delayAfterSend: 0.8)
+                QEMUKeySequenceStep(key: "esc", delayAfterSend: 0.3),
+                QEMUKeySequenceStep(key: "ctrl-esc", delayAfterSend: 0.9)
+            ] + runSearchSteps + [
+                QEMUKeySequenceStep(key: "ret", delayAfterSend: 1.2)
             ] + textSteps + [
                 QEMUKeySequenceStep(key: "ret", delayAfterSend: 1.0)
             ]

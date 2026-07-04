@@ -83,7 +83,7 @@ enum VMControlError: Error, LocalizedError {
         }
     }
 
-    private static let usage = "Usage: veil-vmctl prepare --installer /path/to/Windows.iso [--drivers /path/to/virtio-win.iso] | veil-vmctl app-runtime-status [--json] [--demo] | veil-vmctl app-runtime-action --action launch|fulfill-pending|focus|close|close-all|restore|bring-forward|quiet-when-idle|stop-runtime|clipboard|type-text|click|proof-recommended [--json] [--demo] [--app-id winapp_notepad] [--window-id hwnd:XXXXXXXX] [--text \"...\"] [--x 240 --y 130] | veil-vmctl app-window-proof [--json] [--app-id winapp_notepad] [--wait-seconds 10] [--output /path/to/proof.json] | veil-vmctl coherence-proof [--json] [--app-id winapp_notepad] [--wait-seconds 10] [--output /path/to/proof.json] | veil-vmctl mvp-proof [--json] [--app-id winapp_notepad] [--wait-seconds 30] [--output /path/to/proof.json] [--require-proved] | veil-vmctl guest-agent-wait [--json] [--wait-seconds 30] | veil-vmctl mark-installed [--json] | veil-vmctl providers [--json] | veil-vmctl qemu-plan [--json] | veil-vmctl qemu-doctor [--json] | veil-vmctl qemu-install-status [--json] | veil-vmctl qemu-smoke [--json] [--seconds 45] | veil-vmctl qemu-start [--json] [--wait-seconds 15] [--native-display] | veil-vmctl qemu-display-smoke [--json] [--wait-seconds 5] | veil-vmctl qemu-capture [--json] [--output /path/to/console.png] | veil-vmctl qemu-powerdown [--json] [--wait-seconds 30] | veil-vmctl qemu-force-stop [--json] --i-understand-data-loss [--wait-seconds 10] | veil-vmctl qemu-sendkey [--json] key [key ...] | veil-vmctl qemu-type-text [--json] --text \"...\" | veil-vmctl qemu-click [--json] --x 0...32767 --y 0...32767 | veil-vmctl qemu-oobe-bypass [--json] | veil-vmctl qemu-install-agent [--json]"
+    private static let usage = "Usage: veil-vmctl prepare --installer /path/to/Windows.iso [--drivers /path/to/virtio-win.iso] | veil-vmctl app-runtime-status [--json] [--demo] | veil-vmctl app-runtime-action --action launch|fulfill-pending|focus|close|close-all|restore|bring-forward|quiet-when-idle|stop-runtime|clipboard|type-text|click|proof-recommended [--json] [--demo] [--app-id winapp_notepad] [--window-id hwnd:XXXXXXXX] [--text \"...\"] [--x 240 --y 130] | veil-vmctl app-window-proof [--json] [--app-id winapp_notepad] [--wait-seconds 10] [--output /path/to/proof.json] | veil-vmctl coherence-proof [--json] [--app-id winapp_notepad] [--wait-seconds 10] [--output /path/to/proof.json] | veil-vmctl mvp-proof [--json] [--app-id winapp_notepad] [--wait-seconds 30] [--output /path/to/proof.json] [--require-proved] | veil-vmctl guest-agent-wait [--json] [--wait-seconds 30] | veil-vmctl mark-installed [--json] | veil-vmctl providers [--json] | veil-vmctl qemu-plan [--json] | veil-vmctl qemu-doctor [--json] | veil-vmctl qemu-install-status [--json] | veil-vmctl qemu-smoke [--json] [--seconds 45] | veil-vmctl qemu-start [--json] [--wait-seconds 15] [--native-display] | veil-vmctl qemu-display-smoke [--json] [--wait-seconds 5] | veil-vmctl qemu-capture [--json] [--output /path/to/console.png] | veil-vmctl qemu-powerdown [--json] [--wait-seconds 30] | veil-vmctl qemu-force-stop [--json] --i-understand-data-loss [--wait-seconds 10] | veil-vmctl qemu-sendkey [--json] key [key ...] | veil-vmctl qemu-type-text [--json] --text \"...\" | veil-vmctl qemu-click [--json] --x 0...32767 --y 0...32767 | veil-vmctl qemu-oobe-bypass [--json] | veil-vmctl qemu-install-agent [--json] [--wait-seconds 30]"
 }
 
 struct VMControlArguments {
@@ -131,7 +131,7 @@ struct VMControlArguments {
         case qemuTypeText(json: Bool, text: String)
         case qemuClick(json: Bool, x: Int, y: Int)
         case qemuOOBEBypass(json: Bool)
-        case qemuInstallAgent(json: Bool)
+        case qemuInstallAgent(json: Bool, waitSeconds: Int)
     }
 
     var command: Command
@@ -326,7 +326,12 @@ struct VMControlArguments {
         }
 
         if command == "qemu-install-agent" {
-            return VMControlArguments(command: .qemuInstallAgent(json: arguments.contains("--json")))
+            return VMControlArguments(
+                command: .qemuInstallAgent(
+                    json: arguments.contains("--json"),
+                    waitSeconds: waitSecondsArgument(from: arguments) ?? 30
+                )
+            )
         }
 
         guard command == "prepare" else {
@@ -400,6 +405,15 @@ struct QEMUKeySendRecord: Codable, Equatable {
     var keys: [String]
     var results: [QEMUKeySendResult]
     var sentAt: Date
+}
+
+struct QEMUGuestAgentInstallAttemptReport: Codable, Equatable {
+    var kind: String = "qemuGuestAgentInstallAttempt"
+    var commandText: String
+    var keySend: QEMUKeySendRecord
+    var agentWait: AgentConnectionWaitReport
+    var status: AgentConnectionWaitStatus
+    var nextActions: [String]
 }
 
 struct QEMUPointerClickRecord: Codable, Equatable {
@@ -568,8 +582,8 @@ struct VeilVMControl {
             try await clickQEMU(json: json, x: x, y: y)
         case .qemuOOBEBypass(let json):
             try await sendQEMUOOBEBypass(json: json)
-        case .qemuInstallAgent(let json):
-            try await sendQEMUGuestAgentInstall(json: json)
+        case .qemuInstallAgent(let json, let waitSeconds):
+            try await sendQEMUGuestAgentInstall(json: json, waitSeconds: waitSeconds)
         }
     }
 
@@ -1458,15 +1472,7 @@ struct VeilVMControl {
     }
 
     private static func waitForGuestAgent(json: Bool, waitSeconds: Int) async throws {
-        let endpoint = ProcessInfo.processInfo.environment["VEIL_AGENT_URL"] ?? "ws://127.0.0.1:18444"
-        let url = URL(string: endpoint) ?? URL(string: "ws://127.0.0.1:18444")!
-        let client = VeilHostClient(
-            transport: URLSessionWebSocketTransport(url: url, requestTimeout: 3)
-        )
-        let report = await client.waitForAgentConnection(
-            endpoint: endpoint,
-            timeoutSeconds: waitSeconds
-        )
+        let report = await guestAgentWaitReport(waitSeconds: waitSeconds)
 
         if json {
             let data = try JSONEncoder.veilDiagnostics.encode(report)
@@ -1490,6 +1496,18 @@ struct VeilVMControl {
         for action in report.nextActions {
             print("  - \(action)")
         }
+    }
+
+    private static func guestAgentWaitReport(waitSeconds: Int) async -> AgentConnectionWaitReport {
+        let endpoint = ProcessInfo.processInfo.environment["VEIL_AGENT_URL"] ?? "ws://127.0.0.1:18444"
+        let url = URL(string: endpoint) ?? URL(string: "ws://127.0.0.1:18444")!
+        let client = VeilHostClient(
+            transport: URLSessionWebSocketTransport(url: url, requestTimeout: 3)
+        )
+        return await client.waitForAgentConnection(
+            endpoint: endpoint,
+            timeoutSeconds: waitSeconds
+        )
     }
 
     private static func markInstalled(json: Bool) async throws {
@@ -2010,8 +2028,49 @@ struct VeilVMControl {
         try await sendQEMUKeySteps(json: json, steps: QEMUOOBEBypassKeySequence.steps)
     }
 
-    private static func sendQEMUGuestAgentInstall(json: Bool) async throws {
-        try await sendQEMUKeySteps(json: json, steps: QEMUGuestAgentInstallKeySequence.steps)
+    private static func sendQEMUGuestAgentInstall(json: Bool, waitSeconds: Int) async throws {
+        let keySend = try await qemuKeySendRecord(steps: QEMUGuestAgentInstallKeySequence.steps)
+        let agentWait = await guestAgentWaitReport(waitSeconds: waitSeconds)
+        let nextActions = guestAgentInstallNextActions(agentWait: agentWait, waitSeconds: waitSeconds)
+        let report = QEMUGuestAgentInstallAttemptReport(
+            commandText: QEMUGuestAgentInstallKeySequence.commandText,
+            keySend: keySend,
+            agentWait: agentWait,
+            status: agentWait.status,
+            nextActions: nextActions
+        )
+
+        if json {
+            let data = try JSONEncoder.veilDiagnostics.encode(report)
+            print(String(decoding: data, as: UTF8.self))
+            return
+        }
+
+        print("QEMU guest agent install attempt: \(report.status.rawValue)")
+        print("Keys sent: \(report.keySend.keys.count)")
+        print("Waited seconds: \(report.agentWait.waitedSeconds)")
+        print("Attempts: \(report.agentWait.attempts)")
+        print("Next actions:")
+        for action in report.nextActions {
+            print("  - \(action)")
+        }
+    }
+
+    private static func guestAgentInstallNextActions(
+        agentWait: AgentConnectionWaitReport,
+        waitSeconds: Int
+    ) -> [String] {
+        if agentWait.status == .connected {
+            return [
+                "Run `veil-vmctl app-runtime-status --json` to inspect app launch readiness.",
+                "Run `veil-vmctl app-window-proof --json --app-id winapp_notepad` to prove the first mirrored Windows app window."
+            ]
+        }
+
+        return agentWait.nextActions + [
+            "Refresh the console with `veil-vmctl qemu-capture --json` and confirm the Windows desktop showed Run or PowerShell during the install attempt.",
+            "Retry with a longer gate using `veil-vmctl qemu-install-agent --json --wait-seconds \(max(waitSeconds, 60))` after clicking inside the live Windows console."
+        ]
     }
 
     private static func sendQEMUKeys(
@@ -2032,6 +2091,22 @@ struct VeilVMControl {
         json: Bool,
         steps: [QEMUKeySequenceStep]
     ) async throws {
+        let record = try await qemuKeySendRecord(steps: steps)
+
+        if json {
+            let data = try JSONEncoder.veilDiagnostics.encode(record)
+            print(String(decoding: data, as: UTF8.self))
+            return
+        }
+
+        print("QEMU key sequence sent")
+        print("Monitor socket: \(record.monitorSocketPath)")
+        print("Keys: \(record.keys.joined(separator: ", "))")
+    }
+
+    private static func qemuKeySendRecord(
+        steps: [QEMUKeySequenceStep]
+    ) async throws -> QEMUKeySendRecord {
         let launchRecord = try latestQEMULaunchRecord()
         let qmpSocketPath = launchRecord.qmpSocketPath?.trimmingCharacters(in: .whitespacesAndNewlines)
         let canUseQMP = qmpSocketPath.map { !$0.isEmpty && FileManager.default.fileExists(atPath: $0) } ?? false
@@ -2052,22 +2127,12 @@ struct VeilVMControl {
             try? await Task.sleep(nanoseconds: UInt64(step.delayAfterSend * 1_000_000_000))
         }
 
-        let record = QEMUKeySendRecord(
+        return QEMUKeySendRecord(
             monitorSocketPath: launchRecord.monitorSocketPath,
             keys: steps.map(\.key),
             results: results,
             sentAt: Date()
         )
-
-        if json {
-            let data = try JSONEncoder.veilDiagnostics.encode(record)
-            print(String(decoding: data, as: UTF8.self))
-            return
-        }
-
-        print("QEMU key sequence sent")
-        print("Monitor socket: \(record.monitorSocketPath)")
-        print("Keys: \(record.keys.joined(separator: ", "))")
     }
 
     private static func typeQEMUText(json: Bool, text: String) async throws {

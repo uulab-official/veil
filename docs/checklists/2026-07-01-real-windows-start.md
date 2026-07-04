@@ -105,6 +105,10 @@ Goal: keep the main Veil experience pointed at real local Windows boot and conso
 - [x] Make the app runtime snapshot treat a matching live QEMU launch record as `running`, even when the VM was started by the CLI.
 - [x] Verify the app shell displays the refreshed live QEMU console screenshot and running controls from the CLI launch record.
 - [x] Surface concrete `veil-vmctl prepare --installer ...` recovery commands when stored installer media needs macOS file access to be re-registered.
+- [x] Re-register the local `Win11_25H2_Korean_Arm64_v2.iso` with `veil-vmctl prepare` and verify the runtime returns to `bootReady: yes`.
+- [x] Start the installed Windows 11 Arm disk without attaching the installer ISO and verify a fresh VM-console capture reaches the Windows desktop.
+- [x] Mark the visible Windows desktop as installed in the local profile so normal starts no longer require the installer ISO.
+- [x] Change `qemu-install-agent` from key-send-only output to a bounded install-attempt report that also waits for guest-agent health.
 - [x] Add recovery copy to QEMU smoke reports for common boot failures.
 - [x] Convert QEMU monitor screenshots to PNG paths so users can inspect boot evidence directly.
 - [x] Surface the latest QEMU console PNG inside the Windows setup screen when launch evidence exists.
@@ -167,13 +171,12 @@ Goal: keep the main Veil experience pointed at real local Windows boot and conso
 
 ## Next
 
+- [ ] Investigate why QMP key-send reports success from the Windows desktop but the refreshed console does not show Start, Run, or PowerShell UI changes.
+- [ ] Use the new `qemu-install-agent` install-attempt report to capture key-send evidence plus guest-agent wait status for the next live retry.
 - [ ] Run `Veil Shared\Veil Guest Agent\Install Veil Agent.cmd` inside Windows 11 Arm and verify the current-session agent plus the `VeilAgent` logon task both start.
 - [ ] Run `swift run veil-host-probe --diagnose-agent` before and after the next guest-agent install attempt.
 - [ ] Run `Veil Shared\Veil Guest Agent\Collect Veil Agent Diagnostics.cmd` after the next bootstrap attempt and capture the generated desktop ZIP.
-- [ ] If the current VM remains on a black screen, recover with a clean disk-first relaunch and verify Windows reaches the desktop before retrying the agent installer.
 - [ ] Verify the Win32/GDI HWND capture path inside Windows 11 Arm and record the captured Notepad frame evidence.
 - [ ] Tune the Windows agent frame stream for lower latency after correctness is verified.
-- [ ] Restart the currently running QEMU VM so the new guest-agent port forwarding takes effect.
 - [ ] Replace remaining static setup preview states with real VM screenshots whenever QEMU launch evidence exists.
-- [ ] After Windows reaches the desktop, install and auto-start the Veil guest agent.
 - [ ] Replace remaining manual installed-state copy with guest-agent evidence in the first-run setup flow.

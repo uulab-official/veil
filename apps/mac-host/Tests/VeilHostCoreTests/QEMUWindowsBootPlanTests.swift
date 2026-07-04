@@ -1101,7 +1101,7 @@ struct QEMUWindowsBootPlanTests {
         let steps = try QEMUGuestAgentInstallKeySequence.steps
         let keys = steps.map(\.key)
 
-        #expect(keys.first == "cmd-r")
+        #expect(Array(keys.prefix(5)) == ["esc", "ctrl-esc", "r", "u", "n"])
         #expect(keys.last == "ret")
         #expect(QEMUGuestAgentInstallKeySequence.commandText.contains("Get-Volume -FileSystemLabel 'VEIL_AUTO'"))
         #expect(QEMUGuestAgentInstallKeySequence.commandText.contains("Bootstrap-VeilAgentFromMedia.ps1"))
