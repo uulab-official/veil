@@ -16,6 +16,31 @@ test("validates app runtime pending launch fixture", () => {
   assert.equal(validateAppRuntimeAction(report), report);
 });
 
+test("validates pending launch repair action while local Windows is running", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-action.launch-pending.json", import.meta.url), "utf8"));
+  report.launchPlan.requiresRuntimeStart = false;
+  report.launchPlan.recommendedAction = "repair-guest-agent-for-pending-launch";
+  delete report.launchPlan.recommendedStartCommand;
+  report.launchPlan.recommendedRepairCommand = "veil-vmctl qemu-install-agent --json --wait-seconds 120";
+  report.launchPlan.reason = "Windows is running and the selected app launch is queued; repair or start the guest agent, then open the app automatically.";
+  report.nextActions = [
+    "Run `veil-vmctl guest-agent-wait --json --wait-seconds 30` to wait for the Windows guest agent.",
+    "Run `veil-vmctl qemu-install-agent --json --wait-seconds 120` to repair or start the Windows guest agent from attached media.",
+    "Run `veil-vmctl app-runtime-action --json --action fulfill-pending` after the guest agent connects."
+  ];
+  report.status.launchPlan = { ...report.launchPlan };
+  report.status.localRuntime.state = "running";
+  report.status.localRuntime.canStart = false;
+  report.status.localRuntime.isRunning = true;
+  report.status.localRuntime.windowsInstalled = true;
+  report.status.localRuntime.recommendedAction = "wait-for-guest-agent";
+  report.status.localRuntime.reason = "The local Windows runtime is already running; wait for the guest agent before opening Windows apps.";
+  report.status.actions.find((action) => action.id === "runtime.startWindowsForApp").isAvailable = false;
+  report.status.actions.find((action) => action.id === "runtime.repairGuestAgentForApp").isAvailable = true;
+
+  assert.equal(validateAppRuntimeAction(report), report);
+});
+
 test("validates app runtime fulfill-pending fixture", () => {
   const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-action.fulfill-pending-live.json", import.meta.url), "utf8"));
 
@@ -183,6 +208,18 @@ test("rejects pending launch actions whose top-level app id drifts", () => {
   assert.throws(
     () => validateAppRuntimeAction(report),
     /pendingLaunchAppId must match/
+  );
+});
+
+test("rejects pending launch actions without start or repair recovery", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-action.launch-pending.json", import.meta.url), "utf8"));
+  delete report.launchPlan.recommendedStartCommand;
+  delete report.status.launchPlan.recommendedStartCommand;
+  report.status.actions.find((action) => action.id === "runtime.startWindowsForApp").isAvailable = false;
+
+  assert.throws(
+    () => validateAppRuntimeAction(report),
+    /recommendedStartCommand/
   );
 });
 

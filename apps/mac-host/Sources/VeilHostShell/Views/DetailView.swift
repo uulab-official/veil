@@ -20,6 +20,7 @@ struct DetailView: View {
                 model: vmModel,
                 guestAgentInstallEvidence: model.guestAgentInstallEvidence,
                 canLaunchWindowsApp: model.canLaunchSelectedApp,
+                canRequestWindowsAppLaunch: model.canRequestSelectedAppLaunch,
                 selectedWindowsAppName: model.selectedApp?.name,
                 pendingLaunch: model.pendingLaunchStatus(),
                 canFulfillPendingLaunch: model.canFulfillPendingLaunch,

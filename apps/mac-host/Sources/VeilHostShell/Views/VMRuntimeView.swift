@@ -7,6 +7,7 @@ struct VMRuntimeView: View {
     @Bindable var model: VMRuntimeModel
     var guestAgentInstallEvidence: VMInstallEvidenceSummary?
     var canLaunchWindowsApp: Bool
+    var canRequestWindowsAppLaunch: Bool
     var selectedWindowsAppName: String?
     var pendingLaunch: WindowsAppRuntimePendingLaunchStatus
     var canFulfillPendingLaunch: Bool
@@ -76,6 +77,7 @@ struct VMRuntimeView: View {
                     installGuestAgentAction: installGuestAgentAction,
                     repairGuestAgentForAppLaunchAction: repairGuestAgentForAppLaunchAction,
                     canLaunchWindowsApp: canLaunchWindowsApp,
+                    canRequestWindowsAppLaunch: canRequestWindowsAppLaunch,
                     selectedWindowsAppName: selectedWindowsAppName,
                     pendingLaunch: pendingLaunch,
                     canFulfillPendingLaunch: canFulfillPendingLaunch,
@@ -373,7 +375,7 @@ struct VMRuntimeView: View {
     }
 
     private var canOpenWindowsApp: Bool {
-        canLaunchWindowsApp || canFulfillPendingLaunch
+        canRequestWindowsAppLaunch || canFulfillPendingLaunch
     }
 }
 
@@ -1316,6 +1318,7 @@ private struct WindowsSetupDisplayPanel: View {
     var installGuestAgentAction: () -> Void
     var repairGuestAgentForAppLaunchAction: () -> Void
     var canLaunchWindowsApp: Bool
+    var canRequestWindowsAppLaunch: Bool
     var selectedWindowsAppName: String?
     var pendingLaunch: WindowsAppRuntimePendingLaunchStatus
     var canFulfillPendingLaunch: Bool
@@ -1700,7 +1703,7 @@ private struct WindowsSetupDisplayPanel: View {
             }
         }
 
-        if canLaunchWindowsApp {
+        if canRequestWindowsAppLaunch {
             return selectedWindowsAppName.map { "Open \($0)" } ?? "Open Windows App"
         }
 
@@ -1999,7 +2002,11 @@ private struct WindowsSetupDisplayPanel: View {
                 }
             }
 
-            return canLaunchWindowsApp ? appDisplayName : "After agent"
+            if canLaunchWindowsApp {
+                return appDisplayName
+            }
+
+            return canRequestWindowsAppLaunch ? "Ready to queue" : "After agent"
         }
 
         return activeMirrorSession.latestFrame == nil ? "Opening" : "Mac Window"
@@ -2015,7 +2022,11 @@ private struct WindowsSetupDisplayPanel: View {
                 return .blue
             }
 
-            return canLaunchWindowsApp ? .green : .secondary
+            if canLaunchWindowsApp {
+                return .green
+            }
+
+            return canRequestWindowsAppLaunch ? .blue : .secondary
         }
 
         return activeMirrorSession.latestFrame == nil ? .orange : .green
@@ -2055,7 +2066,7 @@ private struct WindowsSetupDisplayPanel: View {
             }
         }
 
-        if canLaunchWindowsApp {
+        if canRequestWindowsAppLaunch {
             return "Open Windows apps from macOS"
         }
 
@@ -2113,7 +2124,7 @@ private struct WindowsSetupDisplayPanel: View {
             }
         }
 
-        if canLaunchWindowsApp {
+        if canRequestWindowsAppLaunch {
             return "Open \(appDisplayName)"
         }
 
@@ -2145,6 +2156,10 @@ private struct WindowsSetupDisplayPanel: View {
             return pendingLaunch.willLaunchOnAgentReconnect && !canFulfillPendingLaunch
                 ? "bolt.horizontal.circle"
                 : "macwindow.badge.plus"
+        }
+
+        if canRequestWindowsAppLaunch {
+            return "macwindow.badge.plus"
         }
 
         if canInstallGuestAgent {
@@ -2180,7 +2195,7 @@ private struct WindowsSetupDisplayPanel: View {
             }
         }
 
-        if canLaunchWindowsApp {
+        if canRequestWindowsAppLaunch {
             return "Launch \(appDisplayName) as a Mac-managed window."
         }
 
@@ -2249,7 +2264,7 @@ private struct WindowsSetupDisplayPanel: View {
     }
 
     private var canOpenWindowsApp: Bool {
-        canLaunchWindowsApp || canFulfillPendingLaunch
+        canRequestWindowsAppLaunch || canFulfillPendingLaunch
     }
 
     private var canRepairGuestAgentForAppLaunch: Bool {
@@ -2270,18 +2285,16 @@ private struct WindowsSetupDisplayPanel: View {
             ),
             InstallFlowItem(
                 title: "Agent",
-                detail: canOpenWindowsApp
-                    ? "Connected"
-                    : (pendingLaunch.isQueued ? "Waiting for reconnect" : "Waiting for app catalog"),
+                detail: agentFlowDetail,
                 symbolName: "bolt.horizontal.circle",
-                state: canOpenWindowsApp ? .complete : (snapshot.state == .running || snapshot.state == .starting ? .current : .pending)
+                state: agentFlowState
             ),
             InstallFlowItem(
                 title: "App Window",
                 detail: activeMirrorSession?.window.title
                     ?? (pendingLaunch.isQueued ? pendingAppDisplayName : appDisplayName),
                 symbolName: "macwindow",
-                state: activeMirrorSession != nil ? .complete : (canOpenWindowsApp ? .current : .pending)
+                state: appWindowFlowState
             ),
             InstallFlowItem(
                 title: "Proof Gate",
@@ -2290,6 +2303,52 @@ private struct WindowsSetupDisplayPanel: View {
                 state: proofGateState
             )
         ]
+    }
+
+    private var agentFlowDetail: String {
+        if canLaunchWindowsApp || canFulfillPendingLaunch {
+            return "Connected"
+        }
+
+        if pendingLaunch.isQueued {
+            return "Waiting for reconnect"
+        }
+
+        if canRequestWindowsAppLaunch {
+            return snapshot.state == .running || snapshot.state == .starting
+                ? "Repair before launch"
+                : "Start before launch"
+        }
+
+        return "Waiting for app catalog"
+    }
+
+    private var agentFlowState: InstallFlowState {
+        if canLaunchWindowsApp || canFulfillPendingLaunch {
+            return .complete
+        }
+
+        if pendingLaunch.isQueued || canRequestWindowsAppLaunch {
+            return snapshot.state == .running || snapshot.state == .starting ? .current : .pending
+        }
+
+        return .pending
+    }
+
+    private var appWindowFlowState: InstallFlowState {
+        if activeMirrorSession != nil {
+            return .complete
+        }
+
+        if canLaunchWindowsApp || canFulfillPendingLaunch {
+            return .current
+        }
+
+        if pendingLaunch.isQueued || canRequestWindowsAppLaunch {
+            return .pending
+        }
+
+        return .pending
     }
 
     private var proofGateState: InstallFlowState {

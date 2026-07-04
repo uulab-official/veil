@@ -227,6 +227,8 @@ Goal: keep the main Veil experience pointed at real local Windows boot and conso
 - [x] Harden WebSocket request/reply handling so background `window.frame`, `window.updated`, `window.closed`, or guest clipboard events cannot be decoded as `app.launch.response` during a live launch request.
 - [x] Verify live `app-runtime-action --action launch --app-id winapp_notepad` after frame filtering: accepted launch, live guest agent, `hwnd:0001056E`, Korean Notepad title, and app-runtime status marked the launcher as hidden for Windows app windows.
 - [x] Verify live `veil-host-probe --launch-notepad-frame` after frame filtering: launch response, `window.created`, and first PNG frame were all returned from the running Windows 11 Arm guest.
+- [x] Make the post-install launcher start the app-open flow from requestable app state, not only live-agent launch state, so pressing Open Notepad can queue the launch and enter guest-agent repair while the progress strip still shows Agent as repair/waiting instead of connected.
+- [x] Capture the current live regression after a queued-launch repair attempt: QEMU PID 94195 still reports running, but `guest-agent-wait` returns `hostForwardProbe.status=tcpUnavailable`, `qemu-display-smoke` fails with an RFB read error, and the latest console capture is black, so the next end-to-end app validation needs display/agent recovery before it can prove mirrored Notepad again.
 
 ## Next
 

@@ -210,8 +210,19 @@ function validateLaunchAction(report) {
       throw new TypeError("rejected app-first launch actions must expose pendingLaunchAppId for the requested app.");
     }
 
-    if (report.launchPlan.recommendedStartCommand === undefined) {
-      throw new TypeError("rejected app-first launch actions must expose launchPlan.recommendedStartCommand.");
+    if (
+      report.launchPlan.recommendedStartCommand === undefined
+      && report.launchPlan.recommendedRepairCommand === undefined
+    ) {
+      throw new TypeError("rejected app-first launch actions must expose launchPlan.recommendedStartCommand or launchPlan.recommendedRepairCommand.");
+    }
+
+    if (report.launchPlan.requiresRuntimeStart && report.launchPlan.recommendedStartCommand === undefined) {
+      throw new TypeError("rejected app-first launch actions that require runtime start must expose launchPlan.recommendedStartCommand.");
+    }
+
+    if (!report.launchPlan.requiresRuntimeStart && report.launchPlan.recommendedRepairCommand === undefined) {
+      throw new TypeError("rejected app-first launch actions for running runtimes must expose launchPlan.recommendedRepairCommand.");
     }
 
     if (report.launchPlan.recommendedWaitCommand === undefined) {
