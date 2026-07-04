@@ -107,7 +107,8 @@ those capabilities can support the matching proof command. The sibling
 `proofPlan` object carries the selected app id, readiness booleans, and exact
 `veil-vmctl app-window-proof`, `coherence-proof`, and `mvp-proof --require-proved`
 commands so automation can move from status to proof without rebuilding command
-strings.
+strings. It also exposes `recommendedProofKind` and `recommendedProofCommand`
+as the strongest currently available single proof CTA.
 
 ```bash
 cd apps/mac-host

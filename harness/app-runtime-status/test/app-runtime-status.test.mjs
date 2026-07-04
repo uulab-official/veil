@@ -355,6 +355,27 @@ test("rejects proof plan commands that drift from selected app", () => {
   );
 });
 
+test("rejects proof plans whose recommended proof kind is not strongest available", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.mac-window-live.json", import.meta.url), "utf8"));
+  report.proofPlan.recommendedProofKind = "app-window";
+  report.proofPlan.recommendedProofCommand = report.proofPlan.recommendedAppWindowProofCommand;
+
+  assert.throws(
+    () => validateAppRuntimeStatus(report),
+    /recommendedProofKind/
+  );
+});
+
+test("rejects proof plans whose recommended proof command drifts from strongest available", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.mac-window-live.json", import.meta.url), "utf8"));
+  report.proofPlan.recommendedProofCommand = report.proofPlan.recommendedCoherenceProofCommand;
+
+  assert.throws(
+    () => validateAppRuntimeStatus(report),
+    /recommendedProofCommand/
+  );
+});
+
 test("rejects proof plans without the selected app id", () => {
   const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.mac-window-live.json", import.meta.url), "utf8"));
   delete report.proofPlan.selectedAppId;

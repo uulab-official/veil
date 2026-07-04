@@ -176,7 +176,9 @@
       "recommendedAppWindowProofCommand": "veil-vmctl app-window-proof --json --app-id winapp_notepad",
       "recommendedCoherenceProofCommand": "veil-vmctl coherence-proof --json --app-id winapp_notepad",
       "recommendedMVPProofCommand": "veil-vmctl mvp-proof --json --app-id winapp_notepad --require-proved",
-      "reason": "The live Windows agent can run app-window, coherence, and MVP proof commands for the selected app."
+      "reason": "The live Windows agent can run app-window, coherence, and MVP proof commands for the selected app.",
+      "recommendedProofKind": "mvp",
+      "recommendedProofCommand": "veil-vmctl mvp-proof --json --app-id winapp_notepad --require-proved"
     }
   },
   "nextActions": [
@@ -192,6 +194,8 @@
     "recommendedAppWindowProofCommand": "veil-vmctl app-window-proof --json --app-id winapp_notepad",
     "recommendedCoherenceProofCommand": "veil-vmctl coherence-proof --json --app-id winapp_notepad",
     "recommendedMVPProofCommand": "veil-vmctl mvp-proof --json --app-id winapp_notepad --require-proved",
-    "reason": "The live Windows agent can run app-window, coherence, and MVP proof commands for the selected app."
+    "reason": "The live Windows agent can run app-window, coherence, and MVP proof commands for the selected app.",
+    "recommendedProofKind": "mvp",
+    "recommendedProofCommand": "veil-vmctl mvp-proof --json --app-id winapp_notepad --require-proved"
   }
 }

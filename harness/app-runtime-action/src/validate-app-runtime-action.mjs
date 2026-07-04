@@ -258,9 +258,7 @@ function validateProofNextActions(report) {
     return;
   }
 
-  const command = report.proofPlan.recommendedMVPProofCommand
-    ?? report.proofPlan.recommendedCoherenceProofCommand
-    ?? report.proofPlan.recommendedAppWindowProofCommand;
+  const command = report.proofPlan.recommendedProofCommand;
   if (command === undefined) {
     return;
   }

@@ -360,6 +360,8 @@ public struct WindowsAppRuntimeProofPlanStatus: Codable, Equatable, Sendable {
     public var canRunAppWindowProof: Bool
     public var canRunCoherenceProof: Bool
     public var canRunMVPProof: Bool
+    public var recommendedProofKind: String?
+    public var recommendedProofCommand: String?
     public var recommendedAppWindowProofCommand: String?
     public var recommendedCoherenceProofCommand: String?
     public var recommendedMVPProofCommand: String?
@@ -370,6 +372,8 @@ public struct WindowsAppRuntimeProofPlanStatus: Codable, Equatable, Sendable {
         canRunAppWindowProof: Bool,
         canRunCoherenceProof: Bool,
         canRunMVPProof: Bool,
+        recommendedProofKind: String? = nil,
+        recommendedProofCommand: String? = nil,
         recommendedAppWindowProofCommand: String? = nil,
         recommendedCoherenceProofCommand: String? = nil,
         recommendedMVPProofCommand: String? = nil,
@@ -379,6 +383,8 @@ public struct WindowsAppRuntimeProofPlanStatus: Codable, Equatable, Sendable {
         self.canRunAppWindowProof = canRunAppWindowProof
         self.canRunCoherenceProof = canRunCoherenceProof
         self.canRunMVPProof = canRunMVPProof
+        self.recommendedProofKind = recommendedProofKind
+        self.recommendedProofCommand = recommendedProofCommand
         self.recommendedAppWindowProofCommand = recommendedAppWindowProofCommand
         self.recommendedCoherenceProofCommand = recommendedCoherenceProofCommand
         self.recommendedMVPProofCommand = recommendedMVPProofCommand
@@ -919,6 +925,8 @@ public final class HostDashboardModel {
         }
 
         let appWindowCommand = "veil-vmctl app-window-proof --json --app-id \(selectedAppId)"
+        let coherenceCommand = "veil-vmctl coherence-proof --json --app-id \(selectedAppId)"
+        let mvpCommand = "veil-vmctl mvp-proof --json --app-id \(selectedAppId) --require-proved"
 
         guard health?.capabilities.windowCapture == true else {
             return WindowsAppRuntimeProofPlanStatus(
@@ -937,6 +945,8 @@ public final class HostDashboardModel {
                 canRunAppWindowProof: true,
                 canRunCoherenceProof: false,
                 canRunMVPProof: false,
+                recommendedProofKind: "app-window",
+                recommendedProofCommand: appWindowCommand,
                 recommendedAppWindowProofCommand: appWindowCommand,
                 reason: "The live Windows agent must report input and clipboardText before coherence and MVP proof can run."
             )
@@ -947,9 +957,11 @@ public final class HostDashboardModel {
             canRunAppWindowProof: true,
             canRunCoherenceProof: true,
             canRunMVPProof: true,
+            recommendedProofKind: "mvp",
+            recommendedProofCommand: mvpCommand,
             recommendedAppWindowProofCommand: appWindowCommand,
-            recommendedCoherenceProofCommand: "veil-vmctl coherence-proof --json --app-id \(selectedAppId)",
-            recommendedMVPProofCommand: "veil-vmctl mvp-proof --json --app-id \(selectedAppId) --require-proved",
+            recommendedCoherenceProofCommand: coherenceCommand,
+            recommendedMVPProofCommand: mvpCommand,
             reason: "The live Windows agent can run app-window, coherence, and MVP proof commands for the selected app."
         )
     }

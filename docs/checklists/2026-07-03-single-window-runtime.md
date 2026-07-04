@@ -60,6 +60,7 @@ Goal: move Veil from a Veil shell plus separate QEMU Cocoa display toward a UTM-
 - [x] Surface live guest-agent capabilities and proof action availability in app-runtime status so app-window, coherence, and MVP proof runs are gated before real Windows validation.
 - [x] Add a `proofPlan` status contract with exact app-window, coherence, and MVP proof commands so the single-window runtime can hand off to validation without guessing.
 - [x] Carry `proofPlan` through app-runtime action reports so successful app-first actions point directly at the next single-window proof gate.
+- [x] Add a single recommended proof CTA to `proofPlan` so UI and automation can launch the strongest available proof without reimplementing priority rules.
 
 ## Next
 

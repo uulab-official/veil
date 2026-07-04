@@ -942,6 +942,12 @@ struct VeilVMControl {
             }
         }
         print("Proof plan: \(report.proofPlan.reason)")
+        if let proofKind = report.proofPlan.recommendedProofKind {
+            print("Proof recommended kind: \(proofKind)")
+        }
+        if let proofCommand = report.proofPlan.recommendedProofCommand {
+            print("Proof recommended command: \(proofCommand)")
+        }
         if let proofCommand = report.proofPlan.recommendedAppWindowProofCommand {
             print("Proof app-window command: \(proofCommand)")
         }
@@ -1070,19 +1076,23 @@ struct VeilVMControl {
     }
 
     private static func proofNextAction(from proofPlan: WindowsAppRuntimeProofPlanStatus) -> String? {
-        if let command = proofPlan.recommendedMVPProofCommand {
+        guard let command = proofPlan.recommendedProofCommand else {
+            return nil
+        }
+
+        if proofPlan.recommendedProofKind == "mvp" {
             return "Run `\(command)` to verify the full Windows app runtime loop."
         }
 
-        if let command = proofPlan.recommendedCoherenceProofCommand {
+        if proofPlan.recommendedProofKind == "coherence" {
             return "Run `\(command)` to verify input and clipboard before MVP release."
         }
 
-        if let command = proofPlan.recommendedAppWindowProofCommand {
+        if proofPlan.recommendedProofKind == "app-window" {
             return "Run `\(command)` to verify launch, HWND tracking, and first frame capture."
         }
 
-        return nil
+        return "Run `\(command)` to verify the Windows app runtime proof gate."
     }
 
     private static func compactActions(_ actions: [String?]) -> [String] {

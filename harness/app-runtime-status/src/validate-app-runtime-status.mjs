@@ -433,6 +433,7 @@ function validateProofPlan(proofPlan, report) {
   const expectedMVPCommand = report.selectedAppId === undefined
     ? undefined
     : `veil-vmctl mvp-proof --json --app-id ${report.selectedAppId} --require-proved`;
+  const expectedRecommendedProof = strongestProof(proofPlan);
 
   validateProofCommand(
     proofPlan.recommendedAppWindowProofCommand,
@@ -452,6 +453,34 @@ function validateProofPlan(proofPlan, report) {
     proofPlan.canRunMVPProof,
     expectedMVPCommand
   );
+
+  if (expectedRecommendedProof === undefined) {
+    if (proofPlan.recommendedProofKind !== undefined || proofPlan.recommendedProofCommand !== undefined) {
+      throw new TypeError("proofPlan recommended proof fields are only allowed when a proof command is available.");
+    }
+  } else {
+    requireString(proofPlan.recommendedProofKind, "proofPlan.recommendedProofKind");
+    requireString(proofPlan.recommendedProofCommand, "proofPlan.recommendedProofCommand");
+    if (proofPlan.recommendedProofKind !== expectedRecommendedProof.kind) {
+      throw new TypeError("proofPlan.recommendedProofKind must identify the strongest available proof.");
+    }
+    if (proofPlan.recommendedProofCommand !== expectedRecommendedProof.command) {
+      throw new TypeError("proofPlan.recommendedProofCommand must match the strongest available proof command.");
+    }
+  }
+}
+
+function strongestProof(proofPlan) {
+  if (proofPlan.canRunMVPProof) {
+    return { kind: "mvp", command: proofPlan.recommendedMVPProofCommand };
+  }
+  if (proofPlan.canRunCoherenceProof) {
+    return { kind: "coherence", command: proofPlan.recommendedCoherenceProofCommand };
+  }
+  if (proofPlan.canRunAppWindowProof) {
+    return { kind: "app-window", command: proofPlan.recommendedAppWindowProofCommand };
+  }
+  return undefined;
 }
 
 function validateProofCommand(command, fieldName, isAvailable, expectedCommand) {

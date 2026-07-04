@@ -90,3 +90,4 @@ Goal: adapt concrete UTM source patterns into Veil while keeping Veil focused on
 - [x] Add launcher visibility status so Coherence-style runs prove the main launcher should stay hidden while mirrored Windows app windows are managed from Dock/menu controls.
 - [x] Add `proofPlan` to app-runtime status so UTM-style automation can discover exact proof commands from the same status surface that gates actions.
 - [x] Promote `proofPlan` into app-runtime action reports so launch, restore, bring-forward, focus, and clipboard flows hand off to the strongest available proof command.
+- [x] Add `recommendedProofKind` and `recommendedProofCommand` so UTM-style command surfaces can show one proof CTA instead of re-sorting proof capability fields.
