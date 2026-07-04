@@ -395,6 +395,16 @@ test("rejects fulfill-pending action availability that drifts from queued launch
   );
 });
 
+test("rejects wait-agent action availability that drifts from live connection readiness", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.mac-window-live.json", import.meta.url), "utf8"));
+  report.actions.find((action) => action.id === "runtime.waitAgent").isAvailable = true;
+
+  assert.throws(
+    () => validateAppRuntimeStatus(report),
+    /runtime\.waitAgent/
+  );
+});
+
 test("rejects stop action availability that drifts from quiet runtime readiness", () => {
   const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.demo.json", import.meta.url), "utf8"));
   report.actions.find((action) => action.id === "runtime.stopWhenIdle").isAvailable = true;

@@ -1,48 +1,57 @@
 {
   "kind": "windowsAppRuntimeAction",
-  "action": "bring-forward",
-  "requestedAt": "2026-07-03T13:30:00Z",
-  "endpoint": "demo",
+  "action": "wait-agent",
+  "requestedAt": "2026-07-05T01:00:00Z",
+  "endpoint": "ws://127.0.0.1:9",
   "connectionMode": "demo",
-  "accepted": true,
-  "windowId": "hwnd:DEMO0001",
-  "foregroundWindowId": "hwnd:DEMO0001",
-  "foregroundWindowTitle": "Untitled - Notepad",
-  "focus": {
-    "type": "window.focus.response",
-    "requestId": "local_focus_window",
-    "windowId": "hwnd:DEMO0001",
-    "accepted": true
+  "accepted": false,
+  "pendingLaunchAppId": "winapp_notepad",
+  "launchPlan": {
+    "selectedAppId": "winapp_notepad",
+    "pendingLaunchAppId": "winapp_notepad",
+    "canRequestSelectedAppLaunch": true,
+    "canLaunchSelectedAppNow": false,
+    "requiresRuntimeStart": true,
+    "requiresGuestAgent": true,
+    "recommendedAction": "start-runtime-for-pending-launch",
+    "recommendedStartCommand": "veil-vmctl qemu-start --json --wait-seconds 30",
+    "recommendedWaitCommand": "veil-vmctl guest-agent-wait --json --wait-seconds 30",
+    "recommendedLaunchCommand": "veil-vmctl app-runtime-action --json --action fulfill-pending",
+    "reason": "The selected app launch is queued until Windows starts and the guest agent connects."
   },
-  "close": null,
+  "closedWindows": [],
+  "mouseInputs": [],
+  "keyInputs": [],
   "restoredWindows": [],
-  "broughtForwardWindowIds": [
-    "hwnd:DEMO0001"
-  ],
+  "restoreRequestedAppIds": [],
+  "broughtForwardWindowIds": [],
   "status": {
     "kind": "windowsAppRuntimeStatus",
-    "generatedAt": "2026-07-03T13:30:01Z",
+    "generatedAt": "2026-07-04T02:05:01Z",
     "phase": "connected",
     "selectedAppId": "winapp_notepad",
+    "pendingLaunchAppId": "winapp_notepad",
     "pendingLaunch": {
-      "isQueued": false,
-      "willLaunchOnAgentReconnect": false,
-      "recommendedAction": "none",
-      "reason": "No Windows app launch is queued."
+      "isQueued": true,
+      "appId": "winapp_notepad",
+      "willLaunchOnAgentReconnect": true,
+      "recommendedAction": "auto-launch-on-agent-reconnect",
+      "reason": "Veil will launch the queued Windows app after the guest agent reconnects."
     },
     "connection": {
       "mode": "demo",
       "hasLiveAgentConnection": false,
       "agentVersion": "demo-0.1.0",
-      "os": "windows-arm64"
+      "os": "windows-arm64",
+      "connectionDetail": "No Windows agent reachable at ws://127.0.0.1:9. Showing built-in demo data."
     },
     "dockIntegration": {
       "isEnabled": true,
-      "openWindowCount": 1,
-      "pendingLaunchCount": 0,
-      "badgeLabel": "1",
+      "openWindowCount": 0,
+      "pendingLaunchCount": 1,
+      "badgeLabel": "...",
       "canOpenMainWindow": true,
-      "canBringWindowsAppsForward": true,
+      "canBringWindowsAppsForward": false,
       "canRestorePreviousApps": false,
       "canLaunchSelectedApp": true
     },
@@ -51,43 +60,42 @@
       "canOpenMainWindow": true,
       "shouldHideMainWindow": false,
       "keepsDockMenuAvailable": true,
-      "recommendedAction": "show-launcher-or-restore-apps",
-      "reason": "No mirrored app window is open, but previous Windows app intent can be restored."
+      "recommendedAction": "show-launcher-for-pending-launch",
+      "reason": "A Windows app launch is queued and may need the launcher to show start or reconnect recovery."
     },
     "macWindowIntegration": {
       "isEnabled": true,
       "acceptsGuestWindowEvents": false,
       "opensMacWindowsAutomatically": true,
       "hidesLauncherWhenMirroring": false,
-      "mirroredWindowCount": 1,
+      "mirroredWindowCount": 0,
       "pendingFrameWindowCount": 0,
       "streamingWindowCount": 0,
       "reason": "Waiting for the live Windows agent before guest HWND events can open macOS windows automatically.",
-      "foregroundableWindowCount": 1,
-      "foregroundWindowId": "hwnd:DEMO0001",
-      "foregroundWindowTitle": "Untitled - Notepad"
+      "foregroundableWindowCount": 0
     },
     "quietRuntime": {
       "isEnabled": true,
-      "hasOpenedAppWindowThisSession": true,
-      "openWindowCount": 1,
+      "hasOpenedAppWindowThisSession": false,
+      "openWindowCount": 0,
       "canQuietRuntime": false,
       "willQuietAutomatically": false,
       "automaticQuietDelaySeconds": 8,
-      "recommendedAction": "keep-running",
-      "reason": "Windows app windows are still open."
+      "recommendedAction": "none",
+      "reason": "No Windows app window has opened in this host session."
     },
     "launchPlan": {
       "selectedAppId": "winapp_notepad",
+      "pendingLaunchAppId": "winapp_notepad",
       "canRequestSelectedAppLaunch": true,
       "canLaunchSelectedAppNow": false,
       "requiresRuntimeStart": true,
       "requiresGuestAgent": true,
-      "recommendedAction": "start-runtime-and-wait-for-agent",
+      "recommendedAction": "start-runtime-for-pending-launch",
       "recommendedStartCommand": "veil-vmctl qemu-start --json --wait-seconds 30",
       "recommendedWaitCommand": "veil-vmctl guest-agent-wait --json --wait-seconds 30",
-      "recommendedLaunchCommand": "veil-vmctl app-runtime-action --json --action launch --app-id winapp_notepad",
-      "reason": "Start Windows, wait for the guest agent, then launch the selected app."
+      "recommendedLaunchCommand": "veil-vmctl app-runtime-action --json --action fulfill-pending",
+      "reason": "The selected app launch is queued until Windows starts and the guest agent connects."
     },
     "apps": [
       {
@@ -95,22 +103,16 @@
         "name": "Notepad",
         "canRequestLaunch": true,
         "canLaunchNow": false
-      }
-    ],
-    "mirrorSessions": [
+      },
       {
-        "windowId": "hwnd:DEMO0001",
-        "appId": "winapp_notepad",
-        "title": "Untitled - Notepad",
-        "captureState": "unavailable",
-        "canFocus": true,
-        "canClose": true,
-        "canSendInput": false
+        "id": "winapp_calculator",
+        "name": "Calculator",
+        "canRequestLaunch": true,
+        "canLaunchNow": false
       }
     ],
-    "restorableAppIds": [
-      "winapp_notepad"
-    ],
+    "mirrorSessions": [],
+    "restorableAppIds": [],
     "actions": [
       {
         "id": "dock.openMainWindow",
@@ -120,7 +122,7 @@
       {
         "id": "dock.bringWindowsAppsForward",
         "title": "Bring Windows Apps Forward",
-        "isAvailable": true
+        "isAvailable": false
       },
       {
         "id": "windowsApps.restorePrevious",
@@ -135,7 +137,7 @@
       {
         "id": "windowsApps.closeAll",
         "title": "Close All Windows Apps",
-        "isAvailable": true
+        "isAvailable": false
       },
       {
         "id": "macWindows.autoOpen",
@@ -239,8 +241,9 @@
     }
   },
   "nextActions": [
-    "Confirm the mirrored Windows app windows are frontmost on macOS.",
-    "Run `veil-vmctl app-runtime-action --json --action focus --window-id ...` if one app window needs explicit guest focus."
+    "Run `veil-vmctl qemu-install-agent --json --wait-seconds 120` to send the attached guest-agent repair path.",
+    "Run `veil-host-probe --diagnose-agent` to inspect host-forward TCP and WebSocket health.",
+    "Run `veil-vmctl app-runtime-status --json` before retrying app launch or reconnect-restore."
   ],
   "proofPlan": {
     "selectedAppId": "winapp_notepad",
@@ -248,5 +251,32 @@
     "canRunCoherenceProof": false,
     "canRunMVPProof": false,
     "reason": "Wait for the live Windows agent before running proof commands."
+  },
+  "agentWait": {
+    "attempts": 2,
+    "diagnostic": {
+      "endpoint": "ws://127.0.0.1:18444",
+      "nextActions": [
+        "Inside Windows, run Veil Shared\\Veil Guest Agent\\Install Veil Agent.cmd.",
+        "If macOS can open the forwarded port but health still times out, run Veil Shared\\Veil Guest Agent\\Repair Veil Agent Connectivity.cmd and approve the Windows administrator prompt."
+      ],
+      "status": "unavailable",
+      "errorMessage": "Timed out waiting for agent.health.response.",
+      "hostForwardProbe": {
+        "endpoint": "ws://127.0.0.1:18444",
+        "host": "127.0.0.1",
+        "port": 18444,
+        "status": "tcpOpen",
+        "detail": "TCP opened but WebSocket health did not respond."
+      }
+    },
+    "endpoint": "ws://127.0.0.1:18444",
+    "kind": "guestAgentWait",
+    "nextActions": [
+      "Inside Windows, run Veil Shared\\Veil Guest Agent\\Install Veil Agent.cmd.",
+      "If macOS can open the forwarded port but health still times out, run Veil Shared\\Veil Guest Agent\\Repair Veil Agent Connectivity.cmd and approve the Windows administrator prompt."
+    ],
+    "status": "unavailable",
+    "waitedSeconds": 1
   }
 }

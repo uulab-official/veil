@@ -801,6 +801,7 @@ function validateActions(actions, report) {
     "runtime.repairGuestAgentForApp",
     "runtime.recoverDisplay",
     "runtime.fulfillPendingLaunch",
+    "runtime.waitAgent",
     "runtime.quietWhenIdle",
     "runtime.stopWhenIdle",
     "proof.appWindow",
@@ -852,6 +853,11 @@ function validateActions(actions, report) {
   const fulfillPendingAction = actions.find((action) => action.id === "runtime.fulfillPendingLaunch");
   if (fulfillPendingAction.isAvailable !== canFulfillPendingLaunch) {
     throw new TypeError("runtime.fulfillPendingLaunch availability must match queued launch readiness.");
+  }
+
+  const waitAgentAction = actions.find((action) => action.id === "runtime.waitAgent");
+  if (waitAgentAction.isAvailable !== !report.connection.hasLiveAgentConnection) {
+    throw new TypeError("runtime.waitAgent availability must match missing live guest agent connection.");
   }
 
   const quietAction = actions.find((action) => action.id === "runtime.quietWhenIdle");

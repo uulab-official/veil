@@ -233,6 +233,7 @@ Goal: keep the main Veil experience pointed at real local Windows boot and conso
 - [x] Add `app-runtime-action --action recover-display` and `runtime.recoverDisplay` harness gating so stale-display recovery is executable through the same product automation surface as launch, repair, proof, and quiet-runtime actions.
 - [x] Surface stale-display recovery in the app shell as Refresh Display across the main play flow, toolbar, app commands, and menu bar, and gate app-open menu actions while the embedded display evidence is stale.
 - [x] Add explicit `app-runtime-action --action reconnect-restore` plus `windowsApps.reconnectRestore` status gating so reconnect/restore can be validated even before the live guest agent is back. The current live run found persisted Notepad restore intent but remained rejected because the guest agent is still unreachable.
+- [x] Add `app-runtime-action --action wait-agent --wait-seconds <n>` plus `runtime.waitAgent` status gating so guest-agent wait/host-forward diagnostics live inside the same product automation surface as launch, repair, restore, proof, and display recovery.
 
 ## Next
 

@@ -51,6 +51,11 @@
       "title": "Open Queued Windows App"
     },
     {
+      "id": "runtime.waitAgent",
+      "title": "Wait For Guest Agent",
+      "isAvailable": true
+    },
+    {
       "id": "runtime.quietWhenIdle",
       "isAvailable": false,
       "title": "Quiet Runtime When Idle"

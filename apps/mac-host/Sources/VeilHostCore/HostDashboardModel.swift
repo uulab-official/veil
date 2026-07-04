@@ -922,6 +922,11 @@ public final class HostDashboardModel {
                     isAvailable: pendingLaunch.isQueued && canFulfillPendingLaunch
                 ),
                 WindowsAppRuntimeActionStatus(
+                    id: "runtime.waitAgent",
+                    title: "Wait For Guest Agent",
+                    isAvailable: !hasLiveAgentConnection
+                ),
+                WindowsAppRuntimeActionStatus(
                     id: "runtime.quietWhenIdle",
                     title: "Quiet Runtime When Idle",
                     isAvailable: quietRuntime.canQuietRuntime

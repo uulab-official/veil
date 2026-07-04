@@ -2,8 +2,9 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 import { validateAppRuntimeStatus } from "../../app-runtime-status/src/validate-app-runtime-status.mjs";
+import { validateGuestAgentWait } from "../../guest-agent-wait/src/validate-guest-agent-wait.mjs";
 
-const VALID_ACTIONS = new Set(["launch", "fulfill-pending", "focus", "close", "close-all", "restore", "reconnect-restore", "bring-forward", "recover-display", "quiet-when-idle", "stop-runtime", "clipboard", "type-text", "click", "proof-recommended"]);
+const VALID_ACTIONS = new Set(["launch", "fulfill-pending", "focus", "close", "close-all", "restore", "reconnect-restore", "bring-forward", "recover-display", "wait-agent", "quiet-when-idle", "stop-runtime", "clipboard", "type-text", "click", "proof-recommended"]);
 const VALID_CONNECTION_MODES = new Set(["agent", "demo"]);
 const VALID_CONSOLE_PREVIEW_STATES = new Set(["fresh", "stale", "unavailable"]);
 
@@ -54,6 +55,10 @@ export function validateAppRuntimeAction(report) {
     throw new TypeError("displayRecovery is only allowed for recover-display actions.");
   }
 
+  if (report.action !== "wait-agent" && report.agentWait !== undefined && report.agentWait !== null) {
+    throw new TypeError("agentWait is only allowed for wait-agent actions.");
+  }
+
   switch (report.action) {
     case "launch":
       validateLaunchAction(report);
@@ -82,6 +87,9 @@ export function validateAppRuntimeAction(report) {
     case "recover-display":
       validateRecoverDisplayAction(report);
       break;
+    case "wait-agent":
+      validateWaitAgentAction(report);
+      break;
     case "quiet-when-idle":
       validateQuietWhenIdleAction(report);
       break;
@@ -105,6 +113,21 @@ export function validateAppRuntimeAction(report) {
   validateStringArray(report.nextActions, "nextActions");
   validateProofNextActions(report);
   return report;
+}
+
+function validateWaitAgentAction(report) {
+  if (!report.agentWait || typeof report.agentWait !== "object" || Array.isArray(report.agentWait)) {
+    throw new TypeError("wait-agent actions must include agentWait.");
+  }
+
+  validateGuestAgentWait(report.agentWait);
+  if (report.accepted !== (report.agentWait.status === "connected")) {
+    throw new TypeError("wait-agent accepted must match agentWait connected status.");
+  }
+
+  if (report.agentWait.endpoint !== report.status.guestAgentDiagnostics.endpoint) {
+    throw new TypeError("wait-agent endpoint must match status.guestAgentDiagnostics.endpoint.");
+  }
 }
 
 function validateRecoverDisplayAction(report) {

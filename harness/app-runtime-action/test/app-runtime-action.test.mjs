@@ -158,6 +158,59 @@ test("validates recommended proof action fixture", () => {
   assert.equal(validateAppRuntimeAction(report), report);
 });
 
+test("validates wait-agent unavailable action fixture", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-action.wait-agent-unavailable.json", import.meta.url), "utf8"));
+
+  assert.equal(validateAppRuntimeAction(report), report);
+});
+
+test("validates connected wait-agent action reports", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-action.proof-recommended-live.json", import.meta.url), "utf8"));
+  const agentWait = JSON.parse(readFileSync(new URL("../../guest-agent-wait/fixtures/guest-agent-wait.connected.json", import.meta.url), "utf8"));
+  report.action = "wait-agent";
+  report.accepted = true;
+  delete report.appId;
+  delete report.windowId;
+  delete report.foregroundWindowId;
+  delete report.foregroundWindowTitle;
+  delete report.proof;
+  report.agentWait = agentWait;
+  report.nextActions = [
+    "Run `veil-vmctl app-runtime-status --json` to inspect launch, restore, and proof readiness.",
+    "Run `veil-vmctl mvp-proof --json --app-id winapp_notepad --require-proved` to verify the full Windows app runtime loop."
+  ];
+
+  assert.equal(validateAppRuntimeAction(report), report);
+});
+
+test("validates unavailable wait-agent action reports", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-action.launch-pending.json", import.meta.url), "utf8"));
+  const agentWait = unavailableAgentWaitFixture();
+  report.action = "wait-agent";
+  report.accepted = false;
+  delete report.appId;
+  report.agentWait = agentWait;
+  report.nextActions = [
+    "Run `veil-vmctl qemu-install-agent --json --wait-seconds 120` to send the attached guest-agent repair path.",
+    "Run `veil-host-probe --diagnose-agent` to inspect host-forward TCP and WebSocket health.",
+    "Run `veil-vmctl app-runtime-status --json` before retrying app launch or reconnect-restore."
+  ];
+
+  assert.equal(validateAppRuntimeAction(report), report);
+});
+
+test("rejects wait-agent action reports whose accepted flag drifts", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-action.launch-pending.json", import.meta.url), "utf8"));
+  report.action = "wait-agent";
+  report.accepted = true;
+  report.agentWait = unavailableAgentWaitFixture();
+
+  assert.throws(
+    () => validateAppRuntimeAction(report),
+    /accepted/
+  );
+});
+
 test("rejects accepted launch actions without a window", () => {
   const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-action.launch-demo.json", import.meta.url), "utf8"));
   delete report.window;
@@ -167,6 +220,31 @@ test("rejects accepted launch actions without a window", () => {
     /window must be an object/
   );
 });
+
+function unavailableAgentWaitFixture() {
+  const agentWait = JSON.parse(readFileSync(new URL("../../guest-agent-wait/fixtures/guest-agent-wait.connected.json", import.meta.url), "utf8"));
+  const nextActions = [
+    "Inside Windows, run Veil Shared\\Veil Guest Agent\\Install Veil Agent.cmd.",
+    "If macOS can open the forwarded port but health still times out, run Veil Shared\\Veil Guest Agent\\Repair Veil Agent Connectivity.cmd and approve the Windows administrator prompt."
+  ];
+  agentWait.status = "unavailable";
+  agentWait.waitedSeconds = 1;
+  agentWait.attempts = 2;
+  delete agentWait.connectedAt;
+  agentWait.nextActions = nextActions;
+  agentWait.diagnostic.status = "unavailable";
+  delete agentWait.diagnostic.health;
+  agentWait.diagnostic.errorMessage = "Timed out waiting for agent.health.response.";
+  agentWait.diagnostic.hostForwardProbe = {
+    endpoint: "ws://127.0.0.1:18444",
+    host: "127.0.0.1",
+    port: 18444,
+    status: "tcpOpen",
+    detail: "TCP opened but WebSocket health did not respond."
+  };
+  agentWait.diagnostic.nextActions = nextActions;
+  return agentWait;
+}
 
 test("rejects accepted launch actions without a foregroundable Mac window", () => {
   const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-action.launch-demo.json", import.meta.url), "utf8"));

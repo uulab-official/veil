@@ -153,6 +153,11 @@
         "isAvailable": false
       },
       {
+        "id": "runtime.waitAgent",
+        "title": "Wait For Guest Agent",
+        "isAvailable": false
+      },
+      {
         "id": "runtime.quietWhenIdle",
         "title": "Quiet Runtime When Idle",
         "isAvailable": true

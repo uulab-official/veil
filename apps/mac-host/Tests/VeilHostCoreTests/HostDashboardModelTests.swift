@@ -546,6 +546,7 @@ struct HostDashboardModelTests {
         #expect(report.actions.first { $0.id == "runtime.repairGuestAgentForApp" }?.isAvailable == false)
         #expect(report.actions.first { $0.id == "runtime.recoverDisplay" }?.isAvailable == false)
         #expect(report.actions.first { $0.id == "runtime.fulfillPendingLaunch" }?.isAvailable == false)
+        #expect(report.actions.first { $0.id == "runtime.waitAgent" }?.isAvailable == false)
         #expect(report.actions.first { $0.id == "runtime.quietWhenIdle" }?.isAvailable == false)
         #expect(report.actions.first { $0.id == "runtime.stopWhenIdle" }?.isAvailable == false)
         #expect(report.actions.first { $0.id == "proof.appWindow" }?.isAvailable == true)
@@ -597,6 +598,7 @@ struct HostDashboardModelTests {
         #expect(report.proofPlan.recommendedCoherenceProofCommand == nil)
         #expect(report.proofPlan.recommendedMVPProofCommand == nil)
         #expect(report.actions.first { $0.id == "runtime.quietWhenIdle" }?.isAvailable == true)
+        #expect(report.actions.first { $0.id == "runtime.waitAgent" }?.isAvailable == false)
         #expect(report.actions.first { $0.id == "runtime.stopWhenIdle" }?.isAvailable == true)
         #expect(report.actions.first { $0.id == "proof.appWindow" }?.isAvailable == true)
         #expect(report.actions.first { $0.id == "proof.coherence" }?.isAvailable == false)
@@ -754,6 +756,7 @@ struct HostDashboardModelTests {
         #expect(blockedReport.launchPlan.requiresRuntimeStart)
         #expect(blockedReport.launchPlan.recommendedStartCommand == nil)
         #expect(blockedReport.actions.first { $0.id == "runtime.startWindowsForApp" }?.isAvailable == false)
+        #expect(blockedReport.actions.first { $0.id == "runtime.waitAgent" }?.isAvailable == true)
         #expect(model.apps.map(\.id).contains("winapp_notepad"))
         #expect(model.canLaunchSelectedApp == false)
     }
@@ -913,6 +916,7 @@ struct HostDashboardModelTests {
         #expect(queuedReport.actions.first { $0.id == "runtime.startWindowsForApp" }?.isAvailable == true)
         #expect(queuedReport.actions.first { $0.id == "runtime.repairGuestAgentForApp" }?.isAvailable == false)
         #expect(queuedReport.actions.first { $0.id == "runtime.fulfillPendingLaunch" }?.isAvailable == false)
+        #expect(queuedReport.actions.first { $0.id == "runtime.waitAgent" }?.isAvailable == true)
         #expect(try await pendingLaunchStore.load()?.appId == "winapp_notepad")
 
         let runningRuntime = WindowsAppRuntimeLocalRuntimeStatus(
@@ -936,6 +940,7 @@ struct HostDashboardModelTests {
         #expect(runningQueuedReport.actions.first { $0.id == "runtime.startWindowsForApp" }?.isAvailable == false)
         #expect(runningQueuedReport.actions.first { $0.id == "runtime.repairGuestAgentForApp" }?.isAvailable == true)
         #expect(runningQueuedReport.actions.first { $0.id == "runtime.fulfillPendingLaunch" }?.isAvailable == false)
+        #expect(runningQueuedReport.actions.first { $0.id == "runtime.waitAgent" }?.isAvailable == true)
 
         primary.error = nil
         let fulfilledLaunch = await model.refreshLiveAgentIfNeeded()

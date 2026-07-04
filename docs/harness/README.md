@@ -40,7 +40,7 @@ Current executable pieces:
 - `harness/fake-host`: a CLI simulator for the future macOS host flow.
 - `harness/runtime-provider-probe`: a JSON validator for serverless local runtime provider output.
 - `harness/app-runtime-status`: a JSON validator for app runtime status, open HWND sessions, Dock integration state, and supported actions.
-- `harness/app-runtime-action`: a JSON validator for launch, pending-launch fulfillment, bring-forward, focus, close, close-all, restore, input, clipboard, quiet-runtime, and recommended proof app-runtime actions.
+- `harness/app-runtime-action`: a JSON validator for launch, pending-launch fulfillment, bring-forward, focus, close, close-all, restore, guest-agent wait, input, clipboard, quiet-runtime, and recommended proof app-runtime actions.
 - `harness/app-window-proof`: a JSON validator for one app launch, one tracked HWND, and the first captured frame evidence.
 - `harness/coherence-proof`: a JSON validator for one app launch, one tracked HWND, first and post-input frame evidence, mouse/key input, and host clipboard send evidence.
 - `harness/mvp-proof`: a JSON validator for the full Notepad MVP gate: guest-agent readiness plus Coherence proof evidence.
@@ -140,6 +140,10 @@ and the VM display remains a manual recovery surface.
 guest-agent readiness gate: run `veil-host-probe --diagnose-agent` before and
 after a Windows-side install attempt, then use
 `veil-vmctl guest-agent-wait --json --wait-seconds 30` before app-window proof.
+The actions list also exposes `runtime.waitAgent`, available exactly when the
+live guest agent is missing, so the product automation surface can wait and
+return the same host-forward probe evidence without switching to a separate
+low-level command.
 
 `localRuntime` keeps app-first actions honest about the VM layer. When
 `qemu-install-status` says the local Windows runtime is not boot ready,
@@ -168,8 +172,8 @@ clipboard text, type bounded ASCII text, restore persisted app-window intent
 after reconnect with requested app ids matched to restored HWNDs, run an
 explicit reconnect-restore proof while the live agent may still be unavailable,
 confirm that the runtime is ready to quiet after every mirrored Windows app
-window has closed, or request the local runtime stop from the same app-runtime
-action surface.
+window has closed, wait for the guest agent with host-forward diagnostics, or
+request the local runtime stop from the same app-runtime action surface.
 Accepted launch, restore, pending-launch fulfillment, and bring-forward reports
 also include `foregroundWindowId` and `foregroundWindowTitle` so automation and
 logs can identify the Windows app window that should now feel frontmost on
@@ -187,6 +191,11 @@ command in `nextActions`.
 When a launch has already been queued, the retry command is
 `veil-vmctl app-runtime-action --json --action fulfill-pending` so the stored
 intent, not a reconstructed app id, is consumed after the guest agent connects.
+The guest-agent wait action is
+`veil-vmctl app-runtime-action --json --action wait-agent --wait-seconds 30`.
+Its report includes `agentWait`, the same structured readiness and
+`hostForwardProbe` evidence produced by `guest-agent-wait`, and is accepted
+only when `agent.health.response` is reachable through the forwarded endpoint.
 
 ```bash
 cd apps/mac-host
@@ -203,6 +212,7 @@ swift run veil-vmctl app-runtime-action --json --action fulfill-pending | node .
 swift run veil-vmctl app-runtime-action --json --action reconnect-restore | node ../../harness/app-runtime-action/src/validate-app-runtime-action.mjs
 swift run veil-vmctl app-runtime-action --json --action bring-forward | node ../../harness/app-runtime-action/src/validate-app-runtime-action.mjs
 swift run veil-vmctl app-runtime-action --json --action recover-display | node ../../harness/app-runtime-action/src/validate-app-runtime-action.mjs
+swift run veil-vmctl app-runtime-action --json --action wait-agent --wait-seconds 30 | node ../../harness/app-runtime-action/src/validate-app-runtime-action.mjs
 swift run veil-vmctl app-runtime-action --json --action click --window-id hwnd:0003029A --x 240 --y 130 | node ../../harness/app-runtime-action/src/validate-app-runtime-action.mjs
 swift run veil-vmctl app-runtime-action --json --action clipboard --text "hello from macOS" | node ../../harness/app-runtime-action/src/validate-app-runtime-action.mjs
 swift run veil-vmctl app-runtime-action --json --action type-text --window-id hwnd:0003029A --text "veil" | node ../../harness/app-runtime-action/src/validate-app-runtime-action.mjs
