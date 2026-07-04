@@ -390,6 +390,13 @@ struct QEMUConsoleCaptureRecord: Codable, Equatable {
     var capturedAt: Date
 }
 
+struct QEMUGuestAgentInstallConsoleEvidence: Codable, Equatable {
+    var kind: String = "qemuGuestAgentInstallConsoleEvidence"
+    var capture: QEMUConsoleCaptureRecord?
+    var reviewHint: String
+    var expectedVisibleStates: [String]
+}
+
 struct QEMUKeySendResult: Codable, Equatable {
     var key: String
     var transport: String
@@ -411,8 +418,10 @@ struct QEMUGuestAgentInstallAttemptReport: Codable, Equatable {
     var kind: String = "qemuGuestAgentInstallAttempt"
     var commandText: String
     var activationTap: QEMUPointerTapRecord?
+    var uacApprovalTap: QEMUPointerTapRecord?
     var keySend: QEMUKeySendRecord
     var agentWait: AgentConnectionWaitReport
+    var postAttemptConsole: QEMUGuestAgentInstallConsoleEvidence
     var status: AgentConnectionWaitStatus
     var nextActions: [String]
 }
@@ -1880,6 +1889,19 @@ struct VeilVMControl {
     }
 
     private static func captureQEMUConsole(json: Bool, outputPath: String?) async throws {
+        let captureRecord = try captureLatestQEMUConsole(outputPath: outputPath)
+        if json {
+            let captureData = try JSONEncoder.veilDiagnostics.encode(captureRecord)
+            print(String(decoding: captureData, as: UTF8.self))
+            return
+        }
+
+        print("QEMU console screenshot captured")
+        print("Monitor socket: \(captureRecord.monitorSocketPath)")
+        print("Console screenshot: \(captureRecord.consoleScreenshotPath)")
+    }
+
+    private static func captureLatestQEMUConsole(outputPath: String? = nil) throws -> QEMUConsoleCaptureRecord {
         let directory = diagnosticsDirectory()
             .appendingPathComponent("QEMU Launch", isDirectory: true)
         let latestURL = directory.appendingPathComponent("qemu-launch-latest.json")
@@ -1928,15 +1950,7 @@ struct VeilVMControl {
             consoleScreenshotPath: screenshotURL.path,
             capturedAt: Date()
         )
-        if json {
-            let captureData = try JSONEncoder.veilDiagnostics.encode(captureRecord)
-            print(String(decoding: captureData, as: UTF8.self))
-            return
-        }
-
-        print("QEMU console screenshot captured")
-        print("Monitor socket: \(captureRecord.monitorSocketPath)")
-        print("Console screenshot: \(captureRecord.consoleScreenshotPath)")
+        return captureRecord
     }
 
     private static func powerDownQEMU(json: Bool, waitSeconds: Int) async throws {
@@ -2041,13 +2055,25 @@ struct VeilVMControl {
             steps = try QEMUGuestAgentInstallKeySequence.stepsAfterRunOpened
         }
         let keySend = try await qemuKeySendRecord(steps: steps)
+        try? await Task.sleep(nanoseconds: 1_500_000_000)
+        let uacApprovalTap = try? await qemuGuestAgentInstallUACApprovalTapRecord()
+        if uacApprovalTap != nil {
+            try? await Task.sleep(nanoseconds: 1_500_000_000)
+        }
         let agentWait = await guestAgentWaitReport(waitSeconds: waitSeconds)
-        let nextActions = guestAgentInstallNextActions(agentWait: agentWait, waitSeconds: waitSeconds)
+        let postAttemptConsole = qemuGuestAgentInstallConsoleEvidence()
+        let nextActions = guestAgentInstallNextActions(
+            agentWait: agentWait,
+            waitSeconds: waitSeconds,
+            consoleEvidence: postAttemptConsole
+        )
         let report = QEMUGuestAgentInstallAttemptReport(
             commandText: QEMUGuestAgentInstallKeySequence.commandText,
             activationTap: activationTap,
+            uacApprovalTap: uacApprovalTap,
             keySend: keySend,
             agentWait: agentWait,
+            postAttemptConsole: postAttemptConsole,
             status: agentWait.status,
             nextActions: nextActions
         )
@@ -2060,12 +2086,38 @@ struct VeilVMControl {
 
         print("QEMU guest agent install attempt: \(report.status.rawValue)")
         print("Activation tap: \(report.activationTap == nil ? "fallback keyboard" : "sent")")
+        print("UAC approval tap: \(report.uacApprovalTap == nil ? "not sent" : "sent")")
         print("Keys sent: \(report.keySend.keys.count)")
         print("Waited seconds: \(report.agentWait.waitedSeconds)")
         print("Attempts: \(report.agentWait.attempts)")
+        print("Post-attempt console: \(report.postAttemptConsole.capture?.consoleScreenshotPath ?? "not captured")")
         print("Next actions:")
         for action in report.nextActions {
             print("  - \(action)")
+        }
+    }
+
+    private static func qemuGuestAgentInstallConsoleEvidence() -> QEMUGuestAgentInstallConsoleEvidence {
+        let expectedVisibleStates = [
+            "Windows Run dialog with the V.cmd command",
+            "Windows administrator approval prompt for Repair Veil Agent Connectivity",
+            "PowerShell or Command Prompt running the Veil repair/install script",
+            "Windows desktop with no visible installer window, which means the QMP command likely did not reach the shell"
+        ]
+
+        do {
+            let capture = try captureLatestQEMUConsole()
+            return QEMUGuestAgentInstallConsoleEvidence(
+                capture: capture,
+                reviewHint: "Inspect the screenshot to confirm whether the post-attempt Windows screen shows Run, UAC, PowerShell, or only the desktop.",
+                expectedVisibleStates: expectedVisibleStates
+            )
+        } catch {
+            return QEMUGuestAgentInstallConsoleEvidence(
+                capture: nil,
+                reviewHint: "Console screenshot could not be captured after the install attempt: \(error.localizedDescription)",
+                expectedVisibleStates: expectedVisibleStates
+            )
         }
     }
 
@@ -2081,9 +2133,22 @@ struct VeilVMControl {
         )
     }
 
+    private static func qemuGuestAgentInstallUACApprovalTapRecord() async throws -> QEMUPointerTapRecord {
+        let launchRecordStore = JSONQEMULaunchRecordStore(
+            directory: diagnosticsDirectory()
+                .appendingPathComponent("QEMU Launch", isDirectory: true)
+        )
+        let sender = QEMUPointerEventSender(launchRecordStore: launchRecordStore)
+        return try await sender.sendTap(
+            normalizedX: QEMUGuestAgentInstallKeySequence.uacApproveTapNormalizedX,
+            normalizedY: QEMUGuestAgentInstallKeySequence.uacApproveTapNormalizedY
+        )
+    }
+
     private static func guestAgentInstallNextActions(
         agentWait: AgentConnectionWaitReport,
-        waitSeconds: Int
+        waitSeconds: Int,
+        consoleEvidence: QEMUGuestAgentInstallConsoleEvidence
     ) -> [String] {
         if agentWait.status == .connected {
             return [
@@ -2092,10 +2157,14 @@ struct VeilVMControl {
             ]
         }
 
-        return agentWait.nextActions + [
-            "Refresh the console with `veil-vmctl qemu-capture --json` and confirm the Windows desktop showed Run or PowerShell during the install attempt.",
-            "Retry with a longer gate using `veil-vmctl qemu-install-agent --json --wait-seconds \(max(waitSeconds, 60))` after clicking inside the live Windows console."
-        ]
+        var actions = agentWait.nextActions
+        if let capture = consoleEvidence.capture {
+            actions.append("Inspect postAttemptConsole.capture.consoleScreenshotPath at \(capture.consoleScreenshotPath) for Run, UAC, PowerShell, or desktop-only evidence.")
+        } else {
+            actions.append("Run `veil-vmctl qemu-capture --json` and confirm whether the Windows desktop showed Run, UAC, or PowerShell during the install attempt.")
+        }
+        actions.append("Retry with a longer gate using `veil-vmctl qemu-install-agent --json --wait-seconds \(max(waitSeconds, 60))` after clicking inside the live Windows console.")
+        return actions
     }
 
     private static func sendQEMUKeys(

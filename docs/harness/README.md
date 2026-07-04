@@ -420,8 +420,10 @@ runs `Repair Veil Agent Connectivity.cmd` when present and falls back to
 desktop is visible in the console and the host probe still reports the guest
 agent unavailable. The
 JSON report includes the desktop activation tap, bounded key-send evidence, and a
-guest-agent wait result, so a failed attempt records whether the command reached
-a live agent or needs console inspection. The macOS host shell uses the same
+guest-agent wait result. It sends one bounded UAC approval tap after the command
+sequence, then captures `postAttemptConsole` with a screenshot path and review
+hints, so a failed attempt records whether the command reached a live agent or
+needs screenshot-backed Run/UAC/PowerShell inspection. The macOS host shell uses the same
 Core activation and key-sequence path for its Install Guest Agent button and
 menu bar item, so CLI and GUI recovery stay on the same bounded QMP path with a
 keyboard fallback for older launch records.

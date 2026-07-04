@@ -188,7 +188,12 @@ Goal: keep the main Veil experience pointed at real local Windows boot and conso
 - [x] Regenerate `VeilAutoInstall.iso` with `Repair Veil Agent Connectivity.cmd`, `Repair-VeilAgentConnectivity.ps1`, and `V.cmd`; mount verification showed all three files plus `VeilAgent.exe`.
 - [x] Relaunch QEMU with the regenerated media and `VEIL_QEMU_NETWORK_DEVICE=e1000e`; PID 29578 booted with `-device e1000e,netdev=net0` and display smoke passed.
 - [x] Retry `qemu-install-agent` with the short `V.cmd` entrypoint; the QMP input dropped from 384 keys to 145 keys and the wait report still showed `hostForwardProbe.status=tcpOpen` plus WebSocket health timeout.
-- [ ] Add screenshot-backed Run/UAC state detection or a more deterministic guest command channel, because the desktop capture after the `V.cmd` attempt did not show a visible UAC or PowerShell window.
+- [x] Add `postAttemptConsole` evidence to `qemu-install-agent` reports so every failed repair attempt carries a refreshed console screenshot path plus Run/UAC/PowerShell review hints.
+- [x] Add a bounded UAC approval tap to `qemu-install-agent` so the repair path can proceed after the Windows administrator prompt without manual clicking.
+- [x] Fix repair logging so the non-elevated launcher does not hold `repair.log` open while the elevated repair process starts.
+- [x] Live retry with auto UAC tap on QEMU PID 5279 recorded `activationTap=true`, `uacApprovalTap=true`, `keyCount=145`, and post-attempt console evidence returning to the Windows desktop.
+- [x] Live retry still ended with `hostForwardProbe.status=tcpOpen` plus WebSocket health timeout, narrowing the remaining blocker to elevated repair completion evidence, agent process health, or the WebSocket handshake path inside Windows.
+- [ ] Add screenshot-backed elevated-repair completion detection or a more deterministic guest command channel, because the current path can launch and approve UAC but still needs proof that the elevated repair completed and agent health connected.
 - [x] Add `veil-host-probe --diagnose-agent` so host-side agent connection checks return actionable JSON instead of only a timeout.
 - [x] Expose `guestAgentDiagnostics` in app-runtime status so the host shell, CLI, and harness point at the same pre/post install diagnostic gate.
 - [x] Gate app-runtime Start actions on real local VM boot readiness so bootReady=false reports `prepare-local-runtime` instead of exposing a failing start path.

@@ -32,17 +32,26 @@ function Invoke-VeilElevatedRepair {
         "-Elevated"
     )
 
-    Add-Content -Path $RepairLogPath -Value "Requesting elevated repair at $(Get-Date -Format o)."
+    Write-Host "Requesting elevated repair at $(Get-Date -Format o)."
     $Process = Start-Process `
         -FilePath "powershell.exe" `
         -ArgumentList $Arguments `
         -Verb RunAs `
-        -Wait `
+        -WindowStyle Normal `
         -PassThru
 
-    if ($Process.ExitCode -ne 0) {
-        throw "Elevated repair exited with code $($Process.ExitCode)."
-    }
+    Write-Host "Elevated repair process started. PID=$($Process.Id)"
+}
+
+if (-not (Test-VeilAdministrator)) {
+    Write-Host "Repair-VeilAgentConnectivity.ps1 started at $(Get-Date -Format o)."
+    Write-Host "InstallRoot=$InstallRoot"
+    Write-Host "Port=$Port"
+    Write-Host "IsAdministrator=False"
+    Write-Host "Administrator rights are required to repair Windows Firewall rules. Requesting UAC elevation."
+    Invoke-VeilElevatedRepair
+    Write-Host "Elevated repair launched. Approve the Windows prompt and wait for VeilAgent health."
+    return
 }
 
 Start-Transcript -Path $RepairLogPath -Append | Out-Null
@@ -50,14 +59,7 @@ try {
     Write-Host "Repair-VeilAgentConnectivity.ps1 started at $(Get-Date -Format o)."
     Write-Host "InstallRoot=$InstallRoot"
     Write-Host "Port=$Port"
-    Write-Host "IsAdministrator=$(Test-VeilAdministrator)"
-
-    if (-not (Test-VeilAdministrator)) {
-        Write-Host "Administrator rights are required to repair Windows Firewall rules. Requesting UAC elevation."
-        Invoke-VeilElevatedRepair
-        Write-Host "Elevated repair completed."
-        return
-    }
+    Write-Host "IsAdministrator=True"
 
     if (-not (Test-Path $AgentExe)) {
         if (-not (Test-Path $InstallScript)) {
