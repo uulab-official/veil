@@ -24,6 +24,8 @@ struct DetailView: View {
                 canFulfillPendingLaunch: model.canFulfillPendingLaunch,
                 pendingWindowsAppName: pendingWindowsAppName,
                 activeMirrorSession: activeMirrorSession,
+                recommendedProofKind: proofPlan.recommendedProofKind,
+                recommendedProofCommand: proofPlan.recommendedProofCommand,
                 startVMAction: startVMAction,
                 stopVMAction: stopVMAction,
                 markWindowsInstalledAction: markWindowsInstalledAction,
@@ -74,6 +76,10 @@ struct DetailView: View {
         }
 
         return model.apps.first { $0.id == pendingAppId }?.name
+    }
+
+    private var proofPlan: WindowsAppRuntimeProofPlanStatus {
+        model.runtimeStatusReport().proofPlan
     }
 }
 

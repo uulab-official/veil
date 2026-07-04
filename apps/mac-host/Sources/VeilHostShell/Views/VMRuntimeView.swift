@@ -12,6 +12,8 @@ struct VMRuntimeView: View {
     var canFulfillPendingLaunch: Bool
     var pendingWindowsAppName: String?
     var activeMirrorSession: WindowMirrorSession?
+    var recommendedProofKind: String?
+    var recommendedProofCommand: String?
     var startVMAction: () -> Void
     var stopVMAction: () -> Void
     var markWindowsInstalledAction: () -> Void
@@ -75,6 +77,8 @@ struct VMRuntimeView: View {
                     canFulfillPendingLaunch: canFulfillPendingLaunch,
                     pendingWindowsAppName: pendingWindowsAppName,
                     activeMirrorSession: activeMirrorSession,
+                    recommendedProofKind: recommendedProofKind,
+                    recommendedProofCommand: recommendedProofCommand,
                     recordAppFrameProofAction: recordAppFrameProofAction,
                     refreshAction: {
                         Task {
@@ -1312,6 +1316,8 @@ private struct WindowsSetupDisplayPanel: View {
     var canFulfillPendingLaunch: Bool
     var pendingWindowsAppName: String?
     var activeMirrorSession: WindowMirrorSession?
+    var recommendedProofKind: String?
+    var recommendedProofCommand: String?
     var recordAppFrameProofAction: () -> Void
     var refreshAction: () -> Void
     var consolePointerTapAction: (Double, Double) -> Void
@@ -1562,7 +1568,7 @@ private struct WindowsSetupDisplayPanel: View {
                         .foregroundStyle(.primary)
                 } else if effectiveInstallEvidence.isInstalled {
                     AppRuntimeProgressStrip(items: appOpenFlowItems)
-                        .frame(maxWidth: 560)
+                        .frame(maxWidth: 760)
                 } else {
                     ProgressView(value: progressFraction)
                         .tint(progressTint)
@@ -2263,8 +2269,39 @@ private struct WindowsSetupDisplayPanel: View {
                     ?? (pendingLaunch.isQueued ? pendingAppDisplayName : appDisplayName),
                 symbolName: "macwindow",
                 state: activeMirrorSession != nil ? .complete : (canOpenWindowsApp ? .current : .pending)
+            ),
+            InstallFlowItem(
+                title: "Proof Gate",
+                detail: proofGateDetail,
+                symbolName: "checkmark.seal",
+                state: proofGateState
             )
         ]
+    }
+
+    private var proofGateState: InstallFlowState {
+        guard recommendedProofCommand != nil else {
+            return activeMirrorSession != nil ? .current : .pending
+        }
+
+        return recommendedProofKind == "mvp" ? .complete : .current
+    }
+
+    private var proofGateDetail: String {
+        guard recommendedProofCommand != nil else {
+            return activeMirrorSession != nil ? "Capture proof next" : "Waiting for app"
+        }
+
+        switch recommendedProofKind {
+        case "mvp":
+            return "MVP proof ready"
+        case "coherence":
+            return "Input proof ready"
+        case "app-window":
+            return "Frame proof ready"
+        default:
+            return "Proof ready"
+        }
     }
 }
 
