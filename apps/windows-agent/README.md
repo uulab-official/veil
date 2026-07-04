@@ -64,7 +64,7 @@ cd C:\Path\To\veil\apps\windows-agent
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\Install-VeilAgent.ps1
 ```
 
-The installer copies or publishes the agent to `%LOCALAPPDATA%\Veil\Agent\app`, copies the start/uninstall scripts to `%LOCALAPPDATA%\Veil\Agent\scripts`, sets user-level `VEIL_AGENT_HOST=0.0.0.0` and `VEIL_AGENT_PORT`, registers a user logon scheduled task named `VeilAgent` when Windows allows it, and starts the agent immediately. The logon task points at the installed script copy, so agent auto-start does not depend on the original shared-folder path after installation. The start script is idempotent: it reuses an already-running installed `VeilAgent.exe`, waits briefly for a guest-local `ws://127.0.0.1:18444/` probe to succeed, and writes agent stdout/stderr logs for diagnosis. The agent process itself also enforces one instance per configured port. Pass `-NoStart` to install without starting the agent in the current session.
+The installer copies or publishes the agent to `%LOCALAPPDATA%\Veil\Agent\app`, copies the start/repair/uninstall scripts to `%LOCALAPPDATA%\Veil\Agent\scripts`, sets user-level `VEIL_AGENT_HOST=0.0.0.0` and `VEIL_AGENT_PORT`, registers a user logon scheduled task named `VeilAgent` when Windows allows it, and starts the agent immediately. The logon task points at the installed script copy, so agent auto-start does not depend on the original shared-folder path after installation. The start script is idempotent: it reuses an already-running installed `VeilAgent.exe`, waits briefly for a guest-local `ws://127.0.0.1:18444/` probe to succeed, and writes agent stdout/stderr logs for diagnosis. The agent process itself also enforces one instance per configured port. Pass `-NoStart` to install without starting the agent in the current session.
 
 Bootstrap, install, and start logs are written under:
 
@@ -75,6 +75,21 @@ Bootstrap, install, and start logs are written under:
 The same directory also contains `agent.stdout.log` and `agent.stderr.log` from
 the installed process. Check those files when the host cannot connect even
 though the scheduled task exists.
+
+Repair Windows Firewall and restart the agent when macOS can open the forwarded
+QEMU port but `agent.health.response` still times out:
+
+```text
+Veil Shared\Veil Guest Agent\Repair Veil Agent Connectivity.cmd
+```
+
+The repair command requests Windows administrator approval through UAC when
+needed, refreshes the VeilAgent program rule plus a TCP port rule for 18444, and
+then starts the installed agent again.
+
+The media also contains `V.cmd`, a short automation entrypoint used by the macOS
+host when sending QMP keyboard input. It runs the repair command when available
+and falls back to the installer command for older staged media.
 
 Collect install/start diagnostics without copying Windows user data:
 

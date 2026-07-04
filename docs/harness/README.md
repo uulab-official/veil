@@ -286,8 +286,10 @@ When the host can open the QEMU `hostfwd` TCP port but `agent.health.response`
 still times out, unavailable reports include `diagnostic.hostForwardProbe` with
 `status: "tcpOpen"`. Treat that as a narrower transport failure: QEMU is
 listening on macOS, but the guest-side WebSocket protocol is not completing.
-Current recovery guidance points at Windows Firewall, guest NIC driver state,
-or an elevated guest-agent install that can add the inbound firewall rule.
+Current recovery guidance points at `Repair Veil Agent Connectivity.cmd`, which
+requests Windows administrator approval, refreshes the VeilAgent program rule
+plus a TCP port rule for 18444, and restarts the agent before diagnostics ZIP
+collection.
 
 ## Provider Probe Scenario
 
@@ -412,9 +414,11 @@ console is running and no guest-agent evidence exists yet.
 `veil-vmctl qemu-install-agent [--json] [--wait-seconds 30]` is the safer one-command form for the
 common post-desktop recovery path: it focuses the Windows desktop through QMP
 pointer input, opens Run with the Windows key, scans the attached drive letters
-for `Veil Guest Agent\Install Veil Agent.cmd`, and runs that short launcher. Use it
-only when the Windows desktop is visible in the console and the host probe still
-reports the guest agent unavailable. The
+for `Veil Guest Agent\V.cmd`, and runs that short automation entrypoint. `V.cmd`
+runs `Repair Veil Agent Connectivity.cmd` when present and falls back to
+`Install Veil Agent.cmd` for older media layouts. Use it only when the Windows
+desktop is visible in the console and the host probe still reports the guest
+agent unavailable. The
 JSON report includes the desktop activation tap, bounded key-send evidence, and a
 guest-agent wait result, so a failed attempt records whether the command reached
 a live agent or needs console inspection. The macOS host shell uses the same

@@ -45,6 +45,9 @@ export function validateMVPProof(report, options = {}) {
     if (!report.nextActions.some((action) => action.includes("Install Veil Agent.cmd"))) {
       throw new TypeError("unavailable MVP reports must include guest agent install recovery guidance.");
     }
+    if (!report.nextActions.some((action) => action.includes("Repair Veil Agent Connectivity.cmd"))) {
+      throw new TypeError("unavailable MVP reports must include guest agent connectivity repair guidance.");
+    }
   }
 
   return report;

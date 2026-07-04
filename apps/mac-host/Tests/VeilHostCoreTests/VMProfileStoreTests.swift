@@ -1237,16 +1237,21 @@ struct VMProfileStoreTests {
         let installCommandURL = agentBundleURL.appendingPathComponent("Install Veil Agent.cmd")
         let startCommandURL = agentBundleURL.appendingPathComponent("Start Veil Agent.cmd")
         let diagnosticsCommandURL = agentBundleURL.appendingPathComponent("Collect Veil Agent Diagnostics.cmd")
+        let repairCommandURL = agentBundleURL.appendingPathComponent("Repair Veil Agent Connectivity.cmd")
+        let bootstrapCommandURL = agentBundleURL.appendingPathComponent("V.cmd")
         let agentReadmeURL = agentBundleURL.appendingPathComponent("README.txt")
         let installScriptURL = agentBundleURL.appendingPathComponent("scripts/Install-VeilAgent.ps1")
         let publishScriptURL = agentBundleURL.appendingPathComponent("scripts/Publish-VeilAgentBundle.ps1")
         let startScriptURL = agentBundleURL.appendingPathComponent("scripts/Start-VeilAgent.ps1")
         let diagnosticsScriptURL = agentBundleURL.appendingPathComponent("scripts/Collect-VeilAgentDiagnostics.ps1")
+        let repairScriptURL = agentBundleURL.appendingPathComponent("scripts/Repair-VeilAgentConnectivity.ps1")
         let projectURL = agentBundleURL.appendingPathComponent("src/VeilAgent/VeilAgent.csproj")
         let answerFile = try String(contentsOf: answerFileURL, encoding: .utf8)
         let installCommand = try String(contentsOf: installCommandURL, encoding: .utf8)
         let startCommand = try String(contentsOf: startCommandURL, encoding: .utf8)
         let diagnosticsCommand = try String(contentsOf: diagnosticsCommandURL, encoding: .utf8)
+        let repairCommand = try String(contentsOf: repairCommandURL, encoding: .utf8)
+        let bootstrapCommand = try String(contentsOf: bootstrapCommandURL, encoding: .utf8)
         let installScript = try String(contentsOf: installScriptURL, encoding: .utf8)
         let agentReadme = try String(contentsOf: agentReadmeURL, encoding: .utf8)
 
@@ -1326,7 +1331,14 @@ struct VMProfileStoreTests {
         #expect(startCommand.contains("Start-VeilAgent.ps1"))
         #expect(diagnosticsCommand.contains("Collect-VeilAgentDiagnostics.ps1"))
         #expect(diagnosticsCommand.contains("-ExecutionPolicy Bypass"))
+        #expect(repairCommand.contains("Repair-VeilAgentConnectivity.ps1"))
+        #expect(repairCommand.contains("-ExecutionPolicy Bypass"))
+        #expect(bootstrapCommand.contains("Repair Veil Agent Connectivity.cmd"))
+        #expect(bootstrapCommand.contains("Install Veil Agent.cmd"))
+        #expect(FileManager.default.fileExists(atPath: repairScriptURL.path))
         #expect(agentReadme.contains("Install Veil Agent.cmd"))
+        #expect(agentReadme.contains("V.cmd"))
+        #expect(agentReadme.contains("Repair Veil Agent Connectivity.cmd"))
         #expect(agentReadme.contains("Collect Veil Agent Diagnostics.cmd"))
         #expect(agentReadme.contains("diagnostics ZIP"))
         #expect(agentReadme.contains("0.0.0.0:18444"))
@@ -1413,13 +1425,19 @@ struct VMProfileStoreTests {
         try Data("answer".utf8).write(to: answerFileURL)
         try Data("installer".utf8).write(to: agentBundleURL.appendingPathComponent("Install Veil Agent.cmd"))
         try Data("diagnostics".utf8).write(to: agentBundleURL.appendingPathComponent("Collect Veil Agent Diagnostics.cmd"))
+        try Data("repair".utf8).write(to: agentBundleURL.appendingPathComponent("Repair Veil Agent Connectivity.cmd"))
+        try Data("bootstrap".utf8).write(to: agentBundleURL.appendingPathComponent("V.cmd"))
         try Data("script".utf8).write(to: scriptsURL.appendingPathComponent("Install-VeilAgent.ps1"))
         try Data("diagnostics script".utf8).write(to: scriptsURL.appendingPathComponent("Collect-VeilAgentDiagnostics.ps1"))
+        try Data("repair script".utf8).write(to: scriptsURL.appendingPathComponent("Repair-VeilAgentConnectivity.ps1"))
         final class Capture: @unchecked Sendable {
             var stagedInstallCommandExists = false
             var stagedScriptExists = false
             var stagedDiagnosticsCommandExists = false
             var stagedDiagnosticsScriptExists = false
+            var stagedRepairCommandExists = false
+            var stagedRepairScriptExists = false
+            var stagedBootstrapCommandExists = false
         }
         let capture = Capture()
         let builder = HdiutilAutomaticInstallMediaBuilder { _, arguments in
@@ -1438,6 +1456,15 @@ struct VMProfileStoreTests {
             capture.stagedDiagnosticsScriptExists = FileManager.default.fileExists(
                 atPath: stagingURL.appendingPathComponent("Veil Guest Agent/scripts/Collect-VeilAgentDiagnostics.ps1").path
             )
+            capture.stagedRepairCommandExists = FileManager.default.fileExists(
+                atPath: stagingURL.appendingPathComponent("Veil Guest Agent/Repair Veil Agent Connectivity.cmd").path
+            )
+            capture.stagedRepairScriptExists = FileManager.default.fileExists(
+                atPath: stagingURL.appendingPathComponent("Veil Guest Agent/scripts/Repair-VeilAgentConnectivity.ps1").path
+            )
+            capture.stagedBootstrapCommandExists = FileManager.default.fileExists(
+                atPath: stagingURL.appendingPathComponent("Veil Guest Agent/V.cmd").path
+            )
             let outputPath = arguments[outputIndex + 1]
             try Data("fresh media".utf8).write(to: URL(fileURLWithPath: "\(outputPath).iso"))
             return 0
@@ -1449,6 +1476,9 @@ struct VMProfileStoreTests {
         #expect(capture.stagedScriptExists)
         #expect(capture.stagedDiagnosticsCommandExists)
         #expect(capture.stagedDiagnosticsScriptExists)
+        #expect(capture.stagedRepairCommandExists)
+        #expect(capture.stagedRepairScriptExists)
+        #expect(capture.stagedBootstrapCommandExists)
     }
 
     @Test("load snapshot avoids Downloads installer discovery before profile exists")

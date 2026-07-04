@@ -64,6 +64,10 @@ try {
         -Destination $InstalledScriptsRoot `
         -Force
     Copy-Item `
+        -Path (Join-Path $ScriptRoot "Repair-VeilAgentConnectivity.ps1") `
+        -Destination $InstalledScriptsRoot `
+        -Force
+    Copy-Item `
         -Path (Join-Path $ScriptRoot "Uninstall-VeilAgent.ps1") `
         -Destination $InstalledScriptsRoot `
         -Force

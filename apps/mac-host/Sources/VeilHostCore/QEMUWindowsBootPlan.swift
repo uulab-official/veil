@@ -1557,7 +1557,7 @@ public enum QEMUGuestAgentInstallKeySequence {
     public static let startButtonTapNormalizedY = 0.958
 
     public static let commandText =
-        #"cmd.exe /c for %d in (D E F G H I J K L M N O P Q R S T U V W X Y Z) do if exist "%d:\Veil Guest Agent\Install Veil Agent.cmd" "%d:\Veil Guest Agent\Install Veil Agent.cmd""#
+        #"cmd.exe /c for %d in (D E F G H I J K L M N O P Q R S T U V W X Y Z) do if exist "%d:\Veil Guest Agent\V.cmd" call "%d:\Veil Guest Agent\V.cmd""#
 
     public static var stepsAfterRunOpened: [QEMUKeySequenceStep] {
         get throws {

@@ -1187,7 +1187,7 @@ struct QEMUWindowsBootPlanTests {
         #expect(mapper.key(charactersIgnoringModifiers: nil, keyCode: 109) == "f10")
     }
 
-    @Test("guest agent install sequence opens run dialog and invokes VEIL_AUTO installer")
+    @Test("guest agent install sequence opens run dialog and invokes short VEIL_AUTO entrypoint")
     func guestAgentInstallSequenceOpensRunDialogAndInvokesVEILAUTOInstaller() throws {
         let steps = try QEMUGuestAgentInstallKeySequence.steps
         let keys = steps.map(\.key)
@@ -1195,10 +1195,12 @@ struct QEMUWindowsBootPlanTests {
         #expect(Array(keys.prefix(2)) == ["esc", "meta-r"])
         #expect(keys.last == "ret")
         #expect(QEMUGuestAgentInstallKeySequence.commandText.hasPrefix("cmd.exe /c for %d"))
-        #expect(QEMUGuestAgentInstallKeySequence.commandText.contains("Install Veil Agent.cmd"))
+        #expect(QEMUGuestAgentInstallKeySequence.commandText.contains("V.cmd"))
+        #expect(!QEMUGuestAgentInstallKeySequence.commandText.contains("Repair Veil Agent Connectivity.cmd"))
+        #expect(!QEMUGuestAgentInstallKeySequence.commandText.contains("Install Veil Agent.cmd"))
         #expect(keys.contains("backslash"))
         #expect(keys.contains("shift-5"))
-        #expect(keys.count < 1_000)
+        #expect(keys.count < 200)
     }
 
     @Test("guest agent install sequence supports direct Run dialog input")

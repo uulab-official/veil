@@ -49,6 +49,7 @@ struct VeilHostClientTests {
         #expect(diagnostic.health == nil)
         #expect(diagnostic.errorMessage == "Connection refused.")
         #expect(diagnostic.nextActions.contains("Inside Windows, run Veil Shared\\Veil Guest Agent\\Install Veil Agent.cmd."))
+        #expect(diagnostic.nextActions.contains("If macOS can open the forwarded port but health still times out, run Veil Shared\\Veil Guest Agent\\Repair Veil Agent Connectivity.cmd and approve the Windows administrator prompt."))
         #expect(diagnostic.nextActions.contains("If the agent still does not connect, run Veil Shared\\Veil Guest Agent\\Collect Veil Agent Diagnostics.cmd and inspect the desktop ZIP."))
     }
 
@@ -88,7 +89,7 @@ struct VeilHostClientTests {
 
         #expect(diagnostic.status == .unavailable)
         #expect(diagnostic.hostForwardProbe?.status == .tcpOpen)
-        #expect(diagnostic.nextActions.contains("Mac can open the QEMU hostfwd TCP port, but WebSocket health did not respond; check Windows Firewall, guest NIC driver state, or rerun the guest installer as an elevated user."))
+        #expect(diagnostic.nextActions.contains("Mac can open the QEMU hostfwd TCP port, but WebSocket health did not respond; run the Veil connectivity repair command to refresh Windows Firewall rules and restart the agent."))
         #expect(diagnostic.nextActions.contains("If Windows shows a disconnected network icon, attach a driver ISO or retry with an alternate QEMU NIC before relying on hostfwd for app mirroring."))
     }
 

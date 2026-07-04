@@ -171,6 +171,7 @@ private struct AgentDiagnosticPanel: View {
             [
                 "Keep the Windows desktop open.",
                 "Run Install Veil Agent.cmd from the Veil Shared drive.",
+                "Run Repair Veil Agent Connectivity.cmd if the forwarded port opens but health still times out.",
                 "If it still does not connect, run Collect Veil Agent Diagnostics.cmd in Windows."
             ]
         }

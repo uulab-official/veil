@@ -53,6 +53,9 @@ export function validateGuestAgentWait(report) {
     if (!report.nextActions.some((action) => action.includes("Install Veil Agent.cmd"))) {
       throw new TypeError("unavailable guest agent reports must include Install Veil Agent.cmd recovery guidance.");
     }
+    if (!report.nextActions.some((action) => action.includes("Repair Veil Agent Connectivity.cmd"))) {
+      throw new TypeError("unavailable guest agent reports must include Repair Veil Agent Connectivity.cmd recovery guidance.");
+    }
   }
 
   return report;

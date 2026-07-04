@@ -262,11 +262,12 @@ public struct AgentConnectionDiagnostic: Codable, Equatable, Sendable {
         var nextActions = [
             "Confirm the Windows 11 Arm VM is running and has reached the desktop.",
             "Inside Windows, run Veil Shared\\Veil Guest Agent\\Install Veil Agent.cmd.",
+            "If macOS can open the forwarded port but health still times out, run Veil Shared\\Veil Guest Agent\\Repair Veil Agent Connectivity.cmd and approve the Windows administrator prompt.",
             "If the agent still does not connect, run Veil Shared\\Veil Guest Agent\\Collect Veil Agent Diagnostics.cmd and inspect the desktop ZIP.",
             "Confirm the QEMU/HVF plan includes hostfwd=tcp::18444-:18444 and restart the VM after changing the launch plan."
         ]
         if hostForwardProbe?.status == .tcpOpen {
-            nextActions.append("Mac can open the QEMU hostfwd TCP port, but WebSocket health did not respond; check Windows Firewall, guest NIC driver state, or rerun the guest installer as an elevated user.")
+            nextActions.append("Mac can open the QEMU hostfwd TCP port, but WebSocket health did not respond; run the Veil connectivity repair command to refresh Windows Firewall rules and restart the agent.")
             nextActions.append("If Windows shows a disconnected network icon, attach a driver ISO or retry with an alternate QEMU NIC before relying on hostfwd for app mirroring.")
         }
 

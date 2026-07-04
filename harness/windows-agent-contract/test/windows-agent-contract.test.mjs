@@ -257,6 +257,7 @@ test("windows agent includes user-logon install and uninstall scripts", async ()
   const uninstall = await readFile(resolve(agentRoot, "scripts/Uninstall-VeilAgent.ps1"), "utf8");
   const start = await readFile(resolve(agentRoot, "scripts/Start-VeilAgent.ps1"), "utf8");
   const diagnostics = await readFile(resolve(agentRoot, "scripts/Collect-VeilAgentDiagnostics.ps1"), "utf8");
+  const repair = await readFile(resolve(agentRoot, "scripts/Repair-VeilAgentConnectivity.ps1"), "utf8");
   const bootstrap = await readFile(resolve(agentRoot, "scripts/Bootstrap-VeilAgentFromMedia.ps1"), "utf8");
   const publish = await readFile(resolve(agentRoot, "scripts/Publish-VeilAgentBundle.ps1"), "utf8");
   const publishShell = await readFile(resolve(agentRoot, "scripts/publish-veil-agent-bundle.sh"), "utf8");
@@ -271,6 +272,7 @@ test("windows agent includes user-logon install and uninstall scripts", async ()
   assert.match(install, /Start-Transcript/);
   assert.match(install, /install\.log/);
   assert.match(install, /Collect-VeilAgentDiagnostics\.ps1/);
+  assert.match(install, /Repair-VeilAgentConnectivity\.ps1/);
   assert.match(install, /Get-Process\s+-Name\s+"VeilAgent"/);
   assert.match(install, /Stop-Process\s+-Force/);
   assert.match(install, /netsh\s+advfirewall\s+firewall\s+add\s+rule/);
@@ -291,6 +293,11 @@ test("windows agent includes user-logon install and uninstall scripts", async ()
   assert.match(diagnostics, /veil-agent-diagnostics-\$Timestamp\.zip/);
   assert.match(diagnostics, /Get-ScheduledTask\s+-TaskName\s+\$TaskName/);
   assert.match(diagnostics, /bootstrap\.log|install\.log|start\.log|LogRoot/);
+  assert.match(repair, /Start-Process[\s\S]+-Verb\s+RunAs/);
+  assert.match(repair, /VeilAgent WebSocket Port/);
+  assert.match(repair, /localport=\$Port/);
+  assert.match(repair, /Repair-VeilAgentConnectivity/);
+  assert.match(repair, /Start-VeilAgent\.ps1/);
   assert.match(bootstrap, /Bootstrap-VeilAgentFromMedia/);
   assert.match(bootstrap, /Install Veil Agent\.cmd/);
   assert.match(bootstrap, /bootstrap\.log/);
