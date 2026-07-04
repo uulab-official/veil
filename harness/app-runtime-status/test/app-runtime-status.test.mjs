@@ -262,6 +262,44 @@ test("accepts queued pending launch repair while local Windows is already runnin
   assert.doesNotThrow(() => validateAppRuntimeStatus(report));
 });
 
+test("accepts stale running console preview with recovery commands", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.demo.json", import.meta.url), "utf8"));
+  report.localRuntime.state = "running";
+  report.localRuntime.canStart = false;
+  report.localRuntime.isRunning = true;
+  report.localRuntime.windowsInstalled = true;
+  report.localRuntime.recommendedAction = "recover-runtime-display";
+  report.localRuntime.consolePreviewStatus = "stale";
+  report.localRuntime.recommendedDisplayCommand = "veil-vmctl qemu-display-smoke --json";
+  report.localRuntime.recommendedRecoveryCommand = "veil-vmctl qemu-capture --json";
+  report.localRuntime.reason = "The local Windows runtime is running, but the embedded console preview is stale; refresh or validate display evidence before relying on app launch recovery.";
+  report.launchPlan.requiresRuntimeStart = false;
+  report.launchPlan.recommendedAction = "repair-guest-agent-for-app-launch";
+  delete report.launchPlan.recommendedStartCommand;
+  report.launchPlan.recommendedRepairCommand = "veil-vmctl qemu-install-agent --json --wait-seconds 120";
+  report.launchPlan.reason = "Windows is running; repair or start the guest agent, then launch the selected app.";
+  report.actions.find((action) => action.id === "runtime.startWindowsForApp").isAvailable = false;
+  report.actions.find((action) => action.id === "runtime.repairGuestAgentForApp").isAvailable = true;
+
+  assert.doesNotThrow(() => validateAppRuntimeStatus(report));
+});
+
+test("rejects stale running console preview without recovery command", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.demo.json", import.meta.url), "utf8"));
+  report.localRuntime.state = "running";
+  report.localRuntime.canStart = false;
+  report.localRuntime.isRunning = true;
+  report.localRuntime.windowsInstalled = true;
+  report.localRuntime.recommendedAction = "recover-runtime-display";
+  report.localRuntime.consolePreviewStatus = "stale";
+  report.localRuntime.reason = "The local Windows runtime is running, but the embedded console preview is stale.";
+
+  assert.throws(
+    () => validateAppRuntimeStatus(report),
+    /recommendedRecoveryCommand/
+  );
+});
+
 test("rejects repair action availability that drifts from launch plan", () => {
   const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.demo.json", import.meta.url), "utf8"));
   report.actions.find((action) => action.id === "runtime.repairGuestAgentForApp").isAvailable = true;

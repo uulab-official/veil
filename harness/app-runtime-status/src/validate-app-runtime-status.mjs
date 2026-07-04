@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 const VALID_CONNECTION_MODES = new Set(["agent", "demo"]);
 const VALID_PHASES = new Set(["idle", "loading", "connected", "launching", "failed"]);
 const VALID_CAPTURE_STATES = new Set(["unavailable", "pending", "streaming"]);
+const VALID_CONSOLE_PREVIEW_STATES = new Set(["fresh", "stale", "unavailable"]);
 
 export function validateAppRuntimeStatus(report) {
   if (!report || typeof report !== "object" || Array.isArray(report)) {
@@ -153,12 +154,42 @@ function validateLocalRuntime(localRuntime) {
     requireString(localRuntime.recommendedPrepareCommand, "localRuntime.recommendedPrepareCommand");
   }
 
+  if (localRuntime.recommendedDisplayCommand !== undefined) {
+    requireString(localRuntime.recommendedDisplayCommand, "localRuntime.recommendedDisplayCommand");
+  }
+
+  if (localRuntime.recommendedRecoveryCommand !== undefined) {
+    requireString(localRuntime.recommendedRecoveryCommand, "localRuntime.recommendedRecoveryCommand");
+  }
+
+  if (localRuntime.consolePreviewStatus !== undefined) {
+    requireString(localRuntime.consolePreviewStatus, "localRuntime.consolePreviewStatus");
+    if (!VALID_CONSOLE_PREVIEW_STATES.has(localRuntime.consolePreviewStatus)) {
+      throw new TypeError(`Unsupported localRuntime.consolePreviewStatus: ${localRuntime.consolePreviewStatus}`);
+    }
+  }
+
   if (localRuntime.recommendedInstallStatusCommand !== "veil-vmctl qemu-install-status --json") {
     throw new TypeError("localRuntime.recommendedInstallStatusCommand must point at qemu-install-status.");
   }
 
   if (localRuntime.isRunning && localRuntime.canStart) {
     throw new TypeError("localRuntime.canStart must be false while the runtime is already running.");
+  }
+
+  if (
+    localRuntime.isRunning
+    && ["stale", "unavailable"].includes(localRuntime.consolePreviewStatus)
+    && localRuntime.recommendedRecoveryCommand === undefined
+  ) {
+    throw new TypeError("localRuntime.recommendedRecoveryCommand is required when a running runtime has stale or unavailable console preview evidence.");
+  }
+
+  if (
+    localRuntime.recommendedRecoveryCommand !== undefined
+    && localRuntime.recommendedAction !== "recover-runtime-display"
+  ) {
+    throw new TypeError("localRuntime.recommendedRecoveryCommand requires recommendedAction recover-runtime-display.");
   }
 }
 

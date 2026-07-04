@@ -796,6 +796,50 @@ struct HostDashboardModelTests {
         #expect(status.recommendedPrepareCommand == "veil-vmctl prepare --installer /Users/test/Downloads/Win11_25H2_Korean_Arm64_v2.iso --drivers '/Users/test/Downloads/virtio drivers.iso'")
     }
 
+    @Test("local runtime reports display recovery when running console preview is stale")
+    @MainActor
+    func localRuntimeReportsDisplayRecoveryForStalePreview() {
+        let model = HostDashboardModel(service: FakeDashboardService())
+        let snapshot = VMRuntimeSnapshot(
+            state: .running,
+            virtualizationAvailable: true,
+            architecture: "arm64",
+            minimumOSSupported: true,
+            profileName: "Windows 11 Arm",
+            virtualDiskPath: "/Users/test/Virtual Machines/Windows 11 Arm.img",
+            latestConsoleLaunch: VMConsoleLaunchEvidence(
+                provider: "QEMU/HVF",
+                pid: 94195,
+                processLogPath: "/tmp/qemu.log",
+                monitorSocketPath: "/tmp/qemu.sock",
+                qmpSocketPath: "/tmp/qemu.qmp.sock",
+                vncHost: "127.0.0.1",
+                vncPort: 5900,
+                consoleScreenshotPath: "/tmp/qemu-console.png",
+                previewStatus: .stale,
+                startedAt: Date(timeIntervalSince1970: 1_000)
+            ),
+            installEvidence: VMInstallEvidenceSummary(
+                kind: .profileFlag,
+                isInstalled: true,
+                title: "Windows installed",
+                detail: "The profile is marked installed."
+            ),
+            bootReady: true,
+            windowsInstalled: true,
+            detail: "Windows is running."
+        )
+
+        let status = model.localRuntimeStatus(snapshot: snapshot)
+
+        #expect(status.isRunning)
+        #expect(status.consolePreviewStatus == .stale)
+        #expect(status.recommendedAction == "recover-runtime-display")
+        #expect(status.recommendedDisplayCommand == "veil-vmctl qemu-display-smoke --json")
+        #expect(status.recommendedRecoveryCommand == "veil-vmctl qemu-capture --json")
+        #expect(status.reason.contains("embedded console preview is stale"))
+    }
+
     @Test("refresh live agent retries after demo fallback")
     @MainActor
     func refreshLiveAgentRetriesAfterDemoFallback() async throws {

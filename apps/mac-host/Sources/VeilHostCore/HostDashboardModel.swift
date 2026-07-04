@@ -166,6 +166,9 @@ public struct WindowsAppRuntimeLocalRuntimeStatus: Codable, Equatable, Sendable 
     public var recommendedAction: String
     public var recommendedInstallStatusCommand: String
     public var recommendedPrepareCommand: String?
+    public var recommendedDisplayCommand: String?
+    public var recommendedRecoveryCommand: String?
+    public var consolePreviewStatus: VMConsolePreviewStatus?
     public var reason: String
 
     public init(
@@ -178,6 +181,9 @@ public struct WindowsAppRuntimeLocalRuntimeStatus: Codable, Equatable, Sendable 
         recommendedAction: String,
         recommendedInstallStatusCommand: String,
         recommendedPrepareCommand: String? = nil,
+        recommendedDisplayCommand: String? = nil,
+        recommendedRecoveryCommand: String? = nil,
+        consolePreviewStatus: VMConsolePreviewStatus? = nil,
         reason: String
     ) {
         self.isKnown = isKnown
@@ -189,6 +195,9 @@ public struct WindowsAppRuntimeLocalRuntimeStatus: Codable, Equatable, Sendable 
         self.recommendedAction = recommendedAction
         self.recommendedInstallStatusCommand = recommendedInstallStatusCommand
         self.recommendedPrepareCommand = recommendedPrepareCommand
+        self.recommendedDisplayCommand = recommendedDisplayCommand
+        self.recommendedRecoveryCommand = recommendedRecoveryCommand
+        self.consolePreviewStatus = consolePreviewStatus
         self.reason = reason
     }
 }
@@ -1404,19 +1413,34 @@ public final class HostDashboardModel {
             && (snapshot.state == .stopped || snapshot.state == .suspended)
         let recommendedAction: String
         let recommendedPrepareCommand: String?
+        let recommendedDisplayCommand: String?
+        let recommendedRecoveryCommand: String?
         let reason: String
+        let consolePreviewStatus = snapshot.latestConsoleLaunch?.previewStatus
 
         if isRunning {
-            recommendedAction = "wait-for-guest-agent"
+            let displayNeedsRecovery = consolePreviewStatus == .stale
+                || consolePreviewStatus == .unavailable
+            recommendedAction = displayNeedsRecovery ? "recover-runtime-display" : "wait-for-guest-agent"
             recommendedPrepareCommand = nil
-            reason = "The local Windows runtime is already running; wait for the guest agent before opening Windows apps."
+            recommendedDisplayCommand = snapshot.latestConsoleLaunch?.displaySurface.isLiveCapable == true
+                ? "veil-vmctl qemu-display-smoke --json"
+                : nil
+            recommendedRecoveryCommand = displayNeedsRecovery ? "veil-vmctl qemu-capture --json" : nil
+            reason = displayNeedsRecovery
+                ? "The local Windows runtime is running, but the embedded console preview is \(consolePreviewStatus?.rawValue ?? "unavailable"); refresh or validate display evidence before relying on app launch recovery."
+                : "The local Windows runtime is already running; wait for the guest agent before opening Windows apps."
         } else if canStart {
             recommendedAction = "start-runtime"
             recommendedPrepareCommand = nil
+            recommendedDisplayCommand = nil
+            recommendedRecoveryCommand = nil
             reason = "The local Windows runtime is boot ready."
         } else {
             recommendedAction = "prepare-local-runtime"
             recommendedPrepareCommand = prepareCommand(for: snapshot)
+            recommendedDisplayCommand = nil
+            recommendedRecoveryCommand = nil
             reason = snapshot.detail
         }
 
@@ -1430,6 +1454,9 @@ public final class HostDashboardModel {
             recommendedAction: recommendedAction,
             recommendedInstallStatusCommand: "veil-vmctl qemu-install-status --json",
             recommendedPrepareCommand: recommendedPrepareCommand,
+            recommendedDisplayCommand: recommendedDisplayCommand,
+            recommendedRecoveryCommand: recommendedRecoveryCommand,
+            consolePreviewStatus: consolePreviewStatus,
             reason: reason
         )
     }

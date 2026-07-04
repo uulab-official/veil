@@ -664,8 +664,17 @@ struct VeilVMControl {
         print("Local runtime boot ready: \(report.localRuntime.bootReady ? "yes" : "no")")
         print("Local runtime reason: \(report.localRuntime.reason)")
         print("Local runtime install status command: \(report.localRuntime.recommendedInstallStatusCommand)")
+        if let previewStatus = report.localRuntime.consolePreviewStatus {
+            print("Local runtime console preview: \(previewStatus.rawValue)")
+        }
         if let prepareCommand = report.localRuntime.recommendedPrepareCommand {
             print("Local runtime prepare command: \(prepareCommand)")
+        }
+        if let displayCommand = report.localRuntime.recommendedDisplayCommand {
+            print("Local runtime display command: \(displayCommand)")
+        }
+        if let recoveryCommand = report.localRuntime.recommendedRecoveryCommand {
+            print("Local runtime recovery command: \(recoveryCommand)")
         }
         print("Pending launch queued: \(report.pendingLaunch.isQueued ? "yes" : "no")")
         if let pendingLaunchAppId = report.pendingLaunch.appId {
