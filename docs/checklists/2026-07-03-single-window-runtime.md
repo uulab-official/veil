@@ -64,6 +64,7 @@ Goal: move Veil from a Veil shell plus separate QEMU Cocoa display toward a UTM-
 - [x] Add `proof.recommended` to app-runtime actions so the launcher/menu can expose one proof button gated by `recommendedProofCommand`.
 - [x] Surface the recommended proof readiness in the installed Windows launcher strip so the single-window UI shows when app-window, coherence, or MVP proof is the next gate.
 - [x] Add `app-runtime-action --action proof-recommended` so the same action surface can run the strongest available app-window, coherence, or MVP proof and return evidence.
+- [x] Wire the macOS launcher, command menu, and menu bar proof button to run the recommended proof and save the artifact under diagnostics instead of only recording first-frame proof.
 
 ## Next
 

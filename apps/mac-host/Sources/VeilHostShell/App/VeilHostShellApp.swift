@@ -2,16 +2,6 @@ import AppKit
 import SwiftUI
 import VeilHostCore
 
-private struct AppFrameProofRecord: Codable {
-    var kind = "veilAppFrameProof"
-    var generatedAt: Date
-    var endpoint: String
-    var launchResult: NotepadLaunchResult
-    var frame: WindowFrameEvent
-    var frameTiming: WindowFrameTiming?
-    var frameImagePath: String?
-}
-
 private enum AppRuntimeBooterFactory {
     static func make() -> QEMUVMRuntimeBooter {
         if ProcessInfo.processInfo.environment["VEIL_USE_NATIVE_QEMU_DISPLAY"] == "1" {
@@ -22,6 +12,17 @@ private enum AppRuntimeBooterFactory {
             frontmostRunner: {},
             displayMode: .vncLoopback
         )
+    }
+}
+
+private enum RecommendedProofError: Error, LocalizedError {
+    case unsupportedKind(String)
+
+    var errorDescription: String? {
+        switch self {
+        case .unsupportedKind(let kind):
+            "Unsupported recommended proof kind: \(kind)"
+        }
     }
 }
 
@@ -73,7 +74,7 @@ struct VeilHostShellApp: App {
                 markWindowsInstalledAction: markWindowsInstalledFromSetup,
                 installGuestAgentAction: installGuestAgentFromDisplay,
                 launchWindowsAppAction: launchSelectedWindowsAppWindow,
-                recordAppFrameProofAction: recordAppFrameProof,
+                runRecommendedProofAction: runRecommendedProof,
                 displayMessage: displayMessage
             )
                 .frame(minWidth: 1120, idealWidth: 1440, minHeight: 700, idealHeight: 900)
@@ -172,11 +173,11 @@ struct VeilHostShellApp: App {
                 .keyboardShortcut(.return, modifiers: [.command])
                 .disabled(!model.canRequestSelectedAppLaunch && !model.canFulfillPendingLaunch)
 
-                Button("Record App Frame Proof") {
-                    recordAppFrameProof()
+                Button("Run Recommended Proof") {
+                    runRecommendedProof()
                 }
                 .keyboardShortcut("p", modifiers: [.command, .shift])
-                .disabled(!model.canRequestSelectedAppLaunch && model.mirrorSessions.isEmpty)
+                .disabled(model.runtimeStatusReport().proofPlan.recommendedProofCommand == nil)
             }
         }
 
@@ -198,7 +199,7 @@ struct VeilHostShellApp: App {
                 focusWindowsAppWindowAction: focusWindowsAppWindow(windowId:),
                 closeWindowsAppWindowAction: closeWindowsAppWindow(windowId:),
                 closeAllWindowsAppWindowsAction: closeAllWindowsAppWindows,
-                recordAppFrameProofAction: recordAppFrameProof,
+                runRecommendedProofAction: runRecommendedProof,
                 quietWindowsWhenIdleAction: quietWindowsWhenIdle,
                 refreshAppsAction: refreshApps,
                 refreshRuntimeAction: refreshRuntime,
@@ -594,88 +595,99 @@ struct VeilHostShellApp: App {
         MainWindowChrome.hideMainWindow()
     }
 
-    private func recordAppFrameProof() {
+    private func runRecommendedProof() {
         Task { @MainActor in
             activateMainWindow()
-            displayMessage = "Recording Windows app launch and first-frame proof."
+            let proofPlan = model.runtimeStatusReport().proofPlan
+            guard let proofKind = proofPlan.recommendedProofKind,
+                  proofPlan.recommendedProofCommand != nil,
+                  let appId = proofPlan.selectedAppId else {
+                displayMessage = proofPlan.reason
+                return
+            }
 
             if model.apps.isEmpty {
                 await model.load()
             }
 
-            if model.lastLaunch == nil {
-                await model.launchSelectedApp()
-            }
-
-            guard let result = model.lastLaunch else {
-                if model.pendingLaunchAppId != nil,
-                   !model.hasLiveAgentConnection,
-                   vmModel.canStart {
-                    displayMessage = "Windows will start first. Run proof recording again after the guest agent connects."
-                    startWindowsAndShowDisplay()
-                } else {
-                    displayMessage = "App frame proof could not start: \(model.errorMessage ?? "No Windows app launch result.")"
-                }
-                return
-            }
-
-            showWindowsAppWindow(for: result)
-
-            guard let frame = await waitForFirstFrame(windowId: result.window.windowId) else {
-                displayMessage = "App frame proof timed out waiting for the first frame from \(result.window.title)."
-                return
-            }
-            let frameTiming = model.mirrorSessions.first(where: { $0.id == result.window.windowId })?.frameTiming
+            displayMessage = "Running \(proofDisplayName(for: proofKind)) proof for \(proofAppName(appId: appId))."
 
             do {
-                let url = try writeAppFrameProof(launchResult: result, frame: frame, frameTiming: frameTiming)
-                displayMessage = "App frame proof saved: \(url.path)"
+                let url = try await writeRecommendedProof(proofKind: proofKind, appId: appId)
+                displayMessage = "\(proofDisplayName(for: proofKind)) proof saved: \(url.path)"
+                await model.load()
             } catch {
-                displayMessage = "App frame proof could not be saved: \(userMessage(for: error))"
+                displayMessage = "\(proofDisplayName(for: proofKind)) proof could not complete: \(userMessage(for: error))"
             }
         }
     }
 
-    private func waitForFirstFrame(windowId: String, timeoutSeconds: Double = 10) async -> WindowFrameEvent? {
-        let deadline = Date().addingTimeInterval(timeoutSeconds)
-        while Date() < deadline {
-            if let frame = model.mirrorSessions.first(where: { $0.id == windowId })?.latestFrame {
-                return frame
-            }
-
-            try? await Task.sleep(for: .milliseconds(150))
-        }
-
-        return nil
-    }
-
-    private func writeAppFrameProof(
-        launchResult: NotepadLaunchResult,
-        frame: WindowFrameEvent,
-        frameTiming: WindowFrameTiming?
-    ) throws -> URL {
+    private func writeRecommendedProof(proofKind: String, appId: String) async throws -> URL {
+        let transport = URLSessionWebSocketTransport(url: URL(string: Self.agentURLString)!)
+        let client = VeilHostClient(transport: transport)
         let directory = QEMUVMRuntimeBooter.defaultDiagnosticsDirectory()
-            .appendingPathComponent("App Frame Proof", isDirectory: true)
+            .appendingPathComponent("Recommended Proof", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
 
         let stamp = Self.diagnosticTimestamp()
-        let imageURL = directory.appendingPathComponent("app-frame-\(stamp).png")
-        if let data = frame.encodedPayloadData {
-            try data.write(to: imageURL, options: .atomic)
+        switch proofKind {
+        case "app-window":
+            var report = try await client.proveAppWindow(
+                appId: appId,
+                endpoint: Self.agentURLString,
+                eventSource: transport
+            )
+            let outputURL = directory.appendingPathComponent("app-window-proof-\(stamp).json")
+            report.savedProofPath = outputURL.path
+            try writeProof(report, to: outputURL)
+            return outputURL
+        case "coherence":
+            var report = try await client.proveCoherenceAppWindow(
+                appId: appId,
+                endpoint: Self.agentURLString,
+                eventSource: transport
+            )
+            let outputURL = directory.appendingPathComponent("coherence-proof-\(stamp).json")
+            report.savedProofPath = outputURL.path
+            try writeProof(report, to: outputURL)
+            return outputURL
+        case "mvp":
+            var report = try await client.proveMVPAppRuntime(
+                appId: appId,
+                endpoint: Self.agentURLString,
+                eventSource: transport,
+                waitSeconds: 30,
+                proofTimeoutNanoseconds: 30_000_000_000
+            )
+            let outputURL = directory.appendingPathComponent("mvp-proof-\(stamp).json")
+            report.savedProofPath = outputURL.path
+            try writeProof(report, to: outputURL)
+            return outputURL
+        default:
+            throw RecommendedProofError.unsupportedKind(proofKind)
         }
+    }
 
-        let proof = AppFrameProofRecord(
-            generatedAt: Date(),
-            endpoint: Self.agentURLString,
-            launchResult: launchResult,
-            frame: frame,
-            frameTiming: frameTiming,
-            frameImagePath: FileManager.default.fileExists(atPath: imageURL.path) ? imageURL.path : nil
-        )
-        let outputURL = directory.appendingPathComponent("app-frame-proof-\(stamp).json")
-        let data = try JSONEncoder.veilDiagnostics.encode(proof)
+    private func writeProof<T: Encodable>(_ report: T, to outputURL: URL) throws {
+        let data = try JSONEncoder.veilDiagnostics.encode(report)
         try data.write(to: outputURL, options: .atomic)
-        return outputURL
+    }
+
+    private func proofDisplayName(for proofKind: String) -> String {
+        switch proofKind {
+        case "app-window":
+            "App-window"
+        case "coherence":
+            "Coherence"
+        case "mvp":
+            "MVP"
+        default:
+            "Recommended"
+        }
+    }
+
+    private func proofAppName(appId: String) -> String {
+        model.apps.first { $0.id == appId }?.name ?? appId
     }
 
     private static func diagnosticTimestamp(date: Date = Date()) -> String {
@@ -891,7 +903,7 @@ private struct VeilMenuBarMenu: View {
     var focusWindowsAppWindowAction: (String) -> Void
     var closeWindowsAppWindowAction: (String) -> Void
     var closeAllWindowsAppWindowsAction: () -> Void
-    var recordAppFrameProofAction: () -> Void
+    var runRecommendedProofAction: () -> Void
     var quietWindowsWhenIdleAction: () -> Void
     var refreshAppsAction: () -> Void
     var refreshRuntimeAction: () -> Void
@@ -982,11 +994,11 @@ private struct VeilMenuBarMenu: View {
             .disabled(!model.canFulfillPendingLaunch)
         }
 
-        Button("Record App Proof", systemImage: "checkmark.seal") {
+        Button("Run Recommended Proof", systemImage: "checkmark.seal") {
             openMainWindow()
-            recordAppFrameProofAction()
+            runRecommendedProofAction()
         }
-        .disabled(!model.canRequestSelectedAppLaunch && model.mirrorSessions.isEmpty)
+        .disabled(model.runtimeStatusReport().proofPlan.recommendedProofCommand == nil)
 
         Divider()
 
@@ -1232,7 +1244,7 @@ private struct StandaloneMainWindowRoot: View {
             markWindowsInstalledAction: markWindowsInstalledFromSetup,
             installGuestAgentAction: installGuestAgentFromDisplay,
             launchWindowsAppAction: launchSelectedWindowsApp,
-            recordAppFrameProofAction: {},
+            runRecommendedProofAction: {},
             displayMessage: displayMessage
         )
         .frame(minWidth: 1120, idealWidth: 1440, minHeight: 700, idealHeight: 900)

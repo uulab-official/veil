@@ -10,7 +10,7 @@ struct DetailView: View {
     var markWindowsInstalledAction: () -> Void
     var installGuestAgentAction: () -> Void
     var launchWindowsAppAction: () -> Void
-    var recordAppFrameProofAction: () -> Void
+    var runRecommendedProofAction: () -> Void
     var displayMessage: String?
 
     var body: some View {
@@ -31,7 +31,7 @@ struct DetailView: View {
                 markWindowsInstalledAction: markWindowsInstalledAction,
                 installGuestAgentAction: installGuestAgentAction,
                 launchWindowsAppAction: launchWindowsAppAction,
-                recordAppFrameProofAction: recordAppFrameProofAction,
+                runRecommendedProofAction: runRecommendedProofAction,
                 displayMessage: displayMessage
             )
             .padding(6)

@@ -19,7 +19,7 @@ struct VMRuntimeView: View {
     var markWindowsInstalledAction: () -> Void
     var installGuestAgentAction: () -> Void
     var launchWindowsAppAction: () -> Void
-    var recordAppFrameProofAction: () -> Void
+    var runRecommendedProofAction: () -> Void
     var displayMessage: String?
     @State private var pathPicker: PathPicker?
     @State private var showsAdvancedDetails = false
@@ -79,7 +79,7 @@ struct VMRuntimeView: View {
                     activeMirrorSession: activeMirrorSession,
                     recommendedProofKind: recommendedProofKind,
                     recommendedProofCommand: recommendedProofCommand,
-                    recordAppFrameProofAction: recordAppFrameProofAction,
+                    runRecommendedProofAction: runRecommendedProofAction,
                     refreshAction: {
                         Task {
                             await model.load()
@@ -1318,7 +1318,7 @@ private struct WindowsSetupDisplayPanel: View {
     var activeMirrorSession: WindowMirrorSession?
     var recommendedProofKind: String?
     var recommendedProofCommand: String?
-    var recordAppFrameProofAction: () -> Void
+    var runRecommendedProofAction: () -> Void
     var refreshAction: () -> Void
     var consolePointerTapAction: (Double, Double) -> Void
     var consoleKeyAction: (String) -> Void
@@ -1787,13 +1787,13 @@ private struct WindowsSetupDisplayPanel: View {
                 .help("Mark Windows setup complete and detach installer media")
             }
 
-            if canOpenWindowsApp || activeMirrorSession != nil {
-                Button(action: recordAppFrameProofAction) {
-                    Label("Record App Frame Proof", systemImage: "checkmark.seal")
+            if recommendedProofCommand != nil {
+                Button(action: runRecommendedProofAction) {
+                    Label("Run Recommended Proof", systemImage: "checkmark.seal")
                         .labelStyle(.iconOnly)
                 }
                 .disabled(isLoading)
-                .help("Record app launch and first frame proof")
+                .help("Run the strongest available Windows app runtime proof")
             }
 
             Button(action: detailsAction) {
