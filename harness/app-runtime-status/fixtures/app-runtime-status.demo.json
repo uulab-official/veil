@@ -36,6 +36,11 @@
       "title": "Repair Guest Agent For App Launch"
     },
     {
+      "id": "runtime.recoverDisplay",
+      "title": "Recover Runtime Display",
+      "isAvailable": false
+    },
+    {
       "id": "runtime.fulfillPendingLaunch",
       "isAvailable": false,
       "title": "Open Queued Windows App"

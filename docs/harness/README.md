@@ -89,6 +89,12 @@ When Windows is already running but the live guest agent is not connected,
 shell and CLI one shared gate for the Parallels-style path: queue the Windows
 app, repair or start the guest agent from attached media, then fulfill the
 pending launch when the agent reconnects.
+When the local VM is still running but the embedded console preview is stale or
+unavailable, `localRuntime.recommendedAction=recover-runtime-display` exposes
+`runtime.recoverDisplay`. The matching `app-runtime-action --action
+recover-display` report must include `displayRecovery` evidence from
+`qemu-capture`, and the harness accepts it only when the refreshed preview state
+becomes `fresh`.
 `macWindowIntegration` records whether a live agent can feed guest HWND events
 into automatic macOS app-window presentation, including mirrored, pending-frame,
 streaming, and foregroundable window counts. The foregroundable count must move
@@ -194,6 +200,7 @@ cd apps/mac-host
 swift run veil-vmctl app-runtime-action --json --action focus --window-id hwnd:0003029A | node ../../harness/app-runtime-action/src/validate-app-runtime-action.mjs
 swift run veil-vmctl app-runtime-action --json --action fulfill-pending | node ../../harness/app-runtime-action/src/validate-app-runtime-action.mjs
 swift run veil-vmctl app-runtime-action --json --action bring-forward | node ../../harness/app-runtime-action/src/validate-app-runtime-action.mjs
+swift run veil-vmctl app-runtime-action --json --action recover-display | node ../../harness/app-runtime-action/src/validate-app-runtime-action.mjs
 swift run veil-vmctl app-runtime-action --json --action click --window-id hwnd:0003029A --x 240 --y 130 | node ../../harness/app-runtime-action/src/validate-app-runtime-action.mjs
 swift run veil-vmctl app-runtime-action --json --action clipboard --text "hello from macOS" | node ../../harness/app-runtime-action/src/validate-app-runtime-action.mjs
 swift run veil-vmctl app-runtime-action --json --action type-text --window-id hwnd:0003029A --text "veil" | node ../../harness/app-runtime-action/src/validate-app-runtime-action.mjs

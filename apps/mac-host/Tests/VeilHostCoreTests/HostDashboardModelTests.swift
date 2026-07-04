@@ -544,6 +544,7 @@ struct HostDashboardModelTests {
         #expect(report.actions.first { $0.id == "macWindows.autoOpen" }?.isAvailable == true)
         #expect(report.actions.first { $0.id == "runtime.startWindowsForApp" }?.isAvailable == false)
         #expect(report.actions.first { $0.id == "runtime.repairGuestAgentForApp" }?.isAvailable == false)
+        #expect(report.actions.first { $0.id == "runtime.recoverDisplay" }?.isAvailable == false)
         #expect(report.actions.first { $0.id == "runtime.fulfillPendingLaunch" }?.isAvailable == false)
         #expect(report.actions.first { $0.id == "runtime.quietWhenIdle" }?.isAvailable == false)
         #expect(report.actions.first { $0.id == "runtime.stopWhenIdle" }?.isAvailable == false)
@@ -838,6 +839,9 @@ struct HostDashboardModelTests {
         #expect(status.recommendedDisplayCommand == "veil-vmctl qemu-display-smoke --json")
         #expect(status.recommendedRecoveryCommand == "veil-vmctl qemu-capture --json")
         #expect(status.reason.contains("embedded console preview is stale"))
+
+        let report = model.runtimeStatusReport(localRuntime: status)
+        #expect(report.actions.first { $0.id == "runtime.recoverDisplay" }?.isAvailable == true)
     }
 
     @Test("refresh live agent retries after demo fallback")

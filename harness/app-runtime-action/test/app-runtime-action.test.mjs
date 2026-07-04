@@ -65,6 +65,69 @@ test("validates app runtime bring-forward action fixture", () => {
   assert.equal(validateAppRuntimeAction(report), report);
 });
 
+test("validates accepted display recovery action with fresh console evidence", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-action.launch-pending.json", import.meta.url), "utf8"));
+  report.action = "recover-display";
+  report.accepted = true;
+  delete report.appId;
+  delete report.windowId;
+  delete report.launchPlan;
+  delete report.launch;
+  delete report.window;
+  report.displayRecovery = {
+    kind: "windowsAppRuntimeDisplayRecovery",
+    command: "veil-vmctl qemu-capture --json",
+    beforePreviewStatus: "stale",
+    afterPreviewStatus: "fresh",
+    beforeScreenshotPath: "/tmp/qemu-console.png",
+    afterScreenshotPath: "/tmp/qemu-console.png",
+    capture: {
+      kind: "qemuConsoleCapture",
+      monitorSocketPath: "/tmp/qemu-monitor.sock",
+      consoleScreenshotPath: "/tmp/qemu-console.png",
+      capturedAt: "2026-07-04T16:00:00Z"
+    }
+  };
+  report.status.localRuntime.consolePreviewStatus = "fresh";
+  report.status.localRuntime.recommendedAction = "wait-for-guest-agent";
+  delete report.status.localRuntime.recommendedRecoveryCommand;
+  report.status.actions.find((action) => action.id === "runtime.recoverDisplay").isAvailable = false;
+  report.nextActions = [
+    "Run `veil-vmctl qemu-display-smoke --json` to validate the embedded Windows display frame.",
+    "Run `veil-vmctl app-runtime-status --json` before retrying the queued Windows app launch."
+  ];
+
+  assert.equal(validateAppRuntimeAction(report), report);
+});
+
+test("rejects accepted display recovery without fresh console evidence", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-action.launch-pending.json", import.meta.url), "utf8"));
+  report.action = "recover-display";
+  report.accepted = true;
+  delete report.appId;
+  delete report.windowId;
+  delete report.launchPlan;
+  delete report.launch;
+  delete report.window;
+  report.displayRecovery = {
+    kind: "windowsAppRuntimeDisplayRecovery",
+    command: "veil-vmctl qemu-capture --json",
+    beforePreviewStatus: "stale",
+    afterPreviewStatus: "stale",
+    capture: {
+      kind: "qemuConsoleCapture",
+      monitorSocketPath: "/tmp/qemu-monitor.sock",
+      consoleScreenshotPath: "/tmp/qemu-console.png",
+      capturedAt: "2026-07-04T16:00:00Z"
+    }
+  };
+
+  assert.throws(
+    () => validateAppRuntimeAction(report),
+    /fresh afterPreviewStatus/
+  );
+});
+
 test("validates app runtime restore action fixture", () => {
   const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-action.restore-live.json", import.meta.url), "utf8"));
 

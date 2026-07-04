@@ -230,6 +230,7 @@ Goal: keep the main Veil experience pointed at real local Windows boot and conso
 - [x] Make the post-install launcher start the app-open flow from requestable app state, not only live-agent launch state, so pressing Open Notepad can queue the launch and enter guest-agent repair while the progress strip still shows Agent as repair/waiting instead of connected.
 - [x] Capture the current live regression after a queued-launch repair attempt: QEMU PID 94195 still reports running, but `guest-agent-wait` returns `hostForwardProbe.status=tcpUnavailable`, `qemu-display-smoke` fails with an RFB read error, and the latest console capture is black, so the next end-to-end app validation needs display/agent recovery before it can prove mirrored Notepad again.
 - [x] Expose stale/unavailable running console evidence in app-runtime status as `localRuntime.recommendedAction=recover-runtime-display`, including `qemu-display-smoke` and `qemu-capture` commands, so the launcher can distinguish a recoverable black display from a healthy running VM.
+- [x] Add `app-runtime-action --action recover-display` and `runtime.recoverDisplay` harness gating so stale-display recovery is executable through the same product automation surface as launch, repair, proof, and quiet-runtime actions.
 
 ## Next
 

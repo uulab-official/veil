@@ -798,6 +798,7 @@ function validateActions(actions, report) {
     "macWindows.autoOpen",
     "runtime.startWindowsForApp",
     "runtime.repairGuestAgentForApp",
+    "runtime.recoverDisplay",
     "runtime.fulfillPendingLaunch",
     "runtime.quietWhenIdle",
     "runtime.stopWhenIdle",
@@ -830,6 +831,11 @@ function validateActions(actions, report) {
   const repairAction = actions.find((action) => action.id === "runtime.repairGuestAgentForApp");
   if (repairAction.isAvailable !== (report.launchPlan.recommendedRepairCommand !== undefined)) {
     throw new TypeError("runtime.repairGuestAgentForApp availability must match launchPlan.recommendedRepairCommand.");
+  }
+
+  const recoverDisplayAction = actions.find((action) => action.id === "runtime.recoverDisplay");
+  if (recoverDisplayAction.isAvailable !== (report.localRuntime.recommendedRecoveryCommand !== undefined)) {
+    throw new TypeError("runtime.recoverDisplay availability must match localRuntime.recommendedRecoveryCommand.");
   }
 
   const pendingApp = report.apps.find((app) => app.id === report.pendingLaunch.appId);

@@ -900,6 +900,11 @@ public final class HostDashboardModel {
                     isAvailable: launchPlan.recommendedRepairCommand != nil
                 ),
                 WindowsAppRuntimeActionStatus(
+                    id: "runtime.recoverDisplay",
+                    title: "Recover Runtime Display",
+                    isAvailable: localRuntime.recommendedRecoveryCommand != nil
+                ),
+                WindowsAppRuntimeActionStatus(
                     id: "runtime.fulfillPendingLaunch",
                     title: "Open Queued Windows App",
                     isAvailable: pendingLaunch.isQueued && canFulfillPendingLaunch

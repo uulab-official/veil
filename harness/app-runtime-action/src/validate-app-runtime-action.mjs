@@ -3,8 +3,9 @@ import { fileURLToPath } from "node:url";
 
 import { validateAppRuntimeStatus } from "../../app-runtime-status/src/validate-app-runtime-status.mjs";
 
-const VALID_ACTIONS = new Set(["launch", "fulfill-pending", "focus", "close", "close-all", "restore", "bring-forward", "quiet-when-idle", "stop-runtime", "clipboard", "type-text", "click", "proof-recommended"]);
+const VALID_ACTIONS = new Set(["launch", "fulfill-pending", "focus", "close", "close-all", "restore", "bring-forward", "recover-display", "quiet-when-idle", "stop-runtime", "clipboard", "type-text", "click", "proof-recommended"]);
 const VALID_CONNECTION_MODES = new Set(["agent", "demo"]);
+const VALID_CONSOLE_PREVIEW_STATES = new Set(["fresh", "stale", "unavailable"]);
 
 export function validateAppRuntimeAction(report) {
   if (!report || typeof report !== "object" || Array.isArray(report)) {
@@ -49,6 +50,10 @@ export function validateAppRuntimeAction(report) {
     throw new TypeError("proof is only allowed for proof-recommended actions.");
   }
 
+  if (report.action !== "recover-display" && report.displayRecovery !== undefined && report.displayRecovery !== null) {
+    throw new TypeError("displayRecovery is only allowed for recover-display actions.");
+  }
+
   switch (report.action) {
     case "launch":
       validateLaunchAction(report);
@@ -70,6 +75,9 @@ export function validateAppRuntimeAction(report) {
       break;
     case "bring-forward":
       validateBringForwardAction(report);
+      break;
+    case "recover-display":
+      validateRecoverDisplayAction(report);
       break;
     case "quiet-when-idle":
       validateQuietWhenIdleAction(report);
@@ -96,6 +104,54 @@ export function validateAppRuntimeAction(report) {
   return report;
 }
 
+function validateRecoverDisplayAction(report) {
+  const recovery = report.displayRecovery;
+  if (!recovery || typeof recovery !== "object" || Array.isArray(recovery)) {
+    throw new TypeError("recover-display actions must include displayRecovery.");
+  }
+
+  requireString(recovery.kind, "displayRecovery.kind");
+  if (recovery.kind !== "windowsAppRuntimeDisplayRecovery") {
+    throw new TypeError("Unsupported displayRecovery.kind.");
+  }
+
+  requireString(recovery.command, "displayRecovery.command");
+  if (recovery.command !== "veil-vmctl qemu-capture --json") {
+    throw new TypeError("displayRecovery.command must point at qemu-capture.");
+  }
+
+  validateOptionalPreviewStatus(recovery.beforePreviewStatus, "displayRecovery.beforePreviewStatus");
+  validateOptionalPreviewStatus(recovery.afterPreviewStatus, "displayRecovery.afterPreviewStatus");
+
+  if (recovery.beforeScreenshotPath !== undefined) {
+    requireString(recovery.beforeScreenshotPath, "displayRecovery.beforeScreenshotPath");
+  }
+  if (recovery.afterScreenshotPath !== undefined) {
+    requireString(recovery.afterScreenshotPath, "displayRecovery.afterScreenshotPath");
+  }
+  if (recovery.error !== undefined) {
+    requireString(recovery.error, "displayRecovery.error");
+  }
+
+  const hasCapture = recovery.capture !== undefined && recovery.capture !== null;
+  if (hasCapture) {
+    validateConsoleCapture(recovery.capture);
+  }
+
+  if (report.accepted !== (hasCapture && recovery.afterPreviewStatus === "fresh")) {
+    throw new TypeError("recover-display accepted must require a capture and fresh afterPreviewStatus.");
+  }
+
+  const recoverAction = report.status.actions.find((action) => action.id === "runtime.recoverDisplay");
+  if (!recoverAction) {
+    throw new TypeError("recover-display status must include runtime.recoverDisplay.");
+  }
+
+  if (!report.accepted && recovery.error === undefined && report.status.localRuntime.recommendedRecoveryCommand === undefined) {
+    throw new TypeError("rejected recover-display actions must expose either a recovery error or continued recovery command.");
+  }
+}
+
 function validateProofRecommendedAction(report) {
   if (!report.accepted) {
     if (report.proof !== undefined && report.proof !== null) {
@@ -105,6 +161,33 @@ function validateProofRecommendedAction(report) {
   }
 
   validateRecommendedProofRun(report.proof, report);
+}
+
+function validateOptionalPreviewStatus(value, fieldName) {
+  if (value === undefined || value === null) {
+    return;
+  }
+  requireString(value, fieldName);
+  if (!VALID_CONSOLE_PREVIEW_STATES.has(value)) {
+    throw new TypeError(`Unsupported ${fieldName}: ${value}`);
+  }
+}
+
+function validateConsoleCapture(capture) {
+  if (!capture || typeof capture !== "object" || Array.isArray(capture)) {
+    throw new TypeError("displayRecovery.capture must be an object.");
+  }
+
+  requireString(capture.kind, "displayRecovery.capture.kind");
+  if (capture.kind !== "qemuConsoleCapture") {
+    throw new TypeError("Unsupported displayRecovery.capture.kind.");
+  }
+  requireString(capture.monitorSocketPath, "displayRecovery.capture.monitorSocketPath");
+  requireString(capture.consoleScreenshotPath, "displayRecovery.capture.consoleScreenshotPath");
+  requireString(capture.capturedAt, "displayRecovery.capture.capturedAt");
+  if (Number.isNaN(Date.parse(capture.capturedAt))) {
+    throw new TypeError("displayRecovery.capture.capturedAt must be an ISO date.");
+  }
 }
 
 function validateFulfillPendingAction(report) {

@@ -280,6 +280,7 @@ test("accepts stale running console preview with recovery commands", () => {
   report.launchPlan.reason = "Windows is running; repair or start the guest agent, then launch the selected app.";
   report.actions.find((action) => action.id === "runtime.startWindowsForApp").isAvailable = false;
   report.actions.find((action) => action.id === "runtime.repairGuestAgentForApp").isAvailable = true;
+  report.actions.find((action) => action.id === "runtime.recoverDisplay").isAvailable = true;
 
   assert.doesNotThrow(() => validateAppRuntimeStatus(report));
 });
@@ -307,6 +308,16 @@ test("rejects repair action availability that drifts from launch plan", () => {
   assert.throws(
     () => validateAppRuntimeStatus(report),
     /runtime\.repairGuestAgentForApp/
+  );
+});
+
+test("rejects display recovery action availability that drifts from local runtime", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.demo.json", import.meta.url), "utf8"));
+  report.actions.find((action) => action.id === "runtime.recoverDisplay").isAvailable = true;
+
+  assert.throws(
+    () => validateAppRuntimeStatus(report),
+    /runtime\.recoverDisplay/
   );
 });
 

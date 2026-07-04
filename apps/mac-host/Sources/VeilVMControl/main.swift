@@ -83,7 +83,7 @@ enum VMControlError: Error, LocalizedError {
         }
     }
 
-    private static let usage = "Usage: veil-vmctl prepare --installer /path/to/Windows.iso [--drivers /path/to/virtio-win.iso] | veil-vmctl app-runtime-status [--json] [--demo] | veil-vmctl app-runtime-action --action launch|fulfill-pending|focus|close|close-all|restore|bring-forward|quiet-when-idle|stop-runtime|clipboard|type-text|click|proof-recommended [--json] [--demo] [--app-id winapp_notepad] [--window-id hwnd:XXXXXXXX] [--text \"...\"] [--x 240 --y 130] | veil-vmctl app-window-proof [--json] [--app-id winapp_notepad] [--wait-seconds 10] [--output /path/to/proof.json] | veil-vmctl coherence-proof [--json] [--app-id winapp_notepad] [--wait-seconds 10] [--output /path/to/proof.json] | veil-vmctl mvp-proof [--json] [--app-id winapp_notepad] [--wait-seconds 30] [--output /path/to/proof.json] [--require-proved] | veil-vmctl guest-agent-wait [--json] [--wait-seconds 30] | veil-vmctl mark-installed [--json] | veil-vmctl providers [--json] | veil-vmctl qemu-plan [--json] | veil-vmctl qemu-doctor [--json] | veil-vmctl qemu-install-status [--json] | veil-vmctl qemu-smoke [--json] [--seconds 45] | veil-vmctl qemu-start [--json] [--wait-seconds 15] [--native-display] | veil-vmctl qemu-display-smoke [--json] [--wait-seconds 5] | veil-vmctl qemu-capture [--json] [--output /path/to/console.png] | veil-vmctl qemu-powerdown [--json] [--wait-seconds 30] | veil-vmctl qemu-force-stop [--json] --i-understand-data-loss [--wait-seconds 10] | veil-vmctl qemu-sendkey [--json] key [key ...] | veil-vmctl qemu-type-text [--json] --text \"...\" | veil-vmctl qemu-click [--json] --x 0...32767 --y 0...32767 | veil-vmctl qemu-oobe-bypass [--json] | veil-vmctl qemu-install-agent [--json] [--wait-seconds 30]"
+    private static let usage = "Usage: veil-vmctl prepare --installer /path/to/Windows.iso [--drivers /path/to/virtio-win.iso] | veil-vmctl app-runtime-status [--json] [--demo] | veil-vmctl app-runtime-action --action launch|fulfill-pending|focus|close|close-all|restore|bring-forward|recover-display|quiet-when-idle|stop-runtime|clipboard|type-text|click|proof-recommended [--json] [--demo] [--app-id winapp_notepad] [--window-id hwnd:XXXXXXXX] [--text \"...\"] [--x 240 --y 130] | veil-vmctl app-window-proof [--json] [--app-id winapp_notepad] [--wait-seconds 10] [--output /path/to/proof.json] | veil-vmctl coherence-proof [--json] [--app-id winapp_notepad] [--wait-seconds 10] [--output /path/to/proof.json] | veil-vmctl mvp-proof [--json] [--app-id winapp_notepad] [--wait-seconds 30] [--output /path/to/proof.json] [--require-proved] | veil-vmctl guest-agent-wait [--json] [--wait-seconds 30] | veil-vmctl mark-installed [--json] | veil-vmctl providers [--json] | veil-vmctl qemu-plan [--json] | veil-vmctl qemu-doctor [--json] | veil-vmctl qemu-install-status [--json] | veil-vmctl qemu-smoke [--json] [--seconds 45] | veil-vmctl qemu-start [--json] [--wait-seconds 15] [--native-display] | veil-vmctl qemu-display-smoke [--json] [--wait-seconds 5] | veil-vmctl qemu-capture [--json] [--output /path/to/console.png] | veil-vmctl qemu-powerdown [--json] [--wait-seconds 30] | veil-vmctl qemu-force-stop [--json] --i-understand-data-loss [--wait-seconds 10] | veil-vmctl qemu-sendkey [--json] key [key ...] | veil-vmctl qemu-type-text [--json] --text \"...\" | veil-vmctl qemu-click [--json] --x 0...32767 --y 0...32767 | veil-vmctl qemu-oobe-bypass [--json] | veil-vmctl qemu-install-agent [--json] [--wait-seconds 30]"
 }
 
 struct VMControlArguments {
@@ -95,6 +95,7 @@ struct VMControlArguments {
         case closeAll = "close-all"
         case restore
         case bringForward = "bring-forward"
+        case recoverDisplay = "recover-display"
         case quietWhenIdle = "quiet-when-idle"
         case stopRuntime = "stop-runtime"
         case clipboard
@@ -494,6 +495,17 @@ struct AppRuntimeRecommendedProofRun: Codable, Equatable {
     var nextActions: [String]
 }
 
+struct AppRuntimeDisplayRecovery: Codable, Equatable {
+    var kind: String = "windowsAppRuntimeDisplayRecovery"
+    var command: String
+    var beforePreviewStatus: VMConsolePreviewStatus?
+    var afterPreviewStatus: VMConsolePreviewStatus?
+    var beforeScreenshotPath: String?
+    var afterScreenshotPath: String?
+    var capture: QEMUConsoleCaptureRecord?
+    var error: String?
+}
+
 struct AppRuntimeActionReport: Codable, Equatable {
     var kind: String = "windowsAppRuntimeAction"
     var action: VMControlArguments.AppRuntimeAction
@@ -521,6 +533,7 @@ struct AppRuntimeActionReport: Codable, Equatable {
     var restoreRequestedAppIds: [String]
     var broughtForwardWindowIds: [String]
     var proof: AppRuntimeRecommendedProofRun?
+    var displayRecovery: AppRuntimeDisplayRecovery?
     var quietRuntime: WindowsAppRuntimeQuietPolicyStatus?
     var runtimeStop: VMRuntimeSnapshot?
     var status: WindowsAppRuntimeStatusReport
@@ -800,6 +813,7 @@ struct VeilVMControl {
         var restoreRequestedAppIds: [String] = []
         var broughtForwardWindowIds: [String] = []
         var proof: AppRuntimeRecommendedProofRun?
+        var displayRecovery: AppRuntimeDisplayRecovery?
         var foregroundWindowId: String?
         var foregroundWindowTitle: String?
         var quietRuntime: WindowsAppRuntimeQuietPolicyStatus?
@@ -886,6 +900,36 @@ struct VeilVMControl {
                 foregroundWindowTitle = foregroundSession.window.title
             }
             accepted = !broughtForwardWindowIds.isEmpty
+        case .recoverDisplay:
+            let runtimeService = LocalVMRuntimeService()
+            let beforeSnapshot = try? await runtimeService.loadSnapshot()
+            let beforeStatus = model.localRuntimeStatus(snapshot: beforeSnapshot)
+            let recoveryCommand = beforeStatus.recommendedRecoveryCommand ?? "veil-vmctl qemu-capture --json"
+            var capture: QEMUConsoleCaptureRecord?
+            var recoveryError: String?
+
+            if beforeStatus.recommendedRecoveryCommand != nil {
+                do {
+                    capture = try captureLatestQEMUConsole()
+                } catch {
+                    recoveryError = String(describing: error)
+                }
+            } else {
+                recoveryError = "The local runtime does not currently recommend display recovery."
+            }
+
+            let afterSnapshot = try? await runtimeService.loadSnapshot()
+            let afterStatus = model.localRuntimeStatus(snapshot: afterSnapshot)
+            displayRecovery = AppRuntimeDisplayRecovery(
+                command: recoveryCommand,
+                beforePreviewStatus: beforeStatus.consolePreviewStatus,
+                afterPreviewStatus: afterStatus.consolePreviewStatus,
+                beforeScreenshotPath: beforeSnapshot?.latestConsoleScreenshotPath,
+                afterScreenshotPath: afterSnapshot?.latestConsoleScreenshotPath,
+                capture: capture,
+                error: recoveryError
+            )
+            accepted = capture != nil && afterStatus.consolePreviewStatus == .fresh
         case .quietWhenIdle:
             quietRuntime = model.quietRuntimeStatus()
             accepted = quietRuntime?.canQuietRuntime == true
@@ -1006,6 +1050,7 @@ struct VeilVMControl {
             restoreRequestedAppIds: restoreRequestedAppIds,
             broughtForwardWindowIds: broughtForwardWindowIds,
             proof: proof,
+            displayRecovery: displayRecovery,
             quietRuntime: quietRuntime,
             runtimeStop: runtimeStop,
             status: status,
@@ -1035,6 +1080,19 @@ struct VeilVMControl {
         }
         if let pendingLaunchAppId = report.pendingLaunchAppId {
             print("Pending launch app: \(pendingLaunchAppId)")
+        }
+        if let displayRecovery = report.displayRecovery {
+            print("Display recovery: \(displayRecovery.afterPreviewStatus?.rawValue ?? "unknown")")
+            print("Display recovery command: \(displayRecovery.command)")
+            if let beforePreviewStatus = displayRecovery.beforePreviewStatus {
+                print("Display recovery before: \(beforePreviewStatus.rawValue)")
+            }
+            if let capturePath = displayRecovery.capture?.consoleScreenshotPath {
+                print("Display recovery capture: \(capturePath)")
+            }
+            if let error = displayRecovery.error {
+                print("Display recovery error: \(error)")
+            }
         }
         if let launchPlan = report.launchPlan {
             print("Launch plan: \(launchPlan.recommendedAction)")
@@ -1237,6 +1295,12 @@ struct VeilVMControl {
                     proofNextAction(from: status.proofPlan),
                     "Run `veil-vmctl app-runtime-action --json --action focus --window-id ...` if one app window needs explicit guest focus."
                 ])
+            case .recoverDisplay:
+                return compactActions([
+                    status.localRuntime.recommendedDisplayCommand.map { "Run `\($0)` to validate the embedded Windows display frame." },
+                    status.launchPlan.recommendedRepairCommand.map { "Run `\($0)` to repair the guest agent after display evidence is fresh." },
+                    "Run `veil-vmctl app-runtime-status --json` before retrying the queued Windows app launch."
+                ])
             case .quietWhenIdle:
                 return [
                     "Run `\(status.quietRuntime.recommendedStopCommand ?? "veil-vmctl app-runtime-action --json --action stop-runtime")` to stop the idle local Windows runtime.",
@@ -1287,6 +1351,14 @@ struct VeilVMControl {
 
         if action == .launch || action == .fulfillPending {
             return launchRecoveryActions(from: status.launchPlan)
+        }
+
+        if action == .recoverDisplay {
+            return compactActions([
+                status.localRuntime.recommendedRecoveryCommand.map { "Run `\($0)` to refresh the latest QEMU console screenshot." },
+                status.localRuntime.recommendedDisplayCommand.map { "Run `\($0)` to check whether the embedded display can deliver a frame." },
+                "Run `veil-vmctl qemu-install-status --json` and inspect localRuntime.consolePreviewStatus before retrying app launch."
+            ])
         }
 
         return [
