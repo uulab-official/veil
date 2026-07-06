@@ -7,6 +7,13 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+# Normalize once so every later comparison against $InstallRoot (in particular
+# Find-VeilSharedAgentRoot's self-copy guard) compares like-for-like against paths that come back
+# from Resolve-Path, regardless of trailing separators or relative segments the caller passed in.
+# GetFullPath is used instead of Resolve-Path because $InstallRoot does not have to exist yet on a
+# fresh install.
+$InstallRoot = [System.IO.Path]::GetFullPath($InstallRoot).TrimEnd('\')
+
 $ScriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $InstallScript = Join-Path $ScriptRoot "Install-VeilAgent.ps1"
 $StartScript = Join-Path $InstallRoot "scripts\Start-VeilAgent.ps1"
@@ -105,6 +112,8 @@ function Invoke-VeilElevatedRepair {
     Write-Host "Elevated repair process started. PID=$($Process.Id)"
 }
 
+$script:CachedSharedAgentRoot = $null
+
 function Find-VeilSharedAgentRoot {
     # When this script runs from its installed copy ($ScriptRoot = %LOCALAPPDATA%\Veil\Agent\scripts),
     # a plain "..\app" relative to $ScriptRoot resolves to the installed app folder itself
@@ -113,31 +122,60 @@ function Find-VeilSharedAgentRoot {
     # never actually reaches the guest even though the repair flow reports success. Scan attached
     # filesystem drives for the real "Veil Guest Agent" folder instead of trusting $ScriptRoot's
     # current location, the same way Install-VeilVirtIONetworkDriver looks for driver media below.
+    #
+    # Cached per script run: this is called from both Sync-VeilInstalledSupportScripts and
+    # Sync-VeilInstalledAppBundle, and re-scanning every attached drive twice is both wasted work and
+    # a correctness risk if drive state could change between the two calls (it shouldn't within one
+    # repair run, but computing it once removes the possibility entirely).
+    if ($script:CachedSharedAgentRoot) {
+        return $script:CachedSharedAgentRoot
+    }
+
     $ScriptRootAgentRoot = (Resolve-Path (Join-Path $ScriptRoot "..")).Path
 
-    $CandidateRoots = [System.Collections.Generic.List[string]]::new()
+    $CandidateRoots = @()
     foreach ($Drive in Get-PSDrive -PSProvider FileSystem) {
-        $CandidateRoots.Add((Join-Path $Drive.Root "Veil Guest Agent"))
+        if (-not $Drive.Root) {
+            continue
+        }
+        $CandidateRoots += Join-Path $Drive.Root "Veil Guest Agent"
     }
 
     foreach ($CandidateRoot in $CandidateRoots) {
-        if (-not (Test-Path (Join-Path $CandidateRoot "app\VeilAgent.exe"))) {
+        try {
+            if (-not (Test-Path (Join-Path $CandidateRoot "app\VeilAgent.exe"))) {
+                continue
+            }
+
+            $ResolvedCandidateRoot = (Resolve-Path $CandidateRoot).Path
+        } catch {
+            # A disconnected network drive, a stale substituted drive letter, or removable media in
+            # a bad state can make Test-Path/Resolve-Path throw instead of returning $false under
+            # this script's global $ErrorActionPreference = "Stop". One bad drive must not abort the
+            # whole repair flow -- skip it and keep scanning the rest.
+            Write-Host "Skipping unreachable drive candidate ${CandidateRoot}: $($_.Exception.Message)"
             continue
         }
 
-        $ResolvedCandidateRoot = (Resolve-Path $CandidateRoot).Path
         if ($ResolvedCandidateRoot -ne $InstallRoot) {
-            return $ResolvedCandidateRoot
+            $script:CachedSharedAgentRoot = $ResolvedCandidateRoot
+            return $script:CachedSharedAgentRoot
         }
     }
 
-    return $ScriptRootAgentRoot
+    $script:CachedSharedAgentRoot = $ScriptRootAgentRoot
+    return $script:CachedSharedAgentRoot
 }
 
 function Sync-VeilInstalledSupportScripts {
     New-Item -ItemType Directory -Force -Path $InstalledScriptsRoot | Out-Null
     $SharedAgentRoot = Find-VeilSharedAgentRoot
     $SharedScriptsRoot = Join-Path $SharedAgentRoot "scripts"
+
+    if ((Resolve-Path $SharedScriptsRoot -ErrorAction SilentlyContinue).Path -eq (Resolve-Path $InstalledScriptsRoot -ErrorAction SilentlyContinue).Path) {
+        Write-Host "Resolved support script source is the installed scripts folder itself; keeping installed scripts."
+        return
+    }
 
     foreach ($ScriptName in @(
         "Start-VeilAgent.ps1",
