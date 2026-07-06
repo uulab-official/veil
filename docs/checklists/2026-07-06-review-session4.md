@@ -78,11 +78,14 @@ today, since it hadn't been reviewed yet.
   offer. Confirmed non-blocking (error `description` computation is cheap in
   practice, and no safe direct alternative was confirmed to compile without
   further research) — not changed.
-- `loadSnapshot()` has a second, textually identical
+- ~~`loadSnapshot()` has a second, textually identical
   `try? await qemuLaunchRecordStore.loadLatest()` that this pass didn't
-  touch (only `stop()`'s copy was fixed). Lower stakes there (display/read
-  path, not a stop/terminate decision), but worth the same treatment in a
-  future pass for consistency.
+  touch~~ **Done 2026-07-07**: replaced with a do/catch logging via
+  `VeilLog.runtime.notice` (not `.error` — this site already degrades
+  gracefully via the independent `orphanQEMUProcess` detection a few lines
+  below, so a corrupt record here was never at risk of masking an orphan the
+  way `stop()`'s copy was; the log is for diagnosability of a recurring read
+  failure, not because this path is dangerous).
 
 ## Verification
 

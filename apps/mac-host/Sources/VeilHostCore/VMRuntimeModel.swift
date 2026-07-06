@@ -1552,7 +1552,20 @@ public struct LocalVMRuntimeService: VMRuntimeService {
         let profile = try await profileStore.load()
 
         if virtualizationAvailable, let profile {
-            let latestLaunchRecord = try? await qemuLaunchRecordStore.loadLatest()
+            // Unlike stop()'s copy of this read, a corrupt/unreadable launch record here already
+            // degrades gracefully -- `orphanQEMUProcess` a few lines below independently detects a
+            // running QEMU process by virtual disk path and `inferredRuntimeState` falls back to it,
+            // so this path was never at risk of masking an orphan the way stop()'s was. Still log it
+            // (not `.error`, since it's non-fatal and this runs on every snapshot refresh/poll tick)
+            // for the same reason every other silently-discarded failure in this file now logs: a
+            // recurring read failure should be diagnosable without guessing.
+            let latestLaunchRecord: QEMULaunchRecord?
+            do {
+                latestLaunchRecord = try await qemuLaunchRecordStore.loadLatest()
+            } catch {
+                VeilLog.runtime.notice("Failed to load the latest QEMU launch record: \(String(describing: error))")
+                latestLaunchRecord = nil
+            }
             let latestConsoleScreenshot = refreshedConsoleScreenshot(from: latestLaunchRecord)
             let installationSteps = Self.installationSteps(for: profile)
             let preflightChecks = Self.preflightChecks(for: profile)
