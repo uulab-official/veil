@@ -8,8 +8,18 @@ public sealed record WindowsAppDescriptor(
     string Executable,
     string Publisher,
     string IconId,
-    string[]? AlternateExecutables = null
-);
+    string[]? AlternateExecutables = null,
+    TimeSpan? WindowDiscoveryTimeoutOverride = null
+)
+{
+    /// <summary>
+    /// How long <see cref="WindowsDesktop.LaunchAppAsync"/> polls for a top-level window before
+    /// giving up. Packaged (MSIX/UWP) apps like Windows 11's Calculator can take noticeably longer
+    /// to cold-activate their window than native Win32 apps, so this is overridable per app rather
+    /// than a single global constant.
+    /// </summary>
+    public TimeSpan WindowDiscoveryTimeout => WindowDiscoveryTimeoutOverride ?? TimeSpan.FromSeconds(5);
+}
 
 public sealed record LaunchedWindow(
     string WindowId,

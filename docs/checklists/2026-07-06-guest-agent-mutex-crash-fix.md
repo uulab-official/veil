@@ -59,14 +59,27 @@ only matched the originally-launched process's own executable name.
       `DoesProcessMatchApp` to check it, so Calculator's window can be found
       even though it belongs to a different process than the one
       `Process.Start("calc.exe")` returns.
-- [ ] **Not fully verified live**: after the fix, a fresh Calculator launch
-      still occasionally missed the 5-second/50-attempt discovery window in
-      `WindowsDesktop.LaunchAppAsync` — the packaged Calculator app's cold
-      activation appears to sometimes exceed that budget on this ARM64 VM.
-      Confirmed via screenshot that the window does open successfully; the
-      proof command's fixed retry budget is the remaining suspect. Follow-up:
-      consider a longer or app-specific discovery timeout for packaged
-      (MSIX/UWP) apps rather than reusing the same budget as native Win32
-      apps like Notepad and Paint (both proved reliably on the first try).
 - [x] Notepad and Paint re-confirmed working end to end on the same guest
       after the mutex fix, with no changes needed.
+
+## Follow-Up: Calculator Cold-Start Timeout (same day)
+
+The Calculator process-matching fix above still occasionally missed the
+5-second/50-attempt discovery window in `WindowsDesktop.LaunchAppAsync` — the
+packaged Calculator app's cold activation can exceed that budget on this
+ARM64 VM, even though the window does open (confirmed via screenshot).
+
+- [x] Added `WindowsAppDescriptor.WindowDiscoveryTimeoutOverride` (default
+      5s, matching the previous hardcoded budget for every other app) so
+      `LaunchAppAsync`'s discovery loop can use a longer budget for apps that
+      need it, instead of one global constant.
+- [x] Set Calculator's override to 12 seconds in `AgentSession.cs`.
+- [x] Added `apps/windows-agent/tests/VeilAgent.Tests`, the first test
+      project for the Windows agent (previously zero test coverage — the
+      Mutex crash above shipped and would have shipped again without one).
+      Covers `SingleInstanceGuard` (including a direct regression test that
+      reproduces the cross-thread `Dispose()` crash pattern) and the
+      app/process matching logic (`DoesProcessMatchApp`,
+      `AlternateExecutables`, `WindowDiscoveryTimeout`). Runs on macOS via
+      `dotnet test` since none of the covered logic requires live Win32
+      P/Invoke calls.

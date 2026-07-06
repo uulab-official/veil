@@ -58,7 +58,8 @@ public sealed class WindowsDesktop : IWindowsDesktop
             UseShellExecute = true
         }) ?? throw new InvalidOperationException($"Could not start {app.Executable}.");
 
-        for (var attempt = 0; attempt < 50; attempt += 1)
+        var discoveryAttempts = (int)(app.WindowDiscoveryTimeout.TotalMilliseconds / 100);
+        for (var attempt = 0; attempt < discoveryAttempts; attempt += 1)
         {
             cancellationToken.ThrowIfCancellationRequested();
             process.Refresh();
@@ -156,7 +157,7 @@ public sealed class WindowsDesktop : IWindowsDesktop
         return true;
     }
 
-    private static bool DoesProcessMatchApp(uint processId, WindowsAppDescriptor app)
+    internal static bool DoesProcessMatchApp(uint processId, WindowsAppDescriptor app)
     {
         try
         {

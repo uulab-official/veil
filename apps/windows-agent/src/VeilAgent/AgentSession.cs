@@ -24,7 +24,10 @@ public sealed class AgentSession
             // Windows 11 ships calc.exe as a launcher stub for the packaged Calculator app; the
             // top-level window that actually appears belongs to CalculatorApp.exe, a different
             // process than the one Process.Start("calc.exe") returns.
-            AlternateExecutables: ["CalculatorApp"]
+            AlternateExecutables: ["CalculatorApp"],
+            // The packaged Calculator app's cold activation can take noticeably longer than the
+            // default 5-second discovery budget used by native Win32 apps like Notepad and Paint.
+            WindowDiscoveryTimeoutOverride: TimeSpan.FromSeconds(12)
         ),
         new WindowsAppDescriptor(
             Id: "winapp_paint",

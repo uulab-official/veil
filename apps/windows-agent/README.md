@@ -11,6 +11,7 @@ Current scope:
 - App launch emits `app.launch.response`, `window.created`, and the first HWND-captured `window.frame` event through the event broadcast path.
 - After the first frame, a per-window frame streamer continues broadcasting PNG `window.frame` events until the agent process stops or the window stream is replaced.
 - HWND discovery is localization-tolerant: before launching an app the agent snapshots matching existing process windows, then prefers newly created windows matching the launched process id, executable process name, or title. This avoids depending on English window titles for Windows 11 Arm images.
+- HWND discovery also tolerates packaged (MSIX/UWP) apps whose launcher process differs from the process that owns the eventual top-level window, and whose cold-activation time can exceed a native Win32 app's discovery budget. `WindowsAppDescriptor.AlternateExecutables` and `WindowDiscoveryTimeoutOverride` cover this; Windows 11's Calculator (`calc.exe` launches `CalculatorApp.exe`) is configured this way in `AgentSession.cs`.
 
 This project intentionally does not ship Windows media, licenses, product keys, or proprietary SDKs.
 
@@ -136,6 +137,23 @@ Remove the user task and published files:
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\Uninstall-VeilAgent.ps1
 ```
+
+## Unit Tests
+
+`apps/windows-agent/tests/VeilAgent.Tests` covers logic that does not require a
+live Windows desktop — `SingleInstanceGuard`'s mutex handling (including a
+regression test for a real crash where `Dispose()` released the mutex from a
+different thread than the one that acquired it) and the app/process matching
+logic behind HWND discovery. These run on macOS and Linux as well as Windows:
+
+```bash
+dotnet test apps/windows-agent/tests/VeilAgent.Tests/VeilAgent.Tests.csproj
+```
+
+One test (single-instance mutual exclusion across two `SingleInstanceGuard`
+instances for the same port) only asserts on Windows, since named-Mutex
+cross-instance semantics are a Windows-specific OS feature that .NET's
+non-Windows Mutex support does not reliably reproduce.
 
 ## Harness Contract
 
