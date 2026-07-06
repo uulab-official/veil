@@ -7,7 +7,8 @@ public sealed record WindowsAppDescriptor(
     string Name,
     string Executable,
     string Publisher,
-    string IconId
+    string IconId,
+    string[]? AlternateExecutables = null
 );
 
 public sealed record LaunchedWindow(

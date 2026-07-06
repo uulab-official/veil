@@ -20,7 +20,11 @@ public sealed class AgentSession
             Name: "Calculator",
             Executable: "calc.exe",
             Publisher: "Microsoft",
-            IconId: "icon_calculator"
+            IconId: "icon_calculator",
+            // Windows 11 ships calc.exe as a launcher stub for the packaged Calculator app; the
+            // top-level window that actually appears belongs to CalculatorApp.exe, a different
+            // process than the one Process.Start("calc.exe") returns.
+            AlternateExecutables: ["CalculatorApp"]
         ),
         new WindowsAppDescriptor(
             Id: "winapp_paint",

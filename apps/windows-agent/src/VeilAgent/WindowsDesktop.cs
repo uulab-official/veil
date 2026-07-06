@@ -161,8 +161,12 @@ public sealed class WindowsDesktop : IWindowsDesktop
         try
         {
             using var process = Process.GetProcessById((int)processId);
-            var executableName = Path.GetFileNameWithoutExtension(app.Executable);
-            return string.Equals(process.ProcessName, executableName, StringComparison.OrdinalIgnoreCase);
+            var candidateExecutables = (app.AlternateExecutables ?? [])
+                .Append(app.Executable)
+                .Select(Path.GetFileNameWithoutExtension);
+            return candidateExecutables.Any(
+                candidate => string.Equals(process.ProcessName, candidate, StringComparison.OrdinalIgnoreCase)
+            );
         }
         catch (ArgumentException)
         {

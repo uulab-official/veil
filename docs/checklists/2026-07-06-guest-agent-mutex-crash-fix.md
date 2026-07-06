@@ -1,0 +1,72 @@
+# Guest Agent Mutex Crash Fix
+
+Date: 2026-07-06
+
+Goal: root-cause a real, reproducible guest-agent connectivity failure found
+while dogfooding the app after the diagnostics/UX hardening pass earlier the
+same day (`docs/checklists/2026-07-06-diagnostics-and-agent-visibility.md`).
+The Windows guest agent had stopped answering `agent.health.response` on both
+loopback and the forwarded QEMU port, even though Windows Firewall rules were
+present and the TCP port was open (`hostForwardProbe.status: tcpOpen`).
+
+## Root Cause
+
+`SingleInstanceGuard.Dispose()` called `mutex.ReleaseMutex()` unconditionally
+once `ownsMutex` was true. .NET's `Mutex.ReleaseMutex()` requires the
+releasing thread to be the same OS thread that acquired the mutex (`WaitOne()`
+in `TryAcquire`). `Program.cs` uses a top-level `async Main` and disposes the
+guard after `await server.RunAsync()` — a console app's thread pool does not
+guarantee thread affinity across `await`, so the dispose routinely runs on a
+different thread than the one that acquired the mutex. This threw
+`System.ApplicationException: Object synchronization method was called from
+an unsynchronized block of code`, an unhandled exception that killed
+`VeilAgent.exe` on every exit path (including whatever caused
+`server.RunAsync()` to return/throw in the first place — that original cause
+is now masked and unknown, since the crash always happened at the same
+`ReleaseMutex()` line regardless of why the process was exiting).
+
+Found by attaching to the real running VM via QEMU QMP automation (screen
+capture + synthetic keyboard/mouse) and reading
+`%LOCALAPPDATA%\Veil\Agent\logs\agent.stderr.log` inside the guest.
+
+## Fix
+
+- [x] `SingleInstanceGuard.Dispose()` now catches `ApplicationException` around
+      `ReleaseMutex()` and treats it as a no-op — Windows releases a
+      process's named mutexes automatically on exit, so an explicit release
+      is a best-effort courtesy, not a requirement for correctness.
+- [x] Rebuilt and redeployed the agent bundle into the running dev VM's
+      shared folder, then rebooted the VM (the shared folder's guest-agent
+      bundle is baked into boot-time media, not a live share — updates made
+      while the VM is already running are not visible to the guest until the
+      next boot).
+- [x] Re-verified the full MVP loop end to end after the fix:
+      `guest-agent-wait` connected on the first attempt, `app-window-proof`,
+      `coherence-proof`, and `mvp-proof --require-proved` (exit 0, `status:
+      "proved"`) all passed against the real Windows 11 Arm guest.
+
+## Bonus Fix Found During Live Verification
+
+While re-running the MVP proof against real hardware, `winapp_calculator`
+failed to launch (`app_launch_failed: calc.exe started but no top-level
+window was discovered`) even though a real "계산기" (Calculator) window
+visibly opened on screen. Root cause: Windows 11's `calc.exe` is a launcher
+stub for the packaged Calculator app — the actual top-level window belongs to
+a separate `CalculatorApp.exe` process, and `WindowsDesktop.DoesProcessMatchApp`
+only matched the originally-launched process's own executable name.
+
+- [x] Added `WindowsAppDescriptor.AlternateExecutables` and extended
+      `DoesProcessMatchApp` to check it, so Calculator's window can be found
+      even though it belongs to a different process than the one
+      `Process.Start("calc.exe")` returns.
+- [ ] **Not fully verified live**: after the fix, a fresh Calculator launch
+      still occasionally missed the 5-second/50-attempt discovery window in
+      `WindowsDesktop.LaunchAppAsync` — the packaged Calculator app's cold
+      activation appears to sometimes exceed that budget on this ARM64 VM.
+      Confirmed via screenshot that the window does open successfully; the
+      proof command's fixed retry budget is the remaining suspect. Follow-up:
+      consider a longer or app-specific discovery timeout for packaged
+      (MSIX/UWP) apps rather than reusing the same budget as native Win32
+      apps like Notepad and Paint (both proved reliably on the first try).
+- [x] Notepad and Paint re-confirmed working end to end on the same guest
+      after the mutex fix, with no changes needed.
