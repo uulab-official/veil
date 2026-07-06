@@ -83,13 +83,14 @@ ARM64 VM, even though the window does open (confirmed via screenshot).
       `AlternateExecutables`, `WindowDiscoveryTimeout`). Runs on macOS via
       `dotnet test` since none of the covered logic requires live Win32
       P/Invoke calls.
-- [~] **Partially verified live**: screenshots confirm the Calculator window
-      reliably opens after this fix (proving both the `AlternateExecutables`
-      match and the longer discovery budget work), but a clean automated
-      `app-window-proof` pass for Calculator specifically was not captured in
-      this session. See the deployment-pipeline bug below for why builds
-      were slow to reach the guest during this investigation, and
-      "Second Follow-Up" for the state after fixing that.
+- [x] **Fully verified live** on a completely fresh VM boot (after fixing the
+      deployment-pipeline bug below and its own review follow-up in
+      `docs/checklists/2026-07-06-review-session2.md`): `app-window-proof`,
+      `coherence-proof` (mouse, keyboard, and clipboard all posted correctly),
+      and `mvp-proof --require-proved` (Notepad) all passed cleanly on the
+      first attempt, alongside Paint's `app-window-proof`. See "Second
+      Follow-Up" below for the deployment-pipeline root cause this was
+      blocked on.
 
 ## Second Follow-Up: Rebuilt Bundles Were Not Reaching the Guest
 
@@ -136,13 +137,15 @@ Fix:
       built artifact's hash exactly — confirming new builds now actually
       reach the guest through the repair path, not just the very first
       install.
-- [ ] Not yet re-verified: a full automated `app-window-proof` pass for
-      Calculator on a completely fresh VM session (not one that has already
-      accumulated many reboot/repair cycles from same-day debugging). The
-      deployment pipeline itself is now confirmed correct; a clean Calculator
-      proof run is the remaining open item, tracked here rather than in the
-      Calculator section above since it's no longer about the Calculator code
-      itself.
+- [x] Re-verified on a completely fresh VM session after applying the review
+      follow-up fixes in `docs/checklists/2026-07-06-review-session2.md`:
+      `veil-vmctl app-window-proof --json --app-id winapp_calculator` passed
+      on the first attempt (real "계산기" window, `hwnd:00030328`, 500x532 PNG
+      frame), as did `coherence-proof` for Calculator (mouse, keyboard, and
+      host clipboard text all posted successfully) and Paint's
+      `app-window-proof`, alongside Notepad's `mvp-proof --require-proved`.
+      The deployment pipeline and the Calculator fix are both confirmed
+      end to end.
 - [ ] `Repair-VeilAgentConnectivity.ps1` could not be syntax-checked with a
       real PowerShell parser in this session (`pwsh` requires an interactive
       sudo install this sandbox doesn't have). Reviewed carefully by eye
