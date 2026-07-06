@@ -294,6 +294,42 @@ swift run veil-vmctl qemu-smoke --json --seconds 120 | node ../../harness/qemu-s
 
 Expected current output on the test Mac: `qemu smoke valid`; the JSON currently reports `runningNoDecision` plus `boot-prompt-key-sent` and `qemu-running` evidence with a `.png` `consoleScreenshotPath`. On July 2, 2026, a local-only secure code plus secure vars firmware pair moved Windows Setup past the earlier TPM/Secure Boot requirement page, the NVMe system disk appeared as `Disk 0 Unallocated Space` at 128.0 GB, and the generated UEFI/GPT `Autounattend.xml` advanced setup to the Korean `Windows 11 installing` screen at 32%. A persistent visible install then reached Windows OOBE; the current checkpoint is getting through the OOBE network/driver blocker with external driver media or a proven offline path.
 
+## Diagnosing Host/Guest Failures Together
+
+The host (Swift) and guest agent (C#) each gained their first logging
+convention on 2026-07-06, added independently because neither side had any
+failure-diagnosability before that (see
+`docs/checklists/2026-07-06-agent-silent-failure-audit.md` and
+`docs/checklists/2026-07-06-swift-silent-failure-audit.md`). They are
+intentionally different — different runtimes, no shared library boundary —
+but a contributor debugging one incident often needs both:
+
+- **Host (macOS, Swift)**: `os.Logger` under subsystem
+  `org.uulab.veil.host-shell` (matches the shipped app's `CFBundleIdentifier`;
+  see `apps/mac-host/Sources/VeilHostCore/VeilLogging.swift`), categories
+  `runtime` (VM/QEMU lifecycle) and `agent` (guest-agent protocol stream).
+  View with Console.app or:
+  ```bash
+  log stream --predicate 'subsystem == "org.uulab.veil.host-shell"'
+  ```
+  Error-string interpolations default to `.private` (redacted in Console.app
+  unless a debug profile is installed) since these often carry file paths
+  under the host user's home directory — the same class of data
+  `VMRuntimeModel.exportDiagnostics`'s home-directory redaction protects in
+  the diagnostics bundle. Don't add `privacy: .public` to a `VeilLog` call
+  without checking what the interpolated value can actually contain first.
+- **Guest (Windows, C#)**: plain `Console.Error.WriteLine`, written to
+  `%LOCALAPPDATA%\Veil\Agent\logs\agent.stderr.log` when the agent runs via
+  `Start-VeilAgent.ps1` (see `apps/windows-agent/README.md`). No structured
+  logger exists yet; call sites are in `WebSocketAgentServer.cs`,
+  `ClipboardTextStreamer.cs`, `WindowFrameStreamer.cs`, and `AgentSession.cs`.
+
+There is no shared timestamp format, request ID, or session marker linking
+the two today — correlate by wall-clock time and the action you were
+performing when you captured `agent.stderr.log` (from
+`Collect Veil Agent Diagnostics.cmd` or a diagnostics ZIP) alongside a host
+`log show`/Console.app export.
+
 ## Fixture Policy
 
 Fixtures are part of the protocol contract. When a protocol message changes, update both `docs/protocol.md` and the matching fixture here.

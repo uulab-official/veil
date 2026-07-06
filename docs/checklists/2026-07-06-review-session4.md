@@ -63,15 +63,11 @@ today, since it hadn't been reviewed yet.
   Fixing this is a product/UX decision (what should the user see while
   reconnecting?), not a mechanical silent-failure fix — out of scope for this
   pass.
-- Two independently-invented, unlinked logging conventions now exist across
-  the product: the Swift host's new `os.Logger`-based `VeilLog`, and the C#
-  guest agent's plain `Console.Error.WriteLine` (from earlier today's
-  `docs/checklists/2026-07-06-agent-silent-failure-audit.md`). Given the
-  project's own diagnostics-bundle work cares about correlating host/guest
-  failures for shared bug reports, a short doc note describing both
-  conventions and how to correlate them during a live debugging session
-  would help. Not written now — flagged for `docs/harness/README.md` or a
-  new `docs/conventions/logging.md`.
+- ~~Two independently-invented, unlinked logging conventions now exist across
+  the product~~ **Done 2026-07-07**: added a "Diagnosing Host/Guest Failures
+  Together" section to `harness/README.md` documenting both conventions and
+  how to correlate them (no shared timestamp/request ID exists between them,
+  so correlation is by wall-clock time and the action being performed).
 - The eager `String(describing: error)` construction in all three new log
   calls happens in plain Swift before `Logger` ever sees it, which doesn't
   benefit from any interpolation-level laziness `os.Logger` might otherwise
