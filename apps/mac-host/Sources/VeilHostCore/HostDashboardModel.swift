@@ -1929,6 +1929,11 @@ public final class HostDashboardModel {
                 onMessageHandled(result)
             }
         } catch {
+            // Callers run this in a `while !Task.isCancelled` retry loop, so a dropped connection
+            // recovers on its own -- but a silent `return` here leaves zero trace of *why* window
+            // updates or clipboard sync briefly stopped, which is exactly the failure class that
+            // masked a real crash on the guest-agent side earlier the same day this was written.
+            VeilLog.agent.notice("consumeProtocolMessages stopped: \(String(describing: error), privacy: .public)")
             return
         }
     }

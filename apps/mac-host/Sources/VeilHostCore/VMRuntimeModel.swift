@@ -2423,32 +2423,67 @@ public struct LocalVMRuntimeService: VMRuntimeService {
         let startedAt = diagnosticDate()
         do {
             let resultingState = try await bootRunner.start(profile: bootProfile)
-            try? await bootReportStore.save(Self.bootReport(
-                startedAt: startedAt,
-                completedAt: diagnosticDate(),
-                result: .succeeded,
-                resultingState: resultingState,
-                errorMessage: nil,
-                profile: bootProfile
-            ))
+            await Self.saveBootReportLoggingFailure(
+                bootReportStore,
+                Self.bootReport(
+                    startedAt: startedAt,
+                    completedAt: diagnosticDate(),
+                    result: .succeeded,
+                    resultingState: resultingState,
+                    errorMessage: nil,
+                    profile: bootProfile
+                )
+            )
             return try await loadSnapshot()
         } catch {
             let resultingState = await bootRunner.runtimeState() ?? .failed
-            try? await bootReportStore.save(Self.bootReport(
-                startedAt: startedAt,
-                completedAt: diagnosticDate(),
-                result: .failed,
-                resultingState: resultingState,
-                errorMessage: Self.errorMessage(for: error),
-                profile: bootProfile
-            ))
+            await Self.saveBootReportLoggingFailure(
+                bootReportStore,
+                Self.bootReport(
+                    startedAt: startedAt,
+                    completedAt: diagnosticDate(),
+                    result: .failed,
+                    resultingState: resultingState,
+                    errorMessage: Self.errorMessage(for: error),
+                    profile: bootProfile
+                )
+            )
             throw error
+        }
+    }
+
+    /// `bootReportStore.save` failing (disk full, permissions, encode error) used to be swallowed
+    /// with `try?` -- the boot itself would succeed or fail normally, but the diagnostic record other
+    /// tooling relies on (`exportDiagnostics`, `loadSnapshot`'s console-launch evidence) would go
+    /// silently stale with zero trace of why. Log it instead of just discarding it.
+    private static func saveBootReportLoggingFailure(
+        _ store: any VMRuntimeBootReportStore,
+        _ report: VMRuntimeBootReport
+    ) async {
+        do {
+            try await store.save(report)
+        } catch {
+            VeilLog.runtime.error("Failed to save boot report: \(String(describing: error), privacy: .public)")
         }
     }
 
     public func stop() async throws -> VMRuntimeSnapshot {
         let profile = try await profileStore.load()
-        let latestLaunchRecord = try? await qemuLaunchRecordStore.loadLatest()
+        // `loadLatest()` returns nil (no throw) when no launch record file exists at all -- that's
+        // the common, legitimate case. It only throws when the file exists but is corrupt/unreadable,
+        // which `try?` used to collapse into the exact same nil as "no record." That's dangerous here
+        // specifically: a nil launch record means stopQEMULaunchIfRunning below can't identify the
+        // running QEMU process to terminate, silently leaving it orphaned after the user is told
+        // "Windows display closed."
+        let latestLaunchRecord: QEMULaunchRecord?
+        do {
+            latestLaunchRecord = try await qemuLaunchRecordStore.loadLatest()
+        } catch {
+            VeilLog.runtime.error(
+                "Failed to load the latest QEMU launch record while stopping; the running process may not be identifiable for termination. \(String(describing: error), privacy: .public)"
+            )
+            latestLaunchRecord = nil
+        }
         _ = try await bootRunner.stop()
         if let profile {
             Self.stopQEMULaunchIfRunning(

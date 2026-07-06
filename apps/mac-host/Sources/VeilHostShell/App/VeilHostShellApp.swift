@@ -575,6 +575,14 @@ struct VeilHostShellApp: App {
             for launch in restoredLaunches {
                 showWindowsAppWindow(for: launch)
             }
+
+            // restoreMirroredWindowsAfterReconnect() can come back empty either because there was
+            // genuinely nothing to restore, or because every restore attempt failed -- those look
+            // identical to the user (no windows reappear) unless the failure reason is surfaced here.
+            if restoredLaunches.isEmpty, let errorMessage = model.errorMessage {
+                displayMessage = "Could not restore previous Windows apps: \(errorMessage)"
+            }
+
             hideMainWindowForCoherenceIfNeeded()
         }
     }
