@@ -24,7 +24,23 @@ public sealed class ClipboardTextStreamer
 
         while (await timer.WaitForNextTickAsync(cancellationToken))
         {
-            var text = await desktop.GetClipboardTextAsync(cancellationToken);
+            string? text;
+            try
+            {
+                text = await desktop.GetClipboardTextAsync(cancellationToken);
+            }
+            catch (Exception error) when (error is not OperationCanceledException)
+            {
+                // Windows clipboard access is contended by design (any app can hold OpenClipboard
+                // briefly); a transient failure here must not permanently kill clipboard sync for the
+                // rest of the agent's process lifetime. Matches the fallback pattern
+                // WindowFrameStreamer already uses for transient per-tick capture failures.
+                Console.Error.WriteLine(
+                    $"ClipboardTextStreamer: transient clipboard read failure. {error.GetType().Name}: {error.Message}"
+                );
+                continue;
+            }
+
             if (text is null || text == lastBroadcastText)
             {
                 continue;

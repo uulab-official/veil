@@ -46,6 +46,23 @@ public sealed class WebSocketAgentServer
 
     private async Task HandleClientAsync(TcpClient client, CancellationToken cancellationToken)
     {
+        try
+        {
+            await HandleClientCoreAsync(client, cancellationToken);
+        }
+        catch (Exception error) when (error is not OperationCanceledException)
+        {
+            // A single malformed message or connection error must not vanish silently -- this is a
+            // fire-and-forget Task.Run, so an unhandled exception here would otherwise just fault the
+            // task and disconnect the client with no diagnostic trace anywhere.
+            Console.Error.WriteLine(
+                $"WebSocketAgentServer: client handling failed. {error.GetType().Name}: {error.Message}"
+            );
+        }
+    }
+
+    private async Task HandleClientCoreAsync(TcpClient client, CancellationToken cancellationToken)
+    {
         using (client)
         {
             var stream = client.GetStream();
@@ -226,6 +243,12 @@ public sealed class WebSocketAgentServer
             {
                 // Expected when the agent shuts down.
             }
+            catch (Exception error)
+            {
+                Console.Error.WriteLine(
+                    $"WebSocketAgentServer: clipboard stream stopped unexpectedly. {error.GetType().Name}: {error.Message}"
+                );
+            }
         }, streamCancellation.Token);
     }
 
@@ -269,6 +292,12 @@ public sealed class WebSocketAgentServer
             catch (OperationCanceledException)
             {
                 // Expected when the agent shuts down or the same HWND stream is replaced.
+            }
+            catch (Exception error)
+            {
+                Console.Error.WriteLine(
+                    $"WebSocketAgentServer: frame stream for {window.WindowId} stopped unexpectedly. {error.GetType().Name}: {error.Message}"
+                );
             }
             finally
             {
