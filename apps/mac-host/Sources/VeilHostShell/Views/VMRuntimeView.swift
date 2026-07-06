@@ -6,6 +6,7 @@ import VeilHostCore
 struct VMRuntimeView: View {
     @Bindable var model: VMRuntimeModel
     var guestAgentInstallEvidence: VMInstallEvidenceSummary?
+    var agentDiagnostic: AgentConnectionDiagnostic?
     var canLaunchWindowsApp: Bool
     var canRequestWindowsAppLaunch: Bool
     var selectedWindowsAppName: String?
@@ -19,6 +20,7 @@ struct VMRuntimeView: View {
     var stopVMAction: () -> Void
     var markWindowsInstalledAction: () -> Void
     var installGuestAgentAction: () -> Void
+    var waitForGuestAgentAction: () -> Void
     var repairGuestAgentForAppLaunchAction: () -> Void
     var recoverRuntimeDisplayAction: () -> Void
     var launchWindowsAppAction: () -> Void
@@ -34,6 +36,7 @@ struct VMRuntimeView: View {
                 WindowsSetupDisplayPanel(
                     snapshot: snapshot,
                     guestAgentInstallEvidence: guestAgentInstallEvidence,
+                    agentDiagnostic: agentDiagnostic,
                     statusText: model.statusText,
                     canStart: model.canStart,
                     canStop: model.canStop,
@@ -80,6 +83,7 @@ struct VMRuntimeView: View {
                     stopAction: stopVMAction,
                     markWindowsInstalledAction: markWindowsInstalledAction,
                     installGuestAgentAction: installGuestAgentAction,
+                    waitForGuestAgentAction: waitForGuestAgentAction,
                     repairGuestAgentForAppLaunchAction: repairGuestAgentForAppLaunchAction,
                     recoverRuntimeDisplayAction: recoverRuntimeDisplayAction,
                     canLaunchWindowsApp: canLaunchWindowsApp,
@@ -1316,6 +1320,7 @@ private struct ControlCenterHero: View {
 private struct WindowsSetupDisplayPanel: View {
     var snapshot: VMRuntimeSnapshot
     var guestAgentInstallEvidence: VMInstallEvidenceSummary?
+    var agentDiagnostic: AgentConnectionDiagnostic?
     var statusText: String
     var canStart: Bool
     var canStop: Bool
@@ -1331,6 +1336,7 @@ private struct WindowsSetupDisplayPanel: View {
     var stopAction: () -> Void
     var markWindowsInstalledAction: () -> Void
     var installGuestAgentAction: () -> Void
+    var waitForGuestAgentAction: () -> Void
     var repairGuestAgentForAppLaunchAction: () -> Void
     var recoverRuntimeDisplayAction: () -> Void
     var canLaunchWindowsApp: Bool
@@ -1349,6 +1355,8 @@ private struct WindowsSetupDisplayPanel: View {
     var detailsAction: () -> Void
     var isShowingDetails: Bool
     var installSimulation: InstallSimulationState
+    @State private var showsAgentDiagnosticPopover = false
+    @State private var showsFullDesktop = false
 
     var body: some View {
         Group {
@@ -1359,6 +1367,11 @@ private struct WindowsSetupDisplayPanel: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .onChange(of: snapshot.state) { _, newState in
+            if newState != .running {
+                showsFullDesktop = false
+            }
+        }
     }
 
     private var installedLauncherStage: some View {
@@ -1411,7 +1424,18 @@ private struct WindowsSetupDisplayPanel: View {
 
     @ViewBuilder
     private var launcherDisplaySurface: some View {
-        machineDisplay
+        if showsFullDesktop, let displaySurface {
+            WindowsEmbeddedDisplayPreview(
+                image: displayScreenshotImage,
+                surface: displaySurface,
+                path: snapshot.latestConsoleScreenshotPath ?? "",
+                revisionID: displayScreenshotRevisionID,
+                pointerTapAction: consolePointerTapAction,
+                keyAction: consoleKeyAction
+            )
+        } else {
+            machineDisplay
+        }
     }
 
     private var installControlBar: some View {
@@ -1467,6 +1491,8 @@ private struct WindowsSetupDisplayPanel: View {
                 .disabled(isLoading)
                 .help("Install Veil guest agent")
             }
+
+            guestAgentCheckControls
 
             if canRecoverRuntimeDisplay {
                 Button(action: recoverRuntimeDisplayAction) {
@@ -1817,6 +1843,19 @@ private struct WindowsSetupDisplayPanel: View {
                 .help("Repair the guest agent and continue opening the queued Windows app")
             }
 
+            if snapshot.state == .running {
+                Button {
+                    showsFullDesktop.toggle()
+                } label: {
+                    Label(
+                        showsFullDesktop ? "Hide Desktop" : "Show Desktop",
+                        systemImage: showsFullDesktop ? "macwindow" : "display"
+                    )
+                    .labelStyle(.iconOnly)
+                }
+                .help(showsFullDesktop ? "Return to the Windows app launcher" : "Show the full Windows desktop instead of individual app windows")
+            }
+
             Button(action: refreshAction) {
                 Label("Refresh", systemImage: "arrow.clockwise")
                     .labelStyle(.iconOnly)
@@ -1832,6 +1871,8 @@ private struct WindowsSetupDisplayPanel: View {
                 .disabled(isLoading)
                 .help("Install Veil guest agent")
             }
+
+            guestAgentCheckControls
 
             if canMarkWindowsInstalled {
                 Button(action: markWindowsInstalledAction) {
@@ -1907,6 +1948,37 @@ private struct WindowsSetupDisplayPanel: View {
 
     private var canInstallGuestAgent: Bool {
         canShowDisplay && effectiveInstallEvidence.kind != .guestAgent
+    }
+
+    private var canWaitForGuestAgent: Bool {
+        canShowDisplay && guestAgentInstallEvidence == nil
+    }
+
+    @ViewBuilder
+    private var guestAgentCheckControls: some View {
+        if canWaitForGuestAgent {
+            Button(action: waitForGuestAgentAction) {
+                Label("Check Agent", systemImage: "antenna.radiowaves.left.and.right")
+                    .labelStyle(.iconOnly)
+            }
+            .disabled(isLoading)
+            .help("Wait for the Windows guest agent and refresh diagnostics")
+
+            if let agentDiagnostic {
+                Button {
+                    showsAgentDiagnosticPopover = true
+                } label: {
+                    Label("Agent Diagnostics", systemImage: "info.circle")
+                        .labelStyle(.iconOnly)
+                }
+                .help("Show guest agent connection diagnostics and recovery steps")
+                .popover(isPresented: $showsAgentDiagnosticPopover, arrowEdge: .bottom) {
+                    AgentDiagnosticPanel(diagnostic: agentDiagnostic)
+                        .frame(width: 360)
+                        .padding(14)
+                }
+            }
+        }
     }
 
     private var canMarkWindowsInstalled: Bool {

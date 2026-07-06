@@ -27,6 +27,20 @@ struct HostDashboardModelTests {
         #expect(model.errorMessage == nil)
     }
 
+    @Test("marks phase failed when waiting for the live agent connection times out")
+    @MainActor
+    func waitForLiveAgentConnectionMarksPhaseFailedWhenUnavailable() async throws {
+        let service = FakeDashboardService()
+        let model = HostDashboardModel(service: service)
+
+        let report = await model.waitForLiveAgentConnection(timeoutSeconds: 1)
+
+        #expect(report.status == .unavailable)
+        #expect(model.phase == .failed)
+        #expect(model.errorMessage != nil)
+        #expect(model.agentDiagnostic?.status == .unavailable)
+    }
+
     @Test("stores Notepad launch result")
     @MainActor
     func storesNotepadLaunchResult() async throws {
@@ -1291,6 +1305,21 @@ private final class FakeDashboardService: HostDashboardService {
         }
 
         frameUnsubscriptions.append(windowId)
+    }
+
+    func waitForAgentConnection(endpoint: String, timeoutSeconds: Int) async -> AgentConnectionWaitReport {
+        let diagnostic = AgentConnectionDiagnostic.unavailable(
+            endpoint: endpoint,
+            errorMessage: "FakeDashboardService does not simulate a live guest agent connection."
+        )
+        return AgentConnectionWaitReport(
+            endpoint: endpoint,
+            status: .unavailable,
+            waitedSeconds: min(max(timeoutSeconds, 0), 300),
+            attempts: 1,
+            diagnostic: diagnostic,
+            nextActions: diagnostic.nextActions
+        )
     }
 }
 

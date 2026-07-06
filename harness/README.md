@@ -17,6 +17,7 @@ harness/
 ├─ coherence-proof/        Validates launch/HWND/frame/input/clipboard proof JSON
 ├─ mvp-proof/              Validates guest wait plus Coherence proof JSON
 ├─ guest-agent-wait/       Validates post-install guest-agent readiness JSON
+├─ export-diagnostics/     Validates the metadata-only diagnostics bundle JSON
 ├─ qemu-boot-plan/         Validates dry-run QEMU/HVF Windows boot plan JSON
 ├─ qemu-doctor/            Validates QEMU/HVF readiness report JSON
 ├─ qemu-install-status/    Validates visible Windows install evidence JSON
@@ -115,6 +116,23 @@ Expected: JSON reports `status: "connected"` once the Windows guest agent is
 reachable through QEMU/HVF port forwarding. If unavailable, the report remains
 valid JSON and lists the installer, diagnostics, and port-forwarding recovery
 steps.
+
+For an on-demand diagnostics bundle export (no VM start required):
+
+```bash
+swift run veil-vmctl export-diagnostics --json | node ../../harness/export-diagnostics/src/validate-export-diagnostics.mjs
+```
+
+Expected: JSON reports host metadata, the current runtime snapshot (typed
+system/display/sharing/storage/network/input/guest-agent configuration
+sections, preflight checks, device summary), and the last boot report if one
+exists. `profile` and `lastBootReport` are `null` until a VM profile and a boot
+attempt exist. Profile objects never include security-scoped bookmark bytes,
+and every absolute path under the current macOS user's home directory is
+rewritten to start with `~` before the bundle is written, so it never reveals
+the local macOS account name. It is still not fully anonymous: media
+filenames, VM names, and any custom paths outside the home directory are
+preserved as-is, so review a bundle before attaching it to a public issue.
 
 For the app-window proof:
 

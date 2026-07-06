@@ -100,7 +100,7 @@ struct VeilHostClientTests {
         ])
         let client = VeilHostClient(transport: transport)
 
-        let report = await client.waitForAgentConnection(
+        let report = await client.pollForAgentConnection(
             endpoint: "ws://127.0.0.1:18444",
             timeoutSeconds: 10,
             pollIntervalNanoseconds: 1,
@@ -121,7 +121,7 @@ struct VeilHostClientTests {
     func waitReportsUnavailableWindowsGuestAgentWithRecoveryActions() async throws {
         let client = VeilHostClient(transport: FailingTransport(error: DiagnosticTransportError.connectionRefused))
 
-        let report = await client.waitForAgentConnection(
+        let report = await client.pollForAgentConnection(
             endpoint: "ws://127.0.0.1:18444",
             timeoutSeconds: 0,
             pollIntervalNanoseconds: 1,

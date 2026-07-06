@@ -75,6 +75,7 @@ struct VeilHostShellApp: App {
                 stopVMAction: stopWindowsAndCloseDisplay,
                 markWindowsInstalledAction: markWindowsInstalledFromSetup,
                 installGuestAgentAction: installGuestAgentFromDisplay,
+                waitForGuestAgentAction: waitForGuestAgent,
                 repairGuestAgentForAppLaunchAction: repairGuestAgentForAppLaunch,
                 recoverRuntimeDisplayAction: recoverRuntimeDisplayEvidence,
                 launchWindowsAppAction: launchSelectedWindowsAppWindow,
@@ -201,6 +202,7 @@ struct VeilHostShellApp: App {
                 showWindowsDisplayAction: showWindowsDisplay,
                 markWindowsInstalledAction: markWindowsInstalledFromSetup,
                 installGuestAgentAction: installGuestAgentFromDisplay,
+                waitForGuestAgentAction: waitForGuestAgent,
                 repairGuestAgentForAppLaunchAction: repairGuestAgentForAppLaunch,
                 recoverRuntimeDisplayAction: recoverRuntimeDisplayEvidence,
                 launchWindowsAppAction: launchSelectedWindowsAppWindow,
@@ -858,6 +860,30 @@ struct VeilHostShellApp: App {
         }
     }
 
+    private func waitForGuestAgent() {
+        Task { @MainActor in
+            activateMainWindow()
+            displayMessage = "Checking the Windows guest agent."
+            let report = await model.waitForLiveAgentConnection(
+                endpoint: Self.agentURLString,
+                timeoutSeconds: 5
+            )
+            await recordGuestAgentInstallEvidenceIfNeeded()
+
+            if report.status == .connected {
+                displayMessage = "Windows app integration is connected."
+                if let fulfilledLaunch = await model.refreshLiveAgentIfNeeded() {
+                    showWindowsAppWindow(for: fulfilledLaunch)
+                    hideMainWindowForCoherenceIfNeeded()
+                }
+            } else if let hostForwardProbe = report.diagnostic.hostForwardProbe {
+                displayMessage = "Windows agent is not reachable yet (\(hostForwardProbe.status.rawValue))."
+            } else {
+                displayMessage = "Windows agent is not reachable yet."
+            }
+        }
+    }
+
     private func repairGuestAgentForAppLaunch() {
         Task { @MainActor in
             cancelAutomaticQuietRuntime()
@@ -1033,6 +1059,7 @@ private struct VeilMenuBarMenu: View {
     var showWindowsDisplayAction: () -> Void
     var markWindowsInstalledAction: () -> Void
     var installGuestAgentAction: () -> Void
+    var waitForGuestAgentAction: () -> Void
     var repairGuestAgentForAppLaunchAction: () -> Void
     var recoverRuntimeDisplayAction: () -> Void
     var launchWindowsAppAction: () -> Void
@@ -1175,6 +1202,12 @@ private struct VeilMenuBarMenu: View {
         }
         .disabled(!canInstallGuestAgent)
 
+        Button("Check Guest Agent", systemImage: "antenna.radiowaves.left.and.right") {
+            openMainWindow()
+            waitForGuestAgentAction()
+        }
+        .disabled(!canWaitForGuestAgent)
+
         Button("Mark Windows Installed", systemImage: "checkmark.seal") {
             openMainWindow()
             markWindowsInstalledAction()
@@ -1216,6 +1249,11 @@ private struct VeilMenuBarMenu: View {
     private var canInstallGuestAgent: Bool {
         (vmModel.snapshot?.state == .running || vmModel.snapshot?.state == .starting)
             && (vmModel.snapshot?.installEvidence.kind != .guestAgent || !model.hasLiveAgentConnection)
+    }
+
+    private var canWaitForGuestAgent: Bool {
+        (vmModel.snapshot?.state == .running || vmModel.snapshot?.state == .starting)
+            && !model.hasLiveAgentConnection
     }
 
     private var canRecoverRuntimeDisplay: Bool {
@@ -1429,6 +1467,7 @@ private struct StandaloneMainWindowRoot: View {
             stopVMAction: stopWindowsAndCloseDisplay,
             markWindowsInstalledAction: markWindowsInstalledFromSetup,
             installGuestAgentAction: installGuestAgentFromDisplay,
+            waitForGuestAgentAction: waitForGuestAgent,
             repairGuestAgentForAppLaunchAction: installGuestAgentFromDisplay,
             recoverRuntimeDisplayAction: recoverRuntimeDisplayEvidence,
             launchWindowsAppAction: launchSelectedWindowsApp,
@@ -1490,6 +1529,25 @@ private struct StandaloneMainWindowRoot: View {
                 await recordGuestAgentInstallEvidenceIfNeeded()
             } catch {
                 displayMessage = "Guest agent install could not start: \(userMessage(for: error))"
+            }
+        }
+    }
+
+    private func waitForGuestAgent() {
+        Task { @MainActor in
+            displayMessage = "Checking the Windows guest agent."
+            let report = await model.waitForLiveAgentConnection(
+                endpoint: Self.agentURLString,
+                timeoutSeconds: 5
+            )
+            await recordGuestAgentInstallEvidenceIfNeeded()
+
+            if report.status == .connected {
+                displayMessage = "Windows app integration is connected."
+            } else if let hostForwardProbe = report.diagnostic.hostForwardProbe {
+                displayMessage = "Windows agent is not reachable yet (\(hostForwardProbe.status.rawValue))."
+            } else {
+                displayMessage = "Windows agent is not reachable yet."
             }
         }
     }

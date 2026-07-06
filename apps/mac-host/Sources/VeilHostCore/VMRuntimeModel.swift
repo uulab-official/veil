@@ -2492,8 +2492,30 @@ public struct LocalVMRuntimeService: VMRuntimeService {
         )
         let outputURL = directory.appendingPathComponent(Self.diagnosticFileName(for: generatedAt))
         let data = try JSONEncoder.veilDiagnostics.encode(bundle)
-        try data.write(to: outputURL, options: [.atomic])
+        try Self.redactingHomeDirectory(in: data).write(to: outputURL, options: [.atomic])
         return outputURL
+    }
+
+    /// Diagnostics bundles are intended to be shared for bug reports. Path fields across
+    /// `VMRuntimeSnapshot`, `VMConsoleLaunchEvidence`, and other nested types are not individually
+    /// sanitized, so every absolute path under the current user's home directory reveals the macOS
+    /// account name. Replacing the home directory prefix in the serialized JSON text (rather than in
+    /// every nested struct field) keeps the bundle informative while removing that account name.
+    private static func redactingHomeDirectory(in data: Data) -> Data {
+        let homeDirectoryPath = FileManager.default.homeDirectoryForCurrentUser.path
+        guard !homeDirectoryPath.isEmpty,
+              let json = String(data: data, encoding: .utf8) else {
+            return data
+        }
+
+        // JSONEncoder escapes "/" as "\/" on this platform, so the home directory can appear in the
+        // serialized text either escaped or unescaped depending on the encoder's slash-escaping
+        // behavior. Replace both forms to redact it reliably either way.
+        let escapedHomeDirectoryPath = homeDirectoryPath.replacingOccurrences(of: "/", with: "\\/")
+        let redacted = json
+            .replacingOccurrences(of: escapedHomeDirectoryPath, with: "~")
+            .replacingOccurrences(of: homeDirectoryPath, with: "~")
+        return Data(redacted.utf8)
     }
 
     private struct SecurityScopedFileAccess {

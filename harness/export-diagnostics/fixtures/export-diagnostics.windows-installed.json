@@ -1,0 +1,222 @@
+{
+  "generatedAt": "2026-07-06T05:56:39Z",
+  "host": {
+    "architecture": "arm64",
+    "operatingSystemVersion": "26.1.0",
+    "physicalMemoryBytes": 38654705664,
+    "processorCount": 14
+  },
+  "lastBootReport": {
+    "completedAt": "2026-07-04T15:54:37Z",
+    "deviceSummary": {
+      "bootLoader": "EFI",
+      "entropyDevice": "Virtio entropy",
+      "graphics": {
+        "heightInPixels": 900,
+        "widthInPixels": 1440
+      },
+      "inputDevices": [
+        "USB keyboard",
+        "USB screen-coordinate pointer"
+      ],
+      "networkMode": "NAT",
+      "platform": "Generic",
+      "storageDevices": [
+        {
+          "attachment": "USB mass storage",
+          "path": "/Users/veil-dev/Veil Shared/VeilAutoInstall.iso",
+          "readOnly": true,
+          "role": "auto-install"
+        },
+        {
+          "attachment": "Virtio block",
+          "path": "/Users/veil-dev/Virtual Machines/Veil/Windows 11 Arm.img",
+          "readOnly": false,
+          "role": "system-disk"
+        }
+      ]
+    },
+    "profile": {
+      "autoStart": true,
+      "cpuCount": 4,
+      "createdAt": "2026-06-29T17:00:00Z",
+      "diskGB": 128,
+      "id": "vm_default_windows11",
+      "memoryMB": 8192,
+      "name": "Windows 11 Arm",
+      "os": "windows-arm64",
+      "sharedFolderPath": "/Users/veil-dev/Veil Shared",
+      "suspendOnQuit": true,
+      "virtualDiskPath": "/Users/veil-dev/Virtual Machines/Veil/Windows 11 Arm.img"
+    },
+    "result": "succeeded",
+    "resultingState": "running",
+    "startedAt": "2026-07-04T15:54:37Z"
+  },
+  "profile": {
+    "autoStart": true,
+    "cpuCount": 7,
+    "createdAt": "2026-07-01T01:23:29Z",
+    "diskGB": 128,
+    "driverMediaPath": "/Users/veil-dev/Downloads/virtio-win.iso",
+    "id": "vm_default_windows11",
+    "installerMediaPath": "/Users/veil-dev/Downloads/Windows.iso",
+    "memoryMB": 9216,
+    "name": "Windows 11 Arm",
+    "os": "windows-arm64",
+    "sharedFolderPath": "/Users/veil-dev/Veil Shared",
+    "suspendOnQuit": true,
+    "virtualDiskPath": "/Users/veil-dev/Virtual Machines/Veil/Windows 11 Arm.img",
+    "windowsInstalled": true
+  },
+  "snapshot": {
+    "architecture": "arm64",
+    "bootReady": true,
+    "configurationSummary": {
+      "display": {
+        "dynamicResolution": "fixed guest framebuffer until guest agent display bridge",
+        "heightInPixels": 900,
+        "retinaScaling": "host-rendered Retina interpolation",
+        "scalingMode": "aspect-fit host window",
+        "surface": "Embedded VNC loopback",
+        "widthInPixels": 1440
+      },
+      "guestAgent": {
+        "isInstalled": false
+      },
+      "input": {
+        "devices": [
+          "USB keyboard",
+          "USB screen-coordinate pointer"
+        ]
+      },
+      "network": {
+        "mode": "NAT"
+      },
+      "sharing": {
+        "sharedFolderPath": "/Users/veil-dev/Veil Shared"
+      },
+      "storage": {
+        "devices": [
+          {
+            "attachment": "Virtio block",
+            "path": "/Users/veil-dev/Virtual Machines/Veil/Windows 11 Arm.img",
+            "readOnly": false,
+            "role": "system-disk"
+          }
+        ]
+      },
+      "system": {
+        "architecture": "arm64",
+        "cpuCount": 7,
+        "diskGB": 128,
+        "memoryMB": 9216,
+        "name": "Windows 11 Arm"
+      }
+    },
+    "cpuCount": 7,
+    "detail": "Windows is installed and can be started.",
+    "deviceSummary": {
+      "bootLoader": "EFI",
+      "entropyDevice": "Virtio entropy",
+      "graphics": {
+        "heightInPixels": 900,
+        "widthInPixels": 1440
+      },
+      "inputDevices": [
+        "USB keyboard",
+        "USB screen-coordinate pointer"
+      ],
+      "networkMode": "NAT",
+      "platform": "Generic",
+      "storageDevices": [
+        {
+          "attachment": "Virtio block",
+          "path": "/Users/veil-dev/Virtual Machines/Veil/Windows 11 Arm.img",
+          "readOnly": false,
+          "role": "system-disk"
+        }
+      ]
+    },
+    "diskGB": 128,
+    "installEvidence": {
+      "detail": "The local profile is marked installed. Guest-agent evidence should replace this before developer preview.",
+      "isInstalled": true,
+      "kind": "profileFlag",
+      "title": "Windows installed"
+    },
+    "installationSteps": [
+      {
+        "detail": "Windows is installed on the selected disk. The installer ISO is no longer required for normal boot.",
+        "id": "windows-installer",
+        "state": "complete",
+        "title": "Windows 11 Arm installer"
+      },
+      {
+        "detail": "Install the guest agent inside Windows after setup.",
+        "id": "guest-agent",
+        "state": "pending",
+        "title": "Veil guest agent"
+      }
+    ],
+    "memoryMB": 9216,
+    "preflightChecks": [
+      {
+        "detail": "Windows is installed on the system disk; the installer ISO is no longer required for boot.",
+        "id": "installer-media",
+        "state": "passed",
+        "title": "Installer media"
+      },
+      {
+        "detail": "Configured for Windows 11 Arm.",
+        "id": "guest-os",
+        "state": "passed",
+        "title": "Windows Arm guest"
+      },
+      {
+        "detail": "7 virtual CPUs configured.",
+        "id": "cpu",
+        "state": "passed",
+        "title": "CPU allocation"
+      },
+      {
+        "detail": "9216 MB memory configured.",
+        "id": "memory",
+        "state": "passed",
+        "title": "Memory allocation"
+      },
+      {
+        "detail": "128 GB virtual disk configured.",
+        "id": "disk-size",
+        "state": "passed",
+        "title": "Disk size"
+      }
+    ],
+    "profileName": "Windows 11 Arm",
+    "runtimeProvider": {
+      "acceleration": "HVF",
+      "detail": "qemu-system-aarch64 found locally for UTM-style Windows compatibility experiments.",
+      "displayName": "QEMU/HVF",
+      "executablePath": "/opt/homebrew/bin/qemu-system-aarch64",
+      "isServerBacked": false,
+      "kind": "qemuHypervisor",
+      "mode": "Local compatibility provider",
+      "status": "active"
+    },
+    "runtimeProviders": [
+      {
+        "acceleration": "Apple Hypervisor",
+        "detail": "Runs locally inside Veil.app with no server VM backend.",
+        "displayName": "Apple Virtualization",
+        "isServerBacked": false,
+        "kind": "appleVirtualization",
+        "mode": "Local VM runtime",
+        "status": "active"
+      }
+    ],
+    "state": "stopped",
+    "virtualDiskPath": "/Users/veil-dev/Virtual Machines/Veil/Windows 11 Arm.img",
+    "virtualizationAvailable": true,
+    "windowsInstalled": true
+  }
+}

@@ -633,7 +633,26 @@ public struct VeilHostClient: HostDashboardService, Sendable {
         }
     }
 
+    /// `HostDashboardService` conformance. Delegates to `pollForAgentConnection` using the standard
+    /// production poll cadence — kept as a distinct method (not a defaulted parameter on
+    /// `pollForAgentConnection`) so tuning the poll cadence for tests can never silently change what
+    /// this protocol-required overload does.
     public func waitForAgentConnection(
+        endpoint: String,
+        timeoutSeconds: Int
+    ) async -> AgentConnectionWaitReport {
+        await pollForAgentConnection(
+            endpoint: endpoint,
+            timeoutSeconds: timeoutSeconds,
+            pollIntervalNanoseconds: 1_000_000_000,
+            perAttemptTimeoutNanoseconds: 2_000_000_000
+        )
+    }
+
+    /// The tunable implementation. Production callers should use `waitForAgentConnection` for the
+    /// standard cadence; pass explicit `pollIntervalNanoseconds`/`perAttemptTimeoutNanoseconds` only
+    /// where a caller (e.g. tests) genuinely needs a different cadence.
+    public func pollForAgentConnection(
         endpoint: String,
         timeoutSeconds: Int = 30,
         pollIntervalNanoseconds: UInt64 = 1_000_000_000,

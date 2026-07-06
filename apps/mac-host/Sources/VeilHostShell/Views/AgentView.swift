@@ -93,7 +93,7 @@ struct AgentView: View {
     }
 }
 
-private struct AgentDiagnosticPanel: View {
+struct AgentDiagnosticPanel: View {
     var diagnostic: AgentConnectionDiagnostic
 
     var body: some View {

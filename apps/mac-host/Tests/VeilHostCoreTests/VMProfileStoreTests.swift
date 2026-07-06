@@ -122,6 +122,34 @@ struct VMProfileStoreTests {
         #expect(try resolvedBookmarkPath(try #require(updatedProfile.installerMediaBookmarkData)) == canonicalPath(replacementInstallerURL))
     }
 
+    @Test("export diagnostics redacts the current user's home directory from serialized paths")
+    func exportDiagnosticsRedactsHomeDirectoryFromSerializedPaths() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let store = JSONVMProfileStore(directory: directory)
+        let homeDirectory = FileManager.default.homeDirectoryForCurrentUser
+        var profile = VMProfile.defaultWindows11Arm(
+            createdAt: Date(timeIntervalSince1970: 1_782_752_400),
+            homeDirectory: homeDirectory
+        )
+        profile.installerMediaPath = homeDirectory.appendingPathComponent("Downloads/Windows.iso").path
+        try await store.save(profile)
+        let service = LocalVMRuntimeService(profileStore: store)
+
+        let outputURL = try await service.exportDiagnostics(
+            to: directory.appendingPathComponent("Diagnostics", isDirectory: true)
+        )
+        let json = try String(contentsOf: outputURL, encoding: .utf8)
+        let escapedHomeDirectoryPath = homeDirectory.path.replacingOccurrences(of: "/", with: "\\/")
+
+        #expect(!json.contains(homeDirectory.path))
+        #expect(!json.contains(escapedHomeDirectoryPath))
+        #expect(json.contains("~"))
+        #expect(json.contains("Downloads"))
+        #expect(json.contains("Windows.iso"))
+        #expect(json.contains("Veil Shared"))
+    }
+
     @Test("local runtime service reports stopped when profile exists")
     func localRuntimeReportsStoppedProfile() async throws {
         let directory = FileManager.default.temporaryDirectory

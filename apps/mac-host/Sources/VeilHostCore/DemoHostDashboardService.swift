@@ -69,6 +69,10 @@ public struct FallbackHostDashboardService: HostDashboardService, Sendable {
         try await primary.unsubscribeWindowFrames(windowId: windowId)
     }
 
+    public func waitForAgentConnection(endpoint: String, timeoutSeconds: Int) async -> AgentConnectionWaitReport {
+        await primary.waitForAgentConnection(endpoint: endpoint, timeoutSeconds: timeoutSeconds)
+    }
+
     private var fallbackDetail: String {
         "No Windows agent reachable at \(primaryEndpointDescription). Showing built-in demo data."
     }
@@ -153,6 +157,21 @@ public struct DemoHostDashboardService: HostDashboardService, Sendable {
     public func subscribeWindowFrames(windowId: String) async throws {}
 
     public func unsubscribeWindowFrames(windowId: String) async throws {}
+
+    public func waitForAgentConnection(endpoint: String, timeoutSeconds: Int) async -> AgentConnectionWaitReport {
+        let diagnostic = AgentConnectionDiagnostic.unavailable(
+            endpoint: endpoint,
+            errorMessage: "Demo mode cannot prove a live Windows guest agent connection."
+        )
+        return AgentConnectionWaitReport(
+            endpoint: endpoint,
+            status: .unavailable,
+            waitedSeconds: min(max(timeoutSeconds, 0), 300),
+            attempts: 1,
+            diagnostic: diagnostic,
+            nextActions: diagnostic.nextActions
+        )
+    }
 
     private static var demoApps: [WindowsApp] {
         [.demoNotepad, .demoCalculator, .demoPaint]

@@ -9,6 +9,7 @@ struct DetailView: View {
     var stopVMAction: () -> Void
     var markWindowsInstalledAction: () -> Void
     var installGuestAgentAction: () -> Void
+    var waitForGuestAgentAction: () -> Void
     var repairGuestAgentForAppLaunchAction: () -> Void
     var recoverRuntimeDisplayAction: () -> Void
     var launchWindowsAppAction: () -> Void
@@ -20,6 +21,7 @@ struct DetailView: View {
             VMRuntimeView(
                 model: vmModel,
                 guestAgentInstallEvidence: model.guestAgentInstallEvidence,
+                agentDiagnostic: model.agentDiagnostic,
                 canLaunchWindowsApp: model.canLaunchSelectedApp,
                 canRequestWindowsAppLaunch: model.canRequestSelectedAppLaunch,
                 selectedWindowsAppName: model.selectedApp?.name,
@@ -33,6 +35,7 @@ struct DetailView: View {
                 stopVMAction: stopVMAction,
                 markWindowsInstalledAction: markWindowsInstalledAction,
                 installGuestAgentAction: installGuestAgentAction,
+                waitForGuestAgentAction: waitForGuestAgentAction,
                 repairGuestAgentForAppLaunchAction: repairGuestAgentForAppLaunchAction,
                 recoverRuntimeDisplayAction: recoverRuntimeDisplayAction,
                 launchWindowsAppAction: launchWindowsAppAction,

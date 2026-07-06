@@ -83,7 +83,7 @@ enum VMControlError: Error, LocalizedError {
         }
     }
 
-    private static let usage = "Usage: veil-vmctl prepare --installer /path/to/Windows.iso [--drivers /path/to/virtio-win.iso] | veil-vmctl app-runtime-status [--json] [--demo] | veil-vmctl app-runtime-action --action launch|fulfill-pending|focus|close|close-all|restore|reconnect-restore|bring-forward|recover-display|wait-agent|quiet-when-idle|stop-runtime|clipboard|type-text|click|proof-recommended [--json] [--demo] [--wait-seconds 5] [--app-id winapp_notepad] [--window-id hwnd:XXXXXXXX] [--text \"...\"] [--x 240 --y 130] | veil-vmctl app-window-proof [--json] [--app-id winapp_notepad] [--wait-seconds 10] [--output /path/to/proof.json] | veil-vmctl coherence-proof [--json] [--app-id winapp_notepad] [--wait-seconds 10] [--output /path/to/proof.json] | veil-vmctl mvp-proof [--json] [--app-id winapp_notepad] [--wait-seconds 30] [--output /path/to/proof.json] [--require-proved] | veil-vmctl guest-agent-wait [--json] [--wait-seconds 30] | veil-vmctl mark-installed [--json] | veil-vmctl providers [--json] | veil-vmctl qemu-plan [--json] | veil-vmctl qemu-doctor [--json] | veil-vmctl qemu-install-status [--json] | veil-vmctl qemu-smoke [--json] [--seconds 45] | veil-vmctl qemu-start [--json] [--wait-seconds 15] [--native-display] | veil-vmctl qemu-display-smoke [--json] [--wait-seconds 5] | veil-vmctl qemu-capture [--json] [--output /path/to/console.png] | veil-vmctl qemu-powerdown [--json] [--wait-seconds 30] | veil-vmctl qemu-force-stop [--json] --i-understand-data-loss [--wait-seconds 10] | veil-vmctl qemu-sendkey [--json] key [key ...] | veil-vmctl qemu-type-text [--json] --text \"...\" | veil-vmctl qemu-click [--json] --x 0...32767 --y 0...32767 | veil-vmctl qemu-oobe-bypass [--json] | veil-vmctl qemu-install-agent [--json] [--wait-seconds 30]"
+    private static let usage = "Usage: veil-vmctl prepare --installer /path/to/Windows.iso [--drivers /path/to/virtio-win.iso] | veil-vmctl app-runtime-status [--json] [--demo] | veil-vmctl app-runtime-action --action launch|fulfill-pending|focus|close|close-all|restore|reconnect-restore|bring-forward|recover-display|wait-agent|quiet-when-idle|stop-runtime|clipboard|type-text|click|proof-recommended [--json] [--demo] [--wait-seconds 5] [--app-id winapp_notepad] [--window-id hwnd:XXXXXXXX] [--text \"...\"] [--x 240 --y 130] | veil-vmctl app-window-proof [--json] [--app-id winapp_notepad] [--wait-seconds 10] [--output /path/to/proof.json] | veil-vmctl coherence-proof [--json] [--app-id winapp_notepad] [--wait-seconds 10] [--output /path/to/proof.json] | veil-vmctl mvp-proof [--json] [--app-id winapp_notepad] [--wait-seconds 30] [--output /path/to/proof.json] [--require-proved] | veil-vmctl guest-agent-wait [--json] [--wait-seconds 30] | veil-vmctl mark-installed [--json] | veil-vmctl providers [--json] | veil-vmctl export-diagnostics [--json] [--output /path/to/diagnostics.json] | veil-vmctl qemu-plan [--json] | veil-vmctl qemu-doctor [--json] | veil-vmctl qemu-install-status [--json] | veil-vmctl qemu-smoke [--json] [--seconds 45] | veil-vmctl qemu-start [--json] [--wait-seconds 15] [--native-display] | veil-vmctl qemu-display-smoke [--json] [--wait-seconds 5] | veil-vmctl qemu-capture [--json] [--output /path/to/console.png] | veil-vmctl qemu-powerdown [--json] [--wait-seconds 30] | veil-vmctl qemu-force-stop [--json] --i-understand-data-loss [--wait-seconds 10] | veil-vmctl qemu-sendkey [--json] key [key ...] | veil-vmctl qemu-type-text [--json] --text \"...\" | veil-vmctl qemu-click [--json] --x 0...32767 --y 0...32767 | veil-vmctl qemu-oobe-bypass [--json] | veil-vmctl qemu-install-agent [--json] [--wait-seconds 30]"
 }
 
 struct VMControlArguments {
@@ -135,6 +135,7 @@ struct VMControlArguments {
         case qemuClick(json: Bool, x: Int, y: Int)
         case qemuOOBEBypass(json: Bool)
         case qemuInstallAgent(json: Bool, waitSeconds: Int)
+        case exportDiagnostics(json: Bool, outputPath: String?)
     }
 
     var command: Command
@@ -146,6 +147,15 @@ struct VMControlArguments {
 
         if command == "providers" {
             return VMControlArguments(command: .providers(json: arguments.contains("--json")))
+        }
+
+        if command == "export-diagnostics" {
+            return VMControlArguments(
+                command: .exportDiagnostics(
+                    json: arguments.contains("--json"),
+                    outputPath: stringArgument(named: "--output", from: arguments)
+                )
+            )
         }
 
         if command == "app-runtime-status" {
@@ -612,6 +622,8 @@ struct VeilVMControl {
             try await sendQEMUOOBEBypass(json: json)
         case .qemuInstallAgent(let json, let waitSeconds):
             try await sendQEMUGuestAgentInstall(json: json, waitSeconds: waitSeconds)
+        case .exportDiagnostics(let json, let outputPath):
+            try await printExportDiagnostics(json: json, outputPath: outputPath)
         }
     }
 
@@ -1790,6 +1802,40 @@ struct VeilVMControl {
         print("Next actions:")
         for action in report.nextActions {
             print("  - \(action)")
+        }
+    }
+
+    private static func printExportDiagnostics(json: Bool, outputPath: String?) async throws {
+        let generatedURL = try await LocalVMRuntimeService().exportDiagnostics(to: diagnosticsDirectory())
+
+        var finalURL = generatedURL
+        if let outputPath {
+            let destinationURL = URL(fileURLWithPath: outputPath)
+            try FileManager.default.createDirectory(
+                at: destinationURL.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
+            let data = try Data(contentsOf: generatedURL)
+            try data.write(to: destinationURL, options: [.atomic])
+            finalURL = destinationURL
+        }
+
+        let data = try Data(contentsOf: finalURL)
+        if json {
+            print(String(decoding: data, as: UTF8.self))
+            return
+        }
+
+        let bundle = try JSONDecoder.veilDiagnostics.decode(VMRuntimeDiagnosticBundle.self, from: data)
+        print("Diagnostics generated at: \(ISO8601DateFormatter().string(from: bundle.generatedAt))")
+        print("Saved to: \(finalURL.path)")
+        print("Host: \(bundle.host.architecture), \(bundle.host.processorCount) CPUs, \(bundle.host.physicalMemoryBytes / 1_024 / 1_024) MB RAM, \(bundle.host.operatingSystemVersion)")
+        print("Profile: \(bundle.profile?.name ?? "Not configured")")
+        print("Runtime state: \(bundle.snapshot.state.rawValue)")
+        if let lastBootReport = bundle.lastBootReport {
+            print("Last boot result: \(lastBootReport.result.rawValue)")
+        } else {
+            print("Last boot result: none recorded")
         }
     }
 

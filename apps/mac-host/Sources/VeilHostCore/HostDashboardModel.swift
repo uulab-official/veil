@@ -12,6 +12,7 @@ public protocol HostDashboardService: Sendable {
     func sendClipboardText(_ clipboard: ClipboardTextSet) async throws
     func subscribeWindowFrames(windowId: String) async throws
     func unsubscribeWindowFrames(windowId: String) async throws
+    func waitForAgentConnection(endpoint: String, timeoutSeconds: Int) async -> AgentConnectionWaitReport
 }
 
 public struct HostOverview: Codable, Equatable, Sendable {
@@ -634,6 +635,7 @@ public final class HostDashboardModel {
     public private(set) var connectionMode: HostConnectionMode = .agent
     public private(set) var connectionDetail: String?
     public private(set) var agentDiagnostic: AgentConnectionDiagnostic?
+    public private(set) var latestAgentWait: AgentConnectionWaitReport?
     public private(set) var pendingLaunchAppId: String?
     public private(set) var clipboardSequence = 0
     public private(set) var latestGuestClipboardText: String?
@@ -1556,6 +1558,31 @@ public final class HostDashboardModel {
         }
 
         return nil
+    }
+
+    @discardableResult
+    public func waitForLiveAgentConnection(
+        endpoint: String = HostDashboardModel.defaultAgentEndpoint,
+        timeoutSeconds: Int = 5
+    ) async -> AgentConnectionWaitReport {
+        phase = .loading
+        errorMessage = nil
+
+        let report = await service.waitForAgentConnection(
+            endpoint: endpoint,
+            timeoutSeconds: timeoutSeconds
+        )
+        latestAgentWait = report
+        agentDiagnostic = report.diagnostic
+
+        if report.status == .connected {
+            await load()
+        } else {
+            phase = .failed
+            errorMessage = report.diagnostic.errorMessage
+        }
+
+        return report
     }
 
     @discardableResult
