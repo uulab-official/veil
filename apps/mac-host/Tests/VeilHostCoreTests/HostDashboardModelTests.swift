@@ -1071,6 +1071,33 @@ struct HostDashboardModelTests {
         #expect(primary.frameSubscriptions == ["hwnd:0003029A", "hwnd:0003029A"])
     }
 
+    @Test("clears a stale error message when there is nothing to restore")
+    @MainActor
+    func clearsStaleErrorMessageWhenThereIsNothingToRestore() async throws {
+        // Regression test: restoreMirroredWindowsAfterReconnect() used to leave an unrelated,
+        // already-stale errorMessage untouched on its early-return "nothing to restore" path, so a
+        // caller reading errorMessage right after an empty restore result could misreport an old,
+        // unrelated failure as if it were this call's own failure.
+        let primary = FakeDashboardService()
+        let service = FallbackHostDashboardService(
+            primary: primary,
+            fallback: DemoHostDashboardService(),
+            primaryEndpointDescription: "ws://127.0.0.1:18444"
+        )
+        let model = HostDashboardModel(service: service)
+
+        await model.load()
+        primary.error = URLError(.cannotConnectToHost)
+        await model.launchSelectedApp()
+        #expect(model.errorMessage != nil)
+        #expect(model.restorableAppIds.isEmpty)
+
+        let restored = await model.restoreMirroredWindowsAfterReconnect()
+
+        #expect(restored.isEmpty)
+        #expect(model.errorMessage == nil)
+    }
+
     @Test("removes restored app intent when a mapped window closes")
     @MainActor
     func removesRestoredAppIntentWhenMappedWindowCloses() async throws {

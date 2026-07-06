@@ -1605,6 +1605,13 @@ public final class HostDashboardModel {
     }
 
     public func restoreMirroredWindowsAfterReconnect() async -> [NotepadLaunchResult] {
+        // Cleared unconditionally, including on the early-return paths below, so a stale
+        // errorMessage from some earlier unrelated failure can never be mistaken by a caller for a
+        // failure of *this* call (callers like VeilHostShellApp.restoreWindowsAppWindows() read
+        // errorMessage after an empty result to distinguish "nothing to restore" from "restore
+        // failed").
+        errorMessage = nil
+
         guard !restorableAppIds.isEmpty else {
             return []
         }
@@ -1933,7 +1940,11 @@ public final class HostDashboardModel {
             // recovers on its own -- but a silent `return` here leaves zero trace of *why* window
             // updates or clipboard sync briefly stopped, which is exactly the failure class that
             // masked a real crash on the guest-agent side earlier the same day this was written.
-            VeilLog.agent.notice("consumeProtocolMessages stopped: \(String(describing: error), privacy: .public)")
+            // Not `.public`: this error can originate from a disk-backed transport/decoding path and
+            // os.Logger's default `.private` redaction is the same protection `exportDiagnostics`
+            // applies to on-disk paths elsewhere in this codebase -- a log line is not the place to
+            // reintroduce an unredacted host path into Console.app/sysdiagnose output.
+            VeilLog.agent.notice("consumeProtocolMessages stopped: \(String(describing: error))")
             return
         }
     }

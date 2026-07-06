@@ -8,6 +8,11 @@ import os
 /// nothing to introduce; use it for background/best-effort failures that don't have (and shouldn't
 /// force) a user-facing error surface, so at least `log stream`/Console.app can show what happened.
 public enum VeilLog {
-    public static let runtime = Logger(subsystem: "com.uulab.veil.host", category: "runtime")
-    public static let agent = Logger(subsystem: "com.uulab.veil.host", category: "agent")
+    /// Matches the app's actual `CFBundleIdentifier` (`dist/Veil.app/Contents/Info.plist`) so
+    /// `log stream --predicate 'subsystem == "org.uulab.veil.host-shell"'`/Console.app filtering by
+    /// the shipped app's real bundle ID actually finds these logs.
+    private static let subsystem = "org.uulab.veil.host-shell"
+
+    public static let runtime = Logger(subsystem: subsystem, category: "runtime")
+    public static let agent = Logger(subsystem: subsystem, category: "agent")
 }

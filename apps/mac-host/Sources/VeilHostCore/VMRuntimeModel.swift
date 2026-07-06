@@ -2423,31 +2423,25 @@ public struct LocalVMRuntimeService: VMRuntimeService {
         let startedAt = diagnosticDate()
         do {
             let resultingState = try await bootRunner.start(profile: bootProfile)
-            await Self.saveBootReportLoggingFailure(
-                bootReportStore,
-                Self.bootReport(
-                    startedAt: startedAt,
-                    completedAt: diagnosticDate(),
-                    result: .succeeded,
-                    resultingState: resultingState,
-                    errorMessage: nil,
-                    profile: bootProfile
-                )
-            )
+            await saveBootReportLoggingFailure(Self.bootReport(
+                startedAt: startedAt,
+                completedAt: diagnosticDate(),
+                result: .succeeded,
+                resultingState: resultingState,
+                errorMessage: nil,
+                profile: bootProfile
+            ))
             return try await loadSnapshot()
         } catch {
             let resultingState = await bootRunner.runtimeState() ?? .failed
-            await Self.saveBootReportLoggingFailure(
-                bootReportStore,
-                Self.bootReport(
-                    startedAt: startedAt,
-                    completedAt: diagnosticDate(),
-                    result: .failed,
-                    resultingState: resultingState,
-                    errorMessage: Self.errorMessage(for: error),
-                    profile: bootProfile
-                )
-            )
+            await saveBootReportLoggingFailure(Self.bootReport(
+                startedAt: startedAt,
+                completedAt: diagnosticDate(),
+                result: .failed,
+                resultingState: resultingState,
+                errorMessage: Self.errorMessage(for: error),
+                profile: bootProfile
+            ))
             throw error
         }
     }
@@ -2456,14 +2450,16 @@ public struct LocalVMRuntimeService: VMRuntimeService {
     /// with `try?` -- the boot itself would succeed or fail normally, but the diagnostic record other
     /// tooling relies on (`exportDiagnostics`, `loadSnapshot`'s console-launch evidence) would go
     /// silently stale with zero trace of why. Log it instead of just discarding it.
-    private static func saveBootReportLoggingFailure(
-        _ store: any VMRuntimeBootReportStore,
-        _ report: VMRuntimeBootReport
-    ) async {
+    private func saveBootReportLoggingFailure(_ report: VMRuntimeBootReport) async {
         do {
-            try await store.save(report)
+            try await bootReportStore.save(report)
         } catch {
-            VeilLog.runtime.error("Failed to save boot report: \(String(describing: error), privacy: .public)")
+            // Not `.public`: a disk-write failure here (permissions, disk full) commonly carries the
+            // full destination file path under the host user's home directory in its description --
+            // the same class of exposure `exportDiagnostics`'s redaction was added to prevent
+            // earlier the same day. Default `.private` redaction keeps that out of Console.app/
+            // sysdiagnose output.
+            VeilLog.runtime.error("Failed to save boot report: \(String(describing: error))")
         }
     }
 
@@ -2475,14 +2471,18 @@ public struct LocalVMRuntimeService: VMRuntimeService {
         // specifically: a nil launch record means stopQEMULaunchIfRunning below can't identify the
         // running QEMU process to terminate, silently leaving it orphaned after the user is told
         // "Windows display closed."
+        var launchRecordWasUnreadable = false
         let latestLaunchRecord: QEMULaunchRecord?
         do {
             latestLaunchRecord = try await qemuLaunchRecordStore.loadLatest()
         } catch {
+            // Not `.public`: file-read failures commonly carry the full path under the host user's
+            // home directory in their description.
             VeilLog.runtime.error(
-                "Failed to load the latest QEMU launch record while stopping; the running process may not be identifiable for termination. \(String(describing: error), privacy: .public)"
+                "Failed to load the latest QEMU launch record while stopping; falling back to process discovery by virtual disk path. \(String(describing: error))"
             )
             latestLaunchRecord = nil
+            launchRecordWasUnreadable = true
         }
         _ = try await bootRunner.stop()
         if let profile {
@@ -2492,6 +2492,18 @@ public struct LocalVMRuntimeService: VMRuntimeService {
                 processIsRunning: qemuLaunchProcessIsRunning,
                 processTerminator: qemuLaunchProcessTerminator
             )
+
+            // A corrupt/unreadable launch record must not silently orphan a running QEMU process --
+            // fall back to the same ps-based discovery `QEMUVMRuntimeBooter` already uses elsewhere
+            // (e.g. orphan detection in loadSnapshot()) to find the process by virtual disk path
+            // instead of by the launch record's own PID/arguments.
+            if launchRecordWasUnreadable,
+               let virtualDiskPath = profile.virtualDiskPath,
+               let runningProcess = QEMUVMRuntimeBooter.runningProcess(attachedToVirtualDiskPath: virtualDiskPath),
+               qemuLaunchProcessIsRunning(runningProcess.pid) {
+                VeilLog.runtime.notice("Terminating orphaned QEMU process found via disk-path fallback after an unreadable launch record.")
+                _ = qemuLaunchProcessTerminator(runningProcess.pid)
+            }
         }
         return try await loadSnapshot()
     }
