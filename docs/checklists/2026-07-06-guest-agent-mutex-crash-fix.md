@@ -83,17 +83,68 @@ ARM64 VM, even though the window does open (confirmed via screenshot).
       `AlternateExecutables`, `WindowDiscoveryTimeout`). Runs on macOS via
       `dotnet test` since none of the covered logic requires live Win32
       P/Invoke calls.
-- [~] **Partially verified live**: after redeploying and rebooting the VM
-      with this fix, screenshots confirm the Calculator window reliably opens
-      (visually proving both the `AlternateExecutables` match and the longer
-      discovery budget work). A clean automated `app-window-proof` pass for
-      Calculator specifically was not captured in this session — by that
-      point the dev VM had accumulated repeated `qemu-install-agent`/driver
-      reinstall cycles from this same debugging session that made the
-      WebSocket connection intermittently drop mid-request
-      ("Socket is not connected", separate timeouts), unrelated to the
-      Calculator fix itself. Notepad, Paint, and the full `mvp-proof
-      --require-proved` gate all passed cleanly earlier in the same session
-      before that accumulated flakiness set in. Re-run `veil-vmctl
-      app-window-proof --json --app-id winapp_calculator` on a freshly
-      booted VM to get a clean automated confirmation.
+- [~] **Partially verified live**: screenshots confirm the Calculator window
+      reliably opens after this fix (proving both the `AlternateExecutables`
+      match and the longer discovery budget work), but a clean automated
+      `app-window-proof` pass for Calculator specifically was not captured in
+      this session. See the deployment-pipeline bug below for why builds
+      were slow to reach the guest during this investigation, and
+      "Second Follow-Up" for the state after fixing that.
+
+## Second Follow-Up: Rebuilt Bundles Were Not Reaching the Guest
+
+While trying to get a clean live re-verification of the Calculator fix, guest
+package hashes kept not matching the freshly rebuilt agent even after
+redeploying to the shared folder and rebooting the VM.
+
+Root cause (two compounding issues):
+
+1. `Repair-VeilAgentConnectivity.ps1`'s `Sync-VeilInstalledAppBundle` and
+   `Sync-VeilInstalledSupportScripts` resolved the "source" bundle location
+   relative to `$ScriptRoot` — the folder the *currently executing* copy of
+   the script lives in. Once the agent is installed once, every subsequent
+   repair run executes the *installed* copy
+   (`%LOCALAPPDATA%\Veil\Agent\scripts\...`), so `$ScriptRoot\..\app` resolved
+   to `%LOCALAPPDATA%\Veil\Agent\app` — the same path as the installation
+   target. `Copy-Item` from a directory onto itself is a silent no-op: the
+   repair flow reported success on every run, but never actually pulled a
+   newer build after the very first install.
+2. Separately, `VeilAutoInstall.iso` (which bakes the `Veil Guest Agent`
+   folder, including the agent bundle, into guest-visible media) is only
+   rebuilt by `VMRuntimeModel.prepareDefaultResources`/`prepareMedia`
+   (`docs/checklists` — see `HdiutilAutomaticInstallMediaBuilder.mediaIsCurrent`
+   in `VMRuntimeModel.swift`), which only runs from `prepare`-family flows.
+   Plain `qemu-start` reuses whatever media already exists. Editing files
+   under `~/Veil Shared/Veil Guest Agent/` and rebooting is not enough by
+   itself; `veil-vmctl prepare --installer ... --drivers ...` (or the
+   equivalent app action) must run first so `mediaIsCurrent` sees the newer
+   file timestamps and rebuilds the ISO.
+
+Fix:
+
+- [x] Added `Find-VeilSharedAgentRoot` to `Repair-VeilAgentConnectivity.ps1`,
+      which scans attached filesystem drives for the real `Veil Guest Agent`
+      folder (the same drive-scanning pattern `Install-VeilVirtIONetworkDriver`
+      already used for driver media) instead of trusting `$ScriptRoot`'s
+      current location. `Sync-VeilInstalledAppBundle` and
+      `Sync-VeilInstalledSupportScripts` now use it, and
+      `Sync-VeilInstalledAppBundle` additionally guards against copying a
+      resolved source onto itself.
+- [x] Verified the fix directly: after running `veil-vmctl prepare
+      --installer ... --drivers ...` (forcing an ISO rebuild) and rebooting,
+      `Get-FileHash` inside the guest on `VeilAgent.dll` matched the locally
+      built artifact's hash exactly — confirming new builds now actually
+      reach the guest through the repair path, not just the very first
+      install.
+- [ ] Not yet re-verified: a full automated `app-window-proof` pass for
+      Calculator on a completely fresh VM session (not one that has already
+      accumulated many reboot/repair cycles from same-day debugging). The
+      deployment pipeline itself is now confirmed correct; a clean Calculator
+      proof run is the remaining open item, tracked here rather than in the
+      Calculator section above since it's no longer about the Calculator code
+      itself.
+- [ ] `Repair-VeilAgentConnectivity.ps1` could not be syntax-checked with a
+      real PowerShell parser in this session (`pwsh` requires an interactive
+      sudo install this sandbox doesn't have). Reviewed carefully by eye
+      instead; verify with `pwsh -File` or on a real Windows box before
+      relying on it further.

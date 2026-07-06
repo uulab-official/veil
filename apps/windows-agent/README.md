@@ -97,7 +97,15 @@ The same repair path refreshes installed support scripts and, when the current
 media contains a packaged `app/VeilAgent.exe` bundle, replaces the installed app
 bundle before restarting the agent. This keeps repeated `qemu-install-agent`
 attempts aligned with the latest staged guest-agent code without requiring a
-full uninstall.
+full uninstall. The repair script locates that bundle by scanning attached
+drives for a `Veil Guest Agent` folder rather than assuming its own location,
+since after the first install it runs from `%LOCALAPPDATA%\Veil\Agent\scripts`
+and a path relative to itself would otherwise resolve back to the install
+folder. On the host side, remember that `veil-vmctl qemu-start` reuses
+whatever `VeilAutoInstall.iso` already exists — updating files under
+`Veil Shared\Veil Guest Agent` does not reach a new VM boot until something
+in the `prepare` family (e.g. `veil-vmctl prepare --installer ... --drivers
+...`) rebuilds that media.
 
 If a virtio-win driver ISO is attached, the repair command searches attached
 drives for `NetKVM\w11\ARM64` and installs matching INF files with `pnputil`

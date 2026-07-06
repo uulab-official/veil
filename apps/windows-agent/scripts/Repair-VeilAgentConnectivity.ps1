@@ -105,29 +105,65 @@ function Invoke-VeilElevatedRepair {
     Write-Host "Elevated repair process started. PID=$($Process.Id)"
 }
 
+function Find-VeilSharedAgentRoot {
+    # When this script runs from its installed copy ($ScriptRoot = %LOCALAPPDATA%\Veil\Agent\scripts),
+    # a plain "..\app" relative to $ScriptRoot resolves to the installed app folder itself
+    # ($InstallRootApp) rather than the real "Veil Guest Agent" bundle on the shared drive. Copying
+    # that "source" onto the install destination is then a silent no-op, so a newer staged build
+    # never actually reaches the guest even though the repair flow reports success. Scan attached
+    # filesystem drives for the real "Veil Guest Agent" folder instead of trusting $ScriptRoot's
+    # current location, the same way Install-VeilVirtIONetworkDriver looks for driver media below.
+    $ScriptRootAgentRoot = (Resolve-Path (Join-Path $ScriptRoot "..")).Path
+
+    $CandidateRoots = [System.Collections.Generic.List[string]]::new()
+    foreach ($Drive in Get-PSDrive -PSProvider FileSystem) {
+        $CandidateRoots.Add((Join-Path $Drive.Root "Veil Guest Agent"))
+    }
+
+    foreach ($CandidateRoot in $CandidateRoots) {
+        if (-not (Test-Path (Join-Path $CandidateRoot "app\VeilAgent.exe"))) {
+            continue
+        }
+
+        $ResolvedCandidateRoot = (Resolve-Path $CandidateRoot).Path
+        if ($ResolvedCandidateRoot -ne $InstallRoot) {
+            return $ResolvedCandidateRoot
+        }
+    }
+
+    return $ScriptRootAgentRoot
+}
+
 function Sync-VeilInstalledSupportScripts {
     New-Item -ItemType Directory -Force -Path $InstalledScriptsRoot | Out-Null
+    $SharedAgentRoot = Find-VeilSharedAgentRoot
+    $SharedScriptsRoot = Join-Path $SharedAgentRoot "scripts"
 
     foreach ($ScriptName in @(
         "Start-VeilAgent.ps1",
         "Collect-VeilAgentDiagnostics.ps1",
         "Repair-VeilAgentConnectivity.ps1"
     )) {
-        $SourcePath = Join-Path $ScriptRoot $ScriptName
+        $SourcePath = Join-Path $SharedScriptsRoot $ScriptName
         if (Test-Path $SourcePath) {
             Copy-Item -Force -Path $SourcePath -Destination $InstalledScriptsRoot
-            Write-Host "Refreshed installed support script: $ScriptName"
+            Write-Host "Refreshed installed support script: $ScriptName from $SourcePath"
         }
     }
 }
 
 function Sync-VeilInstalledAppBundle {
-    $AgentRoot = (Resolve-Path (Join-Path $ScriptRoot "..")).Path
-    $BundledAppRoot = Join-Path $AgentRoot "app"
+    $BundledAppRoot = Join-Path (Find-VeilSharedAgentRoot) "app"
     $BundledAgentExe = Join-Path $BundledAppRoot "VeilAgent.exe"
 
     if (-not (Test-Path $BundledAgentExe)) {
         Write-Host "No packaged VeilAgent app bundle found at $BundledAgentExe; keeping installed app files."
+        return $false
+    }
+
+    New-Item -ItemType Directory -Force -Path $InstallRootApp | Out-Null
+    if ((Resolve-Path $BundledAppRoot).Path -eq (Resolve-Path $InstallRootApp).Path) {
+        Write-Host "Resolved bundle source is the installed app folder itself; keeping installed app files."
         return $false
     }
 
@@ -138,7 +174,6 @@ function Sync-VeilInstalledAppBundle {
         Start-Sleep -Milliseconds 500
     }
 
-    New-Item -ItemType Directory -Force -Path $InstallRootApp | Out-Null
     Get-ChildItem -Path $InstallRootApp -Force -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force
     Copy-Item `
         -Path (Join-Path $BundledAppRoot "*") `
