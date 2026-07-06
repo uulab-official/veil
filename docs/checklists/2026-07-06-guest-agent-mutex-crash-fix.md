@@ -83,3 +83,17 @@ ARM64 VM, even though the window does open (confirmed via screenshot).
       `AlternateExecutables`, `WindowDiscoveryTimeout`). Runs on macOS via
       `dotnet test` since none of the covered logic requires live Win32
       P/Invoke calls.
+- [~] **Partially verified live**: after redeploying and rebooting the VM
+      with this fix, screenshots confirm the Calculator window reliably opens
+      (visually proving both the `AlternateExecutables` match and the longer
+      discovery budget work). A clean automated `app-window-proof` pass for
+      Calculator specifically was not captured in this session — by that
+      point the dev VM had accumulated repeated `qemu-install-agent`/driver
+      reinstall cycles from this same debugging session that made the
+      WebSocket connection intermittently drop mid-request
+      ("Socket is not connected", separate timeouts), unrelated to the
+      Calculator fix itself. Notepad, Paint, and the full `mvp-proof
+      --require-proved` gate all passed cleanly earlier in the same session
+      before that accumulated flakiness set in. Re-run `veil-vmctl
+      app-window-proof --json --app-id winapp_calculator` on a freshly
+      booted VM to get a clean automated confirmation.
