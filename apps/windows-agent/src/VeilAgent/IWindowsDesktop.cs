@@ -6,6 +6,10 @@ public interface IWindowsDesktop
 
     Task<LaunchedWindow> LaunchNotepadAsync(CancellationToken cancellationToken);
 
+    IReadOnlyList<LaunchedWindow> DiscoverAdditionalWindows(WindowsAppDescriptor app, IReadOnlySet<string> knownWindowIds);
+
+    bool IsWindowStillOpen(string windowId);
+
     Task<bool> FocusWindowAsync(string windowId, CancellationToken cancellationToken);
 
     Task<bool> CloseWindowAsync(string windowId, CancellationToken cancellationToken);

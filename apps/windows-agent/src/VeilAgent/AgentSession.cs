@@ -41,6 +41,7 @@ public sealed class AgentSession
     private readonly IWindowsDesktop desktop;
     private readonly IWindowFrameCapture capture;
     private readonly Dictionary<string, LaunchedWindow> trackedWindowsById = new();
+    private readonly Dictionary<string, WindowsAppDescriptor> appByWindowId = new();
     private readonly object trackedWindowsGate = new();
 
     public AgentSession(IWindowsDesktop desktop, IWindowFrameCapture capture)
@@ -100,7 +101,7 @@ public sealed class AgentSession
             return AgentReplies.Direct(ErrorResponse(requestId, "app_launch_failed", error.Message));
         }
 
-        TrackWindow(launched);
+        TrackWindow(app, launched);
         var frame = await CaptureInitialFrameWithFallbackAsync(launched, cancellationToken);
 
         return new AgentReplies(
@@ -460,11 +461,12 @@ public sealed class AgentSession
         ["message"] = message
     };
 
-    private void TrackWindow(LaunchedWindow window)
+    private void TrackWindow(WindowsAppDescriptor app, LaunchedWindow window)
     {
         lock (trackedWindowsGate)
         {
             trackedWindowsById[window.WindowId] = window;
+            appByWindowId[window.WindowId] = app;
         }
     }
 
@@ -481,7 +483,68 @@ public sealed class AgentSession
         lock (trackedWindowsGate)
         {
             trackedWindowsById.Remove(windowId);
+            appByWindowId.Remove(windowId);
         }
+    }
+
+    /// <summary>
+    /// Snapshot of every app with at least one tracked window, paired with the window ids already
+    /// known for it -- <see cref="WindowDiscoveryStreamer"/> uses this to scan only apps that have
+    /// actually been launched, and to know which windows are already reported so it doesn't
+    /// re-announce them.
+    /// </summary>
+    internal IReadOnlyList<(WindowsAppDescriptor App, IReadOnlySet<string> KnownWindowIds)> SnapshotTrackedAppsForDiscovery()
+    {
+        lock (trackedWindowsGate)
+        {
+            return appByWindowId
+                .GroupBy(pair => pair.Value, pair => pair.Key)
+                .Select(group => (group.Key, (IReadOnlySet<string>)group.ToHashSet()))
+                .ToList();
+        }
+    }
+
+    /// <summary>
+    /// Tracks a window discovered outside the launch flow (a second window for an already-launched
+    /// app) and returns its <c>window.created</c> event, or <c>null</c> if it's already tracked --
+    /// guards against the discovery scan racing a launch/close that tracked or removed the same
+    /// window id between the scan and this call.
+    /// </summary>
+    internal JsonObject? TryTrackDiscoveredWindow(WindowsAppDescriptor app, LaunchedWindow window)
+    {
+        lock (trackedWindowsGate)
+        {
+            if (trackedWindowsById.ContainsKey(window.WindowId))
+            {
+                return null;
+            }
+
+            trackedWindowsById[window.WindowId] = window;
+            appByWindowId[window.WindowId] = app;
+        }
+
+        return WindowCreatedEvent(app, window);
+    }
+
+    /// <summary>
+    /// Untracks a window the discovery scan found is no longer open (the user closed it directly on
+    /// the guest rather than through <c>window.close.request</c>) and returns a <c>window.closed</c>
+    /// event, or <c>null</c> if it wasn't tracked -- guards against the scan racing a concurrent
+    /// <c>window.close.request</c> for the same window id.
+    /// </summary>
+    internal JsonObject? TryUntrackClosedWindow(string windowId)
+    {
+        lock (trackedWindowsGate)
+        {
+            if (!trackedWindowsById.Remove(windowId))
+            {
+                return null;
+            }
+
+            appByWindowId.Remove(windowId);
+        }
+
+        return WindowClosedEvent(windowId);
     }
 
     private static bool TryReadInt(JsonObject request, string key, out int value)

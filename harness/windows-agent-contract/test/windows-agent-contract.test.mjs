@@ -211,6 +211,31 @@ test("windows agent broadcasts guest clipboard text changes without host echo lo
   assert.match(desktop, /lastHostClipboardSequence/);
 });
 
+test("windows agent discovers additional windows for already-launched apps", async () => {
+  const program = await readFile(resolve(agentRoot, "src/VeilAgent/Program.cs"), "utf8");
+  const server = await readFile(resolve(agentRoot, "src/VeilAgent/WebSocketAgentServer.cs"), "utf8");
+  const desktopInterface = await readFile(resolve(agentRoot, "src/VeilAgent/IWindowsDesktop.cs"), "utf8");
+  const desktop = await readFile(resolve(agentRoot, "src/VeilAgent/WindowsDesktop.cs"), "utf8");
+  const session = await readFile(resolve(agentRoot, "src/VeilAgent/AgentSession.cs"), "utf8");
+  const streamer = await readFile(resolve(agentRoot, "src/VeilAgent/WindowDiscoveryStreamer.cs"), "utf8");
+
+  assert.match(program, /new WindowDiscoveryStreamer\(/);
+  assert.match(server, /WindowDiscoveryStreamer/);
+  assert.match(server, /StartWindowDiscoveryStream/);
+  assert.match(
+    desktopInterface,
+    /DiscoverAdditionalWindows\(WindowsAppDescriptor app,\s*IReadOnlySet<string>\s*knownWindowIds\)/
+  );
+  assert.match(desktop, /DiscoverAdditionalWindows/);
+  assert.match(desktopInterface, /IsWindowStillOpen\(string windowId\)/);
+  assert.match(desktop, /IsWindowStillOpen/);
+  assert.match(session, /SnapshotTrackedAppsForDiscovery/);
+  assert.match(session, /TryTrackDiscoveredWindow/);
+  assert.match(session, /TryUntrackClosedWindow/);
+  assert.match(streamer, /PeriodicTimer/);
+  assert.match(streamer, /PruneClosedWindowsAsync/);
+});
+
 test("windows agent exposes an inbox app catalog for native-style Mac windows", async () => {
   const session = await readFile(resolve(agentRoot, "src/VeilAgent/AgentSession.cs"), "utf8");
   const desktopInterface = await readFile(resolve(agentRoot, "src/VeilAgent/IWindowsDesktop.cs"), "utf8");

@@ -80,6 +80,60 @@ public sealed class WindowsDesktop : IWindowsDesktop
         throw new TimeoutException($"{app.Executable} started but no top-level window was discovered.");
     }
 
+    public IReadOnlyList<LaunchedWindow> DiscoverAdditionalWindows(WindowsAppDescriptor app, IReadOnlySet<string> knownWindowIds)
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return Array.Empty<LaunchedWindow>();
+        }
+
+        var discovered = new List<LaunchedWindow>();
+        EnumWindows((hwnd, unused) =>
+        {
+            if (!IsWindowVisible(hwnd))
+            {
+                return true;
+            }
+
+            if (knownWindowIds.Contains(FormatWindowId(hwnd)))
+            {
+                return true;
+            }
+
+            _ = GetWindowThreadProcessId(hwnd, out var windowProcessId);
+            if (!DoesProcessMatchApp(windowProcessId, app))
+            {
+                return true;
+            }
+
+            discovered.Add(CreateLaunchedWindow(hwnd, (int)windowProcessId, GetWindowTitle(hwnd), app.Name));
+            return true;
+        }, IntPtr.Zero);
+
+        return discovered;
+    }
+
+    /// <summary>
+    /// Whether a previously tracked window still exists on the desktop -- used by
+    /// <see cref="WindowDiscoveryStreamer"/> to prune windows the host was never told about closing
+    /// (the user clicked the window's own close button rather than going through
+    /// <c>window.close.request</c>). Pruning stale entries also prevents a subtle bug: Win32 reuses
+    /// HWND values after a window is destroyed, and windowId is derived purely from the hwnd, so an
+    /// un-pruned stale id would make a genuinely new window with a reused hwnd look "already known"
+    /// and never get reported.
+    /// </summary>
+    public bool IsWindowStillOpen(string windowId)
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return false;
+        }
+
+        return TryParseWindowId(windowId, out var hwnd) && IsWindow(hwnd);
+    }
+
+    private static string FormatWindowId(IntPtr hwnd) => $"hwnd:{hwnd.ToInt64():X8}";
+
     private static HashSet<IntPtr> SnapshotAppWindowHandles(WindowsAppDescriptor app)
     {
         var handles = new HashSet<IntPtr>();
@@ -190,7 +244,7 @@ public sealed class WindowsDesktop : IWindowsDesktop
             : title;
 
         return new LaunchedWindow(
-            WindowId: $"hwnd:{hwnd.ToInt64():X8}",
+            WindowId: FormatWindowId(hwnd),
             Hwnd: hwnd,
             ProcessId: processId,
             Title: resolvedTitle,

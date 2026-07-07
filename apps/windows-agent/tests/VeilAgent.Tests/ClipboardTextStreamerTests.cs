@@ -32,6 +32,11 @@ public class ClipboardTextStreamerTests
         public Task<LaunchedWindow> LaunchNotepadAsync(CancellationToken cancellationToken) =>
             throw new NotSupportedException();
 
+        public IReadOnlyList<LaunchedWindow> DiscoverAdditionalWindows(WindowsAppDescriptor app, IReadOnlySet<string> knownWindowIds) =>
+            throw new NotSupportedException();
+
+        public bool IsWindowStillOpen(string windowId) => throw new NotSupportedException();
+
         public Task<bool> FocusWindowAsync(string windowId, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
 
