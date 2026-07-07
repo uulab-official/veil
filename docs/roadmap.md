@@ -136,3 +136,11 @@ Veil now has the local QEMU/HVF boot path, embedded display evidence, fake-agent
 4. UTM-style runtime configuration contract: expose typed system, display, sharing, storage, network, input, guest-agent readiness, and recovery command summaries in one supportable diagnostic surface. Typed configuration, device, and diagnostics-bundle types now exist end to end; `veil-vmctl export-diagnostics` closes the remaining on-demand CLI gap, and the guest-agent connection diagnostic is now visible inline next to "Check Agent" in the main runtime panel, not only in the separate Agent tab. See `docs/checklists/2026-07-06-diagnostics-and-agent-visibility.md`.
 5. Harness automation surface: keep expanding the `app-runtime-status` and `app-runtime-action` commands so launch, focus, close, restore, reconnect-restore, input, clipboard, stale-display recovery, guest-agent wait, stop, repair, and proof runs share the same host model boundaries.
 6. Multi-app validation: repeat the live proof for Calculator and Paint, then tune frame latency after correctness holds across more than Notepad. Done on 2026-07-06 — `app-window-proof` and `coherence-proof` both pass for Calculator (after fixing a packaged-app window-matching gap and a real guest-agent crash, see `docs/checklists/2026-07-06-guest-agent-mutex-crash-fix.md`) and Paint, alongside Notepad's `mvp-proof --require-proved`. Frame latency tuning across apps is still open.
+
+7. UX parity and launch ergonomics pass (2026-07-07): make the main launcher path feel one-screen and app-centered, aligning with the Parallels/UTM benchmark for this scope.
+   - ship a consistent launch surface (single runtime canvas + app launch strip) with no dead navigation paths,
+   - keep launcher and app-window surfaces in a one-screen mental model,
+   - add fallback app icon rendering to avoid blank default icon states,
+   - confirm default window sizing is practical for desktop use,
+   - reduce launch-control noise by moving setup/diagnostic actions behind explicit details menus,
+   - keep install and launcher action sets consistent and deduplicated to avoid one-screen behavior differences.

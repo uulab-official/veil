@@ -1455,87 +1455,19 @@ private struct WindowsSetupDisplayPanel: View {
             Spacer(minLength: 12)
 
             if !canStop && snapshot.state != .starting {
-                Button(action: selectInstallerAction) {
-                    Label("Choose ISO", systemImage: "opticaldisc")
-                        .labelStyle(.iconOnly)
-                }
-                .disabled(isLoading)
-                .help("Choose ISO")
-
-                Button(action: selectDriverAction) {
-                    Label("Choose Drivers", systemImage: "externaldrive.badge.gearshape")
-                        .labelStyle(.iconOnly)
-                }
-                .disabled(isLoading)
-                .help("Choose driver ISO")
-
-                Button(action: prepareAction) {
-                    Label("Prepare", systemImage: "wand.and.stars")
-                        .labelStyle(.iconOnly)
-                }
-                .disabled(isLoading)
-                .help("Prepare Windows")
+                runtimeSetupMenu
             }
-
-            Button(action: detailsAction) {
-                Label(isShowingDetails ? "Hide Details" : "Details", systemImage: "slider.horizontal.3")
-                    .labelStyle(.iconOnly)
-            }
-            .help("Details")
-
-            if canInstallGuestAgent {
-                Button(action: installGuestAgentAction) {
-                    Label("Install Agent", systemImage: "person.crop.circle.badge.plus")
-                        .labelStyle(.iconOnly)
-                }
-                .disabled(isLoading)
-                .help("Install Veil guest agent")
-            }
-
-            guestAgentCheckControls
-
-            if canRecoverRuntimeDisplay {
-                Button(action: recoverRuntimeDisplayAction) {
-                    Label("Refresh Display", systemImage: "display.trianglebadge.exclamationmark")
-                        .labelStyle(.iconOnly)
-                }
-                .disabled(isLoading)
-                .help("Refresh embedded Windows display evidence")
-            }
-
-            if canMarkWindowsInstalled {
-                Button(action: markWindowsInstalledAction) {
-                    Label("Mark Installed", systemImage: "checkmark.seal")
-                        .labelStyle(.iconOnly)
-                }
-                .disabled(isLoading)
-                .help("Mark Windows setup complete and detach installer media")
-            }
-
-            if canStop {
-                Button(action: stopAction) {
-                    Label("Stop Windows", systemImage: "stop.fill")
-                        .labelStyle(.iconOnly)
-                }
-                .disabled(isLoading)
-                .help("Stop Windows")
-            }
-
-            Button(action: refreshAction) {
-                Label("Refresh", systemImage: "arrow.clockwise")
-                    .labelStyle(.iconOnly)
-            }
-            .disabled(isLoading)
-            .help("Refresh")
 
             Button(action: primaryAction) {
                 Label(installPrimaryTitle, systemImage: primarySymbol)
                     .frame(minWidth: canStop ? 124 : 142)
             }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
-            .disabled(primaryDisabled)
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+                .disabled(primaryDisabled)
 
+            runtimeActionButton
+            runtimeMoreMenu
         }
         .controlSize(.regular)
         .padding(.horizontal, 14)
@@ -1578,9 +1510,6 @@ private struct WindowsSetupDisplayPanel: View {
         ZStack {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .fill(machineHeroGradient)
-
-            WindowsDisplayGrid()
-                .opacity(0.16)
 
             VStack(spacing: 16) {
                 Spacer(minLength: 8)
@@ -1638,110 +1567,11 @@ private struct WindowsSetupDisplayPanel: View {
             }
             .foregroundStyle(.white)
             .padding(24)
-
-            VStack {
-                HStack {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text(displayEyebrow)
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.white.opacity(0.62))
-                        Text(displayStatus)
-                            .font(.caption)
-                            .foregroundStyle(.white.opacity(0.52))
-                    }
-
-                    Spacer()
-                }
-                Spacer()
-            }
-            .padding(24)
-
-            if !visibleRecoveryActions.isEmpty {
-                VStack {
-                    HStack(alignment: .top) {
-                        Spacer()
-                        InstallRecoveryActionsPanel(actions: visibleRecoveryActions)
-                            .frame(maxWidth: 360)
-                    }
-                    Spacer()
-                }
-                .padding(24)
-                .allowsHitTesting(false)
-            }
         }
         .overlay {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .strokeBorder(.white.opacity(0.16), lineWidth: 1)
         }
-    }
-
-    private var displayEyebrow: String {
-        if pendingLaunch.isQueued || activeMirrorSession != nil || canOpenWindowsApp {
-            return "WINDOWS APP RUNTIME"
-        }
-
-        return switch snapshot.state {
-        case .running:
-            "WINDOWS DISPLAY"
-        case .starting:
-            "OPENING WINDOWS"
-        default:
-            "WINDOWS 11"
-        }
-    }
-
-    private var displayStatus: String {
-        if let activeMirrorSession {
-            return "\(activeMirrorSession.window.title) is open as a Mac window."
-        }
-
-        if canFulfillPendingLaunch {
-            return "The queued Windows app is ready to open."
-        }
-
-        if canRecoverRuntimeDisplay {
-            return "The embedded Windows display needs fresh evidence."
-        }
-
-        if pendingLaunch.willLaunchOnAgentReconnect {
-            switch snapshot.state {
-            case .running, .starting:
-                return "Waiting for the guest agent to open \(pendingAppDisplayName)."
-            default:
-                return "\(pendingAppDisplayName) is queued. Start Windows to continue."
-            }
-        }
-
-        if pendingLaunch.isQueued {
-            return pendingLaunch.reason
-        }
-
-        return switch snapshot.state {
-        case .running:
-            "Windows is running locally."
-        case .starting:
-            "Opening Windows inside Veil."
-        case .failed:
-            "Start failed. Open details."
-        default:
-            primaryHint
-        }
-    }
-
-    private var visibleRecoveryActions: [String] {
-        guard !effectiveInstallEvidence.isInstalled else {
-            return []
-        }
-
-        let report = snapshot.windowsInstallStatusReport()
-        let shouldShow = !snapshot.bootReady
-            || snapshot.state == .running
-            || snapshot.state == .failed
-        guard shouldShow else {
-            return []
-        }
-
-        return Array(report.nextActions.prefix(3))
     }
 
     private var installPrimaryTitle: String {
@@ -1802,46 +1632,8 @@ private struct WindowsSetupDisplayPanel: View {
 
     private var horizontalActions: some View {
         HStack(spacing: 8) {
-            Button(action: prepareAction) {
-                Label("Prepare", systemImage: "wand.and.stars")
-                    .labelStyle(.iconOnly)
-            }
-            .disabled(isLoading || snapshot.state == .running || snapshot.state == .starting)
-            .help("Prepare Windows")
-
-            if !effectiveInstallEvidence.isInstalled {
-                Button(action: selectInstallerAction) {
-                    Label("Choose ISO", systemImage: "opticaldisc")
-                        .labelStyle(.iconOnly)
-                }
-                .disabled(isLoading || snapshot.state == .running || snapshot.state == .starting)
-                .help("Choose ISO")
-            }
-
             Spacer(minLength: 4)
-
-            if canRecoverRuntimeDisplay {
-                Button(action: recoverRuntimeDisplayAction) {
-                    Label("Refresh Display", systemImage: "display.trianglebadge.exclamationmark")
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(isLoading)
-                .help("Refresh embedded Windows display evidence")
-            } else if canOpenWindowsApp {
-                Button(action: primaryAction) {
-                    Label(appDisplayName, systemImage: "macwindow.badge.plus")
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(isLoading)
-                .help("Open Windows app")
-            } else if canRepairGuestAgentForAppLaunch {
-                Button(action: repairGuestAgentForAppLaunchAction) {
-                    Label("Continue \(pendingAppDisplayName)", systemImage: "bolt.horizontal.circle")
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(isLoading)
-                .help("Repair the guest agent and continue opening the queued Windows app")
-            }
+            runtimeActionButton
 
             if snapshot.state == .running {
                 Button {
@@ -1853,50 +1645,138 @@ private struct WindowsSetupDisplayPanel: View {
                     )
                     .labelStyle(.iconOnly)
                 }
-                .help(showsFullDesktop ? "Return to the Windows app launcher" : "Show the full Windows desktop instead of individual app windows")
+                    .help(showsFullDesktop ? "Return to the Windows app launcher" : "Show the full Windows desktop instead of individual app windows")
             }
 
-            Button(action: refreshAction) {
-                Label("Refresh", systemImage: "arrow.clockwise")
-                    .labelStyle(.iconOnly)
+            runtimeMoreMenu
+        }
+    }
+
+    @ViewBuilder
+    private var runtimeSetupMenu: some View {
+        Menu("Setup", systemImage: "gearshape.fill") {
+            Button("Choose ISO", systemImage: "opticaldisc") {
+                selectInstallerAction()
             }
+            .disabled(isLoading || snapshot.state == .running || snapshot.state == .starting)
+
+            Button("Choose Drivers", systemImage: "externaldrive.badge.gearshape") {
+                selectDriverAction()
+            }
+            .disabled(isLoading || snapshot.state == .running || snapshot.state == .starting)
+
+            Button("Prepare Windows", systemImage: "wand.and.stars") {
+                prepareAction()
+            }
+            .disabled(isLoading || snapshot.state == .running || snapshot.state == .starting)
+        }
+        .disabled(isLoading || snapshot.state == .running || snapshot.state == .starting)
+        .help("Show setup actions")
+    }
+
+    @ViewBuilder
+    private var runtimeActionButton: some View {
+        if canRecoverRuntimeDisplay {
+            Button(action: recoverRuntimeDisplayAction) {
+                Label("Refresh Display", systemImage: "display")
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.regular)
             .disabled(isLoading)
-            .help("Refresh")
+            .help("Refresh embedded Windows display evidence")
+        } else if canOpenWindowsApp {
+            Button(action: primaryAction) {
+                Label(appDisplayName, systemImage: "macwindow.badge.plus")
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.regular)
+            .disabled(isLoading)
+            .help("Open Windows app")
+        } else if canRepairGuestAgentForAppLaunch {
+            Button(action: repairGuestAgentForAppLaunchAction) {
+                Label("Continue \(pendingAppDisplayName)", systemImage: "bolt.horizontal.circle")
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.regular)
+            .disabled(isLoading)
+            .help("Repair the guest agent and continue opening the queued Windows app")
+        }
+    }
 
+    @ViewBuilder
+    private var runtimeMoreMenu: some View {
+        Menu("More", systemImage: "ellipsis.circle") {
             if canInstallGuestAgent {
-                Button(action: installGuestAgentAction) {
-                    Label("Install Agent", systemImage: "person.crop.circle.badge.plus")
-                        .labelStyle(.iconOnly)
+                Button("Install Agent", systemImage: "app.badge") {
+                    installGuestAgentAction()
                 }
                 .disabled(isLoading)
                 .help("Install Veil guest agent")
             }
 
-            guestAgentCheckControls
-
-            if canMarkWindowsInstalled {
-                Button(action: markWindowsInstalledAction) {
-                    Label("Mark Installed", systemImage: "checkmark.seal")
-                        .labelStyle(.iconOnly)
+            if canWaitForGuestAgent {
+                Button("Check Agent", systemImage: "antenna.radiowaves.left.and.right") {
+                    waitForGuestAgentAction()
                 }
                 .disabled(isLoading)
-                .help("Mark Windows setup complete and detach installer media")
+                .help("Wait for the Windows guest agent and refresh diagnostics")
+
+                if let agentDiagnostic {
+                    Button {
+                        showsAgentDiagnosticPopover = true
+                    } label: {
+                        Label("Agent Diagnostics", systemImage: "info.circle")
+                    }
+                    .help("Show guest agent connection diagnostics")
+                    .popover(isPresented: $showsAgentDiagnosticPopover, arrowEdge: .bottom) {
+                        AgentDiagnosticPanel(diagnostic: agentDiagnostic)
+                            .frame(width: 360)
+                            .padding(14)
+                    }
+                }
+            }
+
+            Button("Refresh", systemImage: "arrow.clockwise") {
+                refreshAction()
+            }
+            .disabled(isLoading)
+
+            Button(isShowingDetails ? "Hide Details" : "Show Details", systemImage: "slider.horizontal.3") {
+                detailsAction()
+            }
+            .disabled(isLoading)
+
+            if !effectiveInstallEvidence.isInstalled {
+                Button("Prepare Windows", systemImage: "wand.and.stars") {
+                    prepareAction()
+                }
+                .disabled(isLoading || snapshot.state == .running || snapshot.state == .starting)
+
+                Button("Choose ISO", systemImage: "opticaldisc") {
+                    selectInstallerAction()
+                }
+                .disabled(isLoading || snapshot.state == .running || snapshot.state == .starting)
+
+                Button("Choose Drivers", systemImage: "externaldrive.badge.gearshape") {
+                    selectDriverAction()
+                }
+                .disabled(isLoading || snapshot.state == .running || snapshot.state == .starting)
+            }
+
+            if canMarkWindowsInstalled {
+                Button("Mark Installed", systemImage: "checkmark.seal") {
+                    markWindowsInstalledAction()
+                }
+                .disabled(isLoading)
             }
 
             if recommendedProofCommand != nil {
-                Button(action: runRecommendedProofAction) {
-                    Label("Run Recommended Proof", systemImage: "checkmark.seal")
-                        .labelStyle(.iconOnly)
+                Button("Run Proof", systemImage: "checkmark.seal") {
+                    runRecommendedProofAction()
                 }
                 .disabled(isLoading)
                 .help("Run the strongest available Windows app runtime proof")
             }
-
-            Button(action: detailsAction) {
-                Label(isShowingDetails ? "Hide Details" : "Details", systemImage: "slider.horizontal.3")
-                    .labelStyle(.iconOnly)
-            }
-            .help("Show setup details")
         }
     }
 
@@ -1954,39 +1834,8 @@ private struct WindowsSetupDisplayPanel: View {
         canShowDisplay && guestAgentInstallEvidence == nil
     }
 
-    @ViewBuilder
-    private var guestAgentCheckControls: some View {
-        if canWaitForGuestAgent {
-            Button(action: waitForGuestAgentAction) {
-                Label("Check Agent", systemImage: "antenna.radiowaves.left.and.right")
-                    .labelStyle(.iconOnly)
-            }
-            .disabled(isLoading)
-            .help("Wait for the Windows guest agent and refresh diagnostics")
-
-            if let agentDiagnostic {
-                Button {
-                    showsAgentDiagnosticPopover = true
-                } label: {
-                    Label("Agent Diagnostics", systemImage: "info.circle")
-                        .labelStyle(.iconOnly)
-                }
-                .help("Show guest agent connection diagnostics and recovery steps")
-                .popover(isPresented: $showsAgentDiagnosticPopover, arrowEdge: .bottom) {
-                    AgentDiagnosticPanel(diagnostic: agentDiagnostic)
-                        .frame(width: 360)
-                        .padding(14)
-                }
-            }
-        }
-    }
-
     private var canMarkWindowsInstalled: Bool {
         canShowDisplay && !effectiveInstallEvidence.isInstalled
-    }
-
-    private var agentSummary: String {
-        guestAgentInstallEvidence?.title ?? "After setup"
     }
 
     private var installActionTitle: String {
