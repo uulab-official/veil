@@ -230,7 +230,8 @@ test("windows agent exposes an inbox app catalog for native-style Mac windows", 
   assert.match(session, /WindowCreatedEvent\(app,\s*launched\)/);
   assert.match(desktop, /SnapshotAppWindowHandles\(app\)/);
   assert.match(desktop, /DoesProcessMatchApp\(windowProcessId,\s*app\)/);
-  assert.match(desktop, /Path\.GetFileNameWithoutExtension\(app\.Executable\)/);
+  assert.match(desktop, /\.Append\(app\.Executable\)/);
+  assert.match(desktop, /\.Select\(Path\.GetFileNameWithoutExtension\)/);
   assert.match(desktop, /OrderByDescending\(candidate\s*=>\s*candidate\.IsNewWindow\)/);
   assert.match(desktop, /TryFindTopLevelWindow\(app,\s*process\.Id,\s*existingWindowHandles,\s*out var launched\)/);
   assert.match(desktop, /EnumWindows/);
@@ -325,7 +326,10 @@ test("windows agent includes user-logon install and uninstall scripts", async ()
   assert.match(repair, /"Start-VeilAgent\.ps1"/);
   assert.match(repair, /"Collect-VeilAgentDiagnostics\.ps1"/);
   assert.match(repair, /Sync-VeilInstalledAppBundle/);
-  assert.match(repair, /\$BundledAppRoot\s*=\s*Join-Path\s+\$AgentRoot\s+"app"/);
+  assert.match(repair, /function\s+Find-VeilSharedAgentRoot/);
+  assert.match(repair, /\$BundledAppRoot\s*=\s*Join-Path\s+\(Find-VeilSharedAgentRoot\)\s+"app"/);
+  assert.match(repair, /Resolved bundle source is the installed app folder itself/);
+  assert.match(repair, /Resolved support script source is the installed scripts folder itself/);
   assert.match(repair, /Refreshed installed VeilAgent app bundle/);
   assert.match(repair, /Install-VeilVirtIONetworkDriver/);
   assert.match(repair, /NetKVM\\w11\\ARM64/);
