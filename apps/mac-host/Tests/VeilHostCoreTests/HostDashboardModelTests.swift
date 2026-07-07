@@ -27,7 +27,7 @@ struct HostDashboardModelTests {
         #expect(model.errorMessage == nil)
     }
 
-    @Test("marks phase failed when waiting for the live agent connection times out")
+    @Test("marks phase failed and keeps recovery diagnostics when waiting for the live agent times out")
     @MainActor
     func waitForLiveAgentConnectionMarksPhaseFailedWhenUnavailable() async throws {
         let service = FakeDashboardService()
@@ -36,9 +36,37 @@ struct HostDashboardModelTests {
         let report = await model.waitForLiveAgentConnection(timeoutSeconds: 1)
 
         #expect(report.status == .unavailable)
+        #expect(model.latestAgentWait == report)
         #expect(model.phase == .failed)
         #expect(model.errorMessage != nil)
         #expect(model.agentDiagnostic?.status == .unavailable)
+    }
+
+    @Test("reloads overview after waiting for a live agent connection")
+    @MainActor
+    func waitForLiveAgentConnectionReloadsOverviewAfterConnection() async throws {
+        let service = FakeDashboardService(
+            agentWaitReport: AgentConnectionWaitReport(
+                endpoint: "ws://127.0.0.1:18444",
+                status: .connected,
+                waitedSeconds: 1,
+                attempts: 2,
+                connectedAt: Date(timeIntervalSince1970: 1_000),
+                diagnostic: .connected(endpoint: "ws://127.0.0.1:18444", health: .fixture),
+                nextActions: [
+                    "Run `veil-vmctl app-runtime-status --json` to inspect app launch readiness."
+                ]
+            )
+        )
+        let model = HostDashboardModel(service: service)
+
+        let report = await model.waitForLiveAgentConnection(endpoint: "ws://127.0.0.1:18444", timeoutSeconds: 5)
+
+        #expect(report.status == .connected)
+        #expect(model.latestAgentWait == report)
+        #expect(model.agentDiagnostic == nil)
+        #expect(model.hasLiveAgentConnection)
+        #expect(service.loadCount == 1)
     }
 
     @Test("stores Notepad launch result")
@@ -1278,6 +1306,7 @@ private final class FakeDashboardService: HostDashboardService {
     var health: AgentHealthResponse
     var apps: [WindowsApp]
     var closeAccepted: Bool
+    var agentWaitReport: AgentConnectionWaitReport?
     private(set) var loadCount = 0
     private(set) var launchCount = 0
     private(set) var launchedAppIds: [String] = []
@@ -1293,12 +1322,14 @@ private final class FakeDashboardService: HostDashboardService {
         error: (any Error)? = nil,
         health: AgentHealthResponse = .fixture,
         apps: [WindowsApp] = [.notepad],
-        closeAccepted: Bool = true
+        closeAccepted: Bool = true,
+        agentWaitReport: AgentConnectionWaitReport? = nil
     ) {
         self.error = error
         self.health = health
         self.apps = apps
         self.closeAccepted = closeAccepted
+        self.agentWaitReport = agentWaitReport
     }
 
     func loadOverview() async throws -> HostOverview {
@@ -1401,6 +1432,10 @@ private final class FakeDashboardService: HostDashboardService {
     }
 
     func waitForAgentConnection(endpoint: String, timeoutSeconds: Int) async -> AgentConnectionWaitReport {
+        if let agentWaitReport {
+            return agentWaitReport
+        }
+
         let diagnostic = AgentConnectionDiagnostic.unavailable(
             endpoint: endpoint,
             errorMessage: "FakeDashboardService does not simulate a live guest agent connection."
