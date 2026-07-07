@@ -1,5 +1,7 @@
 using Veil.Agent;
 
+ProcessDpiAwareness.EnablePerMonitorV2();
+
 var endpoint = AgentEndpoint.FromEnvironment();
 using var instanceGuard = SingleInstanceGuard.TryAcquire(endpoint);
 if (!instanceGuard.HasOwnership)

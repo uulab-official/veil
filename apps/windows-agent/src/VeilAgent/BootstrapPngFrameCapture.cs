@@ -14,6 +14,8 @@ public sealed class BootstrapPngFrameCapture : IWindowFrameCapture
             Format: "png",
             Width: 1,
             Height: 1,
+            // Scale is meaningless for this synthetic 1x1 placeholder (it isn't a real capture of
+            // any window's actual DPI), so it's left at 1 rather than querying GetWindowScale.
             Scale: 1,
             EncodedData: OnePixelPng
         ));

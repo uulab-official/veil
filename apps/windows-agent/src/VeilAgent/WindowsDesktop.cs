@@ -271,11 +271,18 @@ public sealed class WindowsDesktop : IWindowsDesktop
     {
         if (GetWindowRect(hwnd, out var rect))
         {
+            // GetWindowRect returns real physical pixels now that the process is Per-Monitor-V2 DPI
+            // aware (see ProcessDpiAwareness), but window.created/window.updated's bounds are a
+            // pre-existing wire contract the host's WindowsAppWindowPlacement sizing heuristics
+            // already assume are ~96-DPI-equivalent "logical" units. Normalize by the window's real
+            // scale here so bounds keeps reporting what it always has, decoupled from
+            // GdiWindowFrameCapture's separate real-DPI-scale capture path.
+            var scale = GdiWindowFrameCapture.GetWindowScale(hwnd);
             return new WindowRect(
-                rect.Left,
-                rect.Top,
-                Math.Max(1, rect.Right - rect.Left),
-                Math.Max(1, rect.Bottom - rect.Top)
+                (int)Math.Round(rect.Left / scale),
+                (int)Math.Round(rect.Top / scale),
+                Math.Max(1, (int)Math.Round((rect.Right - rect.Left) / scale)),
+                Math.Max(1, (int)Math.Round((rect.Bottom - rect.Top) / scale))
             );
         }
 

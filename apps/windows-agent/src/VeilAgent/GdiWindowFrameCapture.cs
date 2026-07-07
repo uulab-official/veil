@@ -45,7 +45,7 @@ public sealed class GdiWindowFrameCapture : IWindowFrameCapture
                 Format: "png",
                 Width: bounds.Width,
                 Height: bounds.Height,
-                Scale: 1,
+                Scale: GetWindowScale(window.Hwnd),
                 EncodedData: Convert.ToBase64String(stream.ToArray())
             );
         }, cancellationToken);
@@ -63,11 +63,44 @@ public sealed class GdiWindowFrameCapture : IWindowFrameCapture
         return window.Bounds;
     }
 
+    /// <summary>
+    /// The window's real DPI scale (1.0 = 100%, 2.0 = 200%, etc). Requires the process to be
+    /// Per-Monitor-V2 DPI aware (see <see cref="ProcessDpiAwareness"/>) -- an unaware process always
+    /// gets 96 back here regardless of the window's real scale, so this degrades to reporting 1.0
+    /// rather than crashing if that declaration didn't take effect (e.g. on a Windows build older
+    /// than the version 1703 minimum documented on
+    /// <see href="https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setprocessdpiawarenesscontext"/>).
+    /// The value is exposed on <see cref="WindowFrame.Scale"/> for future consumers; the current host
+    /// rendering path (<c>WindowsAppFrameSurface.swift</c>) already benefits from the sharper source
+    /// bitmap this produces without needing to read it, since it stretches the captured PNG's pixel
+    /// content to fill the mirror window regardless of any declared point size.
+    /// </summary>
+    internal static double GetWindowScale(nint hwnd)
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return 1.0;
+        }
+
+        try
+        {
+            var dpi = GetDpiForWindow(hwnd);
+            return dpi > 0 ? dpi / 96.0 : 1.0;
+        }
+        catch (EntryPointNotFoundException)
+        {
+            return 1.0;
+        }
+    }
+
     [DllImport("user32.dll", SetLastError = true)]
     private static extern bool GetWindowRect(nint hWnd, out NativeRect rect);
 
     [DllImport("user32.dll", SetLastError = true)]
     private static extern bool PrintWindow(nint hwnd, nint hdcBlt, PrintWindowFlags flags);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern uint GetDpiForWindow(nint hwnd);
 
     [Flags]
     private enum PrintWindowFlags : uint

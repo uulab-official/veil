@@ -232,6 +232,14 @@ Rules:
 - `sequence` is monotonically increasing per window.
 - `format` is `png` for the first correctness harness.
 - `encodedData` is base64 only for early harness spikes; production capture should move to a separate binary or media stream.
+- `scale` is the window's real Windows DPI scale (`1` for 100%, `2` for 200%, etc), read via
+  `GetDpiForWindow` once the guest process declares itself Per-Monitor-V2 DPI aware
+  (`ProcessDpiAwareness.EnablePerMonitorV2`, called once at agent startup). This makes `width`/
+  `height` reflect the window's true pixel resolution instead of a virtualized-96-DPI, blurry
+  upscale of it -- host clients that render the frame at 1:1 pixel-to-point (as the current
+  `resizable().scaledToFit()` mirror surface does) already benefit from the sharper source bitmap
+  without needing to read `scale` themselves; it's exposed for future consumers that want to size
+  a view precisely rather than let it stretch to fit.
 
 ## Window Frame Stream Control
 
