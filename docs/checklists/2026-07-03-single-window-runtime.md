@@ -57,6 +57,7 @@ Goal: move Veil from a Veil shell plus separate QEMU Cocoa display toward a UTM-
 - [x] Add a menu-bar Bring Windows Apps Forward command so hidden Coherence windows can be restored from the stable menu surface without opening the launcher.
 - [x] Add `app-runtime-action --action stop-runtime` so automation can move from quiet-ready Windows app sessions to local runtime stop without dropping into QEMU-specific commands.
 - [x] Add `runtime.stopWhenIdle` to app-runtime status actions so stop-runtime availability is state-gated beside quiet-runtime readiness.
+- [x] Centralize launcher-surface policy in a single sync helper and call it during launch, restore, close, and reconnect transitions.
 - [x] Surface live guest-agent capabilities and proof action availability in app-runtime status so app-window, coherence, and MVP proof runs are gated before real Windows validation.
 - [x] Add a `proofPlan` status contract with exact app-window, coherence, and MVP proof commands so the single-window runtime can hand off to validation without guessing.
 - [x] Carry `proofPlan` through app-runtime action reports so successful app-first actions point directly at the next single-window proof gate.
@@ -71,3 +72,5 @@ Goal: move Veil from a Veil shell plus separate QEMU Cocoa display toward a UTM-
 ## Next
 
 - [ ] Verify one-window startup with a running Windows 11 Arm install and guest-agent connection.
+- [ ] Validate launcher visibility transitions by reproducing close/reopen and reconnect paths: no invisible launcher stuck state.
+- [ ] Add a one-screen UX acceptance pass matching Parallels/UTM behavior expectations for launcher-first and app-window modes.

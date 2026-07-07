@@ -97,9 +97,7 @@ struct VeilHostShellApp: App {
                     for launch in restoredLaunches {
                         showWindowsAppWindow(for: launch)
                     }
-                    if !restoredLaunches.isEmpty {
-                        hideMainWindowForCoherenceIfNeeded()
-                    }
+                    syncLauncherWindowVisibility()
                     await recordGuestAgentInstallEvidenceIfNeeded()
 
                     if Self.shouldStartVMOnLaunch {
@@ -110,6 +108,7 @@ struct VeilHostShellApp: App {
                 .onChange(of: model.mirrorSessions.count) {
                     syncDockTileRuntimeStatus()
                     scheduleAutomaticQuietRuntimeIfNeeded()
+                    syncLauncherWindowVisibility()
                 }
         }
         .defaultLaunchBehavior(.presented)
@@ -266,7 +265,7 @@ struct VeilHostShellApp: App {
                         }
 
                         windowsAppWindowPresenter.showWindow(for: session)
-                        hideMainWindowForCoherenceIfNeeded()
+                        syncLauncherWindowVisibility()
                     case .handledWindowUpdated(let windowId):
                         guard let session = model.mirrorSessions.first(where: { $0.id == windowId }) else {
                             return
@@ -321,16 +320,14 @@ struct VeilHostShellApp: App {
                     for launch in restoredLaunches {
                         showWindowsAppWindow(for: launch)
                     }
-                    if !restoredLaunches.isEmpty {
-                        hideMainWindowForCoherenceIfNeeded()
-                    }
+                    syncLauncherWindowVisibility()
 
                     var fulfilledLaunch: NotepadLaunchResult?
                     if restoredLaunches.isEmpty {
                         fulfilledLaunch = await model.refreshLiveAgentIfNeeded()
                         if let fulfilledLaunch {
                             showWindowsAppWindow(for: fulfilledLaunch)
-                            hideMainWindowForCoherenceIfNeeded()
+                            syncLauncherWindowVisibility()
                         }
                     }
                     await recordGuestAgentInstallEvidenceIfNeeded()
@@ -463,7 +460,7 @@ struct VeilHostShellApp: App {
             }
 
             showWindowsAppWindow(for: result)
-            hideMainWindowForCoherenceIfNeeded()
+            syncLauncherWindowVisibility()
         }
     }
 
@@ -500,7 +497,7 @@ struct VeilHostShellApp: App {
 
         displayMessage = "\(result.window.title) opened as a macOS window."
         showWindowsAppWindow(for: result)
-        hideMainWindowForCoherenceIfNeeded()
+        syncLauncherWindowVisibility()
     }
 
     private func continuePendingLaunchHandoff() {
@@ -613,7 +610,7 @@ struct VeilHostShellApp: App {
                 displayMessage = "Could not restore previous Windows apps: \(errorMessage)"
             }
 
-            hideMainWindowForCoherenceIfNeeded()
+            syncLauncherWindowVisibility()
         }
     }
 
@@ -647,6 +644,7 @@ struct VeilHostShellApp: App {
 
             windowsAppWindowPresenter.closeWindow(windowId: windowId)
             scheduleAutomaticQuietRuntimeIfNeeded()
+            syncLauncherWindowVisibility()
         }
     }
 
@@ -657,6 +655,7 @@ struct VeilHostShellApp: App {
                 windowsAppWindowPresenter.closeWindow(windowId: response.windowId)
             }
             scheduleAutomaticQuietRuntimeIfNeeded()
+            syncLauncherWindowVisibility()
         }
     }
 
@@ -699,6 +698,7 @@ struct VeilHostShellApp: App {
                     captureState: .unavailable
                 )
         windowsAppWindowPresenter.showWindow(for: session)
+        syncLauncherWindowVisibility()
     }
 
     private func setForegroundWindowsAppMessage(windowId: String) {
@@ -709,12 +709,12 @@ struct VeilHostShellApp: App {
         displayMessage = "\(title) is frontmost as a macOS window."
     }
 
-    private func hideMainWindowForCoherenceIfNeeded() {
-        guard model.runtimeStatusReport().launcherVisibility.shouldHideMainWindow else {
-            return
+    private func syncLauncherWindowVisibility() {
+        if model.runtimeStatusReport().launcherVisibility.shouldHideMainWindow {
+            MainWindowChrome.hideMainWindow()
+        } else {
+            MainWindowChrome.showMainWindow()
         }
-
-        MainWindowChrome.hideMainWindow()
     }
 
     private func runRecommendedProof() {
@@ -824,6 +824,7 @@ struct VeilHostShellApp: App {
             Task { @MainActor in
                 _ = await model.closeMirrorSession(windowId: windowId)
                 scheduleAutomaticQuietRuntimeIfNeeded()
+                syncLauncherWindowVisibility()
             }
         }
         windowsAppWindowPresenter.onMouseInput = { windowId, event, x, y in
@@ -912,7 +913,7 @@ struct VeilHostShellApp: App {
                 displayMessage = "Windows app integration is connected."
                 if let fulfilledLaunch = await model.refreshLiveAgentIfNeeded() {
                     showWindowsAppWindow(for: fulfilledLaunch)
-                    hideMainWindowForCoherenceIfNeeded()
+                    syncLauncherWindowVisibility()
                 }
             } else if let hostForwardProbe = report.diagnostic.hostForwardProbe {
                 displayMessage = "Windows agent is not reachable yet (\(hostForwardProbe.status.rawValue))."
@@ -943,7 +944,7 @@ struct VeilHostShellApp: App {
 
                 if let fulfilledLaunch = await model.refreshLiveAgentIfNeeded() {
                     showWindowsAppWindow(for: fulfilledLaunch)
-                    hideMainWindowForCoherenceIfNeeded()
+                    syncLauncherWindowVisibility()
                 }
             } catch {
                 displayMessage = "Guest agent recovery could not start: \(userMessage(for: error))"
