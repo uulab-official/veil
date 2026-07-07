@@ -1,0 +1,7 @@
+{
+  "type": "file.open.request",
+  "requestId": "req_006",
+  "appId": "winapp_notepad",
+  "fileName": "hello.txt",
+  "contentBase64": "SGVsbG8gZnJvbSBtYWNPUw=="
+}

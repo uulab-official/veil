@@ -44,7 +44,13 @@ public sealed class WindowsDesktop : IWindowsDesktop
         );
     }
 
-    public async Task<LaunchedWindow> LaunchAppAsync(WindowsAppDescriptor app, CancellationToken cancellationToken)
+    public Task<LaunchedWindow> LaunchAppAsync(WindowsAppDescriptor app, CancellationToken cancellationToken) =>
+        LaunchAppCoreAsync(app, arguments: null, cancellationToken);
+
+    public Task<LaunchedWindow> LaunchAppWithFileAsync(WindowsAppDescriptor app, string filePath, CancellationToken cancellationToken) =>
+        LaunchAppCoreAsync(app, arguments: $"\"{filePath}\"", cancellationToken);
+
+    private async Task<LaunchedWindow> LaunchAppCoreAsync(WindowsAppDescriptor app, string? arguments, CancellationToken cancellationToken)
     {
         if (!OperatingSystem.IsWindows())
         {
@@ -55,6 +61,7 @@ public sealed class WindowsDesktop : IWindowsDesktop
         using var process = Process.Start(new ProcessStartInfo
         {
             FileName = app.Executable,
+            Arguments = arguments ?? string.Empty,
             UseShellExecute = true
         }) ?? throw new InvalidOperationException($"Could not start {app.Executable}.");
 

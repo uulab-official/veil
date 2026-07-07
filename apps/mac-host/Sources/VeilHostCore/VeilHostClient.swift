@@ -451,6 +451,57 @@ public struct VeilHostClient: HostDashboardService, Sendable {
         try await launchApp(appId: "winapp_notepad")
     }
 
+    public func openFile(appId: String, fileName: String, contentBase64: String) async throws -> WindowsAppLaunchResult {
+        let overview = try await loadOverview()
+
+        guard overview.apps.contains(where: { $0.id == appId }) else {
+            throw VeilHostError.appMissing(appId)
+        }
+
+        let openReplies = try await transport.send(
+            encoder.encode(FileOpenRequest(
+                requestId: "req_open_\(requestIdSuffix(for: appId))",
+                appId: appId,
+                fileName: fileName,
+                contentBase64: contentBase64
+            )),
+            expectedReplies: 2
+        )
+
+        if let error = openReplies.compactMap({ try? decoder.decode(ErrorResponse.self, from: $0) })
+            .first(where: { $0.type == .error }) {
+            throw VeilHostError.agentError(code: error.code, message: error.message)
+        }
+
+        guard let open = openReplies
+            .compactMap({ try? decoder.decode(FileOpenResponse.self, from: $0) })
+            .first(where: { $0.type == .fileOpenResponse }) else {
+            throw VeilHostError.missingReply("file open requires file.open.response")
+        }
+        guard let window = openReplies
+            .compactMap({ try? decoder.decode(WindowCreatedEvent.self, from: $0) })
+            .first(where: { $0.type == .windowCreated }) else {
+            throw VeilHostError.missingReply("file open requires window.created")
+        }
+
+        guard open.accepted,
+              open.processId == window.processId,
+              window.appId == appId else {
+            throw VeilHostError.appWindowMismatch(appId)
+        }
+
+        return WindowsAppLaunchResult(
+            health: overview.health,
+            apps: overview.apps,
+            // WindowsAppLaunchResult.launch only ever has its `accepted`/`processId` fields read
+            // (LaunchView.swift, VeilHostClientTests.swift) -- reusing that shape here instead of
+            // adding a separate `open`-typed variant avoids a wider result-type split for a
+            // launch-shaped response that only differs in how it was triggered.
+            launch: AppLaunchResponse(type: .appLaunchResponse, requestId: open.requestId, accepted: open.accepted, processId: open.processId),
+            window: window
+        )
+    }
+
     public func proveAppWindow(
         appId: String,
         endpoint: String,

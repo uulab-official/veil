@@ -4,6 +4,8 @@ public interface IWindowsDesktop
 {
     Task<LaunchedWindow> LaunchAppAsync(WindowsAppDescriptor app, CancellationToken cancellationToken);
 
+    Task<LaunchedWindow> LaunchAppWithFileAsync(WindowsAppDescriptor app, string filePath, CancellationToken cancellationToken);
+
     Task<LaunchedWindow> LaunchNotepadAsync(CancellationToken cancellationToken);
 
     IReadOnlyList<LaunchedWindow> DiscoverAdditionalWindows(WindowsAppDescriptor app, IReadOnlySet<string> knownWindowIds);

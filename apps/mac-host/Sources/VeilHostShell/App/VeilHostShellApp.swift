@@ -82,7 +82,7 @@ struct VeilHostShellApp: App {
                 runRecommendedProofAction: runRecommendedProof,
                 displayMessage: displayMessage
             )
-                .frame(minWidth: 1120, idealWidth: 1440, minHeight: 700, idealHeight: 900)
+                .frame(minWidth: 1180, idealWidth: 1500, minHeight: 760, idealHeight: 900)
                 .task {
                     configureDockMenuBridge()
                     configureWindowsAppWindowCloseBridge()
@@ -843,6 +843,11 @@ struct VeilHostShellApp: App {
                 )
             }
         }
+        windowsAppWindowPresenter.onFileDrop = { appId, fileName, contentBase64 in
+            Task { @MainActor in
+                await model.openFile(appId: appId, fileName: fileName, contentBase64: contentBase64)
+            }
+        }
         windowsAppWindowPresenter.onPasteShortcut = { windowId, key, windowsVirtualKey, modifiers, text in
             Task { @MainActor in
                 await model.sendHostClipboardText(text)
@@ -1079,10 +1084,55 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func applyBundledAppIcon() {
         guard let iconURL = Bundle.main.url(forResource: "VeilAppIcon", withExtension: "icns"),
               let icon = NSImage(contentsOf: iconURL) else {
+            NSApp.applicationIconImage = fallbackAppIcon()
             return
         }
 
         NSApp.applicationIconImage = icon
+    }
+
+    private func fallbackAppIcon() -> NSImage {
+        let dimension: CGFloat = 1024
+        let size = NSSize(width: dimension, height: dimension)
+        let image = NSImage(size: size)
+        image.lockFocus()
+
+        defer { image.unlockFocus() }
+
+        let backgroundRect = NSRect(origin: .zero, size: size)
+        let gradient = NSGradient(colors: [
+            NSColor(calibratedRed: 0.05, green: 0.09, blue: 0.18, alpha: 1),
+            NSColor(calibratedRed: 0.11, green: 0.44, blue: 0.78, alpha: 1)
+        ])
+        gradient?.draw(in: backgroundRect, angle: 145)
+
+        let iconRect = NSRect(x: 132, y: 132, width: 760, height: 760)
+        let path = NSBezierPath(roundedRect: iconRect, xRadius: 188, yRadius: 188)
+        NSColor.white.setFill()
+        path.fill()
+
+        let outer = NSBezierPath(roundedRect: iconRect.insetBy(dx: 66, dy: 66), xRadius: 150, yRadius: 150)
+        NSColor(calibratedRed: 0.00, green: 0.57, blue: 0.95, alpha: 1).setFill()
+        outer.fill()
+
+        let inner = NSBezierPath(roundedRect: iconRect.insetBy(dx: 164, dy: 164), xRadius: 110, yRadius: 110)
+        NSColor(calibratedRed: 0.95, green: 0.37, blue: 0.14, alpha: 1).setFill()
+        inner.fill()
+
+        let text = "V"
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.alignment = .center
+
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: 430, weight: .bold),
+            .foregroundColor: NSColor.black,
+            .paragraphStyle: paragraph
+        ]
+
+        let textRect = NSRect(x: 110, y: 320, width: 804, height: 420)
+        text.draw(with: textRect, options: .usesLineFragmentOrigin, attributes: attributes)
+
+        return image
     }
 
 }
@@ -1441,7 +1491,7 @@ private enum MainWindowChrome {
     }
 
     private static func configure(_ window: NSWindow) {
-        window.minSize = NSSize(width: 1120, height: 700)
+        window.minSize = NSSize(width: 1180, height: 760)
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
         window.styleMask.insert(.fullSizeContentView)

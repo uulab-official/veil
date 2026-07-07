@@ -5,6 +5,8 @@ export const MessageType = Object.freeze({
   AppListResponse: "app.list.response",
   AppLaunchRequest: "app.launch.request",
   AppLaunchResponse: "app.launch.response",
+  FileOpenRequest: "file.open.request",
+  FileOpenResponse: "file.open.response",
   WindowCreated: "window.created",
   WindowUpdated: "window.updated",
   WindowClosed: "window.closed",
@@ -97,6 +99,62 @@ export function validateWindowLifecycleMetadata(window, expectedType = MessageTy
   }
 
   return window;
+}
+
+// Windows reserves these names for device files regardless of extension ("CON.txt" still resolves
+// to the CON device) -- mirrors AgentSession.cs's ReservedWindowsDeviceNames on the guest so this
+// pre-flight validator actually predicts what the guest will accept.
+const reservedWindowsDeviceNames = new Set([
+  "CON", "PRN", "AUX", "NUL",
+  "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
+  "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9"
+]);
+
+export function validateFileOpenRequest(request) {
+  if (!request || request.type !== MessageType.FileOpenRequest) {
+    throw new TypeError("File open request must use type file.open.request.");
+  }
+
+  requireNonEmptyString(request.requestId, "requestId", "File open request");
+  requireNonEmptyString(request.appId, "appId", "File open request");
+  requireNonEmptyString(request.fileName, "fileName", "File open request");
+
+  // Matches AgentSession.cs's TryResolveSafeFileName: trim first (the guest rejects
+  // whitespace-only names via IsNullOrWhiteSpace before ever comparing to "."/".."), then check
+  // separators/traversal, then reserved device names.
+  const fileName = request.fileName.trim();
+  const nameWithoutExtension = fileName.includes(".") ? fileName.slice(0, fileName.lastIndexOf(".")) : fileName;
+  if (
+    fileName.length === 0
+    || /[\\/]/.test(fileName)
+    || fileName === "."
+    || fileName === ".."
+    || reservedWindowsDeviceNames.has(nameWithoutExtension.toUpperCase())
+  ) {
+    throw new TypeError(
+      "File open request field 'fileName' must be a bare, non-reserved file name with no path separators."
+    );
+  }
+
+  requireNonEmptyString(request.contentBase64, "contentBase64", "File open request");
+  return request;
+}
+
+export function validateFileOpenResponse(response) {
+  if (!response || response.type !== MessageType.FileOpenResponse) {
+    throw new TypeError("File open response must use type file.open.response.");
+  }
+
+  requireNonEmptyString(response.requestId, "requestId", "File open response");
+  if (typeof response.accepted !== "boolean") {
+    throw new TypeError("File open response field 'accepted' must be a boolean.");
+  }
+
+  if (response.accepted) {
+    requirePositiveInteger(response.processId, "processId", "File open response");
+  }
+
+  return response;
 }
 
 export function validateWindowUpdated(updated) {

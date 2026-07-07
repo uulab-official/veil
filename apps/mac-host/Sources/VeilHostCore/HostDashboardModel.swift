@@ -5,6 +5,7 @@ public protocol HostDashboardService: Sendable {
     func loadOverview() async throws -> HostOverview
     func launchApp(appId: String) async throws -> WindowsAppLaunchResult
     func launchNotepad() async throws -> NotepadLaunchResult
+    func openFile(appId: String, fileName: String, contentBase64: String) async throws -> WindowsAppLaunchResult
     func focusWindow(windowId: String) async throws -> WindowFocusResponse
     func closeWindow(windowId: String) async throws -> WindowCloseResponse
     func sendMouseInput(_ input: InputMouseEvent) async throws
@@ -1674,36 +1675,58 @@ public final class HostDashboardModel {
 
         do {
             let result = try await service.launchApp(appId: appId)
-            health = result.health
-            apps = result.apps
-            connectionMode = result.connectionMode
-            connectionDetail = result.connectionDetail
-            agentDiagnostic = result.connectionMode == .agent
-                ? AgentConnectionDiagnostic.connected(endpoint: "configured Windows agent", health: result.health)
-                : agentDiagnostic
-            selectedAppId = result.window.appId
-            lastLaunch = result
-            if pendingLaunchAppId == result.window.appId {
-                await clearPendingLaunchIntent()
-            }
-            await rememberRestorableAppId(result.window.appId)
-            storeActiveWindow(result.window)
-            storeMirrorSession(
-                window: result.window,
-                connectionMode: result.connectionMode,
-                supportsCapture: result.health.capabilities.windowCapture
-            )
-            if result.connectionMode == .agent,
-               result.health.capabilities.windowCapture {
-                try await service.subscribeWindowFrames(windowId: result.window.windowId)
-            }
-            phase = .connected
-            return result
+            return try await applyWindowsAppLaunchResult(result)
         } catch {
             errorMessage = userMessage(for: error)
             phase = .failed
             return nil
         }
+    }
+
+    /// Opens a host file in the given app on the Windows guest -- the drag-and-drop entry point.
+    /// Applies the exact same side effects as `launchApp` since the wire response has the same
+    /// launch-acceptance-plus-`window.created` shape; the only difference is what triggered it.
+    @discardableResult
+    public func openFile(appId: String, fileName: String, contentBase64: String) async -> WindowsAppLaunchResult? {
+        phase = .launching
+        errorMessage = nil
+
+        do {
+            let result = try await service.openFile(appId: appId, fileName: fileName, contentBase64: contentBase64)
+            return try await applyWindowsAppLaunchResult(result)
+        } catch {
+            errorMessage = userMessage(for: error)
+            phase = .failed
+            return nil
+        }
+    }
+
+    private func applyWindowsAppLaunchResult(_ result: WindowsAppLaunchResult) async throws -> WindowsAppLaunchResult {
+        health = result.health
+        apps = result.apps
+        connectionMode = result.connectionMode
+        connectionDetail = result.connectionDetail
+        agentDiagnostic = result.connectionMode == .agent
+            ? AgentConnectionDiagnostic.connected(endpoint: "configured Windows agent", health: result.health)
+            : agentDiagnostic
+        selectedAppId = result.window.appId
+        lastLaunch = result
+        if pendingLaunchAppId == result.window.appId {
+            await clearPendingLaunchIntent()
+        }
+        await rememberRestorableAppId(result.window.appId)
+        storeActiveWindow(result.window)
+        storeMirrorSession(
+            window: result.window,
+            connectionMode: result.connectionMode,
+            supportsCapture: result.health.capabilities.windowCapture
+        )
+        if result.connectionMode == .agent,
+           result.health.capabilities.windowCapture {
+            try await service.subscribeWindowFrames(windowId: result.window.windowId)
+        }
+        phase = .connected
+        return result
     }
 
     public func receiveWindowFrame(_ frame: WindowFrameEvent, receivedAt: Date = Date()) {

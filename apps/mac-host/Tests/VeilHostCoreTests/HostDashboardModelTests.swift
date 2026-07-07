@@ -812,6 +812,35 @@ struct HostDashboardModelTests {
         #expect(service.launchedAppIds == ["winapp_calculator"])
     }
 
+    @Test("opens a dropped file in the target Windows app")
+    @MainActor
+    func opensADroppedFileInTheTargetApp() async throws {
+        let service = FakeDashboardService(apps: [.notepad])
+        let model = HostDashboardModel(service: service)
+
+        let result = await model.openFile(appId: "winapp_notepad", fileName: "notes.txt", contentBase64: "aGVsbG8=")
+
+        #expect(result?.window.appId == "winapp_notepad")
+        #expect(model.phase == .connected)
+        #expect(model.selectedAppId == "winapp_notepad")
+        #expect(service.openedFiles.count == 1)
+        #expect(service.openedFiles.first?.fileName == "notes.txt")
+        #expect(service.openedFiles.first?.contentBase64 == "aGVsbG8=")
+    }
+
+    @Test("surfaces an error when opening a dropped file fails")
+    @MainActor
+    func surfacesErrorWhenOpeningADroppedFileFails() async throws {
+        let service = FakeDashboardService(error: VeilHostError.appMissing("winapp_notepad"))
+        let model = HostDashboardModel(service: service)
+
+        let result = await model.openFile(appId: "winapp_notepad", fileName: "notes.txt", contentBase64: "aGVsbG8=")
+
+        #expect(result == nil)
+        #expect(model.phase == .failed)
+        #expect(model.errorMessage == "The Windows app winapp_notepad is not available from the Windows agent.")
+    }
+
     @Test("loads demo overview when primary agent is unavailable")
     @MainActor
     func loadsDemoOverviewWhenPrimaryAgentIsUnavailable() async throws {
@@ -1310,6 +1339,7 @@ private final class FakeDashboardService: HostDashboardService {
     private(set) var loadCount = 0
     private(set) var launchCount = 0
     private(set) var launchedAppIds: [String] = []
+    private(set) var openedFiles: [(appId: String, fileName: String, contentBase64: String)] = []
     private(set) var focusedWindowIds: [String] = []
     private(set) var closedWindowIds: [String] = []
     private(set) var mouseInputs: [InputMouseEvent] = []
@@ -1361,6 +1391,20 @@ private final class FakeDashboardService: HostDashboardService {
 
     func launchNotepad() async throws -> NotepadLaunchResult {
         try await launchApp(appId: "winapp_notepad")
+    }
+
+    func openFile(appId: String, fileName: String, contentBase64: String) async throws -> WindowsAppLaunchResult {
+        if let error {
+            throw error
+        }
+
+        openedFiles.append((appId, fileName, contentBase64))
+        return WindowsAppLaunchResult(
+            health: health,
+            apps: apps,
+            launch: .fixture,
+            window: .fixture(appId: appId)
+        )
     }
 
     func focusWindow(windowId: String) async throws -> WindowFocusResponse {

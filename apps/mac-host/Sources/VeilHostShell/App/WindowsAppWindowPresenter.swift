@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import UniformTypeIdentifiers
 import VeilHostCore
 
 @MainActor
@@ -13,6 +14,7 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
     var onMouseInput: ((String, String, Int, Int) -> Void)?
     var onKeyInput: ((String, String, String, Int, [String]) -> Void)?
     var onPasteShortcut: ((String, String, Int, [String], String) -> Void)?
+    var onFileDrop: ((String, String, String) -> Void)?
 
     var visibleWindowIds: [String] {
         windowOrder.filter { windowsById[$0] != nil }
@@ -128,6 +130,9 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
                 },
                 onPasteShortcut: { [weak self] windowId, key, windowsVirtualKey, modifiers, text in
                     self?.onPasteShortcut?(windowId, key, windowsVirtualKey, modifiers, text)
+                },
+                onFileDrop: { [weak self] appId, fileName, contentBase64 in
+                    self?.onFileDrop?(appId, fileName, contentBase64)
                 }
             )
         )
@@ -168,11 +173,20 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
     }
 }
 
+// Matches the guest's own MaxDroppedFileBytes cap (AgentSession.cs) -- checked here too so an
+// oversized file fails fast locally instead of paying the cost of reading, base64-encoding, and
+// sending it over the wire only for the guest to reject it afterward. A plain top-level constant
+// (not a View's static member) so it can be read from the non-isolated NSItemProvider completion
+// closure without a Sendable/MainActor-isolation warning.
+private let maxDroppedFileBytes = 50 * 1024 * 1024
+
 private struct WindowsAppMirrorView: View {
     var session: WindowMirrorSession
     var onMouseInput: (String, String, Int, Int) -> Void
     var onKeyInput: (String, String, String, Int, [String]) -> Void
     var onPasteShortcut: (String, String, Int, [String], String) -> Void
+    var onFileDrop: (String, String, String) -> Void
+    @State private var isTargetedForDrop = false
 
     var body: some View {
         ZStack {
@@ -185,10 +199,48 @@ private struct WindowsAppMirrorView: View {
                 onPasteShortcut: onPasteShortcut
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            if isTargetedForDrop {
+                RoundedRectangle(cornerRadius: 0, style: .continuous)
+                    .strokeBorder(Color.accentColor, lineWidth: 4)
+                    .allowsHitTesting(false)
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.black)
         .ignoresSafeArea()
+        .onDrop(of: [.fileURL], isTargeted: $isTargetedForDrop, perform: handleDrop)
+    }
+
+    private func handleDrop(providers: [NSItemProvider]) -> Bool {
+        guard let provider = providers.first(where: { $0.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier) }) else {
+            return false
+        }
+
+        provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier, options: nil) { item, error in
+            guard error == nil,
+                  let data = item as? Data,
+                  let url = URL(dataRepresentation: data, relativeTo: nil) else {
+                return
+            }
+
+            let fileSize = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int) ?? nil
+            guard let fileSize, fileSize > 0, fileSize <= maxDroppedFileBytes else {
+                return
+            }
+
+            guard let fileContent = try? Data(contentsOf: url), !fileContent.isEmpty else {
+                return
+            }
+
+            let fileName = url.lastPathComponent
+            let contentBase64 = fileContent.base64EncodedString()
+            DispatchQueue.main.async {
+                onFileDrop(session.window.appId, fileName, contentBase64)
+            }
+        }
+
+        return true
     }
 }
 

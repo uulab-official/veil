@@ -154,6 +154,55 @@ Rules:
 - `app.launch.response.processId` must match the subsequent `window.created.processId`.
 - `window.created.appId` identifies the launched app; the launch/window acceptance contract is not Notepad-specific.
 
+## File Open (Drag and Drop)
+
+Request:
+
+```json
+{
+  "type": "file.open.request",
+  "requestId": "req_006",
+  "appId": "winapp_notepad",
+  "fileName": "hello.txt",
+  "contentBase64": "SGVsbG8gZnJvbSBtYWNPUw=="
+}
+```
+
+Response:
+
+```json
+{
+  "type": "file.open.response",
+  "requestId": "req_006",
+  "accepted": true,
+  "processId": 4931
+}
+```
+
+Rules:
+
+- `appId` must be one of the IDs returned by the latest `app.list.response`.
+- `fileName` must be a bare file name with no path separators, no `.`/`..` traversal, and not a
+  reserved Windows device name (`CON`, `PRN`, `AUX`, `NUL`, `COM1`-`COM9`, `LPT1`-`LPT9`, with or
+  without an extension) -- the host never gets to choose where inside the guest filesystem this
+  ends up, only what it's named. The guest writes it into a fixed, agent-controlled temp directory
+  under a fresh random subfolder per request (so concurrent drops with the same file name never
+  collide), and deletes that subfolder a few minutes later regardless of whether the launch
+  succeeded, so repeated drops don't accumulate on the guest disk indefinitely.
+- `contentBase64` is the full file content, base64-encoded, sent directly over the existing
+  WebSocket control channel rather than through a separate shared folder or filesystem mount --
+  there is no live/writable host-guest filesystem share (the `Veil Guest Agent` install media is a
+  one-time read-only ISO snapshot baked at `veil-vmctl prepare` time, not a runtime mount), so this
+  is the only channel available without adding new QEMU-level infrastructure (virtio-9p or an SMB
+  share). The guest rejects decoded content over 50 MB.
+- On success, `file.open.response` is followed by a `window.created` event the same way
+  `app.launch.response` is -- the app is launched with the written file path as its command-line
+  argument, so it opens the dropped file's content directly rather than starting blank.
+- On failure the guest returns a structured `error` instead, with no `window.created`: `app_not_found`
+  (unknown `appId`), `invalid_file_name` (unsafe or reserved `fileName`), `file_decode_failed`
+  (`contentBase64` isn't valid base64, or decodes to empty content), `file_too_large` (over 50 MB),
+  `file_write_failed`, or `file_open_failed` (the launch itself failed).
+
 ## Window Created
 
 Event:

@@ -6,6 +6,8 @@ namespace Veil.Agent;
 public sealed class AgentSession
 {
     private static readonly TimeSpan InitialFrameCaptureTimeout = TimeSpan.FromSeconds(2);
+    private const int MaxDroppedFileBytes = 50 * 1024 * 1024;
+    private static readonly TimeSpan DroppedFileCleanupDelay = TimeSpan.FromMinutes(5);
     private static readonly IReadOnlyList<WindowsAppDescriptor> AppCatalog = new[]
     {
         new WindowsAppDescriptor(
@@ -62,6 +64,7 @@ public sealed class AgentSession
                 MessageTypes.AgentHealthRequest => AgentReplies.Direct(HealthResponse(requestId)),
                 MessageTypes.AppListRequest => AgentReplies.Direct(AppListResponse(requestId)),
                 MessageTypes.AppLaunchRequest => await HandleAppLaunchAsync(request, requestId, cancellationToken),
+                MessageTypes.FileOpenRequest => await HandleFileOpenAsync(request, requestId, cancellationToken),
                 MessageTypes.WindowFrameSubscribe => HandleWindowFrameSubscribeAsync(request, requestId),
                 MessageTypes.WindowFrameUnsubscribe => HandleWindowFrameUnsubscribeAsync(request, requestId),
                 MessageTypes.WindowFocusRequest => await HandleWindowFocusAsync(request, requestId, cancellationToken),
@@ -117,6 +120,170 @@ public sealed class AgentSession
             StreamWindow: launched,
             NextFrameSequence: 2
         );
+    }
+
+    private async Task<AgentReplies> HandleFileOpenAsync(
+        JsonObject request,
+        string? requestId,
+        CancellationToken cancellationToken
+    )
+    {
+        var appId = request["appId"]?.GetValue<string>();
+        var app = AppCatalog.FirstOrDefault(candidate => candidate.Id == appId);
+        if (app is null)
+        {
+            return AgentReplies.Direct(ErrorResponse(requestId, "app_not_found", $"No app exists for id {appId}"));
+        }
+
+        var fileName = request["fileName"]?.GetValue<string>();
+        if (!TryResolveSafeFileName(fileName, out var safeFileName))
+        {
+            return AgentReplies.Direct(ErrorResponse(
+                requestId,
+                "invalid_file_name",
+                "fileName must be a non-empty file name with no path separators or traversal."
+            ));
+        }
+
+        var contentBase64 = request["contentBase64"]?.GetValue<string>();
+        byte[] fileBytes;
+        try
+        {
+            fileBytes = Convert.FromBase64String(contentBase64 ?? string.Empty);
+        }
+        catch (FormatException)
+        {
+            return AgentReplies.Direct(ErrorResponse(requestId, "file_decode_failed", "contentBase64 was not valid base64."));
+        }
+
+        if (fileBytes.Length == 0)
+        {
+            return AgentReplies.Direct(ErrorResponse(requestId, "file_decode_failed", "Decoded file content was empty."));
+        }
+
+        if (fileBytes.Length > MaxDroppedFileBytes)
+        {
+            return AgentReplies.Direct(ErrorResponse(
+                requestId,
+                "file_too_large",
+                $"File exceeds the {MaxDroppedFileBytes} byte limit for drag-and-drop."
+            ));
+        }
+
+        string filePath;
+        try
+        {
+            filePath = WriteDroppedFile(safeFileName, fileBytes);
+        }
+        catch (Exception error) when (error is not OperationCanceledException)
+        {
+            return AgentReplies.Direct(ErrorResponse(requestId, "file_write_failed", error.Message));
+        }
+
+        LaunchedWindow launched;
+        try
+        {
+            launched = await desktop.LaunchAppWithFileAsync(app, filePath, cancellationToken);
+        }
+        catch (Exception error) when (error is not OperationCanceledException)
+        {
+            return AgentReplies.Direct(ErrorResponse(requestId, "file_open_failed", error.Message));
+        }
+
+        TrackWindow(app, launched);
+        var frame = await CaptureInitialFrameWithFallbackAsync(launched, cancellationToken);
+
+        return new AgentReplies(
+            DirectReplies: new List<JsonObject>
+            {
+                FileOpenResponse(requestId, accepted: true, launched.ProcessId),
+                WindowCreatedEvent(app, launched)
+            },
+            BroadcastEvents: new List<JsonObject>
+            {
+                WindowFrameEvent(frame)
+            },
+            StreamWindow: launched,
+            NextFrameSequence: 2
+        );
+    }
+
+    /// <summary>
+    /// Only a bare file name is accepted -- no directory separators, no parent-directory traversal.
+    /// The host must never be able to steer where inside the guest filesystem a dropped file ends up
+    /// beyond the fixed, agent-controlled drop directory <see cref="WriteDroppedFile"/> writes into.
+    /// </summary>
+    // Windows reserves these names for device files regardless of extension -- "CON.txt" still
+    // resolves to the CON device, not a regular file. Path.GetInvalidFileNameChars() does not catch
+    // this, so it needs its own check.
+    private static readonly HashSet<string> ReservedWindowsDeviceNames = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "CON", "PRN", "AUX", "NUL",
+        "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
+        "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9"
+    };
+
+    private static bool TryResolveSafeFileName(string? fileName, out string safeFileName)
+    {
+        safeFileName = string.Empty;
+        if (string.IsNullOrWhiteSpace(fileName))
+        {
+            return false;
+        }
+
+        var candidate = fileName.Trim();
+        if (candidate.IndexOfAny(['\\', '/']) >= 0 || candidate == "." || candidate == "..")
+        {
+            return false;
+        }
+
+        if (candidate.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
+        {
+            return false;
+        }
+
+        if (ReservedWindowsDeviceNames.Contains(Path.GetFileNameWithoutExtension(candidate)))
+        {
+            return false;
+        }
+
+        safeFileName = candidate;
+        return true;
+    }
+
+    private static string WriteDroppedFile(string fileName, byte[] content)
+    {
+        var dropDirectory = Path.Combine(Path.GetTempPath(), "VeilDroppedFiles", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dropDirectory);
+        var filePath = Path.Combine(dropDirectory, fileName);
+        File.WriteAllBytes(filePath, content);
+        ScheduleDropDirectoryCleanup(dropDirectory);
+        return filePath;
+    }
+
+    /// <summary>
+    /// Dropped files are never referenced again once the launched app has opened them, so leaving
+    /// them in place forever would let repeated drag-and-drop use slowly fill the guest's disk with
+    /// orphaned copies (up to <see cref="MaxDroppedFileBytes"/> each). Deletes the per-request drop
+    /// directory after a delay long enough for the launched app to have read the file, regardless of
+    /// whether the launch itself succeeds.
+    /// </summary>
+    private static void ScheduleDropDirectoryCleanup(string dropDirectory)
+    {
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await Task.Delay(DroppedFileCleanupDelay);
+                Directory.Delete(dropDirectory, recursive: true);
+            }
+            catch (Exception error) when (error is not OperationCanceledException)
+            {
+                Console.Error.WriteLine(
+                    $"AgentSession: failed to clean up dropped file directory {dropDirectory}. {error.GetType().Name}: {error.Message}"
+                );
+            }
+        });
     }
 
     private async Task<WindowFrame> CaptureInitialFrameWithFallbackAsync(
@@ -397,6 +564,14 @@ public sealed class AgentSession
         ["type"] = MessageTypes.AppLaunchResponse,
         ["requestId"] = requestId,
         ["accepted"] = true,
+        ["processId"] = processId
+    };
+
+    private static JsonObject FileOpenResponse(string? requestId, bool accepted, int processId) => new()
+    {
+        ["type"] = MessageTypes.FileOpenResponse,
+        ["requestId"] = requestId,
+        ["accepted"] = accepted,
         ["processId"] = processId
     };
 

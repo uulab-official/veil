@@ -177,6 +177,43 @@ struct VeilHostClientTests {
         #expect(result.window.title == "Calculator")
     }
 
+    @Test("opens a dropped file and launches the target app with it")
+    func opensADroppedFileAndLaunchesTheTargetAppWithIt() async throws {
+        let transport = RecordingTransport(responses: [
+            #"{"type":"agent.health.response","requestId":"req_health","protocolVersion":1,"agentVersion":"0.1.0","os":"windows-arm64","session":{"interactive":true,"user":"veil-user"},"capabilities":{"appList":true,"appLaunch":true,"windowTracking":true,"windowCapture":false,"input":false,"clipboardText":false}}"#,
+            #"{"type":"app.list.response","requestId":"req_apps","apps":[{"id":"winapp_notepad","name":"Notepad","exePath":"C:\\Windows\\System32\\notepad.exe","publisher":"Microsoft","iconId":"icon_notepad"}]}"#,
+            #"{"type":"file.open.response","requestId":"req_open_winapp_notepad","accepted":true,"processId":4931}"#,
+            #"{"type":"window.created","windowId":"hwnd:00010500","processId":4931,"appId":"winapp_notepad","title":"notes.txt - Notepad","bounds":{"x":10,"y":10,"width":1280,"height":800},"state":"normal","focused":true}"#
+        ])
+        let client = VeilHostClient(transport: transport)
+
+        let result = try await client.openFile(appId: "winapp_notepad", fileName: "notes.txt", contentBase64: "aGVsbG8=")
+
+        #expect(transport.sentTypes == [
+            "agent.health.request",
+            "app.list.request",
+            "file.open.request"
+        ])
+        #expect(transport.sentAppIds == ["winapp_notepad"])
+        #expect(result.launch.processId == 4931)
+        #expect(result.window.windowId == "hwnd:00010500")
+        #expect(result.window.title == "notes.txt - Notepad")
+    }
+
+    @Test("surfaces agent errors when opening a dropped file fails")
+    func surfacesAgentErrorsWhenOpeningADroppedFileFails() async throws {
+        let transport = RecordingTransport(responses: [
+            #"{"type":"agent.health.response","requestId":"req_health","protocolVersion":1,"agentVersion":"0.1.0","os":"windows-arm64","session":{"interactive":true,"user":"veil-user"},"capabilities":{"appList":true,"appLaunch":true,"windowTracking":true,"windowCapture":false,"input":false,"clipboardText":false}}"#,
+            #"{"type":"app.list.response","requestId":"req_apps","apps":[{"id":"winapp_notepad","name":"Notepad","exePath":"C:\\Windows\\System32\\notepad.exe","publisher":"Microsoft","iconId":"icon_notepad"}]}"#,
+            #"{"type":"error","requestId":"req_open_winapp_notepad","code":"invalid_file_name","message":"fileName must be a non-empty file name with no path separators or traversal."}"#
+        ])
+        let client = VeilHostClient(transport: transport)
+
+        await #expect(throws: VeilHostError.self) {
+            _ = try await client.openFile(appId: "winapp_notepad", fileName: "../evil.exe", contentBase64: "aGVsbG8=")
+        }
+    }
+
     @Test("surfaces agent launch errors without waiting for a second launch reply")
     func surfacesAgentLaunchErrorsWithoutWaitingForSecondLaunchReply() async throws {
         let transport = RecordingTransport(responses: [

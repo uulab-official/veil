@@ -25,6 +25,9 @@ public class WindowDiscoveryStreamerTests
         public Task<LaunchedWindow> LaunchAppAsync(WindowsAppDescriptor app, CancellationToken cancellationToken) =>
             Task.FromResult(launchedWindow);
 
+        public Task<LaunchedWindow> LaunchAppWithFileAsync(WindowsAppDescriptor app, string filePath, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+
         public Task<LaunchedWindow> LaunchNotepadAsync(CancellationToken cancellationToken) =>
             Task.FromResult(launchedWindow);
 
@@ -236,6 +239,9 @@ public class WindowDiscoveryStreamerTests
 
         public Task<LaunchedWindow> LaunchAppAsync(WindowsAppDescriptor app, CancellationToken cancellationToken) =>
             Task.FromResult(launchedWindow);
+
+        public Task<LaunchedWindow> LaunchAppWithFileAsync(WindowsAppDescriptor app, string filePath, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
 
         public Task<LaunchedWindow> LaunchNotepadAsync(CancellationToken cancellationToken) =>
             Task.FromResult(launchedWindow);

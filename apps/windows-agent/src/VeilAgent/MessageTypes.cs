@@ -8,6 +8,8 @@ public static class MessageTypes
     public const string AppListResponse = "app.list.response";
     public const string AppLaunchRequest = "app.launch.request";
     public const string AppLaunchResponse = "app.launch.response";
+    public const string FileOpenRequest = "file.open.request";
+    public const string FileOpenResponse = "file.open.response";
     public const string WindowCreated = "window.created";
     public const string WindowUpdated = "window.updated";
     public const string WindowClosed = "window.closed";

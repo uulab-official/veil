@@ -9,6 +9,8 @@ import {
   parseMessage,
   validateAppLaunchAcceptance,
   validateClipboardTextSet,
+  validateFileOpenRequest,
+  validateFileOpenResponse,
   validateInputKey,
   validateInputMouse,
   validateWindowClosed,
@@ -36,6 +38,8 @@ test("parses every stable fixture", async () => {
     "app.list.response.json",
     "app.launch.request.json",
     "app.launch.response.json",
+    "file.open.request.json",
+    "file.open.response.json",
     "window.created.json",
     "window.updated.json",
     "window.closed.json",
@@ -248,4 +252,55 @@ test("validates guest clipboard text fixture", async () => {
   assert.equal(clipboard.origin, "guest");
   assert.equal(clipboard.sequence, 43);
   assert.equal(clipboard.text, "hello from Windows");
+});
+
+test("validates file open request and response fixtures", async () => {
+  const request = validateFileOpenRequest(await readFixture("file.open.request.json"));
+  assert.equal(request.appId, "winapp_notepad");
+  assert.equal(request.fileName, "hello.txt");
+  assert.equal(request.contentBase64, "SGVsbG8gZnJvbSBtYWNPUw==");
+
+  const response = validateFileOpenResponse(await readFixture("file.open.response.json"));
+  assert.equal(response.accepted, true);
+  assert.equal(response.processId, 4931);
+});
+
+test("rejects a file open request whose fileName carries a path", () => {
+  assert.throws(() => validateFileOpenRequest({
+    type: MessageType.FileOpenRequest,
+    requestId: "req_bad",
+    appId: "winapp_notepad",
+    fileName: "../../Windows/System32/evil.exe",
+    contentBase64: "AA=="
+  }), TypeError);
+});
+
+test("rejects a file open request whose fileName is a reserved Windows device name", () => {
+  for (const fileName of ["CON", "con.txt", "NUL", "COM1.log", "LPT1"]) {
+    assert.throws(() => validateFileOpenRequest({
+      type: MessageType.FileOpenRequest,
+      requestId: "req_bad",
+      appId: "winapp_notepad",
+      fileName,
+      contentBase64: "AA=="
+    }), TypeError, fileName);
+  }
+});
+
+test("rejects a file open request whose fileName is whitespace only", () => {
+  assert.throws(() => validateFileOpenRequest({
+    type: MessageType.FileOpenRequest,
+    requestId: "req_bad",
+    appId: "winapp_notepad",
+    fileName: "   ",
+    contentBase64: "AA=="
+  }), TypeError);
+});
+
+test("rejects a file open response missing processId when accepted", () => {
+  assert.throws(() => validateFileOpenResponse({
+    type: MessageType.FileOpenResponse,
+    requestId: "req_bad",
+    accepted: true
+  }), TypeError);
 });

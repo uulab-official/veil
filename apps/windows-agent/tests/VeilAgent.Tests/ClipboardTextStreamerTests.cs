@@ -29,6 +29,9 @@ public class ClipboardTextStreamerTests
         public Task<LaunchedWindow> LaunchAppAsync(WindowsAppDescriptor app, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
 
+        public Task<LaunchedWindow> LaunchAppWithFileAsync(WindowsAppDescriptor app, string filePath, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+
         public Task<LaunchedWindow> LaunchNotepadAsync(CancellationToken cancellationToken) =>
             throw new NotSupportedException();
 

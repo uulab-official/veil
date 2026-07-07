@@ -7,6 +7,8 @@ public enum MessageType: String, Codable, Sendable {
     case appListResponse = "app.list.response"
     case appLaunchRequest = "app.launch.request"
     case appLaunchResponse = "app.launch.response"
+    case fileOpenRequest = "file.open.request"
+    case fileOpenResponse = "file.open.response"
     case windowCreated = "window.created"
     case windowUpdated = "window.updated"
     case windowClosed = "window.closed"
@@ -108,6 +110,29 @@ public struct AppLaunchRequest: Codable, Equatable, Sendable {
 }
 
 public struct AppLaunchResponse: Codable, Equatable, Sendable {
+    public var type: MessageType
+    public var requestId: String
+    public var accepted: Bool
+    public var processId: Int
+}
+
+public struct FileOpenRequest: Codable, Equatable, Sendable {
+    public var type: MessageType
+    public var requestId: String
+    public var appId: String
+    public var fileName: String
+    public var contentBase64: String
+
+    public init(requestId: String, appId: String, fileName: String, contentBase64: String) {
+        self.type = .fileOpenRequest
+        self.requestId = requestId
+        self.appId = appId
+        self.fileName = fileName
+        self.contentBase64 = contentBase64
+    }
+}
+
+public struct FileOpenResponse: Codable, Equatable, Sendable {
     public var type: MessageType
     public var requestId: String
     public var accepted: Bool
