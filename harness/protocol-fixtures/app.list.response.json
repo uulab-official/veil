@@ -7,21 +7,24 @@
       "name": "Notepad",
       "exePath": "C:\\Windows\\System32\\notepad.exe",
       "publisher": "Microsoft",
-      "iconId": "icon_notepad"
+      "iconId": "icon_notepad",
+      "iconPngBase64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
     },
     {
       "id": "winapp_calculator",
       "name": "Calculator",
       "exePath": "calc.exe",
       "publisher": "Microsoft",
-      "iconId": "icon_calculator"
+      "iconId": "icon_calculator",
+      "iconPngBase64": null
     },
     {
       "id": "winapp_paint",
       "name": "Paint",
       "exePath": "mspaint.exe",
       "publisher": "Microsoft",
-      "iconId": "icon_paint"
+      "iconId": "icon_paint",
+      "iconPngBase64": null
     }
   ]
 }

@@ -384,7 +384,11 @@ public sealed class AgentSession
         ["name"] = app.Name,
         ["exePath"] = app.Executable,
         ["publisher"] = app.Publisher,
-        ["iconId"] = app.IconId
+        ["iconId"] = app.IconId,
+        ["iconPngBase64"] = WindowsAppIconExtractor.ExtractIconPngBase64(
+            app.Id,
+            new[] { app.Executable }.Concat(app.AlternateExecutables ?? [])
+        )
     };
 
     private static JsonObject LaunchResponse(string? requestId, int processId) => new()

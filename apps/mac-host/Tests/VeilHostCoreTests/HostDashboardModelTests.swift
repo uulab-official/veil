@@ -261,6 +261,22 @@ struct HostDashboardModelTests {
         #expect(model.phase == .failed)
     }
 
+    @Test("carries a decoded app icon through to the loaded app catalog")
+    @MainActor
+    func carriesDecodedAppIconThroughToLoadedAppCatalog() async throws {
+        let service = FakeDashboardService(health: .captureReady, apps: [.notepad, .calculator])
+        let model = HostDashboardModel(service: service)
+
+        await model.load()
+
+        let notepad = try #require(model.apps.first { $0.id == "winapp_notepad" })
+        let iconBase64 = try #require(notepad.iconPngBase64)
+        #expect(Data(base64Encoded: iconBase64) != nil)
+
+        let calculator = try #require(model.apps.first { $0.id == "winapp_calculator" })
+        #expect(calculator.iconPngBase64 == nil)
+    }
+
     @Test("consumes guest clipboard text from an event source once")
     @MainActor
     func consumesGuestClipboardTextFromEventSourceOnce() async throws {
@@ -1504,7 +1520,8 @@ private extension WindowsApp {
             name: "Notepad",
             exePath: "C:\\Windows\\System32\\notepad.exe",
             publisher: "Microsoft",
-            iconId: "icon_notepad"
+            iconId: "icon_notepad",
+            iconPngBase64: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
         )
     }
 

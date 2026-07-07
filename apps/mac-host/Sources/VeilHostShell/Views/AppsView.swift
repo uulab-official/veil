@@ -81,11 +81,19 @@ private struct WindowsAppCard: View {
         Button(action: action) {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(alignment: .top, spacing: 12) {
-                    Image(systemName: symbolName)
-                        .font(.system(size: 22, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .frame(width: 44, height: 44)
-                        .background(tint, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    if let realIcon {
+                        Image(nsImage: realIcon)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 44, height: 44)
+                            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    } else {
+                        Image(systemName: symbolName)
+                            .font(.system(size: 22, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .frame(width: 44, height: 44)
+                            .background(tint, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    }
 
                     VStack(alignment: .leading, spacing: 4) {
                         Text(app.name)
@@ -122,6 +130,17 @@ private struct WindowsAppCard: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Select \(app.name)")
+    }
+
+    /// Decoded on demand rather than cached -- the app catalog is tiny (a handful of built-in apps)
+    /// and this view only re-renders on user interaction, not per-frame, so re-decoding a small PNG
+    /// here isn't worth a dedicated image cache.
+    private var realIcon: NSImage? {
+        guard let base64 = app.iconPngBase64,
+              let data = Data(base64Encoded: base64) else {
+            return nil
+        }
+        return NSImage(data: data)
     }
 
     private var tint: Color {

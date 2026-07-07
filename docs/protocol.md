@@ -90,25 +90,39 @@ Response:
       "name": "Notepad",
       "exePath": "C:\\Windows\\System32\\notepad.exe",
       "publisher": "Microsoft",
-      "iconId": "icon_notepad"
+      "iconId": "icon_notepad",
+      "iconPngBase64": "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQ...(base64 PNG)"
     },
     {
       "id": "winapp_calculator",
       "name": "Calculator",
       "exePath": "calc.exe",
       "publisher": "Microsoft",
-      "iconId": "icon_calculator"
+      "iconId": "icon_calculator",
+      "iconPngBase64": null
     },
     {
       "id": "winapp_paint",
       "name": "Paint",
       "exePath": "mspaint.exe",
       "publisher": "Microsoft",
-      "iconId": "icon_paint"
+      "iconId": "icon_paint",
+      "iconPngBase64": null
     }
   ]
 }
 ```
+
+`iconPngBase64` is the app's real Windows icon (extracted from the executable,
+`WindowsAppIconExtractor` on the guest), base64-encoded PNG. It is `null` when
+the guest could not resolve the executable's real path or extraction failed
+for any reason (e.g. running in demo mode, or the executable is missing) --
+host clients must fall back to a generic icon in that case, not treat a
+missing icon as an error. Icons are extracted once per app id and cached on
+the guest, since they never change at runtime; expect this field on every
+`app.list.response`, not on a separate per-app request. Packaged apps whose
+primary executable is only a launcher stub (e.g. Calculator) resolve the icon
+from the app's alternate executable names before falling back to no icon.
 
 ## App Launch
 

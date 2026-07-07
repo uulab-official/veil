@@ -87,6 +87,10 @@ public struct WindowsApp: Codable, Equatable, Identifiable, Sendable {
     public var exePath: String
     public var publisher: String
     public var iconId: String
+    /// Base64-encoded PNG of the app's real Windows icon, sent once per app.list.response since
+    /// icons are static (`WindowsAppIconExtractor` on the guest). `nil` in demo mode or if the guest
+    /// could not resolve/extract the icon -- callers should fall back to a generic icon in that case.
+    public var iconPngBase64: String? = nil
 }
 
 public struct AppLaunchRequest: Codable, Equatable, Sendable {
