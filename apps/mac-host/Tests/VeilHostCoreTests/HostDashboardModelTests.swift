@@ -211,6 +211,56 @@ struct HostDashboardModelTests {
         #expect(session.latestFrame?.frameId == "frame_000001")
     }
 
+    @Test("marks phase reconnecting when the event stream drops, and connected while messages flow again")
+    @MainActor
+    func marksPhaseReconnectingWhenEventStreamDropsAndConnectedAgainOnRecovery() async throws {
+        // The production HostEventSource (WebSocketTransport.eventMessages()) only ever ends by
+        // throwing -- it never completes normally -- so this test only asserts the phase mid-stream
+        // (via the onMessageHandled callback) rather than after a finite fake stream naturally ends,
+        // which would otherwise flip phase back to .reconnecting for a reason that can't happen in
+        // production.
+        let service = FakeDashboardService(health: .captureReady)
+        let model = HostDashboardModel(service: service)
+        await model.load()
+        #expect(model.phase == .connected)
+
+        let failingSource = StaticHostEventSource(messages: [], failure: URLError(.networkConnectionLost))
+        await model.consumeProtocolMessages(from: failingSource) { _ in }
+        #expect(model.phase == .reconnecting)
+
+        let recoveredSource = StaticHostEventSource(messages: [
+            Data(WindowFrameEvent.notepadFirstFrameJSON.utf8)
+        ])
+        await model.launchNotepad()
+        var phaseWhileMessageWasHandled: HostDashboardPhase?
+        await model.consumeProtocolMessages(from: recoveredSource) { _ in
+            phaseWhileMessageWasHandled = model.phase
+        }
+
+        #expect(phaseWhileMessageWasHandled == .connected)
+    }
+
+    @Test("does not clobber an unrelated phase when the event stream drops")
+    @MainActor
+    func doesNotClobberAnUnrelatedPhaseWhenTheEventStreamDrops() async throws {
+        // consumeProtocolMessages() runs continuously in the background alongside user-triggered
+        // flows that share the same `phase` property (launching an app, loading, etc.) -- it must
+        // only ever move between .connected and .reconnecting, never stomp on those other states.
+        let service = FakeDashboardService(health: .captureReady)
+        let model = HostDashboardModel(service: service)
+        await model.launchNotepad()
+        #expect(model.phase == .connected)
+
+        service.error = URLError(.cannotFindHost)
+        await model.launchNotepad()
+        #expect(model.phase == .failed)
+
+        let failingSource = StaticHostEventSource(messages: [], failure: URLError(.networkConnectionLost))
+        await model.consumeProtocolMessages(from: failingSource) { _ in }
+
+        #expect(model.phase == .failed)
+    }
+
     @Test("consumes guest clipboard text from an event source once")
     @MainActor
     func consumesGuestClipboardTextFromEventSourceOnce() async throws {
@@ -1352,13 +1402,19 @@ private final class FakeDashboardService: HostDashboardService {
 
 private struct StaticHostEventSource: HostEventSource {
     var messages: [Data]
+    var failure: (any Error)?
+
+    init(messages: [Data], failure: (any Error)? = nil) {
+        self.messages = messages
+        self.failure = failure
+    }
 
     func eventMessages() -> AsyncThrowingStream<Data, any Error> {
         AsyncThrowingStream { continuation in
             for message in messages {
                 continuation.yield(message)
             }
-            continuation.finish()
+            continuation.finish(throwing: failure)
         }
     }
 }

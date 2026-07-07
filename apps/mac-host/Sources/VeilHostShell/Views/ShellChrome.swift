@@ -435,6 +435,8 @@ extension HostDashboardPhase {
             "Launching"
         case .failed:
             "Failed"
+        case .reconnecting:
+            "Reconnecting"
         }
     }
 
@@ -450,6 +452,8 @@ extension HostDashboardPhase {
             "play.circle"
         case .failed:
             "exclamationmark.triangle.fill"
+        case .reconnecting:
+            "arrow.triangle.2.circlepath"
         }
     }
 
@@ -465,6 +469,8 @@ extension HostDashboardPhase {
             .blue
         case .failed:
             .orange
+        case .reconnecting:
+            .yellow
         }
     }
 }

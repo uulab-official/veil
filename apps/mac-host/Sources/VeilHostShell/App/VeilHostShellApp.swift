@@ -249,6 +249,14 @@ struct VeilHostShellApp: App {
         }
 
         agentEventTask = Task { @MainActor in
+            // Bounded backoff instead of a fixed 2s retry: a real, sustained guest-agent outage
+            // shouldn't spin at the same high rate (and log at the same high rate, per
+            // VeilLog.agent.notice in consumeProtocolMessages) forever. Resets to the base interval
+            // the moment a message is actually received again.
+            let baseRetryDelaySeconds: Double = 2
+            let maxRetryDelaySeconds: Double = 10
+            var retryDelaySeconds = baseRetryDelaySeconds
+
             while !Task.isCancelled {
                 await model.consumeProtocolMessages(from: agentTransport) { result in
                     switch result {
@@ -280,7 +288,12 @@ struct VeilHostShellApp: App {
                     }
                 }
 
-                try? await Task.sleep(for: .seconds(2))
+                if model.phase == .reconnecting {
+                    retryDelaySeconds = min(retryDelaySeconds * 2, maxRetryDelaySeconds)
+                } else {
+                    retryDelaySeconds = baseRetryDelaySeconds
+                }
+                try? await Task.sleep(for: .seconds(retryDelaySeconds))
             }
         }
     }
@@ -291,6 +304,13 @@ struct VeilHostShellApp: App {
         }
 
         agentReconnectTask = Task { @MainActor in
+            // Same bounded-backoff reasoning as startAgentEventPumpIfNeeded(): a sustained outage
+            // shouldn't poll at the base rate forever. Resets the moment there's nothing left to do
+            // (either reconnected, or the VM isn't in a state that needs polling at all).
+            let baseRetryDelaySeconds: Double = 5
+            let maxRetryDelaySeconds: Double = 15
+            var retryDelaySeconds = baseRetryDelaySeconds
+
             while !Task.isCancelled {
                 let vmState = vmModel.snapshot?.state
                 let shouldPoll = (vmState == .running || vmState == .starting) && !model.hasLiveAgentConnection
@@ -305,15 +325,25 @@ struct VeilHostShellApp: App {
                         hideMainWindowForCoherenceIfNeeded()
                     }
 
-                    if restoredLaunches.isEmpty,
-                       let fulfilledLaunch = await model.refreshLiveAgentIfNeeded() {
-                        showWindowsAppWindow(for: fulfilledLaunch)
-                        hideMainWindowForCoherenceIfNeeded()
+                    var fulfilledLaunch: NotepadLaunchResult?
+                    if restoredLaunches.isEmpty {
+                        fulfilledLaunch = await model.refreshLiveAgentIfNeeded()
+                        if let fulfilledLaunch {
+                            showWindowsAppWindow(for: fulfilledLaunch)
+                            hideMainWindowForCoherenceIfNeeded()
+                        }
                     }
                     await recordGuestAgentInstallEvidenceIfNeeded()
+
+                    let madeProgress = !restoredLaunches.isEmpty || fulfilledLaunch != nil || model.hasLiveAgentConnection
+                    retryDelaySeconds = madeProgress
+                        ? baseRetryDelaySeconds
+                        : min(retryDelaySeconds * 2, maxRetryDelaySeconds)
+                } else {
+                    retryDelaySeconds = baseRetryDelaySeconds
                 }
 
-                try? await Task.sleep(for: .seconds(5))
+                try? await Task.sleep(for: .seconds(retryDelaySeconds))
             }
         }
     }

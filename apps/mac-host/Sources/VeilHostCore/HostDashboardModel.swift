@@ -96,6 +96,10 @@ public enum HostDashboardPhase: String, Codable, Equatable, Sendable {
     case connected
     case launching
     case failed
+    /// Distinct from `.failed`: the guest-agent connection just dropped and the background retry
+    /// loop (`consumeProtocolMessages`'s caller) is actively attempting to recover, not stuck.
+    /// `.failed` remains reserved for a user-triggered action that failed outright.
+    case reconnecting
 }
 
 public enum HostProtocolMessageResult: Equatable, Sendable {
@@ -681,6 +685,8 @@ public final class HostDashboardModel {
             "Launching Notepad"
         case .failed:
             errorMessage ?? "Connection failed"
+        case .reconnecting:
+            "Reconnecting to Windows agent"
         }
     }
 
@@ -1932,6 +1938,12 @@ public final class HostDashboardModel {
     ) async {
         do {
             for try await message in source.eventMessages() {
+                // Only ever transitions .reconnecting -> .connected here, never touching .loading/
+                // .launching/.idle/.failed -- those are driven by unrelated user-triggered flows
+                // sharing this same `phase` property, and this background pump must not clobber them.
+                if phase == .reconnecting {
+                    phase = .connected
+                }
                 let result = try await receiveProtocolMessage(message)
                 onMessageHandled(result)
             }
@@ -1945,7 +1957,14 @@ public final class HostDashboardModel {
             // applies to on-disk paths elsewhere in this codebase -- a log line is not the place to
             // reintroduce an unredacted host path into Console.app/sysdiagnose output.
             VeilLog.agent.notice("consumeProtocolMessages stopped: \(String(describing: error))")
-            return
+        }
+
+        // The event stream just ended, whether via the catch above or by completing normally --
+        // either way the live pump is no longer running. Only flip .connected -> .reconnecting (see
+        // the guard at loop entry above for why other phases are left alone); the caller's retry loop
+        // will call this again, which flips back to .connected once a message actually arrives.
+        if phase == .connected {
+            phase = .reconnecting
         }
     }
 
