@@ -107,6 +107,7 @@ Goal: keep the user-facing workflow one-screen-first (launcher + one action path
 - [x] Validate `oneScreenUX.heroRunsPrimaryAction` against the installed-runtime hero supported action ids in the status harness, not only against `primaryNextAction.runsInApp`.
 - [x] Add `oneScreenUX.returnsToLauncherWhenNoAppWindows` and harness coverage so the app path cannot pass if the launcher fails to return after all Windows app windows close.
 - [x] Drive the installed-runtime launcher hero and Windows Apps app-flow row from `launchOnboarding`, so the visible one-shot state matches the structured release/one-screen gate instead of comparing raw status sections in the UI.
+- [x] Keep mirrored host windows keyed by guest HWND instead of app id, so separate windows from the same Windows app remain independent macOS windows while same-HWND refreshes update in place.
 
 ## CEO Review
 

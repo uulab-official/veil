@@ -6,8 +6,6 @@ import VeilHostCore
 @MainActor
 final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
     private var windowsById: [String: NSWindow] = [:]
-    private var appIdToWindowId: [String: String] = [:]
-    private var windowIdToAppId: [String: String] = [:]
     private var windowOrder: [String] = []
     private var suppressedCloseWindowIds: Set<String> = []
     private(set) var foregroundWindowId: String?
@@ -23,10 +21,6 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
     }
 
     func showWindow(for session: WindowMirrorSession) {
-        if let existingWindowId = appIdToWindowId[session.window.appId], existingWindowId != session.id {
-            closeWindow(windowId: existingWindowId, suppressWindowCloseCallback: true)
-        }
-
         if let window = windowsById[session.id] {
             updateExistingWindow(window, for: session)
             return
@@ -46,8 +40,6 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
         window.contentView = hostingView(
             for: session
         )
-        appIdToWindowId[session.window.appId] = session.id
-        windowIdToAppId[session.id] = session.window.appId
         windowsById[session.id] = window
         present(window, windowId: session.id)
     }
@@ -58,8 +50,6 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
             window.close()
         }
         windowsById.removeAll()
-        appIdToWindowId.removeAll()
-        windowIdToAppId.removeAll()
         windowOrder.removeAll()
         foregroundWindowId = nil
     }
@@ -132,8 +122,6 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
         if !NSEqualRects(window.frame, preservedFrame) {
             window.setFrame(preservedFrame, display: true, animate: false)
         }
-        appIdToWindowId[session.window.appId] = session.id
-        windowIdToAppId[session.id] = session.window.appId
         present(window, windowId: session.id)
     }
 
@@ -143,11 +131,6 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
     }
 
     private func forgetWindowId(_ windowId: String) {
-        if let appId = windowIdToAppId[windowId], appIdToWindowId[appId] == windowId {
-            appIdToWindowId[appId] = nil
-        }
-        windowIdToAppId[windowId] = nil
-
         windowOrder.removeAll { $0 == windowId }
         if foregroundWindowId == windowId {
             foregroundWindowId = visibleWindowIds.last

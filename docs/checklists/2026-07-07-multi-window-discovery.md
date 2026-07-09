@@ -34,11 +34,12 @@ find during its launch-time polling loop was ever tracked or reported.
 - Wired into `WebSocketAgentServer`/`Program.cs` the same way
   `ClipboardTextStreamer` is: started once in `RunAsync`, broadcasting to all
   connected clients.
-- **Host: zero changes needed.** `mirrorSessions`/`WindowsAppWindowPresenter`
-  are already keyed by `windowId`, not `appId` (confirmed in the plan before
-  starting this phase) — a `window.created` for a second window opens a
-  second independent macOS mirror window automatically, the same as any
-  other `window.created` event.
+- **Host follow-up fixed later:** `mirrorSessions` were already keyed by
+  `windowId`, but `WindowsAppWindowPresenter` still collapsed same-app
+  windows through an `appId -> windowId` map. The presenter is now keyed by
+  guest `windowId`/HWND only, so a `window.created` for a second window from
+  the same app opens a second independent macOS mirror window while a refresh
+  of the same `windowId` updates the existing host window.
 - Design decision (flagged in the plan for confirmation): went with the
   recommended **continuous background scan** over an on-demand rescan
   message, for consistency with the existing clipboard/frame streamer

@@ -48,12 +48,12 @@ struct WindowsAppWindowPresenterTests {
 
         presenter.showWindow(for: session(windowId: "hwnd:0002", appId: "winapp_notepad", title: "Notes.txt - Notepad"))
 
-        #expect(presenter.visibleWindowIds == ["hwnd:0002"])
+        #expect(presenter.visibleWindowIds == ["hwnd:0001", "hwnd:0002"])
         #expect(presenter.foregroundWindowId == "hwnd:0002")
 
         presenter.showWindow(for: session(windowId: "hwnd:0003", appId: "winapp_calculator", title: "Calculator"))
 
-        #expect(presenter.visibleWindowIds == ["hwnd:0002", "hwnd:0003"])
+        #expect(presenter.visibleWindowIds == ["hwnd:0001", "hwnd:0002", "hwnd:0003"])
         #expect(presenter.foregroundWindowId == "hwnd:0003")
     }
 
@@ -252,8 +252,8 @@ struct WindowsAppWindowPresenterTests {
         #expect(fallbackIconReport.meetsLauncherContract == false)
     }
 
-    @Test("closes programmatic windows without emitting user-close callback")
-    func closesProgrammaticWindowsWithoutUserCloseCallback() {
+    @Test("keeps same-app Windows windows independent")
+    func keepsSameAppWindowsIndependent() {
         _ = NSApplication.shared
         let presenter = WindowsAppWindowPresenter()
         defer {
@@ -268,12 +268,12 @@ struct WindowsAppWindowPresenterTests {
         presenter.showWindow(for: session(windowId: "hwnd:0001", appId: "winapp_notepad", title: "Notepad"))
         presenter.showWindow(for: session(windowId: "hwnd:0002", appId: "winapp_notepad", title: "Notepad - Edited"))
 
-        #expect(presenter.visibleWindowIds == ["hwnd:0002"])
+        #expect(presenter.visibleWindowIds == ["hwnd:0001", "hwnd:0002"])
         #expect(callbackWindowIds.isEmpty)
 
         presenter.closeWindow(windowId: "hwnd:0002")
 
-        #expect(presenter.visibleWindowIds.isEmpty)
+        #expect(presenter.visibleWindowIds == ["hwnd:0001"])
         #expect(callbackWindowIds.isEmpty)
     }
 
