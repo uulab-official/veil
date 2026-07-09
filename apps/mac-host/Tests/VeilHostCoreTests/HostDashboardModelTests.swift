@@ -670,6 +670,15 @@ struct HostDashboardModelTests {
         #expect(report.actions.first { $0.id == "proof.coherence" }?.isAvailable == true)
         #expect(report.actions.first { $0.id == "proof.mvp" }?.isAvailable == true)
         #expect(report.actions.first { $0.id == "proof.recommended" }?.isAvailable == true)
+
+        let actionTitles = report.actions.map(\.title)
+        #expect(actionTitles.contains("Repair App Connection"))
+        #expect(actionTitles.contains("Check Windows App"))
+        #expect(actionTitles.contains("Check App Connection"))
+        #expect(actionTitles.allSatisfy { !$0.contains("Guest Agent") })
+        #expect(actionTitles.allSatisfy { !$0.contains("Runtime") })
+        #expect(actionTitles.allSatisfy { !$0.contains("Proof") })
+        #expect(actionTitles.allSatisfy { !$0.contains("HWND") })
     }
 
     @Test("reports quiet runtime readiness after the final Windows app window closes")
@@ -1074,7 +1083,7 @@ struct HostDashboardModelTests {
         #expect(queuedReport.pendingLaunch.appId == "winapp_notepad")
         #expect(queuedReport.pendingLaunch.willLaunchOnAgentReconnect)
         #expect(queuedReport.pendingLaunch.recommendedAction == "auto-launch-on-agent-reconnect")
-        #expect(queuedReport.pendingLaunch.reason == "Veil will launch the queued Windows app after the guest agent reconnects.")
+        #expect(queuedReport.pendingLaunch.reason == "Veil will launch the queued Windows app after the app connection returns.")
         #expect(queuedReport.dockIntegration.openWindowCount == 0)
         #expect(queuedReport.dockIntegration.pendingLaunchCount == 1)
         #expect(queuedReport.dockIntegration.badgeLabel == "...")

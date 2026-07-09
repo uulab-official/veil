@@ -897,7 +897,7 @@ public final class HostDashboardModel {
                 ),
                 WindowsAppRuntimeActionStatus(
                     id: "windowsApps.reconnectRestore",
-                    title: "Reconnect And Restore Apps",
+                    title: "Reconnect Previous Apps",
                     isAvailable: canReconnectRestoreMirrorSessions
                 ),
                 WindowsAppRuntimeActionStatus(
@@ -912,17 +912,17 @@ public final class HostDashboardModel {
                 ),
                 WindowsAppRuntimeActionStatus(
                     id: "runtime.startWindowsForApp",
-                    title: "Start Windows For App Launch",
+                    title: "Start Windows To Open App",
                     isAvailable: launchPlan.recommendedStartCommand != nil
                 ),
                 WindowsAppRuntimeActionStatus(
                     id: "runtime.repairGuestAgentForApp",
-                    title: "Repair Guest Agent For App Launch",
+                    title: "Repair App Connection",
                     isAvailable: launchPlan.recommendedRepairCommand != nil
                 ),
                 WindowsAppRuntimeActionStatus(
                     id: "runtime.recoverDisplay",
-                    title: "Recover Runtime Display",
+                    title: "Refresh Windows Display",
                     isAvailable: localRuntime.recommendedRecoveryCommand != nil
                 ),
                 WindowsAppRuntimeActionStatus(
@@ -932,37 +932,37 @@ public final class HostDashboardModel {
                 ),
                 WindowsAppRuntimeActionStatus(
                     id: "runtime.waitAgent",
-                    title: "Wait For Guest Agent",
+                    title: "Check App Connection",
                     isAvailable: !hasLiveAgentConnection
                 ),
                 WindowsAppRuntimeActionStatus(
                     id: "runtime.quietWhenIdle",
-                    title: "Quiet Runtime When Idle",
+                    title: "Quiet Windows When Idle",
                     isAvailable: quietRuntime.canQuietRuntime
                 ),
                 WindowsAppRuntimeActionStatus(
                     id: "runtime.stopWhenIdle",
-                    title: "Stop Runtime When Idle",
+                    title: "Stop Windows When Idle",
                     isAvailable: quietRuntime.canQuietRuntime
                 ),
                 WindowsAppRuntimeActionStatus(
                     id: "proof.appWindow",
-                    title: "Run App Window Proof",
+                    title: "Check App Window",
                     isAvailable: canRunAppWindowProof
                 ),
                 WindowsAppRuntimeActionStatus(
                     id: "proof.coherence",
-                    title: "Run Coherence Proof",
+                    title: "Check App Input",
                     isAvailable: canRunCoherenceProof
                 ),
                 WindowsAppRuntimeActionStatus(
                     id: "proof.mvp",
-                    title: "Run MVP Proof",
+                    title: "Check Full App Flow",
                     isAvailable: canRunCoherenceProof
                 ),
                 WindowsAppRuntimeActionStatus(
                     id: "proof.recommended",
-                    title: "Run Recommended Proof",
+                    title: "Check Windows App",
                     isAvailable: proofPlan.recommendedProofCommand != nil
                 ),
                 WindowsAppRuntimeActionStatus(
@@ -992,7 +992,7 @@ public final class HostDashboardModel {
                 appId: pendingLaunchAppId,
                 willLaunchOnAgentReconnect: false,
                 recommendedAction: "launch-pending-now",
-                reason: "The live Windows agent is connected; retry the queued app launch now."
+                reason: "The Windows app connection is active; retry the queued app launch now."
             )
         }
 
@@ -1002,7 +1002,7 @@ public final class HostDashboardModel {
                 appId: pendingLaunchAppId,
                 willLaunchOnAgentReconnect: true,
                 recommendedAction: "auto-launch-on-agent-reconnect",
-                reason: "Veil will launch the queued Windows app after the guest agent reconnects."
+                reason: "Veil will launch the queued Windows app after the app connection returns."
             )
         }
 
