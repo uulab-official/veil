@@ -3,7 +3,7 @@
   "action": "repair-agent",
   "requestedAt": "2026-07-10T04:40:00Z",
   "endpoint": "ws://127.0.0.1:9",
-  "connectionMode": "demo",
+  "connectionMode": "agent",
   "accepted": false,
   "pendingLaunchAppId": "winapp_notepad",
   "launchPlan": {
@@ -40,9 +40,9 @@
       "reason": "Veil will launch the queued Windows app after the guest agent reconnects."
     },
     "connection": {
-      "mode": "demo",
+      "mode": "agent",
       "hasLiveAgentConnection": false,
-      "connectionDetail": "No Windows agent reachable at ws://127.0.0.1:9. Showing built-in demo data."
+      "connectionDetail": "No Windows agent reachable at ws://127.0.0.1:9 after the repair attempt."
     },
     "dockIntegration": {
       "isEnabled": true,

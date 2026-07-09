@@ -391,6 +391,8 @@ swift run veil-vmctl app-runtime-action --json --demo --action launch --app-id w
 
 For real guest-agent runs, omit `--demo` and use the HWND returned by
 `app-window-proof`, `coherence-proof`, or `app-runtime-status`:
+`--demo --action repair-agent` is a dry run only and must not send QEMU input to
+the local Windows VM.
 
 ```bash
 cd apps/mac-host

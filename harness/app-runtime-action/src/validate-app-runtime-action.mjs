@@ -128,6 +128,19 @@ function validateRepairAgentAction(report) {
     throw new TypeError("repair-agent actions must include top-level launchPlan.");
   }
 
+  if (report.status.connection.mode === "demo") {
+    if (report.accepted) {
+      throw new TypeError("demo repair-agent actions must not be accepted.");
+    }
+    if (report.agentRepair !== undefined && report.agentRepair !== null) {
+      throw new TypeError("demo repair-agent actions must not include agentRepair.");
+    }
+    if (!report.nextActions.some((action) => action.includes("Omit `--demo`"))) {
+      throw new TypeError("demo repair-agent actions must explain how to run real repair without --demo.");
+    }
+    return;
+  }
+
   if (report.status.localRuntime.requiresGuestToolsMediaRebuild) {
     if (report.agentRepair !== undefined && report.agentRepair !== null) {
       throw new TypeError("repair-agent actions must not run guest-agent repair while guest tools media is stale.");

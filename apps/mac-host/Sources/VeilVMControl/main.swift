@@ -2582,7 +2582,8 @@ struct VeilVMControl {
             let beforeStatus = model.runtimeStatusReport(
                 localRuntime: model.localRuntimeStatus(snapshot: localRuntimeSnapshot)
             )
-            if beforeStatus.launchPlan.recommendedRepairCommand != nil,
+            if !demo,
+               beforeStatus.launchPlan.recommendedRepairCommand != nil,
                beforeStatus.localRuntime.requiresGuestToolsMediaRebuild != true {
                 agentRepair = try await qemuGuestAgentInstallAttemptReport(waitSeconds: waitSeconds)
                 if agentRepair?.status == .connected {
@@ -3080,6 +3081,13 @@ struct VeilVMControl {
         }
 
         if action == .repairAgent {
+            if status.connection.mode == .demo {
+                return [
+                    "Omit `--demo` to send the attached guest-agent repair path to the running local Windows VM.",
+                    "Run `veil-vmctl app-runtime-status --json` to inspect the real app connection before retrying repair-agent."
+                ]
+            }
+
             if status.localRuntime.requiresGuestToolsMediaRebuild {
                 return guestToolsMediaRebuildActions(from: status.localRuntime)
             }

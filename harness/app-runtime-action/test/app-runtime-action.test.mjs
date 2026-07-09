@@ -483,6 +483,51 @@ test("validates repair-agent unavailable action fixture", () => {
   assert.equal(validateAppRuntimeAction(report), report);
 });
 
+test("accepts demo repair-agent only as a dry run", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-action.launch-pending.json", import.meta.url), "utf8"));
+  report.action = "repair-agent";
+  report.launchPlan.requiresRuntimeStart = false;
+  report.launchPlan.recommendedAction = "repair-guest-agent-for-pending-launch";
+  delete report.launchPlan.recommendedStartCommand;
+  report.launchPlan.recommendedRepairCommand = "veil-vmctl app-runtime-action --json --action repair-agent --wait-seconds 120";
+  report.status.launchPlan = { ...report.launchPlan };
+  report.status.localRuntime.state = "running";
+  report.status.localRuntime.bootReady = true;
+  report.status.localRuntime.canStart = false;
+  report.status.localRuntime.isRunning = true;
+  markStatusLocalRuntimeInstalled(report);
+  report.status.localRuntime.recommendedAction = "wait-for-guest-agent";
+  report.status.localRuntime.reason = "The local Windows runtime is already running; wait for the guest agent before opening Windows apps.";
+  report.status.actions.find((action) => action.id === "runtime.startWindowsForApp").isAvailable = false;
+  report.status.actions.find((action) => action.id === "runtime.repairGuestAgentForApp").isAvailable = true;
+  report.status.menuBarIntegration.primaryActionId = "runtime.repairGuestAgentForApp";
+  report.status.menuBarIntegration.primaryActionTitle = "Continue Notepad";
+  setReleaseGateStep(report, "windowsSetup", {
+    state: "passed",
+    isPassing: true
+  });
+  setReleaseGateStep(report, "openWindowsApp", {
+    state: "ready",
+    isPassing: false,
+    nextActionCommand: "veil-vmctl app-runtime-action --json --action repair-agent --wait-seconds 120"
+  });
+  report.nextActions = [
+    "Omit `--demo` to send the attached guest-agent repair path to the running local Windows VM.",
+    "Run `veil-vmctl app-runtime-status --json` to inspect the real app connection before retrying repair-agent."
+  ];
+
+  assert.equal(validateAppRuntimeAction(report), report);
+
+  report.agentRepair = {
+    kind: "qemuGuestAgentInstallAttempt"
+  };
+
+  assert.throws(
+    () => validateAppRuntimeAction(report),
+    /demo repair-agent/
+  );
+});
+
 test("validates wait-agent stale media guidance before guest-agent repair", () => {
   const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-action.wait-agent-unavailable.json", import.meta.url), "utf8"));
   configureRunningStaleGuestToolsMedia(report);
