@@ -238,6 +238,7 @@ Goal: keep the main Veil experience pointed at real local Windows boot and conso
 - [x] Verify live `app-runtime-action --action launch --app-id winapp_notepad` on the same run: accepted launch, foreground `hwnd:00010686`, Korean Notepad title, `macWindowIntegration.mirroredWindowCount=1`, `launcherVisibility.shouldHideMainWindow=true`, and menu-bar primary action `Bring Notepad Forward`.
 - [x] Add `automaticInstallMediaStatus` to `qemu-install-status` plus harness coverage so stale `VeilAutoInstall.iso` media is detected and the next action tells the operator to power down, rebuild guest tools media with `veil-vmctl prepare`, and relaunch Windows before retrying guest-agent repair.
 - [x] Propagate stale guest tools media into `app-runtime-status`: `localRuntime.requiresGuestToolsMediaRebuild` now blocks guest-agent repair, exposes the stop-runtime action while Windows is still running, preserves the media rebuild command, and has Swift plus app-runtime-status harness coverage.
+- [x] Extend `app-runtime-action` launch and wait-agent next actions so stale guest tools media points at stop-runtime plus media rebuild, and add harness coverage rejecting action reports that still recommend guest-agent repair first.
 
 ## Next
 

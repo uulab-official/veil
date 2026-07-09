@@ -3014,7 +3014,7 @@ struct VeilVMControl {
         }
 
         if action == .launch || action == .fulfillPending {
-            return launchRecoveryActions(from: status.launchPlan)
+            return launchRecoveryActions(from: status)
         }
 
         if action == .reconnectRestore {
@@ -3026,6 +3026,10 @@ struct VeilVMControl {
         }
 
         if action == .waitAgent {
+            if status.localRuntime.requiresGuestToolsMediaRebuild {
+                return guestToolsMediaRebuildActions(from: status.localRuntime)
+            }
+
             return [
                 "Run `veil-vmctl qemu-install-agent --json --wait-seconds 120` to send the attached guest-agent repair path.",
                 "Run `veil-host-probe --diagnose-agent` to inspect host-forward TCP and WebSocket health.",
@@ -3077,12 +3081,18 @@ struct VeilVMControl {
         }
     }
 
-    private static func launchRecoveryActions(from launchPlan: WindowsAppRuntimeLaunchPlanStatus) -> [String] {
+    private static func launchRecoveryActions(from status: WindowsAppRuntimeStatusReport) -> [String] {
         var actions: [String] = []
+        let launchPlan = status.launchPlan
 
         if launchPlan.recommendedAction == "prepare-local-runtime" {
             actions.append("Run `veil-vmctl qemu-install-status --json` and resolve the local Windows runtime blocker before starting Windows.")
             return actions
+        }
+
+        if launchPlan.recommendedAction == "rebuild-guest-tools-media-before-launch"
+            || status.localRuntime.requiresGuestToolsMediaRebuild {
+            return guestToolsMediaRebuildActions(from: status.localRuntime)
         }
 
         if let startCommand = launchPlan.recommendedStartCommand {
@@ -3106,6 +3116,20 @@ struct VeilVMControl {
         }
 
         return actions
+    }
+
+    private static func guestToolsMediaRebuildActions(
+        from localRuntime: WindowsAppRuntimeLocalRuntimeStatus
+    ) -> [String] {
+        compactActions([
+            localRuntime.recommendedPowerDownCommand.map {
+                "Run `\($0)` to stop Windows before rebuilding the attached guest tools media."
+            },
+            localRuntime.recommendedMediaRebuildCommand.map {
+                "Run `\($0)` after Windows stops so the next launch attaches a current VeilAutoInstall.iso."
+            },
+            "Run `veil-vmctl app-runtime-status --json` after rebuilding media, then start Windows and retry the app connection."
+        ])
     }
 
     private static func proveAppWindow(json: Bool, appId: String, waitSeconds: Int, outputPath: String?) async throws {

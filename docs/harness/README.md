@@ -131,6 +131,11 @@ same status includes `recommendedStopCommand` so automation can hand off to the
 bounded local runtime shutdown command without guessing. The `actions` list
 also exposes `runtime.stopWhenIdle` so callers can gate the actual stop command
 from the same app-runtime status contract.
+Action reports reuse that same recovery contract: when stale guest tools media
+blocks an app launch or wait-agent attempt, `nextActions` must point at
+`app-runtime-action --action stop-runtime` and the `veil-vmctl prepare
+--installer ...` rebuild command, and must not send the operator back to
+guest-agent repair before the media is rebuilt.
 When a live app connection is present, `connection.capabilities` mirrors the
 app launch, window capture, input, and clipboard support exposed by the Windows
 side. The app-check actions `proof.appWindow`, `proof.coherence`, and

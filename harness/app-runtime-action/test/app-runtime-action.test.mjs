@@ -61,6 +61,13 @@ function expectedPrimaryNextActionId(stepId, command) {
         || command === "veil-vmctl app-runtime-status --json") {
         return "runtime.refreshStatus";
       }
+      if (command.includes("--action stop-runtime")
+        || command.includes("qemu-powerdown")) {
+        return "runtime.stopWhenIdle";
+      }
+      if (command.includes("--action quiet-when-idle")) {
+        return "runtime.quietWhenIdle";
+      }
       if (command.startsWith("veil-vmctl prepare")) {
         return "runtime.prepareWindows";
       }
@@ -201,6 +208,74 @@ function refreshLaunchOnboarding(report) {
   };
 }
 
+function configureRunningStaleGuestToolsMedia(report) {
+  const rebuildCommand = "veil-vmctl prepare --installer /Users/test/Downloads/Win11_25H2_Korean_Arm64_v2.iso --drivers /Users/test/Downloads/virtio-win.iso";
+  const stopCommand = "veil-vmctl app-runtime-action --json --action stop-runtime";
+
+  report.status.localRuntime.state = "running";
+  report.status.localRuntime.bootReady = true;
+  report.status.localRuntime.canStart = false;
+  report.status.localRuntime.isRunning = true;
+  report.status.localRuntime.windowsInstalled = true;
+  report.status.localRuntime.requiresGuestToolsMediaRebuild = true;
+  report.status.localRuntime.recommendedAction = "rebuild-guest-tools-media";
+  report.status.localRuntime.recommendedMediaRebuildCommand = rebuildCommand;
+  report.status.localRuntime.recommendedPowerDownCommand = stopCommand;
+  report.status.localRuntime.reason = "The local Windows runtime is running with stale guest tools media attached; power down Windows, rebuild VeilAutoInstall.iso, then restart before repairing the app connection.";
+  delete report.status.localRuntime.recommendedPrepareCommand;
+  delete report.status.localRuntime.recommendedRecoveryCommand;
+  report.status.localRuntime.automaticInstallMediaStatus = {
+    state: "stale",
+    isCurrent: false,
+    mediaPath: "/Users/test/Virtual Machines/Veil Shared/VeilAutoInstall.iso",
+    sourcePath: "/Users/test/Virtual Machines/Veil Shared",
+    mediaModifiedAt: "2026-07-03T11:55:00Z",
+    sourceModifiedAt: "2026-07-03T11:56:00Z",
+    recommendedAction: "rebuild-media-and-relaunch",
+    rebuildCommand,
+    requiresRelaunch: true,
+    detail: "VeilAutoInstall.iso is older than the staged Autounattend or guest-agent bundle."
+  };
+
+  report.status.launchPlan.requiresRuntimeStart = false;
+  report.status.launchPlan.requiresGuestAgent = true;
+  report.status.launchPlan.willOpenAppAutomatically = false;
+  report.status.launchPlan.recommendedAction = "rebuild-guest-tools-media-before-launch";
+  report.status.launchPlan.reason = "The selected Windows app can be requested, but guest tools media must be rebuilt before Veil can repair the app connection.";
+  delete report.status.launchPlan.recommendedStartCommand;
+  delete report.status.launchPlan.recommendedWaitCommand;
+  delete report.status.launchPlan.recommendedRepairCommand;
+  if (report.launchPlan !== undefined) {
+    report.launchPlan = { ...report.status.launchPlan };
+  }
+
+  report.status.actions.find((action) => action.id === "runtime.startWindowsForApp").isAvailable = false;
+  report.status.actions.find((action) => action.id === "runtime.repairGuestAgentForApp").isAvailable = false;
+  report.status.actions.find((action) => action.id === "runtime.stopWhenIdle").isAvailable = true;
+  report.status.menuBarIntegration.primaryActionId = "runtime.stopWhenIdle";
+  report.status.menuBarIntegration.primaryActionTitle = "Stop Windows";
+  report.status.menuBarIntegration.primaryActionAvailable = true;
+
+  setReleaseGateStep(report, "windowsSetup", {
+    state: "blocked",
+    isPassing: false,
+    evidence: report.status.localRuntime.reason,
+    nextActionCommand: stopCommand
+  });
+  setReleaseGateStep(report, "openWindowsApp", {
+    state: "blocked",
+    isPassing: false,
+    evidence: report.status.launchPlan.reason,
+    nextActionCommand: report.status.launchPlan.recommendedLaunchCommand
+  });
+
+  report.nextActions = [
+    `Run \`${stopCommand}\` to stop Windows before rebuilding the attached guest tools media.`,
+    `Run \`${rebuildCommand}\` after Windows stops so the next launch attaches a current VeilAutoInstall.iso.`,
+    "Run `veil-vmctl app-runtime-status --json` after rebuilding media, then start Windows and retry the app connection."
+  ];
+}
+
 test("validates app runtime launch action fixture", () => {
   const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-action.launch-demo.json", import.meta.url), "utf8"));
 
@@ -245,6 +320,27 @@ test("validates pending launch repair action while local Windows is running", ()
   });
 
   assert.equal(validateAppRuntimeAction(report), report);
+});
+
+test("validates pending launch recovery when guest tools media must be rebuilt first", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-action.launch-pending.json", import.meta.url), "utf8"));
+  configureRunningStaleGuestToolsMedia(report);
+
+  assert.equal(validateAppRuntimeAction(report), report);
+});
+
+test("rejects stale guest tools media action guidance that still recommends repair", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-action.launch-pending.json", import.meta.url), "utf8"));
+  configureRunningStaleGuestToolsMedia(report);
+  report.nextActions = [
+    "Run `veil-vmctl qemu-install-agent --json --wait-seconds 120` to repair or start the Windows guest agent from attached media.",
+    "Run `veil-vmctl app-runtime-action --json --action fulfill-pending` after the guest agent connects."
+  ];
+
+  assert.throws(
+    () => validateAppRuntimeAction(report),
+    /stop Windows first/
+  );
 });
 
 test("validates app runtime fulfill-pending fixture", () => {
@@ -366,6 +462,13 @@ test("validates recommended proof action fixture", () => {
 
 test("validates wait-agent unavailable action fixture", () => {
   const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-action.wait-agent-unavailable.json", import.meta.url), "utf8"));
+
+  assert.equal(validateAppRuntimeAction(report), report);
+});
+
+test("validates wait-agent stale media guidance before guest-agent repair", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-action.wait-agent-unavailable.json", import.meta.url), "utf8"));
+  configureRunningStaleGuestToolsMedia(report);
 
   assert.equal(validateAppRuntimeAction(report), report);
 });

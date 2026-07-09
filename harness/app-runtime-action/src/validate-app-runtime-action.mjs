@@ -111,8 +111,26 @@ export function validateAppRuntimeAction(report) {
   }
 
   validateStringArray(report.nextActions, "nextActions");
+  validateGuestToolsMediaRebuildNextActions(report);
   validateProofNextActions(report);
   return report;
+}
+
+function validateGuestToolsMediaRebuildNextActions(report) {
+  if (!report.status.localRuntime.requiresGuestToolsMediaRebuild) {
+    return;
+  }
+
+  const joinedActions = report.nextActions.join("\n");
+  if (!joinedActions.includes("app-runtime-action --json --action stop-runtime")) {
+    throw new TypeError("stale guest tools media actions must tell the operator to stop Windows first.");
+  }
+  if (!joinedActions.includes("veil-vmctl prepare --installer")) {
+    throw new TypeError("stale guest tools media actions must include the media rebuild command.");
+  }
+  if (joinedActions.includes("qemu-install-agent")) {
+    throw new TypeError("stale guest tools media actions must not recommend guest-agent repair before media rebuild.");
+  }
 }
 
 function validateWaitAgentAction(report) {
@@ -317,6 +335,15 @@ function validateLaunchAction(report) {
 
     if (report.pendingLaunchAppId !== report.appId) {
       throw new TypeError("rejected app-first launch actions must expose pendingLaunchAppId for the requested app.");
+    }
+
+    const requiresGuestToolsMediaRebuild = report.status.localRuntime.requiresGuestToolsMediaRebuild === true;
+    if (requiresGuestToolsMediaRebuild) {
+      if (report.status.localRuntime.recommendedPowerDownCommand === undefined
+        || report.status.localRuntime.recommendedMediaRebuildCommand === undefined) {
+        throw new TypeError("rejected app-first launch actions with stale guest tools media must expose powerdown and rebuild commands.");
+      }
+      return;
     }
 
     if (

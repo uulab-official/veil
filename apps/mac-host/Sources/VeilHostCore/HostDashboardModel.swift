@@ -1490,6 +1490,9 @@ public final class HostDashboardModel {
 
         if pendingLaunch.isQueued {
             let appName = appName(for: pendingLaunch.appId) ?? "Windows App"
+            if localRuntime.recommendedPowerDownCommand != nil {
+                return ("runtime.stopWhenIdle", "Stop Windows", true)
+            }
             if localRuntime.recommendedRecoveryCommand != nil {
                 return ("runtime.recoverDisplay", "Refresh Display", true)
             }
