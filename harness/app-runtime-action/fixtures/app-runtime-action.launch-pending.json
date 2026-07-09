@@ -50,11 +50,27 @@
       "isEnabled": true,
       "openWindowCount": 0,
       "pendingLaunchCount": 1,
+      "restorableAppCount": 0,
       "badgeLabel": "...",
       "canOpenMainWindow": true,
       "canBringWindowsAppsForward": false,
       "canRestorePreviousApps": false,
+      "canReconnectPreviousApps": false,
       "canLaunchSelectedApp": true
+    },
+    "menuBarIntegration": {
+      "isEnabled": true,
+      "statusTitle": "Notepad Waiting",
+      "symbolName": "clock.fill",
+      "primaryActionId": "runtime.startWindowsForApp",
+      "primaryActionTitle": "Open Windows for Notepad",
+      "primaryActionAvailable": true,
+      "canOpenMainWindow": true,
+      "canBringWindowsAppsForward": false,
+      "canRestorePreviousApps": false,
+      "canReconnectPreviousApps": false,
+      "canLaunchSelectedApp": true,
+      "canFulfillPendingLaunch": false
     },
     "launcherVisibility": {
       "isEnabled": true,
@@ -144,6 +160,11 @@
         "id": "macWindows.autoOpen",
         "title": "Auto Open Windows App Windows",
         "isAvailable": false
+      },
+      {
+        "id": "windowsApps.launchSelected",
+        "title": "Open Notepad",
+        "isAvailable": true
       },
       {
         "id": "runtime.startWindowsForApp",

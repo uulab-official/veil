@@ -37,6 +37,8 @@ test("validates pending launch repair action while local Windows is running", ()
   report.status.localRuntime.reason = "The local Windows runtime is already running; wait for the guest agent before opening Windows apps.";
   report.status.actions.find((action) => action.id === "runtime.startWindowsForApp").isAvailable = false;
   report.status.actions.find((action) => action.id === "runtime.repairGuestAgentForApp").isAvailable = true;
+  report.status.menuBarIntegration.primaryActionId = "runtime.repairGuestAgentForApp";
+  report.status.menuBarIntegration.primaryActionTitle = "Continue Notepad";
 
   assert.equal(validateAppRuntimeAction(report), report);
 });
@@ -335,6 +337,7 @@ test("rejects accepted fulfill-pending actions that leave pending launch queued"
   report.status.launchPlan.recommendedLaunchCommand = "veil-vmctl app-runtime-action --json --action fulfill-pending";
   report.status.dockIntegration.pendingLaunchCount = 1;
   report.status.actions.find((action) => action.id === "runtime.fulfillPendingLaunch").isAvailable = true;
+  report.status.menuBarIntegration.canFulfillPendingLaunch = true;
   report.launchPlan.pendingLaunchAppId = "winapp_notepad";
   report.launchPlan.recommendedLaunchCommand = "veil-vmctl app-runtime-action --json --action fulfill-pending";
 
@@ -582,6 +585,11 @@ test("rejects close-all actions that leave mirrored sessions open", () => {
   report.status.dockIntegration.openWindowCount = 1;
   report.status.dockIntegration.badgeLabel = "1";
   report.status.dockIntegration.canBringWindowsAppsForward = true;
+  report.status.menuBarIntegration.statusTitle = "1 Windows App Open";
+  report.status.menuBarIntegration.symbolName = "rectangle.stack.fill";
+  report.status.menuBarIntegration.primaryActionId = "dock.bringWindowsAppsForward";
+  report.status.menuBarIntegration.primaryActionTitle = "Bring Notepad Forward";
+  report.status.menuBarIntegration.canBringWindowsAppsForward = true;
   report.status.macWindowIntegration.mirroredWindowCount = 1;
   report.status.macWindowIntegration.foregroundableWindowCount = 1;
   report.status.macWindowIntegration.foregroundWindowId = "hwnd:STILL_OPEN";
@@ -599,6 +607,7 @@ test("rejects close-all actions that leave mirrored sessions open", () => {
   delete report.status.quietRuntime.recommendedStopCommand;
   report.status.actions.find((action) => action.id === "runtime.quietWhenIdle").isAvailable = false;
   report.status.actions.find((action) => action.id === "runtime.stopWhenIdle").isAvailable = false;
+  report.status.actions.find((action) => action.id === "dock.bringWindowsAppsForward").isAvailable = true;
 
   assert.throws(
     () => validateAppRuntimeAction(report),
@@ -632,8 +641,17 @@ test("allows rejected restore actions to keep requested app ids", () => {
   report.restoredWindows = [];
   report.status.mirrorSessions = [];
   report.status.dockIntegration.openWindowCount = 0;
-  report.status.dockIntegration.badgeLabel = undefined;
+  report.status.dockIntegration.badgeLabel = "R";
   report.status.dockIntegration.canBringWindowsAppsForward = false;
+  report.status.dockIntegration.canReconnectPreviousApps = true;
+  report.status.dockIntegration.canRestorePreviousApps = true;
+  report.status.menuBarIntegration.statusTitle = "Notepad Ready";
+  report.status.menuBarIntegration.symbolName = "arrow.counterclockwise.circle.fill";
+  report.status.menuBarIntegration.primaryActionId = "windowsApps.restorePrevious";
+  report.status.menuBarIntegration.primaryActionTitle = "Restore Notepad";
+  report.status.menuBarIntegration.canBringWindowsAppsForward = false;
+  report.status.menuBarIntegration.canReconnectPreviousApps = true;
+  report.status.menuBarIntegration.canRestorePreviousApps = true;
   report.status.macWindowIntegration.hidesLauncherWhenMirroring = false;
   report.status.macWindowIntegration.mirroredWindowCount = 0;
   report.status.macWindowIntegration.foregroundableWindowCount = 0;
@@ -646,6 +664,7 @@ test("allows rejected restore actions to keep requested app ids", () => {
   report.status.visibleSurfacePolicy.expectedVisibleSurfaceCount = 1;
   report.status.visibleSurfacePolicy.shouldHideLauncher = false;
   report.status.quietRuntime.openWindowCount = 0;
+  report.status.actions.find((action) => action.id === "windowsApps.restorePrevious").isAvailable = true;
   report.status.actions.find((action) => action.id === "windowsApps.reconnectRestore").isAvailable = true;
 
   assert.equal(validateAppRuntimeAction(report), report);
@@ -655,8 +674,17 @@ test("rejects restore actions whose windows are absent from status", () => {
   const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-action.restore-live.json", import.meta.url), "utf8"));
   report.status.mirrorSessions = [];
   report.status.dockIntegration.openWindowCount = 0;
-  report.status.dockIntegration.badgeLabel = undefined;
+  report.status.dockIntegration.badgeLabel = "R";
   report.status.dockIntegration.canBringWindowsAppsForward = false;
+  report.status.dockIntegration.canReconnectPreviousApps = true;
+  report.status.dockIntegration.canRestorePreviousApps = true;
+  report.status.menuBarIntegration.statusTitle = "Notepad Ready";
+  report.status.menuBarIntegration.symbolName = "arrow.counterclockwise.circle.fill";
+  report.status.menuBarIntegration.primaryActionId = "windowsApps.restorePrevious";
+  report.status.menuBarIntegration.primaryActionTitle = "Restore Notepad";
+  report.status.menuBarIntegration.canBringWindowsAppsForward = false;
+  report.status.menuBarIntegration.canReconnectPreviousApps = true;
+  report.status.menuBarIntegration.canRestorePreviousApps = true;
   report.status.macWindowIntegration.hidesLauncherWhenMirroring = false;
   report.status.macWindowIntegration.mirroredWindowCount = 0;
   report.status.macWindowIntegration.foregroundableWindowCount = 0;
@@ -669,6 +697,7 @@ test("rejects restore actions whose windows are absent from status", () => {
   report.status.visibleSurfacePolicy.expectedVisibleSurfaceCount = 1;
   report.status.visibleSurfacePolicy.shouldHideLauncher = false;
   report.status.quietRuntime.openWindowCount = 0;
+  report.status.actions.find((action) => action.id === "windowsApps.restorePrevious").isAvailable = true;
   report.status.actions.find((action) => action.id === "windowsApps.reconnectRestore").isAvailable = true;
 
   assert.throws(

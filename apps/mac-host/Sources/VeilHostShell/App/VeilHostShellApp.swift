@@ -1221,33 +1221,12 @@ private struct VeilMenuBarMenu: View {
     var supportsNativeDisplayWindow: Bool
 
     var body: some View {
-        if !model.mirrorSessions.isEmpty {
-            Button(activeWindowsAppsForwardTitle, systemImage: "arrow.up.forward.app") {
-                bringAllWindowsAppWindowsToFrontAction()
-            }
+        Button(menuBarPrimaryActionTitle, systemImage: menuBarPrimaryActionSymbolName) {
+            runMenuBarPrimaryAction()
+        }
+        .disabled(!menuBarPrimaryAction.primaryActionAvailable)
 
-            Button("Open Veil", systemImage: "macwindow") {
-                openMainWindow()
-            }
-        } else if shouldPromotePreviousAppsRestore {
-            Button(restorePreviousAppsTitle, systemImage: "arrow.clockwise.square") {
-                restoreWindowsAppWindowsAction()
-            }
-            .disabled(!model.canReconnectRestoreMirrorSessions)
-
-            Button("Open Veil", systemImage: "macwindow") {
-                openMainWindow()
-            }
-        } else if let queuedLaunchMenuState, shouldPromoteQueuedLaunch {
-            Button(queuedLaunchMenuState.title, systemImage: queuedLaunchMenuState.symbolName) {
-                runQueuedLaunchAction(queuedLaunchMenuState)
-            }
-            .disabled(!queuedLaunchMenuState.isEnabled)
-
-            Button("Open Veil", systemImage: "macwindow") {
-                openMainWindow()
-            }
-        } else {
+        if menuBarPrimaryAction.primaryActionId != "dock.openMainWindow" {
             Button("Open Veil", systemImage: "macwindow") {
                 openMainWindow()
             }
@@ -1486,6 +1465,21 @@ private struct VeilMenuBarMenu: View {
         appRuntimeStatusReport.menuBarIntegration.symbolName
     }
 
+    private var menuBarPrimaryAction: WindowsAppRuntimeMenuBarIntegrationStatus {
+        appRuntimeStatusReport.menuBarIntegration
+    }
+
+    private var menuBarPrimaryActionTitle: String {
+        menuBarPrimaryAction.primaryActionTitle
+    }
+
+    private var menuBarPrimaryActionSymbolName: String {
+        MenuBarPrimaryActionPresentation.symbolName(
+            for: menuBarPrimaryAction.primaryActionId,
+            fallbackSymbolName: runtimeStatusSymbolName
+        )
+    }
+
     private var runningAppsTitle: String {
         let count = model.mirrorSessions.count
         return count == 1 ? "1 Windows App Running" : "\(count) Windows Apps Running"
@@ -1558,6 +1552,38 @@ private struct VeilMenuBarMenu: View {
         }
     }
 
+    private func runMenuBarPrimaryAction() {
+        switch menuBarPrimaryAction.primaryActionId {
+        case "dock.openMainWindow":
+            openMainWindow()
+        case "dock.bringWindowsAppsForward":
+            bringAllWindowsAppWindowsToFrontAction()
+        case "windowsApps.restorePrevious", "windowsApps.reconnectRestore":
+            restoreWindowsAppWindowsAction()
+        case "runtime.recoverDisplay":
+            openMainWindow()
+            recoverRuntimeDisplayAction()
+        case "runtime.fulfillPendingLaunch":
+            fulfillPendingLaunchAction()
+        case "runtime.repairGuestAgentForApp":
+            openMainWindow()
+            repairGuestAgentForAppLaunchAction()
+        case "runtime.startWindowsForApp":
+            openMainWindow()
+            startVMAction()
+        case "runtime.waitAgent":
+            openMainWindow()
+            waitForGuestAgentAction()
+        case "windowsApps.launchSelected":
+            if !model.hasLiveAgentConnection {
+                openMainWindow()
+            }
+            launchWindowsAppAction()
+        default:
+            openMainWindow()
+        }
+    }
+
     private func openMainWindow() {
         if !MainWindowChrome.hasMainWindow {
             openWindow(id: "main")
@@ -1581,6 +1607,33 @@ private struct VeilMenuBarMenu: View {
             "paintpalette"
         default:
             "macwindow"
+        }
+    }
+}
+
+enum MenuBarPrimaryActionPresentation {
+    static func symbolName(for actionId: String, fallbackSymbolName: String) -> String {
+        switch actionId {
+        case "dock.openMainWindow":
+            return "macwindow"
+        case "dock.bringWindowsAppsForward":
+            return "arrow.up.forward.app"
+        case "windowsApps.restorePrevious", "windowsApps.reconnectRestore":
+            return "arrow.clockwise.square"
+        case "runtime.recoverDisplay":
+            return "display.trianglebadge.exclamationmark"
+        case "runtime.fulfillPendingLaunch":
+            return "arrow.up.forward.app"
+        case "runtime.repairGuestAgentForApp":
+            return "bolt.horizontal.circle"
+        case "runtime.startWindowsForApp":
+            return "play.fill"
+        case "runtime.waitAgent":
+            return "antenna.radiowaves.left.and.right"
+        case "windowsApps.launchSelected":
+            return "arrow.up.forward.app"
+        default:
+            return fallbackSymbolName
         }
     }
 }

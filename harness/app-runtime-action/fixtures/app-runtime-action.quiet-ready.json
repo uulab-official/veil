@@ -46,10 +46,26 @@
       "isEnabled": true,
       "openWindowCount": 0,
       "pendingLaunchCount": 0,
+      "restorableAppCount": 0,
       "canOpenMainWindow": true,
       "canBringWindowsAppsForward": false,
       "canRestorePreviousApps": false,
+      "canReconnectPreviousApps": false,
       "canLaunchSelectedApp": true
+    },
+    "menuBarIntegration": {
+      "isEnabled": true,
+      "statusTitle": "Apps Ready",
+      "symbolName": "display",
+      "primaryActionId": "windowsApps.launchSelected",
+      "primaryActionTitle": "Open Notepad",
+      "primaryActionAvailable": true,
+      "canOpenMainWindow": true,
+      "canBringWindowsAppsForward": false,
+      "canRestorePreviousApps": false,
+      "canReconnectPreviousApps": false,
+      "canLaunchSelectedApp": true,
+      "canFulfillPendingLaunch": false
     },
     "launcherVisibility": {
       "isEnabled": true,
@@ -130,6 +146,11 @@
       {
         "id": "macWindows.autoOpen",
         "title": "Auto Open Windows App Windows",
+        "isAvailable": true
+      },
+      {
+        "id": "windowsApps.launchSelected",
+        "title": "Open Notepad",
         "isAvailable": true
       },
       {

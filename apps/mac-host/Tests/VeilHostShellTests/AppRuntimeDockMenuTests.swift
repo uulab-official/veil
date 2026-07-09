@@ -243,6 +243,37 @@ struct AppRuntimeDockMenuTests {
         #expect(titles.allSatisfy { !$0.contains("Agent") })
     }
 
+    @Test("menu bar primary action symbols stay app first")
+    func menuBarPrimaryActionSymbolsStayAppFirst() {
+        let symbolsByAction = [
+            "dock.openMainWindow": "macwindow",
+            "dock.bringWindowsAppsForward": "arrow.up.forward.app",
+            "windowsApps.restorePrevious": "arrow.clockwise.square",
+            "windowsApps.reconnectRestore": "arrow.clockwise.square",
+            "runtime.recoverDisplay": "display.trianglebadge.exclamationmark",
+            "runtime.fulfillPendingLaunch": "arrow.up.forward.app",
+            "runtime.repairGuestAgentForApp": "bolt.horizontal.circle",
+            "runtime.startWindowsForApp": "play.fill",
+            "runtime.waitAgent": "antenna.radiowaves.left.and.right",
+            "windowsApps.launchSelected": "arrow.up.forward.app"
+        ]
+
+        for (actionId, expectedSymbol) in symbolsByAction {
+            #expect(
+                MenuBarPrimaryActionPresentation.symbolName(
+                    for: actionId,
+                    fallbackSymbolName: "questionmark.circle"
+                ) == expectedSymbol
+            )
+        }
+        #expect(
+            MenuBarPrimaryActionPresentation.symbolName(
+                for: "unknown.action",
+                fallbackSymbolName: "questionmark.circle"
+            ) == "questionmark.circle"
+        )
+    }
+
     @Test("maps reconnect restore handoff to recovery start or wait states")
     func mapsReconnectRestoreHandoffToRecoveryStartOrWaitStates() {
         #expect(

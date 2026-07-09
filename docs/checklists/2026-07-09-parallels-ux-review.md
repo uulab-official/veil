@@ -43,6 +43,7 @@ Goal: keep the user-facing workflow one-screen-first (launcher + one action path
 - [x] Prioritize Windows app state in the menu bar icon so open apps, queued apps, and previous-app restore are visible before generic Windows runtime state.
 - [x] Expose menu-bar status, symbol, and primary action in `app-runtime-status` so top-bar app control is covered by the same harness contract as Dock actions.
 - [x] Reuse `app-runtime-status.menuBarIntegration` in the SwiftUI menu bar extra so UI, CLI, and harness status stay aligned.
+- [x] Drive the menu bar's first button from `menuBarIntegration.primaryAction*`, so the top-bar control opens, restores, reconnects, or brings forward Windows apps using the same contract as CLI and harness output.
 
 ## CEO Review
 
