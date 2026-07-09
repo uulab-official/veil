@@ -137,15 +137,20 @@ struct AppRuntimeDockMenuTests {
             WindowsShellCopy.openWindowsActionTitle(windowsInstalled: true),
             WindowsShellCopy.openWindowsActionTitle(windowsInstalled: false),
             WindowsShellCopy.closeWindowsActionTitle,
-            WindowsShellCopy.refreshWindowsStatusTitle
+            WindowsShellCopy.refreshWindowsStatusTitle,
+            WindowsShellCopy.bringWindowsAppsForwardTitle(openAppWindowCount: 1),
+            WindowsShellCopy.bringWindowsAppsForwardTitle(openAppWindowCount: 2)
         ]
 
         #expect(titles == [
             "Open Windows",
             "Set Up Windows",
             "Close Windows",
-            "Refresh Status"
+            "Refresh Status",
+            "Bring Windows App Forward",
+            "Bring Windows Apps Forward"
         ])
+        #expect(titles.allSatisfy { $0.count <= 30 })
         #expect(titles.allSatisfy { !$0.contains("Runtime") })
         #expect(titles.allSatisfy { !$0.contains("VM") })
         #expect(titles.allSatisfy { !$0.contains("Agent") })
@@ -256,6 +261,43 @@ struct AppRuntimeDockMenuTests {
         #expect(menu.items.first?.title.contains("Runtime") == false)
         #expect(menu.items.first?.title.contains("VM") == false)
         #expect(menu.items.first?.title.contains("Agent") == false)
+    }
+
+    @Test("Dock menu prioritizes open Windows app windows over launcher")
+    func dockMenuPrioritizesOpenWindowsAppWindowsOverLauncher() async throws {
+        let model = HostDashboardModel(service: DemoHostDashboardService())
+        let vmModel = VMRuntimeModel(service: StubVMRuntimeService())
+
+        await model.load()
+        await vmModel.load()
+        let result = await model.launchApp(appId: "winapp_notepad")
+        try #require(result != nil)
+
+        let menu = AppRuntimeDockMenuFactory.makeMenu(
+            model: model,
+            vmModel: vmModel,
+            activateMainWindowAction: {},
+            bringAllWindowsAppWindowsToFrontAction: {},
+            focusWindowsAppWindowAction: { _ in },
+            closeWindowsAppWindowAction: { _ in },
+            closeAllWindowsAppWindowsAction: {},
+            restoreWindowsAppWindowsAction: {},
+            launchWindowsAppByIdAction: { _ in },
+            fulfillPendingLaunchAction: {},
+            repairGuestAgentForAppLaunchAction: {},
+            recoverRuntimeDisplayAction: {},
+            startVMAction: {},
+            stopVMAction: {},
+            quietWindowsWhenIdleAction: {}
+        )
+
+        let firstAction = try #require(menu.items.dropFirst().first { !$0.isSeparatorItem })
+        let bringIndex = try #require(menu.items.firstIndex { $0.title == "Bring Windows App Forward" })
+        let openVeilIndex = try #require(menu.items.firstIndex { $0.title == "Open Veil" })
+
+        #expect(menu.items.first?.title == "1 Windows App Open")
+        #expect(firstAction.title == "Bring Windows App Forward")
+        #expect(bringIndex < openVeilIndex)
     }
 
     @Test("maps queued app Dock menu item to the next product action")

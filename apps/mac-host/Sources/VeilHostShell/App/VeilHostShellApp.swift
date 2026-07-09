@@ -1224,8 +1224,18 @@ private struct VeilMenuBarMenu: View {
     var supportsNativeDisplayWindow: Bool
 
     var body: some View {
-        Button("Open Veil", systemImage: "macwindow") {
-            openMainWindow()
+        if !model.mirrorSessions.isEmpty {
+            Button(activeWindowsAppsForwardTitle, systemImage: "arrow.up.forward.app") {
+                bringAllWindowsAppWindowsToFrontAction()
+            }
+
+            Button("Open Veil", systemImage: "macwindow") {
+                openMainWindow()
+            }
+        } else {
+            Button("Open Veil", systemImage: "macwindow") {
+                openMainWindow()
+            }
         }
 
         Divider()
@@ -1241,7 +1251,7 @@ private struct VeilMenuBarMenu: View {
         if !model.mirrorSessions.isEmpty {
             Menu("Running Windows Apps", systemImage: "rectangle.3.group") {
                 Button(
-                    model.mirrorSessions.count == 1 ? "Bring Windows App Forward" : "Bring Windows Apps Forward",
+                    activeWindowsAppsForwardTitle,
                     systemImage: "arrow.up.forward.app"
                 ) {
                     bringAllWindowsAppWindowsToFrontAction()
@@ -1486,6 +1496,12 @@ private struct VeilMenuBarMenu: View {
     private var runningAppsTitle: String {
         let count = model.mirrorSessions.count
         return count == 1 ? "1 Windows App Running" : "\(count) Windows Apps Running"
+    }
+
+    private var activeWindowsAppsForwardTitle: String {
+        WindowsShellCopy.bringWindowsAppsForwardTitle(
+            openAppWindowCount: model.mirrorSessions.count
+        )
     }
 
     private var restorePreviousAppsTitle: String {

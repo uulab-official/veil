@@ -49,6 +49,10 @@ enum WindowsShellCopy {
     static let closeWindowsActionTitle = "Close Windows"
     static let refreshWindowsStatusTitle = "Refresh Status"
 
+    static func bringWindowsAppsForwardTitle(openAppWindowCount: Int) -> String {
+        openAppWindowCount == 1 ? "Bring Windows App Forward" : "Bring Windows Apps Forward"
+    }
+
     static func menuStatusTitle(
         runtimeState: VMRuntimeState?,
         windowsInstalled: Bool,

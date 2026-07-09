@@ -121,17 +121,19 @@ enum AppRuntimeDockMenuFactory {
         let menu = NSMenu(title: "Veil")
         menu.addItem(statusItem(statusTitle(model: model, vmModel: vmModel)))
         menu.addItem(.separator())
-        menu.addItem(item("Open Veil", action: #selector(AppRuntimeDockMenuTarget.openVeil(_:)), target: target))
 
         if !model.mirrorSessions.isEmpty {
-            menu.addItem(.separator())
             menu.addItem(
                 item(
-                    model.mirrorSessions.count == 1 ? "Bring Windows App Forward" : "Bring Windows Apps Forward",
+                    WindowsShellCopy.bringWindowsAppsForwardTitle(
+                        openAppWindowCount: model.mirrorSessions.count
+                    ),
                     action: #selector(AppRuntimeDockMenuTarget.bringAllWindowsAppsToFront(_:)),
                     target: target
                 )
             )
+            menu.addItem(item("Open Veil", action: #selector(AppRuntimeDockMenuTarget.openVeil(_:)), target: target))
+            menu.addItem(.separator())
 
             for session in model.mirrorSessions {
                 menu.addItem(
@@ -165,6 +167,8 @@ enum AppRuntimeDockMenuFactory {
                     isEnabled: model.canCloseAllMirrorSessions
                 )
             )
+        } else {
+            menu.addItem(item("Open Veil", action: #selector(AppRuntimeDockMenuTarget.openVeil(_:)), target: target))
         }
 
         if !model.restorableAppIds.isEmpty {
