@@ -334,6 +334,16 @@ struct AppRuntimeDockMenuTests {
             WindowsShellCopy.menuStatusTitle(
                 runtimeState: .running,
                 windowsInstalled: true,
+                hasLiveAppConnection: false,
+                hasQueuedApp: false,
+                canReconnectPreviousApps: true,
+                restorableAppName: "Notepad",
+                restorableWindowCount: 2,
+                openAppWindowCount: 0
+            ),
+            WindowsShellCopy.menuStatusTitle(
+                runtimeState: .running,
+                windowsInstalled: true,
                 hasLiveAppConnection: true,
                 hasQueuedApp: false,
                 openAppWindowCount: 2
@@ -355,6 +365,7 @@ struct AppRuntimeDockMenuTests {
             "Very Long Accounti... Waiting",
             "Notepad Ready",
             "Very Long Ac... Can Reconnect",
+            "Notepad Windows Can Reconnect",
             "2 Windows Apps Open",
             "Set Up Windows"
         ])
@@ -383,6 +394,11 @@ struct AppRuntimeDockMenuTests {
                 canRestoreNow: false,
                 singleAppName: "Very Long Accounting Workstation"
             ),
+            WindowsShellCopy.previousAppsRestoreTitle(
+                canRestoreNow: false,
+                singleAppName: "Notepad",
+                restoreWindowCount: 2
+            ),
             WindowsShellCopy.bringWindowsAppsForwardTitle(openAppWindowCount: 1),
             WindowsShellCopy.bringWindowsAppsForwardTitle(
                 openAppWindowCount: 1,
@@ -404,6 +420,7 @@ struct AppRuntimeDockMenuTests {
             "Reconnect Previous Apps",
             "Restore Notepad",
             "Reconnect Very Long Account...",
+            "Reconnect 2 Notepad Windows",
             "Bring Windows App Forward",
             "Bring Notepad Forward",
             "Bring Very Long Acc... Forward",

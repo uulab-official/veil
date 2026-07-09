@@ -297,6 +297,7 @@ enum AppRuntimeDockMenuFactory {
             canRestorePreviousApps: model.canRestoreMirrorSessions,
             canReconnectPreviousApps: model.canReconnectRestoreMirrorSessions,
             restorableAppName: restorableSingleAppName(model: model),
+            restorableWindowCount: model.restorableWindowCount,
             openAppWindowCount: model.mirrorSessions.count
         )
     }
@@ -364,7 +365,8 @@ enum AppRuntimeDockMenuFactory {
     private static func previousAppsRestoreTitle(model: HostDashboardModel) -> String {
         WindowsShellCopy.previousAppsRestoreTitle(
             canRestoreNow: model.canRestoreMirrorSessions,
-            singleAppName: restorableSingleAppName(model: model)
+            singleAppName: restorableSingleAppName(model: model),
+            restoreWindowCount: model.restorableWindowCount
         )
     }
 

@@ -51,8 +51,15 @@ enum WindowsShellCopy {
 
     static func previousAppsRestoreTitle(
         canRestoreNow: Bool,
-        singleAppName: String? = nil
+        singleAppName: String? = nil,
+        restoreWindowCount: Int = 0
     ) -> String {
+        if restoreWindowCount > 1,
+           let singleAppName,
+           !singleAppName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return "\(canRestoreNow ? "Restore" : "Reconnect") \(restoreWindowCount) \(menuItemTitle(singleAppName)) Windows"
+        }
+
         guard let singleAppName,
               !singleAppName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             return canRestoreNow ? "Restore Previous Apps" : "Reconnect Previous Apps"
@@ -66,8 +73,15 @@ enum WindowsShellCopy {
 
     static func previousAppsStatusTitle(
         canRestoreNow: Bool,
-        singleAppName: String? = nil
+        singleAppName: String? = nil,
+        restoreWindowCount: Int = 0
     ) -> String {
+        if restoreWindowCount > 1,
+           let singleAppName,
+           !singleAppName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return "\(menuItemTitle(singleAppName)) Windows \(canRestoreNow ? "Ready" : "Can Reconnect")"
+        }
+
         guard let singleAppName,
               !singleAppName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             return canRestoreNow ? "Previous Apps Ready" : "Previous Apps Can Reconnect"
@@ -144,6 +158,7 @@ enum WindowsShellCopy {
         canRestorePreviousApps: Bool = false,
         canReconnectPreviousApps: Bool = false,
         restorableAppName: String? = nil,
+        restorableWindowCount: Int = 0,
         openAppWindowCount: Int
     ) -> String {
         if openAppWindowCount > 0 {
@@ -166,7 +181,8 @@ enum WindowsShellCopy {
         if canRestorePreviousApps || canReconnectPreviousApps {
             return previousAppsStatusTitle(
                 canRestoreNow: canRestorePreviousApps,
-                singleAppName: restorableAppName
+                singleAppName: restorableAppName,
+                restoreWindowCount: restorableWindowCount
             )
         }
 

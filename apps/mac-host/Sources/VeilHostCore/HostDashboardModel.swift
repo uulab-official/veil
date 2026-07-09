@@ -285,6 +285,7 @@ public struct WindowsAppRuntimeDockIntegrationStatus: Codable, Equatable, Sendab
     public var openWindowCount: Int
     public var pendingLaunchCount: Int
     public var restorableAppCount: Int
+    public var restorableWindowCount: Int
     public var badgeLabel: String?
     public var canOpenMainWindow: Bool
     public var canBringWindowsAppsForward: Bool
@@ -297,6 +298,7 @@ public struct WindowsAppRuntimeDockIntegrationStatus: Codable, Equatable, Sendab
         openWindowCount: Int,
         pendingLaunchCount: Int,
         restorableAppCount: Int,
+        restorableWindowCount: Int? = nil,
         badgeLabel: String?,
         canOpenMainWindow: Bool,
         canBringWindowsAppsForward: Bool,
@@ -308,6 +310,7 @@ public struct WindowsAppRuntimeDockIntegrationStatus: Codable, Equatable, Sendab
         self.openWindowCount = openWindowCount
         self.pendingLaunchCount = pendingLaunchCount
         self.restorableAppCount = restorableAppCount
+        self.restorableWindowCount = restorableWindowCount ?? restorableAppCount
         self.badgeLabel = badgeLabel
         self.canOpenMainWindow = canOpenMainWindow
         self.canBringWindowsAppsForward = canBringWindowsAppsForward
@@ -990,6 +993,11 @@ public final class HostDashboardModel {
     public private(set) var restorableAppWindowCounts: [String: Int] = [:]
     public private(set) var hasOpenedAppWindowThisSession = false
     public var selectedAppId: String?
+    public var restorableWindowCount: Int {
+        restorableAppIds.reduce(0) { count, appId in
+            count + max(1, restorableAppWindowCounts[appId] ?? 1)
+        }
+    }
 
     private let service: any HostDashboardService
     private let restoreIntentStore: any WindowRestoreIntentStore
@@ -1241,6 +1249,7 @@ public final class HostDashboardModel {
                 openWindowCount: mirrorSessions.count,
                 pendingLaunchCount: pendingLaunch.isQueued ? 1 : 0,
                 restorableAppCount: restorableAppIds.count,
+                restorableWindowCount: restorableWindowCount,
                 badgeLabel: dockBadgeLabel(pendingLaunch: pendingLaunch),
                 canOpenMainWindow: true,
                 canBringWindowsAppsForward: !mirrorSessions.isEmpty,
@@ -1434,8 +1443,8 @@ public final class HostDashboardModel {
             return "..."
         }
 
-        if !restorableAppIds.isEmpty {
-            return restorableAppIds.count == 1 ? "R" : "R\(restorableAppIds.count)"
+        if restorableWindowCount > 0 {
+            return restorableWindowCount == 1 ? "R" : "R\(restorableWindowCount)"
         }
 
         return nil
@@ -1651,6 +1660,10 @@ public final class HostDashboardModel {
     }
 
     private func previousAppsStatusTitle() -> String {
+        if restorableWindowCount > 1, let appName = singleRestorableAppName() {
+            return "\(appName) Windows \(canRestoreMirrorSessions ? "Ready" : "Can Reconnect")"
+        }
+
         guard let appName = singleRestorableAppName() else {
             return canRestoreMirrorSessions ? "Previous Apps Ready" : "Previous Apps Can Reconnect"
         }
@@ -1664,6 +1677,10 @@ public final class HostDashboardModel {
 
     private func previousAppsRestoreTitle() -> String {
         let prefix = canRestoreMirrorSessions ? "Restore" : "Reconnect"
+        if restorableWindowCount > 1, let appName = singleRestorableAppName() {
+            return "\(prefix) \(restorableWindowCount) \(menuItemTitle(appName)) Windows"
+        }
+
         guard let appName = singleRestorableAppName() else {
             return canRestoreMirrorSessions ? "Restore Previous Apps" : "Reconnect Previous Apps"
         }

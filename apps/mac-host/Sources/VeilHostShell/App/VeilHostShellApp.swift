@@ -1636,7 +1636,8 @@ private struct VeilMenuBarMenu: View {
     private var restorePreviousAppsTitle: String {
         WindowsShellCopy.previousAppsRestoreTitle(
             canRestoreNow: model.canRestoreMirrorSessions,
-            singleAppName: restorableSingleAppName
+            singleAppName: restorableSingleAppName,
+            restoreWindowCount: model.restorableWindowCount
         )
     }
 

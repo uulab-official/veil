@@ -15,11 +15,11 @@ function setQueuedMenuBarState(report, overrides = {}) {
   refreshLaunchOnboarding(report);
 }
 
-function setReconnectMenuBarState(report) {
-  report.menuBarIntegration.statusTitle = "Notepad Can Reconnect";
+function setReconnectMenuBarState(report, overrides = {}) {
+  report.menuBarIntegration.statusTitle = overrides.statusTitle ?? "Notepad Can Reconnect";
   report.menuBarIntegration.symbolName = "arrow.counterclockwise.circle.fill";
   report.menuBarIntegration.primaryActionId = "windowsApps.reconnectRestore";
-  report.menuBarIntegration.primaryActionTitle = "Reconnect Notepad";
+  report.menuBarIntegration.primaryActionTitle = overrides.primaryActionTitle ?? "Reconnect Notepad";
   report.menuBarIntegration.primaryActionAvailable = true;
   report.menuBarIntegration.canReconnectPreviousApps = true;
   refreshOneScreenUX(report);
@@ -644,6 +644,27 @@ test("accepts Dock previous-app restore readiness", () => {
   report.dockIntegration.canReconnectPreviousApps = true;
   report.actions.find((action) => action.id === "windowsApps.reconnectRestore").isAvailable = true;
   setReconnectMenuBarState(report);
+  setReleaseGateStep(report, "closeOrRestore", {
+    state: "ready",
+    isPassing: true,
+    nextActionCommand: "veil-vmctl app-runtime-action --json --action reconnect-restore"
+  });
+
+  assert.equal(validateAppRuntimeStatus(report), report);
+});
+
+test("accepts Dock previous-window restore readiness for one app with multiple windows", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.demo.json", import.meta.url), "utf8"));
+  report.restorableAppIds = ["winapp_notepad"];
+  report.dockIntegration.restorableAppCount = 1;
+  report.dockIntegration.restorableWindowCount = 2;
+  report.dockIntegration.badgeLabel = "R2";
+  report.dockIntegration.canReconnectPreviousApps = true;
+  report.actions.find((action) => action.id === "windowsApps.reconnectRestore").isAvailable = true;
+  setReconnectMenuBarState(report, {
+    statusTitle: "Notepad Windows Can Reconnect",
+    primaryActionTitle: "Reconnect 2 Notepad Windows"
+  });
   setReleaseGateStep(report, "closeOrRestore", {
     state: "ready",
     isPassing: true,

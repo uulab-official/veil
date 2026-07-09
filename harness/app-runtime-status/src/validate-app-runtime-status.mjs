@@ -1271,6 +1271,8 @@ function validateDockIntegration(dockIntegration, mirrorSessions, report) {
   requireNonNegativeInteger(dockIntegration.openWindowCount, "dockIntegration.openWindowCount");
   requireNonNegativeInteger(dockIntegration.pendingLaunchCount, "dockIntegration.pendingLaunchCount");
   requireNonNegativeInteger(dockIntegration.restorableAppCount, "dockIntegration.restorableAppCount");
+  const restorableWindowCount = dockIntegration.restorableWindowCount ?? dockIntegration.restorableAppCount;
+  requireNonNegativeInteger(restorableWindowCount, "dockIntegration.restorableWindowCount");
   requireBoolean(dockIntegration.canOpenMainWindow, "dockIntegration.canOpenMainWindow");
   requireBoolean(dockIntegration.canBringWindowsAppsForward, "dockIntegration.canBringWindowsAppsForward");
   requireBoolean(dockIntegration.canRestorePreviousApps, "dockIntegration.canRestorePreviousApps");
@@ -1289,6 +1291,9 @@ function validateDockIntegration(dockIntegration, mirrorSessions, report) {
   if (dockIntegration.restorableAppCount !== report.restorableAppIds.length) {
     throw new TypeError("dockIntegration.restorableAppCount must match restorableAppIds length.");
   }
+  if (restorableWindowCount < dockIntegration.restorableAppCount) {
+    throw new TypeError("dockIntegration.restorableWindowCount must be at least restorableAppCount.");
+  }
 
   const canReconnectPreviousApps = report.restorableAppIds.length > 0
     && mirrorSessions.length === 0
@@ -1305,7 +1310,7 @@ function validateDockIntegration(dockIntegration, mirrorSessions, report) {
   if (
     dockIntegration.openWindowCount === 0
     && dockIntegration.pendingLaunchCount === 0
-    && dockIntegration.restorableAppCount === 0
+    && restorableWindowCount === 0
     && dockIntegration.badgeLabel !== undefined
   ) {
     throw new TypeError("dockIntegration.badgeLabel must be omitted when no Windows app windows, pending launches, or restorable apps exist.");
@@ -1328,10 +1333,10 @@ function validateDockIntegration(dockIntegration, mirrorSessions, report) {
   if (
     dockIntegration.openWindowCount === 0
     && dockIntegration.pendingLaunchCount === 0
-    && dockIntegration.restorableAppCount > 0
+    && restorableWindowCount > 0
   ) {
     requireString(dockIntegration.badgeLabel, "dockIntegration.badgeLabel");
-    const expectedRestoreBadge = dockIntegration.restorableAppCount === 1 ? "R" : `R${dockIntegration.restorableAppCount}`;
+    const expectedRestoreBadge = restorableWindowCount === 1 ? "R" : `R${restorableWindowCount}`;
     if (dockIntegration.badgeLabel !== expectedRestoreBadge) {
       throw new TypeError("dockIntegration.badgeLabel must show previous-app restore readiness.");
     }
