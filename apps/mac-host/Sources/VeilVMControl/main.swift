@@ -619,6 +619,21 @@ struct AppRuntimeReviewEvidence: Codable, Equatable {
     var diagnosticsDirectory: String
     var screenshotEvidenceDirectory: String?
     var recommendedAppCheckCommand: String?
+    var hostAppBundle: AppRuntimeReviewHostAppBundleEvidence
+}
+
+struct AppRuntimeReviewHostAppBundleEvidence: Codable, Equatable {
+    var verificationCommand: String
+    var appBundlePath: String
+    var isStagedBundlePresent: Bool
+    var infoPlistExists: Bool
+    var executableExists: Bool
+    var appIconExists: Bool
+    var bundleIdentifier: String?
+    var expectedBundleIdentifier: String
+    var latestFailedLaunchReportPath: String?
+    var latestFailedLaunchReportModifiedAt: Date?
+    var isVerificationReady: Bool
 }
 
 struct AppRuntimeReviewCard: Codable, Equatable {
@@ -1083,6 +1098,12 @@ struct VeilVMControl {
         }
         if let recommendedCommand = card.evidence.recommendedAppCheckCommand {
             print("  Recommended app check: \(recommendedCommand)")
+        }
+        print("  Host app bundle: \(card.evidence.hostAppBundle.isVerificationReady ? "ready" : "needs verification")")
+        print("      Verify: \(card.evidence.hostAppBundle.verificationCommand)")
+        print("      Bundle: \(card.evidence.hostAppBundle.appBundlePath)")
+        if let latestFailedReport = card.evidence.hostAppBundle.latestFailedLaunchReportPath {
+            print("      Latest failed launch report: \(latestFailedReport)")
         }
     }
 
@@ -1600,11 +1621,115 @@ struct VeilVMControl {
                 latestAppCheckModifiedAt: report.proofArtifacts.latestProofModifiedAt,
                 diagnosticsDirectory: report.proofArtifacts.diagnosticsDirectory,
                 screenshotEvidenceDirectory: evidenceDirectoryURL?.path,
-                recommendedAppCheckCommand: report.proofPlan.recommendedProofCommand
+                recommendedAppCheckCommand: report.proofPlan.recommendedProofCommand,
+                hostAppBundle: hostAppBundleEvidence()
             ),
             statusCommand: "veil-vmctl app-runtime-status --json",
             status: report
         )
+    }
+
+    private static func hostAppBundleEvidence() -> AppRuntimeReviewHostAppBundleEvidence {
+        let rootURL = projectRootDirectory()
+        let distURL = rootURL.appendingPathComponent("dist", isDirectory: true)
+        let appBundleURL = distURL.appendingPathComponent("Veil.app", isDirectory: true)
+        let infoPlistURL = appBundleURL
+            .appendingPathComponent("Contents", isDirectory: true)
+            .appendingPathComponent("Info.plist")
+        let executableURL = appBundleURL
+            .appendingPathComponent("Contents", isDirectory: true)
+            .appendingPathComponent("MacOS", isDirectory: true)
+            .appendingPathComponent("veil-host-shell")
+        let iconURL = appBundleURL
+            .appendingPathComponent("Contents", isDirectory: true)
+            .appendingPathComponent("Resources", isDirectory: true)
+            .appendingPathComponent("VeilAppIcon.icns")
+        let expectedBundleIdentifier = "org.uulab.veil.host-shell"
+        let bundleIdentifier = bundleIdentifier(in: infoPlistURL)
+        let latestFailedReport = latestLaunchVerificationFailureReport(in: distURL)
+
+        let isBundlePresent = directoryExists(at: appBundleURL)
+        let infoPlistExists = FileManager.default.fileExists(atPath: infoPlistURL.path)
+        let executableExists = FileManager.default.isExecutableFile(atPath: executableURL.path)
+        let iconExists = FileManager.default.fileExists(atPath: iconURL.path)
+
+        return AppRuntimeReviewHostAppBundleEvidence(
+            verificationCommand: "./script/build_and_run.sh --verify",
+            appBundlePath: appBundleURL.path,
+            isStagedBundlePresent: isBundlePresent,
+            infoPlistExists: infoPlistExists,
+            executableExists: executableExists,
+            appIconExists: iconExists,
+            bundleIdentifier: bundleIdentifier,
+            expectedBundleIdentifier: expectedBundleIdentifier,
+            latestFailedLaunchReportPath: latestFailedReport?.url.path,
+            latestFailedLaunchReportModifiedAt: latestFailedReport?.modifiedAt,
+            isVerificationReady: isBundlePresent
+                && infoPlistExists
+                && executableExists
+                && iconExists
+                && bundleIdentifier == expectedBundleIdentifier
+        )
+    }
+
+    private static func projectRootDirectory() -> URL {
+        var candidate = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+            .standardizedFileURL
+
+        while true {
+            let scriptURL = candidate
+                .appendingPathComponent("script", isDirectory: true)
+                .appendingPathComponent("build_and_run.sh")
+            if FileManager.default.isExecutableFile(atPath: scriptURL.path) {
+                return candidate
+            }
+
+            let parent = candidate.deletingLastPathComponent()
+            if parent.path == candidate.path {
+                return URL(fileURLWithPath: FileManager.default.currentDirectoryPath).standardizedFileURL
+            }
+            candidate = parent
+        }
+    }
+
+    private static func bundleIdentifier(in infoPlistURL: URL) -> String? {
+        guard let data = try? Data(contentsOf: infoPlistURL),
+              let plist = try? PropertyListSerialization.propertyList(from: data, options: [], format: nil),
+              let dictionary = plist as? [String: Any] else {
+            return nil
+        }
+
+        return dictionary["CFBundleIdentifier"] as? String
+    }
+
+    private static func directoryExists(at url: URL) -> Bool {
+        var isDirectory: ObjCBool = false
+        let exists = FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory)
+        return exists && isDirectory.boolValue
+    }
+
+    private static func latestLaunchVerificationFailureReport(in distURL: URL) -> (url: URL, modifiedAt: Date)? {
+        guard let reportURLs = try? FileManager.default.contentsOfDirectory(
+            at: distURL,
+            includingPropertiesForKeys: [.contentModificationDateKey, .isRegularFileKey],
+            options: [.skipsHiddenFiles]
+        ) else {
+            return nil
+        }
+
+        return reportURLs.compactMap { url -> (url: URL, modifiedAt: Date)? in
+            guard url.lastPathComponent.hasPrefix("veil-launch-report-failed-"),
+                  url.pathExtension == "plist" else {
+                return nil
+            }
+            let values = try? url.resourceValues(forKeys: [.contentModificationDateKey, .isRegularFileKey])
+            guard values?.isRegularFile == true,
+                  let modifiedAt = values?.contentModificationDate else {
+                return nil
+            }
+            return (url, modifiedAt)
+        }
+        .max { lhs, rhs in lhs.modifiedAt < rhs.modifiedAt }
     }
 
     private static func appFlowSummary(

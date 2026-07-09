@@ -215,7 +215,11 @@ Parallels-style release card for the current build. It keeps the full status
 report embedded for automation, but surfaces the human review contract directly:
 app-flow readiness, the next product action, the five release-gate steps, the
 required screenshot slots, the latest app-check artifact, and the recommended
-next app check.
+next app check. Its evidence block also includes the staged host app bundle
+contract: `dist/Veil.app`, `Info.plist`, executable, icon, bundle identifier,
+the latest failed launch-contract report when present, and the exact
+`./script/build_and_run.sh --verify` command that proves the branded one-window
+launcher surface.
 
 Run `app-runtime-review-init` before a live VM pass to create the evidence
 folder, `review-manifest.json`, and a human-readable `README.md`. The manifest

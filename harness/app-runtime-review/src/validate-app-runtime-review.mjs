@@ -138,12 +138,63 @@ function validateEvidence(evidence, status) {
   if (evidence.recommendedAppCheckCommand !== undefined) {
     requireString(evidence.recommendedAppCheckCommand, "evidence.recommendedAppCheckCommand");
   }
+  validateHostAppBundleEvidence(evidence.hostAppBundle);
 
   if (evidence.latestAppCheckPath !== status.proofArtifacts.latestProofPath) {
     throw new TypeError("app runtime review latest app check path must match status proof artifacts.");
   }
   if (evidence.recommendedAppCheckCommand !== status.proofPlan.recommendedProofCommand) {
     throw new TypeError("app runtime review recommended app check command must match status proof plan.");
+  }
+}
+
+function validateHostAppBundleEvidence(hostAppBundle) {
+  if (!hostAppBundle || typeof hostAppBundle !== "object" || Array.isArray(hostAppBundle)) {
+    throw new TypeError("app runtime review host app bundle evidence must be an object.");
+  }
+
+  requireString(hostAppBundle.verificationCommand, "evidence.hostAppBundle.verificationCommand");
+  requireString(hostAppBundle.appBundlePath, "evidence.hostAppBundle.appBundlePath");
+  requireBoolean(hostAppBundle.isStagedBundlePresent, "evidence.hostAppBundle.isStagedBundlePresent");
+  requireBoolean(hostAppBundle.infoPlistExists, "evidence.hostAppBundle.infoPlistExists");
+  requireBoolean(hostAppBundle.executableExists, "evidence.hostAppBundle.executableExists");
+  requireBoolean(hostAppBundle.appIconExists, "evidence.hostAppBundle.appIconExists");
+  requireString(hostAppBundle.expectedBundleIdentifier, "evidence.hostAppBundle.expectedBundleIdentifier");
+  requireBoolean(hostAppBundle.isVerificationReady, "evidence.hostAppBundle.isVerificationReady");
+
+  if (hostAppBundle.bundleIdentifier !== undefined) {
+    requireString(hostAppBundle.bundleIdentifier, "evidence.hostAppBundle.bundleIdentifier");
+  }
+  if (hostAppBundle.latestFailedLaunchReportPath !== undefined) {
+    requireString(hostAppBundle.latestFailedLaunchReportPath, "evidence.hostAppBundle.latestFailedLaunchReportPath");
+  }
+  if (
+    hostAppBundle.latestFailedLaunchReportModifiedAt !== undefined
+    && Number.isNaN(Date.parse(hostAppBundle.latestFailedLaunchReportModifiedAt))
+  ) {
+    throw new TypeError("evidence.hostAppBundle.latestFailedLaunchReportModifiedAt must be an ISO date.");
+  }
+
+  if (hostAppBundle.verificationCommand !== "./script/build_and_run.sh --verify") {
+    throw new TypeError("app runtime review host app bundle verification command must use the bundled launcher verification.");
+  }
+  if (!hostAppBundle.appBundlePath.endsWith("/dist/Veil.app")) {
+    throw new TypeError("app runtime review host app bundle path must point at dist/Veil.app.");
+  }
+  if (hostAppBundle.expectedBundleIdentifier !== "org.uulab.veil.host-shell") {
+    throw new TypeError("app runtime review host app bundle expected bundle id is wrong.");
+  }
+  if (
+    hostAppBundle.isVerificationReady
+    !== (
+      hostAppBundle.isStagedBundlePresent
+      && hostAppBundle.infoPlistExists
+      && hostAppBundle.executableExists
+      && hostAppBundle.appIconExists
+      && hostAppBundle.bundleIdentifier === hostAppBundle.expectedBundleIdentifier
+    )
+  ) {
+    throw new TypeError("app runtime review host app bundle readiness must match bundle evidence.");
   }
 }
 

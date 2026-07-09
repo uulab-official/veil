@@ -76,3 +76,23 @@ test("rejects screenshot evidence summary drift", () => {
     /attached screenshot count/
   );
 });
+
+test("rejects host app bundle verification command drift", () => {
+  const card = demoReviewCard();
+  card.evidence.hostAppBundle.verificationCommand = "./script/build_and_run.sh";
+
+  assert.throws(
+    () => validateAppRuntimeReview(card),
+    /host app bundle verification command/
+  );
+});
+
+test("rejects host app bundle readiness drift", () => {
+  const card = demoReviewCard();
+  card.evidence.hostAppBundle.appIconExists = false;
+
+  assert.throws(
+    () => validateAppRuntimeReview(card),
+    /host app bundle readiness/
+  );
+});
