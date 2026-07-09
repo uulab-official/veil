@@ -36,6 +36,16 @@
       "title": "Open Selected Windows App"
     },
     {
+      "id": "runtime.prepareWindows",
+      "isAvailable": false,
+      "title": "Prepare Windows"
+    },
+    {
+      "id": "runtime.refreshStatus",
+      "isAvailable": true,
+      "title": "Refresh Windows Status"
+    },
+    {
       "id": "runtime.startWindowsForApp",
       "isAvailable": true,
       "title": "Start Windows To Open App"
@@ -323,6 +333,7 @@
     "title": "Windows Setup Ready",
     "source": "releaseGate",
     "isAvailable": true,
+    "actionId": "runtime.refreshStatus",
     "command": "veil-vmctl qemu-install-status --json",
     "reason": "The local Windows runtime is boot ready."
   }

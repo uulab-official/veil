@@ -13,6 +13,35 @@ enum LauncherPrimaryNextActionRoute: Equatable {
     case runRecommendedProof
 
     static func resolve(actionId: String, command: String?) -> LauncherPrimaryNextActionRoute? {
+        switch actionId {
+        case "windowsApps.launchSelected":
+            return .launchSelectedApp
+        case "runtime.fulfillPendingLaunch":
+            return .fulfillPendingLaunch
+        case "runtime.recoverDisplay":
+            return .recoverDisplay
+        case "runtime.waitAgent":
+            return .waitForAgent
+        case "runtime.repairGuestAgentForApp":
+            return .repairAppConnection
+        case "runtime.startWindowsForApp":
+            return .startWindows
+        case "runtime.prepareWindows":
+            return .prepareWindows
+        case "runtime.refreshStatus":
+            return .refreshRuntimeStatus
+        case "windowsApps.reconnectRestore", "windowsApps.restorePrevious":
+            return .reconnectPreviousApps
+        case "windowsApps.closeAll":
+            return .closeAllWindowsApps
+        case "runtime.quietWhenIdle", "runtime.stopWhenIdle":
+            return .quietWindows
+        case "proof.recommended":
+            return .runRecommendedProof
+        default:
+            break
+        }
+
         guard let command else {
             return nil
         }

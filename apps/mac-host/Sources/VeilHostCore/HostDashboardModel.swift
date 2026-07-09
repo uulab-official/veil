@@ -657,6 +657,7 @@ public struct WindowsAppRuntimePrimaryNextActionStatus: Codable, Equatable, Send
     public var title: String
     public var source: String
     public var isAvailable: Bool
+    public var actionId: String?
     public var command: String?
     public var reason: String
 
@@ -665,6 +666,7 @@ public struct WindowsAppRuntimePrimaryNextActionStatus: Codable, Equatable, Send
         title: String,
         source: String,
         isAvailable: Bool,
+        actionId: String? = nil,
         command: String? = nil,
         reason: String
     ) {
@@ -672,6 +674,7 @@ public struct WindowsAppRuntimePrimaryNextActionStatus: Codable, Equatable, Send
         self.title = title
         self.source = source
         self.isAvailable = isAvailable
+        self.actionId = actionId
         self.command = command
         self.reason = reason
     }
@@ -1095,6 +1098,16 @@ public final class HostDashboardModel {
                     id: "windowsApps.launchSelected",
                     title: "Open Selected Windows App",
                     isAvailable: canRequestSelectedAppLaunch
+                ),
+                WindowsAppRuntimeActionStatus(
+                    id: "runtime.prepareWindows",
+                    title: "Prepare Windows",
+                    isAvailable: localRuntime.recommendedPrepareCommand != nil
+                ),
+                WindowsAppRuntimeActionStatus(
+                    id: "runtime.refreshStatus",
+                    title: "Refresh Windows Status",
+                    isAvailable: true
                 ),
                 WindowsAppRuntimeActionStatus(
                     id: "runtime.startWindowsForApp",
@@ -1849,9 +1862,69 @@ public final class HostDashboardModel {
             title: step.title,
             source: "releaseGate",
             isAvailable: step.nextActionCommand != nil,
+            actionId: primaryNextActionId(stepId: step.id, command: step.nextActionCommand),
             command: step.nextActionCommand,
             reason: step.evidence
         )
+    }
+
+    private func primaryNextActionId(stepId: String, command: String?) -> String? {
+        guard let command else {
+            return nil
+        }
+
+        switch stepId {
+        case "windowsSetup":
+            if command == "veil-vmctl qemu-install-status --json"
+                || command == "veil-vmctl app-runtime-status --json" {
+                return "runtime.refreshStatus"
+            }
+            if command.hasPrefix("veil-vmctl prepare") {
+                return "runtime.prepareWindows"
+            }
+            if command.contains("qemu-start") {
+                return "runtime.startWindowsForApp"
+            }
+        case "oneScreenPath":
+            return "runtime.refreshStatus"
+        case "openWindowsApp":
+            if command.contains("--action fulfill-pending") {
+                return "runtime.fulfillPendingLaunch"
+            }
+            if command.contains("--action launch") {
+                return "windowsApps.launchSelected"
+            }
+            if command.contains("--action recover-display") {
+                return "runtime.recoverDisplay"
+            }
+            if command.contains("--action wait-agent") {
+                return "runtime.waitAgent"
+            }
+            if command.contains("qemu-install-agent") {
+                return "runtime.repairGuestAgentForApp"
+            }
+            if command.contains("qemu-start") {
+                return "runtime.startWindowsForApp"
+            }
+        case "appCheckEvidence":
+            return "proof.recommended"
+        case "closeOrRestore":
+            if command.contains("--action close-all") {
+                return "windowsApps.closeAll"
+            }
+            if command.contains("--action reconnect-restore")
+                || command.contains("--action restore") {
+                return "windowsApps.reconnectRestore"
+            }
+            if command.contains("--action stop-runtime")
+                || command.contains("--action quiet-when-idle") {
+                return "runtime.quietWhenIdle"
+            }
+        default:
+            break
+        }
+
+        return nil
     }
 
     private func proofArtifacts(in directory: URL, kind: String) -> [ProofArtifactCandidate] {

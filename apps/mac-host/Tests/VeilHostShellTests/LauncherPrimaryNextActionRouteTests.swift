@@ -3,6 +3,46 @@ import Testing
 @testable import VeilHostShell
 
 struct LauncherPrimaryNextActionRouteTests {
+    @Test("routes structured action ids before command fallback")
+    func routesStructuredActionIdsBeforeCommandFallback() {
+        #expect(
+            LauncherPrimaryNextActionRoute.resolve(
+                actionId: "windowsApps.launchSelected",
+                command: nil
+            ) == .launchSelectedApp
+        )
+        #expect(
+            LauncherPrimaryNextActionRoute.resolve(
+                actionId: "runtime.repairGuestAgentForApp",
+                command: nil
+            ) == .repairAppConnection
+        )
+        #expect(
+            LauncherPrimaryNextActionRoute.resolve(
+                actionId: "runtime.prepareWindows",
+                command: nil
+            ) == .prepareWindows
+        )
+        #expect(
+            LauncherPrimaryNextActionRoute.resolve(
+                actionId: "runtime.refreshStatus",
+                command: nil
+            ) == .refreshRuntimeStatus
+        )
+        #expect(
+            LauncherPrimaryNextActionRoute.resolve(
+                actionId: "windowsApps.closeAll",
+                command: nil
+            ) == .closeAllWindowsApps
+        )
+        #expect(
+            LauncherPrimaryNextActionRoute.resolve(
+                actionId: "proof.recommended",
+                command: nil
+            ) == .runRecommendedProof
+        )
+    }
+
     @Test("routes app runtime commands to launcher actions")
     func routesAppRuntimeCommandsToLauncherActions() {
         #expect(

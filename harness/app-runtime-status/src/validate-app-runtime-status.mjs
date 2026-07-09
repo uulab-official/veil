@@ -826,6 +826,9 @@ function validatePrimaryNextAction(primaryNextAction, report) {
   if (primaryNextAction.command !== undefined) {
     requireString(primaryNextAction.command, "primaryNextAction.command");
   }
+  if (primaryNextAction.actionId !== undefined) {
+    requireString(primaryNextAction.actionId, "primaryNextAction.actionId");
+  }
 
   if (primaryNextAction.source !== "releaseGate") {
     throw new TypeError("primaryNextAction.source must be releaseGate.");
@@ -839,6 +842,9 @@ function validatePrimaryNextAction(primaryNextAction, report) {
   const expectedCommand = report.releaseGate.isPassing
     ? "veil-vmctl app-runtime-review --json"
     : expectedStep?.nextActionCommand;
+  const expectedActionId = report.releaseGate.isPassing
+    ? undefined
+    : expectedPrimaryNextActionId(expectedStep?.id, expectedCommand);
   const expectedReason = report.releaseGate.isPassing
     ? report.releaseGate.reason
     : expectedStep?.evidence;
@@ -852,6 +858,9 @@ function validatePrimaryNextAction(primaryNextAction, report) {
   if (primaryNextAction.command !== expectedCommand) {
     throw new TypeError("primaryNextAction.command must match the release gate's next command.");
   }
+  if (primaryNextAction.actionId !== expectedActionId) {
+    throw new TypeError("primaryNextAction.actionId must match the release gate's next executable action.");
+  }
   if (primaryNextAction.isAvailable !== (expectedCommand !== undefined)) {
     throw new TypeError("primaryNextAction.isAvailable must reflect whether a next command exists.");
   }
@@ -863,6 +872,66 @@ function validatePrimaryNextAction(primaryNextAction, report) {
     if (primaryNextAction.title.includes(disallowedTerm)) {
       throw new TypeError("primaryNextAction title must stay product-facing.");
     }
+  }
+}
+
+function expectedPrimaryNextActionId(stepId, command) {
+  if (command === undefined) {
+    return undefined;
+  }
+
+  switch (stepId) {
+    case "windowsSetup":
+      if (command === "veil-vmctl qemu-install-status --json"
+        || command === "veil-vmctl app-runtime-status --json") {
+        return "runtime.refreshStatus";
+      }
+      if (command.startsWith("veil-vmctl prepare")) {
+        return "runtime.prepareWindows";
+      }
+      if (command.includes("qemu-start")) {
+        return "runtime.startWindowsForApp";
+      }
+      return undefined;
+    case "oneScreenPath":
+      return "runtime.refreshStatus";
+    case "openWindowsApp":
+      if (command.includes("--action fulfill-pending")) {
+        return "runtime.fulfillPendingLaunch";
+      }
+      if (command.includes("--action launch")) {
+        return "windowsApps.launchSelected";
+      }
+      if (command.includes("--action recover-display")) {
+        return "runtime.recoverDisplay";
+      }
+      if (command.includes("--action wait-agent")) {
+        return "runtime.waitAgent";
+      }
+      if (command.includes("qemu-install-agent")) {
+        return "runtime.repairGuestAgentForApp";
+      }
+      if (command.includes("qemu-start")) {
+        return "runtime.startWindowsForApp";
+      }
+      return undefined;
+    case "appCheckEvidence":
+      return "proof.recommended";
+    case "closeOrRestore":
+      if (command.includes("--action close-all")) {
+        return "windowsApps.closeAll";
+      }
+      if (command.includes("--action reconnect-restore")
+        || command.includes("--action restore")) {
+        return "windowsApps.reconnectRestore";
+      }
+      if (command.includes("--action stop-runtime")
+        || command.includes("--action quiet-when-idle")) {
+        return "runtime.quietWhenIdle";
+      }
+      return undefined;
+    default:
+      return undefined;
   }
 }
 
@@ -1147,6 +1216,8 @@ function validateActions(actions, report) {
     "windowsApps.closeAll",
     "macWindows.autoOpen",
     "windowsApps.launchSelected",
+    "runtime.prepareWindows",
+    "runtime.refreshStatus",
     "runtime.startWindowsForApp",
     "runtime.repairGuestAgentForApp",
     "runtime.recoverDisplay",
@@ -1184,6 +1255,16 @@ function validateActions(actions, report) {
   const startAction = actions.find((action) => action.id === "runtime.startWindowsForApp");
   if (startAction.isAvailable !== (report.launchPlan.recommendedStartCommand !== undefined)) {
     throw new TypeError("runtime.startWindowsForApp availability must match launchPlan.recommendedStartCommand.");
+  }
+
+  const prepareAction = actions.find((action) => action.id === "runtime.prepareWindows");
+  if (prepareAction.isAvailable !== (report.localRuntime.recommendedPrepareCommand !== undefined)) {
+    throw new TypeError("runtime.prepareWindows availability must match localRuntime.recommendedPrepareCommand.");
+  }
+
+  const refreshStatusAction = actions.find((action) => action.id === "runtime.refreshStatus");
+  if (!refreshStatusAction.isAvailable) {
+    throw new TypeError("runtime.refreshStatus must stay available for app-runtime status refresh.");
   }
 
   const repairAction = actions.find((action) => action.id === "runtime.repairGuestAgentForApp");
@@ -1234,6 +1315,16 @@ function validateActions(actions, report) {
   const menuPrimaryAction = actions.find((action) => action.id === report.menuBarIntegration.primaryActionId);
   if (menuPrimaryAction === undefined) {
     throw new TypeError("menuBarIntegration.primaryActionId must reference a supported action.");
+  }
+
+  if (report.primaryNextAction.actionId !== undefined) {
+    const primaryAction = actions.find((action) => action.id === report.primaryNextAction.actionId);
+    if (primaryAction === undefined) {
+      throw new TypeError("primaryNextAction.actionId must reference a supported action.");
+    }
+    if (primaryAction.isAvailable !== report.primaryNextAction.isAvailable) {
+      throw new TypeError("primaryNextAction.actionId availability must match the referenced action.");
+    }
   }
 
   if (menuPrimaryAction.isAvailable !== report.menuBarIntegration.primaryActionAvailable) {

@@ -55,9 +55,70 @@ function refreshPrimaryNextAction(report) {
     title: nextStep.title,
     source: "releaseGate",
     isAvailable: nextStep.nextActionCommand !== undefined,
+    actionId: expectedPrimaryNextActionId(nextStep.id, nextStep.nextActionCommand),
     command: nextStep.nextActionCommand,
     reason: nextStep.evidence
   };
+}
+
+function expectedPrimaryNextActionId(stepId, command) {
+  if (command === undefined) {
+    return undefined;
+  }
+
+  switch (stepId) {
+    case "windowsSetup":
+      if (command === "veil-vmctl qemu-install-status --json"
+        || command === "veil-vmctl app-runtime-status --json") {
+        return "runtime.refreshStatus";
+      }
+      if (command.startsWith("veil-vmctl prepare")) {
+        return "runtime.prepareWindows";
+      }
+      if (command.includes("qemu-start")) {
+        return "runtime.startWindowsForApp";
+      }
+      return undefined;
+    case "oneScreenPath":
+      return "runtime.refreshStatus";
+    case "openWindowsApp":
+      if (command.includes("--action fulfill-pending")) {
+        return "runtime.fulfillPendingLaunch";
+      }
+      if (command.includes("--action launch")) {
+        return "windowsApps.launchSelected";
+      }
+      if (command.includes("--action recover-display")) {
+        return "runtime.recoverDisplay";
+      }
+      if (command.includes("--action wait-agent")) {
+        return "runtime.waitAgent";
+      }
+      if (command.includes("qemu-install-agent")) {
+        return "runtime.repairGuestAgentForApp";
+      }
+      if (command.includes("qemu-start")) {
+        return "runtime.startWindowsForApp";
+      }
+      return undefined;
+    case "appCheckEvidence":
+      return "proof.recommended";
+    case "closeOrRestore":
+      if (command.includes("--action close-all")) {
+        return "windowsApps.closeAll";
+      }
+      if (command.includes("--action reconnect-restore")
+        || command.includes("--action restore")) {
+        return "windowsApps.reconnectRestore";
+      }
+      if (command.includes("--action stop-runtime")
+        || command.includes("--action quiet-when-idle")) {
+        return "runtime.quietWhenIdle";
+      }
+      return undefined;
+    default:
+      return undefined;
+  }
 }
 
 test("validates app runtime status fixture", () => {
@@ -745,6 +806,16 @@ test("rejects primary next action drift from release gate", () => {
   assert.throws(
     () => validateAppRuntimeStatus(report),
     /primaryNextAction\.command/
+  );
+});
+
+test("rejects primary next action executable action drift", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.demo.json", import.meta.url), "utf8"));
+  report.primaryNextAction.actionId = "windowsApps.closeAll";
+
+  assert.throws(
+    () => validateAppRuntimeStatus(report),
+    /primaryNextAction\.actionId/
   );
 });
 

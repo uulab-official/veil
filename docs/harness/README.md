@@ -149,10 +149,16 @@ screenshots to attach before promoting a build.
 
 `primaryNextAction` is derived from that release gate and names the single next
 product action for the app-first flow. It includes the release-gate step id,
-product-facing title, availability, exact command when one exists, and the same
-evidence text as the gate step. When all release-card steps pass, it points at
+product-facing title, availability, exact command when one exists, optional
+`actionId` for launcher/menu execution, and the same evidence text as the gate
+step. The `actionId` must match an entry from the top-level `actions` list when
+the next step is executable inside the app, for example
+`windowsApps.launchSelected`, `runtime.repairGuestAgentForApp`,
+`windowsApps.reconnectRestore`, `windowsApps.closeAll`, or
+`proof.recommended`. When all release-card steps pass, it points at
 `veil-vmctl app-runtime-review --json` so the next step becomes sharing the
-review card instead of guessing from lower-level status fields.
+review card instead of guessing from lower-level status fields; that review
+handoff intentionally has no launcher `actionId`.
 
 `visibleSurfacePolicy` captures the normal user-facing window contract: before a
 mirrored Windows app opens, the launcher is the single expected surface; after a
