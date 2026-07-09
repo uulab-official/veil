@@ -199,6 +199,11 @@ struct VeilHostShellApp: App {
                 }
                 .keyboardShortcut("p", modifiers: [.command, .shift])
                 .disabled(model.runtimeStatusReport().proofPlan.recommendedProofCommand == nil)
+
+                Button("Prepare Review Evidence") {
+                    prepareReviewEvidenceFolder()
+                }
+                .keyboardShortcut("e", modifiers: [.command, .shift])
             }
         }
 
@@ -224,6 +229,7 @@ struct VeilHostShellApp: App {
                 closeWindowsAppWindowAction: closeWindowsAppWindow(windowId:),
                 closeAllWindowsAppWindowsAction: closeAllWindowsAppWindows,
                 runRecommendedProofAction: runRecommendedProof,
+                prepareReviewEvidenceAction: prepareReviewEvidenceFolder,
                 quietWindowsWhenIdleAction: quietWindowsWhenIdle,
                 refreshAppsAction: refreshApps,
                 refreshRuntimeAction: refreshRuntime,
@@ -863,6 +869,19 @@ struct VeilHostShellApp: App {
         try data.write(to: outputURL, options: .atomic)
     }
 
+    private func prepareReviewEvidenceFolder() {
+        Task { @MainActor in
+            activateMainWindow()
+            do {
+                let folder = try ReviewEvidenceFolderStore.prepare()
+                NSWorkspace.shared.open(folder.directory)
+                displayMessage = "Review Evidence folder ready: \(folder.directory.path)"
+            } catch {
+                displayMessage = "Review Evidence folder could not be prepared: \(userMessage(for: error))"
+            }
+        }
+    }
+
     private func appCheckDisplayName(for proofKind: String) -> String {
         switch proofKind {
         case "app-window":
@@ -1274,6 +1293,7 @@ private struct VeilMenuBarMenu: View {
     var closeWindowsAppWindowAction: (String) -> Void
     var closeAllWindowsAppWindowsAction: () -> Void
     var runRecommendedProofAction: () -> Void
+    var prepareReviewEvidenceAction: () -> Void
     var quietWindowsWhenIdleAction: () -> Void
     var refreshAppsAction: () -> Void
     var refreshRuntimeAction: () -> Void
@@ -1379,6 +1399,11 @@ private struct VeilMenuBarMenu: View {
             runRecommendedProofAction()
         }
         .disabled(model.runtimeStatusReport().proofPlan.recommendedProofCommand == nil)
+
+        Button("Prepare Review Evidence", systemImage: "folder.badge.plus") {
+            openMainWindow()
+            prepareReviewEvidenceAction()
+        }
 
         Divider()
 
