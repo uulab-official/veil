@@ -97,6 +97,40 @@ struct WindowsAppWindowPresenterTests {
         #expect(presenter.visibleWindowIds == ["hwnd:0002", "hwnd:0001"])
     }
 
+    @Test("refreshing an existing Windows app window preserves the Mac window frame")
+    func refreshingExistingWindowsAppWindowPreservesMacWindowFrame() throws {
+        _ = NSApplication.shared
+        let presenter = WindowsAppWindowPresenter()
+        defer {
+            presenter.closeAll()
+        }
+
+        presenter.showWindow(
+            for: session(
+                windowId: "hwnd:frame-preserve",
+                appId: "winapp_frame_preserve",
+                title: "Notepad",
+                bounds: WindowBounds(x: 80, y: 80, width: 960, height: 640)
+            )
+        )
+        let window = try #require(mirroredWindow(withId: "hwnd:frame-preserve"))
+        let userFrame = NSRect(x: 120, y: 140, width: 820, height: 520)
+        window.setFrame(userFrame, display: false)
+
+        presenter.showWindow(
+            for: session(
+                windowId: "hwnd:frame-preserve",
+                appId: "winapp_frame_preserve",
+                title: "Notepad - Updated",
+                bounds: WindowBounds(x: 10, y: 10, width: 1200, height: 800)
+            )
+        )
+
+        #expect(NSEqualRects(window.frame, userFrame))
+        #expect(window.title == "Notepad - Updated")
+        #expect(presenter.visibleWindowIds == ["hwnd:frame-preserve"])
+    }
+
     @Test("restore policy deminiaturizes minimized Windows app windows")
     func restorePolicyDeminiaturizesMinimizedWindowsAppWindows() {
         let window = RestorePolicyTestWindow(isMiniaturizedForTest: true)
@@ -181,14 +215,19 @@ struct WindowsAppWindowPresenterTests {
         #expect(callbackWindowIds.isEmpty)
     }
 
-    private func session(windowId: String, appId: String, title: String) -> WindowMirrorSession {
+    private func session(
+        windowId: String,
+        appId: String,
+        title: String,
+        bounds: WindowBounds = WindowBounds(x: 80, y: 80, width: 960, height: 640)
+    ) -> WindowMirrorSession {
         WindowMirrorSession(
             window: WindowCreatedEvent(
                 windowId: windowId,
                 processId: 4912,
                 appId: appId,
                 title: title,
-                bounds: WindowBounds(x: 80, y: 80, width: 960, height: 640),
+                bounds: bounds,
                 state: "normal",
                 focused: true
             ),

@@ -48,6 +48,7 @@ Goal: keep the user-facing workflow one-screen-first (launcher + one action path
 - [x] Make Dock reopen prefer visible mirrored Windows app windows, but fall back to the main launcher when no mirrored app window is actually visible, avoiding blank reopen and duplicate default-window behavior.
 - [x] Restore minimized mirrored Windows app windows when Bring Forward or an existing-window refresh runs, so minimized Windows apps come back like normal macOS app windows.
 - [x] Track the mirrored Windows app window that the user manually focuses, so later Dock/menu recovery returns to the last active app window instead of stale launch order.
+- [x] Preserve the user's macOS window size and position when an existing mirrored Windows app window receives updated guest bounds/title.
 - [x] Surface app-check readiness and the latest saved check artifact in the one-screen Windows Apps launcher, with a direct `Check App` action instead of hiding the release gate behind CLI-only proof commands.
 - [x] Add `releaseGate` to `app-runtime-status` and harness validation so Windows setup, one-screen launcher behavior, app launch, saved app-check evidence, and close/restore readiness are tracked as one Parallels-style release card contract.
 - [x] Surface the same release gate in the Windows Apps launcher as a compact `App Flow` progress strip, so users can see the next setup/open/check/close step without reading CLI output.

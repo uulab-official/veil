@@ -28,13 +28,7 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
         }
 
         if let window = windowsById[session.id] {
-            configure(window, for: session)
-            window.contentView = hostingView(
-                for: session
-            )
-            appIdToWindowId[session.window.appId] = session.id
-            windowIdToAppId[session.id] = session.window.appId
-            present(window, windowId: session.id)
+            updateExistingWindow(window, for: session)
             return
         }
 
@@ -127,6 +121,20 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
         foregroundWindowId = windowId
         MacWindowRestorePolicy.restoreToFront(window)
         NSApp.activate(ignoringOtherApps: true)
+    }
+
+    private func updateExistingWindow(_ window: NSWindow, for session: WindowMirrorSession) {
+        let preservedFrame = window.frame
+        configure(window, for: session)
+        window.contentView = hostingView(
+            for: session
+        )
+        if !NSEqualRects(window.frame, preservedFrame) {
+            window.setFrame(preservedFrame, display: true, animate: false)
+        }
+        appIdToWindowId[session.window.appId] = session.id
+        windowIdToAppId[session.id] = session.window.appId
+        present(window, windowId: session.id)
     }
 
     private func rememberWindowId(_ windowId: String) {
