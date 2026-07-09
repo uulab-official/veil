@@ -35,7 +35,10 @@ let package = Package(
         ),
         .executableTarget(
             name: "VeilHostShell",
-            dependencies: ["VeilHostCore"]
+            dependencies: ["VeilHostCore"],
+            resources: [
+                .copy("Resources/VeilAppIcon.icns")
+            ]
         ),
         .executableTarget(
             name: "VeilVMControl",

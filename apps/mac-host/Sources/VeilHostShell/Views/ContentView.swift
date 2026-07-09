@@ -34,7 +34,6 @@ struct ContentView: View {
                 DetailView(
                     model: model,
                     vmModel: vmModel,
-                    selectedSection: .vm,
                     startVMAction: startVMAction,
                     stopVMAction: stopVMAction,
                     markWindowsInstalledAction: markWindowsInstalledAction,

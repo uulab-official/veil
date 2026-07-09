@@ -4,7 +4,6 @@ import VeilHostCore
 struct DetailView: View {
     @Bindable var model: HostDashboardModel
     @Bindable var vmModel: VMRuntimeModel
-    var selectedSection: ShellSection
     var startVMAction: () -> Void
     var stopVMAction: () -> Void
     var markWindowsInstalledAction: () -> Void
@@ -17,7 +16,7 @@ struct DetailView: View {
     var displayMessage: String?
 
     var body: some View {
-        if selectedSection == .vm {
+        VStack(alignment: .leading, spacing: 14) {
             VMRuntimeView(
                 model: vmModel,
                 guestAgentInstallEvidence: model.guestAgentInstallEvidence,
@@ -42,34 +41,24 @@ struct DetailView: View {
                 runRecommendedProofAction: runRecommendedProofAction,
                 displayMessage: displayMessage
             )
-            .padding(6)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        } else {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
-                HeaderView(model: model, selectedSection: selectedSection)
+            .padding(.horizontal, 14)
+            .padding(.top, 14)
 
-                switch selectedSection {
-                case .apps:
-                    AppsView(apps: model.apps, selectedAppId: $model.selectedAppId)
-                case .agent:
-                    AgentView(
-                        health: model.health,
-                        connectionMode: model.connectionMode,
-                        connectionDetail: model.connectionDetail,
-                        agentDiagnostic: model.agentDiagnostic,
-                        errorMessage: model.errorMessage
-                    )
-                case .vm:
-                    EmptyView()
-                case .launch:
-                    LaunchView(result: model.lastLaunch)
-                }
+            if !model.apps.isEmpty {
+                WindowsQuickLaunchPanel(
+                    apps: model.apps,
+                    mirrorSessions: model.mirrorSessions,
+                    selectedAppId: $model.selectedAppId,
+                    canFulfillPendingLaunch: model.canFulfillPendingLaunch,
+                    canLaunchSelectedApp: model.canLaunchSelectedApp,
+                    canRequestSelectedAppLaunch: model.canRequestSelectedAppLaunch,
+                    hasLiveAgentConnection: model.hasLiveAgentConnection,
+                    phase: model.phase,
+                    launchWindowsAppAction: launchWindowsAppAction
+                )
+                    .padding(.horizontal, 14)
+                    .padding(.bottom, 14)
             }
-            .frame(maxWidth: 1280, alignment: .topLeading)
-            .padding(.horizontal, 28)
-            .padding(.vertical, 24)
-        }
         }
     }
 
@@ -91,57 +80,108 @@ struct DetailView: View {
     }
 }
 
-private struct HeaderView: View {
-    @Bindable var model: HostDashboardModel
-    var selectedSection: ShellSection
+private struct WindowsQuickLaunchPanel: View {
+    var apps: [WindowsApp]
+    var mirrorSessions: [WindowMirrorSession]
+    @Binding var selectedAppId: String?
+    var canFulfillPendingLaunch: Bool
+    var canLaunchSelectedApp: Bool
+    var canRequestSelectedAppLaunch: Bool
+    var hasLiveAgentConnection: Bool
+    var phase: HostDashboardPhase
+    var launchWindowsAppAction: () -> Void
 
     var body: some View {
         ShellPanel(spacing: 12) {
-            HStack(alignment: .center, spacing: 14) {
-                Image(systemName: selectedSection.symbolName)
-                    .font(.system(size: 24, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .frame(width: 48, height: 48)
-                    .background(
-                        LinearGradient(
-                            colors: [.blue, .cyan],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ),
-                        in: RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    )
+            HStack(spacing: 12) {
+                ShellPanelHeader(
+                    title: "Windows Apps",
+                    subtitle: "Pick an app and open it as a native macOS window.",
+                    symbolName: "macwindow.on.rectangle"
+                )
 
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(selectedSection.title)
-                        .font(.title2.weight(.semibold))
-                    Text(selectedSection.subtitle)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
-                }
-
-                Spacer(minLength: 16)
+                Spacer()
 
                 StatusPill(
-                    title: model.phase.displayTitle,
-                    symbolName: model.phase.symbolName,
-                    tint: model.phase.tint
+                    title: runningAppStateTitle,
+                    symbolName: runningAppStateSymbol,
+                    tint: mirrorSessions.isEmpty ? .secondary : .green
                 )
             }
 
-            Divider()
+            HStack(spacing: 12) {
+                Picker("Windows App", selection: $selectedAppId) {
+                    ForEach(apps) { app in
+                        Text(app.name).tag(Optional(app.id))
+                    }
+                }
+                .labelsHidden()
+                .frame(minWidth: 220, maxWidth: 320)
+                .disabled(apps.isEmpty || phase == .loading || phase == .launching)
 
-            HStack(alignment: .firstTextBaseline, spacing: 12) {
-                Label(model.connectionMode == .demo ? "Demo Mode" : "Agent Mode", systemImage: model.connectionMode == .demo ? "play.rectangle" : "bolt.horizontal.circle")
-                    .font(.callout.weight(.semibold))
-                    .foregroundStyle(model.connectionMode == .demo ? .orange : .green)
-                    .frame(width: 116, alignment: .leading)
+                Button {
+                    launchWindowsAppAction()
+                } label: {
+                    Text(launchButtonTitle)
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(launchDisabled)
+                .help("Open selected Windows app")
 
-                Text(model.connectionDetail ?? model.statusText)
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .textSelection(.enabled)
-                    .lineLimit(3)
+                if let selected = apps.first(where: { $0.id == selectedAppId }) {
+                    Label(selected.publisher, systemImage: "person")
+                        .lineLimit(1)
+                        .foregroundStyle(.secondary)
+                        .truncationMode(.middle)
+                }
+
+                Spacer()
             }
         }
+    }
+
+    private var launchButtonTitle: String {
+        if canFulfillPendingLaunch {
+            return "Open Queued App"
+        }
+
+        if !hasLiveAgentConnection {
+            return "Open When Ready"
+        }
+
+        if canRequestSelectedAppLaunch {
+            return "Open Selected App"
+        }
+
+        if !canLaunchSelectedApp {
+            return "Preparing Runtime"
+        }
+
+        return "Open App"
+    }
+
+    private var launchDisabled: Bool {
+        phase == .loading || phase == .launching || (!canRequestSelectedAppLaunch && !canFulfillPendingLaunch)
+    }
+
+    private var runningAppStateTitle: String {
+        if !mirrorSessions.isEmpty {
+            let count = mirrorSessions.count
+            return count == 1 ? "1 App Window" : "\(count) App Windows"
+        }
+
+        if canFulfillPendingLaunch {
+            return "Queued App"
+        }
+
+        return "No App Window"
+    }
+
+    private var runningAppStateSymbol: String {
+        if mirrorSessions.isEmpty {
+            return "macwindow"
+        }
+
+        return "macwindow.badge.plus"
     }
 }

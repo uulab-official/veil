@@ -142,8 +142,11 @@ Veil now has the local QEMU/HVF boot path, embedded display evidence, fake-agent
    - keep launcher and app-window surfaces in a one-screen mental model,
    - add fallback app icon rendering to avoid blank default icon states,
    - confirm default window sizing is practical for desktop use,
+   - enforce one-host-surface visibility once mirrored Windows app windows are visible, so users don't get launcher + app windows together,
    - reduce launch-control noise by moving setup/diagnostic actions behind explicit details menus,
    - keep install and launcher action sets consistent and deduplicated to avoid one-screen behavior differences.
+
+   - ship the packaged app icon asset (`VeilAppIcon.icns`) with the SwiftUI host target so the launcher, menu, and dock share a consistent identity.
 
 8. v1.5 "Daily Use" progress (2026-07-07): Retina-aware capture, multi-window discovery, app icons, and drag-and-drop file open are all shipped and live-verified (see `docs/checklists/2026-07-07-dpi-aware-capture.md`, `2026-07-07-multi-window-discovery.md`, `2026-07-07-real-app-icons.md`, `2026-07-07-drag-and-drop.md`). The three remaining items — better frame latency, Windows notifications, and printer bridge — now all have feasibility research done (see `docs/checklists/2026-07-07-frame-latency-feasibility.md` and `2026-07-07-notifications-and-printer-feasibility.md`):
    - Printer bridge needs no new QEMU infrastructure: the guest already reaches the host over QEMU's existing user-mode/SLIRP networking, so Windows can add the host's shared printer as a plain IPP network printer. Recommended next step: a manual experiment, not a code spike.

@@ -710,11 +710,19 @@ struct VeilHostShellApp: App {
     }
 
     private func syncLauncherWindowVisibility() {
-        if model.runtimeStatusReport().launcherVisibility.shouldHideMainWindow {
+        if shouldHideLauncherWindowForCoherence() {
             MainWindowChrome.hideMainWindow()
         } else {
             MainWindowChrome.showMainWindow()
         }
+    }
+
+    private func shouldHideLauncherWindowForCoherence() -> Bool {
+        if !windowsAppWindowPresenter.visibleWindowIds.isEmpty {
+            return true
+        }
+
+        return model.runtimeStatusReport().launcherVisibility.shouldHideMainWindow
     }
 
     private func runRecommendedProof() {
@@ -1423,10 +1431,15 @@ private struct VeilMenuBarMenu: View {
     }
 
     private func openMainWindow() {
-        openWindow(id: "main")
-        activateMainWindowAction()
-        DispatchQueue.main.async {
-            MainWindowChrome.showMainWindow()
+        if !MainWindowChrome.hasMainWindow {
+            openWindow(id: "main")
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
+                MainWindowChrome.showMainWindow()
+            }
+        } else {
+            DispatchQueue.main.async {
+                MainWindowChrome.showMainWindow()
+            }
         }
     }
 
@@ -1484,20 +1497,25 @@ private enum MainWindowChrome {
         mainWindows.first
     }
 
+    static var hasMainWindow: Bool {
+        !mainWindows.isEmpty
+    }
+
     private static var mainWindows: [NSWindow] {
         NSApp.windows.filter { window in
-            window.identifier?.rawValue == "main" || window.title == "Veil"
+            window.identifier?.rawValue == "main"
         }
     }
 
     private static func configure(_ window: NSWindow) {
         window.minSize = NSSize(width: 1180, height: 760)
+        window.maxSize = NSSize(width: 2048, height: 1536)
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
         window.styleMask.insert(.fullSizeContentView)
         window.toolbar = nil
-        window.isOpaque = false
-        window.backgroundColor = .clear
+        window.isOpaque = true
+        window.backgroundColor = NSColor(calibratedRed: 0.04, green: 0.05, blue: 0.07, alpha: 1)
     }
 
     private static func fitToPreferredSize(_ window: NSWindow) {

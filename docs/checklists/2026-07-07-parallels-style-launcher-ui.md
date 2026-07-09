@@ -22,12 +22,19 @@ and launch Windows apps without navigating a complex shell.
       between install and launcher modes.
 - [x] Remove the decorative recovery overlay and simplify the install splash canvas so the first view
       reads as one-screen and less noisy.
+- [x] Make main-window activation idempotent so repeated "Open Veil" and launch commands no longer
+      create duplicate launcher surfaces.
+- [x] Add installer/app-launch onboarding artifacts and expected pass-fail failure rules in
+      `docs/checklists/2026-07-09-parallels-launch-onboarding.md`.
+- [x] Enforce launcher visibility so a visible mirrored Windows app surface hides the launcher automatically.
+- [x] Add a Parallels-like UX review checklist covering launch, visibility, and recovery behavior in
+      `docs/checklists/2026-07-09-parallels-ux-review.md`.
 
 ## Current Next
 
-- [ ] Add a targeted UX review checklist for one-shot launch flow (install ISO → VM ready → open app window)
-      with no manual duplicate-step ambiguity.
+- [ ] Execute `docs/checklists/2026-07-09-parallels-launch-onboarding.md` on a clean Mac profile and record
+      actual pass/fail results.
 - [x] Hide non-urgent installer/diagnostic controls from the default launcher card and surface them behind
       optional details to reduce first-screen decision noise.
-- [ ] Add a short onboarding runbook with deterministic validation steps for a fresh Mac install:
+- [x] Add a short onboarding runbook with deterministic validation steps for a fresh Mac install:
       "installer media selected → start VM → Windows app opens as host window".
