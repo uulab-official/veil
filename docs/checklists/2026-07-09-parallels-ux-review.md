@@ -26,6 +26,7 @@ Goal: keep the user-facing workflow one-screen-first (launcher + one action path
 - [x] Reuse the queued-app next-action policy in the menu bar as well as the Dock menu, including compact app-name labels that stay within menu-bar length guidance.
 - [x] Polish action result messages and app-runtime proof-plan reasons toward app connection and app check language, with regression coverage for automation-visible reason text.
 - [x] Polish quiet-Windows and macOS-window integration reason text away from agent/HWND/runtime language, with regression coverage for automation-visible status reports.
+- [x] Move first-run header and display-recovery status copy into tested app-first shell copy so the main launcher avoids runtime/VM/QEMU wording.
 
 ## CEO Review
 

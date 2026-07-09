@@ -60,18 +60,11 @@ struct ContentView: View {
     }
 
     private var headerSubtitle: String {
-        if model.hasLiveAgentConnection {
-            return "Windows apps open on your Mac"
-        }
-
-        switch vmModel.snapshot?.state {
-        case .running:
-            return "Preparing Windows apps"
-        case .starting:
-            return "Opening Windows"
-        default:
-            return "Windows app runtime"
-        }
+        WindowsShellCopy.headerSubtitle(
+            hasLiveAppConnection: model.hasLiveAgentConnection,
+            runtimeState: vmModel.snapshot?.state,
+            windowsInstalled: vmModel.snapshot?.windowsInstalled == true
+        )
     }
 
     private var headerStatusTitle: String {

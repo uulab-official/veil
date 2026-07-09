@@ -6,6 +6,51 @@ import VeilHostCore
 
 @MainActor
 struct AppRuntimeDockMenuTests {
+    @Test("shell copy keeps first-run and recovery messages app-first")
+    func shellCopyKeepsFirstRunAndRecoveryMessagesAppFirst() {
+        #expect(
+            WindowsShellCopy.headerSubtitle(
+                hasLiveAppConnection: false,
+                runtimeState: nil,
+                windowsInstalled: false
+            ) == "Set up Windows apps on this Mac"
+        )
+        #expect(
+            WindowsShellCopy.headerSubtitle(
+                hasLiveAppConnection: false,
+                runtimeState: .stopped,
+                windowsInstalled: true
+            ) == "Ready to open Windows apps"
+        )
+        #expect(
+            WindowsShellCopy.headerSubtitle(
+                hasLiveAppConnection: true,
+                runtimeState: .running,
+                windowsInstalled: true
+            ) == "Windows apps open on your Mac"
+        )
+
+        let visibleMessages = [
+            WindowsShellCopy.headerSubtitle(
+                hasLiveAppConnection: false,
+                runtimeState: nil,
+                windowsInstalled: false
+            ),
+            WindowsShellCopy.headerSubtitle(
+                hasLiveAppConnection: false,
+                runtimeState: .stopped,
+                windowsInstalled: true
+            ),
+            WindowsShellCopy.quietStopWaitingMessage,
+            WindowsShellCopy.displayRecoveryStillStaleMessage(statusText: "stale")
+        ]
+
+        #expect(visibleMessages.allSatisfy { !$0.contains("runtime") })
+        #expect(visibleMessages.allSatisfy { !$0.contains("VM") })
+        #expect(visibleMessages.allSatisfy { !$0.contains("QEMU") })
+        #expect(visibleMessages.allSatisfy { !$0.contains("agent") })
+    }
+
     @Test("maps reconnect restore handoff to recovery start or wait states")
     func mapsReconnectRestoreHandoffToRecoveryStartOrWaitStates() {
         #expect(

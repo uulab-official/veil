@@ -394,7 +394,7 @@ struct VeilHostShellApp: App {
             }
 
             guard vmModel.canStop && vmModel.phase != .loading else {
-                displayMessage = "Windows app windows are closed. Runtime stop will be available after the local VM state refreshes."
+                displayMessage = WindowsShellCopy.quietStopWaitingMessage
                 return
             }
 
@@ -1045,7 +1045,7 @@ struct VeilHostShellApp: App {
                 displayMessage = "Windows display evidence refreshed."
             } else {
                 let statusText = afterStatus?.rawValue ?? beforeStatus?.rawValue ?? "unavailable"
-                displayMessage = "Display is still \(statusText). Open recovery display or check QEMU display smoke before app launch."
+                displayMessage = WindowsShellCopy.displayRecoveryStillStaleMessage(statusText: statusText)
             }
         }
     }
