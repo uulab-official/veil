@@ -1467,13 +1467,13 @@ private struct WindowsSetupDisplayPanel: View {
                 runtimeSetupMenu
             }
 
-            Button(action: primaryAction) {
-                Label(installPrimaryTitle, systemImage: primarySymbol)
+            Button(action: runEffectivePrimaryAction) {
+                Label(effectivePrimaryTitle, systemImage: effectivePrimarySymbol)
                     .frame(minWidth: canStop ? 124 : 142)
             }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.large)
-                .disabled(primaryDisabled)
+                .disabled(effectivePrimaryDisabled)
 
             runtimeActionButton
             runtimeMoreMenu
@@ -1537,27 +1537,29 @@ private struct WindowsSetupDisplayPanel: View {
                         .lineLimit(1)
                 }
 
-                Button(action: primaryAction) {
+                Button(action: runEffectivePrimaryAction) {
                     ZStack {
                         Circle()
-                            .fill(primaryDisabled ? Color.white.opacity(0.20) : Color.accentColor)
-                        Image(systemName: primarySymbol)
+                            .fill(effectivePrimaryDisabled ? Color.white.opacity(0.20) : Color.accentColor)
+                        Image(systemName: effectivePrimarySymbol)
                             .font(.system(size: 30, weight: .bold))
                             .foregroundStyle(.white)
                     }
                     .frame(width: 74, height: 74)
                     .overlay {
                         Circle()
-                            .strokeBorder(.white.opacity(primaryDisabled ? 0.12 : 0.34), lineWidth: 1)
+                            .strokeBorder(.white.opacity(effectivePrimaryDisabled ? 0.12 : 0.34), lineWidth: 1)
                     }
                     .shadow(color: .black.opacity(0.30), radius: 18, y: 10)
                 }
                 .buttonStyle(.plain)
-                .disabled(primaryDisabled)
-                .help(primaryTitle)
+                .disabled(effectivePrimaryDisabled)
+                .help(effectivePrimaryHelp)
 
-                Text(primaryTitle)
+                Text(effectivePrimaryTitle)
                     .font(.headline.weight(.semibold))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.82)
 
                 if effectiveInstallEvidence.isInstalled {
                     Label(primaryNextAction.title, systemImage: "arrow.forward.circle")
@@ -2230,6 +2232,88 @@ private struct WindowsSetupDisplayPanel: View {
         ]
             .compactMap { $0 }
             .joined(separator: "\n")
+    }
+
+    private var executablePrimaryNextActionRoute: LauncherPrimaryNextActionRoute? {
+        guard effectiveInstallEvidence.isInstalled else {
+            return nil
+        }
+
+        guard let route = LauncherPrimaryNextActionRoute.resolve(
+            actionId: primaryNextAction.actionId ?? primaryNextAction.id,
+            command: primaryNextAction.command,
+            runsInApp: primaryNextAction.runsInApp
+        ) else {
+            return nil
+        }
+
+        switch route {
+        case .reconnectPreviousApps, .closeAllWindowsApps:
+            return nil
+        default:
+            return route
+        }
+    }
+
+    private var effectivePrimaryTitle: String {
+        guard let route = executablePrimaryNextActionRoute else {
+            return primaryTitle
+        }
+
+        switch route {
+        case .launchSelectedApp:
+            return selectedWindowsAppName.map { "Open \($0)" } ?? route.buttonTitle
+        case .fulfillPendingLaunch:
+            return "Open \(pendingAppDisplayName)"
+        default:
+            return route.buttonTitle
+        }
+    }
+
+    private var effectivePrimarySymbol: String {
+        executablePrimaryNextActionRoute?.symbolName ?? primarySymbol
+    }
+
+    private var effectivePrimaryDisabled: Bool {
+        if executablePrimaryNextActionRoute != nil {
+            return primaryDisabled || !primaryNextAction.isAvailable
+        }
+
+        return primaryDisabled
+    }
+
+    private var effectivePrimaryHelp: String {
+        executablePrimaryNextActionRoute == nil ? primaryTitle : primaryNextActionHelp
+    }
+
+    private func runEffectivePrimaryAction() {
+        guard let route = executablePrimaryNextActionRoute else {
+            primaryAction()
+            return
+        }
+
+        switch route {
+        case .launchSelectedApp, .fulfillPendingLaunch:
+            primaryAction()
+        case .recoverDisplay:
+            recoverRuntimeDisplayAction()
+        case .waitForAgent:
+            waitForGuestAgentAction()
+        case .repairAppConnection:
+            repairGuestAgentForAppLaunchAction()
+        case .startWindows:
+            primaryAction()
+        case .prepareWindows:
+            prepareAction()
+        case .refreshRuntimeStatus:
+            refreshAction()
+        case .reconnectPreviousApps, .closeAllWindowsApps:
+            primaryAction()
+        case .quietWindows:
+            stopAction()
+        case .runRecommendedProof:
+            runRecommendedProofAction()
+        }
     }
 
     private var oneScreenUXTitle: String {
