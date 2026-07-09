@@ -12,7 +12,11 @@ struct ContentView: View {
     var repairGuestAgentForAppLaunchAction: () -> Void
     var recoverRuntimeDisplayAction: () -> Void
     var launchWindowsAppAction: () -> Void
+    var fulfillPendingLaunchAction: () -> Void
+    var restoreWindowsAppWindowsAction: () -> Void
+    var closeAllWindowsAppWindowsAction: () -> Void
     var runRecommendedProofAction: () -> Void
+    var quietWindowsWhenIdleAction: () -> Void
     var displayMessage: String?
 
     var body: some View {
@@ -42,7 +46,11 @@ struct ContentView: View {
                     repairGuestAgentForAppLaunchAction: repairGuestAgentForAppLaunchAction,
                     recoverRuntimeDisplayAction: recoverRuntimeDisplayAction,
                     launchWindowsAppAction: launchWindowsAppAction,
+                    fulfillPendingLaunchAction: fulfillPendingLaunchAction,
+                    restoreWindowsAppWindowsAction: restoreWindowsAppWindowsAction,
+                    closeAllWindowsAppWindowsAction: closeAllWindowsAppWindowsAction,
                     runRecommendedProofAction: runRecommendedProofAction,
+                    quietWindowsWhenIdleAction: quietWindowsWhenIdleAction,
                     displayMessage: displayMessage
                 )
             }

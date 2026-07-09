@@ -79,7 +79,11 @@ struct VeilHostShellApp: App {
                 repairGuestAgentForAppLaunchAction: repairGuestAgentForAppLaunch,
                 recoverRuntimeDisplayAction: recoverRuntimeDisplayEvidence,
                 launchWindowsAppAction: launchSelectedWindowsAppWindow,
+                fulfillPendingLaunchAction: fulfillPendingWindowsAppWindow,
+                restoreWindowsAppWindowsAction: restoreWindowsAppWindows,
+                closeAllWindowsAppWindowsAction: closeAllWindowsAppWindows,
                 runRecommendedProofAction: runRecommendedProof,
+                quietWindowsWhenIdleAction: quietWindowsWhenIdle,
                 displayMessage: displayMessage
             )
                 .frame(minWidth: 1180, idealWidth: 1500, minHeight: 760, idealHeight: 900)
@@ -1789,7 +1793,11 @@ private struct StandaloneMainWindowRoot: View {
             repairGuestAgentForAppLaunchAction: installGuestAgentFromDisplay,
             recoverRuntimeDisplayAction: recoverRuntimeDisplayEvidence,
             launchWindowsAppAction: launchSelectedWindowsApp,
+            fulfillPendingLaunchAction: launchSelectedWindowsApp,
+            restoreWindowsAppWindowsAction: {},
+            closeAllWindowsAppWindowsAction: {},
             runRecommendedProofAction: {},
+            quietWindowsWhenIdleAction: {},
             displayMessage: displayMessage
         )
         .frame(minWidth: 1120, idealWidth: 1440, minHeight: 700, idealHeight: 900)

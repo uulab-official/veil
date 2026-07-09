@@ -12,7 +12,11 @@ struct DetailView: View {
     var repairGuestAgentForAppLaunchAction: () -> Void
     var recoverRuntimeDisplayAction: () -> Void
     var launchWindowsAppAction: () -> Void
+    var fulfillPendingLaunchAction: () -> Void
+    var restoreWindowsAppWindowsAction: () -> Void
+    var closeAllWindowsAppWindowsAction: () -> Void
     var runRecommendedProofAction: () -> Void
+    var quietWindowsWhenIdleAction: () -> Void
     var displayMessage: String?
 
     var body: some View {
@@ -60,6 +64,7 @@ struct DetailView: View {
                     releaseGate: runtimeStatusReport.releaseGate,
                     primaryNextAction: runtimeStatusReport.primaryNextAction,
                     launchWindowsAppAction: launchWindowsAppAction,
+                    runPrimaryNextAction: runPrimaryNextAction,
                     runRecommendedProofAction: runRecommendedProofAction
                 )
                     .padding(.horizontal, 14)
@@ -90,6 +95,39 @@ struct DetailView: View {
             localRuntime: model.localRuntimeStatus(snapshot: vmModel.snapshot)
         )
     }
+
+    private func runPrimaryNextAction(_ route: LauncherPrimaryNextActionRoute) {
+        switch route {
+        case .launchSelectedApp:
+            launchWindowsAppAction()
+        case .fulfillPendingLaunch:
+            fulfillPendingLaunchAction()
+        case .recoverDisplay:
+            recoverRuntimeDisplayAction()
+        case .waitForAgent:
+            waitForGuestAgentAction()
+        case .repairAppConnection:
+            repairGuestAgentForAppLaunchAction()
+        case .startWindows:
+            startVMAction()
+        case .prepareWindows:
+            Task {
+                await vmModel.prepareDefaultVM()
+            }
+        case .refreshRuntimeStatus:
+            Task {
+                await vmModel.load()
+            }
+        case .reconnectPreviousApps:
+            restoreWindowsAppWindowsAction()
+        case .closeAllWindowsApps:
+            closeAllWindowsAppWindowsAction()
+        case .quietWindows:
+            quietWindowsWhenIdleAction()
+        case .runRecommendedProof:
+            runRecommendedProofAction()
+        }
+    }
 }
 
 private struct WindowsQuickLaunchPanel: View {
@@ -106,6 +144,7 @@ private struct WindowsQuickLaunchPanel: View {
     var releaseGate: WindowsAppRuntimeReleaseGateStatus
     var primaryNextAction: WindowsAppRuntimePrimaryNextActionStatus
     var launchWindowsAppAction: () -> Void
+    var runPrimaryNextAction: (LauncherPrimaryNextActionRoute) -> Void
     var runRecommendedProofAction: () -> Void
 
     var body: some View {
@@ -226,6 +265,17 @@ private struct WindowsQuickLaunchPanel: View {
                     }
                 }
                 .accessibilityLabel("App flow progress")
+
+                if let primaryNextActionRoute {
+                    Button {
+                        runPrimaryNextAction(primaryNextActionRoute)
+                    } label: {
+                        Label(primaryNextActionRoute.buttonTitle, systemImage: primaryNextActionRoute.symbolName)
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(!primaryNextAction.isAvailable)
+                    .help(primaryNextActionHelp)
+                }
             }
         }
     }
@@ -340,6 +390,13 @@ private struct WindowsQuickLaunchPanel: View {
         ]
             .compactMap { $0 }
             .joined(separator: "\n")
+    }
+
+    private var primaryNextActionRoute: LauncherPrimaryNextActionRoute? {
+        LauncherPrimaryNextActionRoute.resolve(
+            actionId: primaryNextAction.id,
+            command: primaryNextAction.command
+        )
     }
 
     private var appFlowSymbolName: String {
