@@ -76,6 +76,12 @@ export function validateAppRuntimeReviewVerification(report) {
   if (report.attachedScreenshotCount !== review.attachedScreenshotCount) {
     throw new TypeError("app runtime review verification attached count must match review card.");
   }
+  if (
+    report.minimumScreenshotWidth !== review.minimumScreenshotWidth
+    || report.minimumScreenshotHeight !== review.minimumScreenshotHeight
+  ) {
+    throw new TypeError("app runtime review verification minimum screenshot dimensions must match the review card.");
+  }
   if (report.missingFiles.length !== report.requiredScreenshotCount - report.attachedScreenshotCount) {
     throw new TypeError("app runtime review verification missing file count must match attached count.");
   }

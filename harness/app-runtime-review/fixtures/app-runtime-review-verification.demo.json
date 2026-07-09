@@ -1,7 +1,7 @@
 {
   "attachedScreenshotCount" : 0,
   "evidenceDirectory" : "\/tmp\/veil-review-verify",
-  "generatedAt" : "2026-07-09T16:53:46Z",
+  "generatedAt" : "2026-07-09T16:56:01Z",
   "isComplete" : false,
   "kind" : "windowsAppRuntimeReviewEvidenceVerification",
   "manifest" : {
@@ -219,7 +219,7 @@
           "meetsLauncherContract" : true,
           "minHeight" : 760,
           "minWidth" : 1180,
-          "modifiedAt" : "2026-07-09T16:51:44Z",
+          "modifiedAt" : "2026-07-09T16:54:24Z",
           "reportPath" : "\/Users\/bonjin\/Documents\/workspace\/uulab\/veil\/dist\/veil-launch-report-latest.plist",
           "titlebarAppearsTransparent" : true,
           "visibleMainWindowCount" : 1
@@ -231,9 +231,11 @@
       "latestAppCheckPath" : "\/Users\/bonjin\/Library\/Application Support\/Veil\/Diagnostics\/MVP Proof\/notepad-mvp-window-detect.json",
       "screenshotEvidenceDirectory" : "\/tmp\/veil-review-verify"
     },
-    "generatedAt" : "2026-07-09T16:53:46Z",
+    "generatedAt" : "2026-07-09T16:56:01Z",
     "isReadyForReview" : false,
     "kind" : "windowsAppRuntimeReviewCard",
+    "minimumScreenshotHeight" : 360,
+    "minimumScreenshotWidth" : 640,
     "nextActionCommand" : "veil-vmctl app-runtime-review-verify --json --evidence-dir \/tmp\/veil-review-verify",
     "nextStepTitle" : "Attach Review Screenshots",
     "requiredScreenshotCount" : 5,
@@ -414,7 +416,7 @@
         "pendingLaunchCount" : 1,
         "restorableAppCount" : 1
       },
-      "generatedAt" : "2026-07-09T16:53:46Z",
+      "generatedAt" : "2026-07-09T16:56:01Z",
       "guestAgentDiagnostics" : {
         "diagnosticCommand" : "veil-host-probe --diagnose-agent",
         "endpoint" : "ws:\/\/127.0.0.1:18444",

@@ -46,7 +46,7 @@
     }
   ],
   "evidenceDirectory" : "\/tmp\/veil-review-readme",
-  "generatedAt" : "2026-07-09T16:53:46Z",
+  "generatedAt" : "2026-07-09T16:56:00Z",
   "kind" : "windowsAppRuntimeReviewEvidenceManifest",
   "manifestPath" : "\/tmp\/veil-review-readme\/review-manifest.json",
   "minimumScreenshotHeight" : 360,

@@ -67,6 +67,7 @@ Goal: keep the user-facing workflow one-screen-first (launcher + one action path
 - [x] Gate `app-runtime-review.isReadyForReview` on the full 5/5 screenshot set as well as Windows app release evidence and host app bundle verification, so a visually incomplete review folder cannot be marked ready.
 - [x] Treat review screenshots as attached only when the expected file is a non-empty PNG and expose `attachmentByteCount`, so empty placeholder files cannot satisfy the visual evidence gate.
 - [x] Require attached review PNGs to be at least 640 x 360 and expose `attachmentWidth`/`attachmentHeight`, so tiny placeholder images cannot satisfy the visual evidence gate.
+- [x] Add structured `minimumScreenshotWidth`/`minimumScreenshotHeight` fields to review cards, so the primary review artifact states the screenshot contract directly.
 - [x] Add structured `minimumScreenshotWidth`/`minimumScreenshotHeight` fields to review manifests, so agents and harnesses can enforce the visual evidence contract without scraping guide text.
 - [x] Repeat `minimumScreenshotWidth`/`minimumScreenshotHeight` on verification reports and require them to match the manifest, so review tools can enforce the screenshot contract from the top-level verification artifact.
 - [x] Add `veil-vmctl app-runtime-review-init` and a manifest harness so live VM proof passes start with one evidence folder, one `review-manifest.json`, and fixed PNG names.

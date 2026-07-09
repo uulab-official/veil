@@ -34,6 +34,16 @@ test("rejects screenshot slots that drift from release gate", () => {
   );
 });
 
+test("rejects cards with drifted minimum screenshot dimensions", () => {
+  const card = demoReviewCard();
+  card.minimumScreenshotWidth = 1;
+
+  assert.throws(
+    () => validateAppRuntimeReview(card),
+    /minimum screenshot dimensions/
+  );
+});
+
 test("accepts attached screenshot evidence paths", () => {
   const card = demoReviewCard();
   card.evidence.screenshotEvidenceDirectory = "/tmp/veil-review";
@@ -91,7 +101,7 @@ test("rejects attached screenshot slots below minimum dimensions", () => {
 
   assert.throws(
     () => validateAppRuntimeReview(card),
-    /640x360/
+    /minimum screenshot dimensions/
   );
 });
 

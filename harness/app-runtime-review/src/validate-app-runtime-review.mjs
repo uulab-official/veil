@@ -22,6 +22,8 @@ export function validateAppRuntimeReview(card) {
   requireBoolean(card.areRequiredScreenshotsAttached, "areRequiredScreenshotsAttached");
   requireNonNegativeInteger(card.requiredScreenshotCount, "requiredScreenshotCount");
   requireNonNegativeInteger(card.attachedScreenshotCount, "attachedScreenshotCount");
+  requirePositiveInteger(card.minimumScreenshotWidth, "minimumScreenshotWidth");
+  requirePositiveInteger(card.minimumScreenshotHeight, "minimumScreenshotHeight");
   requireString(card.appFlowSummary, "appFlowSummary");
   requireString(card.nextStepTitle, "nextStepTitle");
   requireString(card.detail, "detail");
@@ -29,6 +31,9 @@ export function validateAppRuntimeReview(card) {
 
   if (card.nextActionCommand !== undefined) {
     requireString(card.nextActionCommand, "nextActionCommand");
+  }
+  if (card.minimumScreenshotWidth !== 640 || card.minimumScreenshotHeight !== 360) {
+    throw new TypeError("app runtime review card minimum screenshot dimensions must be 640x360.");
   }
 
   const status = validateAppRuntimeStatus(card.status);
@@ -114,8 +119,14 @@ export function validateAppRuntimeReview(card) {
     if (slot.attachmentState === "attached" && (slot.attachmentWidth === undefined || slot.attachmentHeight === undefined)) {
       throw new TypeError("attached review screenshots must include PNG dimensions.");
     }
-    if (slot.attachmentState === "attached" && (slot.attachmentWidth < 640 || slot.attachmentHeight < 360)) {
-      throw new TypeError("attached review screenshots must be at least 640x360.");
+    if (
+      slot.attachmentState === "attached"
+      && (
+        slot.attachmentWidth < card.minimumScreenshotWidth
+        || slot.attachmentHeight < card.minimumScreenshotHeight
+      )
+    ) {
+      throw new TypeError("attached review screenshots must meet the card minimum screenshot dimensions.");
     }
     if (slot.attachmentState === "missing" && slot.attachmentPath !== undefined) {
       throw new TypeError("missing review screenshots must not include an attachment path.");

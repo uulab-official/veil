@@ -666,6 +666,8 @@ struct AppRuntimeReviewCard: Codable, Equatable {
     var areRequiredScreenshotsAttached: Bool
     var requiredScreenshotCount: Int
     var attachedScreenshotCount: Int
+    var minimumScreenshotWidth: Int
+    var minimumScreenshotHeight: Int
     var appFlowSummary: String
     var nextStepTitle: String
     var nextActionCommand: String?
@@ -1648,6 +1650,8 @@ struct VeilVMControl {
             areRequiredScreenshotsAttached: areRequiredScreenshotsAttached,
             requiredScreenshotCount: requiredScreenshotCount,
             attachedScreenshotCount: attachedScreenshotCount,
+            minimumScreenshotWidth: minimumReviewScreenshotWidth,
+            minimumScreenshotHeight: minimumReviewScreenshotHeight,
             appFlowSummary: appRuntimeReviewSummary(
                 releaseGate: report.releaseGate,
                 hostAppBundle: hostAppBundle,

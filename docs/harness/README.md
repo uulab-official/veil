@@ -214,8 +214,9 @@ The app runtime review command converts `app-runtime-status` into a
 Parallels-style release card for the current build. It keeps the full status
 report embedded for automation, but surfaces the human review contract directly:
 app-flow readiness, the next product action, the five release-gate steps, the
-required screenshot slots, the latest app-check artifact, and the recommended
-next app check. Its evidence block also includes the staged host app bundle
+required screenshot slots, the minimum screenshot dimensions, the latest
+app-check artifact, and the recommended next app check. Its evidence block also
+includes the staged host app bundle
 contract: `dist/Veil.app`, `Info.plist`, executable, icon, bundle identifier,
 the latest successful `veil-launch-report-latest.plist`, the latest failed
 launch-contract report when present, and the exact
@@ -241,7 +242,8 @@ actions all point back to the same evidence directory and the `5/5 attached`
 release gate.
 
 Pass `--evidence-dir` to point the card at a screenshot folder. Each required
-slot expects one valid, non-empty PNG of at least 640 x 360 named after the release-gate slot id, for example
+slot expects one valid, non-empty PNG matching the card's 640 x 360 minimum
+screenshot dimensions and named after the release-gate slot id, for example
 `preBootLauncher.png`, `firstAppLaunch.png`, `appWindowOnly.png`,
 `menuRestore.png`, and `closeQuiet.png`. The card marks each slot as `attached`
 or `missing`, records the attached PNG byte count and dimensions, exposes the
