@@ -40,6 +40,8 @@ test("accepts attached screenshot evidence paths", () => {
   card.screenshotSlots[0].attachmentState = "attached";
   card.screenshotSlots[0].attachmentPath = "/tmp/veil-review/preBootLauncher.png";
   card.screenshotSlots[0].attachmentByteCount = 68;
+  card.screenshotSlots[0].attachmentWidth = 1440;
+  card.screenshotSlots[0].attachmentHeight = 900;
   card.attachedScreenshotCount = 1;
   card.nextActionCommand = "veil-vmctl app-runtime-review-verify --json --evidence-dir /tmp/veil-review";
 
@@ -67,6 +69,32 @@ test("rejects attached screenshot slots without byte counts", () => {
   );
 });
 
+test("rejects attached screenshot slots without dimensions", () => {
+  const card = demoReviewCard();
+  card.screenshotSlots[0].attachmentState = "attached";
+  card.screenshotSlots[0].attachmentPath = "/tmp/veil-review/preBootLauncher.png";
+  card.screenshotSlots[0].attachmentByteCount = 68;
+
+  assert.throws(
+    () => validateAppRuntimeReview(card),
+    /dimensions/
+  );
+});
+
+test("rejects attached screenshot slots below minimum dimensions", () => {
+  const card = demoReviewCard();
+  card.screenshotSlots[0].attachmentState = "attached";
+  card.screenshotSlots[0].attachmentPath = "/tmp/veil-review/preBootLauncher.png";
+  card.screenshotSlots[0].attachmentByteCount = 68;
+  card.screenshotSlots[0].attachmentWidth = 1;
+  card.screenshotSlots[0].attachmentHeight = 1;
+
+  assert.throws(
+    () => validateAppRuntimeReview(card),
+    /640x360/
+  );
+});
+
 test("accepts complete screenshot evidence summary", () => {
   const card = demoReviewCard();
   card.evidence.screenshotEvidenceDirectory = "/tmp/veil-review";
@@ -81,6 +109,8 @@ test("accepts complete screenshot evidence summary", () => {
     slot.attachmentState = "attached";
     slot.attachmentPath = `/tmp/veil-review/${slot.expectedFileName}`;
     slot.attachmentByteCount = 68;
+    slot.attachmentWidth = 1440;
+    slot.attachmentHeight = 900;
   }
 
   assert.equal(validateAppRuntimeReview(card), card);

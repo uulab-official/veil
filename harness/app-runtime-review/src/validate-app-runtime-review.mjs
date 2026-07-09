@@ -85,6 +85,12 @@ export function validateAppRuntimeReview(card) {
     if (slot.attachmentByteCount !== undefined) {
       requirePositiveInteger(slot.attachmentByteCount, `screenshotSlots.${index}.attachmentByteCount`);
     }
+    if (slot.attachmentWidth !== undefined) {
+      requirePositiveInteger(slot.attachmentWidth, `screenshotSlots.${index}.attachmentWidth`);
+    }
+    if (slot.attachmentHeight !== undefined) {
+      requirePositiveInteger(slot.attachmentHeight, `screenshotSlots.${index}.attachmentHeight`);
+    }
     if (slot.attachmentPath !== undefined) {
       requireString(slot.attachmentPath, `screenshotSlots.${index}.attachmentPath`);
     }
@@ -105,11 +111,20 @@ export function validateAppRuntimeReview(card) {
     if (slot.attachmentState === "attached" && slot.attachmentByteCount === undefined) {
       throw new TypeError("attached review screenshots must include a positive PNG byte count.");
     }
+    if (slot.attachmentState === "attached" && (slot.attachmentWidth === undefined || slot.attachmentHeight === undefined)) {
+      throw new TypeError("attached review screenshots must include PNG dimensions.");
+    }
+    if (slot.attachmentState === "attached" && (slot.attachmentWidth < 640 || slot.attachmentHeight < 360)) {
+      throw new TypeError("attached review screenshots must be at least 640x360.");
+    }
     if (slot.attachmentState === "missing" && slot.attachmentPath !== undefined) {
       throw new TypeError("missing review screenshots must not include an attachment path.");
     }
     if (slot.attachmentState === "missing" && slot.attachmentByteCount !== undefined) {
       throw new TypeError("missing review screenshots must not include a byte count.");
+    }
+    if (slot.attachmentState === "missing" && (slot.attachmentWidth !== undefined || slot.attachmentHeight !== undefined)) {
+      throw new TypeError("missing review screenshots must not include dimensions.");
     }
     if (slot.attachmentState === "attached") {
       attachedScreenshotCount += 1;

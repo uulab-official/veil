@@ -611,6 +611,8 @@ struct AppRuntimeReviewScreenshotSlot: Codable, Equatable {
     var attachmentState: String
     var attachmentPath: String?
     var attachmentByteCount: Int?
+    var attachmentWidth: Int?
+    var attachmentHeight: Int?
 }
 
 struct AppRuntimeReviewEvidence: Codable, Equatable {
@@ -1600,8 +1602,8 @@ struct VeilVMControl {
             let expectedFileName = "\(slot.id).png"
             let attachmentURL = evidenceDirectoryURL?.appendingPathComponent(expectedFileName)
             let attachmentPath = attachmentURL?.path
-            let attachmentByteCount = attachmentPath.flatMap(byteCountForPNGFile(atPath:))
-            let attachmentExists = attachmentByteCount != nil
+            let attachmentMetadata = attachmentPath.flatMap(pngScreenshotMetadata(atPath:))
+            let attachmentExists = attachmentMetadata != nil
             return AppRuntimeReviewScreenshotSlot(
                 id: slot.id,
                 title: slot.title,
@@ -1609,7 +1611,9 @@ struct VeilVMControl {
                 expectedFileName: expectedFileName,
                 attachmentState: attachmentExists ? "attached" : "missing",
                 attachmentPath: attachmentExists ? attachmentPath : nil,
-                attachmentByteCount: attachmentByteCount
+                attachmentByteCount: attachmentMetadata?.byteCount,
+                attachmentWidth: attachmentMetadata?.width,
+                attachmentHeight: attachmentMetadata?.height
             )
         }
         let requiredScreenshotCount = report.releaseGate.screenshotSlots.filter(\.isRequired).count
@@ -1835,20 +1839,37 @@ struct VeilVMControl {
     }
 
     private static func isPNGFile(atPath path: String) -> Bool {
-        byteCountForPNGFile(atPath: path) != nil
+        pngScreenshotMetadata(atPath: path) != nil
     }
 
-    private static func byteCountForPNGFile(atPath path: String) -> Int? {
+    private static func pngScreenshotMetadata(atPath path: String) -> (byteCount: Int, width: Int, height: Int)? {
         guard let data = try? Data(contentsOf: URL(fileURLWithPath: path), options: [.mappedIfSafe]),
-              data.count > pngSignature.count,
-              data.prefix(pngSignature.count).elementsEqual(pngSignature) else {
+              data.count >= pngIHDRMinimumByteCount,
+              data.prefix(pngSignature.count).elementsEqual(pngSignature),
+              String(data: data[12..<16], encoding: .ascii) == "IHDR" else {
             return nil
         }
 
-        return data.count
+        let width = readPNGUInt32(data, offset: 16)
+        let height = readPNGUInt32(data, offset: 20)
+        guard width >= minimumReviewScreenshotWidth,
+              height >= minimumReviewScreenshotHeight else {
+            return nil
+        }
+
+        return (byteCount: data.count, width: width, height: height)
+    }
+
+    private static func readPNGUInt32(_ data: Data, offset: Int) -> Int {
+        data[offset..<(offset + 4)].reduce(0) { result, byte in
+            (result << 8) | Int(byte)
+        }
     }
 
     private static let pngSignature: [UInt8] = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]
+    private static let pngIHDRMinimumByteCount = 24
+    private static let minimumReviewScreenshotWidth = 640
+    private static let minimumReviewScreenshotHeight = 360
 
     private static func latestLaunchVerificationReport(
         in distURL: URL,
