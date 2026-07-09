@@ -204,13 +204,20 @@ or `missing`, exposes the attached/required screenshot count, and sets
 set. It does this without copying Windows media, disk contents, product keys, or
 guest data.
 
+After screenshots are captured, `app-runtime-review-verify` checks the existing
+folder end to end: manifest presence, README presence, screenshot count,
+missing files, embedded review card state, and the next actions needed before
+sharing evidence.
+
 ```bash
 cd apps/mac-host
 swift run veil-vmctl app-runtime-review-init --json --demo --evidence-dir ../../docs/checklists/artifacts/2026-07-09-app-runtime-review | node ../../harness/app-runtime-review/src/validate-app-runtime-review-manifest.mjs
 swift run veil-vmctl app-runtime-review --json --demo | node ../../harness/app-runtime-review/src/validate-app-runtime-review.mjs
 swift run veil-vmctl app-runtime-review --json --demo --evidence-dir ../../docs/checklists/artifacts/2026-07-09-app-runtime-review | node ../../harness/app-runtime-review/src/validate-app-runtime-review.mjs
+swift run veil-vmctl app-runtime-review-verify --json --demo --evidence-dir ../../docs/checklists/artifacts/2026-07-09-app-runtime-review | node ../../harness/app-runtime-review/src/validate-app-runtime-review-verification.mjs
 node ../../harness/app-runtime-review/src/validate-app-runtime-review.mjs < ../../harness/app-runtime-review/fixtures/app-runtime-review.demo.json
 node ../../harness/app-runtime-review/src/validate-app-runtime-review-manifest.mjs < ../../harness/app-runtime-review/fixtures/app-runtime-review-manifest.demo.json
+node ../../harness/app-runtime-review/src/validate-app-runtime-review-verification.mjs < ../../harness/app-runtime-review/fixtures/app-runtime-review-verification.demo.json
 ```
 
 ## App Runtime Action Scenario
