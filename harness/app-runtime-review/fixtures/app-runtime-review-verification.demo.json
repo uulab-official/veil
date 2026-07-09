@@ -1,7 +1,7 @@
 {
   "attachedScreenshotCount" : 0,
   "evidenceDirectory" : "\/tmp\/veil-review-verify",
-  "generatedAt" : "2026-07-09T17:41:45Z",
+  "generatedAt" : "2026-07-09T17:45:47Z",
   "invalidCaptureSteps" : [
 
   ],
@@ -182,6 +182,16 @@
     "Run `veil-vmctl app-runtime-review --evidence-dir \/tmp\/veil-review-verify` and confirm Screenshots is 5\/5 attached.",
     "Run `veil-vmctl app-runtime-review-verify --json --evidence-dir \/tmp\/veil-review-verify` before sharing evidence."
   ],
+  "nextEvidenceAction" : {
+    "command" : "screencapture -i \/tmp\/veil-review-verify\/preBootLauncher.png",
+    "expectedFileName" : "preBootLauncher.png",
+    "instruction" : "Capture the one-screen Veil launcher before opening the selected Windows app.",
+    "isReadyToShare" : false,
+    "kind" : "captureMissingScreenshot",
+    "path" : "\/tmp\/veil-review-verify\/preBootLauncher.png",
+    "supportingCommand" : "veil-vmctl app-runtime-status --json",
+    "title" : "Capture preBootLauncher.png"
+  },
   "nextMissingCaptureStep" : {
     "captureCommand" : "screencapture -i \/tmp\/veil-review-verify\/preBootLauncher.png",
     "expectedFileName" : "preBootLauncher.png",
@@ -225,7 +235,7 @@
           "meetsLauncherContract" : true,
           "minHeight" : 760,
           "minWidth" : 1180,
-          "modifiedAt" : "2026-07-09T17:37:37Z",
+          "modifiedAt" : "2026-07-09T17:42:41Z",
           "reportPath" : "\/Users\/bonjin\/Documents\/workspace\/uulab\/veil\/dist\/veil-launch-report-latest.plist",
           "titlebarAppearsTransparent" : true,
           "visibleMainWindowCount" : 1
@@ -237,7 +247,7 @@
       "latestAppCheckPath" : "\/Users\/bonjin\/Library\/Application Support\/Veil\/Diagnostics\/MVP Proof\/notepad-mvp-window-detect.json",
       "screenshotEvidenceDirectory" : "\/tmp\/veil-review-verify"
     },
-    "generatedAt" : "2026-07-09T17:41:45Z",
+    "generatedAt" : "2026-07-09T17:45:47Z",
     "invalidScreenshotCount" : 0,
     "isReadyForReview" : false,
     "kind" : "windowsAppRuntimeReviewCard",
@@ -438,7 +448,7 @@
         "pendingLaunchCount" : 0,
         "restorableAppCount" : 1
       },
-      "generatedAt" : "2026-07-09T17:41:45Z",
+      "generatedAt" : "2026-07-09T17:45:47Z",
       "guestAgentDiagnostics" : {
         "diagnosticCommand" : "veil-host-probe --diagnose-agent",
         "endpoint" : "ws:\/\/127.0.0.1:18444",

@@ -31,6 +31,16 @@ function markInvalidScreenshot(report, slotIndex = 0, reason = "notValidPNG") {
   report.screenshotEvidenceSummary.nextStepTitle = `Replace ${slot.expectedFileName}`;
   report.screenshotEvidenceSummary.nextExpectedFileName = slot.expectedFileName;
   report.screenshotEvidenceSummary.nextCaptureCommand = report.missingCaptureSteps[slotIndex].captureCommand;
+  report.nextEvidenceAction = {
+    kind: "replaceInvalidScreenshot",
+    title: `Replace ${slot.expectedFileName}`,
+    command: report.missingCaptureSteps[slotIndex].captureCommand,
+    isReadyToShare: false,
+    expectedFileName: slot.expectedFileName,
+    path: invalidFile.path,
+    instruction: report.missingCaptureSteps[slotIndex].instruction,
+    supportingCommand: report.missingCaptureSteps[slotIndex].supportingCommand
+  };
 
   return invalidFile;
 }
@@ -138,6 +148,26 @@ test("rejects screenshot evidence summary next step drift", () => {
   );
 });
 
+test("rejects verification reports without a next evidence action", () => {
+  const report = demoVerification();
+  delete report.nextEvidenceAction;
+
+  assert.throws(
+    () => validateAppRuntimeReviewVerification(report),
+    /nextEvidenceAction/
+  );
+});
+
+test("rejects next evidence actions that drift from the next capture step", () => {
+  const report = demoVerification();
+  report.nextEvidenceAction.expectedFileName = report.missingCaptureSteps[1].expectedFileName;
+
+  assert.throws(
+    () => validateAppRuntimeReviewVerification(report),
+    /nextEvidenceAction/
+  );
+});
+
 test("rejects verification missing capture steps that drift from missing files", () => {
   const report = demoVerification();
   report.missingFiles[0] = report.missingFiles[1];
@@ -212,6 +242,13 @@ test("accepts complete verification reports", () => {
   };
   report.missingCaptureSteps = [];
   delete report.nextMissingCaptureStep;
+  report.nextEvidenceAction = {
+    kind: "shareEvidence",
+    title: "Share Review Evidence",
+    command: report.openEvidenceDirectoryCommand,
+    isReadyToShare: true,
+    instruction: "Open the complete evidence folder and share the verified review artifacts."
+  };
   report.review.attachedScreenshotCount = report.review.requiredScreenshotCount;
   report.review.invalidScreenshotCount = 0;
   report.review.areRequiredScreenshotsAttached = true;

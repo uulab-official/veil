@@ -282,7 +282,13 @@ exact capture command instead of guessing which capture step failed. Its
 `screenshotEvidenceSummary` gives the review UI and automation one compact
 share-readiness surface: valid, missing, invalid, pending counts, the minimum
 PNG size, the current state (`ready`, `needs-capture`, or `needs-replacement`),
-and the exact next capture command when screenshots are still pending.
+and the exact next capture command when screenshots are still pending. The
+top-level `nextEvidenceAction` repeats the single next product action for the
+evidence folder: replace the first invalid screenshot, capture the first missing
+screenshot, or open the complete folder when it is ready to share. Harness
+validation requires that action to match the underlying capture step or share
+command, so UI code does not need to compare the invalid and missing step arrays
+itself.
 
 ```bash
 cd apps/mac-host

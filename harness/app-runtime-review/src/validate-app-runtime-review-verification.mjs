@@ -68,6 +68,7 @@ export function validateAppRuntimeReviewVerification(report) {
     validateInvalidScreenshotFile(file, index, report);
   }
   validateScreenshotEvidenceSummary(report.screenshotEvidenceSummary, report);
+  validateNextEvidenceActionShape(report.nextEvidenceAction);
   if (!Array.isArray(report.invalidCaptureSteps)) {
     throw new TypeError("app runtime review verification invalidCaptureSteps must be an array.");
   }
@@ -151,6 +152,7 @@ export function validateAppRuntimeReviewVerification(report) {
   } else if (report.nextMissingCaptureStep !== undefined) {
     throw new TypeError("complete app runtime review verification must not include a next missing capture step.");
   }
+  validateNextEvidenceAction(report.nextEvidenceAction, report);
   if (report.isComplete !== (
     report.manifestExists
     && report.readmeExists
@@ -282,6 +284,82 @@ function validateScreenshotEvidenceSummaryNextStep(summary, report) {
   }
   if (summary.nextExpectedFileName !== undefined || summary.nextCaptureCommand !== undefined) {
     throw new TypeError("ready screenshot evidence must not include a next capture file or command.");
+  }
+}
+
+function validateNextEvidenceActionShape(action) {
+  if (!action || typeof action !== "object" || Array.isArray(action)) {
+    throw new TypeError("app runtime review verification nextEvidenceAction must be an object.");
+  }
+
+  requireString(action.kind, "nextEvidenceAction.kind");
+  requireString(action.title, "nextEvidenceAction.title");
+  requireString(action.command, "nextEvidenceAction.command");
+  requireBoolean(action.isReadyToShare, "nextEvidenceAction.isReadyToShare");
+  if (action.expectedFileName !== undefined) {
+    requireString(action.expectedFileName, "nextEvidenceAction.expectedFileName");
+  }
+  if (action.path !== undefined) {
+    requireString(action.path, "nextEvidenceAction.path");
+  }
+  if (action.instruction !== undefined) {
+    requireString(action.instruction, "nextEvidenceAction.instruction");
+  }
+  if (action.supportingCommand !== undefined) {
+    requireString(action.supportingCommand, "nextEvidenceAction.supportingCommand");
+  }
+
+  if (!["shareEvidence", "captureMissingScreenshot", "replaceInvalidScreenshot"].includes(action.kind)) {
+    throw new TypeError("app runtime review verification nextEvidenceAction kind is unsupported.");
+  }
+}
+
+function validateNextEvidenceAction(action, report) {
+  if (report.invalidCaptureSteps.length > 0) {
+    validateNextEvidenceActionForStep(
+      action,
+      report.invalidCaptureSteps[0],
+      "replaceInvalidScreenshot",
+      false
+    );
+    return;
+  }
+
+  if (report.missingCaptureSteps.length > 0) {
+    validateNextEvidenceActionForStep(
+      action,
+      report.missingCaptureSteps[0],
+      "captureMissingScreenshot",
+      false
+    );
+    return;
+  }
+
+  if (
+    action.kind !== "shareEvidence"
+    || action.title !== "Share Review Evidence"
+    || action.command !== report.openEvidenceDirectoryCommand
+    || action.isReadyToShare !== true
+    || action.expectedFileName !== undefined
+    || action.path !== undefined
+    || action.supportingCommand !== undefined
+  ) {
+    throw new TypeError("app runtime review verification nextEvidenceAction must share complete evidence when no screenshots are pending.");
+  }
+}
+
+function validateNextEvidenceActionForStep(action, step, kind, isReadyToShare) {
+  if (
+    action.kind !== kind
+    || action.title !== `${kind === "replaceInvalidScreenshot" ? "Replace" : "Capture"} ${step.expectedFileName}`
+    || action.command !== step.captureCommand
+    || action.isReadyToShare !== isReadyToShare
+    || action.expectedFileName !== step.expectedFileName
+    || action.path !== step.path
+    || action.instruction !== step.instruction
+    || action.supportingCommand !== step.supportingCommand
+  ) {
+    throw new TypeError("app runtime review verification nextEvidenceAction must match the next capture step.");
   }
 }
 

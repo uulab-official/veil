@@ -838,6 +838,17 @@ struct AppRuntimeReviewScreenshotEvidenceSummary: Codable, Equatable {
     var nextCaptureCommand: String?
 }
 
+struct AppRuntimeReviewNextEvidenceAction: Codable, Equatable {
+    var kind: String
+    var title: String
+    var command: String
+    var isReadyToShare: Bool
+    var expectedFileName: String?
+    var path: String?
+    var instruction: String?
+    var supportingCommand: String?
+}
+
 struct AppRuntimeReviewEvidenceVerification: Codable, Equatable {
     var kind: String = "windowsAppRuntimeReviewEvidenceVerification"
     var generatedAt: Date
@@ -854,6 +865,7 @@ struct AppRuntimeReviewEvidenceVerification: Codable, Equatable {
     var missingFiles: [String]
     var invalidScreenshotFiles: [AppRuntimeReviewInvalidScreenshotFile]
     var screenshotEvidenceSummary: AppRuntimeReviewScreenshotEvidenceSummary
+    var nextEvidenceAction: AppRuntimeReviewNextEvidenceAction
     var invalidCaptureSteps: [AppRuntimeReviewMissingCaptureStep]
     var nextInvalidCaptureStep: AppRuntimeReviewMissingCaptureStep?
     var missingCaptureSteps: [AppRuntimeReviewMissingCaptureStep]
@@ -1357,6 +1369,11 @@ struct VeilVMControl {
             invalidCaptureSteps: invalidCaptureSteps,
             missingCaptureSteps: missingCaptureSteps
         )
+        let nextEvidenceAction = appRuntimeReviewNextEvidenceAction(
+            invalidCaptureSteps: invalidCaptureSteps,
+            missingCaptureSteps: missingCaptureSteps,
+            openEvidenceDirectoryCommand: openEvidenceDirectoryCommand
+        )
         let verification = AppRuntimeReviewEvidenceVerification(
             generatedAt: report.generatedAt,
             evidenceDirectory: evidenceDirectoryURL.path,
@@ -1375,6 +1392,7 @@ struct VeilVMControl {
             missingFiles: missingFiles,
             invalidScreenshotFiles: invalidScreenshotFiles,
             screenshotEvidenceSummary: screenshotEvidenceSummary,
+            nextEvidenceAction: nextEvidenceAction,
             invalidCaptureSteps: invalidCaptureSteps,
             nextInvalidCaptureStep: invalidCaptureSteps.first,
             missingCaptureSteps: missingCaptureSteps,
@@ -1409,6 +1427,8 @@ struct VeilVMControl {
         print("Guide: \(verification.readmeExists ? "present" : "missing")")
         print("Screenshots: \(verification.attachedScreenshotCount)/\(verification.requiredScreenshotCount) attached")
         print("Screenshot evidence: \(verification.screenshotEvidenceSummary.state)")
+        print("Next evidence action: \(verification.nextEvidenceAction.title)")
+        print("Next evidence command: \(verification.nextEvidenceAction.command)")
         print("Complete: \(verification.isComplete ? "yes" : "no")")
         print("Open folder: \(verification.openEvidenceDirectoryCommand)")
         if !verification.missingFiles.isEmpty {
@@ -1631,6 +1651,49 @@ struct VeilVMControl {
             nextStepTitle: "Share Review Evidence",
             nextExpectedFileName: nil,
             nextCaptureCommand: nil
+        )
+    }
+
+    private static func appRuntimeReviewNextEvidenceAction(
+        invalidCaptureSteps: [AppRuntimeReviewMissingCaptureStep],
+        missingCaptureSteps: [AppRuntimeReviewMissingCaptureStep],
+        openEvidenceDirectoryCommand: String
+    ) -> AppRuntimeReviewNextEvidenceAction {
+        if let nextInvalidCaptureStep = invalidCaptureSteps.first {
+            return AppRuntimeReviewNextEvidenceAction(
+                kind: "replaceInvalidScreenshot",
+                title: "Replace \(nextInvalidCaptureStep.expectedFileName)",
+                command: nextInvalidCaptureStep.captureCommand,
+                isReadyToShare: false,
+                expectedFileName: nextInvalidCaptureStep.expectedFileName,
+                path: nextInvalidCaptureStep.path,
+                instruction: nextInvalidCaptureStep.instruction,
+                supportingCommand: nextInvalidCaptureStep.supportingCommand
+            )
+        }
+
+        if let nextMissingCaptureStep = missingCaptureSteps.first {
+            return AppRuntimeReviewNextEvidenceAction(
+                kind: "captureMissingScreenshot",
+                title: "Capture \(nextMissingCaptureStep.expectedFileName)",
+                command: nextMissingCaptureStep.captureCommand,
+                isReadyToShare: false,
+                expectedFileName: nextMissingCaptureStep.expectedFileName,
+                path: nextMissingCaptureStep.path,
+                instruction: nextMissingCaptureStep.instruction,
+                supportingCommand: nextMissingCaptureStep.supportingCommand
+            )
+        }
+
+        return AppRuntimeReviewNextEvidenceAction(
+            kind: "shareEvidence",
+            title: "Share Review Evidence",
+            command: openEvidenceDirectoryCommand,
+            isReadyToShare: true,
+            expectedFileName: nil,
+            path: nil,
+            instruction: "Open the complete evidence folder and share the verified review artifacts.",
+            supportingCommand: nil
         )
     }
 
