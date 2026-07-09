@@ -818,7 +818,9 @@ extension AppRuntimeDockMenuTests {
         "runtime.repairGuestAgentForApp": (.repairAppConnection, "bolt.horizontal.circle"),
         "runtime.startWindowsForApp": (.startWindowsForApp, "play.fill"),
         "runtime.waitAgent": (.waitForAgent, "antenna.radiowaves.left.and.right"),
-        "windowsApps.launchSelected": (.launchSelectedApp, "arrow.up.forward.app")
+        "windowsApps.launchSelected": (.launchSelectedApp, "arrow.up.forward.app"),
+        "proof.recommended": (.runRecommendedProof, "checkmark.seal"),
+        "dailyUse.verifyIntegrations": (.runRecommendedProof, "checkmark.seal")
     ]
 }
 

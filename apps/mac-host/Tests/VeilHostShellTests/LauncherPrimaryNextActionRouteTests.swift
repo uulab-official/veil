@@ -59,6 +59,12 @@ struct LauncherPrimaryNextActionRouteTests {
                 command: nil
             ) == .runRecommendedProof
         )
+        #expect(
+            LauncherPrimaryNextActionRoute.resolve(
+                actionId: "dailyUse.verifyIntegrations",
+                command: nil
+            ) == .runRecommendedProof
+        )
     }
 
     @Test("routes app runtime commands to launcher actions")
@@ -110,6 +116,12 @@ struct LauncherPrimaryNextActionRouteTests {
                 actionId: "closeOrRestore",
                 command: "veil-vmctl app-runtime-action --json --action stop-runtime"
             ) == .quietWindows
+        )
+        #expect(
+            LauncherPrimaryNextActionRoute.resolve(
+                actionId: "appCheckEvidence",
+                command: "veil-vmctl app-runtime-action --json --action proof-recommended"
+            ) == .runRecommendedProof
         )
     }
 

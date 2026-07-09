@@ -1663,6 +1663,9 @@ private struct VeilMenuBarMenu: View {
                 openMainWindow()
             }
             launchWindowsAppAction()
+        case .runRecommendedProof:
+            openMainWindow()
+            runRecommendedProofAction()
         }
     }
 
@@ -1703,6 +1706,7 @@ enum MenuBarPrimaryActionRoute: Equatable {
     case startWindowsForApp
     case waitForAgent
     case launchSelectedApp
+    case runRecommendedProof
 
     static func resolve(actionId: String) -> MenuBarPrimaryActionRoute? {
         switch actionId {
@@ -1724,6 +1728,8 @@ enum MenuBarPrimaryActionRoute: Equatable {
             return .waitForAgent
         case "windowsApps.launchSelected":
             return .launchSelectedApp
+        case "proof.recommended", "dailyUse.verifyIntegrations":
+            return .runRecommendedProof
         default:
             return nil
         }
@@ -1747,6 +1753,8 @@ enum MenuBarPrimaryActionRoute: Equatable {
             return "play.fill"
         case .waitForAgent:
             return "antenna.radiowaves.left.and.right"
+        case .runRecommendedProof:
+            return "checkmark.seal"
         }
     }
 }

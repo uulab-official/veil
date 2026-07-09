@@ -49,7 +49,7 @@ enum LauncherPrimaryNextActionRoute: Equatable {
             return .closeAllWindowsApps
         case "runtime.quietWhenIdle", "runtime.stopWhenIdle":
             return .quietWindows
-        case "proof.recommended":
+        case "proof.recommended", "dailyUse.verifyIntegrations":
             return .runRecommendedProof
         default:
             break
@@ -117,6 +117,10 @@ enum LauncherPrimaryNextActionRoute: Equatable {
         if command.contains("--action stop-runtime")
             || command.contains("--action quiet-when-idle") {
             return .quietWindows
+        }
+
+        if command.contains("--action proof-recommended") {
+            return .runRecommendedProof
         }
 
         return nil

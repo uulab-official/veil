@@ -215,6 +215,9 @@ command moves from status refresh to
 `actions` list exposes `dailyUse.verifyIntegrations` so the launcher can continue
 with an in-app app check instead of sending the operator back to a passive status
 screen.
+The macOS launcher and menu bar route both `dailyUse.verifyIntegrations` and
+`proof.recommended` to the same recommended app-check action, keeping Daily Use
+verification reachable from the Parallels-style top-level controls.
 When the guest has written sparse package evidence,
 `dailyUseReadiness.packageIdentityStatus` carries the latest sanitized
 `sparse-package-status.json` stage from `agent.health.response`, allowing
