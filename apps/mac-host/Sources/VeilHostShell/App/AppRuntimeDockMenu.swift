@@ -119,6 +119,8 @@ enum AppRuntimeDockMenuFactory {
         target.quietWindowsWhenIdleAction = quietWindowsWhenIdleAction
 
         let menu = NSMenu(title: "Veil")
+        menu.addItem(statusItem(statusTitle(model: model, vmModel: vmModel)))
+        menu.addItem(.separator())
         menu.addItem(item("Open Veil", action: #selector(AppRuntimeDockMenuTarget.openVeil(_:)), target: target))
 
         if !model.mirrorSessions.isEmpty {
@@ -243,6 +245,22 @@ enum AppRuntimeDockMenuFactory {
         )
 
         return menu
+    }
+
+    private static func statusTitle(model: HostDashboardModel, vmModel: VMRuntimeModel) -> String {
+        WindowsShellCopy.menuStatusTitle(
+            runtimeState: vmModel.snapshot?.state,
+            windowsInstalled: vmModel.snapshot?.windowsInstalled == true,
+            hasLiveAppConnection: model.hasLiveAgentConnection,
+            hasQueuedApp: model.pendingLaunchStatus().isQueued,
+            openAppWindowCount: model.mirrorSessions.count
+        )
+    }
+
+    private static func statusItem(_ title: String) -> NSMenuItem {
+        let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
+        item.isEnabled = false
+        return item
     }
 
     private static func item(

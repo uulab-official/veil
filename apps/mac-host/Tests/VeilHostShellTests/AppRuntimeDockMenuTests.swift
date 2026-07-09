@@ -202,6 +202,42 @@ struct AppRuntimeDockMenuTests {
         #expect(restoreItem?.isEnabled == true)
     }
 
+    @Test("Dock menu starts with app-first status")
+    func dockMenuStartsWithAppFirstStatus() async throws {
+        let model = HostDashboardModel(service: DemoHostDashboardService())
+        let vmModel = VMRuntimeModel(service: StubVMRuntimeService())
+
+        await model.load()
+        await vmModel.load()
+
+        let menu = AppRuntimeDockMenuFactory.makeMenu(
+            model: model,
+            vmModel: vmModel,
+            activateMainWindowAction: {},
+            bringAllWindowsAppWindowsToFrontAction: {},
+            focusWindowsAppWindowAction: { _ in },
+            closeWindowsAppWindowAction: { _ in },
+            closeAllWindowsAppWindowsAction: {},
+            restoreWindowsAppWindowsAction: {},
+            launchWindowsAppByIdAction: { _ in },
+            fulfillPendingLaunchAction: {},
+            repairGuestAgentForAppLaunchAction: {},
+            recoverRuntimeDisplayAction: {},
+            startVMAction: {},
+            stopVMAction: {},
+            quietWindowsWhenIdleAction: {}
+        )
+
+        #expect(menu.items.first?.title == "Ready to Open Apps")
+        #expect(menu.items.first?.isEnabled == false)
+        #expect(menu.items.dropFirst().first?.isSeparatorItem == true)
+        #expect(menu.items.dropFirst(2).first?.title == "Open Veil")
+        #expect(menu.items.first?.title.count ?? 0 <= 30)
+        #expect(menu.items.first?.title.contains("Runtime") == false)
+        #expect(menu.items.first?.title.contains("VM") == false)
+        #expect(menu.items.first?.title.contains("Agent") == false)
+    }
+
     @Test("maps queued app Dock menu item to the next product action")
     func mapsQueuedAppDockMenuItemToNextProductAction() {
         #expect(
