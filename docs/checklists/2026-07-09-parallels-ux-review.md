@@ -6,6 +6,7 @@ Goal: keep the user-facing workflow one-screen-first (launcher + one action path
 
 - [x] Add Parallels-style app icon pipeline so launcher, menu, and dock identity is consistent at launch.
 - [x] Enforce launcher sizing and background tone for a stable one-screen shell surface.
+- [x] Make `./script/build_and_run.sh --verify` launch the staged `dist/Veil.app` bundle and confirm the `veil-host-shell` process, so app-bundle verification catches foreground launch failures instead of only checking signing metadata.
 - [x] Keep primary launcher action as "Open Windows App" once runtime + agent conditions allow it.
 - [x] Remove the heavy multi-section launcher path from the default route by consolidating startup, install, and run signals into a focused runtime panel.
 - [x] Keep recovery actions available through menu/dock surfaces so the default surface stays simple.

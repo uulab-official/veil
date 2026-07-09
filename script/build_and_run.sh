@@ -69,6 +69,19 @@ open_app() {
   /usr/bin/open -n "$APP_BUNDLE" --args "$@"
 }
 
+wait_for_app_process() {
+  local attempts=40
+  for ((i = 1; i <= attempts; i++)); do
+    if pgrep -x "$APP_EXECUTABLE" >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 0.25
+  done
+
+  echo "Veil did not launch a running $APP_EXECUTABLE process within $((attempts / 4)) seconds." >&2
+  return 1
+}
+
 case "$MODE" in
   run)
     open_app
@@ -91,6 +104,8 @@ case "$MODE" in
     codesign --verify --deep --strict "$APP_BUNDLE" >/dev/null
     plutil -lint "$INFO_PLIST" >/dev/null
     test -f "$APP_ICON"
+    open_app
+    wait_for_app_process
     exit 0
     ;;
   *)
