@@ -135,6 +135,7 @@
     "selectedAppId": "winapp_notepad",
     "canRequestSelectedAppLaunch": true,
     "canLaunchSelectedAppNow": true,
+    "willOpenAppAutomatically": true,
     "requiresRuntimeStart": false,
     "requiresGuestAgent": false,
     "recommendedAction": "launch-now",

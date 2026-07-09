@@ -32,6 +32,7 @@ struct DetailView: View {
                 canFulfillPendingLaunch: model.canFulfillPendingLaunch,
                 pendingWindowsAppName: pendingWindowsAppName,
                 activeMirrorSession: activeMirrorSession,
+                launchPlan: runtimeStatusReport.launchPlan,
                 primaryNextAction: runtimeStatusReport.primaryNextAction,
                 oneScreenUX: runtimeStatusReport.oneScreenUX,
                 recommendedProofKind: proofPlan.recommendedProofKind,
@@ -63,6 +64,7 @@ struct DetailView: View {
                     proofPlan: proofPlan,
                     proofArtifacts: runtimeStatusReport.proofArtifacts,
                     releaseGate: runtimeStatusReport.releaseGate,
+                    launchPlan: runtimeStatusReport.launchPlan,
                     primaryNextAction: runtimeStatusReport.primaryNextAction,
                     oneScreenUX: runtimeStatusReport.oneScreenUX,
                     launchWindowsAppAction: launchWindowsAppAction,
@@ -144,6 +146,7 @@ private struct WindowsQuickLaunchPanel: View {
     var proofPlan: WindowsAppRuntimeProofPlanStatus
     var proofArtifacts: WindowsAppRuntimeProofArtifactStatus
     var releaseGate: WindowsAppRuntimeReleaseGateStatus
+    var launchPlan: WindowsAppRuntimeLaunchPlanStatus
     var primaryNextAction: WindowsAppRuntimePrimaryNextActionStatus
     var oneScreenUX: WindowsAppRuntimeOneScreenUXStatus
     var launchWindowsAppAction: () -> Void
@@ -258,9 +261,15 @@ private struct WindowsQuickLaunchPanel: View {
 
                     Label(oneScreenUXTitle, systemImage: oneScreenUXSymbolName)
                         .font(.caption)
-                        .foregroundStyle(oneScreenUX.usesSinglePrimarySurfaceFamily ? Color.secondary : Color.orange)
+                        .foregroundStyle(oneScreenUX.usesSinglePrimarySurfaceFamily && oneScreenUX.canRecoverFromMenuOrDock ? Color.secondary : Color.orange)
                         .lineLimit(1)
                         .help(oneScreenUX.reason)
+
+                    Label(appAutomationTitle, systemImage: appAutomationSymbolName)
+                        .font(.caption)
+                        .foregroundStyle(launchPlan.willOpenAppAutomatically ? Color.secondary : Color.orange)
+                        .lineLimit(1)
+                        .help(launchPlan.reason)
                 }
 
                 Spacer()
@@ -409,6 +418,22 @@ private struct WindowsQuickLaunchPanel: View {
         oneScreenUX.usesSinglePrimarySurfaceFamily && oneScreenUX.canRecoverFromMenuOrDock
             ? "rectangle.on.rectangle"
             : "exclamationmark.triangle"
+    }
+
+    private var appAutomationTitle: String {
+        if launchPlan.willOpenAppAutomatically {
+            return launchPlan.canLaunchSelectedAppNow ? "App opens now" : "App opens automatically"
+        }
+
+        if launchPlan.recommendedAction == "prepare-local-runtime" {
+            return "Setup needed before app opens"
+        }
+
+        return "App open needs attention"
+    }
+
+    private var appAutomationSymbolName: String {
+        launchPlan.willOpenAppAutomatically ? "bolt.circle" : "exclamationmark.triangle"
     }
 
     private var primaryNextActionHelp: String {

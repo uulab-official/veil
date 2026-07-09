@@ -511,6 +511,7 @@ public struct WindowsAppRuntimeLaunchPlanStatus: Codable, Equatable, Sendable {
     public var pendingLaunchAppId: String?
     public var canRequestSelectedAppLaunch: Bool
     public var canLaunchSelectedAppNow: Bool
+    public var willOpenAppAutomatically: Bool
     public var requiresRuntimeStart: Bool
     public var requiresGuestAgent: Bool
     public var recommendedAction: String
@@ -525,6 +526,7 @@ public struct WindowsAppRuntimeLaunchPlanStatus: Codable, Equatable, Sendable {
         pendingLaunchAppId: String?,
         canRequestSelectedAppLaunch: Bool,
         canLaunchSelectedAppNow: Bool,
+        willOpenAppAutomatically: Bool,
         requiresRuntimeStart: Bool,
         requiresGuestAgent: Bool,
         recommendedAction: String,
@@ -538,6 +540,7 @@ public struct WindowsAppRuntimeLaunchPlanStatus: Codable, Equatable, Sendable {
         self.pendingLaunchAppId = pendingLaunchAppId
         self.canRequestSelectedAppLaunch = canRequestSelectedAppLaunch
         self.canLaunchSelectedAppNow = canLaunchSelectedAppNow
+        self.willOpenAppAutomatically = willOpenAppAutomatically
         self.requiresRuntimeStart = requiresRuntimeStart
         self.requiresGuestAgent = requiresGuestAgent
         self.recommendedAction = recommendedAction
@@ -1537,6 +1540,7 @@ public final class HostDashboardModel {
                 pendingLaunchAppId: pendingLaunchAppId,
                 canRequestSelectedAppLaunch: false,
                 canLaunchSelectedAppNow: false,
+                willOpenAppAutomatically: false,
                 requiresRuntimeStart: false,
                 requiresGuestAgent: false,
                 recommendedAction: "select-app",
@@ -1558,6 +1562,7 @@ public final class HostDashboardModel {
                 pendingLaunchAppId: pendingLaunchAppId,
                 canRequestSelectedAppLaunch: canRequest,
                 canLaunchSelectedAppNow: true,
+                willOpenAppAutomatically: true,
                 requiresRuntimeStart: false,
                 requiresGuestAgent: false,
                 recommendedAction: hasPendingSelectedAppLaunch ? "fulfill-pending-now" : "launch-now",
@@ -1577,6 +1582,7 @@ public final class HostDashboardModel {
                     pendingLaunchAppId: pendingLaunchAppId,
                     canRequestSelectedAppLaunch: true,
                     canLaunchSelectedAppNow: false,
+                    willOpenAppAutomatically: false,
                     requiresRuntimeStart: true,
                     requiresGuestAgent: true,
                     recommendedAction: "prepare-local-runtime",
@@ -1600,6 +1606,7 @@ public final class HostDashboardModel {
                 pendingLaunchAppId: pendingLaunchAppId,
                 canRequestSelectedAppLaunch: true,
                 canLaunchSelectedAppNow: false,
+                willOpenAppAutomatically: true,
                 requiresRuntimeStart: requiresRuntimeStart,
                 requiresGuestAgent: !hasLiveAgentConnection,
                 recommendedAction: recommendedAction,
@@ -1622,6 +1629,7 @@ public final class HostDashboardModel {
             pendingLaunchAppId: pendingLaunchAppId,
             canRequestSelectedAppLaunch: false,
             canLaunchSelectedAppNow: false,
+            willOpenAppAutomatically: false,
             requiresRuntimeStart: false,
             requiresGuestAgent: !hasLiveAgentConnection,
             recommendedAction: "unavailable",
@@ -1758,7 +1766,7 @@ public final class HostDashboardModel {
             && visibleSurfacePolicy.isEnabled
             && visibleSurfacePolicy.keepsRecoveryDisplayManual
             && (visibleSurfacePolicy.primarySurface == "launcher" || macWindowIntegration.hidesLauncherWhenMirroring)
-        let launchPassing = launchPlan.canRequestSelectedAppLaunch
+        let launchPassing = launchPlan.willOpenAppAutomatically
             && launchPlan.recommendedLaunchCommand != nil
         let checkPassing = proofArtifacts.latestProofPath != nil
             && proofArtifacts.latestProofKind != nil

@@ -880,6 +880,7 @@ struct VeilVMControl {
             print("Mac foreground title: \(foregroundWindowTitle)")
         }
         print("Launch plan: \(report.launchPlan.recommendedAction)")
+        print("Launch automatic app open: \(report.launchPlan.willOpenAppAutomatically ? "yes" : "no")")
         print("Launch plan reason: \(report.launchPlan.reason)")
         if let startCommand = report.launchPlan.recommendedStartCommand {
             print("Launch start command: \(startCommand)")
@@ -1769,6 +1770,7 @@ struct VeilVMControl {
         }
         if let launchPlan = report.launchPlan {
             print("Launch plan: \(launchPlan.recommendedAction)")
+            print("Launch automatic app open: \(launchPlan.willOpenAppAutomatically ? "yes" : "no")")
             print("Launch plan reason: \(launchPlan.reason)")
             if let startCommand = launchPlan.recommendedStartCommand {
                 print("Launch start command: \(startCommand)")

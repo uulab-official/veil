@@ -63,6 +63,7 @@ Goal: keep the user-facing workflow one-screen-first (launcher + one action path
 - [x] Add `oneScreenUX` to `app-runtime-status` and the harness so launcher-first and Windows-app-window modes must keep one primary surface family, menu/Dock recovery, manual display recovery, and one executable next action aligned.
 - [x] Surface `oneScreenUX` in the launcher panels and human-readable `app-runtime-status` output so the one-screen product contract is visible without opening raw JSON.
 - [x] Add `oneScreenUX.canRecoverFromMenuOrDock` and harness coverage so hidden-launcher app-window mode cannot pass unless menu/Dock recovery remains available.
+- [x] Add `launchPlan.willOpenAppAutomatically` and release-gate coverage so setup blockers cannot be reported as a Parallels-style automatic app-open path.
 
 ## CEO Review
 

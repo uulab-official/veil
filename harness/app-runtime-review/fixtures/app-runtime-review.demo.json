@@ -205,6 +205,7 @@
       "canLaunchSelectedAppNow": false,
       "canRequestSelectedAppLaunch": true,
       "pendingLaunchAppId": "winapp_notepad",
+      "willOpenAppAutomatically": true,
       "reason": "The selected app launch is queued until Windows starts and the guest agent connects.",
       "recommendedAction": "start-runtime-for-pending-launch",
       "recommendedLaunchCommand": "veil-vmctl app-runtime-action --json --action fulfill-pending",

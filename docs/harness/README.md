@@ -74,6 +74,10 @@ supported actions without clicking the UI.
 `launchPlan` records whether the selected Windows app can launch immediately or
 whether Veil must start the local Windows runtime, wait for the guest agent, and
 then replay the pending app launch command.
+`launchPlan.willOpenAppAutomatically` is the productized app-path contract:
+it is true only when the app shell can continue from the user's app-open action
+into the queued/start/wait/repair handoff without leaving the user at a raw VM
+management step.
 `pendingLaunch` records whether an app launch is queued and whether Veil will
 automatically fulfill it when the guest agent reconnects, so a product surface
 can show "Windows is starting, your app will open" without inventing a window.

@@ -14,6 +14,7 @@ struct VMRuntimeView: View {
     var canFulfillPendingLaunch: Bool
     var pendingWindowsAppName: String?
     var activeMirrorSession: WindowMirrorSession?
+    var launchPlan: WindowsAppRuntimeLaunchPlanStatus
     var primaryNextAction: WindowsAppRuntimePrimaryNextActionStatus
     var oneScreenUX: WindowsAppRuntimeOneScreenUXStatus
     var recommendedProofKind: String?
@@ -95,6 +96,7 @@ struct VMRuntimeView: View {
                     canFulfillPendingLaunch: canFulfillPendingLaunch,
                     pendingWindowsAppName: pendingWindowsAppName,
                     activeMirrorSession: activeMirrorSession,
+                    launchPlan: launchPlan,
                     primaryNextAction: primaryNextAction,
                     oneScreenUX: oneScreenUX,
                     recommendedProofKind: recommendedProofKind,
@@ -1350,6 +1352,7 @@ private struct WindowsSetupDisplayPanel: View {
     var canFulfillPendingLaunch: Bool
     var pendingWindowsAppName: String?
     var activeMirrorSession: WindowMirrorSession?
+    var launchPlan: WindowsAppRuntimeLaunchPlanStatus
     var primaryNextAction: WindowsAppRuntimePrimaryNextActionStatus
     var oneScreenUX: WindowsAppRuntimeOneScreenUXStatus
     var recommendedProofKind: String?
@@ -1565,9 +1568,15 @@ private struct WindowsSetupDisplayPanel: View {
 
                     Label(oneScreenUXTitle, systemImage: oneScreenUXSymbolName)
                         .font(.caption.weight(.medium))
-                        .foregroundStyle(.white.opacity(oneScreenUX.usesSinglePrimarySurfaceFamily ? 0.70 : 0.92))
+                        .foregroundStyle(.white.opacity(oneScreenUX.usesSinglePrimarySurfaceFamily && oneScreenUX.canRecoverFromMenuOrDock ? 0.70 : 0.92))
                         .lineLimit(1)
                         .help(oneScreenUX.reason)
+
+                    Label(appAutomationTitle, systemImage: appAutomationSymbolName)
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.white.opacity(launchPlan.willOpenAppAutomatically ? 0.70 : 0.92))
+                        .lineLimit(1)
+                        .help(launchPlan.reason)
                 }
 
                 if installSimulation.phase != .idle {
@@ -2237,6 +2246,22 @@ private struct WindowsSetupDisplayPanel: View {
         oneScreenUX.usesSinglePrimarySurfaceFamily && oneScreenUX.canRecoverFromMenuOrDock
             ? "rectangle.on.rectangle"
             : "exclamationmark.triangle"
+    }
+
+    private var appAutomationTitle: String {
+        if launchPlan.willOpenAppAutomatically {
+            return launchPlan.canLaunchSelectedAppNow ? "App opens now" : "App opens automatically"
+        }
+
+        if launchPlan.recommendedAction == "prepare-local-runtime" {
+            return "Setup needed before app opens"
+        }
+
+        return "App open needs attention"
+    }
+
+    private var appAutomationSymbolName: String {
+        launchPlan.willOpenAppAutomatically ? "bolt.circle" : "exclamationmark.triangle"
     }
 
     private var installerNeedsFilePickerAccess: Bool {

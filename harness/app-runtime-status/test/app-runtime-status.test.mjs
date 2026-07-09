@@ -284,6 +284,16 @@ test("rejects one-screen UX primary action drift", () => {
   );
 });
 
+test("rejects launch plan automatic app open drift", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.demo.json", import.meta.url), "utf8"));
+  report.launchPlan.willOpenAppAutomatically = false;
+
+  assert.throws(
+    () => validateAppRuntimeStatus(report),
+    /willOpenAppAutomatically/
+  );
+});
+
 test("rejects hidden launcher one-screen recovery drift", () => {
   const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.mac-window-live.json", import.meta.url), "utf8"));
   report.oneScreenUX.canRecoverFromMenuOrDock = false;
@@ -650,8 +660,22 @@ test("rejects start action availability when local runtime is not boot ready", (
   report.localRuntime.recommendedPrepareCommand = "veil-vmctl prepare --installer /path/to/Windows.iso";
   report.localRuntime.reason = "Installer media must be re-selected before boot.";
   report.launchPlan.recommendedAction = "prepare-local-runtime";
+  report.launchPlan.willOpenAppAutomatically = false;
+  report.launchPlan.reason = "The selected Windows app can be requested, but the local Windows runtime is not boot ready. Installer media must be re-selected before boot.";
   delete report.launchPlan.recommendedStartCommand;
   delete report.launchPlan.recommendedWaitCommand;
+  setReleaseGateStep(report, "windowsSetup", {
+    state: "blocked",
+    isPassing: false,
+    evidence: report.localRuntime.reason,
+    nextActionCommand: report.localRuntime.recommendedPrepareCommand
+  });
+  setReleaseGateStep(report, "openWindowsApp", {
+    state: "blocked",
+    isPassing: false,
+    evidence: report.launchPlan.reason,
+    nextActionCommand: report.launchPlan.recommendedLaunchCommand
+  });
 
   assert.throws(
     () => validateAppRuntimeStatus(report),

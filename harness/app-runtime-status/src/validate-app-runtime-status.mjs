@@ -395,6 +395,7 @@ function validateLaunchPlan(launchPlan, report) {
 
   requireBoolean(launchPlan.canRequestSelectedAppLaunch, "launchPlan.canRequestSelectedAppLaunch");
   requireBoolean(launchPlan.canLaunchSelectedAppNow, "launchPlan.canLaunchSelectedAppNow");
+  requireBoolean(launchPlan.willOpenAppAutomatically, "launchPlan.willOpenAppAutomatically");
   requireBoolean(launchPlan.requiresRuntimeStart, "launchPlan.requiresRuntimeStart");
   requireBoolean(launchPlan.requiresGuestAgent, "launchPlan.requiresGuestAgent");
   requireString(launchPlan.recommendedAction, "launchPlan.recommendedAction");
@@ -444,6 +445,12 @@ function validateLaunchPlan(launchPlan, report) {
 
   if (launchPlan.canLaunchSelectedAppNow && !launchPlan.canRequestSelectedAppLaunch) {
     throw new TypeError("launchPlan.canLaunchSelectedAppNow requires canRequestSelectedAppLaunch.");
+  }
+
+  const expectedAutomaticOpen = launchPlan.canLaunchSelectedAppNow
+    || (launchPlan.canRequestSelectedAppLaunch && launchPlan.recommendedAction !== "prepare-local-runtime");
+  if (launchPlan.willOpenAppAutomatically !== expectedAutomaticOpen) {
+    throw new TypeError("launchPlan.willOpenAppAutomatically must reflect the app shell automatic handoff path.");
   }
 
   if (launchPlan.canLaunchSelectedAppNow && !report.connection.hasLiveAgentConnection) {
@@ -749,7 +756,7 @@ function validateReleaseGate(releaseGate, report) {
   }
 
   const launchStep = releaseGate.steps.find((step) => step.id === "openWindowsApp");
-  const expectedLaunchPassing = report.launchPlan.canRequestSelectedAppLaunch
+  const expectedLaunchPassing = report.launchPlan.willOpenAppAutomatically
     && report.launchPlan.recommendedLaunchCommand !== undefined;
   if (launchStep.isPassing !== expectedLaunchPassing) {
     throw new TypeError("releaseGate openWindowsApp must reflect launch plan readiness.");
