@@ -2,9 +2,23 @@ import Foundation
 
 public struct WindowRestoreIntent: Codable, Equatable, Sendable {
     public var appIds: [String]
+    public var appWindowCounts: [String: Int]?
 
-    public init(appIds: [String]) {
+    public init(appIds: [String], appWindowCounts: [String: Int]? = nil) {
         self.appIds = appIds
+        self.appWindowCounts = appWindowCounts
+    }
+
+    public var appIdsForRestoreLaunches: [String] {
+        appIds.flatMap { appId in
+            Array(repeating: appId, count: max(1, appWindowCounts?[appId] ?? 1))
+        }
+    }
+
+    public var normalizedAppWindowCounts: [String: Int] {
+        Dictionary(uniqueKeysWithValues: appIds.map { appId in
+            (appId, max(1, appWindowCounts?[appId] ?? 1))
+        })
     }
 }
 

@@ -1806,6 +1806,35 @@ struct HostDashboardModelTests {
         #expect(primary.frameSubscriptions == ["hwnd:0003029A", "hwnd:0003029A"])
     }
 
+    @Test("restores multiple same-app windows after reconnect")
+    @MainActor
+    func restoresMultipleSameAppWindowsAfterReconnect() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let intentStore = JSONWindowRestoreIntentStore(directory: directory)
+        try await intentStore.save(
+            WindowRestoreIntent(
+                appIds: ["winapp_notepad"],
+                appWindowCounts: ["winapp_notepad": 2]
+            )
+        )
+        let service = FakeDashboardService(health: .captureReady)
+        service.launchWindows = [.notepad, .secondNotepad]
+        let model = HostDashboardModel(service: service, restoreIntentStore: intentStore)
+
+        await model.loadRestoreIntent()
+        await model.load()
+        let restored = await model.restoreMirroredWindowsAfterReconnect()
+
+        #expect(restored.map(\.window.windowId) == ["hwnd:0003029A", "hwnd:00010500"])
+        #expect(model.mirrorSessions.map(\.id) == ["hwnd:0003029A", "hwnd:00010500"])
+        #expect(model.restorableAppIds == ["winapp_notepad"])
+        #expect(model.restorableAppWindowCounts == ["winapp_notepad": 2])
+        #expect(try await intentStore.load()?.appWindowCounts == ["winapp_notepad": 2])
+        #expect(service.launchedAppIds == ["winapp_notepad", "winapp_notepad"])
+        #expect(service.frameSubscriptions == ["hwnd:0003029A", "hwnd:00010500"])
+    }
+
     @Test("clears a stale error message when there is nothing to restore")
     @MainActor
     func clearsStaleErrorMessageWhenThereIsNothingToRestore() async throws {
@@ -1865,19 +1894,25 @@ struct HostDashboardModelTests {
 
         #expect(model.mirrorSessions.map(\.id) == ["hwnd:0003029A", "hwnd:00010500"])
         #expect(model.restorableAppIds == ["winapp_notepad"])
+        #expect(model.restorableAppWindowCounts == ["winapp_notepad": 2])
         #expect(try await intentStore.load()?.appIds == ["winapp_notepad"])
+        #expect(try await intentStore.load()?.appWindowCounts == ["winapp_notepad": 2])
 
         _ = await model.closeMirrorSession(windowId: "hwnd:0003029A")
 
         #expect(model.mirrorSessions.map(\.id) == ["hwnd:00010500"])
         #expect(model.restorableAppIds == ["winapp_notepad"])
+        #expect(model.restorableAppWindowCounts == ["winapp_notepad": 1])
         #expect(try await intentStore.load()?.appIds == ["winapp_notepad"])
+        #expect(try await intentStore.load()?.appWindowCounts == ["winapp_notepad": 1])
 
         _ = await model.closeMirrorSession(windowId: "hwnd:00010500")
 
         #expect(model.mirrorSessions.isEmpty)
         #expect(model.restorableAppIds.isEmpty)
+        #expect(model.restorableAppWindowCounts.isEmpty)
         #expect(try await intentStore.load()?.appIds == [])
+        #expect(try await intentStore.load()?.appWindowCounts == nil)
     }
 
     @Test("loads persisted mapped app intent on startup")
@@ -1994,6 +2029,7 @@ private final class FakeDashboardService: HostDashboardService {
     var apps: [WindowsApp]
     var closeAccepted: Bool
     var agentWaitReport: AgentConnectionWaitReport?
+    var launchWindows: [WindowCreatedEvent] = []
     private(set) var loadCount = 0
     private(set) var launchCount = 0
     private(set) var launchedAppIds: [String] = []
@@ -2039,11 +2075,12 @@ private final class FakeDashboardService: HostDashboardService {
 
         launchCount += 1
         launchedAppIds.append(appId)
+        let window = launchWindows.isEmpty ? .fixture(appId: appId) : launchWindows.removeFirst()
         return WindowsAppLaunchResult(
             health: health,
             apps: apps,
             launch: .fixture,
-            window: .fixture(appId: appId)
+            window: window
         )
     }
 
@@ -2343,6 +2380,19 @@ private extension WindowCreatedEvent {
             appId: "winapp_notepad",
             title: "Untitled - Notepad",
             bounds: WindowBounds(x: 10, y: 10, width: 1280, height: 800),
+            state: "normal",
+            focused: true
+        )
+    }
+
+    static var secondNotepad: WindowCreatedEvent {
+        WindowCreatedEvent(
+            type: .windowCreated,
+            windowId: "hwnd:00010500",
+            processId: 4931,
+            appId: "winapp_notepad",
+            title: "Notes.txt - Notepad",
+            bounds: WindowBounds(x: 20, y: 20, width: 1360, height: 820),
             state: "normal",
             focused: true
         )

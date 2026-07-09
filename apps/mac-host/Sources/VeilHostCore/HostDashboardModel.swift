@@ -987,6 +987,7 @@ public final class HostDashboardModel {
     public private(set) var latestGuestClipboardText: String?
     public private(set) var lastGuestClipboardSequence = 0
     public private(set) var restorableAppIds: [String] = []
+    public private(set) var restorableAppWindowCounts: [String: Int] = [:]
     public private(set) var hasOpenedAppWindowThisSession = false
     public var selectedAppId: String?
 
@@ -2924,7 +2925,9 @@ public final class HostDashboardModel {
 
     public func loadRestoreIntent() async {
         do {
-            restorableAppIds = try await restoreIntentStore.load()?.appIds ?? []
+            let restoreIntent = try await restoreIntentStore.load()
+            restorableAppIds = restoreIntent?.appIds ?? []
+            restorableAppWindowCounts = restoreIntent?.normalizedAppWindowCounts ?? [:]
             pendingLaunchAppId = try await pendingLaunchIntentStore.load()?.appId
         } catch {
             errorMessage = userMessage(for: error)
@@ -2952,7 +2955,7 @@ public final class HostDashboardModel {
         }
 
         var restored: [NotepadLaunchResult] = []
-        for appId in restorableAppIds {
+        for appId in restorableAppIdsForLaunches() {
             if let result = await launchApp(appId: appId) {
                 restored.append(result)
             }
@@ -3034,13 +3037,13 @@ public final class HostDashboardModel {
         if pendingLaunchAppId == result.window.appId {
             await clearPendingLaunchIntent()
         }
-        await rememberRestorableAppId(result.window.appId)
         storeActiveWindow(result.window)
         storeMirrorSession(
             window: result.window,
             connectionMode: result.connectionMode,
             supportsCapture: result.health.capabilities.windowCapture
         )
+        await refreshRestoreIntentFromOpenWindows()
         if result.connectionMode == .agent,
            result.health.capabilities.windowCapture {
             try await service.subscribeWindowFrames(windowId: result.window.windowId)
@@ -3232,7 +3235,7 @@ public final class HostDashboardModel {
                 connectionMode: connectionMode,
                 supportsCapture: hasLiveAgentConnection && health?.capabilities.windowCapture == true
             )
-            await rememberRestorableAppId(event.appId)
+            await refreshRestoreIntentFromOpenWindows()
             if hasLiveAgentConnection, health?.capabilities.windowCapture == true {
                 do {
                     try await service.subscribeWindowFrames(windowId: event.windowId)
@@ -3373,14 +3376,6 @@ public final class HostDashboardModel {
     }
 
     private func removeWindowState(windowId: String) async {
-        let removedAppIds = Set(
-            activeWindows
-                .filter { $0.windowId == windowId }
-                .map(\.appId)
-            + mirrorSessions
-                .filter { $0.id == windowId }
-                .map(\.window.appId)
-        )
         activeWindows.removeAll { $0.windowId == windowId }
         mirrorSessions.removeAll { $0.id == windowId }
 
@@ -3388,35 +3383,63 @@ public final class HostDashboardModel {
             lastLaunch = nil
         }
 
-        for appId in removedAppIds {
-            let hasRemainingWindowForApp = activeWindows.contains { $0.appId == appId }
-                || mirrorSessions.contains { $0.window.appId == appId }
-            if !hasRemainingWindowForApp {
-                await forgetRestorableAppId(appId)
-            }
-        }
+        await refreshRestoreIntentFromOpenWindows()
     }
 
-    private func rememberRestorableAppId(_ appId: String) async {
-        if !restorableAppIds.contains(appId) {
-            restorableAppIds.append(appId)
-        }
-
-        await persistRestoreIntent()
-    }
-
-    private func forgetRestorableAppId(_ appId: String) async {
-        restorableAppIds.removeAll { $0 == appId }
+    private func refreshRestoreIntentFromOpenWindows() async {
+        let windows = mergedOpenWindows()
+        restorableAppIds = orderedUniqueAppIds(from: windows)
+        restorableAppWindowCounts = Dictionary(grouping: windows, by: \.appId)
+            .mapValues(\.count)
         await persistRestoreIntent()
     }
 
     private func persistRestoreIntent() async {
         do {
-            try await restoreIntentStore.save(WindowRestoreIntent(appIds: restorableAppIds))
+            try await restoreIntentStore.save(
+                WindowRestoreIntent(
+                    appIds: restorableAppIds,
+                    appWindowCounts: restorableAppWindowCounts.isEmpty ? nil : restorableAppWindowCounts
+                )
+            )
         } catch {
             errorMessage = userMessage(for: error)
             return
         }
+    }
+
+    private func restorableAppIdsForLaunches() -> [String] {
+        restorableAppIds.flatMap { appId in
+            Array(repeating: appId, count: max(1, restorableAppWindowCounts[appId] ?? 1))
+        }
+    }
+
+    private func mergedOpenWindows() -> [WindowCreatedEvent] {
+        var windowsById: [String: WindowCreatedEvent] = [:]
+        var orderedWindowIds: [String] = []
+
+        func append(_ window: WindowCreatedEvent) {
+            if windowsById[window.windowId] == nil {
+                orderedWindowIds.append(window.windowId)
+            }
+            windowsById[window.windowId] = window
+        }
+
+        activeWindows.forEach(append)
+        mirrorSessions.map(\.window).forEach(append)
+        return orderedWindowIds.compactMap { windowsById[$0] }
+    }
+
+    private func orderedUniqueAppIds(from windows: [WindowCreatedEvent]) -> [String] {
+        var seen: Set<String> = []
+        var appIds: [String] = []
+
+        for window in windows where !seen.contains(window.appId) {
+            seen.insert(window.appId)
+            appIds.append(window.appId)
+        }
+
+        return appIds
     }
 
     private func queuePendingLaunchIntent(appId: String?) async {
