@@ -12,6 +12,18 @@ enum LauncherPrimaryNextActionRoute: Equatable {
     case quietWindows
     case runRecommendedProof
 
+    static func resolve(
+        actionId: String,
+        command: String?,
+        runsInApp: Bool
+    ) -> LauncherPrimaryNextActionRoute? {
+        guard runsInApp else {
+            return nil
+        }
+
+        return resolve(actionId: actionId, command: command)
+    }
+
     static func resolve(actionId: String, command: String?) -> LauncherPrimaryNextActionRoute? {
         switch actionId {
         case "windowsApps.launchSelected":

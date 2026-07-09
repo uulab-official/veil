@@ -457,7 +457,8 @@ private struct WindowsQuickLaunchPanel: View {
     private var primaryNextActionRoute: LauncherPrimaryNextActionRoute? {
         LauncherPrimaryNextActionRoute.resolve(
             actionId: primaryNextAction.actionId ?? primaryNextAction.id,
-            command: primaryNextAction.command
+            command: primaryNextAction.command,
+            runsInApp: primaryNextAction.runsInApp
         )
     }
 

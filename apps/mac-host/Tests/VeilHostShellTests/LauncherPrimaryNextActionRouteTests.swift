@@ -132,4 +132,29 @@ struct LauncherPrimaryNextActionRouteTests {
             ) == nil
         )
     }
+
+    @Test("requires in app contract before showing a launcher button")
+    func requiresInAppContractBeforeShowingLauncherButton() {
+        #expect(
+            LauncherPrimaryNextActionRoute.resolve(
+                actionId: "windowsApps.launchSelected",
+                command: "veil-vmctl app-runtime-action --json --action launch --app-id winapp_notepad",
+                runsInApp: true
+            ) == .launchSelectedApp
+        )
+        #expect(
+            LauncherPrimaryNextActionRoute.resolve(
+                actionId: "windowsApps.launchSelected",
+                command: "veil-vmctl app-runtime-action --json --action launch --app-id winapp_notepad",
+                runsInApp: false
+            ) == nil
+        )
+        #expect(
+            LauncherPrimaryNextActionRoute.resolve(
+                actionId: "appCheckEvidence",
+                command: "veil-vmctl mvp-proof --json --app-id winapp_notepad --require-proved",
+                runsInApp: false
+            ) == nil
+        )
+    }
 }
