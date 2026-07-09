@@ -596,6 +596,9 @@ struct AppRuntimeReviewCard: Codable, Equatable {
     var kind: String = "windowsAppRuntimeReviewCard"
     var generatedAt: Date
     var isReadyForReview: Bool
+    var areRequiredScreenshotsAttached: Bool
+    var requiredScreenshotCount: Int
+    var attachedScreenshotCount: Int
     var appFlowSummary: String
     var nextStepTitle: String
     var nextActionCommand: String?
@@ -860,6 +863,7 @@ struct VeilVMControl {
 
         print("Veil Windows App Review Card")
         print("App flow: \(card.appFlowSummary)")
+        print("Screenshots: \(card.attachedScreenshotCount)/\(card.requiredScreenshotCount) attached")
         print("Next step: \(card.nextStepTitle)")
         print("Detail: \(card.detail)")
         if let nextActionCommand = card.nextActionCommand {
@@ -923,10 +927,31 @@ struct VeilVMControl {
         let evidenceDirectoryURL = evidenceDirectoryPath.map {
             URL(fileURLWithPath: $0).standardizedFileURL
         }
+        let screenshotSlots = report.releaseGate.screenshotSlots.map { slot in
+            let expectedFileName = "\(slot.id).png"
+            let attachmentURL = evidenceDirectoryURL?.appendingPathComponent(expectedFileName)
+            let attachmentPath = attachmentURL?.path
+            let attachmentExists = attachmentPath.map {
+                FileManager.default.fileExists(atPath: $0)
+            } ?? false
+            return AppRuntimeReviewScreenshotSlot(
+                id: slot.id,
+                title: slot.title,
+                expectedSurface: slot.expectedSurface,
+                expectedFileName: expectedFileName,
+                attachmentState: attachmentExists ? "attached" : "missing",
+                attachmentPath: attachmentExists ? attachmentPath : nil
+            )
+        }
+        let requiredScreenshotCount = report.releaseGate.screenshotSlots.filter(\.isRequired).count
+        let attachedScreenshotCount = screenshotSlots.filter { $0.attachmentState == "attached" }.count
 
         return AppRuntimeReviewCard(
             generatedAt: report.generatedAt,
             isReadyForReview: report.releaseGate.isPassing,
+            areRequiredScreenshotsAttached: requiredScreenshotCount == attachedScreenshotCount,
+            requiredScreenshotCount: requiredScreenshotCount,
+            attachedScreenshotCount: attachedScreenshotCount,
             appFlowSummary: appFlowSummary(report.releaseGate),
             nextStepTitle: appFlowNextStepTitle(report.releaseGate),
             nextActionCommand: appFlowNextCommand(report.releaseGate),
@@ -941,22 +966,7 @@ struct VeilVMControl {
                     nextActionCommand: step.nextActionCommand
                 )
             },
-            screenshotSlots: report.releaseGate.screenshotSlots.map { slot in
-                let expectedFileName = "\(slot.id).png"
-                let attachmentURL = evidenceDirectoryURL?.appendingPathComponent(expectedFileName)
-                let attachmentPath = attachmentURL?.path
-                let attachmentExists = attachmentPath.map {
-                    FileManager.default.fileExists(atPath: $0)
-                } ?? false
-                return AppRuntimeReviewScreenshotSlot(
-                    id: slot.id,
-                    title: slot.title,
-                    expectedSurface: slot.expectedSurface,
-                    expectedFileName: expectedFileName,
-                    attachmentState: attachmentExists ? "attached" : "missing",
-                    attachmentPath: attachmentExists ? attachmentPath : nil
-                )
-            },
+            screenshotSlots: screenshotSlots,
             evidence: AppRuntimeReviewEvidence(
                 latestAppCheckKind: report.proofArtifacts.latestProofKind,
                 latestAppCheckPath: report.proofArtifacts.latestProofPath,

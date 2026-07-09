@@ -39,6 +39,7 @@ test("accepts attached screenshot evidence paths", () => {
   card.evidence.screenshotEvidenceDirectory = "/tmp/veil-review";
   card.screenshotSlots[0].attachmentState = "attached";
   card.screenshotSlots[0].attachmentPath = "/tmp/veil-review/preBootLauncher.png";
+  card.attachedScreenshotCount = 1;
 
   assert.equal(validateAppRuntimeReview(card), card);
 });
@@ -50,5 +51,28 @@ test("rejects attached screenshot slots without paths", () => {
   assert.throws(
     () => validateAppRuntimeReview(card),
     /attachment path/
+  );
+});
+
+test("accepts complete screenshot evidence summary", () => {
+  const card = demoReviewCard();
+  card.evidence.screenshotEvidenceDirectory = "/tmp/veil-review";
+  card.attachedScreenshotCount = card.requiredScreenshotCount;
+  card.areRequiredScreenshotsAttached = true;
+  for (const slot of card.screenshotSlots) {
+    slot.attachmentState = "attached";
+    slot.attachmentPath = `/tmp/veil-review/${slot.expectedFileName}`;
+  }
+
+  assert.equal(validateAppRuntimeReview(card), card);
+});
+
+test("rejects screenshot evidence summary drift", () => {
+  const card = demoReviewCard();
+  card.attachedScreenshotCount = 99;
+
+  assert.throws(
+    () => validateAppRuntimeReview(card),
+    /attached screenshot count/
   );
 });

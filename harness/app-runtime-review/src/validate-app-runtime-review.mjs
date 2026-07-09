@@ -19,6 +19,9 @@ export function validateAppRuntimeReview(card) {
   }
 
   requireBoolean(card.isReadyForReview, "isReadyForReview");
+  requireBoolean(card.areRequiredScreenshotsAttached, "areRequiredScreenshotsAttached");
+  requireNonNegativeInteger(card.requiredScreenshotCount, "requiredScreenshotCount");
+  requireNonNegativeInteger(card.attachedScreenshotCount, "attachedScreenshotCount");
   requireString(card.appFlowSummary, "appFlowSummary");
   requireString(card.nextStepTitle, "nextStepTitle");
   requireString(card.detail, "detail");
@@ -62,6 +65,7 @@ export function validateAppRuntimeReview(card) {
     throw new TypeError("app runtime review screenshot slots must mirror releaseGate.screenshotSlots.");
   }
 
+  let attachedScreenshotCount = 0;
   for (const [index, slot] of card.screenshotSlots.entries()) {
     const sourceSlot = status.releaseGate.screenshotSlots[index];
     requireString(slot.id, `screenshotSlots.${index}.id`);
@@ -92,6 +96,20 @@ export function validateAppRuntimeReview(card) {
     if (slot.attachmentState === "missing" && slot.attachmentPath !== undefined) {
       throw new TypeError("missing review screenshots must not include an attachment path.");
     }
+    if (slot.attachmentState === "attached") {
+      attachedScreenshotCount += 1;
+    }
+  }
+
+  const requiredScreenshotCount = status.releaseGate.screenshotSlots.filter((slot) => slot.isRequired).length;
+  if (card.requiredScreenshotCount !== requiredScreenshotCount) {
+    throw new TypeError("app runtime review required screenshot count must match release gate slots.");
+  }
+  if (card.attachedScreenshotCount !== attachedScreenshotCount) {
+    throw new TypeError("app runtime review attached screenshot count must match attached slots.");
+  }
+  if (card.areRequiredScreenshotsAttached !== (attachedScreenshotCount === requiredScreenshotCount)) {
+    throw new TypeError("app runtime review screenshot readiness must match attached required slots.");
   }
 
   validateEvidence(card.evidence, status);
@@ -138,6 +156,12 @@ function requireString(value, fieldName) {
 function requireBoolean(value, fieldName) {
   if (typeof value !== "boolean") {
     throw new TypeError(`App runtime review field '${fieldName}' must be boolean.`);
+  }
+}
+
+function requireNonNegativeInteger(value, fieldName) {
+  if (!Number.isInteger(value) || value < 0) {
+    throw new TypeError(`App runtime review field '${fieldName}' must be a non-negative integer.`);
   }
 }
 

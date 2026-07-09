@@ -190,7 +190,9 @@ Pass `--evidence-dir` to point the card at a screenshot folder. Each required
 slot expects one PNG named after the release-gate slot id, for example
 `preBootLauncher.png`, `firstAppLaunch.png`, `appWindowOnly.png`,
 `menuRestore.png`, and `closeQuiet.png`. The card marks each slot as `attached`
-or `missing` without copying Windows media, disk contents, product keys, or
+or `missing`, exposes the attached/required screenshot count, and sets
+`areRequiredScreenshotsAttached` when the current evidence folder has the full
+set. It does this without copying Windows media, disk contents, product keys, or
 guest data.
 
 ```bash

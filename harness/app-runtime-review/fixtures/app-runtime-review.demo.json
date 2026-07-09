@@ -1,5 +1,7 @@
 {
   "appFlowSummary" : "ready (5\/5)",
+  "areRequiredScreenshotsAttached" : false,
+  "attachedScreenshotCount" : 0,
   "detail" : "Setup, launch, app checks, and close controls are covered.",
   "evidence" : {
     "diagnosticsDirectory" : "\/Users\/bonjin\/Library\/Application Support\/Veil\/Diagnostics",
@@ -7,10 +9,11 @@
     "latestAppCheckModifiedAt" : "2026-07-04T15:28:35Z",
     "latestAppCheckPath" : "\/Users\/bonjin\/Library\/Application Support\/Veil\/Diagnostics\/MVP Proof\/notepad-mvp-window-detect.json"
   },
-  "generatedAt" : "2026-07-09T13:41:03Z",
+  "generatedAt" : "2026-07-09T13:44:02Z",
   "isReadyForReview" : true,
   "kind" : "windowsAppRuntimeReviewCard",
   "nextStepTitle" : "Ready For App Review",
+  "requiredScreenshotCount" : 5,
   "screenshotSlots" : [
     {
       "attachmentState" : "missing",
@@ -178,7 +181,7 @@
       "pendingLaunchCount" : 1,
       "restorableAppCount" : 1
     },
-    "generatedAt" : "2026-07-09T13:41:03Z",
+    "generatedAt" : "2026-07-09T13:44:02Z",
     "guestAgentDiagnostics" : {
       "diagnosticCommand" : "veil-host-probe --diagnose-agent",
       "endpoint" : "ws:\/\/127.0.0.1:18444",
