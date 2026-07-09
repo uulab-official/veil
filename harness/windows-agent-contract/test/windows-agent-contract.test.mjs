@@ -193,7 +193,19 @@ test("windows agent accepts host clipboard text updates", async () => {
   assert.match(session, /MessageTypes\.ClipboardTextSet/);
   assert.match(session, /HandleClipboardTextSetAsync/);
   assert.match(session, /\["clipboardText"\]\s*=\s*true/);
-  assert.match(session, /\["packageIdentity"\]\s*=\s*false/);
+});
+
+test("windows agent reports package identity from the Windows app model API", async () => {
+  const session = await readFile(resolve(agentRoot, "src/VeilAgent/AgentSession.cs"), "utf8");
+  const packageIdentityProbe = await readFile(resolve(agentRoot, "src/VeilAgent/PackageIdentityProbe.cs"), "utf8");
+
+  assert.match(session, /IPackageIdentityProbe/);
+  assert.match(session, /new WindowsPackageIdentityProbe\(\)/);
+  assert.match(session, /\["packageIdentity"\]\s*=\s*packageIdentityProbe\.HasPackageIdentity/);
+  assert.doesNotMatch(session, /\["packageIdentity"\]\s*=\s*false/);
+  assert.match(packageIdentityProbe, /GetCurrentPackageFullName/);
+  assert.match(packageIdentityProbe, /AppModelErrorNoPackage\s*=\s*15700/);
+  assert.match(packageIdentityProbe, /OperatingSystem\.IsWindows\(\)/);
 });
 
 test("windows agent broadcasts guest clipboard text changes without host echo loops", async () => {

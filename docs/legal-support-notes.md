@@ -53,6 +53,18 @@ Microsoft's public support page for Windows 11 on Apple Silicon Macs currently p
 
 Project wording should avoid saying Veil is Microsoft-authorized unless that becomes true.
 
+## Windows Package Identity
+
+Some Windows APIs require the calling process to have package identity. Veil's
+guest agent exposes `agent.health.response.capabilities.packageIdentity` only as
+a local readiness signal, not as a licensing, store distribution, or Microsoft
+support claim.
+
+Official references:
+
+- `GetCurrentPackageFullName`: https://learn.microsoft.com/en-us/windows/win32/api/appmodel/nf-appmodel-getcurrentpackagefullname
+- Detect package identity: https://learn.microsoft.com/en-us/windows/msix/detect-package-identity
+
 ## Apple Virtualization.framework
 
 Relevant Apple documentation:

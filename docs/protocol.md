@@ -68,7 +68,8 @@ Response:
 ```
 
 `capabilities.packageIdentity` is `true` only when the Windows agent is running
-with Windows package identity. The default unpackaged agent reports `false`.
+with Windows package identity. The agent reads this from Windows' app model
+package identity API at runtime, so default unpackaged installs report `false`.
 Veil uses this readiness signal before enabling package-gated Windows APIs such
 as borderless Windows Graphics Capture and Windows notification listener
 integration.

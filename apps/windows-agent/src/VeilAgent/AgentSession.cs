@@ -42,14 +42,20 @@ public sealed class AgentSession
 
     private readonly IWindowsDesktop desktop;
     private readonly IWindowFrameCapture capture;
+    private readonly IPackageIdentityProbe packageIdentityProbe;
     private readonly Dictionary<string, LaunchedWindow> trackedWindowsById = new();
     private readonly Dictionary<string, WindowsAppDescriptor> appByWindowId = new();
     private readonly object trackedWindowsGate = new();
 
-    public AgentSession(IWindowsDesktop desktop, IWindowFrameCapture capture)
+    public AgentSession(
+        IWindowsDesktop desktop,
+        IWindowFrameCapture capture,
+        IPackageIdentityProbe? packageIdentityProbe = null
+    )
     {
         this.desktop = desktop;
         this.capture = capture;
+        this.packageIdentityProbe = packageIdentityProbe ?? new WindowsPackageIdentityProbe();
     }
 
     public async Task<AgentReplies> HandleAsync(JsonObject request, CancellationToken cancellationToken = default)
@@ -516,7 +522,7 @@ public sealed class AgentSession
         }
     }
 
-    private static JsonObject HealthResponse(string? requestId) => new()
+    private JsonObject HealthResponse(string? requestId) => new()
     {
         ["type"] = MessageTypes.AgentHealthResponse,
         ["requestId"] = requestId,
@@ -536,7 +542,7 @@ public sealed class AgentSession
             ["windowCapture"] = true,
             ["input"] = true,
             ["clipboardText"] = true,
-            ["packageIdentity"] = false
+            ["packageIdentity"] = packageIdentityProbe.HasPackageIdentity
         }
     };
 
