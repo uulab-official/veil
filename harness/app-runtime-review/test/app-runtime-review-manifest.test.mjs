@@ -73,3 +73,13 @@ test("rejects screenshot paths outside evidence directory", () => {
     /evidence directory/
   );
 });
+
+test("rejects readme paths outside evidence directory", () => {
+  const manifest = demoManifest();
+  manifest.readmePath = "/tmp/other/README.md";
+
+  assert.throws(
+    () => validateAppRuntimeReviewManifest(manifest),
+    /readmePath/
+  );
+});

@@ -643,6 +643,7 @@ struct AppRuntimeReviewEvidenceManifest: Codable, Equatable {
     var generatedAt: Date
     var evidenceDirectory: String
     var manifestPath: String
+    var readmePath: String
     var requiredScreenshotCount: Int
     var screenshotFiles: [AppRuntimeReviewEvidenceFile]
     var captureSteps: [AppRuntimeReviewCaptureStep]
@@ -970,6 +971,7 @@ struct VeilVMControl {
             evidenceDirectoryPath: evidenceDirectoryURL.path
         )
         let manifestURL = evidenceDirectoryURL.appendingPathComponent("review-manifest.json")
+        let readmeURL = evidenceDirectoryURL.appendingPathComponent("README.md")
         let screenshotFiles = card.screenshotSlots.map { slot in
             AppRuntimeReviewEvidenceFile(
                 slotId: slot.id,
@@ -983,6 +985,7 @@ struct VeilVMControl {
             generatedAt: report.generatedAt,
             evidenceDirectory: evidenceDirectoryURL.path,
             manifestPath: manifestURL.path,
+            readmePath: readmeURL.path,
             requiredScreenshotCount: card.requiredScreenshotCount,
             screenshotFiles: screenshotFiles,
             captureSteps: appRuntimeReviewCaptureSteps(
@@ -998,6 +1001,8 @@ struct VeilVMControl {
         )
         let data = try JSONEncoder.veilDiagnostics.encode(manifest)
         try data.write(to: manifestURL, options: [.atomic])
+        let readmeData = Data(appRuntimeReviewEvidenceReadme(manifest: manifest).utf8)
+        try readmeData.write(to: readmeURL, options: [.atomic])
 
         if json {
             print(String(decoding: data, as: UTF8.self))
@@ -1007,6 +1012,7 @@ struct VeilVMControl {
         print("Veil Windows App Review Evidence")
         print("Folder: \(manifest.evidenceDirectory)")
         print("Manifest: \(manifest.manifestPath)")
+        print("Guide: \(manifest.readmePath)")
         print("Screenshots needed: \(manifest.requiredScreenshotCount)")
         for file in manifest.screenshotFiles {
             print("  - \(file.expectedFileName): \(file.title)")
@@ -1051,6 +1057,43 @@ struct VeilVMControl {
             .appendingPathComponent("App Runtime Review")
             .appendingPathComponent(timestamp)
             .standardizedFileURL
+    }
+
+    private static func appRuntimeReviewEvidenceReadme(
+        manifest: AppRuntimeReviewEvidenceManifest
+    ) -> String {
+        var lines: [String] = [
+            "# Veil Windows App Review Evidence",
+            "",
+            "This folder stores one live Windows App Runtime review pass.",
+            "",
+            "## Checklist",
+            "",
+            "- Capture every PNG listed below into this folder.",
+            "- Run `\(manifest.reviewCommand)`.",
+            "- Confirm the review card reports `Screenshots: \(manifest.requiredScreenshotCount)/\(manifest.requiredScreenshotCount) attached`.",
+            "- Keep `review-manifest.json` with the screenshots when sharing review evidence.",
+            "",
+            "## Capture Steps",
+            ""
+        ]
+
+        for step in manifest.captureSteps {
+            lines.append("\(step.order). \(step.title) -> `\(step.expectedFileName)`")
+            lines.append("   \(step.instruction)")
+            if let supportingCommand = step.supportingCommand {
+                lines.append("   Command: `\(supportingCommand)`")
+            }
+        }
+
+        lines.append("")
+        lines.append("## Expected Files")
+        lines.append("")
+        for file in manifest.screenshotFiles {
+            lines.append("- `\(file.expectedFileName)`: \(file.expectedSurface)")
+        }
+        lines.append("")
+        return lines.joined(separator: "\n")
     }
 
     private static func appRuntimeReviewCaptureSteps(

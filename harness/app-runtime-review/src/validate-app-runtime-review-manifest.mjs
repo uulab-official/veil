@@ -25,6 +25,7 @@ export function validateAppRuntimeReviewManifest(manifest) {
   }
   requireString(manifest.evidenceDirectory, "evidenceDirectory");
   requireString(manifest.manifestPath, "manifestPath");
+  requireString(manifest.readmePath, "readmePath");
   requireNonNegativeInteger(manifest.requiredScreenshotCount, "requiredScreenshotCount");
   requireString(manifest.reviewCommand, "reviewCommand");
 
@@ -33,6 +34,12 @@ export function validateAppRuntimeReviewManifest(manifest) {
   }
   if (!manifest.manifestPath.startsWith(`${manifest.evidenceDirectory}/`)) {
     throw new TypeError("app runtime review manifest path must live inside the evidence directory.");
+  }
+  if (!manifest.readmePath.endsWith("/README.md")) {
+    throw new TypeError("app runtime review manifest readmePath must end with README.md.");
+  }
+  if (!manifest.readmePath.startsWith(`${manifest.evidenceDirectory}/`)) {
+    throw new TypeError("app runtime review manifest readmePath must live inside the evidence directory.");
   }
   if (!manifest.reviewCommand.includes("app-runtime-review --evidence-dir")) {
     throw new TypeError("app runtime review manifest reviewCommand must run app-runtime-review with an evidence directory.");
