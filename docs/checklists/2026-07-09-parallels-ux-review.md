@@ -53,6 +53,7 @@ Goal: keep the user-facing workflow one-screen-first (launcher + one action path
 - [x] Add review-card screenshot completion fields (`attachedScreenshotCount`, `requiredScreenshotCount`, `areRequiredScreenshotsAttached`) so live evidence readiness is machine-checkable instead of eyeballed.
 - [x] Add `veil-vmctl app-runtime-review-init` and a manifest harness so live VM proof passes start with one evidence folder, one `review-manifest.json`, and fixed PNG names.
 - [x] Add ordered manifest `captureSteps` with supporting commands so the live proof pass records not just file names, but the intended app-flow sequence for each screenshot.
+- [x] Tighten the review manifest harness so screenshot paths, `reviewCommand`, and next actions must all reference the same evidence folder and the `5/5 attached` gate.
 
 ## CEO Review
 

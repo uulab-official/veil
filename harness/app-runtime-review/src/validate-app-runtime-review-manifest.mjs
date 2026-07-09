@@ -28,6 +28,19 @@ export function validateAppRuntimeReviewManifest(manifest) {
   requireNonNegativeInteger(manifest.requiredScreenshotCount, "requiredScreenshotCount");
   requireString(manifest.reviewCommand, "reviewCommand");
 
+  if (!manifest.manifestPath.endsWith("/review-manifest.json")) {
+    throw new TypeError("app runtime review manifest path must end with review-manifest.json.");
+  }
+  if (!manifest.manifestPath.startsWith(`${manifest.evidenceDirectory}/`)) {
+    throw new TypeError("app runtime review manifest path must live inside the evidence directory.");
+  }
+  if (!manifest.reviewCommand.includes("app-runtime-review --evidence-dir")) {
+    throw new TypeError("app runtime review manifest reviewCommand must run app-runtime-review with an evidence directory.");
+  }
+  if (!manifest.reviewCommand.includes(manifest.evidenceDirectory)) {
+    throw new TypeError("app runtime review manifest reviewCommand must point at the evidence directory.");
+  }
+
   if (!Array.isArray(manifest.screenshotFiles)) {
     throw new TypeError("app runtime review manifest screenshotFiles must be an array.");
   }
@@ -63,6 +76,9 @@ export function validateAppRuntimeReviewManifest(manifest) {
     if (!file.path.endsWith(`/${file.expectedFileName}`)) {
       throw new TypeError("app runtime review manifest screenshot paths must end with expected file names.");
     }
+    if (!file.path.startsWith(`${manifest.evidenceDirectory}/`)) {
+      throw new TypeError("app runtime review manifest screenshot paths must live inside the evidence directory.");
+    }
   }
 
   for (const [index, step] of manifest.captureSteps.entries()) {
@@ -92,6 +108,12 @@ export function validateAppRuntimeReviewManifest(manifest) {
   }
   for (const action of manifest.nextActions) {
     requireString(action, "nextActions[]");
+  }
+  if (!manifest.nextActions.some((action) => action.includes(manifest.evidenceDirectory))) {
+    throw new TypeError("app runtime review manifest next actions must reference the evidence directory.");
+  }
+  if (!manifest.nextActions.some((action) => action.includes("5/5 attached"))) {
+    throw new TypeError("app runtime review manifest next actions must include the 5/5 attached gate.");
   }
 
   return manifest;

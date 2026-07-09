@@ -53,3 +53,23 @@ test("rejects manifests with drifted capture step order", () => {
     /order/
   );
 });
+
+test("rejects review commands that do not point at evidence directory", () => {
+  const manifest = demoManifest();
+  manifest.reviewCommand = "veil-vmctl app-runtime-review --evidence-dir '/tmp/other'";
+
+  assert.throws(
+    () => validateAppRuntimeReviewManifest(manifest),
+    /reviewCommand/
+  );
+});
+
+test("rejects screenshot paths outside evidence directory", () => {
+  const manifest = demoManifest();
+  manifest.screenshotFiles[0].path = "/tmp/other/preBootLauncher.png";
+
+  assert.throws(
+    () => validateAppRuntimeReviewManifest(manifest),
+    /evidence directory/
+  );
+});

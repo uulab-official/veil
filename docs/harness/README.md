@@ -190,7 +190,9 @@ Run `app-runtime-review-init` before a live VM pass to create the evidence
 folder and `review-manifest.json`. The manifest lists every required PNG path,
 the ordered capture steps, supporting commands, and the follow-up review
 command, so contributors can capture screenshots into one predictable folder
-instead of inventing names during the proof pass.
+instead of inventing names during the proof pass. The manifest harness also
+checks that screenshot paths, `reviewCommand`, and next actions all point back
+to the same evidence directory and the `5/5 attached` release gate.
 
 Pass `--evidence-dir` to point the card at a screenshot folder. Each required
 slot expects one PNG named after the release-gate slot id, for example
