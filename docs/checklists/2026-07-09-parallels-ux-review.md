@@ -25,6 +25,7 @@ Goal: keep the user-facing workflow one-screen-first (launcher + one action path
 - Add regression coverage for: mirror window opens while launcher is visible; close/reopen cycles should never produce >1 launcher surface.
 - Keep menu/dock actions resilient even when the launcher is intentionally hidden.
 - Confirm visibility fallback returns safely after app windows close, and that recovery actions still surface when no app windows are running.
+- Add coverage that app-level dedupe replaces same `appId` window sessions without emitting a synthetic user-close callback (`onUserWindowClose`) on replacement.
 
 ## Design Review
 

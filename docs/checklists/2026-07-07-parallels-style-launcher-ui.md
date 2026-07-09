@@ -38,3 +38,4 @@ and launch Windows apps without navigating a complex shell.
       optional details to reduce first-screen decision noise.
 - [x] Add a short onboarding runbook with deterministic validation steps for a fresh Mac install:
       "installer media selected → start VM → Windows app opens as host window".
+- [x] Ensure only one host window is kept per Windows app ID so relaunching/refreshing the same app does not leave duplicate app surfaces.
