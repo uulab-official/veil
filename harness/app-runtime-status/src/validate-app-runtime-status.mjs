@@ -825,7 +825,7 @@ function validateDailyUseReadiness(dailyUseReadiness, report) {
   const expectedCommand = report.connection.hasLiveAgentConnection
     ? expectedPackageIdentityReady
       ? "veil-vmctl app-runtime-status --json"
-      : undefined
+      : "Inside Windows, run \"Veil Guest Agent\\Prepare Sparse Package.cmd\", then rerun `veil-vmctl guest-agent-wait --json --wait-seconds 30` on macOS."
     : "veil-vmctl guest-agent-wait --json --wait-seconds 30";
   if (dailyUseReadiness.recommendedCommand !== expectedCommand) {
     throw new TypeError("dailyUseReadiness.recommendedCommand must match the Daily Use readiness gate.");

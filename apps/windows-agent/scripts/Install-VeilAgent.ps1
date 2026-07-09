@@ -2,6 +2,8 @@ param(
     [string]$InstallRoot = "$env:LOCALAPPDATA\Veil\Agent",
     [string]$Configuration = "Release",
     [int]$Port = 18444,
+    [string]$SparsePackagePath = "",
+    [string]$SparsePackageCertificatePath = "",
     [switch]$NoStart
 )
 
@@ -13,8 +15,8 @@ $ProjectPath = Join-Path $AgentRoot "src\VeilAgent\VeilAgent.csproj"
 $BundledAppRoot = Join-Path $AgentRoot "app"
 $BundledAgentExe = Join-Path $BundledAppRoot "VeilAgent.exe"
 $SparsePackageRoot = Join-Path $AgentRoot "package"
-$SparsePackagePath = Join-Path $SparsePackageRoot "VeilAgent.Identity.msix"
-$SparsePackageCertificatePath = Join-Path $SparsePackageRoot "VeilAgent.Identity.cer"
+$SparsePackagePath = if ($SparsePackagePath) { $SparsePackagePath } else { Join-Path $SparsePackageRoot "VeilAgent.Identity.msix" }
+$SparsePackageCertificatePath = if ($SparsePackageCertificatePath) { $SparsePackageCertificatePath } else { Join-Path $SparsePackageRoot "VeilAgent.Identity.cer" }
 $SparsePackageName = "UULab.Veil.Agent"
 $PublishRoot = Join-Path $InstallRoot "app"
 $InstalledScriptsRoot = Join-Path $InstallRoot "scripts"

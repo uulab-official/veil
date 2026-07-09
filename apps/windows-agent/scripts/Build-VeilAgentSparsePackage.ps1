@@ -3,6 +3,7 @@ param(
     [string]$Publisher = "CN=UULab",
     [string]$PackageName = "UULab.Veil.Agent",
     [string]$ApplicationId = "VeilAgent",
+    [string]$OutputRoot = "",
     [string]$CertificatePfxPath = "",
     [string]$CertificatePassword = "",
     [switch]$CreateDevelopmentCertificate,
@@ -15,9 +16,10 @@ $ScriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $AgentRoot = Resolve-Path (Join-Path $ScriptRoot "..")
 $PackageRoot = Join-Path $AgentRoot "package"
 $SourceManifestPath = Join-Path $PackageRoot "AppxManifest.xml"
-$PackagePath = Join-Path $PackageRoot "VeilAgent.Identity.msix"
-$DevelopmentCertificatePath = Join-Path $PackageRoot "VeilAgent.Identity.cer"
-$DevelopmentPfxPath = Join-Path $PackageRoot "VeilAgent.Identity.pfx"
+$OutputRoot = if ($OutputRoot) { $OutputRoot } else { $PackageRoot }
+$PackagePath = Join-Path $OutputRoot "VeilAgent.Identity.msix"
+$DevelopmentCertificatePath = Join-Path $OutputRoot "VeilAgent.Identity.cer"
+$DevelopmentPfxPath = Join-Path $OutputRoot "VeilAgent.Identity.pfx"
 
 function Resolve-WindowsSdkTool {
     param([string]$ToolName)
@@ -45,6 +47,7 @@ function Resolve-WindowsSdkTool {
 if (-not (Test-Path $SourceManifestPath)) {
     throw "Sparse package manifest was not found at $SourceManifestPath."
 }
+New-Item -ItemType Directory -Force -Path $OutputRoot | Out-Null
 
 if ($CreateDevelopmentCertificate) {
     $PasswordText = if ($CertificatePassword) { $CertificatePassword } else { "veil-development" }

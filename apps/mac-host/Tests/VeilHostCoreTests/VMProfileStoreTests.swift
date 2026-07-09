@@ -1401,19 +1401,23 @@ struct VMProfileStoreTests {
         let startCommandURL = agentBundleURL.appendingPathComponent("Start Veil Agent.cmd")
         let diagnosticsCommandURL = agentBundleURL.appendingPathComponent("Collect Veil Agent Diagnostics.cmd")
         let repairCommandURL = agentBundleURL.appendingPathComponent("Repair Veil Agent Connectivity.cmd")
+        let prepareSparsePackageCommandURL = agentBundleURL.appendingPathComponent("Prepare Sparse Package.cmd")
         let bootstrapCommandURL = agentBundleURL.appendingPathComponent("V.cmd")
         let agentReadmeURL = agentBundleURL.appendingPathComponent("README.txt")
         let installScriptURL = agentBundleURL.appendingPathComponent("scripts/Install-VeilAgent.ps1")
         let publishScriptURL = agentBundleURL.appendingPathComponent("scripts/Publish-VeilAgentBundle.ps1")
+        let sparsePackageScriptURL = agentBundleURL.appendingPathComponent("scripts/Build-VeilAgentSparsePackage.ps1")
         let startScriptURL = agentBundleURL.appendingPathComponent("scripts/Start-VeilAgent.ps1")
         let diagnosticsScriptURL = agentBundleURL.appendingPathComponent("scripts/Collect-VeilAgentDiagnostics.ps1")
         let repairScriptURL = agentBundleURL.appendingPathComponent("scripts/Repair-VeilAgentConnectivity.ps1")
+        let packageManifestURL = agentBundleURL.appendingPathComponent("package/AppxManifest.xml")
         let projectURL = agentBundleURL.appendingPathComponent("src/VeilAgent/VeilAgent.csproj")
         let answerFile = try String(contentsOf: answerFileURL, encoding: .utf8)
         let installCommand = try String(contentsOf: installCommandURL, encoding: .utf8)
         let startCommand = try String(contentsOf: startCommandURL, encoding: .utf8)
         let diagnosticsCommand = try String(contentsOf: diagnosticsCommandURL, encoding: .utf8)
         let repairCommand = try String(contentsOf: repairCommandURL, encoding: .utf8)
+        let prepareSparsePackageCommand = try String(contentsOf: prepareSparsePackageCommandURL, encoding: .utf8)
         let bootstrapCommand = try String(contentsOf: bootstrapCommandURL, encoding: .utf8)
         let installScript = try String(contentsOf: installScriptURL, encoding: .utf8)
         let agentReadme = try String(contentsOf: agentReadmeURL, encoding: .utf8)
@@ -1478,11 +1482,15 @@ struct VMProfileStoreTests {
         ) == nil)
         #expect(FileManager.default.fileExists(atPath: installScriptURL.path))
         #expect(FileManager.default.fileExists(atPath: publishScriptURL.path))
+        #expect(FileManager.default.fileExists(atPath: sparsePackageScriptURL.path))
         #expect(FileManager.default.fileExists(atPath: startScriptURL.path))
         #expect(FileManager.default.fileExists(atPath: diagnosticsScriptURL.path))
+        #expect(FileManager.default.fileExists(atPath: packageManifestURL.path))
         #expect(FileManager.default.fileExists(atPath: projectURL.path))
         #expect(installCommand.contains("Install-VeilAgent.ps1"))
         #expect(installCommand.contains("-ExecutionPolicy Bypass"))
+        #expect(installScript.contains("[string]$SparsePackagePath"))
+        #expect(installScript.contains("Register-VeilSparsePackage"))
         #expect(installScript.contains("-RunLevel Limited"))
         #expect(!installScript.contains("-RunLevel LeastPrivilege"))
         #expect(installScript.contains(#""VEIL_AGENT_HOST", "0.0.0.0""#))
@@ -1496,12 +1504,16 @@ struct VMProfileStoreTests {
         #expect(diagnosticsCommand.contains("-ExecutionPolicy Bypass"))
         #expect(repairCommand.contains("Repair-VeilAgentConnectivity.ps1"))
         #expect(repairCommand.contains("-ExecutionPolicy Bypass"))
+        #expect(prepareSparsePackageCommand.contains("Build-VeilAgentSparsePackage.ps1"))
+        #expect(prepareSparsePackageCommand.contains("%LOCALAPPDATA%\\Veil\\Agent\\package"))
+        #expect(prepareSparsePackageCommand.contains("-SparsePackagePath"))
         #expect(bootstrapCommand.contains("Repair Veil Agent Connectivity.cmd"))
         #expect(bootstrapCommand.contains("Install Veil Agent.cmd"))
         #expect(bootstrapCommand.contains("VEIL_AGENT_AUTOMATION_HOLD"))
         #expect(bootstrapCommand.contains("Veil automation status will remain visible"))
         #expect(FileManager.default.fileExists(atPath: repairScriptURL.path))
         #expect(agentReadme.contains("Install Veil Agent.cmd"))
+        #expect(agentReadme.contains("Prepare Sparse Package.cmd"))
         #expect(agentReadme.contains("V.cmd"))
         #expect(agentReadme.contains("Repair Veil Agent Connectivity.cmd"))
         #expect(agentReadme.contains("Collect Veil Agent Diagnostics.cmd"))
@@ -1591,10 +1603,15 @@ struct VMProfileStoreTests {
         try Data("installer".utf8).write(to: agentBundleURL.appendingPathComponent("Install Veil Agent.cmd"))
         try Data("diagnostics".utf8).write(to: agentBundleURL.appendingPathComponent("Collect Veil Agent Diagnostics.cmd"))
         try Data("repair".utf8).write(to: agentBundleURL.appendingPathComponent("Repair Veil Agent Connectivity.cmd"))
+        try Data("sparse".utf8).write(to: agentBundleURL.appendingPathComponent("Prepare Sparse Package.cmd"))
         try Data("bootstrap".utf8).write(to: agentBundleURL.appendingPathComponent("V.cmd"))
         try Data("script".utf8).write(to: scriptsURL.appendingPathComponent("Install-VeilAgent.ps1"))
         try Data("diagnostics script".utf8).write(to: scriptsURL.appendingPathComponent("Collect-VeilAgentDiagnostics.ps1"))
         try Data("repair script".utf8).write(to: scriptsURL.appendingPathComponent("Repair-VeilAgentConnectivity.ps1"))
+        try Data("sparse script".utf8).write(to: scriptsURL.appendingPathComponent("Build-VeilAgentSparsePackage.ps1"))
+        let packageURL = agentBundleURL.appendingPathComponent("package", isDirectory: true)
+        try FileManager.default.createDirectory(at: packageURL, withIntermediateDirectories: true)
+        try Data("manifest".utf8).write(to: packageURL.appendingPathComponent("AppxManifest.xml"))
         final class Capture: @unchecked Sendable {
             var stagedInstallCommandExists = false
             var stagedScriptExists = false
@@ -1602,6 +1619,9 @@ struct VMProfileStoreTests {
             var stagedDiagnosticsScriptExists = false
             var stagedRepairCommandExists = false
             var stagedRepairScriptExists = false
+            var stagedPrepareSparsePackageCommandExists = false
+            var stagedSparsePackageScriptExists = false
+            var stagedPackageManifestExists = false
             var stagedBootstrapCommandExists = false
         }
         let capture = Capture()
@@ -1627,6 +1647,15 @@ struct VMProfileStoreTests {
             capture.stagedRepairScriptExists = FileManager.default.fileExists(
                 atPath: stagingURL.appendingPathComponent("Veil Guest Agent/scripts/Repair-VeilAgentConnectivity.ps1").path
             )
+            capture.stagedPrepareSparsePackageCommandExists = FileManager.default.fileExists(
+                atPath: stagingURL.appendingPathComponent("Veil Guest Agent/Prepare Sparse Package.cmd").path
+            )
+            capture.stagedSparsePackageScriptExists = FileManager.default.fileExists(
+                atPath: stagingURL.appendingPathComponent("Veil Guest Agent/scripts/Build-VeilAgentSparsePackage.ps1").path
+            )
+            capture.stagedPackageManifestExists = FileManager.default.fileExists(
+                atPath: stagingURL.appendingPathComponent("Veil Guest Agent/package/AppxManifest.xml").path
+            )
             capture.stagedBootstrapCommandExists = FileManager.default.fileExists(
                 atPath: stagingURL.appendingPathComponent("Veil Guest Agent/V.cmd").path
             )
@@ -1643,6 +1672,9 @@ struct VMProfileStoreTests {
         #expect(capture.stagedDiagnosticsScriptExists)
         #expect(capture.stagedRepairCommandExists)
         #expect(capture.stagedRepairScriptExists)
+        #expect(capture.stagedPrepareSparsePackageCommandExists)
+        #expect(capture.stagedSparsePackageScriptExists)
+        #expect(capture.stagedPackageManifestExists)
         #expect(capture.stagedBootstrapCommandExists)
     }
 

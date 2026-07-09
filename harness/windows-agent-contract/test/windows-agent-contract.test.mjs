@@ -330,6 +330,8 @@ test("windows agent includes user-logon install and uninstall scripts", async ()
   assert.match(install, /netsh\s+advfirewall\s+firewall\s+add\s+rule/);
   assert.match(install, /Windows Firewall inbound rule/);
   assert.match(install, /Register-VeilSparsePackage/);
+  assert.match(install, /\[string\]\$SparsePackagePath\s*=\s*""/);
+  assert.match(install, /\[string\]\$SparsePackageCertificatePath\s*=\s*""/);
   assert.match(install, /VeilAgent\.Identity\.msix/);
   assert.match(install, /Add-AppxPackage\s+-Path\s+\$PackagePath\s+-ExternalLocation\s+\$ExternalLocation/);
   assert.match(install, /Import-Certificate[\s\S]+TrustedPeople/);
@@ -394,6 +396,8 @@ test("windows agent includes user-logon install and uninstall scripts", async ()
   assert.match(publishShell, /--self-contained "\$self_contained"/);
   assert.match(publishShell, /EnableWindowsTargeting=true/);
   assert.match(publishShell, /VeilAgent\.exe/);
+  assert.match(sparsePackage, /\[string\]\$OutputRoot\s*=\s*""/);
+  assert.match(sparsePackage, /New-Item\s+-ItemType\s+Directory\s+-Force\s+-Path\s+\$OutputRoot/);
   assert.match(sparsePackage, /MakeAppx\.exe/);
   assert.match(sparsePackage, /SignTool\.exe/);
   assert.match(sparsePackage, /New-SelfSignedCertificate/);

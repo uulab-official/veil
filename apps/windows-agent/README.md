@@ -68,6 +68,14 @@ apps\windows-agent\scripts\Build-VeilAgentSparsePackage.ps1 -CreateDevelopmentCe
 
 This creates ignored local artifacts under `apps\windows-agent\package`: `VeilAgent.Identity.msix`, `VeilAgent.Identity.pfx`, and `VeilAgent.Identity.cer`. The `.pfx` contains the signing private key and must not be committed or distributed publicly. When `VeilAgent.Identity.msix` is present on the `VEIL_AUTO` media or shared folder, `Install-VeilAgent.ps1` registers it with `Add-AppxPackage -ExternalLocation` against the installed app folder. A successful registration is what lets `agent.health.response.capabilities.packageIdentity` become `true`.
 
+Inside a Windows guest booted from the read-only `VEIL_AUTO` media, use the launcher instead:
+
+```text
+Veil Shared\Veil Guest Agent\Prepare Sparse Package.cmd
+```
+
+That launcher writes signing artifacts to `%LOCALAPPDATA%\Veil\Agent\package`, then reruns the installer with `-SparsePackagePath` and `-SparsePackageCertificatePath` pointed at those local files.
+
 For repository development without the shared-folder bundle, run this inside the guest:
 
 ```powershell

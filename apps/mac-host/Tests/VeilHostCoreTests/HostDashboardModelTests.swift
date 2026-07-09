@@ -729,6 +729,7 @@ struct HostDashboardModelTests {
         #expect(report.dailyUseReadiness.borderlessCapturePreflightPassed == false)
         #expect(report.dailyUseReadiness.notificationBridgePreflightPassed == false)
         #expect(report.dailyUseReadiness.recommendedAction == "prepare-sparse-package")
+        #expect(report.dailyUseReadiness.recommendedCommand == #"Inside Windows, run "Veil Guest Agent\Prepare Sparse Package.cmd", then rerun `veil-vmctl guest-agent-wait --json --wait-seconds 30` on macOS."#)
         #expect(report.guestAgentDiagnostics.endpoint == HostDashboardModel.defaultAgentEndpoint)
         #expect(report.guestAgentDiagnostics.isConnected)
         #expect(report.guestAgentDiagnostics.diagnosticCommand == "veil-host-probe --diagnose-agent")
