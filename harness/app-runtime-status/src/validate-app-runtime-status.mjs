@@ -1235,6 +1235,7 @@ function installedRuntimeHeroSupports(actionId) {
     "runtime.recoverDisplay",
     "runtime.waitAgent",
     "runtime.repairGuestAgentForApp",
+    "runtime.prepareSparsePackage",
     "runtime.startWindowsForApp",
     "runtime.prepareWindows",
     "runtime.refreshStatus",

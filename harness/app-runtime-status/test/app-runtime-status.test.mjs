@@ -261,6 +261,8 @@ function currentStepDetail(report) {
           return "Open the queued app as a macOS window.";
         case "runtime.waitAgent":
           return "Wait for the app connection, then continue automatically.";
+        case "runtime.prepareSparsePackage":
+          return "Prepare Windows app identity, then continue Daily Use checks from Veil.";
         case "windowsApps.launchSelected":
           return "Open the selected Windows app as a macOS window.";
         default:

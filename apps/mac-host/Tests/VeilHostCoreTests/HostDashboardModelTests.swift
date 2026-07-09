@@ -109,6 +109,25 @@ struct HostDashboardModelTests {
         #expect(supported.heroRunsPrimaryAction)
         #expect(unsupported.heroRunsPrimaryAction == false)
 
+        let packageIdentitySupported = model.oneScreenUXStatus(
+            launcherVisibility: launcherVisibility,
+            visibleSurfacePolicy: visibleSurfacePolicy,
+            macWindowIntegration: macWindowIntegration,
+            menuBarIntegration: menuBarIntegration,
+            primaryNextAction: WindowsAppRuntimePrimaryNextActionStatus(
+                id: "openWindowsApp",
+                title: "Prepare Identity",
+                source: "releaseGate",
+                isAvailable: true,
+                runsInApp: true,
+                actionId: "runtime.prepareSparsePackage",
+                command: "veil-vmctl app-runtime-action --json --action prepare-sparse-package --wait-seconds 120",
+                reason: "Prepare package identity before Daily Use checks."
+            )
+        )
+
+        #expect(packageIdentitySupported.heroRunsPrimaryAction)
+
         let releaseGate = WindowsAppRuntimeReleaseGateStatus(
             requiredStepCount: 1,
             passingStepCount: 0,
@@ -151,6 +170,25 @@ struct HostDashboardModelTests {
         #expect(supportedOnboarding.state == "continue-in-app")
         #expect(supportedOnboarding.canContinueInApp)
         #expect(supportedOnboarding.primaryActionId == "windowsApps.closeAll")
+
+        let packageIdentityOnboarding = model.launchOnboardingStatus(
+            releaseGate: releaseGate,
+            primaryNextAction: WindowsAppRuntimePrimaryNextActionStatus(
+                id: "openWindowsApp",
+                title: "Prepare Identity",
+                source: "releaseGate",
+                isAvailable: true,
+                runsInApp: true,
+                actionId: "runtime.prepareSparsePackage",
+                command: "veil-vmctl app-runtime-action --json --action prepare-sparse-package --wait-seconds 120",
+                reason: "Prepare package identity before Daily Use checks."
+            ),
+            oneScreenUX: packageIdentitySupported
+        )
+        #expect(packageIdentityOnboarding.state == "continue-in-app")
+        #expect(packageIdentityOnboarding.canContinueInApp)
+        #expect(packageIdentityOnboarding.currentStepDetail == "Prepare Windows app identity, then continue Daily Use checks from Veil.")
+
         #expect(unsupportedOnboarding.state == "external-check")
         #expect(unsupportedOnboarding.canContinueInApp == false)
     }

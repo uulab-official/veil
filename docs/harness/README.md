@@ -210,6 +210,11 @@ The macOS launcher treats both `runtime.prepareSparsePackage` and the
 identity preparation, not as the generic Windows ISO preparation path, so Daily
 Use readiness can continue from the top-level app controls without sending the
 operator back to setup media selection.
+The app-runtime status hero-action contract also lists
+`runtime.prepareSparsePackage` as an in-app launcher action, keeping shell
+routing, one-screen readiness, and harness validation aligned while the sparse
+package flow remains a Daily Use gate rather than a generic release-gate launch
+step.
 The app-runtime action harness includes a live accepted
 `prepare-sparse-package` fixture so package identity success must carry both
 `sparsePackagePreparation.agentWait.diagnostic.health.capabilities.packageIdentity=true`
