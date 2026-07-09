@@ -159,7 +159,7 @@
       {
         "id": "macWindows.autoOpen",
         "isAvailable": true,
-        "title": "Auto Open Windows App Windows"
+        "title": "Show App Windows Automatically"
       },
       {
         "id": "windowsApps.launchSelected",
@@ -310,7 +310,7 @@
         },
         {
           "id": "openWindowsApp",
-          "title": "Open Windows App",
+          "title": "Open Notepad",
           "state": "ready",
           "isRequired": true,
           "isPassing": true,

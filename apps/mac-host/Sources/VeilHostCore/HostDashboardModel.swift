@@ -1119,6 +1119,7 @@ public final class HostDashboardModel {
             macWindowIntegration: macWindowIntegration,
             quietRuntime: quietRuntime,
             launchPlan: launchPlan,
+            pendingLaunch: pendingLaunch,
             proofPlan: proofPlan,
             proofArtifacts: proofArtifacts
         )
@@ -1228,7 +1229,7 @@ public final class HostDashboardModel {
                 ),
                 WindowsAppRuntimeActionStatus(
                     id: "macWindows.autoOpen",
-                    title: "Auto Open Windows App Windows",
+                    title: "Show App Windows Automatically",
                     isAvailable: macWindowIntegration.acceptsGuestWindowEvents
                 ),
                 WindowsAppRuntimeActionStatus(
@@ -1855,6 +1856,7 @@ public final class HostDashboardModel {
         macWindowIntegration: WindowsAppRuntimeMacWindowIntegrationStatus,
         quietRuntime: WindowsAppRuntimeQuietPolicyStatus,
         launchPlan: WindowsAppRuntimeLaunchPlanStatus,
+        pendingLaunch: WindowsAppRuntimePendingLaunchStatus,
         proofPlan: WindowsAppRuntimeProofPlanStatus,
         proofArtifacts: WindowsAppRuntimeProofArtifactStatus
     ) -> WindowsAppRuntimeReleaseGateStatus {
@@ -1912,7 +1914,7 @@ public final class HostDashboardModel {
             ),
             WindowsAppRuntimeReleaseGateStepStatus(
                 id: "openWindowsApp",
-                title: "Open Windows App",
+                title: launchGateTitle(launchPlan: launchPlan, pendingLaunch: pendingLaunch),
                 state: launchPassing ? "ready" : (launchCommand == nil ? "blocked" : "ready"),
                 isPassing: launchPassing,
                 evidence: launchPlan.reason,
@@ -1997,6 +1999,18 @@ public final class HostDashboardModel {
             ?? launchPlan.recommendedRepairCommand
             ?? launchPlan.recommendedWaitCommand
             ?? launchPlan.recommendedLaunchCommand
+    }
+
+    private func launchGateTitle(
+        launchPlan: WindowsAppRuntimeLaunchPlanStatus,
+        pendingLaunch: WindowsAppRuntimePendingLaunchStatus
+    ) -> String {
+        let appName = appName(for: pendingLaunch.appId ?? launchPlan.selectedAppId) ?? "Windows App"
+        if pendingLaunch.isQueued {
+            return prefixedMenuItemTitle(prefix: "Continue", title: appName)
+        }
+
+        return prefixedMenuItemTitle(prefix: "Open", title: appName)
     }
 
     private func closeOrRestoreGateCommand(

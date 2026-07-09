@@ -1007,6 +1007,7 @@ struct HostDashboardModelTests {
             macWindowIntegration: macWindowIntegration,
             quietRuntime: model.quietRuntimeStatus(localRuntime: localRuntime),
             launchPlan: model.launchPlanStatus(localRuntime: localRuntime),
+            pendingLaunch: model.pendingLaunchStatus(),
             proofPlan: model.proofPlanStatus(),
             proofArtifacts: WindowsAppRuntimeProofArtifactStatus(
                 diagnosticsDirectory: "/tmp/Veil/Diagnostics",
@@ -1547,8 +1548,10 @@ struct HostDashboardModelTests {
         #expect(runningQueuedReport.releaseGate.recommendedAction == "openWindowsApp")
         #expect(runningQueuedReport.releaseGate.steps.first { $0.id == "openWindowsApp" }?.isPassing == false)
         #expect(runningQueuedReport.releaseGate.steps.first { $0.id == "openWindowsApp" }?.state == "ready")
+        #expect(runningQueuedReport.releaseGate.steps.first { $0.id == "openWindowsApp" }?.title == "Continue Notepad")
         #expect(runningQueuedReport.releaseGate.steps.first { $0.id == "openWindowsApp" }?.nextActionCommand == "veil-vmctl app-runtime-action --json --action repair-agent --wait-seconds 120")
         #expect(runningQueuedReport.primaryNextAction.id == "openWindowsApp")
+        #expect(runningQueuedReport.primaryNextAction.title == "Continue Notepad")
         #expect(runningQueuedReport.primaryNextAction.actionId == "runtime.repairGuestAgentForApp")
         #expect(runningQueuedReport.primaryNextAction.command == "veil-vmctl app-runtime-action --json --action repair-agent --wait-seconds 120")
 

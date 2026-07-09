@@ -103,6 +103,11 @@ the guest agent temporarily disconnects.
 `menuBarIntegration` mirrors the same app-first state for the macOS menu bar:
 compact status title, symbol, and primary action id/title must stay aligned
 with the supported action list.
+The `openWindowsApp` release-gate step and any derived `primaryNextAction`
+title must name the selected or queued app (`Open Notepad`, `Continue
+Notepad`) instead of falling back to a generic VM-manager phrase. This keeps
+the launcher, menu bar, review card, and automation surface centered on the
+Windows app the user asked to open.
 Queued app launches take precedence over previous-app reconnect actions in the
 menu bar primary action. If the menu title says an app is waiting, the primary
 action must continue that queued app by starting Windows, repairing the app
