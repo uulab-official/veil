@@ -67,12 +67,18 @@ export function validateAppRuntimeReviewVerification(report) {
   for (const [index, file] of report.invalidScreenshotFiles.entries()) {
     validateInvalidScreenshotFile(file, index, report);
   }
+  if (!Array.isArray(report.invalidCaptureSteps)) {
+    throw new TypeError("app runtime review verification invalidCaptureSteps must be an array.");
+  }
+  for (const [index, step] of report.invalidCaptureSteps.entries()) {
+    validateMissingCaptureStep(step, `invalidCaptureSteps.${index}`, report.evidenceDirectory);
+  }
 
   if (!Array.isArray(report.missingCaptureSteps)) {
     throw new TypeError("app runtime review verification missingCaptureSteps must be an array.");
   }
   for (const [index, step] of report.missingCaptureSteps.entries()) {
-    validateMissingCaptureStep(step, index, report.evidenceDirectory);
+    validateMissingCaptureStep(step, `missingCaptureSteps.${index}`, report.evidenceDirectory);
   }
 
   const review = validateAppRuntimeReview(report.review);
@@ -99,6 +105,29 @@ export function validateAppRuntimeReviewVerification(report) {
   }
   if (!report.invalidScreenshotFiles.every((file) => report.missingFiles.includes(file.path))) {
     throw new TypeError("app runtime review verification invalid screenshot files must also be listed as missing files.");
+  }
+  if (report.invalidCaptureSteps.length !== report.invalidScreenshotFiles.length) {
+    throw new TypeError("app runtime review verification invalid capture step count must match invalid screenshots.");
+  }
+  for (const [index, step] of report.invalidCaptureSteps.entries()) {
+    if (step.path !== report.invalidScreenshotFiles[index].path) {
+      throw new TypeError("app runtime review verification invalid capture steps must preserve invalid screenshot order.");
+    }
+  }
+  if (report.invalidCaptureSteps.length > 0) {
+    if (!report.nextInvalidCaptureStep) {
+      throw new TypeError("app runtime review verification must include the next invalid capture step.");
+    }
+    validateMissingCaptureStep(report.nextInvalidCaptureStep, "nextInvalidCaptureStep", report.evidenceDirectory);
+    const firstInvalidStep = report.invalidCaptureSteps[0];
+    if (
+      report.nextInvalidCaptureStep.slotId !== firstInvalidStep.slotId
+      || report.nextInvalidCaptureStep.path !== firstInvalidStep.path
+    ) {
+      throw new TypeError("app runtime review verification next invalid capture step must match the first invalid step.");
+    }
+  } else if (report.nextInvalidCaptureStep !== undefined) {
+    throw new TypeError("verification without invalid screenshots must not include a next invalid capture step.");
   }
   for (const [index, step] of report.missingCaptureSteps.entries()) {
     if (step.path !== report.missingFiles[index]) {
@@ -195,17 +224,17 @@ function validateInvalidScreenshotFile(file, index, report) {
 
 function validateMissingCaptureStep(step, index, evidenceDirectory) {
   if (!step || typeof step !== "object" || Array.isArray(step)) {
-    throw new TypeError(`app runtime review verification missingCaptureSteps.${index} must be an object.`);
+    throw new TypeError(`app runtime review verification ${index} must be an object.`);
   }
-  requireNonNegativeInteger(step.order, `missingCaptureSteps.${index}.order`);
-  requireString(step.slotId, `missingCaptureSteps.${index}.slotId`);
-  requireString(step.title, `missingCaptureSteps.${index}.title`);
-  requireString(step.expectedFileName, `missingCaptureSteps.${index}.expectedFileName`);
-  requireString(step.path, `missingCaptureSteps.${index}.path`);
-  requireString(step.instruction, `missingCaptureSteps.${index}.instruction`);
-  requireString(step.captureCommand, `missingCaptureSteps.${index}.captureCommand`);
+  requireNonNegativeInteger(step.order, `${index}.order`);
+  requireString(step.slotId, `${index}.slotId`);
+  requireString(step.title, `${index}.title`);
+  requireString(step.expectedFileName, `${index}.expectedFileName`);
+  requireString(step.path, `${index}.path`);
+  requireString(step.instruction, `${index}.instruction`);
+  requireString(step.captureCommand, `${index}.captureCommand`);
   if (step.supportingCommand !== undefined) {
-    requireString(step.supportingCommand, `missingCaptureSteps.${index}.supportingCommand`);
+    requireString(step.supportingCommand, `${index}.supportingCommand`);
   }
   if (step.expectedFileName !== `${step.slotId}.png`) {
     throw new TypeError("app runtime review verification missing capture step file names must match slot ids.");

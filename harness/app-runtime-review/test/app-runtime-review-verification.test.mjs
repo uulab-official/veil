@@ -8,6 +8,26 @@ function demoVerification() {
   return JSON.parse(readFileSync(new URL("../fixtures/app-runtime-review-verification.demo.json", import.meta.url), "utf8"));
 }
 
+function markInvalidScreenshot(report, slotIndex = 0, reason = "notValidPNG") {
+  const slot = report.review.screenshotSlots[slotIndex];
+  const invalidFile = {
+    path: `${report.evidenceDirectory}/${slot.expectedFileName}`,
+    reason,
+    byteCount: 12,
+    minimumWidth: report.minimumScreenshotWidth,
+    minimumHeight: report.minimumScreenshotHeight
+  };
+
+  report.invalidScreenshotFiles = [invalidFile];
+  report.review.invalidScreenshotCount = 1;
+  report.review.nextStepTitle = "Replace Review Screenshots";
+  slot.attachmentIssueReason = reason;
+  slot.invalidAttachmentPath = invalidFile.path;
+  slot.invalidAttachmentByteCount = invalidFile.byteCount;
+
+  return invalidFile;
+}
+
 test("validates app runtime review verification fixture", () => {
   const report = demoVerification();
 
@@ -68,6 +88,28 @@ test("rejects invalid screenshot files with drifted minimum dimensions", () => {
   );
 });
 
+test("rejects invalid screenshots without invalid capture steps", () => {
+  const report = demoVerification();
+  markInvalidScreenshot(report);
+
+  assert.throws(
+    () => validateAppRuntimeReviewVerification(report),
+    /invalid capture step count/
+  );
+});
+
+test("rejects invalid capture steps that drift from invalid screenshots", () => {
+  const report = demoVerification();
+  markInvalidScreenshot(report);
+  report.invalidCaptureSteps = [report.missingCaptureSteps[1]];
+  report.nextInvalidCaptureStep = report.invalidCaptureSteps[0];
+
+  assert.throws(
+    () => validateAppRuntimeReviewVerification(report),
+    /invalid capture steps/
+  );
+});
+
 test("rejects verification missing capture steps that drift from missing files", () => {
   const report = demoVerification();
   report.missingFiles[0] = report.missingFiles[1];
@@ -124,6 +166,8 @@ test("accepts complete verification reports", () => {
   report.isComplete = true;
   report.missingFiles = [];
   report.invalidScreenshotFiles = [];
+  report.invalidCaptureSteps = [];
+  delete report.nextInvalidCaptureStep;
   report.missingCaptureSteps = [];
   delete report.nextMissingCaptureStep;
   report.review.attachedScreenshotCount = report.review.requiredScreenshotCount;

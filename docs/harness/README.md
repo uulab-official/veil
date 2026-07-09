@@ -264,8 +264,9 @@ The verification report repeats the same open/review/verify commands and
 minimum screenshot contract, and fails validation if they drift from the
 manifest. Existing but unusable screenshot files are reported separately as
 `invalidScreenshotFiles` with a reason such as `notValidPNG` or
-`belowMinimumDimensions`, so a contributor can replace the right file instead of
-guessing which capture step failed.
+`belowMinimumDimensions`. The report also includes `invalidCaptureSteps` and
+`nextInvalidCaptureStep`, so a contributor can replace the right file with the
+exact capture command instead of guessing which capture step failed.
 
 ```bash
 cd apps/mac-host

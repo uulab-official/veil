@@ -836,6 +836,8 @@ struct AppRuntimeReviewEvidenceVerification: Codable, Equatable {
     var isComplete: Bool
     var missingFiles: [String]
     var invalidScreenshotFiles: [AppRuntimeReviewInvalidScreenshotFile]
+    var invalidCaptureSteps: [AppRuntimeReviewMissingCaptureStep]
+    var nextInvalidCaptureStep: AppRuntimeReviewMissingCaptureStep?
     var missingCaptureSteps: [AppRuntimeReviewMissingCaptureStep]
     var nextMissingCaptureStep: AppRuntimeReviewMissingCaptureStep?
     var review: AppRuntimeReviewCard
@@ -1313,6 +1315,11 @@ struct VeilVMControl {
             captureSteps: captureSteps,
             missingFiles: missingFiles
         )
+        let invalidCaptureSteps = appRuntimeReviewMissingCaptureSteps(
+            expectedFiles: expectedFiles,
+            captureSteps: captureSteps,
+            missingFiles: invalidScreenshotFiles.map(\.path)
+        )
         let verification = AppRuntimeReviewEvidenceVerification(
             generatedAt: report.generatedAt,
             evidenceDirectory: evidenceDirectoryURL.path,
@@ -1330,6 +1337,8 @@ struct VeilVMControl {
                 && card.areRequiredScreenshotsAttached,
             missingFiles: missingFiles,
             invalidScreenshotFiles: invalidScreenshotFiles,
+            invalidCaptureSteps: invalidCaptureSteps,
+            nextInvalidCaptureStep: invalidCaptureSteps.first,
             missingCaptureSteps: missingCaptureSteps,
             nextMissingCaptureStep: missingCaptureSteps.first,
             review: card,
@@ -1342,6 +1351,7 @@ struct VeilVMControl {
                 manifestExists: manifest != nil,
                 readmeExists: FileManager.default.fileExists(atPath: readmeURL.path),
                 invalidScreenshotFiles: invalidScreenshotFiles,
+                invalidCaptureSteps: invalidCaptureSteps,
                 missingCaptureSteps: missingCaptureSteps,
                 reviewCommand: reviewCommand,
                 verifyCommand: verifyCommand,
@@ -1367,6 +1377,11 @@ struct VeilVMControl {
             for file in verification.missingFiles {
                 print("  - \(file)")
             }
+        }
+        if let nextInvalidCaptureStep = verification.nextInvalidCaptureStep {
+            print("Next replacement:")
+            print("  \(nextInvalidCaptureStep.order). \(nextInvalidCaptureStep.title) -> \(nextInvalidCaptureStep.expectedFileName)")
+            print("     Capture: \(nextInvalidCaptureStep.captureCommand)")
         }
         if let nextMissingCaptureStep = verification.nextMissingCaptureStep {
             print("Next capture:")
@@ -1523,6 +1538,7 @@ struct VeilVMControl {
         manifestExists: Bool,
         readmeExists: Bool,
         invalidScreenshotFiles: [AppRuntimeReviewInvalidScreenshotFile],
+        invalidCaptureSteps: [AppRuntimeReviewMissingCaptureStep],
         missingCaptureSteps: [AppRuntimeReviewMissingCaptureStep],
         reviewCommand: String,
         verifyCommand: String,
@@ -1535,6 +1551,9 @@ struct VeilVMControl {
         actions.append("Open the evidence folder with `\(openEvidenceDirectoryCommand)`.")
         if let invalidScreenshotFile = invalidScreenshotFiles.first {
             actions.append("Replace invalid screenshot `\(URL(fileURLWithPath: invalidScreenshotFile.path).lastPathComponent)`: \(invalidScreenshotFile.reason).")
+        }
+        if let nextInvalidCaptureStep = invalidCaptureSteps.first {
+            actions.append("Recapture replacement with `\(nextInvalidCaptureStep.captureCommand)`.")
         }
         if let nextMissingCaptureStep = missingCaptureSteps.first {
             actions.append("Capture `\(nextMissingCaptureStep.expectedFileName)` for \(nextMissingCaptureStep.title): \(nextMissingCaptureStep.instruction)")
