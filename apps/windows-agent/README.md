@@ -77,6 +77,7 @@ Veil Shared\Veil Guest Agent\Prepare Sparse Package.cmd
 That launcher writes signing artifacts to `%LOCALAPPDATA%\Veil\Agent\package`, then reruns the installer with `-SparsePackagePath` and `-SparsePackageCertificatePath` pointed at those local files.
 It also starts the agent with `-RequirePackageIdentity`, so the command fails visibly if `agent.health.response.capabilities.packageIdentity` is still `false`.
 The package builder also writes `%LOCALAPPDATA%\Veil\Agent\package\sparse-package-status.json` with the latest stage, package path, certificate path, and failure message. It records the PFX path for operator diagnosis, but never records the certificate password or copies private key material into diagnostics.
+When that status file exists, `agent.health.response.packageIdentityStatus` includes a sanitized summary of the same stage, success state, message, and public artifact paths so the macOS host can show package-identity progress without opening a Windows console.
 
 The sparse package source manifest references standard Windows package logo paths. `Build-VeilAgentSparsePackage.ps1` generates the required PNG assets in its temporary staging directory before running `MakeAppx`, so no generated logo files or signed package artifacts are committed to the repository.
 

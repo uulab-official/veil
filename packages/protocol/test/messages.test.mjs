@@ -106,6 +106,19 @@ test("validates agent health capability readiness", async () => {
 
   assert.equal(health.capabilities.windowCapture, true);
   assert.equal(health.capabilities.packageIdentity, false);
+  assert.equal(health.packageIdentityStatus.stage, "packageSigned");
+  assert.equal(health.packageIdentityStatus.succeeded, false);
+  assert.match(health.packageIdentityStatus.statusPath, /sparse-package-status\.json/);
+});
+
+test("rejects malformed package identity status", async () => {
+  const health = await readFixture("agent.health.response.json");
+  health.packageIdentityStatus.succeeded = "false";
+
+  assert.throws(
+    () => validateAgentHealthResponse(health),
+    /packageIdentityStatus\.succeeded/
+  );
 });
 
 test("rejects agent health without package identity readiness", async () => {

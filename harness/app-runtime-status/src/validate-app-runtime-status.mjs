@@ -93,7 +93,7 @@ function validateConnection(connection) {
   }
 
   if (!connection.hasLiveAgentConnection) {
-    for (const field of ["agentVersion", "os", "capabilities"]) {
+    for (const field of ["agentVersion", "os", "capabilities", "packageIdentityStatus"]) {
       if (connection[field] !== undefined) {
         throw new TypeError(`connection.${field} is only allowed when a live agent is connected.`);
       }
@@ -114,6 +114,9 @@ function validateConnection(connection) {
 
   if (connection.capabilities !== undefined) {
     validateCapabilities(connection.capabilities);
+  }
+  if (connection.packageIdentityStatus !== undefined) {
+    validatePackageIdentityStatus(connection.packageIdentityStatus, "connection.packageIdentityStatus");
   }
 }
 
@@ -784,6 +787,9 @@ function validateDailyUseReadiness(dailyUseReadiness, report) {
   if (dailyUseReadiness.recommendedCommand !== undefined) {
     requireString(dailyUseReadiness.recommendedCommand, "dailyUseReadiness.recommendedCommand");
   }
+  if (dailyUseReadiness.packageIdentityStatus !== undefined) {
+    validatePackageIdentityStatus(dailyUseReadiness.packageIdentityStatus, "dailyUseReadiness.packageIdentityStatus");
+  }
 
   if (dailyUseReadiness.isEnabled !== true) {
     throw new TypeError("dailyUseReadiness must stay enabled for v1.5 readiness tracking.");
@@ -811,6 +817,10 @@ function validateDailyUseReadiness(dailyUseReadiness, report) {
     throw new TypeError("dailyUseReadiness.notificationBridgePreflightPassed must require package identity.");
   }
 
+  if (JSON.stringify(dailyUseReadiness.packageIdentityStatus) !== JSON.stringify(report.connection.packageIdentityStatus)) {
+    throw new TypeError("dailyUseReadiness.packageIdentityStatus must match connection.packageIdentityStatus.");
+  }
+
   const expectedAction = report.connection.hasLiveAgentConnection
     ? expectedPackageIdentityReady
       ? expectedBorderlessCapturePreflight
@@ -829,6 +839,20 @@ function validateDailyUseReadiness(dailyUseReadiness, report) {
     : "veil-vmctl guest-agent-wait --json --wait-seconds 30";
   if (dailyUseReadiness.recommendedCommand !== expectedCommand) {
     throw new TypeError("dailyUseReadiness.recommendedCommand must match the Daily Use readiness gate.");
+  }
+}
+
+function validatePackageIdentityStatus(status, path) {
+  if (!status || typeof status !== "object" || Array.isArray(status)) {
+    throw new TypeError(`${path} must be an object when present.`);
+  }
+  requireString(status.statusPath, `${path}.statusPath`);
+  requireString(status.stage, `${path}.stage`);
+  requireBoolean(status.succeeded, `${path}.succeeded`);
+  for (const field of ["message", "updatedAt", "packagePath", "certificatePath"]) {
+    if (status[field] !== undefined) {
+      requireString(status[field], `${path}.${field}`);
+    }
   }
 }
 

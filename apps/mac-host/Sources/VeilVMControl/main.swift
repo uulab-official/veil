@@ -1124,6 +1124,11 @@ struct VeilVMControl {
         print("Daily Use borderless capture preflight: \(report.dailyUseReadiness.borderlessCapturePreflightPassed ? "ready" : "blocked")")
         print("Daily Use notifications preflight: \(report.dailyUseReadiness.notificationBridgePreflightPassed ? "ready" : "blocked")")
         print("Daily Use printer mode: \(report.dailyUseReadiness.printerBridgeMode)")
+        if let packageIdentityStatus = report.dailyUseReadiness.packageIdentityStatus {
+            print("Daily Use package identity stage: \(packageIdentityStatus.stage)")
+            print("Daily Use package identity status: \(packageIdentityStatus.succeeded ? "succeeded" : "not complete")")
+            print("Daily Use package identity evidence: \(packageIdentityStatus.statusPath)")
+        }
         print("Daily Use recommendation: \(report.dailyUseReadiness.recommendedAction)")
         if let dailyUseCommand = report.dailyUseReadiness.recommendedCommand {
             print("Daily Use command: \(dailyUseCommand)")

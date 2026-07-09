@@ -708,7 +708,7 @@ struct HostDashboardModelTests {
     @Test("builds app runtime status report for harness automation")
     @MainActor
     func buildsAppRuntimeStatusReportForHarnessAutomation() async throws {
-        let service = FakeDashboardService(health: .clipboardReady)
+        let service = FakeDashboardService(health: .clipboardReadyWithSparsePackageStatus)
         let model = HostDashboardModel(service: service)
         let generatedAt = Date(timeIntervalSince1970: 1_782_800_000)
 
@@ -725,7 +725,10 @@ struct HostDashboardModelTests {
         #expect(report.connection.capabilities?.input == true)
         #expect(report.connection.capabilities?.clipboardText == true)
         #expect(report.connection.capabilities?.packageIdentity == false)
+        #expect(report.connection.packageIdentityStatus?.stage == "packageSigned")
         #expect(report.dailyUseReadiness.packageIdentityReady == false)
+        #expect(report.dailyUseReadiness.packageIdentityStatus?.statusPath.contains("sparse-package-status.json") == true)
+        #expect(report.dailyUseReadiness.reason.contains("stage packageSigned"))
         #expect(report.dailyUseReadiness.borderlessCapturePreflightPassed == false)
         #expect(report.dailyUseReadiness.notificationBridgePreflightPassed == false)
         #expect(report.dailyUseReadiness.recommendedAction == "prepare-sparse-package")
@@ -2130,6 +2133,20 @@ private extension AgentHealthResponse {
                 clipboardText: true
             )
         )
+    }
+
+    static var clipboardReadyWithSparsePackageStatus: AgentHealthResponse {
+        var response = clipboardReady
+        response.packageIdentityStatus = PackageIdentityStatus(
+            statusPath: #"C:\Users\veil\AppData\Local\Veil\Agent\package\sparse-package-status.json"#,
+            stage: "packageSigned",
+            succeeded: false,
+            message: "SignTool signed the sparse identity package.",
+            updatedAt: "2026-07-10T05:40:00.0000000+09:00",
+            packagePath: #"C:\Users\veil\AppData\Local\Veil\Agent\package\VeilAgent.Identity.msix"#,
+            certificatePath: #"C:\Users\veil\AppData\Local\Veil\Agent\package\VeilAgent.Identity.cer"#
+        )
+        return response
     }
 }
 

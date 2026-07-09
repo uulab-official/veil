@@ -118,6 +118,7 @@ public struct WindowsAppRuntimeConnectionStatus: Codable, Equatable, Sendable {
     public var agentVersion: String?
     public var os: String?
     public var capabilities: AgentCapabilities?
+    public var packageIdentityStatus: PackageIdentityStatus?
     public var connectionDetail: String?
 
     public init(
@@ -126,6 +127,7 @@ public struct WindowsAppRuntimeConnectionStatus: Codable, Equatable, Sendable {
         agentVersion: String?,
         os: String?,
         capabilities: AgentCapabilities? = nil,
+        packageIdentityStatus: PackageIdentityStatus? = nil,
         connectionDetail: String?
     ) {
         self.mode = mode
@@ -133,6 +135,7 @@ public struct WindowsAppRuntimeConnectionStatus: Codable, Equatable, Sendable {
         self.agentVersion = agentVersion
         self.os = os
         self.capabilities = capabilities
+        self.packageIdentityStatus = packageIdentityStatus
         self.connectionDetail = connectionDetail
     }
 }
@@ -644,6 +647,7 @@ public struct WindowsAppRuntimeDailyUseReadinessStatus: Codable, Equatable, Send
     public var borderlessCapturePreflightPassed: Bool
     public var notificationBridgePreflightPassed: Bool
     public var printerBridgeMode: String
+    public var packageIdentityStatus: PackageIdentityStatus?
     public var recommendedAction: String
     public var recommendedCommand: String?
     public var reason: String
@@ -654,6 +658,7 @@ public struct WindowsAppRuntimeDailyUseReadinessStatus: Codable, Equatable, Send
         borderlessCapturePreflightPassed: Bool,
         notificationBridgePreflightPassed: Bool,
         printerBridgeMode: String,
+        packageIdentityStatus: PackageIdentityStatus? = nil,
         recommendedAction: String,
         recommendedCommand: String? = nil,
         reason: String
@@ -663,6 +668,7 @@ public struct WindowsAppRuntimeDailyUseReadinessStatus: Codable, Equatable, Send
         self.borderlessCapturePreflightPassed = borderlessCapturePreflightPassed
         self.notificationBridgePreflightPassed = notificationBridgePreflightPassed
         self.printerBridgeMode = printerBridgeMode
+        self.packageIdentityStatus = packageIdentityStatus
         self.recommendedAction = recommendedAction
         self.recommendedCommand = recommendedCommand
         self.reason = reason
@@ -1203,6 +1209,7 @@ public final class HostDashboardModel {
                 agentVersion: hasLiveAgentConnection ? health?.agentVersion : nil,
                 os: hasLiveAgentConnection ? health?.os : nil,
                 capabilities: hasLiveAgentConnection ? health?.capabilities : nil,
+                packageIdentityStatus: hasLiveAgentConnection ? health?.packageIdentityStatus : nil,
                 connectionDetail: connectionDetail
             ),
             guestAgentDiagnostics: guestAgentDiagnosticsStatus(endpoint: agentEndpoint),
@@ -1907,6 +1914,7 @@ public final class HostDashboardModel {
                 borderlessCapturePreflightPassed: false,
                 notificationBridgePreflightPassed: false,
                 printerBridgeMode: "manual-ipp-experiment",
+                packageIdentityStatus: nil,
                 recommendedAction: "connect-agent",
                 recommendedCommand: "veil-vmctl guest-agent-wait --json --wait-seconds 30",
                 reason: "Connect the Windows app agent before checking Daily Use integrations."
@@ -1923,9 +1931,10 @@ public final class HostDashboardModel {
                 borderlessCapturePreflightPassed: false,
                 notificationBridgePreflightPassed: false,
                 printerBridgeMode: "manual-ipp-experiment",
+                packageIdentityStatus: health?.packageIdentityStatus,
                 recommendedAction: "prepare-sparse-package",
                 recommendedCommand: #"Inside Windows, run "Veil Guest Agent\Prepare Sparse Package.cmd", then rerun `veil-vmctl guest-agent-wait --json --wait-seconds 30` on macOS."#,
-                reason: "A signed sparse package is required before borderless app capture or Windows notifications can be enabled."
+                reason: packageIdentityReason(status: health?.packageIdentityStatus)
             )
         }
 
@@ -1934,12 +1943,28 @@ public final class HostDashboardModel {
             borderlessCapturePreflightPassed: borderlessCapturePreflightPassed,
             notificationBridgePreflightPassed: notificationBridgePreflightPassed,
             printerBridgeMode: "manual-ipp-experiment",
+            packageIdentityStatus: health?.packageIdentityStatus,
             recommendedAction: borderlessCapturePreflightPassed ? "verify-daily-use-integrations" : "verify-window-capture",
             recommendedCommand: "veil-vmctl app-runtime-status --json",
             reason: borderlessCapturePreflightPassed
                 ? "Package identity is available; verify borderless capture, notifications, and printer experiments against a live guest."
                 : "Package identity is available, but window capture must be verified before borderless app capture can be enabled."
         )
+    }
+
+    private func packageIdentityReason(status: PackageIdentityStatus?) -> String {
+        guard let status else {
+            return "A signed sparse package is required before borderless app capture or Windows notifications can be enabled."
+        }
+
+        let outcome = status.succeeded ? "last sparse package preparation succeeded" : "last sparse package preparation is not complete"
+        let message: String
+        if let statusMessage = status.message, !statusMessage.isEmpty {
+            message = " (\(statusMessage))"
+        } else {
+            message = ""
+        }
+        return "A signed sparse package is required before borderless app capture or Windows notifications can be enabled; \(outcome) at stage \(status.stage)\(message)."
     }
 
     public func releaseGateStatus(

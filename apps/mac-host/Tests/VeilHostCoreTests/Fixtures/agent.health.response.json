@@ -16,5 +16,14 @@
     "input": true,
     "clipboardText": true,
     "packageIdentity": false
+  },
+  "packageIdentityStatus": {
+    "statusPath": "C:\\Users\\veil\\AppData\\Local\\Veil\\Agent\\package\\sparse-package-status.json",
+    "stage": "packageSigned",
+    "succeeded": false,
+    "message": "SignTool signed the sparse identity package.",
+    "updatedAt": "2026-07-10T05:40:00.0000000+09:00",
+    "packagePath": "C:\\Users\\veil\\AppData\\Local\\Veil\\Agent\\package\\VeilAgent.Identity.msix",
+    "certificatePath": "C:\\Users\\veil\\AppData\\Local\\Veil\\Agent\\package\\VeilAgent.Identity.cer"
   }
 }

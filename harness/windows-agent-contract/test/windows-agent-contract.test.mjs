@@ -198,14 +198,23 @@ test("windows agent accepts host clipboard text updates", async () => {
 test("windows agent reports package identity from the Windows app model API", async () => {
   const session = await readFile(resolve(agentRoot, "src/VeilAgent/AgentSession.cs"), "utf8");
   const packageIdentityProbe = await readFile(resolve(agentRoot, "src/VeilAgent/PackageIdentityProbe.cs"), "utf8");
+  const sparsePackageStatusProbe = await readFile(resolve(agentRoot, "src/VeilAgent/SparsePackageStatusProbe.cs"), "utf8");
 
   assert.match(session, /IPackageIdentityProbe/);
+  assert.match(session, /ISparsePackageStatusProbe/);
   assert.match(session, /new WindowsPackageIdentityProbe\(\)/);
+  assert.match(session, /new SparsePackageStatusProbe\(\)/);
   assert.match(session, /\["packageIdentity"\]\s*=\s*packageIdentityProbe\.HasPackageIdentity/);
+  assert.match(session, /\["packageIdentityStatus"\]\s*=\s*sparsePackageStatus/);
   assert.doesNotMatch(session, /\["packageIdentity"\]\s*=\s*false/);
   assert.match(packageIdentityProbe, /GetCurrentPackageFullName/);
   assert.match(packageIdentityProbe, /AppModelErrorNoPackage\s*=\s*15700/);
   assert.match(packageIdentityProbe, /OperatingSystem\.IsWindows\(\)/);
+  assert.match(sparsePackageStatusProbe, /sparse-package-status\.json/);
+  assert.match(sparsePackageStatusProbe, /\["stage"\]/);
+  assert.match(sparsePackageStatusProbe, /\["succeeded"\]/);
+  assert.match(sparsePackageStatusProbe, /\["statusPath"\]/);
+  assert.doesNotMatch(sparsePackageStatusProbe, /CertificatePassword/);
 });
 
 test("windows agent broadcasts guest clipboard text changes without host echo loops", async () => {

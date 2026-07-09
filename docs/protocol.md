@@ -63,6 +63,15 @@ Response:
     "input": true,
     "clipboardText": true,
     "packageIdentity": false
+  },
+  "packageIdentityStatus": {
+    "statusPath": "C:\\Users\\veil\\AppData\\Local\\Veil\\Agent\\package\\sparse-package-status.json",
+    "stage": "packageSigned",
+    "succeeded": false,
+    "message": "SignTool signed the sparse identity package.",
+    "updatedAt": "2026-07-10T05:40:00.0000000+09:00",
+    "packagePath": "C:\\Users\\veil\\AppData\\Local\\Veil\\Agent\\package\\VeilAgent.Identity.msix",
+    "certificatePath": "C:\\Users\\veil\\AppData\\Local\\Veil\\Agent\\package\\VeilAgent.Identity.cer"
   }
 }
 ```
@@ -73,6 +82,13 @@ package identity API at runtime, so default unpackaged installs report `false`.
 Veil uses this readiness signal before enabling package-gated Windows APIs such
 as borderless Windows Graphics Capture and Windows notification listener
 integration.
+
+`packageIdentityStatus` is optional. When `%LOCALAPPDATA%\Veil\Agent\package\sparse-package-status.json`
+exists in the guest, the agent includes a sanitized summary so the host can show
+whether sparse package preparation has not run, failed, or reached a later
+stage. The object must not include certificate passwords or PFX private-key
+contents; it only carries paths, the latest stage, success state, and a human
+failure/progress message.
 
 ## App List
 

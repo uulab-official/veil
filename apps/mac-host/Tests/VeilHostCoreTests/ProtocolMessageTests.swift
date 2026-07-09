@@ -16,6 +16,9 @@ struct ProtocolMessageTests {
         #expect(response.capabilities.appLaunch)
         #expect(response.capabilities.windowCapture == false)
         #expect(response.capabilities.packageIdentity == false)
+        #expect(response.packageIdentityStatus?.stage == "packageSigned")
+        #expect(response.packageIdentityStatus?.succeeded == false)
+        #expect(response.packageIdentityStatus?.statusPath.contains("sparse-package-status.json") == true)
     }
 
     @Test("decodes app list response")

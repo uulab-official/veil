@@ -93,7 +93,29 @@ export function validateAgentHealthResponse(response) {
     }
   }
 
+  if (response.packageIdentityStatus !== undefined) {
+    validatePackageIdentityStatus(response.packageIdentityStatus);
+  }
+
   return response;
+}
+
+function validatePackageIdentityStatus(status) {
+  if (!status || typeof status !== "object" || Array.isArray(status)) {
+    throw new TypeError("Agent health response field 'packageIdentityStatus' must be an object when present.");
+  }
+
+  requireNonEmptyString(status.statusPath, "packageIdentityStatus.statusPath", "Agent health response");
+  requireNonEmptyString(status.stage, "packageIdentityStatus.stage", "Agent health response");
+  if (typeof status.succeeded !== "boolean") {
+    throw new TypeError("Agent health response field 'packageIdentityStatus.succeeded' must be a boolean.");
+  }
+
+  for (const field of ["message", "updatedAt", "packagePath", "certificatePath"]) {
+    if (status[field] !== undefined) {
+      requireNonEmptyString(status[field], `packageIdentityStatus.${field}`, "Agent health response");
+    }
+  }
 }
 
 export function validateAppLaunchAcceptance(launch, window) {

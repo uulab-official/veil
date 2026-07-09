@@ -49,6 +49,7 @@ public struct AgentHealthResponse: Codable, Equatable, Sendable {
     public var os: String
     public var session: AgentSession
     public var capabilities: AgentCapabilities
+    public var packageIdentityStatus: PackageIdentityStatus? = nil
 }
 
 public struct AgentSession: Codable, Equatable, Sendable {
@@ -66,6 +67,16 @@ public struct AgentCapabilities: Codable, Equatable, Sendable {
     /// True when the Windows agent is running with package identity. Required before Veil can
     /// request package-gated Windows APIs such as borderless capture and notification listening.
     public var packageIdentity: Bool = false
+}
+
+public struct PackageIdentityStatus: Codable, Equatable, Sendable {
+    public var statusPath: String
+    public var stage: String
+    public var succeeded: Bool
+    public var message: String?
+    public var updatedAt: String?
+    public var packagePath: String?
+    public var certificatePath: String?
 }
 
 public struct AppListRequest: Codable, Equatable, Sendable {

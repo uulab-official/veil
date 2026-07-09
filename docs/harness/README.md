@@ -200,6 +200,11 @@ single next readiness action (`connect-agent`, `prepare-sparse-package`,
 `verify-window-capture`, or `verify-daily-use-integrations`) so status cards
 cannot imply Parallels-style daily-use polish before the signed sparse package
 gate is actually satisfied.
+When the guest has written sparse package evidence,
+`dailyUseReadiness.packageIdentityStatus` carries the latest sanitized
+`sparse-package-status.json` stage from `agent.health.response`, allowing
+automation to distinguish "not started" from "failed while packing/signing" and
+from "package built but process still lacks package identity."
 
 `releaseGate` turns the one-minute Parallels-style launch checklist into a
 machine-readable contract. It records the five required release-card steps:

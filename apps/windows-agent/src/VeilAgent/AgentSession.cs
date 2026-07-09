@@ -43,6 +43,7 @@ public sealed class AgentSession
     private readonly IWindowsDesktop desktop;
     private readonly IWindowFrameCapture capture;
     private readonly IPackageIdentityProbe packageIdentityProbe;
+    private readonly ISparsePackageStatusProbe sparsePackageStatusProbe;
     private readonly Dictionary<string, LaunchedWindow> trackedWindowsById = new();
     private readonly Dictionary<string, WindowsAppDescriptor> appByWindowId = new();
     private readonly object trackedWindowsGate = new();
@@ -50,12 +51,14 @@ public sealed class AgentSession
     public AgentSession(
         IWindowsDesktop desktop,
         IWindowFrameCapture capture,
-        IPackageIdentityProbe? packageIdentityProbe = null
+        IPackageIdentityProbe? packageIdentityProbe = null,
+        ISparsePackageStatusProbe? sparsePackageStatusProbe = null
     )
     {
         this.desktop = desktop;
         this.capture = capture;
         this.packageIdentityProbe = packageIdentityProbe ?? new WindowsPackageIdentityProbe();
+        this.sparsePackageStatusProbe = sparsePackageStatusProbe ?? new SparsePackageStatusProbe();
     }
 
     public async Task<AgentReplies> HandleAsync(JsonObject request, CancellationToken cancellationToken = default)
@@ -522,29 +525,40 @@ public sealed class AgentSession
         }
     }
 
-    private JsonObject HealthResponse(string? requestId) => new()
+    private JsonObject HealthResponse(string? requestId)
     {
-        ["type"] = MessageTypes.AgentHealthResponse,
-        ["requestId"] = requestId,
-        ["protocolVersion"] = 1,
-        ["agentVersion"] = "0.1.0",
-        ["os"] = "windows-arm64",
-        ["session"] = new JsonObject
+        var response = new JsonObject
         {
-            ["interactive"] = Environment.UserInteractive,
-            ["user"] = Environment.UserName
-        },
-        ["capabilities"] = new JsonObject
+            ["type"] = MessageTypes.AgentHealthResponse,
+            ["requestId"] = requestId,
+            ["protocolVersion"] = 1,
+            ["agentVersion"] = "0.1.0",
+            ["os"] = "windows-arm64",
+            ["session"] = new JsonObject
+            {
+                ["interactive"] = Environment.UserInteractive,
+                ["user"] = Environment.UserName
+            },
+            ["capabilities"] = new JsonObject
+            {
+                ["appList"] = true,
+                ["appLaunch"] = true,
+                ["windowTracking"] = true,
+                ["windowCapture"] = true,
+                ["input"] = true,
+                ["clipboardText"] = true,
+                ["packageIdentity"] = packageIdentityProbe.HasPackageIdentity
+            }
+        };
+
+        var sparsePackageStatus = sparsePackageStatusProbe.ReadStatus();
+        if (sparsePackageStatus is not null)
         {
-            ["appList"] = true,
-            ["appLaunch"] = true,
-            ["windowTracking"] = true,
-            ["windowCapture"] = true,
-            ["input"] = true,
-            ["clipboardText"] = true,
-            ["packageIdentity"] = packageIdentityProbe.HasPackageIdentity
+            response["packageIdentityStatus"] = sparsePackageStatus;
         }
-    };
+
+        return response;
+    }
 
     private static JsonObject AppListResponse(string? requestId) => new()
     {
