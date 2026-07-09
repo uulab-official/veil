@@ -13,6 +13,7 @@ Goal: keep the user-facing workflow one-screen-first (launcher + one action path
 - [x] Include staged `dist/Veil.app` bundle readiness and the `./script/build_and_run.sh --verify` command in `app-runtime-review` evidence, with harness coverage so review cards do not ignore host-app launch QA.
 - [x] Gate `app-runtime-review.isReadyForReview` on both the Windows app release gate and staged host app bundle readiness, so a missing/stale macOS app bundle cannot be promoted as review-ready.
 - [x] Preserve the latest successful one-window launcher verification report as `dist/veil-launch-report-latest.plist` and require it in `app-runtime-review`, so review-ready evidence proves the branded app actually opened as one correctly sized custom-titlebar window.
+- [x] Surface `launchOnboarding` at the top level of `app-runtime-review` and validate it against embedded status, so release evidence uses the same one-shot launcher state as the app UI.
 - [x] Keep primary launcher action as "Open Windows App" once runtime + agent conditions allow it.
 - [x] Remove the heavy multi-section launcher path from the default route by consolidating startup, install, and run signals into a focused runtime panel.
 - [x] Keep recovery actions available through menu/dock surfaces so the default surface stays simple.

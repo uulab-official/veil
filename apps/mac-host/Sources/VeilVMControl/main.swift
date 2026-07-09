@@ -677,6 +677,7 @@ struct AppRuntimeReviewCard: Codable, Equatable {
     var appFlowSummary: String
     var nextStepTitle: String
     var nextActionCommand: String?
+    var launchOnboarding: WindowsAppRuntimeLaunchOnboardingStatus
     var detail: String
     var steps: [AppRuntimeReviewStep]
     var screenshotSlots: [AppRuntimeReviewScreenshotSlot]
@@ -1141,6 +1142,9 @@ struct VeilVMControl {
         if card.invalidScreenshotCount > 0 {
             print("Invalid screenshots: \(card.invalidScreenshotCount)")
         }
+        print("Launch onboarding: \(card.launchOnboarding.state)")
+        print("Launch step: \(card.launchOnboarding.currentStepTitle)")
+        print("Continue in app: \(card.launchOnboarding.canContinueInApp ? "yes" : "no")")
         print("Next step: \(card.nextStepTitle)")
         print("Detail: \(card.detail)")
         if let nextActionCommand = card.nextActionCommand {
@@ -1830,6 +1834,7 @@ struct VeilVMControl {
                 areRequiredScreenshotsAttached: areRequiredScreenshotsAttached,
                 evidenceDirectoryPath: evidenceDirectoryURL?.path
             ),
+            launchOnboarding: report.launchOnboarding,
             detail: appRuntimeReviewDetail(
                 releaseGate: report.releaseGate,
                 hostAppBundle: hostAppBundle,

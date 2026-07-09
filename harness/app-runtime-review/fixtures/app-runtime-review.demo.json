@@ -27,7 +27,7 @@
         "meetsLauncherContract" : true,
         "minHeight" : 760,
         "minWidth" : 1180,
-        "modifiedAt" : "2026-07-09T17:12:38Z",
+        "modifiedAt" : "2026-07-09T17:37:37Z",
         "reportPath" : "\/Users\/bonjin\/Documents\/workspace\/uulab\/veil\/dist\/veil-launch-report-latest.plist",
         "titlebarAppearsTransparent" : true,
         "visibleMainWindowCount" : 1
@@ -38,10 +38,25 @@
     "latestAppCheckModifiedAt" : "2026-07-04T15:28:35Z",
     "latestAppCheckPath" : "\/Users\/bonjin\/Library\/Application Support\/Veil\/Diagnostics\/MVP Proof\/notepad-mvp-window-detect.json"
   },
-  "generatedAt" : "2026-07-09T17:16:53Z",
+  "generatedAt" : "2026-07-09T17:41:44Z",
   "invalidScreenshotCount" : 0,
   "isReadyForReview" : false,
   "kind" : "windowsAppRuntimeReviewCard",
+  "launchOnboarding" : {
+    "canContinueInApp" : false,
+    "currentStepId" : "ready-for-release-card",
+    "currentStepTitle" : "Review App Flow",
+    "expectedVisibleSurfaceCount" : 1,
+    "heroRunsPrimaryAction" : false,
+    "isEnabled" : true,
+    "keepsRecoveryInMenuOrDock" : true,
+    "keepsVMDisplayManual" : true,
+    "pendingLiveProof" : false,
+    "primaryCommand" : "veil-vmctl app-runtime-review --json",
+    "reason" : "The app-first launch flow is ready for review evidence.",
+    "state" : "ready-for-review",
+    "usesSinglePrimarySurface" : true
+  },
   "minimumScreenshotHeight" : 360,
   "minimumScreenshotWidth" : 640,
   "nextStepTitle" : "Attach Review Screenshots",
@@ -212,7 +227,7 @@
       "os" : "windows-arm64"
     },
     "dockIntegration" : {
-      "badgeLabel" : "...",
+      "badgeLabel" : "R",
       "canBringWindowsAppsForward" : false,
       "canLaunchSelectedApp" : true,
       "canOpenMainWindow" : true,
@@ -220,10 +235,10 @@
       "canRestorePreviousApps" : false,
       "isEnabled" : true,
       "openWindowCount" : 0,
-      "pendingLaunchCount" : 1,
+      "pendingLaunchCount" : 0,
       "restorableAppCount" : 1
     },
-    "generatedAt" : "2026-07-09T17:16:53Z",
+    "generatedAt" : "2026-07-09T17:41:44Z",
     "guestAgentDiagnostics" : {
       "diagnosticCommand" : "veil-host-probe --diagnose-agent",
       "endpoint" : "ws:\/\/127.0.0.1:18444",
@@ -233,13 +248,27 @@
       "waitCommand" : "veil-vmctl guest-agent-wait --json --wait-seconds 30"
     },
     "kind" : "windowsAppRuntimeStatus",
+    "launchOnboarding" : {
+      "canContinueInApp" : false,
+      "currentStepId" : "ready-for-release-card",
+      "currentStepTitle" : "Review App Flow",
+      "expectedVisibleSurfaceCount" : 1,
+      "heroRunsPrimaryAction" : false,
+      "isEnabled" : true,
+      "keepsRecoveryInMenuOrDock" : true,
+      "keepsVMDisplayManual" : true,
+      "pendingLiveProof" : false,
+      "primaryCommand" : "veil-vmctl app-runtime-review --json",
+      "reason" : "The app-first launch flow is ready for review evidence.",
+      "state" : "ready-for-review",
+      "usesSinglePrimarySurface" : true
+    },
     "launchPlan" : {
       "canLaunchSelectedAppNow" : false,
       "canRequestSelectedAppLaunch" : true,
-      "pendingLaunchAppId" : "winapp_notepad",
-      "reason" : "The selected app launch is queued until Windows starts and the guest agent connects.",
-      "recommendedAction" : "start-runtime-for-pending-launch",
-      "recommendedLaunchCommand" : "veil-vmctl app-runtime-action --json --action fulfill-pending",
+      "reason" : "Start Windows, wait for the guest agent, then launch the selected app.",
+      "recommendedAction" : "start-runtime-and-wait-for-agent",
+      "recommendedLaunchCommand" : "veil-vmctl app-runtime-action --json --action launch --app-id winapp_notepad",
       "recommendedStartCommand" : "veil-vmctl qemu-start --json --wait-seconds 30",
       "recommendedWaitCommand" : "veil-vmctl guest-agent-wait --json --wait-seconds 30",
       "requiresGuestAgent" : true,
@@ -251,8 +280,8 @@
       "canOpenMainWindow" : true,
       "isEnabled" : true,
       "keepsDockMenuAvailable" : true,
-      "reason" : "A Windows app launch is queued and may need the launcher to show start or reconnect recovery.",
-      "recommendedAction" : "show-launcher-for-pending-launch",
+      "reason" : "No live mirrored Windows app window needs the launcher hidden.",
+      "recommendedAction" : "show-launcher",
       "shouldHideMainWindow" : false
     },
     "localRuntime" : {
@@ -289,8 +318,8 @@
       "primaryActionAvailable" : true,
       "primaryActionId" : "windowsApps.reconnectRestore",
       "primaryActionTitle" : "Reconnect Notepad",
-      "statusTitle" : "Notepad Waiting",
-      "symbolName" : "clock.fill"
+      "statusTitle" : "Notepad Can Reconnect",
+      "symbolName" : "arrow.counterclockwise.circle.fill"
     },
     "mirrorSessions" : [
 
@@ -311,13 +340,11 @@
       "usesSinglePrimarySurfaceFamily" : true
     },
     "pendingLaunch" : {
-      "appId" : "winapp_notepad",
-      "isQueued" : true,
-      "reason" : "Veil will launch the queued Windows app after the app connection returns.",
-      "recommendedAction" : "auto-launch-on-agent-reconnect",
-      "willLaunchOnAgentReconnect" : true
+      "isQueued" : false,
+      "reason" : "No Windows app launch is queued.",
+      "recommendedAction" : "none",
+      "willLaunchOnAgentReconnect" : false
     },
-    "pendingLaunchAppId" : "winapp_notepad",
     "phase" : "connected",
     "primaryNextAction" : {
       "command" : "veil-vmctl app-runtime-review --json",
@@ -413,11 +440,11 @@
           "title" : "One-Screen App Path"
         },
         {
-          "evidence" : "The selected app launch is queued until Windows starts and the guest agent connects.",
+          "evidence" : "Start Windows, wait for the guest agent, then launch the selected app.",
           "id" : "openWindowsApp",
           "isPassing" : true,
           "isRequired" : true,
-          "nextActionCommand" : "veil-vmctl app-runtime-action --json --action fulfill-pending",
+          "nextActionCommand" : "veil-vmctl app-runtime-action --json --action launch --app-id winapp_notepad",
           "state" : "ready",
           "title" : "Open Windows App"
         },
@@ -472,10 +499,10 @@
       "title" : "One-Screen App Path"
     },
     {
-      "evidence" : "The selected app launch is queued until Windows starts and the guest agent connects.",
+      "evidence" : "Start Windows, wait for the guest agent, then launch the selected app.",
       "id" : "openWindowsApp",
       "isPassing" : true,
-      "nextActionCommand" : "veil-vmctl app-runtime-action --json --action fulfill-pending",
+      "nextActionCommand" : "veil-vmctl app-runtime-action --json --action launch --app-id winapp_notepad",
       "state" : "ready",
       "title" : "Open Windows App"
     },

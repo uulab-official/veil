@@ -34,6 +34,26 @@ test("rejects screenshot slots that drift from release gate", () => {
   );
 });
 
+test("rejects cards without top-level launch onboarding state", () => {
+  const card = demoReviewCard();
+  delete card.launchOnboarding;
+
+  assert.throws(
+    () => validateAppRuntimeReview(card),
+    /launchOnboarding/
+  );
+});
+
+test("rejects launch onboarding drift from embedded status", () => {
+  const card = demoReviewCard();
+  card.launchOnboarding.state = "blocked";
+
+  assert.throws(
+    () => validateAppRuntimeReview(card),
+    /launchOnboarding/
+  );
+});
+
 test("rejects cards with drifted minimum screenshot dimensions", () => {
   const card = demoReviewCard();
   card.minimumScreenshotWidth = 1;

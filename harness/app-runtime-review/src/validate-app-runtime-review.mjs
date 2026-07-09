@@ -38,6 +38,7 @@ export function validateAppRuntimeReview(card) {
   }
 
   const status = validateAppRuntimeStatus(card.status);
+  validateLaunchOnboarding(card.launchOnboarding, status.launchOnboarding);
   const hostAppBundle = validateEvidence(card.evidence, status);
   if (status.releaseGate.isPassing && !hostAppBundle.isVerificationReady) {
     if (card.nextStepTitle !== "Verify Host App Bundle") {
@@ -222,6 +223,61 @@ export function validateAppRuntimeReview(card) {
   }
 
   return card;
+}
+
+function validateLaunchOnboarding(launchOnboarding, sourceLaunchOnboarding) {
+  if (!launchOnboarding || typeof launchOnboarding !== "object" || Array.isArray(launchOnboarding)) {
+    throw new TypeError("app runtime review launchOnboarding must be an object.");
+  }
+
+  for (const fieldName of [
+    "isEnabled",
+    "usesSinglePrimarySurface",
+    "canContinueInApp",
+    "heroRunsPrimaryAction",
+    "keepsRecoveryInMenuOrDock",
+    "keepsVMDisplayManual",
+    "pendingLiveProof"
+  ]) {
+    requireBoolean(launchOnboarding[fieldName], `launchOnboarding.${fieldName}`);
+  }
+
+  for (const fieldName of [
+    "state",
+    "currentStepId",
+    "currentStepTitle",
+    "reason"
+  ]) {
+    requireString(launchOnboarding[fieldName], `launchOnboarding.${fieldName}`);
+  }
+  requireNonNegativeInteger(launchOnboarding.expectedVisibleSurfaceCount, "launchOnboarding.expectedVisibleSurfaceCount");
+
+  for (const fieldName of ["primaryActionId", "primaryCommand"]) {
+    if (launchOnboarding[fieldName] !== undefined) {
+      requireString(launchOnboarding[fieldName], `launchOnboarding.${fieldName}`);
+    }
+  }
+
+  for (const fieldName of [
+    "isEnabled",
+    "state",
+    "currentStepId",
+    "currentStepTitle",
+    "usesSinglePrimarySurface",
+    "expectedVisibleSurfaceCount",
+    "canContinueInApp",
+    "heroRunsPrimaryAction",
+    "keepsRecoveryInMenuOrDock",
+    "keepsVMDisplayManual",
+    "pendingLiveProof",
+    "primaryActionId",
+    "primaryCommand",
+    "reason"
+  ]) {
+    if (launchOnboarding[fieldName] !== sourceLaunchOnboarding[fieldName]) {
+      throw new TypeError("app runtime review launchOnboarding must match status.launchOnboarding.");
+    }
+  }
 }
 
 function validateEvidence(evidence, status) {

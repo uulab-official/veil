@@ -190,8 +190,9 @@ It repeats the current product step, the routed primary action id/command when
 available, whether the hero can continue inside Veil, the expected visible
 surface count, menu/Dock recovery readiness, manual VM display recovery, and
 whether live proof is still pending. The status and action harnesses validate
-this object so a launcher UI cannot silently drift back into a separate VM
-manager flow or show a broken in-app button for a review/CLI-only handoff.
+this object, and review cards now surface the same object at the top level, so a
+launcher UI or release-evidence card cannot silently drift back into a separate
+VM manager flow or show a broken in-app button for a review/CLI-only handoff.
 
 `guestAgentDiagnostics` points every app-runtime status report at the same
 guest-agent readiness gate: run `veil-host-probe --diagnose-agent` before and
@@ -224,9 +225,10 @@ The app runtime review command converts `app-runtime-status` into a
 Parallels-style release card for the current build. It keeps the full status
 report embedded for automation, but surfaces the human review contract directly:
 app-flow readiness, the next product action, the five release-gate steps, the
-required screenshot slots, the minimum screenshot dimensions, the latest
-app-check artifact, and the recommended next app check. Its evidence block also
-includes the staged host app bundle
+top-level `launchOnboarding` state used by the launcher, the required
+screenshot slots, the minimum screenshot dimensions, the latest app-check
+artifact, and the recommended next app check. Its evidence block also includes
+the staged host app bundle
 contract: `dist/Veil.app`, `Info.plist`, executable, icon, bundle identifier,
 the latest successful `veil-launch-report-latest.plist`, the latest failed
 launch-contract report when present, and the exact
