@@ -175,6 +175,18 @@
     "keepsRecoveryDisplayManual": true,
     "reason": "The main Veil launcher is the single normal surface until a live Windows app window is mirrored."
   },
+  "oneScreenUX": {
+    "isEnabled": true,
+    "mode": "launcher",
+    "expectedVisibleSurfaceCount": 1,
+    "usesSinglePrimarySurfaceFamily": true,
+    "hidesLauncherDuringAppMirroring": true,
+    "keepsMenuBarControlAvailable": true,
+    "keepsDockControlAvailable": true,
+    "keepsDisplayRecoveryManual": true,
+    "primaryActionId": "runtime.refreshStatus",
+    "reason": "The launcher is the only normal setup surface until a Windows app opens as a macOS window."
+  },
   "macWindowIntegration": {
     "acceptsGuestWindowEvents": false,
     "hidesLauncherWhenMirroring": false,

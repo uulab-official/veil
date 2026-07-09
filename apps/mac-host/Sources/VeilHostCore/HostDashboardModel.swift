@@ -432,6 +432,43 @@ public struct WindowsAppRuntimeVisibleSurfacePolicyStatus: Codable, Equatable, S
     }
 }
 
+public struct WindowsAppRuntimeOneScreenUXStatus: Codable, Equatable, Sendable {
+    public var isEnabled: Bool
+    public var mode: String
+    public var expectedVisibleSurfaceCount: Int
+    public var usesSinglePrimarySurfaceFamily: Bool
+    public var hidesLauncherDuringAppMirroring: Bool
+    public var keepsMenuBarControlAvailable: Bool
+    public var keepsDockControlAvailable: Bool
+    public var keepsDisplayRecoveryManual: Bool
+    public var primaryActionId: String?
+    public var reason: String
+
+    public init(
+        isEnabled: Bool,
+        mode: String,
+        expectedVisibleSurfaceCount: Int,
+        usesSinglePrimarySurfaceFamily: Bool,
+        hidesLauncherDuringAppMirroring: Bool,
+        keepsMenuBarControlAvailable: Bool,
+        keepsDockControlAvailable: Bool,
+        keepsDisplayRecoveryManual: Bool,
+        primaryActionId: String? = nil,
+        reason: String
+    ) {
+        self.isEnabled = isEnabled
+        self.mode = mode
+        self.expectedVisibleSurfaceCount = expectedVisibleSurfaceCount
+        self.usesSinglePrimarySurfaceFamily = usesSinglePrimarySurfaceFamily
+        self.hidesLauncherDuringAppMirroring = hidesLauncherDuringAppMirroring
+        self.keepsMenuBarControlAvailable = keepsMenuBarControlAvailable
+        self.keepsDockControlAvailable = keepsDockControlAvailable
+        self.keepsDisplayRecoveryManual = keepsDisplayRecoveryManual
+        self.primaryActionId = primaryActionId
+        self.reason = reason
+    }
+}
+
 public struct WindowsAppRuntimeQuietPolicyStatus: Codable, Equatable, Sendable {
     public var isEnabled: Bool
     public var hasOpenedAppWindowThisSession: Bool
@@ -719,6 +756,7 @@ public struct WindowsAppRuntimeStatusReport: Codable, Equatable, Sendable {
     public var menuBarIntegration: WindowsAppRuntimeMenuBarIntegrationStatus
     public var launcherVisibility: WindowsAppRuntimeLauncherVisibilityStatus
     public var visibleSurfacePolicy: WindowsAppRuntimeVisibleSurfacePolicyStatus
+    public var oneScreenUX: WindowsAppRuntimeOneScreenUXStatus
     public var macWindowIntegration: WindowsAppRuntimeMacWindowIntegrationStatus
     public var quietRuntime: WindowsAppRuntimeQuietPolicyStatus
     public var launchPlan: WindowsAppRuntimeLaunchPlanStatus
@@ -745,6 +783,7 @@ public struct WindowsAppRuntimeStatusReport: Codable, Equatable, Sendable {
         menuBarIntegration: WindowsAppRuntimeMenuBarIntegrationStatus,
         launcherVisibility: WindowsAppRuntimeLauncherVisibilityStatus,
         visibleSurfacePolicy: WindowsAppRuntimeVisibleSurfacePolicyStatus,
+        oneScreenUX: WindowsAppRuntimeOneScreenUXStatus,
         macWindowIntegration: WindowsAppRuntimeMacWindowIntegrationStatus,
         quietRuntime: WindowsAppRuntimeQuietPolicyStatus,
         launchPlan: WindowsAppRuntimeLaunchPlanStatus,
@@ -770,6 +809,7 @@ public struct WindowsAppRuntimeStatusReport: Codable, Equatable, Sendable {
         self.menuBarIntegration = menuBarIntegration
         self.launcherVisibility = launcherVisibility
         self.visibleSurfacePolicy = visibleSurfacePolicy
+        self.oneScreenUX = oneScreenUX
         self.macWindowIntegration = macWindowIntegration
         self.quietRuntime = quietRuntime
         self.launchPlan = launchPlan
@@ -1001,6 +1041,18 @@ public final class HostDashboardModel {
             proofArtifacts: proofArtifacts
         )
         let primaryNextAction = primaryNextActionStatus(releaseGate: releaseGate)
+        let menuBarIntegration = menuBarIntegrationStatus(
+            localRuntime: localRuntime,
+            launchPlan: launchPlan,
+            pendingLaunch: pendingLaunch
+        )
+        let oneScreenUX = oneScreenUXStatus(
+            launcherVisibility: launcherVisibility,
+            visibleSurfacePolicy: visibleSurfacePolicy,
+            macWindowIntegration: macWindowIntegration,
+            menuBarIntegration: menuBarIntegration,
+            primaryNextAction: primaryNextAction
+        )
         return WindowsAppRuntimeStatusReport(
             generatedAt: generatedAt,
             phase: phase,
@@ -1049,13 +1101,10 @@ public final class HostDashboardModel {
                 canReconnectPreviousApps: canReconnectRestoreMirrorSessions,
                 canLaunchSelectedApp: canRequestSelectedAppLaunch
             ),
-            menuBarIntegration: menuBarIntegrationStatus(
-                localRuntime: localRuntime,
-                launchPlan: launchPlan,
-                pendingLaunch: pendingLaunch
-            ),
+            menuBarIntegration: menuBarIntegration,
             launcherVisibility: launcherVisibility,
             visibleSurfacePolicy: visibleSurfacePolicy,
+            oneScreenUX: oneScreenUX,
             macWindowIntegration: macWindowIntegration,
             quietRuntime: quietRuntime,
             launchPlan: launchPlan,
@@ -2095,6 +2144,44 @@ public final class HostDashboardModel {
             shouldHideLauncher: false,
             keepsRecoveryDisplayManual: true,
             reason: "The main Veil launcher is the single normal surface until a live Windows app window is mirrored."
+        )
+    }
+
+    public func oneScreenUXStatus(
+        launcherVisibility: WindowsAppRuntimeLauncherVisibilityStatus,
+        visibleSurfacePolicy: WindowsAppRuntimeVisibleSurfacePolicyStatus,
+        macWindowIntegration: WindowsAppRuntimeMacWindowIntegrationStatus,
+        menuBarIntegration: WindowsAppRuntimeMenuBarIntegrationStatus,
+        primaryNextAction: WindowsAppRuntimePrimaryNextActionStatus
+    ) -> WindowsAppRuntimeOneScreenUXStatus {
+        let isMirroringApps = visibleSurfacePolicy.primarySurface == "windows-app-windows"
+        let usesSinglePrimarySurfaceFamily = visibleSurfacePolicy.isEnabled
+            && visibleSurfacePolicy.expectedVisibleSurfaceCount > 0
+            && (visibleSurfacePolicy.primarySurface == "launcher" || isMirroringApps)
+            && (!isMirroringApps || macWindowIntegration.mirroredWindowCount == visibleSurfacePolicy.expectedVisibleSurfaceCount)
+        let hidesLauncherDuringAppMirroring = isMirroringApps
+            ? launcherVisibility.shouldHideMainWindow && macWindowIntegration.hidesLauncherWhenMirroring
+            : !launcherVisibility.shouldHideMainWindow
+        let primaryActionId = primaryNextAction.actionId ?? menuBarIntegration.primaryActionId
+        let reason: String
+
+        if isMirroringApps {
+            reason = "Windows app windows are the only normal work surface, with Dock and menu controls available for recovery."
+        } else {
+            reason = "The launcher is the only normal setup surface until a Windows app opens as a macOS window."
+        }
+
+        return WindowsAppRuntimeOneScreenUXStatus(
+            isEnabled: true,
+            mode: visibleSurfacePolicy.primarySurface,
+            expectedVisibleSurfaceCount: visibleSurfacePolicy.expectedVisibleSurfaceCount,
+            usesSinglePrimarySurfaceFamily: usesSinglePrimarySurfaceFamily,
+            hidesLauncherDuringAppMirroring: hidesLauncherDuringAppMirroring,
+            keepsMenuBarControlAvailable: menuBarIntegration.isEnabled,
+            keepsDockControlAvailable: launcherVisibility.keepsDockMenuAvailable,
+            keepsDisplayRecoveryManual: visibleSurfacePolicy.keepsRecoveryDisplayManual,
+            primaryActionId: primaryActionId,
+            reason: reason
         )
     }
 

@@ -95,6 +95,18 @@
     "keepsRecoveryDisplayManual": true,
     "reason": "Only mirrored Windows app windows should be visible during normal app runtime use; the main launcher and VM display stay out of the way unless recovery is requested."
   },
+  "oneScreenUX": {
+    "isEnabled": true,
+    "mode": "windows-app-windows",
+    "expectedVisibleSurfaceCount": 1,
+    "usesSinglePrimarySurfaceFamily": true,
+    "hidesLauncherDuringAppMirroring": true,
+    "keepsMenuBarControlAvailable": true,
+    "keepsDockControlAvailable": true,
+    "keepsDisplayRecoveryManual": true,
+    "primaryActionId": "dock.bringWindowsAppsForward",
+    "reason": "Windows app windows are the only normal work surface, with Dock and menu controls available for recovery."
+  },
   "macWindowIntegration": {
     "isEnabled": true,
     "acceptsGuestWindowEvents": true,

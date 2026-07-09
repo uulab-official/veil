@@ -44,6 +44,7 @@ export function validateAppRuntimeStatus(report) {
   validateReleaseGate(report.releaseGate, report);
   validatePrimaryNextAction(report.primaryNextAction, report);
   validateMenuBarIntegration(report.menuBarIntegration, report);
+  validateOneScreenUX(report.oneScreenUX, report);
   validateActions(report.actions, report);
 
   if (report.selectedAppId !== undefined) {
@@ -1198,6 +1199,78 @@ function validateVisibleSurfacePolicy(visibleSurfacePolicy, report) {
     }
     if (visibleSurfacePolicy.shouldHideLauncher) {
       throw new TypeError("visibleSurfacePolicy launcher mode cannot hide the launcher.");
+    }
+  }
+}
+
+function validateOneScreenUX(oneScreenUX, report) {
+  if (!oneScreenUX || typeof oneScreenUX !== "object" || Array.isArray(oneScreenUX)) {
+    throw new TypeError("oneScreenUX must be an object.");
+  }
+
+  requireBoolean(oneScreenUX.isEnabled, "oneScreenUX.isEnabled");
+  requireString(oneScreenUX.mode, "oneScreenUX.mode");
+  requireNonNegativeInteger(oneScreenUX.expectedVisibleSurfaceCount, "oneScreenUX.expectedVisibleSurfaceCount");
+  requireBoolean(oneScreenUX.usesSinglePrimarySurfaceFamily, "oneScreenUX.usesSinglePrimarySurfaceFamily");
+  requireBoolean(oneScreenUX.hidesLauncherDuringAppMirroring, "oneScreenUX.hidesLauncherDuringAppMirroring");
+  requireBoolean(oneScreenUX.keepsMenuBarControlAvailable, "oneScreenUX.keepsMenuBarControlAvailable");
+  requireBoolean(oneScreenUX.keepsDockControlAvailable, "oneScreenUX.keepsDockControlAvailable");
+  requireBoolean(oneScreenUX.keepsDisplayRecoveryManual, "oneScreenUX.keepsDisplayRecoveryManual");
+  requireString(oneScreenUX.reason, "oneScreenUX.reason");
+
+  if (oneScreenUX.primaryActionId !== undefined) {
+    requireString(oneScreenUX.primaryActionId, "oneScreenUX.primaryActionId");
+  }
+
+  if (!oneScreenUX.isEnabled) {
+    throw new TypeError("oneScreenUX must stay enabled for Parallels-style one-screen acceptance.");
+  }
+
+  if (oneScreenUX.mode !== report.visibleSurfacePolicy.primarySurface) {
+    throw new TypeError("oneScreenUX.mode must match visibleSurfacePolicy.primarySurface.");
+  }
+
+  if (oneScreenUX.expectedVisibleSurfaceCount !== report.visibleSurfacePolicy.expectedVisibleSurfaceCount) {
+    throw new TypeError("oneScreenUX.expectedVisibleSurfaceCount must match visibleSurfacePolicy.");
+  }
+
+  if (!oneScreenUX.usesSinglePrimarySurfaceFamily) {
+    throw new TypeError("oneScreenUX must use exactly one primary surface family.");
+  }
+
+  const expectedHidesLauncherDuringAppMirroring = report.visibleSurfacePolicy.primarySurface === "windows-app-windows"
+    ? report.launcherVisibility.shouldHideMainWindow && report.macWindowIntegration.hidesLauncherWhenMirroring
+    : !report.launcherVisibility.shouldHideMainWindow;
+  if (oneScreenUX.hidesLauncherDuringAppMirroring !== expectedHidesLauncherDuringAppMirroring) {
+    throw new TypeError("oneScreenUX.hidesLauncherDuringAppMirroring must match launcher/app-window policy.");
+  }
+
+  if (oneScreenUX.keepsMenuBarControlAvailable !== report.menuBarIntegration.isEnabled) {
+    throw new TypeError("oneScreenUX.keepsMenuBarControlAvailable must match menuBarIntegration.isEnabled.");
+  }
+
+  if (oneScreenUX.keepsDockControlAvailable !== report.launcherVisibility.keepsDockMenuAvailable) {
+    throw new TypeError("oneScreenUX.keepsDockControlAvailable must match launcherVisibility.keepsDockMenuAvailable.");
+  }
+
+  if (oneScreenUX.keepsDisplayRecoveryManual !== report.visibleSurfacePolicy.keepsRecoveryDisplayManual) {
+    throw new TypeError("oneScreenUX.keepsDisplayRecoveryManual must match visibleSurfacePolicy.keepsRecoveryDisplayManual.");
+  }
+
+  if (report.visibleSurfacePolicy.primarySurface === "windows-app-windows") {
+    if (report.mirrorSessions.length === 0 || report.launcherVisibility.shouldHideMainWindow !== true) {
+      throw new TypeError("oneScreenUX app-window mode requires mirrored Windows app windows and a hidden launcher.");
+    }
+  }
+
+  const expectedPrimaryActionId = report.primaryNextAction.actionId ?? report.menuBarIntegration.primaryActionId;
+  if (oneScreenUX.primaryActionId !== expectedPrimaryActionId) {
+    throw new TypeError("oneScreenUX.primaryActionId must match the executable next action or menu primary action.");
+  }
+
+  for (const disallowedTerm of ["Guest Agent", "HWND", "QEMU", "Proof"]) {
+    if (oneScreenUX.reason.includes(disallowedTerm)) {
+      throw new TypeError("oneScreenUX.reason must stay product-facing.");
     }
   }
 }

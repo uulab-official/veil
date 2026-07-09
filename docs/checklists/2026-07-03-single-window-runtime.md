@@ -73,4 +73,4 @@ Goal: move Veil from a Veil shell plus separate QEMU Cocoa display toward a UTM-
 
 - [ ] Verify one-window startup with a running Windows 11 Arm install and guest-agent connection.
 - [ ] Validate launcher visibility transitions by reproducing close/reopen and reconnect paths: no invisible launcher stuck state.
-- [ ] Add a one-screen UX acceptance pass matching Parallels/UTM behavior expectations for launcher-first and app-window modes.
+- [x] Add a one-screen UX acceptance pass matching Parallels/UTM behavior expectations for launcher-first and app-window modes.

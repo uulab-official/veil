@@ -89,6 +89,16 @@
         "title": "Open Selected Windows App"
       },
       {
+        "id": "runtime.prepareWindows",
+        "isAvailable": false,
+        "title": "Prepare Windows"
+      },
+      {
+        "id": "runtime.refreshStatus",
+        "isAvailable": true,
+        "title": "Refresh Windows Status"
+      },
+      {
         "id": "runtime.startWindowsForApp",
         "isAvailable": true,
         "title": "Start Windows To Open App"
@@ -382,6 +392,18 @@
       "primarySurface": "launcher",
       "reason": "The main Veil launcher is the single normal surface until a live Windows app window is mirrored.",
       "shouldHideLauncher": false
+    },
+    "oneScreenUX": {
+      "expectedVisibleSurfaceCount": 1,
+      "hidesLauncherDuringAppMirroring": true,
+      "isEnabled": true,
+      "keepsDisplayRecoveryManual": true,
+      "keepsDockControlAvailable": true,
+      "keepsMenuBarControlAvailable": true,
+      "mode": "launcher",
+      "primaryActionId": "windowsApps.reconnectRestore",
+      "reason": "The launcher is the only normal setup surface until a Windows app opens as a macOS window.",
+      "usesSinglePrimarySurfaceFamily": true
     },
     "primaryNextAction": {
       "id": "ready-for-release-card",

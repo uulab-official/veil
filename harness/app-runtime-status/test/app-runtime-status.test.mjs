@@ -46,6 +46,7 @@ function refreshPrimaryNextAction(report) {
       command: "veil-vmctl app-runtime-review --json",
       reason: report.releaseGate.reason
     };
+    refreshOneScreenUX(report);
     return;
   }
 
@@ -59,6 +60,7 @@ function refreshPrimaryNextAction(report) {
     command: nextStep.nextActionCommand,
     reason: nextStep.evidence
   };
+  refreshOneScreenUX(report);
 }
 
 function expectedPrimaryNextActionId(stepId, command) {
@@ -119,6 +121,22 @@ function expectedPrimaryNextActionId(stepId, command) {
     default:
       return undefined;
   }
+}
+
+function refreshOneScreenUX(report) {
+  if (report.oneScreenUX === undefined) {
+    return;
+  }
+
+  report.oneScreenUX.mode = report.visibleSurfacePolicy.primarySurface;
+  report.oneScreenUX.expectedVisibleSurfaceCount = report.visibleSurfacePolicy.expectedVisibleSurfaceCount;
+  report.oneScreenUX.hidesLauncherDuringAppMirroring = report.visibleSurfacePolicy.primarySurface === "windows-app-windows"
+    ? report.launcherVisibility.shouldHideMainWindow && report.macWindowIntegration.hidesLauncherWhenMirroring
+    : !report.launcherVisibility.shouldHideMainWindow;
+  report.oneScreenUX.keepsMenuBarControlAvailable = report.menuBarIntegration.isEnabled;
+  report.oneScreenUX.keepsDockControlAvailable = report.launcherVisibility.keepsDockMenuAvailable;
+  report.oneScreenUX.keepsDisplayRecoveryManual = report.visibleSurfacePolicy.keepsRecoveryDisplayManual;
+  report.oneScreenUX.primaryActionId = report.primaryNextAction.actionId ?? report.menuBarIntegration.primaryActionId;
 }
 
 test("validates app runtime status fixture", () => {
@@ -230,6 +248,36 @@ test("rejects reports without pending launch status", () => {
   assert.throws(
     () => validateAppRuntimeStatus(report),
     /pendingLaunch/
+  );
+});
+
+test("rejects reports without one-screen UX status", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.demo.json", import.meta.url), "utf8"));
+  delete report.oneScreenUX;
+
+  assert.throws(
+    () => validateAppRuntimeStatus(report),
+    /oneScreenUX/
+  );
+});
+
+test("rejects one-screen UX mode drift from visible surfaces", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.demo.json", import.meta.url), "utf8"));
+  report.oneScreenUX.mode = "windows-app-windows";
+
+  assert.throws(
+    () => validateAppRuntimeStatus(report),
+    /oneScreenUX\.mode/
+  );
+});
+
+test("rejects one-screen UX primary action drift", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.demo.json", import.meta.url), "utf8"));
+  report.oneScreenUX.primaryActionId = "windowsApps.closeAll";
+
+  assert.throws(
+    () => validateAppRuntimeStatus(report),
+    /oneScreenUX\.primaryActionId/
   );
 });
 
