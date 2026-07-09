@@ -14,6 +14,7 @@ Goal: keep the user-facing workflow one-screen-first (launcher + one action path
 - [x] Add regression coverage for visible mirror-window priority, same-app window replacement, and programmatic close paths so launcher/app surfaces do not duplicate or re-close unexpectedly.
 - [x] Sync launcher visibility and quiet-runtime scheduling after guest `window.closed` events, covering the case where the user closes a Windows app from inside the mirrored app itself.
 - [x] Re-evaluate automatic quiet-runtime scheduling when the local VM runtime state/phase changes, so a late VM state refresh does not leave an idle Windows runtime running after the final app window closes.
+- [x] Keep previous-app restore visible from Dock/menu as `Reconnect Previous Apps` when restore intent exists but the live guest agent is not connected yet.
 
 ## CEO Review
 
@@ -31,6 +32,7 @@ Goal: keep the user-facing workflow one-screen-first (launcher + one action path
 - Add coverage that app-level dedupe and programmatic close paths replace or close host windows without emitting a synthetic user-close callback (`onUserWindowClose`).
 - Guest-originated `window.closed` now needs the same shell follow-up as host-originated close: close the host mirror window, resync launcher visibility, and evaluate quiet-runtime eligibility.
 - Runtime state refreshes must also re-check quiet-runtime eligibility, because the final app window can close before `vmModel.canStop` becomes true.
+- Dock/menu restore controls should follow `canReconnectRestoreMirrorSessions`, not only `canRestoreMirrorSessions`, so previous app intent remains actionable before the live guest agent returns.
 
 ## Design Review
 

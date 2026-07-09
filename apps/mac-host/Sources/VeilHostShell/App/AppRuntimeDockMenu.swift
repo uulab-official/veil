@@ -151,13 +151,14 @@ enum AppRuntimeDockMenuFactory {
             )
         }
 
-        if model.canRestoreMirrorSessions {
+        if !model.restorableAppIds.isEmpty {
             menu.addItem(.separator())
             menu.addItem(
                 item(
-                    "Restore Previous Apps",
+                    model.canRestoreMirrorSessions ? "Restore Previous Apps" : "Reconnect Previous Apps",
                     action: #selector(AppRuntimeDockMenuTarget.restoreWindowsApps(_:)),
-                    target: target
+                    target: target,
+                    isEnabled: model.canReconnectRestoreMirrorSessions
                 )
             )
         }

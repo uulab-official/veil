@@ -1253,10 +1253,10 @@ private struct VeilMenuBarMenu: View {
         }
 
         if !model.restorableAppIds.isEmpty {
-            Button("Restore Previous Apps", systemImage: "arrow.clockwise.square") {
+            Button(restorePreviousAppsTitle, systemImage: "arrow.clockwise.square") {
                 restoreWindowsAppWindowsAction()
             }
-            .disabled(!model.canRestoreMirrorSessions)
+            .disabled(!model.canReconnectRestoreMirrorSessions)
         }
 
         if model.pendingLaunchAppId != nil {
@@ -1436,6 +1436,10 @@ private struct VeilMenuBarMenu: View {
     private var runningAppsTitle: String {
         let count = model.mirrorSessions.count
         return count == 1 ? "1 Windows App Running" : "\(count) Windows Apps Running"
+    }
+
+    private var restorePreviousAppsTitle: String {
+        model.canRestoreMirrorSessions ? "Restore Previous Apps" : "Reconnect Previous Apps"
     }
 
     private func openMainWindow() {
