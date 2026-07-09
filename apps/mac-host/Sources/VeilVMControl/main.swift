@@ -86,7 +86,7 @@ enum VMControlError: Error, LocalizedError {
         }
     }
 
-    private static let usage = "Usage: veil-vmctl prepare --installer /path/to/Windows.iso [--drivers /path/to/virtio-win.iso] | veil-vmctl app-runtime-status [--json] [--demo] | veil-vmctl app-runtime-review [--json] [--demo] [--evidence-dir /path/to/screenshots] | veil-vmctl app-runtime-review-init [--json] [--demo] [--evidence-dir /path/to/screenshots] | veil-vmctl app-runtime-review-verify [--json] [--demo] --evidence-dir /path/to/screenshots | veil-vmctl app-runtime-action --action launch|fulfill-pending|focus|close|close-all|restore|reconnect-restore|bring-forward|recover-display|wait-agent|quiet-when-idle|stop-runtime|clipboard|type-text|click|proof-recommended [--json] [--demo] [--wait-seconds 5] [--app-id winapp_notepad] [--window-id hwnd:XXXXXXXX] [--text \"...\"] [--x 240 --y 130] | veil-vmctl app-window-proof [--json] [--app-id winapp_notepad] [--wait-seconds 10] [--output /path/to/proof.json] | veil-vmctl coherence-proof [--json] [--app-id winapp_notepad] [--wait-seconds 10] [--output /path/to/proof.json] | veil-vmctl mvp-proof [--json] [--app-id winapp_notepad] [--wait-seconds 30] [--output /path/to/proof.json] [--require-proved] | veil-vmctl guest-agent-wait [--json] [--wait-seconds 30] | veil-vmctl mark-installed [--json] | veil-vmctl providers [--json] | veil-vmctl export-diagnostics [--json] [--output /path/to/diagnostics.json] | veil-vmctl qemu-plan [--json] | veil-vmctl qemu-doctor [--json] | veil-vmctl qemu-install-status [--json] | veil-vmctl qemu-smoke [--json] [--seconds 45] | veil-vmctl qemu-start [--json] [--wait-seconds 15] [--native-display] | veil-vmctl qemu-display-smoke [--json] [--wait-seconds 5] | veil-vmctl qemu-capture [--json] [--output /path/to/console.png] | veil-vmctl qemu-powerdown [--json] [--wait-seconds 30] | veil-vmctl qemu-force-stop [--json] --i-understand-data-loss [--wait-seconds 10] | veil-vmctl qemu-sendkey [--json] key [key ...] | veil-vmctl qemu-type-text [--json] --text \"...\" | veil-vmctl qemu-click [--json] --x 0...32767 --y 0...32767 | veil-vmctl qemu-oobe-bypass [--json] | veil-vmctl qemu-install-agent [--json] [--wait-seconds 30]"
+    private static let usage = "Usage: veil-vmctl prepare --installer /path/to/Windows.iso [--drivers /path/to/virtio-win.iso] | veil-vmctl app-runtime-status [--json] [--demo] | veil-vmctl app-runtime-review [--json] [--demo] [--evidence-dir /path/to/screenshots] | veil-vmctl app-runtime-review-init [--json] [--demo] [--evidence-dir /path/to/screenshots] | veil-vmctl app-runtime-review-verify [--json] [--demo] --evidence-dir /path/to/screenshots | veil-vmctl app-runtime-action --action launch|fulfill-pending|focus|close|close-all|restore|reconnect-restore|bring-forward|recover-display|wait-agent|repair-agent|quiet-when-idle|stop-runtime|clipboard|type-text|click|proof-recommended [--json] [--demo] [--wait-seconds 5] [--app-id winapp_notepad] [--window-id hwnd:XXXXXXXX] [--text \"...\"] [--x 240 --y 130] | veil-vmctl app-window-proof [--json] [--app-id winapp_notepad] [--wait-seconds 10] [--output /path/to/proof.json] | veil-vmctl coherence-proof [--json] [--app-id winapp_notepad] [--wait-seconds 10] [--output /path/to/proof.json] | veil-vmctl mvp-proof [--json] [--app-id winapp_notepad] [--wait-seconds 30] [--output /path/to/proof.json] [--require-proved] | veil-vmctl guest-agent-wait [--json] [--wait-seconds 30] | veil-vmctl mark-installed [--json] | veil-vmctl providers [--json] | veil-vmctl export-diagnostics [--json] [--output /path/to/diagnostics.json] | veil-vmctl qemu-plan [--json] | veil-vmctl qemu-doctor [--json] | veil-vmctl qemu-install-status [--json] | veil-vmctl qemu-smoke [--json] [--seconds 45] | veil-vmctl qemu-start [--json] [--wait-seconds 15] [--native-display] | veil-vmctl qemu-display-smoke [--json] [--wait-seconds 5] | veil-vmctl qemu-capture [--json] [--output /path/to/console.png] | veil-vmctl qemu-powerdown [--json] [--wait-seconds 30] | veil-vmctl qemu-force-stop [--json] --i-understand-data-loss [--wait-seconds 10] | veil-vmctl qemu-sendkey [--json] key [key ...] | veil-vmctl qemu-type-text [--json] --text \"...\" | veil-vmctl qemu-click [--json] --x 0...32767 --y 0...32767 | veil-vmctl qemu-oobe-bypass [--json] | veil-vmctl qemu-install-agent [--json] [--wait-seconds 30]"
 }
 
 struct VMControlArguments {
@@ -101,6 +101,7 @@ struct VMControlArguments {
         case bringForward = "bring-forward"
         case recoverDisplay = "recover-display"
         case waitAgent = "wait-agent"
+        case repairAgent = "repair-agent"
         case quietWhenIdle = "quiet-when-idle"
         case stopRuntime = "stop-runtime"
         case clipboard
@@ -588,6 +589,7 @@ struct AppRuntimeActionReport: Codable, Equatable {
     var proof: AppRuntimeRecommendedProofRun?
     var displayRecovery: AppRuntimeDisplayRecovery?
     var agentWait: AgentConnectionWaitReport?
+    var agentRepair: QEMUGuestAgentInstallAttemptReport?
     var quietRuntime: WindowsAppRuntimeQuietPolicyStatus?
     var runtimeStop: VMRuntimeSnapshot?
     var status: WindowsAppRuntimeStatusReport
@@ -2455,6 +2457,7 @@ struct VeilVMControl {
         var proof: AppRuntimeRecommendedProofRun?
         var displayRecovery: AppRuntimeDisplayRecovery?
         var agentWait: AgentConnectionWaitReport?
+        var agentRepair: QEMUGuestAgentInstallAttemptReport?
         var foregroundWindowId: String?
         var foregroundWindowTitle: String?
         var quietRuntime: WindowsAppRuntimeQuietPolicyStatus?
@@ -2574,6 +2577,25 @@ struct VeilVMControl {
         case .waitAgent:
             agentWait = await guestAgentWaitReport(waitSeconds: waitSeconds)
             accepted = agentWait?.status == .connected
+        case .repairAgent:
+            let localRuntimeSnapshot = try? await LocalVMRuntimeService().loadSnapshot()
+            let beforeStatus = model.runtimeStatusReport(
+                localRuntime: model.localRuntimeStatus(snapshot: localRuntimeSnapshot)
+            )
+            if beforeStatus.launchPlan.recommendedRepairCommand != nil,
+               beforeStatus.localRuntime.requiresGuestToolsMediaRebuild != true {
+                agentRepair = try await qemuGuestAgentInstallAttemptReport(waitSeconds: waitSeconds)
+                if agentRepair?.status == .connected {
+                    let result = await model.refreshLiveAgentIfNeeded()
+                    launch = result?.launch
+                    window = result?.window
+                    resolvedAppId = result?.window.appId ?? model.pendingLaunchAppId ?? beforeStatus.pendingLaunchAppId
+                    resolvedWindowId = result?.window.windowId
+                    foregroundWindowId = result?.window.windowId
+                    foregroundWindowTitle = result?.window.title
+                    accepted = beforeStatus.pendingLaunch.isQueued ? result?.launch.accepted == true : true
+                }
+            }
         case .quietWhenIdle:
             quietRuntime = model.quietRuntimeStatus()
             accepted = quietRuntime?.canQuietRuntime == true
@@ -2667,7 +2689,7 @@ struct VeilVMControl {
         let status = model.runtimeStatusReport(
             localRuntime: model.localRuntimeStatus(snapshot: localRuntimeSnapshot)
         )
-        let actionLaunchPlan = action == .launch || action == .fulfillPending ? status.launchPlan : nil
+        let actionLaunchPlan = action == .launch || action == .fulfillPending || action == .repairAgent ? status.launchPlan : nil
         let report = AppRuntimeActionReport(
             action: action,
             requestedAt: Date(),
@@ -2696,6 +2718,7 @@ struct VeilVMControl {
             proof: proof,
             displayRecovery: displayRecovery,
             agentWait: agentWait,
+            agentRepair: agentRepair,
             quietRuntime: quietRuntime,
             runtimeStop: runtimeStop,
             status: status,
@@ -2749,6 +2772,12 @@ struct VeilVMControl {
             if let errorMessage = agentWait.diagnostic.errorMessage {
                 print("Agent wait error: \(errorMessage)")
             }
+        }
+        if let agentRepair = report.agentRepair {
+            print("Agent repair: \(agentRepair.status.rawValue)")
+            print("Agent repair attempts: \(agentRepair.agentWait.attempts)")
+            print("Agent repair waited seconds: \(agentRepair.agentWait.waitedSeconds)")
+            print("Agent repair console: \(agentRepair.postAttemptConsole.capture?.consoleScreenshotPath ?? "not captured")")
         }
         if let launchPlan = report.launchPlan {
             print("Launch plan: \(launchPlan.recommendedAction)")
@@ -2970,6 +2999,14 @@ struct VeilVMControl {
                     status.launchPlan.recommendedLaunchCommand.map { "Run `\($0)` to continue the pending app launch." },
                     proofNextAction(from: status.proofPlan)
                 ])
+            case .repairAgent:
+                return compactActions([
+                    status.pendingLaunch.isQueued
+                        ? status.launchPlan.recommendedLaunchCommand.map { "Run `\($0)` to continue the queued Windows app launch." }
+                        : nil,
+                    "Run `veil-vmctl app-runtime-status --json` to confirm the Windows app connection is live.",
+                    proofNextAction(from: status.proofPlan)
+                ])
             case .quietWhenIdle:
                 return [
                     "Run `\(status.quietRuntime.recommendedStopCommand ?? "veil-vmctl app-runtime-action --json --action stop-runtime")` to stop the idle local Windows runtime.",
@@ -3036,10 +3073,22 @@ struct VeilVMControl {
             }
 
             return [
-                "Run `veil-vmctl qemu-install-agent --json --wait-seconds 120` to send the attached guest-agent repair path.",
+                "Run `veil-vmctl app-runtime-action --json --action repair-agent --wait-seconds 120` to send the attached guest-agent repair path.",
                 "Run `veil-host-probe --diagnose-agent` to inspect host-forward TCP and WebSocket health.",
                 "Run `veil-vmctl app-runtime-status --json` before retrying app launch or reconnect-restore."
             ]
+        }
+
+        if action == .repairAgent {
+            if status.localRuntime.requiresGuestToolsMediaRebuild {
+                return guestToolsMediaRebuildActions(from: status.localRuntime)
+            }
+
+            return compactActions([
+                status.launchPlan.recommendedRepairCommand.map { "Run `\($0)` to retry the in-app guest-agent repair path." },
+                "Run `veil-host-probe --diagnose-agent` to inspect host-forward TCP and WebSocket health.",
+                "Run `veil-vmctl app-runtime-status --json` before retrying app launch or reconnect-restore."
+            ])
         }
 
         if action == .recoverDisplay {
@@ -3887,6 +3936,29 @@ struct VeilVMControl {
     }
 
     private static func sendQEMUGuestAgentInstall(json: Bool, waitSeconds: Int) async throws {
+        let report = try await qemuGuestAgentInstallAttemptReport(waitSeconds: waitSeconds)
+
+        if json {
+            let data = try JSONEncoder.veilDiagnostics.encode(report)
+            print(String(decoding: data, as: UTF8.self))
+            return
+        }
+
+        print("QEMU guest agent install attempt: \(report.status.rawValue)")
+        print("Activation tap: \(report.activationTap == nil ? "fallback keyboard" : "sent")")
+        print("UAC approval tap: \(report.uacApprovalTap == nil ? "not sent" : "sent")")
+        print("UAC approval keys: \(report.uacApprovalKeySend == nil ? "not sent" : "sent")")
+        print("Keys sent: \(report.keySend.keys.count)")
+        print("Waited seconds: \(report.agentWait.waitedSeconds)")
+        print("Attempts: \(report.agentWait.attempts)")
+        print("Post-attempt console: \(report.postAttemptConsole.capture?.consoleScreenshotPath ?? "not captured")")
+        print("Next actions:")
+        for action in report.nextActions {
+            print("  - \(action)")
+        }
+    }
+
+    private static func qemuGuestAgentInstallAttemptReport(waitSeconds: Int) async throws -> QEMUGuestAgentInstallAttemptReport {
         let activationTap = try? await qemuGuestAgentInstallActivationTapRecord()
         if activationTap != nil {
             try? await Task.sleep(nanoseconds: 800_000_000)
@@ -3912,7 +3984,7 @@ struct VeilVMControl {
             waitSeconds: waitSeconds,
             consoleEvidence: postAttemptConsole
         )
-        let report = QEMUGuestAgentInstallAttemptReport(
+        return QEMUGuestAgentInstallAttemptReport(
             commandText: QEMUGuestAgentInstallKeySequence.commandText,
             activationTap: activationTap,
             uacApprovalTap: uacApprovalTap,
@@ -3923,25 +3995,6 @@ struct VeilVMControl {
             status: agentWait.status,
             nextActions: nextActions
         )
-
-        if json {
-            let data = try JSONEncoder.veilDiagnostics.encode(report)
-            print(String(decoding: data, as: UTF8.self))
-            return
-        }
-
-        print("QEMU guest agent install attempt: \(report.status.rawValue)")
-        print("Activation tap: \(report.activationTap == nil ? "fallback keyboard" : "sent")")
-        print("UAC approval tap: \(report.uacApprovalTap == nil ? "not sent" : "sent")")
-        print("UAC approval keys: \(report.uacApprovalKeySend == nil ? "not sent" : "sent")")
-        print("Keys sent: \(report.keySend.keys.count)")
-        print("Waited seconds: \(report.agentWait.waitedSeconds)")
-        print("Attempts: \(report.agentWait.attempts)")
-        print("Post-attempt console: \(report.postAttemptConsole.capture?.consoleScreenshotPath ?? "not captured")")
-        print("Next actions:")
-        for action in report.nextActions {
-            print("  - \(action)")
-        }
     }
 
     private static func qemuGuestAgentInstallConsoleEvidence() -> QEMUGuestAgentInstallConsoleEvidence {

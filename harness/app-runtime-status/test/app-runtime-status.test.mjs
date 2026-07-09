@@ -116,7 +116,7 @@ function expectedPrimaryNextActionId(stepId, command) {
       if (command.includes("--action wait-agent")) {
         return "runtime.waitAgent";
       }
-      if (command.includes("qemu-install-agent")) {
+      if (command.includes("--action repair-agent") || command.includes("qemu-install-agent")) {
         return "runtime.repairGuestAgentForApp";
       }
       if (command.includes("qemu-start")) {
@@ -753,7 +753,7 @@ test("accepts queued pending launch repair while local Windows is already runnin
   report.launchPlan.requiresRuntimeStart = false;
   report.launchPlan.recommendedAction = "repair-guest-agent-for-pending-launch";
   delete report.launchPlan.recommendedStartCommand;
-  report.launchPlan.recommendedRepairCommand = "veil-vmctl qemu-install-agent --json --wait-seconds 120";
+  report.launchPlan.recommendedRepairCommand = "veil-vmctl app-runtime-action --json --action repair-agent --wait-seconds 120";
   report.launchPlan.recommendedLaunchCommand = "veil-vmctl app-runtime-action --json --action fulfill-pending";
   report.launchPlan.reason = "Windows is running and the selected app launch is queued; repair or start the guest agent, then open the app automatically.";
   report.actions.find((action) => action.id === "runtime.startWindowsForApp").isAvailable = false;
@@ -769,7 +769,7 @@ test("accepts queued pending launch repair while local Windows is already runnin
   setReleaseGateStep(report, "openWindowsApp", {
     state: "ready",
     isPassing: false,
-    nextActionCommand: "veil-vmctl qemu-install-agent --json --wait-seconds 120"
+    nextActionCommand: "veil-vmctl app-runtime-action --json --action repair-agent --wait-seconds 120"
   });
 
   assert.doesNotThrow(() => validateAppRuntimeStatus(report));
@@ -824,7 +824,7 @@ test("rejects queued pending launch repair marked ready for review", () => {
   report.launchPlan.requiresRuntimeStart = false;
   report.launchPlan.recommendedAction = "repair-guest-agent-for-pending-launch";
   delete report.launchPlan.recommendedStartCommand;
-  report.launchPlan.recommendedRepairCommand = "veil-vmctl qemu-install-agent --json --wait-seconds 120";
+  report.launchPlan.recommendedRepairCommand = "veil-vmctl app-runtime-action --json --action repair-agent --wait-seconds 120";
   report.launchPlan.recommendedLaunchCommand = "veil-vmctl app-runtime-action --json --action fulfill-pending";
   report.launchPlan.reason = "Windows is running and the selected app launch is queued; repair or start the guest agent, then open the app automatically.";
   report.actions.find((action) => action.id === "runtime.startWindowsForApp").isAvailable = false;
@@ -863,7 +863,7 @@ test("accepts stale running console preview with recovery commands", () => {
   report.launchPlan.requiresRuntimeStart = false;
   report.launchPlan.recommendedAction = "repair-guest-agent-for-app-launch";
   delete report.launchPlan.recommendedStartCommand;
-  report.launchPlan.recommendedRepairCommand = "veil-vmctl qemu-install-agent --json --wait-seconds 120";
+  report.launchPlan.recommendedRepairCommand = "veil-vmctl app-runtime-action --json --action repair-agent --wait-seconds 120";
   report.launchPlan.reason = "Windows is running; repair or start the guest agent, then launch the selected app.";
   report.actions.find((action) => action.id === "runtime.startWindowsForApp").isAvailable = false;
   report.actions.find((action) => action.id === "runtime.repairGuestAgentForApp").isAvailable = true;
@@ -879,7 +879,7 @@ test("accepts stale running console preview with recovery commands", () => {
   setReleaseGateStep(report, "openWindowsApp", {
     state: "ready",
     isPassing: false,
-    nextActionCommand: "veil-vmctl qemu-install-agent --json --wait-seconds 120"
+    nextActionCommand: "veil-vmctl app-runtime-action --json --action repair-agent --wait-seconds 120"
   });
 
   assert.doesNotThrow(() => validateAppRuntimeStatus(report));
@@ -920,7 +920,7 @@ test("accepts stale guest tools media when app flow powers down before repair", 
 test("rejects stale guest tools media when guest-agent repair is still exposed", () => {
   const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.demo.json", import.meta.url), "utf8"));
   configureRunningStaleGuestToolsMedia(report);
-  report.launchPlan.recommendedRepairCommand = "veil-vmctl qemu-install-agent --json --wait-seconds 120";
+  report.launchPlan.recommendedRepairCommand = "veil-vmctl app-runtime-action --json --action repair-agent --wait-seconds 120";
   report.actions.find((action) => action.id === "runtime.repairGuestAgentForApp").isAvailable = true;
 
   assert.throws(

@@ -1097,7 +1097,7 @@ function expectedPrimaryNextActionId(stepId, command) {
       if (command.includes("--action wait-agent")) {
         return "runtime.waitAgent";
       }
-      if (command.includes("qemu-install-agent")) {
+      if (command.includes("--action repair-agent") || command.includes("qemu-install-agent")) {
         return "runtime.repairGuestAgentForApp";
       }
       if (command.includes("qemu-start")) {

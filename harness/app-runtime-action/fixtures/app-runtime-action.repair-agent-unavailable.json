@@ -1,7 +1,7 @@
 {
   "kind": "windowsAppRuntimeAction",
-  "action": "wait-agent",
-  "requestedAt": "2026-07-05T01:00:00Z",
+  "action": "repair-agent",
+  "requestedAt": "2026-07-10T04:40:00Z",
   "endpoint": "ws://127.0.0.1:9",
   "connectionMode": "demo",
   "accepted": false,
@@ -11,14 +11,14 @@
     "pendingLaunchAppId": "winapp_notepad",
     "canRequestSelectedAppLaunch": true,
     "canLaunchSelectedAppNow": false,
-    "requiresRuntimeStart": true,
+    "requiresRuntimeStart": false,
     "requiresGuestAgent": true,
-    "recommendedAction": "start-runtime-for-pending-launch",
-    "recommendedStartCommand": "veil-vmctl qemu-start --json --wait-seconds 30",
+    "recommendedAction": "repair-guest-agent-for-pending-launch",
     "recommendedWaitCommand": "veil-vmctl guest-agent-wait --json --wait-seconds 30",
     "recommendedLaunchCommand": "veil-vmctl app-runtime-action --json --action fulfill-pending",
-    "reason": "The selected app launch is queued until Windows starts and the guest agent connects.",
-    "willOpenAppAutomatically": true
+    "reason": "Windows is running and the selected app launch is queued; repair or start the guest agent, then open the app automatically.",
+    "willOpenAppAutomatically": true,
+    "recommendedRepairCommand": "veil-vmctl app-runtime-action --json --action repair-agent --wait-seconds 120"
   },
   "closedWindows": [],
   "mouseInputs": [],
@@ -60,8 +60,8 @@
       "isEnabled": true,
       "statusTitle": "Notepad Waiting",
       "symbolName": "clock.fill",
-      "primaryActionId": "runtime.startWindowsForApp",
-      "primaryActionTitle": "Open Windows for Notepad",
+      "primaryActionId": "runtime.repairGuestAgentForApp",
+      "primaryActionTitle": "Continue Notepad",
       "primaryActionAvailable": true,
       "canOpenMainWindow": true,
       "canBringWindowsAppsForward": false,
@@ -104,14 +104,14 @@
       "pendingLaunchAppId": "winapp_notepad",
       "canRequestSelectedAppLaunch": true,
       "canLaunchSelectedAppNow": false,
-      "requiresRuntimeStart": true,
+      "requiresRuntimeStart": false,
       "requiresGuestAgent": true,
-      "recommendedAction": "start-runtime-for-pending-launch",
-      "recommendedStartCommand": "veil-vmctl qemu-start --json --wait-seconds 30",
+      "recommendedAction": "repair-guest-agent-for-pending-launch",
       "recommendedWaitCommand": "veil-vmctl guest-agent-wait --json --wait-seconds 30",
       "recommendedLaunchCommand": "veil-vmctl app-runtime-action --json --action fulfill-pending",
-      "reason": "The selected app launch is queued until Windows starts and the guest agent connects.",
-      "willOpenAppAutomatically": true
+      "reason": "Windows is running and the selected app launch is queued; repair or start the guest agent, then open the app automatically.",
+      "willOpenAppAutomatically": true,
+      "recommendedRepairCommand": "veil-vmctl app-runtime-action --json --action repair-agent --wait-seconds 120"
     },
     "apps": [
       {
@@ -177,12 +177,12 @@
       },
       {
         "id": "runtime.startWindowsForApp",
-        "isAvailable": true,
+        "isAvailable": false,
         "title": "Start Windows To Open App"
       },
       {
         "id": "runtime.repairGuestAgentForApp",
-        "isAvailable": false,
+        "isAvailable": true,
         "title": "Repair App Connection"
       },
       {
@@ -261,35 +261,35 @@
     },
     "localRuntime": {
       "isKnown": true,
-      "state": "stopped",
+      "state": "running",
       "bootReady": true,
-      "canStart": true,
-      "isRunning": false,
-      "windowsInstalled": false,
-      "recommendedAction": "start-runtime",
+      "canStart": false,
+      "isRunning": true,
+      "windowsInstalled": true,
+      "recommendedAction": "wait-for-guest-agent",
       "recommendedInstallStatusCommand": "veil-vmctl qemu-install-status --json",
-      "reason": "The local Windows runtime is boot ready.",
+      "reason": "The local Windows runtime is already running; wait for the guest agent before opening Windows apps.",
       "installEvidence": {
-        "kind": "setupReady",
-        "isInstalled": false,
-        "title": "Windows setup ready",
-        "detail": "Boot the installer, complete Windows setup, then connect the Veil guest agent."
+        "kind": "profileFlag",
+        "isInstalled": true,
+        "title": "Windows installed",
+        "detail": "The local profile is marked installed."
       }
     },
     "releaseGate": {
       "isEnabled": true,
       "requiredStepCount": 5,
-      "passingStepCount": 1,
+      "passingStepCount": 2,
       "isPassing": false,
-      "recommendedAction": "windowsSetup",
+      "recommendedAction": "openWindowsApp",
       "reason": "Continue the first unmet release gate step before promoting the one-screen Windows app flow.",
       "steps": [
         {
           "id": "windowsSetup",
           "title": "Windows Setup Ready",
-          "state": "blocked",
+          "state": "passed",
           "isRequired": true,
-          "isPassing": false,
+          "isPassing": true,
           "evidence": "The local Windows runtime is boot ready.",
           "nextActionCommand": "veil-vmctl qemu-install-status --json"
         },
@@ -309,7 +309,7 @@
           "isRequired": true,
           "isPassing": false,
           "evidence": "The selected app launch is queued until Windows starts and the guest agent connects.",
-          "nextActionCommand": "veil-vmctl qemu-start --json --wait-seconds 30"
+          "nextActionCommand": "veil-vmctl app-runtime-action --json --action repair-agent --wait-seconds 120"
         },
         {
           "id": "appCheckEvidence",
@@ -367,14 +367,14 @@
       "reason": "No app check artifact has been saved under Veil diagnostics yet."
     },
     "primaryNextAction": {
-      "id": "windowsSetup",
-      "title": "Windows Setup Ready",
+      "id": "openWindowsApp",
+      "title": "Open Windows App",
       "source": "releaseGate",
       "isAvailable": true,
       "runsInApp": true,
-      "actionId": "runtime.refreshStatus",
-      "command": "veil-vmctl qemu-install-status --json",
-      "reason": "The local Windows runtime is boot ready."
+      "actionId": "runtime.repairGuestAgentForApp",
+      "command": "veil-vmctl app-runtime-action --json --action repair-agent --wait-seconds 120",
+      "reason": "The selected app launch is queued until Windows starts and the guest agent connects."
     },
     "oneScreenUX": {
       "isEnabled": true,
@@ -387,15 +387,15 @@
       "canRecoverFromMenuOrDock": true,
       "returnsToLauncherWhenNoAppWindows": true,
       "keepsDisplayRecoveryManual": true,
-      "primaryActionId": "runtime.refreshStatus",
+      "primaryActionId": "runtime.repairGuestAgentForApp",
       "heroRunsPrimaryAction": true,
       "reason": "The Veil launcher remains the single setup surface until a Windows app window is ready."
     },
     "launchOnboarding": {
       "isEnabled": true,
       "state": "continue-in-app",
-      "currentStepId": "windowsSetup",
-      "currentStepTitle": "Windows Setup Ready",
+      "currentStepId": "openWindowsApp",
+      "currentStepTitle": "Open Windows App",
       "usesSinglePrimarySurface": true,
       "expectedVisibleSurfaceCount": 1,
       "canContinueInApp": true,
@@ -403,13 +403,13 @@
       "keepsRecoveryInMenuOrDock": true,
       "keepsVMDisplayManual": true,
       "pendingLiveProof": true,
-      "primaryActionId": "runtime.refreshStatus",
-      "primaryCommand": "veil-vmctl qemu-install-status --json",
+      "primaryActionId": "runtime.repairGuestAgentForApp",
+      "primaryCommand": "veil-vmctl app-runtime-action --json --action repair-agent --wait-seconds 120",
       "reason": "Continue from the single Veil launcher action without opening a separate VM manager surface."
     }
   },
   "nextActions": [
-    "Run `veil-vmctl app-runtime-action --json --action repair-agent --wait-seconds 120` to send the attached guest-agent repair path.",
+    "Run `veil-vmctl app-runtime-action --json --action repair-agent --wait-seconds 120` to retry the in-app guest-agent repair path.",
     "Run `veil-host-probe --diagnose-agent` to inspect host-forward TCP and WebSocket health.",
     "Run `veil-vmctl app-runtime-status --json` before retrying app launch or reconnect-restore."
   ],
@@ -420,31 +420,78 @@
     "canRunMVPProof": false,
     "reason": "Wait for the live Windows agent before running proof commands."
   },
-  "agentWait": {
-    "attempts": 2,
-    "diagnostic": {
-      "endpoint": "ws://127.0.0.1:18444",
+  "agentRepair": {
+    "kind": "qemuGuestAgentInstallAttempt",
+    "commandText": "cmd.exe /c for %d in (D E F G H I J K L M N O P Q R S T U V W X Y Z) do @if exist \"%d:\\Veil Guest Agent\\V.cmd\" \"%d:\\Veil Guest Agent\\V.cmd\"",
+    "keySend": {
+      "kind": "qemuKeySend",
+      "monitorSocketPath": "/tmp/veil-qemu-monitor.sock",
+      "qmpSocketPath": "/tmp/veil-qemu.qmp.sock",
+      "keys": [
+        "meta-r",
+        "c",
+        "m",
+        "d",
+        "ret"
+      ],
+      "results": [
+        {
+          "key": "meta-r",
+          "command": "input-send-event",
+          "transport": "qmp",
+          "socketPath": "/tmp/veil-qemu.qmp.sock",
+          "didLaunchSender": true,
+          "terminationStatus": 0
+        }
+      ],
+      "sentAt": "2026-07-10T04:40:01Z"
+    },
+    "agentWait": {
+      "kind": "guestAgentWait",
+      "endpoint": "ws://127.0.0.1:9",
+      "status": "unavailable",
+      "waitedSeconds": 5,
+      "attempts": 1,
+      "diagnostic": {
+        "kind": "agentConnectionDiagnostic",
+        "endpoint": "ws://127.0.0.1:9",
+        "status": "unavailable",
+        "errorMessage": "Connection refused",
+        "hostForwardProbe": {
+          "endpoint": "ws://127.0.0.1:9",
+          "status": "tcpUnavailable",
+          "host": "127.0.0.1",
+          "port": 9,
+          "detail": "The host-forwarded guest agent port is not accepting TCP connections."
+        },
+        "nextActions": [
+          "Inside Windows, run Veil Shared\\Veil Guest Agent\\Install Veil Agent.cmd.",
+          "Inside Windows, run Veil Shared\\Veil Guest Agent\\Repair Veil Agent Connectivity.cmd as Administrator.",
+          "Run `veil-host-probe --diagnose-agent` after the repair attempt."
+        ]
+      },
       "nextActions": [
         "Inside Windows, run Veil Shared\\Veil Guest Agent\\Install Veil Agent.cmd.",
-        "If macOS can open the forwarded port but health still times out, run Veil Shared\\Veil Guest Agent\\Repair Veil Agent Connectivity.cmd and approve the Windows administrator prompt."
-      ],
-      "status": "unavailable",
-      "errorMessage": "Timed out waiting for agent.health.response.",
-      "hostForwardProbe": {
-        "endpoint": "ws://127.0.0.1:18444",
-        "host": "127.0.0.1",
-        "port": 18444,
-        "status": "tcpOpen",
-        "detail": "TCP opened but WebSocket health did not respond."
-      }
+        "Inside Windows, run Veil Shared\\Veil Guest Agent\\Repair Veil Agent Connectivity.cmd as Administrator.",
+        "Run `veil-host-probe --diagnose-agent` after the repair attempt."
+      ]
     },
-    "endpoint": "ws://127.0.0.1:18444",
-    "kind": "guestAgentWait",
+    "postAttemptConsole": {
+      "kind": "qemuGuestAgentInstallConsoleEvidence",
+      "capture": null,
+      "reviewHint": "Console screenshot could not be captured after the install attempt: monitor unavailable",
+      "expectedVisibleStates": [
+        "Windows Run dialog with the V.cmd command",
+        "Windows administrator approval prompt for Repair Veil Agent Connectivity, often with No focused by default",
+        "PowerShell or Command Prompt running the Veil repair/install script",
+        "Windows desktop with no visible installer window, which means the QMP command likely did not reach the shell"
+      ]
+    },
+    "status": "unavailable",
     "nextActions": [
       "Inside Windows, run Veil Shared\\Veil Guest Agent\\Install Veil Agent.cmd.",
-      "If macOS can open the forwarded port but health still times out, run Veil Shared\\Veil Guest Agent\\Repair Veil Agent Connectivity.cmd and approve the Windows administrator prompt."
-    ],
-    "status": "unavailable",
-    "waitedSeconds": 1
+      "Inside Windows, run Veil Shared\\Veil Guest Agent\\Repair Veil Agent Connectivity.cmd as Administrator.",
+      "Run `veil-host-probe --diagnose-agent` after the repair attempt."
+    ]
   }
 }

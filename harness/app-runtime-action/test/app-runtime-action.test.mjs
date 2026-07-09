@@ -90,7 +90,7 @@ function expectedPrimaryNextActionId(stepId, command) {
       if (command.includes("--action wait-agent")) {
         return "runtime.waitAgent";
       }
-      if (command.includes("qemu-install-agent")) {
+      if (command.includes("--action repair-agent") || command.includes("qemu-install-agent")) {
         return "runtime.repairGuestAgentForApp";
       }
       if (command.includes("qemu-start")) {
@@ -303,11 +303,11 @@ test("validates pending launch repair action while local Windows is running", ()
   report.launchPlan.requiresRuntimeStart = false;
   report.launchPlan.recommendedAction = "repair-guest-agent-for-pending-launch";
   delete report.launchPlan.recommendedStartCommand;
-  report.launchPlan.recommendedRepairCommand = "veil-vmctl qemu-install-agent --json --wait-seconds 120";
+  report.launchPlan.recommendedRepairCommand = "veil-vmctl app-runtime-action --json --action repair-agent --wait-seconds 120";
   report.launchPlan.reason = "Windows is running and the selected app launch is queued; repair or start the guest agent, then open the app automatically.";
   report.nextActions = [
     "Run `veil-vmctl guest-agent-wait --json --wait-seconds 30` to wait for the Windows guest agent.",
-    "Run `veil-vmctl qemu-install-agent --json --wait-seconds 120` to repair or start the Windows guest agent from attached media.",
+    "Run `veil-vmctl app-runtime-action --json --action repair-agent --wait-seconds 120` to repair or start the Windows guest agent from attached media.",
     "Run `veil-vmctl app-runtime-action --json --action fulfill-pending` after the guest agent connects."
   ];
   report.status.launchPlan = { ...report.launchPlan };
@@ -327,7 +327,7 @@ test("validates pending launch repair action while local Windows is running", ()
   });
   setReleaseGateStep(report, "openWindowsApp", {
     isPassing: false,
-    nextActionCommand: "veil-vmctl qemu-install-agent --json --wait-seconds 120"
+    nextActionCommand: "veil-vmctl app-runtime-action --json --action repair-agent --wait-seconds 120"
   });
 
   assert.equal(validateAppRuntimeAction(report), report);
@@ -344,7 +344,7 @@ test("rejects stale guest tools media action guidance that still recommends repa
   const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-action.launch-pending.json", import.meta.url), "utf8"));
   configureRunningStaleGuestToolsMedia(report);
   report.nextActions = [
-    "Run `veil-vmctl qemu-install-agent --json --wait-seconds 120` to repair or start the Windows guest agent from attached media.",
+    "Run `veil-vmctl app-runtime-action --json --action repair-agent --wait-seconds 120` to repair or start the Windows guest agent from attached media.",
     "Run `veil-vmctl app-runtime-action --json --action fulfill-pending` after the guest agent connects."
   ];
 
@@ -477,6 +477,12 @@ test("validates wait-agent unavailable action fixture", () => {
   assert.equal(validateAppRuntimeAction(report), report);
 });
 
+test("validates repair-agent unavailable action fixture", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-action.repair-agent-unavailable.json", import.meta.url), "utf8"));
+
+  assert.equal(validateAppRuntimeAction(report), report);
+});
+
 test("validates wait-agent stale media guidance before guest-agent repair", () => {
   const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-action.wait-agent-unavailable.json", import.meta.url), "utf8"));
   configureRunningStaleGuestToolsMedia(report);
@@ -511,7 +517,7 @@ test("validates unavailable wait-agent action reports", () => {
   delete report.appId;
   report.agentWait = agentWait;
   report.nextActions = [
-    "Run `veil-vmctl qemu-install-agent --json --wait-seconds 120` to send the attached guest-agent repair path.",
+    "Run `veil-vmctl app-runtime-action --json --action repair-agent --wait-seconds 120` to send the attached guest-agent repair path.",
     "Run `veil-host-probe --diagnose-agent` to inspect host-forward TCP and WebSocket health.",
     "Run `veil-vmctl app-runtime-status --json` before retrying app launch or reconnect-restore."
   ];
@@ -528,6 +534,16 @@ test("rejects wait-agent action reports whose accepted flag drifts", () => {
   assert.throws(
     () => validateAppRuntimeAction(report),
     /accepted/
+  );
+});
+
+test("rejects repair-agent actions without repair evidence", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-action.repair-agent-unavailable.json", import.meta.url), "utf8"));
+  delete report.agentRepair;
+
+  assert.throws(
+    () => validateAppRuntimeAction(report),
+    /agentRepair/
   );
 });
 

@@ -1536,7 +1536,7 @@ struct HostDashboardModelTests {
         #expect(runningQueuedReport.launchPlan.willOpenAppAutomatically)
         #expect(runningQueuedReport.launchPlan.recommendedStartCommand == nil)
         #expect(runningQueuedReport.launchPlan.recommendedWaitCommand == "veil-vmctl guest-agent-wait --json --wait-seconds 30")
-        #expect(runningQueuedReport.launchPlan.recommendedRepairCommand == "veil-vmctl qemu-install-agent --json --wait-seconds 120")
+        #expect(runningQueuedReport.launchPlan.recommendedRepairCommand == "veil-vmctl app-runtime-action --json --action repair-agent --wait-seconds 120")
         #expect(runningQueuedReport.launchPlan.recommendedLaunchCommand == "veil-vmctl app-runtime-action --json --action fulfill-pending")
         #expect(runningQueuedReport.launchPlan.reason == "Windows is running and the selected app launch is queued; repair or start the guest agent, then open the app automatically.")
         #expect(runningQueuedReport.actions.first { $0.id == "runtime.startWindowsForApp" }?.isAvailable == false)
@@ -1547,10 +1547,10 @@ struct HostDashboardModelTests {
         #expect(runningQueuedReport.releaseGate.recommendedAction == "openWindowsApp")
         #expect(runningQueuedReport.releaseGate.steps.first { $0.id == "openWindowsApp" }?.isPassing == false)
         #expect(runningQueuedReport.releaseGate.steps.first { $0.id == "openWindowsApp" }?.state == "ready")
-        #expect(runningQueuedReport.releaseGate.steps.first { $0.id == "openWindowsApp" }?.nextActionCommand == "veil-vmctl qemu-install-agent --json --wait-seconds 120")
+        #expect(runningQueuedReport.releaseGate.steps.first { $0.id == "openWindowsApp" }?.nextActionCommand == "veil-vmctl app-runtime-action --json --action repair-agent --wait-seconds 120")
         #expect(runningQueuedReport.primaryNextAction.id == "openWindowsApp")
         #expect(runningQueuedReport.primaryNextAction.actionId == "runtime.repairGuestAgentForApp")
-        #expect(runningQueuedReport.primaryNextAction.command == "veil-vmctl qemu-install-agent --json --wait-seconds 120")
+        #expect(runningQueuedReport.primaryNextAction.command == "veil-vmctl app-runtime-action --json --action repair-agent --wait-seconds 120")
 
         primary.error = nil
         let fulfilledLaunch = await model.refreshLiveAgentIfNeeded()

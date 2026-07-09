@@ -1638,7 +1638,7 @@ public final class HostDashboardModel {
         let canLaunchNow = canLaunchApp(appId: selectedAppId)
         let launchCommand = "veil-vmctl app-runtime-action --json --action launch --app-id \(selectedAppId)"
         let fulfillPendingCommand = "veil-vmctl app-runtime-action --json --action fulfill-pending"
-        let repairCommand = "veil-vmctl qemu-install-agent --json --wait-seconds 120"
+        let repairCommand = "veil-vmctl app-runtime-action --json --action repair-agent --wait-seconds 120"
         let hasPendingSelectedAppLaunch = pendingLaunchAppId == selectedAppId
         let localRuntime = localRuntime ?? localRuntimeStatus(snapshot: nil)
 
@@ -2101,7 +2101,7 @@ public final class HostDashboardModel {
             if command.contains("--action wait-agent") {
                 return "runtime.waitAgent"
             }
-            if command.contains("qemu-install-agent") {
+            if command.contains("--action repair-agent") || command.contains("qemu-install-agent") {
                 return "runtime.repairGuestAgentForApp"
             }
             if command.contains("qemu-start") {

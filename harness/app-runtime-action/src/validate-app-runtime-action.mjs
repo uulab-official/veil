@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { validateAppRuntimeStatus } from "../../app-runtime-status/src/validate-app-runtime-status.mjs";
 import { validateGuestAgentWait } from "../../guest-agent-wait/src/validate-guest-agent-wait.mjs";
 
-const VALID_ACTIONS = new Set(["launch", "fulfill-pending", "focus", "close", "close-all", "restore", "reconnect-restore", "bring-forward", "recover-display", "wait-agent", "quiet-when-idle", "stop-runtime", "clipboard", "type-text", "click", "proof-recommended"]);
+const VALID_ACTIONS = new Set(["launch", "fulfill-pending", "focus", "close", "close-all", "restore", "reconnect-restore", "bring-forward", "recover-display", "wait-agent", "repair-agent", "quiet-when-idle", "stop-runtime", "clipboard", "type-text", "click", "proof-recommended"]);
 const VALID_CONNECTION_MODES = new Set(["agent", "demo"]);
 const VALID_CONSOLE_PREVIEW_STATES = new Set(["fresh", "stale", "unavailable"]);
 
@@ -59,6 +59,10 @@ export function validateAppRuntimeAction(report) {
     throw new TypeError("agentWait is only allowed for wait-agent actions.");
   }
 
+  if (report.action !== "repair-agent" && report.agentRepair !== undefined && report.agentRepair !== null) {
+    throw new TypeError("agentRepair is only allowed for repair-agent actions.");
+  }
+
   switch (report.action) {
     case "launch":
       validateLaunchAction(report);
@@ -90,6 +94,9 @@ export function validateAppRuntimeAction(report) {
     case "wait-agent":
       validateWaitAgentAction(report);
       break;
+    case "repair-agent":
+      validateRepairAgentAction(report);
+      break;
     case "quiet-when-idle":
       validateQuietWhenIdleAction(report);
       break;
@@ -116,6 +123,89 @@ export function validateAppRuntimeAction(report) {
   return report;
 }
 
+function validateRepairAgentAction(report) {
+  if (report.launchPlan === undefined) {
+    throw new TypeError("repair-agent actions must include top-level launchPlan.");
+  }
+
+  if (report.status.localRuntime.requiresGuestToolsMediaRebuild) {
+    if (report.agentRepair !== undefined && report.agentRepair !== null) {
+      throw new TypeError("repair-agent actions must not run guest-agent repair while guest tools media is stale.");
+    }
+    return;
+  }
+
+  if (report.launchPlan.recommendedRepairCommand === undefined) {
+    if (report.accepted) {
+      throw new TypeError("accepted repair-agent actions require launchPlan.recommendedRepairCommand.");
+    }
+    if (report.agentRepair !== undefined && report.agentRepair !== null) {
+      throw new TypeError("repair-agent actions without a repair command must not include agentRepair.");
+    }
+    return;
+  }
+
+  if (!report.agentRepair || typeof report.agentRepair !== "object" || Array.isArray(report.agentRepair)) {
+    throw new TypeError("repair-agent actions must include agentRepair.");
+  }
+
+  validateGuestAgentRepair(report.agentRepair);
+
+  if (report.accepted && report.agentRepair.status !== "connected") {
+    throw new TypeError("accepted repair-agent actions require connected agentRepair status.");
+  }
+
+  if (report.accepted && !report.status.connection.hasLiveAgentConnection) {
+    throw new TypeError("accepted repair-agent actions require a live status connection.");
+  }
+
+  if (report.launch !== undefined && report.launch !== null) {
+    validateLaunchResponse(report.launch);
+    validateWindow(report.window);
+    requireString(report.appId, "appId");
+    requireString(report.windowId, "windowId");
+    if (report.window.windowId !== report.windowId) {
+      throw new TypeError("repair-agent launched window must match report.windowId.");
+    }
+    requireForegroundWindowIdentity(report, report.window.windowId, report.window.title, "repair-agent launch handoff");
+    requireForegroundableMacWindow(report, "repair-agent launch handoff");
+  }
+
+  if (!report.accepted && !report.nextActions.some((action) => action.includes("repair-agent") || action.includes("veil-host-probe"))) {
+    throw new TypeError("rejected repair-agent actions must expose repair retry or host diagnostic next actions.");
+  }
+}
+
+function validateGuestAgentRepair(repair) {
+  requireString(repair.kind, "agentRepair.kind");
+  if (repair.kind !== "qemuGuestAgentInstallAttempt") {
+    throw new TypeError("Unsupported agentRepair.kind.");
+  }
+  requireString(repair.commandText, "agentRepair.commandText");
+  validateGuestAgentWait(repair.agentWait);
+  requireString(repair.status, "agentRepair.status");
+  if (repair.status !== repair.agentWait.status) {
+    throw new TypeError("agentRepair.status must match agentRepair.agentWait.status.");
+  }
+  validateGuestAgentRepairConsole(repair.postAttemptConsole);
+  validateStringArray(repair.nextActions, "agentRepair.nextActions");
+}
+
+function validateGuestAgentRepairConsole(consoleEvidence) {
+  if (!consoleEvidence || typeof consoleEvidence !== "object" || Array.isArray(consoleEvidence)) {
+    throw new TypeError("agentRepair.postAttemptConsole must be an object.");
+  }
+  requireString(consoleEvidence.kind, "agentRepair.postAttemptConsole.kind");
+  if (consoleEvidence.kind !== "qemuGuestAgentInstallConsoleEvidence") {
+    throw new TypeError("Unsupported agentRepair.postAttemptConsole.kind.");
+  }
+  requireString(consoleEvidence.reviewHint, "agentRepair.postAttemptConsole.reviewHint");
+  validateStringArray(consoleEvidence.expectedVisibleStates, "agentRepair.postAttemptConsole.expectedVisibleStates");
+  if (consoleEvidence.capture !== undefined && consoleEvidence.capture !== null) {
+    validateConsoleCapture(consoleEvidence.capture);
+  }
+}
+
 function validateGuestToolsMediaRebuildNextActions(report) {
   if (!report.status.localRuntime.requiresGuestToolsMediaRebuild) {
     return;
@@ -128,7 +218,7 @@ function validateGuestToolsMediaRebuildNextActions(report) {
   if (!joinedActions.includes("veil-vmctl prepare --installer")) {
     throw new TypeError("stale guest tools media actions must include the media rebuild command.");
   }
-  if (joinedActions.includes("qemu-install-agent")) {
+  if (joinedActions.includes("qemu-install-agent") || joinedActions.includes("--action repair-agent")) {
     throw new TypeError("stale guest tools media actions must not recommend guest-agent repair before media rebuild.");
   }
 }

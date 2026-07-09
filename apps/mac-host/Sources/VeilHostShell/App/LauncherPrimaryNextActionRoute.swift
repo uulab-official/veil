@@ -65,7 +65,7 @@ enum LauncherPrimaryNextActionRoute: Equatable {
             return .runRecommendedProof
         }
 
-        if command.contains("qemu-install-agent") {
+        if command.contains("--action repair-agent") || command.contains("qemu-install-agent") {
             return .repairAppConnection
         }
 

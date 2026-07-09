@@ -248,6 +248,7 @@ Goal: keep the main Veil experience pointed at real local Windows boot and conso
 - [x] Add structured `localRuntime.installEvidence` to app-runtime status and harness validation so first-run/review automation distinguishes manual profile installed flags from live guest-agent evidence.
 - [x] Replace stopped-installed launcher/menu "ready" copy with start/connect language so a manual profile install flag no longer looks like a completed app-connection proof.
 - [x] Route the installed launcher footer action through the same `launchOnboarding.primaryActionId` path as the hero button, so Continue/Repair/Open actions cannot drift between visible controls.
+- [x] Promote guest-agent repair into `app-runtime-action --action repair-agent`, with `agentRepair` evidence and pending-launch fulfillment, so the app button and harness share one product action instead of pointing at the lower-level QEMU command.
 
 ## Next
 

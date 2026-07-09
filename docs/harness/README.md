@@ -113,7 +113,7 @@ becomes available after a queued app launch has a live guest agent capable of
 opening that app.
 When Windows is already running but the live guest agent is not connected,
 `launchPlan.recommendedRepairCommand` points at
-`veil-vmctl qemu-install-agent --json --wait-seconds 120`, and the matching
+`veil-vmctl app-runtime-action --json --action repair-agent --wait-seconds 120`, and the matching
 `runtime.repairGuestAgentForApp` action becomes available. This gives the app
 shell and CLI one shared gate for the Parallels-style path: queue the Windows
 app, repair or start the guest agent from attached media, then fulfill the
@@ -400,6 +400,7 @@ swift run veil-vmctl app-runtime-action --json --action reconnect-restore | node
 swift run veil-vmctl app-runtime-action --json --action bring-forward | node ../../harness/app-runtime-action/src/validate-app-runtime-action.mjs
 swift run veil-vmctl app-runtime-action --json --action recover-display | node ../../harness/app-runtime-action/src/validate-app-runtime-action.mjs
 swift run veil-vmctl app-runtime-action --json --action wait-agent --wait-seconds 30 | node ../../harness/app-runtime-action/src/validate-app-runtime-action.mjs
+swift run veil-vmctl app-runtime-action --json --action repair-agent --wait-seconds 120 | node ../../harness/app-runtime-action/src/validate-app-runtime-action.mjs
 swift run veil-vmctl app-runtime-action --json --action click --window-id hwnd:0003029A --x 240 --y 130 | node ../../harness/app-runtime-action/src/validate-app-runtime-action.mjs
 swift run veil-vmctl app-runtime-action --json --action clipboard --text "hello from macOS" | node ../../harness/app-runtime-action/src/validate-app-runtime-action.mjs
 swift run veil-vmctl app-runtime-action --json --action type-text --window-id hwnd:0003029A --text "veil" | node ../../harness/app-runtime-action/src/validate-app-runtime-action.mjs

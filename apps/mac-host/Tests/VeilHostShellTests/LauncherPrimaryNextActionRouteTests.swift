@@ -89,6 +89,12 @@ struct LauncherPrimaryNextActionRouteTests {
         )
         #expect(
             LauncherPrimaryNextActionRoute.resolve(
+                actionId: "openWindowsApp",
+                command: "veil-vmctl app-runtime-action --json --action repair-agent --wait-seconds 120"
+            ) == .repairAppConnection
+        )
+        #expect(
+            LauncherPrimaryNextActionRoute.resolve(
                 actionId: "closeOrRestore",
                 command: "veil-vmctl app-runtime-action --json --action reconnect-restore"
             ) == .reconnectPreviousApps
