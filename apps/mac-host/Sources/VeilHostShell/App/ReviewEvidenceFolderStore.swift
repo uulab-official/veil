@@ -15,6 +15,14 @@ struct ReviewEvidenceFile: Codable, Equatable {
     var expectedSurface: String
 }
 
+struct ReviewEvidenceAppCheckProofFile: Codable, Equatable {
+    var expectedFileName: String
+    var path: String
+    var command: String
+    var requiredKind: String
+    var requiredStatus: String
+}
+
 struct ReviewEvidenceCaptureStep: Codable, Equatable {
     var order: Int
     var slotId: String
@@ -35,6 +43,7 @@ struct ReviewEvidenceManifest: Codable, Equatable {
     var minimumScreenshotWidth: Int
     var minimumScreenshotHeight: Int
     var screenshotFiles: [ReviewEvidenceFile]
+    var appCheckProofFile: ReviewEvidenceAppCheckProofFile
     var captureSteps: [ReviewEvidenceCaptureStep]
     var reviewCommand: String
     var verifyCommand: String
@@ -96,6 +105,8 @@ enum ReviewEvidenceFolderStore {
         slots.map { expectedFileName(slotId: $0.id) }
     }
 
+    static let appCheckProofFileName = "mvp-proof.json"
+
     static func defaultDirectory(now: Date = Date()) -> URL {
         QEMUVMRuntimeBooter.defaultDiagnosticsDirectory()
             .appendingPathComponent("Review Evidence", isDirectory: true)
@@ -129,6 +140,7 @@ enum ReviewEvidenceFolderStore {
         let reviewCommand = reviewCommand(evidenceDirectory: evidencePath)
         let verifyCommand = verifyCommand(evidenceDirectory: evidencePath)
         let openEvidenceDirectoryCommand = openCommand(evidenceDirectory: evidencePath)
+        let appCheckProofFile = appCheckProofFile(evidenceDirectory: evidencePath)
         let screenshotFiles = slots.map { slot in
             let fileName = expectedFileName(slotId: slot.id)
             return ReviewEvidenceFile(
@@ -148,7 +160,10 @@ enum ReviewEvidenceFolderStore {
                 expectedFileName: fileName,
                 instruction: slot.instruction,
                 captureCommand: captureCommand(path: directory.appendingPathComponent(fileName).path),
-                supportingCommand: slot.supportingCommand
+                supportingCommand: supportingCommand(
+                    slot: slot,
+                    appCheckProofFile: appCheckProofFile
+                )
             )
         }
 
@@ -161,6 +176,7 @@ enum ReviewEvidenceFolderStore {
             minimumScreenshotWidth: minimumScreenshotWidth,
             minimumScreenshotHeight: minimumScreenshotHeight,
             screenshotFiles: screenshotFiles,
+            appCheckProofFile: appCheckProofFile,
             captureSteps: captureSteps,
             reviewCommand: reviewCommand,
             verifyCommand: verifyCommand,
@@ -168,6 +184,7 @@ enum ReviewEvidenceFolderStore {
             nextActions: [
                 "Open the evidence folder with `\(openEvidenceDirectoryCommand)`.",
                 "Capture the five required screenshots into the evidence directory as valid PNG files of at least 640 x 360.",
+                "Run the saved app check proof command from `review-manifest.json` and keep `\(appCheckProofFile.expectedFileName)` in the evidence directory.",
                 "Run `\(reviewCommand)` and confirm Screenshots is 5/5 attached.",
                 "Run `\(verifyCommand)` before sharing evidence."
             ]
@@ -191,6 +208,10 @@ enum ReviewEvidenceFolderStore {
         let fileList = manifest.screenshotFiles
             .map { "- `\($0.expectedFileName)`: \($0.expectedSurface)" }
             .joined(separator: "\n")
+        let expectedFiles = [
+            fileList,
+            "- `\(manifest.appCheckProofFile.expectedFileName)`: proved Windows app launch, frame, input, and clipboard JSON evidence"
+        ].joined(separator: "\n")
 
         return """
         # Veil Windows App Review Evidence
@@ -203,16 +224,17 @@ enum ReviewEvidenceFolderStore {
         Checklist:
         - Open this folder with `\(manifest.openEvidenceDirectoryCommand)`.
         - Capture every PNG listed below into this folder as a valid PNG of at least \(manifest.minimumScreenshotWidth) x \(manifest.minimumScreenshotHeight).
+        - Run `\(manifest.appCheckProofFile.command)` and keep `\(manifest.appCheckProofFile.expectedFileName)` in this folder.
         - Run `\(manifest.reviewCommand)`.
         - Confirm the review card reports `Screenshots: \(manifest.requiredScreenshotCount)/\(manifest.requiredScreenshotCount) attached`.
         - Run `\(manifest.verifyCommand)` before sharing evidence.
-        - Keep `review-manifest.json` with the screenshots when sharing review evidence.
+        - Keep `review-manifest.json`, `\(manifest.appCheckProofFile.expectedFileName)`, and the screenshots when sharing review evidence.
 
         Capture steps:
         \(captureSteps)
 
         Expected files:
-        \(fileList)
+        \(expectedFiles)
 
         Veil does not store Windows images, product keys, or disk contents in this folder.
         """
@@ -233,6 +255,32 @@ enum ReviewEvidenceFolderStore {
 
     private static func captureCommand(path: String) -> String {
         "screencapture -i \(shellQuoted(path))"
+    }
+
+    private static func appCheckProofFile(evidenceDirectory: String) -> ReviewEvidenceAppCheckProofFile {
+        let path = URL(fileURLWithPath: evidenceDirectory)
+            .appendingPathComponent(appCheckProofFileName)
+            .standardizedFileURL
+            .path
+
+        return ReviewEvidenceAppCheckProofFile(
+            expectedFileName: appCheckProofFileName,
+            path: path,
+            command: "veil-vmctl mvp-proof --json --app-id winapp_notepad --require-proved --output \(shellQuoted(path))",
+            requiredKind: "windowsMVPProof",
+            requiredStatus: "proved"
+        )
+    }
+
+    private static func supportingCommand(
+        slot: ReviewEvidenceSlot,
+        appCheckProofFile: ReviewEvidenceAppCheckProofFile
+    ) -> String? {
+        if slot.id == "appWindowOnly" {
+            return appCheckProofFile.command
+        }
+
+        return slot.supportingCommand
     }
 
     private static func reviewCommand(evidenceDirectory: String) -> String {

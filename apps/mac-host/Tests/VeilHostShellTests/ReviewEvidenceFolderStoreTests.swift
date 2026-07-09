@@ -26,6 +26,8 @@ struct ReviewEvidenceFolderStoreTests {
         #expect(readme.contains("review-manifest.json"))
         #expect(readme.contains("app-runtime-review --evidence-dir"))
         #expect(readme.contains("app-runtime-review-verify --json --evidence-dir"))
+        #expect(readme.contains("mvp-proof.json"))
+        #expect(readme.contains("mvp-proof --json --app-id winapp_notepad --require-proved --output"))
 
         #expect(manifest.kind == "windowsAppRuntimeReviewEvidenceManifest")
         #expect(manifest.generatedAt == now)
@@ -36,13 +38,21 @@ struct ReviewEvidenceFolderStoreTests {
         #expect(manifest.minimumScreenshotWidth == 640)
         #expect(manifest.minimumScreenshotHeight == 360)
         #expect(manifest.screenshotFiles.map(\.expectedFileName) == ReviewEvidenceFolderStore.screenshotFileNames)
+        #expect(manifest.appCheckProofFile.expectedFileName == ReviewEvidenceFolderStore.appCheckProofFileName)
+        #expect(manifest.appCheckProofFile.path == baseDirectory.appendingPathComponent("mvp-proof.json").path)
+        #expect(manifest.appCheckProofFile.command.contains("mvp-proof --json --app-id winapp_notepad --require-proved --output"))
+        #expect(manifest.appCheckProofFile.command.contains(baseDirectory.appendingPathComponent("mvp-proof.json").path))
+        #expect(manifest.appCheckProofFile.requiredKind == "windowsMVPProof")
+        #expect(manifest.appCheckProofFile.requiredStatus == "proved")
         #expect(manifest.captureSteps.map(\.expectedFileName) == ReviewEvidenceFolderStore.screenshotFileNames)
         #expect(manifest.captureSteps.map(\.order) == [1, 2, 3, 4, 5])
+        #expect(manifest.captureSteps.first { $0.slotId == "appWindowOnly" }?.supportingCommand == manifest.appCheckProofFile.command)
         #expect(manifest.reviewCommand.contains("app-runtime-review --evidence-dir"))
         #expect(manifest.verifyCommand.contains("app-runtime-review-verify --json --evidence-dir"))
         #expect(manifest.openEvidenceDirectoryCommand.contains("open "))
         #expect(manifest.nextActions.contains { $0.contains("5/5 attached") })
         #expect(manifest.nextActions.contains { $0.contains("640 x 360") })
+        #expect(manifest.nextActions.contains { $0.contains("mvp-proof.json") })
 
         for fileName in ReviewEvidenceFolderStore.screenshotFileNames {
             #expect(readme.contains(fileName))
@@ -76,6 +86,7 @@ struct ReviewEvidenceFolderStoreTests {
         #expect(manifest.reviewCommand.contains("'\\''"))
         #expect(manifest.verifyCommand.contains("'\\''"))
         #expect(manifest.openEvidenceDirectoryCommand.contains("'\\''"))
+        #expect(manifest.appCheckProofFile.command.contains("'\\''"))
         #expect(manifest.captureSteps.allSatisfy { $0.captureCommand.contains("'\\''") })
     }
 
