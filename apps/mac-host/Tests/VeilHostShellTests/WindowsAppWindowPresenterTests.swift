@@ -5,6 +5,34 @@ import VeilHostCore
 
 @MainActor
 struct WindowsAppWindowPresenterTests {
+    @Test("keeps launcher hidden while any mirrored Windows app window is visible")
+    func keepsLauncherHiddenWhileMirroredWindowIsVisible() {
+        #expect(
+            LauncherWindowVisibilityPolicy.shouldHideLauncher(
+                visibleMirroredWindowCount: 1,
+                modelRequestsHide: false
+            )
+        )
+        #expect(
+            LauncherWindowVisibilityPolicy.shouldHideLauncher(
+                visibleMirroredWindowCount: 1,
+                modelRequestsHide: true
+            )
+        )
+        #expect(
+            LauncherWindowVisibilityPolicy.shouldHideLauncher(
+                visibleMirroredWindowCount: 0,
+                modelRequestsHide: true
+            )
+        )
+        #expect(
+            LauncherWindowVisibilityPolicy.shouldHideLauncher(
+                visibleMirroredWindowCount: 0,
+                modelRequestsHide: false
+            ) == false
+        )
+    }
+
     @Test("tracks the foreground Windows app window")
     func tracksForegroundWindowsAppWindow() {
         _ = NSApplication.shared
@@ -51,8 +79,8 @@ struct WindowsAppWindowPresenterTests {
         #expect(presenter.foregroundWindowId == nil)
     }
 
-    @Test("replaces duplicate app windows without emitting user-close callback")
-    func replacesDuplicateWindowsWithoutUserCloseCallback() {
+    @Test("closes programmatic windows without emitting user-close callback")
+    func closesProgrammaticWindowsWithoutUserCloseCallback() {
         _ = NSApplication.shared
         let presenter = WindowsAppWindowPresenter()
         defer {
@@ -73,7 +101,7 @@ struct WindowsAppWindowPresenterTests {
         presenter.closeWindow(windowId: "hwnd:0002")
 
         #expect(presenter.visibleWindowIds.isEmpty)
-        #expect(callbackWindowIds == ["hwnd:0002"])
+        #expect(callbackWindowIds.isEmpty)
     }
 
     private func session(windowId: String, appId: String, title: String) -> WindowMirrorSession {

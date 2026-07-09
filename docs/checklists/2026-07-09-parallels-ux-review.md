@@ -11,6 +11,7 @@ Goal: keep the user-facing workflow one-screen-first (launcher + one action path
 - [x] Keep recovery actions available through menu/dock surfaces so the default surface stays simple.
 - [x] Reduce duplicated main-window re-open by checking `main` window presence before opening a second launcher host.
 - [x] Improve launcher visibility policy by considering active macOS mirror windows, so the shell does not remain visible as app windows are promoted.
+- [x] Add regression coverage for visible mirror-window priority, same-app window replacement, and programmatic close paths so launcher/app surfaces do not duplicate or re-close unexpectedly.
 
 ## CEO Review
 
@@ -22,10 +23,10 @@ Goal: keep the user-facing workflow one-screen-first (launcher + one action path
 ## Engineering Review
 
 - Validate `syncLauncherWindowVisibility` in race paths: launch, queued launch fulfill, reconnect restore, session close.
-- Add regression coverage for: mirror window opens while launcher is visible; close/reopen cycles should never produce >1 launcher surface.
+- Add regression coverage for: mirror window opens while launcher is visible; close/reopen cycles should never produce >1 launcher surface. Basic mirror-window priority and programmatic close coverage is now in `WindowsAppWindowPresenterTests`.
 - Keep menu/dock actions resilient even when the launcher is intentionally hidden.
 - Confirm visibility fallback returns safely after app windows close, and that recovery actions still surface when no app windows are running.
-- Add coverage that app-level dedupe replaces same `appId` window sessions without emitting a synthetic user-close callback (`onUserWindowClose`) on replacement.
+- Add coverage that app-level dedupe and programmatic close paths replace or close host windows without emitting a synthetic user-close callback (`onUserWindowClose`).
 
 ## Design Review
 

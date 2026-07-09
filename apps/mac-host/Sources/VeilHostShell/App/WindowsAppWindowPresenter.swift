@@ -70,7 +70,7 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
         foregroundWindowId = nil
     }
 
-    func closeWindow(windowId: String, suppressWindowCloseCallback: Bool = false) {
+    func closeWindow(windowId: String, suppressWindowCloseCallback: Bool = true) {
         guard let window = windowsById[windowId] else {
             return
         }

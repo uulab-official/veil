@@ -718,11 +718,10 @@ struct VeilHostShellApp: App {
     }
 
     private func shouldHideLauncherWindowForCoherence() -> Bool {
-        if !windowsAppWindowPresenter.visibleWindowIds.isEmpty {
-            return true
-        }
-
-        return model.runtimeStatusReport().launcherVisibility.shouldHideMainWindow
+        LauncherWindowVisibilityPolicy.shouldHideLauncher(
+            visibleMirroredWindowCount: windowsAppWindowPresenter.visibleWindowIds.count,
+            modelRequestsHide: model.runtimeStatusReport().launcherVisibility.shouldHideMainWindow
+        )
     }
 
     private func runRecommendedProof() {
@@ -1454,6 +1453,15 @@ private struct VeilMenuBarMenu: View {
         default:
             "macwindow"
         }
+    }
+}
+
+struct LauncherWindowVisibilityPolicy {
+    static func shouldHideLauncher(
+        visibleMirroredWindowCount: Int,
+        modelRequestsHide: Bool
+    ) -> Bool {
+        visibleMirroredWindowCount > 0 || modelRequestsHide
     }
 }
 
