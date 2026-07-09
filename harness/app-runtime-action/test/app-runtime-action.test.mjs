@@ -554,6 +554,22 @@ test("validates repair-agent unavailable action fixture", () => {
   assert.equal(validateAppRuntimeAction(report), report);
 });
 
+test("validates accepted prepare-sparse-package action fixture", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-action.prepare-sparse-package-live.json", import.meta.url), "utf8"));
+
+  assert.equal(validateAppRuntimeAction(report), report);
+});
+
+test("rejects accepted prepare-sparse-package reports without package identity", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-action.prepare-sparse-package-live.json", import.meta.url), "utf8"));
+  report.sparsePackagePreparation.agentWait.diagnostic.health.capabilities.packageIdentity = false;
+
+  assert.throws(
+    () => validateAppRuntimeAction(report),
+    /packageIdentity=true/
+  );
+});
+
 test("accepts demo repair-agent only as a dry run", () => {
   const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-action.launch-pending.json", import.meta.url), "utf8"));
   report.action = "repair-agent";

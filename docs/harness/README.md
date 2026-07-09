@@ -205,6 +205,10 @@ The `prepare-sparse-package` command is host-actionable:
 drives the attached `P.cmd` entrypoint through QEMU keyboard automation, while
 `veil-vmctl qemu-prepare-sparse-package --json --wait-seconds 120` exposes the
 lower-level attempt report directly.
+The app-runtime action harness includes a live accepted
+`prepare-sparse-package` fixture so package identity success must carry both
+`sparsePackagePreparation.agentWait.diagnostic.health.capabilities.packageIdentity=true`
+and `dailyUseReadiness.packageIdentityReady=true`.
 When the guest has written sparse package evidence,
 `dailyUseReadiness.packageIdentityStatus` carries the latest sanitized
 `sparse-package-status.json` stage from `agent.health.response`, allowing
