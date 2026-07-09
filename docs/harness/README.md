@@ -252,9 +252,10 @@ copying Windows media, disk contents, product keys, or guest data.
 
 After screenshots are captured, `app-runtime-review-verify` checks the existing
 folder end to end: manifest presence, README presence, screenshot count,
-missing files, embedded review card state, the next missing capture step, and
-the next actions needed before sharing evidence. The verification report repeats
-the same open/review/verify commands and fails validation if they drift from the
+minimum screenshot dimensions, missing files, embedded review card state, the
+next missing capture step, and the next actions needed before sharing evidence.
+The verification report repeats the same open/review/verify commands and
+minimum screenshot contract, and fails validation if they drift from the
 manifest.
 
 ```bash

@@ -813,6 +813,8 @@ struct AppRuntimeReviewEvidenceVerification: Codable, Equatable {
     var readmeExists: Bool
     var requiredScreenshotCount: Int
     var attachedScreenshotCount: Int
+    var minimumScreenshotWidth: Int
+    var minimumScreenshotHeight: Int
     var isComplete: Bool
     var missingFiles: [String]
     var missingCaptureSteps: [AppRuntimeReviewMissingCaptureStep]
@@ -1291,6 +1293,8 @@ struct VeilVMControl {
             readmeExists: FileManager.default.fileExists(atPath: readmeURL.path),
             requiredScreenshotCount: expectedFiles.count,
             attachedScreenshotCount: attachedScreenshotCount,
+            minimumScreenshotWidth: minimumReviewScreenshotWidth,
+            minimumScreenshotHeight: minimumReviewScreenshotHeight,
             isComplete: manifest != nil
                 && FileManager.default.fileExists(atPath: readmeURL.path)
                 && missingFiles.isEmpty

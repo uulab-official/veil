@@ -74,6 +74,16 @@ test("rejects verification commands that drift from manifest commands", () => {
   );
 });
 
+test("rejects verification minimum screenshot dimensions that drift from manifest", () => {
+  const report = demoVerification();
+  report.minimumScreenshotHeight = 1;
+
+  assert.throws(
+    () => validateAppRuntimeReviewVerification(report),
+    /minimum screenshot dimensions/
+  );
+});
+
 test("accepts complete verification reports", () => {
   const report = demoVerification();
   report.attachedScreenshotCount = report.requiredScreenshotCount;

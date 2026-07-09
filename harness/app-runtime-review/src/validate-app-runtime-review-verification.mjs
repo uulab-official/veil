@@ -26,6 +26,8 @@ export function validateAppRuntimeReviewVerification(report) {
   requireBoolean(report.readmeExists, "readmeExists");
   requireNonNegativeInteger(report.requiredScreenshotCount, "requiredScreenshotCount");
   requireNonNegativeInteger(report.attachedScreenshotCount, "attachedScreenshotCount");
+  requirePositiveInteger(report.minimumScreenshotWidth, "minimumScreenshotWidth");
+  requirePositiveInteger(report.minimumScreenshotHeight, "minimumScreenshotHeight");
   requireBoolean(report.isComplete, "isComplete");
   requireString(report.reviewCommand, "reviewCommand");
   requireString(report.verifyCommand, "verifyCommand");
@@ -121,6 +123,12 @@ export function validateAppRuntimeReviewVerification(report) {
     ) {
       throw new TypeError("app runtime review verification commands must match the manifest commands.");
     }
+    if (
+      manifest.minimumScreenshotWidth !== report.minimumScreenshotWidth
+      || manifest.minimumScreenshotHeight !== report.minimumScreenshotHeight
+    ) {
+      throw new TypeError("app runtime review verification minimum screenshot dimensions must match the manifest.");
+    }
   }
 
   if (!Array.isArray(report.nextActions) || report.nextActions.length === 0) {
@@ -182,6 +190,12 @@ function requireBoolean(value, fieldName) {
 function requireNonNegativeInteger(value, fieldName) {
   if (!Number.isInteger(value) || value < 0) {
     throw new TypeError(`App runtime review verification field '${fieldName}' must be a non-negative integer.`);
+  }
+}
+
+function requirePositiveInteger(value, fieldName) {
+  if (!Number.isInteger(value) || value <= 0) {
+    throw new TypeError(`App runtime review verification field '${fieldName}' must be a positive integer.`);
   }
 }
 
