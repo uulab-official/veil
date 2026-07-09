@@ -242,6 +242,8 @@ Goal: keep the main Veil experience pointed at real local Windows boot and conso
 - [x] Block release review readiness when the embedded Windows console preview is stale or unavailable: `windowsSetup` now points at display recovery instead of letting `ready-for-release-card` pass while the main app may still show a stale/black Windows surface.
 - [x] Persist successful `qemu-capture` refresh evidence into the latest QEMU launch record so follow-up app-runtime status reports leave stale-display recovery after the console screenshot is refreshed.
 - [x] Block release review readiness while a queued Windows app launch still needs VM start, guest-agent wait, or repair; `openWindowsApp` now points at the concrete start/repair/wait command until the selected app can launch live or a mirrored macOS window exists.
+- [x] Route `runtime.startWindowsForApp` through the app-open handoff in launcher/detail/menu surfaces so an app-first start preserves the selected app intent instead of starting a generic VM-only session.
+- [x] Make queued app launch recovery outrank reconnect-restore in the menu bar primary action, so a `Notepad Waiting` status cannot show `Reconnect Notepad` as its main action.
 
 ## Next
 

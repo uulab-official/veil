@@ -1654,7 +1654,7 @@ private struct VeilMenuBarMenu: View {
             repairGuestAgentForAppLaunchAction()
         case .startWindowsForApp:
             openMainWindow()
-            startVMAction()
+            launchWindowsAppAction()
         case .waitForAgent:
             openMainWindow()
             waitForGuestAgentAction()

@@ -120,6 +120,8 @@ struct DetailView: View {
             repairGuestAgentForAppLaunchAction()
         case .startWindows:
             startVMAction()
+        case .startWindowsForApp:
+            launchWindowsAppAction()
         case .prepareWindows:
             Task {
                 await vmModel.prepareDefaultVM()

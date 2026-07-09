@@ -1480,14 +1480,6 @@ public final class HostDashboardModel {
             )
         }
 
-        if canRestoreMirrorSessions || canReconnectRestoreMirrorSessions {
-            return (
-                canRestoreMirrorSessions ? "windowsApps.restorePrevious" : "windowsApps.reconnectRestore",
-                previousAppsRestoreTitle(),
-                canReconnectRestoreMirrorSessions
-            )
-        }
-
         if pendingLaunch.isQueued {
             let appName = appName(for: pendingLaunch.appId) ?? "Windows App"
             if localRuntime.recommendedPowerDownCommand != nil {
@@ -1511,6 +1503,14 @@ public final class HostDashboardModel {
             }
 
             return ("runtime.waitAgent", "Check App Connection", !hasLiveAgentConnection)
+        }
+
+        if canRestoreMirrorSessions || canReconnectRestoreMirrorSessions {
+            return (
+                canRestoreMirrorSessions ? "windowsApps.restorePrevious" : "windowsApps.reconnectRestore",
+                previousAppsRestoreTitle(),
+                canReconnectRestoreMirrorSessions
+            )
         }
 
         if canRequestSelectedAppLaunch {

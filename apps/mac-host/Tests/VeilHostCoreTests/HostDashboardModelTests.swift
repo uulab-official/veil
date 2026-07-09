@@ -1569,6 +1569,41 @@ struct HostDashboardModelTests {
         #expect(service.launchCount == 1)
     }
 
+    @Test("pending app launch stays the menu primary action over reconnect restore")
+    @MainActor
+    func pendingAppLaunchStaysMenuPrimaryActionOverReconnectRestore() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let intentStore = JSONWindowRestoreIntentStore(directory: directory)
+        let pendingLaunchStore = JSONPendingLaunchIntentStore(directory: directory)
+        try await intentStore.save(WindowRestoreIntent(appIds: ["winapp_notepad"]))
+        try await pendingLaunchStore.save(PendingLaunchIntent(appId: "winapp_notepad"))
+        let primary = FakeDashboardService(health: .captureReady)
+        primary.error = URLError(.cannotConnectToHost)
+        let service = FallbackHostDashboardService(
+            primary: primary,
+            fallback: DemoHostDashboardService(),
+            primaryEndpointDescription: "ws://127.0.0.1:18444"
+        )
+        let model = HostDashboardModel(
+            service: service,
+            restoreIntentStore: intentStore,
+            pendingLaunchIntentStore: pendingLaunchStore
+        )
+
+        await model.loadRestoreIntent()
+        await model.load()
+        let report = model.runtimeStatusReport()
+
+        #expect(report.pendingLaunch.isQueued)
+        #expect(report.dockIntegration.restorableAppCount == 1)
+        #expect(report.menuBarIntegration.statusTitle == "Notepad Waiting")
+        #expect(report.menuBarIntegration.symbolName == "clock.fill")
+        #expect(report.menuBarIntegration.primaryActionId == "runtime.startWindowsForApp")
+        #expect(report.menuBarIntegration.primaryActionTitle == "Open Windows for Notepad")
+        #expect(report.actions.first { $0.id == "windowsApps.reconnectRestore" }?.isAvailable == true)
+    }
+
     @Test("does not hide live launch failures behind demo fallback")
     @MainActor
     func doesNotHideLiveLaunchFailuresBehindDemoFallback() async throws {

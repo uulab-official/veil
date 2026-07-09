@@ -5,6 +5,7 @@ enum LauncherPrimaryNextActionRoute: Equatable {
     case waitForAgent
     case repairAppConnection
     case startWindows
+    case startWindowsForApp
     case prepareWindows
     case refreshRuntimeStatus
     case reconnectPreviousApps
@@ -37,7 +38,7 @@ enum LauncherPrimaryNextActionRoute: Equatable {
         case "runtime.repairGuestAgentForApp":
             return .repairAppConnection
         case "runtime.startWindowsForApp":
-            return .startWindows
+            return .startWindowsForApp
         case "runtime.prepareWindows":
             return .prepareWindows
         case "runtime.refreshStatus":
@@ -135,6 +136,8 @@ enum LauncherPrimaryNextActionRoute: Equatable {
             return "Repair Connection"
         case .startWindows:
             return "Open Windows"
+        case .startWindowsForApp:
+            return "Open App"
         case .prepareWindows:
             return "Prepare"
         case .refreshRuntimeStatus:
@@ -162,6 +165,8 @@ enum LauncherPrimaryNextActionRoute: Equatable {
             return "bolt.horizontal.circle"
         case .startWindows:
             return "play.fill"
+        case .startWindowsForApp:
+            return "macwindow.badge.plus"
         case .prepareWindows:
             return "wand.and.stars"
         case .refreshRuntimeStatus:

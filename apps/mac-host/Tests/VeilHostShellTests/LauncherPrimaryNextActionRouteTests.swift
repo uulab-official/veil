@@ -19,6 +19,12 @@ struct LauncherPrimaryNextActionRouteTests {
         )
         #expect(
             LauncherPrimaryNextActionRoute.resolve(
+                actionId: "runtime.startWindowsForApp",
+                command: nil
+            ) == .startWindowsForApp
+        )
+        #expect(
+            LauncherPrimaryNextActionRoute.resolve(
                 actionId: "runtime.prepareWindows",
                 command: nil
             ) == .prepareWindows
@@ -113,6 +119,12 @@ struct LauncherPrimaryNextActionRouteTests {
             LauncherPrimaryNextActionRoute.resolve(
                 actionId: "windowsSetup",
                 command: "veil-vmctl qemu-start --json"
+            ) == .startWindows
+        )
+        #expect(
+            LauncherPrimaryNextActionRoute.resolve(
+                actionId: "openWindowsApp",
+                command: "veil-vmctl qemu-start --json --wait-seconds 30"
             ) == .startWindows
         )
         #expect(

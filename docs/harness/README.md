@@ -91,6 +91,11 @@ the guest agent temporarily disconnects.
 `menuBarIntegration` mirrors the same app-first state for the macOS menu bar:
 compact status title, symbol, and primary action id/title must stay aligned
 with the supported action list.
+Queued app launches take precedence over previous-app reconnect actions in the
+menu bar primary action. If the menu title says an app is waiting, the primary
+action must continue that queued app by starting Windows, repairing the app
+connection, waiting, or fulfilling the pending launch; reconnect-restore stays
+secondary until the pending launch is cleared.
 The supported actions include `runtime.fulfillPendingLaunch`, which only
 becomes available after a queued app launch has a live guest agent capable of
 opening that app.
@@ -123,6 +128,11 @@ The `openWindowsApp` release-gate step only passes when the selected app can be
 launched through a live Windows app connection, or when a mirrored macOS app
 window already exists. Queued app launches that still need start, wait, or
 repair remain actionable, but they do not promote the review card to ready.
+When the next action is `runtime.startWindowsForApp`, launcher and menu routes
+must preserve the app-open intent instead of starting a generic VM session:
+clicking the action should queue or continue the selected app handoff, start
+Windows if needed, and let the reconnect path open the mirrored macOS app
+window after the guest agent is ready.
 `macWindowIntegration` records whether a live agent can feed guest HWND events
 into automatic macOS app-window presentation, including mirrored, pending-frame,
 streaming, and foregroundable window counts. The foregroundable count must move

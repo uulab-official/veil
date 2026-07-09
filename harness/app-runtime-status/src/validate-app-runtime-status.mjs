@@ -1240,6 +1240,13 @@ function validateMenuBarIntegration(menuBarIntegration, report) {
   if (menuBarIntegration.symbolName !== expectedSymbol) {
     throw new TypeError("menuBarIntegration.symbolName must prioritize Windows app state.");
   }
+
+  if (report.pendingLaunch.isQueued) {
+    const expectedPrimaryActionId = expectedQueuedMenuBarPrimaryActionId(report);
+    if (menuBarIntegration.primaryActionId !== expectedPrimaryActionId) {
+      throw new TypeError("menuBarIntegration.primaryActionId must prioritize queued app launch recovery.");
+    }
+  }
 }
 
 function expectedMenuBarSymbolName(report) {
@@ -1303,6 +1310,25 @@ function validateLauncherVisibility(launcherVisibility, report) {
   } else if (launcherVisibility.recommendedAction === "hide-main-window-use-app-windows") {
     throw new TypeError("launcherVisibility.recommendedAction cannot hide the launcher without mirrored Windows app windows.");
   }
+}
+
+function expectedQueuedMenuBarPrimaryActionId(report) {
+  if (report.localRuntime.recommendedPowerDownCommand !== undefined) {
+    return "runtime.stopWhenIdle";
+  }
+  if (report.localRuntime.recommendedRecoveryCommand !== undefined) {
+    return "runtime.recoverDisplay";
+  }
+  if (report.menuBarIntegration.canFulfillPendingLaunch) {
+    return "runtime.fulfillPendingLaunch";
+  }
+  if (report.launchPlan.recommendedRepairCommand !== undefined) {
+    return "runtime.repairGuestAgentForApp";
+  }
+  if (report.launchPlan.recommendedStartCommand !== undefined) {
+    return "runtime.startWindowsForApp";
+  }
+  return "runtime.waitAgent";
 }
 
 function validateVisibleSurfacePolicy(visibleSurfacePolicy, report) {

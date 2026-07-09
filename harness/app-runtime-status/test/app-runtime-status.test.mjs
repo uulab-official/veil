@@ -684,6 +684,7 @@ test("rejects queued pending launch plans without fulfill-pending recovery", () 
   report.pendingLaunch.appId = "winapp_notepad";
   report.pendingLaunch.willLaunchOnAgentReconnect = true;
   report.pendingLaunch.recommendedAction = "auto-launch-on-agent-reconnect";
+  report.launchPlan.pendingLaunchAppId = "winapp_notepad";
   report.dockIntegration.pendingLaunchCount = 1;
   report.dockIntegration.badgeLabel = "...";
   report.launchPlan.pendingLaunchAppId = "winapp_notepad";
@@ -704,6 +705,8 @@ test("accepts queued pending launch repair while local Windows is already runnin
   report.pendingLaunch.appId = "winapp_notepad";
   report.pendingLaunch.willLaunchOnAgentReconnect = true;
   report.pendingLaunch.recommendedAction = "auto-launch-on-agent-reconnect";
+  report.launchPlan.pendingLaunchAppId = "winapp_notepad";
+  report.launchPlan.recommendedLaunchCommand = "veil-vmctl app-runtime-action --json --action fulfill-pending";
   report.dockIntegration.pendingLaunchCount = 1;
   report.dockIntegration.badgeLabel = "...";
   report.localRuntime.state = "running";
@@ -735,6 +738,38 @@ test("accepts queued pending launch repair while local Windows is already runnin
   });
 
   assert.doesNotThrow(() => validateAppRuntimeStatus(report));
+});
+
+test("rejects queued pending launch menus that prioritize reconnect restore", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.demo.json", import.meta.url), "utf8"));
+  report.pendingLaunchAppId = "winapp_notepad";
+  report.pendingLaunch.isQueued = true;
+  report.pendingLaunch.appId = "winapp_notepad";
+  report.pendingLaunch.willLaunchOnAgentReconnect = true;
+  report.pendingLaunch.recommendedAction = "auto-launch-on-agent-reconnect";
+  report.launchPlan.pendingLaunchAppId = "winapp_notepad";
+  report.launchPlan.recommendedLaunchCommand = "veil-vmctl app-runtime-action --json --action fulfill-pending";
+  report.dockIntegration.pendingLaunchCount = 1;
+  report.dockIntegration.restorableAppCount = 1;
+  report.dockIntegration.badgeLabel = "...";
+  report.dockIntegration.canReconnectPreviousApps = true;
+  report.menuBarIntegration.canReconnectPreviousApps = true;
+  report.restorableAppIds = ["winapp_notepad"];
+  report.actions.find((action) => action.id === "windowsApps.reconnectRestore").isAvailable = true;
+  setQueuedMenuBarState(report, {
+    primaryActionId: "windowsApps.reconnectRestore",
+    primaryActionTitle: "Reconnect Notepad"
+  });
+  setReleaseGateStep(report, "closeOrRestore", {
+    state: "ready",
+    isPassing: true,
+    nextActionCommand: "veil-vmctl app-runtime-action --json --action reconnect-restore"
+  });
+
+  assert.throws(
+    () => validateAppRuntimeStatus(report),
+    /queued app launch/
+  );
 });
 
 test("rejects queued pending launch repair marked ready for review", () => {
@@ -977,6 +1012,8 @@ test("rejects fulfill-pending action availability that drifts from queued launch
   report.launchPlan.recommendedLaunchCommand = "veil-vmctl app-runtime-action --json --action fulfill-pending";
   report.launchPlan.reason = "The live Windows agent can fulfill the queued app launch now.";
   report.menuBarIntegration.canFulfillPendingLaunch = true;
+  report.menuBarIntegration.primaryActionId = "runtime.fulfillPendingLaunch";
+  report.menuBarIntegration.primaryActionTitle = "Open Queued Notepad";
   setReleaseGateStep(report, "openWindowsApp", {
     nextActionCommand: "veil-vmctl app-runtime-action --json --action fulfill-pending"
   });

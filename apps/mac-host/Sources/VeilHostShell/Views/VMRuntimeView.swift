@@ -2283,6 +2283,10 @@ private struct WindowsSetupDisplayPanel: View {
             return selectedWindowsAppName.map { "Open \($0)" } ?? route.buttonTitle
         case .fulfillPendingLaunch:
             return "Open \(pendingAppDisplayName)"
+        case .startWindowsForApp:
+            return selectedWindowsAppName.map { "Open \($0)" }
+                ?? pendingWindowsAppName.map { "Open \($0)" }
+                ?? route.buttonTitle
         default:
             return route.buttonTitle
         }
@@ -2323,6 +2327,8 @@ private struct WindowsSetupDisplayPanel: View {
             repairGuestAgentForAppLaunchAction()
         case .startWindows:
             primaryAction()
+        case .startWindowsForApp:
+            launchWindowsAppAction()
         case .prepareWindows:
             prepareAction()
         case .refreshRuntimeStatus:
