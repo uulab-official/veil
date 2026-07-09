@@ -98,6 +98,52 @@
   },
   "manifestExists": true,
   "manifestPath": "/tmp/veil-review-verify/review-manifest.json",
+  "missingCaptureSteps": [
+    {
+      "expectedFileName": "preBootLauncher.png",
+      "instruction": "Capture the one-screen Veil launcher before opening the selected Windows app.",
+      "order": 1,
+      "path": "/tmp/veil-review-verify/preBootLauncher.png",
+      "slotId": "preBootLauncher",
+      "supportingCommand": "veil-vmctl app-runtime-status --json",
+      "title": "Pre-Boot Launcher"
+    },
+    {
+      "expectedFileName": "firstAppLaunch.png",
+      "instruction": "Start or queue the selected Windows app and capture the first visible launch state.",
+      "order": 2,
+      "path": "/tmp/veil-review-verify/firstAppLaunch.png",
+      "slotId": "firstAppLaunch",
+      "supportingCommand": "veil-vmctl app-runtime-action --json --action fulfill-pending",
+      "title": "First App Launch"
+    },
+    {
+      "expectedFileName": "appWindowOnly.png",
+      "instruction": "Capture the mirrored Windows app window after the launcher is hidden.",
+      "order": 3,
+      "path": "/tmp/veil-review-verify/appWindowOnly.png",
+      "slotId": "appWindowOnly",
+      "title": "App Window Only"
+    },
+    {
+      "expectedFileName": "menuRestore.png",
+      "instruction": "Open the menu or Dock control and capture restore, reconnect, bring-forward, or close actions.",
+      "order": 4,
+      "path": "/tmp/veil-review-verify/menuRestore.png",
+      "slotId": "menuRestore",
+      "supportingCommand": "veil-vmctl app-runtime-action --json --action bring-forward",
+      "title": "Menu Restore"
+    },
+    {
+      "expectedFileName": "closeQuiet.png",
+      "instruction": "Close the final Windows app window and capture the returned launcher or quiet-Windows control.",
+      "order": 5,
+      "path": "/tmp/veil-review-verify/closeQuiet.png",
+      "slotId": "closeQuiet",
+      "supportingCommand": "veil-vmctl app-runtime-action --json --action reconnect-restore",
+      "title": "Close And Quiet"
+    }
+  ],
   "missingFiles": [
     "/tmp/veil-review-verify/preBootLauncher.png",
     "/tmp/veil-review-verify/firstAppLaunch.png",
@@ -106,10 +152,20 @@
     "/tmp/veil-review-verify/closeQuiet.png"
   ],
   "nextActions": [
-    "Capture missing screenshots into the evidence directory.",
+    "Capture `preBootLauncher.png` for Pre-Boot Launcher: Capture the one-screen Veil launcher before opening the selected Windows app.",
+    "Use `veil-vmctl app-runtime-status --json` to reach the next capture state before saving `preBootLauncher.png`.",
     "Run `veil-vmctl app-runtime-review --evidence-dir '/tmp/veil-review-verify'` and confirm Screenshots is 5/5 attached.",
     "Run `veil-vmctl app-runtime-review-verify --json --evidence-dir '/tmp/veil-review-verify'` before sharing evidence."
   ],
+  "nextMissingCaptureStep": {
+    "expectedFileName": "preBootLauncher.png",
+    "instruction": "Capture the one-screen Veil launcher before opening the selected Windows app.",
+    "order": 1,
+    "path": "/tmp/veil-review-verify/preBootLauncher.png",
+    "slotId": "preBootLauncher",
+    "supportingCommand": "veil-vmctl app-runtime-status --json",
+    "title": "Pre-Boot Launcher"
+  },
   "readmeExists": true,
   "readmePath": "/tmp/veil-review-verify/README.md",
   "requiredScreenshotCount": 5,

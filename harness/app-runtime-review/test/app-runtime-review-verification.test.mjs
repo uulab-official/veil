@@ -34,11 +34,33 @@ test("rejects verification missing files outside evidence directory", () => {
   );
 });
 
+test("rejects verification missing capture steps that drift from missing files", () => {
+  const report = demoVerification();
+  report.missingFiles[0] = report.missingFiles[1];
+
+  assert.throws(
+    () => validateAppRuntimeReviewVerification(report),
+    /missing capture steps/
+  );
+});
+
+test("rejects verification reports without a next missing capture step", () => {
+  const report = demoVerification();
+  delete report.nextMissingCaptureStep;
+
+  assert.throws(
+    () => validateAppRuntimeReviewVerification(report),
+    /next missing capture step/
+  );
+});
+
 test("accepts complete verification reports", () => {
   const report = demoVerification();
   report.attachedScreenshotCount = report.requiredScreenshotCount;
   report.isComplete = true;
   report.missingFiles = [];
+  report.missingCaptureSteps = [];
+  delete report.nextMissingCaptureStep;
   report.review.attachedScreenshotCount = report.review.requiredScreenshotCount;
   report.review.areRequiredScreenshotsAttached = true;
   for (const slot of report.review.screenshotSlots) {

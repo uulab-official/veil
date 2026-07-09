@@ -669,6 +669,16 @@ struct AppRuntimeReviewEvidenceManifest: Codable, Equatable {
     var nextActions: [String]
 }
 
+struct AppRuntimeReviewMissingCaptureStep: Codable, Equatable {
+    var order: Int
+    var slotId: String
+    var title: String
+    var expectedFileName: String
+    var path: String
+    var instruction: String
+    var supportingCommand: String?
+}
+
 struct AppRuntimeReviewEvidenceVerification: Codable, Equatable {
     var kind: String = "windowsAppRuntimeReviewEvidenceVerification"
     var generatedAt: Date
@@ -681,6 +691,8 @@ struct AppRuntimeReviewEvidenceVerification: Codable, Equatable {
     var attachedScreenshotCount: Int
     var isComplete: Bool
     var missingFiles: [String]
+    var missingCaptureSteps: [AppRuntimeReviewMissingCaptureStep]
+    var nextMissingCaptureStep: AppRuntimeReviewMissingCaptureStep?
     var review: AppRuntimeReviewCard
     var manifest: AppRuntimeReviewEvidenceManifest?
     var nextActions: [String]
@@ -1097,8 +1109,26 @@ struct VeilVMControl {
         )
         let expectedFiles = manifest?.screenshotFiles.map(\.path)
             ?? card.screenshotSlots.map { evidenceDirectoryURL.appendingPathComponent($0.expectedFileName).path }
+        let captureSteps = manifest?.captureSteps
+            ?? appRuntimeReviewCaptureSteps(
+                screenshotFiles: card.screenshotSlots.map { slot in
+                    AppRuntimeReviewEvidenceFile(
+                        slotId: slot.id,
+                        title: slot.title,
+                        expectedFileName: slot.expectedFileName,
+                        path: evidenceDirectoryURL.appendingPathComponent(slot.expectedFileName).path,
+                        expectedSurface: slot.expectedSurface
+                    )
+                },
+                card: card
+            )
         let missingFiles = expectedFiles.filter { !FileManager.default.fileExists(atPath: $0) }
         let attachedScreenshotCount = expectedFiles.count - missingFiles.count
+        let missingCaptureSteps = appRuntimeReviewMissingCaptureSteps(
+            expectedFiles: expectedFiles,
+            captureSteps: captureSteps,
+            missingFiles: missingFiles
+        )
         let verification = AppRuntimeReviewEvidenceVerification(
             generatedAt: report.generatedAt,
             evidenceDirectory: evidenceDirectoryURL.path,
@@ -1113,13 +1143,15 @@ struct VeilVMControl {
                 && missingFiles.isEmpty
                 && card.areRequiredScreenshotsAttached,
             missingFiles: missingFiles,
+            missingCaptureSteps: missingCaptureSteps,
+            nextMissingCaptureStep: missingCaptureSteps.first,
             review: card,
             manifest: manifest,
             nextActions: appRuntimeReviewVerificationNextActions(
                 evidenceDirectory: evidenceDirectoryURL.path,
                 manifestExists: manifest != nil,
                 readmeExists: FileManager.default.fileExists(atPath: readmeURL.path),
-                missingFiles: missingFiles
+                missingCaptureSteps: missingCaptureSteps
             )
         )
 
@@ -1139,6 +1171,14 @@ struct VeilVMControl {
             print("Missing files:")
             for file in verification.missingFiles {
                 print("  - \(file)")
+            }
+        }
+        if let nextMissingCaptureStep = verification.nextMissingCaptureStep {
+            print("Next capture:")
+            print("  \(nextMissingCaptureStep.order). \(nextMissingCaptureStep.title) -> \(nextMissingCaptureStep.expectedFileName)")
+            print("     \(nextMissingCaptureStep.instruction)")
+            if let supportingCommand = nextMissingCaptureStep.supportingCommand {
+                print("     Command: \(supportingCommand)")
             }
         }
         print("Next actions:")
@@ -1219,18 +1259,47 @@ struct VeilVMControl {
         evidenceDirectory: String,
         manifestExists: Bool,
         readmeExists: Bool,
-        missingFiles: [String]
+        missingCaptureSteps: [AppRuntimeReviewMissingCaptureStep]
     ) -> [String] {
         var actions: [String] = []
         if !manifestExists || !readmeExists {
             actions.append("Run `veil-vmctl app-runtime-review-init --evidence-dir '\(evidenceDirectory)'` to recreate the review manifest and guide.")
         }
-        if !missingFiles.isEmpty {
-            actions.append("Capture missing screenshots into the evidence directory.")
+        if let nextMissingCaptureStep = missingCaptureSteps.first {
+            actions.append("Capture `\(nextMissingCaptureStep.expectedFileName)` for \(nextMissingCaptureStep.title): \(nextMissingCaptureStep.instruction)")
+            if let supportingCommand = nextMissingCaptureStep.supportingCommand {
+                actions.append("Use `\(supportingCommand)` to reach the next capture state before saving `\(nextMissingCaptureStep.expectedFileName)`.")
+            }
         }
         actions.append("Run `veil-vmctl app-runtime-review --evidence-dir '\(evidenceDirectory)'` and confirm Screenshots is 5/5 attached.")
         actions.append("Run `veil-vmctl app-runtime-review-verify --json --evidence-dir '\(evidenceDirectory)'` before sharing evidence.")
         return actions
+    }
+
+    private static func appRuntimeReviewMissingCaptureSteps(
+        expectedFiles: [String],
+        captureSteps: [AppRuntimeReviewCaptureStep],
+        missingFiles: [String]
+    ) -> [AppRuntimeReviewMissingCaptureStep] {
+        let missingFileSet = Set(missingFiles)
+        return captureSteps.enumerated().compactMap { index, step in
+            guard index < expectedFiles.count else {
+                return nil
+            }
+            let path = expectedFiles[index]
+            guard missingFileSet.contains(path) else {
+                return nil
+            }
+            return AppRuntimeReviewMissingCaptureStep(
+                order: step.order,
+                slotId: step.slotId,
+                title: step.title,
+                expectedFileName: step.expectedFileName,
+                path: path,
+                instruction: step.instruction,
+                supportingCommand: step.supportingCommand
+            )
+        }
     }
 
     private static func appRuntimeReviewCaptureSteps(
