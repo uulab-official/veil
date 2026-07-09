@@ -251,7 +251,7 @@
   "releaseGate": {
     "isEnabled": true,
     "requiredStepCount": 5,
-    "passingStepCount": 2,
+    "passingStepCount": 1,
     "isPassing": false,
     "recommendedAction": "windowsSetup",
     "reason": "Continue the first unmet release gate step before promoting the one-screen Windows app flow.",
@@ -279,9 +279,9 @@
         "title": "Open Windows App",
         "state": "ready",
         "isRequired": true,
-        "isPassing": true,
+        "isPassing": false,
         "evidence": "Start Windows, wait for the guest agent, then launch the selected app.",
-        "nextActionCommand": "veil-vmctl app-runtime-action --json --action launch --app-id winapp_notepad"
+        "nextActionCommand": "veil-vmctl qemu-start --json --wait-seconds 30"
       },
       {
         "id": "appCheckEvidence",

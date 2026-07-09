@@ -1502,6 +1502,14 @@ struct HostDashboardModelTests {
         #expect(runningQueuedReport.actions.first { $0.id == "runtime.repairGuestAgentForApp" }?.isAvailable == true)
         #expect(runningQueuedReport.actions.first { $0.id == "runtime.fulfillPendingLaunch" }?.isAvailable == false)
         #expect(runningQueuedReport.actions.first { $0.id == "runtime.waitAgent" }?.isAvailable == true)
+        #expect(runningQueuedReport.releaseGate.isPassing == false)
+        #expect(runningQueuedReport.releaseGate.recommendedAction == "openWindowsApp")
+        #expect(runningQueuedReport.releaseGate.steps.first { $0.id == "openWindowsApp" }?.isPassing == false)
+        #expect(runningQueuedReport.releaseGate.steps.first { $0.id == "openWindowsApp" }?.state == "ready")
+        #expect(runningQueuedReport.releaseGate.steps.first { $0.id == "openWindowsApp" }?.nextActionCommand == "veil-vmctl qemu-install-agent --json --wait-seconds 120")
+        #expect(runningQueuedReport.primaryNextAction.id == "openWindowsApp")
+        #expect(runningQueuedReport.primaryNextAction.actionId == "runtime.repairGuestAgentForApp")
+        #expect(runningQueuedReport.primaryNextAction.command == "veil-vmctl qemu-install-agent --json --wait-seconds 120")
 
         primary.error = nil
         let fulfilledLaunch = await model.refreshLiveAgentIfNeeded()

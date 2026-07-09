@@ -1879,8 +1879,10 @@ public final class HostDashboardModel {
             && visibleSurfacePolicy.isEnabled
             && visibleSurfacePolicy.keepsRecoveryDisplayManual
             && (visibleSurfacePolicy.primarySurface == "launcher" || macWindowIntegration.hidesLauncherWhenMirroring)
-        let launchPassing = launchPlan.willOpenAppAutomatically
-            && launchPlan.recommendedLaunchCommand != nil
+        let launchPassing = (launchPlan.canLaunchSelectedAppNow
+            && launchPlan.recommendedLaunchCommand != nil)
+            || macWindowIntegration.mirroredWindowCount > 0
+        let launchCommand = nextLaunchGateCommand(launchPlan: launchPlan)
         let checkPassing = proofArtifacts.latestProofPath != nil
             && proofArtifacts.latestProofKind != nil
         let quietOrRestorePassing = quietRuntime.canQuietRuntime
@@ -1908,10 +1910,10 @@ public final class HostDashboardModel {
             WindowsAppRuntimeReleaseGateStepStatus(
                 id: "openWindowsApp",
                 title: "Open Windows App",
-                state: launchPassing ? "ready" : "blocked",
+                state: launchPassing ? "ready" : (launchCommand == nil ? "blocked" : "ready"),
                 isPassing: launchPassing,
                 evidence: launchPlan.reason,
-                nextActionCommand: nextLaunchGateCommand(launchPlan: launchPlan)
+                nextActionCommand: launchCommand
             ),
             WindowsAppRuntimeReleaseGateStepStatus(
                 id: "appCheckEvidence",
@@ -1981,10 +1983,17 @@ public final class HostDashboardModel {
     private func nextLaunchGateCommand(
         launchPlan: WindowsAppRuntimeLaunchPlanStatus
     ) -> String? {
-        launchPlan.recommendedLaunchCommand
-            ?? launchPlan.recommendedStartCommand
+        if launchPlan.canLaunchSelectedAppNow {
+            return launchPlan.recommendedLaunchCommand
+                ?? launchPlan.recommendedStartCommand
+                ?? launchPlan.recommendedRepairCommand
+                ?? launchPlan.recommendedWaitCommand
+        }
+
+        return launchPlan.recommendedStartCommand
             ?? launchPlan.recommendedRepairCommand
             ?? launchPlan.recommendedWaitCommand
+            ?? launchPlan.recommendedLaunchCommand
     }
 
     private func closeOrRestoreGateCommand(

@@ -119,6 +119,10 @@ product action.
 Successful `qemu-capture` runs persist `consoleScreenshotRefreshedAt` in the
 latest QEMU launch record so a refreshed console remains `fresh` across
 subsequent status polling instead of falling back into a stale-display loop.
+The `openWindowsApp` release-gate step only passes when the selected app can be
+launched through a live Windows app connection, or when a mirrored macOS app
+window already exists. Queued app launches that still need start, wait, or
+repair remain actionable, but they do not promote the review card to ready.
 `macWindowIntegration` records whether a live agent can feed guest HWND events
 into automatic macOS app-window presentation, including mirrored, pending-frame,
 streaming, and foregroundable window counts. The foregroundable count must move

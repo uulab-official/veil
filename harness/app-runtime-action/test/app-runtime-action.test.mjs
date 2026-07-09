@@ -316,7 +316,8 @@ test("validates pending launch repair action while local Windows is running", ()
     isPassing: true
   });
   setReleaseGateStep(report, "openWindowsApp", {
-    nextActionCommand: "veil-vmctl app-runtime-action --json --action fulfill-pending"
+    isPassing: false,
+    nextActionCommand: "veil-vmctl qemu-install-agent --json --wait-seconds 120"
   });
 
   assert.equal(validateAppRuntimeAction(report), report);

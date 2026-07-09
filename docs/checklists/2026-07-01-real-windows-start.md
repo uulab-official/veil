@@ -241,6 +241,7 @@ Goal: keep the main Veil experience pointed at real local Windows boot and conso
 - [x] Extend `app-runtime-action` launch and wait-agent next actions so stale guest tools media points at stop-runtime plus media rebuild, and add harness coverage rejecting action reports that still recommend guest-agent repair first.
 - [x] Block release review readiness when the embedded Windows console preview is stale or unavailable: `windowsSetup` now points at display recovery instead of letting `ready-for-release-card` pass while the main app may still show a stale/black Windows surface.
 - [x] Persist successful `qemu-capture` refresh evidence into the latest QEMU launch record so follow-up app-runtime status reports leave stale-display recovery after the console screenshot is refreshed.
+- [x] Block release review readiness while a queued Windows app launch still needs VM start, guest-agent wait, or repair; `openWindowsApp` now points at the concrete start/repair/wait command until the selected app can launch live or a mirrored macOS window exists.
 
 ## Next
 

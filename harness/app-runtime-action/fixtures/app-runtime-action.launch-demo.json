@@ -329,7 +329,7 @@
           "isRequired": true,
           "isPassing": true,
           "evidence": "Start Windows, wait for the guest agent, then launch the selected app.",
-          "nextActionCommand": "veil-vmctl app-runtime-action --json --action launch --app-id winapp_notepad"
+          "nextActionCommand": "veil-vmctl qemu-start --json --wait-seconds 30"
         },
         {
           "id": "appCheckEvidence",

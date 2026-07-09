@@ -729,10 +729,54 @@ test("accepts queued pending launch repair while local Windows is already runnin
     isPassing: true
   });
   setReleaseGateStep(report, "openWindowsApp", {
-    nextActionCommand: "veil-vmctl app-runtime-action --json --action fulfill-pending"
+    state: "ready",
+    isPassing: false,
+    nextActionCommand: "veil-vmctl qemu-install-agent --json --wait-seconds 120"
   });
 
   assert.doesNotThrow(() => validateAppRuntimeStatus(report));
+});
+
+test("rejects queued pending launch repair marked ready for review", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.demo.json", import.meta.url), "utf8"));
+  report.pendingLaunchAppId = "winapp_notepad";
+  report.pendingLaunch.isQueued = true;
+  report.pendingLaunch.appId = "winapp_notepad";
+  report.pendingLaunch.willLaunchOnAgentReconnect = true;
+  report.dockIntegration.pendingLaunchCount = 1;
+  report.dockIntegration.badgeLabel = "...";
+  report.localRuntime.state = "running";
+  report.localRuntime.canStart = false;
+  report.localRuntime.isRunning = true;
+  report.localRuntime.windowsInstalled = true;
+  report.localRuntime.recommendedAction = "wait-for-guest-agent";
+  report.launchPlan.pendingLaunchAppId = "winapp_notepad";
+  report.launchPlan.requiresRuntimeStart = false;
+  report.launchPlan.recommendedAction = "repair-guest-agent-for-pending-launch";
+  delete report.launchPlan.recommendedStartCommand;
+  report.launchPlan.recommendedRepairCommand = "veil-vmctl qemu-install-agent --json --wait-seconds 120";
+  report.launchPlan.recommendedLaunchCommand = "veil-vmctl app-runtime-action --json --action fulfill-pending";
+  report.launchPlan.reason = "Windows is running and the selected app launch is queued; repair or start the guest agent, then open the app automatically.";
+  report.actions.find((action) => action.id === "runtime.startWindowsForApp").isAvailable = false;
+  report.actions.find((action) => action.id === "runtime.repairGuestAgentForApp").isAvailable = true;
+  setQueuedMenuBarState(report, {
+    primaryActionId: "runtime.repairGuestAgentForApp",
+    primaryActionTitle: "Continue Notepad"
+  });
+  setReleaseGateStep(report, "windowsSetup", {
+    state: "passed",
+    isPassing: true
+  });
+  setReleaseGateStep(report, "openWindowsApp", {
+    state: "ready",
+    isPassing: true,
+    nextActionCommand: "veil-vmctl app-runtime-action --json --action fulfill-pending"
+  });
+
+  assert.throws(
+    () => validateAppRuntimeStatus(report),
+    /openWindowsApp/
+  );
 });
 
 test("accepts stale running console preview with recovery commands", () => {
@@ -761,6 +805,11 @@ test("accepts stale running console preview with recovery commands", () => {
     state: "blocked",
     isPassing: false,
     nextActionCommand: "veil-vmctl qemu-capture --json"
+  });
+  setReleaseGateStep(report, "openWindowsApp", {
+    state: "ready",
+    isPassing: false,
+    nextActionCommand: "veil-vmctl qemu-install-agent --json --wait-seconds 120"
   });
 
   assert.doesNotThrow(() => validateAppRuntimeStatus(report));

@@ -847,15 +847,14 @@ function validateReleaseGate(releaseGate, report) {
   }
 
   const launchStep = releaseGate.steps.find((step) => step.id === "openWindowsApp");
-  const expectedLaunchPassing = report.launchPlan.willOpenAppAutomatically
-    && report.launchPlan.recommendedLaunchCommand !== undefined;
+  const expectedLaunchPassing = (
+    report.launchPlan.canLaunchSelectedAppNow
+    && report.launchPlan.recommendedLaunchCommand !== undefined
+  ) || report.macWindowIntegration.mirroredWindowCount > 0;
   if (launchStep.isPassing !== expectedLaunchPassing) {
     throw new TypeError("releaseGate openWindowsApp must reflect launch plan readiness.");
   }
-  const expectedLaunchCommand = report.launchPlan.recommendedLaunchCommand
-    ?? report.launchPlan.recommendedStartCommand
-    ?? report.launchPlan.recommendedRepairCommand
-    ?? report.launchPlan.recommendedWaitCommand;
+  const expectedLaunchCommand = expectedOpenWindowsAppCommand(report.launchPlan);
   if (launchStep.nextActionCommand !== expectedLaunchCommand) {
     throw new TypeError("releaseGate openWindowsApp must expose the next launch command.");
   }
@@ -909,6 +908,20 @@ function validateReleaseGate(releaseGate, report) {
     requireString(slot.expectedSurface, `releaseGate.screenshotSlots.${slot.id}.expectedSurface`);
     requireBoolean(slot.isRequired, `releaseGate.screenshotSlots.${slot.id}.isRequired`);
   }
+}
+
+function expectedOpenWindowsAppCommand(launchPlan) {
+  if (launchPlan.canLaunchSelectedAppNow) {
+    return launchPlan.recommendedLaunchCommand
+      ?? launchPlan.recommendedStartCommand
+      ?? launchPlan.recommendedRepairCommand
+      ?? launchPlan.recommendedWaitCommand;
+  }
+
+  return launchPlan.recommendedStartCommand
+    ?? launchPlan.recommendedRepairCommand
+    ?? launchPlan.recommendedWaitCommand
+    ?? launchPlan.recommendedLaunchCommand;
 }
 
 function validatePrimaryNextAction(primaryNextAction, report) {
