@@ -307,4 +307,51 @@ enum WindowsShellCopy {
             return "Continue the next app setup step."
         }
     }
+
+    static func launchOnboardingTitle(
+        state: String,
+        canContinueInApp: Bool
+    ) -> String {
+        if canContinueInApp {
+            return "Continue in Veil"
+        }
+
+        switch state {
+        case "ready-for-review":
+            return "Share App Flow"
+        case "external-check":
+            return "Review App Flow"
+        case "blocked":
+            return "Needs Attention"
+        default:
+            return "Continue App Flow"
+        }
+    }
+
+    static func launchOnboardingDetail(
+        currentStepTitle: String,
+        pendingLiveProof: Bool
+    ) -> String {
+        pendingLiveProof ? "Next: \(currentStepTitle)" : currentStepTitle
+    }
+
+    static func launchOnboardingSymbolName(
+        state: String,
+        canContinueInApp: Bool
+    ) -> String {
+        if canContinueInApp {
+            return "play.circle.fill"
+        }
+
+        switch state {
+        case "ready-for-review":
+            return "square.and.arrow.up"
+        case "external-check":
+            return "checkmark.seal"
+        case "blocked":
+            return "exclamationmark.triangle"
+        default:
+            return "arrow.forward.circle"
+        }
+    }
 }

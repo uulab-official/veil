@@ -17,6 +17,7 @@ struct VMRuntimeView: View {
     var launchPlan: WindowsAppRuntimeLaunchPlanStatus
     var primaryNextAction: WindowsAppRuntimePrimaryNextActionStatus
     var oneScreenUX: WindowsAppRuntimeOneScreenUXStatus
+    var launchOnboarding: WindowsAppRuntimeLaunchOnboardingStatus
     var recommendedProofKind: String?
     var recommendedProofCommand: String?
     var startVMAction: () -> Void
@@ -107,6 +108,7 @@ struct VMRuntimeView: View {
                     launchPlan: launchPlan,
                     primaryNextAction: primaryNextAction,
                     oneScreenUX: oneScreenUX,
+                    launchOnboarding: launchOnboarding,
                     recommendedProofKind: recommendedProofKind,
                     recommendedProofCommand: recommendedProofCommand,
                     runRecommendedProofAction: runRecommendedProofAction,
@@ -1368,6 +1370,7 @@ private struct WindowsSetupDisplayPanel: View {
     var launchPlan: WindowsAppRuntimeLaunchPlanStatus
     var primaryNextAction: WindowsAppRuntimePrimaryNextActionStatus
     var oneScreenUX: WindowsAppRuntimeOneScreenUXStatus
+    var launchOnboarding: WindowsAppRuntimeLaunchOnboardingStatus
     var recommendedProofKind: String?
     var recommendedProofCommand: String?
     var runRecommendedProofAction: () -> Void
@@ -1576,11 +1579,17 @@ private struct WindowsSetupDisplayPanel: View {
                     .minimumScaleFactor(0.82)
 
                 if effectiveInstallEvidence.isInstalled {
-                    Label(primaryNextAction.title, systemImage: "arrow.forward.circle")
+                    Label(launchOnboardingTitle, systemImage: launchOnboardingSymbolName)
                         .font(.callout.weight(.semibold))
-                        .foregroundStyle(.white.opacity(primaryNextAction.isAvailable ? 0.88 : 0.62))
+                        .foregroundStyle(.white.opacity(launchOnboarding.canContinueInApp ? 0.88 : 0.68))
                         .lineLimit(1)
-                        .help(primaryNextActionHelp)
+                        .help(launchOnboardingHelp)
+
+                    Label(launchOnboardingDetail, systemImage: "arrow.forward.circle")
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.white.opacity(launchOnboarding.canContinueInApp ? 0.78 : 0.62))
+                        .lineLimit(1)
+                        .help(launchOnboarding.reason)
 
                     Label(oneScreenUXTitle, systemImage: oneScreenUXSymbolName)
                         .font(.caption.weight(.medium))
@@ -2254,9 +2263,9 @@ private struct WindowsSetupDisplayPanel: View {
         }
 
         guard let route = LauncherPrimaryNextActionRoute.resolve(
-            actionId: primaryNextAction.actionId ?? primaryNextAction.id,
-            command: primaryNextAction.command,
-            runsInApp: primaryNextAction.runsInApp
+            actionId: launchOnboarding.primaryActionId ?? launchOnboarding.currentStepId,
+            command: launchOnboarding.primaryCommand,
+            runsInApp: launchOnboarding.canContinueInApp
         ) else {
             return nil
         }
@@ -2285,14 +2294,14 @@ private struct WindowsSetupDisplayPanel: View {
 
     private var effectivePrimaryDisabled: Bool {
         if executablePrimaryNextActionRoute != nil {
-            return primaryDisabled || !primaryNextAction.isAvailable
+            return primaryDisabled || !launchOnboarding.canContinueInApp
         }
 
         return primaryDisabled
     }
 
     private var effectivePrimaryHelp: String {
-        executablePrimaryNextActionRoute == nil ? primaryTitle : primaryNextActionHelp
+        executablePrimaryNextActionRoute == nil ? primaryTitle : launchOnboardingHelp
     }
 
     private func runEffectivePrimaryAction() {
@@ -2357,6 +2366,37 @@ private struct WindowsSetupDisplayPanel: View {
             && (!primaryNextAction.runsInApp || oneScreenUX.heroRunsPrimaryAction)
             ? "rectangle.on.rectangle"
             : "exclamationmark.triangle"
+    }
+
+    private var launchOnboardingTitle: String {
+        WindowsShellCopy.launchOnboardingTitle(
+            state: launchOnboarding.state,
+            canContinueInApp: launchOnboarding.canContinueInApp
+        )
+    }
+
+    private var launchOnboardingDetail: String {
+        WindowsShellCopy.launchOnboardingDetail(
+            currentStepTitle: launchOnboarding.currentStepTitle,
+            pendingLiveProof: launchOnboarding.pendingLiveProof
+        )
+    }
+
+    private var launchOnboardingSymbolName: String {
+        WindowsShellCopy.launchOnboardingSymbolName(
+            state: launchOnboarding.state,
+            canContinueInApp: launchOnboarding.canContinueInApp
+        )
+    }
+
+    private var launchOnboardingHelp: String {
+        [
+            launchOnboarding.reason,
+            launchOnboarding.canContinueInApp ? "Runs inside Veil." : "Continue from the review flow.",
+            launchOnboarding.primaryCommand.map { "Command: \($0)" }
+        ]
+            .compactMap { $0 }
+            .joined(separator: "\n")
     }
 
     private var appAutomationTitle: String {

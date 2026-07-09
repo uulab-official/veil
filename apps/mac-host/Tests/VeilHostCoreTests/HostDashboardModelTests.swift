@@ -108,6 +108,51 @@ struct HostDashboardModelTests {
 
         #expect(supported.heroRunsPrimaryAction)
         #expect(unsupported.heroRunsPrimaryAction == false)
+
+        let releaseGate = WindowsAppRuntimeReleaseGateStatus(
+            requiredStepCount: 1,
+            passingStepCount: 0,
+            isPassing: false,
+            recommendedAction: "closeOrRestore",
+            steps: [],
+            screenshotSlots: [],
+            reason: "One app-flow step remains."
+        )
+        let supportedPrimaryNextAction = WindowsAppRuntimePrimaryNextActionStatus(
+            id: "closeOrRestore",
+            title: "Close Apps",
+            source: "releaseGate",
+            isAvailable: true,
+            runsInApp: true,
+            actionId: "windowsApps.closeAll",
+            command: "veil-vmctl app-runtime-action --json --action close-all",
+            reason: "Close all app windows."
+        )
+        let supportedOnboarding = model.launchOnboardingStatus(
+            releaseGate: releaseGate,
+            primaryNextAction: supportedPrimaryNextAction,
+            oneScreenUX: supported
+        )
+        let unsupportedOnboarding = model.launchOnboardingStatus(
+            releaseGate: releaseGate,
+            primaryNextAction: WindowsAppRuntimePrimaryNextActionStatus(
+                id: "futureAction",
+                title: "Future Action",
+                source: "releaseGate",
+                isAvailable: true,
+                runsInApp: true,
+                actionId: "runtime.futureAction",
+                command: "veil-vmctl app-runtime-action --json --action future",
+                reason: "Future app action."
+            ),
+            oneScreenUX: unsupported
+        )
+
+        #expect(supportedOnboarding.state == "continue-in-app")
+        #expect(supportedOnboarding.canContinueInApp)
+        #expect(supportedOnboarding.primaryActionId == "windowsApps.closeAll")
+        #expect(unsupportedOnboarding.state == "external-check")
+        #expect(unsupportedOnboarding.canContinueInApp == false)
     }
 
     @Test("marks phase failed and keeps recovery diagnostics when waiting for the live agent times out")

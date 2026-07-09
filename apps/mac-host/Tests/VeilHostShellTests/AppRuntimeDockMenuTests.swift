@@ -137,6 +137,73 @@ struct AppRuntimeDockMenuTests {
         #expect(visibleText.allSatisfy { !$0.contains("HWND") })
     }
 
+    @Test("launch onboarding copy stays app first")
+    func launchOnboardingCopyStaysAppFirst() {
+        let titles = [
+            WindowsShellCopy.launchOnboardingTitle(
+                state: "continue-in-app",
+                canContinueInApp: true
+            ),
+            WindowsShellCopy.launchOnboardingTitle(
+                state: "external-check",
+                canContinueInApp: false
+            ),
+            WindowsShellCopy.launchOnboardingTitle(
+                state: "ready-for-review",
+                canContinueInApp: false
+            ),
+            WindowsShellCopy.launchOnboardingTitle(
+                state: "blocked",
+                canContinueInApp: false
+            )
+        ]
+        let symbols = [
+            WindowsShellCopy.launchOnboardingSymbolName(
+                state: "continue-in-app",
+                canContinueInApp: true
+            ),
+            WindowsShellCopy.launchOnboardingSymbolName(
+                state: "external-check",
+                canContinueInApp: false
+            ),
+            WindowsShellCopy.launchOnboardingSymbolName(
+                state: "ready-for-review",
+                canContinueInApp: false
+            ),
+            WindowsShellCopy.launchOnboardingSymbolName(
+                state: "blocked",
+                canContinueInApp: false
+            )
+        ]
+
+        #expect(titles == [
+            "Continue in Veil",
+            "Review App Flow",
+            "Share App Flow",
+            "Needs Attention"
+        ])
+        #expect(symbols == [
+            "play.circle.fill",
+            "checkmark.seal",
+            "square.and.arrow.up",
+            "exclamationmark.triangle"
+        ])
+        #expect(
+            WindowsShellCopy.launchOnboardingDetail(
+                currentStepTitle: "Open Windows App",
+                pendingLiveProof: true
+            ) == "Next: Open Windows App"
+        )
+
+        let visibleText = titles + symbols
+        #expect(visibleText.allSatisfy { !$0.contains("runtime") })
+        #expect(visibleText.allSatisfy { !$0.contains("VM") })
+        #expect(visibleText.allSatisfy { !$0.contains("QEMU") })
+        #expect(visibleText.allSatisfy { !$0.contains("Guest Agent") })
+        #expect(visibleText.allSatisfy { !$0.contains("HWND") })
+        #expect(visibleText.allSatisfy { !$0.contains("Proof") })
+    }
+
     @Test("app flow copy stays product-facing")
     func appFlowCopyStaysProductFacing() {
         let titles = [

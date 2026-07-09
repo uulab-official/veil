@@ -35,6 +35,7 @@ struct DetailView: View {
                 launchPlan: runtimeStatusReport.launchPlan,
                 primaryNextAction: runtimeStatusReport.primaryNextAction,
                 oneScreenUX: runtimeStatusReport.oneScreenUX,
+                launchOnboarding: runtimeStatusReport.launchOnboarding,
                 recommendedProofKind: proofPlan.recommendedProofKind,
                 recommendedProofCommand: proofPlan.recommendedProofCommand,
                 startVMAction: startVMAction,
@@ -71,6 +72,7 @@ struct DetailView: View {
                     launchPlan: runtimeStatusReport.launchPlan,
                     primaryNextAction: runtimeStatusReport.primaryNextAction,
                     oneScreenUX: runtimeStatusReport.oneScreenUX,
+                    launchOnboarding: runtimeStatusReport.launchOnboarding,
                     launchWindowsAppAction: launchWindowsAppAction,
                     runPrimaryNextAction: runPrimaryNextAction,
                     runRecommendedProofAction: runRecommendedProofAction
@@ -153,6 +155,7 @@ private struct WindowsQuickLaunchPanel: View {
     var launchPlan: WindowsAppRuntimeLaunchPlanStatus
     var primaryNextAction: WindowsAppRuntimePrimaryNextActionStatus
     var oneScreenUX: WindowsAppRuntimeOneScreenUXStatus
+    var launchOnboarding: WindowsAppRuntimeLaunchOnboardingStatus
     var launchWindowsAppAction: () -> Void
     var runPrimaryNextAction: (LauncherPrimaryNextActionRoute) -> Void
     var runRecommendedProofAction: () -> Void
@@ -245,9 +248,9 @@ private struct WindowsQuickLaunchPanel: View {
 
             HStack(spacing: 12) {
                 StatusPill(
-                    title: appFlowStatusTitle,
-                    symbolName: appFlowSymbolName,
-                    tint: appFlowTint
+                    title: launchOnboardingTitle,
+                    symbolName: launchOnboardingSymbolName,
+                    tint: launchOnboardingTint
                 )
                 .frame(minWidth: 118, alignment: .leading)
 
@@ -257,11 +260,11 @@ private struct WindowsQuickLaunchPanel: View {
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
 
-                    Label(primaryNextAction.title, systemImage: "arrow.forward.circle")
+                    Label(launchOnboardingDetail, systemImage: "arrow.forward.circle")
                         .font(.caption.weight(.semibold))
-                        .foregroundStyle(primaryNextAction.isAvailable ? .primary : .secondary)
+                        .foregroundStyle(launchOnboarding.canContinueInApp ? .primary : .secondary)
                         .lineLimit(1)
-                        .help(primaryNextActionHelp)
+                        .help(launchOnboardingHelp)
 
                     Label(oneScreenUXTitle, systemImage: oneScreenUXSymbolName)
                         .font(.caption)
@@ -297,8 +300,8 @@ private struct WindowsQuickLaunchPanel: View {
                         Label(primaryNextActionRoute.buttonTitle, systemImage: primaryNextActionRoute.symbolName)
                     }
                     .buttonStyle(.bordered)
-                    .disabled(!primaryNextAction.isAvailable)
-                    .help(primaryNextActionHelp)
+                    .disabled(!launchOnboarding.canContinueInApp)
+                    .help(launchOnboardingHelp)
                 }
             }
         }
@@ -407,6 +410,35 @@ private struct WindowsQuickLaunchPanel: View {
         )
     }
 
+    private var launchOnboardingTitle: String {
+        WindowsShellCopy.launchOnboardingTitle(
+            state: launchOnboarding.state,
+            canContinueInApp: launchOnboarding.canContinueInApp
+        )
+    }
+
+    private var launchOnboardingDetail: String {
+        WindowsShellCopy.launchOnboardingDetail(
+            currentStepTitle: launchOnboarding.currentStepTitle,
+            pendingLiveProof: launchOnboarding.pendingLiveProof
+        )
+    }
+
+    private var launchOnboardingSymbolName: String {
+        WindowsShellCopy.launchOnboardingSymbolName(
+            state: launchOnboarding.state,
+            canContinueInApp: launchOnboarding.canContinueInApp
+        )
+    }
+
+    private var launchOnboardingTint: Color {
+        if launchOnboarding.state == "ready-for-review" {
+            return .green
+        }
+
+        return launchOnboarding.canContinueInApp ? .blue : .orange
+    }
+
     private var oneScreenUXTitle: String {
         if primaryNextAction.runsInApp && !oneScreenUX.heroRunsPrimaryAction {
             return "Hero action needs attention"
@@ -463,11 +495,21 @@ private struct WindowsQuickLaunchPanel: View {
             .joined(separator: "\n")
     }
 
+    private var launchOnboardingHelp: String {
+        [
+            launchOnboarding.reason,
+            launchOnboarding.canContinueInApp ? "Runs inside Veil." : "Continue from the review flow.",
+            launchOnboarding.primaryCommand.map { "Command: \($0)" }
+        ]
+            .compactMap { $0 }
+            .joined(separator: "\n")
+    }
+
     private var primaryNextActionRoute: LauncherPrimaryNextActionRoute? {
         LauncherPrimaryNextActionRoute.resolve(
-            actionId: primaryNextAction.actionId ?? primaryNextAction.id,
-            command: primaryNextAction.command,
-            runsInApp: primaryNextAction.runsInApp
+            actionId: launchOnboarding.primaryActionId ?? launchOnboarding.currentStepId,
+            command: launchOnboarding.primaryCommand,
+            runsInApp: launchOnboarding.canContinueInApp
         )
     }
 
