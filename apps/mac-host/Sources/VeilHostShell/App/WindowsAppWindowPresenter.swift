@@ -111,6 +111,17 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
         }
     }
 
+    func windowDidBecomeKey(_ notification: Notification) {
+        guard let window = notification.object as? NSWindow,
+              let windowId = window.identifier?.rawValue,
+              windowsById[windowId] != nil else {
+            return
+        }
+
+        rememberWindowId(windowId)
+        foregroundWindowId = windowId
+    }
+
     private func present(_ window: NSWindow, windowId: String) {
         rememberWindowId(windowId)
         foregroundWindowId = windowId

@@ -79,6 +79,24 @@ struct WindowsAppWindowPresenterTests {
         #expect(presenter.foregroundWindowId == nil)
     }
 
+    @Test("tracks manually focused Windows app windows")
+    func tracksManuallyFocusedWindowsAppWindows() throws {
+        _ = NSApplication.shared
+        let presenter = WindowsAppWindowPresenter()
+        defer {
+            presenter.closeAll()
+        }
+
+        presenter.showWindow(for: session(windowId: "hwnd:0001", appId: "winapp_notepad", title: "Notepad"))
+        presenter.showWindow(for: session(windowId: "hwnd:0002", appId: "winapp_calculator", title: "Calculator"))
+
+        let notepadWindow = try #require(mirroredWindow(withId: "hwnd:0001"))
+        presenter.windowDidBecomeKey(Notification(name: NSWindow.didBecomeKeyNotification, object: notepadWindow))
+
+        #expect(presenter.foregroundWindowId == "hwnd:0001")
+        #expect(presenter.visibleWindowIds == ["hwnd:0002", "hwnd:0001"])
+    }
+
     @Test("restore policy deminiaturizes minimized Windows app windows")
     func restorePolicyDeminiaturizesMinimizedWindowsAppWindows() {
         let window = RestorePolicyTestWindow(isMiniaturizedForTest: true)
@@ -177,6 +195,10 @@ struct WindowsAppWindowPresenterTests {
             connectionMode: .agent,
             captureState: .pending
         )
+    }
+
+    private func mirroredWindow(withId windowId: String) -> NSWindow? {
+        NSApp.windows.first { $0.identifier?.rawValue == windowId }
     }
 }
 
