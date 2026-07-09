@@ -619,7 +619,44 @@ struct VeilHostShellApp: App {
                 displayMessage = "Could not restore previous Windows apps: \(errorMessage)"
             }
 
+            if restoredLaunches.isEmpty,
+               !model.hasLiveAgentConnection,
+               model.canReconnectRestoreMirrorSessions {
+                continuePreviousAppsRestoreHandoff()
+            }
+
             syncLauncherWindowVisibility()
+        }
+    }
+
+    private func continuePreviousAppsRestoreHandoff() {
+        switch vmModel.snapshot?.state {
+        case .running, .starting:
+            activateMainWindow()
+            displayMessage = "Windows is running. Veil is preparing the guest agent to reconnect previous apps."
+            scheduleAutomaticGuestAgentRecoveryIfNeeded()
+            if vmRuntimeBooter.supportsNativeDisplayWindow {
+                showWindowsDisplay()
+            }
+        default:
+            guard vmModel.canStart else {
+                displayMessage = "Veil found previous Windows apps to reconnect. Start Windows when the local runtime is available."
+                return
+            }
+
+            Task { @MainActor in
+                cancelAutomaticQuietRuntime()
+                activateMainWindow()
+                displayMessage = "Starting Windows. Veil will reconnect previous apps when the guest agent responds."
+                await vmModel.start()
+
+                if vmModel.snapshot?.state == .running || vmModel.snapshot?.state == .starting {
+                    displayMessage = "Windows is running. Veil is preparing the guest agent to reconnect previous apps."
+                    scheduleAutomaticGuestAgentRecoveryIfNeeded()
+                } else if let errorMessage = vmModel.errorMessage {
+                    displayMessage = "Windows could not start for previous apps: \(errorMessage)"
+                }
+            }
         }
     }
 
