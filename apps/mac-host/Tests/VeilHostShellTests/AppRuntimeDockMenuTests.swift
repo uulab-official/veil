@@ -169,6 +169,71 @@ struct AppRuntimeDockMenuTests {
         #expect(titles.allSatisfy { !$0.contains("Agent") })
     }
 
+    @Test("menu bar symbols prioritize Windows app state")
+    func menuBarSymbolsPrioritizeWindowsAppState() {
+        let symbols = [
+            WindowsShellCopy.menuBarSymbolName(
+                runtimeState: .stopped,
+                hasOpenAppWindows: true,
+                hasQueuedApp: true,
+                canRestorePreviousApps: true,
+                canReconnectPreviousApps: true
+            ),
+            WindowsShellCopy.menuBarSymbolName(
+                runtimeState: .running,
+                hasOpenAppWindows: false,
+                hasQueuedApp: true,
+                canRestorePreviousApps: true,
+                canReconnectPreviousApps: true
+            ),
+            WindowsShellCopy.menuBarSymbolName(
+                runtimeState: .running,
+                hasOpenAppWindows: false,
+                hasQueuedApp: false,
+                canRestorePreviousApps: false,
+                canReconnectPreviousApps: true
+            ),
+            WindowsShellCopy.menuBarSymbolName(
+                runtimeState: .running,
+                hasOpenAppWindows: false,
+                hasQueuedApp: false,
+                canRestorePreviousApps: false,
+                canReconnectPreviousApps: false
+            ),
+            WindowsShellCopy.menuBarSymbolName(
+                runtimeState: .starting,
+                hasOpenAppWindows: false,
+                hasQueuedApp: false,
+                canRestorePreviousApps: false,
+                canReconnectPreviousApps: false
+            ),
+            WindowsShellCopy.menuBarSymbolName(
+                runtimeState: .failed,
+                hasOpenAppWindows: false,
+                hasQueuedApp: false,
+                canRestorePreviousApps: false,
+                canReconnectPreviousApps: false
+            ),
+            WindowsShellCopy.menuBarSymbolName(
+                runtimeState: .stopped,
+                hasOpenAppWindows: false,
+                hasQueuedApp: false,
+                canRestorePreviousApps: false,
+                canReconnectPreviousApps: false
+            )
+        ]
+
+        #expect(symbols == [
+            "rectangle.stack.fill",
+            "clock.fill",
+            "arrow.counterclockwise.circle.fill",
+            "display",
+            "arrow.triangle.2.circlepath",
+            "exclamationmark.triangle",
+            "play.rectangle"
+        ])
+    }
+
     @Test("Windows power action titles stay product-like")
     func windowsPowerActionTitlesStayProductLike() {
         let titles = [

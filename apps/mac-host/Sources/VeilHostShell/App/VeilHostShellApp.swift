@@ -1088,16 +1088,13 @@ struct VeilHostShellApp: App {
     }
 
     private var menuBarSymbolName: String {
-        switch vmModel.snapshot?.state {
-        case .running:
-            "display"
-        case .starting:
-            "arrow.triangle.2.circlepath"
-        case .failed, .unsupported:
-            "exclamationmark.triangle"
-        default:
-            "play.rectangle"
-        }
+        WindowsShellCopy.menuBarSymbolName(
+            runtimeState: vmModel.snapshot?.state,
+            hasOpenAppWindows: !model.mirrorSessions.isEmpty,
+            hasQueuedApp: model.pendingLaunchStatus().isQueued,
+            canRestorePreviousApps: model.canRestoreMirrorSessions,
+            canReconnectPreviousApps: model.canReconnectRestoreMirrorSessions
+        )
     }
 
     private func userMessage(for error: any Error) -> String {

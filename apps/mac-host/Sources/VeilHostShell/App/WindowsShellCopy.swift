@@ -190,6 +190,37 @@ enum WindowsShellCopy {
         }
     }
 
+    static func menuBarSymbolName(
+        runtimeState: VMRuntimeState?,
+        hasOpenAppWindows: Bool,
+        hasQueuedApp: Bool,
+        canRestorePreviousApps: Bool,
+        canReconnectPreviousApps: Bool
+    ) -> String {
+        if hasOpenAppWindows {
+            return "rectangle.stack.fill"
+        }
+
+        if hasQueuedApp {
+            return "clock.fill"
+        }
+
+        if canRestorePreviousApps || canReconnectPreviousApps {
+            return "arrow.counterclockwise.circle.fill"
+        }
+
+        switch runtimeState {
+        case .running:
+            return "display"
+        case .starting:
+            return "arrow.triangle.2.circlepath"
+        case .failed, .unsupported:
+            return "exclamationmark.triangle"
+        default:
+            return "play.rectangle"
+        }
+    }
+
     static func installedLauncherMetadata(
         windowsIsRunning: Bool,
         windowsCanStart: Bool,
