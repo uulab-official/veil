@@ -125,6 +125,25 @@ function expectedPrimaryNextActionId(stepId, command) {
   }
 }
 
+function installedRuntimeHeroSupports(actionId) {
+  return [
+    "windowsApps.launchSelected",
+    "runtime.fulfillPendingLaunch",
+    "runtime.recoverDisplay",
+    "runtime.waitAgent",
+    "runtime.repairGuestAgentForApp",
+    "runtime.startWindowsForApp",
+    "runtime.prepareWindows",
+    "runtime.refreshStatus",
+    "windowsApps.reconnectRestore",
+    "windowsApps.restorePrevious",
+    "windowsApps.closeAll",
+    "runtime.quietWhenIdle",
+    "runtime.stopWhenIdle",
+    "proof.recommended"
+  ].includes(actionId);
+}
+
 function refreshOneScreenUX(report) {
   if (report.oneScreenUX === undefined) {
     return;
@@ -146,7 +165,8 @@ function refreshOneScreenUX(report) {
       && report.launcherVisibility.shouldHideMainWindow === false);
   report.oneScreenUX.keepsDisplayRecoveryManual = report.visibleSurfacePolicy.keepsRecoveryDisplayManual;
   report.oneScreenUX.primaryActionId = report.primaryNextAction.actionId ?? report.menuBarIntegration.primaryActionId;
-  report.oneScreenUX.heroRunsPrimaryAction = report.primaryNextAction.runsInApp;
+  report.oneScreenUX.heroRunsPrimaryAction = report.primaryNextAction.runsInApp
+    && installedRuntimeHeroSupports(report.primaryNextAction.actionId);
 }
 
 test("validates app runtime status fixture", () => {
@@ -294,6 +314,16 @@ test("rejects one-screen UX primary action drift", () => {
 test("rejects one-screen UX hero action drift", () => {
   const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.demo.json", import.meta.url), "utf8"));
   report.oneScreenUX.heroRunsPrimaryAction = false;
+
+  assert.throws(
+    () => validateAppRuntimeStatus(report),
+    /heroRunsPrimaryAction/
+  );
+});
+
+test("rejects one-screen UX hero readiness without a supported action id", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.mac-window-live.json", import.meta.url), "utf8"));
+  report.oneScreenUX.heroRunsPrimaryAction = true;
 
   assert.throws(
     () => validateAppRuntimeStatus(report),

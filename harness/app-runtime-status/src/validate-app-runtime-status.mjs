@@ -947,6 +947,25 @@ function expectedPrimaryNextActionId(stepId, command) {
   }
 }
 
+function installedRuntimeHeroSupports(actionId) {
+  return [
+    "windowsApps.launchSelected",
+    "runtime.fulfillPendingLaunch",
+    "runtime.recoverDisplay",
+    "runtime.waitAgent",
+    "runtime.repairGuestAgentForApp",
+    "runtime.startWindowsForApp",
+    "runtime.prepareWindows",
+    "runtime.refreshStatus",
+    "windowsApps.reconnectRestore",
+    "windowsApps.restorePrevious",
+    "windowsApps.closeAll",
+    "runtime.quietWhenIdle",
+    "runtime.stopWhenIdle",
+    "proof.recommended"
+  ].includes(actionId);
+}
+
 function validateProofCommand(command, fieldName, isAvailable, expectedCommand) {
   if (isAvailable) {
     requireString(command, fieldName);
@@ -1305,11 +1324,13 @@ function validateOneScreenUX(oneScreenUX, report) {
     throw new TypeError("oneScreenUX.primaryActionId must match the executable next action or menu primary action.");
   }
 
-  if (oneScreenUX.heroRunsPrimaryAction !== report.primaryNextAction.runsInApp) {
-    throw new TypeError("oneScreenUX.heroRunsPrimaryAction must match whether the primary next action runs from the app hero.");
+  const expectedHeroRunsPrimaryAction = report.primaryNextAction.runsInApp
+    && installedRuntimeHeroSupports(report.primaryNextAction.actionId);
+  if (oneScreenUX.heroRunsPrimaryAction !== expectedHeroRunsPrimaryAction) {
+    throw new TypeError("oneScreenUX.heroRunsPrimaryAction must match whether the primary next action is supported by the app hero.");
   }
 
-  if (report.primaryNextAction.runsInApp && !oneScreenUX.heroRunsPrimaryAction) {
+  if (expectedHeroRunsPrimaryAction && !oneScreenUX.heroRunsPrimaryAction) {
     throw new TypeError("oneScreenUX hero action must run every in-app primary next action.");
   }
 
