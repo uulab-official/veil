@@ -401,7 +401,11 @@
       "pendingLiveProof": true,
       "primaryActionId": "proof.recommended",
       "primaryCommand": "veil-vmctl mvp-proof --json --app-id winapp_notepad --require-proved",
-      "reason": "Continue from the single Veil launcher action without opening a separate VM manager surface."
+      "reason": "Continue from the single Veil launcher action without opening a separate VM manager surface.",
+      "completedStepCount": 4,
+      "totalStepCount": 5,
+      "currentStepNumber": 4,
+      "progressLabel": "4 of 5 ready"
     }
   },
   "nextActions": [

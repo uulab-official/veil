@@ -202,10 +202,28 @@ function refreshLaunchOnboarding(report) {
     keepsRecoveryInMenuOrDock: status.oneScreenUX.canRecoverFromMenuOrDock,
     keepsVMDisplayManual: status.oneScreenUX.keepsDisplayRecoveryManual,
     pendingLiveProof: !status.releaseGate.isPassing,
+    completedStepCount: status.releaseGate.passingStepCount,
+    totalStepCount: status.releaseGate.requiredStepCount,
+    currentStepNumber: currentLaunchOnboardingStepNumber(status),
+    progressLabel: `${status.releaseGate.passingStepCount} of ${status.releaseGate.requiredStepCount} ready`,
     ...(status.primaryNextAction.actionId === undefined ? {} : { primaryActionId: status.primaryNextAction.actionId }),
     ...(status.primaryNextAction.command === undefined ? {} : { primaryCommand: status.primaryNextAction.command }),
     reason
   };
+}
+
+function currentLaunchOnboardingStepNumber(status) {
+  if (status.releaseGate.isPassing) {
+    return status.releaseGate.requiredStepCount;
+  }
+
+  const requiredSteps = status.releaseGate.steps.filter((step) => step.isRequired);
+  const recommendedStepIndex = requiredSteps.findIndex((step) => step.id === status.releaseGate.recommendedAction);
+  if (recommendedStepIndex >= 0) {
+    return recommendedStepIndex + 1;
+  }
+
+  return Math.min(status.releaseGate.passingStepCount + 1, status.releaseGate.requiredStepCount);
 }
 
 function markStatusLocalRuntimeInstalled(report, detail = "The local profile is marked installed.") {

@@ -1560,6 +1560,10 @@ function validateLaunchOnboarding(launchOnboarding, report) {
   requireBoolean(launchOnboarding.keepsRecoveryInMenuOrDock, "launchOnboarding.keepsRecoveryInMenuOrDock");
   requireBoolean(launchOnboarding.keepsVMDisplayManual, "launchOnboarding.keepsVMDisplayManual");
   requireBoolean(launchOnboarding.pendingLiveProof, "launchOnboarding.pendingLiveProof");
+  requireNonNegativeInteger(launchOnboarding.completedStepCount, "launchOnboarding.completedStepCount");
+  requireNonNegativeInteger(launchOnboarding.totalStepCount, "launchOnboarding.totalStepCount");
+  requireNonNegativeInteger(launchOnboarding.currentStepNumber, "launchOnboarding.currentStepNumber");
+  requireString(launchOnboarding.progressLabel, "launchOnboarding.progressLabel");
   requireString(launchOnboarding.reason, "launchOnboarding.reason");
 
   if (launchOnboarding.primaryActionId !== undefined) {
@@ -1604,6 +1608,26 @@ function validateLaunchOnboarding(launchOnboarding, report) {
   }
   if (launchOnboarding.pendingLiveProof !== !report.releaseGate.isPassing) {
     throw new TypeError("launchOnboarding.pendingLiveProof must match releaseGate progress.");
+  }
+  if (launchOnboarding.completedStepCount !== report.releaseGate.passingStepCount) {
+    throw new TypeError("launchOnboarding.completedStepCount must match releaseGate.passingStepCount.");
+  }
+  if (launchOnboarding.totalStepCount !== report.releaseGate.requiredStepCount) {
+    throw new TypeError("launchOnboarding.totalStepCount must match releaseGate.requiredStepCount.");
+  }
+  const requiredSteps = report.releaseGate.steps.filter((step) => step.isRequired);
+  const recommendedStepIndex = requiredSteps.findIndex((step) => step.id === report.releaseGate.recommendedAction);
+  const expectedCurrentStepNumber = report.releaseGate.isPassing
+    ? report.releaseGate.requiredStepCount
+    : (recommendedStepIndex >= 0
+      ? recommendedStepIndex + 1
+      : Math.min(report.releaseGate.passingStepCount + 1, report.releaseGate.requiredStepCount));
+  if (launchOnboarding.currentStepNumber !== expectedCurrentStepNumber) {
+    throw new TypeError("launchOnboarding.currentStepNumber must match releaseGate.recommendedAction.");
+  }
+  const expectedProgressLabel = `${report.releaseGate.passingStepCount} of ${report.releaseGate.requiredStepCount} ready`;
+  if (launchOnboarding.progressLabel !== expectedProgressLabel) {
+    throw new TypeError("launchOnboarding.progressLabel must summarize releaseGate progress.");
   }
 
   const expectedCanContinueInApp = report.primaryNextAction.runsInApp

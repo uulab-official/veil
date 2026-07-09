@@ -207,6 +207,16 @@ function refreshLaunchOnboarding(report) {
   report.launchOnboarding.keepsRecoveryInMenuOrDock = report.oneScreenUX.canRecoverFromMenuOrDock;
   report.launchOnboarding.keepsVMDisplayManual = report.oneScreenUX.keepsDisplayRecoveryManual;
   report.launchOnboarding.pendingLiveProof = !report.releaseGate.isPassing;
+  report.launchOnboarding.completedStepCount = report.releaseGate.passingStepCount;
+  report.launchOnboarding.totalStepCount = report.releaseGate.requiredStepCount;
+  const requiredSteps = report.releaseGate.steps.filter((step) => step.isRequired);
+  const recommendedStepIndex = requiredSteps.findIndex((step) => step.id === report.releaseGate.recommendedAction);
+  report.launchOnboarding.currentStepNumber = report.releaseGate.isPassing
+    ? report.releaseGate.requiredStepCount
+    : (recommendedStepIndex >= 0
+      ? recommendedStepIndex + 1
+      : Math.min(report.releaseGate.passingStepCount + 1, report.releaseGate.requiredStepCount));
+  report.launchOnboarding.progressLabel = `${report.releaseGate.passingStepCount} of ${report.releaseGate.requiredStepCount} ready`;
   report.launchOnboarding.primaryActionId = report.primaryNextAction.actionId;
   report.launchOnboarding.primaryCommand = report.primaryNextAction.command;
 }

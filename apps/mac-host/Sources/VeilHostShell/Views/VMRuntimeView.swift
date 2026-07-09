@@ -1591,6 +1591,12 @@ private struct WindowsSetupDisplayPanel: View {
                         .lineLimit(1)
                         .help(launchOnboarding.reason)
 
+                    Label(launchOnboarding.progressLabel, systemImage: "checklist")
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.white.opacity(0.66))
+                        .lineLimit(1)
+                        .help("App flow progress")
+
                     Label(oneScreenUXTitle, systemImage: oneScreenUXSymbolName)
                         .font(.caption.weight(.medium))
                         .foregroundStyle(.white.opacity(oneScreenUX.usesSinglePrimarySurfaceFamily

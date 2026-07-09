@@ -285,15 +285,23 @@ private struct WindowsQuickLaunchPanel: View {
 
                 Spacer()
 
-                HStack(spacing: 5) {
-                    ForEach(releaseGate.steps, id: \.id) { step in
-                        Circle()
-                            .fill(step.isPassing ? Color.green : Color.secondary.opacity(0.35))
-                            .frame(width: 6, height: 6)
-                            .help(step.title)
+                VStack(alignment: .trailing, spacing: 5) {
+                    Text(launchOnboarding.progressLabel)
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .help("App flow progress")
+
+                    HStack(spacing: 5) {
+                        ForEach(releaseGate.steps, id: \.id) { step in
+                            Circle()
+                                .fill(step.isPassing ? Color.green : Color.secondary.opacity(0.35))
+                                .frame(width: 6, height: 6)
+                                .help(step.title)
+                        }
                     }
+                    .accessibilityLabel("App flow progress")
                 }
-                .accessibilityLabel("App flow progress")
 
                 if let primaryNextActionRoute {
                     Button {

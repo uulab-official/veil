@@ -759,6 +759,10 @@ public struct WindowsAppRuntimeLaunchOnboardingStatus: Codable, Equatable, Senda
     public var keepsRecoveryInMenuOrDock: Bool
     public var keepsVMDisplayManual: Bool
     public var pendingLiveProof: Bool
+    public var completedStepCount: Int
+    public var totalStepCount: Int
+    public var currentStepNumber: Int
+    public var progressLabel: String
     public var primaryActionId: String?
     public var primaryCommand: String?
     public var reason: String
@@ -775,6 +779,10 @@ public struct WindowsAppRuntimeLaunchOnboardingStatus: Codable, Equatable, Senda
         keepsRecoveryInMenuOrDock: Bool,
         keepsVMDisplayManual: Bool,
         pendingLiveProof: Bool,
+        completedStepCount: Int = 0,
+        totalStepCount: Int = 0,
+        currentStepNumber: Int = 0,
+        progressLabel: String = "0 of 0 ready",
         primaryActionId: String? = nil,
         primaryCommand: String? = nil,
         reason: String
@@ -790,6 +798,10 @@ public struct WindowsAppRuntimeLaunchOnboardingStatus: Codable, Equatable, Senda
         self.keepsRecoveryInMenuOrDock = keepsRecoveryInMenuOrDock
         self.keepsVMDisplayManual = keepsVMDisplayManual
         self.pendingLiveProof = pendingLiveProof
+        self.completedStepCount = completedStepCount
+        self.totalStepCount = totalStepCount
+        self.currentStepNumber = currentStepNumber
+        self.progressLabel = progressLabel
         self.primaryActionId = primaryActionId
         self.primaryCommand = primaryCommand
         self.reason = reason
@@ -2413,6 +2425,17 @@ public final class HostDashboardModel {
             state = "blocked"
             reason = "The one-screen Windows app launch flow needs setup or recovery before it can continue."
         }
+        let requiredSteps = releaseGate.steps.filter(\.isRequired)
+        let completedStepCount = releaseGate.passingStepCount
+        let totalStepCount = releaseGate.requiredStepCount
+        let currentStepNumber: Int
+        if releaseGate.isPassing {
+            currentStepNumber = totalStepCount
+        } else if let currentIndex = requiredSteps.firstIndex(where: { $0.id == releaseGate.recommendedAction }) {
+            currentStepNumber = currentIndex + 1
+        } else {
+            currentStepNumber = min(completedStepCount + 1, totalStepCount)
+        }
 
         return WindowsAppRuntimeLaunchOnboardingStatus(
             state: state,
@@ -2425,6 +2448,10 @@ public final class HostDashboardModel {
             keepsRecoveryInMenuOrDock: oneScreenUX.canRecoverFromMenuOrDock,
             keepsVMDisplayManual: oneScreenUX.keepsDisplayRecoveryManual,
             pendingLiveProof: !releaseGate.isPassing,
+            completedStepCount: completedStepCount,
+            totalStepCount: totalStepCount,
+            currentStepNumber: currentStepNumber,
+            progressLabel: "\(completedStepCount) of \(totalStepCount) ready",
             primaryActionId: primaryNextAction.actionId,
             primaryCommand: primaryNextAction.command,
             reason: reason

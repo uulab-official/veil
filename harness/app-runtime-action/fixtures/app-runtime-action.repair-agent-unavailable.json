@@ -405,7 +405,11 @@
       "pendingLiveProof": true,
       "primaryActionId": "runtime.repairGuestAgentForApp",
       "primaryCommand": "veil-vmctl app-runtime-action --json --action repair-agent --wait-seconds 120",
-      "reason": "Continue from the single Veil launcher action without opening a separate VM manager surface."
+      "reason": "Continue from the single Veil launcher action without opening a separate VM manager surface.",
+      "completedStepCount": 2,
+      "totalStepCount": 5,
+      "currentStepNumber": 3,
+      "progressLabel": "2 of 5 ready"
     }
   },
   "nextActions": [

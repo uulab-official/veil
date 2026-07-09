@@ -261,7 +261,11 @@
       "keepsVMDisplayManual": true,
       "pendingLiveProof": false,
       "primaryCommand": "veil-vmctl app-runtime-review --json",
-      "reason": "The app-first launch flow is ready for review evidence."
+      "reason": "The app-first launch flow is ready for review evidence.",
+      "completedStepCount": 5,
+      "totalStepCount": 5,
+      "currentStepNumber": 5,
+      "progressLabel": "5 of 5 ready"
     },
     "minimumScreenshotHeight": 360,
     "minimumScreenshotWidth": 640,
@@ -705,7 +709,11 @@
         "keepsVMDisplayManual": true,
         "pendingLiveProof": false,
         "primaryCommand": "veil-vmctl app-runtime-review --json",
-        "reason": "The app-first launch flow is ready for review evidence."
+        "reason": "The app-first launch flow is ready for review evidence.",
+        "completedStepCount": 5,
+        "totalStepCount": 5,
+        "currentStepNumber": 5,
+        "progressLabel": "5 of 5 ready"
       }
     },
     "statusCommand": "veil-vmctl app-runtime-status --json",

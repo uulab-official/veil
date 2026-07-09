@@ -246,11 +246,15 @@ function validateLaunchOnboarding(launchOnboarding, sourceLaunchOnboarding) {
     "state",
     "currentStepId",
     "currentStepTitle",
+    "progressLabel",
     "reason"
   ]) {
     requireString(launchOnboarding[fieldName], `launchOnboarding.${fieldName}`);
   }
   requireNonNegativeInteger(launchOnboarding.expectedVisibleSurfaceCount, "launchOnboarding.expectedVisibleSurfaceCount");
+  requireNonNegativeInteger(launchOnboarding.completedStepCount, "launchOnboarding.completedStepCount");
+  requireNonNegativeInteger(launchOnboarding.totalStepCount, "launchOnboarding.totalStepCount");
+  requireNonNegativeInteger(launchOnboarding.currentStepNumber, "launchOnboarding.currentStepNumber");
 
   for (const fieldName of ["primaryActionId", "primaryCommand"]) {
     if (launchOnboarding[fieldName] !== undefined) {
@@ -270,6 +274,10 @@ function validateLaunchOnboarding(launchOnboarding, sourceLaunchOnboarding) {
     "keepsRecoveryInMenuOrDock",
     "keepsVMDisplayManual",
     "pendingLiveProof",
+    "completedStepCount",
+    "totalStepCount",
+    "currentStepNumber",
+    "progressLabel",
     "primaryActionId",
     "primaryCommand",
     "reason"

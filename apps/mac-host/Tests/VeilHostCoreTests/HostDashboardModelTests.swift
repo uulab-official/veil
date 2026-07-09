@@ -1554,6 +1554,11 @@ struct HostDashboardModelTests {
         #expect(runningQueuedReport.primaryNextAction.title == "Continue Notepad")
         #expect(runningQueuedReport.primaryNextAction.actionId == "runtime.repairGuestAgentForApp")
         #expect(runningQueuedReport.primaryNextAction.command == "veil-vmctl app-runtime-action --json --action repair-agent --wait-seconds 120")
+        #expect(runningQueuedReport.launchOnboarding.currentStepTitle == "Continue Notepad")
+        #expect(runningQueuedReport.launchOnboarding.completedStepCount == 3)
+        #expect(runningQueuedReport.launchOnboarding.totalStepCount == 5)
+        #expect(runningQueuedReport.launchOnboarding.currentStepNumber == 3)
+        #expect(runningQueuedReport.launchOnboarding.progressLabel == "3 of 5 ready")
 
         primary.error = nil
         let fulfilledLaunch = await model.refreshLiveAgentIfNeeded()

@@ -237,10 +237,14 @@ state: `blocked`, `continue-in-app`, `external-check`, or `ready-for-review`.
 It repeats the current product step, the routed primary action id/command when
 available, whether the hero can continue inside Veil, the expected visible
 surface count, menu/Dock recovery readiness, manual VM display recovery, and
-whether live proof is still pending. The status and action harnesses validate
-this object, and review cards now surface the same object at the top level, so a
-launcher UI or release-evidence card cannot silently drift back into a separate
-VM manager flow or show a broken in-app button for a review/CLI-only handoff.
+whether live proof is still pending. It also carries release-gate progress as
+`completedStepCount`, `totalStepCount`, `currentStepNumber`, and
+`progressLabel`, so the app can show Parallels-style "continue the app flow"
+progress without recomputing raw release-card state in the view layer. The
+status and action harnesses validate this object, and review cards now surface
+the same object at the top level, so a launcher UI or release-evidence card
+cannot silently drift back into a separate VM manager flow or show a broken
+in-app button for a review/CLI-only handoff.
 
 `guestAgentDiagnostics` points every app-runtime status report at the same
 guest-agent readiness gate: run `veil-host-probe --diagnose-agent` before and
