@@ -441,6 +441,7 @@ public struct WindowsAppRuntimeOneScreenUXStatus: Codable, Equatable, Sendable {
     public var keepsMenuBarControlAvailable: Bool
     public var keepsDockControlAvailable: Bool
     public var canRecoverFromMenuOrDock: Bool
+    public var returnsToLauncherWhenNoAppWindows: Bool
     public var keepsDisplayRecoveryManual: Bool
     public var primaryActionId: String?
     public var reason: String
@@ -454,6 +455,7 @@ public struct WindowsAppRuntimeOneScreenUXStatus: Codable, Equatable, Sendable {
         keepsMenuBarControlAvailable: Bool,
         keepsDockControlAvailable: Bool,
         canRecoverFromMenuOrDock: Bool,
+        returnsToLauncherWhenNoAppWindows: Bool,
         keepsDisplayRecoveryManual: Bool,
         primaryActionId: String? = nil,
         reason: String
@@ -466,6 +468,7 @@ public struct WindowsAppRuntimeOneScreenUXStatus: Codable, Equatable, Sendable {
         self.keepsMenuBarControlAvailable = keepsMenuBarControlAvailable
         self.keepsDockControlAvailable = keepsDockControlAvailable
         self.canRecoverFromMenuOrDock = canRecoverFromMenuOrDock
+        self.returnsToLauncherWhenNoAppWindows = returnsToLauncherWhenNoAppWindows
         self.keepsDisplayRecoveryManual = keepsDisplayRecoveryManual
         self.primaryActionId = primaryActionId
         self.reason = reason
@@ -2183,6 +2186,10 @@ public final class HostDashboardModel {
         let canRecoverFromMenuOrDock = isMirroringApps
             ? (menuBarIntegration.canBringWindowsAppsForward && launcherVisibility.keepsDockMenuAvailable)
             : (menuBarIntegration.canOpenMainWindow || launcherVisibility.canOpenMainWindow)
+        let returnsToLauncherWhenNoAppWindows = isMirroringApps
+            || (visibleSurfacePolicy.primarySurface == "launcher"
+                && visibleSurfacePolicy.expectedVisibleSurfaceCount == 1
+                && !launcherVisibility.shouldHideMainWindow)
         let primaryActionId = primaryNextAction.actionId ?? menuBarIntegration.primaryActionId
         let reason: String
 
@@ -2201,6 +2208,7 @@ public final class HostDashboardModel {
             keepsMenuBarControlAvailable: menuBarIntegration.isEnabled,
             keepsDockControlAvailable: launcherVisibility.keepsDockMenuAvailable,
             canRecoverFromMenuOrDock: canRecoverFromMenuOrDock,
+            returnsToLauncherWhenNoAppWindows: returnsToLauncherWhenNoAppWindows,
             keepsDisplayRecoveryManual: visibleSurfacePolicy.keepsRecoveryDisplayManual,
             primaryActionId: primaryActionId,
             reason: reason

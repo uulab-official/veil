@@ -261,7 +261,9 @@ private struct WindowsQuickLaunchPanel: View {
 
                     Label(oneScreenUXTitle, systemImage: oneScreenUXSymbolName)
                         .font(.caption)
-                        .foregroundStyle(oneScreenUX.usesSinglePrimarySurfaceFamily && oneScreenUX.canRecoverFromMenuOrDock ? Color.secondary : Color.orange)
+                        .foregroundStyle(oneScreenUX.usesSinglePrimarySurfaceFamily
+                            && oneScreenUX.canRecoverFromMenuOrDock
+                            && oneScreenUX.returnsToLauncherWhenNoAppWindows ? Color.secondary : Color.orange)
                         .lineLimit(1)
                         .help(oneScreenUX.reason)
 
@@ -406,6 +408,10 @@ private struct WindowsQuickLaunchPanel: View {
             return "Recovery needs attention"
         }
 
+        if !oneScreenUX.returnsToLauncherWhenNoAppWindows {
+            return "Launcher fallback needs attention"
+        }
+
         if oneScreenUX.mode == "windows-app-windows" {
             let count = oneScreenUX.expectedVisibleSurfaceCount
             return count == 1 ? "One Windows app surface" : "\(count) Windows app surfaces"
@@ -415,7 +421,9 @@ private struct WindowsQuickLaunchPanel: View {
     }
 
     private var oneScreenUXSymbolName: String {
-        oneScreenUX.usesSinglePrimarySurfaceFamily && oneScreenUX.canRecoverFromMenuOrDock
+        oneScreenUX.usesSinglePrimarySurfaceFamily
+            && oneScreenUX.canRecoverFromMenuOrDock
+            && oneScreenUX.returnsToLauncherWhenNoAppWindows
             ? "rectangle.on.rectangle"
             : "exclamationmark.triangle"
     }

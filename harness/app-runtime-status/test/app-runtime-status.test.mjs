@@ -140,6 +140,10 @@ function refreshOneScreenUX(report) {
   report.oneScreenUX.canRecoverFromMenuOrDock = report.visibleSurfacePolicy.primarySurface === "windows-app-windows"
     ? report.menuBarIntegration.canBringWindowsAppsForward && report.launcherVisibility.keepsDockMenuAvailable
     : report.menuBarIntegration.canOpenMainWindow || report.launcherVisibility.canOpenMainWindow;
+  report.oneScreenUX.returnsToLauncherWhenNoAppWindows = report.visibleSurfacePolicy.primarySurface === "windows-app-windows"
+    || (report.visibleSurfacePolicy.primarySurface === "launcher"
+      && report.visibleSurfacePolicy.expectedVisibleSurfaceCount === 1
+      && report.launcherVisibility.shouldHideMainWindow === false);
   report.oneScreenUX.keepsDisplayRecoveryManual = report.visibleSurfacePolicy.keepsRecoveryDisplayManual;
   report.oneScreenUX.primaryActionId = report.primaryNextAction.actionId ?? report.menuBarIntegration.primaryActionId;
 }
@@ -303,6 +307,16 @@ test("rejects hidden launcher one-screen recovery drift", () => {
   assert.throws(
     () => validateAppRuntimeStatus(report),
     /canRecoverFromMenuOrDock/
+  );
+});
+
+test("rejects one-screen UX without launcher fallback after app windows close", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.demo.json", import.meta.url), "utf8"));
+  report.oneScreenUX.returnsToLauncherWhenNoAppWindows = false;
+
+  assert.throws(
+    () => validateAppRuntimeStatus(report),
+    /returnsToLauncherWhenNoAppWindows/
   );
 });
 

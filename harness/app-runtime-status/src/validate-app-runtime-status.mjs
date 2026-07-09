@@ -1227,6 +1227,7 @@ function validateOneScreenUX(oneScreenUX, report) {
   requireBoolean(oneScreenUX.keepsMenuBarControlAvailable, "oneScreenUX.keepsMenuBarControlAvailable");
   requireBoolean(oneScreenUX.keepsDockControlAvailable, "oneScreenUX.keepsDockControlAvailable");
   requireBoolean(oneScreenUX.canRecoverFromMenuOrDock, "oneScreenUX.canRecoverFromMenuOrDock");
+  requireBoolean(oneScreenUX.returnsToLauncherWhenNoAppWindows, "oneScreenUX.returnsToLauncherWhenNoAppWindows");
   requireBoolean(oneScreenUX.keepsDisplayRecoveryManual, "oneScreenUX.keepsDisplayRecoveryManual");
   requireString(oneScreenUX.reason, "oneScreenUX.reason");
 
@@ -1274,6 +1275,18 @@ function validateOneScreenUX(oneScreenUX, report) {
 
   if (!oneScreenUX.canRecoverFromMenuOrDock) {
     throw new TypeError("oneScreenUX must keep a menu or Dock recovery path available.");
+  }
+
+  const expectedReturnsToLauncherWhenNoAppWindows = report.visibleSurfacePolicy.primarySurface === "windows-app-windows"
+    || (report.visibleSurfacePolicy.primarySurface === "launcher"
+      && report.visibleSurfacePolicy.expectedVisibleSurfaceCount === 1
+      && report.launcherVisibility.shouldHideMainWindow === false);
+  if (oneScreenUX.returnsToLauncherWhenNoAppWindows !== expectedReturnsToLauncherWhenNoAppWindows) {
+    throw new TypeError("oneScreenUX.returnsToLauncherWhenNoAppWindows must match launcher fallback readiness.");
+  }
+
+  if (!oneScreenUX.returnsToLauncherWhenNoAppWindows) {
+    throw new TypeError("oneScreenUX must return to the launcher when no Windows app windows are open.");
   }
 
   if (oneScreenUX.keepsDisplayRecoveryManual !== report.visibleSurfacePolicy.keepsRecoveryDisplayManual) {

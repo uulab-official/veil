@@ -1379,8 +1379,11 @@ struct VeilVMControl {
         let appRecovery = oneScreenUX.canRecoverFromMenuOrDock
             ? "app recovery ready"
             : "app recovery missing"
+        let launcherFallback = oneScreenUX.returnsToLauncherWhenNoAppWindows
+            ? "launcher fallback ready"
+            : "launcher fallback missing"
         let action = oneScreenUX.primaryActionId ?? "no primary action"
-        return "\(menu), \(dock), \(appRecovery), \(recovery), \(action)"
+        return "\(menu), \(dock), \(appRecovery), \(launcherFallback), \(recovery), \(action)"
     }
 
     private static func appFlowNextStepTitle(

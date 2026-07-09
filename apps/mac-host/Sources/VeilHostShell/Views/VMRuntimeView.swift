@@ -1568,7 +1568,9 @@ private struct WindowsSetupDisplayPanel: View {
 
                     Label(oneScreenUXTitle, systemImage: oneScreenUXSymbolName)
                         .font(.caption.weight(.medium))
-                        .foregroundStyle(.white.opacity(oneScreenUX.usesSinglePrimarySurfaceFamily && oneScreenUX.canRecoverFromMenuOrDock ? 0.70 : 0.92))
+                        .foregroundStyle(.white.opacity(oneScreenUX.usesSinglePrimarySurfaceFamily
+                            && oneScreenUX.canRecoverFromMenuOrDock
+                            && oneScreenUX.returnsToLauncherWhenNoAppWindows ? 0.70 : 0.92))
                         .lineLimit(1)
                         .help(oneScreenUX.reason)
 
@@ -2235,6 +2237,10 @@ private struct WindowsSetupDisplayPanel: View {
             return "Recovery needs attention"
         }
 
+        if !oneScreenUX.returnsToLauncherWhenNoAppWindows {
+            return "Launcher fallback needs attention"
+        }
+
         if oneScreenUX.mode == "windows-app-windows" {
             let count = oneScreenUX.expectedVisibleSurfaceCount
             return count == 1 ? "One Windows app surface" : "\(count) Windows app surfaces"
@@ -2244,7 +2250,9 @@ private struct WindowsSetupDisplayPanel: View {
     }
 
     private var oneScreenUXSymbolName: String {
-        oneScreenUX.usesSinglePrimarySurfaceFamily && oneScreenUX.canRecoverFromMenuOrDock
+        oneScreenUX.usesSinglePrimarySurfaceFamily
+            && oneScreenUX.canRecoverFromMenuOrDock
+            && oneScreenUX.returnsToLauncherWhenNoAppWindows
             ? "rectangle.on.rectangle"
             : "exclamationmark.triangle"
     }
