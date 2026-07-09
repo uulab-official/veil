@@ -1451,22 +1451,13 @@ private struct VeilMenuBarMenu: View {
     }
 
     private var runtimeStatusTitle: String {
-        switch vmModel.snapshot?.state {
-        case .running:
-            "Windows Running"
-        case .starting:
-            "Windows Starting"
-        case .suspended:
-            "Windows Suspended"
-        case .failed:
-            "Windows Needs Attention"
-        case .unsupported:
-            "Windows Unsupported"
-        case .notConfigured:
-            "Windows Not Configured"
-        case .stopped, nil:
-            "Windows Stopped"
-        }
+        WindowsShellCopy.menuStatusTitle(
+            runtimeState: vmModel.snapshot?.state,
+            windowsInstalled: vmModel.snapshot?.windowsInstalled == true,
+            hasLiveAppConnection: model.hasLiveAgentConnection,
+            hasQueuedApp: model.pendingLaunchStatus().isQueued,
+            openAppWindowCount: model.mirrorSessions.count
+        )
     }
 
     private var runtimeStatusSymbolName: String {

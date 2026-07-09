@@ -76,6 +76,61 @@ struct AppRuntimeDockMenuTests {
         #expect(visibleText.allSatisfy { !$0.contains("agent") })
     }
 
+    @Test("menu status titles stay app first")
+    func menuStatusTitlesStayAppFirst() {
+        let titles = [
+            WindowsShellCopy.menuStatusTitle(
+                runtimeState: .stopped,
+                windowsInstalled: true,
+                hasLiveAppConnection: false,
+                hasQueuedApp: false,
+                openAppWindowCount: 0
+            ),
+            WindowsShellCopy.menuStatusTitle(
+                runtimeState: .running,
+                windowsInstalled: true,
+                hasLiveAppConnection: true,
+                hasQueuedApp: false,
+                openAppWindowCount: 0
+            ),
+            WindowsShellCopy.menuStatusTitle(
+                runtimeState: .running,
+                windowsInstalled: true,
+                hasLiveAppConnection: false,
+                hasQueuedApp: true,
+                openAppWindowCount: 0
+            ),
+            WindowsShellCopy.menuStatusTitle(
+                runtimeState: .running,
+                windowsInstalled: true,
+                hasLiveAppConnection: true,
+                hasQueuedApp: false,
+                openAppWindowCount: 2
+            ),
+            WindowsShellCopy.menuStatusTitle(
+                runtimeState: .notConfigured,
+                windowsInstalled: false,
+                hasLiveAppConnection: false,
+                hasQueuedApp: false,
+                openAppWindowCount: 0
+            )
+        ]
+
+        #expect(titles == [
+            "Ready to Open Apps",
+            "Apps Ready",
+            "App Waiting to Open",
+            "2 Windows Apps Open",
+            "Set Up Windows"
+        ])
+        #expect(titles.allSatisfy { $0.count <= 30 })
+        #expect(titles.allSatisfy { !$0.contains("Stopped") })
+        #expect(titles.allSatisfy { !$0.contains("Running") })
+        #expect(titles.allSatisfy { !$0.contains("Runtime") })
+        #expect(titles.allSatisfy { !$0.contains("VM") })
+        #expect(titles.allSatisfy { !$0.contains("Agent") })
+    }
+
     @Test("maps reconnect restore handoff to recovery start or wait states")
     func mapsReconnectRestoreHandoffToRecoveryStartOrWaitStates() {
         #expect(

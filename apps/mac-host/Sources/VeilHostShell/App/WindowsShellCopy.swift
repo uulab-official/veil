@@ -42,6 +42,41 @@ enum WindowsShellCopy {
         "Display is still \(statusText). Refresh the Windows display before opening an app."
     }
 
+    static func menuStatusTitle(
+        runtimeState: VMRuntimeState?,
+        windowsInstalled: Bool,
+        hasLiveAppConnection: Bool,
+        hasQueuedApp: Bool,
+        openAppWindowCount: Int
+    ) -> String {
+        if openAppWindowCount > 0 {
+            return openAppWindowCount == 1 ? "1 Windows App Open" : "\(openAppWindowCount) Windows Apps Open"
+        }
+
+        if hasQueuedApp {
+            return "App Waiting to Open"
+        }
+
+        if hasLiveAppConnection {
+            return "Apps Ready"
+        }
+
+        switch runtimeState {
+        case .running:
+            return "Preparing Apps"
+        case .starting:
+            return "Opening Windows"
+        case .suspended:
+            return "Windows Paused"
+        case .failed, .unsupported:
+            return "Needs Attention"
+        case .notConfigured:
+            return "Set Up Windows"
+        case .stopped, nil:
+            return windowsInstalled ? "Ready to Open Apps" : "Set Up Windows"
+        }
+    }
+
     static func installedLauncherMetadata(
         windowsIsRunning: Bool,
         windowsCanStart: Bool,

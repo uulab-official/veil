@@ -28,6 +28,7 @@ Goal: keep the user-facing workflow one-screen-first (launcher + one action path
 - [x] Polish quiet-Windows and macOS-window integration reason text away from agent/HWND/runtime language, with regression coverage for automation-visible status reports.
 - [x] Move first-run header and display-recovery status copy into tested app-first shell copy so the main launcher avoids runtime/VM/QEMU wording.
 - [x] Replace installed-launcher footer metadata from ISO/Disk setup evidence to Windows/App/Display/Connection status, with regression coverage for app-first labels.
+- [x] Polish menu-bar status titles from VM state wording to app-first states such as Apps Ready, Ready to Open Apps, and App Waiting to Open.
 
 ## CEO Review
 
