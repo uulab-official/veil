@@ -44,6 +44,28 @@ function Resolve-WindowsSdkTool {
     return $Candidates[0].FullName
 }
 
+function New-VeilPackagePngAsset {
+    param(
+        [string]$Path,
+        [int]$Width,
+        [int]$Height
+    )
+
+    Add-Type -AssemblyName System.Drawing
+    $Directory = Split-Path -Parent $Path
+    New-Item -ItemType Directory -Force -Path $Directory | Out-Null
+
+    $Bitmap = New-Object System.Drawing.Bitmap -ArgumentList $Width, $Height
+    $Graphics = [System.Drawing.Graphics]::FromImage($Bitmap)
+    try {
+        $Graphics.Clear([System.Drawing.Color]::FromArgb(255, 38, 86, 214))
+        $Bitmap.Save($Path, [System.Drawing.Imaging.ImageFormat]::Png)
+    } finally {
+        $Graphics.Dispose()
+        $Bitmap.Dispose()
+    }
+}
+
 if (-not (Test-Path $SourceManifestPath)) {
     throw "Sparse package manifest was not found at $SourceManifestPath."
 }
@@ -86,6 +108,10 @@ try {
         -replace 'Version="0\.1\.0\.0"', "Version=`"$PackageVersion`"" `
         -replace 'Id="VeilAgent"', "Id=`"$ApplicationId`""
     $ManifestXml | Set-Content -Path (Join-Path $StagingRoot "AppxManifest.xml") -Encoding UTF8
+    $AssetsRoot = Join-Path $StagingRoot "Assets"
+    New-VeilPackagePngAsset -Path (Join-Path $AssetsRoot "StoreLogo.png") -Width 50 -Height 50
+    New-VeilPackagePngAsset -Path (Join-Path $AssetsRoot "Square44x44Logo.png") -Width 44 -Height 44
+    New-VeilPackagePngAsset -Path (Join-Path $AssetsRoot "Square150x150Logo.png") -Width 150 -Height 150
 
     if (Test-Path $PackagePath) {
         Remove-Item -Path $PackagePath -Force

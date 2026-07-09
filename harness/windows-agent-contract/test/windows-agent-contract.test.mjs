@@ -398,6 +398,11 @@ test("windows agent includes user-logon install and uninstall scripts", async ()
   assert.match(publishShell, /VeilAgent\.exe/);
   assert.match(sparsePackage, /\[string\]\$OutputRoot\s*=\s*""/);
   assert.match(sparsePackage, /New-Item\s+-ItemType\s+Directory\s+-Force\s+-Path\s+\$OutputRoot/);
+  assert.match(sparsePackage, /function\s+New-VeilPackagePngAsset/);
+  assert.match(sparsePackage, /Add-Type\s+-AssemblyName\s+System\.Drawing/);
+  assert.match(sparsePackage, /StoreLogo\.png/);
+  assert.match(sparsePackage, /Square44x44Logo\.png/);
+  assert.match(sparsePackage, /Square150x150Logo\.png/);
   assert.match(sparsePackage, /MakeAppx\.exe/);
   assert.match(sparsePackage, /SignTool\.exe/);
   assert.match(sparsePackage, /New-SelfSignedCertificate/);
