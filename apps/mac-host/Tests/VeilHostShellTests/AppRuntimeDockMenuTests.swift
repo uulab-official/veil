@@ -103,6 +103,22 @@ struct AppRuntimeDockMenuTests {
             WindowsShellCopy.menuStatusTitle(
                 runtimeState: .running,
                 windowsInstalled: true,
+                hasLiveAppConnection: false,
+                hasQueuedApp: true,
+                queuedAppName: "Notepad",
+                openAppWindowCount: 0
+            ),
+            WindowsShellCopy.menuStatusTitle(
+                runtimeState: .running,
+                windowsInstalled: true,
+                hasLiveAppConnection: false,
+                hasQueuedApp: true,
+                queuedAppName: "Very Long Accounting Workstation",
+                openAppWindowCount: 0
+            ),
+            WindowsShellCopy.menuStatusTitle(
+                runtimeState: .running,
+                windowsInstalled: true,
                 hasLiveAppConnection: true,
                 hasQueuedApp: false,
                 openAppWindowCount: 2
@@ -120,6 +136,8 @@ struct AppRuntimeDockMenuTests {
             "Ready to Open Apps",
             "Apps Ready",
             "App Waiting to Open",
+            "Notepad Waiting",
+            "Very Long Accounti... Waiting",
             "2 Windows Apps Open",
             "Set Up Windows"
         ])

@@ -279,6 +279,7 @@ enum AppRuntimeDockMenuFactory {
             windowsInstalled: vmModel.snapshot?.windowsInstalled == true,
             hasLiveAppConnection: model.hasLiveAgentConnection,
             hasQueuedApp: model.pendingLaunchStatus().isQueued,
+            queuedAppName: queuedLaunchAppName(model: model),
             openAppWindowCount: model.mirrorSessions.count
         )
     }
@@ -333,6 +334,14 @@ enum AppRuntimeDockMenuFactory {
 
     private static func appName(for appId: String, model: HostDashboardModel) -> String {
         model.apps.first { $0.id == appId }?.name ?? "Windows App"
+    }
+
+    private static func queuedLaunchAppName(model: HostDashboardModel) -> String? {
+        guard let pendingAppId = model.pendingLaunchAppId else {
+            return nil
+        }
+
+        return model.apps.first { $0.id == pendingAppId }?.name
     }
 
     private static func previousAppsRestoreTitle(model: HostDashboardModel) -> String {

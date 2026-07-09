@@ -1484,6 +1484,7 @@ private struct VeilMenuBarMenu: View {
             windowsInstalled: vmModel.snapshot?.windowsInstalled == true,
             hasLiveAppConnection: model.hasLiveAgentConnection,
             hasQueuedApp: model.pendingLaunchStatus().isQueued,
+            queuedAppName: model.pendingLaunchAppId == nil ? nil : queuedLaunchAppName,
             openAppWindowCount: model.mirrorSessions.count
         )
     }

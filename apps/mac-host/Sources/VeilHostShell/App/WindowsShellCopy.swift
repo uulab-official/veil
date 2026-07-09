@@ -124,6 +124,7 @@ enum WindowsShellCopy {
         windowsInstalled: Bool,
         hasLiveAppConnection: Bool,
         hasQueuedApp: Bool,
+        queuedAppName: String? = nil,
         openAppWindowCount: Int
     ) -> String {
         if openAppWindowCount > 0 {
@@ -131,6 +132,15 @@ enum WindowsShellCopy {
         }
 
         if hasQueuedApp {
+            if let queuedAppName,
+               !queuedAppName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                return suffixedMenuItemTitle(
+                    prefix: "",
+                    title: queuedAppName,
+                    suffix: "Waiting"
+                ).trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+
             return "App Waiting to Open"
         }
 
