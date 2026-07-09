@@ -35,6 +35,7 @@ Goal: keep the user-facing workflow one-screen-first (launcher + one action path
 - [x] Cap Dock/menu-bar app and window item titles at 30 characters so long Windows titles stay scannable.
 - [x] Show the active app name in the primary Bring Forward action when exactly one Windows app window is open.
 - [x] Prioritize Restore/Reconnect Previous Apps over Open Veil when no Windows app window is open but a previous app can be restored.
+- [x] Show the single previous app name in Restore/Reconnect actions when one restorable Windows app is known.
 
 ## CEO Review
 

@@ -1529,7 +1529,8 @@ private struct VeilMenuBarMenu: View {
 
     private var restorePreviousAppsTitle: String {
         WindowsShellCopy.previousAppsRestoreTitle(
-            canRestoreNow: model.canRestoreMirrorSessions
+            canRestoreNow: model.canRestoreMirrorSessions,
+            singleAppName: restorableSingleAppName
         )
     }
 
@@ -1539,6 +1540,15 @@ private struct VeilMenuBarMenu: View {
 
     private var shouldShowSecondaryPreviousAppsRestore: Bool {
         !model.restorableAppIds.isEmpty && !shouldPromotePreviousAppsRestore
+    }
+
+    private var restorableSingleAppName: String? {
+        guard model.restorableAppIds.count == 1,
+              let appId = model.restorableAppIds.first else {
+            return nil
+        }
+
+        return model.apps.first { $0.id == appId }?.name
     }
 
     private func openMainWindow() {
