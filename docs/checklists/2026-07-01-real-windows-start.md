@@ -234,6 +234,8 @@ Goal: keep the main Veil experience pointed at real local Windows boot and conso
 - [x] Surface stale-display recovery in the app shell as Refresh Display across the main play flow, toolbar, app commands, and menu bar, and gate app-open menu actions while the embedded display evidence is stale.
 - [x] Add explicit `app-runtime-action --action reconnect-restore` plus `windowsApps.reconnectRestore` status gating so reconnect/restore can be validated even before the live guest agent is back. The current live run found persisted Notepad restore intent but remained rejected because the guest agent is still unreachable.
 - [x] Add `app-runtime-action --action wait-agent --wait-seconds <n>` plus `runtime.waitAgent` status gating so guest-agent wait/host-forward diagnostics live inside the same product automation surface as launch, repair, restore, proof, and display recovery.
+- [x] Re-verify the live Windows 11 Arm app path after republishing the win-arm64 guest-agent bundle and regenerating `VeilAutoInstall.iso` on 2026-07-10 KST: QEMU/HVF relaunched with `virtio-net-pci`, `qemu-install-agent --wait-seconds 60` reached `agent.health.response`, `app-window-proof --app-id winapp_notepad` returned Korean Notepad `hwnd:00010432` with a 600 x 393 PNG frame, and `mvp-proof --require-proved` completed health, HWND tracking, frames, mouse, keyboard, and clipboard with `status=proved`.
+- [x] Verify live `app-runtime-action --action launch --app-id winapp_notepad` on the same run: accepted launch, foreground `hwnd:00010686`, Korean Notepad title, `macWindowIntegration.mirroredWindowCount=1`, `launcherVisibility.shouldHideMainWindow=true`, and menu-bar primary action `Bring Notepad Forward`.
 
 ## Next
 
