@@ -24,6 +24,13 @@ function markInvalidScreenshot(report, slotIndex = 0, reason = "notValidPNG") {
   slot.attachmentIssueReason = reason;
   slot.invalidAttachmentPath = invalidFile.path;
   slot.invalidAttachmentByteCount = invalidFile.byteCount;
+  report.screenshotEvidenceSummary.state = "needs-replacement";
+  report.screenshotEvidenceSummary.missingScreenshotCount = report.missingFiles.length - 1;
+  report.screenshotEvidenceSummary.invalidScreenshotCount = 1;
+  report.screenshotEvidenceSummary.nextStepKind = "replaceInvalidScreenshot";
+  report.screenshotEvidenceSummary.nextStepTitle = `Replace ${slot.expectedFileName}`;
+  report.screenshotEvidenceSummary.nextExpectedFileName = slot.expectedFileName;
+  report.screenshotEvidenceSummary.nextCaptureCommand = report.missingCaptureSteps[slotIndex].captureCommand;
 
   return invalidFile;
 }
@@ -37,6 +44,7 @@ test("validates app runtime review verification fixture", () => {
 test("rejects verification reports whose attached count drifts from review card", () => {
   const report = demoVerification();
   report.attachedScreenshotCount = 99;
+  report.screenshotEvidenceSummary.validScreenshotCount = 99;
 
   assert.throws(
     () => validateAppRuntimeReviewVerification(report),
@@ -110,6 +118,26 @@ test("rejects invalid capture steps that drift from invalid screenshots", () => 
   );
 });
 
+test("rejects screenshot evidence summary count drift", () => {
+  const report = demoVerification();
+  report.screenshotEvidenceSummary.pendingScreenshotCount = 99;
+
+  assert.throws(
+    () => validateAppRuntimeReviewVerification(report),
+    /screenshot summary pending count/
+  );
+});
+
+test("rejects screenshot evidence summary next step drift", () => {
+  const report = demoVerification();
+  report.screenshotEvidenceSummary.nextExpectedFileName = report.missingCaptureSteps[1].expectedFileName;
+
+  assert.throws(
+    () => validateAppRuntimeReviewVerification(report),
+    /screenshot summary capture step/
+  );
+});
+
 test("rejects verification missing capture steps that drift from missing files", () => {
   const report = demoVerification();
   report.missingFiles[0] = report.missingFiles[1];
@@ -153,6 +181,7 @@ test("rejects verification commands that drift from manifest commands", () => {
 test("rejects verification minimum screenshot dimensions that drift from manifest", () => {
   const report = demoVerification();
   report.minimumScreenshotHeight = 1;
+  report.screenshotEvidenceSummary.minimumHeight = 1;
 
   assert.throws(
     () => validateAppRuntimeReviewVerification(report),
@@ -168,6 +197,19 @@ test("accepts complete verification reports", () => {
   report.invalidScreenshotFiles = [];
   report.invalidCaptureSteps = [];
   delete report.nextInvalidCaptureStep;
+  report.screenshotEvidenceSummary = {
+    state: "ready",
+    requiredScreenshotCount: report.requiredScreenshotCount,
+    validScreenshotCount: report.requiredScreenshotCount,
+    missingScreenshotCount: 0,
+    invalidScreenshotCount: 0,
+    pendingScreenshotCount: 0,
+    minimumWidth: report.minimumScreenshotWidth,
+    minimumHeight: report.minimumScreenshotHeight,
+    isScreenshotEvidenceReady: true,
+    nextStepKind: "shareEvidence",
+    nextStepTitle: "Share Review Evidence"
+  };
   report.missingCaptureSteps = [];
   delete report.nextMissingCaptureStep;
   report.review.attachedScreenshotCount = report.review.requiredScreenshotCount;

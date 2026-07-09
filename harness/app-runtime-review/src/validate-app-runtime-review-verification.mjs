@@ -67,6 +67,7 @@ export function validateAppRuntimeReviewVerification(report) {
   for (const [index, file] of report.invalidScreenshotFiles.entries()) {
     validateInvalidScreenshotFile(file, index, report);
   }
+  validateScreenshotEvidenceSummary(report.screenshotEvidenceSummary, report);
   if (!Array.isArray(report.invalidCaptureSteps)) {
     throw new TypeError("app runtime review verification invalidCaptureSteps must be an array.");
   }
@@ -129,6 +130,7 @@ export function validateAppRuntimeReviewVerification(report) {
   } else if (report.nextInvalidCaptureStep !== undefined) {
     throw new TypeError("verification without invalid screenshots must not include a next invalid capture step.");
   }
+  validateScreenshotEvidenceSummaryNextStep(report.screenshotEvidenceSummary, report);
   for (const [index, step] of report.missingCaptureSteps.entries()) {
     if (step.path !== report.missingFiles[index]) {
       throw new TypeError("app runtime review verification missing capture steps must preserve missing file order.");
@@ -189,6 +191,98 @@ export function validateAppRuntimeReviewVerification(report) {
   }
 
   return report;
+}
+
+function validateScreenshotEvidenceSummary(summary, report) {
+  if (!summary || typeof summary !== "object" || Array.isArray(summary)) {
+    throw new TypeError("app runtime review verification screenshotEvidenceSummary must be an object.");
+  }
+
+  requireString(summary.state, "screenshotEvidenceSummary.state");
+  requireNonNegativeInteger(summary.requiredScreenshotCount, "screenshotEvidenceSummary.requiredScreenshotCount");
+  requireNonNegativeInteger(summary.validScreenshotCount, "screenshotEvidenceSummary.validScreenshotCount");
+  requireNonNegativeInteger(summary.missingScreenshotCount, "screenshotEvidenceSummary.missingScreenshotCount");
+  requireNonNegativeInteger(summary.invalidScreenshotCount, "screenshotEvidenceSummary.invalidScreenshotCount");
+  requireNonNegativeInteger(summary.pendingScreenshotCount, "screenshotEvidenceSummary.pendingScreenshotCount");
+  requirePositiveInteger(summary.minimumWidth, "screenshotEvidenceSummary.minimumWidth");
+  requirePositiveInteger(summary.minimumHeight, "screenshotEvidenceSummary.minimumHeight");
+  requireBoolean(summary.isScreenshotEvidenceReady, "screenshotEvidenceSummary.isScreenshotEvidenceReady");
+  requireString(summary.nextStepKind, "screenshotEvidenceSummary.nextStepKind");
+  requireString(summary.nextStepTitle, "screenshotEvidenceSummary.nextStepTitle");
+  if (summary.nextExpectedFileName !== undefined) {
+    requireString(summary.nextExpectedFileName, "screenshotEvidenceSummary.nextExpectedFileName");
+  }
+  if (summary.nextCaptureCommand !== undefined) {
+    requireString(summary.nextCaptureCommand, "screenshotEvidenceSummary.nextCaptureCommand");
+  }
+
+  if (!["ready", "needs-capture", "needs-replacement"].includes(summary.state)) {
+    throw new TypeError("app runtime review verification screenshotEvidenceSummary state is unsupported.");
+  }
+  if (!["shareEvidence", "captureMissingScreenshot", "replaceInvalidScreenshot"].includes(summary.nextStepKind)) {
+    throw new TypeError("app runtime review verification screenshotEvidenceSummary next step kind is unsupported.");
+  }
+  if (summary.requiredScreenshotCount !== report.requiredScreenshotCount) {
+    throw new TypeError("app runtime review verification screenshot summary required count must match the report.");
+  }
+  if (summary.validScreenshotCount !== report.attachedScreenshotCount) {
+    throw new TypeError("app runtime review verification screenshot summary valid count must match attached screenshots.");
+  }
+  if (summary.invalidScreenshotCount !== report.invalidScreenshotFiles.length) {
+    throw new TypeError("app runtime review verification screenshot summary invalid count must match invalid screenshots.");
+  }
+  if (summary.pendingScreenshotCount !== report.missingFiles.length) {
+    throw new TypeError("app runtime review verification screenshot summary pending count must match missing files.");
+  }
+  if (summary.missingScreenshotCount > summary.pendingScreenshotCount) {
+    throw new TypeError("app runtime review verification screenshot summary missing count cannot exceed pending screenshots.");
+  }
+  if (summary.pendingScreenshotCount !== summary.missingScreenshotCount + summary.invalidScreenshotCount) {
+    throw new TypeError("app runtime review verification screenshot summary pending count must equal missing plus invalid screenshots.");
+  }
+  if (summary.minimumWidth !== report.minimumScreenshotWidth || summary.minimumHeight !== report.minimumScreenshotHeight) {
+    throw new TypeError("app runtime review verification screenshot summary minimum dimensions must match the report.");
+  }
+  if (summary.isScreenshotEvidenceReady !== (summary.pendingScreenshotCount === 0)) {
+    throw new TypeError("app runtime review verification screenshot readiness must match pending screenshots.");
+  }
+}
+
+function validateScreenshotEvidenceSummaryNextStep(summary, report) {
+  if (report.invalidCaptureSteps.length > 0) {
+    const firstStep = report.invalidCaptureSteps[0];
+    if (summary.state !== "needs-replacement" || summary.nextStepKind !== "replaceInvalidScreenshot") {
+      throw new TypeError("app runtime review verification screenshot summary must prioritize invalid screenshot replacement.");
+    }
+    if (
+      summary.nextExpectedFileName !== firstStep.expectedFileName
+      || summary.nextCaptureCommand !== firstStep.captureCommand
+    ) {
+      throw new TypeError("app runtime review verification screenshot summary replacement step must match the next invalid capture step.");
+    }
+    return;
+  }
+
+  if (report.missingCaptureSteps.length > 0) {
+    const firstStep = report.missingCaptureSteps[0];
+    if (summary.state !== "needs-capture" || summary.nextStepKind !== "captureMissingScreenshot") {
+      throw new TypeError("app runtime review verification screenshot summary must point at the next missing capture.");
+    }
+    if (
+      summary.nextExpectedFileName !== firstStep.expectedFileName
+      || summary.nextCaptureCommand !== firstStep.captureCommand
+    ) {
+      throw new TypeError("app runtime review verification screenshot summary capture step must match the next missing capture step.");
+    }
+    return;
+  }
+
+  if (summary.state !== "ready" || summary.nextStepKind !== "shareEvidence") {
+    throw new TypeError("app runtime review verification screenshot summary must be ready when no screenshots are pending.");
+  }
+  if (summary.nextExpectedFileName !== undefined || summary.nextCaptureCommand !== undefined) {
+    throw new TypeError("ready screenshot evidence must not include a next capture file or command.");
+  }
 }
 
 function validateInvalidScreenshotFile(file, index, report) {

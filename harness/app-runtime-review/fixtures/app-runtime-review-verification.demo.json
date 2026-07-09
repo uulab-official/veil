@@ -1,7 +1,7 @@
 {
   "attachedScreenshotCount" : 0,
   "evidenceDirectory" : "\/tmp\/veil-review-verify",
-  "generatedAt" : "2026-07-09T17:10:11Z",
+  "generatedAt" : "2026-07-09T17:16:54Z",
   "invalidCaptureSteps" : [
 
   ],
@@ -225,7 +225,7 @@
           "meetsLauncherContract" : true,
           "minHeight" : 760,
           "minWidth" : 1180,
-          "modifiedAt" : "2026-07-09T17:07:51Z",
+          "modifiedAt" : "2026-07-09T17:12:38Z",
           "reportPath" : "\/Users\/bonjin\/Documents\/workspace\/uulab\/veil\/dist\/veil-launch-report-latest.plist",
           "titlebarAppearsTransparent" : true,
           "visibleMainWindowCount" : 1
@@ -237,7 +237,7 @@
       "latestAppCheckPath" : "\/Users\/bonjin\/Library\/Application Support\/Veil\/Diagnostics\/MVP Proof\/notepad-mvp-window-detect.json",
       "screenshotEvidenceDirectory" : "\/tmp\/veil-review-verify"
     },
-    "generatedAt" : "2026-07-09T17:10:11Z",
+    "generatedAt" : "2026-07-09T17:16:54Z",
     "invalidScreenshotCount" : 0,
     "isReadyForReview" : false,
     "kind" : "windowsAppRuntimeReviewCard",
@@ -423,7 +423,7 @@
         "pendingLaunchCount" : 1,
         "restorableAppCount" : 1
       },
-      "generatedAt" : "2026-07-09T17:10:11Z",
+      "generatedAt" : "2026-07-09T17:16:54Z",
       "guestAgentDiagnostics" : {
         "diagnosticCommand" : "veil-host-probe --diagnose-agent",
         "endpoint" : "ws:\/\/127.0.0.1:18444",
@@ -697,5 +697,20 @@
     ]
   },
   "reviewCommand" : "veil-vmctl app-runtime-review --evidence-dir \/tmp\/veil-review-verify",
+  "screenshotEvidenceSummary" : {
+    "invalidScreenshotCount" : 0,
+    "isScreenshotEvidenceReady" : false,
+    "minimumHeight" : 360,
+    "minimumWidth" : 640,
+    "missingScreenshotCount" : 5,
+    "nextCaptureCommand" : "screencapture -i \/tmp\/veil-review-verify\/preBootLauncher.png",
+    "nextExpectedFileName" : "preBootLauncher.png",
+    "nextStepKind" : "captureMissingScreenshot",
+    "nextStepTitle" : "Capture preBootLauncher.png",
+    "pendingScreenshotCount" : 5,
+    "requiredScreenshotCount" : 5,
+    "state" : "needs-capture",
+    "validScreenshotCount" : 0
+  },
   "verifyCommand" : "veil-vmctl app-runtime-review-verify --json --evidence-dir \/tmp\/veil-review-verify"
 }

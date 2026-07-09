@@ -266,7 +266,11 @@ manifest. Existing but unusable screenshot files are reported separately as
 `invalidScreenshotFiles` with a reason such as `notValidPNG` or
 `belowMinimumDimensions`. The report also includes `invalidCaptureSteps` and
 `nextInvalidCaptureStep`, so a contributor can replace the right file with the
-exact capture command instead of guessing which capture step failed.
+exact capture command instead of guessing which capture step failed. Its
+`screenshotEvidenceSummary` gives the review UI and automation one compact
+share-readiness surface: valid, missing, invalid, pending counts, the minimum
+PNG size, the current state (`ready`, `needs-capture`, or `needs-replacement`),
+and the exact next capture command when screenshots are still pending.
 
 ```bash
 cd apps/mac-host

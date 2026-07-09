@@ -821,6 +821,22 @@ struct AppRuntimeReviewInvalidScreenshotFile: Codable, Equatable {
     var minimumHeight: Int
 }
 
+struct AppRuntimeReviewScreenshotEvidenceSummary: Codable, Equatable {
+    var state: String
+    var requiredScreenshotCount: Int
+    var validScreenshotCount: Int
+    var missingScreenshotCount: Int
+    var invalidScreenshotCount: Int
+    var pendingScreenshotCount: Int
+    var minimumWidth: Int
+    var minimumHeight: Int
+    var isScreenshotEvidenceReady: Bool
+    var nextStepKind: String
+    var nextStepTitle: String
+    var nextExpectedFileName: String?
+    var nextCaptureCommand: String?
+}
+
 struct AppRuntimeReviewEvidenceVerification: Codable, Equatable {
     var kind: String = "windowsAppRuntimeReviewEvidenceVerification"
     var generatedAt: Date
@@ -836,6 +852,7 @@ struct AppRuntimeReviewEvidenceVerification: Codable, Equatable {
     var isComplete: Bool
     var missingFiles: [String]
     var invalidScreenshotFiles: [AppRuntimeReviewInvalidScreenshotFile]
+    var screenshotEvidenceSummary: AppRuntimeReviewScreenshotEvidenceSummary
     var invalidCaptureSteps: [AppRuntimeReviewMissingCaptureStep]
     var nextInvalidCaptureStep: AppRuntimeReviewMissingCaptureStep?
     var missingCaptureSteps: [AppRuntimeReviewMissingCaptureStep]
@@ -1308,6 +1325,7 @@ struct VeilVMControl {
                 card: card
             )
         let missingFiles = expectedFiles.filter { !isPNGFile(atPath: $0) }
+        let absentFiles = expectedFiles.filter { !FileManager.default.fileExists(atPath: $0) }
         let invalidScreenshotFiles = expectedFiles.compactMap { invalidReviewScreenshotFile(atPath: $0) }
         let attachedScreenshotCount = expectedFiles.count - missingFiles.count
         let missingCaptureSteps = appRuntimeReviewMissingCaptureSteps(
@@ -1319,6 +1337,15 @@ struct VeilVMControl {
             expectedFiles: expectedFiles,
             captureSteps: captureSteps,
             missingFiles: invalidScreenshotFiles.map(\.path)
+        )
+        let screenshotEvidenceSummary = appRuntimeReviewScreenshotEvidenceSummary(
+            requiredScreenshotCount: expectedFiles.count,
+            validScreenshotCount: attachedScreenshotCount,
+            missingScreenshotCount: absentFiles.count,
+            invalidScreenshotCount: invalidScreenshotFiles.count,
+            pendingScreenshotCount: missingFiles.count,
+            invalidCaptureSteps: invalidCaptureSteps,
+            missingCaptureSteps: missingCaptureSteps
         )
         let verification = AppRuntimeReviewEvidenceVerification(
             generatedAt: report.generatedAt,
@@ -1337,6 +1364,7 @@ struct VeilVMControl {
                 && card.areRequiredScreenshotsAttached,
             missingFiles: missingFiles,
             invalidScreenshotFiles: invalidScreenshotFiles,
+            screenshotEvidenceSummary: screenshotEvidenceSummary,
             invalidCaptureSteps: invalidCaptureSteps,
             nextInvalidCaptureStep: invalidCaptureSteps.first,
             missingCaptureSteps: missingCaptureSteps,
@@ -1370,6 +1398,7 @@ struct VeilVMControl {
         print("Manifest: \(verification.manifestExists ? "present" : "missing")")
         print("Guide: \(verification.readmeExists ? "present" : "missing")")
         print("Screenshots: \(verification.attachedScreenshotCount)/\(verification.requiredScreenshotCount) attached")
+        print("Screenshot evidence: \(verification.screenshotEvidenceSummary.state)")
         print("Complete: \(verification.isComplete ? "yes" : "no")")
         print("Open folder: \(verification.openEvidenceDirectoryCommand)")
         if !verification.missingFiles.isEmpty {
@@ -1531,6 +1560,68 @@ struct VeilVMControl {
             "Run `\(reviewCommand)` and confirm Screenshots is 5/5 attached.",
             "Run `\(verifyCommand)` before sharing evidence."
         ]
+    }
+
+    private static func appRuntimeReviewScreenshotEvidenceSummary(
+        requiredScreenshotCount: Int,
+        validScreenshotCount: Int,
+        missingScreenshotCount: Int,
+        invalidScreenshotCount: Int,
+        pendingScreenshotCount: Int,
+        invalidCaptureSteps: [AppRuntimeReviewMissingCaptureStep],
+        missingCaptureSteps: [AppRuntimeReviewMissingCaptureStep]
+    ) -> AppRuntimeReviewScreenshotEvidenceSummary {
+        if let nextInvalidCaptureStep = invalidCaptureSteps.first {
+            return AppRuntimeReviewScreenshotEvidenceSummary(
+                state: "needs-replacement",
+                requiredScreenshotCount: requiredScreenshotCount,
+                validScreenshotCount: validScreenshotCount,
+                missingScreenshotCount: missingScreenshotCount,
+                invalidScreenshotCount: invalidScreenshotCount,
+                pendingScreenshotCount: pendingScreenshotCount,
+                minimumWidth: minimumReviewScreenshotWidth,
+                minimumHeight: minimumReviewScreenshotHeight,
+                isScreenshotEvidenceReady: false,
+                nextStepKind: "replaceInvalidScreenshot",
+                nextStepTitle: "Replace \(nextInvalidCaptureStep.expectedFileName)",
+                nextExpectedFileName: nextInvalidCaptureStep.expectedFileName,
+                nextCaptureCommand: nextInvalidCaptureStep.captureCommand
+            )
+        }
+
+        if let nextMissingCaptureStep = missingCaptureSteps.first {
+            return AppRuntimeReviewScreenshotEvidenceSummary(
+                state: "needs-capture",
+                requiredScreenshotCount: requiredScreenshotCount,
+                validScreenshotCount: validScreenshotCount,
+                missingScreenshotCount: missingScreenshotCount,
+                invalidScreenshotCount: invalidScreenshotCount,
+                pendingScreenshotCount: pendingScreenshotCount,
+                minimumWidth: minimumReviewScreenshotWidth,
+                minimumHeight: minimumReviewScreenshotHeight,
+                isScreenshotEvidenceReady: false,
+                nextStepKind: "captureMissingScreenshot",
+                nextStepTitle: "Capture \(nextMissingCaptureStep.expectedFileName)",
+                nextExpectedFileName: nextMissingCaptureStep.expectedFileName,
+                nextCaptureCommand: nextMissingCaptureStep.captureCommand
+            )
+        }
+
+        return AppRuntimeReviewScreenshotEvidenceSummary(
+            state: "ready",
+            requiredScreenshotCount: requiredScreenshotCount,
+            validScreenshotCount: validScreenshotCount,
+            missingScreenshotCount: missingScreenshotCount,
+            invalidScreenshotCount: invalidScreenshotCount,
+            pendingScreenshotCount: pendingScreenshotCount,
+            minimumWidth: minimumReviewScreenshotWidth,
+            minimumHeight: minimumReviewScreenshotHeight,
+            isScreenshotEvidenceReady: true,
+            nextStepKind: "shareEvidence",
+            nextStepTitle: "Share Review Evidence",
+            nextExpectedFileName: nil,
+            nextCaptureCommand: nil
+        )
     }
 
     private static func appRuntimeReviewVerificationNextActions(
