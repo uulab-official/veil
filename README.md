@@ -150,7 +150,7 @@ For the Codex desktop Run button, use:
 ```
 
 That script builds `veil-host-shell`, stages `dist/Veil.app`, and launches it as a macOS app bundle.
-Use `./script/build_and_run.sh --verify` when you want the same bundle build plus a launch check that confirms the `veil-host-shell` process is running.
+Use `./script/build_and_run.sh --verify` when you want the same bundle build plus a launch check that confirms the `veil-host-shell` process starts, then cleans up the launched app. Use `./script/build_and_run.sh --verify-keep-running` when you want to leave the staged app open for manual inspection.
 
 If no external agent is listening at `VEIL_AGENT_URL` or `ws://127.0.0.1:18444`, the shell falls back to an internal demo agent so the Windows Apps launcher can still show Notepad, Calculator, and Paint as separate macOS window targets. The header and Agent view label this as Demo mode and show the endpoint that could not be reached. Protocol and agent errors are still surfaced instead of being hidden by the demo fallback. Run `harness/fake-agent` when you want to test the real WebSocket harness path.
 

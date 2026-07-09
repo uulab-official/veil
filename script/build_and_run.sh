@@ -82,6 +82,21 @@ wait_for_app_process() {
   return 1
 }
 
+stop_app_process() {
+  pkill -x "$APP_EXECUTABLE" >/dev/null 2>&1 || true
+
+  local attempts=20
+  for ((i = 1; i <= attempts; i++)); do
+    if ! pgrep -x "$APP_EXECUTABLE" >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 0.25
+  done
+
+  echo "Veil launched, but $APP_EXECUTABLE did not exit after verification cleanup." >&2
+  return 1
+}
+
 case "$MODE" in
   run)
     open_app
@@ -100,16 +115,19 @@ case "$MODE" in
     open_app
     /usr/bin/log stream --info --style compact --predicate "subsystem == \"$BUNDLE_ID\""
     ;;
-  --verify|verify)
+  --verify|verify|--verify-keep-running|verify-keep-running)
     codesign --verify --deep --strict "$APP_BUNDLE" >/dev/null
     plutil -lint "$INFO_PLIST" >/dev/null
     test -f "$APP_ICON"
     open_app
     wait_for_app_process
+    if [[ "$MODE" != "--verify-keep-running" && "$MODE" != "verify-keep-running" ]]; then
+      stop_app_process
+    fi
     exit 0
     ;;
   *)
-    echo "usage: $0 [run|--start-vm|--debug|--logs|--telemetry|--verify]" >&2
+    echo "usage: $0 [run|--start-vm|--debug|--logs|--telemetry|--verify|--verify-keep-running]" >&2
     exit 2
     ;;
 esac
