@@ -61,16 +61,16 @@ struct ContentView: View {
 
     private var headerSubtitle: String {
         if model.hasLiveAgentConnection {
-            return "Mac app integration active"
+            return "Windows apps open on your Mac"
         }
 
         switch vmModel.snapshot?.state {
         case .running:
-            return "Local display running"
+            return "Preparing Windows apps"
         case .starting:
-            return "Opening local display"
+            return "Opening Windows"
         default:
-            return "Veil Desktop"
+            return "Windows app runtime"
         }
     }
 

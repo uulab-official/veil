@@ -161,7 +161,7 @@ struct VeilHostShellApp: App {
                 .disabled(!vmModel.canStop || vmModel.phase == .loading)
 
                 if canShowWindowsDisplay {
-                    Button("Open Recovery Display") {
+                    Button("Show Windows Display") {
                         showWindowsDisplay()
                     }
                     .keyboardShortcut("b", modifiers: [.command, .shift])
@@ -173,7 +173,7 @@ struct VeilHostShellApp: App {
                 .keyboardShortcut("d", modifiers: [.command, .shift])
                 .disabled(!canRecoverRuntimeDisplay)
 
-                Button("Install Guest Agent") {
+                Button("Repair App Connection") {
                     installGuestAgentFromDisplay()
                 }
                 .keyboardShortcut("i", modifiers: [.command, .shift])
@@ -190,7 +190,7 @@ struct VeilHostShellApp: App {
                 .keyboardShortcut(.return, modifiers: [.command])
                 .disabled(canRecoverRuntimeDisplay || (!model.canRequestSelectedAppLaunch && !model.canFulfillPendingLaunch))
 
-                Button("Run Recommended Proof") {
+                Button("Check Windows App") {
                     runRecommendedProof()
                 }
                 .keyboardShortcut("p", modifiers: [.command, .shift])
@@ -1314,7 +1314,7 @@ private struct VeilMenuBarMenu: View {
             .disabled(!canRecoverRuntimeDisplay && !model.canFulfillPendingLaunch && !canRepairQueuedAppLaunch)
         }
 
-        Button("Run Recommended Proof", systemImage: "checkmark.seal") {
+        Button("Check Windows App", systemImage: "checkmark.seal") {
             openMainWindow()
             runRecommendedProofAction()
         }
@@ -1329,7 +1329,7 @@ private struct VeilMenuBarMenu: View {
         .disabled(!vmModel.canStart || vmModel.phase == .loading)
 
         if canShowWindowsDisplay {
-            Button("Open Recovery Display", systemImage: "display") {
+            Button("Show Windows Display", systemImage: "display") {
                 openMainWindow()
                 showWindowsDisplayAction()
             }
@@ -1341,13 +1341,13 @@ private struct VeilMenuBarMenu: View {
         }
         .disabled(!canRecoverRuntimeDisplay)
 
-        Button("Install Guest Agent", systemImage: "person.crop.circle.badge.plus") {
+        Button("Repair App Connection", systemImage: "person.crop.circle.badge.plus") {
             openMainWindow()
             installGuestAgentAction()
         }
         .disabled(!canInstallGuestAgent)
 
-        Button("Check Guest Agent", systemImage: "antenna.radiowaves.left.and.right") {
+        Button("Check App Connection", systemImage: "antenna.radiowaves.left.and.right") {
             openMainWindow()
             waitForGuestAgentAction()
         }

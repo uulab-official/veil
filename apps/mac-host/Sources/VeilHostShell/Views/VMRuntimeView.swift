@@ -1586,7 +1586,7 @@ private struct WindowsSetupDisplayPanel: View {
         if pendingLaunch.willLaunchOnAgentReconnect {
             switch snapshot.state {
             case .running, .starting:
-                return "Repair Agent"
+                return "Repair App Connection"
             default:
                 return "Continue Opening \(pendingAppDisplayName)"
             }
@@ -1597,7 +1597,7 @@ private struct WindowsSetupDisplayPanel: View {
         }
 
         if canInstallGuestAgent {
-            return "Install Agent"
+            return "Repair App Connection"
         }
 
         if canStop {
@@ -1699,7 +1699,7 @@ private struct WindowsSetupDisplayPanel: View {
             .buttonStyle(.bordered)
             .controlSize(.regular)
             .disabled(isLoading)
-            .help("Repair the guest agent and continue opening the queued Windows app")
+            .help("Repair the Windows app connection and continue opening the queued app")
         }
     }
 
@@ -1707,27 +1707,27 @@ private struct WindowsSetupDisplayPanel: View {
     private var runtimeMoreMenu: some View {
         Menu("More", systemImage: "ellipsis.circle") {
             if canInstallGuestAgent {
-                Button("Install Agent", systemImage: "app.badge") {
+                Button("Repair App Connection", systemImage: "app.badge") {
                     installGuestAgentAction()
                 }
                 .disabled(isLoading)
-                .help("Install Veil guest agent")
+                .help("Repair the connection used to open Windows apps on your Mac")
             }
 
             if canWaitForGuestAgent {
-                Button("Check Agent", systemImage: "antenna.radiowaves.left.and.right") {
+                Button("Check App Connection", systemImage: "antenna.radiowaves.left.and.right") {
                     waitForGuestAgentAction()
                 }
                 .disabled(isLoading)
-                .help("Wait for the Windows guest agent and refresh diagnostics")
+                .help("Wait for Windows app connection and refresh status")
 
                 if let agentDiagnostic {
                     Button {
                         showsAgentDiagnosticPopover = true
                     } label: {
-                        Label("Agent Diagnostics", systemImage: "info.circle")
+                        Label("Connection Details", systemImage: "info.circle")
                     }
-                    .help("Show guest agent connection diagnostics")
+                    .help("Show Windows app connection details")
                     .popover(isPresented: $showsAgentDiagnosticPopover, arrowEdge: .bottom) {
                         AgentDiagnosticPanel(diagnostic: agentDiagnostic)
                             .frame(width: 360)
@@ -1771,11 +1771,11 @@ private struct WindowsSetupDisplayPanel: View {
             }
 
             if recommendedProofCommand != nil {
-                Button("Run Proof", systemImage: "checkmark.seal") {
+                Button("Check Windows App", systemImage: "checkmark.seal") {
                     runRecommendedProofAction()
                 }
                 .disabled(isLoading)
-                .help("Run the strongest available Windows app runtime proof")
+                .help("Run the strongest available Windows app check")
             }
         }
     }
@@ -2083,7 +2083,7 @@ private struct WindowsSetupDisplayPanel: View {
         if pendingLaunch.willLaunchOnAgentReconnect {
             switch snapshot.state {
             case .running, .starting:
-                return "Repair Agent"
+                return "Repair App Connection"
             default:
                 return "Continue Opening \(pendingAppDisplayName)"
             }
@@ -2094,7 +2094,7 @@ private struct WindowsSetupDisplayPanel: View {
         }
 
         if canInstallGuestAgent {
-            return "Install Agent"
+            return "Repair App Connection"
         }
 
         if canStop {
