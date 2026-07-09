@@ -33,3 +33,22 @@ test("rejects screenshot slots that drift from release gate", () => {
     /screenshot/
   );
 });
+
+test("accepts attached screenshot evidence paths", () => {
+  const card = demoReviewCard();
+  card.evidence.screenshotEvidenceDirectory = "/tmp/veil-review";
+  card.screenshotSlots[0].attachmentState = "attached";
+  card.screenshotSlots[0].attachmentPath = "/tmp/veil-review/preBootLauncher.png";
+
+  assert.equal(validateAppRuntimeReview(card), card);
+});
+
+test("rejects attached screenshot slots without paths", () => {
+  const card = demoReviewCard();
+  card.screenshotSlots[0].attachmentState = "attached";
+
+  assert.throws(
+    () => validateAppRuntimeReview(card),
+    /attachment path/
+  );
+});

@@ -7,37 +7,42 @@
     "latestAppCheckModifiedAt" : "2026-07-04T15:28:35Z",
     "latestAppCheckPath" : "\/Users\/bonjin\/Library\/Application Support\/Veil\/Diagnostics\/MVP Proof\/notepad-mvp-window-detect.json"
   },
-  "generatedAt" : "2026-07-09T13:35:22Z",
+  "generatedAt" : "2026-07-09T13:41:03Z",
   "isReadyForReview" : true,
   "kind" : "windowsAppRuntimeReviewCard",
   "nextStepTitle" : "Ready For App Review",
   "screenshotSlots" : [
     {
-      "attachmentState" : "needed",
+      "attachmentState" : "missing",
+      "expectedFileName" : "preBootLauncher.png",
       "expectedSurface" : "One Veil launcher window with setup or start action visible.",
       "id" : "preBootLauncher",
       "title" : "Pre-Boot Launcher"
     },
     {
-      "attachmentState" : "needed",
+      "attachmentState" : "missing",
+      "expectedFileName" : "firstAppLaunch.png",
       "expectedSurface" : "A selected Windows app is opening, queued, or ready with one concrete next action.",
       "id" : "firstAppLaunch",
       "title" : "First App Launch"
     },
     {
-      "attachmentState" : "needed",
+      "attachmentState" : "missing",
+      "expectedFileName" : "appWindowOnly.png",
       "expectedSurface" : "The mirrored Windows app window is visible while the launcher is hidden unless recovery is needed.",
       "id" : "appWindowOnly",
       "title" : "App Window Only"
     },
     {
-      "attachmentState" : "needed",
+      "attachmentState" : "missing",
+      "expectedFileName" : "menuRestore.png",
       "expectedSurface" : "Menu or Dock controls can bring forward, restore, reconnect, or close Windows app windows.",
       "id" : "menuRestore",
       "title" : "Menu Restore"
     },
     {
-      "attachmentState" : "needed",
+      "attachmentState" : "missing",
+      "expectedFileName" : "closeQuiet.png",
       "expectedSurface" : "After the final Windows app window closes, the launcher returns or quiet Windows action is available.",
       "id" : "closeQuiet",
       "title" : "Close And Quiet"
@@ -173,7 +178,7 @@
       "pendingLaunchCount" : 1,
       "restorableAppCount" : 1
     },
-    "generatedAt" : "2026-07-09T13:35:22Z",
+    "generatedAt" : "2026-07-09T13:41:03Z",
     "guestAgentDiagnostics" : {
       "diagnosticCommand" : "veil-host-probe --diagnose-agent",
       "endpoint" : "ws:\/\/127.0.0.1:18444",

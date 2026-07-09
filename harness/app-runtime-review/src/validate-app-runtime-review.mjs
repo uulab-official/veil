@@ -67,7 +67,14 @@ export function validateAppRuntimeReview(card) {
     requireString(slot.id, `screenshotSlots.${index}.id`);
     requireString(slot.title, `screenshotSlots.${index}.title`);
     requireString(slot.expectedSurface, `screenshotSlots.${index}.expectedSurface`);
+    requireString(slot.expectedFileName, `screenshotSlots.${index}.expectedFileName`);
     requireString(slot.attachmentState, `screenshotSlots.${index}.attachmentState`);
+    if (!["attached", "missing"].includes(slot.attachmentState)) {
+      throw new TypeError("app runtime review screenshot attachment state must be attached or missing.");
+    }
+    if (slot.attachmentPath !== undefined) {
+      requireString(slot.attachmentPath, `screenshotSlots.${index}.attachmentPath`);
+    }
 
     if (
       slot.id !== sourceSlot.id
@@ -75,6 +82,15 @@ export function validateAppRuntimeReview(card) {
       || slot.expectedSurface !== sourceSlot.expectedSurface
     ) {
       throw new TypeError("app runtime review screenshot slots must preserve release gate screenshot identity.");
+    }
+    if (slot.expectedFileName !== `${sourceSlot.id}.png`) {
+      throw new TypeError("app runtime review screenshot file names must be derived from release gate slot ids.");
+    }
+    if (slot.attachmentState === "attached" && slot.attachmentPath === undefined) {
+      throw new TypeError("attached review screenshots must include an attachment path.");
+    }
+    if (slot.attachmentState === "missing" && slot.attachmentPath !== undefined) {
+      throw new TypeError("missing review screenshots must not include an attachment path.");
     }
   }
 
@@ -88,6 +104,9 @@ function validateEvidence(evidence, status) {
   }
 
   requireString(evidence.diagnosticsDirectory, "evidence.diagnosticsDirectory");
+  if (evidence.screenshotEvidenceDirectory !== undefined) {
+    requireString(evidence.screenshotEvidenceDirectory, "evidence.screenshotEvidenceDirectory");
+  }
 
   if (evidence.latestAppCheckKind !== undefined) {
     requireString(evidence.latestAppCheckKind, "evidence.latestAppCheckKind");

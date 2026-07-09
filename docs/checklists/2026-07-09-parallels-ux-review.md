@@ -49,6 +49,7 @@ Goal: keep the user-facing workflow one-screen-first (launcher + one action path
 - [x] Surface the same release gate in the Windows Apps launcher as a compact `App Flow` progress strip, so users can see the next setup/open/check/close step without reading CLI output.
 - [x] Print the release gate summary in the human-readable `app-runtime-status` output as `App flow`, `Next app step`, and screenshot slots, so CLI diagnostics match the launcher without exposing proof-only wording.
 - [x] Add `veil-vmctl app-runtime-review` plus a harness validator so the release gate, required screenshot slots, latest app-check artifact, and full app-runtime status can be exported as one review card before a live VM proof pass.
+- [x] Teach `app-runtime-review --evidence-dir` to mark required screenshots as `attached` or `missing` using slot-derived PNG names, so a live VM proof pass can produce a single auditable review folder.
 
 ## CEO Review
 
@@ -78,4 +79,4 @@ Goal: keep the user-facing workflow one-screen-first (launcher + one action path
 
 ## Next
 
-- [ ] Execute the proof card on a live VM run and attach current screenshots: pre-boot, first app launch, app-window-only runtime, and close/restore from menu without duplicate launcher.
+- [ ] Execute the proof card on a live VM run and attach current screenshots in one evidence folder: `preBootLauncher.png`, `firstAppLaunch.png`, `appWindowOnly.png`, `menuRestore.png`, and `closeQuiet.png`.

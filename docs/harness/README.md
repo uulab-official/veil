@@ -186,9 +186,17 @@ app-flow readiness, the next product action, the five release-gate steps, the
 required screenshot slots, the latest app-check artifact, and the recommended
 next app check.
 
+Pass `--evidence-dir` to point the card at a screenshot folder. Each required
+slot expects one PNG named after the release-gate slot id, for example
+`preBootLauncher.png`, `firstAppLaunch.png`, `appWindowOnly.png`,
+`menuRestore.png`, and `closeQuiet.png`. The card marks each slot as `attached`
+or `missing` without copying Windows media, disk contents, product keys, or
+guest data.
+
 ```bash
 cd apps/mac-host
 swift run veil-vmctl app-runtime-review --json --demo | node ../../harness/app-runtime-review/src/validate-app-runtime-review.mjs
+swift run veil-vmctl app-runtime-review --json --demo --evidence-dir ../../docs/checklists/artifacts/2026-07-09-app-runtime-review | node ../../harness/app-runtime-review/src/validate-app-runtime-review.mjs
 node ../../harness/app-runtime-review/src/validate-app-runtime-review.mjs < ../../harness/app-runtime-review/fixtures/app-runtime-review.demo.json
 ```
 
