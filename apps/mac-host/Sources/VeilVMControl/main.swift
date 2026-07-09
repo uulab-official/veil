@@ -631,9 +631,29 @@ struct AppRuntimeReviewHostAppBundleEvidence: Codable, Equatable {
     var appIconExists: Bool
     var bundleIdentifier: String?
     var expectedBundleIdentifier: String
+    var latestLaunchReport: AppRuntimeReviewHostAppLaunchReportEvidence
     var latestFailedLaunchReportPath: String?
     var latestFailedLaunchReportModifiedAt: Date?
     var isVerificationReady: Bool
+}
+
+struct AppRuntimeReviewHostAppLaunchReportEvidence: Codable, Equatable {
+    var reportPath: String?
+    var modifiedAt: Date?
+    var meetsLauncherContract: Bool
+    var isCurrentForBundle: Bool
+    var bundleIdentifier: String?
+    var expectedBundleIdentifier: String
+    var mainWindowCount: Int?
+    var visibleMainWindowCount: Int?
+    var duplicateMainWindowCount: Int?
+    var frameWidth: Double?
+    var frameHeight: Double?
+    var minWidth: Double?
+    var minHeight: Double?
+    var titlebarAppearsTransparent: Bool?
+    var hasFullSizeContentView: Bool?
+    var appIconSource: String?
 }
 
 struct AppRuntimeReviewCard: Codable, Equatable {
@@ -1705,6 +1725,14 @@ struct VeilVMControl {
         let expectedBundleIdentifier = "org.uulab.veil.host-shell"
         let bundleIdentifier = bundleIdentifier(in: infoPlistURL)
         let latestFailedReport = latestLaunchVerificationFailureReport(in: distURL)
+        let latestBundleModifiedAt = latestModificationDate(
+            for: [infoPlistURL, executableURL, iconURL]
+        )
+        let latestLaunchReport = latestLaunchVerificationReport(
+            in: distURL,
+            expectedBundleIdentifier: expectedBundleIdentifier,
+            latestBundleModifiedAt: latestBundleModifiedAt
+        )
 
         let isBundlePresent = directoryExists(at: appBundleURL)
         let infoPlistExists = FileManager.default.fileExists(atPath: infoPlistURL.path)
@@ -1720,6 +1748,7 @@ struct VeilVMControl {
             appIconExists: iconExists,
             bundleIdentifier: bundleIdentifier,
             expectedBundleIdentifier: expectedBundleIdentifier,
+            latestLaunchReport: latestLaunchReport,
             latestFailedLaunchReportPath: latestFailedReport?.url.path,
             latestFailedLaunchReportModifiedAt: latestFailedReport?.modifiedAt,
             isVerificationReady: isBundlePresent
@@ -1727,6 +1756,9 @@ struct VeilVMControl {
                 && executableExists
                 && iconExists
                 && bundleIdentifier == expectedBundleIdentifier
+                && latestLaunchReport.meetsLauncherContract
+                && latestLaunchReport.isCurrentForBundle
+                && latestLaunchReport.bundleIdentifier == expectedBundleIdentifier
         )
     }
 
@@ -1764,6 +1796,112 @@ struct VeilVMControl {
         var isDirectory: ObjCBool = false
         let exists = FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory)
         return exists && isDirectory.boolValue
+    }
+
+    private static func latestLaunchVerificationReport(
+        in distURL: URL,
+        expectedBundleIdentifier: String,
+        latestBundleModifiedAt: Date?
+    ) -> AppRuntimeReviewHostAppLaunchReportEvidence {
+        let reportURL = distURL.appendingPathComponent("veil-launch-report-latest.plist")
+        let modifiedAt = modificationDate(for: reportURL)
+
+        guard FileManager.default.fileExists(atPath: reportURL.path),
+              let dictionary = propertyListDictionary(in: reportURL) else {
+            return AppRuntimeReviewHostAppLaunchReportEvidence(
+                reportPath: nil,
+                modifiedAt: nil,
+                meetsLauncherContract: false,
+                isCurrentForBundle: false,
+                bundleIdentifier: nil,
+                expectedBundleIdentifier: expectedBundleIdentifier,
+                mainWindowCount: nil,
+                visibleMainWindowCount: nil,
+                duplicateMainWindowCount: nil,
+                frameWidth: nil,
+                frameHeight: nil,
+                minWidth: nil,
+                minHeight: nil,
+                titlebarAppearsTransparent: nil,
+                hasFullSizeContentView: nil,
+                appIconSource: nil
+            )
+        }
+
+        let frame = dictionary["frame"] as? [String: Any]
+        let isCurrentForBundle: Bool
+        if let modifiedAt, let latestBundleModifiedAt {
+            isCurrentForBundle = modifiedAt >= latestBundleModifiedAt
+        } else {
+            isCurrentForBundle = false
+        }
+
+        return AppRuntimeReviewHostAppLaunchReportEvidence(
+            reportPath: reportURL.path,
+            modifiedAt: modifiedAt,
+            meetsLauncherContract: boolValue(dictionary["meetsLauncherContract"]) ?? false,
+            isCurrentForBundle: isCurrentForBundle,
+            bundleIdentifier: dictionary["bundleIdentifier"] as? String,
+            expectedBundleIdentifier: expectedBundleIdentifier,
+            mainWindowCount: intValue(dictionary["mainWindowCount"]),
+            visibleMainWindowCount: intValue(dictionary["visibleMainWindowCount"]),
+            duplicateMainWindowCount: intValue(dictionary["duplicateMainWindowCount"]),
+            frameWidth: doubleValue(frame?["width"]),
+            frameHeight: doubleValue(frame?["height"]),
+            minWidth: doubleValue(dictionary["minWidth"]),
+            minHeight: doubleValue(dictionary["minHeight"]),
+            titlebarAppearsTransparent: boolValue(dictionary["titlebarAppearsTransparent"]),
+            hasFullSizeContentView: boolValue(dictionary["hasFullSizeContentView"]),
+            appIconSource: dictionary["appIconSource"] as? String
+        )
+    }
+
+    private static func propertyListDictionary(in url: URL) -> [String: Any]? {
+        guard let data = try? Data(contentsOf: url),
+              let plist = try? PropertyListSerialization.propertyList(from: data, options: [], format: nil) else {
+            return nil
+        }
+
+        return plist as? [String: Any]
+    }
+
+    private static func latestModificationDate(for urls: [URL]) -> Date? {
+        urls.compactMap(modificationDate(for:)).max()
+    }
+
+    private static func modificationDate(for url: URL) -> Date? {
+        let values = try? url.resourceValues(forKeys: [.contentModificationDateKey])
+        return values?.contentModificationDate
+    }
+
+    private static func boolValue(_ value: Any?) -> Bool? {
+        if let value = value as? Bool {
+            return value
+        }
+        if let value = value as? NSNumber {
+            return value.boolValue
+        }
+        return nil
+    }
+
+    private static func intValue(_ value: Any?) -> Int? {
+        if let value = value as? Int {
+            return value
+        }
+        if let value = value as? NSNumber {
+            return value.intValue
+        }
+        return nil
+    }
+
+    private static func doubleValue(_ value: Any?) -> Double? {
+        if let value = value as? Double {
+            return value
+        }
+        if let value = value as? NSNumber {
+            return value.doubleValue
+        }
+        return nil
     }
 
     private static func latestLaunchVerificationFailureReport(in distURL: URL) -> (url: URL, modifiedAt: Date)? {

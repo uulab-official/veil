@@ -1,7 +1,7 @@
 {
   "attachedScreenshotCount" : 0,
   "evidenceDirectory" : "\/tmp\/veil-review-verify",
-  "generatedAt" : "2026-07-09T16:24:26Z",
+  "generatedAt" : "2026-07-09T16:33:29Z",
   "isComplete" : false,
   "kind" : "windowsAppRuntimeReviewEvidenceVerification",
   "manifest" : {
@@ -202,6 +202,24 @@
         "infoPlistExists" : true,
         "isStagedBundlePresent" : true,
         "isVerificationReady" : true,
+        "latestLaunchReport" : {
+          "appIconSource" : "bundled",
+          "bundleIdentifier" : "org.uulab.veil.host-shell",
+          "duplicateMainWindowCount" : 0,
+          "expectedBundleIdentifier" : "org.uulab.veil.host-shell",
+          "frameHeight" : 900,
+          "frameWidth" : 1440,
+          "hasFullSizeContentView" : true,
+          "isCurrentForBundle" : true,
+          "mainWindowCount" : 1,
+          "meetsLauncherContract" : true,
+          "minHeight" : 760,
+          "minWidth" : 1180,
+          "modifiedAt" : "2026-07-09T16:32:54Z",
+          "reportPath" : "\/Users\/bonjin\/Documents\/workspace\/uulab\/veil\/dist\/veil-launch-report-latest.plist",
+          "titlebarAppearsTransparent" : true,
+          "visibleMainWindowCount" : 1
+        },
         "verificationCommand" : ".\/script\/build_and_run.sh --verify"
       },
       "latestAppCheckKind" : "mvp",
@@ -209,7 +227,7 @@
       "latestAppCheckPath" : "\/Users\/bonjin\/Library\/Application Support\/Veil\/Diagnostics\/MVP Proof\/notepad-mvp-window-detect.json",
       "screenshotEvidenceDirectory" : "\/tmp\/veil-review-verify"
     },
-    "generatedAt" : "2026-07-09T16:24:26Z",
+    "generatedAt" : "2026-07-09T16:33:29Z",
     "isReadyForReview" : true,
     "kind" : "windowsAppRuntimeReviewCard",
     "nextStepTitle" : "Ready For App Review",
@@ -391,7 +409,7 @@
         "pendingLaunchCount" : 1,
         "restorableAppCount" : 1
       },
-      "generatedAt" : "2026-07-09T16:24:26Z",
+      "generatedAt" : "2026-07-09T16:33:29Z",
       "guestAgentDiagnostics" : {
         "diagnosticCommand" : "veil-host-probe --diagnose-agent",
         "endpoint" : "ws:\/\/127.0.0.1:18444",

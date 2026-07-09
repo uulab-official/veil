@@ -97,9 +97,42 @@ test("rejects host app bundle readiness drift", () => {
   );
 });
 
+test("rejects host app bundle readiness when latest launch report is stale", () => {
+  const card = demoReviewCard();
+  card.evidence.hostAppBundle.latestLaunchReport.isCurrentForBundle = false;
+
+  assert.throws(
+    () => validateAppRuntimeReview(card),
+    /host app bundle readiness/
+  );
+});
+
+test("rejects launcher contract reports that do not prove one visible main window", () => {
+  const card = demoReviewCard();
+  card.evidence.hostAppBundle.latestLaunchReport.mainWindowCount = 2;
+
+  assert.throws(
+    () => validateAppRuntimeReview(card),
+    /one visible main window/
+  );
+});
+
 test("accepts release-ready cards that are blocked on host app bundle verification", () => {
   const card = demoReviewCard();
   card.evidence.hostAppBundle.appIconExists = false;
+  card.evidence.hostAppBundle.isVerificationReady = false;
+  card.isReadyForReview = false;
+  card.appFlowSummary = `${card.appFlowSummary}; host app bundle needs verification`;
+  card.nextStepTitle = "Verify Host App Bundle";
+  card.nextActionCommand = card.evidence.hostAppBundle.verificationCommand;
+  card.detail = `${card.detail} Run bundled launcher verification before sharing review evidence.`;
+
+  assert.equal(validateAppRuntimeReview(card), card);
+});
+
+test("accepts release-ready cards that are blocked on stale host launch verification", () => {
+  const card = demoReviewCard();
+  card.evidence.hostAppBundle.latestLaunchReport.isCurrentForBundle = false;
   card.evidence.hostAppBundle.isVerificationReady = false;
   card.isReadyForReview = false;
   card.appFlowSummary = `${card.appFlowSummary}; host app bundle needs verification`;

@@ -171,6 +171,7 @@ function validateHostAppBundleEvidence(hostAppBundle) {
   requireBoolean(hostAppBundle.appIconExists, "evidence.hostAppBundle.appIconExists");
   requireString(hostAppBundle.expectedBundleIdentifier, "evidence.hostAppBundle.expectedBundleIdentifier");
   requireBoolean(hostAppBundle.isVerificationReady, "evidence.hostAppBundle.isVerificationReady");
+  validateHostAppLaunchReportEvidence(hostAppBundle.latestLaunchReport, hostAppBundle.expectedBundleIdentifier);
 
   if (hostAppBundle.bundleIdentifier !== undefined) {
     requireString(hostAppBundle.bundleIdentifier, "evidence.hostAppBundle.bundleIdentifier");
@@ -202,9 +203,79 @@ function validateHostAppBundleEvidence(hostAppBundle) {
       && hostAppBundle.executableExists
       && hostAppBundle.appIconExists
       && hostAppBundle.bundleIdentifier === hostAppBundle.expectedBundleIdentifier
+      && hostAppBundle.latestLaunchReport.meetsLauncherContract
+      && hostAppBundle.latestLaunchReport.isCurrentForBundle
+      && hostAppBundle.latestLaunchReport.bundleIdentifier === hostAppBundle.expectedBundleIdentifier
     )
   ) {
     throw new TypeError("app runtime review host app bundle readiness must match bundle evidence.");
+  }
+}
+
+function validateHostAppLaunchReportEvidence(launchReport, expectedBundleIdentifier) {
+  if (!launchReport || typeof launchReport !== "object" || Array.isArray(launchReport)) {
+    throw new TypeError("app runtime review host app launch report evidence must be an object.");
+  }
+
+  requireBoolean(launchReport.meetsLauncherContract, "evidence.hostAppBundle.latestLaunchReport.meetsLauncherContract");
+  requireBoolean(launchReport.isCurrentForBundle, "evidence.hostAppBundle.latestLaunchReport.isCurrentForBundle");
+  requireString(launchReport.expectedBundleIdentifier, "evidence.hostAppBundle.latestLaunchReport.expectedBundleIdentifier");
+
+  if (launchReport.reportPath !== undefined) {
+    requireString(launchReport.reportPath, "evidence.hostAppBundle.latestLaunchReport.reportPath");
+    if (!launchReport.reportPath.endsWith("/dist/veil-launch-report-latest.plist")) {
+      throw new TypeError("app runtime review host app launch report path must point at dist/veil-launch-report-latest.plist.");
+    }
+  }
+  if (launchReport.modifiedAt !== undefined && Number.isNaN(Date.parse(launchReport.modifiedAt))) {
+    throw new TypeError("evidence.hostAppBundle.latestLaunchReport.modifiedAt must be an ISO date.");
+  }
+  if (launchReport.bundleIdentifier !== undefined) {
+    requireString(launchReport.bundleIdentifier, "evidence.hostAppBundle.latestLaunchReport.bundleIdentifier");
+  }
+  if (launchReport.appIconSource !== undefined) {
+    requireString(launchReport.appIconSource, "evidence.hostAppBundle.latestLaunchReport.appIconSource");
+  }
+
+  for (const fieldName of [
+    "mainWindowCount",
+    "visibleMainWindowCount",
+    "duplicateMainWindowCount"
+  ]) {
+    if (launchReport[fieldName] !== undefined) {
+      requireNonNegativeInteger(launchReport[fieldName], `evidence.hostAppBundle.latestLaunchReport.${fieldName}`);
+    }
+  }
+  for (const fieldName of ["frameWidth", "frameHeight", "minWidth", "minHeight"]) {
+    if (launchReport[fieldName] !== undefined) {
+      requirePositiveNumber(launchReport[fieldName], `evidence.hostAppBundle.latestLaunchReport.${fieldName}`);
+    }
+  }
+  for (const fieldName of ["titlebarAppearsTransparent", "hasFullSizeContentView"]) {
+    if (launchReport[fieldName] !== undefined) {
+      requireBoolean(launchReport[fieldName], `evidence.hostAppBundle.latestLaunchReport.${fieldName}`);
+    }
+  }
+
+  if (launchReport.expectedBundleIdentifier !== expectedBundleIdentifier) {
+    throw new TypeError("app runtime review host app launch report expected bundle id must match host bundle evidence.");
+  }
+  if (launchReport.meetsLauncherContract) {
+    if (launchReport.bundleIdentifier !== expectedBundleIdentifier) {
+      throw new TypeError("app runtime review host app launch report bundle id must match the staged app.");
+    }
+    if (launchReport.mainWindowCount !== 1 || launchReport.visibleMainWindowCount !== 1 || launchReport.duplicateMainWindowCount !== 0) {
+      throw new TypeError("app runtime review host app launch report must prove exactly one visible main window.");
+    }
+    if (launchReport.frameWidth < 1180 || launchReport.frameHeight < 760 || launchReport.minWidth < 1180 || launchReport.minHeight < 760) {
+      throw new TypeError("app runtime review host app launch report must prove launcher sizing.");
+    }
+    if (launchReport.titlebarAppearsTransparent !== true || launchReport.hasFullSizeContentView !== true) {
+      throw new TypeError("app runtime review host app launch report must prove custom titlebar coverage.");
+    }
+    if (launchReport.appIconSource !== "bundled") {
+      throw new TypeError("app runtime review host app launch report must prove bundled app icon usage.");
+    }
   }
 }
 
@@ -223,6 +294,12 @@ function requireBoolean(value, fieldName) {
 function requireNonNegativeInteger(value, fieldName) {
   if (!Number.isInteger(value) || value < 0) {
     throw new TypeError(`App runtime review field '${fieldName}' must be a non-negative integer.`);
+  }
+}
+
+function requirePositiveNumber(value, fieldName) {
+  if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
+    throw new TypeError(`App runtime review field '${fieldName}' must be a positive number.`);
   }
 }
 

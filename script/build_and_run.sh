@@ -191,6 +191,7 @@ case "$MODE" in
     wait_for_app_process
     wait_for_launch_report "$VERIFY_REPORT"
     verify_launch_report "$VERIFY_REPORT"
+    cp "$VERIFY_REPORT" "$DIST_DIR/veil-launch-report-latest.plist"
     if [[ "$VERIFY_KEEP_RUNNING" -eq 0 ]]; then
       stop_app_process
     fi

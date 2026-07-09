@@ -46,7 +46,7 @@
     }
   ],
   "evidenceDirectory" : "\/tmp\/veil-review-readme",
-  "generatedAt" : "2026-07-09T16:24:26Z",
+  "generatedAt" : "2026-07-09T16:33:28Z",
   "kind" : "windowsAppRuntimeReviewEvidenceManifest",
   "manifestPath" : "\/tmp\/veil-review-readme\/review-manifest.json",
   "nextActions" : [

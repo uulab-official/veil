@@ -14,13 +14,31 @@
       "infoPlistExists" : true,
       "isStagedBundlePresent" : true,
       "isVerificationReady" : true,
+      "latestLaunchReport" : {
+        "appIconSource" : "bundled",
+        "bundleIdentifier" : "org.uulab.veil.host-shell",
+        "duplicateMainWindowCount" : 0,
+        "expectedBundleIdentifier" : "org.uulab.veil.host-shell",
+        "frameHeight" : 900,
+        "frameWidth" : 1440,
+        "hasFullSizeContentView" : true,
+        "isCurrentForBundle" : true,
+        "mainWindowCount" : 1,
+        "meetsLauncherContract" : true,
+        "minHeight" : 760,
+        "minWidth" : 1180,
+        "modifiedAt" : "2026-07-09T16:32:54Z",
+        "reportPath" : "\/Users\/bonjin\/Documents\/workspace\/uulab\/veil\/dist\/veil-launch-report-latest.plist",
+        "titlebarAppearsTransparent" : true,
+        "visibleMainWindowCount" : 1
+      },
       "verificationCommand" : ".\/script\/build_and_run.sh --verify"
     },
     "latestAppCheckKind" : "mvp",
     "latestAppCheckModifiedAt" : "2026-07-04T15:28:35Z",
     "latestAppCheckPath" : "\/Users\/bonjin\/Library\/Application Support\/Veil\/Diagnostics\/MVP Proof\/notepad-mvp-window-detect.json"
   },
-  "generatedAt" : "2026-07-09T16:24:25Z",
+  "generatedAt" : "2026-07-09T16:33:27Z",
   "isReadyForReview" : true,
   "kind" : "windowsAppRuntimeReviewCard",
   "nextStepTitle" : "Ready For App Review",
@@ -202,7 +220,7 @@
       "pendingLaunchCount" : 1,
       "restorableAppCount" : 1
     },
-    "generatedAt" : "2026-07-09T16:24:25Z",
+    "generatedAt" : "2026-07-09T16:33:27Z",
     "guestAgentDiagnostics" : {
       "diagnosticCommand" : "veil-host-probe --diagnose-agent",
       "endpoint" : "ws:\/\/127.0.0.1:18444",
