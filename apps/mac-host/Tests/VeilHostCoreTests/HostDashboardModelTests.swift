@@ -27,6 +27,89 @@ struct HostDashboardModelTests {
         #expect(model.errorMessage == nil)
     }
 
+    @Test("one-screen hero readiness follows supported primary action ids")
+    @MainActor
+    func oneScreenHeroReadinessFollowsSupportedPrimaryActionIds() {
+        let model = HostDashboardModel(service: FakeDashboardService())
+        let launcherVisibility = WindowsAppRuntimeLauncherVisibilityStatus(
+            isEnabled: true,
+            canOpenMainWindow: true,
+            shouldHideMainWindow: false,
+            keepsDockMenuAvailable: true,
+            recommendedAction: "show-launcher",
+            reason: "Launcher visible."
+        )
+        let visibleSurfacePolicy = WindowsAppRuntimeVisibleSurfacePolicyStatus(
+            isEnabled: true,
+            primarySurface: "launcher",
+            expectedVisibleSurfaceCount: 1,
+            shouldHideLauncher: false,
+            keepsRecoveryDisplayManual: true,
+            reason: "Launcher surface."
+        )
+        let macWindowIntegration = WindowsAppRuntimeMacWindowIntegrationStatus(
+            isEnabled: true,
+            acceptsGuestWindowEvents: false,
+            opensMacWindowsAutomatically: true,
+            hidesLauncherWhenMirroring: false,
+            mirroredWindowCount: 0,
+            foregroundableWindowCount: 0,
+            pendingFrameWindowCount: 0,
+            streamingWindowCount: 0,
+            reason: "Waiting."
+        )
+        let menuBarIntegration = WindowsAppRuntimeMenuBarIntegrationStatus(
+            isEnabled: true,
+            statusTitle: "Ready",
+            symbolName: "play.rectangle",
+            primaryActionId: "windowsApps.launchSelected",
+            primaryActionTitle: "Open App",
+            primaryActionAvailable: true,
+            canOpenMainWindow: true,
+            canBringWindowsAppsForward: false,
+            canRestorePreviousApps: false,
+            canReconnectPreviousApps: false,
+            canLaunchSelectedApp: true,
+            canFulfillPendingLaunch: false
+        )
+
+        let supported = model.oneScreenUXStatus(
+            launcherVisibility: launcherVisibility,
+            visibleSurfacePolicy: visibleSurfacePolicy,
+            macWindowIntegration: macWindowIntegration,
+            menuBarIntegration: menuBarIntegration,
+            primaryNextAction: WindowsAppRuntimePrimaryNextActionStatus(
+                id: "closeOrRestore",
+                title: "Close Apps",
+                source: "releaseGate",
+                isAvailable: true,
+                runsInApp: true,
+                actionId: "windowsApps.closeAll",
+                command: "veil-vmctl app-runtime-action --json --action close-all",
+                reason: "Close all app windows."
+            )
+        )
+        let unsupported = model.oneScreenUXStatus(
+            launcherVisibility: launcherVisibility,
+            visibleSurfacePolicy: visibleSurfacePolicy,
+            macWindowIntegration: macWindowIntegration,
+            menuBarIntegration: menuBarIntegration,
+            primaryNextAction: WindowsAppRuntimePrimaryNextActionStatus(
+                id: "futureAction",
+                title: "Future Action",
+                source: "releaseGate",
+                isAvailable: true,
+                runsInApp: true,
+                actionId: "runtime.futureAction",
+                command: "veil-vmctl app-runtime-action --json --action future",
+                reason: "Future app action."
+            )
+        )
+
+        #expect(supported.heroRunsPrimaryAction)
+        #expect(unsupported.heroRunsPrimaryAction == false)
+    }
+
     @Test("marks phase failed and keeps recovery diagnostics when waiting for the live agent times out")
     @MainActor
     func waitForLiveAgentConnectionMarksPhaseFailedWhenUnavailable() async throws {

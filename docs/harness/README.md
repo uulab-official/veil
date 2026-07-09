@@ -178,7 +178,10 @@ launcher fallback after the final Windows app window closes through
 executable primary action id that the launcher or menu should run next. Its
 `heroRunsPrimaryAction` flag must match `primaryNextAction.runsInApp`, so every
 app-native next action has a one-screen hero execution path and review-card
-handoff stays out of broken in-app buttons.
+handoff stays out of broken in-app buttons. The host computes this from the
+supported installed-runtime hero action ids rather than blindly trusting the
+next-action flag, which catches newly introduced app actions before they drift
+into command-only guidance.
 
 `guestAgentDiagnostics` points every app-runtime status report at the same
 guest-agent readiness gate: run `veil-host-probe --diagnose-agent` before and

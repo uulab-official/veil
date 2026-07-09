@@ -2000,6 +2000,32 @@ public final class HostDashboardModel {
         return nil
     }
 
+    private func installedRuntimeHeroSupports(actionId: String?) -> Bool {
+        guard let actionId else {
+            return false
+        }
+
+        switch actionId {
+        case "windowsApps.launchSelected",
+             "runtime.fulfillPendingLaunch",
+             "runtime.recoverDisplay",
+             "runtime.waitAgent",
+             "runtime.repairGuestAgentForApp",
+             "runtime.startWindowsForApp",
+             "runtime.prepareWindows",
+             "runtime.refreshStatus",
+             "windowsApps.reconnectRestore",
+             "windowsApps.restorePrevious",
+             "windowsApps.closeAll",
+             "runtime.quietWhenIdle",
+             "runtime.stopWhenIdle",
+             "proof.recommended":
+            return true
+        default:
+            return false
+        }
+    }
+
     private func proofArtifacts(in directory: URL, kind: String) -> [ProofArtifactCandidate] {
         guard let urls = try? FileManager.default.contentsOfDirectory(
             at: directory,
@@ -2194,6 +2220,8 @@ public final class HostDashboardModel {
                 && visibleSurfacePolicy.expectedVisibleSurfaceCount == 1
                 && !launcherVisibility.shouldHideMainWindow)
         let primaryActionId = primaryNextAction.actionId ?? menuBarIntegration.primaryActionId
+        let heroRunsPrimaryAction = primaryNextAction.runsInApp
+            && installedRuntimeHeroSupports(actionId: primaryNextAction.actionId)
         let reason: String
 
         if isMirroringApps {
@@ -2214,7 +2242,7 @@ public final class HostDashboardModel {
             returnsToLauncherWhenNoAppWindows: returnsToLauncherWhenNoAppWindows,
             keepsDisplayRecoveryManual: visibleSurfacePolicy.keepsRecoveryDisplayManual,
             primaryActionId: primaryActionId,
-            heroRunsPrimaryAction: primaryNextAction.runsInApp,
+            heroRunsPrimaryAction: heroRunsPrimaryAction,
             reason: reason
         )
     }
