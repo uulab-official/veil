@@ -725,6 +725,13 @@ struct VeilVMControl {
         print("Visible surface: \(report.visibleSurfacePolicy.primarySurface)")
         print("Expected visible surfaces: \(report.visibleSurfacePolicy.expectedVisibleSurfaceCount)")
         print("Recovery display: \(report.visibleSurfacePolicy.keepsRecoveryDisplayManual ? "manual" : "automatic")")
+        print("App flow: \(appFlowSummary(report.releaseGate))")
+        print("Next app step: \(appFlowNextStepTitle(report.releaseGate))")
+        print("App flow detail: \(appFlowDetail(report.releaseGate))")
+        if let nextAppCommand = appFlowNextCommand(report.releaseGate) {
+            print("Next app command: \(nextAppCommand)")
+        }
+        print("Screenshot slots: \(report.releaseGate.screenshotSlots.map(\.title).joined(separator: ", "))")
         print("Mac window integration: \(report.macWindowIntegration.isEnabled ? "enabled" : "disabled")")
         print("Mac windows auto-open: \(report.macWindowIntegration.acceptsGuestWindowEvents ? "ready" : "waiting")")
         print("Mac mirrored windows: \(report.macWindowIntegration.mirroredWindowCount)")
@@ -749,40 +756,90 @@ struct VeilVMControl {
         if let launchCommand = report.launchPlan.recommendedLaunchCommand {
             print("Launch app command: \(launchCommand)")
         }
-        print("Proof plan reason: \(report.proofPlan.reason)")
-        print("Proof app-window ready: \(report.proofPlan.canRunAppWindowProof ? "yes" : "no")")
-        print("Proof coherence ready: \(report.proofPlan.canRunCoherenceProof ? "yes" : "no")")
-        print("Proof MVP ready: \(report.proofPlan.canRunMVPProof ? "yes" : "no")")
+        print("App check reason: \(report.proofPlan.reason)")
+        print("App window check ready: \(report.proofPlan.canRunAppWindowProof ? "yes" : "no")")
+        print("App input check ready: \(report.proofPlan.canRunCoherenceProof ? "yes" : "no")")
+        print("Full app check ready: \(report.proofPlan.canRunMVPProof ? "yes" : "no")")
         if let proofCommand = report.proofPlan.recommendedAppWindowProofCommand {
-            print("Proof app-window command: \(proofCommand)")
+            print("App window check command: \(proofCommand)")
         }
         if let proofCommand = report.proofPlan.recommendedCoherenceProofCommand {
-            print("Proof coherence command: \(proofCommand)")
+            print("App input check command: \(proofCommand)")
         }
         if let proofCommand = report.proofPlan.recommendedMVPProofCommand {
-            print("Proof MVP command: \(proofCommand)")
+            print("Full app check command: \(proofCommand)")
         }
-        print("Proof artifacts: \(report.proofArtifacts.reason)")
+        print("App check artifacts: \(report.proofArtifacts.reason)")
         if let latestProofKind = report.proofArtifacts.latestProofKind {
-            print("Latest proof kind: \(latestProofKind)")
+            print("Latest app check kind: \(latestProofKind)")
         }
         if let latestProofPath = report.proofArtifacts.latestProofPath {
-            print("Latest proof artifact: \(latestProofPath)")
+            print("Latest app check artifact: \(latestProofPath)")
         }
-        print("Quiet runtime ready: \(report.quietRuntime.canQuietRuntime ? "yes" : "no")")
-        print("Quiet runtime auto: \(report.quietRuntime.willQuietAutomatically ? "yes" : "no")")
-        print("Quiet runtime delay: \(report.quietRuntime.automaticQuietDelaySeconds)s")
-        print("Quiet runtime recommendation: \(report.quietRuntime.recommendedAction)")
+        print("Quiet Windows ready: \(report.quietRuntime.canQuietRuntime ? "yes" : "no")")
+        print("Quiet Windows auto: \(report.quietRuntime.willQuietAutomatically ? "yes" : "no")")
+        print("Quiet Windows delay: \(report.quietRuntime.automaticQuietDelaySeconds)s")
+        print("Quiet Windows recommendation: \(report.quietRuntime.recommendedAction)")
         if let stopCommand = report.quietRuntime.recommendedStopCommand {
-            print("Quiet runtime stop command: \(stopCommand)")
+            print("Quiet Windows stop command: \(stopCommand)")
         }
-        print("Quiet runtime reason: \(report.quietRuntime.reason)")
+        print("Quiet Windows reason: \(report.quietRuntime.reason)")
         print("Restorable apps: \(report.restorableAppIds.joined(separator: ", "))")
         print("Dock restorable apps: \(report.dockIntegration.restorableAppCount)")
         print("Dock reconnect previous apps: \(report.dockIntegration.canReconnectPreviousApps ? "yes" : "no")")
         print("Actions:")
         for action in report.actions {
             print("  - \(action.id): \(action.isAvailable ? "available" : "unavailable")")
+        }
+    }
+
+    private static func appFlowSummary(
+        _ releaseGate: WindowsAppRuntimeReleaseGateStatus
+    ) -> String {
+        if releaseGate.isPassing {
+            return "ready (\(releaseGate.passingStepCount)/\(releaseGate.requiredStepCount))"
+        }
+
+        return "\(releaseGate.passingStepCount)/\(releaseGate.requiredStepCount) ready"
+    }
+
+    private static func appFlowNextStepTitle(
+        _ releaseGate: WindowsAppRuntimeReleaseGateStatus
+    ) -> String {
+        if releaseGate.isPassing {
+            return "Ready For App Review"
+        }
+
+        return releaseGate.steps.first { $0.id == releaseGate.recommendedAction }?.title
+            ?? "Continue App Setup"
+    }
+
+    private static func appFlowNextCommand(
+        _ releaseGate: WindowsAppRuntimeReleaseGateStatus
+    ) -> String? {
+        releaseGate.steps.first { $0.id == releaseGate.recommendedAction }?.nextActionCommand
+    }
+
+    private static func appFlowDetail(
+        _ releaseGate: WindowsAppRuntimeReleaseGateStatus
+    ) -> String {
+        if releaseGate.isPassing {
+            return "Setup, launch, app checks, and close controls are covered."
+        }
+
+        switch releaseGate.recommendedAction {
+        case "windowsSetup":
+            return "Finish Windows setup before opening apps."
+        case "oneScreenPath":
+            return "Keep setup, launch, and recovery in one clean app flow."
+        case "openWindowsApp":
+            return "Open or queue a Windows app from this status."
+        case "appCheckEvidence":
+            return "Run the app check and save current evidence."
+        case "closeOrRestore":
+            return "Close, restore, or quiet Windows from app controls."
+        default:
+            return "Continue the next app setup step."
         }
     }
 

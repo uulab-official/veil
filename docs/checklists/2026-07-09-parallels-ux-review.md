@@ -47,6 +47,7 @@ Goal: keep the user-facing workflow one-screen-first (launcher + one action path
 - [x] Surface app-check readiness and the latest saved check artifact in the one-screen Windows Apps launcher, with a direct `Check App` action instead of hiding the release gate behind CLI-only proof commands.
 - [x] Add `releaseGate` to `app-runtime-status` and harness validation so Windows setup, one-screen launcher behavior, app launch, saved app-check evidence, and close/restore readiness are tracked as one Parallels-style release card contract.
 - [x] Surface the same release gate in the Windows Apps launcher as a compact `App Flow` progress strip, so users can see the next setup/open/check/close step without reading CLI output.
+- [x] Print the release gate summary in the human-readable `app-runtime-status` output as `App flow`, `Next app step`, and screenshot slots, so CLI diagnostics match the launcher without exposing proof-only wording.
 
 ## CEO Review
 
