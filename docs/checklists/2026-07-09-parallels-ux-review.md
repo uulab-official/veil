@@ -86,7 +86,7 @@ Goal: keep the user-facing workflow one-screen-first (launcher + one action path
 - [x] Add exact `screencapture -i` save commands to review manifests, README guides, and missing-capture verification output so each live proof screenshot can be captured directly into the expected PNG path.
 - [x] Add structured evidence-folder `open`, review, and verify commands to review manifests and verification output so live proof passes can open Finder, review screenshot attachment state, and re-run validation without reading raw JSON.
 - [x] Add top-level `nextEvidenceAction` to review verification output, so the product UI can run the next evidence step without comparing invalid/missing capture arrays.
-- [x] Add a macOS app `Prepare Review Evidence` action that creates and opens a timestamped Review Evidence folder with fixed screenshot names and review/verify commands.
+- [x] Add a macOS app `Prepare Review Evidence` action that creates and opens a timestamped Review Evidence folder with fixed screenshot names, `review-manifest.json`, and review/verify commands.
 - [x] Add `app-runtime-status.primaryNextAction` plus harness coverage so the one-screen flow exposes one product-facing next command derived from the release gate instead of forcing users or automation to compare several status sections.
 - [x] Surface `primaryNextAction` in the launcher hero and Windows Apps app-flow row, so the app UI shows the same single next product action as `app-runtime-status`.
 - [x] Route executable `primaryNextAction` commands to a launcher button, so open, repair, reconnect, close, quiet, and app-check steps can run from the same one-screen app flow instead of only appearing as CLI guidance.

@@ -4,16 +4,97 @@ import VeilHostCore
 struct ReviewEvidenceFolder {
     var directory: URL
     var readme: URL
+    var manifest: URL
+}
+
+struct ReviewEvidenceFile: Codable, Equatable {
+    var slotId: String
+    var title: String
+    var expectedFileName: String
+    var path: String
+    var expectedSurface: String
+}
+
+struct ReviewEvidenceCaptureStep: Codable, Equatable {
+    var order: Int
+    var slotId: String
+    var title: String
+    var expectedFileName: String
+    var instruction: String
+    var captureCommand: String
+    var supportingCommand: String?
+}
+
+struct ReviewEvidenceManifest: Codable, Equatable {
+    var kind: String = "windowsAppRuntimeReviewEvidenceManifest"
+    var generatedAt: Date
+    var evidenceDirectory: String
+    var manifestPath: String
+    var readmePath: String
+    var requiredScreenshotCount: Int
+    var minimumScreenshotWidth: Int
+    var minimumScreenshotHeight: Int
+    var screenshotFiles: [ReviewEvidenceFile]
+    var captureSteps: [ReviewEvidenceCaptureStep]
+    var reviewCommand: String
+    var verifyCommand: String
+    var openEvidenceDirectoryCommand: String
+    var nextActions: [String]
+}
+
+private struct ReviewEvidenceSlot {
+    var id: String
+    var title: String
+    var expectedSurface: String
+    var instruction: String
+    var supportingCommand: String?
 }
 
 enum ReviewEvidenceFolderStore {
-    static let screenshotFileNames = [
-        "preBootLauncher.png",
-        "firstAppLaunch.png",
-        "appWindowOnly.png",
-        "menuRestore.png",
-        "closeQuiet.png"
+    static let minimumScreenshotWidth = 640
+    static let minimumScreenshotHeight = 360
+
+    private static let slots = [
+        ReviewEvidenceSlot(
+            id: "preBootLauncher",
+            title: "Pre-Boot Launcher",
+            expectedSurface: "One Veil launcher window with setup or start action visible.",
+            instruction: "Capture the one-screen Veil launcher before opening the selected Windows app.",
+            supportingCommand: "veil-vmctl app-runtime-status --json"
+        ),
+        ReviewEvidenceSlot(
+            id: "firstAppLaunch",
+            title: "First App Launch",
+            expectedSurface: "A selected Windows app is opening, queued, or ready with one concrete next action.",
+            instruction: "Start or queue the selected Windows app and capture the first visible launch state.",
+            supportingCommand: "veil-vmctl app-runtime-action --json --action fulfill-pending"
+        ),
+        ReviewEvidenceSlot(
+            id: "appWindowOnly",
+            title: "App Window Only",
+            expectedSurface: "The mirrored Windows app window is visible while the launcher is hidden unless recovery is needed.",
+            instruction: "Capture the mirrored Windows app window after the launcher is hidden.",
+            supportingCommand: "veil-vmctl app-window-proof --json --app-id winapp_notepad"
+        ),
+        ReviewEvidenceSlot(
+            id: "menuRestore",
+            title: "Menu Restore",
+            expectedSurface: "Menu or Dock controls can bring forward, restore, reconnect, or close Windows app windows.",
+            instruction: "Open the menu or Dock control and capture restore, reconnect, bring-forward, or close actions.",
+            supportingCommand: "veil-vmctl app-runtime-action --json --action bring-forward"
+        ),
+        ReviewEvidenceSlot(
+            id: "closeQuiet",
+            title: "Close And Quiet",
+            expectedSurface: "After the final Windows app window closes, the launcher returns or quiet Windows action is available.",
+            instruction: "Close the final Windows app window and capture the returned launcher or quiet-Windows control.",
+            supportingCommand: "veil-vmctl app-runtime-action --json --action reconnect-restore"
+        )
     ]
+
+    static var screenshotFileNames: [String] {
+        slots.map { expectedFileName(slotId: $0.id) }
+    }
 
     static func defaultDirectory(now: Date = Date()) -> URL {
         QEMUVMRuntimeBooter.defaultDiagnosticsDirectory()
@@ -21,11 +102,120 @@ enum ReviewEvidenceFolderStore {
             .appendingPathComponent(folderName(for: now), isDirectory: true)
     }
 
-    static func prepare(directory: URL = defaultDirectory()) throws -> ReviewEvidenceFolder {
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        let readmeURL = directory.appendingPathComponent("README.md")
-        try readmeText(directory: directory).write(to: readmeURL, atomically: true, encoding: .utf8)
-        return ReviewEvidenceFolder(directory: directory, readme: readmeURL)
+    static func prepare(directory: URL? = nil, now: Date = Date()) throws -> ReviewEvidenceFolder {
+        let targetDirectory = directory ?? defaultDirectory(now: now)
+        try FileManager.default.createDirectory(at: targetDirectory, withIntermediateDirectories: true)
+        let manifestURL = targetDirectory.appendingPathComponent("review-manifest.json")
+        let readmeURL = targetDirectory.appendingPathComponent("README.md")
+        let manifest = manifest(
+            directory: targetDirectory,
+            manifestURL: manifestURL,
+            readmeURL: readmeURL,
+            generatedAt: now
+        )
+        let manifestData = try JSONEncoder.veilDiagnostics.encode(manifest)
+        try manifestData.write(to: manifestURL, options: [.atomic])
+        try readmeText(manifest: manifest).write(to: readmeURL, atomically: true, encoding: .utf8)
+        return ReviewEvidenceFolder(directory: targetDirectory, readme: readmeURL, manifest: manifestURL)
+    }
+
+    static func manifest(
+        directory: URL,
+        manifestURL: URL,
+        readmeURL: URL,
+        generatedAt: Date
+    ) -> ReviewEvidenceManifest {
+        let evidencePath = directory.path
+        let reviewCommand = reviewCommand(evidenceDirectory: evidencePath)
+        let verifyCommand = verifyCommand(evidenceDirectory: evidencePath)
+        let openEvidenceDirectoryCommand = openCommand(evidenceDirectory: evidencePath)
+        let screenshotFiles = slots.map { slot in
+            let fileName = expectedFileName(slotId: slot.id)
+            return ReviewEvidenceFile(
+                slotId: slot.id,
+                title: slot.title,
+                expectedFileName: fileName,
+                path: directory.appendingPathComponent(fileName).path,
+                expectedSurface: slot.expectedSurface
+            )
+        }
+        let captureSteps = zip(slots.indices, slots).map { index, slot in
+            let fileName = expectedFileName(slotId: slot.id)
+            return ReviewEvidenceCaptureStep(
+                order: index + 1,
+                slotId: slot.id,
+                title: slot.title,
+                expectedFileName: fileName,
+                instruction: slot.instruction,
+                captureCommand: captureCommand(path: directory.appendingPathComponent(fileName).path),
+                supportingCommand: slot.supportingCommand
+            )
+        }
+
+        return ReviewEvidenceManifest(
+            generatedAt: generatedAt,
+            evidenceDirectory: evidencePath,
+            manifestPath: manifestURL.path,
+            readmePath: readmeURL.path,
+            requiredScreenshotCount: slots.count,
+            minimumScreenshotWidth: minimumScreenshotWidth,
+            minimumScreenshotHeight: minimumScreenshotHeight,
+            screenshotFiles: screenshotFiles,
+            captureSteps: captureSteps,
+            reviewCommand: reviewCommand,
+            verifyCommand: verifyCommand,
+            openEvidenceDirectoryCommand: openEvidenceDirectoryCommand,
+            nextActions: [
+                "Open the evidence folder with `\(openEvidenceDirectoryCommand)`.",
+                "Capture the five required screenshots into the evidence directory as valid PNG files of at least 640 x 360.",
+                "Run `\(reviewCommand)` and confirm Screenshots is 5/5 attached.",
+                "Run `\(verifyCommand)` before sharing evidence."
+            ]
+        )
+    }
+
+    static func readmeText(manifest: ReviewEvidenceManifest) -> String {
+        let captureSteps = manifest.captureSteps
+            .map { step in
+                var lines = [
+                    "\(step.order). \(step.title) -> `\(step.expectedFileName)`",
+                    "   \(step.instruction)",
+                    "   Capture: `\(step.captureCommand)`"
+                ]
+                if let supportingCommand = step.supportingCommand {
+                    lines.append("   Command: `\(supportingCommand)`")
+                }
+                return lines.joined(separator: "\n")
+            }
+            .joined(separator: "\n")
+        let fileList = manifest.screenshotFiles
+            .map { "- `\($0.expectedFileName)`: \($0.expectedSurface)" }
+            .joined(separator: "\n")
+
+        return """
+        # Veil Windows App Review Evidence
+
+        This folder stores one live Windows App Runtime review pass.
+
+        Manifest:
+        - `review-manifest.json`
+
+        Checklist:
+        - Open this folder with `\(manifest.openEvidenceDirectoryCommand)`.
+        - Capture every PNG listed below into this folder as a valid PNG of at least \(manifest.minimumScreenshotWidth) x \(manifest.minimumScreenshotHeight).
+        - Run `\(manifest.reviewCommand)`.
+        - Confirm the review card reports `Screenshots: \(manifest.requiredScreenshotCount)/\(manifest.requiredScreenshotCount) attached`.
+        - Run `\(manifest.verifyCommand)` before sharing evidence.
+        - Keep `review-manifest.json` with the screenshots when sharing review evidence.
+
+        Capture steps:
+        \(captureSteps)
+
+        Expected files:
+        \(fileList)
+
+        Veil does not store Windows images, product keys, or disk contents in this folder.
+        """
     }
 
     static func folderName(for date: Date) -> String {
@@ -37,27 +227,27 @@ enum ReviewEvidenceFolderStore {
         return formatter.string(from: date)
     }
 
-    static func readmeText(directory: URL) -> String {
-        let evidencePath = directory.path
-        let fileList = screenshotFileNames
-            .map { "- `\($0)`" }
-            .joined(separator: "\n")
+    private static func expectedFileName(slotId: String) -> String {
+        "\(slotId).png"
+    }
 
-        return """
-        # Veil Review Evidence
+    private static func captureCommand(path: String) -> String {
+        "screencapture -i \(shellQuoted(path))"
+    }
 
-        Capture the current Windows app flow into this folder.
+    private static func reviewCommand(evidenceDirectory: String) -> String {
+        "veil-vmctl app-runtime-review --evidence-dir \(shellQuoted(evidenceDirectory))"
+    }
 
-        Required screenshots:
-        \(fileList)
+    private static func verifyCommand(evidenceDirectory: String) -> String {
+        "veil-vmctl app-runtime-review-verify --json --evidence-dir \(shellQuoted(evidenceDirectory))"
+    }
 
-        Next steps:
-        - Save each screenshot as a PNG in this folder.
-        - Run `veil-vmctl app-runtime-review --evidence-dir '\(evidencePath)'`.
-        - Run `veil-vmctl app-runtime-review-verify --json --evidence-dir '\(evidencePath)'`.
-        - Share this folder only after verification says the evidence is ready.
+    private static func openCommand(evidenceDirectory: String) -> String {
+        "open \(shellQuoted(evidenceDirectory))"
+    }
 
-        Veil does not store Windows images, product keys, or disk contents in this folder.
-        """
+    private static func shellQuoted(_ value: String) -> String {
+        "'\(value.replacingOccurrences(of: "'", with: "'\\''"))'"
     }
 }
