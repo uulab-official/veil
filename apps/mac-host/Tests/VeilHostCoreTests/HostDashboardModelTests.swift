@@ -1278,10 +1278,10 @@ struct HostDashboardModelTests {
                 startedAt: Date(timeIntervalSince1970: 1_000)
             ),
             installEvidence: VMInstallEvidenceSummary(
-                kind: .profileFlag,
+                kind: .guestAgent,
                 isInstalled: true,
-                title: "Windows installed",
-                detail: "The profile is marked installed."
+                title: "Guest agent connected",
+                detail: "The guest agent has already been proved for this display recovery check."
             ),
             bootReady: true,
             windowsInstalled: true,
@@ -1299,6 +1299,95 @@ struct HostDashboardModelTests {
 
         let report = model.runtimeStatusReport(localRuntime: status)
         #expect(report.actions.first { $0.id == "runtime.recoverDisplay" }?.isAvailable == true)
+    }
+
+    @Test("local runtime blocks guest agent repair when attached guest tools media is stale")
+    @MainActor
+    func localRuntimeBlocksGuestAgentRepairForStaleMedia() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let sharedFolderURL = directory.appendingPathComponent("Veil Shared", isDirectory: true)
+        let agentBundleURL = sharedFolderURL.appendingPathComponent("Veil Guest Agent", isDirectory: true)
+        try FileManager.default.createDirectory(at: agentBundleURL, withIntermediateDirectories: true)
+        defer {
+            try? FileManager.default.removeItem(at: directory)
+        }
+
+        let installerURL = directory.appendingPathComponent("Windows.iso")
+        let driverURL = directory.appendingPathComponent("virtio-win.iso")
+        let mediaURL = sharedFolderURL.appendingPathComponent("VeilAutoInstall.iso")
+        let answerURL = sharedFolderURL.appendingPathComponent("Autounattend.xml")
+        let scriptURL = agentBundleURL.appendingPathComponent("V.cmd")
+        try Data("installer".utf8).write(to: installerURL)
+        try Data("drivers".utf8).write(to: driverURL)
+        try Data("old media".utf8).write(to: mediaURL)
+        try Data("<unattend />".utf8).write(to: answerURL)
+        try Data("new script".utf8).write(to: scriptURL)
+
+        let oldDate = Date(timeIntervalSince1970: 1_782_900_000)
+        let newDate = Date(timeIntervalSince1970: 1_782_910_000)
+        try FileManager.default.setAttributes([.modificationDate: oldDate], ofItemAtPath: mediaURL.path)
+        try FileManager.default.setAttributes([.modificationDate: oldDate], ofItemAtPath: answerURL.path)
+        try FileManager.default.setAttributes([.modificationDate: newDate], ofItemAtPath: scriptURL.path)
+        try FileManager.default.setAttributes([.modificationDate: newDate], ofItemAtPath: agentBundleURL.path)
+
+        let snapshot = VMRuntimeSnapshot(
+            state: .running,
+            virtualizationAvailable: true,
+            architecture: "arm64",
+            minimumOSSupported: true,
+            profileName: "Windows 11 Arm",
+            installerMediaPath: installerURL.path,
+            driverMediaPath: driverURL.path,
+            automaticInstallAnswerFilePath: answerURL.path,
+            automaticInstallMediaPath: mediaURL.path,
+            installEvidence: VMInstallEvidenceSummary(
+                kind: .profileFlag,
+                isInstalled: true,
+                title: "Windows installed",
+                detail: "The profile is marked installed."
+            ),
+            bootReady: true,
+            windowsInstalled: true,
+            detail: "Windows is running."
+        )
+        let model = HostDashboardModel(service: FakeDashboardService())
+
+        let status = model.localRuntimeStatus(snapshot: snapshot)
+
+        #expect(status.recommendedAction == "rebuild-guest-tools-media")
+        #expect(status.requiresGuestToolsMediaRebuild)
+        #expect(status.canStart == false)
+        #expect(status.automaticInstallMediaStatus?.state == .stale)
+        #expect(status.recommendedMediaRebuildCommand == "veil-vmctl prepare --installer \(installerURL.path) --drivers \(driverURL.path)")
+        #expect(status.recommendedPowerDownCommand == "veil-vmctl app-runtime-action --json --action stop-runtime")
+        #expect(status.recommendedPrepareCommand == nil)
+        #expect(status.reason.contains("power down Windows"))
+
+        let primary = FakeDashboardService(error: URLError(.cannotConnectToHost))
+        let fallback = DemoHostDashboardService()
+        let service = FallbackHostDashboardService(
+            primary: primary,
+            fallback: fallback,
+            primaryEndpointDescription: "ws://127.0.0.1:18444"
+        )
+        let appModel = HostDashboardModel(service: service)
+        await appModel.load()
+        await appModel.launchSelectedApp()
+
+        let report = appModel.runtimeStatusReport(localRuntime: status)
+
+        #expect(report.localRuntime.requiresGuestToolsMediaRebuild)
+        #expect(report.launchPlan.recommendedAction == "rebuild-guest-tools-media-before-launch")
+        #expect(report.launchPlan.recommendedRepairCommand == nil)
+        #expect(report.launchPlan.willOpenAppAutomatically == false)
+        #expect(report.releaseGate.recommendedAction == "windowsSetup")
+        #expect(report.releaseGate.steps.first { $0.id == "windowsSetup" }?.nextActionCommand == "veil-vmctl app-runtime-action --json --action stop-runtime")
+        #expect(report.primaryNextAction.id == "windowsSetup")
+        #expect(report.primaryNextAction.actionId == "runtime.stopWhenIdle")
+        #expect(report.actions.first { $0.id == "runtime.repairGuestAgentForApp" }?.isAvailable == false)
+        #expect(report.actions.first { $0.id == "runtime.startWindowsForApp" }?.isAvailable == false)
+        #expect(report.actions.first { $0.id == "runtime.stopWhenIdle" }?.isAvailable == true)
     }
 
     @Test("refresh live agent retries after demo fallback")

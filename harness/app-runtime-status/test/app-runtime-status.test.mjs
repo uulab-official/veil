@@ -82,6 +82,13 @@ function expectedPrimaryNextActionId(stepId, command) {
         || command === "veil-vmctl app-runtime-status --json") {
         return "runtime.refreshStatus";
       }
+      if (command.includes("--action stop-runtime")
+        || command.includes("qemu-powerdown")) {
+        return "runtime.stopWhenIdle";
+      }
+      if (command.includes("--action quiet-when-idle")) {
+        return "runtime.quietWhenIdle";
+      }
       if (command.startsWith("veil-vmctl prepare")) {
         return "runtime.prepareWindows";
       }
@@ -197,6 +204,60 @@ function refreshLaunchOnboarding(report) {
   report.launchOnboarding.pendingLiveProof = !report.releaseGate.isPassing;
   report.launchOnboarding.primaryActionId = report.primaryNextAction.actionId;
   report.launchOnboarding.primaryCommand = report.primaryNextAction.command;
+}
+
+function configureRunningStaleGuestToolsMedia(report) {
+  report.localRuntime.state = "running";
+  report.localRuntime.bootReady = true;
+  report.localRuntime.canStart = false;
+  report.localRuntime.isRunning = true;
+  report.localRuntime.windowsInstalled = true;
+  report.localRuntime.requiresGuestToolsMediaRebuild = true;
+  report.localRuntime.recommendedAction = "rebuild-guest-tools-media";
+  report.localRuntime.recommendedMediaRebuildCommand = "veil-vmctl prepare --installer /Users/test/Downloads/Win11_25H2_Korean_Arm64_v2.iso --drivers /Users/test/Downloads/virtio-win.iso";
+  report.localRuntime.recommendedPowerDownCommand = "veil-vmctl app-runtime-action --json --action stop-runtime";
+  report.localRuntime.reason = "The local Windows runtime is running with stale guest tools media attached; power down Windows, rebuild VeilAutoInstall.iso, then restart before repairing the app connection.";
+  delete report.localRuntime.recommendedPrepareCommand;
+  delete report.localRuntime.recommendedRecoveryCommand;
+  report.localRuntime.automaticInstallMediaStatus = {
+    state: "stale",
+    isCurrent: false,
+    mediaPath: "/Users/test/Virtual Machines/Veil Shared/VeilAutoInstall.iso",
+    sourcePath: "/Users/test/Virtual Machines/Veil Shared",
+    mediaModifiedAt: "2026-07-03T11:55:00Z",
+    sourceModifiedAt: "2026-07-03T11:56:00Z",
+    recommendedAction: "rebuild-media-and-relaunch",
+    rebuildCommand: report.localRuntime.recommendedMediaRebuildCommand,
+    requiresRelaunch: true,
+    detail: "VeilAutoInstall.iso is older than the staged Autounattend or guest-agent bundle."
+  };
+
+  report.launchPlan.requiresRuntimeStart = false;
+  report.launchPlan.requiresGuestAgent = true;
+  report.launchPlan.willOpenAppAutomatically = false;
+  report.launchPlan.recommendedAction = "rebuild-guest-tools-media-before-launch";
+  report.launchPlan.reason = "The selected Windows app can be requested, but guest tools media must be rebuilt before Veil can repair the app connection.";
+  delete report.launchPlan.recommendedStartCommand;
+  delete report.launchPlan.recommendedWaitCommand;
+  delete report.launchPlan.recommendedRepairCommand;
+
+  report.actions.find((action) => action.id === "runtime.startWindowsForApp").isAvailable = false;
+  report.actions.find((action) => action.id === "runtime.repairGuestAgentForApp").isAvailable = false;
+  report.actions.find((action) => action.id === "runtime.stopWhenIdle").isAvailable = true;
+  report.menuBarIntegration.symbolName = "display";
+
+  setReleaseGateStep(report, "windowsSetup", {
+    state: "blocked",
+    isPassing: false,
+    evidence: report.localRuntime.reason,
+    nextActionCommand: report.localRuntime.recommendedPowerDownCommand
+  });
+  setReleaseGateStep(report, "openWindowsApp", {
+    state: "blocked",
+    isPassing: false,
+    evidence: report.launchPlan.reason,
+    nextActionCommand: report.launchPlan.recommendedLaunchCommand
+  });
 }
 
 test("validates app runtime status fixture", () => {
@@ -697,6 +758,25 @@ test("accepts stale running console preview with recovery commands", () => {
   });
 
   assert.doesNotThrow(() => validateAppRuntimeStatus(report));
+});
+
+test("accepts stale guest tools media when app flow powers down before repair", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.demo.json", import.meta.url), "utf8"));
+  configureRunningStaleGuestToolsMedia(report);
+
+  assert.equal(validateAppRuntimeStatus(report), report);
+});
+
+test("rejects stale guest tools media when guest-agent repair is still exposed", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.demo.json", import.meta.url), "utf8"));
+  configureRunningStaleGuestToolsMedia(report);
+  report.launchPlan.recommendedRepairCommand = "veil-vmctl qemu-install-agent --json --wait-seconds 120";
+  report.actions.find((action) => action.id === "runtime.repairGuestAgentForApp").isAvailable = true;
+
+  assert.throws(
+    () => validateAppRuntimeStatus(report),
+    /guest-agent repair/
+  );
 });
 
 test("rejects stale running console preview without recovery command", () => {

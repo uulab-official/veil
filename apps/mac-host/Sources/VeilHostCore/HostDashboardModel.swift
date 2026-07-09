@@ -169,11 +169,15 @@ public struct WindowsAppRuntimeLocalRuntimeStatus: Codable, Equatable, Sendable 
     public var canStart: Bool
     public var isRunning: Bool
     public var windowsInstalled: Bool
+    public var automaticInstallMediaStatus: VMAutomaticInstallMediaStatus?
+    public var requiresGuestToolsMediaRebuild: Bool
     public var recommendedAction: String
     public var recommendedInstallStatusCommand: String
     public var recommendedPrepareCommand: String?
     public var recommendedDisplayCommand: String?
     public var recommendedRecoveryCommand: String?
+    public var recommendedMediaRebuildCommand: String?
+    public var recommendedPowerDownCommand: String?
     public var consolePreviewStatus: VMConsolePreviewStatus?
     public var reason: String
 
@@ -184,11 +188,15 @@ public struct WindowsAppRuntimeLocalRuntimeStatus: Codable, Equatable, Sendable 
         canStart: Bool,
         isRunning: Bool,
         windowsInstalled: Bool,
+        automaticInstallMediaStatus: VMAutomaticInstallMediaStatus? = nil,
+        requiresGuestToolsMediaRebuild: Bool = false,
         recommendedAction: String,
         recommendedInstallStatusCommand: String,
         recommendedPrepareCommand: String? = nil,
         recommendedDisplayCommand: String? = nil,
         recommendedRecoveryCommand: String? = nil,
+        recommendedMediaRebuildCommand: String? = nil,
+        recommendedPowerDownCommand: String? = nil,
         consolePreviewStatus: VMConsolePreviewStatus? = nil,
         reason: String
     ) {
@@ -198,11 +206,15 @@ public struct WindowsAppRuntimeLocalRuntimeStatus: Codable, Equatable, Sendable 
         self.canStart = canStart
         self.isRunning = isRunning
         self.windowsInstalled = windowsInstalled
+        self.automaticInstallMediaStatus = automaticInstallMediaStatus
+        self.requiresGuestToolsMediaRebuild = requiresGuestToolsMediaRebuild
         self.recommendedAction = recommendedAction
         self.recommendedInstallStatusCommand = recommendedInstallStatusCommand
         self.recommendedPrepareCommand = recommendedPrepareCommand
         self.recommendedDisplayCommand = recommendedDisplayCommand
         self.recommendedRecoveryCommand = recommendedRecoveryCommand
+        self.recommendedMediaRebuildCommand = recommendedMediaRebuildCommand
+        self.recommendedPowerDownCommand = recommendedPowerDownCommand
         self.consolePreviewStatus = consolePreviewStatus
         self.reason = reason
     }
@@ -1265,6 +1277,7 @@ public final class HostDashboardModel {
                     id: "runtime.stopWhenIdle",
                     title: "Stop Windows When Idle",
                     isAvailable: quietRuntime.canQuietRuntime
+                        || localRuntime.recommendedPowerDownCommand != nil
                 ),
                 WindowsAppRuntimeActionStatus(
                     id: "proof.appWindow",
@@ -1643,6 +1656,20 @@ public final class HostDashboardModel {
         if canRequest {
             let runtimeIsAlreadyRunning = localRuntime.isKnown && localRuntime.isRunning
             let requiresRuntimeStart = !hasLiveAgentConnection && !runtimeIsAlreadyRunning
+            if localRuntime.requiresGuestToolsMediaRebuild {
+                return WindowsAppRuntimeLaunchPlanStatus(
+                    selectedAppId: selectedAppId,
+                    pendingLaunchAppId: pendingLaunchAppId,
+                    canRequestSelectedAppLaunch: true,
+                    canLaunchSelectedAppNow: false,
+                    willOpenAppAutomatically: false,
+                    requiresRuntimeStart: !runtimeIsAlreadyRunning,
+                    requiresGuestAgent: true,
+                    recommendedAction: "rebuild-guest-tools-media-before-launch",
+                    recommendedLaunchCommand: hasPendingSelectedAppLaunch ? fulfillPendingCommand : launchCommand,
+                    reason: "The selected Windows app can be requested, but guest tools media must be rebuilt before Veil can repair the app connection."
+                )
+            }
             if requiresRuntimeStart && localRuntime.isKnown && !localRuntime.canStart {
                 return WindowsAppRuntimeLaunchPlanStatus(
                     selectedAppId: selectedAppId,
@@ -1825,10 +1852,19 @@ public final class HostDashboardModel {
         proofPlan: WindowsAppRuntimeProofPlanStatus,
         proofArtifacts: WindowsAppRuntimeProofArtifactStatus
     ) -> WindowsAppRuntimeReleaseGateStatus {
-        let setupPassing = localRuntime.bootReady && localRuntime.windowsInstalled
-        let setupCommand = setupPassing
-            ? localRuntime.recommendedInstallStatusCommand
-            : (localRuntime.recommendedPrepareCommand ?? localRuntime.recommendedInstallStatusCommand)
+        let setupPassing = localRuntime.bootReady
+            && localRuntime.windowsInstalled
+            && !localRuntime.requiresGuestToolsMediaRebuild
+        let setupCommand: String?
+        if setupPassing {
+            setupCommand = localRuntime.recommendedInstallStatusCommand
+        } else if localRuntime.requiresGuestToolsMediaRebuild, localRuntime.isRunning {
+            setupCommand = localRuntime.recommendedPowerDownCommand
+        } else {
+            setupCommand = localRuntime.recommendedMediaRebuildCommand
+                ?? localRuntime.recommendedPrepareCommand
+                ?? localRuntime.recommendedInstallStatusCommand
+        }
         let surfacePassing = launcherVisibility.isEnabled
             && visibleSurfacePolicy.isEnabled
             && visibleSurfacePolicy.keepsRecoveryDisplayManual
@@ -2009,6 +2045,13 @@ public final class HostDashboardModel {
             if command == "veil-vmctl qemu-install-status --json"
                 || command == "veil-vmctl app-runtime-status --json" {
                 return "runtime.refreshStatus"
+            }
+            if command.contains("--action stop-runtime")
+                || command.contains("qemu-powerdown") {
+                return "runtime.stopWhenIdle"
+            }
+            if command.contains("--action quiet-when-idle") {
+                return "runtime.quietWhenIdle"
             }
             if command.hasPrefix("veil-vmctl prepare") {
                 return "runtime.prepareWindows"
@@ -2389,19 +2432,36 @@ public final class HostDashboardModel {
         }
 
         let isRunning = snapshot.state == .running || snapshot.state == .starting
+        let automaticInstallMediaStatus = snapshot.windowsInstallStatusReport().automaticInstallMediaStatus
+        let requiresGuestToolsMediaRebuild = snapshot.windowsInstalled
+            && snapshot.installEvidence.kind != .guestAgent
+            && (automaticInstallMediaStatus.state == .stale || automaticInstallMediaStatus.state == .missing)
         let canStart = snapshot.virtualizationAvailable
             && snapshot.minimumOSSupported
             && snapshot.profileName != nil
             && snapshot.bootReady
+            && !requiresGuestToolsMediaRebuild
             && (snapshot.state == .stopped || snapshot.state == .suspended)
         let recommendedAction: String
         let recommendedPrepareCommand: String?
         let recommendedDisplayCommand: String?
         let recommendedRecoveryCommand: String?
+        let recommendedMediaRebuildCommand = requiresGuestToolsMediaRebuild
+            ? (automaticInstallMediaStatus.rebuildCommand ?? prepareCommand(for: snapshot))
+            : nil
+        let recommendedPowerDownCommand = requiresGuestToolsMediaRebuild && isRunning
+            ? "veil-vmctl app-runtime-action --json --action stop-runtime"
+            : nil
         let reason: String
         let consolePreviewStatus = snapshot.latestConsoleLaunch?.previewStatus
 
-        if isRunning {
+        if isRunning, requiresGuestToolsMediaRebuild {
+            recommendedAction = "rebuild-guest-tools-media"
+            recommendedPrepareCommand = nil
+            recommendedDisplayCommand = nil
+            recommendedRecoveryCommand = nil
+            reason = "The local Windows runtime is running with stale guest tools media attached; power down Windows, rebuild VeilAutoInstall.iso, then restart before repairing the app connection."
+        } else if isRunning {
             let displayNeedsRecovery = consolePreviewStatus == .stale
                 || consolePreviewStatus == .unavailable
             recommendedAction = displayNeedsRecovery ? "recover-runtime-display" : "wait-for-guest-agent"
@@ -2413,6 +2473,12 @@ public final class HostDashboardModel {
             reason = displayNeedsRecovery
                 ? "The local Windows runtime is running, but the embedded console preview is \(consolePreviewStatus?.rawValue ?? "unavailable"); refresh or validate display evidence before relying on app launch recovery."
                 : "The local Windows runtime is already running; wait for the guest agent before opening Windows apps."
+        } else if requiresGuestToolsMediaRebuild {
+            recommendedAction = "rebuild-guest-tools-media"
+            recommendedPrepareCommand = recommendedMediaRebuildCommand
+            recommendedDisplayCommand = nil
+            recommendedRecoveryCommand = nil
+            reason = "VeilAutoInstall.iso is stale or missing; rebuild guest tools media before starting Windows so app connection repair uses the current guest-agent bundle."
         } else if canStart {
             recommendedAction = "start-runtime"
             recommendedPrepareCommand = nil
@@ -2434,11 +2500,15 @@ public final class HostDashboardModel {
             canStart: canStart,
             isRunning: isRunning,
             windowsInstalled: snapshot.windowsInstalled,
+            automaticInstallMediaStatus: automaticInstallMediaStatus,
+            requiresGuestToolsMediaRebuild: requiresGuestToolsMediaRebuild,
             recommendedAction: recommendedAction,
             recommendedInstallStatusCommand: "veil-vmctl qemu-install-status --json",
             recommendedPrepareCommand: recommendedPrepareCommand,
             recommendedDisplayCommand: recommendedDisplayCommand,
             recommendedRecoveryCommand: recommendedRecoveryCommand,
+            recommendedMediaRebuildCommand: recommendedMediaRebuildCommand,
+            recommendedPowerDownCommand: recommendedPowerDownCommand,
             consolePreviewStatus: consolePreviewStatus,
             reason: reason
         )

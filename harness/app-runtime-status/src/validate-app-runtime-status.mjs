@@ -5,6 +5,7 @@ const VALID_CONNECTION_MODES = new Set(["agent", "demo"]);
 const VALID_PHASES = new Set(["idle", "loading", "connected", "launching", "failed"]);
 const VALID_CAPTURE_STATES = new Set(["unavailable", "pending", "streaming"]);
 const VALID_CONSOLE_PREVIEW_STATES = new Set(["fresh", "stale", "unavailable"]);
+const VALID_AUTOMATIC_INSTALL_MEDIA_STATES = new Set(["current", "stale", "missing", "unavailable"]);
 
 export function validateAppRuntimeStatus(report) {
   if (!report || typeof report !== "object" || Array.isArray(report)) {
@@ -147,9 +148,16 @@ function validateLocalRuntime(localRuntime) {
   requireBoolean(localRuntime.canStart, "localRuntime.canStart");
   requireBoolean(localRuntime.isRunning, "localRuntime.isRunning");
   requireBoolean(localRuntime.windowsInstalled, "localRuntime.windowsInstalled");
+  if (localRuntime.requiresGuestToolsMediaRebuild !== undefined) {
+    requireBoolean(localRuntime.requiresGuestToolsMediaRebuild, "localRuntime.requiresGuestToolsMediaRebuild");
+  }
   requireString(localRuntime.recommendedAction, "localRuntime.recommendedAction");
   requireString(localRuntime.recommendedInstallStatusCommand, "localRuntime.recommendedInstallStatusCommand");
   requireString(localRuntime.reason, "localRuntime.reason");
+
+  if (localRuntime.automaticInstallMediaStatus !== undefined) {
+    validateAutomaticInstallMediaStatus(localRuntime.automaticInstallMediaStatus);
+  }
 
   if (localRuntime.state !== undefined) {
     requireString(localRuntime.state, "localRuntime.state");
@@ -165,6 +173,14 @@ function validateLocalRuntime(localRuntime) {
 
   if (localRuntime.recommendedRecoveryCommand !== undefined) {
     requireString(localRuntime.recommendedRecoveryCommand, "localRuntime.recommendedRecoveryCommand");
+  }
+
+  if (localRuntime.recommendedMediaRebuildCommand !== undefined) {
+    requireString(localRuntime.recommendedMediaRebuildCommand, "localRuntime.recommendedMediaRebuildCommand");
+  }
+
+  if (localRuntime.recommendedPowerDownCommand !== undefined) {
+    requireString(localRuntime.recommendedPowerDownCommand, "localRuntime.recommendedPowerDownCommand");
   }
 
   if (localRuntime.consolePreviewStatus !== undefined) {
@@ -195,6 +211,56 @@ function validateLocalRuntime(localRuntime) {
     && localRuntime.recommendedAction !== "recover-runtime-display"
   ) {
     throw new TypeError("localRuntime.recommendedRecoveryCommand requires recommendedAction recover-runtime-display.");
+  }
+
+  if (localRuntime.requiresGuestToolsMediaRebuild) {
+    if (localRuntime.recommendedAction !== "rebuild-guest-tools-media") {
+      throw new TypeError("localRuntime.requiresGuestToolsMediaRebuild requires recommendedAction rebuild-guest-tools-media.");
+    }
+    if (localRuntime.canStart) {
+      throw new TypeError("localRuntime.canStart must be false while guest tools media needs rebuild.");
+    }
+    if (!["stale", "missing"].includes(localRuntime.automaticInstallMediaStatus?.state)) {
+      throw new TypeError("localRuntime.requiresGuestToolsMediaRebuild requires stale or missing automatic install media status.");
+    }
+    if (localRuntime.recommendedMediaRebuildCommand === undefined
+      || !localRuntime.recommendedMediaRebuildCommand.includes("veil-vmctl prepare --installer")) {
+      throw new TypeError("localRuntime.requiresGuestToolsMediaRebuild requires a media rebuild command.");
+    }
+    if (localRuntime.isRunning) {
+      if (localRuntime.recommendedPowerDownCommand !== "veil-vmctl app-runtime-action --json --action stop-runtime") {
+        throw new TypeError("running stale guest tools media must power down through app-runtime stop-runtime.");
+      }
+      if (localRuntime.recommendedPrepareCommand !== undefined) {
+        throw new TypeError("running stale guest tools media must not expose prepare before powerdown.");
+      }
+    }
+  }
+}
+
+function validateAutomaticInstallMediaStatus(status) {
+  if (!status || typeof status !== "object" || Array.isArray(status)) {
+    throw new TypeError("localRuntime.automaticInstallMediaStatus must be an object.");
+  }
+
+  requireString(status.state, "localRuntime.automaticInstallMediaStatus.state");
+  if (!VALID_AUTOMATIC_INSTALL_MEDIA_STATES.has(status.state)) {
+    throw new TypeError(`Unsupported automatic install media state: ${status.state}`);
+  }
+  requireBoolean(status.isCurrent, "localRuntime.automaticInstallMediaStatus.isCurrent");
+  requireString(status.recommendedAction, "localRuntime.automaticInstallMediaStatus.recommendedAction");
+  requireBoolean(status.requiresRelaunch, "localRuntime.automaticInstallMediaStatus.requiresRelaunch");
+  requireString(status.detail, "localRuntime.automaticInstallMediaStatus.detail");
+
+  for (const field of ["mediaPath", "sourcePath", "rebuildCommand"]) {
+    if (status[field] !== undefined) {
+      requireString(status[field], `localRuntime.automaticInstallMediaStatus.${field}`);
+    }
+  }
+  for (const field of ["mediaModifiedAt", "sourceModifiedAt"]) {
+    if (status[field] !== undefined && Number.isNaN(Date.parse(status[field]))) {
+      throw new TypeError(`localRuntime.automaticInstallMediaStatus.${field} must be an ISO date.`);
+    }
   }
 }
 
@@ -449,7 +515,8 @@ function validateLaunchPlan(launchPlan, report) {
   }
 
   const expectedAutomaticOpen = launchPlan.canLaunchSelectedAppNow
-    || (launchPlan.canRequestSelectedAppLaunch && launchPlan.recommendedAction !== "prepare-local-runtime");
+    || (launchPlan.canRequestSelectedAppLaunch
+      && !["prepare-local-runtime", "rebuild-guest-tools-media-before-launch"].includes(launchPlan.recommendedAction));
   if (launchPlan.willOpenAppAutomatically !== expectedAutomaticOpen) {
     throw new TypeError("launchPlan.willOpenAppAutomatically must reflect the app shell automatic handoff path.");
   }
@@ -483,11 +550,14 @@ function validateLaunchPlan(launchPlan, report) {
 
   if (launchPlan.requiresGuestAgent
     && launchPlan.recommendedWaitCommand === undefined
-    && launchPlan.recommendedAction !== "prepare-local-runtime") {
+    && !["prepare-local-runtime", "rebuild-guest-tools-media-before-launch"].includes(launchPlan.recommendedAction)) {
     throw new TypeError("launchPlan.requiresGuestAgent requires recommendedWaitCommand.");
   }
 
   if (launchPlan.recommendedRepairCommand !== undefined) {
+    if (report.localRuntime.requiresGuestToolsMediaRebuild) {
+      throw new TypeError("stale guest tools media must not expose guest-agent repair.");
+    }
     if (!launchPlan.requiresGuestAgent || !report.localRuntime.isRunning || report.connection.hasLiveAgentConnection) {
       throw new TypeError("launchPlan.recommendedRepairCommand is only allowed for a running local runtime waiting for the guest agent.");
     }
@@ -498,6 +568,12 @@ function validateLaunchPlan(launchPlan, report) {
 
   if (launchPlan.canRequestSelectedAppLaunch && launchPlan.recommendedLaunchCommand === undefined) {
     throw new TypeError("launchPlan.canRequestSelectedAppLaunch requires recommendedLaunchCommand.");
+  }
+
+  if (report.localRuntime.requiresGuestToolsMediaRebuild) {
+    if (launchPlan.recommendedAction !== "rebuild-guest-tools-media-before-launch") {
+      throw new TypeError("stale guest tools media must block launchPlan with rebuild-guest-tools-media-before-launch.");
+    }
   }
 
   const selectedApp = report.apps.find((app) => app.id === launchPlan.selectedAppId);
@@ -735,12 +811,16 @@ function validateReleaseGate(releaseGate, report) {
   }
 
   const setupStep = releaseGate.steps.find((step) => step.id === "windowsSetup");
-  const expectedSetupPassing = report.localRuntime.bootReady && report.localRuntime.windowsInstalled;
+  const expectedSetupPassing = report.localRuntime.bootReady
+    && report.localRuntime.windowsInstalled
+    && !report.localRuntime.requiresGuestToolsMediaRebuild;
   if (setupStep.isPassing !== expectedSetupPassing) {
     throw new TypeError("releaseGate windowsSetup must reflect local Windows setup readiness.");
   }
   if (setupStep.nextActionCommand !== report.localRuntime.recommendedInstallStatusCommand
-    && setupStep.nextActionCommand !== report.localRuntime.recommendedPrepareCommand) {
+    && setupStep.nextActionCommand !== report.localRuntime.recommendedPrepareCommand
+    && setupStep.nextActionCommand !== report.localRuntime.recommendedMediaRebuildCommand
+    && setupStep.nextActionCommand !== report.localRuntime.recommendedPowerDownCommand) {
     throw new TypeError("releaseGate windowsSetup must expose an install status or prepare command.");
   }
 
@@ -898,6 +978,13 @@ function expectedPrimaryNextActionId(stepId, command) {
       if (command === "veil-vmctl qemu-install-status --json"
         || command === "veil-vmctl app-runtime-status --json") {
         return "runtime.refreshStatus";
+      }
+      if (command.includes("--action stop-runtime")
+        || command.includes("qemu-powerdown")) {
+        return "runtime.stopWhenIdle";
+      }
+      if (command.includes("--action quiet-when-idle")) {
+        return "runtime.quietWhenIdle";
       }
       if (command.startsWith("veil-vmctl prepare")) {
         return "runtime.prepareWindows";
@@ -1528,8 +1615,10 @@ function validateActions(actions, report) {
   }
 
   const stopWhenIdleAction = actions.find((action) => action.id === "runtime.stopWhenIdle");
-  if (stopWhenIdleAction.isAvailable !== report.quietRuntime.canQuietRuntime) {
-    throw new TypeError("runtime.stopWhenIdle availability must match quietRuntime.canQuietRuntime.");
+  if (stopWhenIdleAction.isAvailable !== (
+    report.quietRuntime.canQuietRuntime || report.localRuntime.recommendedPowerDownCommand !== undefined
+  )) {
+    throw new TypeError("runtime.stopWhenIdle availability must match quietRuntime.canQuietRuntime or localRuntime.recommendedPowerDownCommand.");
   }
 
   const launchSelectedAction = actions.find((action) => action.id === "windowsApps.launchSelected");

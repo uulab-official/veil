@@ -101,6 +101,12 @@ When Windows is already running but the live guest agent is not connected,
 shell and CLI one shared gate for the Parallels-style path: queue the Windows
 app, repair or start the guest agent from attached media, then fulfill the
 pending launch when the agent reconnects.
+If `qemu-install-status` reports stale or missing guest tools media,
+`localRuntime.requiresGuestToolsMediaRebuild=true` blocks that repair action.
+The one-screen app flow must first expose `app-runtime-action --action
+stop-runtime`, keep `runtime.repairGuestAgentForApp` unavailable, and preserve
+the `veil-vmctl prepare --installer ...` rebuild command for the next stopped
+state before app launch recovery can continue.
 When the local VM is still running but the embedded console preview is stale or
 unavailable, `localRuntime.recommendedAction=recover-runtime-display` exposes
 `runtime.recoverDisplay`. The matching `app-runtime-action --action
@@ -208,6 +214,10 @@ low-level command.
 `launchPlan.recommendedAction` becomes `prepare-local-runtime` and
 `runtime.startWindowsForApp` stays unavailable instead of exposing a Start
 button that cannot succeed.
+When the runtime is otherwise booted but the attached `VeilAutoInstall.iso`
+cannot repair the current guest agent, `launchPlan.recommendedAction` becomes
+`rebuild-guest-tools-media-before-launch` and the app-runtime harness rejects
+any report that still exposes guest-agent repair.
 
 ```bash
 cd apps/mac-host
