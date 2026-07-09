@@ -350,18 +350,7 @@ struct AppRuntimeDockMenuTests {
 
     @Test("menu bar primary action symbols stay app first")
     func menuBarPrimaryActionSymbolsStayAppFirst() {
-        let symbolsByAction = [
-            "dock.openMainWindow": "macwindow",
-            "dock.bringWindowsAppsForward": "arrow.up.forward.app",
-            "windowsApps.restorePrevious": "arrow.clockwise.square",
-            "windowsApps.reconnectRestore": "arrow.clockwise.square",
-            "runtime.recoverDisplay": "display.trianglebadge.exclamationmark",
-            "runtime.fulfillPendingLaunch": "arrow.up.forward.app",
-            "runtime.repairGuestAgentForApp": "bolt.horizontal.circle",
-            "runtime.startWindowsForApp": "play.fill",
-            "runtime.waitAgent": "antenna.radiowaves.left.and.right",
-            "windowsApps.launchSelected": "arrow.up.forward.app"
-        ]
+        let symbolsByAction = Self.menuBarPrimaryActionExpectations.mapValues { $0.symbolName }
 
         for (actionId, expectedSymbol) in symbolsByAction {
             #expect(
@@ -377,6 +366,15 @@ struct AppRuntimeDockMenuTests {
                 fallbackSymbolName: "questionmark.circle"
             ) == "questionmark.circle"
         )
+    }
+
+    @Test("menu bar primary action routes stay executable")
+    func menuBarPrimaryActionRoutesStayExecutable() {
+        for (actionId, expectation) in Self.menuBarPrimaryActionExpectations {
+            #expect(MenuBarPrimaryActionRoute.resolve(actionId: actionId) == expectation.route)
+        }
+
+        #expect(MenuBarPrimaryActionRoute.resolve(actionId: "unknown.action") == nil)
     }
 
     @Test("maps reconnect restore handoff to recovery start or wait states")
@@ -674,6 +672,26 @@ struct AppRuntimeDockMenuTests {
         #expect(longNameState.title == "Open Windows for Very Long...")
         #expect(longNameState.symbolName == "play.fill")
     }
+}
+
+extension AppRuntimeDockMenuTests {
+    private typealias MenuBarPrimaryActionExpectation = (
+        route: MenuBarPrimaryActionRoute,
+        symbolName: String
+    )
+
+    private static let menuBarPrimaryActionExpectations: [String: MenuBarPrimaryActionExpectation] = [
+        "dock.openMainWindow": (.openMainWindow, "macwindow"),
+        "dock.bringWindowsAppsForward": (.bringWindowsAppsForward, "arrow.up.forward.app"),
+        "windowsApps.restorePrevious": (.restorePreviousApps, "arrow.clockwise.square"),
+        "windowsApps.reconnectRestore": (.restorePreviousApps, "arrow.clockwise.square"),
+        "runtime.recoverDisplay": (.recoverDisplay, "display.trianglebadge.exclamationmark"),
+        "runtime.fulfillPendingLaunch": (.fulfillPendingLaunch, "arrow.up.forward.app"),
+        "runtime.repairGuestAgentForApp": (.repairAppConnection, "bolt.horizontal.circle"),
+        "runtime.startWindowsForApp": (.startWindowsForApp, "play.fill"),
+        "runtime.waitAgent": (.waitForAgent, "antenna.radiowaves.left.and.right"),
+        "windowsApps.launchSelected": (.launchSelectedApp, "arrow.up.forward.app")
+    ]
 }
 
 private struct StubVMRuntimeService: VMRuntimeService {

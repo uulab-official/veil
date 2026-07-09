@@ -1557,34 +1557,32 @@ private struct VeilMenuBarMenu: View {
     }
 
     private func runMenuBarPrimaryAction() {
-        switch menuBarPrimaryAction.primaryActionId {
-        case "dock.openMainWindow":
+        switch MenuBarPrimaryActionRoute.resolve(actionId: menuBarPrimaryAction.primaryActionId) ?? .openMainWindow {
+        case .openMainWindow:
             openMainWindow()
-        case "dock.bringWindowsAppsForward":
+        case .bringWindowsAppsForward:
             bringAllWindowsAppWindowsToFrontAction()
-        case "windowsApps.restorePrevious", "windowsApps.reconnectRestore":
+        case .restorePreviousApps:
             restoreWindowsAppWindowsAction()
-        case "runtime.recoverDisplay":
+        case .recoverDisplay:
             openMainWindow()
             recoverRuntimeDisplayAction()
-        case "runtime.fulfillPendingLaunch":
+        case .fulfillPendingLaunch:
             fulfillPendingLaunchAction()
-        case "runtime.repairGuestAgentForApp":
+        case .repairAppConnection:
             openMainWindow()
             repairGuestAgentForAppLaunchAction()
-        case "runtime.startWindowsForApp":
+        case .startWindowsForApp:
             openMainWindow()
             startVMAction()
-        case "runtime.waitAgent":
+        case .waitForAgent:
             openMainWindow()
             waitForGuestAgentAction()
-        case "windowsApps.launchSelected":
+        case .launchSelectedApp:
             if !model.hasLiveAgentConnection {
                 openMainWindow()
             }
             launchWindowsAppAction()
-        default:
-            openMainWindow()
         }
     }
 
@@ -1615,30 +1613,67 @@ private struct VeilMenuBarMenu: View {
     }
 }
 
-enum MenuBarPrimaryActionPresentation {
-    static func symbolName(for actionId: String, fallbackSymbolName: String) -> String {
+enum MenuBarPrimaryActionRoute: Equatable {
+    case openMainWindow
+    case bringWindowsAppsForward
+    case restorePreviousApps
+    case recoverDisplay
+    case fulfillPendingLaunch
+    case repairAppConnection
+    case startWindowsForApp
+    case waitForAgent
+    case launchSelectedApp
+
+    static func resolve(actionId: String) -> MenuBarPrimaryActionRoute? {
         switch actionId {
         case "dock.openMainWindow":
-            return "macwindow"
+            return .openMainWindow
         case "dock.bringWindowsAppsForward":
-            return "arrow.up.forward.app"
+            return .bringWindowsAppsForward
         case "windowsApps.restorePrevious", "windowsApps.reconnectRestore":
-            return "arrow.clockwise.square"
+            return .restorePreviousApps
         case "runtime.recoverDisplay":
-            return "display.trianglebadge.exclamationmark"
+            return .recoverDisplay
         case "runtime.fulfillPendingLaunch":
-            return "arrow.up.forward.app"
+            return .fulfillPendingLaunch
         case "runtime.repairGuestAgentForApp":
-            return "bolt.horizontal.circle"
+            return .repairAppConnection
         case "runtime.startWindowsForApp":
-            return "play.fill"
+            return .startWindowsForApp
         case "runtime.waitAgent":
-            return "antenna.radiowaves.left.and.right"
+            return .waitForAgent
         case "windowsApps.launchSelected":
-            return "arrow.up.forward.app"
+            return .launchSelectedApp
         default:
-            return fallbackSymbolName
+            return nil
         }
+    }
+
+    var symbolName: String? {
+        switch self {
+        case .openMainWindow:
+            return "macwindow"
+        case .bringWindowsAppsForward:
+            return "arrow.up.forward.app"
+        case .restorePreviousApps:
+            return "arrow.clockwise.square"
+        case .recoverDisplay:
+            return "display.trianglebadge.exclamationmark"
+        case .fulfillPendingLaunch, .launchSelectedApp:
+            return "arrow.up.forward.app"
+        case .repairAppConnection:
+            return "bolt.horizontal.circle"
+        case .startWindowsForApp:
+            return "play.fill"
+        case .waitForAgent:
+            return "antenna.radiowaves.left.and.right"
+        }
+    }
+}
+
+enum MenuBarPrimaryActionPresentation {
+    static func symbolName(for actionId: String, fallbackSymbolName: String) -> String {
+        MenuBarPrimaryActionRoute.resolve(actionId: actionId)?.symbolName ?? fallbackSymbolName
     }
 }
 

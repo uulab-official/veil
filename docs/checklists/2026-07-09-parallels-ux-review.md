@@ -44,6 +44,7 @@ Goal: keep the user-facing workflow one-screen-first (launcher + one action path
 - [x] Expose menu-bar status, symbol, and primary action in `app-runtime-status` so top-bar app control is covered by the same harness contract as Dock actions.
 - [x] Reuse `app-runtime-status.menuBarIntegration` in the SwiftUI menu bar extra so UI, CLI, and harness status stay aligned.
 - [x] Drive the menu bar's first button from `menuBarIntegration.primaryAction*`, so the top-bar control opens, restores, reconnects, or brings forward Windows apps using the same contract as CLI and harness output.
+- [x] Keep menu-bar primary action routing and symbols behind one tested route table, so top-bar recovery controls do not drift from `menuBarIntegration.primaryActionId`.
 - [x] Surface app-check readiness and the latest saved check artifact in the one-screen Windows Apps launcher, with a direct `Check App` action instead of hiding the release gate behind CLI-only proof commands.
 - [x] Add `releaseGate` to `app-runtime-status` and harness validation so Windows setup, one-screen launcher behavior, app launch, saved app-check evidence, and close/restore readiness are tracked as one Parallels-style release card contract.
 - [x] Surface the same release gate in the Windows Apps launcher as a compact `App Flow` progress strip, so users can see the next setup/open/check/close step without reading CLI output.
