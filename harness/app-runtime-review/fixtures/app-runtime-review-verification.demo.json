@@ -528,6 +528,7 @@
         "title": "Review App Flow",
         "source": "releaseGate",
         "isAvailable": true,
+        "runsInApp": false,
         "command": "veil-vmctl app-runtime-review --json",
         "reason": "The one-screen Windows app release gate has current setup, launch, app check, and close or restore evidence."
       }

@@ -43,6 +43,7 @@ function refreshPrimaryNextAction(report) {
       title: "Review App Flow",
       source: "releaseGate",
       isAvailable: true,
+      runsInApp: false,
       command: "veil-vmctl app-runtime-review --json",
       reason: report.releaseGate.reason
     };
@@ -56,6 +57,7 @@ function refreshPrimaryNextAction(report) {
     title: nextStep.title,
     source: "releaseGate",
     isAvailable: nextStep.nextActionCommand !== undefined,
+    runsInApp: expectedPrimaryNextActionId(nextStep.id, nextStep.nextActionCommand) !== undefined,
     actionId: expectedPrimaryNextActionId(nextStep.id, nextStep.nextActionCommand),
     command: nextStep.nextActionCommand,
     reason: nextStep.evidence
@@ -901,6 +903,16 @@ test("rejects primary next action executable action drift", () => {
   assert.throws(
     () => validateAppRuntimeStatus(report),
     /primaryNextAction\.actionId/
+  );
+});
+
+test("rejects primary next action in-app routing drift", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.demo.json", import.meta.url), "utf8"));
+  report.primaryNextAction.runsInApp = false;
+
+  assert.throws(
+    () => validateAppRuntimeStatus(report),
+    /primaryNextAction\.runsInApp/
   );
 });
 

@@ -829,6 +829,7 @@ function validatePrimaryNextAction(primaryNextAction, report) {
   requireString(primaryNextAction.title, "primaryNextAction.title");
   requireString(primaryNextAction.source, "primaryNextAction.source");
   requireBoolean(primaryNextAction.isAvailable, "primaryNextAction.isAvailable");
+  requireBoolean(primaryNextAction.runsInApp, "primaryNextAction.runsInApp");
   requireString(primaryNextAction.reason, "primaryNextAction.reason");
 
   if (primaryNextAction.command !== undefined) {
@@ -868,6 +869,9 @@ function validatePrimaryNextAction(primaryNextAction, report) {
   }
   if (primaryNextAction.actionId !== expectedActionId) {
     throw new TypeError("primaryNextAction.actionId must match the release gate's next executable action.");
+  }
+  if (primaryNextAction.runsInApp !== (expectedActionId !== undefined)) {
+    throw new TypeError("primaryNextAction.runsInApp must reflect whether the next action is executable inside the app.");
   }
   if (primaryNextAction.isAvailable !== (expectedCommand !== undefined)) {
     throw new TypeError("primaryNextAction.isAvailable must reflect whether a next command exists.");

@@ -721,6 +721,7 @@ struct HostDashboardModelTests {
         #expect(report.primaryNextAction.title == "Windows Setup Ready")
         #expect(report.primaryNextAction.source == "releaseGate")
         #expect(report.primaryNextAction.isAvailable)
+        #expect(report.primaryNextAction.runsInApp)
         #expect(report.primaryNextAction.actionId == "runtime.refreshStatus")
         #expect(report.primaryNextAction.command == "veil-vmctl qemu-install-status --json")
         #expect(report.primaryNextAction.reason == report.releaseGate.steps.first { $0.id == "windowsSetup" }?.evidence)

@@ -347,6 +347,7 @@
     "title": "Windows Setup Ready",
     "source": "releaseGate",
     "isAvailable": true,
+    "runsInApp": true,
     "actionId": "runtime.refreshStatus",
     "command": "veil-vmctl qemu-install-status --json",
     "reason": "The local Windows runtime is boot ready."

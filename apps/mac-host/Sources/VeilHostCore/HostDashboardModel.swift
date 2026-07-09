@@ -700,6 +700,7 @@ public struct WindowsAppRuntimePrimaryNextActionStatus: Codable, Equatable, Send
     public var title: String
     public var source: String
     public var isAvailable: Bool
+    public var runsInApp: Bool
     public var actionId: String?
     public var command: String?
     public var reason: String
@@ -709,6 +710,7 @@ public struct WindowsAppRuntimePrimaryNextActionStatus: Codable, Equatable, Send
         title: String,
         source: String,
         isAvailable: Bool,
+        runsInApp: Bool,
         actionId: String? = nil,
         command: String? = nil,
         reason: String
@@ -717,6 +719,7 @@ public struct WindowsAppRuntimePrimaryNextActionStatus: Codable, Equatable, Send
         self.title = title
         self.source = source
         self.isAvailable = isAvailable
+        self.runsInApp = runsInApp
         self.actionId = actionId
         self.command = command
         self.reason = reason
@@ -1902,6 +1905,7 @@ public final class HostDashboardModel {
                 title: "Review App Flow",
                 source: "releaseGate",
                 isAvailable: true,
+                runsInApp: false,
                 command: "veil-vmctl app-runtime-review --json",
                 reason: releaseGate.reason
             )
@@ -1913,16 +1917,19 @@ public final class HostDashboardModel {
                 title: "Review App Flow",
                 source: "releaseGate",
                 isAvailable: false,
+                runsInApp: false,
                 reason: releaseGate.reason
             )
         }
 
+        let actionId = primaryNextActionId(stepId: step.id, command: step.nextActionCommand)
         return WindowsAppRuntimePrimaryNextActionStatus(
             id: step.id,
             title: step.title,
             source: "releaseGate",
             isAvailable: step.nextActionCommand != nil,
-            actionId: primaryNextActionId(stepId: step.id, command: step.nextActionCommand),
+            runsInApp: actionId != nil,
+            actionId: actionId,
             command: step.nextActionCommand,
             reason: step.evidence
         )

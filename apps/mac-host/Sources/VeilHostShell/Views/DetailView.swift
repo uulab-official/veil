@@ -439,6 +439,7 @@ private struct WindowsQuickLaunchPanel: View {
     private var primaryNextActionHelp: String {
         [
             primaryNextAction.reason,
+            primaryNextAction.runsInApp ? "Runs inside Veil." : "Review from the command line.",
             primaryNextAction.command.map { "Command: \($0)" }
         ]
             .compactMap { $0 }

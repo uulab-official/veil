@@ -64,6 +64,7 @@ Goal: keep the user-facing workflow one-screen-first (launcher + one action path
 - [x] Surface `oneScreenUX` in the launcher panels and human-readable `app-runtime-status` output so the one-screen product contract is visible without opening raw JSON.
 - [x] Add `oneScreenUX.canRecoverFromMenuOrDock` and harness coverage so hidden-launcher app-window mode cannot pass unless menu/Dock recovery remains available.
 - [x] Add `launchPlan.willOpenAppAutomatically` and release-gate coverage so setup blockers cannot be reported as a Parallels-style automatic app-open path.
+- [x] Add `primaryNextAction.runsInApp` and harness coverage so the one-screen next step clearly distinguishes Veil-native button actions from review/CLI handoff.
 
 ## CEO Review
 

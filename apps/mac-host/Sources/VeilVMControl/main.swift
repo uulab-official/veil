@@ -865,6 +865,7 @@ struct VeilVMControl {
         }
         print("Primary next action: \(report.primaryNextAction.title)")
         print("Primary next action available: \(report.primaryNextAction.isAvailable ? "yes" : "no")")
+        print("Primary next action runs in app: \(report.primaryNextAction.runsInApp ? "yes" : "no")")
         if let primaryCommand = report.primaryNextAction.command {
             print("Primary next command: \(primaryCommand)")
         }
