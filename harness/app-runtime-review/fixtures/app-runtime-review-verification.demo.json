@@ -521,6 +521,7 @@
         "returnsToLauncherWhenNoAppWindows": true,
         "mode": "launcher",
         "primaryActionId": "windowsApps.reconnectRestore",
+        "heroRunsPrimaryAction": false,
         "reason": "The launcher is the only normal setup surface until a Windows app opens as a macOS window.",
         "usesSinglePrimarySurfaceFamily": true
       },

@@ -187,6 +187,7 @@
     "returnsToLauncherWhenNoAppWindows": true,
     "keepsDisplayRecoveryManual": true,
     "primaryActionId": "runtime.refreshStatus",
+    "heroRunsPrimaryAction": true,
     "reason": "The launcher is the only normal setup surface until a Windows app opens as a macOS window."
   },
   "macWindowIntegration": {

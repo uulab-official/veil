@@ -146,6 +146,7 @@ function refreshOneScreenUX(report) {
       && report.launcherVisibility.shouldHideMainWindow === false);
   report.oneScreenUX.keepsDisplayRecoveryManual = report.visibleSurfacePolicy.keepsRecoveryDisplayManual;
   report.oneScreenUX.primaryActionId = report.primaryNextAction.actionId ?? report.menuBarIntegration.primaryActionId;
+  report.oneScreenUX.heroRunsPrimaryAction = report.primaryNextAction.runsInApp;
 }
 
 test("validates app runtime status fixture", () => {
@@ -287,6 +288,16 @@ test("rejects one-screen UX primary action drift", () => {
   assert.throws(
     () => validateAppRuntimeStatus(report),
     /oneScreenUX\.primaryActionId/
+  );
+});
+
+test("rejects one-screen UX hero action drift", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.demo.json", import.meta.url), "utf8"));
+  report.oneScreenUX.heroRunsPrimaryAction = false;
+
+  assert.throws(
+    () => validateAppRuntimeStatus(report),
+    /heroRunsPrimaryAction/
   );
 });
 

@@ -175,7 +175,10 @@ expected visible surface count, hidden-launcher behavior during mirrored app
 use, menu/Dock recovery availability through `canRecoverFromMenuOrDock`,
 launcher fallback after the final Windows app window closes through
 `returnsToLauncherWhenNoAppWindows`, manual display recovery, and the
-executable primary action id that the launcher or menu should run next.
+executable primary action id that the launcher or menu should run next. Its
+`heroRunsPrimaryAction` flag must match `primaryNextAction.runsInApp`, so every
+app-native next action has a one-screen hero execution path and review-card
+handoff stays out of broken in-app buttons.
 
 `guestAgentDiagnostics` points every app-runtime status report at the same
 guest-agent readiness gate: run `veil-host-probe --diagnose-agent` before and

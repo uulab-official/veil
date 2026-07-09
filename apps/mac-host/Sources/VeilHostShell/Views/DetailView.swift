@@ -408,6 +408,10 @@ private struct WindowsQuickLaunchPanel: View {
     }
 
     private var oneScreenUXTitle: String {
+        if primaryNextAction.runsInApp && !oneScreenUX.heroRunsPrimaryAction {
+            return "Hero action needs attention"
+        }
+
         if !oneScreenUX.canRecoverFromMenuOrDock {
             return "Recovery needs attention"
         }
@@ -428,6 +432,7 @@ private struct WindowsQuickLaunchPanel: View {
         oneScreenUX.usesSinglePrimarySurfaceFamily
             && oneScreenUX.canRecoverFromMenuOrDock
             && oneScreenUX.returnsToLauncherWhenNoAppWindows
+            && (!primaryNextAction.runsInApp || oneScreenUX.heroRunsPrimaryAction)
             ? "rectangle.on.rectangle"
             : "exclamationmark.triangle"
     }

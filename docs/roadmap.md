@@ -138,6 +138,7 @@ Veil now has the local QEMU/HVF boot path, embedded display evidence, fake-agent
    - `launchPlan.willOpenAppAutomatically` now separates the app-shell handoff path from lower-level VM readiness, so release cards and the main launcher cannot treat a raw setup blocker as a Parallels-style automatic app open.
    - `primaryNextAction.runsInApp` now marks whether the current next step is executable inside Veil, keeping the one-screen app path distinct from review-card or CLI handoff.
    - `oneScreenUX.returnsToLauncherWhenNoAppWindows` now protects the close/quiet path so the launcher fallback is part of the same one-screen acceptance contract.
+   - `oneScreenUX.heroRunsPrimaryAction` now verifies that every app-native primary next action remains executable from the one-screen hero instead of drifting into CLI-only guidance.
 6. Multi-app validation: repeat the live proof for Calculator and Paint, then tune frame latency after correctness holds across more than Notepad. Done on 2026-07-06 — `app-window-proof` and `coherence-proof` both pass for Calculator (after fixing a packaged-app window-matching gap and a real guest-agent crash, see `docs/checklists/2026-07-06-guest-agent-mutex-crash-fix.md`) and Paint, alongside Notepad's `mvp-proof --require-proved`. Frame latency tuning across apps is still open.
 
 7. UX parity and launch ergonomics pass (2026-07-07): make the main launcher path feel one-screen and app-centered, aligning with the Parallels/UTM benchmark for this scope.

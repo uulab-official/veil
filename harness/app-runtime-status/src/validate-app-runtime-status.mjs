@@ -1229,6 +1229,7 @@ function validateOneScreenUX(oneScreenUX, report) {
   requireBoolean(oneScreenUX.canRecoverFromMenuOrDock, "oneScreenUX.canRecoverFromMenuOrDock");
   requireBoolean(oneScreenUX.returnsToLauncherWhenNoAppWindows, "oneScreenUX.returnsToLauncherWhenNoAppWindows");
   requireBoolean(oneScreenUX.keepsDisplayRecoveryManual, "oneScreenUX.keepsDisplayRecoveryManual");
+  requireBoolean(oneScreenUX.heroRunsPrimaryAction, "oneScreenUX.heroRunsPrimaryAction");
   requireString(oneScreenUX.reason, "oneScreenUX.reason");
 
   if (oneScreenUX.primaryActionId !== undefined) {
@@ -1302,6 +1303,14 @@ function validateOneScreenUX(oneScreenUX, report) {
   const expectedPrimaryActionId = report.primaryNextAction.actionId ?? report.menuBarIntegration.primaryActionId;
   if (oneScreenUX.primaryActionId !== expectedPrimaryActionId) {
     throw new TypeError("oneScreenUX.primaryActionId must match the executable next action or menu primary action.");
+  }
+
+  if (oneScreenUX.heroRunsPrimaryAction !== report.primaryNextAction.runsInApp) {
+    throw new TypeError("oneScreenUX.heroRunsPrimaryAction must match whether the primary next action runs from the app hero.");
+  }
+
+  if (report.primaryNextAction.runsInApp && !oneScreenUX.heroRunsPrimaryAction) {
+    throw new TypeError("oneScreenUX hero action must run every in-app primary next action.");
   }
 
   for (const disallowedTerm of ["Guest Agent", "HWND", "QEMU", "Proof"]) {

@@ -444,6 +444,7 @@ public struct WindowsAppRuntimeOneScreenUXStatus: Codable, Equatable, Sendable {
     public var returnsToLauncherWhenNoAppWindows: Bool
     public var keepsDisplayRecoveryManual: Bool
     public var primaryActionId: String?
+    public var heroRunsPrimaryAction: Bool
     public var reason: String
 
     public init(
@@ -458,6 +459,7 @@ public struct WindowsAppRuntimeOneScreenUXStatus: Codable, Equatable, Sendable {
         returnsToLauncherWhenNoAppWindows: Bool,
         keepsDisplayRecoveryManual: Bool,
         primaryActionId: String? = nil,
+        heroRunsPrimaryAction: Bool,
         reason: String
     ) {
         self.isEnabled = isEnabled
@@ -471,6 +473,7 @@ public struct WindowsAppRuntimeOneScreenUXStatus: Codable, Equatable, Sendable {
         self.returnsToLauncherWhenNoAppWindows = returnsToLauncherWhenNoAppWindows
         self.keepsDisplayRecoveryManual = keepsDisplayRecoveryManual
         self.primaryActionId = primaryActionId
+        self.heroRunsPrimaryAction = heroRunsPrimaryAction
         self.reason = reason
     }
 }
@@ -2211,6 +2214,7 @@ public final class HostDashboardModel {
             returnsToLauncherWhenNoAppWindows: returnsToLauncherWhenNoAppWindows,
             keepsDisplayRecoveryManual: visibleSurfacePolicy.keepsRecoveryDisplayManual,
             primaryActionId: primaryActionId,
+            heroRunsPrimaryAction: primaryNextAction.runsInApp,
             reason: reason
         )
     }
