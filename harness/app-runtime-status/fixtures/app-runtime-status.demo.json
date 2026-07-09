@@ -56,6 +56,11 @@
       "title": "Repair App Connection"
     },
     {
+      "id": "runtime.prepareSparsePackage",
+      "title": "Prepare Package Identity",
+      "isAvailable": false
+    },
+    {
       "id": "runtime.recoverDisplay",
       "title": "Refresh Windows Display",
       "isAvailable": false

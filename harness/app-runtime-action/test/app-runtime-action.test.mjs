@@ -93,6 +93,9 @@ function expectedPrimaryNextActionId(stepId, command) {
       if (command.includes("--action repair-agent") || command.includes("qemu-install-agent")) {
         return "runtime.repairGuestAgentForApp";
       }
+      if (command.includes("--action prepare-sparse-package") || command.includes("qemu-prepare-sparse-package")) {
+        return "runtime.prepareSparsePackage";
+      }
       if (command.includes("qemu-start")) {
         return "runtime.startWindowsForApp";
       }
@@ -124,6 +127,7 @@ function installedRuntimeHeroSupports(actionId) {
     "runtime.recoverDisplay",
     "runtime.waitAgent",
     "runtime.repairGuestAgentForApp",
+    "runtime.prepareSparsePackage",
     "runtime.startWindowsForApp",
     "runtime.prepareWindows",
     "runtime.refreshStatus",
@@ -592,6 +596,27 @@ test("accepts demo repair-agent only as a dry run", () => {
   assert.throws(
     () => validateAppRuntimeAction(report),
     /demo repair-agent/
+  );
+});
+
+test("accepts demo prepare-sparse-package only as a dry run", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-action.launch-pending.json", import.meta.url), "utf8"));
+  report.action = "prepare-sparse-package";
+  report.accepted = false;
+  report.nextActions = [
+    "Omit `--demo` to send the sparse package preparation path to the running local Windows VM.",
+    "Run `veil-vmctl app-runtime-status --json` to inspect package identity before retrying Windows app launch."
+  ];
+
+  assert.equal(validateAppRuntimeAction(report), report);
+
+  report.sparsePackagePreparation = {
+    kind: "qemuSparsePackagePreparationAttempt"
+  };
+
+  assert.throws(
+    () => validateAppRuntimeAction(report),
+    /demo prepare-sparse-package/
   );
 });
 

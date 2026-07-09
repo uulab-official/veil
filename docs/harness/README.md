@@ -200,6 +200,11 @@ single next readiness action (`connect-agent`, `prepare-sparse-package`,
 `verify-window-capture`, or `verify-daily-use-integrations`) so status cards
 cannot imply Parallels-style daily-use polish before the signed sparse package
 gate is actually satisfied.
+The `prepare-sparse-package` command is host-actionable:
+`veil-vmctl app-runtime-action --json --action prepare-sparse-package --wait-seconds 120`
+drives the attached `P.cmd` entrypoint through QEMU keyboard automation, while
+`veil-vmctl qemu-prepare-sparse-package --json --wait-seconds 120` exposes the
+lower-level attempt report directly.
 When the guest has written sparse package evidence,
 `dailyUseReadiness.packageIdentityStatus` carries the latest sanitized
 `sparse-package-status.json` stage from `agent.health.response`, allowing

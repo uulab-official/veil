@@ -64,11 +64,11 @@ enum VMControlError: Error, LocalizedError {
         case .missingAppId:
             "Missing Windows app id. Pass --app-id winapp_notepad, winapp_calculator, or another id reported by app-runtime-status."
         case .missingAppRuntimeAction:
-            "Missing app runtime action. Pass --action launch, fulfill-pending, focus, close, close-all, restore, bring-forward, quiet-when-idle, stop-runtime, clipboard, type-text, click, or proof-recommended."
+            "Missing app runtime action. Pass --action launch, fulfill-pending, focus, close, close-all, restore, bring-forward, prepare-sparse-package, quiet-when-idle, stop-runtime, clipboard, type-text, click, or proof-recommended."
         case .missingAppRuntimeReviewEvidenceDirectory:
             "Missing review evidence directory. Pass --evidence-dir /path/to/review-folder created by app-runtime-review-init."
         case .unsupportedAppRuntimeAction(let action):
-            "Unsupported app runtime action '\(action)'. Pass --action launch, fulfill-pending, focus, close, close-all, restore, bring-forward, quiet-when-idle, stop-runtime, clipboard, type-text, click, or proof-recommended."
+            "Unsupported app runtime action '\(action)'. Pass --action launch, fulfill-pending, focus, close, close-all, restore, bring-forward, prepare-sparse-package, quiet-when-idle, stop-runtime, clipboard, type-text, click, or proof-recommended."
         case .missingWindowId:
             "Missing Windows window id. Pass --window-id hwnd:XXXXXXXX from app-runtime-status or app-window-proof."
         case .missingAppRuntimeText:
@@ -86,7 +86,7 @@ enum VMControlError: Error, LocalizedError {
         }
     }
 
-    private static let usage = "Usage: veil-vmctl prepare --installer /path/to/Windows.iso [--drivers /path/to/virtio-win.iso] | veil-vmctl app-runtime-status [--json] [--demo] | veil-vmctl app-runtime-review [--json] [--demo] [--evidence-dir /path/to/screenshots] | veil-vmctl app-runtime-review-init [--json] [--demo] [--evidence-dir /path/to/screenshots] | veil-vmctl app-runtime-review-verify [--json] [--demo] --evidence-dir /path/to/screenshots | veil-vmctl app-runtime-action --action launch|fulfill-pending|focus|close|close-all|restore|reconnect-restore|bring-forward|recover-display|wait-agent|repair-agent|quiet-when-idle|stop-runtime|clipboard|type-text|click|proof-recommended [--json] [--demo] [--wait-seconds 5] [--app-id winapp_notepad] [--window-id hwnd:XXXXXXXX] [--text \"...\"] [--x 240 --y 130] | veil-vmctl app-window-proof [--json] [--app-id winapp_notepad] [--wait-seconds 10] [--output /path/to/proof.json] | veil-vmctl coherence-proof [--json] [--app-id winapp_notepad] [--wait-seconds 10] [--output /path/to/proof.json] | veil-vmctl mvp-proof [--json] [--app-id winapp_notepad] [--wait-seconds 30] [--output /path/to/proof.json] [--require-proved] | veil-vmctl guest-agent-wait [--json] [--wait-seconds 30] | veil-vmctl mark-installed [--json] | veil-vmctl providers [--json] | veil-vmctl export-diagnostics [--json] [--output /path/to/diagnostics.json] | veil-vmctl qemu-plan [--json] | veil-vmctl qemu-doctor [--json] | veil-vmctl qemu-install-status [--json] | veil-vmctl qemu-smoke [--json] [--seconds 45] | veil-vmctl qemu-start [--json] [--wait-seconds 15] [--native-display] | veil-vmctl qemu-display-smoke [--json] [--wait-seconds 5] | veil-vmctl qemu-capture [--json] [--output /path/to/console.png] | veil-vmctl qemu-powerdown [--json] [--wait-seconds 30] | veil-vmctl qemu-force-stop [--json] --i-understand-data-loss [--wait-seconds 10] | veil-vmctl qemu-sendkey [--json] key [key ...] | veil-vmctl qemu-type-text [--json] --text \"...\" | veil-vmctl qemu-click [--json] --x 0...32767 --y 0...32767 | veil-vmctl qemu-oobe-bypass [--json] | veil-vmctl qemu-install-agent [--json] [--wait-seconds 30]"
+    private static let usage = "Usage: veil-vmctl prepare --installer /path/to/Windows.iso [--drivers /path/to/virtio-win.iso] | veil-vmctl app-runtime-status [--json] [--demo] | veil-vmctl app-runtime-review [--json] [--demo] [--evidence-dir /path/to/screenshots] | veil-vmctl app-runtime-review-init [--json] [--demo] [--evidence-dir /path/to/screenshots] | veil-vmctl app-runtime-review-verify [--json] [--demo] --evidence-dir /path/to/screenshots | veil-vmctl app-runtime-action --action launch|fulfill-pending|focus|close|close-all|restore|reconnect-restore|bring-forward|recover-display|wait-agent|repair-agent|prepare-sparse-package|quiet-when-idle|stop-runtime|clipboard|type-text|click|proof-recommended [--json] [--demo] [--wait-seconds 5] [--app-id winapp_notepad] [--window-id hwnd:XXXXXXXX] [--text \"...\"] [--x 240 --y 130] | veil-vmctl app-window-proof [--json] [--app-id winapp_notepad] [--wait-seconds 10] [--output /path/to/proof.json] | veil-vmctl coherence-proof [--json] [--app-id winapp_notepad] [--wait-seconds 10] [--output /path/to/proof.json] | veil-vmctl mvp-proof [--json] [--app-id winapp_notepad] [--wait-seconds 30] [--output /path/to/proof.json] [--require-proved] | veil-vmctl guest-agent-wait [--json] [--wait-seconds 30] | veil-vmctl mark-installed [--json] | veil-vmctl providers [--json] | veil-vmctl export-diagnostics [--json] [--output /path/to/diagnostics.json] | veil-vmctl qemu-plan [--json] | veil-vmctl qemu-doctor [--json] | veil-vmctl qemu-install-status [--json] | veil-vmctl qemu-smoke [--json] [--seconds 45] | veil-vmctl qemu-start [--json] [--wait-seconds 15] [--native-display] | veil-vmctl qemu-display-smoke [--json] [--wait-seconds 5] | veil-vmctl qemu-capture [--json] [--output /path/to/console.png] | veil-vmctl qemu-powerdown [--json] [--wait-seconds 30] | veil-vmctl qemu-force-stop [--json] --i-understand-data-loss [--wait-seconds 10] | veil-vmctl qemu-sendkey [--json] key [key ...] | veil-vmctl qemu-type-text [--json] --text \"...\" | veil-vmctl qemu-click [--json] --x 0...32767 --y 0...32767 | veil-vmctl qemu-oobe-bypass [--json] | veil-vmctl qemu-install-agent [--json] [--wait-seconds 30] | veil-vmctl qemu-prepare-sparse-package [--json] [--wait-seconds 120]"
 }
 
 struct VMControlArguments {
@@ -102,6 +102,7 @@ struct VMControlArguments {
         case recoverDisplay = "recover-display"
         case waitAgent = "wait-agent"
         case repairAgent = "repair-agent"
+        case prepareSparsePackage = "prepare-sparse-package"
         case quietWhenIdle = "quiet-when-idle"
         case stopRuntime = "stop-runtime"
         case clipboard
@@ -142,6 +143,7 @@ struct VMControlArguments {
         case qemuClick(json: Bool, x: Int, y: Int)
         case qemuOOBEBypass(json: Bool)
         case qemuInstallAgent(json: Bool, waitSeconds: Int)
+        case qemuPrepareSparsePackage(json: Bool, waitSeconds: Int)
         case exportDiagnostics(json: Bool, outputPath: String?)
     }
 
@@ -389,6 +391,15 @@ struct VMControlArguments {
             )
         }
 
+        if command == "qemu-prepare-sparse-package" {
+            return VMControlArguments(
+                command: .qemuPrepareSparsePackage(
+                    json: arguments.contains("--json"),
+                    waitSeconds: waitSecondsArgument(from: arguments) ?? 120
+                )
+            )
+        }
+
         guard command == "prepare" else {
             throw VMControlError.unsupportedCommand(command)
         }
@@ -590,6 +601,7 @@ struct AppRuntimeActionReport: Codable, Equatable {
     var displayRecovery: AppRuntimeDisplayRecovery?
     var agentWait: AgentConnectionWaitReport?
     var agentRepair: QEMUGuestAgentInstallAttemptReport?
+    var sparsePackagePreparation: QEMUGuestAgentInstallAttemptReport?
     var quietRuntime: WindowsAppRuntimeQuietPolicyStatus?
     var runtimeStop: VMRuntimeSnapshot?
     var status: WindowsAppRuntimeStatusReport
@@ -954,6 +966,8 @@ struct VeilVMControl {
             try await sendQEMUOOBEBypass(json: json)
         case .qemuInstallAgent(let json, let waitSeconds):
             try await sendQEMUGuestAgentInstall(json: json, waitSeconds: waitSeconds)
+        case .qemuPrepareSparsePackage(let json, let waitSeconds):
+            try await sendQEMUSparsePackagePreparation(json: json, waitSeconds: waitSeconds)
         case .exportDiagnostics(let json, let outputPath):
             try await printExportDiagnostics(json: json, outputPath: outputPath)
         }
@@ -2472,6 +2486,7 @@ struct VeilVMControl {
         var displayRecovery: AppRuntimeDisplayRecovery?
         var agentWait: AgentConnectionWaitReport?
         var agentRepair: QEMUGuestAgentInstallAttemptReport?
+        var sparsePackagePreparation: QEMUGuestAgentInstallAttemptReport?
         var foregroundWindowId: String?
         var foregroundWindowTitle: String?
         var quietRuntime: WindowsAppRuntimeQuietPolicyStatus?
@@ -2611,6 +2626,14 @@ struct VeilVMControl {
                     accepted = beforeStatus.pendingLaunch.isQueued ? result?.launch.accepted == true : true
                 }
             }
+        case .prepareSparsePackage:
+            if !demo {
+                sparsePackagePreparation = try await qemuSparsePackagePreparationAttemptReport(waitSeconds: waitSeconds)
+                accepted = sparsePackagePreparation?.agentWait.diagnostic.health?.capabilities.packageIdentity == true
+                if sparsePackagePreparation?.status == .connected {
+                    await model.load()
+                }
+            }
         case .quietWhenIdle:
             quietRuntime = model.quietRuntimeStatus()
             accepted = quietRuntime?.canQuietRuntime == true
@@ -2734,6 +2757,7 @@ struct VeilVMControl {
             displayRecovery: displayRecovery,
             agentWait: agentWait,
             agentRepair: agentRepair,
+            sparsePackagePreparation: sparsePackagePreparation,
             quietRuntime: quietRuntime,
             runtimeStop: runtimeStop,
             status: status,
@@ -2793,6 +2817,13 @@ struct VeilVMControl {
             print("Agent repair attempts: \(agentRepair.agentWait.attempts)")
             print("Agent repair waited seconds: \(agentRepair.agentWait.waitedSeconds)")
             print("Agent repair console: \(agentRepair.postAttemptConsole.capture?.consoleScreenshotPath ?? "not captured")")
+        }
+        if let sparsePackagePreparation = report.sparsePackagePreparation {
+            print("Sparse package preparation: \(sparsePackagePreparation.status.rawValue)")
+            print("Sparse package package identity: \(sparsePackagePreparation.agentWait.diagnostic.health?.capabilities.packageIdentity == true ? "ready" : "needed")")
+            print("Sparse package attempts: \(sparsePackagePreparation.agentWait.attempts)")
+            print("Sparse package waited seconds: \(sparsePackagePreparation.agentWait.waitedSeconds)")
+            print("Sparse package console: \(sparsePackagePreparation.postAttemptConsole.capture?.consoleScreenshotPath ?? "not captured")")
         }
         if let launchPlan = report.launchPlan {
             print("Launch plan: \(launchPlan.recommendedAction)")
@@ -3022,6 +3053,11 @@ struct VeilVMControl {
                     "Run `veil-vmctl app-runtime-status --json` to confirm the Windows app connection is live.",
                     proofNextAction(from: status.proofPlan)
                 ])
+            case .prepareSparsePackage:
+                return compactActions([
+                    "Run `veil-vmctl app-runtime-status --json` to confirm Daily Use package identity readiness.",
+                    proofNextAction(from: status.proofPlan)
+                ])
             case .quietWhenIdle:
                 return [
                     "Run `\(status.quietRuntime.recommendedStopCommand ?? "veil-vmctl app-runtime-action --json --action stop-runtime")` to stop the idle local Windows runtime.",
@@ -3118,6 +3154,21 @@ struct VeilVMControl {
                 status.localRuntime.recommendedRecoveryCommand.map { "Run `\($0)` to refresh the latest QEMU console screenshot." },
                 status.localRuntime.recommendedDisplayCommand.map { "Run `\($0)` to check whether the embedded display can deliver a frame." },
                 "Run `veil-vmctl qemu-install-status --json` and inspect localRuntime.consolePreviewStatus before retrying app launch."
+            ])
+        }
+
+        if action == .prepareSparsePackage {
+            if status.connection.mode == .demo {
+                return [
+                    "Omit `--demo` to send the sparse package preparation path to the running local Windows VM.",
+                    "Run `veil-vmctl app-runtime-status --json` to inspect the real package identity state."
+                ]
+            }
+
+            return compactActions([
+                status.dailyUseReadiness.recommendedCommand.map { "Run `\($0)` to retry the sparse package preparation path." },
+                "Confirm the Windows SDK is installed inside the guest if sparse package packing or signing fails.",
+                "Run `veil-vmctl app-runtime-status --json` and inspect dailyUseReadiness.packageIdentityStatus before retrying."
             ])
         }
 
@@ -3957,6 +4008,30 @@ struct VeilVMControl {
         try await sendQEMUKeySteps(json: json, steps: QEMUOOBEBypassKeySequence.steps)
     }
 
+    private static func sendQEMUSparsePackagePreparation(json: Bool, waitSeconds: Int) async throws {
+        let report = try await qemuSparsePackagePreparationAttemptReport(waitSeconds: waitSeconds)
+
+        if json {
+            let data = try JSONEncoder.veilDiagnostics.encode(report)
+            print(String(decoding: data, as: UTF8.self))
+            return
+        }
+
+        print("QEMU sparse package preparation attempt: \(report.status.rawValue)")
+        print("Package identity: \(report.agentWait.diagnostic.health?.capabilities.packageIdentity == true ? "ready" : "needed")")
+        print("Activation tap: \(report.activationTap == nil ? "fallback keyboard" : "sent")")
+        print("UAC approval tap: \(report.uacApprovalTap == nil ? "not sent" : "sent")")
+        print("UAC approval keys: \(report.uacApprovalKeySend == nil ? "not sent" : "sent")")
+        print("Keys sent: \(report.keySend.keys.count)")
+        print("Waited seconds: \(report.agentWait.waitedSeconds)")
+        print("Attempts: \(report.agentWait.attempts)")
+        print("Post-attempt console: \(report.postAttemptConsole.capture?.consoleScreenshotPath ?? "not captured")")
+        print("Next actions:")
+        for action in report.nextActions {
+            print("  - \(action)")
+        }
+    }
+
     private static func sendQEMUGuestAgentInstall(json: Bool, waitSeconds: Int) async throws {
         let report = try await qemuGuestAgentInstallAttemptReport(waitSeconds: waitSeconds)
 
@@ -3980,18 +4055,58 @@ struct VeilVMControl {
         }
     }
 
+    private static func qemuSparsePackagePreparationAttemptReport(waitSeconds: Int) async throws -> QEMUGuestAgentInstallAttemptReport {
+        var report = try await qemuGuestCommandAttemptReport(
+            commandText: QEMUSparsePackagePreparationKeySequence.commandText,
+            steps: QEMUSparsePackagePreparationKeySequence.steps,
+            stepsAfterRunOpened: QEMUSparsePackagePreparationKeySequence.stepsAfterRunOpened,
+            waitSeconds: waitSeconds,
+            nextActions: { agentWait, waitSeconds, consoleEvidence in
+                sparsePackagePreparationNextActions(
+                    agentWait: agentWait,
+                    waitSeconds: waitSeconds,
+                    consoleEvidence: consoleEvidence
+                )
+            }
+        )
+        report.kind = "qemuSparsePackagePreparationAttempt"
+        return report
+    }
+
     private static func qemuGuestAgentInstallAttemptReport(waitSeconds: Int) async throws -> QEMUGuestAgentInstallAttemptReport {
+        try await qemuGuestCommandAttemptReport(
+            commandText: QEMUGuestAgentInstallKeySequence.commandText,
+            steps: QEMUGuestAgentInstallKeySequence.steps,
+            stepsAfterRunOpened: QEMUGuestAgentInstallKeySequence.stepsAfterRunOpened,
+            waitSeconds: waitSeconds,
+            nextActions: { agentWait, waitSeconds, consoleEvidence in
+                guestAgentInstallNextActions(
+                    agentWait: agentWait,
+                    waitSeconds: waitSeconds,
+                    consoleEvidence: consoleEvidence
+                )
+            }
+        )
+    }
+
+    private static func qemuGuestCommandAttemptReport(
+        commandText: String,
+        steps: @autoclosure () throws -> [QEMUKeySequenceStep],
+        stepsAfterRunOpened: @autoclosure () throws -> [QEMUKeySequenceStep],
+        waitSeconds: Int,
+        nextActions: (AgentConnectionWaitReport, Int, QEMUGuestAgentInstallConsoleEvidence) -> [String]
+    ) async throws -> QEMUGuestAgentInstallAttemptReport {
         let activationTap = try? await qemuGuestAgentInstallActivationTapRecord()
         if activationTap != nil {
             try? await Task.sleep(nanoseconds: 800_000_000)
         }
-        let steps: [QEMUKeySequenceStep]
+        let resolvedSteps: [QEMUKeySequenceStep]
         if activationTap == nil {
-            steps = try QEMUGuestAgentInstallKeySequence.steps
+            resolvedSteps = try steps()
         } else {
-            steps = try QEMUGuestAgentInstallKeySequence.stepsAfterRunOpened
+            resolvedSteps = try stepsAfterRunOpened()
         }
-        let keySend = try await qemuKeySendRecord(steps: steps)
+        let keySend = try await qemuKeySendRecord(steps: resolvedSteps)
         try? await Task.sleep(nanoseconds: 5_000_000_000)
         let uacApprovalTap = try? await qemuGuestAgentInstallUACApprovalTapRecord()
         if uacApprovalTap != nil {
@@ -4001,13 +4116,9 @@ struct VeilVMControl {
         try? await Task.sleep(nanoseconds: 1_500_000_000)
         let agentWait = await guestAgentWaitReport(waitSeconds: waitSeconds)
         let postAttemptConsole = qemuGuestAgentInstallConsoleEvidence()
-        let nextActions = guestAgentInstallNextActions(
-            agentWait: agentWait,
-            waitSeconds: waitSeconds,
-            consoleEvidence: postAttemptConsole
-        )
+        let nextActions = nextActions(agentWait, waitSeconds, postAttemptConsole)
         return QEMUGuestAgentInstallAttemptReport(
-            commandText: QEMUGuestAgentInstallKeySequence.commandText,
+            commandText: commandText,
             activationTap: activationTap,
             uacApprovalTap: uacApprovalTap,
             uacApprovalKeySend: uacApprovalKeySend,
@@ -4087,6 +4198,31 @@ struct VeilVMControl {
             actions.append("Run `veil-vmctl qemu-capture --json` and confirm whether the Windows desktop showed Run, UAC, or PowerShell during the install attempt.")
         }
         actions.append("Retry with a longer gate using `veil-vmctl qemu-install-agent --json --wait-seconds \(max(waitSeconds, 60))` after clicking inside the live Windows console.")
+        return actions
+    }
+
+    private static func sparsePackagePreparationNextActions(
+        agentWait: AgentConnectionWaitReport,
+        waitSeconds: Int,
+        consoleEvidence: QEMUGuestAgentInstallConsoleEvidence
+    ) -> [String] {
+        if agentWait.diagnostic.health?.capabilities.packageIdentity == true {
+            return [
+                "Run `veil-vmctl app-runtime-status --json` to verify Daily Use package identity readiness.",
+                "Run `veil-vmctl app-runtime-action --json --action proof-recommended` to continue the strongest available Windows app check."
+            ]
+        }
+
+        var actions = agentWait.nextActions
+        if let packageIdentityStatus = agentWait.diagnostic.health?.packageIdentityStatus {
+            actions.append("Inspect packageIdentityStatus.stage=\(packageIdentityStatus.stage) and packageIdentityStatus.statusPath=\(packageIdentityStatus.statusPath) inside the guest.")
+        }
+        if let capture = consoleEvidence.capture {
+            actions.append("Inspect postAttemptConsole.capture.consoleScreenshotPath at \(capture.consoleScreenshotPath) for the sparse package build or package identity failure.")
+        } else {
+            actions.append("Run `veil-vmctl qemu-capture --json` and confirm whether the Windows desktop showed the sparse package command output.")
+        }
+        actions.append("Retry with a longer gate using `veil-vmctl qemu-prepare-sparse-package --json --wait-seconds \(max(waitSeconds, 120))` after confirming the Windows SDK is installed in the guest.")
         return actions
     }
 

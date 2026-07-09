@@ -1316,6 +1316,12 @@ public final class HostDashboardModel {
                     isAvailable: launchPlan.recommendedRepairCommand != nil
                 ),
                 WindowsAppRuntimeActionStatus(
+                    id: "runtime.prepareSparsePackage",
+                    title: "Prepare Package Identity",
+                    isAvailable: dailyUseReadiness.recommendedAction == "prepare-sparse-package"
+                        && dailyUseReadiness.recommendedCommand != nil
+                ),
+                WindowsAppRuntimeActionStatus(
                     id: "runtime.recoverDisplay",
                     title: "Refresh Windows Display",
                     isAvailable: localRuntime.recommendedRecoveryCommand != nil
@@ -1933,7 +1939,7 @@ public final class HostDashboardModel {
                 printerBridgeMode: "manual-ipp-experiment",
                 packageIdentityStatus: health?.packageIdentityStatus,
                 recommendedAction: "prepare-sparse-package",
-                recommendedCommand: #"Inside Windows, run "Veil Guest Agent\Prepare Sparse Package.cmd", then rerun `veil-vmctl guest-agent-wait --json --wait-seconds 30` on macOS."#,
+                recommendedCommand: "veil-vmctl app-runtime-action --json --action prepare-sparse-package --wait-seconds 120",
                 reason: packageIdentityReason(status: health?.packageIdentityStatus)
             )
         }

@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { validateAppRuntimeStatus } from "../../app-runtime-status/src/validate-app-runtime-status.mjs";
 import { validateGuestAgentWait } from "../../guest-agent-wait/src/validate-guest-agent-wait.mjs";
 
-const VALID_ACTIONS = new Set(["launch", "fulfill-pending", "focus", "close", "close-all", "restore", "reconnect-restore", "bring-forward", "recover-display", "wait-agent", "repair-agent", "quiet-when-idle", "stop-runtime", "clipboard", "type-text", "click", "proof-recommended"]);
+const VALID_ACTIONS = new Set(["launch", "fulfill-pending", "focus", "close", "close-all", "restore", "reconnect-restore", "bring-forward", "recover-display", "wait-agent", "repair-agent", "prepare-sparse-package", "quiet-when-idle", "stop-runtime", "clipboard", "type-text", "click", "proof-recommended"]);
 const VALID_CONNECTION_MODES = new Set(["agent", "demo"]);
 const VALID_CONSOLE_PREVIEW_STATES = new Set(["fresh", "stale", "unavailable"]);
 
@@ -63,6 +63,10 @@ export function validateAppRuntimeAction(report) {
     throw new TypeError("agentRepair is only allowed for repair-agent actions.");
   }
 
+  if (report.action !== "prepare-sparse-package" && report.sparsePackagePreparation !== undefined && report.sparsePackagePreparation !== null) {
+    throw new TypeError("sparsePackagePreparation is only allowed for prepare-sparse-package actions.");
+  }
+
   switch (report.action) {
     case "launch":
       validateLaunchAction(report);
@@ -96,6 +100,9 @@ export function validateAppRuntimeAction(report) {
       break;
     case "repair-agent":
       validateRepairAgentAction(report);
+      break;
+    case "prepare-sparse-package":
+      validatePrepareSparsePackageAction(report);
       break;
     case "quiet-when-idle":
       validateQuietWhenIdleAction(report);
@@ -162,7 +169,7 @@ function validateRepairAgentAction(report) {
     throw new TypeError("repair-agent actions must include agentRepair.");
   }
 
-  validateGuestAgentRepair(report.agentRepair);
+  validateGuestCommandAttempt(report.agentRepair, "agentRepair", "qemuGuestAgentInstallAttempt");
 
   if (report.accepted && report.agentRepair.status !== "connected") {
     throw new TypeError("accepted repair-agent actions require connected agentRepair status.");
@@ -189,31 +196,64 @@ function validateRepairAgentAction(report) {
   }
 }
 
-function validateGuestAgentRepair(repair) {
-  requireString(repair.kind, "agentRepair.kind");
-  if (repair.kind !== "qemuGuestAgentInstallAttempt") {
-    throw new TypeError("Unsupported agentRepair.kind.");
+function validatePrepareSparsePackageAction(report) {
+  if (report.status.connection.mode === "demo") {
+    if (report.accepted) {
+      throw new TypeError("demo prepare-sparse-package actions must not be accepted.");
+    }
+    if (report.sparsePackagePreparation !== undefined && report.sparsePackagePreparation !== null) {
+      throw new TypeError("demo prepare-sparse-package actions must not include sparsePackagePreparation.");
+    }
+    if (!report.nextActions.some((action) => action.includes("Omit `--demo`"))) {
+      throw new TypeError("demo prepare-sparse-package actions must explain how to run the real sparse package path.");
+    }
+    return;
   }
-  requireString(repair.commandText, "agentRepair.commandText");
-  validateGuestAgentWait(repair.agentWait);
-  requireString(repair.status, "agentRepair.status");
-  if (repair.status !== repair.agentWait.status) {
-    throw new TypeError("agentRepair.status must match agentRepair.agentWait.status.");
+
+  if (!report.sparsePackagePreparation || typeof report.sparsePackagePreparation !== "object" || Array.isArray(report.sparsePackagePreparation)) {
+    throw new TypeError("prepare-sparse-package actions must include sparsePackagePreparation.");
   }
-  validateGuestAgentRepairConsole(repair.postAttemptConsole);
-  validateStringArray(repair.nextActions, "agentRepair.nextActions");
+
+  validateGuestCommandAttempt(report.sparsePackagePreparation, "sparsePackagePreparation", "qemuSparsePackagePreparationAttempt");
+
+  if (report.accepted && report.sparsePackagePreparation.agentWait.diagnostic.health?.capabilities?.packageIdentity !== true) {
+    throw new TypeError("accepted prepare-sparse-package actions require packageIdentity=true in sparsePackagePreparation agent health.");
+  }
+
+  if (report.accepted && report.status.dailyUseReadiness.packageIdentityReady !== true) {
+    throw new TypeError("accepted prepare-sparse-package actions require dailyUseReadiness.packageIdentityReady.");
+  }
+
+  if (!report.accepted && !report.nextActions.some((action) => action.includes("qemu-prepare-sparse-package") || action.includes("Windows SDK"))) {
+    throw new TypeError("rejected prepare-sparse-package actions must expose sparse package retry or Windows SDK guidance.");
+  }
 }
 
-function validateGuestAgentRepairConsole(consoleEvidence) {
+function validateGuestCommandAttempt(repair, path, expectedKind) {
+  requireString(repair.kind, `${path}.kind`);
+  if (repair.kind !== expectedKind) {
+    throw new TypeError(`Unsupported ${path}.kind.`);
+  }
+  requireString(repair.commandText, `${path}.commandText`);
+  validateGuestAgentWait(repair.agentWait);
+  requireString(repair.status, `${path}.status`);
+  if (repair.status !== repair.agentWait.status) {
+    throw new TypeError(`${path}.status must match ${path}.agentWait.status.`);
+  }
+  validateGuestAgentRepairConsole(repair.postAttemptConsole, path);
+  validateStringArray(repair.nextActions, `${path}.nextActions`);
+}
+
+function validateGuestAgentRepairConsole(consoleEvidence, path = "agentRepair") {
   if (!consoleEvidence || typeof consoleEvidence !== "object" || Array.isArray(consoleEvidence)) {
-    throw new TypeError("agentRepair.postAttemptConsole must be an object.");
+    throw new TypeError(`${path}.postAttemptConsole must be an object.`);
   }
-  requireString(consoleEvidence.kind, "agentRepair.postAttemptConsole.kind");
+  requireString(consoleEvidence.kind, `${path}.postAttemptConsole.kind`);
   if (consoleEvidence.kind !== "qemuGuestAgentInstallConsoleEvidence") {
-    throw new TypeError("Unsupported agentRepair.postAttemptConsole.kind.");
+    throw new TypeError(`Unsupported ${path}.postAttemptConsole.kind.`);
   }
-  requireString(consoleEvidence.reviewHint, "agentRepair.postAttemptConsole.reviewHint");
-  validateStringArray(consoleEvidence.expectedVisibleStates, "agentRepair.postAttemptConsole.expectedVisibleStates");
+  requireString(consoleEvidence.reviewHint, `${path}.postAttemptConsole.reviewHint`);
+  validateStringArray(consoleEvidence.expectedVisibleStates, `${path}.postAttemptConsole.expectedVisibleStates`);
   if (consoleEvidence.capture !== undefined && consoleEvidence.capture !== null) {
     validateConsoleCapture(consoleEvidence.capture);
   }

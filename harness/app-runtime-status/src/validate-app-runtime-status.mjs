@@ -835,7 +835,7 @@ function validateDailyUseReadiness(dailyUseReadiness, report) {
   const expectedCommand = report.connection.hasLiveAgentConnection
     ? expectedPackageIdentityReady
       ? "veil-vmctl app-runtime-status --json"
-      : "Inside Windows, run \"Veil Guest Agent\\Prepare Sparse Package.cmd\", then rerun `veil-vmctl guest-agent-wait --json --wait-seconds 30` on macOS."
+      : "veil-vmctl app-runtime-action --json --action prepare-sparse-package --wait-seconds 120"
     : "veil-vmctl guest-agent-wait --json --wait-seconds 30";
   if (dailyUseReadiness.recommendedCommand !== expectedCommand) {
     throw new TypeError("dailyUseReadiness.recommendedCommand must match the Daily Use readiness gate.");
@@ -1828,6 +1828,7 @@ function validateActions(actions, report) {
     "runtime.refreshStatus",
     "runtime.startWindowsForApp",
     "runtime.repairGuestAgentForApp",
+    "runtime.prepareSparsePackage",
     "runtime.recoverDisplay",
     "runtime.fulfillPendingLaunch",
     "runtime.waitAgent",
@@ -1878,6 +1879,13 @@ function validateActions(actions, report) {
   const repairAction = actions.find((action) => action.id === "runtime.repairGuestAgentForApp");
   if (repairAction.isAvailable !== (report.launchPlan.recommendedRepairCommand !== undefined)) {
     throw new TypeError("runtime.repairGuestAgentForApp availability must match launchPlan.recommendedRepairCommand.");
+  }
+
+  const prepareSparsePackageAction = actions.find((action) => action.id === "runtime.prepareSparsePackage");
+  const canPrepareSparsePackage = report.dailyUseReadiness.recommendedAction === "prepare-sparse-package"
+    && report.dailyUseReadiness.recommendedCommand !== undefined;
+  if (prepareSparsePackageAction.isAvailable !== canPrepareSparsePackage) {
+    throw new TypeError("runtime.prepareSparsePackage availability must match dailyUseReadiness package identity action.");
   }
 
   const recoverDisplayAction = actions.find((action) => action.id === "runtime.recoverDisplay");

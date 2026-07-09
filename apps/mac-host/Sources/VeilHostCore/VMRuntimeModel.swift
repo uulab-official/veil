@@ -2049,6 +2049,11 @@ public struct LocalVMRuntimeService: VMRuntimeService {
             atomically: true,
             encoding: .utf8
         )
+        try sparsePackageBootstrapCommandText.write(
+            to: bundleURL.appendingPathComponent("P.cmd"),
+            atomically: true,
+            encoding: .utf8
+        )
         try agentBootstrapCommandText.write(
             to: bundleURL.appendingPathComponent("V.cmd"),
             atomically: true,
@@ -2202,6 +2207,22 @@ public struct LocalVMRuntimeService: VMRuntimeService {
 
     """
 
+    private static let sparsePackageBootstrapCommandText = """
+    @echo off
+    setlocal
+    cd /d "%~dp0"
+    if "%VEIL_AGENT_AUTOMATION_HOLD%"=="" set VEIL_AGENT_AUTOMATION_HOLD=75
+    call "%~dp0Prepare Sparse Package.cmd" %*
+    set VEIL_EXIT_CODE=%errorlevel%
+    if not "%VEIL_AGENT_AUTOMATION_HOLD%"=="0" (
+        echo.
+        echo Veil sparse package status will remain visible for %VEIL_AGENT_AUTOMATION_HOLD% seconds.
+        timeout /t %VEIL_AGENT_AUTOMATION_HOLD% /nobreak >nul
+    )
+    exit /b %VEIL_EXIT_CODE%
+
+    """
+
     private static let agentBootstrapCommandText = """
     @echo off
     setlocal
@@ -2228,6 +2249,7 @@ public struct LocalVMRuntimeService: VMRuntimeService {
 
     Run Install Veil Agent.cmd after Windows 11 reaches the desktop.
     V.cmd is the short automation entrypoint used by the macOS host. It runs Repair Veil Agent Connectivity.cmd when present, falls back to Install Veil Agent.cmd for older media layouts, and keeps the console visible briefly so macOS post-attempt screenshots can capture success or failure text.
+    P.cmd is the short sparse-package automation entrypoint used by veil-vmctl qemu-prepare-sparse-package. It runs Prepare Sparse Package.cmd and keeps the console visible briefly so package identity status is visible in post-attempt screenshots.
     The installer uses the packaged VeilAgent.exe bundle when present, registers the VeilAgent user logon task when Windows allows it, and listens inside Windows on 0.0.0.0:18444 so the macOS host can connect through QEMU at ws://127.0.0.1:18444/.
     Bootstrap and installer logs are written under %LOCALAPPDATA%\\Veil\\Agent\\logs.
     If this media does not include app\\VeilAgent.exe, build it on the Mac with apps/windows-agent/scripts/publish-veil-agent-bundle.sh before preparing the VM again.

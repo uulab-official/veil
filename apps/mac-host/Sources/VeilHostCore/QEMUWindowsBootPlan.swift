@@ -1611,6 +1611,38 @@ public enum QEMUGuestAgentInstallKeySequence {
     }
 }
 
+public enum QEMUSparsePackagePreparationKeySequence {
+    public static let startButtonTapNormalizedX = QEMUGuestAgentInstallKeySequence.startButtonTapNormalizedX
+    public static let startButtonTapNormalizedY = QEMUGuestAgentInstallKeySequence.startButtonTapNormalizedY
+    public static let uacApproveTapNormalizedX = QEMUGuestAgentInstallKeySequence.uacApproveTapNormalizedX
+    public static let uacApproveTapNormalizedY = QEMUGuestAgentInstallKeySequence.uacApproveTapNormalizedY
+    public static let uacApproveKeySteps = QEMUGuestAgentInstallKeySequence.uacApproveKeySteps
+
+    public static let commandText =
+        #"cmd.exe /c for %d in (D E F G H I J K L M N O P Q R S T U V W X Y Z) do if exist "%d:\Veil Guest Agent\P.cmd" call "%d:\Veil Guest Agent\P.cmd""#
+
+    public static var stepsAfterRunOpened: [QEMUKeySequenceStep] {
+        get throws {
+            let textSteps = try QEMUQMPKeyboardCommandBuilder
+                .keySequence(forText: commandText)
+                .map { QEMUKeySequenceStep(key: $0, delayAfterSend: 0.035) }
+            return [
+                QEMUKeySequenceStep(key: "meta-r", delayAfterSend: 1.0)
+            ] + textSteps + [
+                QEMUKeySequenceStep(key: "ret", delayAfterSend: 1.0)
+            ]
+        }
+    }
+
+    public static var steps: [QEMUKeySequenceStep] {
+        get throws {
+            return [
+                QEMUKeySequenceStep(key: "esc", delayAfterSend: 0.3)
+            ] + (try stepsAfterRunOpened)
+        }
+    }
+}
+
 public enum QEMUQMPControlCommandBuilder {
     public static func powerDownCommand() throws -> String {
         try QEMUQMPCommandJSONEncoder.jsonLine([

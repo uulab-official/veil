@@ -1270,6 +1270,22 @@ struct QEMUWindowsBootPlanTests {
         #expect(QEMUGuestAgentInstallKeySequence.uacApproveKeySteps.map(\.key) == ["left", "ret"])
     }
 
+    @Test("sparse package sequence opens run dialog and invokes short VEIL_AUTO entrypoint")
+    func sparsePackageSequenceOpensRunDialogAndInvokesShortEntryPoint() throws {
+        let steps = try QEMUSparsePackagePreparationKeySequence.steps
+        let keys = steps.map(\.key)
+
+        #expect(Array(keys.prefix(2)) == ["esc", "meta-r"])
+        #expect(keys.last == "ret")
+        #expect(QEMUSparsePackagePreparationKeySequence.commandText.hasPrefix("cmd.exe /c for %d"))
+        #expect(QEMUSparsePackagePreparationKeySequence.commandText.contains("P.cmd"))
+        #expect(!QEMUSparsePackagePreparationKeySequence.commandText.contains("Prepare Sparse Package.cmd"))
+        #expect(keys.contains("backslash"))
+        #expect(keys.contains("shift-5"))
+        #expect(keys.count < 200)
+        #expect(QEMUSparsePackagePreparationKeySequence.uacApproveKeySteps.map(\.key) == ["left", "ret"])
+    }
+
     @Test("guest agent install sequence supports direct Run dialog input")
     func guestAgentInstallSequenceSupportsDirectRunDialogInput() throws {
         let steps = try QEMUGuestAgentInstallKeySequence.stepsAfterRunOpened
