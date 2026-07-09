@@ -239,6 +239,12 @@ When the guest has written sparse package evidence,
 `sparse-package-status.json` stage from `agent.health.response`, allowing
 automation to distinguish "not started" from "failed while packing/signing" and
 from "package built but process still lacks package identity."
+The same evidence is also flattened into
+`dailyUseReadiness.packageIdentityStage`, `packageIdentitySucceeded`,
+`packageIdentityMessage`, and `packageIdentityEvidencePath` so app surfaces can
+show the current Daily Use blocker without parsing the full nested status
+object. The app-runtime-status harness rejects drift between those summary
+fields and `packageIdentityStatus`.
 
 `releaseGate` turns the one-minute Parallels-style launch checklist into a
 machine-readable contract. It records the five required release-card steps:

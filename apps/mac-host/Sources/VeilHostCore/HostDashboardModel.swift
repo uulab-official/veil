@@ -651,6 +651,10 @@ public struct WindowsAppRuntimeDailyUseReadinessStatus: Codable, Equatable, Send
     public var notificationBridgePreflightPassed: Bool
     public var printerBridgeMode: String
     public var packageIdentityStatus: PackageIdentityStatus?
+    public var packageIdentityStage: String?
+    public var packageIdentitySucceeded: Bool?
+    public var packageIdentityMessage: String?
+    public var packageIdentityEvidencePath: String?
     public var recommendedAction: String
     public var recommendedCommand: String?
     public var reason: String
@@ -662,6 +666,10 @@ public struct WindowsAppRuntimeDailyUseReadinessStatus: Codable, Equatable, Send
         notificationBridgePreflightPassed: Bool,
         printerBridgeMode: String,
         packageIdentityStatus: PackageIdentityStatus? = nil,
+        packageIdentityStage: String? = nil,
+        packageIdentitySucceeded: Bool? = nil,
+        packageIdentityMessage: String? = nil,
+        packageIdentityEvidencePath: String? = nil,
         recommendedAction: String,
         recommendedCommand: String? = nil,
         reason: String
@@ -672,6 +680,10 @@ public struct WindowsAppRuntimeDailyUseReadinessStatus: Codable, Equatable, Send
         self.notificationBridgePreflightPassed = notificationBridgePreflightPassed
         self.printerBridgeMode = printerBridgeMode
         self.packageIdentityStatus = packageIdentityStatus
+        self.packageIdentityStage = packageIdentityStage
+        self.packageIdentitySucceeded = packageIdentitySucceeded
+        self.packageIdentityMessage = packageIdentityMessage
+        self.packageIdentityEvidencePath = packageIdentityEvidencePath
         self.recommendedAction = recommendedAction
         self.recommendedCommand = recommendedCommand
         self.reason = reason
@@ -1992,18 +2004,24 @@ public final class HostDashboardModel {
         let notificationBridgePreflightPassed = packageIdentityReady
 
         if !packageIdentityReady {
+            let packageStatus = health?.packageIdentityStatus
             return WindowsAppRuntimeDailyUseReadinessStatus(
                 packageIdentityReady: false,
                 borderlessCapturePreflightPassed: false,
                 notificationBridgePreflightPassed: false,
                 printerBridgeMode: "manual-ipp-experiment",
-                packageIdentityStatus: health?.packageIdentityStatus,
+                packageIdentityStatus: packageStatus,
+                packageIdentityStage: packageStatus?.stage,
+                packageIdentitySucceeded: packageStatus?.succeeded,
+                packageIdentityMessage: packageStatus?.message,
+                packageIdentityEvidencePath: packageStatus?.statusPath,
                 recommendedAction: "prepare-sparse-package",
                 recommendedCommand: "veil-vmctl app-runtime-action --json --action prepare-sparse-package --wait-seconds 120",
-                reason: packageIdentityReason(status: health?.packageIdentityStatus)
+                reason: packageIdentityReason(status: packageStatus)
             )
         }
 
+        let packageStatus = health?.packageIdentityStatus
         let proofRecommendedCommand = "veil-vmctl app-runtime-action --json --action proof-recommended"
         let recommendedCommand = borderlessCapturePreflightPassed && proofPlan?.recommendedProofCommand != nil
             ? proofRecommendedCommand
@@ -2014,7 +2032,11 @@ public final class HostDashboardModel {
             borderlessCapturePreflightPassed: borderlessCapturePreflightPassed,
             notificationBridgePreflightPassed: notificationBridgePreflightPassed,
             printerBridgeMode: "manual-ipp-experiment",
-            packageIdentityStatus: health?.packageIdentityStatus,
+            packageIdentityStatus: packageStatus,
+            packageIdentityStage: packageStatus?.stage,
+            packageIdentitySucceeded: packageStatus?.succeeded,
+            packageIdentityMessage: packageStatus?.message,
+            packageIdentityEvidencePath: packageStatus?.statusPath,
             recommendedAction: borderlessCapturePreflightPassed ? "verify-daily-use-integrations" : "verify-window-capture",
             recommendedCommand: recommendedCommand,
             reason: borderlessCapturePreflightPassed

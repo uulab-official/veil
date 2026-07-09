@@ -22,6 +22,12 @@
       "input": true,
       "clipboardText": true,
       "packageIdentity": false
+    },
+    "packageIdentityStatus": {
+      "statusPath": "C:\\Users\\veil\\AppData\\Local\\Veil\\Agent\\package\\sparse-package-status.json",
+      "stage": "packageSigned",
+      "succeeded": false,
+      "message": "Sparse package signed; restart the agent through the package registration step."
     }
   },
   "guestAgentDiagnostics": {
@@ -422,8 +428,18 @@
     "borderlessCapturePreflightPassed": false,
     "notificationBridgePreflightPassed": false,
     "printerBridgeMode": "manual-ipp-experiment",
+    "packageIdentityStatus": {
+      "statusPath": "C:\\Users\\veil\\AppData\\Local\\Veil\\Agent\\package\\sparse-package-status.json",
+      "stage": "packageSigned",
+      "succeeded": false,
+      "message": "Sparse package signed; restart the agent through the package registration step."
+    },
+    "packageIdentityStage": "packageSigned",
+    "packageIdentitySucceeded": false,
+    "packageIdentityMessage": "Sparse package signed; restart the agent through the package registration step.",
+    "packageIdentityEvidencePath": "C:\\Users\\veil\\AppData\\Local\\Veil\\Agent\\package\\sparse-package-status.json",
     "recommendedAction": "prepare-sparse-package",
     "recommendedCommand": "veil-vmctl app-runtime-action --json --action prepare-sparse-package --wait-seconds 120",
-    "reason": "A signed sparse package is required before borderless app capture or Windows notifications can be enabled."
+    "reason": "A signed sparse package is required before borderless app capture or Windows notifications can be enabled; last sparse package preparation is not complete at stage packageSigned (Sparse package signed; restart the agent through the package registration step.)."
   }
 }

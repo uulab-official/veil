@@ -147,7 +147,16 @@ struct WindowsAppBridgePanel: View {
             return "Waiting"
         }
 
-        return model.health?.capabilities.packageIdentity == true ? "Ready" : "Needed"
+        if model.health?.capabilities.packageIdentity == true {
+            return "Ready"
+        }
+
+        if let stage = model.health?.packageIdentityStatus?.stage,
+           !stage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return stage
+        }
+
+        return "Needed"
     }
 
     private var packageIdentityTint: Color {

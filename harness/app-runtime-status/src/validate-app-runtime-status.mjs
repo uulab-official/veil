@@ -790,6 +790,18 @@ function validateDailyUseReadiness(dailyUseReadiness, report) {
   if (dailyUseReadiness.packageIdentityStatus !== undefined) {
     validatePackageIdentityStatus(dailyUseReadiness.packageIdentityStatus, "dailyUseReadiness.packageIdentityStatus");
   }
+  if (dailyUseReadiness.packageIdentityStage !== undefined) {
+    requireString(dailyUseReadiness.packageIdentityStage, "dailyUseReadiness.packageIdentityStage");
+  }
+  if (dailyUseReadiness.packageIdentitySucceeded !== undefined) {
+    requireBoolean(dailyUseReadiness.packageIdentitySucceeded, "dailyUseReadiness.packageIdentitySucceeded");
+  }
+  if (dailyUseReadiness.packageIdentityMessage !== undefined) {
+    requireString(dailyUseReadiness.packageIdentityMessage, "dailyUseReadiness.packageIdentityMessage");
+  }
+  if (dailyUseReadiness.packageIdentityEvidencePath !== undefined) {
+    requireString(dailyUseReadiness.packageIdentityEvidencePath, "dailyUseReadiness.packageIdentityEvidencePath");
+  }
 
   if (dailyUseReadiness.isEnabled !== true) {
     throw new TypeError("dailyUseReadiness must stay enabled for v1.5 readiness tracking.");
@@ -819,6 +831,28 @@ function validateDailyUseReadiness(dailyUseReadiness, report) {
 
   if (JSON.stringify(dailyUseReadiness.packageIdentityStatus) !== JSON.stringify(report.connection.packageIdentityStatus)) {
     throw new TypeError("dailyUseReadiness.packageIdentityStatus must match connection.packageIdentityStatus.");
+  }
+  if (dailyUseReadiness.packageIdentityStatus !== undefined) {
+    const status = dailyUseReadiness.packageIdentityStatus;
+    if (dailyUseReadiness.packageIdentityStage !== status.stage) {
+      throw new TypeError("dailyUseReadiness.packageIdentityStage must summarize packageIdentityStatus.stage.");
+    }
+    if (dailyUseReadiness.packageIdentitySucceeded !== status.succeeded) {
+      throw new TypeError("dailyUseReadiness.packageIdentitySucceeded must summarize packageIdentityStatus.succeeded.");
+    }
+    if (dailyUseReadiness.packageIdentityMessage !== status.message) {
+      throw new TypeError("dailyUseReadiness.packageIdentityMessage must summarize packageIdentityStatus.message.");
+    }
+    if (dailyUseReadiness.packageIdentityEvidencePath !== status.statusPath) {
+      throw new TypeError("dailyUseReadiness.packageIdentityEvidencePath must summarize packageIdentityStatus.statusPath.");
+    }
+  } else if (
+    dailyUseReadiness.packageIdentityStage !== undefined
+    || dailyUseReadiness.packageIdentitySucceeded !== undefined
+    || dailyUseReadiness.packageIdentityMessage !== undefined
+    || dailyUseReadiness.packageIdentityEvidencePath !== undefined
+  ) {
+    throw new TypeError("dailyUseReadiness package identity summary fields require packageIdentityStatus evidence.");
   }
 
   const expectedAction = report.connection.hasLiveAgentConnection

@@ -451,7 +451,10 @@
         "updatedAt": "2026-07-10T05:30:00Z",
         "packagePath": "C:\\Users\\veil-user\\AppData\\Local\\Veil\\Agent\\package\\VeilAgent.msix",
         "certificatePath": "C:\\Users\\veil-user\\AppData\\Local\\Veil\\Agent\\package\\VeilAgent.cer"
-      }
+      },
+      "packageIdentityStage": "registered",
+      "packageIdentitySucceeded": true,
+      "packageIdentityEvidencePath": "C:\\Users\\veil-user\\AppData\\Local\\Veil\\Agent\\package\\sparse-package-status.json"
     }
   },
   "nextActions": [

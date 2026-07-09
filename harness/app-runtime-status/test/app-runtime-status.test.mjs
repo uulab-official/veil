@@ -1198,6 +1198,41 @@ test("rejects Daily Use readiness that skips package identity", () => {
   );
 });
 
+test("accepts Daily Use package identity evidence summary", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.mac-window-live.json", import.meta.url), "utf8"));
+  report.connection.packageIdentityStatus = {
+    statusPath: "C:\\Users\\veil\\AppData\\Local\\Veil\\Agent\\package\\sparse-package-status.json",
+    stage: "packageSigned",
+    succeeded: false,
+    message: "Sparse package signed; restart the agent through the package registration step."
+  };
+  report.dailyUseReadiness.packageIdentityStatus = report.connection.packageIdentityStatus;
+  report.dailyUseReadiness.packageIdentityStage = "packageSigned";
+  report.dailyUseReadiness.packageIdentitySucceeded = false;
+  report.dailyUseReadiness.packageIdentityMessage = "Sparse package signed; restart the agent through the package registration step.";
+  report.dailyUseReadiness.packageIdentityEvidencePath = report.connection.packageIdentityStatus.statusPath;
+
+  assert.equal(validateAppRuntimeStatus(report), report);
+});
+
+test("rejects Daily Use package identity summary drift", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.mac-window-live.json", import.meta.url), "utf8"));
+  report.connection.packageIdentityStatus = {
+    statusPath: "C:\\Users\\veil\\AppData\\Local\\Veil\\Agent\\package\\sparse-package-status.json",
+    stage: "packageSigned",
+    succeeded: false
+  };
+  report.dailyUseReadiness.packageIdentityStatus = report.connection.packageIdentityStatus;
+  report.dailyUseReadiness.packageIdentityStage = "registered";
+  report.dailyUseReadiness.packageIdentitySucceeded = false;
+  report.dailyUseReadiness.packageIdentityEvidencePath = report.connection.packageIdentityStatus.statusPath;
+
+  assert.throws(
+    () => validateAppRuntimeStatus(report),
+    /packageIdentityStage/
+  );
+});
+
 test("rejects guest-agent diagnostics that drift from live connection readiness", () => {
   const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.mac-window-live.json", import.meta.url), "utf8"));
   report.guestAgentDiagnostics.isConnected = false;
