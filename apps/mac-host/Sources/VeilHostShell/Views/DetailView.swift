@@ -8,6 +8,7 @@ struct DetailView: View {
     var stopVMAction: () -> Void
     var markWindowsInstalledAction: () -> Void
     var installGuestAgentAction: () -> Void
+    var prepareSparsePackageAction: () -> Void
     var waitForGuestAgentAction: () -> Void
     var repairGuestAgentForAppLaunchAction: () -> Void
     var recoverRuntimeDisplayAction: () -> Void
@@ -42,6 +43,7 @@ struct DetailView: View {
                 stopVMAction: stopVMAction,
                 markWindowsInstalledAction: markWindowsInstalledAction,
                 installGuestAgentAction: installGuestAgentAction,
+                prepareSparsePackageAction: prepareSparsePackageAction,
                 waitForGuestAgentAction: waitForGuestAgentAction,
                 repairGuestAgentForAppLaunchAction: repairGuestAgentForAppLaunchAction,
                 recoverRuntimeDisplayAction: recoverRuntimeDisplayAction,
@@ -126,6 +128,8 @@ struct DetailView: View {
             Task {
                 await vmModel.prepareDefaultVM()
             }
+        case .preparePackageIdentity:
+            prepareSparsePackageAction()
         case .refreshRuntimeStatus:
             Task {
                 await vmModel.load()

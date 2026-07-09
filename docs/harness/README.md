@@ -205,6 +205,11 @@ The `prepare-sparse-package` command is host-actionable:
 drives the attached `P.cmd` entrypoint through QEMU keyboard automation, while
 `veil-vmctl qemu-prepare-sparse-package --json --wait-seconds 120` exposes the
 lower-level attempt report directly.
+The macOS launcher treats both `runtime.prepareSparsePackage` and the
+`prepare-sparse-package`/`qemu-prepare-sparse-package` command forms as package
+identity preparation, not as the generic Windows ISO preparation path, so Daily
+Use readiness can continue from the top-level app controls without sending the
+operator back to setup media selection.
 The app-runtime action harness includes a live accepted
 `prepare-sparse-package` fixture so package identity success must carry both
 `sparsePackagePreparation.agentWait.diagnostic.health.capabilities.packageIdentity=true`

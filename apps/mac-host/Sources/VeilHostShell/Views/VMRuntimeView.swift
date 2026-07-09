@@ -24,6 +24,7 @@ struct VMRuntimeView: View {
     var stopVMAction: () -> Void
     var markWindowsInstalledAction: () -> Void
     var installGuestAgentAction: () -> Void
+    var prepareSparsePackageAction: () -> Void
     var waitForGuestAgentAction: () -> Void
     var repairGuestAgentForAppLaunchAction: () -> Void
     var recoverRuntimeDisplayAction: () -> Void
@@ -91,6 +92,7 @@ struct VMRuntimeView: View {
                     stopAction: stopVMAction,
                     markWindowsInstalledAction: markWindowsInstalledAction,
                     installGuestAgentAction: installGuestAgentAction,
+                    prepareSparsePackageAction: prepareSparsePackageAction,
                     waitForGuestAgentAction: waitForGuestAgentAction,
                     repairGuestAgentForAppLaunchAction: repairGuestAgentForAppLaunchAction,
                     recoverRuntimeDisplayAction: recoverRuntimeDisplayAction,
@@ -1353,6 +1355,7 @@ private struct WindowsSetupDisplayPanel: View {
     var stopAction: () -> Void
     var markWindowsInstalledAction: () -> Void
     var installGuestAgentAction: () -> Void
+    var prepareSparsePackageAction: () -> Void
     var waitForGuestAgentAction: () -> Void
     var repairGuestAgentForAppLaunchAction: () -> Void
     var recoverRuntimeDisplayAction: () -> Void
@@ -2353,6 +2356,8 @@ private struct WindowsSetupDisplayPanel: View {
             launchWindowsAppAction()
         case .prepareWindows:
             prepareAction()
+        case .preparePackageIdentity:
+            prepareSparsePackageAction()
         case .refreshRuntimeStatus:
             refreshAction()
         case .reconnectPreviousApps:

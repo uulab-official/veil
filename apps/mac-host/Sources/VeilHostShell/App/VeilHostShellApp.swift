@@ -75,6 +75,7 @@ struct VeilHostShellApp: App {
                 stopVMAction: stopWindowsAndCloseDisplay,
                 markWindowsInstalledAction: markWindowsInstalledFromSetup,
                 installGuestAgentAction: installGuestAgentFromDisplay,
+                prepareSparsePackageAction: prepareSparsePackageFromDisplay,
                 waitForGuestAgentAction: waitForGuestAgent,
                 repairGuestAgentForAppLaunchAction: repairGuestAgentForAppLaunch,
                 recoverRuntimeDisplayAction: recoverRuntimeDisplayEvidence,
@@ -217,6 +218,7 @@ struct VeilHostShellApp: App {
                 showWindowsDisplayAction: showWindowsDisplay,
                 markWindowsInstalledAction: markWindowsInstalledFromSetup,
                 installGuestAgentAction: installGuestAgentFromDisplay,
+                prepareSparsePackageAction: prepareSparsePackageFromDisplay,
                 waitForGuestAgentAction: waitForGuestAgent,
                 repairGuestAgentForAppLaunchAction: repairGuestAgentForAppLaunch,
                 recoverRuntimeDisplayAction: recoverRuntimeDisplayEvidence,
@@ -991,6 +993,37 @@ struct VeilHostShellApp: App {
         }
     }
 
+    private func prepareSparsePackageFromDisplay() {
+        Task { @MainActor in
+            cancelAutomaticQuietRuntime()
+            activateMainWindow()
+            displayMessage = "Preparing Windows package identity. Keep the Windows setup display open for prompts."
+
+            do {
+                _ = try await vmRuntimeBooter.prepareSparsePackageFromAttachedMedia()
+                displayMessage = "Package identity preparation sent. Waiting for the Windows app connection to return."
+                await vmModel.refreshRuntimeEvidence()
+
+                let report = await model.waitForLiveAgentConnection(
+                    endpoint: Self.agentURLString,
+                    timeoutSeconds: 120
+                )
+                await recordGuestAgentInstallEvidenceIfNeeded()
+                await model.load()
+
+                if report.diagnostic.health?.capabilities.packageIdentity == true {
+                    displayMessage = "Windows package identity is ready."
+                } else if report.status == .connected {
+                    displayMessage = "Windows reconnected, but package identity is not ready yet. Check sparse package evidence."
+                } else {
+                    displayMessage = "Package identity preparation was sent. Windows has not reconnected yet."
+                }
+            } catch {
+                displayMessage = "Package identity preparation could not start: \(userMessage(for: error))"
+            }
+        }
+    }
+
     private func waitForGuestAgent() {
         Task { @MainActor in
             activateMainWindow()
@@ -1281,6 +1314,7 @@ private struct VeilMenuBarMenu: View {
     var showWindowsDisplayAction: () -> Void
     var markWindowsInstalledAction: () -> Void
     var installGuestAgentAction: () -> Void
+    var prepareSparsePackageAction: () -> Void
     var waitForGuestAgentAction: () -> Void
     var repairGuestAgentForAppLaunchAction: () -> Void
     var recoverRuntimeDisplayAction: () -> Void
@@ -1658,6 +1692,9 @@ private struct VeilMenuBarMenu: View {
         case .waitForAgent:
             openMainWindow()
             waitForGuestAgentAction()
+        case .preparePackageIdentity:
+            openMainWindow()
+            prepareSparsePackageAction()
         case .launchSelectedApp:
             if !model.hasLiveAgentConnection {
                 openMainWindow()
@@ -1705,6 +1742,7 @@ enum MenuBarPrimaryActionRoute: Equatable {
     case repairAppConnection
     case startWindowsForApp
     case waitForAgent
+    case preparePackageIdentity
     case launchSelectedApp
     case runRecommendedProof
 
@@ -1726,6 +1764,8 @@ enum MenuBarPrimaryActionRoute: Equatable {
             return .startWindowsForApp
         case "runtime.waitAgent":
             return .waitForAgent
+        case "runtime.prepareSparsePackage":
+            return .preparePackageIdentity
         case "windowsApps.launchSelected":
             return .launchSelectedApp
         case "proof.recommended", "dailyUse.verifyIntegrations":
@@ -1753,6 +1793,8 @@ enum MenuBarPrimaryActionRoute: Equatable {
             return "play.fill"
         case .waitForAgent:
             return "antenna.radiowaves.left.and.right"
+        case .preparePackageIdentity:
+            return "shippingbox"
         case .runRecommendedProof:
             return "checkmark.seal"
         }
@@ -1963,6 +2005,7 @@ private struct StandaloneMainWindowRoot: View {
             stopVMAction: stopWindowsAndCloseDisplay,
             markWindowsInstalledAction: markWindowsInstalledFromSetup,
             installGuestAgentAction: installGuestAgentFromDisplay,
+            prepareSparsePackageAction: prepareSparsePackageFromDisplay,
             waitForGuestAgentAction: waitForGuestAgent,
             repairGuestAgentForAppLaunchAction: installGuestAgentFromDisplay,
             recoverRuntimeDisplayAction: recoverRuntimeDisplayEvidence,
@@ -2029,6 +2072,34 @@ private struct StandaloneMainWindowRoot: View {
                 await recordGuestAgentInstallEvidenceIfNeeded()
             } catch {
                 displayMessage = "App connection install could not start: \(userMessage(for: error))"
+            }
+        }
+    }
+
+    private func prepareSparsePackageFromDisplay() {
+        Task { @MainActor in
+            displayMessage = "Preparing Windows package identity. Keep the Windows setup display open for prompts."
+            do {
+                _ = try await vmRuntimeBooter.prepareSparsePackageFromAttachedMedia()
+                displayMessage = "Package identity preparation sent. Waiting for the Windows app connection to return."
+                await vmModel.refreshRuntimeEvidence()
+
+                let report = await model.waitForLiveAgentConnection(
+                    endpoint: Self.agentURLString,
+                    timeoutSeconds: 120
+                )
+                await recordGuestAgentInstallEvidenceIfNeeded()
+                await model.load()
+
+                if report.diagnostic.health?.capabilities.packageIdentity == true {
+                    displayMessage = "Windows package identity is ready."
+                } else if report.status == .connected {
+                    displayMessage = "Windows reconnected, but package identity is not ready yet. Check sparse package evidence."
+                } else {
+                    displayMessage = "Package identity preparation was sent. Windows has not reconnected yet."
+                }
+            } catch {
+                displayMessage = "Package identity preparation could not start: \(userMessage(for: error))"
             }
         }
     }

@@ -31,6 +31,12 @@ struct LauncherPrimaryNextActionRouteTests {
         )
         #expect(
             LauncherPrimaryNextActionRoute.resolve(
+                actionId: "runtime.prepareSparsePackage",
+                command: nil
+            ) == .preparePackageIdentity
+        )
+        #expect(
+            LauncherPrimaryNextActionRoute.resolve(
                 actionId: "runtime.refreshStatus",
                 command: nil
             ) == .refreshRuntimeStatus
@@ -123,6 +129,12 @@ struct LauncherPrimaryNextActionRouteTests {
                 command: "veil-vmctl app-runtime-action --json --action proof-recommended"
             ) == .runRecommendedProof
         )
+        #expect(
+            LauncherPrimaryNextActionRoute.resolve(
+                actionId: "dailyUse",
+                command: "veil-vmctl app-runtime-action --json --action prepare-sparse-package --wait-seconds 120"
+            ) == .preparePackageIdentity
+        )
     }
 
     @Test("routes setup and app check commands")
@@ -150,6 +162,12 @@ struct LauncherPrimaryNextActionRouteTests {
                 actionId: "windowsSetup",
                 command: "veil-vmctl qemu-install-status --json"
             ) == .refreshRuntimeStatus
+        )
+        #expect(
+            LauncherPrimaryNextActionRoute.resolve(
+                actionId: "windowsSetup",
+                command: "veil-vmctl qemu-prepare-sparse-package --json --wait-seconds 120"
+            ) == .preparePackageIdentity
         )
         #expect(
             LauncherPrimaryNextActionRoute.resolve(

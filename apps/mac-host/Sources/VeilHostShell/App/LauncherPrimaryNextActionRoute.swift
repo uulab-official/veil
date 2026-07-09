@@ -7,6 +7,7 @@ enum LauncherPrimaryNextActionRoute: Equatable {
     case startWindows
     case startWindowsForApp
     case prepareWindows
+    case preparePackageIdentity
     case refreshRuntimeStatus
     case reconnectPreviousApps
     case closeAllWindowsApps
@@ -41,6 +42,8 @@ enum LauncherPrimaryNextActionRoute: Equatable {
             return .startWindowsForApp
         case "runtime.prepareWindows":
             return .prepareWindows
+        case "runtime.prepareSparsePackage":
+            return .preparePackageIdentity
         case "runtime.refreshStatus":
             return .refreshRuntimeStatus
         case "windowsApps.reconnectRestore", "windowsApps.restorePrevious":
@@ -77,6 +80,11 @@ enum LauncherPrimaryNextActionRoute: Equatable {
             return .startWindows
         }
 
+        if command.contains("--action prepare-sparse-package")
+            || command.contains("qemu-prepare-sparse-package") {
+            return .preparePackageIdentity
+        }
+
         if command.contains("prepare") {
             return .prepareWindows
         }
@@ -103,6 +111,10 @@ enum LauncherPrimaryNextActionRoute: Equatable {
 
         if command.contains("--action wait-agent") {
             return .waitForAgent
+        }
+
+        if command.contains("--action prepare-sparse-package") {
+            return .preparePackageIdentity
         }
 
         if command.contains("--action reconnect-restore")
@@ -144,6 +156,8 @@ enum LauncherPrimaryNextActionRoute: Equatable {
             return "Open App"
         case .prepareWindows:
             return "Prepare"
+        case .preparePackageIdentity:
+            return "Prepare Identity"
         case .refreshRuntimeStatus:
             return "Refresh Status"
         case .reconnectPreviousApps:
@@ -173,6 +187,8 @@ enum LauncherPrimaryNextActionRoute: Equatable {
             return "macwindow.badge.plus"
         case .prepareWindows:
             return "wand.and.stars"
+        case .preparePackageIdentity:
+            return "shippingbox"
         case .refreshRuntimeStatus:
             return "arrow.clockwise"
         case .reconnectPreviousApps:

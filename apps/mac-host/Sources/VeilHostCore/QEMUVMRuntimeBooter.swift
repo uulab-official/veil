@@ -258,26 +258,49 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
     }
 
     public func installGuestAgentFromAttachedMedia() async throws -> QEMUKeySendRecord {
+        try await sendAttachedMediaCommand(
+            startButtonTapNormalizedX: QEMUGuestAgentInstallKeySequence.startButtonTapNormalizedX,
+            startButtonTapNormalizedY: QEMUGuestAgentInstallKeySequence.startButtonTapNormalizedY,
+            steps: QEMUGuestAgentInstallKeySequence.steps,
+            stepsAfterRunOpened: QEMUGuestAgentInstallKeySequence.stepsAfterRunOpened
+        )
+    }
+
+    public func prepareSparsePackageFromAttachedMedia() async throws -> QEMUKeySendRecord {
+        try await sendAttachedMediaCommand(
+            startButtonTapNormalizedX: QEMUSparsePackagePreparationKeySequence.startButtonTapNormalizedX,
+            startButtonTapNormalizedY: QEMUSparsePackagePreparationKeySequence.startButtonTapNormalizedY,
+            steps: QEMUSparsePackagePreparationKeySequence.steps,
+            stepsAfterRunOpened: QEMUSparsePackagePreparationKeySequence.stepsAfterRunOpened
+        )
+    }
+
+    private func sendAttachedMediaCommand(
+        startButtonTapNormalizedX: Double,
+        startButtonTapNormalizedY: Double,
+        steps: @autoclosure () throws -> [QEMUKeySequenceStep],
+        stepsAfterRunOpened: @autoclosure () throws -> [QEMUKeySequenceStep]
+    ) async throws -> QEMUKeySendRecord {
         let launchRecordStore = JSONQEMULaunchRecordStore(
             directory: diagnosticsDirectory.appendingPathComponent("QEMU Launch", isDirectory: true)
         )
-        let steps: [QEMUKeySequenceStep]
+        let commandSteps: [QEMUKeySequenceStep]
         do {
             let pointerSender = QEMUPointerEventSender(launchRecordStore: launchRecordStore)
             _ = try await pointerSender.sendTap(
-                normalizedX: QEMUGuestAgentInstallKeySequence.startButtonTapNormalizedX,
-                normalizedY: QEMUGuestAgentInstallKeySequence.startButtonTapNormalizedY
+                normalizedX: startButtonTapNormalizedX,
+                normalizedY: startButtonTapNormalizedY
             )
             try? await Task.sleep(nanoseconds: 800_000_000)
-            steps = try QEMUGuestAgentInstallKeySequence.stepsAfterRunOpened
+            commandSteps = try stepsAfterRunOpened()
         } catch {
-            steps = try QEMUGuestAgentInstallKeySequence.steps
+            commandSteps = try steps()
         }
 
         let sender = QEMUKeySequenceSender(
             launchRecordStore: launchRecordStore
         )
-        return try await sender.send(steps: steps)
+        return try await sender.send(steps: commandSteps)
     }
 
     public static func makePlan(for profile: VMProfile) throws -> QEMUWindowsBootPlan {
