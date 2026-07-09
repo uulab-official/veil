@@ -39,6 +39,7 @@ test("accepts attached screenshot evidence paths", () => {
   card.evidence.screenshotEvidenceDirectory = "/tmp/veil-review";
   card.screenshotSlots[0].attachmentState = "attached";
   card.screenshotSlots[0].attachmentPath = "/tmp/veil-review/preBootLauncher.png";
+  card.screenshotSlots[0].attachmentByteCount = 68;
   card.attachedScreenshotCount = 1;
   card.nextActionCommand = "veil-vmctl app-runtime-review-verify --json --evidence-dir /tmp/veil-review";
 
@@ -55,6 +56,17 @@ test("rejects attached screenshot slots without paths", () => {
   );
 });
 
+test("rejects attached screenshot slots without byte counts", () => {
+  const card = demoReviewCard();
+  card.screenshotSlots[0].attachmentState = "attached";
+  card.screenshotSlots[0].attachmentPath = "/tmp/veil-review/preBootLauncher.png";
+
+  assert.throws(
+    () => validateAppRuntimeReview(card),
+    /byte count/
+  );
+});
+
 test("accepts complete screenshot evidence summary", () => {
   const card = demoReviewCard();
   card.evidence.screenshotEvidenceDirectory = "/tmp/veil-review";
@@ -68,6 +80,7 @@ test("accepts complete screenshot evidence summary", () => {
   for (const slot of card.screenshotSlots) {
     slot.attachmentState = "attached";
     slot.attachmentPath = `/tmp/veil-review/${slot.expectedFileName}`;
+    slot.attachmentByteCount = 68;
   }
 
   assert.equal(validateAppRuntimeReview(card), card);

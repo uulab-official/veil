@@ -610,6 +610,7 @@ struct AppRuntimeReviewScreenshotSlot: Codable, Equatable {
     var expectedFileName: String
     var attachmentState: String
     var attachmentPath: String?
+    var attachmentByteCount: Int?
 }
 
 struct AppRuntimeReviewEvidence: Codable, Equatable {
@@ -1259,7 +1260,7 @@ struct VeilVMControl {
                 },
                 card: card
             )
-        let missingFiles = expectedFiles.filter { !FileManager.default.fileExists(atPath: $0) }
+        let missingFiles = expectedFiles.filter { !isPNGFile(atPath: $0) }
         let attachedScreenshotCount = expectedFiles.count - missingFiles.count
         let missingCaptureSteps = appRuntimeReviewMissingCaptureSteps(
             expectedFiles: expectedFiles,
@@ -1599,16 +1600,16 @@ struct VeilVMControl {
             let expectedFileName = "\(slot.id).png"
             let attachmentURL = evidenceDirectoryURL?.appendingPathComponent(expectedFileName)
             let attachmentPath = attachmentURL?.path
-            let attachmentExists = attachmentPath.map {
-                FileManager.default.fileExists(atPath: $0)
-            } ?? false
+            let attachmentByteCount = attachmentPath.flatMap(byteCountForPNGFile(atPath:))
+            let attachmentExists = attachmentByteCount != nil
             return AppRuntimeReviewScreenshotSlot(
                 id: slot.id,
                 title: slot.title,
                 expectedSurface: slot.expectedSurface,
                 expectedFileName: expectedFileName,
                 attachmentState: attachmentExists ? "attached" : "missing",
-                attachmentPath: attachmentExists ? attachmentPath : nil
+                attachmentPath: attachmentExists ? attachmentPath : nil,
+                attachmentByteCount: attachmentByteCount
             )
         }
         let requiredScreenshotCount = report.releaseGate.screenshotSlots.filter(\.isRequired).count
@@ -1832,6 +1833,22 @@ struct VeilVMControl {
         let exists = FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory)
         return exists && isDirectory.boolValue
     }
+
+    private static func isPNGFile(atPath path: String) -> Bool {
+        byteCountForPNGFile(atPath: path) != nil
+    }
+
+    private static func byteCountForPNGFile(atPath path: String) -> Int? {
+        guard let data = try? Data(contentsOf: URL(fileURLWithPath: path), options: [.mappedIfSafe]),
+              data.count > pngSignature.count,
+              data.prefix(pngSignature.count).elementsEqual(pngSignature) else {
+            return nil
+        }
+
+        return data.count
+    }
+
+    private static let pngSignature: [UInt8] = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]
 
     private static func latestLaunchVerificationReport(
         in distURL: URL,

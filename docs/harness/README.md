@@ -241,14 +241,14 @@ actions all point back to the same evidence directory and the `5/5 attached`
 release gate.
 
 Pass `--evidence-dir` to point the card at a screenshot folder. Each required
-slot expects one PNG named after the release-gate slot id, for example
+slot expects one valid, non-empty PNG named after the release-gate slot id, for example
 `preBootLauncher.png`, `firstAppLaunch.png`, `appWindowOnly.png`,
 `menuRestore.png`, and `closeQuiet.png`. The card marks each slot as `attached`
-or `missing`, exposes the attached/required screenshot count, and sets
-`areRequiredScreenshotsAttached` when the current evidence folder has the full
-set. `isReadyForReview` remains false until this screenshot gate is also
-complete. It does this without copying Windows media, disk contents, product
-keys, or guest data.
+or `missing`, records the attached PNG byte count, exposes the attached/required
+screenshot count, and sets `areRequiredScreenshotsAttached` when the current
+evidence folder has the full valid PNG set. `isReadyForReview` remains false
+until this screenshot gate is also complete. It does this without copying
+Windows media, disk contents, product keys, or guest data.
 
 After screenshots are captured, `app-runtime-review-verify` checks the existing
 folder end to end: manifest presence, README presence, screenshot count,

@@ -82,6 +82,9 @@ export function validateAppRuntimeReview(card) {
     if (!["attached", "missing"].includes(slot.attachmentState)) {
       throw new TypeError("app runtime review screenshot attachment state must be attached or missing.");
     }
+    if (slot.attachmentByteCount !== undefined) {
+      requirePositiveInteger(slot.attachmentByteCount, `screenshotSlots.${index}.attachmentByteCount`);
+    }
     if (slot.attachmentPath !== undefined) {
       requireString(slot.attachmentPath, `screenshotSlots.${index}.attachmentPath`);
     }
@@ -99,8 +102,14 @@ export function validateAppRuntimeReview(card) {
     if (slot.attachmentState === "attached" && slot.attachmentPath === undefined) {
       throw new TypeError("attached review screenshots must include an attachment path.");
     }
+    if (slot.attachmentState === "attached" && slot.attachmentByteCount === undefined) {
+      throw new TypeError("attached review screenshots must include a positive PNG byte count.");
+    }
     if (slot.attachmentState === "missing" && slot.attachmentPath !== undefined) {
       throw new TypeError("missing review screenshots must not include an attachment path.");
+    }
+    if (slot.attachmentState === "missing" && slot.attachmentByteCount !== undefined) {
+      throw new TypeError("missing review screenshots must not include a byte count.");
     }
     if (slot.attachmentState === "attached") {
       attachedScreenshotCount += 1;
@@ -310,6 +319,12 @@ function requireBoolean(value, fieldName) {
 function requireNonNegativeInteger(value, fieldName) {
   if (!Number.isInteger(value) || value < 0) {
     throw new TypeError(`App runtime review field '${fieldName}' must be a non-negative integer.`);
+  }
+}
+
+function requirePositiveInteger(value, fieldName) {
+  if (!Number.isInteger(value) || value <= 0) {
+    throw new TypeError(`App runtime review field '${fieldName}' must be a positive integer.`);
   }
 }
 

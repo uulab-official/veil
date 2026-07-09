@@ -91,6 +91,7 @@ test("accepts complete verification reports", () => {
   for (const slot of report.review.screenshotSlots) {
     slot.attachmentState = "attached";
     slot.attachmentPath = `${report.evidenceDirectory}/${slot.expectedFileName}`;
+    slot.attachmentByteCount = 68;
   }
 
   assert.equal(validateAppRuntimeReviewVerification(report), report);
