@@ -782,6 +782,9 @@ function validateDailyUseReadiness(dailyUseReadiness, report) {
     "dailyUseReadiness.notificationBridgePreflightPassed"
   );
   requireString(dailyUseReadiness.printerBridgeMode, "dailyUseReadiness.printerBridgeMode");
+  requireString(dailyUseReadiness.printerBridgeRecommendedAction, "dailyUseReadiness.printerBridgeRecommendedAction");
+  requireString(dailyUseReadiness.printerBridgeEndpointTemplate, "dailyUseReadiness.printerBridgeEndpointTemplate");
+  requireString(dailyUseReadiness.printerBridgeSetupHint, "dailyUseReadiness.printerBridgeSetupHint");
   requireString(dailyUseReadiness.recommendedAction, "dailyUseReadiness.recommendedAction");
   requireString(dailyUseReadiness.reason, "dailyUseReadiness.reason");
   if (dailyUseReadiness.recommendedCommand !== undefined) {
@@ -809,6 +812,16 @@ function validateDailyUseReadiness(dailyUseReadiness, report) {
 
   if (dailyUseReadiness.printerBridgeMode !== "manual-ipp-experiment") {
     throw new TypeError("dailyUseReadiness.printerBridgeMode must preserve the current IPP printer experiment path.");
+  }
+  if (dailyUseReadiness.printerBridgeRecommendedAction !== "manual-ipp-experiment") {
+    throw new TypeError("dailyUseReadiness.printerBridgeRecommendedAction must preserve the current IPP printer experiment path.");
+  }
+  if (dailyUseReadiness.printerBridgeEndpointTemplate !== "http://10.0.2.2:631/printers/<shared-printer-name>") {
+    throw new TypeError("dailyUseReadiness.printerBridgeEndpointTemplate must expose the QEMU user-network IPP endpoint template.");
+  }
+  if (!dailyUseReadiness.printerBridgeSetupHint.includes("Share the Mac printer")
+    || !dailyUseReadiness.printerBridgeSetupHint.includes("IPP network printer")) {
+    throw new TypeError("dailyUseReadiness.printerBridgeSetupHint must explain the manual Mac printer sharing and Windows IPP setup path.");
   }
 
   const capabilities = report.connection.capabilities;

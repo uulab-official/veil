@@ -440,6 +440,9 @@
     "packageIdentityEvidencePath": "C:\\Users\\veil\\AppData\\Local\\Veil\\Agent\\package\\sparse-package-status.json",
     "recommendedAction": "prepare-sparse-package",
     "recommendedCommand": "veil-vmctl app-runtime-action --json --action prepare-sparse-package --wait-seconds 120",
-    "reason": "A signed sparse package is required before borderless app capture or Windows notifications can be enabled; last sparse package preparation is not complete at stage packageSigned (Sparse package signed; restart the agent through the package registration step.)."
+    "reason": "A signed sparse package is required before borderless app capture or Windows notifications can be enabled; last sparse package preparation is not complete at stage packageSigned (Sparse package signed; restart the agent through the package registration step.).",
+    "printerBridgeRecommendedAction": "manual-ipp-experiment",
+    "printerBridgeEndpointTemplate": "http://10.0.2.2:631/printers/<shared-printer-name>",
+    "printerBridgeSetupHint": "Share the Mac printer, then add it in Windows as an IPP network printer at http://10.0.2.2:631/printers/<shared-printer-name>."
   }
 }

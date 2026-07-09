@@ -644,12 +644,22 @@ public struct WindowsAppRuntimeProofArtifactStatus: Codable, Equatable, Sendable
     }
 }
 
+public enum WindowsAppRuntimePrinterBridgeDefaults {
+    public static let recommendedAction = "manual-ipp-experiment"
+    public static let endpointTemplate = "http://10.0.2.2:631/printers/<shared-printer-name>"
+    public static let setupHint =
+        "Share the Mac printer, then add it in Windows as an IPP network printer at http://10.0.2.2:631/printers/<shared-printer-name>."
+}
+
 public struct WindowsAppRuntimeDailyUseReadinessStatus: Codable, Equatable, Sendable {
     public var isEnabled: Bool
     public var packageIdentityReady: Bool
     public var borderlessCapturePreflightPassed: Bool
     public var notificationBridgePreflightPassed: Bool
     public var printerBridgeMode: String
+    public var printerBridgeRecommendedAction: String
+    public var printerBridgeEndpointTemplate: String
+    public var printerBridgeSetupHint: String
     public var packageIdentityStatus: PackageIdentityStatus?
     public var packageIdentityStage: String?
     public var packageIdentitySucceeded: Bool?
@@ -665,6 +675,9 @@ public struct WindowsAppRuntimeDailyUseReadinessStatus: Codable, Equatable, Send
         borderlessCapturePreflightPassed: Bool,
         notificationBridgePreflightPassed: Bool,
         printerBridgeMode: String,
+        printerBridgeRecommendedAction: String = WindowsAppRuntimePrinterBridgeDefaults.recommendedAction,
+        printerBridgeEndpointTemplate: String = WindowsAppRuntimePrinterBridgeDefaults.endpointTemplate,
+        printerBridgeSetupHint: String = WindowsAppRuntimePrinterBridgeDefaults.setupHint,
         packageIdentityStatus: PackageIdentityStatus? = nil,
         packageIdentityStage: String? = nil,
         packageIdentitySucceeded: Bool? = nil,
@@ -679,6 +692,9 @@ public struct WindowsAppRuntimeDailyUseReadinessStatus: Codable, Equatable, Send
         self.borderlessCapturePreflightPassed = borderlessCapturePreflightPassed
         self.notificationBridgePreflightPassed = notificationBridgePreflightPassed
         self.printerBridgeMode = printerBridgeMode
+        self.printerBridgeRecommendedAction = printerBridgeRecommendedAction
+        self.printerBridgeEndpointTemplate = printerBridgeEndpointTemplate
+        self.printerBridgeSetupHint = printerBridgeSetupHint
         self.packageIdentityStatus = packageIdentityStatus
         self.packageIdentityStage = packageIdentityStage
         self.packageIdentitySucceeded = packageIdentitySucceeded

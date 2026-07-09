@@ -1198,6 +1198,16 @@ test("rejects Daily Use readiness that skips package identity", () => {
   );
 });
 
+test("rejects Daily Use printer bridge guidance drift", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.demo.json", import.meta.url), "utf8"));
+  report.dailyUseReadiness.printerBridgeEndpointTemplate = "http://localhost:631/printers/<shared-printer-name>";
+
+  assert.throws(
+    () => validateAppRuntimeStatus(report),
+    /printerBridgeEndpointTemplate/
+  );
+});
+
 test("accepts Daily Use package identity evidence summary", () => {
   const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.mac-window-live.json", import.meta.url), "utf8"));
   report.connection.packageIdentityStatus = {

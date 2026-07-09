@@ -200,6 +200,12 @@ single next readiness action (`connect-agent`, `prepare-sparse-package`,
 `verify-window-capture`, or `verify-daily-use-integrations`) so status cards
 cannot imply Parallels-style daily-use polish before the signed sparse package
 gate is actually satisfied.
+The printer lane is intentionally explicit while it is still a manual
+experiment: `printerBridgeRecommendedAction=manual-ipp-experiment`,
+`printerBridgeEndpointTemplate=http://10.0.2.2:631/printers/<shared-printer-name>`,
+and `printerBridgeSetupHint` tell the app and CLI to guide users through Mac
+printer sharing plus Windows IPP network-printer registration over QEMU's
+existing user-mode network path.
 The `prepare-sparse-package` command is host-actionable:
 `veil-vmctl app-runtime-action --json --action prepare-sparse-package --wait-seconds 120`
 drives the attached `P.cmd` entrypoint through QEMU keyboard automation, while

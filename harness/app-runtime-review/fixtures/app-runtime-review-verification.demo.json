@@ -477,6 +477,9 @@
         "notificationBridgePreflightPassed" : false,
         "packageIdentityReady" : false,
         "printerBridgeMode" : "manual-ipp-experiment",
+        "printerBridgeRecommendedAction" : "manual-ipp-experiment",
+        "printerBridgeEndpointTemplate" : "http://10.0.2.2:631/printers/<shared-printer-name>",
+        "printerBridgeSetupHint" : "Share the Mac printer, then add it in Windows as an IPP network printer at http://10.0.2.2:631/printers/<shared-printer-name>.",
         "reason" : "Connect the Windows app agent before checking Daily Use integrations.",
         "recommendedAction" : "connect-agent",
         "recommendedCommand" : "veil-vmctl guest-agent-wait --json --wait-seconds 30"

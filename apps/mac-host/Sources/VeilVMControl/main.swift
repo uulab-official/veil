@@ -1172,6 +1172,9 @@ struct VeilVMControl {
         print("Daily Use borderless capture preflight: \(report.dailyUseReadiness.borderlessCapturePreflightPassed ? "ready" : "blocked")")
         print("Daily Use notifications preflight: \(report.dailyUseReadiness.notificationBridgePreflightPassed ? "ready" : "blocked")")
         print("Daily Use printer mode: \(report.dailyUseReadiness.printerBridgeMode)")
+        print("Daily Use printer action: \(report.dailyUseReadiness.printerBridgeRecommendedAction)")
+        print("Daily Use printer endpoint: \(report.dailyUseReadiness.printerBridgeEndpointTemplate)")
+        print("Daily Use printer setup: \(report.dailyUseReadiness.printerBridgeSetupHint)")
         if let packageIdentityStage = report.dailyUseReadiness.packageIdentityStage {
             print("Daily Use package identity stage: \(packageIdentityStage)")
         }

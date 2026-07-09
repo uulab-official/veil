@@ -450,7 +450,10 @@
       "printerBridgeMode": "manual-ipp-experiment",
       "recommendedAction": "prepare-sparse-package",
       "recommendedCommand": "veil-vmctl app-runtime-action --json --action prepare-sparse-package --wait-seconds 120",
-      "reason": "A signed sparse package is required before borderless app capture or Windows notifications can be enabled."
+      "reason": "A signed sparse package is required before borderless app capture or Windows notifications can be enabled.",
+      "printerBridgeRecommendedAction": "manual-ipp-experiment",
+      "printerBridgeEndpointTemplate": "http://10.0.2.2:631/printers/<shared-printer-name>",
+      "printerBridgeSetupHint": "Share the Mac printer, then add it in Windows as an IPP network printer at http://10.0.2.2:631/printers/<shared-printer-name>."
     }
   },
   "nextActions": [
