@@ -1,6 +1,20 @@
 import Foundation
 import VeilHostCore
 
+enum WindowsShellStatusTone: Equatable {
+    case green
+    case blue
+    case orange
+    case secondary
+}
+
+struct WindowsLauncherMetadataStatus: Equatable {
+    var title: String
+    var value: String
+    var symbolName: String
+    var tone: WindowsShellStatusTone
+}
+
 enum WindowsShellCopy {
     static func headerSubtitle(
         hasLiveAppConnection: Bool,
@@ -26,5 +40,42 @@ enum WindowsShellCopy {
 
     static func displayRecoveryStillStaleMessage(statusText: String) -> String {
         "Display is still \(statusText). Refresh the Windows display before opening an app."
+    }
+
+    static func installedLauncherMetadata(
+        windowsIsRunning: Bool,
+        windowsCanStart: Bool,
+        displayNeedsRefresh: Bool,
+        appValue: String,
+        appTone: WindowsShellStatusTone,
+        appConnectionReady: Bool,
+        appConnectionWaiting: Bool
+    ) -> [WindowsLauncherMetadataStatus] {
+        [
+            WindowsLauncherMetadataStatus(
+                title: "Windows",
+                value: windowsIsRunning ? "Running" : (windowsCanStart ? "Ready" : "Stopped"),
+                symbolName: "play.rectangle",
+                tone: windowsIsRunning ? .green : (windowsCanStart ? .blue : .secondary)
+            ),
+            WindowsLauncherMetadataStatus(
+                title: "App",
+                value: appValue,
+                symbolName: "macwindow",
+                tone: appTone
+            ),
+            WindowsLauncherMetadataStatus(
+                title: "Display",
+                value: displayNeedsRefresh ? "Refresh" : (windowsIsRunning ? "Available" : "Hidden"),
+                symbolName: displayNeedsRefresh ? "display.trianglebadge.exclamationmark" : "display",
+                tone: displayNeedsRefresh ? .orange : (windowsIsRunning ? .green : .secondary)
+            ),
+            WindowsLauncherMetadataStatus(
+                title: "Connection",
+                value: appConnectionReady ? "Ready" : (appConnectionWaiting ? "Connecting" : "Needed"),
+                symbolName: "bolt.horizontal.circle",
+                tone: appConnectionReady ? .green : (appConnectionWaiting ? .blue : .orange)
+            )
+        ]
     }
 }

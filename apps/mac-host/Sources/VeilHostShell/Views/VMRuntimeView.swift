@@ -1916,36 +1916,23 @@ private struct WindowsSetupDisplayPanel: View {
     }
 
     private var metadataItems: [LauncherMetadataItem] {
-        [
+        WindowsShellCopy.installedLauncherMetadata(
+            windowsIsRunning: snapshot.state == .running || snapshot.state == .starting,
+            windowsCanStart: canStart,
+            displayNeedsRefresh: canRecoverRuntimeDisplay,
+            appValue: appMetadataValue,
+            appTone: appMetadataTone,
+            appConnectionReady: canLaunchWindowsApp || canFulfillPendingLaunch,
+            appConnectionWaiting: pendingLaunch.isQueued || canRequestWindowsAppLaunch
+        )
+        .map { status in
             LauncherMetadataItem(
-                title: "ISO",
-                value: effectiveInstallEvidence.isInstalled
-                    ? "Detached"
-                    : (selectedInstallerName ?? "Missing"),
-                symbolName: "opticaldisc",
-                tint: effectiveInstallEvidence.isInstalled || (snapshot.installerMediaPath != nil && !installerNeedsFilePickerAccess) ? .green : .orange
-            ),
-            LauncherMetadataItem(
-                title: "Disk",
-                value: resourceName(from: snapshot.virtualDiskPath) ?? "Missing",
-                symbolName: "internaldrive",
-                tint: snapshot.virtualDiskPath == nil ? .orange : .green
-            ),
-            LauncherMetadataItem(
-                title: "Windows",
-                value: effectiveInstallEvidence.isInstalled
-                    ? (snapshot.state == .running ? "Running" : "Start")
-                    : (snapshot.bootReady ? "Install" : "Setup"),
-                symbolName: "play.rectangle",
-                tint: snapshot.state == .running ? .green : .blue
-            ),
-            LauncherMetadataItem(
-                title: "Apps",
-                value: appMetadataValue,
-                symbolName: "macwindow",
-                tint: appMetadataTint
+                title: status.title,
+                value: status.value,
+                symbolName: status.symbolName,
+                tint: color(for: status.tone)
             )
-        ]
+        }
     }
 
     private var appMetadataValue: String {
@@ -1974,6 +1961,10 @@ private struct WindowsSetupDisplayPanel: View {
     }
 
     private var appMetadataTint: Color {
+        color(for: appMetadataTone)
+    }
+
+    private var appMetadataTone: WindowsShellStatusTone {
         guard let activeMirrorSession else {
             if canFulfillPendingLaunch {
                 return .green
@@ -1991,6 +1982,19 @@ private struct WindowsSetupDisplayPanel: View {
         }
 
         return activeMirrorSession.latestFrame == nil ? .orange : .green
+    }
+
+    private func color(for tone: WindowsShellStatusTone) -> Color {
+        switch tone {
+        case .green:
+            .green
+        case .blue:
+            .blue
+        case .orange:
+            .orange
+        case .secondary:
+            .secondary
+        }
     }
 
     private var appDisplayName: String {

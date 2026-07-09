@@ -51,6 +51,31 @@ struct AppRuntimeDockMenuTests {
         #expect(visibleMessages.allSatisfy { !$0.contains("agent") })
     }
 
+    @Test("installed launcher metadata focuses on apps not setup media")
+    func installedLauncherMetadataFocusesOnAppsNotSetupMedia() {
+        let metadata = WindowsShellCopy.installedLauncherMetadata(
+            windowsIsRunning: true,
+            windowsCanStart: false,
+            displayNeedsRefresh: false,
+            appValue: "Notepad",
+            appTone: .green,
+            appConnectionReady: true,
+            appConnectionWaiting: false
+        )
+
+        #expect(metadata.map(\.title) == ["Windows", "App", "Display", "Connection"])
+        #expect(metadata.map(\.value) == ["Running", "Notepad", "Available", "Ready"])
+        #expect(metadata.map(\.symbolName) == ["play.rectangle", "macwindow", "display", "bolt.horizontal.circle"])
+        #expect(!metadata.map(\.title).contains("ISO"))
+        #expect(!metadata.map(\.title).contains("Disk"))
+
+        let visibleText = metadata.flatMap { [$0.title, $0.value] }
+        #expect(visibleText.allSatisfy { !$0.contains("runtime") })
+        #expect(visibleText.allSatisfy { !$0.contains("VM") })
+        #expect(visibleText.allSatisfy { !$0.contains("QEMU") })
+        #expect(visibleText.allSatisfy { !$0.contains("agent") })
+    }
+
     @Test("maps reconnect restore handoff to recovery start or wait states")
     func mapsReconnectRestoreHandoffToRecoveryStartOrWaitStates() {
         #expect(
