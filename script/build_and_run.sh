@@ -82,6 +82,42 @@ wait_for_app_process() {
   return 1
 }
 
+wait_for_launch_report() {
+  local report_path="$1"
+  local attempts=40
+  for ((i = 1; i <= attempts; i++)); do
+    if [[ -s "$report_path" ]]; then
+      return 0
+    fi
+    sleep 0.25
+  done
+
+  echo "Veil launched, but no main-window verification report was written within $((attempts / 4)) seconds." >&2
+  return 1
+}
+
+launch_report_value() {
+  local report_path="$1"
+  local key="$2"
+  plutil -extract "$key" raw -o - "$report_path"
+}
+
+verify_launch_report() {
+  local report_path="$1"
+  plutil -lint "$report_path" >/dev/null
+
+  local bundle_identifier
+  bundle_identifier="$(launch_report_value "$report_path" bundleIdentifier)"
+  local meets_contract
+  meets_contract="$(launch_report_value "$report_path" meetsLauncherContract)"
+
+  if [[ "$bundle_identifier" != "$BUNDLE_ID" || ( "$meets_contract" != "true" && "$meets_contract" != "1" ) ]]; then
+    echo "Veil launch report did not satisfy the one-window app contract:" >&2
+    cat "$report_path" >&2
+    return 1
+  fi
+}
+
 stop_app_process() {
   pkill -x "$APP_EXECUTABLE" >/dev/null 2>&1 || true
 
@@ -119,8 +155,13 @@ case "$MODE" in
     codesign --verify --deep --strict "$APP_BUNDLE" >/dev/null
     plutil -lint "$INFO_PLIST" >/dev/null
     test -f "$APP_ICON"
-    open_app
+    VERIFY_REPORT="$(mktemp -t veil-launch-report.XXXXXX.plist)"
+    rm -f "$VERIFY_REPORT"
+    open_app --launch-verification-report "$VERIFY_REPORT"
     wait_for_app_process
+    wait_for_launch_report "$VERIFY_REPORT"
+    verify_launch_report "$VERIFY_REPORT"
+    rm -f "$VERIFY_REPORT"
     if [[ "$MODE" != "--verify-keep-running" && "$MODE" != "verify-keep-running" ]]; then
       stop_app_process
     fi

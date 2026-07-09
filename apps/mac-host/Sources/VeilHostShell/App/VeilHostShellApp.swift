@@ -1121,6 +1121,10 @@ struct VeilHostShellApp: App {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     var dockMenuProvider: (() -> NSMenu?)?
     var reopenHandler: (() -> Void)?
+    private let launchVerificationReportURL = LaunchVerificationArguments.reportURL(
+        from: ProcessInfo.processInfo.arguments
+    )
+    private var appIconSource: AppIconSource = .fallback
 
     func applicationWillFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
@@ -1128,12 +1132,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        applyBundledAppIcon()
+        appIconSource = applyBundledAppIcon()
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
         DispatchQueue.main.async {
             MainWindowChrome.showMainWindow()
         }
+        scheduleLaunchVerificationReportIfNeeded()
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
@@ -1150,14 +1155,54 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @MainActor
-    private func applyBundledAppIcon() {
+    private func applyBundledAppIcon() -> AppIconSource {
         guard let iconURL = Bundle.main.url(forResource: "VeilAppIcon", withExtension: "icns"),
               let icon = NSImage(contentsOf: iconURL) else {
             NSApp.applicationIconImage = fallbackAppIcon()
-            return
+            return .fallback
         }
 
         NSApp.applicationIconImage = icon
+        return .bundled
+    }
+
+    private func scheduleLaunchVerificationReportIfNeeded(attempt: Int = 1) {
+        guard launchVerificationReportURL != nil else {
+            return
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
+            guard let self else {
+                return
+            }
+
+            MainWindowChrome.showMainWindow()
+            let report = MainWindowChrome.launchReport(appIconSource: self.appIconSource)
+            if report.meetsLauncherContract || attempt >= 24 {
+                self.writeLaunchVerificationReport(report)
+            } else {
+                self.scheduleLaunchVerificationReportIfNeeded(attempt: attempt + 1)
+            }
+        }
+    }
+
+    private func writeLaunchVerificationReport(_ report: MainWindowLaunchReport) {
+        guard let launchVerificationReportURL else {
+            return
+        }
+
+        do {
+            let encoder = PropertyListEncoder()
+            encoder.outputFormat = .xml
+            let data = try encoder.encode(report)
+            try FileManager.default.createDirectory(
+                at: launchVerificationReportURL.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
+            try data.write(to: launchVerificationReportURL, options: .atomic)
+        } catch {
+            NSLog("Veil launch verification report could not be written: \(error.localizedDescription)")
+        }
     }
 
     private func fallbackAppIcon() -> NSImage {
@@ -1779,6 +1824,26 @@ private enum MainWindowChrome {
         !mainWindows.isEmpty
     }
 
+    static func launchReport(appIconSource: AppIconSource) -> MainWindowLaunchReport {
+        let windows = mainWindows
+        let window = windows.first
+        return MainWindowLaunchReport(
+            bundleIdentifier: Bundle.main.bundleIdentifier ?? "",
+            activationPolicy: activationPolicyName(NSApp.activationPolicy()),
+            mainWindowCount: windows.count,
+            visibleMainWindowCount: windows.filter(\.isVisible).count,
+            duplicateMainWindowCount: max(0, windows.count - 1),
+            isAppActive: NSApp.isActive,
+            isMainWindowKey: window?.isKeyWindow ?? false,
+            frame: MainWindowFrameReport(window?.frame ?? .zero),
+            minWidth: Double(window?.minSize.width ?? .zero),
+            minHeight: Double(window?.minSize.height ?? .zero),
+            titlebarAppearsTransparent: window?.titlebarAppearsTransparent ?? false,
+            hasFullSizeContentView: window?.styleMask.contains(.fullSizeContentView) ?? false,
+            appIconSource: appIconSource
+        )
+    }
+
     private static var mainWindows: [NSWindow] {
         NSApp.windows.filter { window in
             window.identifier?.rawValue == "main"
@@ -1813,6 +1878,19 @@ private enum MainWindowChrome {
             y: visibleFrame.midY - targetSize.height / 2
         )
         window.setFrame(NSRect(origin: origin, size: targetSize), display: true, animate: false)
+    }
+
+    private static func activationPolicyName(_ policy: NSApplication.ActivationPolicy) -> String {
+        switch policy {
+        case .regular:
+            return "regular"
+        case .accessory:
+            return "accessory"
+        case .prohibited:
+            return "prohibited"
+        @unknown default:
+            return "unknown"
+        }
     }
 }
 

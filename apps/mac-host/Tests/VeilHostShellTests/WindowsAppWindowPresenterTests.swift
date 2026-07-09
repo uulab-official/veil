@@ -190,6 +190,68 @@ struct WindowsAppWindowPresenterTests {
         #expect(shouldContinueDefaultReopen == false)
     }
 
+    @Test("launch verification arguments accept separated and inline report paths")
+    func launchVerificationArgumentsAcceptReportPaths() throws {
+        let separated = try #require(
+            LaunchVerificationArguments.reportURL(
+                from: ["veil-host-shell", "--launch-verification-report", "/tmp/veil-launch.json"]
+            )
+        )
+        #expect(separated.path == "/tmp/veil-launch.json")
+
+        let inline = try #require(
+            LaunchVerificationArguments.reportURL(
+                from: ["veil-host-shell", "--launch-verification-report=/tmp/veil-inline.json"]
+            )
+        )
+        #expect(inline.path == "/tmp/veil-inline.json")
+        #expect(LaunchVerificationArguments.reportURL(from: ["veil-host-shell"]) == nil)
+        #expect(
+            LaunchVerificationArguments.reportURL(
+                from: ["veil-host-shell", "--launch-verification-report"]
+            ) == nil
+        )
+    }
+
+    @Test("launch verification contract requires one visible branded main window")
+    func launchVerificationContractRequiresOneVisibleBrandedMainWindow() {
+        let passingReport = MainWindowLaunchReport(
+            bundleIdentifier: "org.uulab.veil.host-shell",
+            activationPolicy: "regular",
+            mainWindowCount: 1,
+            visibleMainWindowCount: 1,
+            duplicateMainWindowCount: 0,
+            isAppActive: true,
+            isMainWindowKey: true,
+            frame: MainWindowFrameReport(NSRect(x: 10, y: 20, width: 1440, height: 900)),
+            minWidth: 1180,
+            minHeight: 760,
+            titlebarAppearsTransparent: true,
+            hasFullSizeContentView: true,
+            appIconSource: .bundled
+        )
+
+        #expect(passingReport.meetsLauncherContract)
+
+        var backgroundFocusReport = passingReport
+        backgroundFocusReport.isAppActive = false
+        backgroundFocusReport.isMainWindowKey = false
+        #expect(backgroundFocusReport.meetsLauncherContract)
+
+        var duplicateWindowReport = passingReport
+        duplicateWindowReport.mainWindowCount = 2
+        duplicateWindowReport.duplicateMainWindowCount = 1
+        #expect(duplicateWindowReport.meetsLauncherContract == false)
+
+        var smallWindowReport = passingReport
+        smallWindowReport.frame = MainWindowFrameReport(NSRect(x: 10, y: 20, width: 900, height: 640))
+        #expect(smallWindowReport.meetsLauncherContract == false)
+
+        var fallbackIconReport = passingReport
+        fallbackIconReport.appIconSource = .fallback
+        #expect(fallbackIconReport.meetsLauncherContract == false)
+    }
+
     @Test("closes programmatic windows without emitting user-close callback")
     func closesProgrammaticWindowsWithoutUserCloseCallback() {
         _ = NSApplication.shared
