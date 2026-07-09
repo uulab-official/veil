@@ -61,6 +61,7 @@ Goal: keep the user-facing workflow one-screen-first (launcher + one action path
 - [x] Route executable `primaryNextAction` commands to a launcher button, so open, repair, reconnect, close, quiet, and app-check steps can run from the same one-screen app flow instead of only appearing as CLI guidance.
 - [x] Add structured `primaryNextAction.actionId` validation so the launcher can route the next step through the same top-level action contract as menu bar, Dock, CLI, and harness automation.
 - [x] Add `oneScreenUX` to `app-runtime-status` and the harness so launcher-first and Windows-app-window modes must keep one primary surface family, menu/Dock recovery, manual display recovery, and one executable next action aligned.
+- [x] Surface `oneScreenUX` in the launcher panels and human-readable `app-runtime-status` output so the one-screen product contract is visible without opening raw JSON.
 
 ## CEO Review
 

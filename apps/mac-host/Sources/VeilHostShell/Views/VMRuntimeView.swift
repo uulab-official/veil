@@ -15,6 +15,7 @@ struct VMRuntimeView: View {
     var pendingWindowsAppName: String?
     var activeMirrorSession: WindowMirrorSession?
     var primaryNextAction: WindowsAppRuntimePrimaryNextActionStatus
+    var oneScreenUX: WindowsAppRuntimeOneScreenUXStatus
     var recommendedProofKind: String?
     var recommendedProofCommand: String?
     var startVMAction: () -> Void
@@ -95,6 +96,7 @@ struct VMRuntimeView: View {
                     pendingWindowsAppName: pendingWindowsAppName,
                     activeMirrorSession: activeMirrorSession,
                     primaryNextAction: primaryNextAction,
+                    oneScreenUX: oneScreenUX,
                     recommendedProofKind: recommendedProofKind,
                     recommendedProofCommand: recommendedProofCommand,
                     runRecommendedProofAction: runRecommendedProofAction,
@@ -1349,6 +1351,7 @@ private struct WindowsSetupDisplayPanel: View {
     var pendingWindowsAppName: String?
     var activeMirrorSession: WindowMirrorSession?
     var primaryNextAction: WindowsAppRuntimePrimaryNextActionStatus
+    var oneScreenUX: WindowsAppRuntimeOneScreenUXStatus
     var recommendedProofKind: String?
     var recommendedProofCommand: String?
     var runRecommendedProofAction: () -> Void
@@ -1559,6 +1562,12 @@ private struct WindowsSetupDisplayPanel: View {
                         .foregroundStyle(.white.opacity(primaryNextAction.isAvailable ? 0.88 : 0.62))
                         .lineLimit(1)
                         .help(primaryNextActionHelp)
+
+                    Label(oneScreenUXTitle, systemImage: oneScreenUXSymbolName)
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.white.opacity(oneScreenUX.usesSinglePrimarySurfaceFamily ? 0.70 : 0.92))
+                        .lineLimit(1)
+                        .help(oneScreenUX.reason)
                 }
 
                 if installSimulation.phase != .idle {
@@ -2209,6 +2218,19 @@ private struct WindowsSetupDisplayPanel: View {
         ]
             .compactMap { $0 }
             .joined(separator: "\n")
+    }
+
+    private var oneScreenUXTitle: String {
+        if oneScreenUX.mode == "windows-app-windows" {
+            let count = oneScreenUX.expectedVisibleSurfaceCount
+            return count == 1 ? "One Windows app surface" : "\(count) Windows app surfaces"
+        }
+
+        return "One launcher surface"
+    }
+
+    private var oneScreenUXSymbolName: String {
+        oneScreenUX.usesSinglePrimarySurfaceFamily ? "rectangle.on.rectangle" : "exclamationmark.triangle"
     }
 
     private var installerNeedsFilePickerAccess: Bool {

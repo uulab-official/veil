@@ -33,6 +33,7 @@ struct DetailView: View {
                 pendingWindowsAppName: pendingWindowsAppName,
                 activeMirrorSession: activeMirrorSession,
                 primaryNextAction: runtimeStatusReport.primaryNextAction,
+                oneScreenUX: runtimeStatusReport.oneScreenUX,
                 recommendedProofKind: proofPlan.recommendedProofKind,
                 recommendedProofCommand: proofPlan.recommendedProofCommand,
                 startVMAction: startVMAction,
@@ -63,6 +64,7 @@ struct DetailView: View {
                     proofArtifacts: runtimeStatusReport.proofArtifacts,
                     releaseGate: runtimeStatusReport.releaseGate,
                     primaryNextAction: runtimeStatusReport.primaryNextAction,
+                    oneScreenUX: runtimeStatusReport.oneScreenUX,
                     launchWindowsAppAction: launchWindowsAppAction,
                     runPrimaryNextAction: runPrimaryNextAction,
                     runRecommendedProofAction: runRecommendedProofAction
@@ -143,6 +145,7 @@ private struct WindowsQuickLaunchPanel: View {
     var proofArtifacts: WindowsAppRuntimeProofArtifactStatus
     var releaseGate: WindowsAppRuntimeReleaseGateStatus
     var primaryNextAction: WindowsAppRuntimePrimaryNextActionStatus
+    var oneScreenUX: WindowsAppRuntimeOneScreenUXStatus
     var launchWindowsAppAction: () -> Void
     var runPrimaryNextAction: (LauncherPrimaryNextActionRoute) -> Void
     var runRecommendedProofAction: () -> Void
@@ -252,6 +255,12 @@ private struct WindowsQuickLaunchPanel: View {
                         .foregroundStyle(primaryNextAction.isAvailable ? .primary : .secondary)
                         .lineLimit(1)
                         .help(primaryNextActionHelp)
+
+                    Label(oneScreenUXTitle, systemImage: oneScreenUXSymbolName)
+                        .font(.caption)
+                        .foregroundStyle(oneScreenUX.usesSinglePrimarySurfaceFamily ? Color.secondary : Color.orange)
+                        .lineLimit(1)
+                        .help(oneScreenUX.reason)
                 }
 
                 Spacer()
@@ -381,6 +390,19 @@ private struct WindowsQuickLaunchPanel: View {
             recommendedAction: releaseGate.recommendedAction,
             isPassing: releaseGate.isPassing
         )
+    }
+
+    private var oneScreenUXTitle: String {
+        if oneScreenUX.mode == "windows-app-windows" {
+            let count = oneScreenUX.expectedVisibleSurfaceCount
+            return count == 1 ? "One Windows app surface" : "\(count) Windows app surfaces"
+        }
+
+        return "One launcher surface"
+    }
+
+    private var oneScreenUXSymbolName: String {
+        oneScreenUX.usesSinglePrimarySurfaceFamily ? "rectangle.on.rectangle" : "exclamationmark.triangle"
     }
 
     private var primaryNextActionHelp: String {

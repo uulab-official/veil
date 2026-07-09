@@ -855,6 +855,8 @@ struct VeilVMControl {
         print("Visible surface: \(report.visibleSurfacePolicy.primarySurface)")
         print("Expected visible surfaces: \(report.visibleSurfacePolicy.expectedVisibleSurfaceCount)")
         print("Recovery display: \(report.visibleSurfacePolicy.keepsRecoveryDisplayManual ? "manual" : "automatic")")
+        print("One-screen UX: \(oneScreenUXSummary(report.oneScreenUX))")
+        print("One-screen controls: \(oneScreenUXControls(report.oneScreenUX))")
         print("App flow: \(appFlowSummary(report.releaseGate))")
         print("Next app step: \(appFlowNextStepTitle(report.releaseGate))")
         print("App flow detail: \(appFlowDetail(report.releaseGate))")
@@ -1350,6 +1352,30 @@ struct VeilVMControl {
         }
 
         return "\(releaseGate.passingStepCount)/\(releaseGate.requiredStepCount) ready"
+    }
+
+    private static func oneScreenUXSummary(
+        _ oneScreenUX: WindowsAppRuntimeOneScreenUXStatus
+    ) -> String {
+        let surface = oneScreenUX.mode == "windows-app-windows"
+            ? "Windows app windows"
+            : "launcher"
+        let family = oneScreenUX.usesSinglePrimarySurfaceFamily
+            ? "single surface family"
+            : "needs attention"
+        return "\(surface), \(oneScreenUX.expectedVisibleSurfaceCount) visible, \(family)"
+    }
+
+    private static func oneScreenUXControls(
+        _ oneScreenUX: WindowsAppRuntimeOneScreenUXStatus
+    ) -> String {
+        let menu = oneScreenUX.keepsMenuBarControlAvailable ? "menu ready" : "menu missing"
+        let dock = oneScreenUX.keepsDockControlAvailable ? "Dock ready" : "Dock missing"
+        let recovery = oneScreenUX.keepsDisplayRecoveryManual
+            ? "manual display recovery"
+            : "automatic display recovery"
+        let action = oneScreenUX.primaryActionId ?? "no primary action"
+        return "\(menu), \(dock), \(recovery), \(action)"
     }
 
     private static func appFlowNextStepTitle(
