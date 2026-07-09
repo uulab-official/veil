@@ -19,6 +19,7 @@ Goal: keep the user-facing workflow one-screen-first (launcher + one action path
 - [x] Extract and test the reconnect-restore handoff policy so running/starting Windows maps to guest-agent recovery, startable Windows maps to runtime start, and unavailable runtime maps to a visible wait state.
 - [x] Add a one-minute release-gate checklist and proof card template to `docs/checklists/2026-07-09-parallels-launch-onboarding.md` so app-first launch, reconnect restore, proof, and quiet-runtime behavior can be validated consistently.
 - [x] Align visible app-launch copy away from VM/agent/proof wording toward Windows-app language such as app connection, Windows display, and app checks.
+- [x] Align mirrored app placeholder, app bridge panel, app list, and launch empty-state copy away from HWND/capture/agent language toward app screen, app window, and app connection language.
 
 ## CEO Review
 

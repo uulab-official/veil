@@ -45,12 +45,12 @@ struct WindowsAppBridgePanel: View {
                 )
 
                 if let lastSession = model.mirrorSessions.last {
-                    Label("\(lastSession.window.title) mapped", systemImage: "checkmark.circle.fill")
+                    Label("\(lastSession.window.title) open", systemImage: "checkmark.circle.fill")
                         .font(.callout)
                         .foregroundStyle(.green)
                         .lineLimit(1)
                 } else {
-                    Label("No mirrored app window yet", systemImage: "circle")
+                    Label("No Windows app window yet", systemImage: "circle")
                         .font(.callout)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
@@ -61,13 +61,13 @@ struct WindowsAppBridgePanel: View {
 
             HStack(spacing: 10) {
                 CoherenceMetric(
-                    title: "HWND Sessions",
+                    title: "App Windows",
                     value: "\(model.mirrorSessions.count)",
                     symbolName: "rectangle.3.group",
                     tint: model.mirrorSessions.isEmpty ? .secondary : .green
                 )
                 CoherenceMetric(
-                    title: "Capture",
+                    title: "App Screen",
                     value: captureValue,
                     symbolName: "viewfinder",
                     tint: captureTint
@@ -139,7 +139,7 @@ struct WindowsAppBridgePanel: View {
     private var statusTitle: String {
         switch model.connectionMode {
         case .agent:
-            return model.health == nil ? "Agent Pending" : "Agent"
+            return model.health == nil ? "Connecting" : "Connected"
         case .demo:
             return "Demo"
         }

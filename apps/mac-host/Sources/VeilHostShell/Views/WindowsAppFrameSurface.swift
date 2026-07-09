@@ -96,28 +96,28 @@ struct WindowsAppFrameSurface: View {
         case .pending:
             return "Opening \(session.window.title)"
         case .streaming:
-            return "Frame could not be displayed"
+            return "App image could not be displayed"
         case .unavailable:
-            return "Window capture unavailable"
+            return "App screen unavailable"
         }
     }
 
     private var statusDetail: String {
         switch session.captureState {
         case .pending:
-            return "Waiting for the first frame from Windows."
+            return "Waiting for the Windows app screen."
         case .streaming:
             guard let latestFrame = session.latestFrame else {
-                return "Waiting for the next frame from Windows."
+                return "Waiting for the next app screen update."
             }
 
-            return "Received \(latestFrame.format.uppercased()) frame \(latestFrame.sequence), but the image data could not be decoded."
+            return "Received screen update \(latestFrame.sequence), but it could not be shown."
         case .unavailable:
             if session.connectionMode == .demo {
-                return "Connect the real guest agent to mirror this app as a Mac window."
+                return "Connect Windows to open this app as a Mac window."
             }
 
-            return "The connected guest agent does not advertise window capture."
+            return "Windows is connected, but app screen sharing is not available yet."
         }
     }
 
@@ -153,21 +153,21 @@ struct WindowsAppFrameSurface: View {
 
     private var accessibilityLabel: String {
         if session.captureState == .unavailable {
-            return "\(session.window.title) window capture unavailable"
+            return "\(session.window.title) app screen unavailable"
         }
 
         if hasUndisplayableFrame {
-            return "\(session.window.title) frame could not be displayed"
+            return "\(session.window.title) app image could not be displayed"
         }
 
         if session.latestFrame == nil {
-            return "Waiting for \(session.window.title) frame"
+            return "Waiting for \(session.window.title) app screen"
         }
 
         if let frameTimingSummary {
-            return "\(session.window.title) mirrored Windows app frame, \(frameTimingSummary)"
+            return "\(session.window.title) Windows app screen, \(frameTimingSummary)"
         }
 
-        return "\(session.window.title) mirrored Windows app frame"
+        return "\(session.window.title) Windows app screen"
     }
 }

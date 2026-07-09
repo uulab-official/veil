@@ -45,7 +45,7 @@ struct LaunchView: View {
                     ContentUnavailableView(
                         "Nothing Launched",
                         systemImage: "macwindow.on.rectangle",
-                        description: Text("Launch Notepad to verify the host-to-agent app flow.")
+                        description: Text("Launch Notepad to verify a Windows app opens as a Mac window.")
                     )
                     .frame(maxWidth: .infinity, minHeight: 260)
                 }

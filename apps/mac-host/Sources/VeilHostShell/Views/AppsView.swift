@@ -30,7 +30,7 @@ struct AppsView: View {
                     ContentUnavailableView(
                         "No Apps Loaded",
                         systemImage: "square.grid.2x2",
-                        description: Text("Refresh the agent to load available Windows apps.")
+                        description: Text("Refresh the Windows app connection to load available apps.")
                     )
                     .frame(maxWidth: .infinity, minHeight: 260)
                 }
