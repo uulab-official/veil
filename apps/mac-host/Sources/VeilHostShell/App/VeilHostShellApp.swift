@@ -1087,14 +1087,14 @@ struct VeilHostShellApp: App {
             && vmModel.snapshot?.installEvidence.isInstalled != true
     }
 
-    private var menuBarSymbolName: String {
-        WindowsShellCopy.menuBarSymbolName(
-            runtimeState: vmModel.snapshot?.state,
-            hasOpenAppWindows: !model.mirrorSessions.isEmpty,
-            hasQueuedApp: model.pendingLaunchStatus().isQueued,
-            canRestorePreviousApps: model.canRestoreMirrorSessions,
-            canReconnectPreviousApps: model.canReconnectRestoreMirrorSessions
+    private var appRuntimeStatusReport: WindowsAppRuntimeStatusReport {
+        model.runtimeStatusReport(
+            localRuntime: model.localRuntimeStatus(snapshot: vmModel.snapshot)
         )
+    }
+
+    private var menuBarSymbolName: String {
+        appRuntimeStatusReport.menuBarIntegration.symbolName
     }
 
     private func userMessage(for error: any Error) -> String {
@@ -1472,35 +1472,18 @@ private struct VeilMenuBarMenu: View {
             && vmModel.snapshot?.installEvidence.isInstalled != true
     }
 
-    private var runtimeStatusTitle: String {
-        WindowsShellCopy.menuStatusTitle(
-            runtimeState: vmModel.snapshot?.state,
-            windowsInstalled: vmModel.snapshot?.windowsInstalled == true,
-            hasLiveAppConnection: model.hasLiveAgentConnection,
-            hasQueuedApp: model.pendingLaunchStatus().isQueued,
-            queuedAppName: model.pendingLaunchAppId == nil ? nil : queuedLaunchAppName,
-            canRestorePreviousApps: model.canRestoreMirrorSessions,
-            canReconnectPreviousApps: model.canReconnectRestoreMirrorSessions,
-            restorableAppName: restorableSingleAppName,
-            openAppWindowCount: model.mirrorSessions.count
+    private var appRuntimeStatusReport: WindowsAppRuntimeStatusReport {
+        model.runtimeStatusReport(
+            localRuntime: model.localRuntimeStatus(snapshot: vmModel.snapshot)
         )
     }
 
+    private var runtimeStatusTitle: String {
+        appRuntimeStatusReport.menuBarIntegration.statusTitle
+    }
+
     private var runtimeStatusSymbolName: String {
-        switch vmModel.snapshot?.state {
-        case .running:
-            "play.circle.fill"
-        case .starting:
-            "arrow.triangle.2.circlepath"
-        case .suspended:
-            "pause.circle"
-        case .failed, .unsupported:
-            "exclamationmark.triangle"
-        case .notConfigured:
-            "plus.circle"
-        case .stopped, nil:
-            "stop.circle"
-        }
+        appRuntimeStatusReport.menuBarIntegration.symbolName
     }
 
     private var runningAppsTitle: String {
