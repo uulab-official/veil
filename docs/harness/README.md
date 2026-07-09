@@ -119,23 +119,31 @@ same status includes `recommendedStopCommand` so automation can hand off to the
 bounded local runtime shutdown command without guessing. The `actions` list
 also exposes `runtime.stopWhenIdle` so callers can gate the actual stop command
 from the same app-runtime status contract.
-When a live agent is connected, `connection.capabilities` mirrors the agent's
-app launch, window capture, input, and clipboard support. The proof actions
-`proof.appWindow`, `proof.coherence`, and `proof.mvp` are available only when
-those capabilities can support the matching proof command. The sibling
-`proofPlan` object carries the selected app id, readiness booleans, and exact
+When a live app connection is present, `connection.capabilities` mirrors the
+app launch, window capture, input, and clipboard support exposed by the Windows
+side. The app-check actions `proof.appWindow`, `proof.coherence`, and
+`proof.mvp` are available only when those capabilities can support the matching
+check command. The sibling `proofPlan` object carries the selected app id,
+readiness booleans, and exact
 `veil-vmctl app-window-proof`, `coherence-proof`, and `mvp-proof --require-proved`
-commands so automation can move from status to proof without rebuilding command
+commands so automation can move from status to app check without rebuilding command
 strings. It also exposes `recommendedProofKind` and `recommendedProofCommand`
-as the strongest currently available single proof CTA. The `actions` list must
+as the strongest currently available single app-check CTA. The `actions` list must
 include `proof.recommended`, available exactly when that recommended command is
 present. The matching command surface is
 `veil-vmctl app-runtime-action --json --action proof-recommended`, which runs
-the strongest available proof and returns a `proof` evidence summary inside the
+the strongest available check and returns a `proof` evidence summary inside the
 same action report. The status report also includes `proofArtifacts`, a
-metadata-only pointer to the latest saved proof JSON under Veil diagnostics so
-automation can attach or inspect the current proof evidence without copying
+metadata-only pointer to the latest saved app-check JSON under Veil diagnostics so
+automation can attach or inspect the current check evidence without copying
 Windows media, disk contents, product keys, or guest data.
+
+`releaseGate` turns the one-minute Parallels-style launch checklist into a
+machine-readable contract. It records the five required release-card steps:
+Windows setup readiness, one-screen app path, open-app readiness, saved app
+check evidence, and close/quiet/restore readiness. It also carries the proof
+card screenshot slots so automation can tell contributors exactly which current
+screenshots to attach before promoting a build.
 
 `visibleSurfacePolicy` captures the normal user-facing window contract: before a
 mirrored Windows app opens, the launcher is the single expected surface; after a

@@ -22,6 +22,19 @@ function setReconnectMenuBarState(report) {
   report.menuBarIntegration.canReconnectPreviousApps = true;
 }
 
+function setReleaseGateStep(report, id, overrides) {
+  Object.assign(report.releaseGate.steps.find((step) => step.id === id), overrides);
+  refreshReleaseGateSummary(report);
+}
+
+function refreshReleaseGateSummary(report) {
+  const requiredSteps = report.releaseGate.steps.filter((step) => step.isRequired);
+  report.releaseGate.requiredStepCount = requiredSteps.length;
+  report.releaseGate.passingStepCount = requiredSteps.filter((step) => step.isPassing).length;
+  report.releaseGate.isPassing = report.releaseGate.passingStepCount === report.releaseGate.requiredStepCount;
+  report.releaseGate.recommendedAction = requiredSteps.find((step) => !step.isPassing)?.id ?? "ready-for-release-card";
+}
+
 test("validates app runtime status fixture", () => {
   const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.demo.json", import.meta.url), "utf8"));
 
@@ -104,6 +117,16 @@ test("rejects reports without proof plan status", () => {
   );
 });
 
+test("rejects reports without release gate status", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.demo.json", import.meta.url), "utf8"));
+  delete report.releaseGate;
+
+  assert.throws(
+    () => validateAppRuntimeStatus(report),
+    /releaseGate/
+  );
+});
+
 test("rejects reports without pending launch status", () => {
   const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.demo.json", import.meta.url), "utf8"));
   delete report.pendingLaunch;
@@ -159,6 +182,11 @@ test("accepts Dock previous-app restore readiness", () => {
   report.dockIntegration.canReconnectPreviousApps = true;
   report.actions.find((action) => action.id === "windowsApps.reconnectRestore").isAvailable = true;
   setReconnectMenuBarState(report);
+  setReleaseGateStep(report, "closeOrRestore", {
+    state: "ready",
+    isPassing: true,
+    nextActionCommand: "veil-vmctl app-runtime-action --json --action reconnect-restore"
+  });
 
   assert.equal(validateAppRuntimeStatus(report), report);
 });
@@ -171,6 +199,11 @@ test("rejects Dock previous-app restore badge drift", () => {
   report.dockIntegration.canReconnectPreviousApps = true;
   report.actions.find((action) => action.id === "windowsApps.reconnectRestore").isAvailable = true;
   setReconnectMenuBarState(report);
+  setReleaseGateStep(report, "closeOrRestore", {
+    state: "ready",
+    isPassing: true,
+    nextActionCommand: "veil-vmctl app-runtime-action --json --action reconnect-restore"
+  });
 
   assert.throws(
     () => validateAppRuntimeStatus(report),
@@ -340,6 +373,13 @@ test("accepts queued pending launch repair while local Windows is already runnin
     primaryActionId: "runtime.repairGuestAgentForApp",
     primaryActionTitle: "Continue Notepad"
   });
+  setReleaseGateStep(report, "windowsSetup", {
+    state: "passed",
+    isPassing: true
+  });
+  setReleaseGateStep(report, "openWindowsApp", {
+    nextActionCommand: "veil-vmctl app-runtime-action --json --action fulfill-pending"
+  });
 
   assert.doesNotThrow(() => validateAppRuntimeStatus(report));
 });
@@ -366,6 +406,10 @@ test("accepts stale running console preview with recovery commands", () => {
   report.menuBarIntegration.symbolName = "display";
   report.menuBarIntegration.primaryActionId = "windowsApps.launchSelected";
   report.menuBarIntegration.primaryActionTitle = "Open Notepad";
+  setReleaseGateStep(report, "windowsSetup", {
+    state: "passed",
+    isPassing: true
+  });
 
   assert.doesNotThrow(() => validateAppRuntimeStatus(report));
 });
@@ -474,6 +518,9 @@ test("rejects fulfill-pending action availability that drifts from queued launch
   report.launchPlan.recommendedLaunchCommand = "veil-vmctl app-runtime-action --json --action fulfill-pending";
   report.launchPlan.reason = "The live Windows agent can fulfill the queued app launch now.";
   report.menuBarIntegration.canFulfillPendingLaunch = true;
+  setReleaseGateStep(report, "openWindowsApp", {
+    nextActionCommand: "veil-vmctl app-runtime-action --json --action fulfill-pending"
+  });
 
   assert.throws(
     () => validateAppRuntimeStatus(report),
@@ -632,6 +679,38 @@ test("rejects proof artifact paths that do not point to JSON", () => {
   assert.throws(
     () => validateAppRuntimeStatus(report),
     /proofArtifacts latest artifact/
+  );
+});
+
+test("rejects release gate counts that drift from required steps", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.mac-window-live.json", import.meta.url), "utf8"));
+  report.releaseGate.passingStepCount = 4;
+
+  assert.throws(
+    () => validateAppRuntimeStatus(report),
+    /releaseGate\.passingStepCount/
+  );
+});
+
+test("rejects release gate next action drift", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.mac-window-live.json", import.meta.url), "utf8"));
+  const closeStep = report.releaseGate.steps.find((step) => step.id === "closeOrRestore");
+  closeStep.nextActionCommand = "veil-vmctl app-runtime-action --json --action reconnect-restore";
+
+  assert.throws(
+    () => validateAppRuntimeStatus(report),
+    /closeOrRestore/
+  );
+});
+
+test("rejects release gate titles with internal terms", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.demo.json", import.meta.url), "utf8"));
+  const checkStep = report.releaseGate.steps.find((step) => step.id === "appCheckEvidence");
+  checkStep.title = "Run MVP Proof";
+
+  assert.throws(
+    () => validateAppRuntimeStatus(report),
+    /product-facing/
   );
 });
 

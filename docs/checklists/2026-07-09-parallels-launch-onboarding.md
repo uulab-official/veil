@@ -25,6 +25,7 @@ Goal: validate the one-screen launcher flow before any separate Windows desktop 
 - launcher visibility transition in `model.runtimeStatusReport().launcherVisibility`
 - setup screen progress (`snapshot.latestConsoleLaunch.previewStatus`)
 - app-runtime actions and proof readiness (`runtimeStatusReport().proofPlan`)
+- one-screen release card status (`runtimeStatusReport().releaseGate`)
 - running app sessions (`model.mirrorSessions`)
 
 ## One-Minute Release Gate

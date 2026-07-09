@@ -41,6 +41,7 @@ export function validateAppRuntimeStatus(report) {
   validateLaunchPlan(report.launchPlan, report);
   validateProofPlan(report.proofPlan, report);
   validateProofArtifacts(report.proofArtifacts);
+  validateReleaseGate(report.releaseGate, report);
   validateMenuBarIntegration(report.menuBarIntegration, report);
   validateActions(report.actions, report);
 
@@ -645,6 +646,171 @@ function validateProofArtifacts(proofArtifacts) {
   }
 }
 
+function validateReleaseGate(releaseGate, report) {
+  if (!releaseGate || typeof releaseGate !== "object" || Array.isArray(releaseGate)) {
+    throw new TypeError("releaseGate must be an object.");
+  }
+
+  requireBoolean(releaseGate.isEnabled, "releaseGate.isEnabled");
+  requireNonNegativeInteger(releaseGate.requiredStepCount, "releaseGate.requiredStepCount");
+  requireNonNegativeInteger(releaseGate.passingStepCount, "releaseGate.passingStepCount");
+  requireBoolean(releaseGate.isPassing, "releaseGate.isPassing");
+  requireString(releaseGate.recommendedAction, "releaseGate.recommendedAction");
+  requireString(releaseGate.reason, "releaseGate.reason");
+
+  if (!Array.isArray(releaseGate.steps) || releaseGate.steps.length === 0) {
+    throw new TypeError("releaseGate.steps must be a non-empty array.");
+  }
+
+  if (!Array.isArray(releaseGate.screenshotSlots) || releaseGate.screenshotSlots.length === 0) {
+    throw new TypeError("releaseGate.screenshotSlots must be a non-empty array.");
+  }
+
+  const expectedStepIds = [
+    "windowsSetup",
+    "oneScreenPath",
+    "openWindowsApp",
+    "appCheckEvidence",
+    "closeOrRestore"
+  ];
+  const actualStepIds = releaseGate.steps.map((step) => step?.id);
+  if (actualStepIds.join(",") !== expectedStepIds.join(",")) {
+    throw new TypeError("releaseGate.steps must preserve the one-screen release gate order.");
+  }
+
+  const validStates = new Set(["pending", "ready", "passed", "blocked"]);
+  for (const step of releaseGate.steps) {
+    if (!step || typeof step !== "object" || Array.isArray(step)) {
+      throw new TypeError("releaseGate step entries must be objects.");
+    }
+
+    requireString(step.id, "releaseGate.step.id");
+    requireString(step.title, "releaseGate.step.title");
+    requireString(step.state, `releaseGate.steps.${step.id}.state`);
+    requireBoolean(step.isRequired, `releaseGate.steps.${step.id}.isRequired`);
+    requireBoolean(step.isPassing, `releaseGate.steps.${step.id}.isPassing`);
+    requireString(step.evidence, `releaseGate.steps.${step.id}.evidence`);
+
+    if (!validStates.has(step.state)) {
+      throw new TypeError(`Unsupported releaseGate step state: ${step.state}`);
+    }
+
+    if (step.nextActionCommand !== undefined) {
+      requireString(step.nextActionCommand, `releaseGate.steps.${step.id}.nextActionCommand`);
+    }
+
+    for (const disallowedTerm of ["Guest Agent", "HWND", "QEMU", "Proof"]) {
+      if (step.title.includes(disallowedTerm)) {
+        throw new TypeError("releaseGate step titles must stay product-facing.");
+      }
+    }
+  }
+
+  const requiredSteps = releaseGate.steps.filter((step) => step.isRequired);
+  const passingStepCount = requiredSteps.filter((step) => step.isPassing).length;
+  if (releaseGate.requiredStepCount !== requiredSteps.length) {
+    throw new TypeError("releaseGate.requiredStepCount must match required steps.");
+  }
+  if (releaseGate.passingStepCount !== passingStepCount) {
+    throw new TypeError("releaseGate.passingStepCount must match passing required steps.");
+  }
+  if (releaseGate.isPassing !== (passingStepCount === requiredSteps.length)) {
+    throw new TypeError("releaseGate.isPassing must reflect all required steps.");
+  }
+
+  const firstUnmetStep = requiredSteps.find((step) => !step.isPassing);
+  const expectedRecommendedAction = firstUnmetStep?.id ?? "ready-for-release-card";
+  if (releaseGate.recommendedAction !== expectedRecommendedAction) {
+    throw new TypeError("releaseGate.recommendedAction must point at the first unmet step.");
+  }
+
+  const setupStep = releaseGate.steps.find((step) => step.id === "windowsSetup");
+  const expectedSetupPassing = report.localRuntime.bootReady && report.localRuntime.windowsInstalled;
+  if (setupStep.isPassing !== expectedSetupPassing) {
+    throw new TypeError("releaseGate windowsSetup must reflect local Windows setup readiness.");
+  }
+  if (setupStep.nextActionCommand !== report.localRuntime.recommendedInstallStatusCommand
+    && setupStep.nextActionCommand !== report.localRuntime.recommendedPrepareCommand) {
+    throw new TypeError("releaseGate windowsSetup must expose an install status or prepare command.");
+  }
+
+  const oneScreenStep = releaseGate.steps.find((step) => step.id === "oneScreenPath");
+  const expectedOneScreenPassing = report.launcherVisibility.isEnabled
+    && report.visibleSurfacePolicy.isEnabled
+    && report.visibleSurfacePolicy.keepsRecoveryDisplayManual
+    && (report.visibleSurfacePolicy.primarySurface === "launcher" || report.macWindowIntegration.hidesLauncherWhenMirroring);
+  if (oneScreenStep.isPassing !== expectedOneScreenPassing) {
+    throw new TypeError("releaseGate oneScreenPath must reflect visible surface policy.");
+  }
+  if (oneScreenStep.nextActionCommand !== "veil-vmctl app-runtime-status --json") {
+    throw new TypeError("releaseGate oneScreenPath must point back to app-runtime-status.");
+  }
+
+  const launchStep = releaseGate.steps.find((step) => step.id === "openWindowsApp");
+  const expectedLaunchPassing = report.launchPlan.canRequestSelectedAppLaunch
+    && report.launchPlan.recommendedLaunchCommand !== undefined;
+  if (launchStep.isPassing !== expectedLaunchPassing) {
+    throw new TypeError("releaseGate openWindowsApp must reflect launch plan readiness.");
+  }
+  const expectedLaunchCommand = report.launchPlan.recommendedLaunchCommand
+    ?? report.launchPlan.recommendedStartCommand
+    ?? report.launchPlan.recommendedRepairCommand
+    ?? report.launchPlan.recommendedWaitCommand;
+  if (launchStep.nextActionCommand !== expectedLaunchCommand) {
+    throw new TypeError("releaseGate openWindowsApp must expose the next launch command.");
+  }
+
+  const checkStep = releaseGate.steps.find((step) => step.id === "appCheckEvidence");
+  const expectedCheckPassing = report.proofArtifacts.latestProofPath !== undefined
+    && report.proofArtifacts.latestProofKind !== undefined;
+  if (checkStep.isPassing !== expectedCheckPassing) {
+    throw new TypeError("releaseGate appCheckEvidence must reflect saved app check evidence.");
+  }
+  if (checkStep.nextActionCommand !== report.proofPlan.recommendedProofCommand) {
+    throw new TypeError("releaseGate appCheckEvidence must expose the recommended app check command.");
+  }
+
+  const closeStep = releaseGate.steps.find((step) => step.id === "closeOrRestore");
+  const expectedClosePassing = report.quietRuntime.canQuietRuntime
+    || report.macWindowIntegration.mirroredWindowCount > 0
+    || report.dockIntegration.canReconnectPreviousApps
+    || report.dockIntegration.canRestorePreviousApps;
+  if (closeStep.isPassing !== expectedClosePassing) {
+    throw new TypeError("releaseGate closeOrRestore must reflect close, quiet, or restore readiness.");
+  }
+  const expectedCloseCommand = report.macWindowIntegration.mirroredWindowCount > 0
+    ? "veil-vmctl app-runtime-action --json --action close-all"
+    : (report.quietRuntime.recommendedStopCommand
+      ?? ((report.dockIntegration.canReconnectPreviousApps || report.dockIntegration.canRestorePreviousApps)
+        ? "veil-vmctl app-runtime-action --json --action reconnect-restore"
+        : undefined));
+  if (closeStep.nextActionCommand !== expectedCloseCommand) {
+    throw new TypeError("releaseGate closeOrRestore must expose the next close, quiet, or restore command.");
+  }
+
+  const expectedSlotIds = [
+    "preBootLauncher",
+    "firstAppLaunch",
+    "appWindowOnly",
+    "menuRestore",
+    "closeQuiet"
+  ];
+  const actualSlotIds = releaseGate.screenshotSlots.map((slot) => slot?.id);
+  if (actualSlotIds.join(",") !== expectedSlotIds.join(",")) {
+    throw new TypeError("releaseGate.screenshotSlots must match the proof card template.");
+  }
+
+  for (const slot of releaseGate.screenshotSlots) {
+    if (!slot || typeof slot !== "object" || Array.isArray(slot)) {
+      throw new TypeError("releaseGate screenshot slot entries must be objects.");
+    }
+    requireString(slot.id, "releaseGate.screenshotSlot.id");
+    requireString(slot.title, `releaseGate.screenshotSlots.${slot.id}.title`);
+    requireString(slot.expectedSurface, `releaseGate.screenshotSlots.${slot.id}.expectedSurface`);
+    requireBoolean(slot.isRequired, `releaseGate.screenshotSlots.${slot.id}.isRequired`);
+  }
+}
+
 function validateProofCommand(command, fieldName, isAvailable, expectedCommand) {
   if (isAvailable) {
     requireString(command, fieldName);
@@ -952,6 +1118,12 @@ function validateActions(actions, report) {
     requireString(action.id, "action.id");
     requireString(action.title, "action.title");
     requireBoolean(action.isAvailable, "action.isAvailable");
+
+    for (const disallowedTerm of ["Runtime", "Guest Agent", "HWND", "Proof"]) {
+      if (action.title.includes(disallowedTerm)) {
+        throw new TypeError("action.title must stay product-facing.");
+      }
+    }
   }
 
   const startAction = actions.find((action) => action.id === "runtime.startWindowsForApp");

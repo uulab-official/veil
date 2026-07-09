@@ -672,6 +672,32 @@ struct HostDashboardModelTests {
         #expect(report.proofPlan.reason == "The Windows app connection can run window, input, and full app checks for the selected app.")
         #expect(!report.proofPlan.reason.contains("Windows agent"))
         #expect(!report.proofPlan.reason.contains("proof"))
+        #expect(report.releaseGate.isEnabled)
+        #expect(report.releaseGate.requiredStepCount == 5)
+        #expect((3...4).contains(report.releaseGate.passingStepCount))
+        #expect(report.releaseGate.isPassing == false)
+        #expect(report.releaseGate.recommendedAction == "windowsSetup")
+        #expect(report.releaseGate.steps.map(\.id) == [
+            "windowsSetup",
+            "oneScreenPath",
+            "openWindowsApp",
+            "appCheckEvidence",
+            "closeOrRestore"
+        ])
+        #expect(report.releaseGate.steps.first { $0.id == "oneScreenPath" }?.isPassing == true)
+        #expect(report.releaseGate.steps.first { $0.id == "openWindowsApp" }?.nextActionCommand == "veil-vmctl app-runtime-action --json --action launch --app-id winapp_notepad")
+        #expect(report.releaseGate.steps.first { $0.id == "closeOrRestore" }?.nextActionCommand == "veil-vmctl app-runtime-action --json --action close-all")
+        #expect(report.releaseGate.screenshotSlots.map(\.id) == [
+            "preBootLauncher",
+            "firstAppLaunch",
+            "appWindowOnly",
+            "menuRestore",
+            "closeQuiet"
+        ])
+        #expect(report.releaseGate.steps.map(\.title).allSatisfy { !$0.contains("Guest Agent") })
+        #expect(report.releaseGate.steps.map(\.title).allSatisfy { !$0.contains("Runtime") })
+        #expect(report.releaseGate.steps.map(\.title).allSatisfy { !$0.contains("Proof") })
+        #expect(report.releaseGate.steps.map(\.title).allSatisfy { !$0.contains("HWND") })
         #expect(report.actions.first { $0.id == "dock.openMainWindow" }?.isAvailable == true)
         #expect(report.actions.first { $0.id == "dock.bringWindowsAppsForward" }?.isAvailable == true)
         #expect(report.actions.first { $0.id == "clipboard.setText" }?.isAvailable == true)
@@ -773,6 +799,63 @@ struct HostDashboardModelTests {
         #expect(stoppedReport.quietRuntime.reason == "All Windows app windows are closed and Windows is already quiet.")
         #expect(stoppedReport.actions.first { $0.id == "runtime.quietWhenIdle" }?.isAvailable == false)
         #expect(stoppedReport.actions.first { $0.id == "runtime.stopWhenIdle" }?.isAvailable == false)
+    }
+
+    @Test("reports passing release gate when setup app check and restore evidence are present")
+    @MainActor
+    func reportsPassingReleaseGateWhenEvidenceIsPresent() async throws {
+        let service = FakeDashboardService(health: .clipboardReady)
+        let model = HostDashboardModel(service: service)
+
+        await model.load()
+        await model.launchNotepad()
+
+        let localRuntime = WindowsAppRuntimeLocalRuntimeStatus(
+            isKnown: true,
+            state: .running,
+            bootReady: true,
+            canStart: false,
+            isRunning: true,
+            windowsInstalled: true,
+            recommendedAction: "wait-for-guest-agent",
+            recommendedInstallStatusCommand: "veil-vmctl qemu-install-status --json",
+            reason: "Windows is installed and ready for app checks."
+        )
+        let macWindowIntegration = model.macWindowIntegrationStatus()
+        let launcherVisibility = model.launcherVisibilityStatus(
+            macWindowIntegration: macWindowIntegration
+        )
+        let visibleSurfacePolicy = model.visibleSurfacePolicyStatus(
+            launcherVisibility: launcherVisibility,
+            macWindowIntegration: macWindowIntegration
+        )
+        let releaseGate = model.releaseGateStatus(
+            localRuntime: localRuntime,
+            launcherVisibility: launcherVisibility,
+            visibleSurfacePolicy: visibleSurfacePolicy,
+            macWindowIntegration: macWindowIntegration,
+            quietRuntime: model.quietRuntimeStatus(localRuntime: localRuntime),
+            launchPlan: model.launchPlanStatus(localRuntime: localRuntime),
+            proofPlan: model.proofPlanStatus(),
+            proofArtifacts: WindowsAppRuntimeProofArtifactStatus(
+                diagnosticsDirectory: "/tmp/Veil/Diagnostics",
+                recommendedProofDirectory: "/tmp/Veil/Diagnostics/Recommended Proof",
+                latestProofKind: "mvp",
+                latestProofPath: "/tmp/Veil/Diagnostics/Recommended Proof/mvp-proof-latest.json",
+                latestProofFileName: "mvp-proof-latest.json",
+                latestProofModifiedAt: Date(timeIntervalSince1970: 1_700_000_100),
+                reason: "Latest app check artifact is available in Veil diagnostics."
+            )
+        )
+
+        #expect(releaseGate.requiredStepCount == 5)
+        #expect(releaseGate.passingStepCount == 5)
+        #expect(releaseGate.isPassing)
+        #expect(releaseGate.recommendedAction == "ready-for-release-card")
+        #expect(releaseGate.reason == "The one-screen Windows app release gate has current setup, launch, app check, and close or restore evidence.")
+        #expect(releaseGate.steps.first { $0.id == "appCheckEvidence" }?.state == "passed")
+        #expect(releaseGate.steps.first { $0.id == "closeOrRestore" }?.state == "ready")
+        #expect(releaseGate.steps.first { $0.id == "closeOrRestore" }?.nextActionCommand == "veil-vmctl app-runtime-action --json --action close-all")
     }
 
     @Test("reports latest proof artifact from diagnostics")

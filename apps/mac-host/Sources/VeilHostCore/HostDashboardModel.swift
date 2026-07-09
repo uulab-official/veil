@@ -574,6 +574,84 @@ public struct WindowsAppRuntimeProofArtifactStatus: Codable, Equatable, Sendable
     }
 }
 
+public struct WindowsAppRuntimeReleaseGateStepStatus: Codable, Equatable, Sendable {
+    public var id: String
+    public var title: String
+    public var state: String
+    public var isRequired: Bool
+    public var isPassing: Bool
+    public var evidence: String
+    public var nextActionCommand: String?
+
+    public init(
+        id: String,
+        title: String,
+        state: String,
+        isRequired: Bool = true,
+        isPassing: Bool,
+        evidence: String,
+        nextActionCommand: String? = nil
+    ) {
+        self.id = id
+        self.title = title
+        self.state = state
+        self.isRequired = isRequired
+        self.isPassing = isPassing
+        self.evidence = evidence
+        self.nextActionCommand = nextActionCommand
+    }
+}
+
+public struct WindowsAppRuntimeReleaseGateScreenshotSlotStatus: Codable, Equatable, Sendable {
+    public var id: String
+    public var title: String
+    public var expectedSurface: String
+    public var isRequired: Bool
+
+    public init(
+        id: String,
+        title: String,
+        expectedSurface: String,
+        isRequired: Bool = true
+    ) {
+        self.id = id
+        self.title = title
+        self.expectedSurface = expectedSurface
+        self.isRequired = isRequired
+    }
+}
+
+public struct WindowsAppRuntimeReleaseGateStatus: Codable, Equatable, Sendable {
+    public var isEnabled: Bool
+    public var requiredStepCount: Int
+    public var passingStepCount: Int
+    public var isPassing: Bool
+    public var recommendedAction: String
+    public var steps: [WindowsAppRuntimeReleaseGateStepStatus]
+    public var screenshotSlots: [WindowsAppRuntimeReleaseGateScreenshotSlotStatus]
+    public var reason: String
+
+    public init(
+        isEnabled: Bool = true,
+        requiredStepCount: Int,
+        passingStepCount: Int,
+        isPassing: Bool,
+        recommendedAction: String,
+        steps: [WindowsAppRuntimeReleaseGateStepStatus],
+        screenshotSlots: [WindowsAppRuntimeReleaseGateScreenshotSlotStatus],
+        reason: String
+    ) {
+        self.isEnabled = isEnabled
+        self.requiredStepCount = requiredStepCount
+        self.passingStepCount = passingStepCount
+        self.isPassing = isPassing
+        self.recommendedAction = recommendedAction
+        self.steps = steps
+        self.screenshotSlots = screenshotSlots
+        self.reason = reason
+    }
+}
+
 public struct WindowsAppRuntimePendingLaunchStatus: Codable, Equatable, Sendable {
     public var isQueued: Bool
     public var appId: String?
@@ -618,6 +696,7 @@ public struct WindowsAppRuntimeStatusReport: Codable, Equatable, Sendable {
     public var launchPlan: WindowsAppRuntimeLaunchPlanStatus
     public var proofPlan: WindowsAppRuntimeProofPlanStatus
     public var proofArtifacts: WindowsAppRuntimeProofArtifactStatus
+    public var releaseGate: WindowsAppRuntimeReleaseGateStatus
     public var actions: [WindowsAppRuntimeActionStatus]
 
     public init(
@@ -642,6 +721,7 @@ public struct WindowsAppRuntimeStatusReport: Codable, Equatable, Sendable {
         launchPlan: WindowsAppRuntimeLaunchPlanStatus,
         proofPlan: WindowsAppRuntimeProofPlanStatus,
         proofArtifacts: WindowsAppRuntimeProofArtifactStatus,
+        releaseGate: WindowsAppRuntimeReleaseGateStatus,
         actions: [WindowsAppRuntimeActionStatus]
     ) {
         self.kind = kind
@@ -665,6 +745,7 @@ public struct WindowsAppRuntimeStatusReport: Codable, Equatable, Sendable {
         self.launchPlan = launchPlan
         self.proofPlan = proofPlan
         self.proofArtifacts = proofArtifacts
+        self.releaseGate = releaseGate
         self.actions = actions
     }
 }
@@ -878,6 +959,16 @@ public final class HostDashboardModel {
         let proofPlan = proofPlanStatus()
         let proofArtifacts = proofArtifactStatus()
         let pendingLaunch = pendingLaunchStatus()
+        let releaseGate = releaseGateStatus(
+            localRuntime: localRuntime,
+            launcherVisibility: launcherVisibility,
+            visibleSurfacePolicy: visibleSurfacePolicy,
+            macWindowIntegration: macWindowIntegration,
+            quietRuntime: quietRuntime,
+            launchPlan: launchPlan,
+            proofPlan: proofPlan,
+            proofArtifacts: proofArtifacts
+        )
         return WindowsAppRuntimeStatusReport(
             generatedAt: generatedAt,
             phase: phase,
@@ -938,6 +1029,7 @@ public final class HostDashboardModel {
             launchPlan: launchPlan,
             proofPlan: proofPlan,
             proofArtifacts: proofArtifacts,
+            releaseGate: releaseGate,
             actions: [
                 WindowsAppRuntimeActionStatus(
                     id: "dock.openMainWindow",
@@ -1551,6 +1643,151 @@ public final class HostDashboardModel {
             latestProofModifiedAt: latestProof.modifiedAt,
             reason: "Latest app check artifact is available in Veil diagnostics."
         )
+    }
+
+    public func releaseGateStatus(
+        localRuntime: WindowsAppRuntimeLocalRuntimeStatus,
+        launcherVisibility: WindowsAppRuntimeLauncherVisibilityStatus,
+        visibleSurfacePolicy: WindowsAppRuntimeVisibleSurfacePolicyStatus,
+        macWindowIntegration: WindowsAppRuntimeMacWindowIntegrationStatus,
+        quietRuntime: WindowsAppRuntimeQuietPolicyStatus,
+        launchPlan: WindowsAppRuntimeLaunchPlanStatus,
+        proofPlan: WindowsAppRuntimeProofPlanStatus,
+        proofArtifacts: WindowsAppRuntimeProofArtifactStatus
+    ) -> WindowsAppRuntimeReleaseGateStatus {
+        let setupPassing = localRuntime.bootReady && localRuntime.windowsInstalled
+        let setupCommand = setupPassing
+            ? localRuntime.recommendedInstallStatusCommand
+            : (localRuntime.recommendedPrepareCommand ?? localRuntime.recommendedInstallStatusCommand)
+        let surfacePassing = launcherVisibility.isEnabled
+            && visibleSurfacePolicy.isEnabled
+            && visibleSurfacePolicy.keepsRecoveryDisplayManual
+            && (visibleSurfacePolicy.primarySurface == "launcher" || macWindowIntegration.hidesLauncherWhenMirroring)
+        let launchPassing = launchPlan.canRequestSelectedAppLaunch
+            && launchPlan.recommendedLaunchCommand != nil
+        let checkPassing = proofArtifacts.latestProofPath != nil
+            && proofArtifacts.latestProofKind != nil
+        let quietOrRestorePassing = quietRuntime.canQuietRuntime
+            || macWindowIntegration.mirroredWindowCount > 0
+            || canReconnectRestoreMirrorSessions
+            || canRestoreMirrorSessions
+
+        let steps = [
+            WindowsAppRuntimeReleaseGateStepStatus(
+                id: "windowsSetup",
+                title: "Windows Setup Ready",
+                state: setupPassing ? "passed" : "blocked",
+                isPassing: setupPassing,
+                evidence: localRuntime.reason,
+                nextActionCommand: setupCommand
+            ),
+            WindowsAppRuntimeReleaseGateStepStatus(
+                id: "oneScreenPath",
+                title: "One-Screen App Path",
+                state: surfacePassing ? "passed" : "blocked",
+                isPassing: surfacePassing,
+                evidence: visibleSurfacePolicy.reason,
+                nextActionCommand: "veil-vmctl app-runtime-status --json"
+            ),
+            WindowsAppRuntimeReleaseGateStepStatus(
+                id: "openWindowsApp",
+                title: "Open Windows App",
+                state: launchPassing ? "ready" : "blocked",
+                isPassing: launchPassing,
+                evidence: launchPlan.reason,
+                nextActionCommand: nextLaunchGateCommand(launchPlan: launchPlan)
+            ),
+            WindowsAppRuntimeReleaseGateStepStatus(
+                id: "appCheckEvidence",
+                title: "App Check Evidence",
+                state: checkPassing ? "passed" : (proofPlan.recommendedProofCommand == nil ? "blocked" : "ready"),
+                isPassing: checkPassing,
+                evidence: proofArtifacts.reason,
+                nextActionCommand: proofPlan.recommendedProofCommand
+            ),
+            WindowsAppRuntimeReleaseGateStepStatus(
+                id: "closeOrRestore",
+                title: "Close Or Restore Apps",
+                state: quietOrRestorePassing ? "ready" : "pending",
+                isPassing: quietOrRestorePassing,
+                evidence: quietRuntime.reason,
+                nextActionCommand: closeOrRestoreGateCommand(
+                    macWindowIntegration: macWindowIntegration,
+                    quietRuntime: quietRuntime
+                )
+            )
+        ]
+
+        let requiredSteps = steps.filter(\.isRequired)
+        let passingStepCount = requiredSteps.filter(\.isPassing).count
+        let isPassing = passingStepCount == requiredSteps.count
+        let firstUnmetStep = requiredSteps.first { !$0.isPassing }
+
+        return WindowsAppRuntimeReleaseGateStatus(
+            requiredStepCount: requiredSteps.count,
+            passingStepCount: passingStepCount,
+            isPassing: isPassing,
+            recommendedAction: firstUnmetStep?.id ?? "ready-for-release-card",
+            steps: steps,
+            screenshotSlots: [
+                WindowsAppRuntimeReleaseGateScreenshotSlotStatus(
+                    id: "preBootLauncher",
+                    title: "Pre-Boot Launcher",
+                    expectedSurface: "One Veil launcher window with setup or start action visible."
+                ),
+                WindowsAppRuntimeReleaseGateScreenshotSlotStatus(
+                    id: "firstAppLaunch",
+                    title: "First App Launch",
+                    expectedSurface: "A selected Windows app is opening, queued, or ready with one concrete next action."
+                ),
+                WindowsAppRuntimeReleaseGateScreenshotSlotStatus(
+                    id: "appWindowOnly",
+                    title: "App Window Only",
+                    expectedSurface: "The mirrored Windows app window is visible while the launcher is hidden unless recovery is needed."
+                ),
+                WindowsAppRuntimeReleaseGateScreenshotSlotStatus(
+                    id: "menuRestore",
+                    title: "Menu Restore",
+                    expectedSurface: "Menu or Dock controls can bring forward, restore, reconnect, or close Windows app windows."
+                ),
+                WindowsAppRuntimeReleaseGateScreenshotSlotStatus(
+                    id: "closeQuiet",
+                    title: "Close And Quiet",
+                    expectedSurface: "After the final Windows app window closes, the launcher returns or quiet Windows action is available."
+                )
+            ],
+            reason: isPassing
+                ? "The one-screen Windows app release gate has current setup, launch, app check, and close or restore evidence."
+                : "Continue the first unmet release gate step before promoting the one-screen Windows app flow."
+        )
+    }
+
+    private func nextLaunchGateCommand(
+        launchPlan: WindowsAppRuntimeLaunchPlanStatus
+    ) -> String? {
+        launchPlan.recommendedLaunchCommand
+            ?? launchPlan.recommendedStartCommand
+            ?? launchPlan.recommendedRepairCommand
+            ?? launchPlan.recommendedWaitCommand
+    }
+
+    private func closeOrRestoreGateCommand(
+        macWindowIntegration: WindowsAppRuntimeMacWindowIntegrationStatus,
+        quietRuntime: WindowsAppRuntimeQuietPolicyStatus
+    ) -> String? {
+        if macWindowIntegration.mirroredWindowCount > 0 {
+            return "veil-vmctl app-runtime-action --json --action close-all"
+        }
+
+        if let recommendedStopCommand = quietRuntime.recommendedStopCommand {
+            return recommendedStopCommand
+        }
+
+        if canReconnectRestoreMirrorSessions || canRestoreMirrorSessions {
+            return "veil-vmctl app-runtime-action --json --action reconnect-restore"
+        }
+
+        return nil
     }
 
     private func proofArtifacts(in directory: URL, kind: String) -> [ProofArtifactCandidate] {

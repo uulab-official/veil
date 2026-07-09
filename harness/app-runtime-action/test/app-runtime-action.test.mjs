@@ -4,6 +4,19 @@ import assert from "node:assert/strict";
 
 import { validateAppRuntimeAction } from "../src/validate-app-runtime-action.mjs";
 
+function setReleaseGateStep(report, id, overrides) {
+  Object.assign(report.status.releaseGate.steps.find((step) => step.id === id), overrides);
+  refreshReleaseGateSummary(report);
+}
+
+function refreshReleaseGateSummary(report) {
+  const requiredSteps = report.status.releaseGate.steps.filter((step) => step.isRequired);
+  report.status.releaseGate.requiredStepCount = requiredSteps.length;
+  report.status.releaseGate.passingStepCount = requiredSteps.filter((step) => step.isPassing).length;
+  report.status.releaseGate.isPassing = report.status.releaseGate.passingStepCount === report.status.releaseGate.requiredStepCount;
+  report.status.releaseGate.recommendedAction = requiredSteps.find((step) => !step.isPassing)?.id ?? "ready-for-release-card";
+}
+
 test("validates app runtime launch action fixture", () => {
   const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-action.launch-demo.json", import.meta.url), "utf8"));
 
@@ -39,6 +52,13 @@ test("validates pending launch repair action while local Windows is running", ()
   report.status.actions.find((action) => action.id === "runtime.repairGuestAgentForApp").isAvailable = true;
   report.status.menuBarIntegration.primaryActionId = "runtime.repairGuestAgentForApp";
   report.status.menuBarIntegration.primaryActionTitle = "Continue Notepad";
+  setReleaseGateStep(report, "windowsSetup", {
+    state: "passed",
+    isPassing: true
+  });
+  setReleaseGateStep(report, "openWindowsApp", {
+    nextActionCommand: "veil-vmctl app-runtime-action --json --action fulfill-pending"
+  });
 
   assert.equal(validateAppRuntimeAction(report), report);
 });
@@ -340,6 +360,9 @@ test("rejects accepted fulfill-pending actions that leave pending launch queued"
   report.status.menuBarIntegration.canFulfillPendingLaunch = true;
   report.launchPlan.pendingLaunchAppId = "winapp_notepad";
   report.launchPlan.recommendedLaunchCommand = "veil-vmctl app-runtime-action --json --action fulfill-pending";
+  setReleaseGateStep(report, "openWindowsApp", {
+    nextActionCommand: "veil-vmctl app-runtime-action --json --action fulfill-pending"
+  });
 
   assert.throws(
     () => validateAppRuntimeAction(report),
@@ -608,6 +631,11 @@ test("rejects close-all actions that leave mirrored sessions open", () => {
   report.status.actions.find((action) => action.id === "runtime.quietWhenIdle").isAvailable = false;
   report.status.actions.find((action) => action.id === "runtime.stopWhenIdle").isAvailable = false;
   report.status.actions.find((action) => action.id === "dock.bringWindowsAppsForward").isAvailable = true;
+  setReleaseGateStep(report, "closeOrRestore", {
+    state: "ready",
+    isPassing: true,
+    nextActionCommand: "veil-vmctl app-runtime-action --json --action close-all"
+  });
 
   assert.throws(
     () => validateAppRuntimeAction(report),
@@ -666,6 +694,11 @@ test("allows rejected restore actions to keep requested app ids", () => {
   report.status.quietRuntime.openWindowCount = 0;
   report.status.actions.find((action) => action.id === "windowsApps.restorePrevious").isAvailable = true;
   report.status.actions.find((action) => action.id === "windowsApps.reconnectRestore").isAvailable = true;
+  setReleaseGateStep(report, "closeOrRestore", {
+    state: "ready",
+    isPassing: true,
+    nextActionCommand: "veil-vmctl app-runtime-action --json --action reconnect-restore"
+  });
 
   assert.equal(validateAppRuntimeAction(report), report);
 });
@@ -699,6 +732,11 @@ test("rejects restore actions whose windows are absent from status", () => {
   report.status.quietRuntime.openWindowCount = 0;
   report.status.actions.find((action) => action.id === "windowsApps.restorePrevious").isAvailable = true;
   report.status.actions.find((action) => action.id === "windowsApps.reconnectRestore").isAvailable = true;
+  setReleaseGateStep(report, "closeOrRestore", {
+    state: "ready",
+    isPassing: true,
+    nextActionCommand: "veil-vmctl app-runtime-action --json --action reconnect-restore"
+  });
 
   assert.throws(
     () => validateAppRuntimeAction(report),
