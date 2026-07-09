@@ -2250,7 +2250,7 @@ private struct WindowsSetupDisplayPanel: View {
     private var primaryNextActionHelp: String {
         [
             primaryNextAction.reason,
-            primaryNextAction.runsInApp ? "Runs inside Veil." : "Review from the command line.",
+            WindowsShellCopy.primaryActionHandoffDetail(runsInApp: primaryNextAction.runsInApp),
             primaryNextAction.command.map { "Command: \($0)" }
         ]
             .compactMap { $0 }
@@ -2392,7 +2392,10 @@ private struct WindowsSetupDisplayPanel: View {
     private var launchOnboardingHelp: String {
         [
             launchOnboarding.reason,
-            launchOnboarding.canContinueInApp ? "Runs inside Veil." : "Continue from the review flow.",
+            WindowsShellCopy.launchOnboardingHandoffDetail(
+                state: launchOnboarding.state,
+                canContinueInApp: launchOnboarding.canContinueInApp
+            ),
             launchOnboarding.primaryCommand.map { "Command: \($0)" }
         ]
             .compactMap { $0 }

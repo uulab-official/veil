@@ -194,14 +194,39 @@ struct AppRuntimeDockMenuTests {
                 pendingLiveProof: true
             ) == "Next: Open Windows App"
         )
+        #expect(WindowsShellCopy.primaryActionHandoffDetail(runsInApp: true) == "Runs inside Veil.")
+        #expect(WindowsShellCopy.primaryActionHandoffDetail(runsInApp: false) == "Prepare Review Evidence.")
+        #expect(
+            WindowsShellCopy.launchOnboardingHandoffDetail(
+                state: "ready-for-review",
+                canContinueInApp: false
+            ) == "Share Review Evidence."
+        )
+        #expect(
+            WindowsShellCopy.launchOnboardingHandoffDetail(
+                state: "external-check",
+                canContinueInApp: false
+            ) == "Prepare Review Evidence."
+        )
 
-        let visibleText = titles + symbols
+        let visibleText = titles + symbols + [
+            WindowsShellCopy.primaryActionHandoffDetail(runsInApp: false),
+            WindowsShellCopy.launchOnboardingHandoffDetail(
+                state: "ready-for-review",
+                canContinueInApp: false
+            ),
+            WindowsShellCopy.launchOnboardingHandoffDetail(
+                state: "external-check",
+                canContinueInApp: false
+            )
+        ]
         #expect(visibleText.allSatisfy { !$0.contains("runtime") })
         #expect(visibleText.allSatisfy { !$0.contains("VM") })
         #expect(visibleText.allSatisfy { !$0.contains("QEMU") })
         #expect(visibleText.allSatisfy { !$0.contains("Guest Agent") })
         #expect(visibleText.allSatisfy { !$0.contains("HWND") })
         #expect(visibleText.allSatisfy { !$0.contains("Proof") })
+        #expect(visibleText.allSatisfy { !$0.localizedCaseInsensitiveContains("command line") })
     }
 
     @Test("app flow copy stays product-facing")

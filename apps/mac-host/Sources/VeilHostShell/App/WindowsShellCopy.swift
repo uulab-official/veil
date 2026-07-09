@@ -335,6 +335,30 @@ enum WindowsShellCopy {
         pendingLiveProof ? "Next: \(currentStepTitle)" : currentStepTitle
     }
 
+    static func primaryActionHandoffDetail(runsInApp: Bool) -> String {
+        runsInApp ? "Runs inside Veil." : "Prepare Review Evidence."
+    }
+
+    static func launchOnboardingHandoffDetail(
+        state: String,
+        canContinueInApp: Bool
+    ) -> String {
+        if canContinueInApp {
+            return "Runs inside Veil."
+        }
+
+        switch state {
+        case "ready-for-review":
+            return "Share Review Evidence."
+        case "external-check":
+            return "Prepare Review Evidence."
+        case "blocked":
+            return "Finish the highlighted setup step."
+        default:
+            return "Continue the app flow."
+        }
+    }
+
     static func launchOnboardingSymbolName(
         state: String,
         canContinueInApp: Bool
