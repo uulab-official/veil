@@ -76,6 +76,67 @@ struct AppRuntimeDockMenuTests {
         #expect(visibleText.allSatisfy { !$0.contains("agent") })
     }
 
+    @Test("app check copy stays product-facing")
+    func appCheckCopyStaysProductFacing() {
+        let titles = [
+            WindowsShellCopy.appCheckStatusTitle(
+                recommendedProofKind: "mvp",
+                latestProofFileName: nil
+            ),
+            WindowsShellCopy.appCheckStatusTitle(
+                recommendedProofKind: "app-window",
+                latestProofFileName: nil
+            ),
+            WindowsShellCopy.appCheckStatusTitle(
+                recommendedProofKind: nil,
+                latestProofFileName: "mvp-proof-2026-07-09.json"
+            ),
+            WindowsShellCopy.appCheckStatusTitle(
+                recommendedProofKind: nil,
+                latestProofFileName: nil
+            )
+        ]
+        let details = [
+            WindowsShellCopy.appCheckDetail(
+                canRunMVPProof: true,
+                canRunCoherenceProof: true,
+                canRunAppWindowProof: true,
+                recommendedProofCommand: "veil-vmctl mvp-proof --json",
+                latestProofFileName: nil,
+                reason: "unused"
+            ),
+            WindowsShellCopy.appCheckDetail(
+                canRunMVPProof: false,
+                canRunCoherenceProof: false,
+                canRunAppWindowProof: true,
+                recommendedProofCommand: "veil-vmctl app-window-proof --json",
+                latestProofFileName: nil,
+                reason: "unused"
+            ),
+            WindowsShellCopy.appCheckDetail(
+                canRunMVPProof: false,
+                canRunCoherenceProof: false,
+                canRunAppWindowProof: false,
+                recommendedProofCommand: nil,
+                latestProofFileName: "mvp-proof-2026-07-09.json",
+                reason: "unused"
+            )
+        ]
+
+        #expect(titles == ["Full Check", "Window Check", "Saved", "Waiting"])
+        #expect(details == [
+            "Window, input, and clipboard are ready.",
+            "Window capture is ready.",
+            "Latest app check saved in diagnostics."
+        ])
+
+        let visibleText = titles + details
+        #expect(visibleText.allSatisfy { !$0.contains("Proof") })
+        #expect(visibleText.allSatisfy { !$0.contains("Runtime") })
+        #expect(visibleText.allSatisfy { !$0.contains("Guest Agent") })
+        #expect(visibleText.allSatisfy { !$0.contains("HWND") })
+    }
+
     @Test("menu status titles stay app first")
     func menuStatusTitlesStayAppFirst() {
         let titles = [

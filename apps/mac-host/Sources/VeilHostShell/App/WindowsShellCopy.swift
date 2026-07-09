@@ -226,4 +226,49 @@ enum WindowsShellCopy {
             )
         ]
     }
+
+    static func appCheckStatusTitle(
+        recommendedProofKind: String?,
+        latestProofFileName: String?
+    ) -> String {
+        switch recommendedProofKind {
+        case "mvp":
+            return "Full Check"
+        case "coherence":
+            return "Input Check"
+        case "app-window":
+            return "Window Check"
+        default:
+            return latestProofFileName == nil ? "Waiting" : "Saved"
+        }
+    }
+
+    static func appCheckDetail(
+        canRunMVPProof: Bool,
+        canRunCoherenceProof: Bool,
+        canRunAppWindowProof: Bool,
+        recommendedProofCommand: String?,
+        latestProofFileName: String?,
+        reason: String
+    ) -> String {
+        if recommendedProofCommand != nil {
+            if canRunMVPProof {
+                return "Window, input, and clipboard are ready."
+            }
+
+            if canRunCoherenceProof {
+                return "Window and input are ready."
+            }
+
+            if canRunAppWindowProof {
+                return "Window capture is ready."
+            }
+        }
+
+        if latestProofFileName != nil {
+            return "Latest app check saved in diagnostics."
+        }
+
+        return reason
+    }
 }

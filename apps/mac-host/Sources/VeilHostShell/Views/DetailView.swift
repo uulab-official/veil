@@ -54,7 +54,10 @@ struct DetailView: View {
                     canRequestSelectedAppLaunch: model.canRequestSelectedAppLaunch,
                     hasLiveAgentConnection: model.hasLiveAgentConnection,
                     phase: model.phase,
-                    launchWindowsAppAction: launchWindowsAppAction
+                    proofPlan: proofPlan,
+                    proofArtifacts: runtimeStatusReport.proofArtifacts,
+                    launchWindowsAppAction: launchWindowsAppAction,
+                    runRecommendedProofAction: runRecommendedProofAction
                 )
                     .padding(.horizontal, 14)
                     .padding(.bottom, 14)
@@ -76,7 +79,13 @@ struct DetailView: View {
     }
 
     private var proofPlan: WindowsAppRuntimeProofPlanStatus {
-        model.runtimeStatusReport().proofPlan
+        runtimeStatusReport.proofPlan
+    }
+
+    private var runtimeStatusReport: WindowsAppRuntimeStatusReport {
+        model.runtimeStatusReport(
+            localRuntime: model.localRuntimeStatus(snapshot: vmModel.snapshot)
+        )
     }
 }
 
@@ -89,7 +98,10 @@ private struct WindowsQuickLaunchPanel: View {
     var canRequestSelectedAppLaunch: Bool
     var hasLiveAgentConnection: Bool
     var phase: HostDashboardPhase
+    var proofPlan: WindowsAppRuntimeProofPlanStatus
+    var proofArtifacts: WindowsAppRuntimeProofArtifactStatus
     var launchWindowsAppAction: () -> Void
+    var runRecommendedProofAction: () -> Void
 
     var body: some View {
         ShellPanel(spacing: 12) {
@@ -137,6 +149,43 @@ private struct WindowsQuickLaunchPanel: View {
 
                 Spacer()
             }
+
+            Divider()
+
+            HStack(spacing: 12) {
+                StatusPill(
+                    title: appCheckStatusTitle,
+                    symbolName: appCheckSymbolName,
+                    tint: appCheckTint
+                )
+                .frame(minWidth: 118, alignment: .leading)
+
+                Text(appCheckDetail)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+
+                if let latestProofFileName = proofArtifacts.latestProofFileName {
+                    Label(
+                        "Latest Check",
+                        systemImage: "doc.text"
+                    )
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .help(latestProofFileName)
+                }
+
+                Spacer()
+
+                Button {
+                    runRecommendedProofAction()
+                } label: {
+                    Label("Check App", systemImage: "checkmark.seal")
+                }
+                .disabled(proofPlan.recommendedProofCommand == nil)
+                .help("Check selected Windows app")
+            }
         }
     }
 
@@ -183,5 +232,48 @@ private struct WindowsQuickLaunchPanel: View {
         }
 
         return "macwindow.badge.plus"
+    }
+
+    private var appCheckStatusTitle: String {
+        WindowsShellCopy.appCheckStatusTitle(
+            recommendedProofKind: proofPlan.recommendedProofKind,
+            latestProofFileName: proofArtifacts.latestProofFileName
+        )
+    }
+
+    private var appCheckDetail: String {
+        WindowsShellCopy.appCheckDetail(
+            canRunMVPProof: proofPlan.canRunMVPProof,
+            canRunCoherenceProof: proofPlan.canRunCoherenceProof,
+            canRunAppWindowProof: proofPlan.canRunAppWindowProof,
+            recommendedProofCommand: proofPlan.recommendedProofCommand,
+            latestProofFileName: proofArtifacts.latestProofFileName,
+            reason: proofPlan.reason
+        )
+    }
+
+    private var appCheckSymbolName: String {
+        switch proofPlan.recommendedProofKind {
+        case "mvp":
+            return "checkmark.seal.fill"
+        case "coherence":
+            return "keyboard.badge.ellipsis"
+        case "app-window":
+            return "macwindow"
+        default:
+            return proofArtifacts.latestProofFileName == nil ? "clock" : "doc.text"
+        }
+    }
+
+    private var appCheckTint: Color {
+        if proofPlan.canRunMVPProof {
+            return .green
+        }
+
+        if proofPlan.recommendedProofCommand != nil {
+            return .blue
+        }
+
+        return proofArtifacts.latestProofFileName == nil ? .secondary : .green
     }
 }
