@@ -32,8 +32,17 @@ export function validateAppRuntimeReview(card) {
   }
 
   const status = validateAppRuntimeStatus(card.status);
-  if (card.isReadyForReview !== status.releaseGate.isPassing) {
-    throw new TypeError("app runtime review readiness must match the release gate.");
+  const hostAppBundle = validateEvidence(card.evidence, status);
+  if (card.isReadyForReview !== (status.releaseGate.isPassing && hostAppBundle.isVerificationReady)) {
+    throw new TypeError("app runtime review readiness must match the release gate and host app bundle evidence.");
+  }
+  if (status.releaseGate.isPassing && !hostAppBundle.isVerificationReady) {
+    if (card.nextStepTitle !== "Verify Host App Bundle") {
+      throw new TypeError("app runtime review next step must verify the host app bundle when release evidence passes but bundle evidence is not ready.");
+    }
+    if (card.nextActionCommand !== hostAppBundle.verificationCommand) {
+      throw new TypeError("app runtime review next command must run host app bundle verification when bundle evidence is not ready.");
+    }
   }
 
   if (!Array.isArray(card.steps) || card.steps.length !== status.releaseGate.steps.length) {
@@ -112,7 +121,6 @@ export function validateAppRuntimeReview(card) {
     throw new TypeError("app runtime review screenshot readiness must match attached required slots.");
   }
 
-  validateEvidence(card.evidence, status);
   return card;
 }
 
@@ -146,6 +154,8 @@ function validateEvidence(evidence, status) {
   if (evidence.recommendedAppCheckCommand !== status.proofPlan.recommendedProofCommand) {
     throw new TypeError("app runtime review recommended app check command must match status proof plan.");
   }
+
+  return evidence.hostAppBundle;
 }
 
 function validateHostAppBundleEvidence(hostAppBundle) {

@@ -96,3 +96,30 @@ test("rejects host app bundle readiness drift", () => {
     /host app bundle readiness/
   );
 });
+
+test("accepts release-ready cards that are blocked on host app bundle verification", () => {
+  const card = demoReviewCard();
+  card.evidence.hostAppBundle.appIconExists = false;
+  card.evidence.hostAppBundle.isVerificationReady = false;
+  card.isReadyForReview = false;
+  card.appFlowSummary = `${card.appFlowSummary}; host app bundle needs verification`;
+  card.nextStepTitle = "Verify Host App Bundle";
+  card.nextActionCommand = card.evidence.hostAppBundle.verificationCommand;
+  card.detail = `${card.detail} Run bundled launcher verification before sharing review evidence.`;
+
+  assert.equal(validateAppRuntimeReview(card), card);
+});
+
+test("rejects bundle-blocked cards without host verification next command", () => {
+  const card = demoReviewCard();
+  card.evidence.hostAppBundle.appIconExists = false;
+  card.evidence.hostAppBundle.isVerificationReady = false;
+  card.isReadyForReview = false;
+  card.nextStepTitle = "Verify Host App Bundle";
+  card.nextActionCommand = "veil-vmctl app-runtime-review --json";
+
+  assert.throws(
+    () => validateAppRuntimeReview(card),
+    /next command/
+  );
+});

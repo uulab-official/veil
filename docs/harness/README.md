@@ -219,7 +219,10 @@ next app check. Its evidence block also includes the staged host app bundle
 contract: `dist/Veil.app`, `Info.plist`, executable, icon, bundle identifier,
 the latest failed launch-contract report when present, and the exact
 `./script/build_and_run.sh --verify` command that proves the branded one-window
-launcher surface.
+launcher surface. A review card is ready only when both the Windows app release
+gate and this host app bundle evidence pass; if the Windows app evidence passes
+but the staged app bundle is missing or stale, the next review action becomes
+the bundle verification command.
 
 Run `app-runtime-review-init` before a live VM pass to create the evidence
 folder, `review-manifest.json`, and a human-readable `README.md`. The manifest

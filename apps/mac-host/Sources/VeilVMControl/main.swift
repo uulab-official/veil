@@ -1593,17 +1593,30 @@ struct VeilVMControl {
         }
         let requiredScreenshotCount = report.releaseGate.screenshotSlots.filter(\.isRequired).count
         let attachedScreenshotCount = screenshotSlots.filter { $0.attachmentState == "attached" }.count
+        let hostAppBundle = hostAppBundleEvidence()
 
         return AppRuntimeReviewCard(
             generatedAt: report.generatedAt,
-            isReadyForReview: report.releaseGate.isPassing,
+            isReadyForReview: report.releaseGate.isPassing && hostAppBundle.isVerificationReady,
             areRequiredScreenshotsAttached: requiredScreenshotCount == attachedScreenshotCount,
             requiredScreenshotCount: requiredScreenshotCount,
             attachedScreenshotCount: attachedScreenshotCount,
-            appFlowSummary: appFlowSummary(report.releaseGate),
-            nextStepTitle: appFlowNextStepTitle(report.releaseGate),
-            nextActionCommand: appFlowNextCommand(report.releaseGate),
-            detail: appFlowDetail(report.releaseGate),
+            appFlowSummary: appRuntimeReviewSummary(
+                releaseGate: report.releaseGate,
+                hostAppBundle: hostAppBundle
+            ),
+            nextStepTitle: appRuntimeReviewNextStepTitle(
+                releaseGate: report.releaseGate,
+                hostAppBundle: hostAppBundle
+            ),
+            nextActionCommand: appRuntimeReviewNextCommand(
+                releaseGate: report.releaseGate,
+                hostAppBundle: hostAppBundle
+            ),
+            detail: appRuntimeReviewDetail(
+                releaseGate: report.releaseGate,
+                hostAppBundle: hostAppBundle
+            ),
             steps: report.releaseGate.steps.map { step in
                 AppRuntimeReviewStep(
                     id: step.id,
@@ -1622,11 +1635,56 @@ struct VeilVMControl {
                 diagnosticsDirectory: report.proofArtifacts.diagnosticsDirectory,
                 screenshotEvidenceDirectory: evidenceDirectoryURL?.path,
                 recommendedAppCheckCommand: report.proofPlan.recommendedProofCommand,
-                hostAppBundle: hostAppBundleEvidence()
+                hostAppBundle: hostAppBundle
             ),
             statusCommand: "veil-vmctl app-runtime-status --json",
             status: report
         )
+    }
+
+    private static func appRuntimeReviewSummary(
+        releaseGate: WindowsAppRuntimeReleaseGateStatus,
+        hostAppBundle: AppRuntimeReviewHostAppBundleEvidence
+    ) -> String {
+        guard hostAppBundle.isVerificationReady else {
+            return "\(appFlowSummary(releaseGate)); host app bundle needs verification"
+        }
+
+        return appFlowSummary(releaseGate)
+    }
+
+    private static func appRuntimeReviewNextStepTitle(
+        releaseGate: WindowsAppRuntimeReleaseGateStatus,
+        hostAppBundle: AppRuntimeReviewHostAppBundleEvidence
+    ) -> String {
+        if releaseGate.isPassing && !hostAppBundle.isVerificationReady {
+            return "Verify Host App Bundle"
+        }
+
+        return appFlowNextStepTitle(releaseGate)
+    }
+
+    private static func appRuntimeReviewNextCommand(
+        releaseGate: WindowsAppRuntimeReleaseGateStatus,
+        hostAppBundle: AppRuntimeReviewHostAppBundleEvidence
+    ) -> String? {
+        if releaseGate.isPassing && !hostAppBundle.isVerificationReady {
+            return hostAppBundle.verificationCommand
+        }
+
+        return appFlowNextCommand(releaseGate)
+    }
+
+    private static func appRuntimeReviewDetail(
+        releaseGate: WindowsAppRuntimeReleaseGateStatus,
+        hostAppBundle: AppRuntimeReviewHostAppBundleEvidence
+    ) -> String {
+        let releaseGateDetail = appFlowDetail(releaseGate)
+        guard !hostAppBundle.isVerificationReady else {
+            return releaseGateDetail
+        }
+
+        return "\(releaseGateDetail) Run bundled launcher verification before sharing review evidence."
     }
 
     private static func hostAppBundleEvidence() -> AppRuntimeReviewHostAppBundleEvidence {
