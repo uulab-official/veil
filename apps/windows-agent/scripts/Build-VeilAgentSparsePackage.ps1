@@ -4,6 +4,7 @@ param(
     [string]$PackageName = "UULab.Veil.Agent",
     [string]$ApplicationId = "VeilAgent",
     [string]$OutputRoot = "",
+    [string]$StatusPath = "",
     [string]$CertificatePfxPath = "",
     [string]$CertificatePassword = "",
     [switch]$CreateDevelopmentCertificate,
@@ -20,6 +21,51 @@ $OutputRoot = if ($OutputRoot) { $OutputRoot } else { $PackageRoot }
 $PackagePath = Join-Path $OutputRoot "VeilAgent.Identity.msix"
 $DevelopmentCertificatePath = Join-Path $OutputRoot "VeilAgent.Identity.cer"
 $DevelopmentPfxPath = Join-Path $OutputRoot "VeilAgent.Identity.pfx"
+$StatusPath = if ($StatusPath) { $StatusPath } else { Join-Path $OutputRoot "sparse-package-status.json" }
+
+function Write-VeilSparsePackageStatus {
+    param(
+        [string]$Stage,
+        [bool]$Succeeded,
+        [string]$Message,
+        [hashtable]$Details = @{}
+    )
+
+    $StatusDirectory = Split-Path -Parent $StatusPath
+    if ($StatusDirectory) {
+        New-Item -ItemType Directory -Force -Path $StatusDirectory | Out-Null
+    }
+
+    $Status = [ordered]@{
+        stage = $Stage
+        succeeded = $Succeeded
+        message = $Message
+        updatedAt = (Get-Date -Format o)
+        packageName = $PackageName
+        packageVersion = $PackageVersion
+        publisher = $Publisher
+        applicationId = $ApplicationId
+        outputRoot = $OutputRoot
+        packagePath = $PackagePath
+        certificatePath = $DevelopmentCertificatePath
+        sourceManifestPath = $SourceManifestPath
+        details = $Details
+    }
+
+    $Status | ConvertTo-Json -Depth 6 | Set-Content -Path $StatusPath -Encoding UTF8
+}
+
+trap {
+    Write-VeilSparsePackageStatus `
+        -Stage "failed" `
+        -Succeeded $false `
+        -Message $_.Exception.Message `
+        -Details @{
+            scriptLine = $_.InvocationInfo.ScriptLineNumber
+            command = $_.InvocationInfo.Line
+        }
+    throw
+}
 
 function Resolve-WindowsSdkTool {
     param([string]$ToolName)
@@ -70,6 +116,10 @@ if (-not (Test-Path $SourceManifestPath)) {
     throw "Sparse package manifest was not found at $SourceManifestPath."
 }
 New-Item -ItemType Directory -Force -Path $OutputRoot | Out-Null
+Write-VeilSparsePackageStatus `
+    -Stage "started" `
+    -Succeeded $false `
+    -Message "Veil sparse identity package build started."
 
 if ($CreateDevelopmentCertificate) {
     $PasswordText = if ($CertificatePassword) { $CertificatePassword } else { "veil-development" }
@@ -85,6 +135,15 @@ if ($CreateDevelopmentCertificate) {
     Export-Certificate -Cert $Certificate -FilePath $DevelopmentCertificatePath | Out-Null
     $CertificatePfxPath = $DevelopmentPfxPath
     $CertificatePassword = $PasswordText
+    Write-VeilSparsePackageStatus `
+        -Stage "developmentCertificateCreated" `
+        -Succeeded $false `
+        -Message "Development signing certificate was created." `
+        -Details @{
+            pfxPath = $DevelopmentPfxPath
+            certificatePath = $DevelopmentCertificatePath
+            privateKeyMaterial = "pfx path only; password is never written"
+        }
     Write-Host "Created development signing certificate at $DevelopmentPfxPath and public certificate at $DevelopmentCertificatePath."
 }
 
@@ -112,6 +171,18 @@ try {
     New-VeilPackagePngAsset -Path (Join-Path $AssetsRoot "StoreLogo.png") -Width 50 -Height 50
     New-VeilPackagePngAsset -Path (Join-Path $AssetsRoot "Square44x44Logo.png") -Width 44 -Height 44
     New-VeilPackagePngAsset -Path (Join-Path $AssetsRoot "Square150x150Logo.png") -Width 150 -Height 150
+    Write-VeilSparsePackageStatus `
+        -Stage "assetsGenerated" `
+        -Succeeded $false `
+        -Message "Sparse package manifest and PNG assets were staged." `
+        -Details @{
+            stagingRoot = $StagingRoot
+            assets = @(
+                "Assets\StoreLogo.png",
+                "Assets\Square44x44Logo.png",
+                "Assets\Square150x150Logo.png"
+            )
+        }
 
     if (Test-Path $PackagePath) {
         Remove-Item -Path $PackagePath -Force
@@ -121,6 +192,13 @@ try {
     if ($LASTEXITCODE -ne 0) {
         throw "MakeAppx.exe failed with exit code $LASTEXITCODE."
     }
+    Write-VeilSparsePackageStatus `
+        -Stage "packagePacked" `
+        -Succeeded $false `
+        -Message "MakeAppx created the sparse identity package." `
+        -Details @{
+            makeAppx = $MakeAppx
+        }
 
     $SignArguments = @("sign", "/fd", "SHA256", "/f", $CertificatePfxPath)
     if ($CertificatePassword) {
@@ -132,6 +210,14 @@ try {
     if ($LASTEXITCODE -ne 0) {
         throw "SignTool.exe failed with exit code $LASTEXITCODE."
     }
+    Write-VeilSparsePackageStatus `
+        -Stage "packageSigned" `
+        -Succeeded $false `
+        -Message "SignTool signed the sparse identity package." `
+        -Details @{
+            signTool = $SignTool
+            signedPackagePath = $PackagePath
+        }
 } finally {
     if (Test-Path $StagingRoot) {
         Remove-Item -Path $StagingRoot -Recurse -Force
@@ -144,7 +230,18 @@ if ($TrustDevelopmentCertificate) {
         Export-Certificate -Cert $Certificate -FilePath $DevelopmentCertificatePath | Out-Null
     }
     Import-Certificate -FilePath $DevelopmentCertificatePath -CertStoreLocation Cert:\CurrentUser\TrustedPeople | Out-Null
+    Write-VeilSparsePackageStatus `
+        -Stage "certificateTrusted" `
+        -Succeeded $false `
+        -Message "Development signing certificate was trusted for the current user." `
+        -Details @{
+            certificateStore = "Cert:\CurrentUser\TrustedPeople"
+        }
     Write-Host "Trusted development certificate in Cert:\CurrentUser\TrustedPeople."
 }
 
+Write-VeilSparsePackageStatus `
+    -Stage "succeeded" `
+    -Succeeded $true `
+    -Message "Veil sparse identity package built and signed."
 Write-Host "Veil sparse identity package built and signed at $PackagePath."

@@ -76,6 +76,7 @@ Veil Shared\Veil Guest Agent\Prepare Sparse Package.cmd
 
 That launcher writes signing artifacts to `%LOCALAPPDATA%\Veil\Agent\package`, then reruns the installer with `-SparsePackagePath` and `-SparsePackageCertificatePath` pointed at those local files.
 It also starts the agent with `-RequirePackageIdentity`, so the command fails visibly if `agent.health.response.capabilities.packageIdentity` is still `false`.
+The package builder also writes `%LOCALAPPDATA%\Veil\Agent\package\sparse-package-status.json` with the latest stage, package path, certificate path, and failure message. It records the PFX path for operator diagnosis, but never records the certificate password or copies private key material into diagnostics.
 
 The sparse package source manifest references standard Windows package logo paths. `Build-VeilAgentSparsePackage.ps1` generates the required PNG assets in its temporary staging directory before running `MakeAppx`, so no generated logo files or signed package artifacts are committed to the repository.
 
@@ -146,7 +147,7 @@ Collect install/start diagnostics without copying Windows user data:
 Veil Shared\Veil Guest Agent\Collect Veil Agent Diagnostics.cmd
 ```
 
-The collector writes `veil-agent-diagnostics-<timestamp>.zip` to the Windows desktop. It includes VeilAgent logs, scheduled-task metadata, process status, and a short summary; it does not copy Windows media, product keys, virtual disk contents, or user documents.
+The collector writes `veil-agent-diagnostics-<timestamp>.zip` to the Windows desktop. It includes VeilAgent logs, scheduled-task metadata, process status, the sparse package status JSON when present, and a short summary; it does not copy Windows media, product keys, sparse package PFX files, virtual disk contents, or user documents.
 
 Start again without waiting for the next login:
 

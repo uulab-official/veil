@@ -7,6 +7,8 @@ $ErrorActionPreference = "Stop"
 
 $LogRoot = Join-Path $InstallRoot "logs"
 $DiagnosticsRoot = Join-Path $InstallRoot "diagnostics"
+$SparsePackageRoot = Join-Path $InstallRoot "package"
+$SparsePackageStatusPath = Join-Path $SparsePackageRoot "sparse-package-status.json"
 $AgentExe = Join-Path $InstallRoot "app\VeilAgent.exe"
 $TaskName = "VeilAgent"
 
@@ -26,6 +28,8 @@ $SummaryPath = Join-Path $StagingRoot "summary.txt"
 "GeneratedAt=$(Get-Date -Format o)" | Out-File -FilePath $SummaryPath -Encoding UTF8
 "InstallRoot=$InstallRoot" | Add-Content -Path $SummaryPath
 "LogRoot=$LogRoot" | Add-Content -Path $SummaryPath
+"SparsePackageStatusPath=$SparsePackageStatusPath" | Add-Content -Path $SummaryPath
+"SparsePackageStatusExists=$(Test-Path $SparsePackageStatusPath)" | Add-Content -Path $SummaryPath
 "AgentExe=$AgentExe" | Add-Content -Path $SummaryPath
 "AgentExeExists=$(Test-Path $AgentExe)" | Add-Content -Path $SummaryPath
 "User=$env:USERNAME" | Add-Content -Path $SummaryPath
@@ -55,6 +59,10 @@ if (Test-Path $LogRoot) {
     }
 } else {
     "No log directory found." | Add-Content -Path $SummaryPath
+}
+
+if (Test-Path $SparsePackageStatusPath) {
+    Copy-Item -Path $SparsePackageStatusPath -Destination (Join-Path $StagingRoot "sparse-package-status.json") -Force
 }
 
 if (Test-Path $ZipPath) {

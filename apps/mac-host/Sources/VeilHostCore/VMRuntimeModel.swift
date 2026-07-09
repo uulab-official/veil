@@ -2191,7 +2191,7 @@ public struct LocalVMRuntimeService: VMRuntimeService {
     setlocal
     cd /d "%~dp0"
     set "VEIL_SPARSE_PACKAGE_ROOT=%LOCALAPPDATA%\\Veil\\Agent\\package"
-    powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\\Build-VeilAgentSparsePackage.ps1" -OutputRoot "%VEIL_SPARSE_PACKAGE_ROOT%" -CreateDevelopmentCertificate -TrustDevelopmentCertificate
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\\Build-VeilAgentSparsePackage.ps1" -OutputRoot "%VEIL_SPARSE_PACKAGE_ROOT%" -StatusPath "%VEIL_SPARSE_PACKAGE_ROOT%\\sparse-package-status.json" -CreateDevelopmentCertificate -TrustDevelopmentCertificate
     if errorlevel 1 (
         set VEIL_EXIT_CODE=%errorlevel%
         pause
@@ -2233,7 +2233,7 @@ public struct LocalVMRuntimeService: VMRuntimeService {
     If this media does not include app\\VeilAgent.exe, build it on the Mac with apps/windows-agent/scripts/publish-veil-agent-bundle.sh before preparing the VM again.
 
     Run Start Veil Agent.cmd to start the agent immediately after installation.
-    Run Prepare Sparse Package.cmd to build a local development identity package in %LOCALAPPDATA%\\Veil\\Agent\\package and reinstall the agent with package identity. This requires the Windows SDK inside the guest; if it succeeds, agent.health.response.capabilities.packageIdentity should become true after the agent restarts.
+    Run Prepare Sparse Package.cmd to build a local development identity package in %LOCALAPPDATA%\\Veil\\Agent\\package and reinstall the agent with package identity. This writes sparse-package-status.json next to the generated package without storing certificate passwords. This requires the Windows SDK inside the guest; if it succeeds, agent.health.response.capabilities.packageIdentity should become true after the agent restarts.
     Run Repair Veil Agent Connectivity.cmd when macOS can open QEMU port 18444 but the agent health check still times out. The repair path requests administrator approval, refreshes Windows Firewall rules, restarts VeilAgent, and writes repair-status.json when the in-guest loopback plus guest IPv4 agent.health.response probes succeed or fail.
     Run Collect Veil Agent Diagnostics.cmd to write a metadata-only diagnostics ZIP to the Windows desktop when install, start, or connection checks fail.
     Keep this folder in the Veil Shared drive while Veil is in pre-alpha.
