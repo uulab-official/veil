@@ -630,20 +630,21 @@ struct VeilHostShellApp: App {
     }
 
     private func continuePreviousAppsRestoreHandoff() {
-        switch vmModel.snapshot?.state {
-        case .running, .starting:
+        let handoff = PreviousAppsRestoreHandoffPolicy.action(
+            runtimeState: vmModel.snapshot?.state,
+            canStartRuntime: vmModel.canStart,
+            supportsNativeDisplayWindow: vmRuntimeBooter.supportsNativeDisplayWindow
+        )
+
+        switch handoff {
+        case .prepareGuestAgentRecovery(let shouldShowDisplay):
             activateMainWindow()
             displayMessage = "Windows is running. Veil is preparing the guest agent to reconnect previous apps."
             scheduleAutomaticGuestAgentRecoveryIfNeeded()
-            if vmRuntimeBooter.supportsNativeDisplayWindow {
+            if shouldShowDisplay {
                 showWindowsDisplay()
             }
-        default:
-            guard vmModel.canStart else {
-                displayMessage = "Veil found previous Windows apps to reconnect. Start Windows when the local runtime is available."
-                return
-            }
-
+        case .startRuntime:
             Task { @MainActor in
                 cancelAutomaticQuietRuntime()
                 activateMainWindow()
@@ -657,6 +658,8 @@ struct VeilHostShellApp: App {
                     displayMessage = "Windows could not start for previous apps: \(errorMessage)"
                 }
             }
+        case .waitForRuntimeAvailability:
+            displayMessage = "Veil found previous Windows apps to reconnect. Start Windows when the local runtime is available."
         }
     }
 
@@ -1512,6 +1515,27 @@ struct LauncherWindowVisibilityPolicy {
         modelRequestsHide: Bool
     ) -> Bool {
         visibleMirroredWindowCount > 0 || modelRequestsHide
+    }
+}
+
+enum PreviousAppsRestoreHandoffAction: Equatable {
+    case prepareGuestAgentRecovery(shouldShowDisplay: Bool)
+    case startRuntime
+    case waitForRuntimeAvailability
+}
+
+struct PreviousAppsRestoreHandoffPolicy {
+    static func action(
+        runtimeState: VMRuntimeState?,
+        canStartRuntime: Bool,
+        supportsNativeDisplayWindow: Bool
+    ) -> PreviousAppsRestoreHandoffAction {
+        switch runtimeState {
+        case .running, .starting:
+            return .prepareGuestAgentRecovery(shouldShowDisplay: supportsNativeDisplayWindow)
+        default:
+            return canStartRuntime ? .startRuntime : .waitForRuntimeAvailability
+        }
     }
 }
 

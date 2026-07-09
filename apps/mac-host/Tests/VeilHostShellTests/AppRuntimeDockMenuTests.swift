@@ -6,6 +6,38 @@ import VeilHostCore
 
 @MainActor
 struct AppRuntimeDockMenuTests {
+    @Test("maps reconnect restore handoff to recovery start or wait states")
+    func mapsReconnectRestoreHandoffToRecoveryStartOrWaitStates() {
+        #expect(
+            PreviousAppsRestoreHandoffPolicy.action(
+                runtimeState: .running,
+                canStartRuntime: false,
+                supportsNativeDisplayWindow: true
+            ) == .prepareGuestAgentRecovery(shouldShowDisplay: true)
+        )
+        #expect(
+            PreviousAppsRestoreHandoffPolicy.action(
+                runtimeState: .starting,
+                canStartRuntime: false,
+                supportsNativeDisplayWindow: false
+            ) == .prepareGuestAgentRecovery(shouldShowDisplay: false)
+        )
+        #expect(
+            PreviousAppsRestoreHandoffPolicy.action(
+                runtimeState: .stopped,
+                canStartRuntime: true,
+                supportsNativeDisplayWindow: true
+            ) == .startRuntime
+        )
+        #expect(
+            PreviousAppsRestoreHandoffPolicy.action(
+                runtimeState: .failed,
+                canStartRuntime: false,
+                supportsNativeDisplayWindow: true
+            ) == .waitForRuntimeAvailability
+        )
+    }
+
     @Test("shows reconnect restore action when previous app intent exists without live agent")
     func showsReconnectRestoreActionWithoutLiveAgent() async throws {
         let directory = FileManager.default.temporaryDirectory

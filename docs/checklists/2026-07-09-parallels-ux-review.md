@@ -16,6 +16,7 @@ Goal: keep the user-facing workflow one-screen-first (launcher + one action path
 - [x] Re-evaluate automatic quiet-runtime scheduling when the local VM runtime state/phase changes, so a late VM state refresh does not leave an idle Windows runtime running after the final app window closes.
 - [x] Keep previous-app restore visible from Dock/menu as `Reconnect Previous Apps` when restore intent exists but the live guest agent is not connected yet.
 - [x] Route an empty reconnect-restore attempt into an app-first handoff: start Windows when possible, or prepare guest-agent recovery when Windows is already running.
+- [x] Extract and test the reconnect-restore handoff policy so running/starting Windows maps to guest-agent recovery, startable Windows maps to runtime start, and unavailable runtime maps to a visible wait state.
 
 ## CEO Review
 
@@ -35,6 +36,7 @@ Goal: keep the user-facing workflow one-screen-first (launcher + one action path
 - Runtime state refreshes must also re-check quiet-runtime eligibility, because the final app window can close before `vmModel.canStop` becomes true.
 - Dock/menu restore controls should follow `canReconnectRestoreMirrorSessions`, not only `canRestoreMirrorSessions`, so previous app intent remains actionable before the live guest agent returns.
 - `Reconnect Previous Apps` must never appear to do nothing; if no windows restore immediately because the agent is missing, the shell should show the launcher and move into Windows start or guest-agent recovery.
+- Reconnect-restore handoff policy is now covered in `AppRuntimeDockMenuTests` to protect the product path from regressing back into a silent no-op.
 
 ## Design Review
 
