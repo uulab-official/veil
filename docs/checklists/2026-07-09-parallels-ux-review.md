@@ -41,6 +41,7 @@ Goal: keep the user-facing workflow one-screen-first (launcher + one action path
 - [x] Show previous-app restore readiness in Dock/menu-bar status before falling back to generic Apps Ready copy.
 - [x] Expose previous-app restore readiness in Dock integration status and badge data so CLI/automation can see when reconnect restore is available.
 - [x] Prioritize Windows app state in the menu bar icon so open apps, queued apps, and previous-app restore are visible before generic Windows runtime state.
+- [x] Expose menu-bar status, symbol, and primary action in `app-runtime-status` so top-bar app control is covered by the same harness contract as Dock actions.
 
 ## CEO Review
 

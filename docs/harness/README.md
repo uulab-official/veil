@@ -82,6 +82,9 @@ app visible even before a guest HWND exists.
 `dockIntegration.restorableAppCount`, `canReconnectPreviousApps`, and the `R`
 Dock badge keep previous app restore visible after the launcher is hidden or
 the guest agent temporarily disconnects.
+`menuBarIntegration` mirrors the same app-first state for the macOS menu bar:
+compact status title, symbol, and primary action id/title must stay aligned
+with the supported action list.
 The supported actions include `runtime.fulfillPendingLaunch`, which only
 becomes available after a queued app launch has a live guest agent capable of
 opening that app.

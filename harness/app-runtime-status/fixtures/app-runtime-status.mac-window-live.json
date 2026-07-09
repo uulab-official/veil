@@ -65,6 +65,20 @@
     "canReconnectPreviousApps": false,
     "canLaunchSelectedApp": true
   },
+  "menuBarIntegration": {
+    "isEnabled": true,
+    "statusTitle": "1 Windows App Open",
+    "symbolName": "rectangle.stack.fill",
+    "primaryActionId": "dock.bringWindowsAppsForward",
+    "primaryActionTitle": "Bring Notepad Forward",
+    "primaryActionAvailable": true,
+    "canOpenMainWindow": true,
+    "canBringWindowsAppsForward": true,
+    "canRestorePreviousApps": false,
+    "canReconnectPreviousApps": false,
+    "canLaunchSelectedApp": true,
+    "canFulfillPendingLaunch": false
+  },
   "launcherVisibility": {
     "isEnabled": true,
     "canOpenMainWindow": true,
@@ -143,6 +157,11 @@
     {
       "id": "macWindows.autoOpen",
       "title": "Auto Open Windows App Windows",
+      "isAvailable": true
+    },
+    {
+      "id": "windowsApps.launchSelected",
+      "title": "Open Selected Windows App",
       "isAvailable": true
     },
     {

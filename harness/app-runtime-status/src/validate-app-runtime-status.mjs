@@ -41,6 +41,7 @@ export function validateAppRuntimeStatus(report) {
   validateLaunchPlan(report.launchPlan, report);
   validateProofPlan(report.proofPlan, report);
   validateProofArtifacts(report.proofArtifacts);
+  validateMenuBarIntegration(report.menuBarIntegration, report);
   validateActions(report.actions, report);
 
   if (report.selectedAppId !== undefined) {
@@ -738,6 +739,98 @@ function validateDockIntegration(dockIntegration, mirrorSessions, report) {
   }
 }
 
+function validateMenuBarIntegration(menuBarIntegration, report) {
+  if (!menuBarIntegration || typeof menuBarIntegration !== "object" || Array.isArray(menuBarIntegration)) {
+    throw new TypeError("menuBarIntegration must be an object.");
+  }
+
+  requireBoolean(menuBarIntegration.isEnabled, "menuBarIntegration.isEnabled");
+  requireString(menuBarIntegration.statusTitle, "menuBarIntegration.statusTitle");
+  requireString(menuBarIntegration.symbolName, "menuBarIntegration.symbolName");
+  requireString(menuBarIntegration.primaryActionId, "menuBarIntegration.primaryActionId");
+  requireString(menuBarIntegration.primaryActionTitle, "menuBarIntegration.primaryActionTitle");
+  requireBoolean(menuBarIntegration.primaryActionAvailable, "menuBarIntegration.primaryActionAvailable");
+  requireBoolean(menuBarIntegration.canOpenMainWindow, "menuBarIntegration.canOpenMainWindow");
+  requireBoolean(menuBarIntegration.canBringWindowsAppsForward, "menuBarIntegration.canBringWindowsAppsForward");
+  requireBoolean(menuBarIntegration.canRestorePreviousApps, "menuBarIntegration.canRestorePreviousApps");
+  requireBoolean(menuBarIntegration.canReconnectPreviousApps, "menuBarIntegration.canReconnectPreviousApps");
+  requireBoolean(menuBarIntegration.canLaunchSelectedApp, "menuBarIntegration.canLaunchSelectedApp");
+  requireBoolean(menuBarIntegration.canFulfillPendingLaunch, "menuBarIntegration.canFulfillPendingLaunch");
+
+  if (menuBarIntegration.statusTitle.length > 30) {
+    throw new TypeError("menuBarIntegration.statusTitle must stay compact for the menu bar.");
+  }
+
+  if (menuBarIntegration.primaryActionTitle.length > 30) {
+    throw new TypeError("menuBarIntegration.primaryActionTitle must stay compact for the menu bar.");
+  }
+
+  for (const disallowedTerm of ["Runtime", "Guest Agent", "HWND", "QEMU"]) {
+    if (menuBarIntegration.statusTitle.includes(disallowedTerm)) {
+      throw new TypeError("menuBarIntegration.statusTitle must stay app-first.");
+    }
+  }
+
+  if (menuBarIntegration.canOpenMainWindow !== report.dockIntegration.canOpenMainWindow) {
+    throw new TypeError("menuBarIntegration.canOpenMainWindow must match dockIntegration.canOpenMainWindow.");
+  }
+
+  if (menuBarIntegration.canBringWindowsAppsForward !== report.dockIntegration.canBringWindowsAppsForward) {
+    throw new TypeError("menuBarIntegration.canBringWindowsAppsForward must match dockIntegration.canBringWindowsAppsForward.");
+  }
+
+  if (menuBarIntegration.canRestorePreviousApps !== report.dockIntegration.canRestorePreviousApps) {
+    throw new TypeError("menuBarIntegration.canRestorePreviousApps must match dockIntegration.canRestorePreviousApps.");
+  }
+
+  if (menuBarIntegration.canReconnectPreviousApps !== report.dockIntegration.canReconnectPreviousApps) {
+    throw new TypeError("menuBarIntegration.canReconnectPreviousApps must match dockIntegration.canReconnectPreviousApps.");
+  }
+
+  if (menuBarIntegration.canLaunchSelectedApp !== report.launchPlan.canRequestSelectedAppLaunch) {
+    throw new TypeError("menuBarIntegration.canLaunchSelectedApp must match launchPlan.canRequestSelectedAppLaunch.");
+  }
+
+  const pendingApp = report.apps.find((app) => app.id === report.pendingLaunch.appId);
+  const canFulfillPendingLaunch = report.pendingLaunch.isQueued
+    && report.connection.hasLiveAgentConnection
+    && pendingApp?.canLaunchNow === true;
+  if (menuBarIntegration.canFulfillPendingLaunch !== canFulfillPendingLaunch) {
+    throw new TypeError("menuBarIntegration.canFulfillPendingLaunch must match queued launch readiness.");
+  }
+
+  const expectedSymbol = expectedMenuBarSymbolName(report);
+  if (menuBarIntegration.symbolName !== expectedSymbol) {
+    throw new TypeError("menuBarIntegration.symbolName must prioritize Windows app state.");
+  }
+}
+
+function expectedMenuBarSymbolName(report) {
+  if (report.mirrorSessions.length > 0) {
+    return "rectangle.stack.fill";
+  }
+
+  if (report.pendingLaunch.isQueued) {
+    return "clock.fill";
+  }
+
+  if (report.dockIntegration.canRestorePreviousApps || report.dockIntegration.canReconnectPreviousApps) {
+    return "arrow.counterclockwise.circle.fill";
+  }
+
+  switch (report.localRuntime.state) {
+    case "running":
+      return "display";
+    case "starting":
+      return "arrow.triangle.2.circlepath";
+    case "failed":
+    case "unsupported":
+      return "exclamationmark.triangle";
+    default:
+      return "play.rectangle";
+  }
+}
+
 function validateLauncherVisibility(launcherVisibility, report) {
   if (!launcherVisibility || typeof launcherVisibility !== "object" || Array.isArray(launcherVisibility)) {
     throw new TypeError("launcherVisibility must be an object.");
@@ -832,6 +925,7 @@ function validateActions(actions, report) {
     "windowsApps.reconnectRestore",
     "windowsApps.closeAll",
     "macWindows.autoOpen",
+    "windowsApps.launchSelected",
     "runtime.startWindowsForApp",
     "runtime.repairGuestAgentForApp",
     "runtime.recoverDisplay",
@@ -903,6 +997,20 @@ function validateActions(actions, report) {
   const stopWhenIdleAction = actions.find((action) => action.id === "runtime.stopWhenIdle");
   if (stopWhenIdleAction.isAvailable !== report.quietRuntime.canQuietRuntime) {
     throw new TypeError("runtime.stopWhenIdle availability must match quietRuntime.canQuietRuntime.");
+  }
+
+  const launchSelectedAction = actions.find((action) => action.id === "windowsApps.launchSelected");
+  if (launchSelectedAction.isAvailable !== report.launchPlan.canRequestSelectedAppLaunch) {
+    throw new TypeError("windowsApps.launchSelected availability must match launchPlan.canRequestSelectedAppLaunch.");
+  }
+
+  const menuPrimaryAction = actions.find((action) => action.id === report.menuBarIntegration.primaryActionId);
+  if (menuPrimaryAction === undefined) {
+    throw new TypeError("menuBarIntegration.primaryActionId must reference a supported action.");
+  }
+
+  if (menuPrimaryAction.isAvailable !== report.menuBarIntegration.primaryActionAvailable) {
+    throw new TypeError("menuBarIntegration.primaryActionAvailable must match the referenced action availability.");
   }
 
   const selectedApp = report.apps.find((app) => app.id === report.selectedAppId);

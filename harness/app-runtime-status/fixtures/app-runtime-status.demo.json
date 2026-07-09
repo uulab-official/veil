@@ -31,6 +31,11 @@
       "title": "Auto Open Windows App Windows"
     },
     {
+      "id": "windowsApps.launchSelected",
+      "isAvailable": true,
+      "title": "Open Selected Windows App"
+    },
+    {
       "id": "runtime.startWindowsForApp",
       "isAvailable": true,
       "title": "Start Windows For App Launch"
@@ -129,6 +134,20 @@
     "openWindowCount": 0,
     "pendingLaunchCount": 0,
     "restorableAppCount": 0
+  },
+  "menuBarIntegration": {
+    "isEnabled": true,
+    "statusTitle": "Set Up Windows",
+    "symbolName": "play.rectangle",
+    "primaryActionId": "windowsApps.launchSelected",
+    "primaryActionTitle": "Open Notepad",
+    "primaryActionAvailable": true,
+    "canOpenMainWindow": true,
+    "canBringWindowsAppsForward": false,
+    "canRestorePreviousApps": false,
+    "canReconnectPreviousApps": false,
+    "canLaunchSelectedApp": true,
+    "canFulfillPendingLaunch": false
   },
   "launcherVisibility": {
     "isEnabled": true,

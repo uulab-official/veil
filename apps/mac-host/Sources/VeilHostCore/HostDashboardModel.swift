@@ -299,6 +299,49 @@ public struct WindowsAppRuntimeDockIntegrationStatus: Codable, Equatable, Sendab
     }
 }
 
+public struct WindowsAppRuntimeMenuBarIntegrationStatus: Codable, Equatable, Sendable {
+    public var isEnabled: Bool
+    public var statusTitle: String
+    public var symbolName: String
+    public var primaryActionId: String
+    public var primaryActionTitle: String
+    public var primaryActionAvailable: Bool
+    public var canOpenMainWindow: Bool
+    public var canBringWindowsAppsForward: Bool
+    public var canRestorePreviousApps: Bool
+    public var canReconnectPreviousApps: Bool
+    public var canLaunchSelectedApp: Bool
+    public var canFulfillPendingLaunch: Bool
+
+    public init(
+        isEnabled: Bool,
+        statusTitle: String,
+        symbolName: String,
+        primaryActionId: String,
+        primaryActionTitle: String,
+        primaryActionAvailable: Bool,
+        canOpenMainWindow: Bool,
+        canBringWindowsAppsForward: Bool,
+        canRestorePreviousApps: Bool,
+        canReconnectPreviousApps: Bool,
+        canLaunchSelectedApp: Bool,
+        canFulfillPendingLaunch: Bool
+    ) {
+        self.isEnabled = isEnabled
+        self.statusTitle = statusTitle
+        self.symbolName = symbolName
+        self.primaryActionId = primaryActionId
+        self.primaryActionTitle = primaryActionTitle
+        self.primaryActionAvailable = primaryActionAvailable
+        self.canOpenMainWindow = canOpenMainWindow
+        self.canBringWindowsAppsForward = canBringWindowsAppsForward
+        self.canRestorePreviousApps = canRestorePreviousApps
+        self.canReconnectPreviousApps = canReconnectPreviousApps
+        self.canLaunchSelectedApp = canLaunchSelectedApp
+        self.canFulfillPendingLaunch = canFulfillPendingLaunch
+    }
+}
+
 public struct WindowsAppRuntimeMacWindowIntegrationStatus: Codable, Equatable, Sendable {
     public var isEnabled: Bool
     public var acceptsGuestWindowEvents: Bool
@@ -567,6 +610,7 @@ public struct WindowsAppRuntimeStatusReport: Codable, Equatable, Sendable {
     public var mirrorSessions: [WindowsAppRuntimeWindowStatus]
     public var restorableAppIds: [String]
     public var dockIntegration: WindowsAppRuntimeDockIntegrationStatus
+    public var menuBarIntegration: WindowsAppRuntimeMenuBarIntegrationStatus
     public var launcherVisibility: WindowsAppRuntimeLauncherVisibilityStatus
     public var visibleSurfacePolicy: WindowsAppRuntimeVisibleSurfacePolicyStatus
     public var macWindowIntegration: WindowsAppRuntimeMacWindowIntegrationStatus
@@ -590,6 +634,7 @@ public struct WindowsAppRuntimeStatusReport: Codable, Equatable, Sendable {
         mirrorSessions: [WindowsAppRuntimeWindowStatus],
         restorableAppIds: [String],
         dockIntegration: WindowsAppRuntimeDockIntegrationStatus,
+        menuBarIntegration: WindowsAppRuntimeMenuBarIntegrationStatus,
         launcherVisibility: WindowsAppRuntimeLauncherVisibilityStatus,
         visibleSurfacePolicy: WindowsAppRuntimeVisibleSurfacePolicyStatus,
         macWindowIntegration: WindowsAppRuntimeMacWindowIntegrationStatus,
@@ -612,6 +657,7 @@ public struct WindowsAppRuntimeStatusReport: Codable, Equatable, Sendable {
         self.mirrorSessions = mirrorSessions
         self.restorableAppIds = restorableAppIds
         self.dockIntegration = dockIntegration
+        self.menuBarIntegration = menuBarIntegration
         self.launcherVisibility = launcherVisibility
         self.visibleSurfacePolicy = visibleSurfacePolicy
         self.macWindowIntegration = macWindowIntegration
@@ -880,6 +926,11 @@ public final class HostDashboardModel {
                 canReconnectPreviousApps: canReconnectRestoreMirrorSessions,
                 canLaunchSelectedApp: canRequestSelectedAppLaunch
             ),
+            menuBarIntegration: menuBarIntegrationStatus(
+                localRuntime: localRuntime,
+                launchPlan: launchPlan,
+                pendingLaunch: pendingLaunch
+            ),
             launcherVisibility: launcherVisibility,
             visibleSurfacePolicy: visibleSurfacePolicy,
             macWindowIntegration: macWindowIntegration,
@@ -917,6 +968,11 @@ public final class HostDashboardModel {
                     id: "macWindows.autoOpen",
                     title: "Auto Open Windows App Windows",
                     isAvailable: macWindowIntegration.acceptsGuestWindowEvents
+                ),
+                WindowsAppRuntimeActionStatus(
+                    id: "windowsApps.launchSelected",
+                    title: "Open Selected Windows App",
+                    isAvailable: canRequestSelectedAppLaunch
                 ),
                 WindowsAppRuntimeActionStatus(
                     id: "runtime.startWindowsForApp",
@@ -1037,6 +1093,252 @@ public final class HostDashboardModel {
         }
 
         return nil
+    }
+
+    private func menuBarIntegrationStatus(
+        localRuntime: WindowsAppRuntimeLocalRuntimeStatus,
+        launchPlan: WindowsAppRuntimeLaunchPlanStatus,
+        pendingLaunch: WindowsAppRuntimePendingLaunchStatus
+    ) -> WindowsAppRuntimeMenuBarIntegrationStatus {
+        let primaryAction = menuBarPrimaryAction(
+            localRuntime: localRuntime,
+            launchPlan: launchPlan,
+            pendingLaunch: pendingLaunch
+        )
+
+        return WindowsAppRuntimeMenuBarIntegrationStatus(
+            isEnabled: true,
+            statusTitle: menuBarStatusTitle(
+                localRuntime: localRuntime,
+                pendingLaunch: pendingLaunch
+            ),
+            symbolName: menuBarSymbolName(
+                localRuntime: localRuntime,
+                pendingLaunch: pendingLaunch
+            ),
+            primaryActionId: primaryAction.id,
+            primaryActionTitle: primaryAction.title,
+            primaryActionAvailable: primaryAction.isAvailable,
+            canOpenMainWindow: true,
+            canBringWindowsAppsForward: !mirrorSessions.isEmpty,
+            canRestorePreviousApps: canRestoreMirrorSessions,
+            canReconnectPreviousApps: canReconnectRestoreMirrorSessions,
+            canLaunchSelectedApp: canRequestSelectedAppLaunch,
+            canFulfillPendingLaunch: pendingLaunch.isQueued && canFulfillPendingLaunch
+        )
+    }
+
+    private func menuBarStatusTitle(
+        localRuntime: WindowsAppRuntimeLocalRuntimeStatus,
+        pendingLaunch: WindowsAppRuntimePendingLaunchStatus
+    ) -> String {
+        if !mirrorSessions.isEmpty {
+            return mirrorSessions.count == 1 ? "1 Windows App Open" : "\(mirrorSessions.count) Windows Apps Open"
+        }
+
+        if pendingLaunch.isQueued {
+            guard let appName = appName(for: pendingLaunch.appId) else {
+                return "App Waiting to Open"
+            }
+
+            return suffixedMenuItemTitle(prefix: "", title: appName, suffix: "Waiting")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+
+        if canRestoreMirrorSessions || canReconnectRestoreMirrorSessions {
+            return previousAppsStatusTitle()
+        }
+
+        if hasLiveAgentConnection {
+            return "Apps Ready"
+        }
+
+        switch localRuntime.state {
+        case .running:
+            return "Preparing Apps"
+        case .starting:
+            return "Opening Windows"
+        case .suspended:
+            return "Windows Paused"
+        case .failed, .unsupported:
+            return "Needs Attention"
+        case .notConfigured:
+            return "Set Up Windows"
+        case .stopped, nil:
+            return localRuntime.windowsInstalled ? "Ready to Open Apps" : "Set Up Windows"
+        }
+    }
+
+    private func menuBarSymbolName(
+        localRuntime: WindowsAppRuntimeLocalRuntimeStatus,
+        pendingLaunch: WindowsAppRuntimePendingLaunchStatus
+    ) -> String {
+        if !mirrorSessions.isEmpty {
+            return "rectangle.stack.fill"
+        }
+
+        if pendingLaunch.isQueued {
+            return "clock.fill"
+        }
+
+        if canRestoreMirrorSessions || canReconnectRestoreMirrorSessions {
+            return "arrow.counterclockwise.circle.fill"
+        }
+
+        switch localRuntime.state {
+        case .running:
+            return "display"
+        case .starting:
+            return "arrow.triangle.2.circlepath"
+        case .failed, .unsupported:
+            return "exclamationmark.triangle"
+        default:
+            return "play.rectangle"
+        }
+    }
+
+    private func menuBarPrimaryAction(
+        localRuntime: WindowsAppRuntimeLocalRuntimeStatus,
+        launchPlan: WindowsAppRuntimeLaunchPlanStatus,
+        pendingLaunch: WindowsAppRuntimePendingLaunchStatus
+    ) -> (id: String, title: String, isAvailable: Bool) {
+        if !mirrorSessions.isEmpty {
+            return (
+                "dock.bringWindowsAppsForward",
+                bringWindowsAppsForwardTitle(),
+                true
+            )
+        }
+
+        if canRestoreMirrorSessions || canReconnectRestoreMirrorSessions {
+            return (
+                canRestoreMirrorSessions ? "windowsApps.restorePrevious" : "windowsApps.reconnectRestore",
+                previousAppsRestoreTitle(),
+                canReconnectRestoreMirrorSessions
+            )
+        }
+
+        if pendingLaunch.isQueued {
+            let appName = appName(for: pendingLaunch.appId) ?? "Windows App"
+            if localRuntime.recommendedRecoveryCommand != nil {
+                return ("runtime.recoverDisplay", "Refresh Display", true)
+            }
+            if canFulfillPendingLaunch {
+                return ("runtime.fulfillPendingLaunch", prefixedMenuItemTitle(prefix: "Open Queued", title: appName), true)
+            }
+            if launchPlan.recommendedRepairCommand != nil {
+                return ("runtime.repairGuestAgentForApp", prefixedMenuItemTitle(prefix: "Continue", title: appName), true)
+            }
+            if launchPlan.recommendedStartCommand != nil {
+                return (
+                    "runtime.startWindowsForApp",
+                    prefixedMenuItemTitle(prefix: "Open Windows for", title: appName),
+                    true
+                )
+            }
+
+            return ("runtime.waitAgent", "Check App Connection", !hasLiveAgentConnection)
+        }
+
+        if canRequestSelectedAppLaunch {
+            return (
+                "windowsApps.launchSelected",
+                prefixedMenuItemTitle(prefix: "Open", title: selectedAppDisplayName()),
+                true
+            )
+        }
+
+        if !hasLiveAgentConnection {
+            return ("runtime.waitAgent", "Check App Connection", true)
+        }
+
+        return ("dock.openMainWindow", "Open Veil", true)
+    }
+
+    private func bringWindowsAppsForwardTitle() -> String {
+        guard mirrorSessions.count == 1,
+              let session = mirrorSessions.first else {
+            return "Bring Windows Apps Forward"
+        }
+
+        return suffixedMenuItemTitle(
+            prefix: "Bring",
+            title: appName(for: session.window.appId) ?? session.window.title,
+            suffix: "Forward"
+        )
+    }
+
+    private func previousAppsStatusTitle() -> String {
+        guard let appName = singleRestorableAppName() else {
+            return canRestoreMirrorSessions ? "Previous Apps Ready" : "Previous Apps Can Reconnect"
+        }
+
+        return suffixedMenuItemTitle(
+            prefix: "",
+            title: appName,
+            suffix: canRestoreMirrorSessions ? "Ready" : "Can Reconnect"
+        ).trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func previousAppsRestoreTitle() -> String {
+        let prefix = canRestoreMirrorSessions ? "Restore" : "Reconnect"
+        guard let appName = singleRestorableAppName() else {
+            return canRestoreMirrorSessions ? "Restore Previous Apps" : "Reconnect Previous Apps"
+        }
+
+        return prefixedMenuItemTitle(prefix: prefix, title: appName)
+    }
+
+    private func selectedAppDisplayName() -> String {
+        appName(for: selectedAppId) ?? "Windows App"
+    }
+
+    private func singleRestorableAppName() -> String? {
+        guard restorableAppIds.count == 1,
+              let appId = restorableAppIds.first else {
+            return nil
+        }
+
+        return appName(for: appId)
+    }
+
+    private func appName(for appId: String?) -> String? {
+        guard let appId else {
+            return nil
+        }
+
+        return apps.first { $0.id == appId }?.name
+    }
+
+    private func menuItemTitle(_ title: String, maxCount: Int = 30) -> String {
+        let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedTitle.isEmpty else {
+            return "Windows App"
+        }
+
+        guard trimmedTitle.count > maxCount else {
+            return trimmedTitle
+        }
+
+        let prefixCount = max(1, maxCount - 3)
+        let prefix = String(trimmedTitle.prefix(prefixCount))
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return "\(prefix)..."
+    }
+
+    private func prefixedMenuItemTitle(prefix: String, title: String, maxCount: Int = 30) -> String {
+        let itemTitleLimit = max(1, maxCount - prefix.count - 1)
+        return "\(prefix) \(menuItemTitle(title, maxCount: itemTitleLimit))"
+    }
+
+    private func suffixedMenuItemTitle(
+        prefix: String,
+        title: String,
+        suffix: String,
+        maxCount: Int = 30
+    ) -> String {
+        let itemTitleLimit = max(1, maxCount - prefix.count - suffix.count - 2)
+        return "\(prefix) \(menuItemTitle(title, maxCount: itemTitleLimit)) \(suffix)"
     }
 
     public func launchPlanStatus(

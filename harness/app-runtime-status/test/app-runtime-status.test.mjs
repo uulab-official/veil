@@ -4,6 +4,24 @@ import assert from "node:assert/strict";
 
 import { validateAppRuntimeStatus } from "../src/validate-app-runtime-status.mjs";
 
+function setQueuedMenuBarState(report, overrides = {}) {
+  report.menuBarIntegration.statusTitle = "Notepad Waiting";
+  report.menuBarIntegration.symbolName = "clock.fill";
+  report.menuBarIntegration.primaryActionId = overrides.primaryActionId ?? "runtime.startWindowsForApp";
+  report.menuBarIntegration.primaryActionTitle = overrides.primaryActionTitle ?? "Open Windows for Notepad";
+  report.menuBarIntegration.primaryActionAvailable = overrides.primaryActionAvailable ?? true;
+  report.menuBarIntegration.canFulfillPendingLaunch = overrides.canFulfillPendingLaunch ?? false;
+}
+
+function setReconnectMenuBarState(report) {
+  report.menuBarIntegration.statusTitle = "Notepad Can Reconnect";
+  report.menuBarIntegration.symbolName = "arrow.counterclockwise.circle.fill";
+  report.menuBarIntegration.primaryActionId = "windowsApps.reconnectRestore";
+  report.menuBarIntegration.primaryActionTitle = "Reconnect Notepad";
+  report.menuBarIntegration.primaryActionAvailable = true;
+  report.menuBarIntegration.canReconnectPreviousApps = true;
+}
+
 test("validates app runtime status fixture", () => {
   const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.demo.json", import.meta.url), "utf8"));
 
@@ -33,6 +51,16 @@ test("rejects reports without Dock integration status", () => {
   assert.throws(
     () => validateAppRuntimeStatus(report),
     /dockIntegration/
+  );
+});
+
+test("rejects reports without menu bar integration status", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.demo.json", import.meta.url), "utf8"));
+  delete report.menuBarIntegration;
+
+  assert.throws(
+    () => validateAppRuntimeStatus(report),
+    /menuBarIntegration/
   );
 });
 
@@ -115,6 +143,7 @@ test("rejects Dock integration pending launch count drift", () => {
   report.launchPlan.recommendedAction = "start-runtime-for-pending-launch";
   report.launchPlan.recommendedLaunchCommand = "veil-vmctl app-runtime-action --json --action fulfill-pending";
   report.launchPlan.reason = "The selected app launch is queued until Windows starts and the guest agent connects.";
+  setQueuedMenuBarState(report);
 
   assert.throws(
     () => validateAppRuntimeStatus(report),
@@ -129,6 +158,7 @@ test("accepts Dock previous-app restore readiness", () => {
   report.dockIntegration.badgeLabel = "R";
   report.dockIntegration.canReconnectPreviousApps = true;
   report.actions.find((action) => action.id === "windowsApps.reconnectRestore").isAvailable = true;
+  setReconnectMenuBarState(report);
 
   assert.equal(validateAppRuntimeStatus(report), report);
 });
@@ -140,10 +170,31 @@ test("rejects Dock previous-app restore badge drift", () => {
   report.dockIntegration.badgeLabel = "1";
   report.dockIntegration.canReconnectPreviousApps = true;
   report.actions.find((action) => action.id === "windowsApps.reconnectRestore").isAvailable = true;
+  setReconnectMenuBarState(report);
 
   assert.throws(
     () => validateAppRuntimeStatus(report),
     /badgeLabel/
+  );
+});
+
+test("rejects menu bar primary action drift", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.demo.json", import.meta.url), "utf8"));
+  report.menuBarIntegration.primaryActionId = "runtime.fulfillPendingLaunch";
+
+  assert.throws(
+    () => validateAppRuntimeStatus(report),
+    /primaryActionAvailable/
+  );
+});
+
+test("rejects menu bar symbol drift", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.mac-window-live.json", import.meta.url), "utf8"));
+  report.menuBarIntegration.symbolName = "display";
+
+  assert.throws(
+    () => validateAppRuntimeStatus(report),
+    /symbolName/
   );
 });
 
@@ -234,6 +285,7 @@ test("rejects queued pending launch status without matching app id", () => {
   report.launchPlan.recommendedAction = "start-runtime-for-pending-launch";
   report.launchPlan.recommendedLaunchCommand = "veil-vmctl app-runtime-action --json --action fulfill-pending";
   report.launchPlan.reason = "The selected app launch is queued until Windows starts and the guest agent connects.";
+  setQueuedMenuBarState(report);
 
   assert.throws(
     () => validateAppRuntimeStatus(report),
@@ -253,6 +305,7 @@ test("rejects queued pending launch plans without fulfill-pending recovery", () 
   report.launchPlan.pendingLaunchAppId = "winapp_notepad";
   report.launchPlan.recommendedAction = "start-runtime-for-pending-launch";
   report.launchPlan.reason = "The selected app launch is queued until Windows starts and the guest agent connects.";
+  setQueuedMenuBarState(report);
 
   assert.throws(
     () => validateAppRuntimeStatus(report),
@@ -283,6 +336,10 @@ test("accepts queued pending launch repair while local Windows is already runnin
   report.launchPlan.reason = "Windows is running and the selected app launch is queued; repair or start the guest agent, then open the app automatically.";
   report.actions.find((action) => action.id === "runtime.startWindowsForApp").isAvailable = false;
   report.actions.find((action) => action.id === "runtime.repairGuestAgentForApp").isAvailable = true;
+  setQueuedMenuBarState(report, {
+    primaryActionId: "runtime.repairGuestAgentForApp",
+    primaryActionTitle: "Continue Notepad"
+  });
 
   assert.doesNotThrow(() => validateAppRuntimeStatus(report));
 });
@@ -306,6 +363,9 @@ test("accepts stale running console preview with recovery commands", () => {
   report.actions.find((action) => action.id === "runtime.startWindowsForApp").isAvailable = false;
   report.actions.find((action) => action.id === "runtime.repairGuestAgentForApp").isAvailable = true;
   report.actions.find((action) => action.id === "runtime.recoverDisplay").isAvailable = true;
+  report.menuBarIntegration.symbolName = "display";
+  report.menuBarIntegration.primaryActionId = "windowsApps.launchSelected";
+  report.menuBarIntegration.primaryActionTitle = "Open Notepad";
 
   assert.doesNotThrow(() => validateAppRuntimeStatus(report));
 });
@@ -413,6 +473,7 @@ test("rejects fulfill-pending action availability that drifts from queued launch
   report.dockIntegration.pendingLaunchCount = 1;
   report.launchPlan.recommendedLaunchCommand = "veil-vmctl app-runtime-action --json --action fulfill-pending";
   report.launchPlan.reason = "The live Windows agent can fulfill the queued app launch now.";
+  report.menuBarIntegration.canFulfillPendingLaunch = true;
 
   assert.throws(
     () => validateAppRuntimeStatus(report),
