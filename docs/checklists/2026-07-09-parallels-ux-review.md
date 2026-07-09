@@ -57,6 +57,7 @@ Goal: keep the user-facing workflow one-screen-first (launcher + one action path
 - [x] Generate a human-readable evidence-folder `README.md` from `app-runtime-review-init` and validate its path in the manifest harness, so live proof passes are usable without reading JSON first.
 - [x] Add `veil-vmctl app-runtime-review-verify` plus a verification harness so an existing evidence folder can be checked for manifest, README, screenshot completeness, and review-card consistency before sharing.
 - [x] Add `app-runtime-status.primaryNextAction` plus harness coverage so the one-screen flow exposes one product-facing next command derived from the release gate instead of forcing users or automation to compare several status sections.
+- [x] Surface `primaryNextAction` in the launcher hero and Windows Apps app-flow row, so the app UI shows the same single next product action as `app-runtime-status`.
 
 ## CEO Review
 

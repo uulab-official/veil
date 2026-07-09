@@ -28,6 +28,7 @@ struct DetailView: View {
                 canFulfillPendingLaunch: model.canFulfillPendingLaunch,
                 pendingWindowsAppName: pendingWindowsAppName,
                 activeMirrorSession: activeMirrorSession,
+                primaryNextAction: runtimeStatusReport.primaryNextAction,
                 recommendedProofKind: proofPlan.recommendedProofKind,
                 recommendedProofCommand: proofPlan.recommendedProofCommand,
                 startVMAction: startVMAction,
@@ -57,6 +58,7 @@ struct DetailView: View {
                     proofPlan: proofPlan,
                     proofArtifacts: runtimeStatusReport.proofArtifacts,
                     releaseGate: runtimeStatusReport.releaseGate,
+                    primaryNextAction: runtimeStatusReport.primaryNextAction,
                     launchWindowsAppAction: launchWindowsAppAction,
                     runRecommendedProofAction: runRecommendedProofAction
                 )
@@ -102,6 +104,7 @@ private struct WindowsQuickLaunchPanel: View {
     var proofPlan: WindowsAppRuntimeProofPlanStatus
     var proofArtifacts: WindowsAppRuntimeProofArtifactStatus
     var releaseGate: WindowsAppRuntimeReleaseGateStatus
+    var primaryNextAction: WindowsAppRuntimePrimaryNextActionStatus
     var launchWindowsAppAction: () -> Void
     var runRecommendedProofAction: () -> Void
 
@@ -199,10 +202,18 @@ private struct WindowsQuickLaunchPanel: View {
                 )
                 .frame(minWidth: 118, alignment: .leading)
 
-                Text(appFlowDetail)
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(appFlowDetail)
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+
+                    Label(primaryNextAction.title, systemImage: "arrow.forward.circle")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(primaryNextAction.isAvailable ? .primary : .secondary)
+                        .lineLimit(1)
+                        .help(primaryNextActionHelp)
+                }
 
                 Spacer()
 
@@ -320,6 +331,15 @@ private struct WindowsQuickLaunchPanel: View {
             recommendedAction: releaseGate.recommendedAction,
             isPassing: releaseGate.isPassing
         )
+    }
+
+    private var primaryNextActionHelp: String {
+        [
+            primaryNextAction.reason,
+            primaryNextAction.command.map { "Command: \($0)" }
+        ]
+            .compactMap { $0 }
+            .joined(separator: "\n")
     }
 
     private var appFlowSymbolName: String {

@@ -14,6 +14,7 @@ struct VMRuntimeView: View {
     var canFulfillPendingLaunch: Bool
     var pendingWindowsAppName: String?
     var activeMirrorSession: WindowMirrorSession?
+    var primaryNextAction: WindowsAppRuntimePrimaryNextActionStatus
     var recommendedProofKind: String?
     var recommendedProofCommand: String?
     var startVMAction: () -> Void
@@ -93,6 +94,7 @@ struct VMRuntimeView: View {
                     canFulfillPendingLaunch: canFulfillPendingLaunch,
                     pendingWindowsAppName: pendingWindowsAppName,
                     activeMirrorSession: activeMirrorSession,
+                    primaryNextAction: primaryNextAction,
                     recommendedProofKind: recommendedProofKind,
                     recommendedProofCommand: recommendedProofCommand,
                     runRecommendedProofAction: runRecommendedProofAction,
@@ -1346,6 +1348,7 @@ private struct WindowsSetupDisplayPanel: View {
     var canFulfillPendingLaunch: Bool
     var pendingWindowsAppName: String?
     var activeMirrorSession: WindowMirrorSession?
+    var primaryNextAction: WindowsAppRuntimePrimaryNextActionStatus
     var recommendedProofKind: String?
     var recommendedProofCommand: String?
     var runRecommendedProofAction: () -> Void
@@ -1549,6 +1552,14 @@ private struct WindowsSetupDisplayPanel: View {
 
                 Text(primaryTitle)
                     .font(.headline.weight(.semibold))
+
+                if effectiveInstallEvidence.isInstalled {
+                    Label(primaryNextAction.title, systemImage: "arrow.forward.circle")
+                        .font(.callout.weight(.semibold))
+                        .foregroundStyle(.white.opacity(primaryNextAction.isAvailable ? 0.88 : 0.62))
+                        .lineLimit(1)
+                        .help(primaryNextActionHelp)
+                }
 
                 if installSimulation.phase != .idle {
                     AssistantProgressStrip(simulation: installSimulation)
@@ -2189,6 +2200,15 @@ private struct WindowsSetupDisplayPanel: View {
         }
 
         return "Create the profile, disk, shared folder, and install media."
+    }
+
+    private var primaryNextActionHelp: String {
+        [
+            primaryNextAction.reason,
+            primaryNextAction.command.map { "Command: \($0)" }
+        ]
+            .compactMap { $0 }
+            .joined(separator: "\n")
     }
 
     private var installerNeedsFilePickerAccess: Bool {
