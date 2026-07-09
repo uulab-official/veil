@@ -219,6 +219,52 @@ test("rejects verification minimum screenshot dimensions that drift from manifes
   );
 });
 
+test("rejects complete verification reports without proved app check proof", () => {
+  const report = demoVerification();
+  report.attachedScreenshotCount = report.requiredScreenshotCount;
+  report.isComplete = true;
+  report.missingFiles = [];
+  report.invalidScreenshotFiles = [];
+  report.invalidCaptureSteps = [];
+  delete report.nextInvalidCaptureStep;
+  report.missingCaptureSteps = [];
+  delete report.nextMissingCaptureStep;
+  report.screenshotEvidenceSummary = {
+    state: "ready",
+    requiredScreenshotCount: report.requiredScreenshotCount,
+    validScreenshotCount: report.requiredScreenshotCount,
+    missingScreenshotCount: 0,
+    invalidScreenshotCount: 0,
+    pendingScreenshotCount: 0,
+    minimumWidth: report.minimumScreenshotWidth,
+    minimumHeight: report.minimumScreenshotHeight,
+    isScreenshotEvidenceReady: true,
+    nextStepKind: "shareEvidence",
+    nextStepTitle: "Share Review Evidence"
+  };
+  report.nextEvidenceAction = {
+    kind: "shareEvidence",
+    title: "Share Review Evidence",
+    command: report.openEvidenceDirectoryCommand,
+    isReadyToShare: true,
+    instruction: "Open the complete evidence folder and share the verified review artifacts."
+  };
+  report.review.attachedScreenshotCount = report.review.requiredScreenshotCount;
+  report.review.areRequiredScreenshotsAttached = true;
+  for (const slot of report.review.screenshotSlots) {
+    slot.attachmentState = "attached";
+    slot.attachmentPath = `${report.evidenceDirectory}/${slot.expectedFileName}`;
+    slot.attachmentByteCount = 68;
+    slot.attachmentWidth = 1440;
+    slot.attachmentHeight = 900;
+  }
+
+  assert.throws(
+    () => validateAppRuntimeReviewVerification(report),
+    /app check proof/
+  );
+});
+
 test("accepts complete verification reports", () => {
   const report = demoVerification();
   report.attachedScreenshotCount = report.requiredScreenshotCount;
@@ -249,14 +295,18 @@ test("accepts complete verification reports", () => {
     isReadyToShare: true,
     instruction: "Open the complete evidence folder and share the verified review artifacts."
   };
+  report.appCheckProof = {
+    ...report.appCheckProof,
+    exists: true,
+    isValid: true,
+    kind: "windowsMVPProof",
+    status: "proved",
+    appId: "winapp_notepad"
+  };
+  delete report.appCheckProof.issueReason;
   report.review.attachedScreenshotCount = report.review.requiredScreenshotCount;
   report.review.invalidScreenshotCount = 0;
   report.review.areRequiredScreenshotsAttached = true;
-  report.review.isReadyForReview = true;
-  report.review.appFlowSummary = "ready (5/5)";
-  report.review.nextStepTitle = "Ready For App Review";
-  delete report.review.nextActionCommand;
-  report.review.detail = "Setup, launch, app checks, and close controls are covered.";
   for (const slot of report.review.screenshotSlots) {
     slot.attachmentState = "attached";
     slot.attachmentPath = `${report.evidenceDirectory}/${slot.expectedFileName}`;

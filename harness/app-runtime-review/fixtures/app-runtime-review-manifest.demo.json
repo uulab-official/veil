@@ -1,7 +1,14 @@
 {
+  "appCheckProofFile" : {
+    "command" : "veil-vmctl mvp-proof --json --app-id winapp_notepad --require-proved --output \/tmp\/veil-review-verify\/mvp-proof.json",
+    "expectedFileName" : "mvp-proof.json",
+    "path" : "\/tmp\/veil-review-verify\/mvp-proof.json",
+    "requiredKind" : "windowsMVPProof",
+    "requiredStatus" : "proved"
+  },
   "captureSteps" : [
     {
-      "captureCommand" : "screencapture -i \/tmp\/veil-review-readme\/preBootLauncher.png",
+      "captureCommand" : "screencapture -i \/tmp\/veil-review-verify\/preBootLauncher.png",
       "expectedFileName" : "preBootLauncher.png",
       "instruction" : "Capture the one-screen Veil launcher before opening the selected Windows app.",
       "order" : 1,
@@ -10,24 +17,25 @@
       "title" : "Pre-Boot Launcher"
     },
     {
-      "captureCommand" : "screencapture -i \/tmp\/veil-review-readme\/firstAppLaunch.png",
+      "captureCommand" : "screencapture -i \/tmp\/veil-review-verify\/firstAppLaunch.png",
       "expectedFileName" : "firstAppLaunch.png",
       "instruction" : "Start or queue the selected Windows app and capture the first visible launch state.",
       "order" : 2,
       "slotId" : "firstAppLaunch",
-      "supportingCommand" : "veil-vmctl app-runtime-action --json --action fulfill-pending",
+      "supportingCommand" : "veil-vmctl app-runtime-action --json --action repair-agent --wait-seconds 120",
       "title" : "First App Launch"
     },
     {
-      "captureCommand" : "screencapture -i \/tmp\/veil-review-readme\/appWindowOnly.png",
+      "captureCommand" : "screencapture -i \/tmp\/veil-review-verify\/appWindowOnly.png",
       "expectedFileName" : "appWindowOnly.png",
       "instruction" : "Capture the mirrored Windows app window after the launcher is hidden.",
       "order" : 3,
       "slotId" : "appWindowOnly",
+      "supportingCommand" : "veil-vmctl mvp-proof --json --app-id winapp_notepad --require-proved --output \/tmp\/veil-review-verify\/mvp-proof.json",
       "title" : "App Window Only"
     },
     {
-      "captureCommand" : "screencapture -i \/tmp\/veil-review-readme\/menuRestore.png",
+      "captureCommand" : "screencapture -i \/tmp\/veil-review-verify\/menuRestore.png",
       "expectedFileName" : "menuRestore.png",
       "instruction" : "Open the menu or Dock control and capture restore, reconnect, bring-forward, or close actions.",
       "order" : 4,
@@ -36,7 +44,7 @@
       "title" : "Menu Restore"
     },
     {
-      "captureCommand" : "screencapture -i \/tmp\/veil-review-readme\/closeQuiet.png",
+      "captureCommand" : "screencapture -i \/tmp\/veil-review-verify\/closeQuiet.png",
       "expectedFileName" : "closeQuiet.png",
       "instruction" : "Close the final Windows app window and capture the returned launcher or quiet-Windows control.",
       "order" : 5,
@@ -45,58 +53,59 @@
       "title" : "Close And Quiet"
     }
   ],
-  "evidenceDirectory" : "\/tmp\/veil-review-readme",
-  "generatedAt" : "2026-07-09T17:16:53Z",
+  "evidenceDirectory" : "\/tmp\/veil-review-verify",
+  "generatedAt" : "2026-07-09T21:47:07Z",
   "kind" : "windowsAppRuntimeReviewEvidenceManifest",
-  "manifestPath" : "\/tmp\/veil-review-readme\/review-manifest.json",
+  "manifestPath" : "\/tmp\/veil-review-verify\/review-manifest.json",
   "minimumScreenshotHeight" : 360,
   "minimumScreenshotWidth" : 640,
   "nextActions" : [
-    "Open the evidence folder with `open \/tmp\/veil-review-readme`.",
+    "Open the evidence folder with `open \/tmp\/veil-review-verify`.",
     "Capture the five required screenshots into the evidence directory as valid PNG files of at least 640 x 360.",
-    "Run `veil-vmctl app-runtime-review --evidence-dir \/tmp\/veil-review-readme` and confirm Screenshots is 5\/5 attached.",
-    "Run `veil-vmctl app-runtime-review-verify --json --evidence-dir \/tmp\/veil-review-readme` before sharing evidence."
+    "Run the saved app check proof command from `review-manifest.json` and keep `mvp-proof.json` in the evidence directory.",
+    "Run `veil-vmctl app-runtime-review --evidence-dir \/tmp\/veil-review-verify` and confirm Screenshots is 5\/5 attached.",
+    "Run `veil-vmctl app-runtime-review-verify --json --evidence-dir \/tmp\/veil-review-verify` before sharing evidence."
   ],
-  "openEvidenceDirectoryCommand" : "open \/tmp\/veil-review-readme",
-  "readmePath" : "\/tmp\/veil-review-readme\/README.md",
+  "openEvidenceDirectoryCommand" : "open \/tmp\/veil-review-verify",
+  "readmePath" : "\/tmp\/veil-review-verify\/README.md",
   "requiredScreenshotCount" : 5,
-  "reviewCommand" : "veil-vmctl app-runtime-review --evidence-dir \/tmp\/veil-review-readme",
+  "reviewCommand" : "veil-vmctl app-runtime-review --evidence-dir \/tmp\/veil-review-verify",
   "screenshotFiles" : [
     {
       "expectedFileName" : "preBootLauncher.png",
       "expectedSurface" : "One Veil launcher window with setup or start action visible.",
-      "path" : "\/tmp\/veil-review-readme\/preBootLauncher.png",
+      "path" : "\/tmp\/veil-review-verify\/preBootLauncher.png",
       "slotId" : "preBootLauncher",
       "title" : "Pre-Boot Launcher"
     },
     {
       "expectedFileName" : "firstAppLaunch.png",
       "expectedSurface" : "A selected Windows app is opening, queued, or ready with one concrete next action.",
-      "path" : "\/tmp\/veil-review-readme\/firstAppLaunch.png",
+      "path" : "\/tmp\/veil-review-verify\/firstAppLaunch.png",
       "slotId" : "firstAppLaunch",
       "title" : "First App Launch"
     },
     {
       "expectedFileName" : "appWindowOnly.png",
       "expectedSurface" : "The mirrored Windows app window is visible while the launcher is hidden unless recovery is needed.",
-      "path" : "\/tmp\/veil-review-readme\/appWindowOnly.png",
+      "path" : "\/tmp\/veil-review-verify\/appWindowOnly.png",
       "slotId" : "appWindowOnly",
       "title" : "App Window Only"
     },
     {
       "expectedFileName" : "menuRestore.png",
       "expectedSurface" : "Menu or Dock controls can bring forward, restore, reconnect, or close Windows app windows.",
-      "path" : "\/tmp\/veil-review-readme\/menuRestore.png",
+      "path" : "\/tmp\/veil-review-verify\/menuRestore.png",
       "slotId" : "menuRestore",
       "title" : "Menu Restore"
     },
     {
       "expectedFileName" : "closeQuiet.png",
       "expectedSurface" : "After the final Windows app window closes, the launcher returns or quiet Windows action is available.",
-      "path" : "\/tmp\/veil-review-readme\/closeQuiet.png",
+      "path" : "\/tmp\/veil-review-verify\/closeQuiet.png",
       "slotId" : "closeQuiet",
       "title" : "Close And Quiet"
     }
   ],
-  "verifyCommand" : "veil-vmctl app-runtime-review-verify --json --evidence-dir \/tmp\/veil-review-readme"
+  "verifyCommand" : "veil-vmctl app-runtime-review-verify --json --evidence-dir \/tmp\/veil-review-verify"
 }

@@ -708,6 +708,14 @@ struct AppRuntimeReviewEvidenceFile: Codable, Equatable {
     var expectedSurface: String
 }
 
+struct AppRuntimeReviewAppCheckProofFile: Codable, Equatable {
+    var expectedFileName: String
+    var path: String
+    var command: String
+    var requiredKind: String
+    var requiredStatus: String
+}
+
 struct AppRuntimeReviewCaptureStep: Codable, Equatable {
     var order: Int
     var slotId: String
@@ -760,6 +768,7 @@ struct AppRuntimeReviewEvidenceManifest: Codable, Equatable {
     var minimumScreenshotWidth: Int
     var minimumScreenshotHeight: Int
     var screenshotFiles: [AppRuntimeReviewEvidenceFile]
+    var appCheckProofFile: AppRuntimeReviewAppCheckProofFile
     var captureSteps: [AppRuntimeReviewCaptureStep]
     var reviewCommand: String
     var verifyCommand: String
@@ -775,6 +784,7 @@ struct AppRuntimeReviewEvidenceManifest: Codable, Equatable {
         minimumScreenshotWidth: Int = AppRuntimeReviewEvidenceManifest.defaultMinimumScreenshotWidth,
         minimumScreenshotHeight: Int = AppRuntimeReviewEvidenceManifest.defaultMinimumScreenshotHeight,
         screenshotFiles: [AppRuntimeReviewEvidenceFile],
+        appCheckProofFile: AppRuntimeReviewAppCheckProofFile,
         captureSteps: [AppRuntimeReviewCaptureStep],
         reviewCommand: String,
         verifyCommand: String = "",
@@ -789,6 +799,7 @@ struct AppRuntimeReviewEvidenceManifest: Codable, Equatable {
         self.minimumScreenshotWidth = minimumScreenshotWidth
         self.minimumScreenshotHeight = minimumScreenshotHeight
         self.screenshotFiles = screenshotFiles
+        self.appCheckProofFile = appCheckProofFile
         self.captureSteps = captureSteps
         self.reviewCommand = reviewCommand
         self.verifyCommand = verifyCommand
@@ -807,6 +818,14 @@ struct AppRuntimeReviewEvidenceManifest: Codable, Equatable {
         minimumScreenshotWidth = try container.decodeIfPresent(Int.self, forKey: .minimumScreenshotWidth) ?? Self.defaultMinimumScreenshotWidth
         minimumScreenshotHeight = try container.decodeIfPresent(Int.self, forKey: .minimumScreenshotHeight) ?? Self.defaultMinimumScreenshotHeight
         screenshotFiles = try container.decode([AppRuntimeReviewEvidenceFile].self, forKey: .screenshotFiles)
+        appCheckProofFile = try container.decodeIfPresent(AppRuntimeReviewAppCheckProofFile.self, forKey: .appCheckProofFile)
+            ?? AppRuntimeReviewAppCheckProofFile(
+                expectedFileName: "mvp-proof.json",
+                path: "\(evidenceDirectory)/mvp-proof.json",
+                command: "",
+                requiredKind: "windowsMVPProof",
+                requiredStatus: "proved"
+            )
         captureSteps = try container.decode([AppRuntimeReviewCaptureStep].self, forKey: .captureSteps)
         reviewCommand = try container.decode(String.self, forKey: .reviewCommand)
         verifyCommand = try container.decodeIfPresent(String.self, forKey: .verifyCommand) ?? ""
@@ -863,6 +882,20 @@ struct AppRuntimeReviewNextEvidenceAction: Codable, Equatable {
     var supportingCommand: String?
 }
 
+struct AppRuntimeReviewAppCheckProofEvidence: Codable, Equatable {
+    var expectedFileName: String
+    var path: String
+    var command: String
+    var requiredKind: String
+    var requiredStatus: String
+    var exists: Bool
+    var isValid: Bool
+    var kind: String?
+    var status: String?
+    var appId: String?
+    var issueReason: String?
+}
+
 struct AppRuntimeReviewEvidenceVerification: Codable, Equatable {
     var kind: String = "windowsAppRuntimeReviewEvidenceVerification"
     var generatedAt: Date
@@ -878,6 +911,7 @@ struct AppRuntimeReviewEvidenceVerification: Codable, Equatable {
     var isComplete: Bool
     var missingFiles: [String]
     var invalidScreenshotFiles: [AppRuntimeReviewInvalidScreenshotFile]
+    var appCheckProof: AppRuntimeReviewAppCheckProofEvidence
     var screenshotEvidenceSummary: AppRuntimeReviewScreenshotEvidenceSummary
     var nextEvidenceAction: AppRuntimeReviewNextEvidenceAction
     var invalidCaptureSteps: [AppRuntimeReviewMissingCaptureStep]
@@ -1272,6 +1306,10 @@ struct VeilVMControl {
         let reviewCommand = appRuntimeReviewCommand(evidenceDirectory: evidenceDirectoryURL.path)
         let verifyCommand = appRuntimeReviewVerifyCommand(evidenceDirectory: evidenceDirectoryURL.path)
         let openEvidenceDirectoryCommand = appRuntimeReviewOpenCommand(evidenceDirectory: evidenceDirectoryURL.path)
+        let appCheckProofFile = appRuntimeReviewAppCheckProofFile(
+            evidenceDirectory: evidenceDirectoryURL.path,
+            recommendedCommand: card.evidence.recommendedAppCheckCommand
+        )
         let screenshotFiles = card.screenshotSlots.map { slot in
             AppRuntimeReviewEvidenceFile(
                 slotId: slot.id,
@@ -1290,8 +1328,10 @@ struct VeilVMControl {
             minimumScreenshotWidth: minimumReviewScreenshotWidth,
             minimumScreenshotHeight: minimumReviewScreenshotHeight,
             screenshotFiles: screenshotFiles,
+            appCheckProofFile: appCheckProofFile,
             captureSteps: appRuntimeReviewCaptureSteps(
                 screenshotFiles: screenshotFiles,
+                appCheckProofFile: appCheckProofFile,
                 card: card
             ),
             reviewCommand: reviewCommand,
@@ -1368,6 +1408,11 @@ struct VeilVMControl {
             ?? appRuntimeReviewVerifyCommand(evidenceDirectory: evidenceDirectoryURL.path)
         let openEvidenceDirectoryCommand = manifest?.openEvidenceDirectoryCommand
             ?? appRuntimeReviewOpenCommand(evidenceDirectory: evidenceDirectoryURL.path)
+        let appCheckProofFile = manifest?.appCheckProofFile
+            ?? appRuntimeReviewAppCheckProofFile(
+                evidenceDirectory: evidenceDirectoryURL.path,
+                recommendedCommand: card.evidence.recommendedAppCheckCommand
+            )
         let captureSteps = manifest?.captureSteps
             ?? appRuntimeReviewCaptureSteps(
                 screenshotFiles: card.screenshotSlots.map { slot in
@@ -1379,6 +1424,7 @@ struct VeilVMControl {
                         expectedSurface: slot.expectedSurface
                     )
                 },
+                appCheckProofFile: appCheckProofFile,
                 card: card
             )
         let missingFiles = expectedFiles.filter { !isPNGFile(atPath: $0) }
@@ -1404,9 +1450,11 @@ struct VeilVMControl {
             invalidCaptureSteps: invalidCaptureSteps,
             missingCaptureSteps: missingCaptureSteps
         )
+        let appCheckProof = appRuntimeReviewAppCheckProofEvidence(file: appCheckProofFile)
         let nextEvidenceAction = appRuntimeReviewNextEvidenceAction(
             invalidCaptureSteps: invalidCaptureSteps,
             missingCaptureSteps: missingCaptureSteps,
+            appCheckProof: appCheckProof,
             openEvidenceDirectoryCommand: openEvidenceDirectoryCommand
         )
         let verification = AppRuntimeReviewEvidenceVerification(
@@ -1423,9 +1471,11 @@ struct VeilVMControl {
             isComplete: manifest != nil
                 && FileManager.default.fileExists(atPath: readmeURL.path)
                 && missingFiles.isEmpty
+                && appCheckProof.isValid
                 && card.areRequiredScreenshotsAttached,
             missingFiles: missingFiles,
             invalidScreenshotFiles: invalidScreenshotFiles,
+            appCheckProof: appCheckProof,
             screenshotEvidenceSummary: screenshotEvidenceSummary,
             nextEvidenceAction: nextEvidenceAction,
             invalidCaptureSteps: invalidCaptureSteps,
@@ -1442,6 +1492,7 @@ struct VeilVMControl {
                 manifestExists: manifest != nil,
                 readmeExists: FileManager.default.fileExists(atPath: readmeURL.path),
                 invalidScreenshotFiles: invalidScreenshotFiles,
+                appCheckProof: appCheckProof,
                 invalidCaptureSteps: invalidCaptureSteps,
                 missingCaptureSteps: missingCaptureSteps,
                 reviewCommand: reviewCommand,
@@ -1462,6 +1513,7 @@ struct VeilVMControl {
         print("Guide: \(verification.readmeExists ? "present" : "missing")")
         print("Screenshots: \(verification.attachedScreenshotCount)/\(verification.requiredScreenshotCount) attached")
         print("Screenshot evidence: \(verification.screenshotEvidenceSummary.state)")
+        print("App check proof: \(verification.appCheckProof.isValid ? "proved" : (verification.appCheckProof.issueReason ?? "missing"))")
         print("Next evidence action: \(verification.nextEvidenceAction.title)")
         print("Next evidence command: \(verification.nextEvidenceAction.command)")
         print("Complete: \(verification.isComplete ? "yes" : "no")")
@@ -1485,6 +1537,10 @@ struct VeilVMControl {
             if let supportingCommand = nextMissingCaptureStep.supportingCommand {
                 print("     Command: \(supportingCommand)")
             }
+        }
+        if !verification.appCheckProof.isValid {
+            print("App check proof:")
+            print("  \(verification.appCheckProof.command)")
         }
         print("Next actions:")
         for action in verification.nextActions {
@@ -1535,10 +1591,11 @@ struct VeilVMControl {
             "",
             "- Open this folder with `\(manifest.openEvidenceDirectoryCommand)`.",
             "- Capture every PNG listed below into this folder as a valid PNG of at least 640 x 360.",
+            "- Run `\(manifest.appCheckProofFile.command)` and keep `\(manifest.appCheckProofFile.expectedFileName)` in this folder.",
             "- Run `\(manifest.reviewCommand)`.",
             "- Confirm the review card reports `Screenshots: \(manifest.requiredScreenshotCount)/\(manifest.requiredScreenshotCount) attached`.",
             "- Run `\(manifest.verifyCommand)` before sharing evidence.",
-            "- Keep `review-manifest.json` with the screenshots when sharing review evidence.",
+            "- Keep `review-manifest.json`, `\(manifest.appCheckProofFile.expectedFileName)`, and the screenshots when sharing review evidence.",
             "",
             "## Capture Steps",
             ""
@@ -1559,6 +1616,7 @@ struct VeilVMControl {
         for file in manifest.screenshotFiles {
             lines.append("- `\(file.expectedFileName)`: \(file.expectedSurface)")
         }
+        lines.append("- `\(manifest.appCheckProofFile.expectedFileName)`: proved Windows app launch, frame, input, and clipboard JSON evidence")
         lines.append("")
         return lines.joined(separator: "\n")
     }
@@ -1592,6 +1650,24 @@ struct VeilVMControl {
         let openEvidenceDirectoryCommand = manifest.openEvidenceDirectoryCommand.isEmpty
             ? appRuntimeReviewOpenCommand(evidenceDirectory: evidenceDirectory)
             : manifest.openEvidenceDirectoryCommand
+        let appCheckProofFile = AppRuntimeReviewAppCheckProofFile(
+            expectedFileName: manifest.appCheckProofFile.expectedFileName,
+            path: manifest.appCheckProofFile.path.isEmpty
+                ? "\(evidenceDirectory)/mvp-proof.json"
+                : manifest.appCheckProofFile.path,
+            command: manifest.appCheckProofFile.command.isEmpty
+                ? appRuntimeReviewProofCommand(
+                    recommendedCommand: nil,
+                    proofPath: "\(evidenceDirectory)/mvp-proof.json"
+                )
+                : manifest.appCheckProofFile.command,
+            requiredKind: manifest.appCheckProofFile.requiredKind.isEmpty
+                ? "windowsMVPProof"
+                : manifest.appCheckProofFile.requiredKind,
+            requiredStatus: manifest.appCheckProofFile.requiredStatus.isEmpty
+                ? "proved"
+                : manifest.appCheckProofFile.requiredStatus
+        )
 
         return AppRuntimeReviewEvidenceManifest(
             generatedAt: manifest.generatedAt,
@@ -1602,6 +1678,7 @@ struct VeilVMControl {
             minimumScreenshotWidth: minimumReviewScreenshotWidth,
             minimumScreenshotHeight: minimumReviewScreenshotHeight,
             screenshotFiles: manifest.screenshotFiles,
+            appCheckProofFile: appCheckProofFile,
             captureSteps: captureSteps,
             reviewCommand: reviewCommand,
             verifyCommand: verifyCommand,
@@ -1622,6 +1699,7 @@ struct VeilVMControl {
         [
             "Open the evidence folder with `\(openEvidenceDirectoryCommand)`.",
             "Capture the five required screenshots into the evidence directory as valid PNG files of at least 640 x 360.",
+            "Run the saved app check proof command from `review-manifest.json` and keep `mvp-proof.json` in the evidence directory.",
             "Run `\(reviewCommand)` and confirm Screenshots is 5/5 attached.",
             "Run `\(verifyCommand)` before sharing evidence."
         ]
@@ -1692,6 +1770,7 @@ struct VeilVMControl {
     private static func appRuntimeReviewNextEvidenceAction(
         invalidCaptureSteps: [AppRuntimeReviewMissingCaptureStep],
         missingCaptureSteps: [AppRuntimeReviewMissingCaptureStep],
+        appCheckProof: AppRuntimeReviewAppCheckProofEvidence,
         openEvidenceDirectoryCommand: String
     ) -> AppRuntimeReviewNextEvidenceAction {
         if let nextInvalidCaptureStep = invalidCaptureSteps.first {
@@ -1720,6 +1799,19 @@ struct VeilVMControl {
             )
         }
 
+        if !appCheckProof.isValid {
+            return AppRuntimeReviewNextEvidenceAction(
+                kind: "runAppCheckProof",
+                title: "Run App Check Proof",
+                command: appCheckProof.command,
+                isReadyToShare: false,
+                expectedFileName: appCheckProof.expectedFileName,
+                path: appCheckProof.path,
+                instruction: "Run the saved Windows app proof and keep the proved JSON artifact in the evidence folder.",
+                supportingCommand: "veil-vmctl app-runtime-status --json"
+            )
+        }
+
         return AppRuntimeReviewNextEvidenceAction(
             kind: "shareEvidence",
             title: "Share Review Evidence",
@@ -1737,6 +1829,7 @@ struct VeilVMControl {
         manifestExists: Bool,
         readmeExists: Bool,
         invalidScreenshotFiles: [AppRuntimeReviewInvalidScreenshotFile],
+        appCheckProof: AppRuntimeReviewAppCheckProofEvidence,
         invalidCaptureSteps: [AppRuntimeReviewMissingCaptureStep],
         missingCaptureSteps: [AppRuntimeReviewMissingCaptureStep],
         reviewCommand: String,
@@ -1759,6 +1852,13 @@ struct VeilVMControl {
             actions.append("Save it as a valid PNG of at least 640 x 360 with `\(nextMissingCaptureStep.captureCommand)`.")
             if let supportingCommand = nextMissingCaptureStep.supportingCommand {
                 actions.append("Use `\(supportingCommand)` to reach the next capture state before saving `\(nextMissingCaptureStep.expectedFileName)`.")
+            }
+        }
+        if !appCheckProof.isValid {
+            if let issueReason = appCheckProof.issueReason {
+                actions.append("Run `\(appCheckProof.command)` to create `\(appCheckProof.expectedFileName)` with \(appCheckProof.requiredKind) status=\(appCheckProof.requiredStatus); current issue: \(issueReason).")
+            } else {
+                actions.append("Run `\(appCheckProof.command)` to create `\(appCheckProof.expectedFileName)` with \(appCheckProof.requiredKind) status=\(appCheckProof.requiredStatus).")
             }
         }
         actions.append("Run `\(reviewCommand)` and confirm Screenshots is 5/5 attached.")
@@ -1795,6 +1895,7 @@ struct VeilVMControl {
 
     private static func appRuntimeReviewCaptureSteps(
         screenshotFiles: [AppRuntimeReviewEvidenceFile],
+        appCheckProofFile: AppRuntimeReviewAppCheckProofFile,
         card: AppRuntimeReviewCard
     ) -> [AppRuntimeReviewCaptureStep] {
         screenshotFiles.enumerated().map { index, file in
@@ -1805,9 +1906,47 @@ struct VeilVMControl {
                 expectedFileName: file.expectedFileName,
                 instruction: appRuntimeReviewCaptureInstruction(slotId: file.slotId),
                 captureCommand: appRuntimeReviewCaptureCommand(path: file.path),
-                supportingCommand: appRuntimeReviewCaptureCommand(slotId: file.slotId, card: card)
+                supportingCommand: appRuntimeReviewCaptureCommand(
+                    slotId: file.slotId,
+                    appCheckProofFile: appCheckProofFile,
+                    card: card
+                )
             )
         }
+    }
+
+    private static func appRuntimeReviewAppCheckProofFile(
+        evidenceDirectory: String,
+        recommendedCommand: String?
+    ) -> AppRuntimeReviewAppCheckProofFile {
+        let path = URL(fileURLWithPath: evidenceDirectory)
+            .appendingPathComponent("mvp-proof.json")
+            .standardizedFileURL
+            .path
+
+        return AppRuntimeReviewAppCheckProofFile(
+            expectedFileName: "mvp-proof.json",
+            path: path,
+            command: appRuntimeReviewProofCommand(
+                recommendedCommand: recommendedCommand,
+                proofPath: path
+            ),
+            requiredKind: "windowsMVPProof",
+            requiredStatus: "proved"
+        )
+    }
+
+    private static func appRuntimeReviewProofCommand(
+        recommendedCommand: String?,
+        proofPath: String
+    ) -> String {
+        let fallback = "veil-vmctl mvp-proof --json --app-id winapp_notepad --require-proved"
+        let baseCommand = recommendedCommand?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let command = baseCommand?.isEmpty == false ? baseCommand! : fallback
+        guard !command.contains(" --output ") else {
+            return command
+        }
+        return "\(command) --output \(shellQuoted(proofPath))"
     }
 
     private static func appRuntimeReviewCaptureCommand(path: String) -> String {
@@ -1845,6 +1984,7 @@ struct VeilVMControl {
 
     private static func appRuntimeReviewCaptureCommand(
         slotId: String,
+        appCheckProofFile: AppRuntimeReviewAppCheckProofFile,
         card: AppRuntimeReviewCard
     ) -> String? {
         switch slotId {
@@ -1853,7 +1993,7 @@ struct VeilVMControl {
         case "firstAppLaunch":
             return card.steps.first { $0.id == "openWindowsApp" }?.nextActionCommand
         case "appWindowOnly":
-            return card.evidence.recommendedAppCheckCommand
+            return appCheckProofFile.command
         case "menuRestore":
             return "veil-vmctl app-runtime-action --json --action bring-forward"
         case "closeQuiet":
@@ -2190,6 +2330,81 @@ struct VeilVMControl {
         }
 
         return nil
+    }
+
+    private static func appRuntimeReviewAppCheckProofEvidence(
+        file: AppRuntimeReviewAppCheckProofFile
+    ) -> AppRuntimeReviewAppCheckProofEvidence {
+        guard FileManager.default.fileExists(atPath: file.path) else {
+            return AppRuntimeReviewAppCheckProofEvidence(
+                expectedFileName: file.expectedFileName,
+                path: file.path,
+                command: file.command,
+                requiredKind: file.requiredKind,
+                requiredStatus: file.requiredStatus,
+                exists: false,
+                isValid: false,
+                kind: nil,
+                status: nil,
+                appId: nil,
+                issueReason: "missing"
+            )
+        }
+
+        do {
+            let data = try Data(contentsOf: URL(fileURLWithPath: file.path))
+            let object = try JSONSerialization.jsonObject(with: data)
+            guard let dictionary = object as? [String: Any] else {
+                return appRuntimeReviewInvalidAppCheckProofEvidence(file: file, reason: "notObject")
+            }
+
+            let kind = dictionary["kind"] as? String
+            let status = dictionary["status"] as? String
+            let appId = dictionary["appId"] as? String
+            let issueReason: String?
+            if kind != file.requiredKind {
+                issueReason = "wrongKind"
+            } else if status != file.requiredStatus {
+                issueReason = "notProved"
+            } else {
+                issueReason = nil
+            }
+
+            return AppRuntimeReviewAppCheckProofEvidence(
+                expectedFileName: file.expectedFileName,
+                path: file.path,
+                command: file.command,
+                requiredKind: file.requiredKind,
+                requiredStatus: file.requiredStatus,
+                exists: true,
+                isValid: issueReason == nil,
+                kind: kind,
+                status: status,
+                appId: appId,
+                issueReason: issueReason
+            )
+        } catch {
+            return appRuntimeReviewInvalidAppCheckProofEvidence(file: file, reason: "notValidJSON")
+        }
+    }
+
+    private static func appRuntimeReviewInvalidAppCheckProofEvidence(
+        file: AppRuntimeReviewAppCheckProofFile,
+        reason: String
+    ) -> AppRuntimeReviewAppCheckProofEvidence {
+        AppRuntimeReviewAppCheckProofEvidence(
+            expectedFileName: file.expectedFileName,
+            path: file.path,
+            command: file.command,
+            requiredKind: file.requiredKind,
+            requiredStatus: file.requiredStatus,
+            exists: true,
+            isValid: false,
+            kind: nil,
+            status: nil,
+            appId: nil,
+            issueReason: reason
+        )
     }
 
     private static func pngScreenshotMetadata(atPath path: String) -> (byteCount: Int, width: Int, height: Int)? {

@@ -123,3 +123,13 @@ test("rejects next actions without minimum screenshot size", () => {
     /minimum screenshot size/
   );
 });
+
+test("rejects app check proof commands that do not save to the evidence file", () => {
+  const manifest = demoManifest();
+  manifest.appCheckProofFile.command = "veil-vmctl mvp-proof --json --app-id winapp_notepad --require-proved";
+
+  assert.throws(
+    () => validateAppRuntimeReviewManifest(manifest),
+    /proof file path/
+  );
+});

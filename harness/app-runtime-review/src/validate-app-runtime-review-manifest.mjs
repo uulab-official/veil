@@ -67,6 +67,7 @@ export function validateAppRuntimeReviewManifest(manifest) {
   if (!Array.isArray(manifest.screenshotFiles)) {
     throw new TypeError("app runtime review manifest screenshotFiles must be an array.");
   }
+  validateAppCheckProofFile(manifest.appCheckProofFile, manifest);
   if (!Array.isArray(manifest.captureSteps)) {
     throw new TypeError("app runtime review manifest captureSteps must be an array.");
   }
@@ -151,11 +152,44 @@ export function validateAppRuntimeReviewManifest(manifest) {
   if (!manifest.nextActions.some((action) => action.includes("640 x 360"))) {
     throw new TypeError("app runtime review manifest next actions must include the minimum screenshot size.");
   }
+  if (!manifest.nextActions.some((action) => action.includes("mvp-proof.json"))) {
+    throw new TypeError("app runtime review manifest next actions must include the saved app check proof file.");
+  }
   if (!manifest.nextActions.some((action) => action.includes(manifest.openEvidenceDirectoryCommand))) {
     throw new TypeError("app runtime review manifest next actions must include the open evidence folder command.");
   }
 
   return manifest;
+}
+
+function validateAppCheckProofFile(file, manifest) {
+  if (!file || typeof file !== "object" || Array.isArray(file)) {
+    throw new TypeError("app runtime review manifest appCheckProofFile must be an object.");
+  }
+  requireString(file.expectedFileName, "appCheckProofFile.expectedFileName");
+  requireString(file.path, "appCheckProofFile.path");
+  requireString(file.command, "appCheckProofFile.command");
+  requireString(file.requiredKind, "appCheckProofFile.requiredKind");
+  requireString(file.requiredStatus, "appCheckProofFile.requiredStatus");
+
+  if (file.expectedFileName !== "mvp-proof.json") {
+    throw new TypeError("app runtime review manifest appCheckProofFile expectedFileName must be mvp-proof.json.");
+  }
+  if (!file.path.endsWith(`/${file.expectedFileName}`)) {
+    throw new TypeError("app runtime review manifest appCheckProofFile path must end with mvp-proof.json.");
+  }
+  if (!file.path.startsWith(`${manifest.evidenceDirectory}/`)) {
+    throw new TypeError("app runtime review manifest appCheckProofFile path must live inside the evidence directory.");
+  }
+  if (!file.command.includes("mvp-proof --json") || !file.command.includes("--require-proved")) {
+    throw new TypeError("app runtime review manifest appCheckProofFile command must run proved mvp-proof.");
+  }
+  if (!file.command.includes("--output") || !file.command.includes(file.path)) {
+    throw new TypeError("app runtime review manifest appCheckProofFile command must save to the proof file path.");
+  }
+  if (file.requiredKind !== "windowsMVPProof" || file.requiredStatus !== "proved") {
+    throw new TypeError("app runtime review manifest appCheckProofFile must require windowsMVPProof status=proved.");
+  }
 }
 
 function requireString(value, fieldName) {

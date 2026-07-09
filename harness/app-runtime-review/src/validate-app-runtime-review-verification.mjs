@@ -67,6 +67,7 @@ export function validateAppRuntimeReviewVerification(report) {
   for (const [index, file] of report.invalidScreenshotFiles.entries()) {
     validateInvalidScreenshotFile(file, index, report);
   }
+  validateAppCheckProof(report.appCheckProof, report);
   validateScreenshotEvidenceSummary(report.screenshotEvidenceSummary, report);
   validateNextEvidenceActionShape(report.nextEvidenceAction);
   if (!Array.isArray(report.invalidCaptureSteps)) {
@@ -157,6 +158,7 @@ export function validateAppRuntimeReviewVerification(report) {
     report.manifestExists
     && report.readmeExists
     && report.missingFiles.length === 0
+    && report.appCheckProof.isValid
     && review.areRequiredScreenshotsAttached
   )) {
     throw new TypeError("app runtime review verification completeness must match evidence state.");
@@ -179,6 +181,12 @@ export function validateAppRuntimeReviewVerification(report) {
       || manifest.minimumScreenshotHeight !== report.minimumScreenshotHeight
     ) {
       throw new TypeError("app runtime review verification minimum screenshot dimensions must match the manifest.");
+    }
+    if (
+      manifest.appCheckProofFile.path !== report.appCheckProof.path
+      || manifest.appCheckProofFile.command !== report.appCheckProof.command
+    ) {
+      throw new TypeError("app runtime review verification app check proof must match the manifest.");
     }
   }
 
@@ -309,7 +317,7 @@ function validateNextEvidenceActionShape(action) {
     requireString(action.supportingCommand, "nextEvidenceAction.supportingCommand");
   }
 
-  if (!["shareEvidence", "captureMissingScreenshot", "replaceInvalidScreenshot"].includes(action.kind)) {
+  if (!["shareEvidence", "captureMissingScreenshot", "replaceInvalidScreenshot", "runAppCheckProof"].includes(action.kind)) {
     throw new TypeError("app runtime review verification nextEvidenceAction kind is unsupported.");
   }
 }
@@ -335,6 +343,22 @@ function validateNextEvidenceAction(action, report) {
     return;
   }
 
+  if (!report.appCheckProof.isValid) {
+    if (
+      action.kind !== "runAppCheckProof"
+      || action.title !== "Run App Check Proof"
+      || action.command !== report.appCheckProof.command
+      || action.isReadyToShare !== false
+      || action.expectedFileName !== report.appCheckProof.expectedFileName
+      || action.path !== report.appCheckProof.path
+      || action.instruction !== "Run the saved Windows app proof and keep the proved JSON artifact in the evidence folder."
+      || action.supportingCommand !== "veil-vmctl app-runtime-status --json"
+    ) {
+      throw new TypeError("app runtime review verification nextEvidenceAction must run the app check proof before sharing.");
+    }
+    return;
+  }
+
   if (
     action.kind !== "shareEvidence"
     || action.title !== "Share Review Evidence"
@@ -345,6 +369,62 @@ function validateNextEvidenceAction(action, report) {
     || action.supportingCommand !== undefined
   ) {
     throw new TypeError("app runtime review verification nextEvidenceAction must share complete evidence when no screenshots are pending.");
+  }
+}
+
+function validateAppCheckProof(proof, report) {
+  if (!proof || typeof proof !== "object" || Array.isArray(proof)) {
+    throw new TypeError("app runtime review verification appCheckProof must be an object.");
+  }
+  requireString(proof.expectedFileName, "appCheckProof.expectedFileName");
+  requireString(proof.path, "appCheckProof.path");
+  requireString(proof.command, "appCheckProof.command");
+  requireString(proof.requiredKind, "appCheckProof.requiredKind");
+  requireString(proof.requiredStatus, "appCheckProof.requiredStatus");
+  requireBoolean(proof.exists, "appCheckProof.exists");
+  requireBoolean(proof.isValid, "appCheckProof.isValid");
+  if (proof.kind !== undefined) {
+    requireString(proof.kind, "appCheckProof.kind");
+  }
+  if (proof.status !== undefined) {
+    requireString(proof.status, "appCheckProof.status");
+  }
+  if (proof.appId !== undefined) {
+    requireString(proof.appId, "appCheckProof.appId");
+  }
+  if (proof.issueReason !== undefined) {
+    requireString(proof.issueReason, "appCheckProof.issueReason");
+  }
+
+  if (proof.expectedFileName !== "mvp-proof.json") {
+    throw new TypeError("app runtime review verification appCheckProof expected file must be mvp-proof.json.");
+  }
+  if (!proof.path.endsWith(`/${proof.expectedFileName}`)) {
+    throw new TypeError("app runtime review verification appCheckProof path must end with mvp-proof.json.");
+  }
+  if (!proof.path.startsWith(`${report.evidenceDirectory}/`)) {
+    throw new TypeError("app runtime review verification appCheckProof path must live inside the evidence directory.");
+  }
+  if (!proof.command.includes("mvp-proof --json") || !proof.command.includes("--require-proved")) {
+    throw new TypeError("app runtime review verification appCheckProof command must run proved mvp-proof.");
+  }
+  if (!proof.command.includes("--output") || !proof.command.includes(proof.path)) {
+    throw new TypeError("app runtime review verification appCheckProof command must save to the proof path.");
+  }
+  if (proof.requiredKind !== "windowsMVPProof" || proof.requiredStatus !== "proved") {
+    throw new TypeError("app runtime review verification appCheckProof must require windowsMVPProof status=proved.");
+  }
+  if (proof.isValid) {
+    if (
+      proof.exists !== true
+      || proof.kind !== proof.requiredKind
+      || proof.status !== proof.requiredStatus
+      || proof.issueReason !== undefined
+    ) {
+      throw new TypeError("app runtime review verification valid appCheckProof must match the required proof contract.");
+    }
+  } else if (!["missing", "notValidJSON", "notObject", "wrongKind", "notProved"].includes(proof.issueReason)) {
+    throw new TypeError("app runtime review verification invalid appCheckProof must include a supported issue reason.");
   }
 }
 

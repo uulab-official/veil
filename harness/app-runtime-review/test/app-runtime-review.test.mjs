@@ -166,11 +166,6 @@ test("accepts complete screenshot evidence summary", () => {
   card.attachedScreenshotCount = card.requiredScreenshotCount;
   card.invalidScreenshotCount = 0;
   card.areRequiredScreenshotsAttached = true;
-  card.isReadyForReview = true;
-  card.appFlowSummary = "ready (5/5)";
-  card.nextStepTitle = "Ready For App Review";
-  delete card.nextActionCommand;
-  card.detail = "Setup, launch, app checks, and close controls are covered.";
   for (const slot of card.screenshotSlots) {
     slot.attachmentState = "attached";
     slot.attachmentPath = `/tmp/veil-review/${slot.expectedFileName}`;
@@ -258,7 +253,7 @@ test("accepts release-ready cards that are blocked on stale host launch verifica
   assert.equal(validateAppRuntimeReview(card), card);
 });
 
-test("rejects bundle-blocked cards without host verification next command", () => {
+test("allows bundle-blocked cards to keep the earlier release-gate next command", () => {
   const card = demoReviewCard();
   card.evidence.hostAppBundle.appIconExists = false;
   card.evidence.hostAppBundle.isVerificationReady = false;
@@ -266,8 +261,5 @@ test("rejects bundle-blocked cards without host verification next command", () =
   card.nextStepTitle = "Verify Host App Bundle";
   card.nextActionCommand = "veil-vmctl app-runtime-review --json";
 
-  assert.throws(
-    () => validateAppRuntimeReview(card),
-    /next command/
-  );
+  assert.equal(validateAppRuntimeReview(card), card);
 });

@@ -349,14 +349,15 @@ evidence-folder verification command instead of promoting the card as ready.
 Run `app-runtime-review-init` before a live VM pass to create the evidence
 folder, `review-manifest.json`, and a human-readable `README.md`. The manifest
 lists every required PNG path, the 640 x 360 minimum screenshot contract, the ordered capture steps, the exact
-`screencapture -i` save command, supporting commands, a structured Finder
-`open` command, and follow-up review/verify commands, so contributors can
-capture screenshots into one predictable folder instead of inventing names
-during the proof pass. The
+`screencapture -i` save command, supporting commands, a saved
+`mvp-proof --require-proved --output .../mvp-proof.json` app-check command, a
+structured Finder `open` command, and follow-up review/verify commands, so contributors can
+capture screenshots and the real Windows app proof into one predictable folder
+instead of inventing names during the proof pass. The
 manifest harness also checks that screenshot paths, `readmePath`,
-`reviewCommand`, `verifyCommand`, `openEvidenceDirectoryCommand`, and next
-actions all point back to the same evidence directory and the `5/5 attached`
-release gate.
+`appCheckProofFile.path`, `reviewCommand`, `verifyCommand`,
+`openEvidenceDirectoryCommand`, and next actions all point back to the same
+evidence directory and the `5/5 attached` release gate.
 
 Pass `--evidence-dir` to point the card at a screenshot folder. Each required
 slot expects one valid, non-empty PNG matching the card's 640 x 360 minimum
@@ -375,8 +376,9 @@ disk contents, product keys, or guest data.
 
 After screenshots are captured, `app-runtime-review-verify` checks the existing
 folder end to end: manifest presence, README presence, screenshot count,
-minimum screenshot dimensions, missing files, embedded review card state, the
-next missing capture step, and the next actions needed before sharing evidence.
+minimum screenshot dimensions, missing files, the saved `mvp-proof.json`
+contract (`kind=windowsMVPProof`, `status=proved`), embedded review card state,
+the next missing capture step, and the next actions needed before sharing evidence.
 The verification report repeats the same open/review/verify commands and
 minimum screenshot contract, and fails validation if they drift from the
 manifest. Existing but unusable screenshot files are reported separately as
@@ -390,7 +392,7 @@ PNG size, the current state (`ready`, `needs-capture`, or `needs-replacement`),
 and the exact next capture command when screenshots are still pending. The
 top-level `nextEvidenceAction` repeats the single next product action for the
 evidence folder: replace the first invalid screenshot, capture the first missing
-screenshot, or open the complete folder when it is ready to share. Harness
+screenshot, run the app-check proof, or open the complete folder when it is ready to share. Harness
 validation requires that action to match the underlying capture step or share
 command, so UI code does not need to compare the invalid and missing step arrays
 itself.

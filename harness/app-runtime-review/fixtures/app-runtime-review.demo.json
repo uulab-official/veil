@@ -1,579 +1,581 @@
 {
-  "appFlowSummary": "ready (5/5); review screenshots 0/5 attached",
-  "areRequiredScreenshotsAttached": false,
-  "attachedScreenshotCount": 0,
-  "detail": "Setup, launch, app checks, and close controls are covered. Attach all 5 review screenshots before sharing evidence.",
-  "evidence": {
-    "diagnosticsDirectory": "/Users/bonjin/Library/Application Support/Veil/Diagnostics",
-    "hostAppBundle": {
-      "appBundlePath": "/Users/bonjin/Documents/workspace/uulab/veil/dist/Veil.app",
-      "appIconExists": true,
-      "bundleIdentifier": "org.uulab.veil.host-shell",
-      "executableExists": true,
-      "expectedBundleIdentifier": "org.uulab.veil.host-shell",
-      "infoPlistExists": true,
-      "isStagedBundlePresent": true,
-      "isVerificationReady": true,
-      "latestLaunchReport": {
-        "appIconSource": "bundled",
-        "bundleIdentifier": "org.uulab.veil.host-shell",
-        "duplicateMainWindowCount": 0,
-        "expectedBundleIdentifier": "org.uulab.veil.host-shell",
-        "frameHeight": 900,
-        "frameWidth": 1440,
-        "hasFullSizeContentView": true,
-        "isCurrentForBundle": true,
-        "mainWindowCount": 1,
-        "meetsLauncherContract": true,
-        "minHeight": 760,
-        "minWidth": 1180,
-        "modifiedAt": "2026-07-09T17:37:37Z",
-        "reportPath": "/Users/bonjin/Documents/workspace/uulab/veil/dist/veil-launch-report-latest.plist",
-        "titlebarAppearsTransparent": true,
-        "visibleMainWindowCount": 1
+  "appFlowSummary" : "4\/5 ready; review screenshots 0\/5 attached",
+  "areRequiredScreenshotsAttached" : false,
+  "attachedScreenshotCount" : 0,
+  "detail" : "Open or queue a Windows app from this status. Attach all 5 review screenshots before sharing evidence.",
+  "evidence" : {
+    "diagnosticsDirectory" : "\/Users\/bonjin\/Library\/Application Support\/Veil\/Diagnostics",
+    "hostAppBundle" : {
+      "appBundlePath" : "\/Users\/bonjin\/Documents\/workspace\/uulab\/veil\/dist\/Veil.app",
+      "appIconExists" : true,
+      "bundleIdentifier" : "org.uulab.veil.host-shell",
+      "executableExists" : true,
+      "expectedBundleIdentifier" : "org.uulab.veil.host-shell",
+      "infoPlistExists" : true,
+      "isStagedBundlePresent" : true,
+      "isVerificationReady" : true,
+      "latestLaunchReport" : {
+        "appIconSource" : "bundled",
+        "bundleIdentifier" : "org.uulab.veil.host-shell",
+        "duplicateMainWindowCount" : 0,
+        "expectedBundleIdentifier" : "org.uulab.veil.host-shell",
+        "frameHeight" : 900,
+        "frameWidth" : 1440,
+        "hasFullSizeContentView" : true,
+        "isCurrentForBundle" : true,
+        "mainWindowCount" : 1,
+        "meetsLauncherContract" : true,
+        "minHeight" : 760,
+        "minWidth" : 1180,
+        "modifiedAt" : "2026-07-09T20:18:55Z",
+        "reportPath" : "\/Users\/bonjin\/Documents\/workspace\/uulab\/veil\/dist\/veil-launch-report-latest.plist",
+        "titlebarAppearsTransparent" : true,
+        "visibleMainWindowCount" : 1
       },
-      "verificationCommand": "./script/build_and_run.sh --verify"
+      "verificationCommand" : ".\/script\/build_and_run.sh --verify"
     },
-    "latestAppCheckKind": "mvp",
-    "latestAppCheckModifiedAt": "2026-07-04T10:00:00Z",
-    "latestAppCheckPath": "/Users/test/Library/Application Support/Veil/Diagnostics/Recommended Proof/mvp-proof-latest.json",
-    "recommendedAppCheckCommand": "veil-vmctl mvp-proof --json --app-id winapp_notepad --require-proved"
+    "latestAppCheckKind" : "mvp",
+    "latestAppCheckModifiedAt" : "2026-07-04T15:28:35Z",
+    "latestAppCheckPath" : "\/Users\/bonjin\/Library\/Application Support\/Veil\/Diagnostics\/MVP Proof\/notepad-mvp-window-detect.json",
+    "screenshotEvidenceDirectory" : "\/tmp\/veil-review-verify"
   },
-  "generatedAt": "2026-07-09T17:41:44Z",
-  "invalidScreenshotCount": 0,
-  "isReadyForReview": false,
-  "kind": "windowsAppRuntimeReviewCard",
-  "launchOnboarding": {
-    "isEnabled": true,
-    "state": "ready-for-review",
-    "currentStepId": "ready-for-release-card",
-    "currentStepTitle": "Review App Flow",
-    "usesSinglePrimarySurface": true,
-    "expectedVisibleSurfaceCount": 1,
-    "canContinueInApp": false,
-    "heroRunsPrimaryAction": false,
-    "keepsRecoveryInMenuOrDock": true,
-    "keepsVMDisplayManual": true,
-    "pendingLiveProof": false,
-    "primaryCommand": "veil-vmctl app-runtime-review --json",
-    "reason": "The app-first launch flow is ready for review evidence.",
-    "completedStepCount": 5,
-    "totalStepCount": 5,
-    "currentStepNumber": 5,
-    "progressLabel": "Step 5 of 5",
-    "currentStepDetail": "Review and share the current app-flow evidence."
+  "generatedAt" : "2026-07-09T21:47:08Z",
+  "invalidScreenshotCount" : 0,
+  "isReadyForReview" : false,
+  "kind" : "windowsAppRuntimeReviewCard",
+  "launchOnboarding" : {
+    "canContinueInApp" : true,
+    "completedStepCount" : 4,
+    "currentStepDetail" : "Reconnect the app connection, then open Notepad automatically.",
+    "currentStepId" : "openWindowsApp",
+    "currentStepNumber" : 3,
+    "currentStepTitle" : "Continue Notepad",
+    "expectedVisibleSurfaceCount" : 1,
+    "heroRunsPrimaryAction" : true,
+    "isEnabled" : true,
+    "keepsRecoveryInMenuOrDock" : true,
+    "keepsVMDisplayManual" : true,
+    "pendingLiveProof" : true,
+    "primaryActionId" : "runtime.repairGuestAgentForApp",
+    "primaryCommand" : "veil-vmctl app-runtime-action --json --action repair-agent --wait-seconds 120",
+    "progressLabel" : "Step 3 of 5",
+    "reason" : "Continue from the single Veil launcher action without opening a separate VM manager surface.",
+    "state" : "continue-in-app",
+    "totalStepCount" : 5,
+    "usesSinglePrimarySurface" : true
   },
-  "minimumScreenshotHeight": 360,
-  "minimumScreenshotWidth": 640,
-  "nextStepTitle": "Attach Review Screenshots",
-  "requiredScreenshotCount": 5,
-  "screenshotSlots": [
+  "minimumScreenshotHeight" : 360,
+  "minimumScreenshotWidth" : 640,
+  "nextActionCommand" : "veil-vmctl app-runtime-action --json --action repair-agent --wait-seconds 120",
+  "nextStepTitle" : "Continue Notepad",
+  "requiredScreenshotCount" : 5,
+  "screenshotSlots" : [
     {
-      "attachmentState": "missing",
-      "expectedFileName": "preBootLauncher.png",
-      "expectedSurface": "One Veil launcher window with setup or start action visible.",
-      "id": "preBootLauncher",
-      "title": "Pre-Boot Launcher"
+      "attachmentState" : "missing",
+      "expectedFileName" : "preBootLauncher.png",
+      "expectedSurface" : "One Veil launcher window with setup or start action visible.",
+      "id" : "preBootLauncher",
+      "title" : "Pre-Boot Launcher"
     },
     {
-      "attachmentState": "missing",
-      "expectedFileName": "firstAppLaunch.png",
-      "expectedSurface": "A selected Windows app is opening, queued, or ready with one concrete next action.",
-      "id": "firstAppLaunch",
-      "title": "First App Launch"
+      "attachmentState" : "missing",
+      "expectedFileName" : "firstAppLaunch.png",
+      "expectedSurface" : "A selected Windows app is opening, queued, or ready with one concrete next action.",
+      "id" : "firstAppLaunch",
+      "title" : "First App Launch"
     },
     {
-      "attachmentState": "missing",
-      "expectedFileName": "appWindowOnly.png",
-      "expectedSurface": "The mirrored Windows app window is visible while the launcher is hidden unless recovery is needed.",
-      "id": "appWindowOnly",
-      "title": "App Window Only"
+      "attachmentState" : "missing",
+      "expectedFileName" : "appWindowOnly.png",
+      "expectedSurface" : "The mirrored Windows app window is visible while the launcher is hidden unless recovery is needed.",
+      "id" : "appWindowOnly",
+      "title" : "App Window Only"
     },
     {
-      "attachmentState": "missing",
-      "expectedFileName": "menuRestore.png",
-      "expectedSurface": "Menu or Dock controls can bring forward, restore, reconnect, or close Windows app windows.",
-      "id": "menuRestore",
-      "title": "Menu Restore"
+      "attachmentState" : "missing",
+      "expectedFileName" : "menuRestore.png",
+      "expectedSurface" : "Menu or Dock controls can bring forward, restore, reconnect, or close Windows app windows.",
+      "id" : "menuRestore",
+      "title" : "Menu Restore"
     },
     {
-      "attachmentState": "missing",
-      "expectedFileName": "closeQuiet.png",
-      "expectedSurface": "After the final Windows app window closes, the launcher returns or quiet Windows action is available.",
-      "id": "closeQuiet",
-      "title": "Close And Quiet"
+      "attachmentState" : "missing",
+      "expectedFileName" : "closeQuiet.png",
+      "expectedSurface" : "After the final Windows app window closes, the launcher returns or quiet Windows action is available.",
+      "id" : "closeQuiet",
+      "title" : "Close And Quiet"
     }
   ],
-  "status": {
-    "kind": "windowsAppRuntimeStatus",
-    "generatedAt": "2026-07-03T13:20:00Z",
-    "phase": "connected",
-    "selectedAppId": "winapp_notepad",
-    "pendingLaunch": {
-      "isQueued": false,
-      "willLaunchOnAgentReconnect": false,
-      "recommendedAction": "none",
-      "reason": "No Windows app launch is queued."
-    },
-    "connection": {
-      "mode": "agent",
-      "hasLiveAgentConnection": true,
-      "agentVersion": "0.1.0",
-      "os": "windows-arm64",
-      "capabilities": {
-        "appList": true,
-        "appLaunch": true,
-        "windowTracking": true,
-        "windowCapture": true,
-        "input": true,
-        "clipboardText": true,
-        "packageIdentity": false
-      }
-    },
-    "guestAgentDiagnostics": {
-      "endpoint": "ws://127.0.0.1:18444",
-      "isConnected": true,
-      "diagnosticCommand": "veil-host-probe --diagnose-agent",
-      "waitCommand": "veil-vmctl guest-agent-wait --json --wait-seconds 30",
-      "recommendedAction": "run-app-window-proof",
-      "reason": "The Windows app connection is ready; proceed to app launch and app checks."
-    },
-    "apps": [
+  "status" : {
+    "actions" : [
       {
-        "id": "winapp_notepad",
-        "name": "Notepad",
-        "canRequestLaunch": true,
-        "canLaunchNow": true
-      }
-    ],
-    "mirrorSessions": [
-      {
-        "windowId": "hwnd:0003029A",
-        "appId": "winapp_notepad",
-        "title": "Untitled - Notepad",
-        "captureState": "pending",
-        "canFocus": true,
-        "canClose": true,
-        "canSendInput": true
-      }
-    ],
-    "restorableAppIds": [
-      "winapp_notepad"
-    ],
-    "dockIntegration": {
-      "isEnabled": true,
-      "openWindowCount": 1,
-      "pendingLaunchCount": 0,
-      "restorableAppCount": 1,
-      "badgeLabel": "1",
-      "canOpenMainWindow": true,
-      "canBringWindowsAppsForward": true,
-      "canRestorePreviousApps": false,
-      "canReconnectPreviousApps": false,
-      "canLaunchSelectedApp": true
-    },
-    "menuBarIntegration": {
-      "isEnabled": true,
-      "statusTitle": "1 Windows App Open",
-      "symbolName": "rectangle.stack.fill",
-      "primaryActionId": "dock.bringWindowsAppsForward",
-      "primaryActionTitle": "Bring Notepad Forward",
-      "primaryActionAvailable": true,
-      "canOpenMainWindow": true,
-      "canBringWindowsAppsForward": true,
-      "canRestorePreviousApps": false,
-      "canReconnectPreviousApps": false,
-      "canLaunchSelectedApp": true,
-      "canFulfillPendingLaunch": false
-    },
-    "launcherVisibility": {
-      "isEnabled": true,
-      "canOpenMainWindow": true,
-      "shouldHideMainWindow": true,
-      "keepsDockMenuAvailable": true,
-      "recommendedAction": "hide-main-window-use-app-windows",
-      "reason": "A live Windows app window is mirrored, so the main launcher should stay hidden while Dock and menu controls remain available."
-    },
-    "visibleSurfacePolicy": {
-      "isEnabled": true,
-      "primarySurface": "windows-app-windows",
-      "expectedVisibleSurfaceCount": 1,
-      "shouldHideLauncher": true,
-      "keepsRecoveryDisplayManual": true,
-      "reason": "Only mirrored Windows app windows should be visible during normal app runtime use; the main launcher and VM display stay out of the way unless recovery is requested."
-    },
-    "oneScreenUX": {
-      "isEnabled": true,
-      "mode": "windows-app-windows",
-      "expectedVisibleSurfaceCount": 1,
-      "usesSinglePrimarySurfaceFamily": true,
-      "hidesLauncherDuringAppMirroring": true,
-      "keepsMenuBarControlAvailable": true,
-      "keepsDockControlAvailable": true,
-      "canRecoverFromMenuOrDock": true,
-      "returnsToLauncherWhenNoAppWindows": true,
-      "keepsDisplayRecoveryManual": true,
-      "primaryActionId": "dock.bringWindowsAppsForward",
-      "heroRunsPrimaryAction": false,
-      "reason": "Windows app windows are the only normal work surface, with Dock and menu controls available for recovery."
-    },
-    "macWindowIntegration": {
-      "isEnabled": true,
-      "acceptsGuestWindowEvents": true,
-      "opensMacWindowsAutomatically": true,
-      "hidesLauncherWhenMirroring": true,
-      "mirroredWindowCount": 1,
-      "pendingFrameWindowCount": 1,
-      "streamingWindowCount": 0,
-      "reason": "Windows app windows are mirrored as macOS windows.",
-      "foregroundableWindowCount": 1,
-      "foregroundWindowId": "hwnd:0003029A",
-      "foregroundWindowTitle": "Untitled - Notepad"
-    },
-    "quietRuntime": {
-      "isEnabled": true,
-      "hasOpenedAppWindowThisSession": true,
-      "openWindowCount": 1,
-      "canQuietRuntime": false,
-      "willQuietAutomatically": false,
-      "automaticQuietDelaySeconds": 8,
-      "recommendedAction": "keep-running",
-      "reason": "Windows app windows are still open."
-    },
-    "launchPlan": {
-      "selectedAppId": "winapp_notepad",
-      "canRequestSelectedAppLaunch": true,
-      "canLaunchSelectedAppNow": true,
-      "willOpenAppAutomatically": true,
-      "requiresRuntimeStart": false,
-      "requiresGuestAgent": false,
-      "recommendedAction": "launch-now",
-      "recommendedLaunchCommand": "veil-vmctl app-runtime-action --json --action launch --app-id winapp_notepad",
-      "reason": "The Windows app connection can open the selected app now."
-    },
-    "actions": [
-      {
-        "id": "dock.openMainWindow",
-        "title": "Open Veil From Dock",
-        "isAvailable": true
+        "id" : "dock.openMainWindow",
+        "isAvailable" : true,
+        "title" : "Open Veil From Dock"
       },
       {
-        "id": "dock.bringWindowsAppsForward",
-        "title": "Bring Windows Apps Forward",
-        "isAvailable": true
+        "id" : "dock.bringWindowsAppsForward",
+        "isAvailable" : false,
+        "title" : "Bring Windows Apps Forward"
       },
       {
-        "id": "windowsApps.restorePrevious",
-        "title": "Restore Previous Apps",
-        "isAvailable": false
+        "id" : "windowsApps.restorePrevious",
+        "isAvailable" : false,
+        "title" : "Restore Previous Apps"
       },
       {
-        "id": "windowsApps.reconnectRestore",
-        "title": "Reconnect Previous Apps",
-        "isAvailable": false
+        "id" : "windowsApps.reconnectRestore",
+        "isAvailable" : true,
+        "title" : "Reconnect Previous Apps"
       },
       {
-        "id": "windowsApps.closeAll",
-        "title": "Close All Windows Apps",
-        "isAvailable": true
+        "id" : "windowsApps.closeAll",
+        "isAvailable" : false,
+        "title" : "Close All Windows Apps"
       },
       {
-        "id": "macWindows.autoOpen",
-        "title": "Show App Windows Automatically",
-        "isAvailable": true
+        "id" : "macWindows.autoOpen",
+        "isAvailable" : false,
+        "title" : "Show App Windows Automatically"
       },
       {
-        "id": "windowsApps.launchSelected",
-        "title": "Open Selected Windows App",
-        "isAvailable": true
+        "id" : "windowsApps.launchSelected",
+        "isAvailable" : true,
+        "title" : "Open Selected Windows App"
       },
       {
-        "id": "runtime.prepareWindows",
-        "title": "Prepare Windows",
-        "isAvailable": false
+        "id" : "runtime.prepareWindows",
+        "isAvailable" : false,
+        "title" : "Prepare Windows"
       },
       {
-        "id": "runtime.refreshStatus",
-        "title": "Refresh Windows Status",
-        "isAvailable": true
+        "id" : "runtime.refreshStatus",
+        "isAvailable" : true,
+        "title" : "Refresh Windows Status"
       },
       {
-        "id": "runtime.startWindowsForApp",
-        "title": "Start Windows To Open App",
-        "isAvailable": false
+        "id" : "runtime.startWindowsForApp",
+        "isAvailable" : false,
+        "title" : "Start Windows To Open App"
       },
       {
-        "id": "runtime.repairGuestAgentForApp",
-        "title": "Repair App Connection",
-        "isAvailable": false
+        "id" : "runtime.repairGuestAgentForApp",
+        "isAvailable" : true,
+        "title" : "Repair App Connection"
       },
       {
-        "id": "runtime.prepareSparsePackage",
-        "title": "Prepare Package Identity",
-        "isAvailable": true
+        "id" : "runtime.prepareSparsePackage",
+        "isAvailable" : false,
+        "title" : "Prepare Package Identity"
       },
       {
-        "id": "dailyUse.verifyIntegrations",
-        "title": "Verify Daily Use",
-        "isAvailable": false
+        "id" : "dailyUse.verifyIntegrations",
+        "isAvailable" : false,
+        "title" : "Verify Daily Use"
       },
       {
-        "id": "runtime.recoverDisplay",
-        "title": "Refresh Windows Display",
-        "isAvailable": false
+        "id" : "runtime.recoverDisplay",
+        "isAvailable" : false,
+        "title" : "Refresh Windows Display"
       },
       {
-        "id": "runtime.fulfillPendingLaunch",
-        "title": "Open Queued Windows App",
-        "isAvailable": false
+        "id" : "runtime.fulfillPendingLaunch",
+        "isAvailable" : false,
+        "title" : "Open Queued Windows App"
       },
       {
-        "id": "runtime.waitAgent",
-        "title": "Check App Connection",
-        "isAvailable": false
+        "id" : "runtime.waitAgent",
+        "isAvailable" : true,
+        "title" : "Check App Connection"
       },
       {
-        "id": "runtime.quietWhenIdle",
-        "title": "Quiet Windows When Idle",
-        "isAvailable": false
+        "id" : "runtime.quietWhenIdle",
+        "isAvailable" : false,
+        "title" : "Quiet Windows When Idle"
       },
       {
-        "id": "runtime.stopWhenIdle",
-        "title": "Stop Windows When Idle",
-        "isAvailable": false
+        "id" : "runtime.stopWhenIdle",
+        "isAvailable" : false,
+        "title" : "Stop Windows When Idle"
       },
       {
-        "id": "proof.appWindow",
-        "title": "Check App Window",
-        "isAvailable": true
+        "id" : "proof.appWindow",
+        "isAvailable" : false,
+        "title" : "Check App Window"
       },
       {
-        "id": "proof.coherence",
-        "title": "Check App Input",
-        "isAvailable": true
+        "id" : "proof.coherence",
+        "isAvailable" : false,
+        "title" : "Check App Input"
       },
       {
-        "id": "proof.mvp",
-        "title": "Check Full App Flow",
-        "isAvailable": true
+        "id" : "proof.mvp",
+        "isAvailable" : false,
+        "title" : "Check Full App Flow"
       },
       {
-        "id": "proof.recommended",
-        "title": "Check Windows App",
-        "isAvailable": true
+        "id" : "proof.recommended",
+        "isAvailable" : false,
+        "title" : "Check Windows App"
       },
       {
-        "id": "clipboard.setText",
-        "title": "Set Windows Clipboard Text",
-        "isAvailable": true
+        "id" : "clipboard.setText",
+        "isAvailable" : false,
+        "title" : "Set Windows Clipboard Text"
       }
     ],
-    "proofPlan": {
-      "selectedAppId": "winapp_notepad",
-      "canRunAppWindowProof": true,
-      "canRunCoherenceProof": true,
-      "canRunMVPProof": true,
-      "recommendedAppWindowProofCommand": "veil-vmctl app-window-proof --json --app-id winapp_notepad",
-      "recommendedCoherenceProofCommand": "veil-vmctl coherence-proof --json --app-id winapp_notepad",
-      "recommendedMVPProofCommand": "veil-vmctl mvp-proof --json --app-id winapp_notepad --require-proved",
-      "reason": "The Windows app connection can run window, input, and full app checks for the selected app.",
-      "recommendedProofKind": "mvp",
-      "recommendedProofCommand": "veil-vmctl mvp-proof --json --app-id winapp_notepad --require-proved"
+    "apps" : [
+      {
+        "canLaunchNow" : false,
+        "canRequestLaunch" : true,
+        "id" : "winapp_notepad",
+        "name" : "Notepad"
+      },
+      {
+        "canLaunchNow" : false,
+        "canRequestLaunch" : true,
+        "id" : "winapp_calculator",
+        "name" : "Calculator"
+      }
+    ],
+    "connection" : {
+      "hasLiveAgentConnection" : false,
+      "mode" : "demo"
     },
-    "proofArtifacts": {
-      "diagnosticsDirectory": "/Users/test/Library/Application Support/Veil/Diagnostics",
-      "recommendedProofDirectory": "/Users/test/Library/Application Support/Veil/Diagnostics/Recommended Proof",
-      "reason": "Latest app check artifact is available in Veil diagnostics.",
-      "latestProofKind": "mvp",
-      "latestProofPath": "/Users/test/Library/Application Support/Veil/Diagnostics/Recommended Proof/mvp-proof-latest.json",
-      "latestProofFileName": "mvp-proof-latest.json",
-      "latestProofModifiedAt": "2026-07-04T10:00:00Z"
+    "dailyUseReadiness" : {
+      "borderlessCapturePreflightPassed" : false,
+      "isEnabled" : true,
+      "notificationBridgePreflightPassed" : false,
+      "packageIdentityReady" : false,
+      "printerBridgeMode" : "manual-ipp-experiment",
+      "reason" : "Connect the Windows app agent before checking Daily Use integrations.",
+      "recommendedAction" : "connect-agent",
+      "recommendedCommand" : "veil-vmctl guest-agent-wait --json --wait-seconds 30"
     },
-    "releaseGate": {
-      "isEnabled": true,
-      "requiredStepCount": 5,
-      "passingStepCount": 5,
-      "isPassing": true,
-      "recommendedAction": "ready-for-release-card",
-      "reason": "The one-screen Windows app release gate has current setup, launch, app check, and close or restore evidence.",
-      "steps": [
+    "dockIntegration" : {
+      "badgeLabel" : "...",
+      "canBringWindowsAppsForward" : false,
+      "canLaunchSelectedApp" : true,
+      "canOpenMainWindow" : true,
+      "canReconnectPreviousApps" : true,
+      "canRestorePreviousApps" : false,
+      "isEnabled" : true,
+      "openWindowCount" : 0,
+      "pendingLaunchCount" : 1,
+      "restorableAppCount" : 1
+    },
+    "generatedAt" : "2026-07-09T21:47:08Z",
+    "guestAgentDiagnostics" : {
+      "diagnosticCommand" : "veil-host-probe --diagnose-agent",
+      "endpoint" : "ws:\/\/127.0.0.1:18444",
+      "isConnected" : false,
+      "reason" : "Run the guest-agent diagnostic before and after installing the Windows agent so setup evidence is captured consistently.",
+      "recommendedAction" : "diagnose-agent",
+      "waitCommand" : "veil-vmctl guest-agent-wait --json --wait-seconds 30"
+    },
+    "kind" : "windowsAppRuntimeStatus",
+    "launchOnboarding" : {
+      "canContinueInApp" : true,
+      "completedStepCount" : 4,
+      "currentStepDetail" : "Reconnect the app connection, then open Notepad automatically.",
+      "currentStepId" : "openWindowsApp",
+      "currentStepNumber" : 3,
+      "currentStepTitle" : "Continue Notepad",
+      "expectedVisibleSurfaceCount" : 1,
+      "heroRunsPrimaryAction" : true,
+      "isEnabled" : true,
+      "keepsRecoveryInMenuOrDock" : true,
+      "keepsVMDisplayManual" : true,
+      "pendingLiveProof" : true,
+      "primaryActionId" : "runtime.repairGuestAgentForApp",
+      "primaryCommand" : "veil-vmctl app-runtime-action --json --action repair-agent --wait-seconds 120",
+      "progressLabel" : "Step 3 of 5",
+      "reason" : "Continue from the single Veil launcher action without opening a separate VM manager surface.",
+      "state" : "continue-in-app",
+      "totalStepCount" : 5,
+      "usesSinglePrimarySurface" : true
+    },
+    "launchPlan" : {
+      "canLaunchSelectedAppNow" : false,
+      "canRequestSelectedAppLaunch" : true,
+      "pendingLaunchAppId" : "winapp_notepad",
+      "reason" : "Windows is running and the selected app launch is queued; repair or start the guest agent, then open the app automatically.",
+      "recommendedAction" : "repair-guest-agent-for-pending-launch",
+      "recommendedLaunchCommand" : "veil-vmctl app-runtime-action --json --action fulfill-pending",
+      "recommendedRepairCommand" : "veil-vmctl app-runtime-action --json --action repair-agent --wait-seconds 120",
+      "recommendedWaitCommand" : "veil-vmctl guest-agent-wait --json --wait-seconds 30",
+      "requiresGuestAgent" : true,
+      "requiresRuntimeStart" : false,
+      "selectedAppId" : "winapp_notepad",
+      "willOpenAppAutomatically" : true
+    },
+    "launcherVisibility" : {
+      "canOpenMainWindow" : true,
+      "isEnabled" : true,
+      "keepsDockMenuAvailable" : true,
+      "reason" : "A Windows app launch is queued and may need the launcher to show start or reconnect recovery.",
+      "recommendedAction" : "show-launcher-for-pending-launch",
+      "shouldHideMainWindow" : false
+    },
+    "localRuntime" : {
+      "automaticInstallMediaStatus" : {
+        "detail" : "VeilAutoInstall.iso is current with the staged Autounattend and guest-agent bundle.",
+        "isCurrent" : true,
+        "mediaModifiedAt" : "2026-07-09T18:04:44Z",
+        "mediaPath" : "\/Users\/bonjin\/Veil Shared\/VeilAutoInstall.iso",
+        "rebuildCommand" : "veil-vmctl prepare --installer \/Users\/bonjin\/Downloads\/Win11_25H2_Korean_Arm64_v2.iso --drivers \/Users\/bonjin\/Downloads\/virtio-win.iso",
+        "recommendedAction" : "none",
+        "requiresRelaunch" : false,
+        "sourceModifiedAt" : "2026-07-09T18:04:43Z",
+        "sourcePath" : "\/Users\/bonjin\/Veil Shared",
+        "state" : "current"
+      },
+      "bootReady" : true,
+      "canStart" : false,
+      "consolePreviewStatus" : "fresh",
+      "installEvidence" : {
+        "detail" : "The local profile is marked installed. Guest-agent evidence should replace this before developer preview.",
+        "isInstalled" : true,
+        "kind" : "profileFlag",
+        "title" : "Windows installed"
+      },
+      "isKnown" : true,
+      "isRunning" : true,
+      "reason" : "The local Windows runtime is already running; wait for the guest agent before opening Windows apps.",
+      "recommendedAction" : "wait-for-guest-agent",
+      "recommendedDisplayCommand" : "veil-vmctl qemu-display-smoke --json",
+      "recommendedInstallStatusCommand" : "veil-vmctl qemu-install-status --json",
+      "requiresGuestToolsMediaRebuild" : false,
+      "state" : "running",
+      "windowsInstalled" : true
+    },
+    "macWindowIntegration" : {
+      "acceptsGuestWindowEvents" : false,
+      "foregroundableWindowCount" : 0,
+      "hidesLauncherWhenMirroring" : false,
+      "isEnabled" : true,
+      "mirroredWindowCount" : 0,
+      "opensMacWindowsAutomatically" : true,
+      "pendingFrameWindowCount" : 0,
+      "reason" : "Waiting for the Windows app connection before opening app windows on macOS automatically.",
+      "streamingWindowCount" : 0
+    },
+    "menuBarIntegration" : {
+      "canBringWindowsAppsForward" : false,
+      "canFulfillPendingLaunch" : false,
+      "canLaunchSelectedApp" : true,
+      "canOpenMainWindow" : true,
+      "canReconnectPreviousApps" : true,
+      "canRestorePreviousApps" : false,
+      "isEnabled" : true,
+      "primaryActionAvailable" : true,
+      "primaryActionId" : "runtime.repairGuestAgentForApp",
+      "primaryActionTitle" : "Continue Notepad",
+      "statusTitle" : "Notepad Waiting",
+      "symbolName" : "clock.fill"
+    },
+    "mirrorSessions" : [
+
+    ],
+    "oneScreenUX" : {
+      "canRecoverFromMenuOrDock" : true,
+      "expectedVisibleSurfaceCount" : 1,
+      "heroRunsPrimaryAction" : true,
+      "hidesLauncherDuringAppMirroring" : true,
+      "isEnabled" : true,
+      "keepsDisplayRecoveryManual" : true,
+      "keepsDockControlAvailable" : true,
+      "keepsMenuBarControlAvailable" : true,
+      "mode" : "launcher",
+      "primaryActionId" : "runtime.repairGuestAgentForApp",
+      "reason" : "The launcher is the only normal setup surface until a Windows app opens as a macOS window.",
+      "returnsToLauncherWhenNoAppWindows" : true,
+      "usesSinglePrimarySurfaceFamily" : true
+    },
+    "pendingLaunch" : {
+      "appId" : "winapp_notepad",
+      "isQueued" : true,
+      "reason" : "Veil will launch the queued Windows app after the app connection returns.",
+      "recommendedAction" : "auto-launch-on-agent-reconnect",
+      "willLaunchOnAgentReconnect" : true
+    },
+    "pendingLaunchAppId" : "winapp_notepad",
+    "phase" : "connected",
+    "primaryNextAction" : {
+      "actionId" : "runtime.repairGuestAgentForApp",
+      "command" : "veil-vmctl app-runtime-action --json --action repair-agent --wait-seconds 120",
+      "id" : "openWindowsApp",
+      "isAvailable" : true,
+      "reason" : "Windows is running and the selected app launch is queued; repair or start the guest agent, then open the app automatically.",
+      "runsInApp" : true,
+      "source" : "releaseGate",
+      "title" : "Continue Notepad"
+    },
+    "proofArtifacts" : {
+      "diagnosticsDirectory" : "\/Users\/bonjin\/Library\/Application Support\/Veil\/Diagnostics",
+      "latestProofFileName" : "notepad-mvp-window-detect.json",
+      "latestProofKind" : "mvp",
+      "latestProofModifiedAt" : "2026-07-04T15:28:35Z",
+      "latestProofPath" : "\/Users\/bonjin\/Library\/Application Support\/Veil\/Diagnostics\/MVP Proof\/notepad-mvp-window-detect.json",
+      "reason" : "Latest app check artifact is available in Veil diagnostics.",
+      "recommendedProofDirectory" : "\/Users\/bonjin\/Library\/Application Support\/Veil\/Diagnostics\/Recommended Proof"
+    },
+    "proofPlan" : {
+      "canRunAppWindowProof" : false,
+      "canRunCoherenceProof" : false,
+      "canRunMVPProof" : false,
+      "reason" : "Wait for the Windows app connection before running app checks.",
+      "selectedAppId" : "winapp_notepad"
+    },
+    "quietRuntime" : {
+      "automaticQuietDelaySeconds" : 8,
+      "canQuietRuntime" : false,
+      "hasOpenedAppWindowThisSession" : false,
+      "isEnabled" : true,
+      "openWindowCount" : 0,
+      "reason" : "No Windows app window has opened in this host session.",
+      "recommendedAction" : "none",
+      "willQuietAutomatically" : false
+    },
+    "releaseGate" : {
+      "isEnabled" : true,
+      "isPassing" : false,
+      "passingStepCount" : 4,
+      "reason" : "Continue the first unmet release gate step before promoting the one-screen Windows app flow.",
+      "recommendedAction" : "openWindowsApp",
+      "requiredStepCount" : 5,
+      "screenshotSlots" : [
         {
-          "id": "windowsSetup",
-          "title": "Windows Setup Ready",
-          "state": "passed",
-          "isRequired": true,
-          "isPassing": true,
-          "evidence": "The local Windows runtime is already running; wait for the guest agent before opening Windows apps.",
-          "nextActionCommand": "veil-vmctl qemu-install-status --json"
+          "expectedSurface" : "One Veil launcher window with setup or start action visible.",
+          "id" : "preBootLauncher",
+          "isRequired" : true,
+          "title" : "Pre-Boot Launcher"
         },
         {
-          "id": "oneScreenPath",
-          "title": "One-Screen App Path",
-          "state": "passed",
-          "isRequired": true,
-          "isPassing": true,
-          "evidence": "Only mirrored Windows app windows should be visible during normal app runtime use; the main launcher and VM display stay out of the way unless recovery is requested.",
-          "nextActionCommand": "veil-vmctl app-runtime-status --json"
+          "expectedSurface" : "A selected Windows app is opening, queued, or ready with one concrete next action.",
+          "id" : "firstAppLaunch",
+          "isRequired" : true,
+          "title" : "First App Launch"
         },
         {
-          "id": "openWindowsApp",
-          "title": "Open Notepad",
-          "state": "ready",
-          "isRequired": true,
-          "isPassing": true,
-          "evidence": "The Windows app connection can open the selected app now.",
-          "nextActionCommand": "veil-vmctl app-runtime-action --json --action launch --app-id winapp_notepad"
+          "expectedSurface" : "The mirrored Windows app window is visible while the launcher is hidden unless recovery is needed.",
+          "id" : "appWindowOnly",
+          "isRequired" : true,
+          "title" : "App Window Only"
         },
         {
-          "id": "appCheckEvidence",
-          "title": "App Check Evidence",
-          "state": "passed",
-          "isRequired": true,
-          "isPassing": true,
-          "evidence": "Latest app check artifact is available in Veil diagnostics.",
-          "nextActionCommand": "veil-vmctl mvp-proof --json --app-id winapp_notepad --require-proved"
+          "expectedSurface" : "Menu or Dock controls can bring forward, restore, reconnect, or close Windows app windows.",
+          "id" : "menuRestore",
+          "isRequired" : true,
+          "title" : "Menu Restore"
         },
         {
-          "id": "closeOrRestore",
-          "title": "Close Or Restore Apps",
-          "state": "ready",
-          "isRequired": true,
-          "isPassing": true,
-          "evidence": "Windows app windows are still open.",
-          "nextActionCommand": "veil-vmctl app-runtime-action --json --action close-all"
+          "expectedSurface" : "After the final Windows app window closes, the launcher returns or quiet Windows action is available.",
+          "id" : "closeQuiet",
+          "isRequired" : true,
+          "title" : "Close And Quiet"
         }
       ],
-      "screenshotSlots": [
+      "steps" : [
         {
-          "id": "preBootLauncher",
-          "title": "Pre-Boot Launcher",
-          "expectedSurface": "One Veil launcher window with setup or start action visible.",
-          "isRequired": true
+          "evidence" : "The local Windows runtime is already running; wait for the guest agent before opening Windows apps.",
+          "id" : "windowsSetup",
+          "isPassing" : true,
+          "isRequired" : true,
+          "nextActionCommand" : "veil-vmctl qemu-install-status --json",
+          "state" : "passed",
+          "title" : "Windows Setup Ready"
         },
         {
-          "id": "firstAppLaunch",
-          "title": "First App Launch",
-          "expectedSurface": "A selected Windows app is opening, queued, or ready with one concrete next action.",
-          "isRequired": true
+          "evidence" : "The main Veil launcher is the single normal surface until a live Windows app window is mirrored.",
+          "id" : "oneScreenPath",
+          "isPassing" : true,
+          "isRequired" : true,
+          "nextActionCommand" : "veil-vmctl app-runtime-status --json",
+          "state" : "passed",
+          "title" : "One-Screen App Path"
         },
         {
-          "id": "appWindowOnly",
-          "title": "App Window Only",
-          "expectedSurface": "The mirrored Windows app window is visible while the launcher is hidden unless recovery is needed.",
-          "isRequired": true
+          "evidence" : "Windows is running and the selected app launch is queued; repair or start the guest agent, then open the app automatically.",
+          "id" : "openWindowsApp",
+          "isPassing" : false,
+          "isRequired" : true,
+          "nextActionCommand" : "veil-vmctl app-runtime-action --json --action repair-agent --wait-seconds 120",
+          "state" : "ready",
+          "title" : "Continue Notepad"
         },
         {
-          "id": "menuRestore",
-          "title": "Menu Restore",
-          "expectedSurface": "Menu or Dock controls can bring forward, restore, reconnect, or close Windows app windows.",
-          "isRequired": true
+          "evidence" : "Latest app check artifact is available in Veil diagnostics.",
+          "id" : "appCheckEvidence",
+          "isPassing" : true,
+          "isRequired" : true,
+          "state" : "passed",
+          "title" : "App Check Evidence"
         },
         {
-          "id": "closeQuiet",
-          "title": "Close And Quiet",
-          "expectedSurface": "After the final Windows app window closes, the launcher returns or quiet Windows action is available.",
-          "isRequired": true
+          "evidence" : "No Windows app window has opened in this host session.",
+          "id" : "closeOrRestore",
+          "isPassing" : true,
+          "isRequired" : true,
+          "nextActionCommand" : "veil-vmctl app-runtime-action --json --action reconnect-restore",
+          "state" : "ready",
+          "title" : "Close Or Restore Apps"
         }
       ]
     },
-    "localRuntime": {
-      "isKnown": true,
-      "state": "running",
-      "bootReady": true,
-      "canStart": false,
-      "isRunning": true,
-      "windowsInstalled": true,
-      "recommendedAction": "wait-for-guest-agent",
-      "recommendedInstallStatusCommand": "veil-vmctl qemu-install-status --json",
-      "reason": "The local Windows runtime is already running; wait for the guest agent before opening Windows apps.",
-      "installEvidence": {
-        "kind": "guestAgent",
-        "isInstalled": true,
-        "title": "Guest agent connected",
-        "detail": "Windows is running the Veil guest agent 0.1.0 over the local runtime channel."
-      }
-    },
-    "primaryNextAction": {
-      "id": "ready-for-release-card",
-      "title": "Review App Flow",
-      "source": "releaseGate",
-      "isAvailable": true,
-      "runsInApp": false,
-      "command": "veil-vmctl app-runtime-review --json",
-      "reason": "The one-screen Windows app release gate has current setup, launch, app check, and close or restore evidence."
-    },
-    "launchOnboarding": {
-      "isEnabled": true,
-      "state": "ready-for-review",
-      "currentStepId": "ready-for-release-card",
-      "currentStepTitle": "Review App Flow",
-      "usesSinglePrimarySurface": true,
-      "expectedVisibleSurfaceCount": 1,
-      "canContinueInApp": false,
-      "heroRunsPrimaryAction": false,
-      "keepsRecoveryInMenuOrDock": true,
-      "keepsVMDisplayManual": true,
-      "pendingLiveProof": false,
-      "primaryCommand": "veil-vmctl app-runtime-review --json",
-      "reason": "The app-first launch flow is ready for review evidence.",
-      "completedStepCount": 5,
-      "totalStepCount": 5,
-      "currentStepNumber": 5,
-      "progressLabel": "Step 5 of 5",
-      "currentStepDetail": "Review and share the current app-flow evidence."
-    },
-    "dailyUseReadiness": {
-      "isEnabled": true,
-      "packageIdentityReady": false,
-      "borderlessCapturePreflightPassed": false,
-      "notificationBridgePreflightPassed": false,
-      "printerBridgeMode": "manual-ipp-experiment",
-      "recommendedAction": "prepare-sparse-package",
-      "recommendedCommand": "veil-vmctl app-runtime-action --json --action prepare-sparse-package --wait-seconds 120",
-      "reason": "A signed sparse package is required before borderless app capture or Windows notifications can be enabled."
+    "restorableAppIds" : [
+      "winapp_notepad"
+    ],
+    "selectedAppId" : "winapp_notepad",
+    "visibleSurfacePolicy" : {
+      "expectedVisibleSurfaceCount" : 1,
+      "isEnabled" : true,
+      "keepsRecoveryDisplayManual" : true,
+      "primarySurface" : "launcher",
+      "reason" : "The main Veil launcher is the single normal surface until a live Windows app window is mirrored.",
+      "shouldHideLauncher" : false
     }
   },
-  "statusCommand": "veil-vmctl app-runtime-status --json",
-  "steps": [
+  "statusCommand" : "veil-vmctl app-runtime-status --json",
+  "steps" : [
     {
-      "id": "windowsSetup",
-      "title": "Windows Setup Ready",
-      "state": "passed",
-      "isPassing": true,
-      "evidence": "The local Windows runtime is already running; wait for the guest agent before opening Windows apps.",
-      "nextActionCommand": "veil-vmctl qemu-install-status --json"
+      "evidence" : "The local Windows runtime is already running; wait for the guest agent before opening Windows apps.",
+      "id" : "windowsSetup",
+      "isPassing" : true,
+      "nextActionCommand" : "veil-vmctl qemu-install-status --json",
+      "state" : "passed",
+      "title" : "Windows Setup Ready"
     },
     {
-      "id": "oneScreenPath",
-      "title": "One-Screen App Path",
-      "state": "passed",
-      "isPassing": true,
-      "evidence": "Only mirrored Windows app windows should be visible during normal app runtime use; the main launcher and VM display stay out of the way unless recovery is requested.",
-      "nextActionCommand": "veil-vmctl app-runtime-status --json"
+      "evidence" : "The main Veil launcher is the single normal surface until a live Windows app window is mirrored.",
+      "id" : "oneScreenPath",
+      "isPassing" : true,
+      "nextActionCommand" : "veil-vmctl app-runtime-status --json",
+      "state" : "passed",
+      "title" : "One-Screen App Path"
     },
     {
-      "id": "openWindowsApp",
-      "title": "Open Notepad",
-      "state": "ready",
-      "isPassing": true,
-      "evidence": "The Windows app connection can open the selected app now.",
-      "nextActionCommand": "veil-vmctl app-runtime-action --json --action launch --app-id winapp_notepad"
+      "evidence" : "Windows is running and the selected app launch is queued; repair or start the guest agent, then open the app automatically.",
+      "id" : "openWindowsApp",
+      "isPassing" : false,
+      "nextActionCommand" : "veil-vmctl app-runtime-action --json --action repair-agent --wait-seconds 120",
+      "state" : "ready",
+      "title" : "Continue Notepad"
     },
     {
-      "id": "appCheckEvidence",
-      "title": "App Check Evidence",
-      "state": "passed",
-      "isPassing": true,
-      "evidence": "Latest app check artifact is available in Veil diagnostics.",
-      "nextActionCommand": "veil-vmctl mvp-proof --json --app-id winapp_notepad --require-proved"
+      "evidence" : "Latest app check artifact is available in Veil diagnostics.",
+      "id" : "appCheckEvidence",
+      "isPassing" : true,
+      "state" : "passed",
+      "title" : "App Check Evidence"
     },
     {
-      "id": "closeOrRestore",
-      "title": "Close Or Restore Apps",
-      "state": "ready",
-      "isPassing": true,
-      "evidence": "Windows app windows are still open.",
-      "nextActionCommand": "veil-vmctl app-runtime-action --json --action close-all"
+      "evidence" : "No Windows app window has opened in this host session.",
+      "id" : "closeOrRestore",
+      "isPassing" : true,
+      "nextActionCommand" : "veil-vmctl app-runtime-action --json --action reconnect-restore",
+      "state" : "ready",
+      "title" : "Close Or Restore Apps"
     }
   ]
 }
