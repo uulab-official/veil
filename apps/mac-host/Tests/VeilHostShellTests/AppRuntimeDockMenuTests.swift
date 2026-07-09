@@ -131,6 +131,26 @@ struct AppRuntimeDockMenuTests {
         #expect(titles.allSatisfy { !$0.contains("Agent") })
     }
 
+    @Test("Windows power action titles stay product-like")
+    func windowsPowerActionTitlesStayProductLike() {
+        let titles = [
+            WindowsShellCopy.openWindowsActionTitle(windowsInstalled: true),
+            WindowsShellCopy.openWindowsActionTitle(windowsInstalled: false),
+            WindowsShellCopy.closeWindowsActionTitle,
+            WindowsShellCopy.refreshWindowsStatusTitle
+        ]
+
+        #expect(titles == [
+            "Open Windows",
+            "Set Up Windows",
+            "Close Windows",
+            "Refresh Status"
+        ])
+        #expect(titles.allSatisfy { !$0.contains("Runtime") })
+        #expect(titles.allSatisfy { !$0.contains("VM") })
+        #expect(titles.allSatisfy { !$0.contains("Agent") })
+    }
+
     @Test("maps reconnect restore handoff to recovery start or wait states")
     func mapsReconnectRestoreHandoffToRecoveryStartOrWaitStates() {
         #expect(
@@ -294,7 +314,7 @@ struct AppRuntimeDockMenuTests {
                 canStartWindows: true,
                 runtimeIsLoading: false
             ) == AppQueuedLaunchMenuState(
-                title: "Start Windows for Notepad",
+                title: "Open Windows for Notepad",
                 kind: .startWindows,
                 isEnabled: true
             )
@@ -309,7 +329,7 @@ struct AppRuntimeDockMenuTests {
                 canStartWindows: true,
                 runtimeIsLoading: true
             ) == AppQueuedLaunchMenuState(
-                title: "Start Windows for Notepad",
+                title: "Open Windows for Notepad",
                 kind: .startWindows,
                 isEnabled: false
             )
@@ -324,7 +344,7 @@ struct AppRuntimeDockMenuTests {
             runtimeIsLoading: false
         )
         #expect(longNameState.title.count <= 30)
-        #expect(longNameState.title == "Start Windows for Very Long...")
+        #expect(longNameState.title == "Open Windows for Very Long...")
         #expect(longNameState.symbolName == "play.fill")
     }
 }

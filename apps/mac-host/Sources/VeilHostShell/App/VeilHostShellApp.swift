@@ -1328,7 +1328,7 @@ private struct VeilMenuBarMenu: View {
 
         Divider()
 
-        Button("Start Windows", systemImage: "play.fill") {
+        Button(openWindowsActionTitle, systemImage: "play.fill") {
             openMainWindow()
             startVMAction()
         }
@@ -1365,7 +1365,7 @@ private struct VeilMenuBarMenu: View {
         }
         .disabled(!canMarkWindowsInstalled)
 
-        Button("Stop Windows", systemImage: "stop.fill") {
+        Button(WindowsShellCopy.closeWindowsActionTitle, systemImage: "stop.fill") {
             openMainWindow()
             stopVMAction()
         }
@@ -1380,7 +1380,7 @@ private struct VeilMenuBarMenu: View {
 
         Divider()
 
-        Button("Refresh Windows", systemImage: "arrow.clockwise") {
+        Button(WindowsShellCopy.refreshWindowsStatusTitle, systemImage: "arrow.clockwise") {
             refreshRuntimeAction()
         }
         .disabled(vmModel.phase == .loading)
@@ -1395,6 +1395,12 @@ private struct VeilMenuBarMenu: View {
     private var canShowWindowsDisplay: Bool {
         supportsNativeDisplayWindow
             && (vmModel.snapshot?.state == .running || vmModel.snapshot?.state == .starting)
+    }
+
+    private var openWindowsActionTitle: String {
+        WindowsShellCopy.openWindowsActionTitle(
+            windowsInstalled: vmModel.snapshot?.windowsInstalled == true
+        )
     }
 
     private var canInstallGuestAgent: Bool {

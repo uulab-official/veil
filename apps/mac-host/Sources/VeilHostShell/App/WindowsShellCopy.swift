@@ -42,6 +42,13 @@ enum WindowsShellCopy {
         "Display is still \(statusText). Refresh the Windows display before opening an app."
     }
 
+    static func openWindowsActionTitle(windowsInstalled: Bool) -> String {
+        windowsInstalled ? "Open Windows" : "Set Up Windows"
+    }
+
+    static let closeWindowsActionTitle = "Close Windows"
+    static let refreshWindowsStatusTitle = "Refresh Status"
+
     static func menuStatusTitle(
         runtimeState: VMRuntimeState?,
         windowsInstalled: Bool,

@@ -229,7 +229,9 @@ enum AppRuntimeDockMenuFactory {
         menu.addItem(.separator())
         menu.addItem(
             item(
-                "Start Windows",
+                WindowsShellCopy.openWindowsActionTitle(
+                    windowsInstalled: vmModel.snapshot?.windowsInstalled == true
+                ),
                 action: #selector(AppRuntimeDockMenuTarget.startWindows(_:)),
                 target: target,
                 isEnabled: vmModel.canStart && vmModel.phase != .loading
@@ -237,7 +239,7 @@ enum AppRuntimeDockMenuFactory {
         )
         menu.addItem(
             item(
-                "Stop Windows",
+                WindowsShellCopy.closeWindowsActionTitle,
                 action: #selector(AppRuntimeDockMenuTarget.stopWindows(_:)),
                 target: target,
                 isEnabled: vmModel.canStop && vmModel.phase != .loading
@@ -376,7 +378,7 @@ struct AppQueuedLaunchMenuState: Equatable {
         }
 
         return AppQueuedLaunchMenuState(
-            title: title(prefix: "Start Windows for", appName: appName),
+            title: title(prefix: "Open Windows for", appName: appName),
             kind: .startWindows,
             isEnabled: canStartWindows && !runtimeIsLoading
         )
@@ -394,6 +396,8 @@ struct AppQueuedLaunchMenuState: Equatable {
         }
 
         let prefixCount = max(1, maxCount - 3)
-        return "\(title.prefix(prefixCount))..."
+        let trimmedPrefix = String(title.prefix(prefixCount))
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return "\(trimmedPrefix)..."
     }
 }
