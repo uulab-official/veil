@@ -15,6 +15,31 @@ function refreshReleaseGateSummary(report) {
   report.status.releaseGate.passingStepCount = requiredSteps.filter((step) => step.isPassing).length;
   report.status.releaseGate.isPassing = report.status.releaseGate.passingStepCount === report.status.releaseGate.requiredStepCount;
   report.status.releaseGate.recommendedAction = requiredSteps.find((step) => !step.isPassing)?.id ?? "ready-for-release-card";
+  refreshPrimaryNextAction(report);
+}
+
+function refreshPrimaryNextAction(report) {
+  if (report.status.releaseGate.isPassing) {
+    report.status.primaryNextAction = {
+      id: "ready-for-release-card",
+      title: "Review App Flow",
+      source: "releaseGate",
+      isAvailable: true,
+      command: "veil-vmctl app-runtime-review --json",
+      reason: report.status.releaseGate.reason
+    };
+    return;
+  }
+
+  const nextStep = report.status.releaseGate.steps.find((step) => step.id === report.status.releaseGate.recommendedAction);
+  report.status.primaryNextAction = {
+    id: nextStep.id,
+    title: nextStep.title,
+    source: "releaseGate",
+    isAvailable: nextStep.nextActionCommand !== undefined,
+    command: nextStep.nextActionCommand,
+    reason: nextStep.evidence
+  };
 }
 
 test("validates app runtime launch action fixture", () => {

@@ -37,7 +37,8 @@ Run from `apps/mac-host` with the built app or local Swift package available.
    - Pass if `bootReady` is true, or the output names the exact missing setup prerequisite.
    - Fail if it starts, stops, copies, or modifies Windows media.
 2. `swift run veil-vmctl app-runtime-status --json`
-   - Pass if `launchPlan`, `launcherVisibility`, `visibleSurfacePolicy`, `macWindowIntegration`, `quietRuntime`, and `actions` are present.
+   - Pass if `launchPlan`, `launcherVisibility`, `visibleSurfacePolicy`, `macWindowIntegration`, `quietRuntime`, `primaryNextAction`, and `actions` are present.
+   - Pass if `primaryNextAction` points at the same next command as the first unmet `releaseGate` step.
    - Pass if `runtime.startWindowsForApp`, `runtime.waitAgent`, `runtime.repairGuestAgentForApp`, `windowsApps.reconnectRestore`, or `proof.recommended` gives the next executable step.
    - Fail if the status report only says "ready" without naming the next action.
 3. If Windows is stopped and app launch is queued, run:

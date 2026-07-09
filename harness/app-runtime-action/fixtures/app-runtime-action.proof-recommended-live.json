@@ -356,6 +356,14 @@
       "diagnosticsDirectory": "/Users/test/Library/Application Support/Veil/Diagnostics",
       "recommendedProofDirectory": "/Users/test/Library/Application Support/Veil/Diagnostics/Recommended Proof",
       "reason": "No app check artifact has been saved under Veil diagnostics yet."
+    },
+    "primaryNextAction": {
+      "id": "appCheckEvidence",
+      "title": "App Check Evidence",
+      "source": "releaseGate",
+      "isAvailable": true,
+      "command": "veil-vmctl mvp-proof --json --app-id winapp_notepad --require-proved",
+      "reason": "No app check artifact has been saved under Veil diagnostics yet."
     }
   },
   "nextActions": [

@@ -861,6 +861,11 @@ struct VeilVMControl {
         if let nextAppCommand = appFlowNextCommand(report.releaseGate) {
             print("Next app command: \(nextAppCommand)")
         }
+        print("Primary next action: \(report.primaryNextAction.title)")
+        print("Primary next action available: \(report.primaryNextAction.isAvailable ? "yes" : "no")")
+        if let primaryCommand = report.primaryNextAction.command {
+            print("Primary next command: \(primaryCommand)")
+        }
         print("Screenshot slots: \(report.releaseGate.screenshotSlots.map(\.title).joined(separator: ", "))")
         print("Mac window integration: \(report.macWindowIntegration.isEnabled ? "enabled" : "disabled")")
         print("Mac windows auto-open: \(report.macWindowIntegration.acceptsGuestWindowEvents ? "ready" : "waiting")")

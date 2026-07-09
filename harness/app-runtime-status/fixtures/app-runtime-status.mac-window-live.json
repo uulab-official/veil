@@ -343,5 +343,13 @@
     "recommendedAction": "wait-for-guest-agent",
     "recommendedInstallStatusCommand": "veil-vmctl qemu-install-status --json",
     "reason": "The local Windows runtime is already running; wait for the guest agent before opening Windows apps."
+  },
+  "primaryNextAction": {
+    "id": "ready-for-release-card",
+    "title": "Review App Flow",
+    "source": "releaseGate",
+    "isAvailable": true,
+    "command": "veil-vmctl app-runtime-review --json",
+    "reason": "The one-screen Windows app release gate has current setup, launch, app check, and close or restore evidence."
   }
 }

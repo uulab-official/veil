@@ -652,6 +652,31 @@ public struct WindowsAppRuntimeReleaseGateStatus: Codable, Equatable, Sendable {
     }
 }
 
+public struct WindowsAppRuntimePrimaryNextActionStatus: Codable, Equatable, Sendable {
+    public var id: String
+    public var title: String
+    public var source: String
+    public var isAvailable: Bool
+    public var command: String?
+    public var reason: String
+
+    public init(
+        id: String,
+        title: String,
+        source: String,
+        isAvailable: Bool,
+        command: String? = nil,
+        reason: String
+    ) {
+        self.id = id
+        self.title = title
+        self.source = source
+        self.isAvailable = isAvailable
+        self.command = command
+        self.reason = reason
+    }
+}
+
 public struct WindowsAppRuntimePendingLaunchStatus: Codable, Equatable, Sendable {
     public var isQueued: Bool
     public var appId: String?
@@ -697,6 +722,7 @@ public struct WindowsAppRuntimeStatusReport: Codable, Equatable, Sendable {
     public var proofPlan: WindowsAppRuntimeProofPlanStatus
     public var proofArtifacts: WindowsAppRuntimeProofArtifactStatus
     public var releaseGate: WindowsAppRuntimeReleaseGateStatus
+    public var primaryNextAction: WindowsAppRuntimePrimaryNextActionStatus
     public var actions: [WindowsAppRuntimeActionStatus]
 
     public init(
@@ -722,6 +748,7 @@ public struct WindowsAppRuntimeStatusReport: Codable, Equatable, Sendable {
         proofPlan: WindowsAppRuntimeProofPlanStatus,
         proofArtifacts: WindowsAppRuntimeProofArtifactStatus,
         releaseGate: WindowsAppRuntimeReleaseGateStatus,
+        primaryNextAction: WindowsAppRuntimePrimaryNextActionStatus,
         actions: [WindowsAppRuntimeActionStatus]
     ) {
         self.kind = kind
@@ -746,6 +773,7 @@ public struct WindowsAppRuntimeStatusReport: Codable, Equatable, Sendable {
         self.proofPlan = proofPlan
         self.proofArtifacts = proofArtifacts
         self.releaseGate = releaseGate
+        self.primaryNextAction = primaryNextAction
         self.actions = actions
     }
 }
@@ -969,6 +997,7 @@ public final class HostDashboardModel {
             proofPlan: proofPlan,
             proofArtifacts: proofArtifacts
         )
+        let primaryNextAction = primaryNextActionStatus(releaseGate: releaseGate)
         return WindowsAppRuntimeStatusReport(
             generatedAt: generatedAt,
             phase: phase,
@@ -1030,6 +1059,7 @@ public final class HostDashboardModel {
             proofPlan: proofPlan,
             proofArtifacts: proofArtifacts,
             releaseGate: releaseGate,
+            primaryNextAction: primaryNextAction,
             actions: [
                 WindowsAppRuntimeActionStatus(
                     id: "dock.openMainWindow",
@@ -1788,6 +1818,40 @@ public final class HostDashboardModel {
         }
 
         return nil
+    }
+
+    private func primaryNextActionStatus(
+        releaseGate: WindowsAppRuntimeReleaseGateStatus
+    ) -> WindowsAppRuntimePrimaryNextActionStatus {
+        if releaseGate.isPassing {
+            return WindowsAppRuntimePrimaryNextActionStatus(
+                id: "ready-for-release-card",
+                title: "Review App Flow",
+                source: "releaseGate",
+                isAvailable: true,
+                command: "veil-vmctl app-runtime-review --json",
+                reason: releaseGate.reason
+            )
+        }
+
+        guard let step = releaseGate.steps.first(where: { $0.id == releaseGate.recommendedAction }) else {
+            return WindowsAppRuntimePrimaryNextActionStatus(
+                id: releaseGate.recommendedAction,
+                title: "Review App Flow",
+                source: "releaseGate",
+                isAvailable: false,
+                reason: releaseGate.reason
+            )
+        }
+
+        return WindowsAppRuntimePrimaryNextActionStatus(
+            id: step.id,
+            title: step.title,
+            source: "releaseGate",
+            isAvailable: step.nextActionCommand != nil,
+            command: step.nextActionCommand,
+            reason: step.evidence
+        )
     }
 
     private func proofArtifacts(in directory: URL, kind: String) -> [ProofArtifactCandidate] {

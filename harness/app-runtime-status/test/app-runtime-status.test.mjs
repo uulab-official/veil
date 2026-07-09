@@ -33,6 +33,31 @@ function refreshReleaseGateSummary(report) {
   report.releaseGate.passingStepCount = requiredSteps.filter((step) => step.isPassing).length;
   report.releaseGate.isPassing = report.releaseGate.passingStepCount === report.releaseGate.requiredStepCount;
   report.releaseGate.recommendedAction = requiredSteps.find((step) => !step.isPassing)?.id ?? "ready-for-release-card";
+  refreshPrimaryNextAction(report);
+}
+
+function refreshPrimaryNextAction(report) {
+  if (report.releaseGate.isPassing) {
+    report.primaryNextAction = {
+      id: "ready-for-release-card",
+      title: "Review App Flow",
+      source: "releaseGate",
+      isAvailable: true,
+      command: "veil-vmctl app-runtime-review --json",
+      reason: report.releaseGate.reason
+    };
+    return;
+  }
+
+  const nextStep = report.releaseGate.steps.find((step) => step.id === report.releaseGate.recommendedAction);
+  report.primaryNextAction = {
+    id: nextStep.id,
+    title: nextStep.title,
+    source: "releaseGate",
+    isAvailable: nextStep.nextActionCommand !== undefined,
+    command: nextStep.nextActionCommand,
+    reason: nextStep.evidence
+  };
 }
 
 test("validates app runtime status fixture", () => {
@@ -124,6 +149,16 @@ test("rejects reports without release gate status", () => {
   assert.throws(
     () => validateAppRuntimeStatus(report),
     /releaseGate/
+  );
+});
+
+test("rejects reports without primary next action", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.demo.json", import.meta.url), "utf8"));
+  delete report.primaryNextAction;
+
+  assert.throws(
+    () => validateAppRuntimeStatus(report),
+    /primaryNextAction/
   );
 });
 
@@ -701,6 +736,30 @@ test("rejects release gate next action drift", () => {
     () => validateAppRuntimeStatus(report),
     /closeOrRestore/
   );
+});
+
+test("rejects primary next action drift from release gate", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.demo.json", import.meta.url), "utf8"));
+  report.primaryNextAction.command = "veil-vmctl app-runtime-action --json --action close-all";
+
+  assert.throws(
+    () => validateAppRuntimeStatus(report),
+    /primaryNextAction\.command/
+  );
+});
+
+test("accepts ready-for-review primary next action", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.mac-window-live.json", import.meta.url), "utf8"));
+  for (const step of report.releaseGate.steps) {
+    step.isPassing = true;
+    step.state = step.id === "openWindowsApp" || step.id === "closeOrRestore" ? "ready" : "passed";
+  }
+  report.releaseGate.reason = "The one-screen Windows app release gate has current setup, launch, app check, and close or restore evidence.";
+  refreshReleaseGateSummary(report);
+
+  assert.equal(report.primaryNextAction.id, "ready-for-release-card");
+  assert.equal(report.primaryNextAction.command, "veil-vmctl app-runtime-review --json");
+  assert.equal(validateAppRuntimeStatus(report), report);
 });
 
 test("rejects release gate titles with internal terms", () => {

@@ -317,5 +317,13 @@
     "recommendedAction": "start-runtime",
     "recommendedInstallStatusCommand": "veil-vmctl qemu-install-status --json",
     "reason": "The local Windows runtime is boot ready."
+  },
+  "primaryNextAction": {
+    "id": "windowsSetup",
+    "title": "Windows Setup Ready",
+    "source": "releaseGate",
+    "isAvailable": true,
+    "command": "veil-vmctl qemu-install-status --json",
+    "reason": "The local Windows runtime is boot ready."
   }
 }

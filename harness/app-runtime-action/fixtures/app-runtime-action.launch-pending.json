@@ -350,6 +350,14 @@
       "diagnosticsDirectory": "/Users/test/Library/Application Support/Veil/Diagnostics",
       "recommendedProofDirectory": "/Users/test/Library/Application Support/Veil/Diagnostics/Recommended Proof",
       "reason": "No app check artifact has been saved under Veil diagnostics yet."
+    },
+    "primaryNextAction": {
+      "id": "windowsSetup",
+      "title": "Windows Setup Ready",
+      "source": "releaseGate",
+      "isAvailable": true,
+      "command": "veil-vmctl qemu-install-status --json",
+      "reason": "The local Windows runtime is boot ready."
     }
   },
   "nextActions": [

@@ -42,6 +42,7 @@ export function validateAppRuntimeStatus(report) {
   validateProofPlan(report.proofPlan, report);
   validateProofArtifacts(report.proofArtifacts);
   validateReleaseGate(report.releaseGate, report);
+  validatePrimaryNextAction(report.primaryNextAction, report);
   validateMenuBarIntegration(report.menuBarIntegration, report);
   validateActions(report.actions, report);
 
@@ -808,6 +809,60 @@ function validateReleaseGate(releaseGate, report) {
     requireString(slot.title, `releaseGate.screenshotSlots.${slot.id}.title`);
     requireString(slot.expectedSurface, `releaseGate.screenshotSlots.${slot.id}.expectedSurface`);
     requireBoolean(slot.isRequired, `releaseGate.screenshotSlots.${slot.id}.isRequired`);
+  }
+}
+
+function validatePrimaryNextAction(primaryNextAction, report) {
+  if (!primaryNextAction || typeof primaryNextAction !== "object" || Array.isArray(primaryNextAction)) {
+    throw new TypeError("primaryNextAction must be an object.");
+  }
+
+  requireString(primaryNextAction.id, "primaryNextAction.id");
+  requireString(primaryNextAction.title, "primaryNextAction.title");
+  requireString(primaryNextAction.source, "primaryNextAction.source");
+  requireBoolean(primaryNextAction.isAvailable, "primaryNextAction.isAvailable");
+  requireString(primaryNextAction.reason, "primaryNextAction.reason");
+
+  if (primaryNextAction.command !== undefined) {
+    requireString(primaryNextAction.command, "primaryNextAction.command");
+  }
+
+  if (primaryNextAction.source !== "releaseGate") {
+    throw new TypeError("primaryNextAction.source must be releaseGate.");
+  }
+
+  const expectedStep = report.releaseGate.isPassing
+    ? undefined
+    : report.releaseGate.steps.find((step) => step.id === report.releaseGate.recommendedAction);
+  const expectedId = report.releaseGate.isPassing ? "ready-for-release-card" : expectedStep?.id;
+  const expectedTitle = report.releaseGate.isPassing ? "Review App Flow" : expectedStep?.title;
+  const expectedCommand = report.releaseGate.isPassing
+    ? "veil-vmctl app-runtime-review --json"
+    : expectedStep?.nextActionCommand;
+  const expectedReason = report.releaseGate.isPassing
+    ? report.releaseGate.reason
+    : expectedStep?.evidence;
+
+  if (primaryNextAction.id !== expectedId) {
+    throw new TypeError("primaryNextAction.id must match the release gate's next step.");
+  }
+  if (primaryNextAction.title !== expectedTitle) {
+    throw new TypeError("primaryNextAction.title must match the release gate's next step.");
+  }
+  if (primaryNextAction.command !== expectedCommand) {
+    throw new TypeError("primaryNextAction.command must match the release gate's next command.");
+  }
+  if (primaryNextAction.isAvailable !== (expectedCommand !== undefined)) {
+    throw new TypeError("primaryNextAction.isAvailable must reflect whether a next command exists.");
+  }
+  if (primaryNextAction.reason !== expectedReason) {
+    throw new TypeError("primaryNextAction.reason must match the release gate's next evidence.");
+  }
+
+  for (const disallowedTerm of ["Guest Agent", "HWND", "QEMU", "Proof"]) {
+    if (primaryNextAction.title.includes(disallowedTerm)) {
+      throw new TypeError("primaryNextAction title must stay product-facing.");
+    }
   }
 }
 

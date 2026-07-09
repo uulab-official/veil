@@ -147,6 +147,13 @@ check evidence, and close/quiet/restore readiness. It also carries the proof
 card screenshot slots so automation can tell contributors exactly which current
 screenshots to attach before promoting a build.
 
+`primaryNextAction` is derived from that release gate and names the single next
+product action for the app-first flow. It includes the release-gate step id,
+product-facing title, availability, exact command when one exists, and the same
+evidence text as the gate step. When all release-card steps pass, it points at
+`veil-vmctl app-runtime-review --json` so the next step becomes sharing the
+review card instead of guessing from lower-level status fields.
+
 `visibleSurfacePolicy` captures the normal user-facing window contract: before a
 mirrored Windows app opens, the launcher is the single expected surface; after a
 live mirrored HWND opens, the Windows app windows become the expected surfaces
