@@ -137,6 +137,50 @@ struct AppRuntimeDockMenuTests {
         #expect(visibleText.allSatisfy { !$0.contains("HWND") })
     }
 
+    @Test("app flow copy stays product-facing")
+    func appFlowCopyStaysProductFacing() {
+        let titles = [
+            WindowsShellCopy.appFlowStatusTitle(
+                isPassing: true,
+                passingStepCount: 5,
+                requiredStepCount: 5
+            ),
+            WindowsShellCopy.appFlowStatusTitle(
+                isPassing: false,
+                passingStepCount: 3,
+                requiredStepCount: 5
+            )
+        ]
+        let details = [
+            WindowsShellCopy.appFlowDetail(
+                recommendedAction: "windowsSetup",
+                isPassing: false
+            ),
+            WindowsShellCopy.appFlowDetail(
+                recommendedAction: "appCheckEvidence",
+                isPassing: false
+            ),
+            WindowsShellCopy.appFlowDetail(
+                recommendedAction: "ready-for-release-card",
+                isPassing: true
+            )
+        ]
+
+        #expect(titles == ["Ready", "3 of 5"])
+        #expect(details == [
+            "Finish Windows setup before opening apps.",
+            "Run Check App to save current app evidence.",
+            "Setup, launch, app checks, and close controls are covered."
+        ])
+
+        let visibleText = titles + details
+        #expect(visibleText.allSatisfy { !$0.contains("Proof") })
+        #expect(visibleText.allSatisfy { !$0.contains("Runtime") })
+        #expect(visibleText.allSatisfy { !$0.contains("Guest Agent") })
+        #expect(visibleText.allSatisfy { !$0.contains("HWND") })
+        #expect(visibleText.allSatisfy { !$0.contains("QEMU") })
+    }
+
     @Test("menu status titles stay app first")
     func menuStatusTitlesStayAppFirst() {
         let titles = [

@@ -271,4 +271,40 @@ enum WindowsShellCopy {
 
         return reason
     }
+
+    static func appFlowStatusTitle(
+        isPassing: Bool,
+        passingStepCount: Int,
+        requiredStepCount: Int
+    ) -> String {
+        if isPassing {
+            return "Ready"
+        }
+
+        return "\(passingStepCount) of \(requiredStepCount)"
+    }
+
+    static func appFlowDetail(
+        recommendedAction: String,
+        isPassing: Bool
+    ) -> String {
+        if isPassing {
+            return "Setup, launch, app checks, and close controls are covered."
+        }
+
+        switch recommendedAction {
+        case "windowsSetup":
+            return "Finish Windows setup before opening apps."
+        case "oneScreenPath":
+            return "Keep setup, launch, and recovery in one clean app flow."
+        case "openWindowsApp":
+            return "Open or queue a Windows app from this screen."
+        case "appCheckEvidence":
+            return "Run Check App to save current app evidence."
+        case "closeOrRestore":
+            return "Close, restore, or quiet Windows from app controls."
+        default:
+            return "Continue the next app setup step."
+        }
+    }
 }

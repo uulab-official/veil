@@ -56,6 +56,7 @@ struct DetailView: View {
                     phase: model.phase,
                     proofPlan: proofPlan,
                     proofArtifacts: runtimeStatusReport.proofArtifacts,
+                    releaseGate: runtimeStatusReport.releaseGate,
                     launchWindowsAppAction: launchWindowsAppAction,
                     runRecommendedProofAction: runRecommendedProofAction
                 )
@@ -100,6 +101,7 @@ private struct WindowsQuickLaunchPanel: View {
     var phase: HostDashboardPhase
     var proofPlan: WindowsAppRuntimeProofPlanStatus
     var proofArtifacts: WindowsAppRuntimeProofArtifactStatus
+    var releaseGate: WindowsAppRuntimeReleaseGateStatus
     var launchWindowsAppAction: () -> Void
     var runRecommendedProofAction: () -> Void
 
@@ -185,6 +187,34 @@ private struct WindowsQuickLaunchPanel: View {
                 }
                 .disabled(proofPlan.recommendedProofCommand == nil)
                 .help("Check selected Windows app")
+            }
+
+            Divider()
+
+            HStack(spacing: 12) {
+                StatusPill(
+                    title: appFlowStatusTitle,
+                    symbolName: appFlowSymbolName,
+                    tint: appFlowTint
+                )
+                .frame(minWidth: 118, alignment: .leading)
+
+                Text(appFlowDetail)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+
+                Spacer()
+
+                HStack(spacing: 5) {
+                    ForEach(releaseGate.steps, id: \.id) { step in
+                        Circle()
+                            .fill(step.isPassing ? Color.green : Color.secondary.opacity(0.35))
+                            .frame(width: 6, height: 6)
+                            .help(step.title)
+                    }
+                }
+                .accessibilityLabel("App flow progress")
             }
         }
     }
@@ -275,5 +305,28 @@ private struct WindowsQuickLaunchPanel: View {
         }
 
         return proofArtifacts.latestProofFileName == nil ? .secondary : .green
+    }
+
+    private var appFlowStatusTitle: String {
+        WindowsShellCopy.appFlowStatusTitle(
+            isPassing: releaseGate.isPassing,
+            passingStepCount: releaseGate.passingStepCount,
+            requiredStepCount: releaseGate.requiredStepCount
+        )
+    }
+
+    private var appFlowDetail: String {
+        WindowsShellCopy.appFlowDetail(
+            recommendedAction: releaseGate.recommendedAction,
+            isPassing: releaseGate.isPassing
+        )
+    }
+
+    private var appFlowSymbolName: String {
+        releaseGate.isPassing ? "checkmark.circle.fill" : "list.bullet.circle"
+    }
+
+    private var appFlowTint: Color {
+        releaseGate.isPassing ? .green : .blue
     }
 }
