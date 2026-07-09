@@ -5,6 +5,7 @@ struct ReviewEvidenceFolder {
     var directory: URL
     var readme: URL
     var manifest: URL
+    var appCheckProof: URL
 }
 
 struct ReviewEvidenceFile: Codable, Equatable {
@@ -127,7 +128,12 @@ enum ReviewEvidenceFolderStore {
         let manifestData = try JSONEncoder.veilDiagnostics.encode(manifest)
         try manifestData.write(to: manifestURL, options: [.atomic])
         try readmeText(manifest: manifest).write(to: readmeURL, atomically: true, encoding: .utf8)
-        return ReviewEvidenceFolder(directory: targetDirectory, readme: readmeURL, manifest: manifestURL)
+        return ReviewEvidenceFolder(
+            directory: targetDirectory,
+            readme: readmeURL,
+            manifest: manifestURL,
+            appCheckProof: targetDirectory.appendingPathComponent(appCheckProofFileName)
+        )
     }
 
     static func manifest(

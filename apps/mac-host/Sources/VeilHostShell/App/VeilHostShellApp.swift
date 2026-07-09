@@ -40,6 +40,7 @@ struct VeilHostShellApp: App {
     @State private var automaticQuietRuntimeTask: Task<Void, Never>?
     @State private var automaticGuestAgentRecoveryTask: Task<Void, Never>?
     @State private var automaticGuestAgentRecoveryAttemptedTokens: Set<String> = []
+    @State private var latestReviewEvidenceFolder: ReviewEvidenceFolder?
 
     init() {
         let runtimeBooter = AppRuntimeBooterFactory.make()
@@ -811,7 +812,11 @@ struct VeilHostShellApp: App {
             displayMessage = "Running \(appCheckDisplayName(for: proofKind)) app check for \(proofAppName(appId: appId))."
 
             do {
-                let url = try await writeRecommendedProof(proofKind: proofKind, appId: appId)
+                let url = try await writeRecommendedProof(
+                    proofKind: proofKind,
+                    appId: appId,
+                    reviewEvidenceFolder: latestReviewEvidenceFolder
+                )
                 displayMessage = "\(appCheckDisplayName(for: proofKind)) app check saved: \(url.path)"
                 await model.load()
             } catch {
@@ -820,7 +825,11 @@ struct VeilHostShellApp: App {
         }
     }
 
-    private func writeRecommendedProof(proofKind: String, appId: String) async throws -> URL {
+    private func writeRecommendedProof(
+        proofKind: String,
+        appId: String,
+        reviewEvidenceFolder: ReviewEvidenceFolder? = nil
+    ) async throws -> URL {
         let transport = URLSessionWebSocketTransport(url: URL(string: Self.agentURLString)!)
         let client = VeilHostClient(transport: transport)
         let directory = QEMUVMRuntimeBooter.defaultDiagnosticsDirectory()
@@ -857,7 +866,8 @@ struct VeilHostShellApp: App {
                 waitSeconds: 30,
                 proofTimeoutNanoseconds: 30_000_000_000
             )
-            let outputURL = directory.appendingPathComponent("mvp-proof-\(stamp).json")
+            let outputURL = reviewEvidenceFolder?.appCheckProof
+                ?? directory.appendingPathComponent("mvp-proof-\(stamp).json")
             report.savedProofPath = outputURL.path
             try writeProof(report, to: outputURL)
             return outputURL
@@ -876,8 +886,9 @@ struct VeilHostShellApp: App {
             activateMainWindow()
             do {
                 let folder = try ReviewEvidenceFolderStore.prepare()
+                latestReviewEvidenceFolder = folder
                 NSWorkspace.shared.open(folder.directory)
-                displayMessage = "Review Evidence folder ready: \(folder.directory.path)"
+                displayMessage = "Review Evidence folder ready: \(folder.directory.path). App checks will save \(folder.appCheckProof.lastPathComponent) there."
             } catch {
                 displayMessage = "Review Evidence folder could not be prepared: \(userMessage(for: error))"
             }

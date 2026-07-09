@@ -22,6 +22,7 @@ struct ReviewEvidenceFolderStoreTests {
         #expect(FileManager.default.fileExists(atPath: folder.readme.path))
         #expect(FileManager.default.fileExists(atPath: folder.manifest.path))
         #expect(folder.directory == baseDirectory)
+        #expect(folder.appCheckProof == baseDirectory.appendingPathComponent("mvp-proof.json"))
         #expect(readme.contains("Veil Windows App Review Evidence"))
         #expect(readme.contains("review-manifest.json"))
         #expect(readme.contains("app-runtime-review --evidence-dir"))
