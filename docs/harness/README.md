@@ -200,6 +200,13 @@ single next readiness action (`connect-agent`, `prepare-sparse-package`,
 `verify-window-capture`, or `verify-daily-use-integrations`) so status cards
 cannot imply Parallels-style daily-use polish before the signed sparse package
 gate is actually satisfied.
+The same section also carries lane-specific guidance:
+`borderlessCaptureRecommendedAction` and `borderlessCaptureRequirement` preserve
+the signed sparse package plus `windowCapture` capability prerequisite for
+borderless Windows Graphics Capture consent, while
+`notificationBridgeRecommendedAction` and `notificationBridgeRequirement` keep
+the Windows `UserNotificationListener` consent spike tied to package identity
+instead of presenting notifications as generally ready.
 The printer lane is intentionally explicit while it is still a manual
 experiment: `printerBridgeRecommendedAction=manual-ipp-experiment`,
 `printerBridgeEndpointTemplate=http://10.0.2.2:631/printers/<shared-printer-name>`,

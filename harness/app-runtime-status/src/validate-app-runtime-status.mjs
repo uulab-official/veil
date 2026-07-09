@@ -777,10 +777,14 @@ function validateDailyUseReadiness(dailyUseReadiness, report) {
     dailyUseReadiness.borderlessCapturePreflightPassed,
     "dailyUseReadiness.borderlessCapturePreflightPassed"
   );
+  requireString(dailyUseReadiness.borderlessCaptureRecommendedAction, "dailyUseReadiness.borderlessCaptureRecommendedAction");
+  requireString(dailyUseReadiness.borderlessCaptureRequirement, "dailyUseReadiness.borderlessCaptureRequirement");
   requireBoolean(
     dailyUseReadiness.notificationBridgePreflightPassed,
     "dailyUseReadiness.notificationBridgePreflightPassed"
   );
+  requireString(dailyUseReadiness.notificationBridgeRecommendedAction, "dailyUseReadiness.notificationBridgeRecommendedAction");
+  requireString(dailyUseReadiness.notificationBridgeRequirement, "dailyUseReadiness.notificationBridgeRequirement");
   requireString(dailyUseReadiness.printerBridgeMode, "dailyUseReadiness.printerBridgeMode");
   requireString(dailyUseReadiness.printerBridgeRecommendedAction, "dailyUseReadiness.printerBridgeRecommendedAction");
   requireString(dailyUseReadiness.printerBridgeEndpointTemplate, "dailyUseReadiness.printerBridgeEndpointTemplate");
@@ -810,6 +814,15 @@ function validateDailyUseReadiness(dailyUseReadiness, report) {
     throw new TypeError("dailyUseReadiness must stay enabled for v1.5 readiness tracking.");
   }
 
+  if (!dailyUseReadiness.borderlessCaptureRequirement.includes("signed sparse package identity")
+    || !dailyUseReadiness.borderlessCaptureRequirement.includes("windowCapture capability")) {
+    throw new TypeError("dailyUseReadiness.borderlessCaptureRequirement must explain the package identity and windowCapture prerequisites.");
+  }
+  if (!dailyUseReadiness.notificationBridgeRequirement.includes("signed sparse package identity")
+    || !dailyUseReadiness.notificationBridgeRequirement.includes("Windows UserNotificationListener consent")) {
+    throw new TypeError("dailyUseReadiness.notificationBridgeRequirement must explain the package identity and notification listener consent prerequisites.");
+  }
+
   if (dailyUseReadiness.printerBridgeMode !== "manual-ipp-experiment") {
     throw new TypeError("dailyUseReadiness.printerBridgeMode must preserve the current IPP printer experiment path.");
   }
@@ -829,6 +842,18 @@ function validateDailyUseReadiness(dailyUseReadiness, report) {
     && capabilities?.packageIdentity === true;
   const expectedBorderlessCapturePreflight = expectedPackageIdentityReady
     && capabilities?.windowCapture === true;
+  const expectedBorderlessAction = !report.connection.hasLiveAgentConnection
+    ? "connect-agent"
+    : expectedPackageIdentityReady
+      ? expectedBorderlessCapturePreflight
+        ? "verify-daily-use-integrations"
+        : "verify-window-capture"
+      : "prepare-sparse-package";
+  const expectedNotificationAction = !report.connection.hasLiveAgentConnection
+    ? "connect-agent"
+    : expectedPackageIdentityReady
+      ? "verify-notification-listener-consent"
+      : "prepare-sparse-package";
 
   if (dailyUseReadiness.packageIdentityReady !== expectedPackageIdentityReady) {
     throw new TypeError("dailyUseReadiness.packageIdentityReady must match live package identity readiness.");
@@ -837,9 +862,15 @@ function validateDailyUseReadiness(dailyUseReadiness, report) {
   if (dailyUseReadiness.borderlessCapturePreflightPassed !== expectedBorderlessCapturePreflight) {
     throw new TypeError("dailyUseReadiness.borderlessCapturePreflightPassed must require package identity and window capture.");
   }
+  if (dailyUseReadiness.borderlessCaptureRecommendedAction !== expectedBorderlessAction) {
+    throw new TypeError("dailyUseReadiness.borderlessCaptureRecommendedAction must match the current borderless capture gate.");
+  }
 
   if (dailyUseReadiness.notificationBridgePreflightPassed !== expectedPackageIdentityReady) {
     throw new TypeError("dailyUseReadiness.notificationBridgePreflightPassed must require package identity.");
+  }
+  if (dailyUseReadiness.notificationBridgeRecommendedAction !== expectedNotificationAction) {
+    throw new TypeError("dailyUseReadiness.notificationBridgeRecommendedAction must match the current notification bridge gate.");
   }
 
   if (JSON.stringify(dailyUseReadiness.packageIdentityStatus) !== JSON.stringify(report.connection.packageIdentityStatus)) {

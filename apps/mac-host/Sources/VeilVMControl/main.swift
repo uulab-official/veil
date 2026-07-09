@@ -1170,7 +1170,11 @@ struct VeilVMControl {
         }
         print("Daily Use package identity: \(report.dailyUseReadiness.packageIdentityReady ? "ready" : "needed")")
         print("Daily Use borderless capture preflight: \(report.dailyUseReadiness.borderlessCapturePreflightPassed ? "ready" : "blocked")")
+        print("Daily Use borderless action: \(report.dailyUseReadiness.borderlessCaptureRecommendedAction)")
+        print("Daily Use borderless requirement: \(report.dailyUseReadiness.borderlessCaptureRequirement)")
         print("Daily Use notifications preflight: \(report.dailyUseReadiness.notificationBridgePreflightPassed ? "ready" : "blocked")")
+        print("Daily Use notifications action: \(report.dailyUseReadiness.notificationBridgeRecommendedAction)")
+        print("Daily Use notifications requirement: \(report.dailyUseReadiness.notificationBridgeRequirement)")
         print("Daily Use printer mode: \(report.dailyUseReadiness.printerBridgeMode)")
         print("Daily Use printer action: \(report.dailyUseReadiness.printerBridgeRecommendedAction)")
         print("Daily Use printer endpoint: \(report.dailyUseReadiness.printerBridgeEndpointTemplate)")

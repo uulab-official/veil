@@ -244,8 +244,12 @@
     },
     "dailyUseReadiness" : {
       "borderlessCapturePreflightPassed" : false,
+      "borderlessCaptureRecommendedAction" : "connect-agent",
+      "borderlessCaptureRequirement" : "Requires signed sparse package identity plus windowCapture capability before borderless Windows Graphics Capture consent can be requested.",
       "isEnabled" : true,
       "notificationBridgePreflightPassed" : false,
+      "notificationBridgeRecommendedAction" : "connect-agent",
+      "notificationBridgeRequirement" : "Requires signed sparse package identity before Windows UserNotificationListener consent can be requested.",
       "packageIdentityReady" : false,
       "printerBridgeMode" : "manual-ipp-experiment",
       "printerBridgeRecommendedAction" : "manual-ipp-experiment",

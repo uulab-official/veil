@@ -651,11 +651,22 @@ public enum WindowsAppRuntimePrinterBridgeDefaults {
         "Share the Mac printer, then add it in Windows as an IPP network printer at http://10.0.2.2:631/printers/<shared-printer-name>."
 }
 
+public enum WindowsAppRuntimeDailyUseIntegrationDefaults {
+    public static let borderlessCaptureRequirement =
+        "Requires signed sparse package identity plus windowCapture capability before borderless Windows Graphics Capture consent can be requested."
+    public static let notificationBridgeRequirement =
+        "Requires signed sparse package identity before Windows UserNotificationListener consent can be requested."
+}
+
 public struct WindowsAppRuntimeDailyUseReadinessStatus: Codable, Equatable, Sendable {
     public var isEnabled: Bool
     public var packageIdentityReady: Bool
     public var borderlessCapturePreflightPassed: Bool
+    public var borderlessCaptureRecommendedAction: String
+    public var borderlessCaptureRequirement: String
     public var notificationBridgePreflightPassed: Bool
+    public var notificationBridgeRecommendedAction: String
+    public var notificationBridgeRequirement: String
     public var printerBridgeMode: String
     public var printerBridgeRecommendedAction: String
     public var printerBridgeEndpointTemplate: String
@@ -673,7 +684,11 @@ public struct WindowsAppRuntimeDailyUseReadinessStatus: Codable, Equatable, Send
         isEnabled: Bool = true,
         packageIdentityReady: Bool,
         borderlessCapturePreflightPassed: Bool,
+        borderlessCaptureRecommendedAction: String,
+        borderlessCaptureRequirement: String = WindowsAppRuntimeDailyUseIntegrationDefaults.borderlessCaptureRequirement,
         notificationBridgePreflightPassed: Bool,
+        notificationBridgeRecommendedAction: String,
+        notificationBridgeRequirement: String = WindowsAppRuntimeDailyUseIntegrationDefaults.notificationBridgeRequirement,
         printerBridgeMode: String,
         printerBridgeRecommendedAction: String = WindowsAppRuntimePrinterBridgeDefaults.recommendedAction,
         printerBridgeEndpointTemplate: String = WindowsAppRuntimePrinterBridgeDefaults.endpointTemplate,
@@ -690,7 +705,11 @@ public struct WindowsAppRuntimeDailyUseReadinessStatus: Codable, Equatable, Send
         self.isEnabled = isEnabled
         self.packageIdentityReady = packageIdentityReady
         self.borderlessCapturePreflightPassed = borderlessCapturePreflightPassed
+        self.borderlessCaptureRecommendedAction = borderlessCaptureRecommendedAction
+        self.borderlessCaptureRequirement = borderlessCaptureRequirement
         self.notificationBridgePreflightPassed = notificationBridgePreflightPassed
+        self.notificationBridgeRecommendedAction = notificationBridgeRecommendedAction
+        self.notificationBridgeRequirement = notificationBridgeRequirement
         self.printerBridgeMode = printerBridgeMode
         self.printerBridgeRecommendedAction = printerBridgeRecommendedAction
         self.printerBridgeEndpointTemplate = printerBridgeEndpointTemplate
@@ -2006,7 +2025,9 @@ public final class HostDashboardModel {
             return WindowsAppRuntimeDailyUseReadinessStatus(
                 packageIdentityReady: false,
                 borderlessCapturePreflightPassed: false,
+                borderlessCaptureRecommendedAction: "connect-agent",
                 notificationBridgePreflightPassed: false,
+                notificationBridgeRecommendedAction: "connect-agent",
                 printerBridgeMode: "manual-ipp-experiment",
                 packageIdentityStatus: nil,
                 recommendedAction: "connect-agent",
@@ -2024,7 +2045,9 @@ public final class HostDashboardModel {
             return WindowsAppRuntimeDailyUseReadinessStatus(
                 packageIdentityReady: false,
                 borderlessCapturePreflightPassed: false,
+                borderlessCaptureRecommendedAction: "prepare-sparse-package",
                 notificationBridgePreflightPassed: false,
+                notificationBridgeRecommendedAction: "prepare-sparse-package",
                 printerBridgeMode: "manual-ipp-experiment",
                 packageIdentityStatus: packageStatus,
                 packageIdentityStage: packageStatus?.stage,
@@ -2042,18 +2065,23 @@ public final class HostDashboardModel {
         let recommendedCommand = borderlessCapturePreflightPassed && proofPlan?.recommendedProofCommand != nil
             ? proofRecommendedCommand
             : "veil-vmctl app-runtime-status --json"
+        let borderlessCaptureRecommendedAction = borderlessCapturePreflightPassed
+            ? "verify-daily-use-integrations"
+            : "verify-window-capture"
 
         return WindowsAppRuntimeDailyUseReadinessStatus(
             packageIdentityReady: true,
             borderlessCapturePreflightPassed: borderlessCapturePreflightPassed,
+            borderlessCaptureRecommendedAction: borderlessCaptureRecommendedAction,
             notificationBridgePreflightPassed: notificationBridgePreflightPassed,
+            notificationBridgeRecommendedAction: "verify-notification-listener-consent",
             printerBridgeMode: "manual-ipp-experiment",
             packageIdentityStatus: packageStatus,
             packageIdentityStage: packageStatus?.stage,
             packageIdentitySucceeded: packageStatus?.succeeded,
             packageIdentityMessage: packageStatus?.message,
             packageIdentityEvidencePath: packageStatus?.statusPath,
-            recommendedAction: borderlessCapturePreflightPassed ? "verify-daily-use-integrations" : "verify-window-capture",
+            recommendedAction: borderlessCaptureRecommendedAction,
             recommendedCommand: recommendedCommand,
             reason: borderlessCapturePreflightPassed
                 ? "Package identity is available; run the strongest Windows app check before enabling borderless capture, notifications, and printer experiments."

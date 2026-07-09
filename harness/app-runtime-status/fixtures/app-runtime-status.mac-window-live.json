@@ -426,7 +426,11 @@
     "isEnabled": true,
     "packageIdentityReady": false,
     "borderlessCapturePreflightPassed": false,
+    "borderlessCaptureRecommendedAction": "prepare-sparse-package",
+    "borderlessCaptureRequirement": "Requires signed sparse package identity plus windowCapture capability before borderless Windows Graphics Capture consent can be requested.",
     "notificationBridgePreflightPassed": false,
+    "notificationBridgeRecommendedAction": "prepare-sparse-package",
+    "notificationBridgeRequirement": "Requires signed sparse package identity before Windows UserNotificationListener consent can be requested.",
     "printerBridgeMode": "manual-ipp-experiment",
     "packageIdentityStatus": {
       "statusPath": "C:\\Users\\veil\\AppData\\Local\\Veil\\Agent\\package\\sparse-package-status.json",

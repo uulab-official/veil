@@ -1208,6 +1208,26 @@ test("rejects Daily Use printer bridge guidance drift", () => {
   );
 });
 
+test("rejects Daily Use borderless capture guidance drift", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.mac-window-live.json", import.meta.url), "utf8"));
+  report.dailyUseReadiness.borderlessCaptureRecommendedAction = "verify-daily-use-integrations";
+
+  assert.throws(
+    () => validateAppRuntimeStatus(report),
+    /borderlessCaptureRecommendedAction/
+  );
+});
+
+test("rejects Daily Use notification bridge guidance drift", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.mac-window-live.json", import.meta.url), "utf8"));
+  report.dailyUseReadiness.notificationBridgeRecommendedAction = "verify-notification-listener-consent";
+
+  assert.throws(
+    () => validateAppRuntimeStatus(report),
+    /notificationBridgeRecommendedAction/
+  );
+});
+
 test("accepts Daily Use package identity evidence summary", () => {
   const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.mac-window-live.json", import.meta.url), "utf8"));
   report.connection.packageIdentityStatus = {
