@@ -122,6 +122,31 @@ test("rejects Dock integration pending launch count drift", () => {
   );
 });
 
+test("accepts Dock previous-app restore readiness", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.demo.json", import.meta.url), "utf8"));
+  report.restorableAppIds = ["winapp_notepad"];
+  report.dockIntegration.restorableAppCount = 1;
+  report.dockIntegration.badgeLabel = "R";
+  report.dockIntegration.canReconnectPreviousApps = true;
+  report.actions.find((action) => action.id === "windowsApps.reconnectRestore").isAvailable = true;
+
+  assert.equal(validateAppRuntimeStatus(report), report);
+});
+
+test("rejects Dock previous-app restore badge drift", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.demo.json", import.meta.url), "utf8"));
+  report.restorableAppIds = ["winapp_notepad"];
+  report.dockIntegration.restorableAppCount = 1;
+  report.dockIntegration.badgeLabel = "1";
+  report.dockIntegration.canReconnectPreviousApps = true;
+  report.actions.find((action) => action.id === "windowsApps.reconnectRestore").isAvailable = true;
+
+  assert.throws(
+    () => validateAppRuntimeStatus(report),
+    /badgeLabel/
+  );
+});
+
 test("rejects Mac foregroundable window counts that drift from mirrored sessions", () => {
   const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.mac-window-live.json", import.meta.url), "utf8"));
   report.macWindowIntegration.foregroundableWindowCount = 0;

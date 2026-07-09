@@ -57,10 +57,12 @@
     "isEnabled": true,
     "openWindowCount": 1,
     "pendingLaunchCount": 0,
+    "restorableAppCount": 1,
     "badgeLabel": "1",
     "canOpenMainWindow": true,
     "canBringWindowsAppsForward": true,
     "canRestorePreviousApps": false,
+    "canReconnectPreviousApps": false,
     "canLaunchSelectedApp": true
   },
   "launcherVisibility": {

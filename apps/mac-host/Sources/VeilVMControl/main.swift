@@ -775,6 +775,8 @@ struct VeilVMControl {
         }
         print("Quiet runtime reason: \(report.quietRuntime.reason)")
         print("Restorable apps: \(report.restorableAppIds.joined(separator: ", "))")
+        print("Dock restorable apps: \(report.dockIntegration.restorableAppCount)")
+        print("Dock reconnect previous apps: \(report.dockIntegration.canReconnectPreviousApps ? "yes" : "no")")
         print("Actions:")
         for action in report.actions {
             print("  - \(action.id): \(action.isAvailable ? "available" : "unavailable")")

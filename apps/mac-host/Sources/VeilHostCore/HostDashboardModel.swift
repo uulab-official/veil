@@ -266,29 +266,35 @@ public struct WindowsAppRuntimeDockIntegrationStatus: Codable, Equatable, Sendab
     public var isEnabled: Bool
     public var openWindowCount: Int
     public var pendingLaunchCount: Int
+    public var restorableAppCount: Int
     public var badgeLabel: String?
     public var canOpenMainWindow: Bool
     public var canBringWindowsAppsForward: Bool
     public var canRestorePreviousApps: Bool
+    public var canReconnectPreviousApps: Bool
     public var canLaunchSelectedApp: Bool
 
     public init(
         isEnabled: Bool,
         openWindowCount: Int,
         pendingLaunchCount: Int,
+        restorableAppCount: Int,
         badgeLabel: String?,
         canOpenMainWindow: Bool,
         canBringWindowsAppsForward: Bool,
         canRestorePreviousApps: Bool,
+        canReconnectPreviousApps: Bool,
         canLaunchSelectedApp: Bool
     ) {
         self.isEnabled = isEnabled
         self.openWindowCount = openWindowCount
         self.pendingLaunchCount = pendingLaunchCount
+        self.restorableAppCount = restorableAppCount
         self.badgeLabel = badgeLabel
         self.canOpenMainWindow = canOpenMainWindow
         self.canBringWindowsAppsForward = canBringWindowsAppsForward
         self.canRestorePreviousApps = canRestorePreviousApps
+        self.canReconnectPreviousApps = canReconnectPreviousApps
         self.canLaunchSelectedApp = canLaunchSelectedApp
     }
 }
@@ -866,10 +872,12 @@ public final class HostDashboardModel {
                 isEnabled: true,
                 openWindowCount: mirrorSessions.count,
                 pendingLaunchCount: pendingLaunch.isQueued ? 1 : 0,
+                restorableAppCount: restorableAppIds.count,
                 badgeLabel: dockBadgeLabel(pendingLaunch: pendingLaunch),
                 canOpenMainWindow: true,
                 canBringWindowsAppsForward: !mirrorSessions.isEmpty,
                 canRestorePreviousApps: canRestoreMirrorSessions,
+                canReconnectPreviousApps: canReconnectRestoreMirrorSessions,
                 canLaunchSelectedApp: canRequestSelectedAppLaunch
             ),
             launcherVisibility: launcherVisibility,
@@ -1022,6 +1030,10 @@ public final class HostDashboardModel {
 
         if pendingLaunch.isQueued {
             return "..."
+        }
+
+        if !restorableAppIds.isEmpty {
+            return restorableAppIds.count == 1 ? "R" : "R\(restorableAppIds.count)"
         }
 
         return nil

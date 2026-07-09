@@ -79,6 +79,9 @@ The queued app id is persisted locally as a pending-launch intent, allowing the
 handoff to survive a host process restart while Windows is still starting.
 `dockIntegration.pendingLaunchCount` and the `...` Dock badge keep that queued
 app visible even before a guest HWND exists.
+`dockIntegration.restorableAppCount`, `canReconnectPreviousApps`, and the `R`
+Dock badge keep previous app restore visible after the launcher is hidden or
+the guest agent temporarily disconnects.
 The supported actions include `runtime.fulfillPendingLaunch`, which only
 becomes available after a queued app launch has a live guest agent capable of
 opening that app.

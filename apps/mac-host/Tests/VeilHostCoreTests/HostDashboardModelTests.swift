@@ -606,9 +606,12 @@ struct HostDashboardModelTests {
         #expect(report.dockIntegration.isEnabled)
         #expect(report.dockIntegration.openWindowCount == 1)
         #expect(report.dockIntegration.pendingLaunchCount == 0)
+        #expect(report.dockIntegration.restorableAppCount == 1)
         #expect(report.dockIntegration.badgeLabel == "1")
         #expect(report.dockIntegration.canOpenMainWindow)
         #expect(report.dockIntegration.canBringWindowsAppsForward)
+        #expect(report.dockIntegration.canRestorePreviousApps == false)
+        #expect(report.dockIntegration.canReconnectPreviousApps == false)
         #expect(report.dockIntegration.canLaunchSelectedApp)
         #expect(report.launcherVisibility.isEnabled)
         #expect(report.launcherVisibility.canOpenMainWindow)
@@ -1098,6 +1101,7 @@ struct HostDashboardModelTests {
         #expect(queuedReport.pendingLaunch.reason == "Veil will launch the queued Windows app after the app connection returns.")
         #expect(queuedReport.dockIntegration.openWindowCount == 0)
         #expect(queuedReport.dockIntegration.pendingLaunchCount == 1)
+        #expect(queuedReport.dockIntegration.restorableAppCount == 0)
         #expect(queuedReport.dockIntegration.badgeLabel == "...")
         #expect(model.canFulfillPendingLaunch == false)
         #expect(queuedReport.actions.first { $0.id == "runtime.startWindowsForApp" }?.isAvailable == true)
@@ -1316,6 +1320,7 @@ struct HostDashboardModelTests {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
         let intentStore = JSONWindowRestoreIntentStore(directory: directory)
+        let pendingLaunchStore = JSONPendingLaunchIntentStore(directory: directory)
         try await intentStore.save(WindowRestoreIntent(appIds: ["winapp_notepad"]))
         let primary = FakeDashboardService(health: .captureReady)
         primary.error = URLError(.cannotConnectToHost)
@@ -1324,7 +1329,11 @@ struct HostDashboardModelTests {
             fallback: DemoHostDashboardService(),
             primaryEndpointDescription: "ws://127.0.0.1:18444"
         )
-        let model = HostDashboardModel(service: service, restoreIntentStore: intentStore)
+        let model = HostDashboardModel(
+            service: service,
+            restoreIntentStore: intentStore,
+            pendingLaunchIntentStore: pendingLaunchStore
+        )
 
         await model.loadRestoreIntent()
         await model.load()
@@ -1333,6 +1342,12 @@ struct HostDashboardModelTests {
         #expect(model.hasLiveAgentConnection == false)
         #expect(model.canRestoreMirrorSessions == false)
         #expect(model.canReconnectRestoreMirrorSessions)
+        #expect(report.dockIntegration.openWindowCount == 0)
+        #expect(report.dockIntegration.pendingLaunchCount == 0)
+        #expect(report.dockIntegration.restorableAppCount == 1)
+        #expect(report.dockIntegration.badgeLabel == "R")
+        #expect(report.dockIntegration.canRestorePreviousApps == false)
+        #expect(report.dockIntegration.canReconnectPreviousApps)
         #expect(report.actions.first { $0.id == "windowsApps.restorePrevious" }?.isAvailable == false)
         #expect(report.actions.first { $0.id == "windowsApps.reconnectRestore" }?.isAvailable == true)
     }

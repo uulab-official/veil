@@ -123,10 +123,12 @@
     "canBringWindowsAppsForward": false,
     "canLaunchSelectedApp": true,
     "canOpenMainWindow": true,
+    "canReconnectPreviousApps": false,
     "canRestorePreviousApps": false,
     "isEnabled": true,
     "openWindowCount": 0,
-    "pendingLaunchCount": 0
+    "pendingLaunchCount": 0,
+    "restorableAppCount": 0
   },
   "launcherVisibility": {
     "isEnabled": true,

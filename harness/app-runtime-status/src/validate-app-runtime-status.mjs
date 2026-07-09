@@ -666,9 +666,11 @@ function validateDockIntegration(dockIntegration, mirrorSessions, report) {
   requireBoolean(dockIntegration.isEnabled, "dockIntegration.isEnabled");
   requireNonNegativeInteger(dockIntegration.openWindowCount, "dockIntegration.openWindowCount");
   requireNonNegativeInteger(dockIntegration.pendingLaunchCount, "dockIntegration.pendingLaunchCount");
+  requireNonNegativeInteger(dockIntegration.restorableAppCount, "dockIntegration.restorableAppCount");
   requireBoolean(dockIntegration.canOpenMainWindow, "dockIntegration.canOpenMainWindow");
   requireBoolean(dockIntegration.canBringWindowsAppsForward, "dockIntegration.canBringWindowsAppsForward");
   requireBoolean(dockIntegration.canRestorePreviousApps, "dockIntegration.canRestorePreviousApps");
+  requireBoolean(dockIntegration.canReconnectPreviousApps, "dockIntegration.canReconnectPreviousApps");
   requireBoolean(dockIntegration.canLaunchSelectedApp, "dockIntegration.canLaunchSelectedApp");
 
   if (dockIntegration.openWindowCount !== mirrorSessions.length) {
@@ -680,8 +682,29 @@ function validateDockIntegration(dockIntegration, mirrorSessions, report) {
     throw new TypeError("dockIntegration.pendingLaunchCount must reflect queued pending launch state.");
   }
 
-  if (dockIntegration.openWindowCount === 0 && dockIntegration.pendingLaunchCount === 0 && dockIntegration.badgeLabel !== undefined) {
-    throw new TypeError("dockIntegration.badgeLabel must be omitted when no Windows app windows or pending launches exist.");
+  if (dockIntegration.restorableAppCount !== report.restorableAppIds.length) {
+    throw new TypeError("dockIntegration.restorableAppCount must match restorableAppIds length.");
+  }
+
+  const canReconnectPreviousApps = report.restorableAppIds.length > 0
+    && mirrorSessions.length === 0
+    && !["loading", "launching"].includes(report.phase);
+  if (dockIntegration.canReconnectPreviousApps !== canReconnectPreviousApps) {
+    throw new TypeError("dockIntegration.canReconnectPreviousApps must reflect previous-app restore readiness.");
+  }
+
+  const canRestorePreviousApps = report.connection.hasLiveAgentConnection && canReconnectPreviousApps;
+  if (dockIntegration.canRestorePreviousApps !== canRestorePreviousApps) {
+    throw new TypeError("dockIntegration.canRestorePreviousApps must reflect live app connection restore readiness.");
+  }
+
+  if (
+    dockIntegration.openWindowCount === 0
+    && dockIntegration.pendingLaunchCount === 0
+    && dockIntegration.restorableAppCount === 0
+    && dockIntegration.badgeLabel !== undefined
+  ) {
+    throw new TypeError("dockIntegration.badgeLabel must be omitted when no Windows app windows, pending launches, or restorable apps exist.");
   }
 
   if (dockIntegration.openWindowCount > 0) {
@@ -695,6 +718,18 @@ function validateDockIntegration(dockIntegration, mirrorSessions, report) {
     requireString(dockIntegration.badgeLabel, "dockIntegration.badgeLabel");
     if (dockIntegration.badgeLabel !== "...") {
       throw new TypeError("dockIntegration.badgeLabel must show pending app launch progress.");
+    }
+  }
+
+  if (
+    dockIntegration.openWindowCount === 0
+    && dockIntegration.pendingLaunchCount === 0
+    && dockIntegration.restorableAppCount > 0
+  ) {
+    requireString(dockIntegration.badgeLabel, "dockIntegration.badgeLabel");
+    const expectedRestoreBadge = dockIntegration.restorableAppCount === 1 ? "R" : `R${dockIntegration.restorableAppCount}`;
+    if (dockIntegration.badgeLabel !== expectedRestoreBadge) {
+      throw new TypeError("dockIntegration.badgeLabel must show previous-app restore readiness.");
     }
   }
 
