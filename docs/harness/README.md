@@ -209,6 +209,12 @@ The app-runtime action harness includes a live accepted
 `prepare-sparse-package` fixture so package identity success must carry both
 `sparsePackagePreparation.agentWait.diagnostic.health.capabilities.packageIdentity=true`
 and `dailyUseReadiness.packageIdentityReady=true`.
+Once package identity and window capture are both ready, the Daily Use readiness
+command moves from status refresh to
+`veil-vmctl app-runtime-action --json --action proof-recommended`, and the
+`actions` list exposes `dailyUse.verifyIntegrations` so the launcher can continue
+with an in-app app check instead of sending the operator back to a passive status
+screen.
 When the guest has written sparse package evidence,
 `dailyUseReadiness.packageIdentityStatus` carries the latest sanitized
 `sparse-package-status.json` stage from `agent.health.response`, allowing

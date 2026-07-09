@@ -519,6 +519,11 @@
           "isAvailable": true
         },
         {
+          "id": "dailyUse.verifyIntegrations",
+          "title": "Verify Daily Use",
+          "isAvailable": false
+        },
+        {
           "id": "runtime.recoverDisplay",
           "title": "Refresh Windows Display",
           "isAvailable": false

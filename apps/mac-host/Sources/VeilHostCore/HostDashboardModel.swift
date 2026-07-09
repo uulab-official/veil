@@ -1166,7 +1166,7 @@ public final class HostDashboardModel {
         let launchPlan = launchPlanStatus(localRuntime: localRuntime)
         let proofPlan = proofPlanStatus()
         let proofArtifacts = proofArtifactStatus()
-        let dailyUseReadiness = dailyUseReadinessStatus()
+        let dailyUseReadiness = dailyUseReadinessStatus(proofPlan: proofPlan)
         let pendingLaunch = pendingLaunchStatus()
         let releaseGate = releaseGateStatus(
             localRuntime: localRuntime,
@@ -1320,6 +1320,12 @@ public final class HostDashboardModel {
                     title: "Prepare Package Identity",
                     isAvailable: dailyUseReadiness.recommendedAction == "prepare-sparse-package"
                         && dailyUseReadiness.recommendedCommand != nil
+                ),
+                WindowsAppRuntimeActionStatus(
+                    id: "dailyUse.verifyIntegrations",
+                    title: "Verify Daily Use",
+                    isAvailable: dailyUseReadiness.recommendedAction == "verify-daily-use-integrations"
+                        && dailyUseReadiness.recommendedCommand == "veil-vmctl app-runtime-action --json --action proof-recommended"
                 ),
                 WindowsAppRuntimeActionStatus(
                     id: "runtime.recoverDisplay",
@@ -1913,7 +1919,9 @@ public final class HostDashboardModel {
         )
     }
 
-    public func dailyUseReadinessStatus() -> WindowsAppRuntimeDailyUseReadinessStatus {
+    public func dailyUseReadinessStatus(
+        proofPlan: WindowsAppRuntimeProofPlanStatus? = nil
+    ) -> WindowsAppRuntimeDailyUseReadinessStatus {
         guard hasLiveAgentConnection else {
             return WindowsAppRuntimeDailyUseReadinessStatus(
                 packageIdentityReady: false,
@@ -1944,6 +1952,11 @@ public final class HostDashboardModel {
             )
         }
 
+        let proofRecommendedCommand = "veil-vmctl app-runtime-action --json --action proof-recommended"
+        let recommendedCommand = borderlessCapturePreflightPassed && proofPlan?.recommendedProofCommand != nil
+            ? proofRecommendedCommand
+            : "veil-vmctl app-runtime-status --json"
+
         return WindowsAppRuntimeDailyUseReadinessStatus(
             packageIdentityReady: true,
             borderlessCapturePreflightPassed: borderlessCapturePreflightPassed,
@@ -1951,9 +1964,9 @@ public final class HostDashboardModel {
             printerBridgeMode: "manual-ipp-experiment",
             packageIdentityStatus: health?.packageIdentityStatus,
             recommendedAction: borderlessCapturePreflightPassed ? "verify-daily-use-integrations" : "verify-window-capture",
-            recommendedCommand: "veil-vmctl app-runtime-status --json",
+            recommendedCommand: recommendedCommand,
             reason: borderlessCapturePreflightPassed
-                ? "Package identity is available; verify borderless capture, notifications, and printer experiments against a live guest."
+                ? "Package identity is available; run the strongest Windows app check before enabling borderless capture, notifications, and printer experiments."
                 : "Package identity is available, but window capture must be verified before borderless app capture can be enabled."
         )
     }

@@ -128,6 +128,7 @@ function installedRuntimeHeroSupports(actionId) {
     "runtime.waitAgent",
     "runtime.repairGuestAgentForApp",
     "runtime.prepareSparsePackage",
+    "dailyUse.verifyIntegrations",
     "runtime.startWindowsForApp",
     "runtime.prepareWindows",
     "runtime.refreshStatus",

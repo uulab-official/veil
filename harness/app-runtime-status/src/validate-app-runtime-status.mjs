@@ -834,7 +834,9 @@ function validateDailyUseReadiness(dailyUseReadiness, report) {
 
   const expectedCommand = report.connection.hasLiveAgentConnection
     ? expectedPackageIdentityReady
-      ? "veil-vmctl app-runtime-status --json"
+      ? expectedBorderlessCapturePreflight && report.proofPlan.recommendedProofCommand !== undefined
+        ? "veil-vmctl app-runtime-action --json --action proof-recommended"
+        : "veil-vmctl app-runtime-status --json"
       : "veil-vmctl app-runtime-action --json --action prepare-sparse-package --wait-seconds 120"
     : "veil-vmctl guest-agent-wait --json --wait-seconds 30";
   if (dailyUseReadiness.recommendedCommand !== expectedCommand) {
@@ -1829,6 +1831,7 @@ function validateActions(actions, report) {
     "runtime.startWindowsForApp",
     "runtime.repairGuestAgentForApp",
     "runtime.prepareSparsePackage",
+    "dailyUse.verifyIntegrations",
     "runtime.recoverDisplay",
     "runtime.fulfillPendingLaunch",
     "runtime.waitAgent",
@@ -1886,6 +1889,13 @@ function validateActions(actions, report) {
     && report.dailyUseReadiness.recommendedCommand !== undefined;
   if (prepareSparsePackageAction.isAvailable !== canPrepareSparsePackage) {
     throw new TypeError("runtime.prepareSparsePackage availability must match dailyUseReadiness package identity action.");
+  }
+
+  const verifyDailyUseAction = actions.find((action) => action.id === "dailyUse.verifyIntegrations");
+  const canVerifyDailyUse = report.dailyUseReadiness.recommendedAction === "verify-daily-use-integrations"
+    && report.dailyUseReadiness.recommendedCommand === "veil-vmctl app-runtime-action --json --action proof-recommended";
+  if (verifyDailyUseAction.isAvailable !== canVerifyDailyUse) {
+    throw new TypeError("dailyUse.verifyIntegrations availability must match Daily Use verification readiness.");
   }
 
   const recoverDisplayAction = actions.find((action) => action.id === "runtime.recoverDisplay");
