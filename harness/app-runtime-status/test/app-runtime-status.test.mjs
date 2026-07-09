@@ -200,6 +200,7 @@ function refreshLaunchOnboarding(report) {
     : (canContinueInApp ? "continue-in-app" : (report.primaryNextAction.isAvailable ? "external-check" : "blocked"));
   report.launchOnboarding.currentStepId = report.primaryNextAction.id;
   report.launchOnboarding.currentStepTitle = report.primaryNextAction.title;
+  report.launchOnboarding.currentStepDetail = currentStepDetail(report);
   report.launchOnboarding.usesSinglePrimarySurface = report.oneScreenUX.usesSinglePrimarySurfaceFamily;
   report.launchOnboarding.expectedVisibleSurfaceCount = report.oneScreenUX.expectedVisibleSurfaceCount;
   report.launchOnboarding.canContinueInApp = canContinueInApp;
@@ -219,6 +220,54 @@ function refreshLaunchOnboarding(report) {
   report.launchOnboarding.progressLabel = `Step ${report.launchOnboarding.currentStepNumber} of ${report.releaseGate.requiredStepCount}`;
   report.launchOnboarding.primaryActionId = report.primaryNextAction.actionId;
   report.launchOnboarding.primaryCommand = report.primaryNextAction.command;
+}
+
+function currentStepDetail(report) {
+  if (report.releaseGate.isPassing) {
+    return "Review and share the current app-flow evidence.";
+  }
+
+  switch (report.primaryNextAction.id) {
+    case "windowsSetup":
+      switch (report.primaryNextAction.actionId) {
+        case "runtime.recoverDisplay":
+          return "Refresh the Windows display before continuing the app flow.";
+        case "runtime.stopWhenIdle":
+        case "runtime.quietWhenIdle":
+          return "Quiet Windows, update setup media, then continue the app flow.";
+        case "runtime.prepareWindows":
+          return "Finish Windows setup before opening apps.";
+        default:
+          return "Check Windows setup, then continue the app flow.";
+      }
+    case "oneScreenPath":
+      return "Keep Veil as the only launcher until the app window opens.";
+    case "openWindowsApp":
+      switch (report.primaryNextAction.actionId) {
+        case "runtime.repairGuestAgentForApp": {
+          const appName = report.primaryNextAction.title.startsWith("Continue ")
+            ? report.primaryNextAction.title.slice("Continue ".length)
+            : "the selected app";
+          return `Reconnect the app connection, then open ${appName} automatically.`;
+        }
+        case "runtime.startWindowsForApp":
+          return "Start Windows, then open the selected app automatically.";
+        case "runtime.fulfillPendingLaunch":
+          return "Open the queued app as a macOS window.";
+        case "runtime.waitAgent":
+          return "Wait for the app connection, then continue automatically.";
+        case "windowsApps.launchSelected":
+          return "Open the selected Windows app as a macOS window.";
+        default:
+          return "Continue the selected Windows app from Veil.";
+      }
+    case "appCheckEvidence":
+      return "Run Check App and save current app evidence.";
+    case "closeOrRestore":
+      return "Restore, bring forward, or close Windows app windows from Veil.";
+    default:
+      return "Continue the next app-flow step.";
+  }
 }
 
 function markLocalRuntimeInstalled(report, detail = "The local profile is marked installed.") {

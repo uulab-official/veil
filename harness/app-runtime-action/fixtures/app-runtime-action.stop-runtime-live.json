@@ -428,7 +428,8 @@
       "completedStepCount": 4,
       "totalStepCount": 5,
       "currentStepNumber": 4,
-      "progressLabel": "Step 4 of 5"
+      "progressLabel": "Step 4 of 5",
+      "currentStepDetail": "Run Check App and save current app evidence."
     }
   },
   "nextActions": [

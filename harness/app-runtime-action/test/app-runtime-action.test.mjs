@@ -195,6 +195,7 @@ function refreshLaunchOnboarding(report) {
     state,
     currentStepId: status.primaryNextAction.id,
     currentStepTitle: status.primaryNextAction.title,
+    currentStepDetail: currentStepDetail(status),
     usesSinglePrimarySurface: status.oneScreenUX.usesSinglePrimarySurfaceFamily,
     expectedVisibleSurfaceCount: status.oneScreenUX.expectedVisibleSurfaceCount,
     canContinueInApp,
@@ -210,6 +211,54 @@ function refreshLaunchOnboarding(report) {
     ...(status.primaryNextAction.command === undefined ? {} : { primaryCommand: status.primaryNextAction.command }),
     reason
   };
+}
+
+function currentStepDetail(status) {
+  if (status.releaseGate.isPassing) {
+    return "Review and share the current app-flow evidence.";
+  }
+
+  switch (status.primaryNextAction.id) {
+    case "windowsSetup":
+      switch (status.primaryNextAction.actionId) {
+        case "runtime.recoverDisplay":
+          return "Refresh the Windows display before continuing the app flow.";
+        case "runtime.stopWhenIdle":
+        case "runtime.quietWhenIdle":
+          return "Quiet Windows, update setup media, then continue the app flow.";
+        case "runtime.prepareWindows":
+          return "Finish Windows setup before opening apps.";
+        default:
+          return "Check Windows setup, then continue the app flow.";
+      }
+    case "oneScreenPath":
+      return "Keep Veil as the only launcher until the app window opens.";
+    case "openWindowsApp":
+      switch (status.primaryNextAction.actionId) {
+        case "runtime.repairGuestAgentForApp": {
+          const appName = status.primaryNextAction.title.startsWith("Continue ")
+            ? status.primaryNextAction.title.slice("Continue ".length)
+            : "the selected app";
+          return `Reconnect the app connection, then open ${appName} automatically.`;
+        }
+        case "runtime.startWindowsForApp":
+          return "Start Windows, then open the selected app automatically.";
+        case "runtime.fulfillPendingLaunch":
+          return "Open the queued app as a macOS window.";
+        case "runtime.waitAgent":
+          return "Wait for the app connection, then continue automatically.";
+        case "windowsApps.launchSelected":
+          return "Open the selected Windows app as a macOS window.";
+        default:
+          return "Continue the selected Windows app from Veil.";
+      }
+    case "appCheckEvidence":
+      return "Run Check App and save current app evidence.";
+    case "closeOrRestore":
+      return "Restore, bring forward, or close Windows app windows from Veil.";
+    default:
+      return "Continue the next app-flow step.";
+  }
 }
 
 function currentLaunchOnboardingStepNumber(status) {

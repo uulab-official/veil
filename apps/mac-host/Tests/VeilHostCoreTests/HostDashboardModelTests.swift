@@ -1555,6 +1555,7 @@ struct HostDashboardModelTests {
         #expect(runningQueuedReport.primaryNextAction.actionId == "runtime.repairGuestAgentForApp")
         #expect(runningQueuedReport.primaryNextAction.command == "veil-vmctl app-runtime-action --json --action repair-agent --wait-seconds 120")
         #expect(runningQueuedReport.launchOnboarding.currentStepTitle == "Continue Notepad")
+        #expect(runningQueuedReport.launchOnboarding.currentStepDetail == "Reconnect the app connection, then open Notepad automatically.")
         #expect(runningQueuedReport.launchOnboarding.completedStepCount == 3)
         #expect(runningQueuedReport.launchOnboarding.totalStepCount == 5)
         #expect(runningQueuedReport.launchOnboarding.currentStepNumber == 3)

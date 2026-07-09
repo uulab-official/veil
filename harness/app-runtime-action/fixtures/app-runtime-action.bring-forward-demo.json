@@ -407,7 +407,8 @@
       "completedStepCount": 3,
       "totalStepCount": 5,
       "currentStepNumber": 1,
-      "progressLabel": "Step 1 of 5"
+      "progressLabel": "Step 1 of 5",
+      "currentStepDetail": "Check Windows setup, then continue the app flow."
     }
   },
   "nextActions": [

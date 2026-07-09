@@ -265,7 +265,8 @@
       "completedStepCount": 5,
       "totalStepCount": 5,
       "currentStepNumber": 5,
-      "progressLabel": "Step 5 of 5"
+      "progressLabel": "Step 5 of 5",
+      "currentStepDetail": "Review and share the current app-flow evidence."
     },
     "minimumScreenshotHeight": 360,
     "minimumScreenshotWidth": 640,
@@ -713,7 +714,8 @@
         "completedStepCount": 5,
         "totalStepCount": 5,
         "currentStepNumber": 5,
-        "progressLabel": "Step 5 of 5"
+        "progressLabel": "Step 5 of 5",
+        "currentStepDetail": "Review and share the current app-flow evidence."
       }
     },
     "statusCommand": "veil-vmctl app-runtime-status --json",

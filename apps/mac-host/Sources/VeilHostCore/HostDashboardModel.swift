@@ -752,6 +752,7 @@ public struct WindowsAppRuntimeLaunchOnboardingStatus: Codable, Equatable, Senda
     public var state: String
     public var currentStepId: String
     public var currentStepTitle: String
+    public var currentStepDetail: String
     public var usesSinglePrimarySurface: Bool
     public var expectedVisibleSurfaceCount: Int
     public var canContinueInApp: Bool
@@ -772,6 +773,7 @@ public struct WindowsAppRuntimeLaunchOnboardingStatus: Codable, Equatable, Senda
         state: String,
         currentStepId: String,
         currentStepTitle: String,
+        currentStepDetail: String,
         usesSinglePrimarySurface: Bool,
         expectedVisibleSurfaceCount: Int,
         canContinueInApp: Bool,
@@ -791,6 +793,7 @@ public struct WindowsAppRuntimeLaunchOnboardingStatus: Codable, Equatable, Senda
         self.state = state
         self.currentStepId = currentStepId
         self.currentStepTitle = currentStepTitle
+        self.currentStepDetail = currentStepDetail
         self.usesSinglePrimarySurface = usesSinglePrimarySurface
         self.expectedVisibleSurfaceCount = expectedVisibleSurfaceCount
         self.canContinueInApp = canContinueInApp
@@ -2441,6 +2444,10 @@ public final class HostDashboardModel {
             state: state,
             currentStepId: primaryNextAction.id,
             currentStepTitle: primaryNextAction.title,
+            currentStepDetail: launchOnboardingStepDetail(
+                releaseGate: releaseGate,
+                primaryNextAction: primaryNextAction
+            ),
             usesSinglePrimarySurface: oneScreenUX.usesSinglePrimarySurfaceFamily,
             expectedVisibleSurfaceCount: oneScreenUX.expectedVisibleSurfaceCount,
             canContinueInApp: canContinueInApp,
@@ -2456,6 +2463,55 @@ public final class HostDashboardModel {
             primaryCommand: primaryNextAction.command,
             reason: reason
         )
+    }
+
+    private func launchOnboardingStepDetail(
+        releaseGate: WindowsAppRuntimeReleaseGateStatus,
+        primaryNextAction: WindowsAppRuntimePrimaryNextActionStatus
+    ) -> String {
+        if releaseGate.isPassing {
+            return "Review and share the current app-flow evidence."
+        }
+
+        switch primaryNextAction.id {
+        case "windowsSetup":
+            switch primaryNextAction.actionId {
+            case "runtime.recoverDisplay":
+                return "Refresh the Windows display before continuing the app flow."
+            case "runtime.stopWhenIdle", "runtime.quietWhenIdle":
+                return "Quiet Windows, update setup media, then continue the app flow."
+            case "runtime.prepareWindows":
+                return "Finish Windows setup before opening apps."
+            default:
+                return "Check Windows setup, then continue the app flow."
+            }
+        case "oneScreenPath":
+            return "Keep Veil as the only launcher until the app window opens."
+        case "openWindowsApp":
+            switch primaryNextAction.actionId {
+            case "runtime.repairGuestAgentForApp":
+                let appName = primaryNextAction.title.hasPrefix("Continue ")
+                    ? String(primaryNextAction.title.dropFirst("Continue ".count))
+                    : "the selected app"
+                return "Reconnect the app connection, then open \(appName) automatically."
+            case "runtime.startWindowsForApp":
+                return "Start Windows, then open the selected app automatically."
+            case "runtime.fulfillPendingLaunch":
+                return "Open the queued app as a macOS window."
+            case "runtime.waitAgent":
+                return "Wait for the app connection, then continue automatically."
+            case "windowsApps.launchSelected":
+                return "Open the selected Windows app as a macOS window."
+            default:
+                return "Continue the selected Windows app from Veil."
+            }
+        case "appCheckEvidence":
+            return "Run Check App and save current app evidence."
+        case "closeOrRestore":
+            return "Restore, bring forward, or close Windows app windows from Veil."
+        default:
+            return "Continue the next app-flow step."
+        }
     }
 
     public func guestAgentDiagnosticsStatus(

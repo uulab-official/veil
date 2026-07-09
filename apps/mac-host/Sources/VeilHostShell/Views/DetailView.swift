@@ -257,7 +257,7 @@ private struct WindowsQuickLaunchPanel: View {
                 .frame(minWidth: 118, alignment: .leading)
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(appFlowDetail)
+                    Text(launchOnboarding.currentStepDetail)
                         .font(.callout)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
@@ -413,13 +413,6 @@ private struct WindowsQuickLaunchPanel: View {
         )
     }
 
-    private var appFlowDetail: String {
-        WindowsShellCopy.appFlowDetail(
-            recommendedAction: releaseGate.recommendedAction,
-            isPassing: releaseGate.isPassing
-        )
-    }
-
     private var launchOnboardingTitle: String {
         WindowsShellCopy.launchOnboardingTitle(
             state: launchOnboarding.state,
@@ -507,6 +500,7 @@ private struct WindowsQuickLaunchPanel: View {
 
     private var launchOnboardingHelp: String {
         [
+            launchOnboarding.currentStepDetail,
             launchOnboarding.reason,
             WindowsShellCopy.launchOnboardingHandoffDetail(
                 state: launchOnboarding.state,

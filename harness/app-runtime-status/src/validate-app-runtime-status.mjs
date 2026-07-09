@@ -1553,6 +1553,7 @@ function validateLaunchOnboarding(launchOnboarding, report) {
   requireString(launchOnboarding.state, "launchOnboarding.state");
   requireString(launchOnboarding.currentStepId, "launchOnboarding.currentStepId");
   requireString(launchOnboarding.currentStepTitle, "launchOnboarding.currentStepTitle");
+  requireString(launchOnboarding.currentStepDetail, "launchOnboarding.currentStepDetail");
   requireBoolean(launchOnboarding.usesSinglePrimarySurface, "launchOnboarding.usesSinglePrimarySurface");
   requireNonNegativeInteger(launchOnboarding.expectedVisibleSurfaceCount, "launchOnboarding.expectedVisibleSurfaceCount");
   requireBoolean(launchOnboarding.canContinueInApp, "launchOnboarding.canContinueInApp");
@@ -1584,6 +1585,10 @@ function validateLaunchOnboarding(launchOnboarding, report) {
   }
   if (launchOnboarding.currentStepTitle !== report.primaryNextAction.title) {
     throw new TypeError("launchOnboarding.currentStepTitle must match primaryNextAction.title.");
+  }
+  const expectedCurrentStepDetail = currentStepDetail(report);
+  if (launchOnboarding.currentStepDetail !== expectedCurrentStepDetail) {
+    throw new TypeError("launchOnboarding.currentStepDetail must describe the current product step.");
   }
   if (launchOnboarding.usesSinglePrimarySurface !== report.oneScreenUX.usesSinglePrimarySurfaceFamily) {
     throw new TypeError("launchOnboarding.usesSinglePrimarySurface must match oneScreenUX.");
@@ -1647,9 +1652,59 @@ function validateLaunchOnboarding(launchOnboarding, report) {
   }
 
   for (const disallowedTerm of ["Guest Agent", "HWND", "QEMU", "Proof"]) {
-    if (launchOnboarding.currentStepTitle.includes(disallowedTerm) || launchOnboarding.reason.includes(disallowedTerm)) {
+    if (launchOnboarding.currentStepTitle.includes(disallowedTerm)
+      || launchOnboarding.currentStepDetail.includes(disallowedTerm)
+      || launchOnboarding.reason.includes(disallowedTerm)) {
       throw new TypeError("launchOnboarding copy must stay product-facing.");
     }
+  }
+}
+
+function currentStepDetail(report) {
+  if (report.releaseGate.isPassing) {
+    return "Review and share the current app-flow evidence.";
+  }
+
+  switch (report.primaryNextAction.id) {
+    case "windowsSetup":
+      switch (report.primaryNextAction.actionId) {
+        case "runtime.recoverDisplay":
+          return "Refresh the Windows display before continuing the app flow.";
+        case "runtime.stopWhenIdle":
+        case "runtime.quietWhenIdle":
+          return "Quiet Windows, update setup media, then continue the app flow.";
+        case "runtime.prepareWindows":
+          return "Finish Windows setup before opening apps.";
+        default:
+          return "Check Windows setup, then continue the app flow.";
+      }
+    case "oneScreenPath":
+      return "Keep Veil as the only launcher until the app window opens.";
+    case "openWindowsApp":
+      switch (report.primaryNextAction.actionId) {
+        case "runtime.repairGuestAgentForApp": {
+          const appName = report.primaryNextAction.title.startsWith("Continue ")
+            ? report.primaryNextAction.title.slice("Continue ".length)
+            : "the selected app";
+          return `Reconnect the app connection, then open ${appName} automatically.`;
+        }
+        case "runtime.startWindowsForApp":
+          return "Start Windows, then open the selected app automatically.";
+        case "runtime.fulfillPendingLaunch":
+          return "Open the queued app as a macOS window.";
+        case "runtime.waitAgent":
+          return "Wait for the app connection, then continue automatically.";
+        case "windowsApps.launchSelected":
+          return "Open the selected Windows app as a macOS window.";
+        default:
+          return "Continue the selected Windows app from Veil.";
+      }
+    case "appCheckEvidence":
+      return "Run Check App and save current app evidence.";
+    case "closeOrRestore":
+      return "Restore, bring forward, or close Windows app windows from Veil.";
+    default:
+      return "Continue the next app-flow step.";
   }
 }
 

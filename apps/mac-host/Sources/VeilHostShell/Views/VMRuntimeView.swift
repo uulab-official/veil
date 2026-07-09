@@ -1591,6 +1591,12 @@ private struct WindowsSetupDisplayPanel: View {
                         .lineLimit(1)
                         .help(launchOnboarding.reason)
 
+                    Label(launchOnboarding.currentStepDetail, systemImage: "text.bubble")
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.white.opacity(0.70))
+                        .lineLimit(1)
+                        .help(launchOnboardingHelp)
+
                     Label(launchOnboarding.progressLabel, systemImage: "checklist")
                         .font(.caption.weight(.medium))
                         .foregroundStyle(.white.opacity(0.66))
@@ -2413,6 +2419,7 @@ private struct WindowsSetupDisplayPanel: View {
 
     private var launchOnboardingHelp: String {
         [
+            launchOnboarding.currentStepDetail,
             launchOnboarding.reason,
             WindowsShellCopy.launchOnboardingHandoffDetail(
                 state: launchOnboarding.state,

@@ -409,7 +409,8 @@
       "completedStepCount": 2,
       "totalStepCount": 5,
       "currentStepNumber": 3,
-      "progressLabel": "Step 3 of 5"
+      "progressLabel": "Step 3 of 5",
+      "currentStepDetail": "Reconnect the app connection, then open Notepad automatically."
     }
   },
   "nextActions": [

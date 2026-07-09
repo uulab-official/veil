@@ -246,6 +246,7 @@ function validateLaunchOnboarding(launchOnboarding, sourceLaunchOnboarding) {
     "state",
     "currentStepId",
     "currentStepTitle",
+    "currentStepDetail",
     "progressLabel",
     "reason"
   ]) {
@@ -267,6 +268,7 @@ function validateLaunchOnboarding(launchOnboarding, sourceLaunchOnboarding) {
     "state",
     "currentStepId",
     "currentStepTitle",
+    "currentStepDetail",
     "usesSinglePrimarySurface",
     "expectedVisibleSurfaceCount",
     "canContinueInApp",
