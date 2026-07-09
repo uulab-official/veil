@@ -37,6 +37,18 @@ struct LauncherPrimaryNextActionRouteTests {
         )
         #expect(
             LauncherPrimaryNextActionRoute.resolve(
+                actionId: "windowsApps.reconnectRestore",
+                command: nil
+            ) == .reconnectPreviousApps
+        )
+        #expect(
+            LauncherPrimaryNextActionRoute.resolve(
+                actionId: "runtime.quietWhenIdle",
+                command: nil
+            ) == .quietWindows
+        )
+        #expect(
+            LauncherPrimaryNextActionRoute.resolve(
                 actionId: "proof.recommended",
                 command: nil
             ) == .runRecommendedProof

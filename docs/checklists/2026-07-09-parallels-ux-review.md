@@ -67,6 +67,7 @@ Goal: keep the user-facing workflow one-screen-first (launcher + one action path
 - [x] Add `primaryNextAction.runsInApp` and harness coverage so the one-screen next step clearly distinguishes Veil-native button actions from review/CLI handoff.
 - [x] Gate launcher next-action buttons on `primaryNextAction.runsInApp` so review/CLI handoff commands cannot appear as broken in-app buttons.
 - [x] Route the installed-runtime hero play button through the same `primaryNextAction` contract so the one big action stays aligned with open, repair, refresh, proof, and quiet flows.
+- [x] Carry restore, close-all, fulfill-pending, and quiet actions into the installed-runtime hero so every in-app `primaryNextAction` route can execute from the one-screen control.
 - [x] Add `oneScreenUX.returnsToLauncherWhenNoAppWindows` and harness coverage so the app path cannot pass if the launcher fails to return after all Windows app windows close.
 
 ## CEO Review

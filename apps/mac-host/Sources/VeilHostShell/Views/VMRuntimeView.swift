@@ -27,7 +27,11 @@ struct VMRuntimeView: View {
     var repairGuestAgentForAppLaunchAction: () -> Void
     var recoverRuntimeDisplayAction: () -> Void
     var launchWindowsAppAction: () -> Void
+    var fulfillPendingLaunchAction: () -> Void
+    var restoreWindowsAppWindowsAction: () -> Void
+    var closeAllWindowsAppWindowsAction: () -> Void
     var runRecommendedProofAction: () -> Void
+    var quietWindowsWhenIdleAction: () -> Void
     var displayMessage: String?
     @State private var pathPicker: PathPicker?
     @State private var showsAdvancedDetails = false
@@ -61,7 +65,7 @@ struct VMRuntimeView: View {
                     },
                     primaryAction: {
                         if canFulfillPendingLaunch {
-                            launchWindowsAppAction()
+                            fulfillPendingLaunchAction()
                         } else if canRecoverRuntimeDisplay(for: snapshot) {
                             recoverRuntimeDisplayAction()
                         } else if canRequestWindowsAppLaunch {
@@ -89,6 +93,10 @@ struct VMRuntimeView: View {
                     waitForGuestAgentAction: waitForGuestAgentAction,
                     repairGuestAgentForAppLaunchAction: repairGuestAgentForAppLaunchAction,
                     recoverRuntimeDisplayAction: recoverRuntimeDisplayAction,
+                    launchWindowsAppAction: launchWindowsAppAction,
+                    fulfillPendingLaunchAction: fulfillPendingLaunchAction,
+                    restoreWindowsAppWindowsAction: restoreWindowsAppWindowsAction,
+                    closeAllWindowsAppWindowsAction: closeAllWindowsAppWindowsAction,
                     canLaunchWindowsApp: canLaunchWindowsApp,
                     canRequestWindowsAppLaunch: canRequestWindowsAppLaunch,
                     selectedWindowsAppName: selectedWindowsAppName,
@@ -102,6 +110,7 @@ struct VMRuntimeView: View {
                     recommendedProofKind: recommendedProofKind,
                     recommendedProofCommand: recommendedProofCommand,
                     runRecommendedProofAction: runRecommendedProofAction,
+                    quietWindowsWhenIdleAction: quietWindowsWhenIdleAction,
                     refreshAction: {
                         Task {
                             await model.load()
@@ -1345,6 +1354,10 @@ private struct WindowsSetupDisplayPanel: View {
     var waitForGuestAgentAction: () -> Void
     var repairGuestAgentForAppLaunchAction: () -> Void
     var recoverRuntimeDisplayAction: () -> Void
+    var launchWindowsAppAction: () -> Void
+    var fulfillPendingLaunchAction: () -> Void
+    var restoreWindowsAppWindowsAction: () -> Void
+    var closeAllWindowsAppWindowsAction: () -> Void
     var canLaunchWindowsApp: Bool
     var canRequestWindowsAppLaunch: Bool
     var selectedWindowsAppName: String?
@@ -1358,6 +1371,7 @@ private struct WindowsSetupDisplayPanel: View {
     var recommendedProofKind: String?
     var recommendedProofCommand: String?
     var runRecommendedProofAction: () -> Void
+    var quietWindowsWhenIdleAction: () -> Void
     var refreshAction: () -> Void
     var consolePointerTapAction: (Double, Double) -> Void
     var consoleKeyAction: (String) -> Void
@@ -2247,12 +2261,7 @@ private struct WindowsSetupDisplayPanel: View {
             return nil
         }
 
-        switch route {
-        case .reconnectPreviousApps, .closeAllWindowsApps:
-            return nil
-        default:
-            return route
-        }
+        return route
     }
 
     private var effectivePrimaryTitle: String {
@@ -2293,8 +2302,10 @@ private struct WindowsSetupDisplayPanel: View {
         }
 
         switch route {
-        case .launchSelectedApp, .fulfillPendingLaunch:
-            primaryAction()
+        case .launchSelectedApp:
+            launchWindowsAppAction()
+        case .fulfillPendingLaunch:
+            fulfillPendingLaunchAction()
         case .recoverDisplay:
             recoverRuntimeDisplayAction()
         case .waitForAgent:
@@ -2307,10 +2318,12 @@ private struct WindowsSetupDisplayPanel: View {
             prepareAction()
         case .refreshRuntimeStatus:
             refreshAction()
-        case .reconnectPreviousApps, .closeAllWindowsApps:
-            primaryAction()
+        case .reconnectPreviousApps:
+            restoreWindowsAppWindowsAction()
+        case .closeAllWindowsApps:
+            closeAllWindowsAppWindowsAction()
         case .quietWindows:
-            stopAction()
+            quietWindowsWhenIdleAction()
         case .runRecommendedProof:
             runRecommendedProofAction()
         }

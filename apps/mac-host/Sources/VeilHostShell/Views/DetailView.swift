@@ -45,7 +45,11 @@ struct DetailView: View {
                 repairGuestAgentForAppLaunchAction: repairGuestAgentForAppLaunchAction,
                 recoverRuntimeDisplayAction: recoverRuntimeDisplayAction,
                 launchWindowsAppAction: launchWindowsAppAction,
+                fulfillPendingLaunchAction: fulfillPendingLaunchAction,
+                restoreWindowsAppWindowsAction: restoreWindowsAppWindowsAction,
+                closeAllWindowsAppWindowsAction: closeAllWindowsAppWindowsAction,
                 runRecommendedProofAction: runRecommendedProofAction,
+                quietWindowsWhenIdleAction: quietWindowsWhenIdleAction,
                 displayMessage: displayMessage
             )
             .padding(.horizontal, 14)
