@@ -412,6 +412,16 @@
       "currentStepNumber": 1,
       "progressLabel": "Step 1 of 5",
       "currentStepDetail": "Check Windows setup, then continue the app flow."
+    },
+    "dailyUseReadiness": {
+      "isEnabled": true,
+      "packageIdentityReady": false,
+      "borderlessCapturePreflightPassed": false,
+      "notificationBridgePreflightPassed": false,
+      "printerBridgeMode": "manual-ipp-experiment",
+      "recommendedAction": "connect-agent",
+      "recommendedCommand": "veil-vmctl guest-agent-wait --json --wait-seconds 30",
+      "reason": "Connect the Windows app agent before checking Daily Use integrations."
     }
   },
   "nextActions": [

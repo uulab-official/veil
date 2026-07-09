@@ -511,6 +511,15 @@
       "currentStepNumber": 5,
       "progressLabel": "Step 5 of 5",
       "currentStepDetail": "Review and share the current app-flow evidence."
+    },
+    "dailyUseReadiness": {
+      "isEnabled": true,
+      "packageIdentityReady": false,
+      "borderlessCapturePreflightPassed": false,
+      "notificationBridgePreflightPassed": false,
+      "printerBridgeMode": "manual-ipp-experiment",
+      "recommendedAction": "prepare-sparse-package",
+      "reason": "A signed sparse package is required before borderless app capture or Windows notifications can be enabled."
     }
   },
   "statusCommand": "veil-vmctl app-runtime-status --json",

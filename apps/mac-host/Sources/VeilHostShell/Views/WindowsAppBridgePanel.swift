@@ -84,6 +84,12 @@ struct WindowsAppBridgePanel: View {
                     symbolName: "doc.on.clipboard",
                     tint: model.health?.capabilities.clipboardText == true ? .green : .secondary
                 )
+                CoherenceMetric(
+                    title: "Package ID",
+                    value: packageIdentityValue,
+                    symbolName: "shippingbox",
+                    tint: packageIdentityTint
+                )
             }
         }
     }
@@ -134,6 +140,22 @@ struct WindowsAppBridgePanel: View {
         }
 
         return model.health?.capabilities.windowCapture == true ? .green : .secondary
+    }
+
+    private var packageIdentityValue: String {
+        guard model.hasLiveAgentConnection else {
+            return "Waiting"
+        }
+
+        return model.health?.capabilities.packageIdentity == true ? "Ready" : "Needed"
+    }
+
+    private var packageIdentityTint: Color {
+        guard model.hasLiveAgentConnection else {
+            return .secondary
+        }
+
+        return model.health?.capabilities.packageIdentity == true ? .green : .orange
     }
 
     private var statusTitle: String {

@@ -441,6 +441,16 @@ test("rejects reports without proof plan status", () => {
   );
 });
 
+test("rejects reports without Daily Use readiness status", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.demo.json", import.meta.url), "utf8"));
+  delete report.dailyUseReadiness;
+
+  assert.throws(
+    () => validateAppRuntimeStatus(report),
+    /dailyUseReadiness/
+  );
+});
+
 test("rejects reports without release gate status", () => {
   const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.demo.json", import.meta.url), "utf8"));
   delete report.releaseGate;
@@ -1145,6 +1155,20 @@ test("rejects live agent reports without structured capabilities", () => {
   assert.throws(
     () => validateAppRuntimeStatus(report),
     /connection\.capabilities\.packageIdentity/
+  );
+});
+
+test("rejects Daily Use readiness that skips package identity", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.mac-window-live.json", import.meta.url), "utf8"));
+  report.dailyUseReadiness.packageIdentityReady = true;
+  report.dailyUseReadiness.borderlessCapturePreflightPassed = true;
+  report.dailyUseReadiness.notificationBridgePreflightPassed = true;
+  report.dailyUseReadiness.recommendedAction = "verify-daily-use-integrations";
+  report.dailyUseReadiness.recommendedCommand = "veil-vmctl app-runtime-status --json";
+
+  assert.throws(
+    () => validateAppRuntimeStatus(report),
+    /dailyUseReadiness\.packageIdentityReady/
   );
 });
 

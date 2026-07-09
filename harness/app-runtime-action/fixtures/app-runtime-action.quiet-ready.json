@@ -408,6 +408,15 @@
       "currentStepNumber": 4,
       "progressLabel": "Step 4 of 5",
       "currentStepDetail": "Run Check App and save current app evidence."
+    },
+    "dailyUseReadiness": {
+      "isEnabled": true,
+      "packageIdentityReady": false,
+      "borderlessCapturePreflightPassed": false,
+      "notificationBridgePreflightPassed": false,
+      "printerBridgeMode": "manual-ipp-experiment",
+      "recommendedAction": "prepare-sparse-package",
+      "reason": "A signed sparse package is required before borderless app capture or Windows notifications can be enabled."
     }
   },
   "nextActions": [

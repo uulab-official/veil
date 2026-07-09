@@ -192,6 +192,15 @@ metadata-only pointer to the latest saved app-check JSON under Veil diagnostics 
 automation can attach or inspect the current check evidence without copying
 Windows media, disk contents, product keys, or guest data.
 
+`dailyUseReadiness` tracks the v1.5 integration preflight separately from the
+MVP app-check proof path. It requires live package identity before borderless
+capture and Windows notification listener work can move forward, keeps the
+printer bridge in the current `manual-ipp-experiment` lane, and exposes the
+single next readiness action (`connect-agent`, `prepare-sparse-package`,
+`verify-window-capture`, or `verify-daily-use-integrations`) so status cards
+cannot imply Parallels-style daily-use polish before the signed sparse package
+gate is actually satisfied.
+
 `releaseGate` turns the one-minute Parallels-style launch checklist into a
 machine-readable contract. It records the five required release-card steps:
 Windows setup readiness, one-screen app path, open-app readiness, saved app

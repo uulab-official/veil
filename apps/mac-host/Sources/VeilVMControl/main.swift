@@ -1120,6 +1120,15 @@ struct VeilVMControl {
         if let latestProofPath = report.proofArtifacts.latestProofPath {
             print("Latest app check artifact: \(latestProofPath)")
         }
+        print("Daily Use package identity: \(report.dailyUseReadiness.packageIdentityReady ? "ready" : "needed")")
+        print("Daily Use borderless capture preflight: \(report.dailyUseReadiness.borderlessCapturePreflightPassed ? "ready" : "blocked")")
+        print("Daily Use notifications preflight: \(report.dailyUseReadiness.notificationBridgePreflightPassed ? "ready" : "blocked")")
+        print("Daily Use printer mode: \(report.dailyUseReadiness.printerBridgeMode)")
+        print("Daily Use recommendation: \(report.dailyUseReadiness.recommendedAction)")
+        if let dailyUseCommand = report.dailyUseReadiness.recommendedCommand {
+            print("Daily Use command: \(dailyUseCommand)")
+        }
+        print("Daily Use reason: \(report.dailyUseReadiness.reason)")
         print("Quiet Windows ready: \(report.quietRuntime.canQuietRuntime ? "yes" : "no")")
         print("Quiet Windows auto: \(report.quietRuntime.willQuietAutomatically ? "yes" : "no")")
         print("Quiet Windows delay: \(report.quietRuntime.automaticQuietDelaySeconds)s")

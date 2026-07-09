@@ -638,6 +638,37 @@ public struct WindowsAppRuntimeProofArtifactStatus: Codable, Equatable, Sendable
     }
 }
 
+public struct WindowsAppRuntimeDailyUseReadinessStatus: Codable, Equatable, Sendable {
+    public var isEnabled: Bool
+    public var packageIdentityReady: Bool
+    public var borderlessCapturePreflightPassed: Bool
+    public var notificationBridgePreflightPassed: Bool
+    public var printerBridgeMode: String
+    public var recommendedAction: String
+    public var recommendedCommand: String?
+    public var reason: String
+
+    public init(
+        isEnabled: Bool = true,
+        packageIdentityReady: Bool,
+        borderlessCapturePreflightPassed: Bool,
+        notificationBridgePreflightPassed: Bool,
+        printerBridgeMode: String,
+        recommendedAction: String,
+        recommendedCommand: String? = nil,
+        reason: String
+    ) {
+        self.isEnabled = isEnabled
+        self.packageIdentityReady = packageIdentityReady
+        self.borderlessCapturePreflightPassed = borderlessCapturePreflightPassed
+        self.notificationBridgePreflightPassed = notificationBridgePreflightPassed
+        self.printerBridgeMode = printerBridgeMode
+        self.recommendedAction = recommendedAction
+        self.recommendedCommand = recommendedCommand
+        self.reason = reason
+    }
+}
+
 public struct WindowsAppRuntimeReleaseGateStepStatus: Codable, Equatable, Sendable {
     public var id: String
     public var title: String
@@ -857,6 +888,7 @@ public struct WindowsAppRuntimeStatusReport: Codable, Equatable, Sendable {
     public var launchPlan: WindowsAppRuntimeLaunchPlanStatus
     public var proofPlan: WindowsAppRuntimeProofPlanStatus
     public var proofArtifacts: WindowsAppRuntimeProofArtifactStatus
+    public var dailyUseReadiness: WindowsAppRuntimeDailyUseReadinessStatus
     public var releaseGate: WindowsAppRuntimeReleaseGateStatus
     public var primaryNextAction: WindowsAppRuntimePrimaryNextActionStatus
     public var actions: [WindowsAppRuntimeActionStatus]
@@ -885,6 +917,7 @@ public struct WindowsAppRuntimeStatusReport: Codable, Equatable, Sendable {
         launchPlan: WindowsAppRuntimeLaunchPlanStatus,
         proofPlan: WindowsAppRuntimeProofPlanStatus,
         proofArtifacts: WindowsAppRuntimeProofArtifactStatus,
+        dailyUseReadiness: WindowsAppRuntimeDailyUseReadinessStatus,
         releaseGate: WindowsAppRuntimeReleaseGateStatus,
         primaryNextAction: WindowsAppRuntimePrimaryNextActionStatus,
         actions: [WindowsAppRuntimeActionStatus]
@@ -912,6 +945,7 @@ public struct WindowsAppRuntimeStatusReport: Codable, Equatable, Sendable {
         self.launchPlan = launchPlan
         self.proofPlan = proofPlan
         self.proofArtifacts = proofArtifacts
+        self.dailyUseReadiness = dailyUseReadiness
         self.releaseGate = releaseGate
         self.primaryNextAction = primaryNextAction
         self.actions = actions
@@ -1126,6 +1160,7 @@ public final class HostDashboardModel {
         let launchPlan = launchPlanStatus(localRuntime: localRuntime)
         let proofPlan = proofPlanStatus()
         let proofArtifacts = proofArtifactStatus()
+        let dailyUseReadiness = dailyUseReadinessStatus()
         let pendingLaunch = pendingLaunchStatus()
         let releaseGate = releaseGateStatus(
             localRuntime: localRuntime,
@@ -1214,6 +1249,7 @@ public final class HostDashboardModel {
             launchPlan: launchPlan,
             proofPlan: proofPlan,
             proofArtifacts: proofArtifacts,
+            dailyUseReadiness: dailyUseReadiness,
             releaseGate: releaseGate,
             primaryNextAction: primaryNextAction,
             actions: [
@@ -1861,6 +1897,47 @@ public final class HostDashboardModel {
             latestProofFileName: latestProof.url.lastPathComponent,
             latestProofModifiedAt: latestProof.modifiedAt,
             reason: "Latest app check artifact is available in Veil diagnostics."
+        )
+    }
+
+    public func dailyUseReadinessStatus() -> WindowsAppRuntimeDailyUseReadinessStatus {
+        guard hasLiveAgentConnection else {
+            return WindowsAppRuntimeDailyUseReadinessStatus(
+                packageIdentityReady: false,
+                borderlessCapturePreflightPassed: false,
+                notificationBridgePreflightPassed: false,
+                printerBridgeMode: "manual-ipp-experiment",
+                recommendedAction: "connect-agent",
+                recommendedCommand: "veil-vmctl guest-agent-wait --json --wait-seconds 30",
+                reason: "Connect the Windows app agent before checking Daily Use integrations."
+            )
+        }
+
+        let packageIdentityReady = health?.capabilities.packageIdentity == true
+        let borderlessCapturePreflightPassed = packageIdentityReady && health?.capabilities.windowCapture == true
+        let notificationBridgePreflightPassed = packageIdentityReady
+
+        if !packageIdentityReady {
+            return WindowsAppRuntimeDailyUseReadinessStatus(
+                packageIdentityReady: false,
+                borderlessCapturePreflightPassed: false,
+                notificationBridgePreflightPassed: false,
+                printerBridgeMode: "manual-ipp-experiment",
+                recommendedAction: "prepare-sparse-package",
+                reason: "A signed sparse package is required before borderless app capture or Windows notifications can be enabled."
+            )
+        }
+
+        return WindowsAppRuntimeDailyUseReadinessStatus(
+            packageIdentityReady: true,
+            borderlessCapturePreflightPassed: borderlessCapturePreflightPassed,
+            notificationBridgePreflightPassed: notificationBridgePreflightPassed,
+            printerBridgeMode: "manual-ipp-experiment",
+            recommendedAction: borderlessCapturePreflightPassed ? "verify-daily-use-integrations" : "verify-window-capture",
+            recommendedCommand: "veil-vmctl app-runtime-status --json",
+            reason: borderlessCapturePreflightPassed
+                ? "Package identity is available; verify borderless capture, notifications, and printer experiments against a live guest."
+                : "Package identity is available, but window capture must be verified before borderless app capture can be enabled."
         )
     }
 

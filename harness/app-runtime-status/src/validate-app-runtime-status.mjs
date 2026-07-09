@@ -50,6 +50,7 @@ export function validateAppRuntimeStatus(report) {
   validateLaunchPlan(report.launchPlan, report);
   validateProofPlan(report.proofPlan, report);
   validateProofArtifacts(report.proofArtifacts);
+  validateDailyUseReadiness(report.dailyUseReadiness, report);
   validateReleaseGate(report.releaseGate, report);
   validatePrimaryNextAction(report.primaryNextAction, report);
   validateMenuBarIntegration(report.menuBarIntegration, report);
@@ -760,6 +761,75 @@ function strongestProof(proofPlan) {
     return { kind: "app-window", command: proofPlan.recommendedAppWindowProofCommand };
   }
   return undefined;
+}
+
+function validateDailyUseReadiness(dailyUseReadiness, report) {
+  if (!dailyUseReadiness || typeof dailyUseReadiness !== "object" || Array.isArray(dailyUseReadiness)) {
+    throw new TypeError("dailyUseReadiness must be an object.");
+  }
+
+  requireBoolean(dailyUseReadiness.isEnabled, "dailyUseReadiness.isEnabled");
+  requireBoolean(dailyUseReadiness.packageIdentityReady, "dailyUseReadiness.packageIdentityReady");
+  requireBoolean(
+    dailyUseReadiness.borderlessCapturePreflightPassed,
+    "dailyUseReadiness.borderlessCapturePreflightPassed"
+  );
+  requireBoolean(
+    dailyUseReadiness.notificationBridgePreflightPassed,
+    "dailyUseReadiness.notificationBridgePreflightPassed"
+  );
+  requireString(dailyUseReadiness.printerBridgeMode, "dailyUseReadiness.printerBridgeMode");
+  requireString(dailyUseReadiness.recommendedAction, "dailyUseReadiness.recommendedAction");
+  requireString(dailyUseReadiness.reason, "dailyUseReadiness.reason");
+  if (dailyUseReadiness.recommendedCommand !== undefined) {
+    requireString(dailyUseReadiness.recommendedCommand, "dailyUseReadiness.recommendedCommand");
+  }
+
+  if (dailyUseReadiness.isEnabled !== true) {
+    throw new TypeError("dailyUseReadiness must stay enabled for v1.5 readiness tracking.");
+  }
+
+  if (dailyUseReadiness.printerBridgeMode !== "manual-ipp-experiment") {
+    throw new TypeError("dailyUseReadiness.printerBridgeMode must preserve the current IPP printer experiment path.");
+  }
+
+  const capabilities = report.connection.capabilities;
+  const expectedPackageIdentityReady = report.connection.hasLiveAgentConnection
+    && capabilities?.packageIdentity === true;
+  const expectedBorderlessCapturePreflight = expectedPackageIdentityReady
+    && capabilities?.windowCapture === true;
+
+  if (dailyUseReadiness.packageIdentityReady !== expectedPackageIdentityReady) {
+    throw new TypeError("dailyUseReadiness.packageIdentityReady must match live package identity readiness.");
+  }
+
+  if (dailyUseReadiness.borderlessCapturePreflightPassed !== expectedBorderlessCapturePreflight) {
+    throw new TypeError("dailyUseReadiness.borderlessCapturePreflightPassed must require package identity and window capture.");
+  }
+
+  if (dailyUseReadiness.notificationBridgePreflightPassed !== expectedPackageIdentityReady) {
+    throw new TypeError("dailyUseReadiness.notificationBridgePreflightPassed must require package identity.");
+  }
+
+  const expectedAction = report.connection.hasLiveAgentConnection
+    ? expectedPackageIdentityReady
+      ? expectedBorderlessCapturePreflight
+        ? "verify-daily-use-integrations"
+        : "verify-window-capture"
+      : "prepare-sparse-package"
+    : "connect-agent";
+  if (dailyUseReadiness.recommendedAction !== expectedAction) {
+    throw new TypeError("dailyUseReadiness.recommendedAction must match the next Daily Use readiness gate.");
+  }
+
+  const expectedCommand = report.connection.hasLiveAgentConnection
+    ? expectedPackageIdentityReady
+      ? "veil-vmctl app-runtime-status --json"
+      : undefined
+    : "veil-vmctl guest-agent-wait --json --wait-seconds 30";
+  if (dailyUseReadiness.recommendedCommand !== expectedCommand) {
+    throw new TypeError("dailyUseReadiness.recommendedCommand must match the Daily Use readiness gate.");
+  }
 }
 
 function validateProofArtifacts(proofArtifacts) {
