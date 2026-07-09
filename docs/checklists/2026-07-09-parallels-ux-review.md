@@ -64,6 +64,7 @@ Goal: keep the user-facing workflow one-screen-first (launcher + one action path
 - [x] Add `veil-vmctl app-runtime-review` plus a harness validator so the release gate, required screenshot slots, latest app-check artifact, and full app-runtime status can be exported as one review card before a live VM proof pass.
 - [x] Teach `app-runtime-review --evidence-dir` to mark required screenshots as `attached` or `missing` using slot-derived PNG names, so a live VM proof pass can produce a single auditable review folder.
 - [x] Add review-card screenshot completion fields (`attachedScreenshotCount`, `requiredScreenshotCount`, `areRequiredScreenshotsAttached`) so live evidence readiness is machine-checkable instead of eyeballed.
+- [x] Gate `app-runtime-review.isReadyForReview` on the full 5/5 screenshot set as well as Windows app release evidence and host app bundle verification, so a visually incomplete review folder cannot be marked ready.
 - [x] Add `veil-vmctl app-runtime-review-init` and a manifest harness so live VM proof passes start with one evidence folder, one `review-manifest.json`, and fixed PNG names.
 - [x] Add ordered manifest `captureSteps` with supporting commands so the live proof pass records not just file names, but the intended app-flow sequence for each screenshot.
 - [x] Tighten the review manifest harness so screenshot paths, `reviewCommand`, and next actions must all reference the same evidence folder and the `5/5 attached` gate.

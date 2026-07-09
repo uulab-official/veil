@@ -14,9 +14,9 @@ test("validates app runtime review fixture", () => {
   assert.equal(validateAppRuntimeReview(card), card);
 });
 
-test("rejects cards whose readiness drifts from release gate", () => {
+test("rejects cards whose readiness ignores missing review screenshots", () => {
   const card = demoReviewCard();
-  card.isReadyForReview = !card.status.releaseGate.isPassing;
+  card.isReadyForReview = true;
 
   assert.throws(
     () => validateAppRuntimeReview(card),
@@ -40,6 +40,7 @@ test("accepts attached screenshot evidence paths", () => {
   card.screenshotSlots[0].attachmentState = "attached";
   card.screenshotSlots[0].attachmentPath = "/tmp/veil-review/preBootLauncher.png";
   card.attachedScreenshotCount = 1;
+  card.nextActionCommand = "veil-vmctl app-runtime-review-verify --json --evidence-dir /tmp/veil-review";
 
   assert.equal(validateAppRuntimeReview(card), card);
 });
@@ -59,6 +60,11 @@ test("accepts complete screenshot evidence summary", () => {
   card.evidence.screenshotEvidenceDirectory = "/tmp/veil-review";
   card.attachedScreenshotCount = card.requiredScreenshotCount;
   card.areRequiredScreenshotsAttached = true;
+  card.isReadyForReview = true;
+  card.appFlowSummary = "ready (5/5)";
+  card.nextStepTitle = "Ready For App Review";
+  delete card.nextActionCommand;
+  card.detail = "Setup, launch, app checks, and close controls are covered.";
   for (const slot of card.screenshotSlots) {
     slot.attachmentState = "attached";
     slot.attachmentPath = `/tmp/veil-review/${slot.expectedFileName}`;
@@ -122,10 +128,10 @@ test("accepts release-ready cards that are blocked on host app bundle verificati
   card.evidence.hostAppBundle.appIconExists = false;
   card.evidence.hostAppBundle.isVerificationReady = false;
   card.isReadyForReview = false;
-  card.appFlowSummary = `${card.appFlowSummary}; host app bundle needs verification`;
+  card.appFlowSummary = "ready (5/5); host app bundle needs verification";
   card.nextStepTitle = "Verify Host App Bundle";
   card.nextActionCommand = card.evidence.hostAppBundle.verificationCommand;
-  card.detail = `${card.detail} Run bundled launcher verification before sharing review evidence.`;
+  card.detail = "Setup, launch, app checks, and close controls are covered. Run bundled launcher verification and attach all 5 review screenshots before sharing evidence.";
 
   assert.equal(validateAppRuntimeReview(card), card);
 });
@@ -135,10 +141,10 @@ test("accepts release-ready cards that are blocked on stale host launch verifica
   card.evidence.hostAppBundle.latestLaunchReport.isCurrentForBundle = false;
   card.evidence.hostAppBundle.isVerificationReady = false;
   card.isReadyForReview = false;
-  card.appFlowSummary = `${card.appFlowSummary}; host app bundle needs verification`;
+  card.appFlowSummary = "ready (5/5); host app bundle needs verification";
   card.nextStepTitle = "Verify Host App Bundle";
   card.nextActionCommand = card.evidence.hostAppBundle.verificationCommand;
-  card.detail = `${card.detail} Run bundled launcher verification before sharing review evidence.`;
+  card.detail = "Setup, launch, app checks, and close controls are covered. Run bundled launcher verification and attach all 5 review screenshots before sharing evidence.";
 
   assert.equal(validateAppRuntimeReview(card), card);
 });

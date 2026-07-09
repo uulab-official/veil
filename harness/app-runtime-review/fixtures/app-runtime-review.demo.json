@@ -1,8 +1,8 @@
 {
-  "appFlowSummary" : "ready (5\/5)",
+  "appFlowSummary" : "ready (5\/5); review screenshots 0\/5 attached",
   "areRequiredScreenshotsAttached" : false,
   "attachedScreenshotCount" : 0,
-  "detail" : "Setup, launch, app checks, and close controls are covered.",
+  "detail" : "Setup, launch, app checks, and close controls are covered. Attach all 5 review screenshots before sharing evidence.",
   "evidence" : {
     "diagnosticsDirectory" : "\/Users\/bonjin\/Library\/Application Support\/Veil\/Diagnostics",
     "hostAppBundle" : {
@@ -27,7 +27,7 @@
         "meetsLauncherContract" : true,
         "minHeight" : 760,
         "minWidth" : 1180,
-        "modifiedAt" : "2026-07-09T16:32:54Z",
+        "modifiedAt" : "2026-07-09T16:34:14Z",
         "reportPath" : "\/Users\/bonjin\/Documents\/workspace\/uulab\/veil\/dist\/veil-launch-report-latest.plist",
         "titlebarAppearsTransparent" : true,
         "visibleMainWindowCount" : 1
@@ -38,10 +38,10 @@
     "latestAppCheckModifiedAt" : "2026-07-04T15:28:35Z",
     "latestAppCheckPath" : "\/Users\/bonjin\/Library\/Application Support\/Veil\/Diagnostics\/MVP Proof\/notepad-mvp-window-detect.json"
   },
-  "generatedAt" : "2026-07-09T16:33:27Z",
-  "isReadyForReview" : true,
+  "generatedAt" : "2026-07-09T16:36:48Z",
+  "isReadyForReview" : false,
   "kind" : "windowsAppRuntimeReviewCard",
-  "nextStepTitle" : "Ready For App Review",
+  "nextStepTitle" : "Attach Review Screenshots",
   "requiredScreenshotCount" : 5,
   "screenshotSlots" : [
     {
@@ -220,7 +220,7 @@
       "pendingLaunchCount" : 1,
       "restorableAppCount" : 1
     },
-    "generatedAt" : "2026-07-09T16:33:27Z",
+    "generatedAt" : "2026-07-09T16:36:48Z",
     "guestAgentDiagnostics" : {
       "diagnosticCommand" : "veil-host-probe --diagnose-agent",
       "endpoint" : "ws:\/\/127.0.0.1:18444",

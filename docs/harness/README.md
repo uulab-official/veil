@@ -221,10 +221,12 @@ the latest successful `veil-launch-report-latest.plist`, the latest failed
 launch-contract report when present, and the exact
 `./script/build_and_run.sh --verify` command that proves the branded one-window
 launcher surface. A review card is ready only when both the Windows app release
-gate and this host app bundle evidence pass; if the Windows app evidence passes
-but the staged app bundle is missing, stale, or lacks a current successful
-one-window launch report, the next review action becomes the bundle verification
-command.
+gate, this host app bundle evidence, and all required review screenshots pass;
+if the Windows app evidence passes but the staged app bundle is missing, stale,
+or lacks a current successful one-window launch report, the next review action
+becomes the bundle verification command. If the Windows app and host app bundle
+pass but screenshots are still missing, the next review action becomes the
+evidence-folder verification command instead of promoting the card as ready.
 
 Run `app-runtime-review-init` before a live VM pass to create the evidence
 folder, `review-manifest.json`, and a human-readable `README.md`. The manifest
@@ -244,8 +246,9 @@ slot expects one PNG named after the release-gate slot id, for example
 `menuRestore.png`, and `closeQuiet.png`. The card marks each slot as `attached`
 or `missing`, exposes the attached/required screenshot count, and sets
 `areRequiredScreenshotsAttached` when the current evidence folder has the full
-set. It does this without copying Windows media, disk contents, product keys, or
-guest data.
+set. `isReadyForReview` remains false until this screenshot gate is also
+complete. It does this without copying Windows media, disk contents, product
+keys, or guest data.
 
 After screenshots are captured, `app-runtime-review-verify` checks the existing
 folder end to end: manifest presence, README presence, screenshot count,

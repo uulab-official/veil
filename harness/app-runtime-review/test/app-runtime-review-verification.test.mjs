@@ -83,6 +83,11 @@ test("accepts complete verification reports", () => {
   delete report.nextMissingCaptureStep;
   report.review.attachedScreenshotCount = report.review.requiredScreenshotCount;
   report.review.areRequiredScreenshotsAttached = true;
+  report.review.isReadyForReview = true;
+  report.review.appFlowSummary = "ready (5/5)";
+  report.review.nextStepTitle = "Ready For App Review";
+  delete report.review.nextActionCommand;
+  report.review.detail = "Setup, launch, app checks, and close controls are covered.";
   for (const slot of report.review.screenshotSlots) {
     slot.attachmentState = "attached";
     slot.attachmentPath = `${report.evidenceDirectory}/${slot.expectedFileName}`;

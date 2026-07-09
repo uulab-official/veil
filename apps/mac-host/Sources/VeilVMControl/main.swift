@@ -1613,29 +1613,39 @@ struct VeilVMControl {
         }
         let requiredScreenshotCount = report.releaseGate.screenshotSlots.filter(\.isRequired).count
         let attachedScreenshotCount = screenshotSlots.filter { $0.attachmentState == "attached" }.count
+        let areRequiredScreenshotsAttached = requiredScreenshotCount == attachedScreenshotCount
         let hostAppBundle = hostAppBundleEvidence()
 
         return AppRuntimeReviewCard(
             generatedAt: report.generatedAt,
-            isReadyForReview: report.releaseGate.isPassing && hostAppBundle.isVerificationReady,
-            areRequiredScreenshotsAttached: requiredScreenshotCount == attachedScreenshotCount,
+            isReadyForReview: report.releaseGate.isPassing
+                && hostAppBundle.isVerificationReady
+                && areRequiredScreenshotsAttached,
+            areRequiredScreenshotsAttached: areRequiredScreenshotsAttached,
             requiredScreenshotCount: requiredScreenshotCount,
             attachedScreenshotCount: attachedScreenshotCount,
             appFlowSummary: appRuntimeReviewSummary(
                 releaseGate: report.releaseGate,
-                hostAppBundle: hostAppBundle
+                hostAppBundle: hostAppBundle,
+                requiredScreenshotCount: requiredScreenshotCount,
+                attachedScreenshotCount: attachedScreenshotCount
             ),
             nextStepTitle: appRuntimeReviewNextStepTitle(
                 releaseGate: report.releaseGate,
-                hostAppBundle: hostAppBundle
+                hostAppBundle: hostAppBundle,
+                areRequiredScreenshotsAttached: areRequiredScreenshotsAttached
             ),
             nextActionCommand: appRuntimeReviewNextCommand(
                 releaseGate: report.releaseGate,
-                hostAppBundle: hostAppBundle
+                hostAppBundle: hostAppBundle,
+                areRequiredScreenshotsAttached: areRequiredScreenshotsAttached,
+                evidenceDirectoryPath: evidenceDirectoryURL?.path
             ),
             detail: appRuntimeReviewDetail(
                 releaseGate: report.releaseGate,
-                hostAppBundle: hostAppBundle
+                hostAppBundle: hostAppBundle,
+                requiredScreenshotCount: requiredScreenshotCount,
+                attachedScreenshotCount: attachedScreenshotCount
             ),
             steps: report.releaseGate.steps.map { step in
                 AppRuntimeReviewStep(
@@ -1664,10 +1674,15 @@ struct VeilVMControl {
 
     private static func appRuntimeReviewSummary(
         releaseGate: WindowsAppRuntimeReleaseGateStatus,
-        hostAppBundle: AppRuntimeReviewHostAppBundleEvidence
+        hostAppBundle: AppRuntimeReviewHostAppBundleEvidence,
+        requiredScreenshotCount: Int,
+        attachedScreenshotCount: Int
     ) -> String {
         guard hostAppBundle.isVerificationReady else {
             return "\(appFlowSummary(releaseGate)); host app bundle needs verification"
+        }
+        guard requiredScreenshotCount == attachedScreenshotCount else {
+            return "\(appFlowSummary(releaseGate)); review screenshots \(attachedScreenshotCount)/\(requiredScreenshotCount) attached"
         }
 
         return appFlowSummary(releaseGate)
@@ -1675,10 +1690,14 @@ struct VeilVMControl {
 
     private static func appRuntimeReviewNextStepTitle(
         releaseGate: WindowsAppRuntimeReleaseGateStatus,
-        hostAppBundle: AppRuntimeReviewHostAppBundleEvidence
+        hostAppBundle: AppRuntimeReviewHostAppBundleEvidence,
+        areRequiredScreenshotsAttached: Bool
     ) -> String {
         if releaseGate.isPassing && !hostAppBundle.isVerificationReady {
             return "Verify Host App Bundle"
+        }
+        if releaseGate.isPassing && !areRequiredScreenshotsAttached {
+            return "Attach Review Screenshots"
         }
 
         return appFlowNextStepTitle(releaseGate)
@@ -1686,10 +1705,17 @@ struct VeilVMControl {
 
     private static func appRuntimeReviewNextCommand(
         releaseGate: WindowsAppRuntimeReleaseGateStatus,
-        hostAppBundle: AppRuntimeReviewHostAppBundleEvidence
+        hostAppBundle: AppRuntimeReviewHostAppBundleEvidence,
+        areRequiredScreenshotsAttached: Bool,
+        evidenceDirectoryPath: String?
     ) -> String? {
         if releaseGate.isPassing && !hostAppBundle.isVerificationReady {
             return hostAppBundle.verificationCommand
+        }
+        if releaseGate.isPassing,
+           !areRequiredScreenshotsAttached,
+           let evidenceDirectoryPath {
+            return appRuntimeReviewVerifyCommand(evidenceDirectory: evidenceDirectoryPath)
         }
 
         return appFlowNextCommand(releaseGate)
@@ -1697,11 +1723,20 @@ struct VeilVMControl {
 
     private static func appRuntimeReviewDetail(
         releaseGate: WindowsAppRuntimeReleaseGateStatus,
-        hostAppBundle: AppRuntimeReviewHostAppBundleEvidence
+        hostAppBundle: AppRuntimeReviewHostAppBundleEvidence,
+        requiredScreenshotCount: Int,
+        attachedScreenshotCount: Int
     ) -> String {
         let releaseGateDetail = appFlowDetail(releaseGate)
         guard !hostAppBundle.isVerificationReady else {
-            return releaseGateDetail
+            guard requiredScreenshotCount != attachedScreenshotCount else {
+                return releaseGateDetail
+            }
+            return "\(releaseGateDetail) Attach all \(requiredScreenshotCount) review screenshots before sharing evidence."
+        }
+
+        if requiredScreenshotCount != attachedScreenshotCount {
+            return "\(releaseGateDetail) Run bundled launcher verification and attach all \(requiredScreenshotCount) review screenshots before sharing evidence."
         }
 
         return "\(releaseGateDetail) Run bundled launcher verification before sharing review evidence."

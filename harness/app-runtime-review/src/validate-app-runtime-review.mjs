@@ -33,9 +33,6 @@ export function validateAppRuntimeReview(card) {
 
   const status = validateAppRuntimeStatus(card.status);
   const hostAppBundle = validateEvidence(card.evidence, status);
-  if (card.isReadyForReview !== (status.releaseGate.isPassing && hostAppBundle.isVerificationReady)) {
-    throw new TypeError("app runtime review readiness must match the release gate and host app bundle evidence.");
-  }
   if (status.releaseGate.isPassing && !hostAppBundle.isVerificationReady) {
     if (card.nextStepTitle !== "Verify Host App Bundle") {
       throw new TypeError("app runtime review next step must verify the host app bundle when release evidence passes but bundle evidence is not ready.");
@@ -120,6 +117,20 @@ export function validateAppRuntimeReview(card) {
   if (card.areRequiredScreenshotsAttached !== (attachedScreenshotCount === requiredScreenshotCount)) {
     throw new TypeError("app runtime review screenshot readiness must match attached required slots.");
   }
+  if (card.isReadyForReview !== (status.releaseGate.isPassing && hostAppBundle.isVerificationReady && card.areRequiredScreenshotsAttached)) {
+    throw new TypeError("app runtime review readiness must match the release gate, host app bundle evidence, and required screenshot evidence.");
+  }
+  if (status.releaseGate.isPassing && hostAppBundle.isVerificationReady && !card.areRequiredScreenshotsAttached) {
+    if (card.nextStepTitle !== "Attach Review Screenshots") {
+      throw new TypeError("app runtime review next step must attach review screenshots when release and bundle evidence pass but screenshots are missing.");
+    }
+    if (
+      card.evidence.screenshotEvidenceDirectory !== undefined
+      && !isEvidenceVerifyCommand(card.nextActionCommand, card.evidence.screenshotEvidenceDirectory)
+    ) {
+      throw new TypeError("app runtime review next command must verify the evidence directory when screenshots are missing.");
+    }
+  }
 
   return card;
 }
@@ -156,6 +167,11 @@ function validateEvidence(evidence, status) {
   }
 
   return evidence.hostAppBundle;
+}
+
+function isEvidenceVerifyCommand(command, evidenceDirectory) {
+  return command === `veil-vmctl app-runtime-review-verify --json --evidence-dir ${evidenceDirectory}`
+    || command === `veil-vmctl app-runtime-review-verify --json --evidence-dir '${evidenceDirectory}'`;
 }
 
 function validateHostAppBundleEvidence(hostAppBundle) {
