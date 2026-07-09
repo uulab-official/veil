@@ -3390,7 +3390,7 @@ struct VeilVMControl {
             return compactActions([
                 status.dailyUseReadiness.recommendedCommand.map { "Run `\($0)` to retry the sparse package preparation path." },
                 "Confirm the Windows SDK is installed inside the guest if sparse package packing or signing fails.",
-                "Run `veil-vmctl app-runtime-status --json` and inspect dailyUseReadiness.packageIdentityStatus before retrying."
+                "Run `veil-vmctl app-runtime-status --json` and inspect dailyUseReadiness.packageIdentityStage, packageIdentityMessage, and packageIdentityEvidencePath before retrying."
             ])
         }
 
@@ -4437,7 +4437,10 @@ struct VeilVMControl {
 
         var actions = agentWait.nextActions
         if let packageIdentityStatus = agentWait.diagnostic.health?.packageIdentityStatus {
-            actions.append("Inspect packageIdentityStatus.stage=\(packageIdentityStatus.stage) and packageIdentityStatus.statusPath=\(packageIdentityStatus.statusPath) inside the guest.")
+            actions.append("Inspect dailyUseReadiness.packageIdentityStage=\(packageIdentityStatus.stage) and packageIdentityEvidencePath=\(packageIdentityStatus.statusPath) before retrying.")
+            if let message = packageIdentityStatus.message, !message.isEmpty {
+                actions.append("Inspect dailyUseReadiness.packageIdentityMessage=\(message)")
+            }
         }
         if let capture = consoleEvidence.capture {
             actions.append("Inspect postAttemptConsole.capture.consoleScreenshotPath at \(capture.consoleScreenshotPath) for the sparse package build or package identity failure.")

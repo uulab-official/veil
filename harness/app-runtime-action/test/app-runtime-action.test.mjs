@@ -571,6 +571,20 @@ test("rejects accepted prepare-sparse-package reports without package identity",
   );
 });
 
+test("rejects prepare-sparse-package retry guidance without Daily Use evidence summary", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-action.prepare-sparse-package-live.json", import.meta.url), "utf8"));
+  report.accepted = false;
+  report.nextActions = [
+    "Confirm the Windows SDK is installed inside the guest if sparse package packing or signing fails.",
+    "Retry with a longer gate using `veil-vmctl qemu-prepare-sparse-package --json --wait-seconds 120`."
+  ];
+
+  assert.throws(
+    () => validateAppRuntimeAction(report),
+    /Daily Use package identity summary evidence/
+  );
+});
+
 test("accepts demo repair-agent only as a dry run", () => {
   const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-action.launch-pending.json", import.meta.url), "utf8"));
   report.action = "repair-agent";

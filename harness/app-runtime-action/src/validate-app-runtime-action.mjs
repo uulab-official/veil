@@ -227,6 +227,12 @@ function validatePrepareSparsePackageAction(report) {
   if (!report.accepted && !report.nextActions.some((action) => action.includes("qemu-prepare-sparse-package") || action.includes("Windows SDK"))) {
     throw new TypeError("rejected prepare-sparse-package actions must expose sparse package retry or Windows SDK guidance.");
   }
+
+  if (!report.accepted
+    && !report.nextActions.some((action) => action.includes("dailyUseReadiness.packageIdentityStage")
+      || action.includes("packageIdentityEvidencePath"))) {
+    throw new TypeError("rejected prepare-sparse-package actions must point at Daily Use package identity summary evidence.");
+  }
 }
 
 function validateGuestCommandAttempt(repair, path, expectedKind) {
