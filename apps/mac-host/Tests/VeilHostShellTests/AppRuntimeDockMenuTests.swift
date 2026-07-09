@@ -80,14 +80,14 @@ struct AppRuntimeDockMenuTests {
     @Test("maps queued app Dock menu item to the next product action")
     func mapsQueuedAppDockMenuItemToNextProductAction() {
         #expect(
-            DockQueuedLaunchMenuState.make(
+            AppQueuedLaunchMenuState.make(
                 appName: "Notepad",
                 canRecoverRuntimeDisplay: true,
                 canFulfillPendingLaunch: false,
                 canRepairQueuedAppLaunch: false,
                 canStartWindows: true,
                 runtimeIsLoading: false
-            ) == DockQueuedLaunchMenuState(
+            ) == AppQueuedLaunchMenuState(
                 title: "Refresh Display",
                 kind: .recoverRuntimeDisplay,
                 isEnabled: true
@@ -95,14 +95,14 @@ struct AppRuntimeDockMenuTests {
         )
 
         #expect(
-            DockQueuedLaunchMenuState.make(
+            AppQueuedLaunchMenuState.make(
                 appName: "Notepad",
                 canRecoverRuntimeDisplay: false,
                 canFulfillPendingLaunch: true,
                 canRepairQueuedAppLaunch: false,
                 canStartWindows: false,
                 runtimeIsLoading: false
-            ) == DockQueuedLaunchMenuState(
+            ) == AppQueuedLaunchMenuState(
                 title: "Open Queued Notepad",
                 kind: .fulfillPendingLaunch,
                 isEnabled: true
@@ -110,14 +110,14 @@ struct AppRuntimeDockMenuTests {
         )
 
         #expect(
-            DockQueuedLaunchMenuState.make(
+            AppQueuedLaunchMenuState.make(
                 appName: "Notepad",
                 canRecoverRuntimeDisplay: false,
                 canFulfillPendingLaunch: false,
                 canRepairQueuedAppLaunch: true,
                 canStartWindows: false,
                 runtimeIsLoading: false
-            ) == DockQueuedLaunchMenuState(
+            ) == AppQueuedLaunchMenuState(
                 title: "Continue Notepad",
                 kind: .repairGuestAgentForAppLaunch,
                 isEnabled: true
@@ -125,14 +125,14 @@ struct AppRuntimeDockMenuTests {
         )
 
         #expect(
-            DockQueuedLaunchMenuState.make(
+            AppQueuedLaunchMenuState.make(
                 appName: "Notepad",
                 canRecoverRuntimeDisplay: false,
                 canFulfillPendingLaunch: false,
                 canRepairQueuedAppLaunch: false,
                 canStartWindows: true,
                 runtimeIsLoading: false
-            ) == DockQueuedLaunchMenuState(
+            ) == AppQueuedLaunchMenuState(
                 title: "Start Windows for Notepad",
                 kind: .startWindows,
                 isEnabled: true
@@ -140,19 +140,31 @@ struct AppRuntimeDockMenuTests {
         )
 
         #expect(
-            DockQueuedLaunchMenuState.make(
+            AppQueuedLaunchMenuState.make(
                 appName: "Notepad",
                 canRecoverRuntimeDisplay: false,
                 canFulfillPendingLaunch: false,
                 canRepairQueuedAppLaunch: false,
                 canStartWindows: true,
                 runtimeIsLoading: true
-            ) == DockQueuedLaunchMenuState(
+            ) == AppQueuedLaunchMenuState(
                 title: "Start Windows for Notepad",
                 kind: .startWindows,
                 isEnabled: false
             )
         )
+
+        let longNameState = AppQueuedLaunchMenuState.make(
+            appName: "Very Long Accounting Workstation",
+            canRecoverRuntimeDisplay: false,
+            canFulfillPendingLaunch: false,
+            canRepairQueuedAppLaunch: false,
+            canStartWindows: true,
+            runtimeIsLoading: false
+        )
+        #expect(longNameState.title.count <= 30)
+        #expect(longNameState.title == "Start Windows for Very Long...")
+        #expect(longNameState.symbolName == "play.fill")
     }
 }
 

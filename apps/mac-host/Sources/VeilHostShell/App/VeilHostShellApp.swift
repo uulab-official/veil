@@ -1301,19 +1301,23 @@ private struct VeilMenuBarMenu: View {
             .disabled(!model.canReconnectRestoreMirrorSessions)
         }
 
-        if model.pendingLaunchAppId != nil {
-            Button(queuedAppMenuTitle, systemImage: queuedAppMenuSymbolName) {
-                if canRecoverRuntimeDisplay {
+        if let queuedLaunchMenuState {
+            Button(queuedLaunchMenuState.title, systemImage: queuedLaunchMenuState.symbolName) {
+                switch queuedLaunchMenuState.kind {
+                case .recoverRuntimeDisplay:
                     openMainWindow()
                     recoverRuntimeDisplayAction()
-                } else if model.canFulfillPendingLaunch {
+                case .fulfillPendingLaunch:
                     fulfillPendingLaunchAction()
-                } else {
+                case .repairGuestAgentForAppLaunch:
                     openMainWindow()
                     repairGuestAgentForAppLaunchAction()
+                case .startWindows:
+                    openMainWindow()
+                    startVMAction()
                 }
             }
-            .disabled(!canRecoverRuntimeDisplay && !model.canFulfillPendingLaunch && !canRepairQueuedAppLaunch)
+            .disabled(!queuedLaunchMenuState.isEnabled)
         }
 
         Button("Check Windows App", systemImage: "checkmark.seal") {
@@ -1418,20 +1422,27 @@ private struct VeilMenuBarMenu: View {
             && !model.canFulfillPendingLaunch
     }
 
-    private var queuedAppMenuTitle: String {
-        if canRecoverRuntimeDisplay {
-            return "Refresh Display"
+    private var queuedLaunchMenuState: AppQueuedLaunchMenuState? {
+        guard model.pendingLaunchAppId != nil else {
+            return nil
         }
 
-        return model.canFulfillPendingLaunch ? "Open Queued App" : "Continue Queued App"
+        return AppQueuedLaunchMenuState.make(
+            appName: queuedLaunchAppName,
+            canRecoverRuntimeDisplay: canRecoverRuntimeDisplay,
+            canFulfillPendingLaunch: model.canFulfillPendingLaunch,
+            canRepairQueuedAppLaunch: canRepairQueuedAppLaunch,
+            canStartWindows: vmModel.canStart,
+            runtimeIsLoading: vmModel.phase == .loading
+        )
     }
 
-    private var queuedAppMenuSymbolName: String {
-        if canRecoverRuntimeDisplay {
-            return "display.trianglebadge.exclamationmark"
+    private var queuedLaunchAppName: String {
+        guard let pendingAppId = model.pendingLaunchAppId else {
+            return "Windows App"
         }
 
-        return model.canFulfillPendingLaunch ? "arrow.up.forward.app" : "bolt.horizontal.circle"
+        return model.apps.first { $0.id == pendingAppId }?.name ?? "Windows App"
     }
 
     private var canMarkWindowsInstalled: Bool {

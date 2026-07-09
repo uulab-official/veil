@@ -178,7 +178,7 @@ enum AppRuntimeDockMenuFactory {
         }
 
         if let pendingAppId = model.pendingLaunchAppId {
-            let pendingAction = DockQueuedLaunchMenuState.make(
+            let pendingAction = AppQueuedLaunchMenuState.make(
                 appName: appName(for: pendingAppId, model: model),
                 canRecoverRuntimeDisplay: canRecoverRuntimeDisplay(vmModel: vmModel),
                 canFulfillPendingLaunch: model.canFulfillPendingLaunch,
@@ -267,7 +267,7 @@ enum AppRuntimeDockMenuFactory {
         return "\(title.prefix(25))..."
     }
 
-    private static func selector(for kind: DockQueuedLaunchMenuState.Kind) -> Selector {
+    private static func selector(for kind: AppQueuedLaunchMenuState.Kind) -> Selector {
         switch kind {
         case .recoverRuntimeDisplay:
             return #selector(AppRuntimeDockMenuTarget.recoverRuntimeDisplay(_:))
@@ -300,7 +300,7 @@ enum AppRuntimeDockMenuFactory {
     }
 }
 
-struct DockQueuedLaunchMenuState: Equatable {
+struct AppQueuedLaunchMenuState: Equatable {
     enum Kind: Equatable {
         case recoverRuntimeDisplay
         case fulfillPendingLaunch
@@ -312,6 +312,19 @@ struct DockQueuedLaunchMenuState: Equatable {
     var kind: Kind
     var isEnabled: Bool
 
+    var symbolName: String {
+        switch kind {
+        case .recoverRuntimeDisplay:
+            return "display.trianglebadge.exclamationmark"
+        case .fulfillPendingLaunch:
+            return "arrow.up.forward.app"
+        case .repairGuestAgentForAppLaunch:
+            return "bolt.horizontal.circle"
+        case .startWindows:
+            return "play.fill"
+        }
+    }
+
     static func make(
         appName: String,
         canRecoverRuntimeDisplay: Bool,
@@ -319,10 +332,9 @@ struct DockQueuedLaunchMenuState: Equatable {
         canRepairQueuedAppLaunch: Bool,
         canStartWindows: Bool,
         runtimeIsLoading: Bool
-    ) -> DockQueuedLaunchMenuState {
-        let shortAppName = shortTitle(appName)
+    ) -> AppQueuedLaunchMenuState {
         if canRecoverRuntimeDisplay {
-            return DockQueuedLaunchMenuState(
+            return AppQueuedLaunchMenuState(
                 title: "Refresh Display",
                 kind: .recoverRuntimeDisplay,
                 isEnabled: true
@@ -330,33 +342,40 @@ struct DockQueuedLaunchMenuState: Equatable {
         }
 
         if canFulfillPendingLaunch {
-            return DockQueuedLaunchMenuState(
-                title: "Open Queued \(shortAppName)",
+            return AppQueuedLaunchMenuState(
+                title: title(prefix: "Open Queued", appName: appName),
                 kind: .fulfillPendingLaunch,
                 isEnabled: true
             )
         }
 
         if canRepairQueuedAppLaunch {
-            return DockQueuedLaunchMenuState(
-                title: "Continue \(shortAppName)",
+            return AppQueuedLaunchMenuState(
+                title: title(prefix: "Continue", appName: appName),
                 kind: .repairGuestAgentForAppLaunch,
                 isEnabled: true
             )
         }
 
-        return DockQueuedLaunchMenuState(
-            title: "Start Windows for \(shortAppName)",
+        return AppQueuedLaunchMenuState(
+            title: title(prefix: "Start Windows for", appName: appName),
             kind: .startWindows,
             isEnabled: canStartWindows && !runtimeIsLoading
         )
     }
 
-    private static func shortTitle(_ title: String) -> String {
-        guard title.count > 26 else {
+    private static func title(prefix: String, appName: String) -> String {
+        let maxMenuItemLength = 30
+        let appNameLimit = max(1, maxMenuItemLength - prefix.count - 1)
+        return "\(prefix) \(shortTitle(appName, maxCount: appNameLimit))"
+    }
+
+    private static func shortTitle(_ title: String, maxCount: Int) -> String {
+        guard title.count > maxCount else {
             return title
         }
 
-        return "\(title.prefix(25))..."
+        let prefixCount = max(1, maxCount - 3)
+        return "\(title.prefix(prefixCount))..."
     }
 }
