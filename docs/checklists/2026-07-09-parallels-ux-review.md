@@ -33,6 +33,7 @@ Goal: keep the user-facing workflow one-screen-first (launcher + one action path
 - [x] Polish menu and Dock power actions from Start/Stop/Refresh Windows toward Open Windows, Close Windows, and Refresh Status copy.
 - [x] Prioritize Bring Windows App(s) Forward over Open Veil in Dock/menu-bar actions while mirrored Windows app windows are open.
 - [x] Cap Dock/menu-bar app and window item titles at 30 characters so long Windows titles stay scannable.
+- [x] Show the active app name in the primary Bring Forward action when exactly one Windows app window is open.
 
 ## CEO Review
 

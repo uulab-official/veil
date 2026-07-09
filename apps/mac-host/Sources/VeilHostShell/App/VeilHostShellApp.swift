@@ -1503,8 +1503,19 @@ private struct VeilMenuBarMenu: View {
 
     private var activeWindowsAppsForwardTitle: String {
         WindowsShellCopy.bringWindowsAppsForwardTitle(
-            openAppWindowCount: model.mirrorSessions.count
+            openAppWindowCount: model.mirrorSessions.count,
+            singleAppName: activeSingleAppName
         )
+    }
+
+    private var activeSingleAppName: String? {
+        guard model.mirrorSessions.count == 1,
+              let session = model.mirrorSessions.first else {
+            return nil
+        }
+
+        return model.apps.first { $0.id == session.window.appId }?.name
+            ?? session.window.title
     }
 
     private var restorePreviousAppsTitle: String {

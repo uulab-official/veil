@@ -139,6 +139,14 @@ struct AppRuntimeDockMenuTests {
             WindowsShellCopy.closeWindowsActionTitle,
             WindowsShellCopy.refreshWindowsStatusTitle,
             WindowsShellCopy.bringWindowsAppsForwardTitle(openAppWindowCount: 1),
+            WindowsShellCopy.bringWindowsAppsForwardTitle(
+                openAppWindowCount: 1,
+                singleAppName: "Notepad"
+            ),
+            WindowsShellCopy.bringWindowsAppsForwardTitle(
+                openAppWindowCount: 1,
+                singleAppName: "Very Long Accounting Workstation"
+            ),
             WindowsShellCopy.bringWindowsAppsForwardTitle(openAppWindowCount: 2)
         ]
 
@@ -148,6 +156,8 @@ struct AppRuntimeDockMenuTests {
             "Close Windows",
             "Refresh Status",
             "Bring Windows App Forward",
+            "Bring Notepad Forward",
+            "Bring Very Long Acc... Forward",
             "Bring Windows Apps Forward"
         ])
         #expect(titles.allSatisfy { $0.count <= 30 })
@@ -164,6 +174,7 @@ struct AppRuntimeDockMenuTests {
             WindowsShellCopy.prefixedMenuItemTitle(prefix: "Open", title: longTitle),
             WindowsShellCopy.prefixedMenuItemTitle(prefix: "Focus", title: longTitle),
             WindowsShellCopy.prefixedMenuItemTitle(prefix: "Close", title: longTitle),
+            WindowsShellCopy.suffixedMenuItemTitle(prefix: "Bring", title: longTitle, suffix: "Forward"),
             WindowsShellCopy.menuItemTitle("   ")
         ]
 
@@ -172,7 +183,9 @@ struct AppRuntimeDockMenuTests {
         #expect(titles[1].hasPrefix("Open "))
         #expect(titles[2].hasPrefix("Focus "))
         #expect(titles[3].hasPrefix("Close "))
-        #expect(titles[4] == "Windows App")
+        #expect(titles[4].hasPrefix("Bring "))
+        #expect(titles[4].hasSuffix(" Forward"))
+        #expect(titles[5] == "Windows App")
         #expect(titles.allSatisfy { !$0.contains("Runtime") })
         #expect(titles.allSatisfy { !$0.contains("VM") })
         #expect(titles.allSatisfy { !$0.contains("Agent") })
@@ -314,11 +327,11 @@ struct AppRuntimeDockMenuTests {
         )
 
         let firstAction = try #require(menu.items.dropFirst().first { !$0.isSeparatorItem })
-        let bringIndex = try #require(menu.items.firstIndex { $0.title == "Bring Windows App Forward" })
+        let bringIndex = try #require(menu.items.firstIndex { $0.title == "Bring Notepad Forward" })
         let openVeilIndex = try #require(menu.items.firstIndex { $0.title == "Open Veil" })
 
         #expect(menu.items.first?.title == "1 Windows App Open")
-        #expect(firstAction.title == "Bring Windows App Forward")
+        #expect(firstAction.title == "Bring Notepad Forward")
         #expect(bringIndex < openVeilIndex)
     }
 

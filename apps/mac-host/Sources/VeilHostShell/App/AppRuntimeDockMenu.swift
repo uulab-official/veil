@@ -126,7 +126,8 @@ enum AppRuntimeDockMenuFactory {
             menu.addItem(
                 item(
                     WindowsShellCopy.bringWindowsAppsForwardTitle(
-                        openAppWindowCount: model.mirrorSessions.count
+                        openAppWindowCount: model.mirrorSessions.count,
+                        singleAppName: activeSingleAppName(model: model)
                     ),
                     action: #selector(AppRuntimeDockMenuTarget.bringAllWindowsAppsToFront(_:)),
                     target: target
@@ -322,6 +323,16 @@ enum AppRuntimeDockMenuFactory {
 
     private static func appName(for appId: String, model: HostDashboardModel) -> String {
         model.apps.first { $0.id == appId }?.name ?? "Windows App"
+    }
+
+    private static func activeSingleAppName(model: HostDashboardModel) -> String? {
+        guard model.mirrorSessions.count == 1,
+              let session = model.mirrorSessions.first else {
+            return nil
+        }
+
+        return model.apps.first { $0.id == session.window.appId }?.name
+            ?? session.window.title
     }
 }
 

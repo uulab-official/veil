@@ -49,8 +49,24 @@ enum WindowsShellCopy {
     static let closeWindowsActionTitle = "Close Windows"
     static let refreshWindowsStatusTitle = "Refresh Status"
 
-    static func bringWindowsAppsForwardTitle(openAppWindowCount: Int) -> String {
-        openAppWindowCount == 1 ? "Bring Windows App Forward" : "Bring Windows Apps Forward"
+    static func bringWindowsAppsForwardTitle(
+        openAppWindowCount: Int,
+        singleAppName: String? = nil
+    ) -> String {
+        if openAppWindowCount == 1 {
+            guard let singleAppName,
+                  !singleAppName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                return "Bring Windows App Forward"
+            }
+
+            return suffixedMenuItemTitle(
+                prefix: "Bring",
+                title: singleAppName,
+                suffix: "Forward"
+            )
+        }
+
+        return "Bring Windows Apps Forward"
     }
 
     static func menuItemTitle(_ title: String, maxCount: Int = 30) -> String {
@@ -76,6 +92,16 @@ enum WindowsShellCopy {
     ) -> String {
         let itemTitleLimit = max(1, maxCount - prefix.count - 1)
         return "\(prefix) \(menuItemTitle(title, maxCount: itemTitleLimit))"
+    }
+
+    static func suffixedMenuItemTitle(
+        prefix: String,
+        title: String,
+        suffix: String,
+        maxCount: Int = 30
+    ) -> String {
+        let itemTitleLimit = max(1, maxCount - prefix.count - suffix.count - 2)
+        return "\(prefix) \(menuItemTitle(title, maxCount: itemTitleLimit)) \(suffix)"
     }
 
     static func menuStatusTitle(
