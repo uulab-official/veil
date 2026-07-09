@@ -583,6 +583,42 @@ struct AppRuntimeDockMenuTests {
         #expect(queuedItemCount == 1)
     }
 
+    @Test("Dock menu prioritizes display recovery over app launch")
+    func dockMenuPrioritizesDisplayRecoveryOverAppLaunch() async throws {
+        let model = HostDashboardModel(service: DemoHostDashboardService())
+        let vmModel = VMRuntimeModel(service: StubVMRuntimeService(snapshot: .runningWithStalePreview))
+
+        await model.load()
+        await vmModel.load()
+
+        let menu = AppRuntimeDockMenuFactory.makeMenu(
+            model: model,
+            vmModel: vmModel,
+            activateMainWindowAction: {},
+            bringAllWindowsAppWindowsToFrontAction: {},
+            focusWindowsAppWindowAction: { _ in },
+            closeWindowsAppWindowAction: { _ in },
+            closeAllWindowsAppWindowsAction: {},
+            restoreWindowsAppWindowsAction: {},
+            launchWindowsAppByIdAction: { _ in },
+            fulfillPendingLaunchAction: {},
+            repairGuestAgentForAppLaunchAction: {},
+            recoverRuntimeDisplayAction: {},
+            startVMAction: {},
+            stopVMAction: {},
+            quietWindowsWhenIdleAction: {}
+        )
+
+        let firstAction = try #require(menu.items.dropFirst().first { !$0.isSeparatorItem })
+        let refreshIndex = try #require(menu.items.firstIndex { $0.title == "Refresh Display" })
+        let openVeilIndex = try #require(menu.items.firstIndex { $0.title == "Open Veil" })
+        let openNotepad = try #require(menu.items.first { $0.title == "Open Notepad" })
+
+        #expect(firstAction.title == "Refresh Display")
+        #expect(refreshIndex < openVeilIndex)
+        #expect(openNotepad.isEnabled == false)
+    }
+
     @Test("maps queued app Dock menu item to the next product action")
     func mapsQueuedAppDockMenuItemToNextProductAction() {
         #expect(
@@ -695,6 +731,8 @@ extension AppRuntimeDockMenuTests {
 }
 
 private struct StubVMRuntimeService: VMRuntimeService {
+    var snapshot: VMRuntimeSnapshot = .stoppedWindowsInstalled
+
     func loadSnapshot() async throws -> VMRuntimeSnapshot { snapshot }
     func prepareDefaultVM() async throws -> VMRuntimeSnapshot { snapshot }
     func createDefaultProfile() async throws -> VMRuntimeSnapshot { snapshot }
@@ -727,7 +765,10 @@ private struct StubVMRuntimeService: VMRuntimeService {
     }
     func exportDiagnostics(to directory: URL) async throws -> URL { directory }
 
-    private var snapshot: VMRuntimeSnapshot {
+}
+
+private extension VMRuntimeSnapshot {
+    static var stoppedWindowsInstalled: VMRuntimeSnapshot {
         VMRuntimeSnapshot(
             state: .stopped,
             virtualizationAvailable: true,
@@ -737,6 +778,31 @@ private struct StubVMRuntimeService: VMRuntimeService {
             bootReady: true,
             windowsInstalled: true,
             detail: "Stub runtime"
+        )
+    }
+
+    static var runningWithStalePreview: VMRuntimeSnapshot {
+        VMRuntimeSnapshot(
+            state: .running,
+            virtualizationAvailable: true,
+            architecture: "arm64",
+            minimumOSSupported: true,
+            profileName: "Default",
+            latestConsoleLaunch: VMConsoleLaunchEvidence(
+                provider: "QEMU/HVF",
+                pid: 12345,
+                processLogPath: "/tmp/veil-qemu.log",
+                monitorSocketPath: "/tmp/veil-qemu-monitor.sock",
+                qmpSocketPath: "/tmp/veil-qemu-qmp.sock",
+                vncHost: "127.0.0.1",
+                vncPort: 5900,
+                consoleScreenshotPath: "/tmp/veil-qemu-console.png",
+                previewStatus: .stale,
+                startedAt: Date(timeIntervalSince1970: 1_000)
+            ),
+            bootReady: true,
+            windowsInstalled: true,
+            detail: "Stub runtime with stale preview"
         )
     }
 }

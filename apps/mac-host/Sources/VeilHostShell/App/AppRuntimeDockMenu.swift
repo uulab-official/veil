@@ -196,6 +196,15 @@ enum AppRuntimeDockMenuFactory {
                     )
                 )
             }
+            if shouldPromoteDisplayRecovery(model: model, vmModel: vmModel) {
+                menu.addItem(
+                    item(
+                        "Refresh Display",
+                        action: #selector(AppRuntimeDockMenuTarget.recoverRuntimeDisplay(_:)),
+                        target: target
+                    )
+                )
+            }
             menu.addItem(item("Open Veil", action: #selector(AppRuntimeDockMenuTarget.openVeil(_:)), target: target))
         }
 
@@ -236,7 +245,8 @@ enum AppRuntimeDockMenuFactory {
                         action: #selector(AppRuntimeDockMenuTarget.launchWindowsApp(_:)),
                         target: target,
                         representedObject: app.id,
-                        isEnabled: model.canRequestAppLaunch(appId: app.id)
+                        isEnabled: !canRecoverRuntimeDisplay(vmModel: vmModel)
+                            && model.canRequestAppLaunch(appId: app.id)
                     )
                 )
             }
@@ -374,6 +384,13 @@ enum AppRuntimeDockMenuFactory {
 
     private static func shouldShowSecondaryQueuedLaunch(model: HostDashboardModel) -> Bool {
         model.pendingLaunchAppId != nil && !shouldPromoteQueuedLaunch(model: model)
+    }
+
+    private static func shouldPromoteDisplayRecovery(model: HostDashboardModel, vmModel: VMRuntimeModel) -> Bool {
+        canRecoverRuntimeDisplay(vmModel: vmModel)
+            && model.mirrorSessions.isEmpty
+            && !shouldPromotePreviousAppsRestore(model: model)
+            && model.pendingLaunchAppId == nil
     }
 
     private static func activeSingleAppName(model: HostDashboardModel) -> String? {
