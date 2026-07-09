@@ -90,7 +90,7 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
 
         for windowId in visibleWindowIds {
             if let window = windowsById[windowId] {
-                window.makeKeyAndOrderFront(nil)
+                MacWindowRestorePolicy.restoreToFront(window)
             }
         }
         foregroundWindowId = visibleWindowIds.last
@@ -114,7 +114,7 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
     private func present(_ window: NSWindow, windowId: String) {
         rememberWindowId(windowId)
         foregroundWindowId = windowId
-        window.makeKeyAndOrderFront(nil)
+        MacWindowRestorePolicy.restoreToFront(window)
         NSApp.activate(ignoringOtherApps: true)
     }
 
@@ -189,6 +189,16 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
             width: frame.width,
             height: frame.height
         )
+    }
+}
+
+@MainActor
+enum MacWindowRestorePolicy {
+    static func restoreToFront(_ window: NSWindow) {
+        if window.isMiniaturized {
+            window.deminiaturize(nil)
+        }
+        window.makeKeyAndOrderFront(nil)
     }
 }
 

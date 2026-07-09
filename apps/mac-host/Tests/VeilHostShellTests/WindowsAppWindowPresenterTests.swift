@@ -79,6 +79,26 @@ struct WindowsAppWindowPresenterTests {
         #expect(presenter.foregroundWindowId == nil)
     }
 
+    @Test("restore policy deminiaturizes minimized Windows app windows")
+    func restorePolicyDeminiaturizesMinimizedWindowsAppWindows() {
+        let window = RestorePolicyTestWindow(isMiniaturizedForTest: true)
+
+        MacWindowRestorePolicy.restoreToFront(window)
+
+        #expect(window.deminiaturizeCallCount == 1)
+        #expect(window.makeKeyAndOrderFrontCallCount == 1)
+    }
+
+    @Test("restore policy fronts visible Windows app windows without deminiaturizing")
+    func restorePolicyFrontsVisibleWindowsAppWindowsWithoutDeminiaturizing() {
+        let window = RestorePolicyTestWindow(isMiniaturizedForTest: false)
+
+        MacWindowRestorePolicy.restoreToFront(window)
+
+        #expect(window.deminiaturizeCallCount == 0)
+        #expect(window.makeKeyAndOrderFrontCallCount == 1)
+    }
+
     @Test("Dock reopen uses visible mirrored windows before hidden launcher state")
     func dockReopenUsesVisibleMirroredWindowsBeforeHiddenLauncherState() {
         #expect(
@@ -157,5 +177,35 @@ struct WindowsAppWindowPresenterTests {
             connectionMode: .agent,
             captureState: .pending
         )
+    }
+}
+
+@MainActor
+private final class RestorePolicyTestWindow: NSWindow {
+    var isMiniaturizedForTest: Bool
+    var deminiaturizeCallCount = 0
+    var makeKeyAndOrderFrontCallCount = 0
+
+    init(isMiniaturizedForTest: Bool) {
+        self.isMiniaturizedForTest = isMiniaturizedForTest
+        super.init(
+            contentRect: NSRect(x: 0, y: 0, width: 320, height: 240),
+            styleMask: [.titled, .miniaturizable],
+            backing: .buffered,
+            defer: false
+        )
+    }
+
+    override var isMiniaturized: Bool {
+        isMiniaturizedForTest
+    }
+
+    override func deminiaturize(_ sender: Any?) {
+        deminiaturizeCallCount += 1
+        isMiniaturizedForTest = false
+    }
+
+    override func makeKeyAndOrderFront(_ sender: Any?) {
+        makeKeyAndOrderFrontCallCount += 1
     }
 }
