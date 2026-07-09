@@ -15,6 +15,7 @@ struct ProtocolMessageTests {
         #expect(response.session.interactive)
         #expect(response.capabilities.appLaunch)
         #expect(response.capabilities.windowCapture == false)
+        #expect(response.capabilities.packageIdentity == false)
     }
 
     @Test("decodes app list response")

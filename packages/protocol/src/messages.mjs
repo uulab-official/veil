@@ -58,6 +58,44 @@ export function createError(requestId, code, message) {
   };
 }
 
+export function validateAgentHealthResponse(response) {
+  if (!response || response.type !== MessageType.AgentHealthResponse) {
+    throw new TypeError("Agent health response must use type agent.health.response.");
+  }
+
+  requireNonEmptyString(response.requestId, "requestId", "Agent health response");
+  requirePositiveInteger(response.protocolVersion, "protocolVersion", "Agent health response");
+  requireNonEmptyString(response.agentVersion, "agentVersion", "Agent health response");
+  requireNonEmptyString(response.os, "os", "Agent health response");
+
+  if (!response.session || typeof response.session !== "object" || Array.isArray(response.session)) {
+    throw new TypeError("Agent health response field 'session' must be an object.");
+  }
+  if (typeof response.session.interactive !== "boolean") {
+    throw new TypeError("Agent health response field 'session.interactive' must be a boolean.");
+  }
+  requireNonEmptyString(response.session.user, "session.user", "Agent health response");
+
+  if (!response.capabilities || typeof response.capabilities !== "object" || Array.isArray(response.capabilities)) {
+    throw new TypeError("Agent health response field 'capabilities' must be an object.");
+  }
+  for (const field of [
+    "appList",
+    "appLaunch",
+    "windowTracking",
+    "windowCapture",
+    "input",
+    "clipboardText",
+    "packageIdentity"
+  ]) {
+    if (typeof response.capabilities[field] !== "boolean") {
+      throw new TypeError(`Agent health response field 'capabilities.${field}' must be a boolean.`);
+    }
+  }
+
+  return response;
+}
+
 export function validateAppLaunchAcceptance(launch, window) {
   if (!launch || launch.type !== MessageType.AppLaunchResponse || launch.accepted !== true) {
     throw new TypeError("App launch response must be accepted.");

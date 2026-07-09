@@ -121,7 +121,15 @@ function validateCapabilities(capabilities) {
     throw new TypeError("connection.capabilities must be an object.");
   }
 
-  for (const field of ["appList", "appLaunch", "windowTracking", "windowCapture", "input", "clipboardText"]) {
+  for (const field of [
+    "appList",
+    "appLaunch",
+    "windowTracking",
+    "windowCapture",
+    "input",
+    "clipboardText",
+    "packageIdentity"
+  ]) {
     requireBoolean(capabilities[field], `connection.capabilities.${field}`);
   }
 }

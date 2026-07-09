@@ -724,6 +724,7 @@ struct HostDashboardModelTests {
         #expect(report.connection.capabilities?.windowCapture == true)
         #expect(report.connection.capabilities?.input == true)
         #expect(report.connection.capabilities?.clipboardText == true)
+        #expect(report.connection.capabilities?.packageIdentity == false)
         #expect(report.guestAgentDiagnostics.endpoint == HostDashboardModel.defaultAgentEndpoint)
         #expect(report.guestAgentDiagnostics.isConnected)
         #expect(report.guestAgentDiagnostics.diagnosticCommand == "veil-host-probe --diagnose-agent")

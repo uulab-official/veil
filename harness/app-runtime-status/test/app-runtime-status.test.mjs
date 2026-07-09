@@ -1140,11 +1140,11 @@ test("rejects stop action availability that drifts from quiet runtime readiness"
 
 test("rejects live agent reports without structured capabilities", () => {
   const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.mac-window-live.json", import.meta.url), "utf8"));
-  delete report.connection.capabilities.windowCapture;
+  delete report.connection.capabilities.packageIdentity;
 
   assert.throws(
     () => validateAppRuntimeStatus(report),
-    /connection\.capabilities\.windowCapture/
+    /connection\.capabilities\.packageIdentity/
   );
 });
 

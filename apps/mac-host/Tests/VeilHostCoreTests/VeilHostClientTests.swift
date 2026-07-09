@@ -8,7 +8,7 @@ struct VeilHostClientTests {
     @Test("loads agent health without launching an app")
     func loadsAgentHealthOnly() async throws {
         let transport = RecordingTransport(responses: [
-            #"{"type":"agent.health.response","requestId":"req_health","protocolVersion":1,"agentVersion":"0.1.0","os":"windows-arm64","session":{"interactive":true,"user":"veil-user"},"capabilities":{"appList":true,"appLaunch":true,"windowTracking":true,"windowCapture":false,"input":false,"clipboardText":false}}"#
+            #"{"type":"agent.health.response","requestId":"req_health","protocolVersion":1,"agentVersion":"0.1.0","os":"windows-arm64","session":{"interactive":true,"user":"veil-user"},"capabilities":{"appList":true,"appLaunch":true,"windowTracking":true,"windowCapture":false,"input":false,"clipboardText":false,"packageIdentity":false}}"#
         ])
         let client = VeilHostClient(transport: transport)
 
@@ -23,7 +23,7 @@ struct VeilHostClientTests {
     @Test("diagnoses connected Windows agent")
     func diagnosesConnectedAgent() async throws {
         let transport = RecordingTransport(responses: [
-            #"{"type":"agent.health.response","requestId":"req_health","protocolVersion":1,"agentVersion":"0.1.0","os":"windows-arm64","session":{"interactive":true,"user":"veil-user"},"capabilities":{"appList":true,"appLaunch":true,"windowTracking":true,"windowCapture":true,"input":true,"clipboardText":true}}"#
+            #"{"type":"agent.health.response","requestId":"req_health","protocolVersion":1,"agentVersion":"0.1.0","os":"windows-arm64","session":{"interactive":true,"user":"veil-user"},"capabilities":{"appList":true,"appLaunch":true,"windowTracking":true,"windowCapture":true,"input":true,"clipboardText":true,"packageIdentity":false}}"#
         ])
         let client = VeilHostClient(transport: transport)
 
@@ -96,7 +96,7 @@ struct VeilHostClientTests {
     @Test("waits for connected Windows guest agent")
     func waitsForConnectedWindowsGuestAgent() async throws {
         let transport = RecordingTransport(responses: [
-            #"{"type":"agent.health.response","requestId":"req_health","protocolVersion":1,"agentVersion":"0.1.0","os":"windows-arm64","session":{"interactive":true,"user":"veil-user"},"capabilities":{"appList":true,"appLaunch":true,"windowTracking":true,"windowCapture":true,"input":true,"clipboardText":true}}"#
+            #"{"type":"agent.health.response","requestId":"req_health","protocolVersion":1,"agentVersion":"0.1.0","os":"windows-arm64","session":{"interactive":true,"user":"veil-user"},"capabilities":{"appList":true,"appLaunch":true,"windowTracking":true,"windowCapture":true,"input":true,"clipboardText":true,"packageIdentity":false}}"#
         ])
         let client = VeilHostClient(transport: transport)
 
@@ -140,7 +140,7 @@ struct VeilHostClientTests {
     @Test("runs the Notepad launch flow in protocol order")
     func runsNotepadLaunchFlow() async throws {
         let transport = RecordingTransport(responses: [
-            #"{"type":"agent.health.response","requestId":"req_health","protocolVersion":1,"agentVersion":"0.1.0","os":"windows-arm64","session":{"interactive":true,"user":"veil-user"},"capabilities":{"appList":true,"appLaunch":true,"windowTracking":true,"windowCapture":false,"input":false,"clipboardText":false}}"#,
+            #"{"type":"agent.health.response","requestId":"req_health","protocolVersion":1,"agentVersion":"0.1.0","os":"windows-arm64","session":{"interactive":true,"user":"veil-user"},"capabilities":{"appList":true,"appLaunch":true,"windowTracking":true,"windowCapture":false,"input":false,"clipboardText":false,"packageIdentity":false}}"#,
             #"{"type":"app.list.response","requestId":"req_apps","apps":[{"id":"winapp_notepad","name":"Notepad","exePath":"C:\\Windows\\System32\\notepad.exe","publisher":"Microsoft","iconId":"icon_notepad"}]}"#,
             #"{"type":"app.launch.response","requestId":"req_launch_notepad","accepted":true,"processId":4912}"#,
             #"{"type":"window.created","windowId":"hwnd:0003029A","processId":4912,"appId":"winapp_notepad","title":"Untitled - Notepad","bounds":{"x":10,"y":10,"width":1280,"height":800},"state":"normal","focused":true}"#
@@ -163,7 +163,7 @@ struct VeilHostClientTests {
     @Test("launches a selected Windows app id")
     func launchesSelectedWindowsAppId() async throws {
         let transport = RecordingTransport(responses: [
-            #"{"type":"agent.health.response","requestId":"req_health","protocolVersion":1,"agentVersion":"0.1.0","os":"windows-arm64","session":{"interactive":true,"user":"veil-user"},"capabilities":{"appList":true,"appLaunch":true,"windowTracking":true,"windowCapture":false,"input":false,"clipboardText":false}}"#,
+            #"{"type":"agent.health.response","requestId":"req_health","protocolVersion":1,"agentVersion":"0.1.0","os":"windows-arm64","session":{"interactive":true,"user":"veil-user"},"capabilities":{"appList":true,"appLaunch":true,"windowTracking":true,"windowCapture":false,"input":false,"clipboardText":false,"packageIdentity":false}}"#,
             #"{"type":"app.list.response","requestId":"req_apps","apps":[{"id":"winapp_calculator","name":"Calculator","exePath":"calc.exe","publisher":"Microsoft","iconId":"icon_calculator"}]}"#,
             #"{"type":"app.launch.response","requestId":"req_launch_winapp_calculator","accepted":true,"processId":5010}"#,
             #"{"type":"window.created","windowId":"hwnd:0003030B","processId":5010,"appId":"winapp_calculator","title":"Calculator","bounds":{"x":10,"y":10,"width":520,"height":720},"state":"normal","focused":true}"#
@@ -180,7 +180,7 @@ struct VeilHostClientTests {
     @Test("opens a dropped file and launches the target app with it")
     func opensADroppedFileAndLaunchesTheTargetAppWithIt() async throws {
         let transport = RecordingTransport(responses: [
-            #"{"type":"agent.health.response","requestId":"req_health","protocolVersion":1,"agentVersion":"0.1.0","os":"windows-arm64","session":{"interactive":true,"user":"veil-user"},"capabilities":{"appList":true,"appLaunch":true,"windowTracking":true,"windowCapture":false,"input":false,"clipboardText":false}}"#,
+            #"{"type":"agent.health.response","requestId":"req_health","protocolVersion":1,"agentVersion":"0.1.0","os":"windows-arm64","session":{"interactive":true,"user":"veil-user"},"capabilities":{"appList":true,"appLaunch":true,"windowTracking":true,"windowCapture":false,"input":false,"clipboardText":false,"packageIdentity":false}}"#,
             #"{"type":"app.list.response","requestId":"req_apps","apps":[{"id":"winapp_notepad","name":"Notepad","exePath":"C:\\Windows\\System32\\notepad.exe","publisher":"Microsoft","iconId":"icon_notepad"}]}"#,
             #"{"type":"file.open.response","requestId":"req_open_winapp_notepad","accepted":true,"processId":4931}"#,
             #"{"type":"window.created","windowId":"hwnd:00010500","processId":4931,"appId":"winapp_notepad","title":"notes.txt - Notepad","bounds":{"x":10,"y":10,"width":1280,"height":800},"state":"normal","focused":true}"#
@@ -203,7 +203,7 @@ struct VeilHostClientTests {
     @Test("surfaces agent errors when opening a dropped file fails")
     func surfacesAgentErrorsWhenOpeningADroppedFileFails() async throws {
         let transport = RecordingTransport(responses: [
-            #"{"type":"agent.health.response","requestId":"req_health","protocolVersion":1,"agentVersion":"0.1.0","os":"windows-arm64","session":{"interactive":true,"user":"veil-user"},"capabilities":{"appList":true,"appLaunch":true,"windowTracking":true,"windowCapture":false,"input":false,"clipboardText":false}}"#,
+            #"{"type":"agent.health.response","requestId":"req_health","protocolVersion":1,"agentVersion":"0.1.0","os":"windows-arm64","session":{"interactive":true,"user":"veil-user"},"capabilities":{"appList":true,"appLaunch":true,"windowTracking":true,"windowCapture":false,"input":false,"clipboardText":false,"packageIdentity":false}}"#,
             #"{"type":"app.list.response","requestId":"req_apps","apps":[{"id":"winapp_notepad","name":"Notepad","exePath":"C:\\Windows\\System32\\notepad.exe","publisher":"Microsoft","iconId":"icon_notepad"}]}"#,
             #"{"type":"error","requestId":"req_open_winapp_notepad","code":"invalid_file_name","message":"fileName must be a non-empty file name with no path separators or traversal."}"#
         ])
@@ -217,7 +217,7 @@ struct VeilHostClientTests {
     @Test("surfaces agent launch errors without waiting for a second launch reply")
     func surfacesAgentLaunchErrorsWithoutWaitingForSecondLaunchReply() async throws {
         let transport = RecordingTransport(responses: [
-            #"{"type":"agent.health.response","requestId":"req_health","protocolVersion":1,"agentVersion":"0.1.0","os":"windows-arm64","session":{"interactive":true,"user":"veil-user"},"capabilities":{"appList":true,"appLaunch":true,"windowTracking":true,"windowCapture":false,"input":false,"clipboardText":false}}"#,
+            #"{"type":"agent.health.response","requestId":"req_health","protocolVersion":1,"agentVersion":"0.1.0","os":"windows-arm64","session":{"interactive":true,"user":"veil-user"},"capabilities":{"appList":true,"appLaunch":true,"windowTracking":true,"windowCapture":false,"input":false,"clipboardText":false,"packageIdentity":false}}"#,
             #"{"type":"app.list.response","requestId":"req_apps","apps":[{"id":"winapp_notepad","name":"Notepad","exePath":"notepad.exe","publisher":"Microsoft","iconId":"icon_notepad"}]}"#,
             #"{"type":"error","requestId":"req_launch_winapp_notepad","code":"app_launch_failed","message":"notepad.exe started but no top-level window was discovered."}"#
         ])
@@ -237,7 +237,7 @@ struct VeilHostClientTests {
     func ignoresUnsolicitedFrameEventsMixedIntoAppLaunchReplies() async throws {
         let transport = BatchRecordingTransport(responseBatches: [
             [
-                #"{"type":"agent.health.response","requestId":"req_health","protocolVersion":1,"agentVersion":"0.1.0","os":"windows-arm64","session":{"interactive":true,"user":"veil-user"},"capabilities":{"appList":true,"appLaunch":true,"windowTracking":true,"windowCapture":true,"input":true,"clipboardText":true}}"#
+                #"{"type":"agent.health.response","requestId":"req_health","protocolVersion":1,"agentVersion":"0.1.0","os":"windows-arm64","session":{"interactive":true,"user":"veil-user"},"capabilities":{"appList":true,"appLaunch":true,"windowTracking":true,"windowCapture":true,"input":true,"clipboardText":true,"packageIdentity":false}}"#
             ],
             [
                 #"{"type":"app.list.response","requestId":"req_apps","apps":[{"id":"winapp_notepad","name":"Notepad","exePath":"notepad.exe","publisher":"Microsoft","iconId":"icon_notepad"}]}"#
@@ -260,7 +260,7 @@ struct VeilHostClientTests {
     @Test("proves Windows app window launch with first frame evidence")
     func provesWindowsAppWindowLaunchWithFirstFrameEvidence() async throws {
         let transport = RecordingTransport(responses: [
-            #"{"type":"agent.health.response","requestId":"req_health","protocolVersion":1,"agentVersion":"0.1.0","os":"windows-arm64","session":{"interactive":true,"user":"veil-user"},"capabilities":{"appList":true,"appLaunch":true,"windowTracking":true,"windowCapture":true,"input":true,"clipboardText":true}}"#,
+            #"{"type":"agent.health.response","requestId":"req_health","protocolVersion":1,"agentVersion":"0.1.0","os":"windows-arm64","session":{"interactive":true,"user":"veil-user"},"capabilities":{"appList":true,"appLaunch":true,"windowTracking":true,"windowCapture":true,"input":true,"clipboardText":true,"packageIdentity":false}}"#,
             #"{"type":"app.list.response","requestId":"req_apps","apps":[{"id":"winapp_notepad","name":"Notepad","exePath":"C:\\Windows\\System32\\notepad.exe","publisher":"Microsoft","iconId":"icon_notepad"}]}"#,
             #"{"type":"app.launch.response","requestId":"req_launch_winapp_notepad","accepted":true,"processId":4912}"#,
             #"{"type":"window.created","windowId":"hwnd:0003029A","processId":4912,"appId":"winapp_notepad","title":"Untitled - Notepad","bounds":{"x":10,"y":10,"width":1280,"height":800},"state":"normal","focused":true}"#
@@ -297,7 +297,7 @@ struct VeilHostClientTests {
     @Test("proves Windows app coherence with input and clipboard evidence")
     func provesWindowsAppCoherenceWithInputAndClipboardEvidence() async throws {
         let transport = RecordingTransport(responses: [
-            #"{"type":"agent.health.response","requestId":"req_health","protocolVersion":1,"agentVersion":"0.1.0","os":"windows-arm64","session":{"interactive":true,"user":"veil-user"},"capabilities":{"appList":true,"appLaunch":true,"windowTracking":true,"windowCapture":true,"input":true,"clipboardText":true}}"#,
+            #"{"type":"agent.health.response","requestId":"req_health","protocolVersion":1,"agentVersion":"0.1.0","os":"windows-arm64","session":{"interactive":true,"user":"veil-user"},"capabilities":{"appList":true,"appLaunch":true,"windowTracking":true,"windowCapture":true,"input":true,"clipboardText":true,"packageIdentity":false}}"#,
             #"{"type":"app.list.response","requestId":"req_apps","apps":[{"id":"winapp_notepad","name":"Notepad","exePath":"C:\\Windows\\System32\\notepad.exe","publisher":"Microsoft","iconId":"icon_notepad"}]}"#,
             #"{"type":"app.launch.response","requestId":"req_launch_winapp_notepad","accepted":true,"processId":4912}"#,
             #"{"type":"window.created","windowId":"hwnd:0003029A","processId":4912,"appId":"winapp_notepad","title":"Untitled - Notepad","bounds":{"x":10,"y":10,"width":1280,"height":800},"state":"normal","focused":true}"#
@@ -358,8 +358,8 @@ struct VeilHostClientTests {
     @Test("proves Windows MVP runtime after guest agent wait")
     func provesWindowsMVPRuntimeAfterGuestAgentWait() async throws {
         let transport = RecordingTransport(responses: [
-            #"{"type":"agent.health.response","requestId":"req_health","protocolVersion":1,"agentVersion":"0.1.0","os":"windows-arm64","session":{"interactive":true,"user":"veil-user"},"capabilities":{"appList":true,"appLaunch":true,"windowTracking":true,"windowCapture":true,"input":true,"clipboardText":true}}"#,
-            #"{"type":"agent.health.response","requestId":"req_health","protocolVersion":1,"agentVersion":"0.1.0","os":"windows-arm64","session":{"interactive":true,"user":"veil-user"},"capabilities":{"appList":true,"appLaunch":true,"windowTracking":true,"windowCapture":true,"input":true,"clipboardText":true}}"#,
+            #"{"type":"agent.health.response","requestId":"req_health","protocolVersion":1,"agentVersion":"0.1.0","os":"windows-arm64","session":{"interactive":true,"user":"veil-user"},"capabilities":{"appList":true,"appLaunch":true,"windowTracking":true,"windowCapture":true,"input":true,"clipboardText":true,"packageIdentity":false}}"#,
+            #"{"type":"agent.health.response","requestId":"req_health","protocolVersion":1,"agentVersion":"0.1.0","os":"windows-arm64","session":{"interactive":true,"user":"veil-user"},"capabilities":{"appList":true,"appLaunch":true,"windowTracking":true,"windowCapture":true,"input":true,"clipboardText":true,"packageIdentity":false}}"#,
             #"{"type":"app.list.response","requestId":"req_apps","apps":[{"id":"winapp_notepad","name":"Notepad","exePath":"C:\\Windows\\System32\\notepad.exe","publisher":"Microsoft","iconId":"icon_notepad"}]}"#,
             #"{"type":"app.launch.response","requestId":"req_launch_winapp_notepad","accepted":true,"processId":4912}"#,
             #"{"type":"window.created","windowId":"hwnd:0003029A","processId":4912,"appId":"winapp_notepad","title":"Untitled - Notepad","bounds":{"x":10,"y":10,"width":1280,"height":800},"state":"normal","focused":true}"#
@@ -410,7 +410,7 @@ struct VeilHostClientTests {
     @Test("fails when Notepad is missing from the app list")
     func failsWhenNotepadIsMissing() async throws {
         let transport = RecordingTransport(responses: [
-            #"{"type":"agent.health.response","requestId":"req_health","protocolVersion":1,"agentVersion":"0.1.0","os":"windows-arm64","session":{"interactive":true,"user":"veil-user"},"capabilities":{"appList":true,"appLaunch":true,"windowTracking":true,"windowCapture":false,"input":false,"clipboardText":false}}"#,
+            #"{"type":"agent.health.response","requestId":"req_health","protocolVersion":1,"agentVersion":"0.1.0","os":"windows-arm64","session":{"interactive":true,"user":"veil-user"},"capabilities":{"appList":true,"appLaunch":true,"windowTracking":true,"windowCapture":false,"input":false,"clipboardText":false,"packageIdentity":false}}"#,
             #"{"type":"app.list.response","requestId":"req_apps","apps":[]}"#
         ])
         let client = VeilHostClient(transport: transport)
@@ -423,7 +423,7 @@ struct VeilHostClientTests {
     @Test("rejects Notepad launch when the HWND event does not match the launched process")
     func rejectsMismatchedNotepadWindowEvent() async throws {
         let transport = RecordingTransport(responses: [
-            #"{"type":"agent.health.response","requestId":"req_health","protocolVersion":1,"agentVersion":"0.1.0","os":"windows-arm64","session":{"interactive":true,"user":"veil-user"},"capabilities":{"appList":true,"appLaunch":true,"windowTracking":true,"windowCapture":false,"input":false,"clipboardText":false}}"#,
+            #"{"type":"agent.health.response","requestId":"req_health","protocolVersion":1,"agentVersion":"0.1.0","os":"windows-arm64","session":{"interactive":true,"user":"veil-user"},"capabilities":{"appList":true,"appLaunch":true,"windowTracking":true,"windowCapture":false,"input":false,"clipboardText":false,"packageIdentity":false}}"#,
             #"{"type":"app.list.response","requestId":"req_apps","apps":[{"id":"winapp_notepad","name":"Notepad","exePath":"C:\\Windows\\System32\\notepad.exe","publisher":"Microsoft","iconId":"icon_notepad"}]}"#,
             #"{"type":"app.launch.response","requestId":"req_launch_notepad","accepted":true,"processId":4912}"#,
             #"{"type":"window.created","windowId":"hwnd:0003029A","processId":9001,"appId":"winapp_notepad","title":"Untitled - Notepad","bounds":{"x":10,"y":10,"width":1280,"height":800},"state":"normal","focused":true}"#

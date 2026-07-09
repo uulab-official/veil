@@ -23,6 +23,7 @@ test("responds to agent health requests with fixture capability data", async () 
   assert.equal(replies[0].requestId, "req_001");
   assert.equal(replies[0].capabilities.appLaunch, true);
   assert.equal(replies[0].capabilities.windowCapture, true);
+  assert.equal(replies[0].capabilities.packageIdentity, false);
 });
 
 test("launches Notepad and emits a tracked window event", async () => {

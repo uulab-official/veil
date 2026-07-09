@@ -193,6 +193,7 @@ test("windows agent accepts host clipboard text updates", async () => {
   assert.match(session, /MessageTypes\.ClipboardTextSet/);
   assert.match(session, /HandleClipboardTextSetAsync/);
   assert.match(session, /\["clipboardText"\]\s*=\s*true/);
+  assert.match(session, /\["packageIdentity"\]\s*=\s*false/);
 });
 
 test("windows agent broadcasts guest clipboard text changes without host echo loops", async () => {

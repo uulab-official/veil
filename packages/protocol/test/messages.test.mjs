@@ -7,6 +7,7 @@ import {
   MessageType,
   createError,
   parseMessage,
+  validateAgentHealthResponse,
   validateAppLaunchAcceptance,
   validateClipboardTextSet,
   validateFileOpenRequest,
@@ -98,6 +99,23 @@ test("creates structured errors", () => {
     code: "app_not_found",
     message: "No app exists for id x"
   });
+});
+
+test("validates agent health capability readiness", async () => {
+  const health = validateAgentHealthResponse(await readFixture("agent.health.response.json"));
+
+  assert.equal(health.capabilities.windowCapture, true);
+  assert.equal(health.capabilities.packageIdentity, false);
+});
+
+test("rejects agent health without package identity readiness", async () => {
+  const health = await readFixture("agent.health.response.json");
+  delete health.capabilities.packageIdentity;
+
+  assert.throws(
+    () => validateAgentHealthResponse(health),
+    /capabilities\.packageIdentity/
+  );
 });
 
 test("validates an app launch acceptance pair", async () => {

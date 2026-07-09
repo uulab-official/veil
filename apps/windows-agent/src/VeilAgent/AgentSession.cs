@@ -535,7 +535,8 @@ public sealed class AgentSession
             ["windowTracking"] = true,
             ["windowCapture"] = true,
             ["input"] = true,
-            ["clipboardText"] = true
+            ["clipboardText"] = true,
+            ["packageIdentity"] = false
         }
     };
 

@@ -11,7 +11,8 @@
         "clipboardText": true,
         "input": true,
         "windowCapture": true,
-        "windowTracking": true
+        "windowTracking": true,
+        "packageIdentity": false
       },
       "os": "windows-arm64",
       "protocolVersion": 1,

@@ -61,10 +61,17 @@ Response:
     "windowTracking": true,
     "windowCapture": true,
     "input": true,
-    "clipboardText": true
+    "clipboardText": true,
+    "packageIdentity": false
   }
 }
 ```
+
+`capabilities.packageIdentity` is `true` only when the Windows agent is running
+with Windows package identity. The default unpackaged agent reports `false`.
+Veil uses this readiness signal before enabling package-gated Windows APIs such
+as borderless Windows Graphics Capture and Windows notification listener
+integration.
 
 ## App List
 

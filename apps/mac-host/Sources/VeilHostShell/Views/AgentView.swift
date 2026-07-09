@@ -60,6 +60,7 @@ struct AgentView: View {
                         CapabilityPill(title: "Window Capture", isEnabled: health.capabilities.windowCapture)
                         CapabilityPill(title: "Input", isEnabled: health.capabilities.input)
                         CapabilityPill(title: "Clipboard", isEnabled: health.capabilities.clipboardText)
+                        CapabilityPill(title: "Package Identity", isEnabled: health.capabilities.packageIdentity)
                     }
                 }
 

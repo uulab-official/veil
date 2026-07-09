@@ -63,6 +63,9 @@ public struct AgentCapabilities: Codable, Equatable, Sendable {
     public var windowCapture: Bool
     public var input: Bool
     public var clipboardText: Bool
+    /// True when the Windows agent is running with package identity. Required before Veil can
+    /// request package-gated Windows APIs such as borderless capture and notification listening.
+    public var packageIdentity: Bool = false
 }
 
 public struct AppListRequest: Codable, Equatable, Sendable {

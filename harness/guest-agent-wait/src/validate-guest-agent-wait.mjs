@@ -97,7 +97,15 @@ function validateHealth(health) {
   if (!health.capabilities || typeof health.capabilities !== "object" || Array.isArray(health.capabilities)) {
     throw new TypeError("diagnostic.health.capabilities must be an object.");
   }
-  for (const field of ["appList", "appLaunch", "windowTracking", "windowCapture", "input", "clipboardText"]) {
+  for (const field of [
+    "appList",
+    "appLaunch",
+    "windowTracking",
+    "windowCapture",
+    "input",
+    "clipboardText",
+    "packageIdentity"
+  ]) {
     requireBoolean(health.capabilities[field], `diagnostic.health.capabilities.${field}`);
   }
 }

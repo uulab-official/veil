@@ -3355,7 +3355,7 @@ struct VeilVMControl {
         if let health = report.diagnostic.health {
             print("Agent: \(health.agentVersion)")
             print("OS: \(health.os)")
-            print("Capabilities: appLaunch=\(health.capabilities.appLaunch), windowCapture=\(health.capabilities.windowCapture), input=\(health.capabilities.input), clipboard=\(health.capabilities.clipboardText)")
+            print("Capabilities: appLaunch=\(health.capabilities.appLaunch), windowCapture=\(health.capabilities.windowCapture), input=\(health.capabilities.input), clipboard=\(health.capabilities.clipboardText), packageIdentity=\(health.capabilities.packageIdentity)")
         }
         if let errorMessage = report.diagnostic.errorMessage {
             print("Error: \(errorMessage)")
