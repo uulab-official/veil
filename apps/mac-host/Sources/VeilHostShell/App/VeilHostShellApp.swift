@@ -110,6 +110,13 @@ struct VeilHostShellApp: App {
                     scheduleAutomaticQuietRuntimeIfNeeded()
                     syncLauncherWindowVisibility()
                 }
+                .onChange(of: vmModel.snapshot?.state) {
+                    syncDockTileRuntimeStatus()
+                    scheduleAutomaticQuietRuntimeIfNeeded()
+                }
+                .onChange(of: vmModel.phase) {
+                    scheduleAutomaticQuietRuntimeIfNeeded()
+                }
         }
         .defaultLaunchBehavior(.presented)
         .defaultSize(width: 1440, height: 900)
