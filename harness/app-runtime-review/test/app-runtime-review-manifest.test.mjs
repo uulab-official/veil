@@ -24,6 +24,16 @@ test("rejects manifests with missing screenshot files", () => {
   );
 });
 
+test("rejects manifests with drifted minimum screenshot dimensions", () => {
+  const manifest = demoManifest();
+  manifest.minimumScreenshotWidth = 1;
+
+  assert.throws(
+    () => validateAppRuntimeReviewManifest(manifest),
+    /minimum screenshot dimensions/
+  );
+});
+
 test("rejects manifests with missing capture steps", () => {
   const manifest = demoManifest();
   manifest.captureSteps.pop();

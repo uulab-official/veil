@@ -1,7 +1,7 @@
 {
   "attachedScreenshotCount" : 0,
   "evidenceDirectory" : "\/tmp\/veil-review-verify",
-  "generatedAt" : "2026-07-09T16:47:11Z",
+  "generatedAt" : "2026-07-09T16:50:23Z",
   "isComplete" : false,
   "kind" : "windowsAppRuntimeReviewEvidenceVerification",
   "manifest" : {
@@ -55,6 +55,8 @@
     "generatedAt" : "2026-07-09T16:04:35Z",
     "kind" : "windowsAppRuntimeReviewEvidenceManifest",
     "manifestPath" : "\/tmp\/veil-review-verify\/review-manifest.json",
+    "minimumScreenshotHeight" : 360,
+    "minimumScreenshotWidth" : 640,
     "nextActions" : [
       "Open the evidence folder with `open \/tmp\/veil-review-verify`.",
       "Capture the five required screenshots into the evidence directory as valid PNG files of at least 640 x 360.",
@@ -215,7 +217,7 @@
           "meetsLauncherContract" : true,
           "minHeight" : 760,
           "minWidth" : 1180,
-          "modifiedAt" : "2026-07-09T16:45:12Z",
+          "modifiedAt" : "2026-07-09T16:47:30Z",
           "reportPath" : "\/Users\/bonjin\/Documents\/workspace\/uulab\/veil\/dist\/veil-launch-report-latest.plist",
           "titlebarAppearsTransparent" : true,
           "visibleMainWindowCount" : 1
@@ -227,7 +229,7 @@
       "latestAppCheckPath" : "\/Users\/bonjin\/Library\/Application Support\/Veil\/Diagnostics\/MVP Proof\/notepad-mvp-window-detect.json",
       "screenshotEvidenceDirectory" : "\/tmp\/veil-review-verify"
     },
-    "generatedAt" : "2026-07-09T16:47:11Z",
+    "generatedAt" : "2026-07-09T16:50:23Z",
     "isReadyForReview" : false,
     "kind" : "windowsAppRuntimeReviewCard",
     "nextActionCommand" : "veil-vmctl app-runtime-review-verify --json --evidence-dir \/tmp\/veil-review-verify",
@@ -410,7 +412,7 @@
         "pendingLaunchCount" : 1,
         "restorableAppCount" : 1
       },
-      "generatedAt" : "2026-07-09T16:47:11Z",
+      "generatedAt" : "2026-07-09T16:50:23Z",
       "guestAgentDiagnostics" : {
         "diagnosticCommand" : "veil-host-probe --diagnose-agent",
         "endpoint" : "ws:\/\/127.0.0.1:18444",

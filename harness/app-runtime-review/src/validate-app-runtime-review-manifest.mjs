@@ -27,6 +27,8 @@ export function validateAppRuntimeReviewManifest(manifest) {
   requireString(manifest.manifestPath, "manifestPath");
   requireString(manifest.readmePath, "readmePath");
   requireNonNegativeInteger(manifest.requiredScreenshotCount, "requiredScreenshotCount");
+  requirePositiveInteger(manifest.minimumScreenshotWidth, "minimumScreenshotWidth");
+  requirePositiveInteger(manifest.minimumScreenshotHeight, "minimumScreenshotHeight");
   requireString(manifest.reviewCommand, "reviewCommand");
   requireString(manifest.verifyCommand, "verifyCommand");
   requireString(manifest.openEvidenceDirectoryCommand, "openEvidenceDirectoryCommand");
@@ -70,6 +72,9 @@ export function validateAppRuntimeReviewManifest(manifest) {
   }
   if (manifest.requiredScreenshotCount !== expectedSlotIds.length) {
     throw new TypeError("app runtime review manifest requiredScreenshotCount must match the release card.");
+  }
+  if (manifest.minimumScreenshotWidth !== 640 || manifest.minimumScreenshotHeight !== 360) {
+    throw new TypeError("app runtime review manifest minimum screenshot dimensions must be 640x360.");
   }
   if (manifest.screenshotFiles.length !== expectedSlotIds.length) {
     throw new TypeError("app runtime review manifest must list every required screenshot file.");
@@ -162,6 +167,12 @@ function requireString(value, fieldName) {
 function requireNonNegativeInteger(value, fieldName) {
   if (!Number.isInteger(value) || value < 0) {
     throw new TypeError(`App runtime review manifest field '${fieldName}' must be a non-negative integer.`);
+  }
+}
+
+function requirePositiveInteger(value, fieldName) {
+  if (!Number.isInteger(value) || value <= 0) {
+    throw new TypeError(`App runtime review manifest field '${fieldName}' must be a positive integer.`);
   }
 }
 

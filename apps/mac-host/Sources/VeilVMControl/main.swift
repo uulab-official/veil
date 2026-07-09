@@ -725,12 +725,17 @@ struct AppRuntimeReviewCaptureStep: Codable, Equatable {
 }
 
 struct AppRuntimeReviewEvidenceManifest: Codable, Equatable {
+    static let defaultMinimumScreenshotWidth = 640
+    static let defaultMinimumScreenshotHeight = 360
+
     var kind: String = "windowsAppRuntimeReviewEvidenceManifest"
     var generatedAt: Date
     var evidenceDirectory: String
     var manifestPath: String
     var readmePath: String
     var requiredScreenshotCount: Int
+    var minimumScreenshotWidth: Int
+    var minimumScreenshotHeight: Int
     var screenshotFiles: [AppRuntimeReviewEvidenceFile]
     var captureSteps: [AppRuntimeReviewCaptureStep]
     var reviewCommand: String
@@ -744,6 +749,8 @@ struct AppRuntimeReviewEvidenceManifest: Codable, Equatable {
         manifestPath: String,
         readmePath: String,
         requiredScreenshotCount: Int,
+        minimumScreenshotWidth: Int = AppRuntimeReviewEvidenceManifest.defaultMinimumScreenshotWidth,
+        minimumScreenshotHeight: Int = AppRuntimeReviewEvidenceManifest.defaultMinimumScreenshotHeight,
         screenshotFiles: [AppRuntimeReviewEvidenceFile],
         captureSteps: [AppRuntimeReviewCaptureStep],
         reviewCommand: String,
@@ -756,6 +763,8 @@ struct AppRuntimeReviewEvidenceManifest: Codable, Equatable {
         self.manifestPath = manifestPath
         self.readmePath = readmePath
         self.requiredScreenshotCount = requiredScreenshotCount
+        self.minimumScreenshotWidth = minimumScreenshotWidth
+        self.minimumScreenshotHeight = minimumScreenshotHeight
         self.screenshotFiles = screenshotFiles
         self.captureSteps = captureSteps
         self.reviewCommand = reviewCommand
@@ -772,6 +781,8 @@ struct AppRuntimeReviewEvidenceManifest: Codable, Equatable {
         manifestPath = try container.decode(String.self, forKey: .manifestPath)
         readmePath = try container.decode(String.self, forKey: .readmePath)
         requiredScreenshotCount = try container.decode(Int.self, forKey: .requiredScreenshotCount)
+        minimumScreenshotWidth = try container.decodeIfPresent(Int.self, forKey: .minimumScreenshotWidth) ?? Self.defaultMinimumScreenshotWidth
+        minimumScreenshotHeight = try container.decodeIfPresent(Int.self, forKey: .minimumScreenshotHeight) ?? Self.defaultMinimumScreenshotHeight
         screenshotFiles = try container.decode([AppRuntimeReviewEvidenceFile].self, forKey: .screenshotFiles)
         captureSteps = try container.decode([AppRuntimeReviewCaptureStep].self, forKey: .captureSteps)
         reviewCommand = try container.decode(String.self, forKey: .reviewCommand)
@@ -1170,6 +1181,8 @@ struct VeilVMControl {
             manifestPath: manifestURL.path,
             readmePath: readmeURL.path,
             requiredScreenshotCount: card.requiredScreenshotCount,
+            minimumScreenshotWidth: minimumReviewScreenshotWidth,
+            minimumScreenshotHeight: minimumReviewScreenshotHeight,
             screenshotFiles: screenshotFiles,
             captureSteps: appRuntimeReviewCaptureSteps(
                 screenshotFiles: screenshotFiles,
@@ -1442,6 +1455,8 @@ struct VeilVMControl {
             manifestPath: manifest.manifestPath,
             readmePath: manifest.readmePath,
             requiredScreenshotCount: manifest.requiredScreenshotCount,
+            minimumScreenshotWidth: minimumReviewScreenshotWidth,
+            minimumScreenshotHeight: minimumReviewScreenshotHeight,
             screenshotFiles: manifest.screenshotFiles,
             captureSteps: captureSteps,
             reviewCommand: reviewCommand,

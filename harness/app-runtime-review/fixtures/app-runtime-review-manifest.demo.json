@@ -46,9 +46,11 @@
     }
   ],
   "evidenceDirectory" : "\/tmp\/veil-review-readme",
-  "generatedAt" : "2026-07-09T16:47:11Z",
+  "generatedAt" : "2026-07-09T16:50:23Z",
   "kind" : "windowsAppRuntimeReviewEvidenceManifest",
   "manifestPath" : "\/tmp\/veil-review-readme\/review-manifest.json",
+  "minimumScreenshotHeight" : 360,
+  "minimumScreenshotWidth" : 640,
   "nextActions" : [
     "Open the evidence folder with `open \/tmp\/veil-review-readme`.",
     "Capture the five required screenshots into the evidence directory as valid PNG files of at least 640 x 360.",

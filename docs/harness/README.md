@@ -230,7 +230,7 @@ evidence-folder verification command instead of promoting the card as ready.
 
 Run `app-runtime-review-init` before a live VM pass to create the evidence
 folder, `review-manifest.json`, and a human-readable `README.md`. The manifest
-lists every required PNG path, the ordered capture steps, the exact
+lists every required PNG path, the 640 x 360 minimum screenshot contract, the ordered capture steps, the exact
 `screencapture -i` save command, supporting commands, a structured Finder
 `open` command, and follow-up review/verify commands, so contributors can
 capture screenshots into one predictable folder instead of inventing names
