@@ -514,18 +514,18 @@ struct VeilHostShellApp: App {
         switch vmModel.snapshot?.state {
         case .running, .starting:
             activateMainWindow()
-            displayMessage = "Windows is running. Veil is preparing the guest agent so \(appName) can open as a Mac window."
+            displayMessage = "Windows is running. Veil is preparing the app connection so \(appName) can open as a Mac window."
             scheduleAutomaticGuestAgentRecoveryIfNeeded()
             if vmRuntimeBooter.supportsNativeDisplayWindow {
                 showWindowsDisplay()
             }
         default:
             guard vmModel.canStart else {
-                displayMessage = "Veil queued \(appName). Start Windows when the local runtime is available."
+                displayMessage = "Veil queued \(appName). Start Windows when setup is available."
                 return
             }
 
-            displayMessage = "Starting Windows. Veil will open \(appName) when the guest agent connects."
+            displayMessage = "Starting Windows. Veil will open \(appName) when the app connection is ready."
             startWindowsAndShowDisplay()
         }
     }
@@ -551,14 +551,14 @@ struct VeilHostShellApp: App {
                 return
             }
 
-            displayMessage = "Windows is running. Veil is starting the guest agent for \(pendingLaunchDisplayName())."
+            displayMessage = "Windows is running. Veil is repairing the app connection for \(pendingLaunchDisplayName())."
 
             do {
                 _ = try await vmRuntimeBooter.installGuestAgentFromAttachedMedia()
-                displayMessage = "Guest agent recovery sent. Veil will open \(pendingLaunchDisplayName()) when Windows responds."
+                displayMessage = "App connection repair sent. Veil will open \(pendingLaunchDisplayName()) when Windows responds."
                 await vmModel.refreshRuntimeEvidence()
             } catch {
-                displayMessage = "Guest agent recovery could not start: \(userMessage(for: error))"
+                displayMessage = "App connection repair could not start: \(userMessage(for: error))"
             }
 
             automaticGuestAgentRecoveryTask = nil
@@ -639,7 +639,7 @@ struct VeilHostShellApp: App {
         switch handoff {
         case .prepareGuestAgentRecovery(let shouldShowDisplay):
             activateMainWindow()
-            displayMessage = "Windows is running. Veil is preparing the guest agent to reconnect previous apps."
+            displayMessage = "Windows is running. Veil is preparing the app connection to reconnect previous apps."
             scheduleAutomaticGuestAgentRecoveryIfNeeded()
             if shouldShowDisplay {
                 showWindowsDisplay()
@@ -648,18 +648,18 @@ struct VeilHostShellApp: App {
             Task { @MainActor in
                 cancelAutomaticQuietRuntime()
                 activateMainWindow()
-                displayMessage = "Starting Windows. Veil will reconnect previous apps when the guest agent responds."
+                displayMessage = "Starting Windows. Veil will reconnect previous apps when the app connection is ready."
                 await vmModel.start()
 
                 if vmModel.snapshot?.state == .running || vmModel.snapshot?.state == .starting {
-                    displayMessage = "Windows is running. Veil is preparing the guest agent to reconnect previous apps."
+                    displayMessage = "Windows is running. Veil is preparing the app connection to reconnect previous apps."
                     scheduleAutomaticGuestAgentRecoveryIfNeeded()
                 } else if let errorMessage = vmModel.errorMessage {
                     displayMessage = "Windows could not start for previous apps: \(errorMessage)"
                 }
             }
         case .waitForRuntimeAvailability:
-            displayMessage = "Veil found previous Windows apps to reconnect. Start Windows when the local runtime is available."
+            displayMessage = "Veil found previous Windows apps to reconnect. Start Windows when setup is available."
         }
     }
 
@@ -790,14 +790,14 @@ struct VeilHostShellApp: App {
                 await model.load()
             }
 
-            displayMessage = "Running \(proofDisplayName(for: proofKind)) proof for \(proofAppName(appId: appId))."
+            displayMessage = "Running \(appCheckDisplayName(for: proofKind)) app check for \(proofAppName(appId: appId))."
 
             do {
                 let url = try await writeRecommendedProof(proofKind: proofKind, appId: appId)
-                displayMessage = "\(proofDisplayName(for: proofKind)) proof saved: \(url.path)"
+                displayMessage = "\(appCheckDisplayName(for: proofKind)) app check saved: \(url.path)"
                 await model.load()
             } catch {
-                displayMessage = "\(proofDisplayName(for: proofKind)) proof could not complete: \(userMessage(for: error))"
+                displayMessage = "\(appCheckDisplayName(for: proofKind)) app check could not complete: \(userMessage(for: error))"
             }
         }
     }
@@ -853,14 +853,14 @@ struct VeilHostShellApp: App {
         try data.write(to: outputURL, options: .atomic)
     }
 
-    private func proofDisplayName(for proofKind: String) -> String {
+    private func appCheckDisplayName(for proofKind: String) -> String {
         switch proofKind {
         case "app-window":
-            "App-window"
+            "Window"
         case "coherence":
-            "Coherence"
+            "Input"
         case "mvp":
-            "MVP"
+            "Full"
         default:
             "Recommended"
         }
@@ -950,14 +950,14 @@ struct VeilHostShellApp: App {
     private func installGuestAgentFromDisplay() {
         Task { @MainActor in
             activateMainWindow()
-            displayMessage = "Sending the Veil guest agent installer to Windows."
+            displayMessage = "Sending the Veil app connection installer to Windows."
             do {
                 _ = try await vmRuntimeBooter.installGuestAgentFromAttachedMedia()
-                displayMessage = "Guest agent installer sent. Veil will connect when the Windows agent starts."
+                displayMessage = "App connection installer sent. Veil will connect when Windows is ready."
                 await vmModel.refreshRuntimeEvidence()
                 await recordGuestAgentInstallEvidenceIfNeeded()
             } catch {
-                displayMessage = "Guest agent install could not start: \(userMessage(for: error))"
+                displayMessage = "App connection install could not start: \(userMessage(for: error))"
             }
         }
     }
@@ -965,7 +965,7 @@ struct VeilHostShellApp: App {
     private func waitForGuestAgent() {
         Task { @MainActor in
             activateMainWindow()
-            displayMessage = "Checking the Windows guest agent."
+            displayMessage = "Checking the Windows app connection."
             let report = await model.waitForLiveAgentConnection(
                 endpoint: Self.agentURLString,
                 timeoutSeconds: 5
@@ -973,15 +973,15 @@ struct VeilHostShellApp: App {
             await recordGuestAgentInstallEvidenceIfNeeded()
 
             if report.status == .connected {
-                displayMessage = "Windows app integration is connected."
+                displayMessage = "Windows app connection is ready."
                 if let fulfilledLaunch = await model.refreshLiveAgentIfNeeded() {
                     showWindowsAppWindow(for: fulfilledLaunch)
                     syncLauncherWindowVisibility()
                 }
             } else if let hostForwardProbe = report.diagnostic.hostForwardProbe {
-                displayMessage = "Windows agent is not reachable yet (\(hostForwardProbe.status.rawValue))."
+                displayMessage = "Windows app connection is not ready yet (\(hostForwardProbe.status.rawValue))."
             } else {
-                displayMessage = "Windows agent is not reachable yet."
+                displayMessage = "Windows app connection is not ready yet."
             }
         }
     }
@@ -997,11 +997,11 @@ struct VeilHostShellApp: App {
             }
 
             let appName = pendingLaunchDisplayName()
-            displayMessage = "Starting the Windows guest agent so \(appName) can open as a Mac window."
+            displayMessage = "Repairing the Windows app connection so \(appName) can open as a Mac window."
 
             do {
                 _ = try await vmRuntimeBooter.installGuestAgentFromAttachedMedia()
-                displayMessage = "Guest agent recovery sent. Veil will open \(appName) when Windows responds."
+                displayMessage = "App connection repair sent. Veil will open \(appName) when Windows responds."
                 await vmModel.refreshRuntimeEvidence()
                 await recordGuestAgentInstallEvidenceIfNeeded()
 
@@ -1010,7 +1010,7 @@ struct VeilHostShellApp: App {
                     syncLauncherWindowVisibility()
                 }
             } catch {
-                displayMessage = "Guest agent recovery could not start: \(userMessage(for: error))"
+                displayMessage = "App connection repair could not start: \(userMessage(for: error))"
             }
         }
     }
@@ -1723,21 +1723,21 @@ private struct StandaloneMainWindowRoot: View {
 
     private func installGuestAgentFromDisplay() {
         Task { @MainActor in
-            displayMessage = "Sending the Veil guest agent installer to Windows."
+            displayMessage = "Sending the Veil app connection installer to Windows."
             do {
                 _ = try await vmRuntimeBooter.installGuestAgentFromAttachedMedia()
-                displayMessage = "Guest agent installer sent. Veil will connect when the Windows agent starts."
+                displayMessage = "App connection installer sent. Veil will connect when Windows is ready."
                 await vmModel.refreshRuntimeEvidence()
                 await recordGuestAgentInstallEvidenceIfNeeded()
             } catch {
-                displayMessage = "Guest agent install could not start: \(userMessage(for: error))"
+                displayMessage = "App connection install could not start: \(userMessage(for: error))"
             }
         }
     }
 
     private func waitForGuestAgent() {
         Task { @MainActor in
-            displayMessage = "Checking the Windows guest agent."
+            displayMessage = "Checking the Windows app connection."
             let report = await model.waitForLiveAgentConnection(
                 endpoint: Self.agentURLString,
                 timeoutSeconds: 5
@@ -1745,11 +1745,11 @@ private struct StandaloneMainWindowRoot: View {
             await recordGuestAgentInstallEvidenceIfNeeded()
 
             if report.status == .connected {
-                displayMessage = "Windows app integration is connected."
+                displayMessage = "Windows app connection is ready."
             } else if let hostForwardProbe = report.diagnostic.hostForwardProbe {
-                displayMessage = "Windows agent is not reachable yet (\(hostForwardProbe.status.rawValue))."
+                displayMessage = "Windows app connection is not ready yet (\(hostForwardProbe.status.rawValue))."
             } else {
-                displayMessage = "Windows agent is not reachable yet."
+                displayMessage = "Windows app connection is not ready yet."
             }
         }
     }

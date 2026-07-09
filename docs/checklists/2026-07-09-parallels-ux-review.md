@@ -24,6 +24,7 @@ Goal: keep the user-facing workflow one-screen-first (launcher + one action path
 - [x] Align Dock queued-app actions with the menu bar flow so a queued Windows app shows Refresh Display, Open Queued, Continue, or Start Windows as the next product action instead of a disabled one-off item.
 - [x] Polish launcher and progress-strip copy away from guest-agent/proof/runtime wording toward app connection, Windows setup, and app check language.
 - [x] Reuse the queued-app next-action policy in the menu bar as well as the Dock menu, including compact app-name labels that stay within menu-bar length guidance.
+- [x] Polish action result messages and app-runtime proof-plan reasons toward app connection and app check language, with regression coverage for automation-visible reason text.
 
 ## CEO Review
 

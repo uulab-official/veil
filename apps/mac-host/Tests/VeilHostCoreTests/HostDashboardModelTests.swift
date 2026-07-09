@@ -654,6 +654,9 @@ struct HostDashboardModelTests {
         #expect(report.proofPlan.recommendedAppWindowProofCommand == "veil-vmctl app-window-proof --json --app-id winapp_notepad")
         #expect(report.proofPlan.recommendedCoherenceProofCommand == "veil-vmctl coherence-proof --json --app-id winapp_notepad")
         #expect(report.proofPlan.recommendedMVPProofCommand == "veil-vmctl mvp-proof --json --app-id winapp_notepad --require-proved")
+        #expect(report.proofPlan.reason == "The Windows app connection can run window, input, and full app checks for the selected app.")
+        #expect(!report.proofPlan.reason.contains("Windows agent"))
+        #expect(!report.proofPlan.reason.contains("proof"))
         #expect(report.actions.first { $0.id == "dock.openMainWindow" }?.isAvailable == true)
         #expect(report.actions.first { $0.id == "dock.bringWindowsAppsForward" }?.isAvailable == true)
         #expect(report.actions.first { $0.id == "clipboard.setText" }?.isAvailable == true)
@@ -790,6 +793,7 @@ struct HostDashboardModelTests {
         #expect(artifacts.latestProofPath?.hasSuffix("/Recommended Proof/mvp-proof-latest.json") == true)
         #expect(artifacts.latestProofFileName == "mvp-proof-latest.json")
         #expect(artifacts.latestProofModifiedAt == Date(timeIntervalSince1970: 1_700_000_100))
+        #expect(artifacts.reason == "Latest app check artifact is available in Veil diagnostics.")
     }
 
     @Test("updates active window sessions by HWND")

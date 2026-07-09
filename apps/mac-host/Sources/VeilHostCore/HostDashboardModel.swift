@@ -1136,7 +1136,7 @@ public final class HostDashboardModel {
                 canRunAppWindowProof: false,
                 canRunCoherenceProof: false,
                 canRunMVPProof: false,
-                reason: "Select a Windows app before running proof commands."
+                reason: "Select a Windows app before running app checks."
             )
         }
 
@@ -1146,7 +1146,7 @@ public final class HostDashboardModel {
                 canRunAppWindowProof: false,
                 canRunCoherenceProof: false,
                 canRunMVPProof: false,
-                reason: "Wait for the live Windows agent before running proof commands."
+                reason: "Wait for the Windows app connection before running app checks."
             )
         }
 
@@ -1156,7 +1156,7 @@ public final class HostDashboardModel {
                 canRunAppWindowProof: false,
                 canRunCoherenceProof: false,
                 canRunMVPProof: false,
-                reason: "The selected Windows app is not available for proof launch."
+                reason: "The selected Windows app is not available for app checks."
             )
         }
 
@@ -1170,7 +1170,7 @@ public final class HostDashboardModel {
                 canRunAppWindowProof: false,
                 canRunCoherenceProof: false,
                 canRunMVPProof: false,
-                reason: "The live Windows agent must report windowCapture before app-window proof can run."
+                reason: "The Windows app connection must support window capture before the window check can run."
             )
         }
 
@@ -1184,7 +1184,7 @@ public final class HostDashboardModel {
                 recommendedProofKind: "app-window",
                 recommendedProofCommand: appWindowCommand,
                 recommendedAppWindowProofCommand: appWindowCommand,
-                reason: "The live Windows agent must report input and clipboardText before coherence and MVP proof can run."
+                reason: "The Windows app connection must support input and clipboard before full app checks can run."
             )
         }
 
@@ -1198,7 +1198,7 @@ public final class HostDashboardModel {
             recommendedAppWindowProofCommand: appWindowCommand,
             recommendedCoherenceProofCommand: coherenceCommand,
             recommendedMVPProofCommand: mvpCommand,
-            reason: "The live Windows agent can run app-window, coherence, and MVP proof commands for the selected app."
+            reason: "The Windows app connection can run window, input, and full app checks for the selected app."
         )
     }
 
@@ -1224,7 +1224,7 @@ public final class HostDashboardModel {
             return WindowsAppRuntimeProofArtifactStatus(
                 diagnosticsDirectory: diagnosticsDirectory.path,
                 recommendedProofDirectory: recommendedProofDirectory.path,
-                reason: "No proof artifact has been saved under Veil diagnostics yet."
+                reason: "No app check artifact has been saved under Veil diagnostics yet."
             )
         }
 
@@ -1235,7 +1235,7 @@ public final class HostDashboardModel {
             latestProofPath: latestProof.url.path,
             latestProofFileName: latestProof.url.lastPathComponent,
             latestProofModifiedAt: latestProof.modifiedAt,
-            reason: "Latest proof artifact is available in Veil diagnostics."
+            reason: "Latest app check artifact is available in Veil diagnostics."
         )
     }
 
