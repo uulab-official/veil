@@ -49,6 +49,10 @@ enum WindowsShellCopy {
     static let closeWindowsActionTitle = "Close Windows"
     static let refreshWindowsStatusTitle = "Refresh Status"
 
+    static func previousAppsRestoreTitle(canRestoreNow: Bool) -> String {
+        canRestoreNow ? "Restore Previous Apps" : "Reconnect Previous Apps"
+    }
+
     static func bringWindowsAppsForwardTitle(
         openAppWindowCount: Int,
         singleAppName: String? = nil

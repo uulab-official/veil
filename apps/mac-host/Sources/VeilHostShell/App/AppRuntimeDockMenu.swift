@@ -175,14 +175,24 @@ enum AppRuntimeDockMenuFactory {
                 )
             )
         } else {
+            if shouldPromotePreviousAppsRestore(model: model) {
+                menu.addItem(
+                    item(
+                        previousAppsRestoreTitle(model: model),
+                        action: #selector(AppRuntimeDockMenuTarget.restoreWindowsApps(_:)),
+                        target: target,
+                        isEnabled: model.canReconnectRestoreMirrorSessions
+                    )
+                )
+            }
             menu.addItem(item("Open Veil", action: #selector(AppRuntimeDockMenuTarget.openVeil(_:)), target: target))
         }
 
-        if !model.restorableAppIds.isEmpty {
+        if shouldShowSecondaryPreviousAppsRestore(model: model) {
             menu.addItem(.separator())
             menu.addItem(
                 item(
-                    model.canRestoreMirrorSessions ? "Restore Previous Apps" : "Reconnect Previous Apps",
+                    previousAppsRestoreTitle(model: model),
                     action: #selector(AppRuntimeDockMenuTarget.restoreWindowsApps(_:)),
                     target: target,
                     isEnabled: model.canReconnectRestoreMirrorSessions
@@ -323,6 +333,20 @@ enum AppRuntimeDockMenuFactory {
 
     private static func appName(for appId: String, model: HostDashboardModel) -> String {
         model.apps.first { $0.id == appId }?.name ?? "Windows App"
+    }
+
+    private static func previousAppsRestoreTitle(model: HostDashboardModel) -> String {
+        WindowsShellCopy.previousAppsRestoreTitle(
+            canRestoreNow: model.canRestoreMirrorSessions
+        )
+    }
+
+    private static func shouldPromotePreviousAppsRestore(model: HostDashboardModel) -> Bool {
+        !model.restorableAppIds.isEmpty && model.mirrorSessions.isEmpty
+    }
+
+    private static func shouldShowSecondaryPreviousAppsRestore(model: HostDashboardModel) -> Bool {
+        !model.restorableAppIds.isEmpty && !shouldPromotePreviousAppsRestore(model: model)
     }
 
     private static func activeSingleAppName(model: HostDashboardModel) -> String? {

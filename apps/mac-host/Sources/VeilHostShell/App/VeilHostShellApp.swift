@@ -1232,6 +1232,15 @@ private struct VeilMenuBarMenu: View {
             Button("Open Veil", systemImage: "macwindow") {
                 openMainWindow()
             }
+        } else if shouldPromotePreviousAppsRestore {
+            Button(restorePreviousAppsTitle, systemImage: "arrow.clockwise.square") {
+                restoreWindowsAppWindowsAction()
+            }
+            .disabled(!model.canReconnectRestoreMirrorSessions)
+
+            Button("Open Veil", systemImage: "macwindow") {
+                openMainWindow()
+            }
         } else {
             Button("Open Veil", systemImage: "macwindow") {
                 openMainWindow()
@@ -1307,7 +1316,7 @@ private struct VeilMenuBarMenu: View {
             }
         }
 
-        if !model.restorableAppIds.isEmpty {
+        if shouldShowSecondaryPreviousAppsRestore {
             Button(restorePreviousAppsTitle, systemImage: "arrow.clockwise.square") {
                 restoreWindowsAppWindowsAction()
             }
@@ -1519,7 +1528,17 @@ private struct VeilMenuBarMenu: View {
     }
 
     private var restorePreviousAppsTitle: String {
-        model.canRestoreMirrorSessions ? "Restore Previous Apps" : "Reconnect Previous Apps"
+        WindowsShellCopy.previousAppsRestoreTitle(
+            canRestoreNow: model.canRestoreMirrorSessions
+        )
+    }
+
+    private var shouldPromotePreviousAppsRestore: Bool {
+        !model.restorableAppIds.isEmpty && model.mirrorSessions.isEmpty
+    }
+
+    private var shouldShowSecondaryPreviousAppsRestore: Bool {
+        !model.restorableAppIds.isEmpty && !shouldPromotePreviousAppsRestore
     }
 
     private func openMainWindow() {

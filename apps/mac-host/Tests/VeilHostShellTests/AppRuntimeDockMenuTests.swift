@@ -138,6 +138,8 @@ struct AppRuntimeDockMenuTests {
             WindowsShellCopy.openWindowsActionTitle(windowsInstalled: false),
             WindowsShellCopy.closeWindowsActionTitle,
             WindowsShellCopy.refreshWindowsStatusTitle,
+            WindowsShellCopy.previousAppsRestoreTitle(canRestoreNow: true),
+            WindowsShellCopy.previousAppsRestoreTitle(canRestoreNow: false),
             WindowsShellCopy.bringWindowsAppsForwardTitle(openAppWindowCount: 1),
             WindowsShellCopy.bringWindowsAppsForwardTitle(
                 openAppWindowCount: 1,
@@ -155,6 +157,8 @@ struct AppRuntimeDockMenuTests {
             "Set Up Windows",
             "Close Windows",
             "Refresh Status",
+            "Restore Previous Apps",
+            "Reconnect Previous Apps",
             "Bring Windows App Forward",
             "Bring Notepad Forward",
             "Bring Very Long Acc... Forward",
@@ -257,9 +261,17 @@ struct AppRuntimeDockMenuTests {
         )
 
         let restoreItem = menu.items.first { $0.title == "Reconnect Previous Apps" }
+        let firstAction = try #require(menu.items.dropFirst().first { !$0.isSeparatorItem })
+        let restoreIndex = try #require(menu.items.firstIndex { $0.title == "Reconnect Previous Apps" })
+        let openVeilIndex = try #require(menu.items.firstIndex { $0.title == "Open Veil" })
+        let restoreItemCount = menu.items.filter { $0.title == "Reconnect Previous Apps" }.count
+
         #expect(model.canRestoreMirrorSessions == false)
         #expect(model.canReconnectRestoreMirrorSessions)
         #expect(restoreItem?.isEnabled == true)
+        #expect(firstAction.title == "Reconnect Previous Apps")
+        #expect(restoreIndex < openVeilIndex)
+        #expect(restoreItemCount == 1)
     }
 
     @Test("Dock menu starts with app-first status")
