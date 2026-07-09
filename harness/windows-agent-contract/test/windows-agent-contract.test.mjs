@@ -332,6 +332,7 @@ test("windows agent includes user-logon install and uninstall scripts", async ()
   assert.match(install, /Register-VeilSparsePackage/);
   assert.match(install, /\[string\]\$SparsePackagePath\s*=\s*""/);
   assert.match(install, /\[string\]\$SparsePackageCertificatePath\s*=\s*""/);
+  assert.match(install, /\[switch\]\$RequirePackageIdentity/);
   assert.match(install, /VeilAgent\.Identity\.msix/);
   assert.match(install, /Add-AppxPackage\s+-Path\s+\$PackagePath\s+-ExternalLocation\s+\$ExternalLocation/);
   assert.match(install, /Import-Certificate[\s\S]+TrustedPeople/);
@@ -348,12 +349,17 @@ test("windows agent includes user-logon install and uninstall scripts", async ()
   assert.match(start, /ClientWebSocket/);
   assert.match(start, /agent\.health\.request/);
   assert.match(start, /agent\.health\.response/);
+  assert.match(start, /\[switch\]\$RequirePackageIdentity/);
+  assert.match(start, /capabilities\.packageIdentity/);
+  assert.match(start, /package identity is not ready yet/);
+  assert.match(start, /package identity was not ready/);
   assert.match(start, /Guest IPv4 addresses visible to Windows/);
   assert.match(start, /Get-Process\s+-Name\s+"VeilAgent"/);
   assert.match(start, /VeilAgent is already running/);
   assert.match(start, /loopback plus guest IPv4 agent\.health\.response did not both succeed/);
   assert.match(start, /RedirectStandardOutput\s+\$StdOutLogPath/);
   assert.match(start, /RedirectStandardError\s+\$StdErrLogPath/);
+  assert.match(install, /-RequirePackageIdentity:\$RequirePackageIdentity/);
   assert.match(diagnostics, /Compress-Archive/);
   assert.match(diagnostics, /veil-agent-diagnostics-\$Timestamp\.zip/);
   assert.match(diagnostics, /Get-ScheduledTask\s+-TaskName\s+\$TaskName/);

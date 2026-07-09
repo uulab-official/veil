@@ -4,6 +4,7 @@ param(
     [int]$Port = 18444,
     [string]$SparsePackagePath = "",
     [string]$SparsePackageCertificatePath = "",
+    [switch]$RequirePackageIdentity,
     [switch]$NoStart
 )
 
@@ -166,7 +167,7 @@ try {
         Write-Host "VeilAgent installed to $PublishRoot without a logon task."
     }
     if (-not $NoStart) {
-        & $StartScript -InstallRoot $InstallRoot -Port $Port
+        & $StartScript -InstallRoot $InstallRoot -Port $Port -RequirePackageIdentity:$RequirePackageIdentity
         Write-Host "VeilAgent started inside Windows on 0.0.0.0:$Port. The macOS host connects through QEMU at ws://127.0.0.1:$Port/."
     } else {
         Write-Host "Start now with: powershell -NoProfile -ExecutionPolicy Bypass -File `"$StartScript`" -InstallRoot `"$InstallRoot`" -Port $Port"

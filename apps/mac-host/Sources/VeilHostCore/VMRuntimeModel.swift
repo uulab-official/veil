@@ -2197,7 +2197,7 @@ public struct LocalVMRuntimeService: VMRuntimeService {
         pause
         exit /b %VEIL_EXIT_CODE%
     )
-    call "%~dp0Install Veil Agent.cmd" -SparsePackagePath "%VEIL_SPARSE_PACKAGE_ROOT%\\VeilAgent.Identity.msix" -SparsePackageCertificatePath "%VEIL_SPARSE_PACKAGE_ROOT%\\VeilAgent.Identity.cer" %*
+    call "%~dp0Install Veil Agent.cmd" -SparsePackagePath "%VEIL_SPARSE_PACKAGE_ROOT%\\VeilAgent.Identity.msix" -SparsePackageCertificatePath "%VEIL_SPARSE_PACKAGE_ROOT%\\VeilAgent.Identity.cer" -RequirePackageIdentity %*
     if errorlevel 1 pause
 
     """
