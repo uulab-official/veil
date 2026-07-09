@@ -11,6 +11,8 @@ function setQueuedMenuBarState(report, overrides = {}) {
   report.menuBarIntegration.primaryActionTitle = overrides.primaryActionTitle ?? "Open Windows for Notepad";
   report.menuBarIntegration.primaryActionAvailable = overrides.primaryActionAvailable ?? true;
   report.menuBarIntegration.canFulfillPendingLaunch = overrides.canFulfillPendingLaunch ?? false;
+  refreshOneScreenUX(report);
+  refreshLaunchOnboarding(report);
 }
 
 function setReconnectMenuBarState(report) {
@@ -20,6 +22,8 @@ function setReconnectMenuBarState(report) {
   report.menuBarIntegration.primaryActionTitle = "Reconnect Notepad";
   report.menuBarIntegration.primaryActionAvailable = true;
   report.menuBarIntegration.canReconnectPreviousApps = true;
+  refreshOneScreenUX(report);
+  refreshLaunchOnboarding(report);
 }
 
 function setReleaseGateStep(report, id, overrides) {
@@ -48,6 +52,7 @@ function refreshPrimaryNextAction(report) {
       reason: report.releaseGate.reason
     };
     refreshOneScreenUX(report);
+    refreshLaunchOnboarding(report);
     return;
   }
 
@@ -63,6 +68,7 @@ function refreshPrimaryNextAction(report) {
     reason: nextStep.evidence
   };
   refreshOneScreenUX(report);
+  refreshLaunchOnboarding(report);
 }
 
 function expectedPrimaryNextActionId(stepId, command) {
@@ -169,6 +175,30 @@ function refreshOneScreenUX(report) {
     && installedRuntimeHeroSupports(report.primaryNextAction.actionId);
 }
 
+function refreshLaunchOnboarding(report) {
+  if (report.launchOnboarding === undefined) {
+    return;
+  }
+
+  const canContinueInApp = report.primaryNextAction.runsInApp
+    && report.primaryNextAction.isAvailable
+    && report.oneScreenUX.heroRunsPrimaryAction;
+  report.launchOnboarding.state = report.releaseGate.isPassing
+    ? "ready-for-review"
+    : (canContinueInApp ? "continue-in-app" : (report.primaryNextAction.isAvailable ? "external-check" : "blocked"));
+  report.launchOnboarding.currentStepId = report.primaryNextAction.id;
+  report.launchOnboarding.currentStepTitle = report.primaryNextAction.title;
+  report.launchOnboarding.usesSinglePrimarySurface = report.oneScreenUX.usesSinglePrimarySurfaceFamily;
+  report.launchOnboarding.expectedVisibleSurfaceCount = report.oneScreenUX.expectedVisibleSurfaceCount;
+  report.launchOnboarding.canContinueInApp = canContinueInApp;
+  report.launchOnboarding.heroRunsPrimaryAction = report.oneScreenUX.heroRunsPrimaryAction;
+  report.launchOnboarding.keepsRecoveryInMenuOrDock = report.oneScreenUX.canRecoverFromMenuOrDock;
+  report.launchOnboarding.keepsVMDisplayManual = report.oneScreenUX.keepsDisplayRecoveryManual;
+  report.launchOnboarding.pendingLiveProof = !report.releaseGate.isPassing;
+  report.launchOnboarding.primaryActionId = report.primaryNextAction.actionId;
+  report.launchOnboarding.primaryCommand = report.primaryNextAction.command;
+}
+
 test("validates app runtime status fixture", () => {
   const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.demo.json", import.meta.url), "utf8"));
 
@@ -271,6 +301,16 @@ test("rejects reports without primary next action", () => {
   );
 });
 
+test("rejects reports without launch onboarding status", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.demo.json", import.meta.url), "utf8"));
+  delete report.launchOnboarding;
+
+  assert.throws(
+    () => validateAppRuntimeStatus(report),
+    /launchOnboarding/
+  );
+});
+
 test("rejects reports without pending launch status", () => {
   const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.demo.json", import.meta.url), "utf8"));
   delete report.pendingLaunch;
@@ -288,6 +328,26 @@ test("rejects reports without one-screen UX status", () => {
   assert.throws(
     () => validateAppRuntimeStatus(report),
     /oneScreenUX/
+  );
+});
+
+test("rejects launch onboarding action drift", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.demo.json", import.meta.url), "utf8"));
+  report.launchOnboarding.primaryActionId = "windowsApps.launchSelected";
+
+  assert.throws(
+    () => validateAppRuntimeStatus(report),
+    /launchOnboarding.primaryActionId/
+  );
+});
+
+test("rejects launch onboarding state drift", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.demo.json", import.meta.url), "utf8"));
+  report.launchOnboarding.state = "blocked";
+
+  assert.throws(
+    () => validateAppRuntimeStatus(report),
+    /launchOnboarding.state/
   );
 });
 
@@ -314,6 +374,7 @@ test("rejects one-screen UX primary action drift", () => {
 test("rejects one-screen UX hero action drift", () => {
   const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.demo.json", import.meta.url), "utf8"));
   report.oneScreenUX.heroRunsPrimaryAction = false;
+  report.launchOnboarding.heroRunsPrimaryAction = false;
 
   assert.throws(
     () => validateAppRuntimeStatus(report),

@@ -378,5 +378,20 @@
     "runsInApp": false,
     "command": "veil-vmctl app-runtime-review --json",
     "reason": "The one-screen Windows app release gate has current setup, launch, app check, and close or restore evidence."
+  },
+  "launchOnboarding": {
+    "isEnabled": true,
+    "state": "ready-for-review",
+    "currentStepId": "ready-for-release-card",
+    "currentStepTitle": "Review App Flow",
+    "usesSinglePrimarySurface": true,
+    "expectedVisibleSurfaceCount": 1,
+    "canContinueInApp": false,
+    "heroRunsPrimaryAction": false,
+    "keepsRecoveryInMenuOrDock": true,
+    "keepsVMDisplayManual": true,
+    "pendingLiveProof": false,
+    "primaryCommand": "veil-vmctl app-runtime-review --json",
+    "reason": "The app-first launch flow is ready for review evidence."
   }
 }

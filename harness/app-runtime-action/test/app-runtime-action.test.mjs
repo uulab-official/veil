@@ -25,20 +25,179 @@ function refreshPrimaryNextAction(report) {
       title: "Review App Flow",
       source: "releaseGate",
       isAvailable: true,
+      runsInApp: false,
       command: "veil-vmctl app-runtime-review --json",
       reason: report.status.releaseGate.reason
     };
+    refreshOneScreenUX(report);
+    refreshLaunchOnboarding(report);
     return;
   }
 
   const nextStep = report.status.releaseGate.steps.find((step) => step.id === report.status.releaseGate.recommendedAction);
+  const actionId = expectedPrimaryNextActionId(nextStep.id, nextStep.nextActionCommand);
   report.status.primaryNextAction = {
     id: nextStep.id,
     title: nextStep.title,
     source: "releaseGate",
     isAvailable: nextStep.nextActionCommand !== undefined,
+    runsInApp: actionId !== undefined,
+    ...(actionId === undefined ? {} : { actionId }),
     command: nextStep.nextActionCommand,
     reason: nextStep.evidence
+  };
+  refreshOneScreenUX(report);
+  refreshLaunchOnboarding(report);
+}
+
+function expectedPrimaryNextActionId(stepId, command) {
+  if (command === undefined) {
+    return undefined;
+  }
+
+  switch (stepId) {
+    case "windowsSetup":
+      if (command === "veil-vmctl qemu-install-status --json"
+        || command === "veil-vmctl app-runtime-status --json") {
+        return "runtime.refreshStatus";
+      }
+      if (command.startsWith("veil-vmctl prepare")) {
+        return "runtime.prepareWindows";
+      }
+      if (command.includes("qemu-start")) {
+        return "runtime.startWindowsForApp";
+      }
+      return undefined;
+    case "oneScreenPath":
+      return "runtime.refreshStatus";
+    case "openWindowsApp":
+      if (command.includes("--action fulfill-pending")) {
+        return "runtime.fulfillPendingLaunch";
+      }
+      if (command.includes("--action launch")) {
+        return "windowsApps.launchSelected";
+      }
+      if (command.includes("--action recover-display")) {
+        return "runtime.recoverDisplay";
+      }
+      if (command.includes("--action wait-agent")) {
+        return "runtime.waitAgent";
+      }
+      if (command.includes("qemu-install-agent")) {
+        return "runtime.repairGuestAgentForApp";
+      }
+      if (command.includes("qemu-start")) {
+        return "runtime.startWindowsForApp";
+      }
+      return undefined;
+    case "appCheckEvidence":
+      return "proof.recommended";
+    case "closeOrRestore":
+      if (command.includes("--action close-all")) {
+        return "windowsApps.closeAll";
+      }
+      if (command.includes("--action reconnect-restore")
+        || command.includes("--action restore")) {
+        return "windowsApps.reconnectRestore";
+      }
+      if (command.includes("--action stop-runtime")
+        || command.includes("--action quiet-when-idle")) {
+        return "runtime.quietWhenIdle";
+      }
+      return undefined;
+    default:
+      return undefined;
+  }
+}
+
+function installedRuntimeHeroSupports(actionId) {
+  return [
+    "windowsApps.launchSelected",
+    "runtime.fulfillPendingLaunch",
+    "runtime.recoverDisplay",
+    "runtime.waitAgent",
+    "runtime.repairGuestAgentForApp",
+    "runtime.startWindowsForApp",
+    "runtime.prepareWindows",
+    "runtime.refreshStatus",
+    "windowsApps.reconnectRestore",
+    "windowsApps.restorePrevious",
+    "windowsApps.closeAll",
+    "runtime.quietWhenIdle",
+    "runtime.stopWhenIdle",
+    "proof.recommended"
+  ].includes(actionId);
+}
+
+function refreshOneScreenUX(report) {
+  const status = report.status;
+  const mode = status.visibleSurfacePolicy.primarySurface;
+  const hidesLauncherDuringAppMirroring = mode === "windows-app-windows"
+    ? status.launcherVisibility.shouldHideMainWindow && status.macWindowIntegration.hidesLauncherWhenMirroring
+    : !status.launcherVisibility.shouldHideMainWindow;
+  const canRecoverFromMenuOrDock = mode === "windows-app-windows"
+    ? status.menuBarIntegration.canBringWindowsAppsForward && status.launcherVisibility.keepsDockMenuAvailable
+    : status.menuBarIntegration.canOpenMainWindow || status.launcherVisibility.canOpenMainWindow;
+  const returnsToLauncherWhenNoAppWindows = mode === "windows-app-windows"
+    || (mode === "launcher"
+      && status.visibleSurfacePolicy.expectedVisibleSurfaceCount === 1
+      && status.launcherVisibility.shouldHideMainWindow === false);
+  const primaryActionId = status.primaryNextAction.actionId ?? status.menuBarIntegration.primaryActionId;
+  const heroRunsPrimaryAction = status.primaryNextAction.runsInApp
+    && installedRuntimeHeroSupports(status.primaryNextAction.actionId);
+
+  status.oneScreenUX = {
+    isEnabled: true,
+    mode,
+    expectedVisibleSurfaceCount: status.visibleSurfacePolicy.expectedVisibleSurfaceCount,
+    usesSinglePrimarySurfaceFamily: true,
+    hidesLauncherDuringAppMirroring,
+    keepsMenuBarControlAvailable: status.menuBarIntegration.isEnabled,
+    keepsDockControlAvailable: status.launcherVisibility.keepsDockMenuAvailable,
+    canRecoverFromMenuOrDock,
+    returnsToLauncherWhenNoAppWindows,
+    keepsDisplayRecoveryManual: status.visibleSurfacePolicy.keepsRecoveryDisplayManual,
+    primaryActionId,
+    heroRunsPrimaryAction,
+    reason: mode === "windows-app-windows"
+      ? "Mirrored Windows app windows become the only normal surface while menu and Dock recovery stay available."
+      : "The Veil launcher remains the single setup surface until a Windows app window is ready."
+  };
+}
+
+function refreshLaunchOnboarding(report) {
+  const status = report.status;
+  const canContinueInApp = status.primaryNextAction.runsInApp
+    && status.primaryNextAction.isAvailable
+    && status.oneScreenUX.heroRunsPrimaryAction;
+  const state = status.releaseGate.isPassing
+    ? "ready-for-review"
+    : (canContinueInApp
+      ? "continue-in-app"
+      : (status.primaryNextAction.isAvailable ? "external-check" : "blocked"));
+  const reason = status.releaseGate.isPassing
+    ? "The app-first launch flow is ready for review evidence."
+    : (canContinueInApp
+      ? "Continue from the single Veil launcher action without opening a separate VM manager surface."
+      : (status.primaryNextAction.isAvailable
+        ? "The next app-flow check is available, but it should run as a review or CLI handoff instead of an in-app launcher button."
+        : "The one-screen Windows app launch flow needs setup or recovery before it can continue."));
+
+  status.launchOnboarding = {
+    isEnabled: true,
+    state,
+    currentStepId: status.primaryNextAction.id,
+    currentStepTitle: status.primaryNextAction.title,
+    usesSinglePrimarySurface: status.oneScreenUX.usesSinglePrimarySurfaceFamily,
+    expectedVisibleSurfaceCount: status.oneScreenUX.expectedVisibleSurfaceCount,
+    canContinueInApp,
+    heroRunsPrimaryAction: status.oneScreenUX.heroRunsPrimaryAction,
+    keepsRecoveryInMenuOrDock: status.oneScreenUX.canRecoverFromMenuOrDock,
+    keepsVMDisplayManual: status.oneScreenUX.keepsDisplayRecoveryManual,
+    pendingLiveProof: !status.releaseGate.isPassing,
+    ...(status.primaryNextAction.actionId === undefined ? {} : { primaryActionId: status.primaryNextAction.actionId }),
+    ...(status.primaryNextAction.command === undefined ? {} : { primaryCommand: status.primaryNextAction.command }),
+    reason
   };
 }
 

@@ -19,7 +19,8 @@
     "recommendedStartCommand": "veil-vmctl qemu-start --json --wait-seconds 30",
     "recommendedWaitCommand": "veil-vmctl guest-agent-wait --json --wait-seconds 30",
     "recommendedLaunchCommand": "veil-vmctl app-runtime-action --json --action launch --app-id winapp_notepad",
-    "reason": "Start Windows, wait for the guest agent, then launch the selected app."
+    "reason": "Start Windows, wait for the guest agent, then launch the selected app.",
+    "willOpenAppAutomatically": true
   },
   "launch": {
     "type": "app.launch.response",
@@ -129,7 +130,8 @@
       "recommendedStartCommand": "veil-vmctl qemu-start --json --wait-seconds 30",
       "recommendedWaitCommand": "veil-vmctl guest-agent-wait --json --wait-seconds 30",
       "recommendedLaunchCommand": "veil-vmctl app-runtime-action --json --action launch --app-id winapp_notepad",
-      "reason": "Start Windows, wait for the guest agent, then launch the selected app."
+      "reason": "Start Windows, wait for the guest agent, then launch the selected app.",
+      "willOpenAppAutomatically": true
     },
     "apps": [
       {
@@ -156,43 +158,53 @@
     "actions": [
       {
         "id": "dock.openMainWindow",
-        "title": "Open Veil From Dock",
-        "isAvailable": true
+        "isAvailable": true,
+        "title": "Open Veil From Dock"
       },
       {
         "id": "dock.bringWindowsAppsForward",
-        "title": "Bring Windows Apps Forward",
-        "isAvailable": true
+        "isAvailable": true,
+        "title": "Bring Windows Apps Forward"
       },
       {
         "id": "windowsApps.restorePrevious",
-        "title": "Restore Previous Apps",
-        "isAvailable": false
+        "isAvailable": false,
+        "title": "Restore Previous Apps"
       },
       {
         "id": "windowsApps.reconnectRestore",
-        "title": "Reconnect Previous Apps",
-        "isAvailable": false
+        "isAvailable": false,
+        "title": "Reconnect Previous Apps"
       },
       {
         "id": "windowsApps.closeAll",
-        "title": "Close All Windows Apps",
-        "isAvailable": true
+        "isAvailable": true,
+        "title": "Close All Windows Apps"
       },
       {
         "id": "macWindows.autoOpen",
-        "title": "Auto Open Windows App Windows",
-        "isAvailable": false
+        "isAvailable": false,
+        "title": "Auto Open Windows App Windows"
       },
       {
         "id": "windowsApps.launchSelected",
-        "title": "Open Notepad",
-        "isAvailable": true
+        "isAvailable": true,
+        "title": "Open Notepad"
+      },
+      {
+        "id": "runtime.prepareWindows",
+        "isAvailable": false,
+        "title": "Prepare Windows"
+      },
+      {
+        "id": "runtime.refreshStatus",
+        "isAvailable": true,
+        "title": "Refresh Windows Status"
       },
       {
         "id": "runtime.startWindowsForApp",
-        "title": "Start Windows To Open App",
-        "isAvailable": true
+        "isAvailable": true,
+        "title": "Start Windows To Open App"
       },
       {
         "id": "runtime.repairGuestAgentForApp",
@@ -201,53 +213,53 @@
       },
       {
         "id": "runtime.recoverDisplay",
-        "title": "Refresh Windows Display",
-        "isAvailable": false
+        "isAvailable": false,
+        "title": "Refresh Windows Display"
       },
       {
         "id": "runtime.fulfillPendingLaunch",
-        "title": "Open Queued Windows App",
-        "isAvailable": false
+        "isAvailable": false,
+        "title": "Open Queued Windows App"
       },
       {
         "id": "runtime.waitAgent",
-        "title": "Check App Connection",
-        "isAvailable": true
+        "isAvailable": true,
+        "title": "Check App Connection"
       },
       {
         "id": "runtime.quietWhenIdle",
-        "title": "Quiet Windows When Idle",
-        "isAvailable": false
+        "isAvailable": false,
+        "title": "Quiet Windows When Idle"
       },
       {
         "id": "runtime.stopWhenIdle",
-        "title": "Stop Windows When Idle",
-        "isAvailable": false
+        "isAvailable": false,
+        "title": "Stop Windows When Idle"
       },
       {
         "id": "proof.appWindow",
-        "title": "Check App Window",
-        "isAvailable": false
+        "isAvailable": false,
+        "title": "Check App Window"
       },
       {
         "id": "proof.coherence",
-        "title": "Check App Input",
-        "isAvailable": false
+        "isAvailable": false,
+        "title": "Check App Input"
       },
       {
         "id": "proof.mvp",
-        "title": "Check Full App Flow",
-        "isAvailable": false
+        "isAvailable": false,
+        "title": "Check Full App Flow"
       },
       {
         "id": "proof.recommended",
-        "title": "Check Windows App",
-        "isAvailable": false
+        "isAvailable": false,
+        "title": "Check Windows App"
       },
       {
         "id": "clipboard.setText",
-        "title": "Set Windows Clipboard Text",
-        "isAvailable": false
+        "isAvailable": false,
+        "title": "Set Windows Clipboard Text"
       }
     ],
     "proofPlan": {
@@ -380,8 +392,41 @@
       "title": "Windows Setup Ready",
       "source": "releaseGate",
       "isAvailable": true,
+      "runsInApp": true,
+      "actionId": "runtime.refreshStatus",
       "command": "veil-vmctl qemu-install-status --json",
       "reason": "The local Windows runtime is boot ready."
+    },
+    "oneScreenUX": {
+      "isEnabled": true,
+      "mode": "launcher",
+      "expectedVisibleSurfaceCount": 1,
+      "usesSinglePrimarySurfaceFamily": true,
+      "hidesLauncherDuringAppMirroring": true,
+      "keepsMenuBarControlAvailable": true,
+      "keepsDockControlAvailable": true,
+      "canRecoverFromMenuOrDock": true,
+      "returnsToLauncherWhenNoAppWindows": true,
+      "keepsDisplayRecoveryManual": true,
+      "primaryActionId": "runtime.refreshStatus",
+      "heroRunsPrimaryAction": true,
+      "reason": "The Veil launcher remains the single setup surface until a Windows app window is ready."
+    },
+    "launchOnboarding": {
+      "isEnabled": true,
+      "state": "continue-in-app",
+      "currentStepId": "windowsSetup",
+      "currentStepTitle": "Windows Setup Ready",
+      "usesSinglePrimarySurface": true,
+      "expectedVisibleSurfaceCount": 1,
+      "canContinueInApp": true,
+      "heroRunsPrimaryAction": true,
+      "keepsRecoveryInMenuOrDock": true,
+      "keepsVMDisplayManual": true,
+      "pendingLiveProof": true,
+      "primaryActionId": "runtime.refreshStatus",
+      "primaryCommand": "veil-vmctl qemu-install-status --json",
+      "reason": "Continue from the single Veil launcher action without opening a separate VM manager surface."
     }
   },
   "nextActions": [

@@ -183,6 +183,16 @@ supported installed-runtime hero action ids rather than blindly trusting the
 next-action flag, which catches newly introduced app actions before they drift
 into command-only guidance.
 
+`launchOnboarding` is the app-facing summary of that one-screen gate. It
+combines `releaseGate`, `primaryNextAction`, and `oneScreenUX` into one launcher
+state: `blocked`, `continue-in-app`, `external-check`, or `ready-for-review`.
+It repeats the current product step, the routed primary action id/command when
+available, whether the hero can continue inside Veil, the expected visible
+surface count, menu/Dock recovery readiness, manual VM display recovery, and
+whether live proof is still pending. The status and action harnesses validate
+this object so a launcher UI cannot silently drift back into a separate VM
+manager flow or show a broken in-app button for a review/CLI-only handoff.
+
 `guestAgentDiagnostics` points every app-runtime status report at the same
 guest-agent readiness gate: run `veil-host-probe --diagnose-agent` before and
 after a Windows-side install attempt, then use

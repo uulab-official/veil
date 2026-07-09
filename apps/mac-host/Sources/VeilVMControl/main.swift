@@ -1036,6 +1036,12 @@ struct VeilVMControl {
         print("Recovery display: \(report.visibleSurfacePolicy.keepsRecoveryDisplayManual ? "manual" : "automatic")")
         print("One-screen UX: \(oneScreenUXSummary(report.oneScreenUX))")
         print("One-screen controls: \(oneScreenUXControls(report.oneScreenUX))")
+        print("Launch onboarding: \(report.launchOnboarding.state)")
+        print("Launch onboarding step: \(report.launchOnboarding.currentStepTitle)")
+        print("Launch onboarding continues in app: \(report.launchOnboarding.canContinueInApp ? "yes" : "no")")
+        if let primaryActionId = report.launchOnboarding.primaryActionId {
+            print("Launch onboarding action: \(primaryActionId)")
+        }
         print("App flow: \(appFlowSummary(report.releaseGate))")
         print("Next app step: \(appFlowNextStepTitle(report.releaseGate))")
         print("App flow detail: \(appFlowDetail(report.releaseGate))")

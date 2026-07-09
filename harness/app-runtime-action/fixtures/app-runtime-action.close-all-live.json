@@ -110,7 +110,8 @@
       "requiresGuestAgent": false,
       "recommendedAction": "launch-now",
       "recommendedLaunchCommand": "veil-vmctl app-runtime-action --json --action launch --app-id winapp_calculator",
-      "reason": "The live Windows agent can launch the selected app now."
+      "reason": "The live Windows agent can launch the selected app now.",
+      "willOpenAppAutomatically": true
     },
     "apps": [
       {
@@ -131,43 +132,53 @@
     "actions": [
       {
         "id": "dock.openMainWindow",
-        "title": "Open Veil From Dock",
-        "isAvailable": true
+        "isAvailable": true,
+        "title": "Open Veil From Dock"
       },
       {
         "id": "dock.bringWindowsAppsForward",
-        "title": "Bring Windows Apps Forward",
-        "isAvailable": false
+        "isAvailable": false,
+        "title": "Bring Windows Apps Forward"
       },
       {
         "id": "windowsApps.restorePrevious",
-        "title": "Restore Previous Apps",
-        "isAvailable": false
+        "isAvailable": false,
+        "title": "Restore Previous Apps"
       },
       {
         "id": "windowsApps.reconnectRestore",
-        "title": "Reconnect Previous Apps",
-        "isAvailable": false
+        "isAvailable": false,
+        "title": "Reconnect Previous Apps"
       },
       {
         "id": "windowsApps.closeAll",
-        "title": "Close All Windows Apps",
-        "isAvailable": false
+        "isAvailable": false,
+        "title": "Close All Windows Apps"
       },
       {
         "id": "macWindows.autoOpen",
-        "title": "Auto Open Windows App Windows",
-        "isAvailable": true
+        "isAvailable": true,
+        "title": "Auto Open Windows App Windows"
       },
       {
         "id": "windowsApps.launchSelected",
-        "title": "Open Calculator",
-        "isAvailable": true
+        "isAvailable": true,
+        "title": "Open Calculator"
+      },
+      {
+        "id": "runtime.prepareWindows",
+        "isAvailable": false,
+        "title": "Prepare Windows"
+      },
+      {
+        "id": "runtime.refreshStatus",
+        "isAvailable": true,
+        "title": "Refresh Windows Status"
       },
       {
         "id": "runtime.startWindowsForApp",
-        "title": "Start Windows To Open App",
-        "isAvailable": false
+        "isAvailable": false,
+        "title": "Start Windows To Open App"
       },
       {
         "id": "runtime.repairGuestAgentForApp",
@@ -176,53 +187,53 @@
       },
       {
         "id": "runtime.recoverDisplay",
-        "title": "Refresh Windows Display",
-        "isAvailable": false
+        "isAvailable": false,
+        "title": "Refresh Windows Display"
       },
       {
         "id": "runtime.fulfillPendingLaunch",
-        "title": "Open Queued Windows App",
-        "isAvailable": false
+        "isAvailable": false,
+        "title": "Open Queued Windows App"
       },
       {
         "id": "runtime.waitAgent",
-        "title": "Check App Connection",
-        "isAvailable": false
+        "isAvailable": false,
+        "title": "Check App Connection"
       },
       {
         "id": "runtime.quietWhenIdle",
-        "title": "Quiet Windows When Idle",
-        "isAvailable": true
+        "isAvailable": true,
+        "title": "Quiet Windows When Idle"
       },
       {
         "id": "runtime.stopWhenIdle",
-        "title": "Stop Windows When Idle",
-        "isAvailable": true
+        "isAvailable": true,
+        "title": "Stop Windows When Idle"
       },
       {
         "id": "proof.appWindow",
-        "title": "Check App Window",
-        "isAvailable": true
+        "isAvailable": true,
+        "title": "Check App Window"
       },
       {
         "id": "proof.coherence",
-        "title": "Check App Input",
-        "isAvailable": true
+        "isAvailable": true,
+        "title": "Check App Input"
       },
       {
         "id": "proof.mvp",
-        "title": "Check Full App Flow",
-        "isAvailable": true
+        "isAvailable": true,
+        "title": "Check Full App Flow"
       },
       {
         "id": "proof.recommended",
-        "title": "Check Windows App",
-        "isAvailable": true
+        "isAvailable": true,
+        "title": "Check Windows App"
       },
       {
         "id": "clipboard.setText",
-        "title": "Set Windows Clipboard Text",
-        "isAvailable": true
+        "isAvailable": true,
+        "title": "Set Windows Clipboard Text"
       }
     ],
     "proofPlan": {
@@ -361,8 +372,41 @@
       "title": "App Check Evidence",
       "source": "releaseGate",
       "isAvailable": true,
+      "runsInApp": true,
+      "actionId": "proof.recommended",
       "command": "veil-vmctl mvp-proof --json --app-id winapp_calculator --require-proved",
       "reason": "No app check artifact has been saved under Veil diagnostics yet."
+    },
+    "oneScreenUX": {
+      "isEnabled": true,
+      "mode": "launcher",
+      "expectedVisibleSurfaceCount": 1,
+      "usesSinglePrimarySurfaceFamily": true,
+      "hidesLauncherDuringAppMirroring": true,
+      "keepsMenuBarControlAvailable": true,
+      "keepsDockControlAvailable": true,
+      "canRecoverFromMenuOrDock": true,
+      "returnsToLauncherWhenNoAppWindows": true,
+      "keepsDisplayRecoveryManual": true,
+      "primaryActionId": "proof.recommended",
+      "heroRunsPrimaryAction": true,
+      "reason": "The Veil launcher remains the single setup surface until a Windows app window is ready."
+    },
+    "launchOnboarding": {
+      "isEnabled": true,
+      "state": "continue-in-app",
+      "currentStepId": "appCheckEvidence",
+      "currentStepTitle": "App Check Evidence",
+      "usesSinglePrimarySurface": true,
+      "expectedVisibleSurfaceCount": 1,
+      "canContinueInApp": true,
+      "heroRunsPrimaryAction": true,
+      "keepsRecoveryInMenuOrDock": true,
+      "keepsVMDisplayManual": true,
+      "pendingLiveProof": true,
+      "primaryActionId": "proof.recommended",
+      "primaryCommand": "veil-vmctl mvp-proof --json --app-id winapp_calculator --require-proved",
+      "reason": "Continue from the single Veil launcher action without opening a separate VM manager surface."
     }
   },
   "nextActions": [

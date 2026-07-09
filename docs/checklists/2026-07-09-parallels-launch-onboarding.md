@@ -26,6 +26,7 @@ Goal: validate the one-screen launcher flow before any separate Windows desktop 
 - setup screen progress (`snapshot.latestConsoleLaunch.previewStatus`)
 - app-runtime actions and proof readiness (`runtimeStatusReport().proofPlan`)
 - one-screen release card status (`runtimeStatusReport().releaseGate`)
+- one-shot launcher progress (`runtimeStatusReport().launchOnboarding`)
 - running app sessions (`model.mirrorSessions`)
 
 ## One-Minute Release Gate
@@ -41,6 +42,8 @@ Run from `apps/mac-host` with the built app or local Swift package available.
    - Pass if `primaryNextAction` points at the same next command as the first unmet `releaseGate` step.
    - Pass if `primaryNextAction.runsInApp` is true whenever the next step has a routed Veil action, and false for review-card/CLI handoff.
    - Pass if `oneScreenUX.heroRunsPrimaryAction` matches `primaryNextAction.runsInApp` so app-native next steps remain executable from the one-screen hero.
+   - Pass if `launchOnboarding.state` is `continue-in-app` for app-native next steps, `external-check` for review/CLI-only handoff, and `ready-for-review` only after the full release gate passes.
+   - Pass if `launchOnboarding.canContinueInApp`, `primaryActionId`, and `expectedVisibleSurfaceCount` match `primaryNextAction` and `oneScreenUX`.
    - Pass if executable `primaryNextAction.actionId` values such as `runtime.startWindowsForApp`, `runtime.waitAgent`, `runtime.repairGuestAgentForApp`, `windowsApps.reconnectRestore`, or `proof.recommended` match the top-level `actions` contract.
    - Fail if the status report only says "ready" without naming the next action.
 3. If Windows is stopped and app launch is queued, run:

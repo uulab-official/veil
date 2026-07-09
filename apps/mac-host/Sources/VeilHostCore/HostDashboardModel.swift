@@ -732,6 +732,55 @@ public struct WindowsAppRuntimePrimaryNextActionStatus: Codable, Equatable, Send
     }
 }
 
+public struct WindowsAppRuntimeLaunchOnboardingStatus: Codable, Equatable, Sendable {
+    public var isEnabled: Bool
+    public var state: String
+    public var currentStepId: String
+    public var currentStepTitle: String
+    public var usesSinglePrimarySurface: Bool
+    public var expectedVisibleSurfaceCount: Int
+    public var canContinueInApp: Bool
+    public var heroRunsPrimaryAction: Bool
+    public var keepsRecoveryInMenuOrDock: Bool
+    public var keepsVMDisplayManual: Bool
+    public var pendingLiveProof: Bool
+    public var primaryActionId: String?
+    public var primaryCommand: String?
+    public var reason: String
+
+    public init(
+        isEnabled: Bool = true,
+        state: String,
+        currentStepId: String,
+        currentStepTitle: String,
+        usesSinglePrimarySurface: Bool,
+        expectedVisibleSurfaceCount: Int,
+        canContinueInApp: Bool,
+        heroRunsPrimaryAction: Bool,
+        keepsRecoveryInMenuOrDock: Bool,
+        keepsVMDisplayManual: Bool,
+        pendingLiveProof: Bool,
+        primaryActionId: String? = nil,
+        primaryCommand: String? = nil,
+        reason: String
+    ) {
+        self.isEnabled = isEnabled
+        self.state = state
+        self.currentStepId = currentStepId
+        self.currentStepTitle = currentStepTitle
+        self.usesSinglePrimarySurface = usesSinglePrimarySurface
+        self.expectedVisibleSurfaceCount = expectedVisibleSurfaceCount
+        self.canContinueInApp = canContinueInApp
+        self.heroRunsPrimaryAction = heroRunsPrimaryAction
+        self.keepsRecoveryInMenuOrDock = keepsRecoveryInMenuOrDock
+        self.keepsVMDisplayManual = keepsVMDisplayManual
+        self.pendingLiveProof = pendingLiveProof
+        self.primaryActionId = primaryActionId
+        self.primaryCommand = primaryCommand
+        self.reason = reason
+    }
+}
+
 public struct WindowsAppRuntimePendingLaunchStatus: Codable, Equatable, Sendable {
     public var isQueued: Bool
     public var appId: String?
@@ -772,6 +821,7 @@ public struct WindowsAppRuntimeStatusReport: Codable, Equatable, Sendable {
     public var launcherVisibility: WindowsAppRuntimeLauncherVisibilityStatus
     public var visibleSurfacePolicy: WindowsAppRuntimeVisibleSurfacePolicyStatus
     public var oneScreenUX: WindowsAppRuntimeOneScreenUXStatus
+    public var launchOnboarding: WindowsAppRuntimeLaunchOnboardingStatus
     public var macWindowIntegration: WindowsAppRuntimeMacWindowIntegrationStatus
     public var quietRuntime: WindowsAppRuntimeQuietPolicyStatus
     public var launchPlan: WindowsAppRuntimeLaunchPlanStatus
@@ -799,6 +849,7 @@ public struct WindowsAppRuntimeStatusReport: Codable, Equatable, Sendable {
         launcherVisibility: WindowsAppRuntimeLauncherVisibilityStatus,
         visibleSurfacePolicy: WindowsAppRuntimeVisibleSurfacePolicyStatus,
         oneScreenUX: WindowsAppRuntimeOneScreenUXStatus,
+        launchOnboarding: WindowsAppRuntimeLaunchOnboardingStatus,
         macWindowIntegration: WindowsAppRuntimeMacWindowIntegrationStatus,
         quietRuntime: WindowsAppRuntimeQuietPolicyStatus,
         launchPlan: WindowsAppRuntimeLaunchPlanStatus,
@@ -825,6 +876,7 @@ public struct WindowsAppRuntimeStatusReport: Codable, Equatable, Sendable {
         self.launcherVisibility = launcherVisibility
         self.visibleSurfacePolicy = visibleSurfacePolicy
         self.oneScreenUX = oneScreenUX
+        self.launchOnboarding = launchOnboarding
         self.macWindowIntegration = macWindowIntegration
         self.quietRuntime = quietRuntime
         self.launchPlan = launchPlan
@@ -1068,6 +1120,11 @@ public final class HostDashboardModel {
             menuBarIntegration: menuBarIntegration,
             primaryNextAction: primaryNextAction
         )
+        let launchOnboarding = launchOnboardingStatus(
+            releaseGate: releaseGate,
+            primaryNextAction: primaryNextAction,
+            oneScreenUX: oneScreenUX
+        )
         return WindowsAppRuntimeStatusReport(
             generatedAt: generatedAt,
             phase: phase,
@@ -1120,6 +1177,7 @@ public final class HostDashboardModel {
             launcherVisibility: launcherVisibility,
             visibleSurfacePolicy: visibleSurfacePolicy,
             oneScreenUX: oneScreenUX,
+            launchOnboarding: launchOnboarding,
             macWindowIntegration: macWindowIntegration,
             quietRuntime: quietRuntime,
             launchPlan: launchPlan,
@@ -2243,6 +2301,48 @@ public final class HostDashboardModel {
             keepsDisplayRecoveryManual: visibleSurfacePolicy.keepsRecoveryDisplayManual,
             primaryActionId: primaryActionId,
             heroRunsPrimaryAction: heroRunsPrimaryAction,
+            reason: reason
+        )
+    }
+
+    public func launchOnboardingStatus(
+        releaseGate: WindowsAppRuntimeReleaseGateStatus,
+        primaryNextAction: WindowsAppRuntimePrimaryNextActionStatus,
+        oneScreenUX: WindowsAppRuntimeOneScreenUXStatus
+    ) -> WindowsAppRuntimeLaunchOnboardingStatus {
+        let canContinueInApp = primaryNextAction.runsInApp
+            && primaryNextAction.isAvailable
+            && oneScreenUX.heroRunsPrimaryAction
+        let state: String
+        let reason: String
+
+        if releaseGate.isPassing {
+            state = "ready-for-review"
+            reason = "The app-first launch flow is ready for review evidence."
+        } else if canContinueInApp {
+            state = "continue-in-app"
+            reason = "Continue from the single Veil launcher action without opening a separate VM manager surface."
+        } else if primaryNextAction.isAvailable {
+            state = "external-check"
+            reason = "The next app-flow check is available, but it should run as a review or CLI handoff instead of an in-app launcher button."
+        } else {
+            state = "blocked"
+            reason = "The one-screen Windows app launch flow needs setup or recovery before it can continue."
+        }
+
+        return WindowsAppRuntimeLaunchOnboardingStatus(
+            state: state,
+            currentStepId: primaryNextAction.id,
+            currentStepTitle: primaryNextAction.title,
+            usesSinglePrimarySurface: oneScreenUX.usesSinglePrimarySurfaceFamily,
+            expectedVisibleSurfaceCount: oneScreenUX.expectedVisibleSurfaceCount,
+            canContinueInApp: canContinueInApp,
+            heroRunsPrimaryAction: oneScreenUX.heroRunsPrimaryAction,
+            keepsRecoveryInMenuOrDock: oneScreenUX.canRecoverFromMenuOrDock,
+            keepsVMDisplayManual: oneScreenUX.keepsDisplayRecoveryManual,
+            pendingLiveProof: !releaseGate.isPassing,
+            primaryActionId: primaryNextAction.actionId,
+            primaryCommand: primaryNextAction.command,
             reason: reason
         )
     }

@@ -45,6 +45,7 @@ export function validateAppRuntimeStatus(report) {
   validatePrimaryNextAction(report.primaryNextAction, report);
   validateMenuBarIntegration(report.menuBarIntegration, report);
   validateOneScreenUX(report.oneScreenUX, report);
+  validateLaunchOnboarding(report.launchOnboarding, report);
   validateActions(report.actions, report);
 
   if (report.selectedAppId !== undefined) {
@@ -1337,6 +1338,91 @@ function validateOneScreenUX(oneScreenUX, report) {
   for (const disallowedTerm of ["Guest Agent", "HWND", "QEMU", "Proof"]) {
     if (oneScreenUX.reason.includes(disallowedTerm)) {
       throw new TypeError("oneScreenUX.reason must stay product-facing.");
+    }
+  }
+}
+
+function validateLaunchOnboarding(launchOnboarding, report) {
+  if (!launchOnboarding || typeof launchOnboarding !== "object" || Array.isArray(launchOnboarding)) {
+    throw new TypeError("launchOnboarding must be an object.");
+  }
+
+  requireBoolean(launchOnboarding.isEnabled, "launchOnboarding.isEnabled");
+  requireString(launchOnboarding.state, "launchOnboarding.state");
+  requireString(launchOnboarding.currentStepId, "launchOnboarding.currentStepId");
+  requireString(launchOnboarding.currentStepTitle, "launchOnboarding.currentStepTitle");
+  requireBoolean(launchOnboarding.usesSinglePrimarySurface, "launchOnboarding.usesSinglePrimarySurface");
+  requireNonNegativeInteger(launchOnboarding.expectedVisibleSurfaceCount, "launchOnboarding.expectedVisibleSurfaceCount");
+  requireBoolean(launchOnboarding.canContinueInApp, "launchOnboarding.canContinueInApp");
+  requireBoolean(launchOnboarding.heroRunsPrimaryAction, "launchOnboarding.heroRunsPrimaryAction");
+  requireBoolean(launchOnboarding.keepsRecoveryInMenuOrDock, "launchOnboarding.keepsRecoveryInMenuOrDock");
+  requireBoolean(launchOnboarding.keepsVMDisplayManual, "launchOnboarding.keepsVMDisplayManual");
+  requireBoolean(launchOnboarding.pendingLiveProof, "launchOnboarding.pendingLiveProof");
+  requireString(launchOnboarding.reason, "launchOnboarding.reason");
+
+  if (launchOnboarding.primaryActionId !== undefined) {
+    requireString(launchOnboarding.primaryActionId, "launchOnboarding.primaryActionId");
+  }
+  if (launchOnboarding.primaryCommand !== undefined) {
+    requireString(launchOnboarding.primaryCommand, "launchOnboarding.primaryCommand");
+  }
+
+  if (!["blocked", "continue-in-app", "external-check", "ready-for-review"].includes(launchOnboarding.state)) {
+    throw new TypeError("launchOnboarding.state must identify a known onboarding state.");
+  }
+  if (!launchOnboarding.isEnabled) {
+    throw new TypeError("launchOnboarding must stay enabled for one-shot launch acceptance.");
+  }
+  if (launchOnboarding.currentStepId !== report.primaryNextAction.id) {
+    throw new TypeError("launchOnboarding.currentStepId must match primaryNextAction.id.");
+  }
+  if (launchOnboarding.currentStepTitle !== report.primaryNextAction.title) {
+    throw new TypeError("launchOnboarding.currentStepTitle must match primaryNextAction.title.");
+  }
+  if (launchOnboarding.usesSinglePrimarySurface !== report.oneScreenUX.usesSinglePrimarySurfaceFamily) {
+    throw new TypeError("launchOnboarding.usesSinglePrimarySurface must match oneScreenUX.");
+  }
+  if (launchOnboarding.expectedVisibleSurfaceCount !== report.oneScreenUX.expectedVisibleSurfaceCount) {
+    throw new TypeError("launchOnboarding.expectedVisibleSurfaceCount must match oneScreenUX.");
+  }
+  if (launchOnboarding.heroRunsPrimaryAction !== report.oneScreenUX.heroRunsPrimaryAction) {
+    throw new TypeError("launchOnboarding.heroRunsPrimaryAction must match oneScreenUX.");
+  }
+  if (launchOnboarding.keepsRecoveryInMenuOrDock !== report.oneScreenUX.canRecoverFromMenuOrDock) {
+    throw new TypeError("launchOnboarding.keepsRecoveryInMenuOrDock must match oneScreenUX.");
+  }
+  if (launchOnboarding.keepsVMDisplayManual !== report.oneScreenUX.keepsDisplayRecoveryManual) {
+    throw new TypeError("launchOnboarding.keepsVMDisplayManual must match oneScreenUX.");
+  }
+  if (launchOnboarding.primaryActionId !== report.primaryNextAction.actionId) {
+    throw new TypeError("launchOnboarding.primaryActionId must match primaryNextAction.actionId.");
+  }
+  if (launchOnboarding.primaryCommand !== report.primaryNextAction.command) {
+    throw new TypeError("launchOnboarding.primaryCommand must match primaryNextAction.command.");
+  }
+  if (launchOnboarding.pendingLiveProof !== !report.releaseGate.isPassing) {
+    throw new TypeError("launchOnboarding.pendingLiveProof must match releaseGate progress.");
+  }
+
+  const expectedCanContinueInApp = report.primaryNextAction.runsInApp
+    && report.primaryNextAction.isAvailable
+    && report.oneScreenUX.heroRunsPrimaryAction;
+  if (launchOnboarding.canContinueInApp !== expectedCanContinueInApp) {
+    throw new TypeError("launchOnboarding.canContinueInApp must match the executable one-screen action.");
+  }
+
+  const expectedState = report.releaseGate.isPassing
+    ? "ready-for-review"
+    : (expectedCanContinueInApp
+      ? "continue-in-app"
+      : (report.primaryNextAction.isAvailable ? "external-check" : "blocked"));
+  if (launchOnboarding.state !== expectedState) {
+    throw new TypeError("launchOnboarding.state must match release and primary action readiness.");
+  }
+
+  for (const disallowedTerm of ["Guest Agent", "HWND", "QEMU", "Proof"]) {
+    if (launchOnboarding.currentStepTitle.includes(disallowedTerm) || launchOnboarding.reason.includes(disallowedTerm)) {
+      throw new TypeError("launchOnboarding copy must stay product-facing.");
     }
   }
 }
