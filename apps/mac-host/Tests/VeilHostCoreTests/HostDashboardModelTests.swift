@@ -216,6 +216,15 @@ struct HostDashboardModelTests {
         #expect(model.mirrorSessions.isEmpty)
         #expect(model.lastLaunch == nil)
         #expect(model.restorableAppIds.isEmpty)
+
+        let report = model.runtimeStatusReport()
+        #expect(report.launcherVisibility.shouldHideMainWindow == false)
+        #expect(report.visibleSurfacePolicy.primarySurface == "launcher")
+        #expect(report.visibleSurfacePolicy.expectedVisibleSurfaceCount == 1)
+        #expect(report.quietRuntime.hasOpenedAppWindowThisSession)
+        #expect(report.quietRuntime.openWindowCount == 0)
+        #expect(report.quietRuntime.canQuietRuntime)
+        #expect(report.quietRuntime.willQuietAutomatically)
     }
 
     @Test("consumes protocol frames from an event source")

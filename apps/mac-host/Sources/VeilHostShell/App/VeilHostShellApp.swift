@@ -280,6 +280,8 @@ struct VeilHostShellApp: App {
                         windowsAppWindowPresenter.showWindow(for: session)
                     case .handledWindowClosed(let windowId):
                         windowsAppWindowPresenter.closeWindow(windowId: windowId)
+                        scheduleAutomaticQuietRuntimeIfNeeded()
+                        syncLauncherWindowVisibility()
                     case .handledClipboardText:
                         syncGuestClipboardToPasteboard()
                     case .ignored:
