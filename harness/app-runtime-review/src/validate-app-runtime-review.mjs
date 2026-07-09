@@ -99,6 +99,21 @@ export function validateAppRuntimeReview(card) {
     if (slot.attachmentPath !== undefined) {
       requireString(slot.attachmentPath, `screenshotSlots.${index}.attachmentPath`);
     }
+    if (slot.attachmentIssueReason !== undefined) {
+      requireString(slot.attachmentIssueReason, `screenshotSlots.${index}.attachmentIssueReason`);
+    }
+    if (slot.invalidAttachmentPath !== undefined) {
+      requireString(slot.invalidAttachmentPath, `screenshotSlots.${index}.invalidAttachmentPath`);
+    }
+    if (slot.invalidAttachmentByteCount !== undefined) {
+      requirePositiveInteger(slot.invalidAttachmentByteCount, `screenshotSlots.${index}.invalidAttachmentByteCount`);
+    }
+    if (slot.invalidAttachmentWidth !== undefined) {
+      requirePositiveInteger(slot.invalidAttachmentWidth, `screenshotSlots.${index}.invalidAttachmentWidth`);
+    }
+    if (slot.invalidAttachmentHeight !== undefined) {
+      requirePositiveInteger(slot.invalidAttachmentHeight, `screenshotSlots.${index}.invalidAttachmentHeight`);
+    }
 
     if (
       slot.id !== sourceSlot.id
@@ -112,6 +127,12 @@ export function validateAppRuntimeReview(card) {
     }
     if (slot.attachmentState === "attached" && slot.attachmentPath === undefined) {
       throw new TypeError("attached review screenshots must include an attachment path.");
+    }
+    if (slot.attachmentState === "attached" && slot.attachmentIssueReason !== undefined) {
+      throw new TypeError("attached review screenshots must not include an attachment issue reason.");
+    }
+    if (slot.attachmentState === "attached" && slot.invalidAttachmentPath !== undefined) {
+      throw new TypeError("attached review screenshots must not include invalid attachment metadata.");
     }
     if (slot.attachmentState === "attached" && slot.attachmentByteCount === undefined) {
       throw new TypeError("attached review screenshots must include a positive PNG byte count.");
@@ -136,6 +157,30 @@ export function validateAppRuntimeReview(card) {
     }
     if (slot.attachmentState === "missing" && (slot.attachmentWidth !== undefined || slot.attachmentHeight !== undefined)) {
       throw new TypeError("missing review screenshots must not include dimensions.");
+    }
+    if (slot.attachmentIssueReason !== undefined) {
+      if (!["unreadableFile", "notValidPNG", "belowMinimumDimensions"].includes(slot.attachmentIssueReason)) {
+        throw new TypeError("app runtime review screenshot issue reason is unsupported.");
+      }
+      if (slot.attachmentState !== "missing") {
+        throw new TypeError("app runtime review screenshot issue reasons only apply to missing slots.");
+      }
+      if (slot.invalidAttachmentPath === undefined) {
+        throw new TypeError("app runtime review screenshot issue reason must include an invalid attachment path.");
+      }
+      if (slot.invalidAttachmentPath !== `${card.evidence.screenshotEvidenceDirectory}/${slot.expectedFileName}`) {
+        throw new TypeError("app runtime review invalid attachment path must match the evidence directory and expected file.");
+      }
+      if (slot.attachmentIssueReason === "belowMinimumDimensions" && (slot.invalidAttachmentWidth === undefined || slot.invalidAttachmentHeight === undefined)) {
+        throw new TypeError("app runtime review below-minimum screenshot issues must include dimensions.");
+      }
+    } else if (
+      slot.invalidAttachmentPath !== undefined
+      || slot.invalidAttachmentByteCount !== undefined
+      || slot.invalidAttachmentWidth !== undefined
+      || slot.invalidAttachmentHeight !== undefined
+    ) {
+      throw new TypeError("app runtime review invalid attachment metadata requires an issue reason.");
     }
     if (slot.attachmentState === "attached") {
       attachedScreenshotCount += 1;

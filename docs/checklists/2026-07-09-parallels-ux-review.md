@@ -67,6 +67,7 @@ Goal: keep the user-facing workflow one-screen-first (launcher + one action path
 - [x] Gate `app-runtime-review.isReadyForReview` on the full 5/5 screenshot set as well as Windows app release evidence and host app bundle verification, so a visually incomplete review folder cannot be marked ready.
 - [x] Treat review screenshots as attached only when the expected file is a non-empty PNG and expose `attachmentByteCount`, so empty placeholder files cannot satisfy the visual evidence gate.
 - [x] Require attached review PNGs to be at least 640 x 360 and expose `attachmentWidth`/`attachmentHeight`, so tiny placeholder images cannot satisfy the visual evidence gate.
+- [x] Add slot-level `attachmentIssueReason` and invalid attachment metadata to review cards, so the primary card distinguishes missing screenshots from existing files that are unreadable, not valid PNGs, or below minimum dimensions.
 - [x] Add structured `minimumScreenshotWidth`/`minimumScreenshotHeight` fields to review cards, so the primary review artifact states the screenshot contract directly.
 - [x] Add structured `minimumScreenshotWidth`/`minimumScreenshotHeight` fields to review manifests, so agents and harnesses can enforce the visual evidence contract without scraping guide text.
 - [x] Repeat `minimumScreenshotWidth`/`minimumScreenshotHeight` on verification reports and require them to match the manifest, so review tools can enforce the screenshot contract from the top-level verification artifact.

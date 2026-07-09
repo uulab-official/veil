@@ -105,6 +105,29 @@ test("rejects attached screenshot slots below minimum dimensions", () => {
   );
 });
 
+test("accepts missing screenshot slots with invalid attachment issues", () => {
+  const card = demoReviewCard();
+  card.evidence.screenshotEvidenceDirectory = "/tmp/veil-review";
+  card.nextActionCommand = "veil-vmctl app-runtime-review-verify --json --evidence-dir /tmp/veil-review";
+  card.screenshotSlots[0].attachmentIssueReason = "belowMinimumDimensions";
+  card.screenshotSlots[0].invalidAttachmentPath = "/tmp/veil-review/preBootLauncher.png";
+  card.screenshotSlots[0].invalidAttachmentByteCount = 68;
+  card.screenshotSlots[0].invalidAttachmentWidth = 1;
+  card.screenshotSlots[0].invalidAttachmentHeight = 1;
+
+  assert.equal(validateAppRuntimeReview(card), card);
+});
+
+test("rejects screenshot issue reasons without invalid attachment paths", () => {
+  const card = demoReviewCard();
+  card.screenshotSlots[0].attachmentIssueReason = "notValidPNG";
+
+  assert.throws(
+    () => validateAppRuntimeReview(card),
+    /invalid attachment path/
+  );
+});
+
 test("accepts complete screenshot evidence summary", () => {
   const card = demoReviewCard();
   card.evidence.screenshotEvidenceDirectory = "/tmp/veil-review";

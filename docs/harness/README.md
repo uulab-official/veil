@@ -246,8 +246,10 @@ slot expects one valid, non-empty PNG matching the card's 640 x 360 minimum
 screenshot dimensions and named after the release-gate slot id, for example
 `preBootLauncher.png`, `firstAppLaunch.png`, `appWindowOnly.png`,
 `menuRestore.png`, and `closeQuiet.png`. The card marks each slot as `attached`
-or `missing`, records the attached PNG byte count and dimensions, exposes the
-attached/required screenshot count, and sets `areRequiredScreenshotsAttached`
+or `missing`, records the attached PNG byte count and dimensions, and reports
+slot-level `attachmentIssueReason` metadata when an existing file is unreadable,
+not a valid PNG, or below the minimum dimensions. It also exposes the
+attached/required screenshot count and sets `areRequiredScreenshotsAttached`
 when the current evidence folder has the full valid PNG set. `isReadyForReview`
 remains false until this screenshot gate is also complete. It does this without
 copying Windows media, disk contents, product keys, or guest data.

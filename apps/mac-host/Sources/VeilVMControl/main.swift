@@ -610,9 +610,14 @@ struct AppRuntimeReviewScreenshotSlot: Codable, Equatable {
     var expectedFileName: String
     var attachmentState: String
     var attachmentPath: String?
+    var attachmentIssueReason: String?
+    var invalidAttachmentPath: String?
     var attachmentByteCount: Int?
     var attachmentWidth: Int?
     var attachmentHeight: Int?
+    var invalidAttachmentByteCount: Int?
+    var invalidAttachmentWidth: Int?
+    var invalidAttachmentHeight: Int?
 }
 
 struct AppRuntimeReviewEvidence: Codable, Equatable {
@@ -1131,6 +1136,12 @@ struct VeilVMControl {
             if let attachmentPath = slot.attachmentPath {
                 print("      Attached: \(attachmentPath)")
             }
+            if let attachmentIssueReason = slot.attachmentIssueReason {
+                print("      Issue: \(attachmentIssueReason)")
+            }
+            if let invalidAttachmentPath = slot.invalidAttachmentPath {
+                print("      Invalid file: \(invalidAttachmentPath)")
+            }
             print("      Expected: \(slot.expectedSurface)")
         }
         print("")
@@ -1642,6 +1653,9 @@ struct VeilVMControl {
             let attachmentURL = evidenceDirectoryURL?.appendingPathComponent(expectedFileName)
             let attachmentPath = attachmentURL?.path
             let attachmentMetadata = attachmentPath.flatMap(pngScreenshotMetadata(atPath:))
+            let invalidAttachment = attachmentMetadata == nil
+                ? attachmentPath.flatMap(invalidReviewScreenshotFile(atPath:))
+                : nil
             let attachmentExists = attachmentMetadata != nil
             return AppRuntimeReviewScreenshotSlot(
                 id: slot.id,
@@ -1650,9 +1664,14 @@ struct VeilVMControl {
                 expectedFileName: expectedFileName,
                 attachmentState: attachmentExists ? "attached" : "missing",
                 attachmentPath: attachmentExists ? attachmentPath : nil,
+                attachmentIssueReason: invalidAttachment?.reason,
+                invalidAttachmentPath: invalidAttachment?.path,
                 attachmentByteCount: attachmentMetadata?.byteCount,
                 attachmentWidth: attachmentMetadata?.width,
-                attachmentHeight: attachmentMetadata?.height
+                attachmentHeight: attachmentMetadata?.height,
+                invalidAttachmentByteCount: invalidAttachment?.byteCount,
+                invalidAttachmentWidth: invalidAttachment?.width,
+                invalidAttachmentHeight: invalidAttachment?.height
             )
         }
         let requiredScreenshotCount = report.releaseGate.screenshotSlots.filter(\.isRequired).count
