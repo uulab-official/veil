@@ -91,10 +91,51 @@ struct ReviewEvidenceFolderStoreTests {
         #expect(manifest.captureSteps.allSatisfy { $0.captureCommand.contains("'\\''") })
     }
 
+    @Test("remembers the latest review evidence folder across app launches")
+    func remembersLatestReviewEvidenceFolder() throws {
+        let baseDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let defaults = isolatedDefaults()
+        defer {
+            try? FileManager.default.removeItem(at: baseDirectory)
+            ReviewEvidenceFolderStore.forgetLatest(defaults: defaults)
+        }
+
+        let folder = try ReviewEvidenceFolderStore.prepare(
+            directory: baseDirectory,
+            now: Date(timeIntervalSince1970: 1_725_894_245)
+        )
+        ReviewEvidenceFolderStore.rememberLatest(folder, defaults: defaults)
+
+        let loaded = try #require(ReviewEvidenceFolderStore.loadLatest(defaults: defaults))
+        #expect(loaded.directory.path == folder.directory.standardizedFileURL.path)
+        #expect(loaded.readme.path == folder.readme.standardizedFileURL.path)
+        #expect(loaded.manifest.path == folder.manifest.standardizedFileURL.path)
+        #expect(loaded.appCheckProof.path == folder.appCheckProof.standardizedFileURL.path)
+    }
+
+    @Test("clears stale latest review evidence folders")
+    func clearsStaleLatestReviewEvidenceFolder() {
+        let defaults = isolatedDefaults()
+        let missingDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defaults.set(missingDirectory.path, forKey: ReviewEvidenceFolderStore.latestDirectoryDefaultsKey)
+
+        #expect(ReviewEvidenceFolderStore.loadLatest(defaults: defaults) == nil)
+        #expect(defaults.string(forKey: ReviewEvidenceFolderStore.latestDirectoryDefaultsKey) == nil)
+    }
+
     @Test("uses a stable UTC folder name for review evidence passes")
     func stableReviewEvidenceFolderName() {
         let date = Date(timeIntervalSince1970: 1_725_894_245)
 
         #expect(ReviewEvidenceFolderStore.folderName(for: date) == "2024-09-09-150405")
+    }
+
+    private func isolatedDefaults() -> UserDefaults {
+        let suiteName = "org.uulab.veil.tests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defaults.removePersistentDomain(forName: suiteName)
+        return defaults
     }
 }

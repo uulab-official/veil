@@ -65,6 +65,7 @@ struct VeilHostShellApp: App {
                 service: LocalVMRuntimeService(bootRunner: runtimeBooter)
             )
         )
+        _latestReviewEvidenceFolder = State(initialValue: ReviewEvidenceFolderStore.loadLatest())
     }
 
     var body: some Scene {
@@ -887,6 +888,7 @@ struct VeilHostShellApp: App {
             do {
                 let folder = try ReviewEvidenceFolderStore.prepare()
                 latestReviewEvidenceFolder = folder
+                ReviewEvidenceFolderStore.rememberLatest(folder)
                 NSWorkspace.shared.open(folder.directory)
                 displayMessage = "Review Evidence folder ready: \(folder.directory.path). App checks will save \(folder.appCheckProof.lastPathComponent) there."
             } catch {

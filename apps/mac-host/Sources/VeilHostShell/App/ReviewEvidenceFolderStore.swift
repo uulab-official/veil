@@ -63,6 +63,7 @@ private struct ReviewEvidenceSlot {
 enum ReviewEvidenceFolderStore {
     static let minimumScreenshotWidth = 640
     static let minimumScreenshotHeight = 360
+    static let latestDirectoryDefaultsKey = "org.uulab.veil.reviewEvidence.latestDirectory"
 
     private static let slots = [
         ReviewEvidenceSlot(
@@ -134,6 +135,38 @@ enum ReviewEvidenceFolderStore {
             manifest: manifestURL,
             appCheckProof: targetDirectory.appendingPathComponent(appCheckProofFileName)
         )
+    }
+
+    static func rememberLatest(
+        _ folder: ReviewEvidenceFolder,
+        defaults: UserDefaults = .standard
+    ) {
+        defaults.set(folder.directory.path, forKey: latestDirectoryDefaultsKey)
+    }
+
+    static func loadLatest(
+        defaults: UserDefaults = .standard,
+        fileManager: FileManager = .default
+    ) -> ReviewEvidenceFolder? {
+        guard let path = defaults.string(forKey: latestDirectoryDefaultsKey),
+              !path.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return nil
+        }
+
+        let directory = URL(fileURLWithPath: path).standardizedFileURL
+        let folder = folder(at: directory)
+        guard fileManager.fileExists(atPath: folder.directory.path),
+              fileManager.fileExists(atPath: folder.readme.path),
+              fileManager.fileExists(atPath: folder.manifest.path) else {
+            defaults.removeObject(forKey: latestDirectoryDefaultsKey)
+            return nil
+        }
+
+        return folder
+    }
+
+    static func forgetLatest(defaults: UserDefaults = .standard) {
+        defaults.removeObject(forKey: latestDirectoryDefaultsKey)
     }
 
     static func manifest(
@@ -257,6 +290,15 @@ enum ReviewEvidenceFolderStore {
 
     private static func expectedFileName(slotId: String) -> String {
         "\(slotId).png"
+    }
+
+    private static func folder(at directory: URL) -> ReviewEvidenceFolder {
+        ReviewEvidenceFolder(
+            directory: directory,
+            readme: directory.appendingPathComponent("README.md"),
+            manifest: directory.appendingPathComponent("review-manifest.json"),
+            appCheckProof: directory.appendingPathComponent(appCheckProofFileName)
+        )
     }
 
     private static func captureCommand(path: String) -> String {
