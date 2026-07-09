@@ -185,6 +185,17 @@ enum AppRuntimeDockMenuFactory {
                     )
                 )
             }
+            if let pendingAction = queuedLaunchMenuState(model: model, vmModel: vmModel),
+               shouldPromoteQueuedLaunch(model: model) {
+                menu.addItem(
+                    item(
+                        pendingAction.title,
+                        action: selector(for: pendingAction.kind),
+                        target: target,
+                        isEnabled: pendingAction.isEnabled
+                    )
+                )
+            }
             menu.addItem(item("Open Veil", action: #selector(AppRuntimeDockMenuTarget.openVeil(_:)), target: target))
         }
 
@@ -200,15 +211,8 @@ enum AppRuntimeDockMenuFactory {
             )
         }
 
-        if let pendingAppId = model.pendingLaunchAppId {
-            let pendingAction = AppQueuedLaunchMenuState.make(
-                appName: appName(for: pendingAppId, model: model),
-                canRecoverRuntimeDisplay: canRecoverRuntimeDisplay(vmModel: vmModel),
-                canFulfillPendingLaunch: model.canFulfillPendingLaunch,
-                canRepairQueuedAppLaunch: canRepairQueuedAppLaunch(model: model, vmModel: vmModel),
-                canStartWindows: vmModel.canStart,
-                runtimeIsLoading: vmModel.phase == .loading
-            )
+        if let pendingAction = queuedLaunchMenuState(model: model, vmModel: vmModel),
+           shouldShowSecondaryQueuedLaunch(model: model) {
             menu.addItem(.separator())
             menu.addItem(
                 item(
@@ -359,6 +363,16 @@ enum AppRuntimeDockMenuFactory {
         !model.restorableAppIds.isEmpty && !shouldPromotePreviousAppsRestore(model: model)
     }
 
+    private static func shouldPromoteQueuedLaunch(model: HostDashboardModel) -> Bool {
+        model.pendingLaunchAppId != nil
+            && model.mirrorSessions.isEmpty
+            && !shouldPromotePreviousAppsRestore(model: model)
+    }
+
+    private static func shouldShowSecondaryQueuedLaunch(model: HostDashboardModel) -> Bool {
+        model.pendingLaunchAppId != nil && !shouldPromoteQueuedLaunch(model: model)
+    }
+
     private static func activeSingleAppName(model: HostDashboardModel) -> String? {
         guard model.mirrorSessions.count == 1,
               let session = model.mirrorSessions.first else {
@@ -376,6 +390,24 @@ enum AppRuntimeDockMenuFactory {
         }
 
         return model.apps.first { $0.id == appId }?.name
+    }
+
+    private static func queuedLaunchMenuState(
+        model: HostDashboardModel,
+        vmModel: VMRuntimeModel
+    ) -> AppQueuedLaunchMenuState? {
+        guard let pendingAppId = model.pendingLaunchAppId else {
+            return nil
+        }
+
+        return AppQueuedLaunchMenuState.make(
+            appName: appName(for: pendingAppId, model: model),
+            canRecoverRuntimeDisplay: canRecoverRuntimeDisplay(vmModel: vmModel),
+            canFulfillPendingLaunch: model.canFulfillPendingLaunch,
+            canRepairQueuedAppLaunch: canRepairQueuedAppLaunch(model: model, vmModel: vmModel),
+            canStartWindows: vmModel.canStart,
+            runtimeIsLoading: vmModel.phase == .loading
+        )
     }
 }
 

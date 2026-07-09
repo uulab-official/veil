@@ -1241,6 +1241,15 @@ private struct VeilMenuBarMenu: View {
             Button("Open Veil", systemImage: "macwindow") {
                 openMainWindow()
             }
+        } else if let queuedLaunchMenuState, shouldPromoteQueuedLaunch {
+            Button(queuedLaunchMenuState.title, systemImage: queuedLaunchMenuState.symbolName) {
+                runQueuedLaunchAction(queuedLaunchMenuState)
+            }
+            .disabled(!queuedLaunchMenuState.isEnabled)
+
+            Button("Open Veil", systemImage: "macwindow") {
+                openMainWindow()
+            }
         } else {
             Button("Open Veil", systemImage: "macwindow") {
                 openMainWindow()
@@ -1323,21 +1332,9 @@ private struct VeilMenuBarMenu: View {
             .disabled(!model.canReconnectRestoreMirrorSessions)
         }
 
-        if let queuedLaunchMenuState {
+        if let queuedLaunchMenuState, shouldShowSecondaryQueuedLaunch {
             Button(queuedLaunchMenuState.title, systemImage: queuedLaunchMenuState.symbolName) {
-                switch queuedLaunchMenuState.kind {
-                case .recoverRuntimeDisplay:
-                    openMainWindow()
-                    recoverRuntimeDisplayAction()
-                case .fulfillPendingLaunch:
-                    fulfillPendingLaunchAction()
-                case .repairGuestAgentForAppLaunch:
-                    openMainWindow()
-                    repairGuestAgentForAppLaunchAction()
-                case .startWindows:
-                    openMainWindow()
-                    startVMAction()
-                }
+                runQueuedLaunchAction(queuedLaunchMenuState)
             }
             .disabled(!queuedLaunchMenuState.isEnabled)
         }
@@ -1543,6 +1540,16 @@ private struct VeilMenuBarMenu: View {
         !model.restorableAppIds.isEmpty && !shouldPromotePreviousAppsRestore
     }
 
+    private var shouldPromoteQueuedLaunch: Bool {
+        model.pendingLaunchAppId != nil
+            && model.mirrorSessions.isEmpty
+            && !shouldPromotePreviousAppsRestore
+    }
+
+    private var shouldShowSecondaryQueuedLaunch: Bool {
+        model.pendingLaunchAppId != nil && !shouldPromoteQueuedLaunch
+    }
+
     private var restorableSingleAppName: String? {
         guard model.restorableAppIds.count == 1,
               let appId = model.restorableAppIds.first else {
@@ -1550,6 +1557,22 @@ private struct VeilMenuBarMenu: View {
         }
 
         return model.apps.first { $0.id == appId }?.name
+    }
+
+    private func runQueuedLaunchAction(_ state: AppQueuedLaunchMenuState) {
+        switch state.kind {
+        case .recoverRuntimeDisplay:
+            openMainWindow()
+            recoverRuntimeDisplayAction()
+        case .fulfillPendingLaunch:
+            fulfillPendingLaunchAction()
+        case .repairGuestAgentForAppLaunch:
+            openMainWindow()
+            repairGuestAgentForAppLaunchAction()
+        case .startWindows:
+            openMainWindow()
+            startVMAction()
+        }
     }
 
     private func openMainWindow() {

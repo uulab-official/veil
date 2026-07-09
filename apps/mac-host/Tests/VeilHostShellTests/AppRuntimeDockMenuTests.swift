@@ -375,6 +375,55 @@ struct AppRuntimeDockMenuTests {
         #expect(bringIndex < openVeilIndex)
     }
 
+    @Test("Dock menu prioritizes queued Windows app over launcher")
+    func dockMenuPrioritizesQueuedWindowsAppOverLauncher() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let pendingLaunchStore = JSONPendingLaunchIntentStore(directory: directory)
+        let restoreIntentStore = JSONWindowRestoreIntentStore(
+            directory: directory.appendingPathComponent("restore", isDirectory: true)
+        )
+        try await pendingLaunchStore.save(PendingLaunchIntent(appId: "winapp_notepad"))
+        let model = HostDashboardModel(
+            service: DemoHostDashboardService(),
+            restoreIntentStore: restoreIntentStore,
+            pendingLaunchIntentStore: pendingLaunchStore
+        )
+        let vmModel = VMRuntimeModel(service: StubVMRuntimeService())
+
+        await model.loadRestoreIntent()
+        await model.load()
+        await vmModel.load()
+
+        let menu = AppRuntimeDockMenuFactory.makeMenu(
+            model: model,
+            vmModel: vmModel,
+            activateMainWindowAction: {},
+            bringAllWindowsAppWindowsToFrontAction: {},
+            focusWindowsAppWindowAction: { _ in },
+            closeWindowsAppWindowAction: { _ in },
+            closeAllWindowsAppWindowsAction: {},
+            restoreWindowsAppWindowsAction: {},
+            launchWindowsAppByIdAction: { _ in },
+            fulfillPendingLaunchAction: {},
+            repairGuestAgentForAppLaunchAction: {},
+            recoverRuntimeDisplayAction: {},
+            startVMAction: {},
+            stopVMAction: {},
+            quietWindowsWhenIdleAction: {}
+        )
+
+        let firstAction = try #require(menu.items.dropFirst().first { !$0.isSeparatorItem })
+        let queuedIndex = try #require(menu.items.firstIndex { $0.title == "Open Windows for Notepad" })
+        let openVeilIndex = try #require(menu.items.firstIndex { $0.title == "Open Veil" })
+        let queuedItemCount = menu.items.filter { $0.title == "Open Windows for Notepad" }.count
+
+        #expect(menu.items.first?.title == "Notepad Waiting")
+        #expect(firstAction.title == "Open Windows for Notepad")
+        #expect(queuedIndex < openVeilIndex)
+        #expect(queuedItemCount == 1)
+    }
+
     @Test("maps queued app Dock menu item to the next product action")
     func mapsQueuedAppDockMenuItemToNextProductAction() {
         #expect(
