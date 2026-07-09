@@ -1625,9 +1625,9 @@ function validateLaunchOnboarding(launchOnboarding, report) {
   if (launchOnboarding.currentStepNumber !== expectedCurrentStepNumber) {
     throw new TypeError("launchOnboarding.currentStepNumber must match releaseGate.recommendedAction.");
   }
-  const expectedProgressLabel = `${report.releaseGate.passingStepCount} of ${report.releaseGate.requiredStepCount} ready`;
+  const expectedProgressLabel = `Step ${expectedCurrentStepNumber} of ${report.releaseGate.requiredStepCount}`;
   if (launchOnboarding.progressLabel !== expectedProgressLabel) {
-    throw new TypeError("launchOnboarding.progressLabel must summarize releaseGate progress.");
+    throw new TypeError("launchOnboarding.progressLabel must summarize the current releaseGate step.");
   }
 
   const expectedCanContinueInApp = report.primaryNextAction.runsInApp

@@ -782,7 +782,7 @@ public struct WindowsAppRuntimeLaunchOnboardingStatus: Codable, Equatable, Senda
         completedStepCount: Int = 0,
         totalStepCount: Int = 0,
         currentStepNumber: Int = 0,
-        progressLabel: String = "0 of 0 ready",
+        progressLabel: String = "Step 0 of 0",
         primaryActionId: String? = nil,
         primaryCommand: String? = nil,
         reason: String
@@ -2451,7 +2451,7 @@ public final class HostDashboardModel {
             completedStepCount: completedStepCount,
             totalStepCount: totalStepCount,
             currentStepNumber: currentStepNumber,
-            progressLabel: "\(completedStepCount) of \(totalStepCount) ready",
+            progressLabel: "Step \(currentStepNumber) of \(totalStepCount)",
             primaryActionId: primaryNextAction.actionId,
             primaryCommand: primaryNextAction.command,
             reason: reason

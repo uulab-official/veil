@@ -216,7 +216,7 @@ function refreshLaunchOnboarding(report) {
     : (recommendedStepIndex >= 0
       ? recommendedStepIndex + 1
       : Math.min(report.releaseGate.passingStepCount + 1, report.releaseGate.requiredStepCount));
-  report.launchOnboarding.progressLabel = `${report.releaseGate.passingStepCount} of ${report.releaseGate.requiredStepCount} ready`;
+  report.launchOnboarding.progressLabel = `Step ${report.launchOnboarding.currentStepNumber} of ${report.releaseGate.requiredStepCount}`;
   report.launchOnboarding.primaryActionId = report.primaryNextAction.actionId;
   report.launchOnboarding.primaryCommand = report.primaryNextAction.command;
 }

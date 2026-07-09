@@ -1558,7 +1558,7 @@ struct HostDashboardModelTests {
         #expect(runningQueuedReport.launchOnboarding.completedStepCount == 3)
         #expect(runningQueuedReport.launchOnboarding.totalStepCount == 5)
         #expect(runningQueuedReport.launchOnboarding.currentStepNumber == 3)
-        #expect(runningQueuedReport.launchOnboarding.progressLabel == "3 of 5 ready")
+        #expect(runningQueuedReport.launchOnboarding.progressLabel == "Step 3 of 5")
 
         primary.error = nil
         let fulfilledLaunch = await model.refreshLiveAgentIfNeeded()

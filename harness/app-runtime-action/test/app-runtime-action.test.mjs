@@ -205,7 +205,7 @@ function refreshLaunchOnboarding(report) {
     completedStepCount: status.releaseGate.passingStepCount,
     totalStepCount: status.releaseGate.requiredStepCount,
     currentStepNumber: currentLaunchOnboardingStepNumber(status),
-    progressLabel: `${status.releaseGate.passingStepCount} of ${status.releaseGate.requiredStepCount} ready`,
+    progressLabel: `Step ${currentLaunchOnboardingStepNumber(status)} of ${status.releaseGate.requiredStepCount}`,
     ...(status.primaryNextAction.actionId === undefined ? {} : { primaryActionId: status.primaryNextAction.actionId }),
     ...(status.primaryNextAction.command === undefined ? {} : { primaryCommand: status.primaryNextAction.command }),
     reason
