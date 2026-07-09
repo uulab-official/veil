@@ -5,6 +5,7 @@ const VALID_STATES = new Set(["unsupported", "notConfigured", "stopped", "starti
 const VALID_INSTALL_EVIDENCE = new Set(["notConfigured", "setupBlocked", "sparseDisk", "setupReady", "profileFlag", "guestAgent"]);
 const VALID_PREVIEW_STATUSES = new Set(["fresh", "stale", "unavailable"]);
 const VALID_DISPLAY_SURFACES = new Set(["vncLoopback", "screenshot", "unavailable"]);
+const VALID_AUTOMATIC_INSTALL_MEDIA_STATES = new Set(["current", "stale", "missing", "unavailable"]);
 
 export function validateQEMUInstallStatus(report) {
   if (!report || typeof report !== "object" || Array.isArray(report)) {
@@ -33,6 +34,7 @@ export function validateQEMUInstallStatus(report) {
   validateOptionalPath(report.driverMediaPath, "driverMediaPath");
   validateOptionalPath(report.virtualDiskPath, "virtualDiskPath");
   validateOptionalPath(report.automaticInstallMediaPath, "automaticInstallMediaPath");
+  validateAutomaticInstallMediaStatus(report.automaticInstallMediaStatus, report);
   validateOptionalPath(report.latestConsoleScreenshotPath, "latestConsoleScreenshotPath");
   validateDisplaySurface(report.displaySurface);
   validateNextActions(report.nextActions);
@@ -67,7 +69,60 @@ export function validateQEMUInstallStatus(report) {
     throw new TypeError("running install status reports without launch evidence must include existing QEMU recovery guidance.");
   }
 
+  if (report.automaticInstallMediaStatus.state === "stale"
+    && !report.nextActions.some((action) => action.includes("VeilAutoInstall.iso") && action.includes("rebuild guest tools media"))) {
+    throw new TypeError("stale automatic install media must include rebuild and relaunch guidance.");
+  }
+
   return report;
+}
+
+function validateAutomaticInstallMediaStatus(status, report) {
+  if (!status || typeof status !== "object" || Array.isArray(status)) {
+    throw new TypeError("automaticInstallMediaStatus must be an object.");
+  }
+
+  requireString(status.state, "automaticInstallMediaStatus.state");
+  if (!VALID_AUTOMATIC_INSTALL_MEDIA_STATES.has(status.state)) {
+    throw new TypeError(`Unsupported automatic install media state: ${status.state}`);
+  }
+  requireBoolean(status.isCurrent, "automaticInstallMediaStatus.isCurrent");
+  requireString(status.recommendedAction, "automaticInstallMediaStatus.recommendedAction");
+  requireBoolean(status.requiresRelaunch, "automaticInstallMediaStatus.requiresRelaunch");
+  requireString(status.detail, "automaticInstallMediaStatus.detail");
+  validateOptionalPath(status.mediaPath, "automaticInstallMediaStatus.mediaPath");
+  validateOptionalPath(status.sourcePath, "automaticInstallMediaStatus.sourcePath");
+
+  if (status.mediaModifiedAt !== undefined && Number.isNaN(Date.parse(status.mediaModifiedAt))) {
+    throw new TypeError("automaticInstallMediaStatus.mediaModifiedAt must be an ISO date.");
+  }
+  if (status.sourceModifiedAt !== undefined && Number.isNaN(Date.parse(status.sourceModifiedAt))) {
+    throw new TypeError("automaticInstallMediaStatus.sourceModifiedAt must be an ISO date.");
+  }
+  if (status.rebuildCommand !== undefined) {
+    requireString(status.rebuildCommand, "automaticInstallMediaStatus.rebuildCommand");
+  }
+
+  if (report.automaticInstallMediaPath !== undefined && status.mediaPath !== report.automaticInstallMediaPath) {
+    throw new TypeError("automaticInstallMediaStatus.mediaPath must match automaticInstallMediaPath.");
+  }
+  if (status.state === "current" && status.isCurrent !== true) {
+    throw new TypeError("current automatic install media must set isCurrent.");
+  }
+  if (status.state === "stale") {
+    if (status.isCurrent !== false) {
+      throw new TypeError("stale automatic install media cannot set isCurrent.");
+    }
+    if (status.recommendedAction !== "rebuild-media-and-relaunch") {
+      throw new TypeError("stale automatic install media must recommend rebuild-media-and-relaunch.");
+    }
+    if (!status.rebuildCommand || !status.rebuildCommand.includes("veil-vmctl prepare --installer")) {
+      throw new TypeError("stale automatic install media must include a prepare rebuild command.");
+    }
+    if (report.state === "running" && status.requiresRelaunch !== true) {
+      throw new TypeError("stale automatic install media on a running VM must require relaunch.");
+    }
+  }
 }
 
 function validateDisplaySurface(surface) {

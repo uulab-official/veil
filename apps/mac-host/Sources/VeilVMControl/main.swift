@@ -3402,6 +3402,12 @@ struct VeilVMControl {
         print("Installer: \(report.installerMediaPath ?? "Not selected")")
         print("Drivers: \(report.driverMediaPath ?? "Not selected")")
         print("Virtual disk: \(report.virtualDiskPath ?? "Not selected")")
+        print("Guest tools media: \(report.automaticInstallMediaStatus.state.rawValue)")
+        print("Guest tools media detail: \(report.automaticInstallMediaStatus.detail)")
+        if let rebuildCommand = report.automaticInstallMediaStatus.rebuildCommand,
+           report.automaticInstallMediaStatus.recommendedAction != "none" {
+            print("Guest tools media rebuild: \(rebuildCommand)")
+        }
         print("Console screenshot: \(report.latestConsoleScreenshotPath ?? "Not captured")")
         print("Display surface: \(report.displaySurface.kind.rawValue)")
         print("Display size: \(report.displaySurface.plannedWidthInPixels)x\(report.displaySurface.plannedHeightInPixels)")

@@ -344,6 +344,9 @@ struct VMProfileStoreTests {
         #expect(report.driverMediaPath == driverURL.path)
         #expect(report.virtualDiskPath == diskURL.path)
         #expect(report.automaticInstallMediaPath == sharedFolderURL.appendingPathComponent("VeilAutoInstall.iso").path)
+        #expect(report.automaticInstallMediaStatus.state == .current)
+        #expect(report.automaticInstallMediaStatus.isCurrent)
+        #expect(report.automaticInstallMediaStatus.recommendedAction == "none")
         #expect(report.latestConsoleScreenshotPath == consoleScreenshotURL.path)
         #expect(report.displaySurface.kind == .vncLoopback)
         #expect(report.displaySurface.endpoint == "127.0.0.1:5907")
@@ -407,6 +410,74 @@ struct VMProfileStoreTests {
         #expect(report.nextActions.first == "Close existing QEMU/Windows PID 2468 before preparing or relaunching; Veil detected the configured disk is already attached but has no current launch record.")
         #expect(report.nextActions.dropFirst().first == "Installer media: Installer media is in Downloads. Re-select it with the file picker so Veil can store macOS file access before starting Windows.")
         #expect(report.nextActions.contains("Re-register the selected installer with `veil-vmctl prepare --installer /Users/test/Downloads/Win11_25H2_Korean_Arm64_v2.iso`."))
+    }
+
+    @Test("install status reports stale automatic install media before guest agent repair")
+    func installStatusReportsStaleAutomaticInstallMedia() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let sharedFolderURL = directory.appendingPathComponent("Veil Shared", isDirectory: true)
+        let agentBundleURL = sharedFolderURL.appendingPathComponent("Veil Guest Agent", isDirectory: true)
+        try FileManager.default.createDirectory(at: agentBundleURL, withIntermediateDirectories: true)
+        defer {
+            try? FileManager.default.removeItem(at: directory)
+        }
+
+        let installerURL = directory.appendingPathComponent("Windows.iso")
+        let driverURL = directory.appendingPathComponent("virtio-win.iso")
+        let mediaURL = sharedFolderURL.appendingPathComponent("VeilAutoInstall.iso")
+        let answerURL = sharedFolderURL.appendingPathComponent("Autounattend.xml")
+        let scriptURL = agentBundleURL.appendingPathComponent("V.cmd")
+        try Data("installer".utf8).write(to: installerURL)
+        try Data("drivers".utf8).write(to: driverURL)
+        try Data("old media".utf8).write(to: mediaURL)
+        try Data("<unattend />".utf8).write(to: answerURL)
+        try Data("new script".utf8).write(to: scriptURL)
+
+        let oldDate = Date(timeIntervalSince1970: 1_782_900_000)
+        let newDate = Date(timeIntervalSince1970: 1_782_910_000)
+        try FileManager.default.setAttributes([.modificationDate: oldDate], ofItemAtPath: mediaURL.path)
+        try FileManager.default.setAttributes([.modificationDate: oldDate], ofItemAtPath: answerURL.path)
+        try FileManager.default.setAttributes([.modificationDate: newDate], ofItemAtPath: scriptURL.path)
+        try FileManager.default.setAttributes([.modificationDate: newDate], ofItemAtPath: agentBundleURL.path)
+
+        let snapshot = VMRuntimeSnapshot(
+            state: .running,
+            virtualizationAvailable: true,
+            architecture: "arm64",
+            minimumOSSupported: true,
+            profileName: "Windows 11 Arm",
+            installerMediaPath: installerURL.path,
+            driverMediaPath: driverURL.path,
+            automaticInstallAnswerFilePath: answerURL.path,
+            automaticInstallMediaPath: mediaURL.path,
+            installEvidence: VMInstallEvidenceSummary(
+                kind: .profileFlag,
+                isInstalled: true,
+                title: "Windows installed",
+                detail: "The local profile is marked installed."
+            ),
+            bootReady: true,
+            windowsInstalled: true,
+            detail: "Windows is installed."
+        )
+
+        let report = snapshot.windowsInstallStatusReport()
+
+        #expect(report.automaticInstallMediaStatus.state == .stale)
+        #expect(report.automaticInstallMediaStatus.isCurrent == false)
+        #expect(report.automaticInstallMediaStatus.mediaPath == mediaURL.path)
+        #expect(report.automaticInstallMediaStatus.sourcePath == sharedFolderURL.path)
+        #expect(report.automaticInstallMediaStatus.mediaModifiedAt == oldDate)
+        #expect(report.automaticInstallMediaStatus.sourceModifiedAt == newDate)
+        #expect(report.automaticInstallMediaStatus.recommendedAction == "rebuild-media-and-relaunch")
+        #expect(report.automaticInstallMediaStatus.requiresRelaunch)
+        #expect(report.automaticInstallMediaStatus.rebuildCommand == "veil-vmctl prepare --installer \(installerURL.path) --drivers \(driverURL.path)")
+        #expect(report.nextActions.contains { action in
+            action.contains("qemu-powerdown")
+                && action.contains("rebuild guest tools media")
+                && action.contains("VeilAutoInstall.iso")
+        })
     }
 
     @Test("local runtime avoids protected Downloads console screenshot during snapshot load")

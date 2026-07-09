@@ -495,11 +495,14 @@ The report includes named checks for VM profile, installer media, automatic inst
 
 The QEMU install status command is the read-only checkpoint for persistent
 Windows setup runs. It reports the local profile, boot readiness, Windows
-install evidence, the latest QEMU launch record, the latest VM-console
-screenshot path, the embedded display surface, planned 1440x900 guest
-framebuffer, aspect-fit scaling policy, Retina host-rendering policy, and safe
-next actions. It never starts, stops, copies, or modifies Windows media or
-virtual disks.
+install evidence, automatic install media freshness, the latest QEMU launch
+record, the latest VM-console screenshot path, the embedded display surface,
+planned 1440x900 guest framebuffer, aspect-fit scaling policy, Retina
+host-rendering policy, and safe next actions. It never starts, stops, copies, or
+modifies Windows media or virtual disks. The harness rejects stale
+`VeilAutoInstall.iso` reports unless the next actions tell the operator to
+rebuild guest tools media and relaunch Windows before relying on attached-media
+guest-agent repair.
 
 ```bash
 cd apps/mac-host

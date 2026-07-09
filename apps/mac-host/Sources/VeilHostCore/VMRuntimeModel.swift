@@ -326,6 +326,7 @@ public struct VMWindowsInstallStatusReport: Codable, Equatable, Sendable {
     public var driverMediaPath: String?
     public var virtualDiskPath: String?
     public var automaticInstallMediaPath: String?
+    public var automaticInstallMediaStatus: VMAutomaticInstallMediaStatus
     public var latestConsoleScreenshotPath: String?
     public var displaySurface: VMConsoleDisplaySurface
     public var latestConsoleLaunch: VMConsoleLaunchEvidence?
@@ -344,6 +345,7 @@ public struct VMWindowsInstallStatusReport: Codable, Equatable, Sendable {
         driverMediaPath: String?,
         virtualDiskPath: String?,
         automaticInstallMediaPath: String?,
+        automaticInstallMediaStatus: VMAutomaticInstallMediaStatus,
         latestConsoleScreenshotPath: String?,
         displaySurface: VMConsoleDisplaySurface,
         latestConsoleLaunch: VMConsoleLaunchEvidence?,
@@ -361,11 +363,56 @@ public struct VMWindowsInstallStatusReport: Codable, Equatable, Sendable {
         self.driverMediaPath = driverMediaPath
         self.virtualDiskPath = virtualDiskPath
         self.automaticInstallMediaPath = automaticInstallMediaPath
+        self.automaticInstallMediaStatus = automaticInstallMediaStatus
         self.latestConsoleScreenshotPath = latestConsoleScreenshotPath
         self.displaySurface = displaySurface
         self.latestConsoleLaunch = latestConsoleLaunch
         self.runningQEMUProcess = runningQEMUProcess
         self.nextActions = nextActions
+    }
+}
+
+public enum VMAutomaticInstallMediaState: String, Codable, Equatable, Sendable {
+    case current
+    case stale
+    case missing
+    case unavailable
+}
+
+public struct VMAutomaticInstallMediaStatus: Codable, Equatable, Sendable {
+    public var state: VMAutomaticInstallMediaState
+    public var isCurrent: Bool
+    public var mediaPath: String?
+    public var sourcePath: String?
+    public var mediaModifiedAt: Date?
+    public var sourceModifiedAt: Date?
+    public var recommendedAction: String
+    public var rebuildCommand: String?
+    public var requiresRelaunch: Bool
+    public var detail: String
+
+    public init(
+        state: VMAutomaticInstallMediaState,
+        isCurrent: Bool,
+        mediaPath: String?,
+        sourcePath: String?,
+        mediaModifiedAt: Date?,
+        sourceModifiedAt: Date?,
+        recommendedAction: String,
+        rebuildCommand: String?,
+        requiresRelaunch: Bool,
+        detail: String
+    ) {
+        self.state = state
+        self.isCurrent = isCurrent
+        self.mediaPath = mediaPath
+        self.sourcePath = sourcePath
+        self.mediaModifiedAt = mediaModifiedAt
+        self.sourceModifiedAt = sourceModifiedAt
+        self.recommendedAction = recommendedAction
+        self.rebuildCommand = rebuildCommand
+        self.requiresRelaunch = requiresRelaunch
+        self.detail = detail
     }
 }
 
@@ -382,6 +429,7 @@ public extension VMRuntimeSnapshot {
             driverMediaPath: driverMediaPath,
             virtualDiskPath: virtualDiskPath,
             automaticInstallMediaPath: automaticInstallMediaPath,
+            automaticInstallMediaStatus: automaticInstallMediaStatusEvidence(),
             latestConsoleScreenshotPath: latestConsoleScreenshotPath,
             displaySurface: displaySurfaceEvidence(),
             latestConsoleLaunch: latestConsoleLaunch,
@@ -391,6 +439,7 @@ public extension VMRuntimeSnapshot {
     }
 
     private func windowsInstallNextActions() -> [String] {
+        let mediaRecoveryActions = automaticInstallMediaRecoveryActions()
         if !bootReady {
             var actions = runningRecoveryActions()
             let blockers = preflightChecks
@@ -430,6 +479,7 @@ public extension VMRuntimeSnapshot {
             if latestConsoleLaunch?.monitorSocketPath.isEmpty == false {
                 actions.append("Refresh install evidence with `veil-vmctl qemu-capture --json` before changing recovery steps.")
             }
+            actions.append(contentsOf: mediaRecoveryActions)
             if !windowsInstalled {
                 actions.append("Continue Windows Setup in the console; use `veil-vmctl qemu-oobe-bypass --json` only when OOBE network setup blocks local account creation.")
             } else if installEvidence.kind != .guestAgent {
@@ -441,6 +491,9 @@ public extension VMRuntimeSnapshot {
         }
 
         if windowsInstalled, installEvidence.kind != .guestAgent {
+            if !mediaRecoveryActions.isEmpty {
+                return mediaRecoveryActions
+            }
             return [
                 "Start the installed Windows disk with `veil-vmctl qemu-start --wait-seconds 15`.",
                 "Install the guest agent with `veil-vmctl qemu-install-agent --json` once the Windows desktop is visible."
@@ -452,6 +505,24 @@ public extension VMRuntimeSnapshot {
         }
 
         return ["Start the visible install with `veil-vmctl qemu-start --wait-seconds 15`."]
+    }
+
+    private func automaticInstallMediaRecoveryActions() -> [String] {
+        let status = automaticInstallMediaStatusEvidence()
+        guard status.state == .stale || status.state == .missing else {
+            return []
+        }
+
+        let command = status.rebuildCommand ?? "veil-vmctl prepare --installer /path/to/Windows.iso"
+        if state == .running {
+            return [
+                "Power down Windows with `veil-vmctl qemu-powerdown --json`, rebuild guest tools media with `\(command)`, then restart Windows so QEMU attaches the refreshed `VeilAutoInstall.iso`."
+            ]
+        }
+
+        return [
+            "Rebuild guest tools media with `\(command)` before starting Windows so attached recovery scripts match the local guest-agent bundle."
+        ]
     }
 
     private func windowsInstallPrepareCommand() -> String? {
@@ -494,6 +565,137 @@ public extension VMRuntimeSnapshot {
         return [
             "Capture the current console before changing setup state, then shut down with `veil-vmctl qemu-powerdown --json` if you need to reselect media or relaunch."
         ]
+    }
+
+    private func automaticInstallMediaStatusEvidence() -> VMAutomaticInstallMediaStatus {
+        let mediaURL = automaticInstallMediaPath.map(URL.init(fileURLWithPath:))
+        let sourceURL = automaticInstallSourceDirectoryURL()
+        let mediaDate = mediaURL.flatMap { modificationDate(at: $0) }
+        let sourceDate = latestAutomaticInstallSourceModificationDate()
+        let rebuildCommand = windowsInstallPrepareCommand()
+
+        guard let mediaPath = automaticInstallMediaPath,
+              !mediaPath.isEmpty else {
+            return VMAutomaticInstallMediaStatus(
+                state: .missing,
+                isCurrent: false,
+                mediaPath: nil,
+                sourcePath: sourceURL?.path,
+                mediaModifiedAt: nil,
+                sourceModifiedAt: sourceDate,
+                recommendedAction: "prepare-media",
+                rebuildCommand: rebuildCommand,
+                requiresRelaunch: state == .running,
+                detail: "VeilAutoInstall.iso is missing; prepare Windows before starting or repairing the guest agent."
+            )
+        }
+
+        guard let mediaDate else {
+            return VMAutomaticInstallMediaStatus(
+                state: .missing,
+                isCurrent: false,
+                mediaPath: mediaPath,
+                sourcePath: sourceURL?.path,
+                mediaModifiedAt: nil,
+                sourceModifiedAt: sourceDate,
+                recommendedAction: "prepare-media",
+                rebuildCommand: rebuildCommand,
+                requiresRelaunch: state == .running,
+                detail: "VeilAutoInstall.iso is not present at the configured path; rebuild the automatic install media before using guest-agent repair."
+            )
+        }
+
+        guard let sourceDate else {
+            return VMAutomaticInstallMediaStatus(
+                state: .unavailable,
+                isCurrent: false,
+                mediaPath: mediaPath,
+                sourcePath: sourceURL?.path,
+                mediaModifiedAt: mediaDate,
+                sourceModifiedAt: nil,
+                recommendedAction: "inspect-media",
+                rebuildCommand: rebuildCommand,
+                requiresRelaunch: false,
+                detail: "Veil cannot compare VeilAutoInstall.iso with the staged Autounattend or guest-agent bundle because source timestamps are unavailable."
+            )
+        }
+
+        let isCurrent = mediaDate >= sourceDate
+        return VMAutomaticInstallMediaStatus(
+            state: isCurrent ? .current : .stale,
+            isCurrent: isCurrent,
+            mediaPath: mediaPath,
+            sourcePath: sourceURL?.path,
+            mediaModifiedAt: mediaDate,
+            sourceModifiedAt: sourceDate,
+            recommendedAction: isCurrent ? "none" : "rebuild-media-and-relaunch",
+            rebuildCommand: rebuildCommand,
+            requiresRelaunch: !isCurrent && state == .running,
+            detail: isCurrent
+                ? "VeilAutoInstall.iso is current with the staged Autounattend and guest-agent bundle."
+                : "VeilAutoInstall.iso is older than the staged Autounattend or guest-agent bundle; rebuild it and relaunch Windows before relying on attached-media guest-agent repair."
+        )
+    }
+
+    private func automaticInstallSourceDirectoryURL() -> URL? {
+        if let automaticInstallAnswerFilePath, !automaticInstallAnswerFilePath.isEmpty {
+            return URL(fileURLWithPath: automaticInstallAnswerFilePath).deletingLastPathComponent()
+        }
+
+        if let automaticInstallMediaPath, !automaticInstallMediaPath.isEmpty {
+            return URL(fileURLWithPath: automaticInstallMediaPath).deletingLastPathComponent()
+        }
+
+        return nil
+    }
+
+    private func latestAutomaticInstallSourceModificationDate() -> Date? {
+        guard let sourceURL = automaticInstallSourceDirectoryURL() else {
+            return nil
+        }
+
+        let answerDate = modificationDate(at: sourceURL.appendingPathComponent("Autounattend.xml"))
+        let agentBundleDate = latestModificationDate(in: sourceURL.appendingPathComponent("Veil Guest Agent", isDirectory: true))
+
+        switch (answerDate, agentBundleDate) {
+        case let (answerDate?, agentBundleDate?):
+            return max(answerDate, agentBundleDate)
+        case let (answerDate?, nil):
+            return answerDate
+        case let (nil, agentBundleDate?):
+            return agentBundleDate
+        case (nil, nil):
+            return nil
+        }
+    }
+
+    private func modificationDate(at url: URL) -> Date? {
+        try? FileManager.default.attributesOfItem(atPath: url.path)[.modificationDate] as? Date
+    }
+
+    private func latestModificationDate(in url: URL) -> Date? {
+        let fileManager = FileManager.default
+        guard fileManager.fileExists(atPath: url.path) else {
+            return nil
+        }
+
+        var latest = modificationDate(at: url) ?? Date.distantPast
+        guard let enumerator = fileManager.enumerator(
+            at: url,
+            includingPropertiesForKeys: [.contentModificationDateKey]
+        ) else {
+            return latest
+        }
+
+        for case let fileURL as URL in enumerator {
+            guard let modificationDate = try? fileURL
+                .resourceValues(forKeys: [.contentModificationDateKey])
+                .contentModificationDate else {
+                continue
+            }
+            latest = max(latest, modificationDate)
+        }
+        return latest
     }
 
     private func displaySurfaceEvidence() -> VMConsoleDisplaySurface {

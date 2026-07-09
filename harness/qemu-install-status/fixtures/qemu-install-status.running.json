@@ -1,5 +1,17 @@
 {
   "automaticInstallMediaPath": "/Users/test/Virtual Machines/Veil Shared/VeilAutoInstall.iso",
+  "automaticInstallMediaStatus": {
+    "detail": "VeilAutoInstall.iso is current with the staged Autounattend and guest-agent bundle.",
+    "isCurrent": true,
+    "mediaModifiedAt": "2026-07-03T11:57:00Z",
+    "mediaPath": "/Users/test/Virtual Machines/Veil Shared/VeilAutoInstall.iso",
+    "recommendedAction": "none",
+    "rebuildCommand": "veil-vmctl prepare --installer /Users/test/Downloads/Win11_25H2_Korean_Arm64_v2.iso --drivers /Users/test/Downloads/virtio-win.iso",
+    "requiresRelaunch": false,
+    "sourceModifiedAt": "2026-07-03T11:56:00Z",
+    "sourcePath": "/Users/test/Virtual Machines/Veil Shared",
+    "state": "current"
+  },
   "bootReady": true,
   "driverMediaPath": "/Users/test/Downloads/virtio-win.iso",
   "displaySurface": {
