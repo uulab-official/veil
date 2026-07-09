@@ -655,6 +655,35 @@ struct AppRuntimeReviewCaptureStep: Codable, Equatable {
     var instruction: String
     var captureCommand: String
     var supportingCommand: String?
+
+    init(
+        order: Int,
+        slotId: String,
+        title: String,
+        expectedFileName: String,
+        instruction: String,
+        captureCommand: String = "",
+        supportingCommand: String? = nil
+    ) {
+        self.order = order
+        self.slotId = slotId
+        self.title = title
+        self.expectedFileName = expectedFileName
+        self.instruction = instruction
+        self.captureCommand = captureCommand
+        self.supportingCommand = supportingCommand
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        order = try container.decode(Int.self, forKey: .order)
+        slotId = try container.decode(String.self, forKey: .slotId)
+        title = try container.decode(String.self, forKey: .title)
+        expectedFileName = try container.decode(String.self, forKey: .expectedFileName)
+        instruction = try container.decode(String.self, forKey: .instruction)
+        captureCommand = try container.decodeIfPresent(String.self, forKey: .captureCommand) ?? ""
+        supportingCommand = try container.decodeIfPresent(String.self, forKey: .supportingCommand)
+    }
 }
 
 struct AppRuntimeReviewEvidenceManifest: Codable, Equatable {
@@ -667,7 +696,51 @@ struct AppRuntimeReviewEvidenceManifest: Codable, Equatable {
     var screenshotFiles: [AppRuntimeReviewEvidenceFile]
     var captureSteps: [AppRuntimeReviewCaptureStep]
     var reviewCommand: String
+    var verifyCommand: String
+    var openEvidenceDirectoryCommand: String
     var nextActions: [String]
+
+    init(
+        generatedAt: Date,
+        evidenceDirectory: String,
+        manifestPath: String,
+        readmePath: String,
+        requiredScreenshotCount: Int,
+        screenshotFiles: [AppRuntimeReviewEvidenceFile],
+        captureSteps: [AppRuntimeReviewCaptureStep],
+        reviewCommand: String,
+        verifyCommand: String = "",
+        openEvidenceDirectoryCommand: String = "",
+        nextActions: [String]
+    ) {
+        self.generatedAt = generatedAt
+        self.evidenceDirectory = evidenceDirectory
+        self.manifestPath = manifestPath
+        self.readmePath = readmePath
+        self.requiredScreenshotCount = requiredScreenshotCount
+        self.screenshotFiles = screenshotFiles
+        self.captureSteps = captureSteps
+        self.reviewCommand = reviewCommand
+        self.verifyCommand = verifyCommand
+        self.openEvidenceDirectoryCommand = openEvidenceDirectoryCommand
+        self.nextActions = nextActions
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        kind = try container.decodeIfPresent(String.self, forKey: .kind) ?? "windowsAppRuntimeReviewEvidenceManifest"
+        generatedAt = try container.decode(Date.self, forKey: .generatedAt)
+        evidenceDirectory = try container.decode(String.self, forKey: .evidenceDirectory)
+        manifestPath = try container.decode(String.self, forKey: .manifestPath)
+        readmePath = try container.decode(String.self, forKey: .readmePath)
+        requiredScreenshotCount = try container.decode(Int.self, forKey: .requiredScreenshotCount)
+        screenshotFiles = try container.decode([AppRuntimeReviewEvidenceFile].self, forKey: .screenshotFiles)
+        captureSteps = try container.decode([AppRuntimeReviewCaptureStep].self, forKey: .captureSteps)
+        reviewCommand = try container.decode(String.self, forKey: .reviewCommand)
+        verifyCommand = try container.decodeIfPresent(String.self, forKey: .verifyCommand) ?? ""
+        openEvidenceDirectoryCommand = try container.decodeIfPresent(String.self, forKey: .openEvidenceDirectoryCommand) ?? ""
+        nextActions = try container.decode([String].self, forKey: .nextActions)
+    }
 }
 
 struct AppRuntimeReviewMissingCaptureStep: Codable, Equatable {
@@ -697,6 +770,9 @@ struct AppRuntimeReviewEvidenceVerification: Codable, Equatable {
     var nextMissingCaptureStep: AppRuntimeReviewMissingCaptureStep?
     var review: AppRuntimeReviewCard
     var manifest: AppRuntimeReviewEvidenceManifest?
+    var reviewCommand: String
+    var verifyCommand: String
+    var openEvidenceDirectoryCommand: String
     var nextActions: [String]
 }
 
@@ -1032,6 +1108,9 @@ struct VeilVMControl {
         )
         let manifestURL = evidenceDirectoryURL.appendingPathComponent("review-manifest.json")
         let readmeURL = evidenceDirectoryURL.appendingPathComponent("README.md")
+        let reviewCommand = appRuntimeReviewCommand(evidenceDirectory: evidenceDirectoryURL.path)
+        let verifyCommand = appRuntimeReviewVerifyCommand(evidenceDirectory: evidenceDirectoryURL.path)
+        let openEvidenceDirectoryCommand = appRuntimeReviewOpenCommand(evidenceDirectory: evidenceDirectoryURL.path)
         let screenshotFiles = card.screenshotSlots.map { slot in
             AppRuntimeReviewEvidenceFile(
                 slotId: slot.id,
@@ -1052,12 +1131,14 @@ struct VeilVMControl {
                 screenshotFiles: screenshotFiles,
                 card: card
             ),
-            reviewCommand: "veil-vmctl app-runtime-review --evidence-dir '\(evidenceDirectoryURL.path)'",
-            nextActions: [
-                "Capture the five required screenshots into the evidence directory.",
-                "Run `veil-vmctl app-runtime-review --evidence-dir '\(evidenceDirectoryURL.path)'` and confirm Screenshots is 5/5 attached.",
-                "Run `veil-vmctl app-runtime-review --json --evidence-dir '\(evidenceDirectoryURL.path)'` for machine-readable release evidence."
-            ]
+            reviewCommand: reviewCommand,
+            verifyCommand: verifyCommand,
+            openEvidenceDirectoryCommand: openEvidenceDirectoryCommand,
+            nextActions: appRuntimeReviewManifestNextActions(
+                reviewCommand: reviewCommand,
+                verifyCommand: verifyCommand,
+                openEvidenceDirectoryCommand: openEvidenceDirectoryCommand
+            )
         )
         let data = try JSONEncoder.veilDiagnostics.encode(manifest)
         try data.write(to: manifestURL, options: [.atomic])
@@ -1074,6 +1155,7 @@ struct VeilVMControl {
         print("Manifest: \(manifest.manifestPath)")
         print("Guide: \(manifest.readmePath)")
         print("Screenshots needed: \(manifest.requiredScreenshotCount)")
+        print("Open folder: \(manifest.openEvidenceDirectoryCommand)")
         for file in manifest.screenshotFiles {
             print("  - \(file.expectedFileName): \(file.title)")
         }
@@ -1087,6 +1169,7 @@ struct VeilVMControl {
             }
         }
         print("Review command: \(manifest.reviewCommand)")
+        print("Verify command: \(manifest.verifyCommand)")
     }
 
     @MainActor
@@ -1102,7 +1185,11 @@ struct VeilVMControl {
         let manifest: AppRuntimeReviewEvidenceManifest?
         if FileManager.default.fileExists(atPath: manifestURL.path) {
             let data = try Data(contentsOf: manifestURL)
-            manifest = try JSONDecoder.veilDiagnostics.decode(AppRuntimeReviewEvidenceManifest.self, from: data)
+            let decodedManifest = try JSONDecoder.veilDiagnostics.decode(AppRuntimeReviewEvidenceManifest.self, from: data)
+            manifest = appRuntimeReviewManifestWithCurrentCommands(
+                decodedManifest,
+                evidenceDirectory: evidenceDirectoryURL.path
+            )
         } else {
             manifest = nil
         }
@@ -1112,6 +1199,12 @@ struct VeilVMControl {
         )
         let expectedFiles = manifest?.screenshotFiles.map(\.path)
             ?? card.screenshotSlots.map { evidenceDirectoryURL.appendingPathComponent($0.expectedFileName).path }
+        let reviewCommand = manifest?.reviewCommand
+            ?? appRuntimeReviewCommand(evidenceDirectory: evidenceDirectoryURL.path)
+        let verifyCommand = manifest?.verifyCommand
+            ?? appRuntimeReviewVerifyCommand(evidenceDirectory: evidenceDirectoryURL.path)
+        let openEvidenceDirectoryCommand = manifest?.openEvidenceDirectoryCommand
+            ?? appRuntimeReviewOpenCommand(evidenceDirectory: evidenceDirectoryURL.path)
         let captureSteps = manifest?.captureSteps
             ?? appRuntimeReviewCaptureSteps(
                 screenshotFiles: card.screenshotSlots.map { slot in
@@ -1150,11 +1243,17 @@ struct VeilVMControl {
             nextMissingCaptureStep: missingCaptureSteps.first,
             review: card,
             manifest: manifest,
+            reviewCommand: reviewCommand,
+            verifyCommand: verifyCommand,
+            openEvidenceDirectoryCommand: openEvidenceDirectoryCommand,
             nextActions: appRuntimeReviewVerificationNextActions(
                 evidenceDirectory: evidenceDirectoryURL.path,
                 manifestExists: manifest != nil,
                 readmeExists: FileManager.default.fileExists(atPath: readmeURL.path),
-                missingCaptureSteps: missingCaptureSteps
+                missingCaptureSteps: missingCaptureSteps,
+                reviewCommand: reviewCommand,
+                verifyCommand: verifyCommand,
+                openEvidenceDirectoryCommand: openEvidenceDirectoryCommand
             )
         )
 
@@ -1170,6 +1269,7 @@ struct VeilVMControl {
         print("Guide: \(verification.readmeExists ? "present" : "missing")")
         print("Screenshots: \(verification.attachedScreenshotCount)/\(verification.requiredScreenshotCount) attached")
         print("Complete: \(verification.isComplete ? "yes" : "no")")
+        print("Open folder: \(verification.openEvidenceDirectoryCommand)")
         if !verification.missingFiles.isEmpty {
             print("Missing files:")
             for file in verification.missingFiles {
@@ -1232,9 +1332,11 @@ struct VeilVMControl {
             "",
             "## Checklist",
             "",
+            "- Open this folder with `\(manifest.openEvidenceDirectoryCommand)`.",
             "- Capture every PNG listed below into this folder.",
             "- Run `\(manifest.reviewCommand)`.",
             "- Confirm the review card reports `Screenshots: \(manifest.requiredScreenshotCount)/\(manifest.requiredScreenshotCount) attached`.",
+            "- Run `\(manifest.verifyCommand)` before sharing evidence.",
             "- Keep `review-manifest.json` with the screenshots when sharing review evidence.",
             "",
             "## Capture Steps",
@@ -1260,16 +1362,82 @@ struct VeilVMControl {
         return lines.joined(separator: "\n")
     }
 
+    private static func appRuntimeReviewManifestWithCurrentCommands(
+        _ manifest: AppRuntimeReviewEvidenceManifest,
+        evidenceDirectory: String
+    ) -> AppRuntimeReviewEvidenceManifest {
+        let pathsBySlotId = Dictionary(
+            uniqueKeysWithValues: manifest.screenshotFiles.map { ($0.slotId, $0.path) }
+        )
+        let captureSteps = manifest.captureSteps.map { step in
+            AppRuntimeReviewCaptureStep(
+                order: step.order,
+                slotId: step.slotId,
+                title: step.title,
+                expectedFileName: step.expectedFileName,
+                instruction: step.instruction,
+                captureCommand: step.captureCommand.isEmpty
+                    ? appRuntimeReviewCaptureCommand(path: pathsBySlotId[step.slotId] ?? "\(evidenceDirectory)/\(step.expectedFileName)")
+                    : step.captureCommand,
+                supportingCommand: step.supportingCommand
+            )
+        }
+        let reviewCommand = manifest.reviewCommand.isEmpty
+            ? appRuntimeReviewCommand(evidenceDirectory: evidenceDirectory)
+            : manifest.reviewCommand
+        let verifyCommand = manifest.verifyCommand.isEmpty
+            ? appRuntimeReviewVerifyCommand(evidenceDirectory: evidenceDirectory)
+            : manifest.verifyCommand
+        let openEvidenceDirectoryCommand = manifest.openEvidenceDirectoryCommand.isEmpty
+            ? appRuntimeReviewOpenCommand(evidenceDirectory: evidenceDirectory)
+            : manifest.openEvidenceDirectoryCommand
+
+        return AppRuntimeReviewEvidenceManifest(
+            generatedAt: manifest.generatedAt,
+            evidenceDirectory: manifest.evidenceDirectory,
+            manifestPath: manifest.manifestPath,
+            readmePath: manifest.readmePath,
+            requiredScreenshotCount: manifest.requiredScreenshotCount,
+            screenshotFiles: manifest.screenshotFiles,
+            captureSteps: captureSteps,
+            reviewCommand: reviewCommand,
+            verifyCommand: verifyCommand,
+            openEvidenceDirectoryCommand: openEvidenceDirectoryCommand,
+            nextActions: appRuntimeReviewManifestNextActions(
+                reviewCommand: reviewCommand,
+                verifyCommand: verifyCommand,
+                openEvidenceDirectoryCommand: openEvidenceDirectoryCommand
+            )
+        )
+    }
+
+    private static func appRuntimeReviewManifestNextActions(
+        reviewCommand: String,
+        verifyCommand: String,
+        openEvidenceDirectoryCommand: String
+    ) -> [String] {
+        [
+            "Open the evidence folder with `\(openEvidenceDirectoryCommand)`.",
+            "Capture the five required screenshots into the evidence directory.",
+            "Run `\(reviewCommand)` and confirm Screenshots is 5/5 attached.",
+            "Run `\(verifyCommand)` before sharing evidence."
+        ]
+    }
+
     private static func appRuntimeReviewVerificationNextActions(
         evidenceDirectory: String,
         manifestExists: Bool,
         readmeExists: Bool,
-        missingCaptureSteps: [AppRuntimeReviewMissingCaptureStep]
+        missingCaptureSteps: [AppRuntimeReviewMissingCaptureStep],
+        reviewCommand: String,
+        verifyCommand: String,
+        openEvidenceDirectoryCommand: String
     ) -> [String] {
         var actions: [String] = []
         if !manifestExists || !readmeExists {
             actions.append("Run `veil-vmctl app-runtime-review-init --evidence-dir '\(evidenceDirectory)'` to recreate the review manifest and guide.")
         }
+        actions.append("Open the evidence folder with `\(openEvidenceDirectoryCommand)`.")
         if let nextMissingCaptureStep = missingCaptureSteps.first {
             actions.append("Capture `\(nextMissingCaptureStep.expectedFileName)` for \(nextMissingCaptureStep.title): \(nextMissingCaptureStep.instruction)")
             actions.append("Save it with `\(nextMissingCaptureStep.captureCommand)`.")
@@ -1277,8 +1445,8 @@ struct VeilVMControl {
                 actions.append("Use `\(supportingCommand)` to reach the next capture state before saving `\(nextMissingCaptureStep.expectedFileName)`.")
             }
         }
-        actions.append("Run `veil-vmctl app-runtime-review --evidence-dir '\(evidenceDirectory)'` and confirm Screenshots is 5/5 attached.")
-        actions.append("Run `veil-vmctl app-runtime-review-verify --json --evidence-dir '\(evidenceDirectory)'` before sharing evidence.")
+        actions.append("Run `\(reviewCommand)` and confirm Screenshots is 5/5 attached.")
+        actions.append("Run `\(verifyCommand)` before sharing evidence.")
         return actions
     }
 
@@ -1328,6 +1496,18 @@ struct VeilVMControl {
 
     private static func appRuntimeReviewCaptureCommand(path: String) -> String {
         "screencapture -i \(shellQuoted(path))"
+    }
+
+    private static func appRuntimeReviewCommand(evidenceDirectory: String) -> String {
+        "veil-vmctl app-runtime-review --evidence-dir \(shellQuoted(evidenceDirectory))"
+    }
+
+    private static func appRuntimeReviewVerifyCommand(evidenceDirectory: String) -> String {
+        "veil-vmctl app-runtime-review-verify --json --evidence-dir \(shellQuoted(evidenceDirectory))"
+    }
+
+    private static func appRuntimeReviewOpenCommand(evidenceDirectory: String) -> String {
+        "open \(shellQuoted(evidenceDirectory))"
     }
 
     private static func appRuntimeReviewCaptureInstruction(slotId: String) -> String {

@@ -27,6 +27,28 @@ export function validateAppRuntimeReviewVerification(report) {
   requireNonNegativeInteger(report.requiredScreenshotCount, "requiredScreenshotCount");
   requireNonNegativeInteger(report.attachedScreenshotCount, "attachedScreenshotCount");
   requireBoolean(report.isComplete, "isComplete");
+  requireString(report.reviewCommand, "reviewCommand");
+  requireString(report.verifyCommand, "verifyCommand");
+  requireString(report.openEvidenceDirectoryCommand, "openEvidenceDirectoryCommand");
+
+  if (!report.reviewCommand.includes("app-runtime-review --evidence-dir")) {
+    throw new TypeError("app runtime review verification reviewCommand must run app-runtime-review with an evidence directory.");
+  }
+  if (!report.reviewCommand.includes(report.evidenceDirectory)) {
+    throw new TypeError("app runtime review verification reviewCommand must point at the evidence directory.");
+  }
+  if (!report.verifyCommand.includes("app-runtime-review-verify --json --evidence-dir")) {
+    throw new TypeError("app runtime review verification verifyCommand must run app-runtime-review-verify with JSON output and an evidence directory.");
+  }
+  if (!report.verifyCommand.includes(report.evidenceDirectory)) {
+    throw new TypeError("app runtime review verification verifyCommand must point at the evidence directory.");
+  }
+  if (!report.openEvidenceDirectoryCommand.startsWith("open ")) {
+    throw new TypeError("app runtime review verification openEvidenceDirectoryCommand must open the evidence directory.");
+  }
+  if (!report.openEvidenceDirectoryCommand.includes(report.evidenceDirectory)) {
+    throw new TypeError("app runtime review verification openEvidenceDirectoryCommand must point at the evidence directory.");
+  }
 
   if (!Array.isArray(report.missingFiles)) {
     throw new TypeError("app runtime review verification missingFiles must be an array.");
@@ -92,6 +114,13 @@ export function validateAppRuntimeReviewVerification(report) {
     if (manifest.evidenceDirectory !== report.evidenceDirectory) {
       throw new TypeError("app runtime review verification manifest must point at the evidence directory.");
     }
+    if (
+      manifest.reviewCommand !== report.reviewCommand
+      || manifest.verifyCommand !== report.verifyCommand
+      || manifest.openEvidenceDirectoryCommand !== report.openEvidenceDirectoryCommand
+    ) {
+      throw new TypeError("app runtime review verification commands must match the manifest commands.");
+    }
   }
 
   if (!Array.isArray(report.nextActions) || report.nextActions.length === 0) {
@@ -99,6 +128,9 @@ export function validateAppRuntimeReviewVerification(report) {
   }
   for (const action of report.nextActions) {
     requireString(action, "nextActions[]");
+  }
+  if (!report.nextActions.some((action) => action.includes(report.openEvidenceDirectoryCommand))) {
+    throw new TypeError("app runtime review verification next actions must include the open evidence folder command.");
   }
 
   return report;

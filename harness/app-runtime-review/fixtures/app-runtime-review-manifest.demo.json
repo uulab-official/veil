@@ -46,17 +46,19 @@
     }
   ],
   "evidenceDirectory" : "\/tmp\/veil-review-readme",
-  "generatedAt" : "2026-07-09T15:58:30Z",
+  "generatedAt" : "2026-07-09T16:04:35Z",
   "kind" : "windowsAppRuntimeReviewEvidenceManifest",
   "manifestPath" : "\/tmp\/veil-review-readme\/review-manifest.json",
   "nextActions" : [
+    "Open the evidence folder with `open \/tmp\/veil-review-readme`.",
     "Capture the five required screenshots into the evidence directory.",
-    "Run `veil-vmctl app-runtime-review --evidence-dir '\/tmp\/veil-review-readme'` and confirm Screenshots is 5\/5 attached.",
-    "Run `veil-vmctl app-runtime-review --json --evidence-dir '\/tmp\/veil-review-readme'` for machine-readable release evidence."
+    "Run `veil-vmctl app-runtime-review --evidence-dir \/tmp\/veil-review-readme` and confirm Screenshots is 5\/5 attached.",
+    "Run `veil-vmctl app-runtime-review-verify --json --evidence-dir \/tmp\/veil-review-readme` before sharing evidence."
   ],
+  "openEvidenceDirectoryCommand" : "open \/tmp\/veil-review-readme",
   "readmePath" : "\/tmp\/veil-review-readme\/README.md",
   "requiredScreenshotCount" : 5,
-  "reviewCommand" : "veil-vmctl app-runtime-review --evidence-dir '\/tmp\/veil-review-readme'",
+  "reviewCommand" : "veil-vmctl app-runtime-review --evidence-dir \/tmp\/veil-review-readme",
   "screenshotFiles" : [
     {
       "expectedFileName" : "preBootLauncher.png",
@@ -93,5 +95,6 @@
       "slotId" : "closeQuiet",
       "title" : "Close And Quiet"
     }
-  ]
+  ],
+  "verifyCommand" : "veil-vmctl app-runtime-review-verify --json --evidence-dir \/tmp\/veil-review-readme"
 }

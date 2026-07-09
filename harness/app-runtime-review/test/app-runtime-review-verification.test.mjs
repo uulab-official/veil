@@ -64,6 +64,16 @@ test("rejects verification missing capture commands that do not save the missing
   );
 });
 
+test("rejects verification commands that drift from manifest commands", () => {
+  const report = demoVerification();
+  report.verifyCommand = "veil-vmctl app-runtime-review-verify --json --evidence-dir /tmp/other";
+
+  assert.throws(
+    () => validateAppRuntimeReviewVerification(report),
+    /verifyCommand/
+  );
+});
+
 test("accepts complete verification reports", () => {
   const report = demoVerification();
   report.attachedScreenshotCount = report.requiredScreenshotCount;

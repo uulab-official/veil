@@ -1,7 +1,7 @@
 {
   "attachedScreenshotCount" : 0,
   "evidenceDirectory" : "\/tmp\/veil-review-verify",
-  "generatedAt" : "2026-07-09T15:58:31Z",
+  "generatedAt" : "2026-07-09T16:04:36Z",
   "isComplete" : false,
   "kind" : "windowsAppRuntimeReviewEvidenceVerification",
   "manifest" : {
@@ -52,17 +52,19 @@
       }
     ],
     "evidenceDirectory" : "\/tmp\/veil-review-verify",
-    "generatedAt" : "2026-07-09T15:58:30Z",
+    "generatedAt" : "2026-07-09T16:04:35Z",
     "kind" : "windowsAppRuntimeReviewEvidenceManifest",
     "manifestPath" : "\/tmp\/veil-review-verify\/review-manifest.json",
     "nextActions" : [
+      "Open the evidence folder with `open \/tmp\/veil-review-verify`.",
       "Capture the five required screenshots into the evidence directory.",
-      "Run `veil-vmctl app-runtime-review --evidence-dir '\/tmp\/veil-review-verify'` and confirm Screenshots is 5\/5 attached.",
-      "Run `veil-vmctl app-runtime-review --json --evidence-dir '\/tmp\/veil-review-verify'` for machine-readable release evidence."
+      "Run `veil-vmctl app-runtime-review --evidence-dir \/tmp\/veil-review-verify` and confirm Screenshots is 5\/5 attached.",
+      "Run `veil-vmctl app-runtime-review-verify --json --evidence-dir \/tmp\/veil-review-verify` before sharing evidence."
     ],
+    "openEvidenceDirectoryCommand" : "open \/tmp\/veil-review-verify",
     "readmePath" : "\/tmp\/veil-review-verify\/README.md",
     "requiredScreenshotCount" : 5,
-    "reviewCommand" : "veil-vmctl app-runtime-review --evidence-dir '\/tmp\/veil-review-verify'",
+    "reviewCommand" : "veil-vmctl app-runtime-review --evidence-dir \/tmp\/veil-review-verify",
     "screenshotFiles" : [
       {
         "expectedFileName" : "preBootLauncher.png",
@@ -99,7 +101,8 @@
         "slotId" : "closeQuiet",
         "title" : "Close And Quiet"
       }
-    ]
+    ],
+    "verifyCommand" : "veil-vmctl app-runtime-review-verify --json --evidence-dir \/tmp\/veil-review-verify"
   },
   "manifestExists" : true,
   "manifestPath" : "\/tmp\/veil-review-verify\/review-manifest.json",
@@ -162,11 +165,12 @@
     "\/tmp\/veil-review-verify\/closeQuiet.png"
   ],
   "nextActions" : [
+    "Open the evidence folder with `open \/tmp\/veil-review-verify`.",
     "Capture `preBootLauncher.png` for Pre-Boot Launcher: Capture the one-screen Veil launcher before opening the selected Windows app.",
     "Save it with `screencapture -i \/tmp\/veil-review-verify\/preBootLauncher.png`.",
     "Use `veil-vmctl app-runtime-status --json` to reach the next capture state before saving `preBootLauncher.png`.",
-    "Run `veil-vmctl app-runtime-review --evidence-dir '\/tmp\/veil-review-verify'` and confirm Screenshots is 5\/5 attached.",
-    "Run `veil-vmctl app-runtime-review-verify --json --evidence-dir '\/tmp\/veil-review-verify'` before sharing evidence."
+    "Run `veil-vmctl app-runtime-review --evidence-dir \/tmp\/veil-review-verify` and confirm Screenshots is 5\/5 attached.",
+    "Run `veil-vmctl app-runtime-review-verify --json --evidence-dir \/tmp\/veil-review-verify` before sharing evidence."
   ],
   "nextMissingCaptureStep" : {
     "captureCommand" : "screencapture -i \/tmp\/veil-review-verify\/preBootLauncher.png",
@@ -178,6 +182,7 @@
     "supportingCommand" : "veil-vmctl app-runtime-status --json",
     "title" : "Pre-Boot Launcher"
   },
+  "openEvidenceDirectoryCommand" : "open \/tmp\/veil-review-verify",
   "readmeExists" : true,
   "readmePath" : "\/tmp\/veil-review-verify\/README.md",
   "requiredScreenshotCount" : 5,
@@ -193,7 +198,7 @@
       "latestAppCheckPath" : "\/Users\/bonjin\/Library\/Application Support\/Veil\/Diagnostics\/MVP Proof\/notepad-mvp-window-detect.json",
       "screenshotEvidenceDirectory" : "\/tmp\/veil-review-verify"
     },
-    "generatedAt" : "2026-07-09T15:58:31Z",
+    "generatedAt" : "2026-07-09T16:04:36Z",
     "isReadyForReview" : true,
     "kind" : "windowsAppRuntimeReviewCard",
     "nextStepTitle" : "Ready For App Review",
@@ -375,7 +380,7 @@
         "pendingLaunchCount" : 1,
         "restorableAppCount" : 1
       },
-      "generatedAt" : "2026-07-09T15:58:31Z",
+      "generatedAt" : "2026-07-09T16:04:36Z",
       "guestAgentDiagnostics" : {
         "diagnosticCommand" : "veil-host-probe --diagnose-agent",
         "endpoint" : "ws:\/\/127.0.0.1:18444",
@@ -647,5 +652,7 @@
         "title" : "Close Or Restore Apps"
       }
     ]
-  }
+  },
+  "reviewCommand" : "veil-vmctl app-runtime-review --evidence-dir \/tmp\/veil-review-verify",
+  "verifyCommand" : "veil-vmctl app-runtime-review-verify --json --evidence-dir \/tmp\/veil-review-verify"
 }

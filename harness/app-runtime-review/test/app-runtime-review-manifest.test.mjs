@@ -64,6 +64,16 @@ test("rejects manifests with capture commands that do not save the expected file
   );
 });
 
+test("rejects manifests with open commands outside evidence directory", () => {
+  const manifest = demoManifest();
+  manifest.openEvidenceDirectoryCommand = "open /tmp/other";
+
+  assert.throws(
+    () => validateAppRuntimeReviewManifest(manifest),
+    /openEvidenceDirectoryCommand/
+  );
+});
+
 test("rejects review commands that do not point at evidence directory", () => {
   const manifest = demoManifest();
   manifest.reviewCommand = "veil-vmctl app-runtime-review --evidence-dir '/tmp/other'";

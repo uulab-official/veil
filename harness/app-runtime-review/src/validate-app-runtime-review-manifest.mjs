@@ -28,6 +28,8 @@ export function validateAppRuntimeReviewManifest(manifest) {
   requireString(manifest.readmePath, "readmePath");
   requireNonNegativeInteger(manifest.requiredScreenshotCount, "requiredScreenshotCount");
   requireString(manifest.reviewCommand, "reviewCommand");
+  requireString(manifest.verifyCommand, "verifyCommand");
+  requireString(manifest.openEvidenceDirectoryCommand, "openEvidenceDirectoryCommand");
 
   if (!manifest.manifestPath.endsWith("/review-manifest.json")) {
     throw new TypeError("app runtime review manifest path must end with review-manifest.json.");
@@ -46,6 +48,18 @@ export function validateAppRuntimeReviewManifest(manifest) {
   }
   if (!manifest.reviewCommand.includes(manifest.evidenceDirectory)) {
     throw new TypeError("app runtime review manifest reviewCommand must point at the evidence directory.");
+  }
+  if (!manifest.verifyCommand.includes("app-runtime-review-verify --json --evidence-dir")) {
+    throw new TypeError("app runtime review manifest verifyCommand must run app-runtime-review-verify with JSON output and an evidence directory.");
+  }
+  if (!manifest.verifyCommand.includes(manifest.evidenceDirectory)) {
+    throw new TypeError("app runtime review manifest verifyCommand must point at the evidence directory.");
+  }
+  if (!manifest.openEvidenceDirectoryCommand.startsWith("open ")) {
+    throw new TypeError("app runtime review manifest openEvidenceDirectoryCommand must open the evidence directory.");
+  }
+  if (!manifest.openEvidenceDirectoryCommand.includes(manifest.evidenceDirectory)) {
+    throw new TypeError("app runtime review manifest openEvidenceDirectoryCommand must point at the evidence directory.");
   }
 
   if (!Array.isArray(manifest.screenshotFiles)) {
@@ -128,6 +142,9 @@ export function validateAppRuntimeReviewManifest(manifest) {
   }
   if (!manifest.nextActions.some((action) => action.includes("5/5 attached"))) {
     throw new TypeError("app runtime review manifest next actions must include the 5/5 attached gate.");
+  }
+  if (!manifest.nextActions.some((action) => action.includes(manifest.openEvidenceDirectoryCommand))) {
+    throw new TypeError("app runtime review manifest next actions must include the open evidence folder command.");
   }
 
   return manifest;
