@@ -46,12 +46,12 @@
     }
   ],
   "evidenceDirectory" : "\/tmp\/veil-review-readme",
-  "generatedAt" : "2026-07-09T16:44:18Z",
+  "generatedAt" : "2026-07-09T16:47:11Z",
   "kind" : "windowsAppRuntimeReviewEvidenceManifest",
   "manifestPath" : "\/tmp\/veil-review-readme\/review-manifest.json",
   "nextActions" : [
     "Open the evidence folder with `open \/tmp\/veil-review-readme`.",
-    "Capture the five required screenshots into the evidence directory.",
+    "Capture the five required screenshots into the evidence directory as valid PNG files of at least 640 x 360.",
     "Run `veil-vmctl app-runtime-review --evidence-dir \/tmp\/veil-review-readme` and confirm Screenshots is 5\/5 attached.",
     "Run `veil-vmctl app-runtime-review-verify --json --evidence-dir \/tmp\/veil-review-readme` before sharing evidence."
   ],

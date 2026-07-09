@@ -103,3 +103,13 @@ test("rejects readme paths outside evidence directory", () => {
     /readmePath/
   );
 });
+
+test("rejects next actions without minimum screenshot size", () => {
+  const manifest = demoManifest();
+  manifest.nextActions = manifest.nextActions.map((action) => action.replace(" of at least 640 x 360", ""));
+
+  assert.throws(
+    () => validateAppRuntimeReviewManifest(manifest),
+    /minimum screenshot size/
+  );
+});

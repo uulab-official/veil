@@ -143,6 +143,9 @@ export function validateAppRuntimeReviewManifest(manifest) {
   if (!manifest.nextActions.some((action) => action.includes("5/5 attached"))) {
     throw new TypeError("app runtime review manifest next actions must include the 5/5 attached gate.");
   }
+  if (!manifest.nextActions.some((action) => action.includes("640 x 360"))) {
+    throw new TypeError("app runtime review manifest next actions must include the minimum screenshot size.");
+  }
   if (!manifest.nextActions.some((action) => action.includes(manifest.openEvidenceDirectoryCommand))) {
     throw new TypeError("app runtime review manifest next actions must include the open evidence folder command.");
   }

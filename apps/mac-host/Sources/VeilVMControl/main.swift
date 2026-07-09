@@ -1377,7 +1377,7 @@ struct VeilVMControl {
             "## Checklist",
             "",
             "- Open this folder with `\(manifest.openEvidenceDirectoryCommand)`.",
-            "- Capture every PNG listed below into this folder.",
+            "- Capture every PNG listed below into this folder as a valid PNG of at least 640 x 360.",
             "- Run `\(manifest.reviewCommand)`.",
             "- Confirm the review card reports `Screenshots: \(manifest.requiredScreenshotCount)/\(manifest.requiredScreenshotCount) attached`.",
             "- Run `\(manifest.verifyCommand)` before sharing evidence.",
@@ -1462,7 +1462,7 @@ struct VeilVMControl {
     ) -> [String] {
         [
             "Open the evidence folder with `\(openEvidenceDirectoryCommand)`.",
-            "Capture the five required screenshots into the evidence directory.",
+            "Capture the five required screenshots into the evidence directory as valid PNG files of at least 640 x 360.",
             "Run `\(reviewCommand)` and confirm Screenshots is 5/5 attached.",
             "Run `\(verifyCommand)` before sharing evidence."
         ]
@@ -1484,7 +1484,7 @@ struct VeilVMControl {
         actions.append("Open the evidence folder with `\(openEvidenceDirectoryCommand)`.")
         if let nextMissingCaptureStep = missingCaptureSteps.first {
             actions.append("Capture `\(nextMissingCaptureStep.expectedFileName)` for \(nextMissingCaptureStep.title): \(nextMissingCaptureStep.instruction)")
-            actions.append("Save it with `\(nextMissingCaptureStep.captureCommand)`.")
+            actions.append("Save it as a valid PNG of at least 640 x 360 with `\(nextMissingCaptureStep.captureCommand)`.")
             if let supportingCommand = nextMissingCaptureStep.supportingCommand {
                 actions.append("Use `\(supportingCommand)` to reach the next capture state before saving `\(nextMissingCaptureStep.expectedFileName)`.")
             }
