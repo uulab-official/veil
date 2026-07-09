@@ -108,6 +108,7 @@ Goal: keep the user-facing workflow one-screen-first (launcher + one action path
 - [x] Add `oneScreenUX.returnsToLauncherWhenNoAppWindows` and harness coverage so the app path cannot pass if the launcher fails to return after all Windows app windows close.
 - [x] Drive the installed-runtime launcher hero and Windows Apps app-flow row from `launchOnboarding`, so the visible one-shot state matches the structured release/one-screen gate instead of comparing raw status sections in the UI.
 - [x] Keep mirrored host windows keyed by guest HWND instead of app id, so separate windows from the same Windows app remain independent macOS windows while same-HWND refreshes update in place.
+- [x] Keep restore intent alive until the last same-app HWND closes, so closing one Notepad window does not erase recovery for another still-open Notepad window.
 
 ## CEO Review
 

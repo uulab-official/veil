@@ -3389,7 +3389,11 @@ public final class HostDashboardModel {
         }
 
         for appId in removedAppIds {
-            await forgetRestorableAppId(appId)
+            let hasRemainingWindowForApp = activeWindows.contains { $0.appId == appId }
+                || mirrorSessions.contains { $0.window.appId == appId }
+            if !hasRemainingWindowForApp {
+                await forgetRestorableAppId(appId)
+            }
         }
     }
 

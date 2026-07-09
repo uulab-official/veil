@@ -1851,6 +1851,35 @@ struct HostDashboardModelTests {
         #expect(try await intentStore.load()?.appIds == [])
     }
 
+    @Test("keeps restored app intent until the last same-app window closes")
+    @MainActor
+    func keepsRestoredAppIntentUntilLastSameAppWindowCloses() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let intentStore = JSONWindowRestoreIntentStore(directory: directory)
+        let service = FakeDashboardService(health: .captureReady)
+        let model = HostDashboardModel(service: service, restoreIntentStore: intentStore)
+
+        await model.launchNotepad()
+        _ = try await model.receiveProtocolMessage(Data(WindowCreatedEvent.secondNotepadCreatedJSON.utf8))
+
+        #expect(model.mirrorSessions.map(\.id) == ["hwnd:0003029A", "hwnd:00010500"])
+        #expect(model.restorableAppIds == ["winapp_notepad"])
+        #expect(try await intentStore.load()?.appIds == ["winapp_notepad"])
+
+        _ = await model.closeMirrorSession(windowId: "hwnd:0003029A")
+
+        #expect(model.mirrorSessions.map(\.id) == ["hwnd:00010500"])
+        #expect(model.restorableAppIds == ["winapp_notepad"])
+        #expect(try await intentStore.load()?.appIds == ["winapp_notepad"])
+
+        _ = await model.closeMirrorSession(windowId: "hwnd:00010500")
+
+        #expect(model.mirrorSessions.isEmpty)
+        #expect(model.restorableAppIds.isEmpty)
+        #expect(try await intentStore.load()?.appIds == [])
+    }
+
     @Test("loads persisted mapped app intent on startup")
     @MainActor
     func loadsPersistedMappedAppIntentOnStartup() async throws {
@@ -2321,6 +2350,10 @@ private extension WindowCreatedEvent {
 
     static var paintCreatedJSON: String {
         #"{"type":"window.created","windowId":"hwnd:0005029C","processId":4948,"appId":"winapp_paint","title":"Untitled - Paint","bounds":{"x":40,"y":40,"width":1280,"height":800},"state":"normal","focused":true}"#
+    }
+
+    static var secondNotepadCreatedJSON: String {
+        #"{"type":"window.created","windowId":"hwnd:00010500","processId":4931,"appId":"winapp_notepad","title":"Notes.txt - Notepad","bounds":{"x":20,"y":20,"width":1360,"height":820},"state":"normal","focused":true}"#
     }
 }
 
