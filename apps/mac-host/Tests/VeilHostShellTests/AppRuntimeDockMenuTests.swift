@@ -121,6 +121,24 @@ struct AppRuntimeDockMenuTests {
                 windowsInstalled: true,
                 hasLiveAppConnection: true,
                 hasQueuedApp: false,
+                canRestorePreviousApps: true,
+                restorableAppName: "Notepad",
+                openAppWindowCount: 0
+            ),
+            WindowsShellCopy.menuStatusTitle(
+                runtimeState: .running,
+                windowsInstalled: true,
+                hasLiveAppConnection: false,
+                hasQueuedApp: false,
+                canReconnectPreviousApps: true,
+                restorableAppName: "Very Long Accounting Workstation",
+                openAppWindowCount: 0
+            ),
+            WindowsShellCopy.menuStatusTitle(
+                runtimeState: .running,
+                windowsInstalled: true,
+                hasLiveAppConnection: true,
+                hasQueuedApp: false,
                 openAppWindowCount: 2
             ),
             WindowsShellCopy.menuStatusTitle(
@@ -138,6 +156,8 @@ struct AppRuntimeDockMenuTests {
             "App Waiting to Open",
             "Notepad Waiting",
             "Very Long Accounti... Waiting",
+            "Notepad Ready",
+            "Very Long Ac... Can Reconnect",
             "2 Windows Apps Open",
             "Set Up Windows"
         ])
@@ -260,10 +280,14 @@ struct AppRuntimeDockMenuTests {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
         let intentStore = JSONWindowRestoreIntentStore(directory: directory)
+        let pendingLaunchStore = JSONPendingLaunchIntentStore(
+            directory: directory.appendingPathComponent("pending", isDirectory: true)
+        )
         try await intentStore.save(WindowRestoreIntent(appIds: ["winapp_notepad"]))
         let model = HostDashboardModel(
             service: DemoHostDashboardService(),
-            restoreIntentStore: intentStore
+            restoreIntentStore: intentStore,
+            pendingLaunchIntentStore: pendingLaunchStore
         )
         let vmModel = VMRuntimeModel(service: StubVMRuntimeService())
 
@@ -294,6 +318,7 @@ struct AppRuntimeDockMenuTests {
         let openVeilIndex = try #require(menu.items.firstIndex { $0.title == "Open Veil" })
         let restoreItemCount = menu.items.filter { $0.title == "Reconnect Notepad" }.count
 
+        #expect(menu.items.first?.title == "Notepad Can Reconnect")
         #expect(model.canRestoreMirrorSessions == false)
         #expect(model.canReconnectRestoreMirrorSessions)
         #expect(restoreItem?.isEnabled == true)

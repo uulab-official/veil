@@ -38,6 +38,7 @@ Goal: keep the user-facing workflow one-screen-first (launcher + one action path
 - [x] Show the single previous app name in Restore/Reconnect actions when one restorable Windows app is known.
 - [x] Show the queued app name in Dock/menu-bar status while a Windows app is waiting to open.
 - [x] Prioritize the queued Windows app action over Open Veil when an app is waiting to open.
+- [x] Show previous-app restore readiness in Dock/menu-bar status before falling back to generic Apps Ready copy.
 
 ## CEO Review
 

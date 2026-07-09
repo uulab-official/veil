@@ -284,6 +284,9 @@ enum AppRuntimeDockMenuFactory {
             hasLiveAppConnection: model.hasLiveAgentConnection,
             hasQueuedApp: model.pendingLaunchStatus().isQueued,
             queuedAppName: queuedLaunchAppName(model: model),
+            canRestorePreviousApps: model.canRestoreMirrorSessions,
+            canReconnectPreviousApps: model.canReconnectRestoreMirrorSessions,
+            restorableAppName: restorableSingleAppName(model: model),
             openAppWindowCount: model.mirrorSessions.count
         )
     }

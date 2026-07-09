@@ -1482,6 +1482,9 @@ private struct VeilMenuBarMenu: View {
             hasLiveAppConnection: model.hasLiveAgentConnection,
             hasQueuedApp: model.pendingLaunchStatus().isQueued,
             queuedAppName: model.pendingLaunchAppId == nil ? nil : queuedLaunchAppName,
+            canRestorePreviousApps: model.canRestoreMirrorSessions,
+            canReconnectPreviousApps: model.canReconnectRestoreMirrorSessions,
+            restorableAppName: restorableSingleAppName,
             openAppWindowCount: model.mirrorSessions.count
         )
     }

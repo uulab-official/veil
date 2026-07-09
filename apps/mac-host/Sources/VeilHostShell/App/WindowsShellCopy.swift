@@ -64,6 +64,22 @@ enum WindowsShellCopy {
         )
     }
 
+    static func previousAppsStatusTitle(
+        canRestoreNow: Bool,
+        singleAppName: String? = nil
+    ) -> String {
+        guard let singleAppName,
+              !singleAppName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return canRestoreNow ? "Previous Apps Ready" : "Previous Apps Can Reconnect"
+        }
+
+        return suffixedMenuItemTitle(
+            prefix: "",
+            title: singleAppName,
+            suffix: canRestoreNow ? "Ready" : "Can Reconnect"
+        ).trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     static func bringWindowsAppsForwardTitle(
         openAppWindowCount: Int,
         singleAppName: String? = nil
@@ -125,6 +141,9 @@ enum WindowsShellCopy {
         hasLiveAppConnection: Bool,
         hasQueuedApp: Bool,
         queuedAppName: String? = nil,
+        canRestorePreviousApps: Bool = false,
+        canReconnectPreviousApps: Bool = false,
+        restorableAppName: String? = nil,
         openAppWindowCount: Int
     ) -> String {
         if openAppWindowCount > 0 {
@@ -142,6 +161,13 @@ enum WindowsShellCopy {
             }
 
             return "App Waiting to Open"
+        }
+
+        if canRestorePreviousApps || canReconnectPreviousApps {
+            return previousAppsStatusTitle(
+                canRestoreNow: canRestorePreviousApps,
+                singleAppName: restorableAppName
+            )
         }
 
         if hasLiveAppConnection {
