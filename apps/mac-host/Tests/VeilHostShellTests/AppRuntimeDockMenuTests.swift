@@ -20,7 +20,7 @@ struct AppRuntimeDockMenuTests {
                 hasLiveAppConnection: false,
                 runtimeState: .stopped,
                 windowsInstalled: true
-            ) == "Ready to open Windows apps"
+            ) == "Start Windows to open apps"
         )
         #expect(
             WindowsShellCopy.headerSubtitle(
@@ -348,7 +348,7 @@ struct AppRuntimeDockMenuTests {
         ]
 
         #expect(titles == [
-            "Ready to Open Apps",
+            "Start Windows for Apps",
             "Apps Ready",
             "App Waiting to Open",
             "Notepad Waiting",
@@ -579,7 +579,7 @@ struct AppRuntimeDockMenuTests {
             quietWindowsWhenIdleAction: {}
         )
 
-        #expect(menu.items.first?.title == "Ready to Open Apps")
+        #expect(menu.items.first?.title == "Start Windows for Apps")
         #expect(menu.items.first?.isEnabled == false)
         #expect(menu.items.dropFirst().first?.isSeparatorItem == true)
         #expect(menu.items.dropFirst(2).first?.title == "Open Veil")

@@ -245,6 +245,7 @@ Goal: keep the main Veil experience pointed at real local Windows boot and conso
 - [x] Route `runtime.startWindowsForApp` through the app-open handoff in launcher/detail/menu surfaces so an app-first start preserves the selected app intent instead of starting a generic VM-only session.
 - [x] Make queued app launch recovery outrank reconnect-restore in the menu bar primary action, so a `Notepad Waiting` status cannot show `Reconnect Notepad` as its main action.
 - [x] Add structured `localRuntime.installEvidence` to app-runtime status and harness validation so first-run/review automation distinguishes manual profile installed flags from live guest-agent evidence.
+- [x] Replace stopped-installed launcher/menu "ready" copy with start/connect language so a manual profile install flag no longer looks like a completed app-connection proof.
 
 ## Next
 

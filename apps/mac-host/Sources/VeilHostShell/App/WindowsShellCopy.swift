@@ -31,7 +31,7 @@ enum WindowsShellCopy {
         case .starting:
             return "Opening Windows"
         default:
-            return windowsInstalled ? "Ready to open Windows apps" : "Set up Windows apps on this Mac"
+            return windowsInstalled ? "Start Windows to open apps" : "Set up Windows apps on this Mac"
         }
     }
 
@@ -186,7 +186,7 @@ enum WindowsShellCopy {
         case .notConfigured:
             return "Set Up Windows"
         case .stopped, nil:
-            return windowsInstalled ? "Ready to Open Apps" : "Set Up Windows"
+            return windowsInstalled ? "Start Windows for Apps" : "Set Up Windows"
         }
     }
 

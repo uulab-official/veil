@@ -2094,7 +2094,7 @@ private struct WindowsSetupDisplayPanel: View {
         if effectiveInstallEvidence.isInstalled {
             return effectiveInstallEvidence.kind == .guestAgent
                 ? "App connection ready"
-                : "Run it locally on this Mac"
+                : "Connect app integration to open Mac windows"
         }
 
         if snapshot.bootReady {
