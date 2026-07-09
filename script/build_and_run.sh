@@ -19,6 +19,8 @@ APP_BINARY="$APP_MACOS/$APP_EXECUTABLE"
 INFO_PLIST="$APP_CONTENTS/Info.plist"
 ENTITLEMENTS="$PACKAGE_DIR/VeilHostShell.entitlements"
 APP_ICON="$APP_RESOURCES/VeilAppIcon.icns"
+VERIFY_REPORT=""
+VERIFY_KEEP_RUNNING=0
 
 pkill -x "$APP_EXECUTABLE" >/dev/null 2>&1 || true
 
@@ -110,8 +112,9 @@ verify_launch_report() {
   bundle_identifier="$(launch_report_value "$report_path" bundleIdentifier)"
   local meets_contract
   meets_contract="$(launch_report_value "$report_path" meetsLauncherContract)"
+  local expected_bundle_id="${VEIL_VERIFY_EXPECT_BUNDLE_ID:-$BUNDLE_ID}"
 
-  if [[ "$bundle_identifier" != "$BUNDLE_ID" || ( "$meets_contract" != "true" && "$meets_contract" != "1" ) ]]; then
+  if [[ "$bundle_identifier" != "$expected_bundle_id" || ( "$meets_contract" != "true" && "$meets_contract" != "1" ) ]]; then
     echo "Veil launch report did not satisfy the one-window app contract:" >&2
     cat "$report_path" >&2
     return 1
@@ -133,6 +136,29 @@ stop_app_process() {
   return 1
 }
 
+cleanup_verify() {
+  local status=$?
+
+  if [[ -n "${VERIFY_REPORT:-}" ]]; then
+    if [[ "$status" -eq 0 ]]; then
+      rm -f "$VERIFY_REPORT"
+    elif [[ -s "$VERIFY_REPORT" ]]; then
+      local preserved_report="$DIST_DIR/veil-launch-report-failed-$(date -u +%Y%m%d%H%M%S).plist"
+      cp "$VERIFY_REPORT" "$preserved_report"
+      echo "Veil launch verification report preserved at $preserved_report" >&2
+      rm -f "$VERIFY_REPORT"
+    else
+      rm -f "$VERIFY_REPORT"
+    fi
+  fi
+
+  if [[ "$status" -ne 0 || "$VERIFY_KEEP_RUNNING" -eq 0 ]]; then
+    pkill -x "$APP_EXECUTABLE" >/dev/null 2>&1 || true
+  fi
+
+  exit "$status"
+}
+
 case "$MODE" in
   run)
     open_app
@@ -152,17 +178,20 @@ case "$MODE" in
     /usr/bin/log stream --info --style compact --predicate "subsystem == \"$BUNDLE_ID\""
     ;;
   --verify|verify|--verify-keep-running|verify-keep-running)
+    trap cleanup_verify EXIT
     codesign --verify --deep --strict "$APP_BUNDLE" >/dev/null
     plutil -lint "$INFO_PLIST" >/dev/null
     test -f "$APP_ICON"
+    if [[ "$MODE" == "--verify-keep-running" || "$MODE" == "verify-keep-running" ]]; then
+      VERIFY_KEEP_RUNNING=1
+    fi
     VERIFY_REPORT="$(mktemp -t veil-launch-report.XXXXXX.plist)"
     rm -f "$VERIFY_REPORT"
     open_app --launch-verification-report "$VERIFY_REPORT"
     wait_for_app_process
     wait_for_launch_report "$VERIFY_REPORT"
     verify_launch_report "$VERIFY_REPORT"
-    rm -f "$VERIFY_REPORT"
-    if [[ "$MODE" != "--verify-keep-running" && "$MODE" != "verify-keep-running" ]]; then
+    if [[ "$VERIFY_KEEP_RUNNING" -eq 0 ]]; then
       stop_app_process
     fi
     exit 0

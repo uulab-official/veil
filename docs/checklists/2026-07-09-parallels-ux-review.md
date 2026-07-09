@@ -9,6 +9,7 @@ Goal: keep the user-facing workflow one-screen-first (launcher + one action path
 - [x] Make `./script/build_and_run.sh --verify` launch the staged `dist/Veil.app` bundle and confirm the `veil-host-shell` process, so app-bundle verification catches foreground launch failures instead of only checking signing metadata.
 - [x] Make app-bundle verification clean up the launched process by default, while keeping `--verify-keep-running` for manual launcher/window inspection.
 - [x] Add an internal main-window launch report to app-bundle verification so CI/local checks can reject duplicate, hidden, undersized, or unbranded launcher states without macOS Accessibility permissions.
+- [x] Preserve failed launch-contract reports under `dist/veil-launch-report-failed-*.plist` while still cleaning up the launched app process, so UI regressions are diagnosable without leaving stray windows.
 - [x] Keep primary launcher action as "Open Windows App" once runtime + agent conditions allow it.
 - [x] Remove the heavy multi-section launcher path from the default route by consolidating startup, install, and run signals into a focused runtime panel.
 - [x] Keep recovery actions available through menu/dock surfaces so the default surface stays simple.
