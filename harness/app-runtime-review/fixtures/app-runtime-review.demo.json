@@ -27,7 +27,7 @@
         "meetsLauncherContract" : true,
         "minHeight" : 760,
         "minWidth" : 1180,
-        "modifiedAt" : "2026-07-09T17:00:34Z",
+        "modifiedAt" : "2026-07-09T17:03:56Z",
         "reportPath" : "\/Users\/bonjin\/Documents\/workspace\/uulab\/veil\/dist\/veil-launch-report-latest.plist",
         "titlebarAppearsTransparent" : true,
         "visibleMainWindowCount" : 1
@@ -38,7 +38,8 @@
     "latestAppCheckModifiedAt" : "2026-07-04T15:28:35Z",
     "latestAppCheckPath" : "\/Users\/bonjin\/Library\/Application Support\/Veil\/Diagnostics\/MVP Proof\/notepad-mvp-window-detect.json"
   },
-  "generatedAt" : "2026-07-09T17:03:02Z",
+  "generatedAt" : "2026-07-09T17:07:04Z",
+  "invalidScreenshotCount" : 0,
   "isReadyForReview" : false,
   "kind" : "windowsAppRuntimeReviewCard",
   "minimumScreenshotHeight" : 360,
@@ -222,7 +223,7 @@
       "pendingLaunchCount" : 1,
       "restorableAppCount" : 1
     },
-    "generatedAt" : "2026-07-09T17:03:02Z",
+    "generatedAt" : "2026-07-09T17:07:04Z",
     "guestAgentDiagnostics" : {
       "diagnosticCommand" : "veil-host-probe --diagnose-agent",
       "endpoint" : "ws:\/\/127.0.0.1:18444",

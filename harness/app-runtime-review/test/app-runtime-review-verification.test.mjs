@@ -127,6 +127,7 @@ test("accepts complete verification reports", () => {
   report.missingCaptureSteps = [];
   delete report.nextMissingCaptureStep;
   report.review.attachedScreenshotCount = report.review.requiredScreenshotCount;
+  report.review.invalidScreenshotCount = 0;
   report.review.areRequiredScreenshotsAttached = true;
   report.review.isReadyForReview = true;
   report.review.appFlowSummary = "ready (5/5)";

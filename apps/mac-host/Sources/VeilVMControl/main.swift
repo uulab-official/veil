@@ -671,6 +671,7 @@ struct AppRuntimeReviewCard: Codable, Equatable {
     var areRequiredScreenshotsAttached: Bool
     var requiredScreenshotCount: Int
     var attachedScreenshotCount: Int
+    var invalidScreenshotCount: Int
     var minimumScreenshotWidth: Int
     var minimumScreenshotHeight: Int
     var appFlowSummary: String
@@ -1112,6 +1113,9 @@ struct VeilVMControl {
         print("Veil Windows App Review Card")
         print("App flow: \(card.appFlowSummary)")
         print("Screenshots: \(card.attachedScreenshotCount)/\(card.requiredScreenshotCount) attached")
+        if card.invalidScreenshotCount > 0 {
+            print("Invalid screenshots: \(card.invalidScreenshotCount)")
+        }
         print("Next step: \(card.nextStepTitle)")
         print("Detail: \(card.detail)")
         if let nextActionCommand = card.nextActionCommand {
@@ -1676,6 +1680,7 @@ struct VeilVMControl {
         }
         let requiredScreenshotCount = report.releaseGate.screenshotSlots.filter(\.isRequired).count
         let attachedScreenshotCount = screenshotSlots.filter { $0.attachmentState == "attached" }.count
+        let invalidScreenshotCount = screenshotSlots.filter { $0.attachmentIssueReason != nil }.count
         let areRequiredScreenshotsAttached = requiredScreenshotCount == attachedScreenshotCount
         let hostAppBundle = hostAppBundleEvidence()
 
@@ -1687,18 +1692,21 @@ struct VeilVMControl {
             areRequiredScreenshotsAttached: areRequiredScreenshotsAttached,
             requiredScreenshotCount: requiredScreenshotCount,
             attachedScreenshotCount: attachedScreenshotCount,
+            invalidScreenshotCount: invalidScreenshotCount,
             minimumScreenshotWidth: minimumReviewScreenshotWidth,
             minimumScreenshotHeight: minimumReviewScreenshotHeight,
             appFlowSummary: appRuntimeReviewSummary(
                 releaseGate: report.releaseGate,
                 hostAppBundle: hostAppBundle,
                 requiredScreenshotCount: requiredScreenshotCount,
-                attachedScreenshotCount: attachedScreenshotCount
+                attachedScreenshotCount: attachedScreenshotCount,
+                invalidScreenshotCount: invalidScreenshotCount
             ),
             nextStepTitle: appRuntimeReviewNextStepTitle(
                 releaseGate: report.releaseGate,
                 hostAppBundle: hostAppBundle,
-                areRequiredScreenshotsAttached: areRequiredScreenshotsAttached
+                areRequiredScreenshotsAttached: areRequiredScreenshotsAttached,
+                invalidScreenshotCount: invalidScreenshotCount
             ),
             nextActionCommand: appRuntimeReviewNextCommand(
                 releaseGate: report.releaseGate,
@@ -1710,7 +1718,8 @@ struct VeilVMControl {
                 releaseGate: report.releaseGate,
                 hostAppBundle: hostAppBundle,
                 requiredScreenshotCount: requiredScreenshotCount,
-                attachedScreenshotCount: attachedScreenshotCount
+                attachedScreenshotCount: attachedScreenshotCount,
+                invalidScreenshotCount: invalidScreenshotCount
             ),
             steps: report.releaseGate.steps.map { step in
                 AppRuntimeReviewStep(
@@ -1741,10 +1750,14 @@ struct VeilVMControl {
         releaseGate: WindowsAppRuntimeReleaseGateStatus,
         hostAppBundle: AppRuntimeReviewHostAppBundleEvidence,
         requiredScreenshotCount: Int,
-        attachedScreenshotCount: Int
+        attachedScreenshotCount: Int,
+        invalidScreenshotCount: Int
     ) -> String {
         guard hostAppBundle.isVerificationReady else {
             return "\(appFlowSummary(releaseGate)); host app bundle needs verification"
+        }
+        guard invalidScreenshotCount == 0 else {
+            return "\(appFlowSummary(releaseGate)); review screenshots \(attachedScreenshotCount)/\(requiredScreenshotCount) attached; \(invalidScreenshotCount) invalid"
         }
         guard requiredScreenshotCount == attachedScreenshotCount else {
             return "\(appFlowSummary(releaseGate)); review screenshots \(attachedScreenshotCount)/\(requiredScreenshotCount) attached"
@@ -1756,10 +1769,14 @@ struct VeilVMControl {
     private static func appRuntimeReviewNextStepTitle(
         releaseGate: WindowsAppRuntimeReleaseGateStatus,
         hostAppBundle: AppRuntimeReviewHostAppBundleEvidence,
-        areRequiredScreenshotsAttached: Bool
+        areRequiredScreenshotsAttached: Bool,
+        invalidScreenshotCount: Int
     ) -> String {
         if releaseGate.isPassing && !hostAppBundle.isVerificationReady {
             return "Verify Host App Bundle"
+        }
+        if releaseGate.isPassing && invalidScreenshotCount > 0 {
+            return "Replace Review Screenshots"
         }
         if releaseGate.isPassing && !areRequiredScreenshotsAttached {
             return "Attach Review Screenshots"
@@ -1790,16 +1807,23 @@ struct VeilVMControl {
         releaseGate: WindowsAppRuntimeReleaseGateStatus,
         hostAppBundle: AppRuntimeReviewHostAppBundleEvidence,
         requiredScreenshotCount: Int,
-        attachedScreenshotCount: Int
+        attachedScreenshotCount: Int,
+        invalidScreenshotCount: Int
     ) -> String {
         let releaseGateDetail = appFlowDetail(releaseGate)
         guard !hostAppBundle.isVerificationReady else {
+            guard invalidScreenshotCount == 0 else {
+                return "\(releaseGateDetail) Replace \(invalidScreenshotCount) invalid review screenshot\(invalidScreenshotCount == 1 ? "" : "s") before sharing evidence."
+            }
             guard requiredScreenshotCount != attachedScreenshotCount else {
                 return releaseGateDetail
             }
             return "\(releaseGateDetail) Attach all \(requiredScreenshotCount) review screenshots before sharing evidence."
         }
 
+        if invalidScreenshotCount > 0 {
+            return "\(releaseGateDetail) Run bundled launcher verification and replace \(invalidScreenshotCount) invalid review screenshot\(invalidScreenshotCount == 1 ? "" : "s") before sharing evidence."
+        }
         if requiredScreenshotCount != attachedScreenshotCount {
             return "\(releaseGateDetail) Run bundled launcher verification and attach all \(requiredScreenshotCount) review screenshots before sharing evidence."
         }

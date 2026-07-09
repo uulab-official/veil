@@ -109,6 +109,8 @@ test("accepts missing screenshot slots with invalid attachment issues", () => {
   const card = demoReviewCard();
   card.evidence.screenshotEvidenceDirectory = "/tmp/veil-review";
   card.nextActionCommand = "veil-vmctl app-runtime-review-verify --json --evidence-dir /tmp/veil-review";
+  card.invalidScreenshotCount = 1;
+  card.nextStepTitle = "Replace Review Screenshots";
   card.screenshotSlots[0].attachmentIssueReason = "belowMinimumDimensions";
   card.screenshotSlots[0].invalidAttachmentPath = "/tmp/veil-review/preBootLauncher.png";
   card.screenshotSlots[0].invalidAttachmentByteCount = 68;
@@ -116,6 +118,16 @@ test("accepts missing screenshot slots with invalid attachment issues", () => {
   card.screenshotSlots[0].invalidAttachmentHeight = 1;
 
   assert.equal(validateAppRuntimeReview(card), card);
+});
+
+test("rejects invalid screenshot count drift", () => {
+  const card = demoReviewCard();
+  card.invalidScreenshotCount = 1;
+
+  assert.throws(
+    () => validateAppRuntimeReview(card),
+    /invalid screenshot count/
+  );
 });
 
 test("rejects screenshot issue reasons without invalid attachment paths", () => {
@@ -132,6 +144,7 @@ test("accepts complete screenshot evidence summary", () => {
   const card = demoReviewCard();
   card.evidence.screenshotEvidenceDirectory = "/tmp/veil-review";
   card.attachedScreenshotCount = card.requiredScreenshotCount;
+  card.invalidScreenshotCount = 0;
   card.areRequiredScreenshotsAttached = true;
   card.isReadyForReview = true;
   card.appFlowSummary = "ready (5/5)";

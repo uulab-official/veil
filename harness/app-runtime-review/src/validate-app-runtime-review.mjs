@@ -22,6 +22,7 @@ export function validateAppRuntimeReview(card) {
   requireBoolean(card.areRequiredScreenshotsAttached, "areRequiredScreenshotsAttached");
   requireNonNegativeInteger(card.requiredScreenshotCount, "requiredScreenshotCount");
   requireNonNegativeInteger(card.attachedScreenshotCount, "attachedScreenshotCount");
+  requireNonNegativeInteger(card.invalidScreenshotCount, "invalidScreenshotCount");
   requirePositiveInteger(card.minimumScreenshotWidth, "minimumScreenshotWidth");
   requirePositiveInteger(card.minimumScreenshotHeight, "minimumScreenshotHeight");
   requireString(card.appFlowSummary, "appFlowSummary");
@@ -77,6 +78,7 @@ export function validateAppRuntimeReview(card) {
   }
 
   let attachedScreenshotCount = 0;
+  let invalidScreenshotCount = 0;
   for (const [index, slot] of card.screenshotSlots.entries()) {
     const sourceSlot = status.releaseGate.screenshotSlots[index];
     requireString(slot.id, `screenshotSlots.${index}.id`);
@@ -159,6 +161,7 @@ export function validateAppRuntimeReview(card) {
       throw new TypeError("missing review screenshots must not include dimensions.");
     }
     if (slot.attachmentIssueReason !== undefined) {
+      invalidScreenshotCount += 1;
       if (!["unreadableFile", "notValidPNG", "belowMinimumDimensions"].includes(slot.attachmentIssueReason)) {
         throw new TypeError("app runtime review screenshot issue reason is unsupported.");
       }
@@ -194,6 +197,9 @@ export function validateAppRuntimeReview(card) {
   if (card.attachedScreenshotCount !== attachedScreenshotCount) {
     throw new TypeError("app runtime review attached screenshot count must match attached slots.");
   }
+  if (card.invalidScreenshotCount !== invalidScreenshotCount) {
+    throw new TypeError("app runtime review invalid screenshot count must match screenshot slot issues.");
+  }
   if (card.areRequiredScreenshotsAttached !== (attachedScreenshotCount === requiredScreenshotCount)) {
     throw new TypeError("app runtime review screenshot readiness must match attached required slots.");
   }
@@ -201,7 +207,10 @@ export function validateAppRuntimeReview(card) {
     throw new TypeError("app runtime review readiness must match the release gate, host app bundle evidence, and required screenshot evidence.");
   }
   if (status.releaseGate.isPassing && hostAppBundle.isVerificationReady && !card.areRequiredScreenshotsAttached) {
-    if (card.nextStepTitle !== "Attach Review Screenshots") {
+    if (invalidScreenshotCount > 0 && card.nextStepTitle !== "Replace Review Screenshots") {
+      throw new TypeError("app runtime review next step must replace invalid review screenshots when release and bundle evidence pass but screenshots are invalid.");
+    }
+    if (invalidScreenshotCount === 0 && card.nextStepTitle !== "Attach Review Screenshots") {
       throw new TypeError("app runtime review next step must attach review screenshots when release and bundle evidence pass but screenshots are missing.");
     }
     if (
