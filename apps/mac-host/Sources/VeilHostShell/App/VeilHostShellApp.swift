@@ -728,6 +728,8 @@ struct VeilHostShellApp: App {
                 restoreWindowsAppWindowsAction: restoreWindowsAppWindows,
                 launchWindowsAppByIdAction: launchWindowsAppWindow(appId:),
                 fulfillPendingLaunchAction: fulfillPendingWindowsAppWindow,
+                repairGuestAgentForAppLaunchAction: repairGuestAgentForAppLaunch,
+                recoverRuntimeDisplayAction: recoverRuntimeDisplayEvidence,
                 startVMAction: startWindowsAndShowDisplay,
                 stopVMAction: stopWindowsAndCloseDisplay,
                 quietWindowsWhenIdleAction: quietWindowsWhenIdle

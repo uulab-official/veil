@@ -21,6 +21,7 @@ Goal: keep the user-facing workflow one-screen-first (launcher + one action path
 - [x] Align visible app-launch copy away from VM/agent/proof wording toward Windows-app language such as app connection, Windows display, and app checks.
 - [x] Align mirrored app placeholder, app bridge panel, app list, and launch empty-state copy away from HWND/capture/agent language toward app screen, app window, and app connection language.
 - [x] Align `app-runtime-status` action titles away from Guest Agent/Runtime/Proof/HWND wording and add regression coverage so automation-visible actions read like product actions.
+- [x] Align Dock queued-app actions with the menu bar flow so a queued Windows app shows Refresh Display, Open Queued, Continue, or Start Windows as the next product action instead of a disabled one-off item.
 
 ## CEO Review
 

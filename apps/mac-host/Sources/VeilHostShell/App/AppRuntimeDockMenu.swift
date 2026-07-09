@@ -13,6 +13,8 @@ private final class AppRuntimeDockMenuTarget: NSObject {
     var restoreWindowsAppWindowsAction: (() -> Void)?
     var launchWindowsAppByIdAction: ((String) -> Void)?
     var fulfillPendingLaunchAction: (() -> Void)?
+    var repairGuestAgentForAppLaunchAction: (() -> Void)?
+    var recoverRuntimeDisplayAction: (() -> Void)?
     var startVMAction: (() -> Void)?
     var stopVMAction: (() -> Void)?
     var quietWindowsWhenIdleAction: (() -> Void)?
@@ -61,6 +63,14 @@ private final class AppRuntimeDockMenuTarget: NSObject {
         fulfillPendingLaunchAction?()
     }
 
+    @objc func repairGuestAgentForAppLaunch(_ sender: NSMenuItem) {
+        repairGuestAgentForAppLaunchAction?()
+    }
+
+    @objc func recoverRuntimeDisplay(_ sender: NSMenuItem) {
+        recoverRuntimeDisplayAction?()
+    }
+
     @objc func startWindows(_ sender: NSMenuItem) {
         startVMAction?()
     }
@@ -87,6 +97,8 @@ enum AppRuntimeDockMenuFactory {
         restoreWindowsAppWindowsAction: @escaping () -> Void,
         launchWindowsAppByIdAction: @escaping (String) -> Void,
         fulfillPendingLaunchAction: @escaping () -> Void,
+        repairGuestAgentForAppLaunchAction: @escaping () -> Void,
+        recoverRuntimeDisplayAction: @escaping () -> Void,
         startVMAction: @escaping () -> Void,
         stopVMAction: @escaping () -> Void,
         quietWindowsWhenIdleAction: @escaping () -> Void
@@ -100,6 +112,8 @@ enum AppRuntimeDockMenuFactory {
         target.restoreWindowsAppWindowsAction = restoreWindowsAppWindowsAction
         target.launchWindowsAppByIdAction = launchWindowsAppByIdAction
         target.fulfillPendingLaunchAction = fulfillPendingLaunchAction
+        target.repairGuestAgentForAppLaunchAction = repairGuestAgentForAppLaunchAction
+        target.recoverRuntimeDisplayAction = recoverRuntimeDisplayAction
         target.startVMAction = startVMAction
         target.stopVMAction = stopVMAction
         target.quietWindowsWhenIdleAction = quietWindowsWhenIdleAction
@@ -164,13 +178,21 @@ enum AppRuntimeDockMenuFactory {
         }
 
         if let pendingAppId = model.pendingLaunchAppId {
+            let pendingAction = DockQueuedLaunchMenuState.make(
+                appName: appName(for: pendingAppId, model: model),
+                canRecoverRuntimeDisplay: canRecoverRuntimeDisplay(vmModel: vmModel),
+                canFulfillPendingLaunch: model.canFulfillPendingLaunch,
+                canRepairQueuedAppLaunch: canRepairQueuedAppLaunch(model: model, vmModel: vmModel),
+                canStartWindows: vmModel.canStart,
+                runtimeIsLoading: vmModel.phase == .loading
+            )
             menu.addItem(.separator())
             menu.addItem(
                 item(
-                    "Open Queued \(shortTitle(appName(for: pendingAppId, model: model)))",
-                    action: #selector(AppRuntimeDockMenuTarget.fulfillPendingLaunch(_:)),
+                    pendingAction.title,
+                    action: selector(for: pendingAction.kind),
                     target: target,
-                    isEnabled: model.canFulfillPendingLaunch
+                    isEnabled: pendingAction.isEnabled
                 )
             )
         }
@@ -245,7 +267,96 @@ enum AppRuntimeDockMenuFactory {
         return "\(title.prefix(25))..."
     }
 
+    private static func selector(for kind: DockQueuedLaunchMenuState.Kind) -> Selector {
+        switch kind {
+        case .recoverRuntimeDisplay:
+            return #selector(AppRuntimeDockMenuTarget.recoverRuntimeDisplay(_:))
+        case .fulfillPendingLaunch:
+            return #selector(AppRuntimeDockMenuTarget.fulfillPendingLaunch(_:))
+        case .repairGuestAgentForAppLaunch:
+            return #selector(AppRuntimeDockMenuTarget.repairGuestAgentForAppLaunch(_:))
+        case .startWindows:
+            return #selector(AppRuntimeDockMenuTarget.startWindows(_:))
+        }
+    }
+
+    private static func canRecoverRuntimeDisplay(vmModel: VMRuntimeModel) -> Bool {
+        guard vmModel.snapshot?.state == .running || vmModel.snapshot?.state == .starting else {
+            return false
+        }
+
+        return vmModel.snapshot?.latestConsoleLaunch?.previewStatus == .stale
+            || vmModel.snapshot?.latestConsoleLaunch?.previewStatus == .unavailable
+    }
+
+    private static func canRepairQueuedAppLaunch(model: HostDashboardModel, vmModel: VMRuntimeModel) -> Bool {
+        model.pendingLaunchStatus().willLaunchOnAgentReconnect
+            && (vmModel.snapshot?.state == .running || vmModel.snapshot?.state == .starting)
+            && !model.canFulfillPendingLaunch
+    }
+
     private static func appName(for appId: String, model: HostDashboardModel) -> String {
         model.apps.first { $0.id == appId }?.name ?? "Windows App"
+    }
+}
+
+struct DockQueuedLaunchMenuState: Equatable {
+    enum Kind: Equatable {
+        case recoverRuntimeDisplay
+        case fulfillPendingLaunch
+        case repairGuestAgentForAppLaunch
+        case startWindows
+    }
+
+    var title: String
+    var kind: Kind
+    var isEnabled: Bool
+
+    static func make(
+        appName: String,
+        canRecoverRuntimeDisplay: Bool,
+        canFulfillPendingLaunch: Bool,
+        canRepairQueuedAppLaunch: Bool,
+        canStartWindows: Bool,
+        runtimeIsLoading: Bool
+    ) -> DockQueuedLaunchMenuState {
+        let shortAppName = shortTitle(appName)
+        if canRecoverRuntimeDisplay {
+            return DockQueuedLaunchMenuState(
+                title: "Refresh Display",
+                kind: .recoverRuntimeDisplay,
+                isEnabled: true
+            )
+        }
+
+        if canFulfillPendingLaunch {
+            return DockQueuedLaunchMenuState(
+                title: "Open Queued \(shortAppName)",
+                kind: .fulfillPendingLaunch,
+                isEnabled: true
+            )
+        }
+
+        if canRepairQueuedAppLaunch {
+            return DockQueuedLaunchMenuState(
+                title: "Continue \(shortAppName)",
+                kind: .repairGuestAgentForAppLaunch,
+                isEnabled: true
+            )
+        }
+
+        return DockQueuedLaunchMenuState(
+            title: "Start Windows for \(shortAppName)",
+            kind: .startWindows,
+            isEnabled: canStartWindows && !runtimeIsLoading
+        )
+    }
+
+    private static func shortTitle(_ title: String) -> String {
+        guard title.count > 26 else {
+            return title
+        }
+
+        return "\(title.prefix(25))..."
     }
 }

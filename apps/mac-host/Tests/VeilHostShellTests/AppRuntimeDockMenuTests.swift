@@ -64,6 +64,8 @@ struct AppRuntimeDockMenuTests {
             restoreWindowsAppWindowsAction: {},
             launchWindowsAppByIdAction: { _ in },
             fulfillPendingLaunchAction: {},
+            repairGuestAgentForAppLaunchAction: {},
+            recoverRuntimeDisplayAction: {},
             startVMAction: {},
             stopVMAction: {},
             quietWindowsWhenIdleAction: {}
@@ -73,6 +75,84 @@ struct AppRuntimeDockMenuTests {
         #expect(model.canRestoreMirrorSessions == false)
         #expect(model.canReconnectRestoreMirrorSessions)
         #expect(restoreItem?.isEnabled == true)
+    }
+
+    @Test("maps queued app Dock menu item to the next product action")
+    func mapsQueuedAppDockMenuItemToNextProductAction() {
+        #expect(
+            DockQueuedLaunchMenuState.make(
+                appName: "Notepad",
+                canRecoverRuntimeDisplay: true,
+                canFulfillPendingLaunch: false,
+                canRepairQueuedAppLaunch: false,
+                canStartWindows: true,
+                runtimeIsLoading: false
+            ) == DockQueuedLaunchMenuState(
+                title: "Refresh Display",
+                kind: .recoverRuntimeDisplay,
+                isEnabled: true
+            )
+        )
+
+        #expect(
+            DockQueuedLaunchMenuState.make(
+                appName: "Notepad",
+                canRecoverRuntimeDisplay: false,
+                canFulfillPendingLaunch: true,
+                canRepairQueuedAppLaunch: false,
+                canStartWindows: false,
+                runtimeIsLoading: false
+            ) == DockQueuedLaunchMenuState(
+                title: "Open Queued Notepad",
+                kind: .fulfillPendingLaunch,
+                isEnabled: true
+            )
+        )
+
+        #expect(
+            DockQueuedLaunchMenuState.make(
+                appName: "Notepad",
+                canRecoverRuntimeDisplay: false,
+                canFulfillPendingLaunch: false,
+                canRepairQueuedAppLaunch: true,
+                canStartWindows: false,
+                runtimeIsLoading: false
+            ) == DockQueuedLaunchMenuState(
+                title: "Continue Notepad",
+                kind: .repairGuestAgentForAppLaunch,
+                isEnabled: true
+            )
+        )
+
+        #expect(
+            DockQueuedLaunchMenuState.make(
+                appName: "Notepad",
+                canRecoverRuntimeDisplay: false,
+                canFulfillPendingLaunch: false,
+                canRepairQueuedAppLaunch: false,
+                canStartWindows: true,
+                runtimeIsLoading: false
+            ) == DockQueuedLaunchMenuState(
+                title: "Start Windows for Notepad",
+                kind: .startWindows,
+                isEnabled: true
+            )
+        )
+
+        #expect(
+            DockQueuedLaunchMenuState.make(
+                appName: "Notepad",
+                canRecoverRuntimeDisplay: false,
+                canFulfillPendingLaunch: false,
+                canRepairQueuedAppLaunch: false,
+                canStartWindows: true,
+                runtimeIsLoading: true
+            ) == DockQueuedLaunchMenuState(
+                title: "Start Windows for Notepad",
+                kind: .startWindows,
+                isEnabled: false
+            )
+        )
     }
 }
 
