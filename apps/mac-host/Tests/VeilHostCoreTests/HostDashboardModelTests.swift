@@ -1251,7 +1251,43 @@ struct HostDashboardModelTests {
 
         #expect(status.recommendedAction == "prepare-local-runtime")
         #expect(status.canStart == false)
+        #expect(status.installEvidence?.kind == .setupBlocked)
+        #expect(status.installEvidence?.isInstalled == false)
         #expect(status.recommendedPrepareCommand == "veil-vmctl prepare --installer /Users/test/Downloads/Win11_25H2_Korean_Arm64_v2.iso --drivers '/Users/test/Downloads/virtio drivers.iso'")
+    }
+
+    @Test("runtime status upgrades profile install flag to live guest agent evidence")
+    @MainActor
+    func runtimeStatusUpgradesProfileInstallFlagToLiveGuestAgentEvidence() async throws {
+        let service = FakeDashboardService(health: .captureReady)
+        let model = HostDashboardModel(service: service)
+        await model.load()
+
+        let localRuntime = WindowsAppRuntimeLocalRuntimeStatus(
+            isKnown: true,
+            state: .running,
+            bootReady: true,
+            canStart: false,
+            isRunning: true,
+            windowsInstalled: true,
+            installEvidence: VMInstallEvidenceSummary(
+                kind: .profileFlag,
+                isInstalled: true,
+                title: "Windows installed",
+                detail: "The local profile is marked installed."
+            ),
+            recommendedAction: "wait-for-guest-agent",
+            recommendedInstallStatusCommand: "veil-vmctl qemu-install-status --json",
+            reason: "The local Windows runtime is already running."
+        )
+
+        let report = model.runtimeStatusReport(localRuntime: localRuntime)
+
+        #expect(report.connection.hasLiveAgentConnection)
+        #expect(report.localRuntime.windowsInstalled)
+        #expect(report.localRuntime.installEvidence?.kind == .guestAgent)
+        #expect(report.localRuntime.installEvidence?.isInstalled == true)
+        #expect(report.localRuntime.installEvidence?.detail.contains("0.1.0") == true)
     }
 
     @Test("local runtime reports display recovery when running console preview is stale")
@@ -1291,6 +1327,8 @@ struct HostDashboardModelTests {
         let status = model.localRuntimeStatus(snapshot: snapshot)
 
         #expect(status.isRunning)
+        #expect(status.installEvidence?.kind == .guestAgent)
+        #expect(status.installEvidence?.isInstalled == true)
         #expect(status.consolePreviewStatus == .stale)
         #expect(status.recommendedAction == "recover-runtime-display")
         #expect(status.recommendedDisplayCommand == "veil-vmctl qemu-display-smoke --json")

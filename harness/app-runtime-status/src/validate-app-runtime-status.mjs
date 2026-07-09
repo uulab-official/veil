@@ -6,6 +6,14 @@ const VALID_PHASES = new Set(["idle", "loading", "connected", "launching", "fail
 const VALID_CAPTURE_STATES = new Set(["unavailable", "pending", "streaming"]);
 const VALID_CONSOLE_PREVIEW_STATES = new Set(["fresh", "stale", "unavailable"]);
 const VALID_AUTOMATIC_INSTALL_MEDIA_STATES = new Set(["current", "stale", "missing", "unavailable"]);
+const VALID_INSTALL_EVIDENCE_KINDS = new Set([
+  "notConfigured",
+  "setupBlocked",
+  "sparseDisk",
+  "setupReady",
+  "profileFlag",
+  "guestAgent"
+]);
 
 export function validateAppRuntimeStatus(report) {
   if (!report || typeof report !== "object" || Array.isArray(report)) {
@@ -29,7 +37,7 @@ export function validateAppRuntimeStatus(report) {
 
   validateConnection(report.connection);
   validateGuestAgentDiagnostics(report.guestAgentDiagnostics, report);
-  validateLocalRuntime(report.localRuntime);
+  validateLocalRuntime(report.localRuntime, report);
   validateApps(report.apps);
   validatePendingLaunch(report.pendingLaunch, report);
   validateMirrorSessions(report.mirrorSessions);
@@ -138,7 +146,7 @@ function validateGuestAgentDiagnostics(guestAgentDiagnostics, report) {
   }
 }
 
-function validateLocalRuntime(localRuntime) {
+function validateLocalRuntime(localRuntime, report) {
   if (!localRuntime || typeof localRuntime !== "object" || Array.isArray(localRuntime)) {
     throw new TypeError("localRuntime must be an object.");
   }
@@ -157,6 +165,24 @@ function validateLocalRuntime(localRuntime) {
 
   if (localRuntime.automaticInstallMediaStatus !== undefined) {
     validateAutomaticInstallMediaStatus(localRuntime.automaticInstallMediaStatus);
+  }
+
+  if (localRuntime.installEvidence !== undefined) {
+    validateInstallEvidence(localRuntime.installEvidence);
+    if (localRuntime.installEvidence.isInstalled !== localRuntime.windowsInstalled) {
+      throw new TypeError("localRuntime.installEvidence.isInstalled must match localRuntime.windowsInstalled.");
+    }
+  } else if (localRuntime.isKnown || report.connection.hasLiveAgentConnection) {
+    throw new TypeError("localRuntime.installEvidence is required for known local runtime state.");
+  }
+
+  if (report.connection.hasLiveAgentConnection) {
+    if (localRuntime.installEvidence?.kind !== "guestAgent") {
+      throw new TypeError("live app connections must use guest-agent install evidence.");
+    }
+    if (localRuntime.windowsInstalled !== true) {
+      throw new TypeError("live app connections require localRuntime.windowsInstalled.");
+    }
   }
 
   if (localRuntime.state !== undefined) {
@@ -235,6 +261,31 @@ function validateLocalRuntime(localRuntime) {
         throw new TypeError("running stale guest tools media must not expose prepare before powerdown.");
       }
     }
+  }
+}
+
+function validateInstallEvidence(installEvidence) {
+  if (!installEvidence || typeof installEvidence !== "object" || Array.isArray(installEvidence)) {
+    throw new TypeError("localRuntime.installEvidence must be an object.");
+  }
+
+  requireString(installEvidence.kind, "localRuntime.installEvidence.kind");
+  if (!VALID_INSTALL_EVIDENCE_KINDS.has(installEvidence.kind)) {
+    throw new TypeError(`Unsupported localRuntime.installEvidence.kind: ${installEvidence.kind}`);
+  }
+  requireBoolean(installEvidence.isInstalled, "localRuntime.installEvidence.isInstalled");
+  requireString(installEvidence.title, "localRuntime.installEvidence.title");
+  requireString(installEvidence.detail, "localRuntime.installEvidence.detail");
+
+  if (installEvidence.kind === "guestAgent" && !installEvidence.isInstalled) {
+    throw new TypeError("guest-agent install evidence must mark Windows installed.");
+  }
+  if (installEvidence.kind === "profileFlag" && !installEvidence.isInstalled) {
+    throw new TypeError("profile-flag install evidence must mark Windows installed.");
+  }
+  if (["notConfigured", "setupBlocked", "sparseDisk", "setupReady"].includes(installEvidence.kind)
+    && installEvidence.isInstalled) {
+    throw new TypeError("pre-install evidence kinds must not mark Windows installed.");
   }
 }
 

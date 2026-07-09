@@ -169,6 +169,7 @@ public struct WindowsAppRuntimeLocalRuntimeStatus: Codable, Equatable, Sendable 
     public var canStart: Bool
     public var isRunning: Bool
     public var windowsInstalled: Bool
+    public var installEvidence: VMInstallEvidenceSummary?
     public var automaticInstallMediaStatus: VMAutomaticInstallMediaStatus?
     public var requiresGuestToolsMediaRebuild: Bool
     public var recommendedAction: String
@@ -188,6 +189,7 @@ public struct WindowsAppRuntimeLocalRuntimeStatus: Codable, Equatable, Sendable 
         canStart: Bool,
         isRunning: Bool,
         windowsInstalled: Bool,
+        installEvidence: VMInstallEvidenceSummary? = nil,
         automaticInstallMediaStatus: VMAutomaticInstallMediaStatus? = nil,
         requiresGuestToolsMediaRebuild: Bool = false,
         recommendedAction: String,
@@ -206,6 +208,7 @@ public struct WindowsAppRuntimeLocalRuntimeStatus: Codable, Equatable, Sendable 
         self.canStart = canStart
         self.isRunning = isRunning
         self.windowsInstalled = windowsInstalled
+        self.installEvidence = installEvidence
         self.automaticInstallMediaStatus = automaticInstallMediaStatus
         self.requiresGuestToolsMediaRebuild = requiresGuestToolsMediaRebuild
         self.recommendedAction = recommendedAction
@@ -1095,7 +1098,7 @@ public final class HostDashboardModel {
         agentEndpoint: String = HostDashboardModel.defaultAgentEndpoint,
         localRuntime: WindowsAppRuntimeLocalRuntimeStatus? = nil
     ) -> WindowsAppRuntimeStatusReport {
-        let localRuntime = localRuntime ?? localRuntimeStatus(snapshot: nil)
+        let localRuntime = localRuntimeWithGuestAgentEvidence(localRuntime ?? localRuntimeStatus(snapshot: nil))
         let quietRuntime = quietRuntimeStatus(localRuntime: localRuntime)
         let macWindowIntegration = macWindowIntegrationStatus()
         let launcherVisibility = launcherVisibilityStatus(
@@ -2449,6 +2452,7 @@ public final class HostDashboardModel {
                 canStart: true,
                 isRunning: false,
                 windowsInstalled: false,
+                installEvidence: guestAgentInstallEvidence,
                 recommendedAction: "inspect-local-runtime",
                 recommendedInstallStatusCommand: "veil-vmctl qemu-install-status --json",
                 reason: "Local Windows runtime readiness has not been loaded for this status report."
@@ -2524,6 +2528,7 @@ public final class HostDashboardModel {
             canStart: canStart,
             isRunning: isRunning,
             windowsInstalled: snapshot.windowsInstalled,
+            installEvidence: guestAgentInstallEvidence ?? snapshot.installEvidence,
             automaticInstallMediaStatus: automaticInstallMediaStatus,
             requiresGuestToolsMediaRebuild: requiresGuestToolsMediaRebuild,
             recommendedAction: recommendedAction,
@@ -2536,6 +2541,19 @@ public final class HostDashboardModel {
             consolePreviewStatus: consolePreviewStatus,
             reason: reason
         )
+    }
+
+    private func localRuntimeWithGuestAgentEvidence(
+        _ localRuntime: WindowsAppRuntimeLocalRuntimeStatus
+    ) -> WindowsAppRuntimeLocalRuntimeStatus {
+        guard let guestAgentInstallEvidence else {
+            return localRuntime
+        }
+
+        var runtime = localRuntime
+        runtime.windowsInstalled = true
+        runtime.installEvidence = guestAgentInstallEvidence
+        return runtime
     }
 
     private func prepareCommand(for snapshot: VMRuntimeSnapshot) -> String {

@@ -306,7 +306,13 @@
       "windowsInstalled": true,
       "recommendedAction": "wait-for-guest-agent",
       "recommendedInstallStatusCommand": "veil-vmctl qemu-install-status --json",
-      "reason": "The local Windows runtime is already running; wait for the guest agent before opening Windows apps."
+      "reason": "The local Windows runtime is already running; wait for the guest agent before opening Windows apps.",
+      "installEvidence": {
+        "kind": "guestAgent",
+        "isInstalled": true,
+        "title": "Guest agent connected",
+        "detail": "Windows is running the Veil guest agent 0.1.0 over the local runtime channel."
+      }
     },
     "releaseGate": {
       "isEnabled": true,

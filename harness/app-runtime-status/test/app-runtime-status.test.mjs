@@ -211,12 +211,22 @@ function refreshLaunchOnboarding(report) {
   report.launchOnboarding.primaryCommand = report.primaryNextAction.command;
 }
 
+function markLocalRuntimeInstalled(report, detail = "The local profile is marked installed.") {
+  report.localRuntime.windowsInstalled = true;
+  report.localRuntime.installEvidence = {
+    kind: "profileFlag",
+    isInstalled: true,
+    title: "Windows installed",
+    detail
+  };
+}
+
 function configureRunningStaleGuestToolsMedia(report) {
   report.localRuntime.state = "running";
   report.localRuntime.bootReady = true;
   report.localRuntime.canStart = false;
   report.localRuntime.isRunning = true;
-  report.localRuntime.windowsInstalled = true;
+  markLocalRuntimeInstalled(report);
   report.localRuntime.requiresGuestToolsMediaRebuild = true;
   report.localRuntime.recommendedAction = "rebuild-guest-tools-media";
   report.localRuntime.recommendedMediaRebuildCommand = "veil-vmctl prepare --installer /Users/test/Downloads/Win11_25H2_Korean_Arm64_v2.iso --drivers /Users/test/Downloads/virtio-win.iso";
@@ -275,6 +285,31 @@ test("validates live Mac window integration status fixture", () => {
   const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.mac-window-live.json", import.meta.url), "utf8"));
 
   assert.equal(validateAppRuntimeStatus(report), report);
+});
+
+test("rejects known local runtime state without install evidence", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.demo.json", import.meta.url), "utf8"));
+  delete report.localRuntime.installEvidence;
+
+  assert.throws(
+    () => validateAppRuntimeStatus(report),
+    /installEvidence/
+  );
+});
+
+test("rejects live app connections that still use profile install evidence", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.mac-window-live.json", import.meta.url), "utf8"));
+  report.localRuntime.installEvidence = {
+    kind: "profileFlag",
+    isInstalled: true,
+    title: "Windows installed",
+    detail: "The local profile is marked installed."
+  };
+
+  assert.throws(
+    () => validateAppRuntimeStatus(report),
+    /guest-agent install evidence/
+  );
 });
 
 test("rejects reports without required actions", () => {
@@ -712,7 +747,7 @@ test("accepts queued pending launch repair while local Windows is already runnin
   report.localRuntime.state = "running";
   report.localRuntime.canStart = false;
   report.localRuntime.isRunning = true;
-  report.localRuntime.windowsInstalled = true;
+  markLocalRuntimeInstalled(report);
   report.localRuntime.recommendedAction = "wait-for-guest-agent";
   report.launchPlan.pendingLaunchAppId = "winapp_notepad";
   report.launchPlan.requiresRuntimeStart = false;
@@ -783,7 +818,7 @@ test("rejects queued pending launch repair marked ready for review", () => {
   report.localRuntime.state = "running";
   report.localRuntime.canStart = false;
   report.localRuntime.isRunning = true;
-  report.localRuntime.windowsInstalled = true;
+  markLocalRuntimeInstalled(report);
   report.localRuntime.recommendedAction = "wait-for-guest-agent";
   report.launchPlan.pendingLaunchAppId = "winapp_notepad";
   report.launchPlan.requiresRuntimeStart = false;
@@ -819,7 +854,7 @@ test("accepts stale running console preview with recovery commands", () => {
   report.localRuntime.state = "running";
   report.localRuntime.canStart = false;
   report.localRuntime.isRunning = true;
-  report.localRuntime.windowsInstalled = true;
+  markLocalRuntimeInstalled(report);
   report.localRuntime.recommendedAction = "recover-runtime-display";
   report.localRuntime.consolePreviewStatus = "stale";
   report.localRuntime.recommendedDisplayCommand = "veil-vmctl qemu-display-smoke --json";
@@ -855,7 +890,7 @@ test("rejects stale running console preview marked ready for review", () => {
   report.localRuntime.state = "running";
   report.localRuntime.canStart = false;
   report.localRuntime.isRunning = true;
-  report.localRuntime.windowsInstalled = true;
+  markLocalRuntimeInstalled(report);
   report.localRuntime.recommendedAction = "recover-runtime-display";
   report.localRuntime.consolePreviewStatus = "stale";
   report.localRuntime.recommendedDisplayCommand = "veil-vmctl qemu-display-smoke --json";
@@ -899,7 +934,7 @@ test("rejects stale running console preview without recovery command", () => {
   report.localRuntime.state = "running";
   report.localRuntime.canStart = false;
   report.localRuntime.isRunning = true;
-  report.localRuntime.windowsInstalled = true;
+  markLocalRuntimeInstalled(report);
   report.localRuntime.recommendedAction = "recover-runtime-display";
   report.localRuntime.consolePreviewStatus = "stale";
   report.localRuntime.reason = "The local Windows runtime is running, but the embedded console preview is stale.";

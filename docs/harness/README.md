@@ -78,6 +78,14 @@ then replay the pending app launch command.
 it is true only when the app shell can continue from the user's app-open action
 into the queued/start/wait/repair handoff without leaving the user at a raw VM
 management step.
+`localRuntime.installEvidence` is the structured authority for whether the app
+shell should treat Windows as installed. A profile flag may keep the local disk
+bootable, but a live app connection must report `kind=guestAgent` so the
+first-run launcher and review automation can distinguish real guest-agent
+evidence from manual installed-state copy. When
+`connection.hasLiveAgentConnection` is true, `localRuntime.windowsInstalled`
+and `localRuntime.installEvidence` must both reflect that live guest-agent
+evidence.
 `pendingLaunch` records whether an app launch is queued and whether Veil will
 automatically fulfill it when the guest agent reconnects, so a product surface
 can show "Windows is starting, your app will open" without inventing a window.

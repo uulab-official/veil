@@ -271,7 +271,13 @@
       "windowsInstalled": false,
       "recommendedAction": "start-runtime",
       "recommendedInstallStatusCommand": "veil-vmctl qemu-install-status --json",
-      "reason": "The local Windows runtime is boot ready."
+      "reason": "The local Windows runtime is boot ready.",
+      "installEvidence": {
+        "kind": "setupReady",
+        "isInstalled": false,
+        "title": "Windows setup ready",
+        "detail": "Boot the installer, complete Windows setup, then connect the Veil guest agent."
+      }
     },
     "releaseGate": {
       "isEnabled": true,

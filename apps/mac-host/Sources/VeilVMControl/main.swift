@@ -1013,6 +1013,11 @@ struct VeilVMControl {
         print("Guest agent wait command: \(report.guestAgentDiagnostics.waitCommand)")
         print("Local runtime: \(report.localRuntime.recommendedAction)")
         print("Local runtime boot ready: \(report.localRuntime.bootReady ? "yes" : "no")")
+        if let installEvidence = report.localRuntime.installEvidence {
+            print("Local runtime install evidence: \(installEvidence.kind.rawValue)")
+            print("Local runtime installed: \(installEvidence.isInstalled ? "yes" : "no")")
+            print("Local runtime install evidence detail: \(installEvidence.detail)")
+        }
         print("Local runtime reason: \(report.localRuntime.reason)")
         print("Local runtime install status command: \(report.localRuntime.recommendedInstallStatusCommand)")
         if let previewStatus = report.localRuntime.consolePreviewStatus {

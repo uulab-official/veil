@@ -208,6 +208,16 @@ function refreshLaunchOnboarding(report) {
   };
 }
 
+function markStatusLocalRuntimeInstalled(report, detail = "The local profile is marked installed.") {
+  report.status.localRuntime.windowsInstalled = true;
+  report.status.localRuntime.installEvidence = {
+    kind: "profileFlag",
+    isInstalled: true,
+    title: "Windows installed",
+    detail
+  };
+}
+
 function configureRunningStaleGuestToolsMedia(report) {
   const rebuildCommand = "veil-vmctl prepare --installer /Users/test/Downloads/Win11_25H2_Korean_Arm64_v2.iso --drivers /Users/test/Downloads/virtio-win.iso";
   const stopCommand = "veil-vmctl app-runtime-action --json --action stop-runtime";
@@ -216,7 +226,7 @@ function configureRunningStaleGuestToolsMedia(report) {
   report.status.localRuntime.bootReady = true;
   report.status.localRuntime.canStart = false;
   report.status.localRuntime.isRunning = true;
-  report.status.localRuntime.windowsInstalled = true;
+  markStatusLocalRuntimeInstalled(report);
   report.status.localRuntime.requiresGuestToolsMediaRebuild = true;
   report.status.localRuntime.recommendedAction = "rebuild-guest-tools-media";
   report.status.localRuntime.recommendedMediaRebuildCommand = rebuildCommand;
@@ -304,7 +314,7 @@ test("validates pending launch repair action while local Windows is running", ()
   report.status.localRuntime.state = "running";
   report.status.localRuntime.canStart = false;
   report.status.localRuntime.isRunning = true;
-  report.status.localRuntime.windowsInstalled = true;
+  markStatusLocalRuntimeInstalled(report);
   report.status.localRuntime.recommendedAction = "wait-for-guest-agent";
   report.status.localRuntime.reason = "The local Windows runtime is already running; wait for the guest agent before opening Windows apps.";
   report.status.actions.find((action) => action.id === "runtime.startWindowsForApp").isAvailable = false;
