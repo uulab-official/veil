@@ -721,6 +721,26 @@ struct HostDashboardModelTests {
         #expect(report.actions.first { $0.id == "proof.coherence" }?.isAvailable == false)
         #expect(report.actions.first { $0.id == "proof.mvp" }?.isAvailable == false)
         #expect(report.actions.first { $0.id == "proof.recommended" }?.isAvailable == true)
+
+        let stoppedRuntime = WindowsAppRuntimeLocalRuntimeStatus(
+            isKnown: true,
+            state: .stopped,
+            bootReady: true,
+            canStart: true,
+            isRunning: false,
+            windowsInstalled: true,
+            recommendedAction: "start-runtime",
+            recommendedInstallStatusCommand: "veil-vmctl qemu-install-status --json",
+            reason: "The local Windows runtime is already stopped."
+        )
+        let stoppedReport = model.runtimeStatusReport(localRuntime: stoppedRuntime)
+
+        #expect(stoppedReport.quietRuntime.canQuietRuntime == false)
+        #expect(stoppedReport.quietRuntime.willQuietAutomatically == false)
+        #expect(stoppedReport.quietRuntime.recommendedAction == "already-quiet")
+        #expect(stoppedReport.quietRuntime.recommendedStopCommand == nil)
+        #expect(stoppedReport.actions.first { $0.id == "runtime.quietWhenIdle" }?.isAvailable == false)
+        #expect(stoppedReport.actions.first { $0.id == "runtime.stopWhenIdle" }?.isAvailable == false)
     }
 
     @Test("reports latest proof artifact from diagnostics")

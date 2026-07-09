@@ -813,7 +813,7 @@ public final class HostDashboardModel {
         localRuntime: WindowsAppRuntimeLocalRuntimeStatus? = nil
     ) -> WindowsAppRuntimeStatusReport {
         let localRuntime = localRuntime ?? localRuntimeStatus(snapshot: nil)
-        let quietRuntime = quietRuntimeStatus()
+        let quietRuntime = quietRuntimeStatus(localRuntime: localRuntime)
         let macWindowIntegration = macWindowIntegrationStatus()
         let launcherVisibility = launcherVisibilityStatus(
             macWindowIntegration: macWindowIntegration
@@ -1274,9 +1274,13 @@ public final class HostDashboardModel {
         return fallback
     }
 
-    public func quietRuntimeStatus() -> WindowsAppRuntimeQuietPolicyStatus {
+    public func quietRuntimeStatus(
+        localRuntime: WindowsAppRuntimeLocalRuntimeStatus? = nil
+    ) -> WindowsAppRuntimeQuietPolicyStatus {
         let recommendedAction: String
         let reason: String
+        let canStopLocalRuntime = canStopLocalRuntime(localRuntime)
+        let canQuietRuntime = canQuietRuntimeWhenIdle && canStopLocalRuntime
 
         if !hasOpenedAppWindowThisSession {
             recommendedAction = "none"
@@ -1284,9 +1288,12 @@ public final class HostDashboardModel {
         } else if !mirrorSessions.isEmpty {
             recommendedAction = "keep-running"
             reason = "Windows app windows are still open."
-        } else if canQuietRuntimeWhenIdle {
+        } else if canQuietRuntime {
             recommendedAction = "stop-or-suspend-runtime"
             reason = "All Windows app windows are closed and the live agent is connected."
+        } else if localRuntime?.isKnown == true && !canStopLocalRuntime {
+            recommendedAction = "already-quiet"
+            reason = "All Windows app windows are closed and the local Windows runtime is not running."
         } else {
             recommendedAction = "wait-for-agent"
             reason = "Wait for a live Windows agent before quieting the runtime."
@@ -1296,13 +1303,21 @@ public final class HostDashboardModel {
             isEnabled: true,
             hasOpenedAppWindowThisSession: hasOpenedAppWindowThisSession,
             openWindowCount: mirrorSessions.count,
-            canQuietRuntime: canQuietRuntimeWhenIdle,
-            willQuietAutomatically: canQuietRuntimeWhenIdle,
+            canQuietRuntime: canQuietRuntime,
+            willQuietAutomatically: canQuietRuntime,
             automaticQuietDelaySeconds: automaticQuietDelaySeconds,
             recommendedAction: recommendedAction,
-            recommendedStopCommand: canQuietRuntimeWhenIdle ? "veil-vmctl app-runtime-action --json --action stop-runtime" : nil,
+            recommendedStopCommand: canQuietRuntime ? "veil-vmctl app-runtime-action --json --action stop-runtime" : nil,
             reason: reason
         )
+    }
+
+    private func canStopLocalRuntime(_ localRuntime: WindowsAppRuntimeLocalRuntimeStatus?) -> Bool {
+        guard let localRuntime, localRuntime.isKnown else {
+            return true
+        }
+
+        return localRuntime.state == .running || localRuntime.state == .suspended
     }
 
     public func macWindowIntegrationStatus() -> WindowsAppRuntimeMacWindowIntegrationStatus {
