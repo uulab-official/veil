@@ -2221,6 +2221,10 @@ private struct WindowsSetupDisplayPanel: View {
     }
 
     private var oneScreenUXTitle: String {
+        if !oneScreenUX.canRecoverFromMenuOrDock {
+            return "Recovery needs attention"
+        }
+
         if oneScreenUX.mode == "windows-app-windows" {
             let count = oneScreenUX.expectedVisibleSurfaceCount
             return count == 1 ? "One Windows app surface" : "\(count) Windows app surfaces"
@@ -2230,7 +2234,9 @@ private struct WindowsSetupDisplayPanel: View {
     }
 
     private var oneScreenUXSymbolName: String {
-        oneScreenUX.usesSinglePrimarySurfaceFamily ? "rectangle.on.rectangle" : "exclamationmark.triangle"
+        oneScreenUX.usesSinglePrimarySurfaceFamily && oneScreenUX.canRecoverFromMenuOrDock
+            ? "rectangle.on.rectangle"
+            : "exclamationmark.triangle"
     }
 
     private var installerNeedsFilePickerAccess: Bool {

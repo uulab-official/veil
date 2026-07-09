@@ -516,6 +516,7 @@
         "keepsDisplayRecoveryManual": true,
         "keepsDockControlAvailable": true,
         "keepsMenuBarControlAvailable": true,
+        "canRecoverFromMenuOrDock": true,
         "mode": "launcher",
         "primaryActionId": "windowsApps.reconnectRestore",
         "reason": "The launcher is the only normal setup surface until a Windows app opens as a macOS window.",

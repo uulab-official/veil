@@ -103,6 +103,7 @@
     "hidesLauncherDuringAppMirroring": true,
     "keepsMenuBarControlAvailable": true,
     "keepsDockControlAvailable": true,
+    "canRecoverFromMenuOrDock": true,
     "keepsDisplayRecoveryManual": true,
     "primaryActionId": "dock.bringWindowsAppsForward",
     "reason": "Windows app windows are the only normal work surface, with Dock and menu controls available for recovery."

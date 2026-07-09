@@ -183,6 +183,7 @@
     "hidesLauncherDuringAppMirroring": true,
     "keepsMenuBarControlAvailable": true,
     "keepsDockControlAvailable": true,
+    "canRecoverFromMenuOrDock": true,
     "keepsDisplayRecoveryManual": true,
     "primaryActionId": "runtime.refreshStatus",
     "reason": "The launcher is the only normal setup surface until a Windows app opens as a macOS window."

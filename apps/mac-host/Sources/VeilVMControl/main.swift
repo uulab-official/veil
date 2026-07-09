@@ -1374,8 +1374,11 @@ struct VeilVMControl {
         let recovery = oneScreenUX.keepsDisplayRecoveryManual
             ? "manual display recovery"
             : "automatic display recovery"
+        let appRecovery = oneScreenUX.canRecoverFromMenuOrDock
+            ? "app recovery ready"
+            : "app recovery missing"
         let action = oneScreenUX.primaryActionId ?? "no primary action"
-        return "\(menu), \(dock), \(recovery), \(action)"
+        return "\(menu), \(dock), \(appRecovery), \(recovery), \(action)"
     }
 
     private static func appFlowNextStepTitle(

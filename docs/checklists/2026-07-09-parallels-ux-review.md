@@ -62,6 +62,7 @@ Goal: keep the user-facing workflow one-screen-first (launcher + one action path
 - [x] Add structured `primaryNextAction.actionId` validation so the launcher can route the next step through the same top-level action contract as menu bar, Dock, CLI, and harness automation.
 - [x] Add `oneScreenUX` to `app-runtime-status` and the harness so launcher-first and Windows-app-window modes must keep one primary surface family, menu/Dock recovery, manual display recovery, and one executable next action aligned.
 - [x] Surface `oneScreenUX` in the launcher panels and human-readable `app-runtime-status` output so the one-screen product contract is visible without opening raw JSON.
+- [x] Add `oneScreenUX.canRecoverFromMenuOrDock` and harness coverage so hidden-launcher app-window mode cannot pass unless menu/Dock recovery remains available.
 
 ## CEO Review
 
@@ -72,7 +73,7 @@ Goal: keep the user-facing workflow one-screen-first (launcher + one action path
 
 ## Engineering Review
 
-- Validate `syncLauncherWindowVisibility` in race paths: launch, queued launch fulfill, reconnect restore, session close.
+- Validate `syncLauncherWindowVisibility` on a live VM in race paths: launch, queued launch fulfill, reconnect restore, session close.
 - Add regression coverage for: mirror window opens while launcher is visible; close/reopen cycles should never produce >1 launcher surface. Basic mirror-window priority and programmatic close coverage is now in `WindowsAppWindowPresenterTests`.
 - Keep menu/dock actions resilient even when the launcher is intentionally hidden.
 - Confirm visibility fallback returns safely after app windows close, and that recovery actions still surface when no app windows are running.

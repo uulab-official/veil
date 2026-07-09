@@ -168,7 +168,8 @@ and the VM display remains a manual recovery surface.
 `oneScreenUX` is the Parallels/UTM-style acceptance gate layered over those
 lower-level signals. It must confirm a single primary surface family, the exact
 expected visible surface count, hidden-launcher behavior during mirrored app
-use, menu/Dock recovery availability, manual display recovery, and the
+use, menu/Dock recovery availability through `canRecoverFromMenuOrDock`,
+manual display recovery, and the
 executable primary action id that the launcher or menu should run next.
 
 `guestAgentDiagnostics` points every app-runtime status report at the same

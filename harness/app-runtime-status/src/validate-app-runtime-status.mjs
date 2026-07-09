@@ -1215,6 +1215,7 @@ function validateOneScreenUX(oneScreenUX, report) {
   requireBoolean(oneScreenUX.hidesLauncherDuringAppMirroring, "oneScreenUX.hidesLauncherDuringAppMirroring");
   requireBoolean(oneScreenUX.keepsMenuBarControlAvailable, "oneScreenUX.keepsMenuBarControlAvailable");
   requireBoolean(oneScreenUX.keepsDockControlAvailable, "oneScreenUX.keepsDockControlAvailable");
+  requireBoolean(oneScreenUX.canRecoverFromMenuOrDock, "oneScreenUX.canRecoverFromMenuOrDock");
   requireBoolean(oneScreenUX.keepsDisplayRecoveryManual, "oneScreenUX.keepsDisplayRecoveryManual");
   requireString(oneScreenUX.reason, "oneScreenUX.reason");
 
@@ -1251,6 +1252,17 @@ function validateOneScreenUX(oneScreenUX, report) {
 
   if (oneScreenUX.keepsDockControlAvailable !== report.launcherVisibility.keepsDockMenuAvailable) {
     throw new TypeError("oneScreenUX.keepsDockControlAvailable must match launcherVisibility.keepsDockMenuAvailable.");
+  }
+
+  const expectedCanRecoverFromMenuOrDock = report.visibleSurfacePolicy.primarySurface === "windows-app-windows"
+    ? report.menuBarIntegration.canBringWindowsAppsForward && report.launcherVisibility.keepsDockMenuAvailable
+    : report.menuBarIntegration.canOpenMainWindow || report.launcherVisibility.canOpenMainWindow;
+  if (oneScreenUX.canRecoverFromMenuOrDock !== expectedCanRecoverFromMenuOrDock) {
+    throw new TypeError("oneScreenUX.canRecoverFromMenuOrDock must match menu/Dock recovery readiness.");
+  }
+
+  if (!oneScreenUX.canRecoverFromMenuOrDock) {
+    throw new TypeError("oneScreenUX must keep a menu or Dock recovery path available.");
   }
 
   if (oneScreenUX.keepsDisplayRecoveryManual !== report.visibleSurfacePolicy.keepsRecoveryDisplayManual) {

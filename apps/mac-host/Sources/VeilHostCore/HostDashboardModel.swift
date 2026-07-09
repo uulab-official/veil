@@ -440,6 +440,7 @@ public struct WindowsAppRuntimeOneScreenUXStatus: Codable, Equatable, Sendable {
     public var hidesLauncherDuringAppMirroring: Bool
     public var keepsMenuBarControlAvailable: Bool
     public var keepsDockControlAvailable: Bool
+    public var canRecoverFromMenuOrDock: Bool
     public var keepsDisplayRecoveryManual: Bool
     public var primaryActionId: String?
     public var reason: String
@@ -452,6 +453,7 @@ public struct WindowsAppRuntimeOneScreenUXStatus: Codable, Equatable, Sendable {
         hidesLauncherDuringAppMirroring: Bool,
         keepsMenuBarControlAvailable: Bool,
         keepsDockControlAvailable: Bool,
+        canRecoverFromMenuOrDock: Bool,
         keepsDisplayRecoveryManual: Bool,
         primaryActionId: String? = nil,
         reason: String
@@ -463,6 +465,7 @@ public struct WindowsAppRuntimeOneScreenUXStatus: Codable, Equatable, Sendable {
         self.hidesLauncherDuringAppMirroring = hidesLauncherDuringAppMirroring
         self.keepsMenuBarControlAvailable = keepsMenuBarControlAvailable
         self.keepsDockControlAvailable = keepsDockControlAvailable
+        self.canRecoverFromMenuOrDock = canRecoverFromMenuOrDock
         self.keepsDisplayRecoveryManual = keepsDisplayRecoveryManual
         self.primaryActionId = primaryActionId
         self.reason = reason
@@ -2162,6 +2165,9 @@ public final class HostDashboardModel {
         let hidesLauncherDuringAppMirroring = isMirroringApps
             ? launcherVisibility.shouldHideMainWindow && macWindowIntegration.hidesLauncherWhenMirroring
             : !launcherVisibility.shouldHideMainWindow
+        let canRecoverFromMenuOrDock = isMirroringApps
+            ? (menuBarIntegration.canBringWindowsAppsForward && launcherVisibility.keepsDockMenuAvailable)
+            : (menuBarIntegration.canOpenMainWindow || launcherVisibility.canOpenMainWindow)
         let primaryActionId = primaryNextAction.actionId ?? menuBarIntegration.primaryActionId
         let reason: String
 
@@ -2179,6 +2185,7 @@ public final class HostDashboardModel {
             hidesLauncherDuringAppMirroring: hidesLauncherDuringAppMirroring,
             keepsMenuBarControlAvailable: menuBarIntegration.isEnabled,
             keepsDockControlAvailable: launcherVisibility.keepsDockMenuAvailable,
+            canRecoverFromMenuOrDock: canRecoverFromMenuOrDock,
             keepsDisplayRecoveryManual: visibleSurfacePolicy.keepsRecoveryDisplayManual,
             primaryActionId: primaryActionId,
             reason: reason

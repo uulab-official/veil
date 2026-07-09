@@ -135,6 +135,9 @@ function refreshOneScreenUX(report) {
     : !report.launcherVisibility.shouldHideMainWindow;
   report.oneScreenUX.keepsMenuBarControlAvailable = report.menuBarIntegration.isEnabled;
   report.oneScreenUX.keepsDockControlAvailable = report.launcherVisibility.keepsDockMenuAvailable;
+  report.oneScreenUX.canRecoverFromMenuOrDock = report.visibleSurfacePolicy.primarySurface === "windows-app-windows"
+    ? report.menuBarIntegration.canBringWindowsAppsForward && report.launcherVisibility.keepsDockMenuAvailable
+    : report.menuBarIntegration.canOpenMainWindow || report.launcherVisibility.canOpenMainWindow;
   report.oneScreenUX.keepsDisplayRecoveryManual = report.visibleSurfacePolicy.keepsRecoveryDisplayManual;
   report.oneScreenUX.primaryActionId = report.primaryNextAction.actionId ?? report.menuBarIntegration.primaryActionId;
 }
@@ -278,6 +281,16 @@ test("rejects one-screen UX primary action drift", () => {
   assert.throws(
     () => validateAppRuntimeStatus(report),
     /oneScreenUX\.primaryActionId/
+  );
+});
+
+test("rejects hidden launcher one-screen recovery drift", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.mac-window-live.json", import.meta.url), "utf8"));
+  report.oneScreenUX.canRecoverFromMenuOrDock = false;
+
+  assert.throws(
+    () => validateAppRuntimeStatus(report),
+    /canRecoverFromMenuOrDock/
   );
 });
 
