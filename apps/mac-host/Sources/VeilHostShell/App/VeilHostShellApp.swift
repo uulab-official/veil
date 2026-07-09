@@ -714,9 +714,15 @@ struct VeilHostShellApp: App {
 
     private func configureDockMenuBridge() {
         appDelegate.reopenHandler = {
-            if model.runtimeStatusReport().launcherVisibility.shouldHideMainWindow {
+            let destination = LauncherReopenPolicy.destination(
+                visibleMirroredWindowCount: windowsAppWindowPresenter.visibleWindowIds.count,
+                modelRequestsHideLauncher: model.runtimeStatusReport().launcherVisibility.shouldHideMainWindow
+            )
+
+            switch destination {
+            case .windowsAppWindows:
                 bringAllWindowsAppWindowsToFront()
-            } else {
+            case .mainWindow:
                 activateMainWindow()
             }
         }
@@ -1131,8 +1137,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-        reopenHandler?()
-        return true
+        guard let reopenHandler else {
+            return true
+        }
+
+        reopenHandler()
+        return false
     }
 
     func applicationDockMenu(_ sender: NSApplication) -> NSMenu? {
@@ -1704,6 +1714,24 @@ struct PreviousAppsRestoreHandoffPolicy {
         default:
             return canStartRuntime ? .startRuntime : .waitForRuntimeAvailability
         }
+    }
+}
+
+enum LauncherReopenPolicy {
+    enum Destination: Equatable {
+        case mainWindow
+        case windowsAppWindows
+    }
+
+    static func destination(
+        visibleMirroredWindowCount: Int,
+        modelRequestsHideLauncher: Bool
+    ) -> Destination {
+        guard visibleMirroredWindowCount > 0 else {
+            return .mainWindow
+        }
+
+        return modelRequestsHideLauncher ? .windowsAppWindows : .mainWindow
     }
 }
 

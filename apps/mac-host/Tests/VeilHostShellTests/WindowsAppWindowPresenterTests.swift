@@ -79,6 +79,45 @@ struct WindowsAppWindowPresenterTests {
         #expect(presenter.foregroundWindowId == nil)
     }
 
+    @Test("Dock reopen uses visible mirrored windows before hidden launcher state")
+    func dockReopenUsesVisibleMirroredWindowsBeforeHiddenLauncherState() {
+        #expect(
+            LauncherReopenPolicy.destination(
+                visibleMirroredWindowCount: 1,
+                modelRequestsHideLauncher: true
+            ) == .windowsAppWindows
+        )
+        #expect(
+            LauncherReopenPolicy.destination(
+                visibleMirroredWindowCount: 0,
+                modelRequestsHideLauncher: true
+            ) == .mainWindow
+        )
+        #expect(
+            LauncherReopenPolicy.destination(
+                visibleMirroredWindowCount: 1,
+                modelRequestsHideLauncher: false
+            ) == .mainWindow
+        )
+    }
+
+    @Test("app delegate handles reopen without default duplicate window")
+    func appDelegateHandlesReopenWithoutDefaultDuplicateWindow() {
+        let delegate = AppDelegate()
+        var handledCount = 0
+        delegate.reopenHandler = {
+            handledCount += 1
+        }
+
+        let shouldContinueDefaultReopen = delegate.applicationShouldHandleReopen(
+            NSApplication.shared,
+            hasVisibleWindows: false
+        )
+
+        #expect(handledCount == 1)
+        #expect(shouldContinueDefaultReopen == false)
+    }
+
     @Test("closes programmatic windows without emitting user-close callback")
     func closesProgrammaticWindowsWithoutUserCloseCallback() {
         _ = NSApplication.shared
