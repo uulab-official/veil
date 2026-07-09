@@ -86,6 +86,19 @@ function validateConnection(connection) {
     throw new TypeError("Only agent mode may report a live agent connection.");
   }
 
+  if (connection.hasLiveAgentConnection) {
+    requireString(connection.agentVersion, "connection.agentVersion");
+    requireString(connection.os, "connection.os");
+  }
+
+  if (!connection.hasLiveAgentConnection) {
+    for (const field of ["agentVersion", "os", "capabilities"]) {
+      if (connection[field] !== undefined) {
+        throw new TypeError(`connection.${field} is only allowed when a live agent is connected.`);
+      }
+    }
+  }
+
   if (connection.agentVersion !== undefined) {
     requireString(connection.agentVersion, "connection.agentVersion");
   }
@@ -100,9 +113,6 @@ function validateConnection(connection) {
 
   if (connection.capabilities !== undefined) {
     validateCapabilities(connection.capabilities);
-    if (!connection.hasLiveAgentConnection) {
-      throw new TypeError("connection.capabilities is only allowed when a live agent is connected.");
-    }
   }
 }
 

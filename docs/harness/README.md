@@ -86,6 +86,10 @@ evidence from manual installed-state copy. When
 `connection.hasLiveAgentConnection` is true, `localRuntime.windowsInstalled`
 and `localRuntime.installEvidence` must both reflect that live guest-agent
 evidence.
+Demo fallback status must not expose `connection.agentVersion`,
+`connection.os`, or `connection.capabilities`. Those fields are reserved for a
+real Windows guest-agent health response, while non-live status should rely on
+`connection.connectionDetail` and `guestAgentDiagnostics` for recovery copy.
 `pendingLaunch` records whether an app launch is queued and whether Veil will
 automatically fulfill it when the guest agent reconnects, so a product surface
 can show "Windows is starting, your app will open" without inventing a window.

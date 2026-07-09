@@ -42,8 +42,6 @@
     "connection": {
       "mode": "demo",
       "hasLiveAgentConnection": false,
-      "agentVersion": "demo-0.1.0",
-      "os": "windows-arm64",
       "connectionDetail": "No Windows agent reachable at ws://127.0.0.1:9. Showing built-in demo data."
     },
     "dockIntegration": {

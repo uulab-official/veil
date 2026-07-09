@@ -1318,3 +1318,21 @@ test("rejects live agent reports outside agent mode", () => {
     /Only agent mode/
   );
 });
+
+test("rejects demo fallback agent metadata", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.demo.json", import.meta.url), "utf8"));
+  report.connection.agentVersion = "demo-0.1.0";
+
+  assert.throws(
+    () => validateAppRuntimeStatus(report),
+    /connection.agentVersion is only allowed/
+  );
+
+  delete report.connection.agentVersion;
+  report.connection.os = "windows-arm64";
+
+  assert.throws(
+    () => validateAppRuntimeStatus(report),
+    /connection.os is only allowed/
+  );
+});

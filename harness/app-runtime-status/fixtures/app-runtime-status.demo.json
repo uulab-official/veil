@@ -121,10 +121,8 @@
     }
   ],
   "connection": {
-    "agentVersion": "demo-0.1.0",
     "hasLiveAgentConnection": false,
-    "mode": "demo",
-    "os": "windows-arm64"
+    "mode": "demo"
   },
   "guestAgentDiagnostics": {
     "endpoint": "ws://127.0.0.1:18444",

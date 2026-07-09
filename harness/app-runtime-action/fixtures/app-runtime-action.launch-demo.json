@@ -59,9 +59,7 @@
     },
     "connection": {
       "mode": "demo",
-      "hasLiveAgentConnection": false,
-      "agentVersion": "demo-0.1.0",
-      "os": "windows-arm64"
+      "hasLiveAgentConnection": false
     },
     "dockIntegration": {
       "isEnabled": true,

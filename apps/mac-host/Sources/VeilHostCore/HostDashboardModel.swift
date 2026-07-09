@@ -1149,8 +1149,8 @@ public final class HostDashboardModel {
             connection: WindowsAppRuntimeConnectionStatus(
                 mode: connectionMode,
                 hasLiveAgentConnection: hasLiveAgentConnection,
-                agentVersion: health?.agentVersion,
-                os: health?.os,
+                agentVersion: hasLiveAgentConnection ? health?.agentVersion : nil,
+                os: hasLiveAgentConnection ? health?.os : nil,
                 capabilities: hasLiveAgentConnection ? health?.capabilities : nil,
                 connectionDetail: connectionDetail
             ),

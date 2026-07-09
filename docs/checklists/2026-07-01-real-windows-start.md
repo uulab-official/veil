@@ -132,6 +132,7 @@ Goal: keep the main Veil experience pointed at real local Windows boot and conso
 - [x] Make the Windows agent installer start the installed agent immediately by default, with `-NoStart` available for manual installs.
 - [x] Poll for a live guest agent while the VM is running so the host can leave demo mode after installation without a manual refresh.
 - [x] Gate macOS app-window launch on a live Windows guest agent so demo fallback cannot masquerade as real mirroring.
+- [x] Remove demo fallback agent version and OS metadata from app-runtime status so only real guest-agent health can identify Windows.
 - [x] Queue a Notepad open request while waiting for the live agent, then launch it automatically after the agent connects.
 - [x] Return fulfilled pending-launch results to the macOS presenter so the accepted HWND opens as a Mac window after reconnect.
 - [x] Add `window.close.request/response` fixtures, JS validators, Swift models, fake-agent support, and Windows agent `WM_CLOSE` handling.
