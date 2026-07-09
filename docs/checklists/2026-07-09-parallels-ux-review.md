@@ -32,6 +32,7 @@ Goal: keep the user-facing workflow one-screen-first (launcher + one action path
 - [x] Add the same app-first status title to the Dock menu before actions so Dock/right-click control starts with the current Windows-app state.
 - [x] Polish menu and Dock power actions from Start/Stop/Refresh Windows toward Open Windows, Close Windows, and Refresh Status copy.
 - [x] Prioritize Bring Windows App(s) Forward over Open Veil in Dock/menu-bar actions while mirrored Windows app windows are open.
+- [x] Cap Dock/menu-bar app and window item titles at 30 characters so long Windows titles stay scannable.
 
 ## CEO Review
 

@@ -53,6 +53,31 @@ enum WindowsShellCopy {
         openAppWindowCount == 1 ? "Bring Windows App Forward" : "Bring Windows Apps Forward"
     }
 
+    static func menuItemTitle(_ title: String, maxCount: Int = 30) -> String {
+        let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedTitle.isEmpty else {
+            return "Windows App"
+        }
+
+        guard trimmedTitle.count > maxCount else {
+            return trimmedTitle
+        }
+
+        let prefixCount = max(1, maxCount - 3)
+        let prefix = String(trimmedTitle.prefix(prefixCount))
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return "\(prefix)..."
+    }
+
+    static func prefixedMenuItemTitle(
+        prefix: String,
+        title: String,
+        maxCount: Int = 30
+    ) -> String {
+        let itemTitleLimit = max(1, maxCount - prefix.count - 1)
+        return "\(prefix) \(menuItemTitle(title, maxCount: itemTitleLimit))"
+    }
+
     static func menuStatusTitle(
         runtimeState: VMRuntimeState?,
         windowsInstalled: Bool,

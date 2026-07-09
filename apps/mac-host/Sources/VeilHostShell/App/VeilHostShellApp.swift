@@ -1260,7 +1260,10 @@ private struct VeilMenuBarMenu: View {
                 Divider()
 
                 ForEach(model.mirrorSessions) { session in
-                    Menu(session.window.title, systemImage: "macwindow") {
+                    Menu(
+                        WindowsShellCopy.menuItemTitle(session.window.title),
+                        systemImage: "macwindow"
+                    ) {
                         Button("Bring to Front", systemImage: "arrow.up.forward.app") {
                             focusWindowsAppWindowAction(session.id)
                         }
@@ -1293,7 +1296,7 @@ private struct VeilMenuBarMenu: View {
         } else {
             Menu("Windows Apps", systemImage: "square.grid.2x2") {
                 ForEach(model.apps) { app in
-                    Button(app.name, systemImage: symbolName(for: app)) {
+                    Button(WindowsShellCopy.menuItemTitle(app.name), systemImage: symbolName(for: app)) {
                         if !model.hasLiveAgentConnection {
                             openMainWindow()
                         }

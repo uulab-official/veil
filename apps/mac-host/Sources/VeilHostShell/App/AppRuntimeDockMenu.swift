@@ -138,7 +138,10 @@ enum AppRuntimeDockMenuFactory {
             for session in model.mirrorSessions {
                 menu.addItem(
                     item(
-                        "Focus \(shortTitle(session.window.title))",
+                        WindowsShellCopy.prefixedMenuItemTitle(
+                            prefix: "Focus",
+                            title: session.window.title
+                        ),
                         action: #selector(AppRuntimeDockMenuTarget.focusWindowsAppWindow(_:)),
                         target: target,
                         representedObject: session.id,
@@ -150,7 +153,10 @@ enum AppRuntimeDockMenuFactory {
             for session in model.mirrorSessions {
                 menu.addItem(
                     item(
-                        "Close \(shortTitle(session.window.title))",
+                        WindowsShellCopy.prefixedMenuItemTitle(
+                            prefix: "Close",
+                            title: session.window.title
+                        ),
                         action: #selector(AppRuntimeDockMenuTarget.closeWindowsAppWindow(_:)),
                         target: target,
                         representedObject: session.id,
@@ -208,7 +214,10 @@ enum AppRuntimeDockMenuFactory {
             for app in model.apps.prefix(5) {
                 menu.addItem(
                     item(
-                        "Open \(shortTitle(app.name))",
+                        WindowsShellCopy.prefixedMenuItemTitle(
+                            prefix: "Open",
+                            title: app.name
+                        ),
                         action: #selector(AppRuntimeDockMenuTarget.launchWindowsApp(_:)),
                         target: target,
                         representedObject: app.id,
@@ -281,14 +290,6 @@ enum AppRuntimeDockMenuFactory {
         item.representedObject = representedObject
         item.isEnabled = isEnabled
         return item
-    }
-
-    private static func shortTitle(_ title: String) -> String {
-        guard title.count > 26 else {
-            return title
-        }
-
-        return "\(title.prefix(25))..."
     }
 
     private static func selector(for kind: AppQueuedLaunchMenuState.Kind) -> Selector {
@@ -389,19 +390,6 @@ struct AppQueuedLaunchMenuState: Equatable {
     }
 
     private static func title(prefix: String, appName: String) -> String {
-        let maxMenuItemLength = 30
-        let appNameLimit = max(1, maxMenuItemLength - prefix.count - 1)
-        return "\(prefix) \(shortTitle(appName, maxCount: appNameLimit))"
-    }
-
-    private static func shortTitle(_ title: String, maxCount: Int) -> String {
-        guard title.count > maxCount else {
-            return title
-        }
-
-        let prefixCount = max(1, maxCount - 3)
-        let trimmedPrefix = String(title.prefix(prefixCount))
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        return "\(trimmedPrefix)..."
+        WindowsShellCopy.prefixedMenuItemTitle(prefix: prefix, title: appName)
     }
 }

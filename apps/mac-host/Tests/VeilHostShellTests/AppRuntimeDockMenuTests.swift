@@ -156,6 +156,28 @@ struct AppRuntimeDockMenuTests {
         #expect(titles.allSatisfy { !$0.contains("Agent") })
     }
 
+    @Test("menu item titles stay compact")
+    func menuItemTitlesStayCompact() {
+        let longTitle = "Very Long Accounting Workstation Window Title"
+        let titles = [
+            WindowsShellCopy.menuItemTitle(longTitle),
+            WindowsShellCopy.prefixedMenuItemTitle(prefix: "Open", title: longTitle),
+            WindowsShellCopy.prefixedMenuItemTitle(prefix: "Focus", title: longTitle),
+            WindowsShellCopy.prefixedMenuItemTitle(prefix: "Close", title: longTitle),
+            WindowsShellCopy.menuItemTitle("   ")
+        ]
+
+        #expect(titles.allSatisfy { $0.count <= 30 })
+        #expect(titles[0].hasSuffix("..."))
+        #expect(titles[1].hasPrefix("Open "))
+        #expect(titles[2].hasPrefix("Focus "))
+        #expect(titles[3].hasPrefix("Close "))
+        #expect(titles[4] == "Windows App")
+        #expect(titles.allSatisfy { !$0.contains("Runtime") })
+        #expect(titles.allSatisfy { !$0.contains("VM") })
+        #expect(titles.allSatisfy { !$0.contains("Agent") })
+    }
+
     @Test("maps reconnect restore handoff to recovery start or wait states")
     func mapsReconnectRestoreHandoffToRecoveryStartOrWaitStates() {
         #expect(
