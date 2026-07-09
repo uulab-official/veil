@@ -1,6 +1,7 @@
 {
   "captureSteps" : [
     {
+      "captureCommand" : "screencapture -i \/tmp\/veil-review-readme\/preBootLauncher.png",
       "expectedFileName" : "preBootLauncher.png",
       "instruction" : "Capture the one-screen Veil launcher before opening the selected Windows app.",
       "order" : 1,
@@ -9,6 +10,7 @@
       "title" : "Pre-Boot Launcher"
     },
     {
+      "captureCommand" : "screencapture -i \/tmp\/veil-review-readme\/firstAppLaunch.png",
       "expectedFileName" : "firstAppLaunch.png",
       "instruction" : "Start or queue the selected Windows app and capture the first visible launch state.",
       "order" : 2,
@@ -17,6 +19,7 @@
       "title" : "First App Launch"
     },
     {
+      "captureCommand" : "screencapture -i \/tmp\/veil-review-readme\/appWindowOnly.png",
       "expectedFileName" : "appWindowOnly.png",
       "instruction" : "Capture the mirrored Windows app window after the launcher is hidden.",
       "order" : 3,
@@ -24,6 +27,7 @@
       "title" : "App Window Only"
     },
     {
+      "captureCommand" : "screencapture -i \/tmp\/veil-review-readme\/menuRestore.png",
       "expectedFileName" : "menuRestore.png",
       "instruction" : "Open the menu or Dock control and capture restore, reconnect, bring-forward, or close actions.",
       "order" : 4,
@@ -32,6 +36,7 @@
       "title" : "Menu Restore"
     },
     {
+      "captureCommand" : "screencapture -i \/tmp\/veil-review-readme\/closeQuiet.png",
       "expectedFileName" : "closeQuiet.png",
       "instruction" : "Close the final Windows app window and capture the returned launcher or quiet-Windows control.",
       "order" : 5,
@@ -41,7 +46,7 @@
     }
   ],
   "evidenceDirectory" : "\/tmp\/veil-review-readme",
-  "generatedAt" : "2026-07-09T13:57:07Z",
+  "generatedAt" : "2026-07-09T15:58:30Z",
   "kind" : "windowsAppRuntimeReviewEvidenceManifest",
   "manifestPath" : "\/tmp\/veil-review-readme\/review-manifest.json",
   "nextActions" : [

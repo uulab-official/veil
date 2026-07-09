@@ -54,6 +54,16 @@ test("rejects verification reports without a next missing capture step", () => {
   );
 });
 
+test("rejects verification missing capture commands that do not save the missing file", () => {
+  const report = demoVerification();
+  report.missingCaptureSteps[0].captureCommand = "screencapture -i /tmp/other/preBootLauncher.png";
+
+  assert.throws(
+    () => validateAppRuntimeReviewVerification(report),
+    /capture commands/
+  );
+});
+
 test("accepts complete verification reports", () => {
   const report = demoVerification();
   report.attachedScreenshotCount = report.requiredScreenshotCount;

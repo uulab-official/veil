@@ -219,9 +219,10 @@ next app check.
 
 Run `app-runtime-review-init` before a live VM pass to create the evidence
 folder, `review-manifest.json`, and a human-readable `README.md`. The manifest
-lists every required PNG path, the ordered capture steps, supporting commands,
-and the follow-up review command, so contributors can capture screenshots into
-one predictable folder instead of inventing names during the proof pass. The
+lists every required PNG path, the ordered capture steps, the exact
+`screencapture -i` save command, supporting commands, and the follow-up review
+command, so contributors can capture screenshots into one predictable folder
+instead of inventing names during the proof pass. The
 manifest harness also checks that screenshot paths, `readmePath`,
 `reviewCommand`, and next actions all point back to the same evidence directory
 and the `5/5 attached` release gate.
@@ -237,8 +238,8 @@ guest data.
 
 After screenshots are captured, `app-runtime-review-verify` checks the existing
 folder end to end: manifest presence, README presence, screenshot count,
-missing files, embedded review card state, and the next actions needed before
-sharing evidence.
+missing files, embedded review card state, the next missing capture step, and
+the next actions needed before sharing evidence.
 
 ```bash
 cd apps/mac-host

@@ -97,6 +97,7 @@ export function validateAppRuntimeReviewManifest(manifest) {
     requireString(step.title, `captureSteps.${index}.title`);
     requireString(step.expectedFileName, `captureSteps.${index}.expectedFileName`);
     requireString(step.instruction, `captureSteps.${index}.instruction`);
+    requireString(step.captureCommand, `captureSteps.${index}.captureCommand`);
     if (step.supportingCommand !== undefined) {
       requireString(step.supportingCommand, `captureSteps.${index}.supportingCommand`);
     }
@@ -107,6 +108,12 @@ export function validateAppRuntimeReviewManifest(manifest) {
     }
     if (step.slotId !== file.slotId || step.expectedFileName !== file.expectedFileName) {
       throw new TypeError("app runtime review manifest capture steps must match screenshot files.");
+    }
+    if (!step.captureCommand.includes("screencapture -i")) {
+      throw new TypeError("app runtime review manifest capture steps must use interactive macOS screenshot capture.");
+    }
+    if (!step.captureCommand.includes(file.path)) {
+      throw new TypeError("app runtime review manifest capture commands must save to the expected screenshot path.");
     }
   }
 

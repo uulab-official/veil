@@ -653,6 +653,7 @@ struct AppRuntimeReviewCaptureStep: Codable, Equatable {
     var title: String
     var expectedFileName: String
     var instruction: String
+    var captureCommand: String
     var supportingCommand: String?
 }
 
@@ -676,6 +677,7 @@ struct AppRuntimeReviewMissingCaptureStep: Codable, Equatable {
     var expectedFileName: String
     var path: String
     var instruction: String
+    var captureCommand: String
     var supportingCommand: String?
 }
 
@@ -1079,6 +1081,7 @@ struct VeilVMControl {
         for step in manifest.captureSteps {
             print("  \(step.order). \(step.title) -> \(step.expectedFileName)")
             print("     \(step.instruction)")
+            print("     Capture: \(step.captureCommand)")
             if let supportingCommand = step.supportingCommand {
                 print("     Command: \(supportingCommand)")
             }
@@ -1177,6 +1180,7 @@ struct VeilVMControl {
             print("Next capture:")
             print("  \(nextMissingCaptureStep.order). \(nextMissingCaptureStep.title) -> \(nextMissingCaptureStep.expectedFileName)")
             print("     \(nextMissingCaptureStep.instruction)")
+            print("     Capture: \(nextMissingCaptureStep.captureCommand)")
             if let supportingCommand = nextMissingCaptureStep.supportingCommand {
                 print("     Command: \(supportingCommand)")
             }
@@ -1240,6 +1244,7 @@ struct VeilVMControl {
         for step in manifest.captureSteps {
             lines.append("\(step.order). \(step.title) -> `\(step.expectedFileName)`")
             lines.append("   \(step.instruction)")
+            lines.append("   Capture: `\(step.captureCommand)`")
             if let supportingCommand = step.supportingCommand {
                 lines.append("   Command: `\(supportingCommand)`")
             }
@@ -1267,6 +1272,7 @@ struct VeilVMControl {
         }
         if let nextMissingCaptureStep = missingCaptureSteps.first {
             actions.append("Capture `\(nextMissingCaptureStep.expectedFileName)` for \(nextMissingCaptureStep.title): \(nextMissingCaptureStep.instruction)")
+            actions.append("Save it with `\(nextMissingCaptureStep.captureCommand)`.")
             if let supportingCommand = nextMissingCaptureStep.supportingCommand {
                 actions.append("Use `\(supportingCommand)` to reach the next capture state before saving `\(nextMissingCaptureStep.expectedFileName)`.")
             }
@@ -1297,6 +1303,7 @@ struct VeilVMControl {
                 expectedFileName: step.expectedFileName,
                 path: path,
                 instruction: step.instruction,
+                captureCommand: step.captureCommand,
                 supportingCommand: step.supportingCommand
             )
         }
@@ -1313,9 +1320,14 @@ struct VeilVMControl {
                 title: file.title,
                 expectedFileName: file.expectedFileName,
                 instruction: appRuntimeReviewCaptureInstruction(slotId: file.slotId),
+                captureCommand: appRuntimeReviewCaptureCommand(path: file.path),
                 supportingCommand: appRuntimeReviewCaptureCommand(slotId: file.slotId, card: card)
             )
         }
+    }
+
+    private static func appRuntimeReviewCaptureCommand(path: String) -> String {
+        "screencapture -i \(shellQuoted(path))"
     }
 
     private static func appRuntimeReviewCaptureInstruction(slotId: String) -> String {

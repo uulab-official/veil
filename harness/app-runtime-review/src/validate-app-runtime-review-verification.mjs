@@ -114,6 +114,7 @@ function validateMissingCaptureStep(step, index, evidenceDirectory) {
   requireString(step.expectedFileName, `missingCaptureSteps.${index}.expectedFileName`);
   requireString(step.path, `missingCaptureSteps.${index}.path`);
   requireString(step.instruction, `missingCaptureSteps.${index}.instruction`);
+  requireString(step.captureCommand, `missingCaptureSteps.${index}.captureCommand`);
   if (step.supportingCommand !== undefined) {
     requireString(step.supportingCommand, `missingCaptureSteps.${index}.supportingCommand`);
   }
@@ -125,6 +126,12 @@ function validateMissingCaptureStep(step, index, evidenceDirectory) {
   }
   if (!step.path.startsWith(`${evidenceDirectory}/`)) {
     throw new TypeError("app runtime review verification missing capture step paths must live inside the evidence directory.");
+  }
+  if (!step.captureCommand.includes("screencapture -i")) {
+    throw new TypeError("app runtime review verification missing capture steps must use interactive macOS screenshot capture.");
+  }
+  if (!step.captureCommand.includes(step.path)) {
+    throw new TypeError("app runtime review verification missing capture commands must save to the missing file path.");
   }
 }
 

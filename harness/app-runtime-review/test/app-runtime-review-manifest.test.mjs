@@ -54,6 +54,16 @@ test("rejects manifests with drifted capture step order", () => {
   );
 });
 
+test("rejects manifests with capture commands that do not save the expected file", () => {
+  const manifest = demoManifest();
+  manifest.captureSteps[0].captureCommand = "screencapture -i /tmp/other/preBootLauncher.png";
+
+  assert.throws(
+    () => validateAppRuntimeReviewManifest(manifest),
+    /capture commands/
+  );
+});
+
 test("rejects review commands that do not point at evidence directory", () => {
   const manifest = demoManifest();
   manifest.reviewCommand = "veil-vmctl app-runtime-review --evidence-dir '/tmp/other'";
