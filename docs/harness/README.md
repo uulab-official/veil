@@ -186,6 +186,11 @@ app-flow readiness, the next product action, the five release-gate steps, the
 required screenshot slots, the latest app-check artifact, and the recommended
 next app check.
 
+Run `app-runtime-review-init` before a live VM pass to create the evidence
+folder and `review-manifest.json`. The manifest lists every required PNG path
+and the follow-up review command, so contributors can capture screenshots into
+one predictable folder instead of inventing names during the proof pass.
+
 Pass `--evidence-dir` to point the card at a screenshot folder. Each required
 slot expects one PNG named after the release-gate slot id, for example
 `preBootLauncher.png`, `firstAppLaunch.png`, `appWindowOnly.png`,
@@ -197,9 +202,11 @@ guest data.
 
 ```bash
 cd apps/mac-host
+swift run veil-vmctl app-runtime-review-init --json --demo --evidence-dir ../../docs/checklists/artifacts/2026-07-09-app-runtime-review | node ../../harness/app-runtime-review/src/validate-app-runtime-review-manifest.mjs
 swift run veil-vmctl app-runtime-review --json --demo | node ../../harness/app-runtime-review/src/validate-app-runtime-review.mjs
 swift run veil-vmctl app-runtime-review --json --demo --evidence-dir ../../docs/checklists/artifacts/2026-07-09-app-runtime-review | node ../../harness/app-runtime-review/src/validate-app-runtime-review.mjs
 node ../../harness/app-runtime-review/src/validate-app-runtime-review.mjs < ../../harness/app-runtime-review/fixtures/app-runtime-review.demo.json
+node ../../harness/app-runtime-review/src/validate-app-runtime-review-manifest.mjs < ../../harness/app-runtime-review/fixtures/app-runtime-review-manifest.demo.json
 ```
 
 ## App Runtime Action Scenario

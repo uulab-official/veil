@@ -83,7 +83,7 @@ enum VMControlError: Error, LocalizedError {
         }
     }
 
-    private static let usage = "Usage: veil-vmctl prepare --installer /path/to/Windows.iso [--drivers /path/to/virtio-win.iso] | veil-vmctl app-runtime-status [--json] [--demo] | veil-vmctl app-runtime-review [--json] [--demo] [--evidence-dir /path/to/screenshots] | veil-vmctl app-runtime-action --action launch|fulfill-pending|focus|close|close-all|restore|reconnect-restore|bring-forward|recover-display|wait-agent|quiet-when-idle|stop-runtime|clipboard|type-text|click|proof-recommended [--json] [--demo] [--wait-seconds 5] [--app-id winapp_notepad] [--window-id hwnd:XXXXXXXX] [--text \"...\"] [--x 240 --y 130] | veil-vmctl app-window-proof [--json] [--app-id winapp_notepad] [--wait-seconds 10] [--output /path/to/proof.json] | veil-vmctl coherence-proof [--json] [--app-id winapp_notepad] [--wait-seconds 10] [--output /path/to/proof.json] | veil-vmctl mvp-proof [--json] [--app-id winapp_notepad] [--wait-seconds 30] [--output /path/to/proof.json] [--require-proved] | veil-vmctl guest-agent-wait [--json] [--wait-seconds 30] | veil-vmctl mark-installed [--json] | veil-vmctl providers [--json] | veil-vmctl export-diagnostics [--json] [--output /path/to/diagnostics.json] | veil-vmctl qemu-plan [--json] | veil-vmctl qemu-doctor [--json] | veil-vmctl qemu-install-status [--json] | veil-vmctl qemu-smoke [--json] [--seconds 45] | veil-vmctl qemu-start [--json] [--wait-seconds 15] [--native-display] | veil-vmctl qemu-display-smoke [--json] [--wait-seconds 5] | veil-vmctl qemu-capture [--json] [--output /path/to/console.png] | veil-vmctl qemu-powerdown [--json] [--wait-seconds 30] | veil-vmctl qemu-force-stop [--json] --i-understand-data-loss [--wait-seconds 10] | veil-vmctl qemu-sendkey [--json] key [key ...] | veil-vmctl qemu-type-text [--json] --text \"...\" | veil-vmctl qemu-click [--json] --x 0...32767 --y 0...32767 | veil-vmctl qemu-oobe-bypass [--json] | veil-vmctl qemu-install-agent [--json] [--wait-seconds 30]"
+    private static let usage = "Usage: veil-vmctl prepare --installer /path/to/Windows.iso [--drivers /path/to/virtio-win.iso] | veil-vmctl app-runtime-status [--json] [--demo] | veil-vmctl app-runtime-review [--json] [--demo] [--evidence-dir /path/to/screenshots] | veil-vmctl app-runtime-review-init [--json] [--demo] [--evidence-dir /path/to/screenshots] | veil-vmctl app-runtime-action --action launch|fulfill-pending|focus|close|close-all|restore|reconnect-restore|bring-forward|recover-display|wait-agent|quiet-when-idle|stop-runtime|clipboard|type-text|click|proof-recommended [--json] [--demo] [--wait-seconds 5] [--app-id winapp_notepad] [--window-id hwnd:XXXXXXXX] [--text \"...\"] [--x 240 --y 130] | veil-vmctl app-window-proof [--json] [--app-id winapp_notepad] [--wait-seconds 10] [--output /path/to/proof.json] | veil-vmctl coherence-proof [--json] [--app-id winapp_notepad] [--wait-seconds 10] [--output /path/to/proof.json] | veil-vmctl mvp-proof [--json] [--app-id winapp_notepad] [--wait-seconds 30] [--output /path/to/proof.json] [--require-proved] | veil-vmctl guest-agent-wait [--json] [--wait-seconds 30] | veil-vmctl mark-installed [--json] | veil-vmctl providers [--json] | veil-vmctl export-diagnostics [--json] [--output /path/to/diagnostics.json] | veil-vmctl qemu-plan [--json] | veil-vmctl qemu-doctor [--json] | veil-vmctl qemu-install-status [--json] | veil-vmctl qemu-smoke [--json] [--seconds 45] | veil-vmctl qemu-start [--json] [--wait-seconds 15] [--native-display] | veil-vmctl qemu-display-smoke [--json] [--wait-seconds 5] | veil-vmctl qemu-capture [--json] [--output /path/to/console.png] | veil-vmctl qemu-powerdown [--json] [--wait-seconds 30] | veil-vmctl qemu-force-stop [--json] --i-understand-data-loss [--wait-seconds 10] | veil-vmctl qemu-sendkey [--json] key [key ...] | veil-vmctl qemu-type-text [--json] --text \"...\" | veil-vmctl qemu-click [--json] --x 0...32767 --y 0...32767 | veil-vmctl qemu-oobe-bypass [--json] | veil-vmctl qemu-install-agent [--json] [--wait-seconds 30]"
 }
 
 struct VMControlArguments {
@@ -115,6 +115,7 @@ struct VMControlArguments {
         case prepare(installerPath: String, driverMediaPath: String?)
         case appRuntimeStatus(json: Bool, demo: Bool)
         case appRuntimeReview(json: Bool, demo: Bool, evidenceDirectoryPath: String?)
+        case appRuntimeReviewInit(json: Bool, demo: Bool, evidenceDirectoryPath: String?)
         case appRuntimeAction(json: Bool, demo: Bool, action: AppRuntimeAction, appId: String?, windowId: String?, text: String?, x: Int?, y: Int?, waitSeconds: Int)
         case appWindowProof(json: Bool, appId: String, waitSeconds: Int, outputPath: String?)
         case coherenceProof(json: Bool, appId: String, waitSeconds: Int, outputPath: String?)
@@ -171,6 +172,16 @@ struct VMControlArguments {
         if command == "app-runtime-review" {
             return VMControlArguments(
                 command: .appRuntimeReview(
+                    json: arguments.contains("--json"),
+                    demo: arguments.contains("--demo"),
+                    evidenceDirectoryPath: stringArgument(named: "--evidence-dir", from: arguments)
+                )
+            )
+        }
+
+        if command == "app-runtime-review-init" {
+            return VMControlArguments(
+                command: .appRuntimeReviewInit(
                     json: arguments.contains("--json"),
                     demo: arguments.contains("--demo"),
                     evidenceDirectoryPath: stringArgument(named: "--evidence-dir", from: arguments)
@@ -610,6 +621,25 @@ struct AppRuntimeReviewCard: Codable, Equatable {
     var status: WindowsAppRuntimeStatusReport
 }
 
+struct AppRuntimeReviewEvidenceFile: Codable, Equatable {
+    var slotId: String
+    var title: String
+    var expectedFileName: String
+    var path: String
+    var expectedSurface: String
+}
+
+struct AppRuntimeReviewEvidenceManifest: Codable, Equatable {
+    var kind: String = "windowsAppRuntimeReviewEvidenceManifest"
+    var generatedAt: Date
+    var evidenceDirectory: String
+    var manifestPath: String
+    var requiredScreenshotCount: Int
+    var screenshotFiles: [AppRuntimeReviewEvidenceFile]
+    var reviewCommand: String
+    var nextActions: [String]
+}
+
 @main
 struct VeilVMControl {
     static func main() async {
@@ -638,6 +668,8 @@ struct VeilVMControl {
             try await printAppRuntimeStatus(json: json, demo: demo)
         case .appRuntimeReview(let json, let demo, let evidenceDirectoryPath):
             try await printAppRuntimeReview(json: json, demo: demo, evidenceDirectoryPath: evidenceDirectoryPath)
+        case .appRuntimeReviewInit(let json, let demo, let evidenceDirectoryPath):
+            try await initAppRuntimeReview(json: json, demo: demo, evidenceDirectoryPath: evidenceDirectoryPath)
         case .appRuntimeAction(let json, let demo, let action, let appId, let windowId, let text, let x, let y, let waitSeconds):
             try await runAppRuntimeAction(json: json, demo: demo, action: action, appId: appId, windowId: windowId, text: text, x: x, y: y, waitSeconds: waitSeconds)
         case .appWindowProof(let json, let appId, let waitSeconds, let outputPath):
@@ -908,6 +940,66 @@ struct VeilVMControl {
     }
 
     @MainActor
+    private static func initAppRuntimeReview(
+        json: Bool,
+        demo: Bool,
+        evidenceDirectoryPath: String?
+    ) async throws {
+        let report = try await appRuntimeStatusReport(demo: demo)
+        let evidenceDirectoryURL = try appRuntimeReviewEvidenceDirectory(
+            requestedPath: evidenceDirectoryPath,
+            diagnosticsDirectory: report.proofArtifacts.diagnosticsDirectory
+        )
+        try FileManager.default.createDirectory(
+            at: evidenceDirectoryURL,
+            withIntermediateDirectories: true
+        )
+
+        let card = appRuntimeReviewCard(
+            status: report,
+            evidenceDirectoryPath: evidenceDirectoryURL.path
+        )
+        let manifestURL = evidenceDirectoryURL.appendingPathComponent("review-manifest.json")
+        let manifest = AppRuntimeReviewEvidenceManifest(
+            generatedAt: report.generatedAt,
+            evidenceDirectory: evidenceDirectoryURL.path,
+            manifestPath: manifestURL.path,
+            requiredScreenshotCount: card.requiredScreenshotCount,
+            screenshotFiles: card.screenshotSlots.map { slot in
+                AppRuntimeReviewEvidenceFile(
+                    slotId: slot.id,
+                    title: slot.title,
+                    expectedFileName: slot.expectedFileName,
+                    path: evidenceDirectoryURL.appendingPathComponent(slot.expectedFileName).path,
+                    expectedSurface: slot.expectedSurface
+                )
+            },
+            reviewCommand: "veil-vmctl app-runtime-review --evidence-dir '\(evidenceDirectoryURL.path)'",
+            nextActions: [
+                "Capture the five required screenshots into the evidence directory.",
+                "Run `veil-vmctl app-runtime-review --evidence-dir '\(evidenceDirectoryURL.path)'` and confirm Screenshots is 5/5 attached.",
+                "Run `veil-vmctl app-runtime-review --json --evidence-dir '\(evidenceDirectoryURL.path)'` for machine-readable release evidence."
+            ]
+        )
+        let data = try JSONEncoder.veilDiagnostics.encode(manifest)
+        try data.write(to: manifestURL, options: [.atomic])
+
+        if json {
+            print(String(decoding: data, as: UTF8.self))
+            return
+        }
+
+        print("Veil Windows App Review Evidence")
+        print("Folder: \(manifest.evidenceDirectory)")
+        print("Manifest: \(manifest.manifestPath)")
+        print("Screenshots needed: \(manifest.requiredScreenshotCount)")
+        for file in manifest.screenshotFiles {
+            print("  - \(file.expectedFileName): \(file.title)")
+        }
+        print("Review command: \(manifest.reviewCommand)")
+    }
+
+    @MainActor
     private static func appRuntimeStatusReport(demo: Bool) async throws -> WindowsAppRuntimeStatusReport {
         let model = HostDashboardModel(service: appRuntimeStatusService(demo: demo))
 
@@ -918,6 +1010,24 @@ struct VeilVMControl {
         return model.runtimeStatusReport(
             localRuntime: model.localRuntimeStatus(snapshot: localRuntimeSnapshot)
         )
+    }
+
+    private static func appRuntimeReviewEvidenceDirectory(
+        requestedPath: String?,
+        diagnosticsDirectory: String
+    ) throws -> URL {
+        if let requestedPath,
+           !requestedPath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return URL(fileURLWithPath: requestedPath).standardizedFileURL
+        }
+
+        let timestamp = ISO8601DateFormatter()
+            .string(from: Date())
+            .replacingOccurrences(of: ":", with: "-")
+        return URL(fileURLWithPath: diagnosticsDirectory)
+            .appendingPathComponent("App Runtime Review")
+            .appendingPathComponent(timestamp)
+            .standardizedFileURL
     }
 
     private static func appRuntimeReviewCard(
