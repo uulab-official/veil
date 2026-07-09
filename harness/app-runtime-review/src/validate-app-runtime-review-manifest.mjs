@@ -31,11 +31,17 @@ export function validateAppRuntimeReviewManifest(manifest) {
   if (!Array.isArray(manifest.screenshotFiles)) {
     throw new TypeError("app runtime review manifest screenshotFiles must be an array.");
   }
+  if (!Array.isArray(manifest.captureSteps)) {
+    throw new TypeError("app runtime review manifest captureSteps must be an array.");
+  }
   if (manifest.requiredScreenshotCount !== expectedSlotIds.length) {
     throw new TypeError("app runtime review manifest requiredScreenshotCount must match the release card.");
   }
   if (manifest.screenshotFiles.length !== expectedSlotIds.length) {
     throw new TypeError("app runtime review manifest must list every required screenshot file.");
+  }
+  if (manifest.captureSteps.length !== expectedSlotIds.length) {
+    throw new TypeError("app runtime review manifest must list every capture step.");
   }
 
   for (const [index, file] of manifest.screenshotFiles.entries()) {
@@ -56,6 +62,28 @@ export function validateAppRuntimeReviewManifest(manifest) {
     }
     if (!file.path.endsWith(`/${file.expectedFileName}`)) {
       throw new TypeError("app runtime review manifest screenshot paths must end with expected file names.");
+    }
+  }
+
+  for (const [index, step] of manifest.captureSteps.entries()) {
+    if (!step || typeof step !== "object" || Array.isArray(step)) {
+      throw new TypeError("app runtime review manifest capture steps must be objects.");
+    }
+    requireNonNegativeInteger(step.order, `captureSteps.${index}.order`);
+    requireString(step.slotId, `captureSteps.${index}.slotId`);
+    requireString(step.title, `captureSteps.${index}.title`);
+    requireString(step.expectedFileName, `captureSteps.${index}.expectedFileName`);
+    requireString(step.instruction, `captureSteps.${index}.instruction`);
+    if (step.supportingCommand !== undefined) {
+      requireString(step.supportingCommand, `captureSteps.${index}.supportingCommand`);
+    }
+
+    const file = manifest.screenshotFiles[index];
+    if (step.order !== index + 1) {
+      throw new TypeError("app runtime review manifest capture step order must be one-based and sequential.");
+    }
+    if (step.slotId !== file.slotId || step.expectedFileName !== file.expectedFileName) {
+      throw new TypeError("app runtime review manifest capture steps must match screenshot files.");
     }
   }
 

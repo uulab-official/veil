@@ -24,6 +24,16 @@ test("rejects manifests with missing screenshot files", () => {
   );
 });
 
+test("rejects manifests with missing capture steps", () => {
+  const manifest = demoManifest();
+  manifest.captureSteps.pop();
+
+  assert.throws(
+    () => validateAppRuntimeReviewManifest(manifest),
+    /every capture step/
+  );
+});
+
 test("rejects manifests with drifted screenshot file names", () => {
   const manifest = demoManifest();
   manifest.screenshotFiles[0].expectedFileName = "wrong.png";
@@ -31,5 +41,15 @@ test("rejects manifests with drifted screenshot file names", () => {
   assert.throws(
     () => validateAppRuntimeReviewManifest(manifest),
     /file names/
+  );
+});
+
+test("rejects manifests with drifted capture step order", () => {
+  const manifest = demoManifest();
+  manifest.captureSteps[0].order = 2;
+
+  assert.throws(
+    () => validateAppRuntimeReviewManifest(manifest),
+    /order/
   );
 });

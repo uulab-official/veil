@@ -1,6 +1,47 @@
 {
+  "captureSteps" : [
+    {
+      "expectedFileName" : "preBootLauncher.png",
+      "instruction" : "Capture the one-screen Veil launcher before opening the selected Windows app.",
+      "order" : 1,
+      "slotId" : "preBootLauncher",
+      "supportingCommand" : "veil-vmctl app-runtime-status --json",
+      "title" : "Pre-Boot Launcher"
+    },
+    {
+      "expectedFileName" : "firstAppLaunch.png",
+      "instruction" : "Start or queue the selected Windows app and capture the first visible launch state.",
+      "order" : 2,
+      "slotId" : "firstAppLaunch",
+      "supportingCommand" : "veil-vmctl app-runtime-action --json --action fulfill-pending",
+      "title" : "First App Launch"
+    },
+    {
+      "expectedFileName" : "appWindowOnly.png",
+      "instruction" : "Capture the mirrored Windows app window after the launcher is hidden.",
+      "order" : 3,
+      "slotId" : "appWindowOnly",
+      "title" : "App Window Only"
+    },
+    {
+      "expectedFileName" : "menuRestore.png",
+      "instruction" : "Open the menu or Dock control and capture restore, reconnect, bring-forward, or close actions.",
+      "order" : 4,
+      "slotId" : "menuRestore",
+      "supportingCommand" : "veil-vmctl app-runtime-action --json --action bring-forward",
+      "title" : "Menu Restore"
+    },
+    {
+      "expectedFileName" : "closeQuiet.png",
+      "instruction" : "Close the final Windows app window and capture the returned launcher or quiet-Windows control.",
+      "order" : 5,
+      "slotId" : "closeQuiet",
+      "supportingCommand" : "veil-vmctl app-runtime-action --json --action reconnect-restore",
+      "title" : "Close And Quiet"
+    }
+  ],
   "evidenceDirectory" : "\/tmp\/veil-review-init",
-  "generatedAt" : "2026-07-09T13:48:05Z",
+  "generatedAt" : "2026-07-09T13:51:12Z",
   "kind" : "windowsAppRuntimeReviewEvidenceManifest",
   "manifestPath" : "\/tmp\/veil-review-init\/review-manifest.json",
   "nextActions" : [

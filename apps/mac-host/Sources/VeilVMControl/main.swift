@@ -629,6 +629,15 @@ struct AppRuntimeReviewEvidenceFile: Codable, Equatable {
     var expectedSurface: String
 }
 
+struct AppRuntimeReviewCaptureStep: Codable, Equatable {
+    var order: Int
+    var slotId: String
+    var title: String
+    var expectedFileName: String
+    var instruction: String
+    var supportingCommand: String?
+}
+
 struct AppRuntimeReviewEvidenceManifest: Codable, Equatable {
     var kind: String = "windowsAppRuntimeReviewEvidenceManifest"
     var generatedAt: Date
@@ -636,6 +645,7 @@ struct AppRuntimeReviewEvidenceManifest: Codable, Equatable {
     var manifestPath: String
     var requiredScreenshotCount: Int
     var screenshotFiles: [AppRuntimeReviewEvidenceFile]
+    var captureSteps: [AppRuntimeReviewCaptureStep]
     var reviewCommand: String
     var nextActions: [String]
 }
@@ -960,20 +970,25 @@ struct VeilVMControl {
             evidenceDirectoryPath: evidenceDirectoryURL.path
         )
         let manifestURL = evidenceDirectoryURL.appendingPathComponent("review-manifest.json")
+        let screenshotFiles = card.screenshotSlots.map { slot in
+            AppRuntimeReviewEvidenceFile(
+                slotId: slot.id,
+                title: slot.title,
+                expectedFileName: slot.expectedFileName,
+                path: evidenceDirectoryURL.appendingPathComponent(slot.expectedFileName).path,
+                expectedSurface: slot.expectedSurface
+            )
+        }
         let manifest = AppRuntimeReviewEvidenceManifest(
             generatedAt: report.generatedAt,
             evidenceDirectory: evidenceDirectoryURL.path,
             manifestPath: manifestURL.path,
             requiredScreenshotCount: card.requiredScreenshotCount,
-            screenshotFiles: card.screenshotSlots.map { slot in
-                AppRuntimeReviewEvidenceFile(
-                    slotId: slot.id,
-                    title: slot.title,
-                    expectedFileName: slot.expectedFileName,
-                    path: evidenceDirectoryURL.appendingPathComponent(slot.expectedFileName).path,
-                    expectedSurface: slot.expectedSurface
-                )
-            },
+            screenshotFiles: screenshotFiles,
+            captureSteps: appRuntimeReviewCaptureSteps(
+                screenshotFiles: screenshotFiles,
+                card: card
+            ),
             reviewCommand: "veil-vmctl app-runtime-review --evidence-dir '\(evidenceDirectoryURL.path)'",
             nextActions: [
                 "Capture the five required screenshots into the evidence directory.",
@@ -995,6 +1010,14 @@ struct VeilVMControl {
         print("Screenshots needed: \(manifest.requiredScreenshotCount)")
         for file in manifest.screenshotFiles {
             print("  - \(file.expectedFileName): \(file.title)")
+        }
+        print("Capture steps:")
+        for step in manifest.captureSteps {
+            print("  \(step.order). \(step.title) -> \(step.expectedFileName)")
+            print("     \(step.instruction)")
+            if let supportingCommand = step.supportingCommand {
+                print("     Command: \(supportingCommand)")
+            }
         }
         print("Review command: \(manifest.reviewCommand)")
     }
@@ -1028,6 +1051,59 @@ struct VeilVMControl {
             .appendingPathComponent("App Runtime Review")
             .appendingPathComponent(timestamp)
             .standardizedFileURL
+    }
+
+    private static func appRuntimeReviewCaptureSteps(
+        screenshotFiles: [AppRuntimeReviewEvidenceFile],
+        card: AppRuntimeReviewCard
+    ) -> [AppRuntimeReviewCaptureStep] {
+        screenshotFiles.enumerated().map { index, file in
+            AppRuntimeReviewCaptureStep(
+                order: index + 1,
+                slotId: file.slotId,
+                title: file.title,
+                expectedFileName: file.expectedFileName,
+                instruction: appRuntimeReviewCaptureInstruction(slotId: file.slotId),
+                supportingCommand: appRuntimeReviewCaptureCommand(slotId: file.slotId, card: card)
+            )
+        }
+    }
+
+    private static func appRuntimeReviewCaptureInstruction(slotId: String) -> String {
+        switch slotId {
+        case "preBootLauncher":
+            return "Capture the one-screen Veil launcher before opening the selected Windows app."
+        case "firstAppLaunch":
+            return "Start or queue the selected Windows app and capture the first visible launch state."
+        case "appWindowOnly":
+            return "Capture the mirrored Windows app window after the launcher is hidden."
+        case "menuRestore":
+            return "Open the menu or Dock control and capture restore, reconnect, bring-forward, or close actions."
+        case "closeQuiet":
+            return "Close the final Windows app window and capture the returned launcher or quiet-Windows control."
+        default:
+            return "Capture the expected Windows app runtime surface."
+        }
+    }
+
+    private static func appRuntimeReviewCaptureCommand(
+        slotId: String,
+        card: AppRuntimeReviewCard
+    ) -> String? {
+        switch slotId {
+        case "preBootLauncher":
+            return card.statusCommand
+        case "firstAppLaunch":
+            return card.steps.first { $0.id == "openWindowsApp" }?.nextActionCommand
+        case "appWindowOnly":
+            return card.evidence.recommendedAppCheckCommand
+        case "menuRestore":
+            return "veil-vmctl app-runtime-action --json --action bring-forward"
+        case "closeQuiet":
+            return card.steps.first { $0.id == "closeOrRestore" }?.nextActionCommand
+        default:
+            return nil
+        }
     }
 
     private static func appRuntimeReviewCard(
