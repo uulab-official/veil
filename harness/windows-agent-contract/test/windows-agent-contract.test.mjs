@@ -312,6 +312,7 @@ test("windows agent includes user-logon install and uninstall scripts", async ()
   const bootstrap = await readFile(resolve(agentRoot, "scripts/Bootstrap-VeilAgentFromMedia.ps1"), "utf8");
   const publish = await readFile(resolve(agentRoot, "scripts/Publish-VeilAgentBundle.ps1"), "utf8");
   const publishShell = await readFile(resolve(agentRoot, "scripts/publish-veil-agent-bundle.sh"), "utf8");
+  const sparsePackage = await readFile(resolve(agentRoot, "scripts/Build-VeilAgentSparsePackage.ps1"), "utf8");
 
   assert.match(install, /Register-ScheduledTask/);
   assert.match(install, /New-ScheduledTaskTrigger\s+-AtLogOn/);
@@ -328,6 +329,10 @@ test("windows agent includes user-logon install and uninstall scripts", async ()
   assert.match(install, /Stop-Process\s+-Force/);
   assert.match(install, /netsh\s+advfirewall\s+firewall\s+add\s+rule/);
   assert.match(install, /Windows Firewall inbound rule/);
+  assert.match(install, /Register-VeilSparsePackage/);
+  assert.match(install, /VeilAgent\.Identity\.msix/);
+  assert.match(install, /Add-AppxPackage\s+-Path\s+\$PackagePath\s+-ExternalLocation\s+\$ExternalLocation/);
+  assert.match(install, /Import-Certificate[\s\S]+TrustedPeople/);
   assert.match(start, /VeilAgent\.exe/);
   assert.match(start, /0\.0\.0\.0/);
   assert.match(start, /127\.0\.0\.1/);
@@ -378,6 +383,8 @@ test("windows agent includes user-logon install and uninstall scripts", async ()
   assert.match(bootstrap, /Install Veil Agent\.cmd/);
   assert.match(bootstrap, /bootstrap\.log/);
   assert.match(uninstall, /Unregister-ScheduledTask/);
+  assert.match(uninstall, /Get-AppxPackage\s+-Name\s+\$SparsePackageName/);
+  assert.match(uninstall, /Remove-AppxPackage/);
   assert.match(uninstall, /VeilAgent/);
   assert.match(publish, /--runtime\s+\$Runtime/);
   assert.match(publish, /--self-contained:\$SelfContained/);
@@ -387,6 +394,30 @@ test("windows agent includes user-logon install and uninstall scripts", async ()
   assert.match(publishShell, /--self-contained "\$self_contained"/);
   assert.match(publishShell, /EnableWindowsTargeting=true/);
   assert.match(publishShell, /VeilAgent\.exe/);
+  assert.match(sparsePackage, /MakeAppx\.exe/);
+  assert.match(sparsePackage, /SignTool\.exe/);
+  assert.match(sparsePackage, /New-SelfSignedCertificate/);
+  assert.match(sparsePackage, /VeilAgent\.Identity\.msix/);
+  assert.match(sparsePackage, /Cert:\\CurrentUser\\TrustedPeople/);
+});
+
+test("windows agent sparse package manifests line up with executable identity", async () => {
+  const project = await readFile(resolve(agentRoot, "src/VeilAgent/VeilAgent.csproj"), "utf8");
+  const executableManifest = await readFile(resolve(agentRoot, "src/VeilAgent/app.manifest"), "utf8");
+  const packageManifest = await readFile(resolve(agentRoot, "package/AppxManifest.xml"), "utf8");
+  const gitignore = await readFile(resolve(repoRoot, ".gitignore"), "utf8");
+
+  assert.match(project, /<ApplicationManifest>app\.manifest<\/ApplicationManifest>/);
+  assert.match(executableManifest, /<msix[\s\S]+publisher="CN=UULab"[\s\S]+packageName="UULab\.Veil\.Agent"[\s\S]+applicationId="VeilAgent"/);
+  assert.match(packageManifest, /<Identity[\s\S]+Name="UULab\.Veil\.Agent"[\s\S]+Publisher="CN=UULab"/);
+  assert.match(packageManifest, /<uap10:AllowExternalContent>true<\/uap10:AllowExternalContent>/);
+  assert.match(packageManifest, /<rescap:Capability Name="runFullTrust" \/>/);
+  assert.match(packageManifest, /<rescap:Capability Name="unvirtualizedResources" \/>/);
+  assert.match(packageManifest, /<uap3:Capability Name="userNotificationListener" \/>/);
+  assert.match(packageManifest, /Id="VeilAgent"[\s\S]+Executable="VeilAgent\.exe"[\s\S]+uap10:TrustLevel="mediumIL"[\s\S]+uap10:RuntimeBehavior="win32App"/);
+  assert.match(gitignore, /apps\/windows-agent\/package\/\*\.pfx/);
+  assert.match(gitignore, /apps\/windows-agent\/package\/\*\.msix/);
+  assert.match(gitignore, /apps\/windows-agent\/package\/\*\.cer/);
 });
 
 test("windows agent installs logon task against the local installed scripts", async () => {

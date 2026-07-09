@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<assembly manifestVersion="1.0" xmlns="urn:schemas-microsoft-com:asm.v1">
+  <assemblyIdentity version="0.1.0.0" name="UULab.Veil.Agent" />
+  <msix
+    xmlns="urn:schemas-microsoft-com:msix.v1"
+    publisher="CN=UULab"
+    packageName="UULab.Veil.Agent"
+    applicationId="VeilAgent" />
+</assembly>

@@ -12,6 +12,9 @@ bin/
 obj/
 TestResults/
 apps/windows-agent/app/
+apps/windows-agent/package/*.cer
+apps/windows-agent/package/*.msix
+apps/windows-agent/package/*.pfx
 
 # Node
 node_modules/

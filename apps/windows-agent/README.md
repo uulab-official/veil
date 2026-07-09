@@ -60,6 +60,14 @@ apps\windows-agent\scripts\Publish-VeilAgentBundle.ps1
 
 That creates `apps\windows-agent\app\VeilAgent.exe` and its runtime payload. The installer prefers that packaged `app` folder and does not need the .NET SDK inside Windows. If no packaged `app` folder exists, the installer falls back to `dotnet publish`, which requires the .NET 8 SDK in the guest. The `app` folder is a local build artifact and is intentionally ignored by Git.
 
+To enable package-identity-gated Windows APIs, also build and sign the sparse identity package on Windows with the Windows SDK installed:
+
+```powershell
+apps\windows-agent\scripts\Build-VeilAgentSparsePackage.ps1 -CreateDevelopmentCertificate -TrustDevelopmentCertificate
+```
+
+This creates ignored local artifacts under `apps\windows-agent\package`: `VeilAgent.Identity.msix`, `VeilAgent.Identity.pfx`, and `VeilAgent.Identity.cer`. The `.pfx` contains the signing private key and must not be committed or distributed publicly. When `VeilAgent.Identity.msix` is present on the `VEIL_AUTO` media or shared folder, `Install-VeilAgent.ps1` registers it with `Add-AppxPackage -ExternalLocation` against the installed app folder. A successful registration is what lets `agent.health.response.capabilities.packageIdentity` become `true`.
+
 For repository development without the shared-folder bundle, run this inside the guest:
 
 ```powershell

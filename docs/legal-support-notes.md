@@ -60,10 +60,16 @@ guest agent exposes `agent.health.response.capabilities.packageIdentity` only as
 a local readiness signal, not as a licensing, store distribution, or Microsoft
 support claim.
 
+Sparse package signing material is sensitive. Do not commit generated `.pfx`,
+`.cer`, or `.msix` artifacts; only the source manifests and scripts belong in
+the repository. A development `.pfx` contains a private key and should remain
+local to the test Windows machine.
+
 Official references:
 
 - `GetCurrentPackageFullName`: https://learn.microsoft.com/en-us/windows/win32/api/appmodel/nf-appmodel-getcurrentpackagefullname
 - Detect package identity: https://learn.microsoft.com/en-us/windows/msix/detect-package-identity
+- Grant package identity by packaging with external location: https://learn.microsoft.com/en-us/windows/apps/desktop/modernize/grant-identity-to-nonpackaged-apps
 
 ## Apple Virtualization.framework
 

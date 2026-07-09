@@ -12,6 +12,10 @@ $AgentRoot = Resolve-Path (Join-Path $ScriptRoot "..")
 $ProjectPath = Join-Path $AgentRoot "src\VeilAgent\VeilAgent.csproj"
 $BundledAppRoot = Join-Path $AgentRoot "app"
 $BundledAgentExe = Join-Path $BundledAppRoot "VeilAgent.exe"
+$SparsePackageRoot = Join-Path $AgentRoot "package"
+$SparsePackagePath = Join-Path $SparsePackageRoot "VeilAgent.Identity.msix"
+$SparsePackageCertificatePath = Join-Path $SparsePackageRoot "VeilAgent.Identity.cer"
+$SparsePackageName = "UULab.Veil.Agent"
 $PublishRoot = Join-Path $InstallRoot "app"
 $InstalledScriptsRoot = Join-Path $InstallRoot "scripts"
 $LogRoot = Join-Path $InstallRoot "logs"
@@ -22,6 +26,34 @@ $TaskName = "VeilAgent"
 New-Item -ItemType Directory -Force -Path $PublishRoot | Out-Null
 New-Item -ItemType Directory -Force -Path $InstalledScriptsRoot | Out-Null
 New-Item -ItemType Directory -Force -Path $LogRoot | Out-Null
+
+function Register-VeilSparsePackage {
+    param(
+        [string]$PackagePath,
+        [string]$CertificatePath,
+        [string]$ExternalLocation,
+        [string]$PackageName
+    )
+
+    if (-not (Test-Path $PackagePath)) {
+        Write-Host "No signed sparse identity package found at $PackagePath; continuing with unpackaged agent identity."
+        return
+    }
+
+    if ($CertificatePath -and (Test-Path $CertificatePath)) {
+        Import-Certificate -FilePath $CertificatePath -CertStoreLocation Cert:\CurrentUser\TrustedPeople | Out-Null
+        Write-Host "Trusted Veil sparse package certificate in Cert:\CurrentUser\TrustedPeople."
+    }
+
+    $ExistingPackage = Get-AppxPackage -Name $PackageName -ErrorAction SilentlyContinue
+    if ($ExistingPackage) {
+        Write-Host "Removing existing sparse identity package $($ExistingPackage.PackageFullName)."
+        $ExistingPackage | Remove-AppxPackage
+    }
+
+    Add-AppxPackage -Path $PackagePath -ExternalLocation $ExternalLocation
+    Write-Host "Registered sparse identity package $PackageName for external location $ExternalLocation."
+}
 
 Start-Transcript -Path $InstallLogPath -Append | Out-Null
 try {
@@ -96,6 +128,17 @@ try {
 
     [Environment]::SetEnvironmentVariable("VEIL_AGENT_HOST", "0.0.0.0", "User")
     [Environment]::SetEnvironmentVariable("VEIL_AGENT_PORT", "$Port", "User")
+
+    try {
+        Register-VeilSparsePackage `
+            -PackagePath $SparsePackagePath `
+            -CertificatePath $SparsePackageCertificatePath `
+            -ExternalLocation $PublishRoot `
+            -PackageName $SparsePackageName
+    } catch {
+        Write-Warning "Veil sparse identity package could not be registered: $($_.Exception.Message)"
+        Write-Host "Continuing with unpackaged identity; agent.health.response.capabilities.packageIdentity will remain false until the sparse package is registered."
+    }
 
     $FirewallProgram = Join-Path $PublishRoot "VeilAgent.exe"
     try {
