@@ -2336,7 +2336,7 @@ public struct LocalVMRuntimeService: VMRuntimeService {
         let refreshedAt = Self.consoleScreenshotDidRefresh(
             before: beforeEvidence,
             after: afterEvidence
-        ) ? diagnosticDate() : nil
+        ) ? diagnosticDate() : launchRecord?.consoleScreenshotRefreshedAt
         return ConsoleScreenshotRefresh(path: refreshedPath, refreshedAt: refreshedAt)
     }
 
@@ -2392,10 +2392,10 @@ public struct LocalVMRuntimeService: VMRuntimeService {
             vncHost: launchRecord.vncHost,
             vncPort: launchRecord.vncPort,
             consoleScreenshotPath: consoleScreenshotPath ?? existingConsoleScreenshotPath(from: launchRecord),
-            consoleScreenshotRefreshedAt: consoleScreenshotRefreshedAt,
+            consoleScreenshotRefreshedAt: consoleScreenshotRefreshedAt ?? launchRecord.consoleScreenshotRefreshedAt,
             previewStatus: consolePreviewStatus(
                 consoleScreenshotPath: consoleScreenshotPath ?? existingConsoleScreenshotPath(from: launchRecord),
-                consoleScreenshotRefreshedAt: consoleScreenshotRefreshedAt
+                consoleScreenshotRefreshedAt: consoleScreenshotRefreshedAt ?? launchRecord.consoleScreenshotRefreshedAt
             ),
             startedAt: launchRecord.startedAt
         )

@@ -1855,11 +1855,18 @@ public final class HostDashboardModel {
         proofPlan: WindowsAppRuntimeProofPlanStatus,
         proofArtifacts: WindowsAppRuntimeProofArtifactStatus
     ) -> WindowsAppRuntimeReleaseGateStatus {
+        let displayRecoveryRequired = localRuntime.recommendedAction == "recover-runtime-display"
+            || localRuntime.recommendedRecoveryCommand != nil
         let setupPassing = localRuntime.bootReady
             && localRuntime.windowsInstalled
             && !localRuntime.requiresGuestToolsMediaRebuild
+            && !displayRecoveryRequired
         let setupCommand: String?
-        if setupPassing {
+        if displayRecoveryRequired {
+            setupCommand = localRuntime.recommendedRecoveryCommand
+                ?? localRuntime.recommendedDisplayCommand
+                ?? localRuntime.recommendedInstallStatusCommand
+        } else if setupPassing {
             setupCommand = localRuntime.recommendedInstallStatusCommand
         } else if localRuntime.requiresGuestToolsMediaRebuild, localRuntime.isRunning {
             setupCommand = localRuntime.recommendedPowerDownCommand
@@ -2055,6 +2062,11 @@ public final class HostDashboardModel {
             }
             if command.contains("--action quiet-when-idle") {
                 return "runtime.quietWhenIdle"
+            }
+            if command.contains("qemu-capture")
+                || command.contains("qemu-display-smoke")
+                || command.contains("--action recover-display") {
+                return "runtime.recoverDisplay"
             }
             if command.hasPrefix("veil-vmctl prepare") {
                 return "runtime.prepareWindows"

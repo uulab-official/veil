@@ -1299,6 +1299,13 @@ struct HostDashboardModelTests {
 
         let report = model.runtimeStatusReport(localRuntime: status)
         #expect(report.actions.first { $0.id == "runtime.recoverDisplay" }?.isAvailable == true)
+        #expect(report.releaseGate.isPassing == false)
+        #expect(report.releaseGate.recommendedAction == "windowsSetup")
+        #expect(report.releaseGate.steps.first { $0.id == "windowsSetup" }?.isPassing == false)
+        #expect(report.releaseGate.steps.first { $0.id == "windowsSetup" }?.nextActionCommand == "veil-vmctl qemu-capture --json")
+        #expect(report.primaryNextAction.id == "windowsSetup")
+        #expect(report.primaryNextAction.actionId == "runtime.recoverDisplay")
+        #expect(report.primaryNextAction.command == "veil-vmctl qemu-capture --json")
     }
 
     @Test("local runtime blocks guest agent repair when attached guest tools media is stale")

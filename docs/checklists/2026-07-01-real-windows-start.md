@@ -239,6 +239,8 @@ Goal: keep the main Veil experience pointed at real local Windows boot and conso
 - [x] Add `automaticInstallMediaStatus` to `qemu-install-status` plus harness coverage so stale `VeilAutoInstall.iso` media is detected and the next action tells the operator to power down, rebuild guest tools media with `veil-vmctl prepare`, and relaunch Windows before retrying guest-agent repair.
 - [x] Propagate stale guest tools media into `app-runtime-status`: `localRuntime.requiresGuestToolsMediaRebuild` now blocks guest-agent repair, exposes the stop-runtime action while Windows is still running, preserves the media rebuild command, and has Swift plus app-runtime-status harness coverage.
 - [x] Extend `app-runtime-action` launch and wait-agent next actions so stale guest tools media points at stop-runtime plus media rebuild, and add harness coverage rejecting action reports that still recommend guest-agent repair first.
+- [x] Block release review readiness when the embedded Windows console preview is stale or unavailable: `windowsSetup` now points at display recovery instead of letting `ready-for-release-card` pass while the main app may still show a stale/black Windows surface.
+- [x] Persist successful `qemu-capture` refresh evidence into the latest QEMU launch record so follow-up app-runtime status reports leave stale-display recovery after the console screenshot is refreshed.
 
 ## Next
 

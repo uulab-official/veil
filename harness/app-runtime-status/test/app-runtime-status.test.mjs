@@ -89,6 +89,11 @@ function expectedPrimaryNextActionId(stepId, command) {
       if (command.includes("--action quiet-when-idle")) {
         return "runtime.quietWhenIdle";
       }
+      if (command.includes("qemu-capture")
+        || command.includes("qemu-display-smoke")
+        || command.includes("--action recover-display")) {
+        return "runtime.recoverDisplay";
+      }
       if (command.startsWith("veil-vmctl prepare")) {
         return "runtime.prepareWindows";
       }
@@ -753,11 +758,37 @@ test("accepts stale running console preview with recovery commands", () => {
   report.menuBarIntegration.primaryActionId = "windowsApps.launchSelected";
   report.menuBarIntegration.primaryActionTitle = "Open Notepad";
   setReleaseGateStep(report, "windowsSetup", {
-    state: "passed",
-    isPassing: true
+    state: "blocked",
+    isPassing: false,
+    nextActionCommand: "veil-vmctl qemu-capture --json"
   });
 
   assert.doesNotThrow(() => validateAppRuntimeStatus(report));
+});
+
+test("rejects stale running console preview marked ready for review", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.demo.json", import.meta.url), "utf8"));
+  report.localRuntime.state = "running";
+  report.localRuntime.canStart = false;
+  report.localRuntime.isRunning = true;
+  report.localRuntime.windowsInstalled = true;
+  report.localRuntime.recommendedAction = "recover-runtime-display";
+  report.localRuntime.consolePreviewStatus = "stale";
+  report.localRuntime.recommendedDisplayCommand = "veil-vmctl qemu-display-smoke --json";
+  report.localRuntime.recommendedRecoveryCommand = "veil-vmctl qemu-capture --json";
+  report.localRuntime.reason = "The local Windows runtime is running, but the embedded console preview is stale.";
+  report.actions.find((action) => action.id === "runtime.startWindowsForApp").isAvailable = false;
+  report.actions.find((action) => action.id === "runtime.recoverDisplay").isAvailable = true;
+  setReleaseGateStep(report, "windowsSetup", {
+    state: "passed",
+    isPassing: true,
+    nextActionCommand: "veil-vmctl qemu-install-status --json"
+  });
+
+  assert.throws(
+    () => validateAppRuntimeStatus(report),
+    /setup readiness/
+  );
 });
 
 test("accepts stale guest tools media when app flow powers down before repair", () => {

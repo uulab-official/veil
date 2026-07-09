@@ -3777,14 +3777,16 @@ struct VeilVMControl {
             throw VMControlError.qemuScreenshotCaptureFailed(screenshotURL.path)
         }
 
+        let capturedAt = Date()
         launchRecord.consoleScreenshotPath = screenshotURL.path
+        launchRecord.consoleScreenshotRefreshedAt = capturedAt
         let launchData = try JSONEncoder.veilDiagnostics.encode(launchRecord)
         try launchData.write(to: latestURL, options: .atomic)
 
         let captureRecord = QEMUConsoleCaptureRecord(
             monitorSocketPath: launchRecord.monitorSocketPath,
             consoleScreenshotPath: screenshotURL.path,
-            capturedAt: Date()
+            capturedAt: capturedAt
         )
         return captureRecord
     }

@@ -731,6 +731,70 @@ struct VMProfileStoreTests {
         #expect(try String(contentsOf: consoleScreenshotURL, encoding: .utf8) == "stale")
     }
 
+    @Test("local runtime preserves qemu capture refresh evidence from launch record")
+    func localRuntimePreservesQEMUCaptureRefreshEvidenceFromLaunchRecord() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let installerURL = directory.appendingPathComponent("Windows.iso")
+        let driverURL = directory.appendingPathComponent("virtio-win.iso")
+        let diskURL = directory.appendingPathComponent("Windows.img")
+        let sharedFolderURL = directory.appendingPathComponent("Veil Shared", isDirectory: true)
+        try Data("installer".utf8).write(to: installerURL)
+        try Data("drivers".utf8).write(to: driverURL)
+        try Data("disk".utf8).write(to: diskURL)
+        try FileManager.default.createDirectory(at: sharedFolderURL, withIntermediateDirectories: true)
+        try Data("<unattend />".utf8).write(to: sharedFolderURL.appendingPathComponent("Autounattend.xml"))
+        try Data("auto install media".utf8).write(to: sharedFolderURL.appendingPathComponent("VeilAutoInstall.iso"))
+
+        let qemuLaunchDirectory = directory.appendingPathComponent("QEMU Launch", isDirectory: true)
+        try FileManager.default.createDirectory(at: qemuLaunchDirectory, withIntermediateDirectories: true)
+        let processLogURL = qemuLaunchDirectory.appendingPathComponent("qemu-launch.log")
+        let consoleScreenshotURL = qemuLaunchDirectory.appendingPathComponent("qemu-console.png")
+        let monitorSocketURL = directory.appendingPathComponent("vq-test.sock")
+        try Data("qemu log".utf8).write(to: processLogURL)
+        try Data("fresh from qemu-capture".utf8).write(to: consoleScreenshotURL)
+        try Data("socket".utf8).write(to: monitorSocketURL)
+        let capturedAt = Date(timeIntervalSince1970: 1_782_839_120)
+
+        let launchRecord = QEMULaunchRecord(
+            pid: 1234,
+            executablePath: "/opt/homebrew/bin/qemu-system-aarch64",
+            arguments: ["-display", "none"],
+            processLogPath: processLogURL.path,
+            monitorSocketPath: monitorSocketURL.path,
+            consoleScreenshotPath: consoleScreenshotURL.path,
+            consoleScreenshotRefreshedAt: capturedAt,
+            startedAt: Date(timeIntervalSince1970: 1_782_838_800)
+        )
+        let launchEncoder = JSONEncoder()
+        launchEncoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        launchEncoder.dateEncodingStrategy = .iso8601
+        try launchEncoder.encode(launchRecord)
+            .write(to: qemuLaunchDirectory.appendingPathComponent("qemu-launch-latest.json"), options: .atomic)
+
+        let store = JSONVMProfileStore(directory: directory)
+        var profile = VMProfile.defaultWindows11Arm(createdAt: Date(timeIntervalSince1970: 1_782_752_400))
+        profile.installerMediaPath = installerURL.path
+        profile.driverMediaPath = driverURL.path
+        profile.virtualDiskPath = diskURL.path
+        profile.sharedFolderPath = sharedFolderURL.path
+        try await store.save(profile)
+
+        let service = LocalVMRuntimeService(
+            profileStore: store,
+            qemuLaunchRecordStore: JSONQEMULaunchRecordStore(directory: qemuLaunchDirectory),
+            consoleScreenshotRefresher: { _, _ in }
+        )
+
+        let snapshot = try await service.loadSnapshot()
+
+        #expect(snapshot.latestConsoleScreenshotPath == consoleScreenshotURL.path)
+        #expect(snapshot.latestConsoleLaunch?.consoleScreenshotPath == consoleScreenshotURL.path)
+        #expect(snapshot.latestConsoleLaunch?.consoleScreenshotRefreshedAt == capturedAt)
+        #expect(snapshot.latestConsoleLaunch?.previewStatus == .fresh)
+    }
+
     @Test("local runtime reports running when latest QEMU launch pid is alive")
     func localRuntimeReportsRunningWhenLatestQEMULaunchPIDIsAlive() async throws {
         let directory = FileManager.default.temporaryDirectory

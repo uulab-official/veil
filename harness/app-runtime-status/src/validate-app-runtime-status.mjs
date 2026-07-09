@@ -811,16 +811,26 @@ function validateReleaseGate(releaseGate, report) {
   }
 
   const setupStep = releaseGate.steps.find((step) => step.id === "windowsSetup");
+  const requiresDisplayRecovery = report.localRuntime.recommendedAction === "recover-runtime-display"
+    || report.localRuntime.recommendedRecoveryCommand !== undefined;
   const expectedSetupPassing = report.localRuntime.bootReady
     && report.localRuntime.windowsInstalled
-    && !report.localRuntime.requiresGuestToolsMediaRebuild;
+    && !report.localRuntime.requiresGuestToolsMediaRebuild
+    && !requiresDisplayRecovery;
   if (setupStep.isPassing !== expectedSetupPassing) {
     throw new TypeError("releaseGate windowsSetup must reflect local Windows setup readiness.");
+  }
+  if (requiresDisplayRecovery
+    && setupStep.nextActionCommand !== report.localRuntime.recommendedRecoveryCommand
+    && setupStep.nextActionCommand !== report.localRuntime.recommendedDisplayCommand) {
+    throw new TypeError("releaseGate windowsSetup must expose display recovery before review readiness.");
   }
   if (setupStep.nextActionCommand !== report.localRuntime.recommendedInstallStatusCommand
     && setupStep.nextActionCommand !== report.localRuntime.recommendedPrepareCommand
     && setupStep.nextActionCommand !== report.localRuntime.recommendedMediaRebuildCommand
-    && setupStep.nextActionCommand !== report.localRuntime.recommendedPowerDownCommand) {
+    && setupStep.nextActionCommand !== report.localRuntime.recommendedPowerDownCommand
+    && setupStep.nextActionCommand !== report.localRuntime.recommendedRecoveryCommand
+    && setupStep.nextActionCommand !== report.localRuntime.recommendedDisplayCommand) {
     throw new TypeError("releaseGate windowsSetup must expose an install status or prepare command.");
   }
 
@@ -985,6 +995,11 @@ function expectedPrimaryNextActionId(stepId, command) {
       }
       if (command.includes("--action quiet-when-idle")) {
         return "runtime.quietWhenIdle";
+      }
+      if (command.includes("qemu-capture")
+        || command.includes("qemu-display-smoke")
+        || command.includes("--action recover-display")) {
+        return "runtime.recoverDisplay";
       }
       if (command.startsWith("veil-vmctl prepare")) {
         return "runtime.prepareWindows";

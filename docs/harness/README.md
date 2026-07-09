@@ -113,6 +113,12 @@ unavailable, `localRuntime.recommendedAction=recover-runtime-display` exposes
 recover-display` report must include `displayRecovery` evidence from
 `qemu-capture`, and the harness accepts it only when the refreshed preview state
 becomes `fresh`.
+That stale-display state also blocks the `windowsSetup` release-gate step:
+review readiness cannot pass while `runtime.recoverDisplay` is still the next
+product action.
+Successful `qemu-capture` runs persist `consoleScreenshotRefreshedAt` in the
+latest QEMU launch record so a refreshed console remains `fresh` across
+subsequent status polling instead of falling back into a stale-display loop.
 `macWindowIntegration` records whether a live agent can feed guest HWND events
 into automatic macOS app-window presentation, including mirrored, pending-frame,
 streaming, and foregroundable window counts. The foregroundable count must move

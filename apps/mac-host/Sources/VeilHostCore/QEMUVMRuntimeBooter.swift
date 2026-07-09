@@ -14,6 +14,7 @@ public struct QEMULaunchRecord: Codable, Equatable, Sendable {
     public var vncHost: String?
     public var vncPort: Int?
     public var consoleScreenshotPath: String?
+    public var consoleScreenshotRefreshedAt: Date?
     public var startedAt: Date
 
     public init(
@@ -30,6 +31,7 @@ public struct QEMULaunchRecord: Codable, Equatable, Sendable {
         vncHost: String? = nil,
         vncPort: Int? = nil,
         consoleScreenshotPath: String? = nil,
+        consoleScreenshotRefreshedAt: Date? = nil,
         startedAt: Date
     ) {
         self.kind = kind
@@ -45,6 +47,7 @@ public struct QEMULaunchRecord: Codable, Equatable, Sendable {
         self.vncHost = vncHost
         self.vncPort = vncPort
         self.consoleScreenshotPath = consoleScreenshotPath
+        self.consoleScreenshotRefreshedAt = consoleScreenshotRefreshedAt
         self.startedAt = startedAt
     }
 }
