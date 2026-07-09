@@ -1740,6 +1740,14 @@ private struct WindowsSetupDisplayPanel: View {
             .controlSize(.regular)
             .disabled(isLoading)
             .help("Refresh embedded Windows display evidence")
+        } else if executablePrimaryNextActionRoute != nil {
+            Button(action: runEffectivePrimaryAction) {
+                Label(effectivePrimaryTitle, systemImage: effectivePrimarySymbol)
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.regular)
+            .disabled(effectivePrimaryDisabled)
+            .help(effectivePrimaryHelp)
         } else if canOpenWindowsApp {
             Button(action: primaryAction) {
                 Label(appDisplayName, systemImage: "macwindow.badge.plus")
@@ -2283,6 +2291,8 @@ private struct WindowsSetupDisplayPanel: View {
             return selectedWindowsAppName.map { "Open \($0)" } ?? route.buttonTitle
         case .fulfillPendingLaunch:
             return "Open \(pendingAppDisplayName)"
+        case .repairAppConnection:
+            return "Continue \(pendingWindowsAppName ?? selectedWindowsAppName ?? "App")"
         case .startWindowsForApp:
             return selectedWindowsAppName.map { "Open \($0)" }
                 ?? pendingWindowsAppName.map { "Open \($0)" }
