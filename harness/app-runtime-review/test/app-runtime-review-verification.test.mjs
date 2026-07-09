@@ -34,6 +34,40 @@ test("rejects verification missing files outside evidence directory", () => {
   );
 });
 
+test("rejects invalid screenshot files outside evidence directory", () => {
+  const report = demoVerification();
+  report.invalidScreenshotFiles = [{
+    path: "/tmp/other/preBootLauncher.png",
+    reason: "notValidPNG",
+    byteCount: 12,
+    minimumWidth: report.minimumScreenshotWidth,
+    minimumHeight: report.minimumScreenshotHeight
+  }];
+
+  assert.throws(
+    () => validateAppRuntimeReviewVerification(report),
+    /evidence directory/
+  );
+});
+
+test("rejects invalid screenshot files with drifted minimum dimensions", () => {
+  const report = demoVerification();
+  report.invalidScreenshotFiles = [{
+    path: report.missingFiles[0],
+    reason: "belowMinimumDimensions",
+    byteCount: 68,
+    width: 1,
+    height: 1,
+    minimumWidth: 1,
+    minimumHeight: report.minimumScreenshotHeight
+  }];
+
+  assert.throws(
+    () => validateAppRuntimeReviewVerification(report),
+    /minimum dimensions/
+  );
+});
+
 test("rejects verification missing capture steps that drift from missing files", () => {
   const report = demoVerification();
   report.missingFiles[0] = report.missingFiles[1];
@@ -89,6 +123,7 @@ test("accepts complete verification reports", () => {
   report.attachedScreenshotCount = report.requiredScreenshotCount;
   report.isComplete = true;
   report.missingFiles = [];
+  report.invalidScreenshotFiles = [];
   report.missingCaptureSteps = [];
   delete report.nextMissingCaptureStep;
   report.review.attachedScreenshotCount = report.review.requiredScreenshotCount;

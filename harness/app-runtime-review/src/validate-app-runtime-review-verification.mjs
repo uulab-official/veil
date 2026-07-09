@@ -61,6 +61,12 @@ export function validateAppRuntimeReviewVerification(report) {
       throw new TypeError("app runtime review verification missing files must live inside the evidence directory.");
     }
   }
+  if (!Array.isArray(report.invalidScreenshotFiles)) {
+    throw new TypeError("app runtime review verification invalidScreenshotFiles must be an array.");
+  }
+  for (const [index, file] of report.invalidScreenshotFiles.entries()) {
+    validateInvalidScreenshotFile(file, index, report);
+  }
 
   if (!Array.isArray(report.missingCaptureSteps)) {
     throw new TypeError("app runtime review verification missingCaptureSteps must be an array.");
@@ -87,6 +93,9 @@ export function validateAppRuntimeReviewVerification(report) {
   }
   if (report.missingCaptureSteps.length !== report.missingFiles.length) {
     throw new TypeError("app runtime review verification missing capture step count must match missing files.");
+  }
+  if (!report.invalidScreenshotFiles.every((file) => report.missingFiles.includes(file.path))) {
+    throw new TypeError("app runtime review verification invalid screenshot files must also be listed as missing files.");
   }
   for (const [index, step] of report.missingCaptureSteps.entries()) {
     if (step.path !== report.missingFiles[index]) {
@@ -148,6 +157,37 @@ export function validateAppRuntimeReviewVerification(report) {
   }
 
   return report;
+}
+
+function validateInvalidScreenshotFile(file, index, report) {
+  if (!file || typeof file !== "object" || Array.isArray(file)) {
+    throw new TypeError(`app runtime review verification invalidScreenshotFiles.${index} must be an object.`);
+  }
+  requireString(file.path, `invalidScreenshotFiles.${index}.path`);
+  requireString(file.reason, `invalidScreenshotFiles.${index}.reason`);
+  requirePositiveInteger(file.minimumWidth, `invalidScreenshotFiles.${index}.minimumWidth`);
+  requirePositiveInteger(file.minimumHeight, `invalidScreenshotFiles.${index}.minimumHeight`);
+  if (file.byteCount !== undefined) {
+    requirePositiveInteger(file.byteCount, `invalidScreenshotFiles.${index}.byteCount`);
+  }
+  if (file.width !== undefined) {
+    requirePositiveInteger(file.width, `invalidScreenshotFiles.${index}.width`);
+  }
+  if (file.height !== undefined) {
+    requirePositiveInteger(file.height, `invalidScreenshotFiles.${index}.height`);
+  }
+  if (!["unreadableFile", "notValidPNG", "belowMinimumDimensions"].includes(file.reason)) {
+    throw new TypeError("app runtime review verification invalid screenshot reason is unsupported.");
+  }
+  if (!file.path.startsWith(`${report.evidenceDirectory}/`)) {
+    throw new TypeError("app runtime review verification invalid screenshot files must live inside the evidence directory.");
+  }
+  if (file.minimumWidth !== report.minimumScreenshotWidth || file.minimumHeight !== report.minimumScreenshotHeight) {
+    throw new TypeError("app runtime review verification invalid screenshot minimum dimensions must match the report.");
+  }
+  if (file.reason === "belowMinimumDimensions" && (file.width === undefined || file.height === undefined)) {
+    throw new TypeError("app runtime review verification below-minimum screenshots must include dimensions.");
+  }
 }
 
 function validateMissingCaptureStep(step, index, evidenceDirectory) {

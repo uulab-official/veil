@@ -805,6 +805,16 @@ struct AppRuntimeReviewMissingCaptureStep: Codable, Equatable {
     var supportingCommand: String?
 }
 
+struct AppRuntimeReviewInvalidScreenshotFile: Codable, Equatable {
+    var path: String
+    var reason: String
+    var byteCount: Int?
+    var width: Int?
+    var height: Int?
+    var minimumWidth: Int
+    var minimumHeight: Int
+}
+
 struct AppRuntimeReviewEvidenceVerification: Codable, Equatable {
     var kind: String = "windowsAppRuntimeReviewEvidenceVerification"
     var generatedAt: Date
@@ -819,6 +829,7 @@ struct AppRuntimeReviewEvidenceVerification: Codable, Equatable {
     var minimumScreenshotHeight: Int
     var isComplete: Bool
     var missingFiles: [String]
+    var invalidScreenshotFiles: [AppRuntimeReviewInvalidScreenshotFile]
     var missingCaptureSteps: [AppRuntimeReviewMissingCaptureStep]
     var nextMissingCaptureStep: AppRuntimeReviewMissingCaptureStep?
     var review: AppRuntimeReviewCard
@@ -1280,6 +1291,7 @@ struct VeilVMControl {
                 card: card
             )
         let missingFiles = expectedFiles.filter { !isPNGFile(atPath: $0) }
+        let invalidScreenshotFiles = expectedFiles.compactMap { invalidReviewScreenshotFile(atPath: $0) }
         let attachedScreenshotCount = expectedFiles.count - missingFiles.count
         let missingCaptureSteps = appRuntimeReviewMissingCaptureSteps(
             expectedFiles: expectedFiles,
@@ -1302,6 +1314,7 @@ struct VeilVMControl {
                 && missingFiles.isEmpty
                 && card.areRequiredScreenshotsAttached,
             missingFiles: missingFiles,
+            invalidScreenshotFiles: invalidScreenshotFiles,
             missingCaptureSteps: missingCaptureSteps,
             nextMissingCaptureStep: missingCaptureSteps.first,
             review: card,
@@ -1313,6 +1326,7 @@ struct VeilVMControl {
                 evidenceDirectory: evidenceDirectoryURL.path,
                 manifestExists: manifest != nil,
                 readmeExists: FileManager.default.fileExists(atPath: readmeURL.path),
+                invalidScreenshotFiles: invalidScreenshotFiles,
                 missingCaptureSteps: missingCaptureSteps,
                 reviewCommand: reviewCommand,
                 verifyCommand: verifyCommand,
@@ -1493,6 +1507,7 @@ struct VeilVMControl {
         evidenceDirectory: String,
         manifestExists: Bool,
         readmeExists: Bool,
+        invalidScreenshotFiles: [AppRuntimeReviewInvalidScreenshotFile],
         missingCaptureSteps: [AppRuntimeReviewMissingCaptureStep],
         reviewCommand: String,
         verifyCommand: String,
@@ -1503,6 +1518,9 @@ struct VeilVMControl {
             actions.append("Run `veil-vmctl app-runtime-review-init --evidence-dir '\(evidenceDirectory)'` to recreate the review manifest and guide.")
         }
         actions.append("Open the evidence folder with `\(openEvidenceDirectoryCommand)`.")
+        if let invalidScreenshotFile = invalidScreenshotFiles.first {
+            actions.append("Replace invalid screenshot `\(URL(fileURLWithPath: invalidScreenshotFile.path).lastPathComponent)`: \(invalidScreenshotFile.reason).")
+        }
         if let nextMissingCaptureStep = missingCaptureSteps.first {
             actions.append("Capture `\(nextMissingCaptureStep.expectedFileName)` for \(nextMissingCaptureStep.title): \(nextMissingCaptureStep.instruction)")
             actions.append("Save it as a valid PNG of at least 640 x 360 with `\(nextMissingCaptureStep.captureCommand)`.")
@@ -1863,6 +1881,53 @@ struct VeilVMControl {
 
     private static func isPNGFile(atPath path: String) -> Bool {
         pngScreenshotMetadata(atPath: path) != nil
+    }
+
+    private static func invalidReviewScreenshotFile(atPath path: String) -> AppRuntimeReviewInvalidScreenshotFile? {
+        guard FileManager.default.fileExists(atPath: path) else {
+            return nil
+        }
+        guard let data = try? Data(contentsOf: URL(fileURLWithPath: path), options: [.mappedIfSafe]) else {
+            return AppRuntimeReviewInvalidScreenshotFile(
+                path: path,
+                reason: "unreadableFile",
+                byteCount: nil,
+                width: nil,
+                height: nil,
+                minimumWidth: minimumReviewScreenshotWidth,
+                minimumHeight: minimumReviewScreenshotHeight
+            )
+        }
+        guard data.count >= pngIHDRMinimumByteCount,
+              data.prefix(pngSignature.count).elementsEqual(pngSignature),
+              String(data: data[12..<16], encoding: .ascii) == "IHDR" else {
+            return AppRuntimeReviewInvalidScreenshotFile(
+                path: path,
+                reason: "notValidPNG",
+                byteCount: data.count,
+                width: nil,
+                height: nil,
+                minimumWidth: minimumReviewScreenshotWidth,
+                minimumHeight: minimumReviewScreenshotHeight
+            )
+        }
+
+        let width = readPNGUInt32(data, offset: 16)
+        let height = readPNGUInt32(data, offset: 20)
+        guard width >= minimumReviewScreenshotWidth,
+              height >= minimumReviewScreenshotHeight else {
+            return AppRuntimeReviewInvalidScreenshotFile(
+                path: path,
+                reason: "belowMinimumDimensions",
+                byteCount: data.count,
+                width: width,
+                height: height,
+                minimumWidth: minimumReviewScreenshotWidth,
+                minimumHeight: minimumReviewScreenshotHeight
+            )
+        }
+
+        return nil
     }
 
     private static func pngScreenshotMetadata(atPath path: String) -> (byteCount: Int, width: Int, height: Int)? {
