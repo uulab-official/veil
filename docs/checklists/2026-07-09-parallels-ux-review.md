@@ -25,6 +25,7 @@ Goal: keep the user-facing workflow one-screen-first (launcher + one action path
 - [x] Polish launcher and progress-strip copy away from guest-agent/proof/runtime wording toward app connection, Windows setup, and app check language.
 - [x] Reuse the queued-app next-action policy in the menu bar as well as the Dock menu, including compact app-name labels that stay within menu-bar length guidance.
 - [x] Polish action result messages and app-runtime proof-plan reasons toward app connection and app check language, with regression coverage for automation-visible reason text.
+- [x] Polish quiet-Windows and macOS-window integration reason text away from agent/HWND/runtime language, with regression coverage for automation-visible status reports.
 
 ## CEO Review
 

@@ -1290,13 +1290,13 @@ public final class HostDashboardModel {
             reason = "Windows app windows are still open."
         } else if canQuietRuntime {
             recommendedAction = "stop-or-suspend-runtime"
-            reason = "All Windows app windows are closed and the live agent is connected."
+            reason = "All Windows app windows are closed and the Windows app connection is ready to stop cleanly."
         } else if localRuntime?.isKnown == true && !canStopLocalRuntime {
             recommendedAction = "already-quiet"
-            reason = "All Windows app windows are closed and the local Windows runtime is not running."
+            reason = "All Windows app windows are closed and Windows is already quiet."
         } else {
             recommendedAction = "wait-for-agent"
-            reason = "Wait for a live Windows agent before quieting the runtime."
+            reason = "Wait for the Windows app connection before stopping Windows cleanly."
         }
 
         return WindowsAppRuntimeQuietPolicyStatus(
@@ -1326,11 +1326,11 @@ public final class HostDashboardModel {
         let reason: String
 
         if !hasLiveAgentConnection {
-            reason = "Waiting for the live Windows agent before guest HWND events can open macOS windows automatically."
+            reason = "Waiting for the Windows app connection before opening app windows on macOS automatically."
         } else if mirrorSessions.isEmpty {
-            reason = "Ready to open the next guest HWND as a macOS window."
+            reason = "Ready to open the next Windows app as a macOS window."
         } else {
-            reason = "Guest HWND sessions are mirrored as macOS windows."
+            reason = "Windows app windows are mirrored as macOS windows."
         }
 
         return WindowsAppRuntimeMacWindowIntegrationStatus(
