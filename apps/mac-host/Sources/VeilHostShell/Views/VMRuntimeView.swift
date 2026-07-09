@@ -142,7 +142,7 @@ struct VMRuntimeView: View {
                 RuntimeLandingPanel(
                     title: "Windows 11",
                     subtitle: model.phase == .loading
-                        ? "Opening the local Windows runtime."
+                        ? "Opening Windows on this Mac."
                         : "Install and run Windows locally on this Mac.",
                     primaryTitle: model.phase == .loading ? "Loading..." : "Choose Windows ISO",
                     primarySymbol: model.phase == .loading ? "arrow.triangle.2.circlepath" : "opticaldisc",
@@ -600,7 +600,7 @@ private struct SimpleRuntimePanel: View {
     private var summaryText: String {
         switch snapshot.state {
         case .unsupported:
-            return "This Mac cannot run the current local Windows Arm runtime."
+            return "This Mac cannot run the current Windows 11 Arm setup."
         case .notConfigured:
             return "Choose a Windows 11 Arm ISO, then prepare Windows."
         case .stopped:
@@ -616,7 +616,7 @@ private struct SimpleRuntimePanel: View {
         case .starting:
             return "Starting local Windows in the main Veil window."
         case .running:
-            return "Windows is running locally. Open a Windows app once the guest agent connects."
+            return "Windows is running locally. Open a Windows app once the app connection is ready."
         case .suspended:
             return "Windows is paused."
         case .failed:
@@ -1101,7 +1101,7 @@ private struct QuickActionsPanel: View {
             ) {
                 ControlActionTile(
                     title: canStop ? "Stop" : "Start",
-                    detail: canStop ? "Shut down the local Windows runtime." : (canStart ? "Boot the configured Windows machine." : "Complete setup before booting."),
+                    detail: canStop ? "Shut down Windows on this Mac." : (canStart ? "Start the configured Windows machine." : "Complete setup before starting Windows."),
                     symbolName: canStop ? "stop.fill" : "power",
                     tint: canStop ? .orange : .green,
                     state: (canStart || canStop) ? .ready : .blocked,
@@ -1121,7 +1121,7 @@ private struct QuickActionsPanel: View {
 
                 ControlActionTile(
                     title: "Refresh",
-                    detail: "Reload runtime capability and profile state.",
+                    detail: "Reload Windows setup and app connection state.",
                     symbolName: "arrow.clockwise",
                     tint: .blue,
                     state: isLoading ? .partial : .ready,
@@ -1151,7 +1151,7 @@ private struct QuickActionsPanel: View {
 
                 ControlActionTile(
                     title: "Configure",
-                    detail: "Advanced runtime settings follow boot validation.",
+                    detail: "Advanced Windows settings follow boot validation.",
                     symbolName: "slider.horizontal.3",
                     tint: .blue,
                     state: .planned
@@ -1908,7 +1908,7 @@ private struct WindowsSetupDisplayPanel: View {
             ),
             InstallFlowItem(
                 title: "Mac Integration",
-                detail: "Install the Veil guest agent after Windows setup",
+                detail: "Install Veil integration after Windows setup",
                 symbolName: "macwindow.on.rectangle",
                 state: snapshot.state == .running ? .current : .pending
             )
@@ -1957,7 +1957,7 @@ private struct WindowsSetupDisplayPanel: View {
             if pendingLaunch.willLaunchOnAgentReconnect {
                 switch snapshot.state {
                 case .running, .starting:
-                    return "Waiting Agent"
+                    return "Connecting"
                 default:
                     return "Queued"
                 }
@@ -1967,7 +1967,7 @@ private struct WindowsSetupDisplayPanel: View {
                 return appDisplayName
             }
 
-            return canRequestWindowsAppLaunch ? "Ready to queue" : "After agent"
+            return canRequestWindowsAppLaunch ? "Ready to queue" : "After connection"
         }
 
         return activeMirrorSession.latestFrame == nil ? "Opening" : "Mac Window"
@@ -2021,7 +2021,7 @@ private struct WindowsSetupDisplayPanel: View {
         if pendingLaunch.willLaunchOnAgentReconnect {
             switch snapshot.state {
             case .running, .starting:
-                return "\(pendingAppDisplayName) will open when the guest agent connects"
+                return "\(pendingAppDisplayName) will open when the app connection is ready"
             default:
                 return "\(pendingAppDisplayName) is queued. Start Windows to continue"
             }
@@ -2033,7 +2033,7 @@ private struct WindowsSetupDisplayPanel: View {
 
         if effectiveInstallEvidence.isInstalled {
             return effectiveInstallEvidence.kind == .guestAgent
-                ? "Guest agent connected"
+                ? "App connection ready"
                 : "Run it locally on this Mac"
         }
 
@@ -2158,9 +2158,9 @@ private struct WindowsSetupDisplayPanel: View {
         if pendingLaunch.willLaunchOnAgentReconnect {
             switch snapshot.state {
             case .running, .starting:
-                return "Windows is running; Veil is waiting for the guest agent before opening \(pendingAppDisplayName)."
+                return "Windows is running; Veil is waiting for the app connection before opening \(pendingAppDisplayName)."
             default:
-                return "Start Windows, wait for the guest agent, then open \(pendingAppDisplayName)."
+                return "Start Windows, wait for the app connection, then open \(pendingAppDisplayName)."
             }
         }
 
@@ -2169,7 +2169,7 @@ private struct WindowsSetupDisplayPanel: View {
         }
 
         if canStop {
-            return "Stop the current local Windows runtime."
+            return "Stop Windows on this Mac."
         }
 
         if effectiveInstallEvidence.isInstalled {
@@ -2257,12 +2257,12 @@ private struct WindowsSetupDisplayPanel: View {
                 title: "Windows",
                 detail: snapshot.state == .running || snapshot.state == .starting
                     ? "Running locally"
-                    : "Start local runtime",
+                    : "Start Windows",
                 symbolName: "play.rectangle",
                 state: snapshot.state == .running || snapshot.state == .starting ? .complete : .current
             ),
             InstallFlowItem(
-                title: "Agent",
+                title: "App Connection",
                 detail: agentFlowDetail,
                 symbolName: "bolt.horizontal.circle",
                 state: agentFlowState
@@ -2275,7 +2275,7 @@ private struct WindowsSetupDisplayPanel: View {
                 state: appWindowFlowState
             ),
             InstallFlowItem(
-                title: "Proof Gate",
+                title: "App Check",
                 detail: proofGateDetail,
                 symbolName: "checkmark.seal",
                 state: proofGateState
@@ -2339,18 +2339,18 @@ private struct WindowsSetupDisplayPanel: View {
 
     private var proofGateDetail: String {
         guard recommendedProofCommand != nil else {
-            return activeMirrorSession != nil ? "Capture proof next" : "Waiting for app"
+            return activeMirrorSession != nil ? "Ready to check" : "Waiting for app"
         }
 
         switch recommendedProofKind {
         case "mvp":
-            return "MVP proof ready"
+            return "Full app check ready"
         case "coherence":
-            return "Input proof ready"
+            return "Input check ready"
         case "app-window":
-            return "Frame proof ready"
+            return "Window check ready"
         default:
-            return "Proof ready"
+            return "App check ready"
         }
     }
 }

@@ -102,7 +102,7 @@ struct WindowsAppBridgePanel: View {
         }
 
         if model.pendingLaunchAppId != nil {
-            return "Queued App Unavailable"
+            return "Continue When Ready"
         }
 
         if !model.hasLiveAgentConnection {

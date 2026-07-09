@@ -154,7 +154,7 @@ private struct WindowsQuickLaunchPanel: View {
         }
 
         if !canLaunchSelectedApp {
-            return "Preparing Runtime"
+            return "Preparing Windows"
         }
 
         return "Open App"
