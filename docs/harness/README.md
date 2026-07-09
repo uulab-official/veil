@@ -215,6 +215,12 @@ The app-runtime status hero-action contract also lists
 routing, one-screen readiness, and harness validation aligned while the sparse
 package flow remains a Daily Use gate rather than a generic release-gate launch
 step.
+When no mirrored Windows app window, queued launch, or previous app restore is
+more urgent, the menu-bar primary action promotes the same Daily Use gate:
+`runtime.prepareSparsePackage` for package identity preparation and
+`dailyUse.verifyIntegrations` for the follow-up app check. This keeps the
+top-level menu bar useful for service-quality work instead of only opening the
+launcher.
 The app-runtime action harness includes a live accepted
 `prepare-sparse-package` fixture so package identity success must carry both
 `sparsePackagePreparation.agentWait.diagnostic.health.capabilities.packageIdentity=true`

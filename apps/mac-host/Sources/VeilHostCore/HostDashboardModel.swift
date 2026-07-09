@@ -1183,7 +1183,8 @@ public final class HostDashboardModel {
         let menuBarIntegration = menuBarIntegrationStatus(
             localRuntime: localRuntime,
             launchPlan: launchPlan,
-            pendingLaunch: pendingLaunch
+            pendingLaunch: pendingLaunch,
+            dailyUseReadiness: dailyUseReadiness
         )
         let oneScreenUX = oneScreenUXStatus(
             launcherVisibility: launcherVisibility,
@@ -1442,23 +1443,27 @@ public final class HostDashboardModel {
     private func menuBarIntegrationStatus(
         localRuntime: WindowsAppRuntimeLocalRuntimeStatus,
         launchPlan: WindowsAppRuntimeLaunchPlanStatus,
-        pendingLaunch: WindowsAppRuntimePendingLaunchStatus
+        pendingLaunch: WindowsAppRuntimePendingLaunchStatus,
+        dailyUseReadiness: WindowsAppRuntimeDailyUseReadinessStatus
     ) -> WindowsAppRuntimeMenuBarIntegrationStatus {
         let primaryAction = menuBarPrimaryAction(
             localRuntime: localRuntime,
             launchPlan: launchPlan,
-            pendingLaunch: pendingLaunch
+            pendingLaunch: pendingLaunch,
+            dailyUseReadiness: dailyUseReadiness
         )
 
         return WindowsAppRuntimeMenuBarIntegrationStatus(
             isEnabled: true,
             statusTitle: menuBarStatusTitle(
                 localRuntime: localRuntime,
-                pendingLaunch: pendingLaunch
+                pendingLaunch: pendingLaunch,
+                dailyUseReadiness: dailyUseReadiness
             ),
             symbolName: menuBarSymbolName(
                 localRuntime: localRuntime,
-                pendingLaunch: pendingLaunch
+                pendingLaunch: pendingLaunch,
+                dailyUseReadiness: dailyUseReadiness
             ),
             primaryActionId: primaryAction.id,
             primaryActionTitle: primaryAction.title,
@@ -1474,7 +1479,8 @@ public final class HostDashboardModel {
 
     private func menuBarStatusTitle(
         localRuntime: WindowsAppRuntimeLocalRuntimeStatus,
-        pendingLaunch: WindowsAppRuntimePendingLaunchStatus
+        pendingLaunch: WindowsAppRuntimePendingLaunchStatus,
+        dailyUseReadiness: WindowsAppRuntimeDailyUseReadinessStatus
     ) -> String {
         if !mirrorSessions.isEmpty {
             return mirrorSessions.count == 1 ? "1 Windows App Open" : "\(mirrorSessions.count) Windows Apps Open"
@@ -1491,6 +1497,14 @@ public final class HostDashboardModel {
 
         if canRestoreMirrorSessions || canReconnectRestoreMirrorSessions {
             return previousAppsStatusTitle()
+        }
+
+        if dailyUseReadiness.recommendedAction == "prepare-sparse-package" {
+            return "App Identity Needed"
+        }
+
+        if dailyUseReadiness.recommendedAction == "verify-daily-use-integrations" {
+            return "App Check Needed"
         }
 
         if hasLiveAgentConnection {
@@ -1515,7 +1529,8 @@ public final class HostDashboardModel {
 
     private func menuBarSymbolName(
         localRuntime: WindowsAppRuntimeLocalRuntimeStatus,
-        pendingLaunch: WindowsAppRuntimePendingLaunchStatus
+        pendingLaunch: WindowsAppRuntimePendingLaunchStatus,
+        dailyUseReadiness: WindowsAppRuntimeDailyUseReadinessStatus
     ) -> String {
         if !mirrorSessions.isEmpty {
             return "rectangle.stack.fill"
@@ -1527,6 +1542,14 @@ public final class HostDashboardModel {
 
         if canRestoreMirrorSessions || canReconnectRestoreMirrorSessions {
             return "arrow.counterclockwise.circle.fill"
+        }
+
+        if dailyUseReadiness.recommendedAction == "prepare-sparse-package" {
+            return "shippingbox"
+        }
+
+        if dailyUseReadiness.recommendedAction == "verify-daily-use-integrations" {
+            return "checkmark.seal"
         }
 
         switch localRuntime.state {
@@ -1544,7 +1567,8 @@ public final class HostDashboardModel {
     private func menuBarPrimaryAction(
         localRuntime: WindowsAppRuntimeLocalRuntimeStatus,
         launchPlan: WindowsAppRuntimeLaunchPlanStatus,
-        pendingLaunch: WindowsAppRuntimePendingLaunchStatus
+        pendingLaunch: WindowsAppRuntimePendingLaunchStatus,
+        dailyUseReadiness: WindowsAppRuntimeDailyUseReadinessStatus
     ) -> (id: String, title: String, isAvailable: Bool) {
         if !mirrorSessions.isEmpty {
             return (
@@ -1585,6 +1609,16 @@ public final class HostDashboardModel {
                 previousAppsRestoreTitle(),
                 canReconnectRestoreMirrorSessions
             )
+        }
+
+        if dailyUseReadiness.recommendedAction == "prepare-sparse-package",
+           dailyUseReadiness.recommendedCommand != nil {
+            return ("runtime.prepareSparsePackage", "Prepare Identity", true)
+        }
+
+        if dailyUseReadiness.recommendedAction == "verify-daily-use-integrations",
+           dailyUseReadiness.recommendedCommand == "veil-vmctl app-runtime-action --json --action proof-recommended" {
+            return ("dailyUse.verifyIntegrations", "Verify Daily Use", true)
         }
 
         if canRequestSelectedAppLaunch {

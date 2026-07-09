@@ -937,6 +937,25 @@ struct HostDashboardModelTests {
         #expect(actionTitles.allSatisfy { !$0.contains("HWND") })
     }
 
+    @Test("menu bar promotes package identity preparation when no Windows app is open")
+    @MainActor
+    func menuBarPromotesPackageIdentityPreparationWhenNoWindowsAppIsOpen() async throws {
+        let service = FakeDashboardService(health: .clipboardReadyWithSparsePackageStatus)
+        let model = HostDashboardModel(service: service)
+
+        await model.load()
+        let report = model.runtimeStatusReport()
+
+        #expect(report.mirrorSessions.isEmpty)
+        #expect(report.dailyUseReadiness.recommendedAction == "prepare-sparse-package")
+        #expect(report.dailyUseReadiness.recommendedCommand == "veil-vmctl app-runtime-action --json --action prepare-sparse-package --wait-seconds 120")
+        #expect(report.menuBarIntegration.statusTitle == "App Identity Needed")
+        #expect(report.menuBarIntegration.symbolName == "shippingbox")
+        #expect(report.menuBarIntegration.primaryActionId == "runtime.prepareSparsePackage")
+        #expect(report.menuBarIntegration.primaryActionTitle == "Prepare Identity")
+        #expect(report.menuBarIntegration.primaryActionAvailable)
+    }
+
     @Test("daily use readiness continues into the strongest app check after package identity")
     @MainActor
     func dailyUseReadinessContinuesIntoStrongestAppCheckAfterPackageIdentity() async throws {
@@ -952,6 +971,11 @@ struct HostDashboardModelTests {
         #expect(report.dailyUseReadiness.notificationBridgePreflightPassed)
         #expect(report.dailyUseReadiness.recommendedAction == "verify-daily-use-integrations")
         #expect(report.dailyUseReadiness.recommendedCommand == "veil-vmctl app-runtime-action --json --action proof-recommended")
+        #expect(report.menuBarIntegration.statusTitle == "App Check Needed")
+        #expect(report.menuBarIntegration.symbolName == "checkmark.seal")
+        #expect(report.menuBarIntegration.primaryActionId == "dailyUse.verifyIntegrations")
+        #expect(report.menuBarIntegration.primaryActionTitle == "Verify Daily Use")
+        #expect(report.menuBarIntegration.primaryActionAvailable)
         #expect(report.actions.first { $0.id == "runtime.prepareSparsePackage" }?.isAvailable == false)
         #expect(report.actions.first { $0.id == "dailyUse.verifyIntegrations" }?.isAvailable == true)
         #expect(report.actions.first { $0.id == "proof.recommended" }?.isAvailable == true)

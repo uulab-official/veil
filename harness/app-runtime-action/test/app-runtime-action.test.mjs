@@ -826,8 +826,8 @@ test("rejects accepted fulfill-pending actions that leave pending launch queued"
   report.status.dockIntegration.pendingLaunchCount = 1;
   report.status.actions.find((action) => action.id === "runtime.fulfillPendingLaunch").isAvailable = true;
   report.status.menuBarIntegration.canFulfillPendingLaunch = true;
-  report.status.menuBarIntegration.primaryActionId = "runtime.fulfillPendingLaunch";
-  report.status.menuBarIntegration.primaryActionTitle = "Open Queued Notepad";
+  report.status.menuBarIntegration.primaryActionId = "dock.bringWindowsAppsForward";
+  report.status.menuBarIntegration.primaryActionTitle = "Bring Notepad Forward";
   report.launchPlan.pendingLaunchAppId = "winapp_notepad";
   report.launchPlan.recommendedLaunchCommand = "veil-vmctl app-runtime-action --json --action fulfill-pending";
   setReleaseGateStep(report, "openWindowsApp", {

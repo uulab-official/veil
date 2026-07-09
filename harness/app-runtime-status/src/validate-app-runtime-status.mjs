@@ -1407,11 +1407,22 @@ function validateMenuBarIntegration(menuBarIntegration, report) {
     throw new TypeError("menuBarIntegration.symbolName must prioritize Windows app state.");
   }
 
-  if (report.pendingLaunch.isQueued) {
-    const expectedPrimaryActionId = expectedQueuedMenuBarPrimaryActionId(report);
-    if (menuBarIntegration.primaryActionId !== expectedPrimaryActionId) {
+  const expectedPrimaryActionId = expectedMenuBarPrimaryActionId(report);
+  if (menuBarIntegration.primaryActionId !== expectedPrimaryActionId) {
+    if (report.pendingLaunch.isQueued) {
       throw new TypeError("menuBarIntegration.primaryActionId must prioritize queued app launch recovery.");
     }
+    throw new TypeError("menuBarIntegration.primaryActionId must prioritize Windows app and Daily Use recovery.");
+  }
+
+  if (menuBarIntegration.primaryActionId === "runtime.prepareSparsePackage"
+    && menuBarIntegration.primaryActionTitle !== "Prepare Identity") {
+    throw new TypeError("menuBarIntegration.primaryActionTitle must expose package identity preparation.");
+  }
+
+  if (menuBarIntegration.primaryActionId === "dailyUse.verifyIntegrations"
+    && menuBarIntegration.primaryActionTitle !== "Verify Daily Use") {
+    throw new TypeError("menuBarIntegration.primaryActionTitle must expose Daily Use verification.");
   }
 }
 
@@ -1426,6 +1437,14 @@ function expectedMenuBarSymbolName(report) {
 
   if (report.dockIntegration.canRestorePreviousApps || report.dockIntegration.canReconnectPreviousApps) {
     return "arrow.counterclockwise.circle.fill";
+  }
+
+  if (report.dailyUseReadiness.recommendedAction === "prepare-sparse-package") {
+    return "shippingbox";
+  }
+
+  if (report.dailyUseReadiness.recommendedAction === "verify-daily-use-integrations") {
+    return "checkmark.seal";
   }
 
   switch (report.localRuntime.state) {
@@ -1476,6 +1495,42 @@ function validateLauncherVisibility(launcherVisibility, report) {
   } else if (launcherVisibility.recommendedAction === "hide-main-window-use-app-windows") {
     throw new TypeError("launcherVisibility.recommendedAction cannot hide the launcher without mirrored Windows app windows.");
   }
+}
+
+function expectedMenuBarPrimaryActionId(report) {
+  if (report.mirrorSessions.length > 0) {
+    return "dock.bringWindowsAppsForward";
+  }
+
+  if (report.pendingLaunch.isQueued) {
+    return expectedQueuedMenuBarPrimaryActionId(report);
+  }
+
+  if (report.dockIntegration.canRestorePreviousApps || report.dockIntegration.canReconnectPreviousApps) {
+    return report.dockIntegration.canRestorePreviousApps
+      ? "windowsApps.restorePrevious"
+      : "windowsApps.reconnectRestore";
+  }
+
+  if (report.dailyUseReadiness.recommendedAction === "prepare-sparse-package"
+    && report.dailyUseReadiness.recommendedCommand !== undefined) {
+    return "runtime.prepareSparsePackage";
+  }
+
+  if (report.dailyUseReadiness.recommendedAction === "verify-daily-use-integrations"
+    && report.dailyUseReadiness.recommendedCommand === "veil-vmctl app-runtime-action --json --action proof-recommended") {
+    return "dailyUse.verifyIntegrations";
+  }
+
+  if (report.launchPlan.canRequestSelectedAppLaunch) {
+    return "windowsApps.launchSelected";
+  }
+
+  if (!report.connection.hasLiveAgentConnection) {
+    return "runtime.waitAgent";
+  }
+
+  return "dock.openMainWindow";
 }
 
 function expectedQueuedMenuBarPrimaryActionId(report) {
@@ -1944,6 +1999,9 @@ function validateActions(actions, report) {
   const menuPrimaryAction = actions.find((action) => action.id === report.menuBarIntegration.primaryActionId);
   if (menuPrimaryAction === undefined) {
     throw new TypeError("menuBarIntegration.primaryActionId must reference a supported action.");
+  }
+  if (menuPrimaryAction.isAvailable !== report.menuBarIntegration.primaryActionAvailable) {
+    throw new TypeError("menuBarIntegration.primaryActionAvailable must match the referenced action.");
   }
 
   if (report.primaryNextAction.actionId !== undefined) {

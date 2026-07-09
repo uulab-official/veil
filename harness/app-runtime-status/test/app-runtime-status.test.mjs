@@ -679,7 +679,7 @@ test("rejects menu bar primary action drift", () => {
 
   assert.throws(
     () => validateAppRuntimeStatus(report),
-    /primaryActionAvailable/
+    /primaryActionId/
   );
 });
 
@@ -1123,8 +1123,6 @@ test("rejects fulfill-pending action availability that drifts from queued launch
   report.launchPlan.recommendedLaunchCommand = "veil-vmctl app-runtime-action --json --action fulfill-pending";
   report.launchPlan.reason = "The live Windows agent can fulfill the queued app launch now.";
   report.menuBarIntegration.canFulfillPendingLaunch = true;
-  report.menuBarIntegration.primaryActionId = "runtime.fulfillPendingLaunch";
-  report.menuBarIntegration.primaryActionTitle = "Open Queued Notepad";
   setReleaseGateStep(report, "openWindowsApp", {
     nextActionCommand: "veil-vmctl app-runtime-action --json --action fulfill-pending"
   });
