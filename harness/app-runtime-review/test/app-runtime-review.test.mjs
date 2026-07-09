@@ -1,0 +1,35 @@
+import { readFileSync } from "node:fs";
+import { test } from "node:test";
+import assert from "node:assert/strict";
+
+import { validateAppRuntimeReview } from "../src/validate-app-runtime-review.mjs";
+
+function demoReviewCard() {
+  return JSON.parse(readFileSync(new URL("../fixtures/app-runtime-review.demo.json", import.meta.url), "utf8"));
+}
+
+test("validates app runtime review fixture", () => {
+  const card = demoReviewCard();
+
+  assert.equal(validateAppRuntimeReview(card), card);
+});
+
+test("rejects cards whose readiness drifts from release gate", () => {
+  const card = demoReviewCard();
+  card.isReadyForReview = !card.status.releaseGate.isPassing;
+
+  assert.throws(
+    () => validateAppRuntimeReview(card),
+    /readiness/
+  );
+});
+
+test("rejects screenshot slots that drift from release gate", () => {
+  const card = demoReviewCard();
+  card.screenshotSlots[0].title = "Different Slot";
+
+  assert.throws(
+    () => validateAppRuntimeReview(card),
+    /screenshot/
+  );
+});

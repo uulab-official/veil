@@ -48,6 +48,7 @@ Goal: keep the user-facing workflow one-screen-first (launcher + one action path
 - [x] Add `releaseGate` to `app-runtime-status` and harness validation so Windows setup, one-screen launcher behavior, app launch, saved app-check evidence, and close/restore readiness are tracked as one Parallels-style release card contract.
 - [x] Surface the same release gate in the Windows Apps launcher as a compact `App Flow` progress strip, so users can see the next setup/open/check/close step without reading CLI output.
 - [x] Print the release gate summary in the human-readable `app-runtime-status` output as `App flow`, `Next app step`, and screenshot slots, so CLI diagnostics match the launcher without exposing proof-only wording.
+- [x] Add `veil-vmctl app-runtime-review` plus a harness validator so the release gate, required screenshot slots, latest app-check artifact, and full app-runtime status can be exported as one review card before a live VM proof pass.
 
 ## CEO Review
 

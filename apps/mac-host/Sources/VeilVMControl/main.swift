@@ -83,7 +83,7 @@ enum VMControlError: Error, LocalizedError {
         }
     }
 
-    private static let usage = "Usage: veil-vmctl prepare --installer /path/to/Windows.iso [--drivers /path/to/virtio-win.iso] | veil-vmctl app-runtime-status [--json] [--demo] | veil-vmctl app-runtime-action --action launch|fulfill-pending|focus|close|close-all|restore|reconnect-restore|bring-forward|recover-display|wait-agent|quiet-when-idle|stop-runtime|clipboard|type-text|click|proof-recommended [--json] [--demo] [--wait-seconds 5] [--app-id winapp_notepad] [--window-id hwnd:XXXXXXXX] [--text \"...\"] [--x 240 --y 130] | veil-vmctl app-window-proof [--json] [--app-id winapp_notepad] [--wait-seconds 10] [--output /path/to/proof.json] | veil-vmctl coherence-proof [--json] [--app-id winapp_notepad] [--wait-seconds 10] [--output /path/to/proof.json] | veil-vmctl mvp-proof [--json] [--app-id winapp_notepad] [--wait-seconds 30] [--output /path/to/proof.json] [--require-proved] | veil-vmctl guest-agent-wait [--json] [--wait-seconds 30] | veil-vmctl mark-installed [--json] | veil-vmctl providers [--json] | veil-vmctl export-diagnostics [--json] [--output /path/to/diagnostics.json] | veil-vmctl qemu-plan [--json] | veil-vmctl qemu-doctor [--json] | veil-vmctl qemu-install-status [--json] | veil-vmctl qemu-smoke [--json] [--seconds 45] | veil-vmctl qemu-start [--json] [--wait-seconds 15] [--native-display] | veil-vmctl qemu-display-smoke [--json] [--wait-seconds 5] | veil-vmctl qemu-capture [--json] [--output /path/to/console.png] | veil-vmctl qemu-powerdown [--json] [--wait-seconds 30] | veil-vmctl qemu-force-stop [--json] --i-understand-data-loss [--wait-seconds 10] | veil-vmctl qemu-sendkey [--json] key [key ...] | veil-vmctl qemu-type-text [--json] --text \"...\" | veil-vmctl qemu-click [--json] --x 0...32767 --y 0...32767 | veil-vmctl qemu-oobe-bypass [--json] | veil-vmctl qemu-install-agent [--json] [--wait-seconds 30]"
+    private static let usage = "Usage: veil-vmctl prepare --installer /path/to/Windows.iso [--drivers /path/to/virtio-win.iso] | veil-vmctl app-runtime-status [--json] [--demo] | veil-vmctl app-runtime-review [--json] [--demo] | veil-vmctl app-runtime-action --action launch|fulfill-pending|focus|close|close-all|restore|reconnect-restore|bring-forward|recover-display|wait-agent|quiet-when-idle|stop-runtime|clipboard|type-text|click|proof-recommended [--json] [--demo] [--wait-seconds 5] [--app-id winapp_notepad] [--window-id hwnd:XXXXXXXX] [--text \"...\"] [--x 240 --y 130] | veil-vmctl app-window-proof [--json] [--app-id winapp_notepad] [--wait-seconds 10] [--output /path/to/proof.json] | veil-vmctl coherence-proof [--json] [--app-id winapp_notepad] [--wait-seconds 10] [--output /path/to/proof.json] | veil-vmctl mvp-proof [--json] [--app-id winapp_notepad] [--wait-seconds 30] [--output /path/to/proof.json] [--require-proved] | veil-vmctl guest-agent-wait [--json] [--wait-seconds 30] | veil-vmctl mark-installed [--json] | veil-vmctl providers [--json] | veil-vmctl export-diagnostics [--json] [--output /path/to/diagnostics.json] | veil-vmctl qemu-plan [--json] | veil-vmctl qemu-doctor [--json] | veil-vmctl qemu-install-status [--json] | veil-vmctl qemu-smoke [--json] [--seconds 45] | veil-vmctl qemu-start [--json] [--wait-seconds 15] [--native-display] | veil-vmctl qemu-display-smoke [--json] [--wait-seconds 5] | veil-vmctl qemu-capture [--json] [--output /path/to/console.png] | veil-vmctl qemu-powerdown [--json] [--wait-seconds 30] | veil-vmctl qemu-force-stop [--json] --i-understand-data-loss [--wait-seconds 10] | veil-vmctl qemu-sendkey [--json] key [key ...] | veil-vmctl qemu-type-text [--json] --text \"...\" | veil-vmctl qemu-click [--json] --x 0...32767 --y 0...32767 | veil-vmctl qemu-oobe-bypass [--json] | veil-vmctl qemu-install-agent [--json] [--wait-seconds 30]"
 }
 
 struct VMControlArguments {
@@ -114,6 +114,7 @@ struct VMControlArguments {
     enum Command: Equatable {
         case prepare(installerPath: String, driverMediaPath: String?)
         case appRuntimeStatus(json: Bool, demo: Bool)
+        case appRuntimeReview(json: Bool, demo: Bool)
         case appRuntimeAction(json: Bool, demo: Bool, action: AppRuntimeAction, appId: String?, windowId: String?, text: String?, x: Int?, y: Int?, waitSeconds: Int)
         case appWindowProof(json: Bool, appId: String, waitSeconds: Int, outputPath: String?)
         case coherenceProof(json: Bool, appId: String, waitSeconds: Int, outputPath: String?)
@@ -161,6 +162,15 @@ struct VMControlArguments {
         if command == "app-runtime-status" {
             return VMControlArguments(
                 command: .appRuntimeStatus(
+                    json: arguments.contains("--json"),
+                    demo: arguments.contains("--demo")
+                )
+            )
+        }
+
+        if command == "app-runtime-review" {
+            return VMControlArguments(
+                command: .appRuntimeReview(
                     json: arguments.contains("--json"),
                     demo: arguments.contains("--demo")
                 )
@@ -554,6 +564,45 @@ struct AppRuntimeActionReport: Codable, Equatable {
     var nextActions: [String]
 }
 
+struct AppRuntimeReviewStep: Codable, Equatable {
+    var id: String
+    var title: String
+    var state: String
+    var isPassing: Bool
+    var evidence: String
+    var nextActionCommand: String?
+}
+
+struct AppRuntimeReviewScreenshotSlot: Codable, Equatable {
+    var id: String
+    var title: String
+    var expectedSurface: String
+    var attachmentState: String
+}
+
+struct AppRuntimeReviewEvidence: Codable, Equatable {
+    var latestAppCheckKind: String?
+    var latestAppCheckPath: String?
+    var latestAppCheckModifiedAt: Date?
+    var diagnosticsDirectory: String
+    var recommendedAppCheckCommand: String?
+}
+
+struct AppRuntimeReviewCard: Codable, Equatable {
+    var kind: String = "windowsAppRuntimeReviewCard"
+    var generatedAt: Date
+    var isReadyForReview: Bool
+    var appFlowSummary: String
+    var nextStepTitle: String
+    var nextActionCommand: String?
+    var detail: String
+    var steps: [AppRuntimeReviewStep]
+    var screenshotSlots: [AppRuntimeReviewScreenshotSlot]
+    var evidence: AppRuntimeReviewEvidence
+    var statusCommand: String
+    var status: WindowsAppRuntimeStatusReport
+}
+
 @main
 struct VeilVMControl {
     static func main() async {
@@ -580,6 +629,8 @@ struct VeilVMControl {
             try await prepare(installerPath: installerPath, driverMediaPath: driverMediaPath)
         case .appRuntimeStatus(let json, let demo):
             try await printAppRuntimeStatus(json: json, demo: demo)
+        case .appRuntimeReview(let json, let demo):
+            try await printAppRuntimeReview(json: json, demo: demo)
         case .appRuntimeAction(let json, let demo, let action, let appId, let windowId, let text, let x, let y, let waitSeconds):
             try await runAppRuntimeAction(json: json, demo: demo, action: action, appId: appId, windowId: windowId, text: text, x: x, y: y, waitSeconds: waitSeconds)
         case .appWindowProof(let json, let appId, let waitSeconds, let outputPath):
@@ -662,15 +713,7 @@ struct VeilVMControl {
 
     @MainActor
     private static func printAppRuntimeStatus(json: Bool, demo: Bool) async throws {
-        let model = HostDashboardModel(service: appRuntimeStatusService(demo: demo))
-
-        await model.loadRestoreIntent()
-        await model.load()
-
-        let localRuntimeSnapshot = try? await LocalVMRuntimeService().loadSnapshot()
-        let report = model.runtimeStatusReport(
-            localRuntime: model.localRuntimeStatus(snapshot: localRuntimeSnapshot)
-        )
+        let report = try await appRuntimeStatusReport(demo: demo)
         if json {
             let data = try JSONEncoder.veilDiagnostics.encode(report)
             print(String(decoding: data, as: UTF8.self))
@@ -791,6 +834,108 @@ struct VeilVMControl {
         for action in report.actions {
             print("  - \(action.id): \(action.isAvailable ? "available" : "unavailable")")
         }
+    }
+
+    @MainActor
+    private static func printAppRuntimeReview(json: Bool, demo: Bool) async throws {
+        let report = try await appRuntimeStatusReport(demo: demo)
+        let card = appRuntimeReviewCard(status: report)
+
+        if json {
+            let data = try JSONEncoder.veilDiagnostics.encode(card)
+            print(String(decoding: data, as: UTF8.self))
+            return
+        }
+
+        print("Veil Windows App Review Card")
+        print("App flow: \(card.appFlowSummary)")
+        print("Next step: \(card.nextStepTitle)")
+        print("Detail: \(card.detail)")
+        if let nextActionCommand = card.nextActionCommand {
+            print("Next command: \(nextActionCommand)")
+        }
+        print("Status command: \(card.statusCommand)")
+        print("")
+        print("Steps:")
+        for step in card.steps {
+            let marker = step.isPassing ? "[x]" : "[ ]"
+            print("  \(marker) \(step.title) - \(step.state)")
+            print("      \(step.evidence)")
+            if let nextActionCommand = step.nextActionCommand, !step.isPassing {
+                print("      Next: \(nextActionCommand)")
+            }
+        }
+        print("")
+        print("Screenshots to attach:")
+        for slot in card.screenshotSlots {
+            print("  - \(slot.title): \(slot.attachmentState)")
+            print("      Expected: \(slot.expectedSurface)")
+        }
+        print("")
+        print("Evidence:")
+        print("  Diagnostics: \(card.evidence.diagnosticsDirectory)")
+        if let latestKind = card.evidence.latestAppCheckKind {
+            print("  Latest app check: \(latestKind)")
+        }
+        if let latestPath = card.evidence.latestAppCheckPath {
+            print("  Latest app check file: \(latestPath)")
+        }
+        if let recommendedCommand = card.evidence.recommendedAppCheckCommand {
+            print("  Recommended app check: \(recommendedCommand)")
+        }
+    }
+
+    @MainActor
+    private static func appRuntimeStatusReport(demo: Bool) async throws -> WindowsAppRuntimeStatusReport {
+        let model = HostDashboardModel(service: appRuntimeStatusService(demo: demo))
+
+        await model.loadRestoreIntent()
+        await model.load()
+
+        let localRuntimeSnapshot = try? await LocalVMRuntimeService().loadSnapshot()
+        return model.runtimeStatusReport(
+            localRuntime: model.localRuntimeStatus(snapshot: localRuntimeSnapshot)
+        )
+    }
+
+    private static func appRuntimeReviewCard(
+        status report: WindowsAppRuntimeStatusReport
+    ) -> AppRuntimeReviewCard {
+        AppRuntimeReviewCard(
+            generatedAt: report.generatedAt,
+            isReadyForReview: report.releaseGate.isPassing,
+            appFlowSummary: appFlowSummary(report.releaseGate),
+            nextStepTitle: appFlowNextStepTitle(report.releaseGate),
+            nextActionCommand: appFlowNextCommand(report.releaseGate),
+            detail: appFlowDetail(report.releaseGate),
+            steps: report.releaseGate.steps.map { step in
+                AppRuntimeReviewStep(
+                    id: step.id,
+                    title: step.title,
+                    state: step.state,
+                    isPassing: step.isPassing,
+                    evidence: step.evidence,
+                    nextActionCommand: step.nextActionCommand
+                )
+            },
+            screenshotSlots: report.releaseGate.screenshotSlots.map { slot in
+                AppRuntimeReviewScreenshotSlot(
+                    id: slot.id,
+                    title: slot.title,
+                    expectedSurface: slot.expectedSurface,
+                    attachmentState: "needed"
+                )
+            },
+            evidence: AppRuntimeReviewEvidence(
+                latestAppCheckKind: report.proofArtifacts.latestProofKind,
+                latestAppCheckPath: report.proofArtifacts.latestProofPath,
+                latestAppCheckModifiedAt: report.proofArtifacts.latestProofModifiedAt,
+                diagnosticsDirectory: report.proofArtifacts.diagnosticsDirectory,
+                recommendedAppCheckCommand: report.proofPlan.recommendedProofCommand
+            ),
+            statusCommand: "veil-vmctl app-runtime-status --json",
+            status: report
+        )
     }
 
     private static func appFlowSummary(

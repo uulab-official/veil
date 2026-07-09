@@ -12,6 +12,7 @@ harness/
 ├─ fake-host/              CLI client that sends host messages
 ├─ runtime-provider-probe/ Validates local VM provider JSON output
 ├─ app-runtime-status/     Validates host app-runtime status/actions JSON
+├─ app-runtime-review/     Validates one-screen release review card JSON
 ├─ app-runtime-action/     Validates host app-runtime launch/focus/close/input/clipboard/proof JSON
 ├─ app-window-proof/       Validates app launch/HWND/first-frame proof JSON
 ├─ coherence-proof/        Validates launch/HWND/frame/input/clipboard proof JSON

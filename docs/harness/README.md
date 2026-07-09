@@ -17,6 +17,7 @@ harness/
 ├─ fake-host/              CLI client that sends host messages to the agent
 ├─ runtime-provider-probe/ JSON shape validation for local VM providers
 ├─ app-runtime-status/     JSON shape validation for host app-runtime status/actions
+├─ app-runtime-review/     JSON shape validation for one-screen release review cards
 ├─ app-runtime-action/     JSON shape validation for host app-runtime actions
 ├─ app-window-proof/       JSON shape validation for launch/HWND/first-frame proof
 ├─ coherence-proof/        JSON shape validation for launch/HWND/frame/input/clipboard proof
@@ -40,6 +41,7 @@ Current executable pieces:
 - `harness/fake-host`: a CLI simulator for the future macOS host flow.
 - `harness/runtime-provider-probe`: a JSON validator for serverless local runtime provider output.
 - `harness/app-runtime-status`: a JSON validator for app runtime status, open HWND sessions, Dock integration state, and supported actions.
+- `harness/app-runtime-review`: a JSON validator for one-screen release review cards generated from app-runtime status, release-gate steps, screenshot slots, and latest app-check evidence.
 - `harness/app-runtime-action`: a JSON validator for launch, pending-launch fulfillment, bring-forward, focus, close, close-all, restore, guest-agent wait, input, clipboard, quiet-runtime, and recommended proof app-runtime actions.
 - `harness/app-window-proof`: a JSON validator for one app launch, one tracked HWND, and the first captured frame evidence.
 - `harness/coherence-proof`: a JSON validator for one app launch, one tracked HWND, first and post-input frame evidence, mouse/key input, and host clipboard send evidence.
@@ -174,6 +176,21 @@ node ../../harness/app-runtime-status/src/validate-app-runtime-status.mjs < ../.
 Use `--demo` for deterministic local harness checks. Without `--demo`, the
 command tries `VEIL_AGENT_URL` or `ws://127.0.0.1:18444` and falls back to demo
 metadata only for network availability errors.
+
+## App Runtime Review Card Scenario
+
+The app runtime review command converts `app-runtime-status` into a
+Parallels-style release card for the current build. It keeps the full status
+report embedded for automation, but surfaces the human review contract directly:
+app-flow readiness, the next product action, the five release-gate steps, the
+required screenshot slots, the latest app-check artifact, and the recommended
+next app check.
+
+```bash
+cd apps/mac-host
+swift run veil-vmctl app-runtime-review --json --demo | node ../../harness/app-runtime-review/src/validate-app-runtime-review.mjs
+node ../../harness/app-runtime-review/src/validate-app-runtime-review.mjs < ../../harness/app-runtime-review/fixtures/app-runtime-review.demo.json
+```
 
 ## App Runtime Action Scenario
 
