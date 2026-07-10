@@ -76,6 +76,76 @@ public struct WindowFrameTiming: Codable, Equatable, Sendable {
     }
 }
 
+public struct WindowFrameStreamAssessment: Equatable, Sendable {
+    public static let freshFrameAgeThresholdMilliseconds = 1_000
+    public static let delayedFrameAgeThresholdMilliseconds = 5_000
+
+    public var status: WindowFrameStreamStatus
+    public var latestFrameAgeMilliseconds: Int?
+    public var latestFrameIntervalMilliseconds: Int?
+    public var receivedFrameCount: Int
+    public var recommendedAction: String
+
+    public init(
+        status: WindowFrameStreamStatus,
+        latestFrameAgeMilliseconds: Int? = nil,
+        latestFrameIntervalMilliseconds: Int? = nil,
+        receivedFrameCount: Int = 0,
+        recommendedAction: String
+    ) {
+        self.status = status
+        self.latestFrameAgeMilliseconds = latestFrameAgeMilliseconds
+        self.latestFrameIntervalMilliseconds = latestFrameIntervalMilliseconds
+        self.receivedFrameCount = receivedFrameCount
+        self.recommendedAction = recommendedAction
+    }
+
+    public static func assess(
+        session: WindowMirrorSession,
+        generatedAt: Date = Date()
+    ) -> WindowFrameStreamAssessment {
+        guard session.captureState != .unavailable else {
+            return WindowFrameStreamAssessment(
+                status: .unavailable,
+                recommendedAction: "enable-window-capture"
+            )
+        }
+
+        guard let timing = session.frameTiming else {
+            return WindowFrameStreamAssessment(
+                status: .waitingForFirstFrame,
+                recommendedAction: "wait-for-first-frame"
+            )
+        }
+
+        let ageMilliseconds = max(
+            0,
+            Int((generatedAt.timeIntervalSince(timing.latestFrameReceivedAt) * 1000).rounded())
+        )
+        let status: WindowFrameStreamStatus
+        let recommendedAction: String
+
+        if ageMilliseconds <= freshFrameAgeThresholdMilliseconds {
+            status = .fresh
+            recommendedAction = "none"
+        } else if ageMilliseconds <= delayedFrameAgeThresholdMilliseconds {
+            status = .delayed
+            recommendedAction = "refresh-runtime-status"
+        } else {
+            status = .stale
+            recommendedAction = "restart-frame-subscription"
+        }
+
+        return WindowFrameStreamAssessment(
+            status: status,
+            latestFrameAgeMilliseconds: ageMilliseconds,
+            latestFrameIntervalMilliseconds: timing.latestFrameIntervalMilliseconds,
+            receivedFrameCount: timing.receivedFrameCount,
+            recommendedAction: recommendedAction
+        )
+    }
+}
+
 public struct WindowMirrorSession: Codable, Equatable, Identifiable, Sendable {
     public var id: String { window.windowId }
     public var window: WindowCreatedEvent
@@ -1315,18 +1385,21 @@ public final class HostDashboardModel {
                 )
             },
             mirrorSessions: mirrorSessions.map { session in
-                let frameStreamStatus = frameStreamStatus(for: session, generatedAt: generatedAt)
+                let frameStream = WindowFrameStreamAssessment.assess(
+                    session: session,
+                    generatedAt: generatedAt
+                )
                 return WindowsAppRuntimeWindowStatus(
                     windowId: session.id,
                     appId: session.window.appId,
                     title: session.window.title,
                     captureState: session.captureState,
-                    frameStreamStatus: frameStreamStatus,
+                    frameStreamStatus: frameStream.status,
                     latestFrameReceivedAt: session.frameTiming?.latestFrameReceivedAt,
-                    latestFrameAgeMilliseconds: latestFrameAgeMilliseconds(for: session, generatedAt: generatedAt),
-                    latestFrameIntervalMilliseconds: session.frameTiming?.latestFrameIntervalMilliseconds,
-                    receivedFrameCount: session.frameTiming?.receivedFrameCount ?? 0,
-                    frameStreamRecommendedAction: frameStreamRecommendedAction(for: frameStreamStatus),
+                    latestFrameAgeMilliseconds: frameStream.latestFrameAgeMilliseconds,
+                    latestFrameIntervalMilliseconds: frameStream.latestFrameIntervalMilliseconds,
+                    receivedFrameCount: frameStream.receivedFrameCount,
+                    frameStreamRecommendedAction: frameStream.recommendedAction,
                     canFocus: canFocusMirrorSession(windowId: session.id),
                     canClose: canCloseMirrorSession(windowId: session.id),
                     canSendInput: canSendInput(to: session.id)
@@ -1384,6 +1457,11 @@ public final class HostDashboardModel {
                     id: "windowsApps.closeAll",
                     title: "Close All Windows Apps",
                     isAvailable: canCloseAllMirrorSessions
+                ),
+                WindowsAppRuntimeActionStatus(
+                    id: "windowsApps.restartFrameStream",
+                    title: "Restart App Screen",
+                    isAvailable: macWindowIntegration.staleFrameWindowCount > 0
                 ),
                 WindowsAppRuntimeActionStatus(
                     id: "macWindows.autoOpen",
@@ -2558,66 +2636,14 @@ public final class HostDashboardModel {
         return localRuntime.state == .running || localRuntime.state == .suspended
     }
 
-    private static let freshFrameAgeThresholdMilliseconds = 1_000
-    private static let delayedFrameAgeThresholdMilliseconds = 5_000
-
-    private func latestFrameAgeMilliseconds(
-        for session: WindowMirrorSession,
-        generatedAt: Date
-    ) -> Int? {
-        guard let latestFrameReceivedAt = session.frameTiming?.latestFrameReceivedAt else {
-            return nil
-        }
-
-        return max(0, Int((generatedAt.timeIntervalSince(latestFrameReceivedAt) * 1000).rounded()))
-    }
-
-    private func frameStreamStatus(
-        for session: WindowMirrorSession,
-        generatedAt: Date
-    ) -> WindowFrameStreamStatus {
-        guard session.captureState != .unavailable else {
-            return .unavailable
-        }
-
-        guard let ageMilliseconds = latestFrameAgeMilliseconds(for: session, generatedAt: generatedAt) else {
-            return .waitingForFirstFrame
-        }
-
-        if ageMilliseconds <= Self.freshFrameAgeThresholdMilliseconds {
-            return .fresh
-        }
-
-        if ageMilliseconds <= Self.delayedFrameAgeThresholdMilliseconds {
-            return .delayed
-        }
-
-        return .stale
-    }
-
-    private func frameStreamRecommendedAction(
-        for status: WindowFrameStreamStatus
-    ) -> String {
-        switch status {
-        case .unavailable:
-            return "enable-window-capture"
-        case .waitingForFirstFrame:
-            return "wait-for-first-frame"
-        case .fresh:
-            return "none"
-        case .delayed:
-            return "refresh-runtime-status"
-        case .stale:
-            return "restart-frame-subscription"
-        }
-    }
-
     public func macWindowIntegrationStatus(
         generatedAt: Date = Date()
     ) -> WindowsAppRuntimeMacWindowIntegrationStatus {
         let pendingFrameWindowCount = mirrorSessions.filter { $0.captureState == .pending }.count
         let streamingWindowCount = mirrorSessions.filter { $0.captureState == .streaming }.count
-        let frameStatuses = mirrorSessions.map { frameStreamStatus(for: $0, generatedAt: generatedAt) }
+        let frameStatuses = mirrorSessions.map {
+            WindowFrameStreamAssessment.assess(session: $0, generatedAt: generatedAt).status
+        }
         let freshFrameWindowCount = frameStatuses.filter { $0 == .fresh }.count
         let delayedFrameWindowCount = frameStatuses.filter { $0 == .delayed }.count
         let staleFrameWindowCount = frameStatuses.filter { $0 == .stale }.count
@@ -3323,6 +3349,28 @@ public final class HostDashboardModel {
             errorMessage = userMessage(for: error)
             phase = .failed
             return nil
+        }
+    }
+
+    @discardableResult
+    public func restartFrameSubscription(windowId: String) async -> Bool {
+        guard let index = mirrorSessions.firstIndex(where: { $0.id == windowId }),
+              mirrorSessions[index].captureState != .unavailable,
+              hasLiveAgentConnection else {
+            return false
+        }
+
+        do {
+            try await service.unsubscribeWindowFrames(windowId: windowId)
+            try await service.subscribeWindowFrames(windowId: windowId)
+            mirrorSessions[index].captureState = .pending
+            mirrorSessions[index].frameTiming = nil
+            mirrorSessions[index].latestFrame = nil
+            return true
+        } catch {
+            errorMessage = userMessage(for: error)
+            phase = .failed
+            return false
         }
     }
 

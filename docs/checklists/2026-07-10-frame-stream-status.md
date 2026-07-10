@@ -12,6 +12,9 @@ Goal: make mirrored Windows app surfaces report whether their frame stream is mi
 - [x] Updated `veil-vmctl app-runtime-status` text output to show per-window frame stream quality.
 - [x] Updated app-runtime status/action/review fixtures and validators.
 - [x] Added Swift coverage for first-frame waiting and fresh frame age reporting.
+- [x] Shared the frame stream assessment logic between host status, app-window UI, and launcher metrics.
+- [x] Added a stale-screen overlay with an in-window restart action.
+- [x] Added `windowsApps.restartFrameStream` to the app-runtime action contract.
 
 ## Status Semantics
 
@@ -31,5 +34,4 @@ Goal: make mirrored Windows app surfaces report whether their frame stream is mi
 ## Still Open
 
 - [ ] Tune live frame latency across Notepad, Calculator, and Paint after this status contract is visible in UI.
-- [ ] Wire stale frame streams to an explicit frame-subscription restart action instead of status guidance only.
-- [ ] Use this signal in the main launcher/window chrome so blank app surfaces explain themselves without exposing diagnostic noise.
+- [ ] Promote repeated stale-screen restarts into a stronger recovery path if the guest agent keeps streaming old frames.

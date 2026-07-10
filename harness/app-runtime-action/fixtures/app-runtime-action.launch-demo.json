@@ -186,6 +186,11 @@
         "title": "Close All Windows Apps"
       },
       {
+        "id": "windowsApps.restartFrameStream",
+        "title": "Restart App Screen",
+        "isAvailable": false
+      },
+      {
         "id": "macWindows.autoOpen",
         "isAvailable": false,
         "title": "Show App Windows Automatically"

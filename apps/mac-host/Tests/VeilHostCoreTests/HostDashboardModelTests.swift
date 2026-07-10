@@ -325,6 +325,48 @@ struct HostDashboardModelTests {
         #expect(report.macWindowIntegration.staleFrameWindowCount == 0)
     }
 
+    @Test("reports stale frame streams and exposes restart action")
+    @MainActor
+    func reportsStaleFrameStreamsAndRestartAction() async throws {
+        let service = FakeDashboardService(health: .captureReady)
+        let model = HostDashboardModel(service: service)
+        let frameAt = Date(timeIntervalSince1970: 1_000)
+
+        await model.launchNotepad()
+        model.receiveWindowFrame(.notepadFirstFrame, receivedAt: frameAt)
+
+        let report = model.runtimeStatusReport(generatedAt: Date(timeIntervalSince1970: 1_006.250))
+        let windowStatus = try #require(report.mirrorSessions.first)
+        let restartAction = try #require(report.actions.first { $0.id == "windowsApps.restartFrameStream" })
+
+        #expect(windowStatus.frameStreamStatus == .stale)
+        #expect(windowStatus.latestFrameAgeMilliseconds == 6_250)
+        #expect(windowStatus.frameStreamRecommendedAction == "restart-frame-subscription")
+        #expect(report.macWindowIntegration.staleFrameWindowCount == 1)
+        #expect(restartAction.title == "Restart App Screen")
+        #expect(restartAction.isAvailable)
+    }
+
+    @Test("restarts frame subscription for a mirrored window")
+    @MainActor
+    func restartsFrameSubscriptionForMirroredWindow() async throws {
+        let service = FakeDashboardService(health: .captureReady)
+        let model = HostDashboardModel(service: service)
+
+        await model.launchNotepad()
+        model.receiveWindowFrame(.notepadFirstFrame, receivedAt: Date(timeIntervalSince1970: 1_000))
+
+        let didRestart = await model.restartFrameSubscription(windowId: "hwnd:0003029A")
+        let session = try #require(model.mirrorSessions.first)
+
+        #expect(didRestart)
+        #expect(service.frameUnsubscriptions == ["hwnd:0003029A"])
+        #expect(service.frameSubscriptions == ["hwnd:0003029A", "hwnd:0003029A"])
+        #expect(session.captureState == .pending)
+        #expect(session.latestFrame == nil)
+        #expect(session.frameTiming == nil)
+    }
+
     @Test("routes a protocol frame message into the matching mirror session")
     @MainActor
     func routesProtocolFrameMessageIntoMirrorSession() async throws {

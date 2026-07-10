@@ -162,6 +162,7 @@ function installedRuntimeHeroSupports(actionId) {
     "windowsApps.reconnectRestore",
     "windowsApps.restorePrevious",
     "windowsApps.closeAll",
+    "windowsApps.restartFrameStream",
     "runtime.quietWhenIdle",
     "runtime.stopWhenIdle",
     "proof.recommended"

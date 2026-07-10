@@ -119,11 +119,23 @@ struct WindowsAppBridgePanel: View {
     }
 
     private var captureValue: String {
-        if model.mirrorSessions.contains(where: { $0.captureState == .streaming }) {
-            return "Streaming"
+        let assessments = model.mirrorSessions.map {
+            WindowFrameStreamAssessment.assess(session: $0)
         }
 
-        if model.mirrorSessions.contains(where: { $0.captureState == .pending }) {
+        if assessments.contains(where: { $0.status == .stale }) {
+            return "Paused"
+        }
+
+        if assessments.contains(where: { $0.status == .delayed }) {
+            return "Delayed"
+        }
+
+        if assessments.contains(where: { $0.status == .fresh }) {
+            return "Live"
+        }
+
+        if assessments.contains(where: { $0.status == .waitingForFirstFrame }) {
             return "Pending"
         }
 
@@ -131,11 +143,23 @@ struct WindowsAppBridgePanel: View {
     }
 
     private var captureTint: Color {
-        if model.mirrorSessions.contains(where: { $0.captureState == .streaming }) {
+        let assessments = model.mirrorSessions.map {
+            WindowFrameStreamAssessment.assess(session: $0)
+        }
+
+        if assessments.contains(where: { $0.status == .stale }) {
+            return .orange
+        }
+
+        if assessments.contains(where: { $0.status == .delayed }) {
+            return .yellow
+        }
+
+        if assessments.contains(where: { $0.status == .fresh }) {
             return .green
         }
 
-        if model.mirrorSessions.contains(where: { $0.captureState == .pending }) {
+        if assessments.contains(where: { $0.status == .waitingForFirstFrame }) {
             return .orange
         }
 

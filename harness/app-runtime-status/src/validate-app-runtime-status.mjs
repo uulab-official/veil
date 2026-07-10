@@ -1376,6 +1376,7 @@ function installedRuntimeHeroSupports(actionId) {
     "windowsApps.reconnectRestore",
     "windowsApps.restorePrevious",
     "windowsApps.closeAll",
+    "windowsApps.restartFrameStream",
     "runtime.quietWhenIdle",
     "runtime.stopWhenIdle",
     "proof.recommended"
@@ -2019,6 +2020,7 @@ function validateActions(actions, report) {
     "windowsApps.restorePrevious",
     "windowsApps.reconnectRestore",
     "windowsApps.closeAll",
+    "windowsApps.restartFrameStream",
     "macWindows.autoOpen",
     "windowsApps.launchSelected",
     "runtime.prepareWindows",
@@ -2074,6 +2076,12 @@ function validateActions(actions, report) {
   const refreshStatusAction = actions.find((action) => action.id === "runtime.refreshStatus");
   if (!refreshStatusAction.isAvailable) {
     throw new TypeError("runtime.refreshStatus must stay available for app-runtime status refresh.");
+  }
+
+  const restartFrameStreamAction = actions.find((action) => action.id === "windowsApps.restartFrameStream");
+  const canRestartFrameStream = report.macWindowIntegration.staleFrameWindowCount > 0;
+  if (restartFrameStreamAction.isAvailable !== canRestartFrameStream) {
+    throw new TypeError("windowsApps.restartFrameStream availability must match stale frame streams.");
   }
 
   const repairAction = actions.find((action) => action.id === "runtime.repairGuestAgentForApp");

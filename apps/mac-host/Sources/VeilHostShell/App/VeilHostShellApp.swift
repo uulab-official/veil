@@ -950,6 +950,18 @@ struct VeilHostShellApp: App {
                 await model.openFile(appId: appId, fileName: fileName, contentBase64: contentBase64)
             }
         }
+        windowsAppWindowPresenter.onRestartFrameStream = { windowId in
+            Task { @MainActor in
+                let didRestart = await model.restartFrameSubscription(windowId: windowId)
+                guard didRestart,
+                      let session = model.mirrorSessions.first(where: { $0.id == windowId }) else {
+                    return
+                }
+
+                windowsAppWindowPresenter.showWindow(for: session)
+                displayMessage = "Restarting \(session.window.title) screen."
+            }
+        }
         windowsAppWindowPresenter.onPasteShortcut = { windowId, key, windowsVirtualKey, modifiers, text in
             Task { @MainActor in
                 await model.sendHostClipboardText(text)

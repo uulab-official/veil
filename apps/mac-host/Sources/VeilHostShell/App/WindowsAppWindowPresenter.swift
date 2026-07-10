@@ -15,6 +15,7 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
     var onKeyInput: ((String, String, String, Int, [String]) -> Void)?
     var onPasteShortcut: ((String, String, Int, [String], String) -> Void)?
     var onFileDrop: ((String, String, String) -> Void)?
+    var onRestartFrameStream: ((String) -> Void)?
 
     var visibleWindowIds: [String] {
         windowOrder.filter { windowsById[$0] != nil }
@@ -154,6 +155,9 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
                 },
                 onFileDrop: { [weak self] appId, fileName, contentBase64 in
                     self?.onFileDrop?(appId, fileName, contentBase64)
+                },
+                onRestartFrameStream: { [weak self] windowId in
+                    self?.onRestartFrameStream?(windowId)
                 }
             )
         )
@@ -217,11 +221,15 @@ private struct WindowsAppMirrorView: View {
     var onKeyInput: (String, String, String, Int, [String]) -> Void
     var onPasteShortcut: (String, String, Int, [String], String) -> Void
     var onFileDrop: (String, String, String) -> Void
+    var onRestartFrameStream: (String) -> Void
     @State private var isTargetedForDrop = false
 
     var body: some View {
         ZStack {
-            WindowsAppFrameSurface(session: session)
+            WindowsAppFrameSurface(
+                session: session,
+                restartFrameStreamAction: onRestartFrameStream
+            )
 
             InputCaptureView(
                 session: session,
