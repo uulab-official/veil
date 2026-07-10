@@ -124,6 +124,26 @@ test("rejects next actions without minimum screenshot size", () => {
   );
 });
 
+test("rejects next actions without supplemental notification proof guidance", () => {
+  const manifest = demoManifest();
+  manifest.nextActions = manifest.nextActions.filter((action) => !action.includes("notification-proof"));
+
+  assert.throws(
+    () => validateAppRuntimeReviewManifest(manifest),
+    /notification proof/
+  );
+});
+
+test("rejects next actions without supplemental printer proof guidance", () => {
+  const manifest = demoManifest();
+  manifest.nextActions = manifest.nextActions.filter((action) => !action.includes("printer-bridge-proof"));
+
+  assert.throws(
+    () => validateAppRuntimeReviewManifest(manifest),
+    /printer proof/
+  );
+});
+
 test("rejects app check proof commands that do not save to the evidence file", () => {
   const manifest = demoManifest();
   manifest.appCheckProofFile.command = "veil-vmctl mvp-proof --json --app-id winapp_notepad --require-proved";

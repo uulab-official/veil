@@ -81,6 +81,8 @@
       "Open the evidence folder with `open /tmp/veil-review-verify`.",
       "Capture the five required screenshots into the evidence directory as valid PNG files of at least 640 x 360.",
       "Run the saved app check proof command from `review-manifest.json` and keep `mvp-proof.json` in the evidence directory.",
+      "If the review card lists notification proof, keep the referenced Notification Proof JSON available or regenerate it with `veil-vmctl notification-proof --json --require-proved --output ...`.",
+      "If the review card lists printer proof, keep the referenced Printer Proof JSON available or regenerate it with `veil-vmctl printer-bridge-proof --json --evidence ...`.",
       "Run `veil-vmctl app-runtime-review --evidence-dir /tmp/veil-review-verify` and confirm Screenshots is 5/5 attached.",
       "Run `veil-vmctl app-runtime-review-verify --json --evidence-dir /tmp/veil-review-verify` before sharing evidence."
     ],

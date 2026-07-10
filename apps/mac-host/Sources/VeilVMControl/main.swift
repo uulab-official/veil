@@ -1951,6 +1951,8 @@ struct VeilVMControl {
             "- Open this folder with `\(manifest.openEvidenceDirectoryCommand)`.",
             "- Capture every PNG listed below into this folder as a valid PNG of at least 640 x 360.",
             "- Run `\(manifest.appCheckProofFile.command)` and keep `\(manifest.appCheckProofFile.expectedFileName)` in this folder.",
+            "- If the review card lists a latest notification proof, keep the referenced `Notification Proof` JSON available or regenerate it with `veil-vmctl notification-proof --json --require-proved --output ...`.",
+            "- If the review card lists a latest printer proof, keep the referenced `Printer Proof` JSON available or regenerate it with `veil-vmctl printer-bridge-proof --json --evidence ...`.",
             "- Run `\(manifest.reviewCommand)`.",
             "- Confirm the review card reports `Screenshots: \(manifest.requiredScreenshotCount)/\(manifest.requiredScreenshotCount) attached`.",
             "- Run `\(manifest.verifyCommand)` before sharing evidence.",
@@ -1976,6 +1978,8 @@ struct VeilVMControl {
             lines.append("- `\(file.expectedFileName)`: \(file.expectedSurface)")
         }
         lines.append("- `\(manifest.appCheckProofFile.expectedFileName)`: proved Windows app launch, frame, input, and clipboard JSON evidence")
+        lines.append("- Referenced `Notification Proof/*.json`: optional Windows notification proof JSON shown by the review card")
+        lines.append("- Referenced `Printer Proof/*.json`: optional Windows printer bridge proof JSON shown by the review card")
         lines.append("")
         return lines.joined(separator: "\n")
     }
@@ -2059,6 +2063,8 @@ struct VeilVMControl {
             "Open the evidence folder with `\(openEvidenceDirectoryCommand)`.",
             "Capture the five required screenshots into the evidence directory as valid PNG files of at least 640 x 360.",
             "Run the saved app check proof command from `review-manifest.json` and keep `mvp-proof.json` in the evidence directory.",
+            "If the review card lists notification proof, keep the referenced Notification Proof JSON available or regenerate it with `veil-vmctl notification-proof --json --require-proved --output ...`.",
+            "If the review card lists printer proof, keep the referenced Printer Proof JSON available or regenerate it with `veil-vmctl printer-bridge-proof --json --evidence ...`.",
             "Run `\(reviewCommand)` and confirm Screenshots is 5/5 attached.",
             "Run `\(verifyCommand)` before sharing evidence."
         ]

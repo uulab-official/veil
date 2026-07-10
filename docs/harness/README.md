@@ -514,13 +514,15 @@ folder, `review-manifest.json`, and a human-readable `README.md`. The manifest
 lists every required PNG path, the 640 x 360 minimum screenshot contract, the ordered capture steps, the exact
 `screencapture -i` save command, supporting commands, a saved
 `mvp-proof --require-proved --output .../mvp-proof.json` app-check command, a
-structured Finder `open` command, and follow-up review/verify commands, so contributors can
-capture screenshots and the real Windows app proof into one predictable folder
-instead of inventing names during the proof pass. The
+structured Finder `open` command, supplemental notification/printer proof
+regeneration guidance, and follow-up review/verify commands, so contributors can
+capture screenshots and keep the real Windows app plus Daily Use proof artifacts
+in one predictable evidence pass instead of inventing names during review. The
 manifest harness also checks that screenshot paths, `readmePath`,
 `appCheckProofFile.path`, `reviewCommand`, `verifyCommand`,
-`openEvidenceDirectoryCommand`, and next actions all point back to the same
-evidence directory and the `5/5 attached` release gate.
+`openEvidenceDirectoryCommand`, supplemental proof guidance, and next actions
+all point back to the same evidence directory and the `5/5 attached` release
+gate.
 
 Pass `--evidence-dir` to point the card at a screenshot folder. Each required
 slot expects one valid, non-empty PNG matching the card's 640 x 360 minimum

@@ -155,6 +155,12 @@ export function validateAppRuntimeReviewManifest(manifest) {
   if (!manifest.nextActions.some((action) => action.includes("mvp-proof.json"))) {
     throw new TypeError("app runtime review manifest next actions must include the saved app check proof file.");
   }
+  if (!manifest.nextActions.some((action) => action.includes("notification-proof --json --require-proved"))) {
+    throw new TypeError("app runtime review manifest next actions must include notification proof regeneration guidance.");
+  }
+  if (!manifest.nextActions.some((action) => action.includes("printer-bridge-proof --json --evidence"))) {
+    throw new TypeError("app runtime review manifest next actions must include printer proof regeneration guidance.");
+  }
   if (!manifest.nextActions.some((action) => action.includes(manifest.openEvidenceDirectoryCommand))) {
     throw new TypeError("app runtime review manifest next actions must include the open evidence folder command.");
   }

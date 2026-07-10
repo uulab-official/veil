@@ -29,6 +29,8 @@ struct ReviewEvidenceFolderStoreTests {
         #expect(readme.contains("app-runtime-review-verify --json --evidence-dir"))
         #expect(readme.contains("mvp-proof.json"))
         #expect(readme.contains("mvp-proof --json --app-id winapp_notepad --require-proved --output"))
+        #expect(readme.contains("notification-proof --json --require-proved --output"))
+        #expect(readme.contains("printer-bridge-proof --json --evidence"))
 
         #expect(manifest.kind == "windowsAppRuntimeReviewEvidenceManifest")
         #expect(manifest.generatedAt == now)
@@ -54,6 +56,8 @@ struct ReviewEvidenceFolderStoreTests {
         #expect(manifest.nextActions.contains { $0.contains("5/5 attached") })
         #expect(manifest.nextActions.contains { $0.contains("640 x 360") })
         #expect(manifest.nextActions.contains { $0.contains("mvp-proof.json") })
+        #expect(manifest.nextActions.contains { $0.contains("notification-proof --json --require-proved") })
+        #expect(manifest.nextActions.contains { $0.contains("printer-bridge-proof --json --evidence") })
 
         for fileName in ReviewEvidenceFolderStore.screenshotFileNames {
             #expect(readme.contains(fileName))
