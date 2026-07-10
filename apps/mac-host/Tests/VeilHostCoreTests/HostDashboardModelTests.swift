@@ -1149,6 +1149,7 @@ struct HostDashboardModelTests {
         #expect(report.dailyUseReadiness.printerBridgePlanCommand == "veil-vmctl printer-bridge-plan --json --shared-printer <shared-printer-name>")
         #expect(report.dailyUseReadiness.printerBridgeSetupHint.contains("Share the Mac printer"))
         #expect(report.dailyUseReadiness.printerBridgeSetupHint.contains("IPP network printer"))
+        #expect(report.actions.contains { $0.id == "dailyUse.planPrinterBridge" && $0.title == "Printer Setup" && $0.isAvailable })
         #expect(report.dailyUseReadiness.recommendedAction == "prepare-sparse-package")
         #expect(report.dailyUseReadiness.recommendedCommand == "veil-vmctl app-runtime-action --json --action prepare-sparse-package --wait-seconds 120")
         #expect(report.guestAgentDiagnostics.endpoint == HostDashboardModel.defaultAgentEndpoint)

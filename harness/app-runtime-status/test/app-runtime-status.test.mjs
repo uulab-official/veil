@@ -1387,6 +1387,17 @@ test("rejects Daily Use printer bridge plan command drift", () => {
   );
 });
 
+test("rejects Daily Use printer setup action drift", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.demo.json", import.meta.url), "utf8"));
+  const action = report.actions.find((candidate) => candidate.id === "dailyUse.planPrinterBridge");
+  action.isAvailable = false;
+
+  assert.throws(
+    () => validateAppRuntimeStatus(report),
+    /planPrinterBridge/
+  );
+});
+
 test("rejects Daily Use borderless capture guidance drift", () => {
   const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.mac-window-live.json", import.meta.url), "utf8"));
   report.dailyUseReadiness.borderlessCaptureRecommendedAction = "verify-daily-use-integrations";

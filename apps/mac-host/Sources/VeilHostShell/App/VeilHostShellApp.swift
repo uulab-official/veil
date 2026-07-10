@@ -2162,6 +2162,8 @@ private struct VeilMenuBarMenu: View {
         case .runNotificationProof:
             openMainWindow()
             runNotificationProofAction()
+        case .showPrinterBridgePlan:
+            openMainWindow()
         case .refreshRuntimeStatus:
             openMainWindow()
         case .restartFrameStream:
@@ -2223,6 +2225,7 @@ enum MenuBarPrimaryActionRoute: Equatable {
     case preparePackageIdentity
     case requestNotificationConsent
     case runNotificationProof
+    case showPrinterBridgePlan
     case refreshRuntimeStatus
     case restartFrameStream
     case recoverWindowCapture
@@ -2263,6 +2266,8 @@ enum MenuBarPrimaryActionRoute: Equatable {
             return .requestNotificationConsent
         case "dailyUse.verifyNotifications":
             return .runNotificationProof
+        case "dailyUse.planPrinterBridge":
+            return .showPrinterBridgePlan
         case "windowsApps.launchSelected":
             return .launchSelectedApp
         case "proof.recommended":
@@ -2298,6 +2303,8 @@ enum MenuBarPrimaryActionRoute: Equatable {
             return "bell.badge"
         case .runNotificationProof:
             return "bell.badge.fill"
+        case .showPrinterBridgePlan:
+            return "printer"
         case .refreshRuntimeStatus:
             return "arrow.clockwise"
         case .restartFrameStream:

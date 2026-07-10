@@ -97,6 +97,12 @@ struct LauncherPrimaryNextActionRouteTests {
         )
         #expect(
             LauncherPrimaryNextActionRoute.resolve(
+                actionId: "dailyUse.planPrinterBridge",
+                command: nil
+            ) == .showPrinterBridgePlan
+        )
+        #expect(
+            LauncherPrimaryNextActionRoute.resolve(
                 actionId: "windowsApps.restartFrameStream",
                 command: nil
             ) == .restartFrameStream
@@ -201,6 +207,12 @@ struct LauncherPrimaryNextActionRouteTests {
                 command: "veil-vmctl notification-proof --json --require-proved"
             ) == .runNotificationProof
         )
+        #expect(
+            LauncherPrimaryNextActionRoute.resolve(
+                actionId: "dailyUse",
+                command: "veil-vmctl printer-bridge-plan --json --shared-printer Office"
+            ) == .showPrinterBridgePlan
+        )
     }
 
     @Test("routes setup and app check commands")
@@ -295,6 +307,13 @@ struct LauncherPrimaryNextActionRouteTests {
                 command: "veil-vmctl notification-proof --json --require-proved",
                 runsInApp: true
             ) == .runNotificationProof
+        )
+        #expect(
+            LauncherPrimaryNextActionRoute.resolve(
+                actionId: "dailyUse.planPrinterBridge",
+                command: "veil-vmctl printer-bridge-plan --json --shared-printer Office",
+                runsInApp: true
+            ) == .showPrinterBridgePlan
         )
     }
 }

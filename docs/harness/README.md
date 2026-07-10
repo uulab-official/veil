@@ -304,6 +304,10 @@ printer sharing plus Windows IPP network-printer registration over QEMU's
 existing user-mode network path. The generated plan uses Windows PowerShell
 `Add-Printer -IppURL` and keeps the limitation explicit: Veil must not claim
 automatic printer support until a real Windows test page is proven.
+The app action surface must also include
+`actions[].id=dailyUse.planPrinterBridge` with title `Printer Setup`, so the
+launcher and menu-bar routers can keep printer setup in the same product action
+family as Daily Use app checks and notification checks.
 The `prepare-sparse-package` command is host-actionable:
 `veil-vmctl app-runtime-action --json --action prepare-sparse-package --wait-seconds 120`
 drives the attached `P.cmd` entrypoint through QEMU keyboard automation, while

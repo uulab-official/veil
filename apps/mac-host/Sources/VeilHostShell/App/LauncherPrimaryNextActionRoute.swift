@@ -17,6 +17,7 @@ enum LauncherPrimaryNextActionRoute: Equatable {
     case quietWindows
     case requestNotificationConsent
     case runNotificationProof
+    case showPrinterBridgePlan
     case runRecommendedProof
     case runMultiAppProof
 
@@ -56,6 +57,8 @@ enum LauncherPrimaryNextActionRoute: Equatable {
             return .requestNotificationConsent
         case "dailyUse.verifyNotifications":
             return .runNotificationProof
+        case "dailyUse.planPrinterBridge":
+            return .showPrinterBridgePlan
         case "windowsApps.reconnectRestore", "windowsApps.restorePrevious":
             return .reconnectPreviousApps
         case "windowsApps.closeAll":
@@ -92,6 +95,10 @@ enum LauncherPrimaryNextActionRoute: Equatable {
 
         if command.contains("notification-proof") {
             return .runNotificationProof
+        }
+
+        if command.contains("printer-bridge-plan") {
+            return .showPrinterBridgePlan
         }
 
         if command.contains("--action repair-agent") || command.contains("qemu-install-agent") {
@@ -222,6 +229,8 @@ enum LauncherPrimaryNextActionRoute: Equatable {
             return "Allow Notifications"
         case .runNotificationProof:
             return "Check Notifications"
+        case .showPrinterBridgePlan:
+            return "Printer Setup"
         case .runRecommendedProof:
             return "Check App"
         case .runMultiAppProof:
@@ -265,6 +274,8 @@ enum LauncherPrimaryNextActionRoute: Equatable {
             return "bell.badge"
         case .runNotificationProof:
             return "bell.badge.fill"
+        case .showPrinterBridgePlan:
+            return "printer"
         case .runRecommendedProof:
             return "checkmark.seal"
         case .runMultiAppProof:

@@ -315,6 +315,11 @@
         "isAvailable": false
       },
       {
+        "id": "dailyUse.planPrinterBridge",
+        "title": "Printer Setup",
+        "isAvailable": true
+      },
+      {
         "id": "runtime.recoverDisplay",
         "title": "Refresh Windows Display",
         "isAvailable": false

@@ -1886,6 +1886,12 @@ public final class HostDashboardModel {
                     )
                 ),
                 WindowsAppRuntimeActionStatus(
+                    id: "dailyUse.planPrinterBridge",
+                    title: "Printer Setup",
+                    isAvailable: dailyUseReadiness.printerBridgeRecommendedAction == WindowsAppRuntimePrinterBridgeDefaults.recommendedAction
+                        && !dailyUseReadiness.printerBridgePlanCommand.isEmpty
+                ),
+                WindowsAppRuntimeActionStatus(
                     id: "runtime.recoverDisplay",
                     title: "Refresh Windows Display",
                     isAvailable: localRuntime.recommendedRecoveryCommand != nil
@@ -3108,6 +3114,7 @@ public final class HostDashboardModel {
              "runtime.stopWhenIdle",
              "dailyUse.verifyNotifications",
              "dailyUse.verifyIntegrations",
+             "dailyUse.planPrinterBridge",
              "proof.recommended",
              "proof.multiApp":
             return true

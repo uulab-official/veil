@@ -78,6 +78,7 @@ struct DetailView: View {
                     phase: model.phase,
                     proofPlan: proofPlan,
                     proofArtifacts: runtimeStatusReport.proofArtifacts,
+                    dailyUseReadiness: runtimeStatusReport.dailyUseReadiness,
                     releaseGate: runtimeStatusReport.releaseGate,
                     launchPlan: runtimeStatusReport.launchPlan,
                     primaryNextAction: runtimeStatusReport.primaryNextAction,
@@ -161,6 +162,10 @@ struct DetailView: View {
             requestNotificationConsentAction()
         case .runNotificationProof:
             runNotificationProofAction()
+        case .showPrinterBridgePlan:
+            Task {
+                await vmModel.load()
+            }
         case .runRecommendedProof:
             runRecommendedProofAction()
         case .runMultiAppProof:
@@ -180,6 +185,7 @@ private struct WindowsQuickLaunchPanel: View {
     var phase: HostDashboardPhase
     var proofPlan: WindowsAppRuntimeProofPlanStatus
     var proofArtifacts: WindowsAppRuntimeProofArtifactStatus
+    var dailyUseReadiness: WindowsAppRuntimeDailyUseReadinessStatus
     var releaseGate: WindowsAppRuntimeReleaseGateStatus
     var launchPlan: WindowsAppRuntimeLaunchPlanStatus
     var primaryNextAction: WindowsAppRuntimePrimaryNextActionStatus
@@ -293,6 +299,33 @@ private struct WindowsQuickLaunchPanel: View {
                 }
                 .disabled(proofPlan.recommendedMultiAppProofCommand == nil)
                 .help("Check Notepad, Calculator, and Paint")
+            }
+
+            Divider()
+
+            HStack(spacing: 12) {
+                StatusPill(
+                    title: "Printer Setup",
+                    symbolName: "printer",
+                    tint: .blue
+                )
+                .frame(minWidth: 118, alignment: .leading)
+
+                Text(printerBridgeDetail)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .help(printerBridgeHelp)
+
+                Spacer()
+
+                Button {
+                    runPrimaryNextAction(.showPrinterBridgePlan)
+                } label: {
+                    Label("Printer Setup", systemImage: "printer")
+                }
+                .buttonStyle(.bordered)
+                .help(printerBridgeHelp)
             }
 
             Divider()
@@ -452,6 +485,17 @@ private struct WindowsQuickLaunchPanel: View {
         }
 
         return proofArtifacts.latestProofFileName == nil ? .secondary : .green
+    }
+
+    private var printerBridgeDetail: String {
+        "Manual IPP setup at \(dailyUseReadiness.printerBridgeEndpointTemplate)"
+    }
+
+    private var printerBridgeHelp: String {
+        [
+            dailyUseReadiness.printerBridgeSetupHint,
+            "Command: \(dailyUseReadiness.printerBridgePlanCommand)"
+        ].joined(separator: "\n")
     }
 
     private var appFlowStatusTitle: String {

@@ -1863,6 +1863,7 @@ function installedRuntimeHeroSupports(actionId) {
     "runtime.quietWhenIdle",
     "runtime.stopWhenIdle",
     "dailyUse.verifyNotifications",
+    "dailyUse.planPrinterBridge",
     "proof.recommended"
   ].includes(actionId);
 }
@@ -2052,6 +2053,11 @@ function validateMenuBarIntegration(menuBarIntegration, report) {
   if (menuBarIntegration.primaryActionId === "dailyUse.verifyNotifications"
     && menuBarIntegration.primaryActionTitle !== "Check Notifications") {
     throw new TypeError("menuBarIntegration.primaryActionTitle must expose notification proof.");
+  }
+
+  if (menuBarIntegration.primaryActionId === "dailyUse.planPrinterBridge"
+    && menuBarIntegration.primaryActionTitle !== "Printer Setup") {
+    throw new TypeError("menuBarIntegration.primaryActionTitle must expose printer bridge setup.");
   }
 }
 
@@ -2539,6 +2545,7 @@ function validateActions(actions, report) {
     "dailyUse.verifyWindowCapture",
     "dailyUse.requestNotificationConsent",
     "dailyUse.verifyNotifications",
+    "dailyUse.planPrinterBridge",
     "runtime.recoverDisplay",
     "runtime.fulfillPendingLaunch",
     "runtime.waitAgent",
@@ -2654,6 +2661,16 @@ function validateActions(actions, report) {
     && report.notificationBridge.recommendedAction === "run-notification-proof";
   if (notificationProofAction.isAvailable !== canRunNotificationProof) {
     throw new TypeError("dailyUse.verifyNotifications availability must match Windows notification proof readiness.");
+  }
+
+  const printerBridgePlanAction = actions.find((action) => action.id === "dailyUse.planPrinterBridge");
+  const canPlanPrinterBridge = report.dailyUseReadiness.printerBridgeRecommendedAction === "manual-ipp-experiment"
+    && report.dailyUseReadiness.printerBridgePlanCommand === "veil-vmctl printer-bridge-plan --json --shared-printer <shared-printer-name>";
+  if (printerBridgePlanAction.title !== "Printer Setup") {
+    throw new TypeError("dailyUse.planPrinterBridge title must stay product-facing.");
+  }
+  if (printerBridgePlanAction.isAvailable !== canPlanPrinterBridge) {
+    throw new TypeError("dailyUse.planPrinterBridge availability must match printer bridge setup plan readiness.");
   }
 
   const recoverDisplayAction = actions.find((action) => action.id === "runtime.recoverDisplay");

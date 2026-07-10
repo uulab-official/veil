@@ -849,7 +849,8 @@ extension AppRuntimeDockMenuTests {
         "dailyUse.verifyIntegrations": (.runMultiAppProof, "checkmark.seal.fill"),
         "dailyUse.verifyWindowCapture": (.refreshRuntimeStatus, "arrow.clockwise"),
         "dailyUse.requestNotificationConsent": (.requestNotificationConsent, "bell.badge"),
-        "dailyUse.verifyNotifications": (.runNotificationProof, "bell.badge.fill")
+        "dailyUse.verifyNotifications": (.runNotificationProof, "bell.badge.fill"),
+        "dailyUse.planPrinterBridge": (.showPrinterBridgePlan, "printer")
     ]
 }
 

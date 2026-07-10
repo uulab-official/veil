@@ -2388,6 +2388,8 @@ private struct WindowsSetupDisplayPanel: View {
             requestNotificationConsentAction()
         case .runNotificationProof:
             runNotificationProofAction()
+        case .showPrinterBridgePlan:
+            refreshAction()
         case .runRecommendedProof:
             runRecommendedProofAction()
         case .runMultiAppProof:
