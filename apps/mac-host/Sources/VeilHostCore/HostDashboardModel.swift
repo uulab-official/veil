@@ -1549,9 +1549,9 @@ public final class HostDashboardModel {
     public private(set) var hasOpenedAppWindowThisSession = false
     public var selectedAppId: String?
     public var restorableWindowCount: Int {
-        restorableAppIds.reduce(0) { count, appId in
-            count + max(1, restorableAppWindowCounts[appId] ?? 1)
-        }
+        // The ordinary product path restores one macOS window per app. Counts from older
+        // sessions are migration/diagnostic input, not a user-visible restore queue.
+        restorableAppIds.count
     }
 
     private let service: any HostDashboardService
@@ -4077,6 +4077,15 @@ public final class HostDashboardModel {
             let restoreIntent = try await restoreIntentStore.load()
             restorableAppIds = restoreIntent?.appIds ?? []
             restorableAppWindowCounts = restoreIntent?.normalizedAppWindowCounts ?? [:]
+            if let restoreIntent,
+               restoreIntent.appWindowCounts != restorableAppWindowCounts {
+                try await restoreIntentStore.save(
+                    WindowRestoreIntent(
+                        appIds: restorableAppIds,
+                        appWindowCounts: restorableAppWindowCounts
+                    )
+                )
+            }
             pendingLaunchAppId = try await pendingLaunchIntentStore.load()?.appId
         } catch {
             errorMessage = userMessage(for: error)
@@ -4147,9 +4156,12 @@ public final class HostDashboardModel {
     ) async -> WindowsAppLaunchResult? {
         phase = .launching
         errorMessage = nil
+        let shouldReuseExistingWindow = preferExistingWindow
+            || mirrorSessions.contains(where: { $0.window.appId == appId })
+            || activeWindows.contains(where: { $0.appId == appId })
 
         do {
-            let result = try await (preferExistingWindow
+            let result = try await (shouldReuseExistingWindow
                 ? service.restoreApp(appId: appId)
                 : service.launchApp(appId: appId))
             return try await applyWindowsAppLaunchResult(result)
@@ -4584,6 +4596,13 @@ public final class HostDashboardModel {
         switch envelope.type {
         case .windowCreated:
             let event = try decoder.decode(WindowCreatedEvent.self, from: message)
+            // The event WebSocket can connect before the overview request establishes a live
+            // agent-backed model. Do not let startup discovery create a demo/unavailable mirror;
+            // the subsequent restore or explicit launch owns the first real app window.
+            guard hasLiveAgentConnection,
+                  shouldAcceptAutomaticWindowEvent(event) else {
+                return .ignored
+            }
             storeActiveWindow(event)
             storeMirrorSession(
                 window: event,
@@ -4683,6 +4702,20 @@ public final class HostDashboardModel {
         activeWindows.append(window)
     }
 
+    private func shouldAcceptAutomaticWindowEvent(_ event: WindowCreatedEvent) -> Bool {
+        if activeWindows.contains(where: { $0.windowId == event.windowId })
+            || mirrorSessions.contains(where: { $0.id == event.windowId }) {
+            return true
+        }
+
+        // A normal reconnect mirrors the first window for each app. The guest can legitimately
+        // discover older documents while its state settles; treating each one as a new macOS
+        // window creates a cascade and makes the launcher unusable. Explicit host launches still
+        // enter through applyWindowsAppLaunchResult, so they are not blocked by this event guard.
+        return !activeWindows.contains(where: { $0.appId == event.appId })
+            && !mirrorSessions.contains(where: { $0.window.appId == event.appId })
+    }
+
     private func storeMirrorSession(
         window: WindowCreatedEvent,
         connectionMode: HostConnectionMode,
@@ -4750,8 +4783,7 @@ public final class HostDashboardModel {
     private func refreshRestoreIntentFromOpenWindows() async {
         let windows = mergedOpenWindows()
         restorableAppIds = orderedUniqueAppIds(from: windows)
-        restorableAppWindowCounts = Dictionary(grouping: windows, by: \.appId)
-            .mapValues(\.count)
+        restorableAppWindowCounts = Dictionary(uniqueKeysWithValues: restorableAppIds.map { ($0, 1) })
         await persistRestoreIntent()
     }
 

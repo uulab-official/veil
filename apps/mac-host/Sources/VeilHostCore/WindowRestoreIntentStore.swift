@@ -15,8 +15,12 @@ public struct WindowRestoreIntent: Codable, Equatable, Sendable {
     }
 
     public var normalizedAppWindowCounts: [String: Int] {
+        // Restore is intentionally app-first in the pre-alpha shell: a persisted count can be
+        // diagnostic evidence from an interrupted event stream, but it must never decide how many
+        // macOS windows come back automatically. Additional document windows need an explicit
+        // user action once multi-window restore ordering is designed.
         Dictionary(uniqueKeysWithValues: appIds.map { appId in
-            (appId, max(1, appWindowCounts?[appId] ?? 1))
+            (appId, 1)
         })
     }
 }

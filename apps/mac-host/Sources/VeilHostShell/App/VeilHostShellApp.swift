@@ -85,6 +85,7 @@ struct VeilHostShellApp: App {
     @State private var automaticFrameStreamMaintenanceTask: Task<Void, Never>?
     @State private var automaticGuestAgentRecoveryAttemptedTokens: Set<String> = []
     @State private var latestReviewEvidenceFolder: ReviewEvidenceFolder?
+    private let automaticRestoreMaximumAttempts = 3
 
     init() {
         let runtimeBooter = AppRuntimeBooterFactory.make()
@@ -141,7 +142,6 @@ struct VeilHostShellApp: App {
                 .task {
                     configureDockMenuBridge()
                     configureWindowsAppWindowCloseBridge()
-                    startAgentEventPumpIfNeeded()
                     startAgentReconnectPollerIfNeeded()
                     startAutomaticFrameStreamMaintenanceLoopIfNeeded()
 
@@ -149,10 +149,11 @@ struct VeilHostShellApp: App {
                     async let hostLoad: Void = model.load()
                     async let vmLoad: Void = vmModel.load()
                     _ = await (hostLoad, vmLoad)
-                    let restoredLaunches = await model.restoreMirroredWindowsAfterReconnect()
-                    for launch in restoredLaunches {
-                        showWindowsAppWindow(for: launch)
-                    }
+                    // The event channel is intentionally started after the overview. Otherwise an
+                    // early discovery event can create a placeholder window before the model knows
+                    // that this is a capture-capable live agent.
+                    startAgentEventPumpIfNeeded()
+                    await restorePreviousWindowsAppWindowAfterLaunchIfNeeded()
                     syncLauncherWindowVisibility()
                     await recordGuestAgentInstallEvidenceIfNeeded()
 
@@ -420,6 +421,36 @@ struct VeilHostShellApp: App {
 
                 try? await Task.sleep(for: .seconds(retryDelaySeconds))
             }
+        }
+    }
+
+    private func restorePreviousWindowsAppWindowAfterLaunchIfNeeded() async {
+        guard windowsAppWindowPresenter.visibleWindowIds.isEmpty,
+              model.mirrorSessions.isEmpty,
+              !model.restorableAppIds.isEmpty else {
+            return
+        }
+
+        // The first health request can succeed just before the guest completes its agent-side
+        // recovery. Retry a few times, always with reuseExistingWindow, so startup reaches the
+        // normal single app window without turning a temporary connection race into a launch loop.
+        for attempt in 0..<automaticRestoreMaximumAttempts {
+            let restoredLaunches = await model.restoreMirroredWindowsAfterReconnect()
+            for launch in restoredLaunches {
+                showWindowsAppWindow(for: launch)
+            }
+
+            if !restoredLaunches.isEmpty || !windowsAppWindowPresenter.visibleWindowIds.isEmpty {
+                return
+            }
+
+            guard attempt + 1 < automaticRestoreMaximumAttempts else {
+                VeilLog.agent.notice(
+                    "Automatic app restore did not open a window after \(self.automaticRestoreMaximumAttempts, privacy: .public) attempts; live agent=\(model.hasLiveAgentConnection, privacy: .public)."
+                )
+                return
+            }
+            try? await Task.sleep(for: .seconds(1))
         }
     }
 

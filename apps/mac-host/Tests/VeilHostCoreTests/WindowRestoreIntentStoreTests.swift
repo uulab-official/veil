@@ -22,7 +22,7 @@ struct WindowRestoreIntentStoreTests {
         #expect(loaded?.appIds == ["winapp_notepad"])
         #expect(loaded?.appWindowCounts == ["winapp_notepad": 2])
         #expect(loaded?.appIdsForRestoreLaunches == ["winapp_notepad"])
-        #expect(loaded?.normalizedAppWindowCounts == ["winapp_notepad": 2])
+        #expect(loaded?.normalizedAppWindowCounts == ["winapp_notepad": 1])
     }
 
     @Test("loads legacy mapped app ids as one window per app")

@@ -685,6 +685,21 @@ struct HostDashboardModelTests {
         #expect(service.frameSubscriptions == ["hwnd:0005029C"])
     }
 
+    @Test("ignores discovery until the live agent overview is established")
+    @MainActor
+    func ignoresProtocolCreatedMessageBeforeLiveAgentOverview() async throws {
+        let service = FakeDashboardService(health: .captureReady, apps: [.notepad, .paint])
+        let model = HostDashboardModel(service: service)
+        let message = Data(WindowCreatedEvent.paintCreatedJSON.utf8)
+
+        let result = try await model.receiveProtocolMessage(message)
+
+        #expect(result == .ignored)
+        #expect(model.activeWindows.isEmpty)
+        #expect(model.mirrorSessions.isEmpty)
+        #expect(service.frameSubscriptions.isEmpty)
+    }
+
     @Test("routes a protocol updated message into mirrored window metadata")
     @MainActor
     func routesProtocolUpdatedMessageIntoMirroredWindowMetadata() async throws {
@@ -1841,9 +1856,9 @@ struct HostDashboardModelTests {
         #expect(artifacts.reason == "Latest app check artifact is available in Veil diagnostics.")
     }
 
-    @Test("updates active window sessions by HWND")
+    @Test("reuses the existing app window for repeated default launches")
     @MainActor
-    func updatesActiveWindowSessionsByHWND() async throws {
+    func reusesExistingAppWindowForRepeatedDefaultLaunches() async throws {
         let service = FakeDashboardService()
         let model = HostDashboardModel(service: service)
 
@@ -1853,7 +1868,8 @@ struct HostDashboardModelTests {
         #expect(model.activeWindows.count == 1)
         #expect(model.activeWindows.first?.windowId == "hwnd:0003029A")
         #expect(model.activeWindows.first?.title == "Untitled - Notepad")
-        #expect(service.launchCount == 2)
+        #expect(service.launchCount == 1)
+        #expect(service.restoreCount == 1)
     }
 
     @Test("stores service failures as user visible errors")
@@ -2483,7 +2499,8 @@ struct HostDashboardModelTests {
         #expect(model.connectionMode == .agent)
         #expect(model.mirrorSessions.map(\.id) == ["hwnd:0003029A"])
         #expect(model.restorableAppIds == ["winapp_notepad"])
-        #expect(primary.launchCount == 2)
+        #expect(primary.launchCount == 1)
+        #expect(primary.restoreCount == 1)
         #expect(primary.frameSubscriptions == ["hwnd:0003029A", "hwnd:0003029A"])
     }
 
@@ -2565,9 +2582,9 @@ struct HostDashboardModelTests {
         #expect(try await intentStore.load()?.appIds == [])
     }
 
-    @Test("keeps restored app intent until the last same-app window closes")
+    @Test("ignores extra same-app discovery windows in the default app-first mode")
     @MainActor
-    func keepsRestoredAppIntentUntilLastSameAppWindowCloses() async throws {
+    func ignoresExtraSameAppDiscoveryWindowsInDefaultAppFirstMode() async throws {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
         let intentStore = JSONWindowRestoreIntentStore(directory: directory)
@@ -2575,23 +2592,16 @@ struct HostDashboardModelTests {
         let model = HostDashboardModel(service: service, restoreIntentStore: intentStore)
 
         await model.launchNotepad()
-        _ = try await model.receiveProtocolMessage(Data(WindowCreatedEvent.secondNotepadCreatedJSON.utf8))
+        let discoveryResult = try await model.receiveProtocolMessage(Data(WindowCreatedEvent.secondNotepadCreatedJSON.utf8))
 
-        #expect(model.mirrorSessions.map(\.id) == ["hwnd:0003029A", "hwnd:00010500"])
-        #expect(model.restorableAppIds == ["winapp_notepad"])
-        #expect(model.restorableAppWindowCounts == ["winapp_notepad": 2])
-        #expect(try await intentStore.load()?.appIds == ["winapp_notepad"])
-        #expect(try await intentStore.load()?.appWindowCounts == ["winapp_notepad": 2])
-
-        _ = await model.closeMirrorSession(windowId: "hwnd:0003029A")
-
-        #expect(model.mirrorSessions.map(\.id) == ["hwnd:00010500"])
+        #expect(discoveryResult == .ignored)
+        #expect(model.mirrorSessions.map(\.id) == ["hwnd:0003029A"])
         #expect(model.restorableAppIds == ["winapp_notepad"])
         #expect(model.restorableAppWindowCounts == ["winapp_notepad": 1])
         #expect(try await intentStore.load()?.appIds == ["winapp_notepad"])
         #expect(try await intentStore.load()?.appWindowCounts == ["winapp_notepad": 1])
 
-        _ = await model.closeMirrorSession(windowId: "hwnd:00010500")
+        _ = await model.closeMirrorSession(windowId: "hwnd:0003029A")
 
         #expect(model.mirrorSessions.isEmpty)
         #expect(model.restorableAppIds.isEmpty)
@@ -2621,6 +2631,8 @@ struct HostDashboardModelTests {
         await model.load()
 
         #expect(model.restorableAppIds == ["winapp_notepad"])
+        #expect(model.restorableAppWindowCounts == ["winapp_notepad": 1])
+        #expect(try await intentStore.load()?.appWindowCounts == ["winapp_notepad": 1])
         #expect(model.canRestoreMirrorSessions)
         #expect(model.canReconnectRestoreMirrorSessions)
         #expect(model.runtimeStatusReport().actions.first { $0.id == "windowsApps.reconnectRestore" }?.isAvailable == true)
@@ -2659,14 +2671,14 @@ struct HostDashboardModelTests {
         #expect(model.hasLiveAgentConnection == false)
         #expect(model.canRestoreMirrorSessions == false)
         #expect(model.canReconnectRestoreMirrorSessions)
-        #expect(model.restorableAppWindowCounts == ["winapp_notepad": 2])
+        #expect(model.restorableAppWindowCounts == ["winapp_notepad": 1])
         #expect(report.dockIntegration.openWindowCount == 0)
         #expect(report.dockIntegration.pendingLaunchCount == 0)
         #expect(report.dockIntegration.restorableAppCount == 1)
-        #expect(report.dockIntegration.restorableWindowCount == 2)
-        #expect(report.dockIntegration.badgeLabel == "R2")
-        #expect(report.menuBarIntegration.statusTitle == "Notepad Windows Can Reconnect")
-        #expect(report.menuBarIntegration.primaryActionTitle == "Reconnect 2 Notepad Windows")
+        #expect(report.dockIntegration.restorableWindowCount == 1)
+        #expect(report.dockIntegration.badgeLabel == "R")
+        #expect(report.menuBarIntegration.statusTitle == "Notepad Can Reconnect")
+        #expect(report.menuBarIntegration.primaryActionTitle == "Reconnect Notepad")
         #expect(report.dockIntegration.canRestorePreviousApps == false)
         #expect(report.dockIntegration.canReconnectPreviousApps)
         #expect(report.menuBarIntegration.symbolName == "arrow.counterclockwise.circle.fill")
@@ -2729,6 +2741,7 @@ private final class FakeDashboardService: HostDashboardService {
     var launchWindows: [WindowCreatedEvent] = []
     private(set) var loadCount = 0
     private(set) var launchCount = 0
+    private(set) var restoreCount = 0
     private(set) var launchedAppIds: [String] = []
     private(set) var openedFiles: [(appId: String, fileName: String, contentBase64: String)] = []
     private(set) var focusedWindowIds: [String] = []
@@ -2771,6 +2784,22 @@ private final class FakeDashboardService: HostDashboardService {
         }
 
         launchCount += 1
+        launchedAppIds.append(appId)
+        let window = launchWindows.isEmpty ? .fixture(appId: appId) : launchWindows.removeFirst()
+        return WindowsAppLaunchResult(
+            health: health,
+            apps: apps,
+            launch: .fixture,
+            window: window
+        )
+    }
+
+    func restoreApp(appId: String) async throws -> WindowsAppLaunchResult {
+        if let error {
+            throw error
+        }
+
+        restoreCount += 1
         launchedAppIds.append(appId)
         let window = launchWindows.isEmpty ? .fixture(appId: appId) : launchWindows.removeFirst()
         return WindowsAppLaunchResult(

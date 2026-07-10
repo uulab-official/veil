@@ -2096,7 +2096,14 @@ struct VMProfileStoreTests {
         try await store.save(profile)
         let bootRunner = FakeVMRuntimeBooter(startState: .running, currentState: .running)
 
-        let service = LocalVMRuntimeService(profileStore: store, bootRunner: bootRunner)
+        // Keep this stop-path test isolated from a developer's real QEMU launch record. The test
+        // covers the fake boot runner only and must never inspect or terminate a live VM.
+        let qemuLaunchDirectory = directory.appendingPathComponent("QEMU Launch", isDirectory: true)
+        let service = LocalVMRuntimeService(
+            profileStore: store,
+            bootRunner: bootRunner,
+            qemuLaunchRecordStore: JSONQEMULaunchRecordStore(directory: qemuLaunchDirectory)
+        )
 
         let snapshot = try await service.stop()
 
