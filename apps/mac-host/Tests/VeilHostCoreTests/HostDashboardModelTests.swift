@@ -1497,6 +1497,8 @@ struct HostDashboardModelTests {
         #expect(report.menuBarIntegration.primaryActionAvailable)
         #expect(report.oneScreenUX.primaryActionId == "dailyUse.verifyWindowCapture")
         #expect(report.oneScreenUX.heroRunsPrimaryAction)
+        #expect(report.launchOnboarding.primaryActionId == "dailyUse.verifyWindowCapture")
+        #expect(report.launchOnboarding.canContinueInApp)
     }
 
     @Test("reports quiet runtime readiness after the final Windows app window closes")

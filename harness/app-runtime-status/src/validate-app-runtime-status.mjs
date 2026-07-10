@@ -2503,8 +2503,11 @@ function validateLaunchOnboarding(launchOnboarding, report) {
   if (launchOnboarding.keepsVMDisplayManual !== report.oneScreenUX.keepsDisplayRecoveryManual) {
     throw new TypeError("launchOnboarding.keepsVMDisplayManual must match oneScreenUX.");
   }
-  if (launchOnboarding.primaryActionId !== report.primaryNextAction.actionId) {
-    throw new TypeError("launchOnboarding.primaryActionId must match primaryNextAction.actionId.");
+  const expectedLaunchPrimaryActionId = report.oneScreenUX.heroRunsPrimaryAction
+    ? (report.oneScreenUX.primaryActionId ?? report.primaryNextAction.actionId)
+    : report.primaryNextAction.actionId;
+  if (launchOnboarding.primaryActionId !== expectedLaunchPrimaryActionId) {
+    throw new TypeError("launchOnboarding.primaryActionId must match the executable one-screen primary action.");
   }
   if (launchOnboarding.primaryCommand !== report.primaryNextAction.command) {
     throw new TypeError("launchOnboarding.primaryCommand must match primaryNextAction.command.");
@@ -2533,9 +2536,9 @@ function validateLaunchOnboarding(launchOnboarding, report) {
     throw new TypeError("launchOnboarding.progressLabel must summarize the current releaseGate step.");
   }
 
-  const expectedCanContinueInApp = report.primaryNextAction.runsInApp
-    && report.primaryNextAction.isAvailable
-    && report.oneScreenUX.heroRunsPrimaryAction;
+  const expectedCanContinueInApp = report.primaryNextAction.isAvailable
+    && report.oneScreenUX.heroRunsPrimaryAction
+    && expectedLaunchPrimaryActionId !== undefined;
   if (launchOnboarding.canContinueInApp !== expectedCanContinueInApp) {
     throw new TypeError("launchOnboarding.canContinueInApp must match the executable one-screen action.");
   }

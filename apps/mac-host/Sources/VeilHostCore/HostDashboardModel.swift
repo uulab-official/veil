@@ -3692,9 +3692,12 @@ public final class HostDashboardModel {
         primaryNextAction: WindowsAppRuntimePrimaryNextActionStatus,
         oneScreenUX: WindowsAppRuntimeOneScreenUXStatus
     ) -> WindowsAppRuntimeLaunchOnboardingStatus {
-        let canContinueInApp = primaryNextAction.runsInApp
-            && primaryNextAction.isAvailable
+        let launchPrimaryActionId = oneScreenUX.heroRunsPrimaryAction
+            ? (oneScreenUX.primaryActionId ?? primaryNextAction.actionId)
+            : primaryNextAction.actionId
+        let canContinueInApp = primaryNextAction.isAvailable
             && oneScreenUX.heroRunsPrimaryAction
+            && launchPrimaryActionId != nil
         let state: String
         let reason: String
 
@@ -3742,7 +3745,7 @@ public final class HostDashboardModel {
             totalStepCount: totalStepCount,
             currentStepNumber: currentStepNumber,
             progressLabel: "Step \(currentStepNumber) of \(totalStepCount)",
-            primaryActionId: primaryNextAction.actionId,
+            primaryActionId: launchPrimaryActionId,
             primaryCommand: primaryNextAction.command,
             reason: reason
         )

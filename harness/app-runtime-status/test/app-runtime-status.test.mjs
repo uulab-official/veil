@@ -372,9 +372,12 @@ function refreshLaunchOnboarding(report) {
     return;
   }
 
-  const canContinueInApp = report.primaryNextAction.runsInApp
-    && report.primaryNextAction.isAvailable
-    && report.oneScreenUX.heroRunsPrimaryAction;
+  const launchPrimaryActionId = report.oneScreenUX.heroRunsPrimaryAction
+    ? (report.oneScreenUX.primaryActionId ?? report.primaryNextAction.actionId)
+    : report.primaryNextAction.actionId;
+  const canContinueInApp = report.primaryNextAction.isAvailable
+    && report.oneScreenUX.heroRunsPrimaryAction
+    && launchPrimaryActionId !== undefined;
   report.launchOnboarding.state = report.releaseGate.isPassing
     ? "ready-for-review"
     : (canContinueInApp ? "continue-in-app" : (report.primaryNextAction.isAvailable ? "external-check" : "blocked"));
@@ -398,7 +401,7 @@ function refreshLaunchOnboarding(report) {
       ? recommendedStepIndex + 1
       : Math.min(report.releaseGate.passingStepCount + 1, report.releaseGate.requiredStepCount));
   report.launchOnboarding.progressLabel = `Step ${report.launchOnboarding.currentStepNumber} of ${report.releaseGate.requiredStepCount}`;
-  report.launchOnboarding.primaryActionId = report.primaryNextAction.actionId;
+  report.launchOnboarding.primaryActionId = launchPrimaryActionId;
   report.launchOnboarding.primaryCommand = report.primaryNextAction.command;
 }
 
@@ -1775,6 +1778,9 @@ test("accepts Daily Use window capture as the menu bar primary action", () => {
   const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.mac-window-live.json", import.meta.url), "utf8"));
   setPackageIdentityWithoutWindowCapture(report);
 
+  assert.equal(report.oneScreenUX.primaryActionId, "dailyUse.verifyWindowCapture");
+  assert.equal(report.launchOnboarding.primaryActionId, "dailyUse.verifyWindowCapture");
+  assert.equal(report.launchOnboarding.canContinueInApp, true);
   assert.equal(validateAppRuntimeStatus(report), report);
 });
 
@@ -1787,6 +1793,17 @@ test("rejects menu bar primary action that skips Daily Use window capture", () =
   assert.throws(
     () => validateAppRuntimeStatus(report),
     /primaryActionId/
+  );
+});
+
+test("rejects launch onboarding action that skips one-screen Daily Use primary action", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.mac-window-live.json", import.meta.url), "utf8"));
+  setPackageIdentityWithoutWindowCapture(report);
+  report.launchOnboarding.primaryActionId = "runtime.refreshStatus";
+
+  assert.throws(
+    () => validateAppRuntimeStatus(report),
+    /launchOnboarding\.primaryActionId/
   );
 });
 
