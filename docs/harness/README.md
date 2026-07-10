@@ -401,7 +401,11 @@ The same evidence is also flattened into
 `packageIdentityMessage`, and `packageIdentityEvidencePath` so app surfaces can
 show the current Daily Use blocker without parsing the full nested status
 object. The app-runtime-status harness rejects drift between those summary
-fields and `packageIdentityStatus`.
+fields and `packageIdentityStatus`. It also rejects contradictory live readiness:
+`connection.capabilities.packageIdentity` and
+`connection.packageIdentityStatus.succeeded` must agree whenever sparse package
+evidence is present, and a notification listener cannot claim `canListen=true`
+without live package identity.
 
 `releaseGate` turns the one-minute Parallels-style launch checklist into a
 machine-readable contract. It records the five required release-card steps:

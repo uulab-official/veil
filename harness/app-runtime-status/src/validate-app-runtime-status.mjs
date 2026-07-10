@@ -130,6 +130,15 @@ function validateConnection(connection) {
   if (connection.notificationListener !== undefined) {
     validateNotificationListenerStatus(connection.notificationListener, "connection.notificationListener");
   }
+
+  const packageIdentityReady = connection.capabilities?.packageIdentity === true;
+  if (connection.packageIdentityStatus !== undefined
+    && connection.packageIdentityStatus.succeeded !== packageIdentityReady) {
+    throw new TypeError("connection.packageIdentityStatus.succeeded must match connection.capabilities.packageIdentity.");
+  }
+  if (connection.notificationListener?.canListen === true && !packageIdentityReady) {
+    throw new TypeError("connection.notificationListener.canListen requires connection.capabilities.packageIdentity.");
+  }
 }
 
 function validateCapabilities(capabilities) {

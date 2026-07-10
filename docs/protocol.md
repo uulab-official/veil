@@ -96,13 +96,18 @@ whether sparse package preparation has not run, failed, or reached a later
 stage. The object must not include certificate passwords or PFX private-key
 contents; it only carries paths, the latest stage, success state, and a human
 failure/progress message.
+When present, `packageIdentityStatus.succeeded` must agree with
+`capabilities.packageIdentity`: Veil must not present package identity as ready
+while the latest sparse-package evidence says preparation is incomplete, or
+present successful sparse-package evidence while the live agent is still running
+without package identity.
 
 `notificationListener` is optional for backwards compatibility. Current agents
 include it so the host can distinguish the sparse-package prerequisite from the
 Windows `UserNotificationListener` consent state. `canListen=true` means the
 agent can start the package-gated listener and the next proof step is
-`run-notification-proof`; otherwise `recommendedAction` names the specific
-blocker, such as `prepare-sparse-package`,
+`run-notification-proof`; it also requires live package identity. Otherwise
+`recommendedAction` names the specific blocker, such as `prepare-sparse-package`,
 `request-notification-listener-consent`, or
 `enable-notification-listener-settings`.
 

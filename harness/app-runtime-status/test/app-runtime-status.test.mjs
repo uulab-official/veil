@@ -1353,6 +1353,44 @@ test("rejects live agent reports without structured capabilities", () => {
   );
 });
 
+test("rejects package identity capability that contradicts sparse package evidence", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.mac-window-live.json", import.meta.url), "utf8"));
+  report.connection.capabilities.packageIdentity = true;
+
+  assert.throws(
+    () => validateAppRuntimeStatus(report),
+    /packageIdentityStatus\.succeeded/
+  );
+});
+
+test("rejects sparse package success evidence without live package identity", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.mac-window-live.json", import.meta.url), "utf8"));
+  report.connection.packageIdentityStatus.succeeded = true;
+  report.connection.packageIdentityStatus.stage = "registered";
+  report.connection.packageIdentityStatus.message = "Sparse package registered and agent restarted with package identity.";
+
+  assert.throws(
+    () => validateAppRuntimeStatus(report),
+    /packageIdentityStatus\.succeeded/
+  );
+});
+
+test("rejects notification listener readiness without live package identity", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.mac-window-live.json", import.meta.url), "utf8"));
+  report.connection.notificationListener = {
+    isSupported: true,
+    canListen: true,
+    accessStatus: "allowed",
+    recommendedAction: "run-notification-proof",
+    requiresPackageIdentity: true
+  };
+
+  assert.throws(
+    () => validateAppRuntimeStatus(report),
+    /notificationListener\.canListen/
+  );
+});
+
 test("rejects Daily Use readiness that skips package identity", () => {
   const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.mac-window-live.json", import.meta.url), "utf8"));
   report.dailyUseReadiness.packageIdentityReady = true;
