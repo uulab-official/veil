@@ -313,6 +313,7 @@ function validateEvidence(evidence, status) {
   validateEvidenceProofLatency(evidence, status);
   validateEvidenceNotificationProof(evidence, status);
   validateEvidencePrinterBridgeProof(evidence, status);
+  validateEvidenceDailyUseReadiness(evidence, status);
   if (evidence.recommendedAppCheckCommand !== undefined) {
     requireString(evidence.recommendedAppCheckCommand, "evidence.recommendedAppCheckCommand");
   }
@@ -326,6 +327,45 @@ function validateEvidence(evidence, status) {
   }
 
   return evidence.hostAppBundle;
+}
+
+function validateEvidenceDailyUseReadiness(evidence, status) {
+  const dailyUseReadiness = status.dailyUseReadiness;
+  requireBoolean(evidence.dailyUsePackageIdentityReady, "evidence.dailyUsePackageIdentityReady");
+  requireBoolean(evidence.dailyUseBorderlessCapturePreflightPassed, "evidence.dailyUseBorderlessCapturePreflightPassed");
+  requireBoolean(evidence.dailyUseNotificationBridgePreflightPassed, "evidence.dailyUseNotificationBridgePreflightPassed");
+  requireString(evidence.dailyUseRecommendedAction, "evidence.dailyUseRecommendedAction");
+  requireString(evidence.dailyUseReason, "evidence.dailyUseReason");
+
+  if (evidence.dailyUseRecommendedCommand !== undefined) {
+    requireString(evidence.dailyUseRecommendedCommand, "evidence.dailyUseRecommendedCommand");
+  }
+  if (evidence.dailyUsePackageIdentityStage !== undefined) {
+    requireString(evidence.dailyUsePackageIdentityStage, "evidence.dailyUsePackageIdentityStage");
+  }
+  if (evidence.dailyUsePackageIdentitySucceeded !== undefined) {
+    requireBoolean(evidence.dailyUsePackageIdentitySucceeded, "evidence.dailyUsePackageIdentitySucceeded");
+  }
+  if (evidence.dailyUsePackageIdentityEvidencePath !== undefined) {
+    requireString(evidence.dailyUsePackageIdentityEvidencePath, "evidence.dailyUsePackageIdentityEvidencePath");
+  }
+
+  const fields = [
+    ["dailyUsePackageIdentityReady", "packageIdentityReady"],
+    ["dailyUseBorderlessCapturePreflightPassed", "borderlessCapturePreflightPassed"],
+    ["dailyUseNotificationBridgePreflightPassed", "notificationBridgePreflightPassed"],
+    ["dailyUseRecommendedAction", "recommendedAction"],
+    ["dailyUseRecommendedCommand", "recommendedCommand"],
+    ["dailyUseReason", "reason"],
+    ["dailyUsePackageIdentityStage", "packageIdentityStage"],
+    ["dailyUsePackageIdentitySucceeded", "packageIdentitySucceeded"],
+    ["dailyUsePackageIdentityEvidencePath", "packageIdentityEvidencePath"]
+  ];
+  for (const [evidenceField, statusField] of fields) {
+    if (evidence[evidenceField] !== dailyUseReadiness[statusField]) {
+      throw new TypeError(`evidence.${evidenceField} must match status dailyUseReadiness.${statusField}.`);
+    }
+  }
 }
 
 function validateEvidenceNotificationProof(evidence, status) {

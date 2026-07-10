@@ -74,6 +74,26 @@ test("rejects multi-app proof coverage drift from embedded status", () => {
   );
 });
 
+test("rejects Daily Use evidence drift from embedded status", () => {
+  const card = demoReviewCard();
+  card.evidence.dailyUseRecommendedAction = "verify-daily-use-integrations";
+
+  assert.throws(
+    () => validateAppRuntimeReview(card),
+    /dailyUseRecommendedAction/
+  );
+});
+
+test("rejects package identity evidence drift from embedded status", () => {
+  const card = demoReviewCard();
+  card.evidence.dailyUsePackageIdentitySucceeded = true;
+
+  assert.throws(
+    () => validateAppRuntimeReview(card),
+    /dailyUsePackageIdentitySucceeded/
+  );
+});
+
 test("rejects latest notification proof drift from embedded status", () => {
   const card = demoReviewCard();
   Object.assign(card.status.proofArtifacts, {

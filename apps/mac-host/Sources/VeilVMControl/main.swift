@@ -797,6 +797,15 @@ struct AppRuntimeReviewEvidence: Codable, Equatable {
     var latestPrinterBridgeProofEvidenceByteCount: Int?
     var latestPrinterBridgeProofEvidenceModifiedAt: Date?
     var latestPrinterBridgeProofIppEndpoint: String?
+    var dailyUsePackageIdentityReady: Bool
+    var dailyUseBorderlessCapturePreflightPassed: Bool
+    var dailyUseNotificationBridgePreflightPassed: Bool
+    var dailyUseRecommendedAction: String
+    var dailyUseRecommendedCommand: String?
+    var dailyUseReason: String
+    var dailyUsePackageIdentityStage: String?
+    var dailyUsePackageIdentitySucceeded: Bool?
+    var dailyUsePackageIdentityEvidencePath: String?
     var diagnosticsDirectory: String
     var screenshotEvidenceDirectory: String?
     var recommendedAppCheckCommand: String?
@@ -1601,6 +1610,23 @@ struct VeilVMControl {
         if let printerProofEvidence = card.evidence.latestPrinterBridgeProofEvidenceFileName {
             print("  Latest printer evidence: \(printerProofEvidence)")
         }
+        print("  Daily Use package identity: \(card.evidence.dailyUsePackageIdentityReady ? "ready" : "needed")")
+        print("  Daily Use borderless capture: \(card.evidence.dailyUseBorderlessCapturePreflightPassed ? "ready" : "blocked")")
+        print("  Daily Use notifications: \(card.evidence.dailyUseNotificationBridgePreflightPassed ? "ready" : "blocked")")
+        print("  Daily Use action: \(card.evidence.dailyUseRecommendedAction)")
+        if let dailyUseCommand = card.evidence.dailyUseRecommendedCommand {
+            print("  Daily Use command: \(dailyUseCommand)")
+        }
+        if let packageIdentityStage = card.evidence.dailyUsePackageIdentityStage {
+            print("  Daily Use package identity stage: \(packageIdentityStage)")
+        }
+        if let packageIdentitySucceeded = card.evidence.dailyUsePackageIdentitySucceeded {
+            print("  Daily Use package identity status: \(packageIdentitySucceeded ? "succeeded" : "not complete")")
+        }
+        if let packageIdentityEvidencePath = card.evidence.dailyUsePackageIdentityEvidencePath {
+            print("  Daily Use package identity evidence: \(packageIdentityEvidencePath)")
+        }
+        print("  Daily Use reason: \(card.evidence.dailyUseReason)")
         if let coverageHealth = card.evidence.multiAppProofCoverageHealth,
            let coverageCount = card.evidence.multiAppProofCoverageCount,
            let targetCount = card.evidence.multiAppProofTargetAppIds?.count {
@@ -2527,6 +2553,15 @@ struct VeilVMControl {
                 latestPrinterBridgeProofEvidenceByteCount: report.proofArtifacts.latestPrinterBridgeProofEvidenceByteCount,
                 latestPrinterBridgeProofEvidenceModifiedAt: report.proofArtifacts.latestPrinterBridgeProofEvidenceModifiedAt,
                 latestPrinterBridgeProofIppEndpoint: report.proofArtifacts.latestPrinterBridgeProofIppEndpoint,
+                dailyUsePackageIdentityReady: report.dailyUseReadiness.packageIdentityReady,
+                dailyUseBorderlessCapturePreflightPassed: report.dailyUseReadiness.borderlessCapturePreflightPassed,
+                dailyUseNotificationBridgePreflightPassed: report.dailyUseReadiness.notificationBridgePreflightPassed,
+                dailyUseRecommendedAction: report.dailyUseReadiness.recommendedAction,
+                dailyUseRecommendedCommand: report.dailyUseReadiness.recommendedCommand,
+                dailyUseReason: report.dailyUseReadiness.reason,
+                dailyUsePackageIdentityStage: report.dailyUseReadiness.packageIdentityStage,
+                dailyUsePackageIdentitySucceeded: report.dailyUseReadiness.packageIdentitySucceeded,
+                dailyUsePackageIdentityEvidencePath: report.dailyUseReadiness.packageIdentityEvidencePath,
                 diagnosticsDirectory: report.proofArtifacts.diagnosticsDirectory,
                 screenshotEvidenceDirectory: evidenceDirectoryURL?.path,
                 recommendedAppCheckCommand: report.proofPlan.recommendedProofCommand,

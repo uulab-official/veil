@@ -50,7 +50,13 @@
     "latestAppCheckLatencyBudgetMilliseconds": 1000,
     "latestAppCheckStaleTimeoutMilliseconds": 5000,
     "latestAppCheckLatencyRecommendedAction": "measure-again",
-    "screenshotEvidenceDirectory": "/tmp/veil-review-verify"
+    "screenshotEvidenceDirectory": "/tmp/veil-review-verify",
+    "dailyUsePackageIdentityReady": false,
+    "dailyUseBorderlessCapturePreflightPassed": false,
+    "dailyUseNotificationBridgePreflightPassed": false,
+    "dailyUseRecommendedAction": "connect-agent",
+    "dailyUseRecommendedCommand": "veil-vmctl guest-agent-wait --json --wait-seconds 30",
+    "dailyUseReason": "Connect the Windows app agent before checking Daily Use integrations."
   },
   "generatedAt": "2026-07-09T21:47:08Z",
   "invalidScreenshotCount": 0,

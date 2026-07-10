@@ -499,8 +499,14 @@ report embedded for automation, but surfaces the human review contract directly:
 app-flow readiness, the next product action, the five release-gate steps, the
 top-level `launchOnboarding` state used by the launcher, the required
 screenshot slots, the minimum screenshot dimensions, the latest app-check
-artifact, and the recommended next app check. Its evidence block also includes
-the staged host app bundle
+artifact, and the recommended next app check. Its evidence block mirrors the
+Daily Use preflight from `status.dailyUseReadiness` as well: package identity
+readiness, borderless capture readiness, Windows notification readiness, the
+current Daily Use action/command/reason, and the sparse package evidence stage
+when present. The review harness rejects drift between that evidence summary
+and the embedded status so reviewers can see the current Parallels-style
+integration blocker without parsing nested JSON. Its evidence block also
+includes the staged host app bundle
 contract: `dist/Veil.app`, `Info.plist`, executable, icon, bundle identifier,
 the latest successful `veil-launch-report-latest.plist`, the latest failed
 launch-contract report when present, and the exact
