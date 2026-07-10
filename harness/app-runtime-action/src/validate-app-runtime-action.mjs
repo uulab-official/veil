@@ -5,7 +5,7 @@ import { validateAppRuntimeStatus } from "../../app-runtime-status/src/validate-
 import { validateGuestAgentWait } from "../../guest-agent-wait/src/validate-guest-agent-wait.mjs";
 import { validateMultiAppProof } from "../../multi-app-proof/src/validate-multi-app-proof.mjs";
 
-const VALID_ACTIONS = new Set(["launch", "fulfill-pending", "focus", "close", "close-all", "restart-frame-stream", "recover-window-capture", "reopen-window", "maintain-frame-streams", "restore", "reconnect-restore", "bring-forward", "recover-display", "wait-agent", "repair-agent", "prepare-sparse-package", "quiet-when-idle", "stop-runtime", "clipboard", "type-text", "click", "proof-recommended", "proof-multi-app"]);
+const VALID_ACTIONS = new Set(["launch", "fulfill-pending", "focus", "close", "close-all", "restart-frame-stream", "recover-window-capture", "reopen-window", "maintain-frame-streams", "restore", "reconnect-restore", "bring-forward", "recover-display", "wait-agent", "repair-agent", "prepare-sparse-package", "request-notification-consent", "quiet-when-idle", "stop-runtime", "clipboard", "type-text", "click", "proof-recommended", "proof-multi-app"]);
 const VALID_CONNECTION_MODES = new Set(["agent", "demo"]);
 const VALID_CONSOLE_PREVIEW_STATES = new Set(["fresh", "stale", "unavailable"]);
 
@@ -78,6 +78,10 @@ export function validateAppRuntimeAction(report) {
     throw new TypeError("sparsePackagePreparation is only allowed for prepare-sparse-package actions.");
   }
 
+  if (report.action !== "request-notification-consent" && report.notificationConsent !== undefined && report.notificationConsent !== null) {
+    throw new TypeError("notificationConsent is only allowed for request-notification-consent actions.");
+  }
+
   switch (report.action) {
     case "launch":
       validateLaunchAction(report);
@@ -127,6 +131,9 @@ export function validateAppRuntimeAction(report) {
     case "prepare-sparse-package":
       validatePrepareSparsePackageAction(report);
       break;
+    case "request-notification-consent":
+      validateNotificationConsentAction(report);
+      break;
     case "quiet-when-idle":
       validateQuietWhenIdleAction(report);
       break;
@@ -154,6 +161,96 @@ export function validateAppRuntimeAction(report) {
   validateGuestToolsMediaRebuildNextActions(report);
   validateProofNextActions(report);
   return report;
+}
+
+function validateNotificationConsentAction(report) {
+  if (!report.notificationConsent || typeof report.notificationConsent !== "object" || Array.isArray(report.notificationConsent)) {
+    throw new TypeError("request-notification-consent actions must include notificationConsent.");
+  }
+
+  requireString(report.notificationConsent.kind, "notificationConsent.kind");
+  if (report.notificationConsent.kind !== "windowsNotificationConsentRequest") {
+    throw new TypeError("notificationConsent.kind must be windowsNotificationConsentRequest.");
+  }
+  requireString(report.notificationConsent.command, "notificationConsent.command");
+  if (!report.notificationConsent.command.includes("--action request-notification-consent")) {
+    throw new TypeError("notificationConsent.command must point at the request-notification-consent action.");
+  }
+
+  if (report.status.connection.mode === "demo") {
+    if (report.accepted) {
+      throw new TypeError("demo request-notification-consent actions must not be accepted.");
+    }
+    if (report.notificationConsent.response !== undefined && report.notificationConsent.response !== null) {
+      throw new TypeError("demo request-notification-consent actions must not include a live response.");
+    }
+    if (!report.nextActions.some((action) => action.includes("Omit `--demo`"))) {
+      throw new TypeError("demo request-notification-consent actions must explain how to request live notification consent.");
+    }
+    return;
+  }
+
+  if (report.status.connection.capabilities?.packageIdentity !== true) {
+    if (report.accepted) {
+      throw new TypeError("request-notification-consent actions require package identity before acceptance.");
+    }
+    if (report.notificationConsent.response !== undefined && report.notificationConsent.response !== null) {
+      throw new TypeError("request-notification-consent actions without package identity must not include a live response.");
+    }
+    if (!report.nextActions.some((action) => action.includes("prepare-sparse-package"))) {
+      throw new TypeError("request-notification-consent actions without package identity must point at sparse package preparation.");
+    }
+    return;
+  }
+
+  validateNotificationListenerResponse(report.notificationConsent.response);
+  if (report.accepted !== report.notificationConsent.response.accepted) {
+    throw new TypeError("request-notification-consent accepted must match the agent notification listener response.");
+  }
+
+  if (report.accepted && !report.nextActions.some((action) => action.includes("notification-proof"))) {
+    throw new TypeError("accepted request-notification-consent actions must point at notification-proof.");
+  }
+
+  if (!report.accepted && !report.nextActions.some((action) => action.includes("app-runtime-status"))) {
+    throw new TypeError("rejected request-notification-consent actions must point at app-runtime-status inspection.");
+  }
+}
+
+function validateNotificationListenerResponse(response) {
+  if (!response || typeof response !== "object" || Array.isArray(response)) {
+    throw new TypeError("notificationConsent.response must be an object.");
+  }
+
+  requireString(response.type, "notificationConsent.response.type");
+  if (response.type !== "notification.listener.response") {
+    throw new TypeError("notificationConsent.response.type must be notification.listener.response.");
+  }
+  requireString(response.requestId, "notificationConsent.response.requestId");
+  requireBoolean(response.accepted, "notificationConsent.response.accepted");
+  requireNonNegativeInteger(response.protocolVersion, "notificationConsent.response.protocolVersion");
+  if (response.protocolVersion < 1) {
+    throw new TypeError("notificationConsent.response.protocolVersion must be positive.");
+  }
+  validateNotificationListenerStatus(response.notificationListener, "notificationConsent.response.notificationListener");
+  if (response.accepted !== response.notificationListener.canListen) {
+    throw new TypeError("notificationConsent.response.accepted must match notificationListener.canListen.");
+  }
+}
+
+function validateNotificationListenerStatus(status, prefix) {
+  if (!status || typeof status !== "object" || Array.isArray(status)) {
+    throw new TypeError(`${prefix} must be an object.`);
+  }
+
+  requireBoolean(status.isSupported, `${prefix}.isSupported`);
+  requireBoolean(status.canListen, `${prefix}.canListen`);
+  requireBoolean(status.requiresPackageIdentity, `${prefix}.requiresPackageIdentity`);
+  requireString(status.accessStatus, `${prefix}.accessStatus`);
+  requireString(status.recommendedAction, `${prefix}.recommendedAction`);
+  if (status.message !== undefined) {
+    requireString(status.message, `${prefix}.message`);
+  }
 }
 
 function validateRepairAgentAction(report) {

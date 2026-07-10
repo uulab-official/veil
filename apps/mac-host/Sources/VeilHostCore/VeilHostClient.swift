@@ -849,6 +849,12 @@ public struct VeilHostClient: HostDashboardService, Sendable {
         )
     }
 
+    public func requestWindowsNotificationListenerConsent() async throws -> WindowsNotificationListenerResponse {
+        try await request(
+            WindowsNotificationListenerRequest(requestId: "req_notification_listener")
+        )
+    }
+
     public func diagnoseAgentConnection(
         endpoint: String,
         timeoutNanoseconds: UInt64 = 5_000_000_000

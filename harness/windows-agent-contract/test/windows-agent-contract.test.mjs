@@ -236,6 +236,7 @@ test("windows agent wires package-gated Windows notification listener", async ()
   assert.match(listener, /UserNotificationListener\.Current/);
   assert.match(listener, /GetAccessStatus\(\)\s*!=\s*UserNotificationListenerAccessStatus\.Allowed/);
   assert.match(listener, /UserNotificationListener\.Current\.GetAccessStatus\(\)/);
+  assert.match(listener, /RequestAccessAsync\(\)/);
   assert.match(listener, /GetNotificationsAsync\(NotificationKinds\.Toast\)/);
   assert.match(listener, /NotificationChanged/);
   assert.match(listener, /KnownNotificationBindings\.ToastGeneric/);
@@ -243,9 +244,16 @@ test("windows agent wires package-gated Windows notification listener", async ()
   assert.match(listener, /packageIdentityProbe\.HasPackageIdentity/);
   assert.match(session, /IWindowsNotificationAccessProbe/);
   assert.match(session, /notificationAccessProbe\.ReadStatus\(hasPackageIdentity\)/);
+  assert.match(session, /MessageTypes\.NotificationListenerRequest/);
+  assert.match(session, /notificationAccessProbe\.RequestAccessAsync\(hasPackageIdentity,\s*cancellationToken\)/);
+  assert.match(session, /MessageTypes\.NotificationListenerResponse/);
   assert.match(session, /\["notificationListener"\]/);
   assert.match(streamer, /TryAccept/);
   assert.match(models, /MessageTypes\.NotificationReceived/);
+  assert.match(models, /NotificationReceived/);
+  assert.match(session, /\["accepted"\]\s*=\s*status\["canListen"\]/);
+  assert.match(await readFile(resolve(agentRoot, "src/VeilAgent/MessageTypes.cs"), "utf8"), /NotificationListenerRequest\s*=\s*"notification\.listener\.request"/);
+  assert.match(await readFile(resolve(agentRoot, "src/VeilAgent/MessageTypes.cs"), "utf8"), /NotificationListenerResponse\s*=\s*"notification\.listener\.response"/);
 });
 
 test("windows agent broadcasts guest clipboard text changes without host echo loops", async () => {

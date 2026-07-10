@@ -18,6 +18,8 @@ export const MessageType = Object.freeze({
   WindowCloseRequest: "window.close.request",
   WindowCloseResponse: "window.close.response",
   ClipboardTextSet: "clipboard.text.set",
+  NotificationListenerRequest: "notification.listener.request",
+  NotificationListenerResponse: "notification.listener.response",
   InputMouse: "input.mouse",
   InputKey: "input.key",
   Error: "error"
@@ -103,20 +105,47 @@ export function validateAgentHealthResponse(response) {
   return response;
 }
 
-function validateNotificationListenerStatus(status) {
+export function validateNotificationListenerRequest(request) {
+  if (!request || request.type !== MessageType.NotificationListenerRequest) {
+    throw new TypeError("Notification listener request must use type notification.listener.request.");
+  }
+
+  requireNonEmptyString(request.requestId, "requestId", "Notification listener request");
+  requirePositiveInteger(request.protocolVersion, "protocolVersion", "Notification listener request");
+  return request;
+}
+
+export function validateNotificationListenerResponse(response) {
+  if (!response || response.type !== MessageType.NotificationListenerResponse) {
+    throw new TypeError("Notification listener response must use type notification.listener.response.");
+  }
+
+  requireNonEmptyString(response.requestId, "requestId", "Notification listener response");
+  requirePositiveInteger(response.protocolVersion, "protocolVersion", "Notification listener response");
+  if (typeof response.accepted !== "boolean") {
+    throw new TypeError("Notification listener response field 'accepted' must be a boolean.");
+  }
+  validateNotificationListenerStatus(response.notificationListener, "Notification listener response");
+  if (response.accepted !== response.notificationListener.canListen) {
+    throw new TypeError("Notification listener response field 'accepted' must match notificationListener.canListen.");
+  }
+  return response;
+}
+
+function validateNotificationListenerStatus(status, context = "Agent health response") {
   if (!status || typeof status !== "object" || Array.isArray(status)) {
-    throw new TypeError("Agent health response field 'notificationListener' must be an object when present.");
+    throw new TypeError(`${context} field 'notificationListener' must be an object when present.`);
   }
 
   for (const field of ["isSupported", "canListen", "requiresPackageIdentity"]) {
     if (typeof status[field] !== "boolean") {
-      throw new TypeError(`Agent health response field 'notificationListener.${field}' must be a boolean.`);
+      throw new TypeError(`${context} field 'notificationListener.${field}' must be a boolean.`);
     }
   }
-  requireNonEmptyString(status.accessStatus, "notificationListener.accessStatus", "Agent health response");
-  requireNonEmptyString(status.recommendedAction, "notificationListener.recommendedAction", "Agent health response");
+  requireNonEmptyString(status.accessStatus, "notificationListener.accessStatus", context);
+  requireNonEmptyString(status.recommendedAction, "notificationListener.recommendedAction", context);
   if (status.message !== undefined) {
-    requireNonEmptyString(status.message, "notificationListener.message", "Agent health response");
+    requireNonEmptyString(status.message, "notificationListener.message", context);
   }
 }
 

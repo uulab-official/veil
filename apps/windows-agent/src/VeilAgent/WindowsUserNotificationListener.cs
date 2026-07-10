@@ -161,6 +161,8 @@ public static class WindowsNotificationListenerFactory
 public interface IWindowsNotificationAccessProbe
 {
     JsonObject ReadStatus(bool hasPackageIdentity);
+
+    Task<JsonObject> RequestAccessAsync(bool hasPackageIdentity, CancellationToken cancellationToken);
 }
 
 public sealed class WindowsNotificationAccessProbe : IWindowsNotificationAccessProbe
@@ -218,6 +220,33 @@ public sealed class WindowsNotificationAccessProbe : IWindowsNotificationAccessP
             };
         }
         catch (Exception error)
+        {
+            var status = Status(
+                isSupported: true,
+                canListen: false,
+                accessStatus: "unknown",
+                recommendedAction: "inspect-notification-listener"
+            );
+            status["message"] = $"{error.GetType().Name}: {error.Message}";
+            return status;
+        }
+    }
+
+    public async Task<JsonObject> RequestAccessAsync(bool hasPackageIdentity, CancellationToken cancellationToken)
+    {
+        if (!OperatingSystem.IsWindows() || !hasPackageIdentity)
+        {
+            return ReadStatus(hasPackageIdentity);
+        }
+
+        try
+        {
+            _ = await UserNotificationListener.Current
+                .RequestAccessAsync()
+                .AsTask(cancellationToken);
+            return ReadStatus(hasPackageIdentity);
+        }
+        catch (Exception error) when (error is not OperationCanceledException)
         {
             var status = Status(
                 isSupported: true,

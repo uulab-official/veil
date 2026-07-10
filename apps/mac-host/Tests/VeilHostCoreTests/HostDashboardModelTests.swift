@@ -1412,6 +1412,7 @@ struct HostDashboardModelTests {
         #expect(report.notificationBridge.canReceiveNotifications == false)
         #expect(report.notificationBridge.recommendedAction == "enable-notification-listener-settings")
         #expect(report.notificationBridge.reason.contains("listener consent"))
+        #expect(report.actions.first { $0.id == "dailyUse.requestNotificationConsent" }?.isAvailable == true)
     }
 
     @Test("Daily Use readiness allows notification proof after Windows listener consent")
@@ -1431,6 +1432,7 @@ struct HostDashboardModelTests {
         #expect(report.notificationBridge.deliveredNotificationCount == 0)
         #expect(report.notificationBridge.recommendedAction == "run-notification-proof")
         #expect(report.notificationBridge.reason.contains("run notification-proof"))
+        #expect(report.actions.first { $0.id == "dailyUse.requestNotificationConsent" }?.isAvailable == false)
     }
 
     @Test("Daily Use readiness prefers multi-app proof when every target app is launchable")

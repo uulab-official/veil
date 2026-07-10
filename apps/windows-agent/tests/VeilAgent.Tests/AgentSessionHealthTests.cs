@@ -24,6 +24,9 @@ public class AgentSessionHealthTests
 
     private sealed class FakeNotificationAccessProbe : IWindowsNotificationAccessProbe
     {
+        public bool WasRequested { get; private set; }
+        public bool? RequestPackageIdentityInput { get; private set; }
+
         public JsonObject Status { get; init; } = new()
         {
             ["isSupported"] = true,
@@ -37,6 +40,14 @@ public class AgentSessionHealthTests
         {
             Status["packageIdentityInput"] = hasPackageIdentity;
             return Status;
+        }
+
+        public Task<JsonObject> RequestAccessAsync(bool hasPackageIdentity, CancellationToken cancellationToken)
+        {
+            WasRequested = true;
+            RequestPackageIdentityInput = hasPackageIdentity;
+            Status["packageIdentityInput"] = hasPackageIdentity;
+            return Task.FromResult(Status);
         }
     }
 
@@ -136,6 +147,44 @@ public class AgentSessionHealthTests
         Assert.True(notificationListener["canListen"]!.GetValue<bool>());
         Assert.Equal("allowed", notificationListener["accessStatus"]!.GetValue<string>());
         Assert.Equal("run-notification-proof", notificationListener["recommendedAction"]!.GetValue<string>());
+        Assert.True(notificationListener["packageIdentityInput"]!.GetValue<bool>());
+    }
+
+    [Fact]
+    public async Task NotificationListenerRequestReturnsLatestConsentStatus()
+    {
+        var notificationAccessProbe = new FakeNotificationAccessProbe
+        {
+            Status = new JsonObject
+            {
+                ["isSupported"] = true,
+                ["canListen"] = false,
+                ["accessStatus"] = "unspecified",
+                ["recommendedAction"] = "request-notification-listener-consent",
+                ["requiresPackageIdentity"] = true
+            }
+        };
+        var session = new AgentSession(
+            new NoOpWindowsDesktop(),
+            new NoOpFrameCapture(),
+            new FakePackageIdentityProbe(true),
+            notificationAccessProbe: notificationAccessProbe
+        );
+
+        var replies = await session.HandleAsync(new JsonObject
+        {
+            ["type"] = MessageTypes.NotificationListenerRequest,
+            ["requestId"] = "req_notification_listener"
+        });
+
+        var response = Assert.Single(replies.DirectReplies);
+        Assert.Equal(MessageTypes.NotificationListenerResponse, response["type"]!.GetValue<string>());
+        Assert.False(response["accepted"]!.GetValue<bool>());
+        Assert.True(notificationAccessProbe.WasRequested);
+        Assert.True(notificationAccessProbe.RequestPackageIdentityInput);
+        var notificationListener = Assert.IsType<JsonObject>(response["notificationListener"]);
+        Assert.Equal("unspecified", notificationListener["accessStatus"]!.GetValue<string>());
+        Assert.Equal("request-notification-listener-consent", notificationListener["recommendedAction"]!.GetValue<string>());
         Assert.True(notificationListener["packageIdentityInput"]!.GetValue<bool>());
     }
 

@@ -1,0 +1,13 @@
+{
+  "type": "notification.listener.response",
+  "requestId": "req_notification_listener",
+  "protocolVersion": 1,
+  "accepted": false,
+  "notificationListener": {
+    "isSupported": true,
+    "canListen": false,
+    "accessStatus": "unspecified",
+    "recommendedAction": "request-notification-listener-consent",
+    "requiresPackageIdentity": true
+  }
+}

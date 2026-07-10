@@ -84,6 +84,7 @@ public sealed class AgentSession
                 MessageTypes.InputMouse => await HandleMouseInputAsync(request, requestId, cancellationToken),
                 MessageTypes.InputKey => await HandleKeyInputAsync(request, requestId, cancellationToken),
                 MessageTypes.ClipboardTextSet => await HandleClipboardTextSetAsync(request, requestId, cancellationToken),
+                MessageTypes.NotificationListenerRequest => await HandleNotificationListenerRequestAsync(requestId, cancellationToken),
                 _ => AgentReplies.Direct(ErrorResponse(requestId, "unknown_message_type", $"Unsupported message type {type}"))
             };
         }
@@ -563,6 +564,23 @@ public sealed class AgentSession
         }
 
         return response;
+    }
+
+    private async Task<AgentReplies> HandleNotificationListenerRequestAsync(
+        string? requestId,
+        CancellationToken cancellationToken
+    )
+    {
+        var hasPackageIdentity = packageIdentityProbe.HasPackageIdentity;
+        var status = await notificationAccessProbe.RequestAccessAsync(hasPackageIdentity, cancellationToken);
+        return AgentReplies.Direct(new JsonObject
+        {
+            ["type"] = MessageTypes.NotificationListenerResponse,
+            ["requestId"] = requestId,
+            ["protocolVersion"] = 1,
+            ["accepted"] = status["canListen"]?.GetValue<bool>() == true,
+            ["notificationListener"] = status
+        });
     }
 
     private static JsonObject AppListResponse(string? requestId) => new()

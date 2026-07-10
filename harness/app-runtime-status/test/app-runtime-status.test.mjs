@@ -1419,6 +1419,7 @@ test("accepts blocked Windows notification listener consent readiness", () => {
   report.notificationBridge.reason = "Windows notification listener consent is required before Veil can mirror Windows notifications.";
   report.actions.find((action) => action.id === "runtime.prepareSparsePackage").isAvailable = false;
   report.actions.find((action) => action.id === "dailyUse.verifyIntegrations").isAvailable = true;
+  report.actions.find((action) => action.id === "dailyUse.requestNotificationConsent").isAvailable = true;
 
   assert.equal(validateAppRuntimeStatus(report), report);
 });
@@ -1456,7 +1457,7 @@ test("accepts allowed Windows notification listener proof readiness", () => {
   assert.equal(validateAppRuntimeStatus(report), report);
 });
 
-test("rejects available notification consent action before automation exists", () => {
+test("rejects notification consent action availability drift", () => {
   const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.demo.json", import.meta.url), "utf8"));
   report.actions.find((action) => action.id === "dailyUse.requestNotificationConsent").isAvailable = true;
 

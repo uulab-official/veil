@@ -1827,7 +1827,9 @@ public final class HostDashboardModel {
                 WindowsAppRuntimeActionStatus(
                     id: "dailyUse.requestNotificationConsent",
                     title: "Check Notifications",
-                    isAvailable: false
+                    isAvailable: canRequestWindowsNotificationConsent(
+                        dailyUseReadiness: dailyUseReadiness
+                    )
                 ),
                 WindowsAppRuntimeActionStatus(
                     id: "runtime.recoverDisplay",
@@ -2629,6 +2631,19 @@ public final class HostDashboardModel {
             message = ""
         }
         return "A signed sparse package is required before borderless app capture or Windows notifications can be enabled; \(outcome) at stage \(status.stage)\(message)."
+    }
+
+    private func canRequestWindowsNotificationConsent(
+        dailyUseReadiness: WindowsAppRuntimeDailyUseReadinessStatus
+    ) -> Bool {
+        guard hasLiveAgentConnection,
+              health?.capabilities.packageIdentity == true,
+              health?.notificationListener != nil else {
+            return false
+        }
+
+        return dailyUseReadiness.notificationBridgeRecommendedAction == "request-notification-listener-consent"
+            || dailyUseReadiness.notificationBridgeRecommendedAction == "enable-notification-listener-settings"
     }
 
     public func notificationBridgeStatus(

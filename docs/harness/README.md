@@ -332,10 +332,11 @@ with an in-app app check instead of sending the operator back to a passive statu
 screen.
 The same `actions` list now includes `dailyUse.verifyWindowCapture` for the
 intermediate "package identity exists, window capture still needs verification"
-state and `dailyUse.requestNotificationConsent` as an explicit unavailable lane
-until Windows notification consent automation exists. This keeps the app surface
-honest about what can be clicked today while still showing the remaining Daily
-Use work.
+state and `dailyUse.requestNotificationConsent` when package identity exists but
+Windows `UserNotificationListener` access is still denied or unspecified. The
+matching automation surface is `veil-vmctl app-runtime-action --json --action
+request-notification-consent`; accepted reports must carry the agent's
+`notification.listener.response` and point the operator at `notification-proof`.
 The sibling `notificationBridge` section tracks the actual guest-to-host
 notification event path separately from that consent preflight. It is blocked
 until the live agent and package identity gate are present, moves to

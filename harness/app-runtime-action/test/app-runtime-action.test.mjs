@@ -664,6 +664,85 @@ test("rejects prepare-sparse-package retry guidance without Daily Use evidence s
   );
 });
 
+test("validates accepted notification consent request action", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-action.prepare-sparse-package-live.json", import.meta.url), "utf8"));
+  report.action = "request-notification-consent";
+  report.accepted = true;
+  delete report.sparsePackagePreparation;
+  report.notificationConsent = {
+    kind: "windowsNotificationConsentRequest",
+    command: "veil-vmctl app-runtime-action --json --action request-notification-consent",
+    response: {
+      type: "notification.listener.response",
+      requestId: "req_notification_listener",
+      protocolVersion: 1,
+      accepted: true,
+      notificationListener: {
+        isSupported: true,
+        canListen: true,
+        accessStatus: "allowed",
+        recommendedAction: "run-notification-proof",
+        requiresPackageIdentity: true
+      }
+    }
+  };
+  report.status.connection.notificationListener = {
+    isSupported: true,
+    canListen: true,
+    accessStatus: "allowed",
+    recommendedAction: "run-notification-proof",
+    requiresPackageIdentity: true
+  };
+  report.status.dailyUseReadiness.notificationBridgePreflightPassed = true;
+  report.status.dailyUseReadiness.notificationBridgeRecommendedAction = "run-notification-proof";
+  report.status.notificationBridge.canReceiveNotifications = true;
+  report.status.notificationBridge.recommendedAction = "run-notification-proof";
+  report.status.notificationBridge.reason = "Windows notification listener consent is ready; run notification-proof and wait for the first notification.received event.";
+  report.status.actions.find((action) => action.id === "dailyUse.requestNotificationConsent").isAvailable = false;
+  report.nextActions = [
+    "Run `veil-vmctl notification-proof --json --require-proved` after triggering a Windows notification.",
+    "Run `veil-vmctl app-runtime-status --json` to confirm notificationBridge.recommendedAction updates from consent to proof or receiving state."
+  ];
+
+  assert.equal(validateAppRuntimeAction(report), report);
+});
+
+test("accepts demo notification consent request only as a dry run", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-action.launch-demo.json", import.meta.url), "utf8"));
+  report.action = "request-notification-consent";
+  report.accepted = false;
+  report.notificationConsent = {
+    kind: "windowsNotificationConsentRequest",
+    command: "veil-vmctl app-runtime-action --json --action request-notification-consent",
+    error: "Omit --demo to request Windows notification listener consent from the live guest agent."
+  };
+  report.nextActions = [
+    "Omit `--demo` to request Windows notification listener consent from the live guest agent.",
+    "Run `veil-vmctl app-runtime-status --json` to inspect the real notification listener state."
+  ];
+
+  assert.equal(validateAppRuntimeAction(report), report);
+
+  report.notificationConsent.response = {
+    type: "notification.listener.response",
+    requestId: "req_notification_listener",
+    protocolVersion: 1,
+    accepted: false,
+    notificationListener: {
+      isSupported: true,
+      canListen: false,
+      accessStatus: "unspecified",
+      recommendedAction: "request-notification-listener-consent",
+      requiresPackageIdentity: true
+    }
+  };
+
+  assert.throws(
+    () => validateAppRuntimeAction(report),
+    /demo request-notification-consent/
+  );
+});
+
 test("accepts demo repair-agent only as a dry run", () => {
   const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-action.launch-pending.json", import.meta.url), "utf8"));
   report.action = "repair-agent";

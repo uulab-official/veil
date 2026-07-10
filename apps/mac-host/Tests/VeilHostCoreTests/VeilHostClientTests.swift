@@ -20,6 +20,22 @@ struct VeilHostClientTests {
         #expect(health.os == "windows-arm64")
     }
 
+    @Test("requests Windows notification listener consent")
+    func requestsWindowsNotificationListenerConsent() async throws {
+        let transport = RecordingTransport(responses: [
+            #"{"type":"notification.listener.response","requestId":"req_notification_listener","protocolVersion":1,"accepted":false,"notificationListener":{"isSupported":true,"canListen":false,"accessStatus":"unspecified","recommendedAction":"request-notification-listener-consent","requiresPackageIdentity":true}}"#
+        ])
+        let client = VeilHostClient(transport: transport)
+
+        let response = try await client.requestWindowsNotificationListenerConsent()
+
+        #expect(transport.sentTypes == ["notification.listener.request"])
+        #expect(transport.expectedReplyCounts == [1])
+        #expect(response.accepted == false)
+        #expect(response.notificationListener.accessStatus == "unspecified")
+        #expect(response.notificationListener.recommendedAction == "request-notification-listener-consent")
+    }
+
     @Test("diagnoses connected Windows agent")
     func diagnosesConnectedAgent() async throws {
         let transport = RecordingTransport(responses: [

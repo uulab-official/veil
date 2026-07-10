@@ -2558,8 +2558,13 @@ function validateActions(actions, report) {
   }
 
   const notificationConsentAction = actions.find((action) => action.id === "dailyUse.requestNotificationConsent");
-  if (notificationConsentAction.isAvailable) {
-    throw new TypeError("dailyUse.requestNotificationConsent must stay unavailable until notification consent automation exists.");
+  const canRequestNotificationConsent = report.connection.hasLiveAgentConnection
+    && report.connection.capabilities?.packageIdentity === true
+    && report.connection.notificationListener !== undefined
+    && (report.dailyUseReadiness.notificationBridgeRecommendedAction === "request-notification-listener-consent"
+      || report.dailyUseReadiness.notificationBridgeRecommendedAction === "enable-notification-listener-settings");
+  if (notificationConsentAction.isAvailable !== canRequestNotificationConsent) {
+    throw new TypeError("dailyUse.requestNotificationConsent availability must match Windows notification listener consent readiness.");
   }
 
   const recoverDisplayAction = actions.find((action) => action.id === "runtime.recoverDisplay");

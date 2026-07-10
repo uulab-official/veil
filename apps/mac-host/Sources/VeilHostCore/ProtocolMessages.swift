@@ -20,6 +20,8 @@ public enum MessageType: String, Codable, Sendable {
     case windowCloseRequest = "window.close.request"
     case windowCloseResponse = "window.close.response"
     case clipboardTextSet = "clipboard.text.set"
+    case notificationListenerRequest = "notification.listener.request"
+    case notificationListenerResponse = "notification.listener.response"
     case notificationReceived = "notification.received"
     case inputMouse = "input.mouse"
     case inputKey = "input.key"
@@ -88,6 +90,26 @@ public struct WindowsNotificationListenerStatus: Codable, Equatable, Sendable {
     public var recommendedAction: String
     public var requiresPackageIdentity: Bool
     public var message: String?
+}
+
+public struct WindowsNotificationListenerRequest: Codable, Equatable, Sendable {
+    public var type: MessageType
+    public var requestId: String
+    public var protocolVersion: Int
+
+    public init(requestId: String, protocolVersion: Int = 1) {
+        self.type = .notificationListenerRequest
+        self.requestId = requestId
+        self.protocolVersion = protocolVersion
+    }
+}
+
+public struct WindowsNotificationListenerResponse: Codable, Equatable, Sendable {
+    public var type: MessageType
+    public var requestId: String
+    public var protocolVersion: Int
+    public var accepted: Bool
+    public var notificationListener: WindowsNotificationListenerStatus
 }
 
 public struct AppListRequest: Codable, Equatable, Sendable {

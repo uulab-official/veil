@@ -14,6 +14,8 @@ import {
   validateFileOpenResponse,
   validateInputKey,
   validateInputMouse,
+  validateNotificationListenerRequest,
+  validateNotificationListenerResponse,
   validateWindowClosed,
   validateWindowCloseRequest,
   validateWindowCloseResponse,
@@ -55,6 +57,8 @@ test("parses every stable fixture", async () => {
     "input.key.copy.json",
     "clipboard.text.set.host.json",
     "clipboard.text.set.guest.json",
+    "notification.listener.request.json",
+    "notification.listener.response.json",
     "error.app_not_found.json"
   ];
 
@@ -130,6 +134,26 @@ test("rejects agent health without package identity readiness", async () => {
   assert.throws(
     () => validateAgentHealthResponse(health),
     /capabilities\.packageIdentity/
+  );
+});
+
+test("validates notification listener consent request and response", async () => {
+  const request = validateNotificationListenerRequest(await readFixture("notification.listener.request.json"));
+  const response = validateNotificationListenerResponse(await readFixture("notification.listener.response.json"));
+
+  assert.equal(request.requestId, "req_notification_listener");
+  assert.equal(response.accepted, false);
+  assert.equal(response.notificationListener.accessStatus, "unspecified");
+  assert.equal(response.notificationListener.recommendedAction, "request-notification-listener-consent");
+});
+
+test("rejects notification listener response accepted drift", async () => {
+  const response = await readFixture("notification.listener.response.json");
+  response.accepted = true;
+
+  assert.throws(
+    () => validateNotificationListenerResponse(response),
+    /accepted/
   );
 });
 

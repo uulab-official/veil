@@ -69,11 +69,11 @@ enum VMControlError: Error, LocalizedError {
         case .missingMultiAppProofAppIds:
             "Missing Windows app ids. Pass --app-ids winapp_notepad,winapp_calculator,winapp_paint or omit it to use the default multi-app proof set."
         case .missingAppRuntimeAction:
-            "Missing app runtime action. Pass --action launch, fulfill-pending, focus, close, close-all, restart-frame-stream, recover-window-capture, restore, bring-forward, prepare-sparse-package, quiet-when-idle, stop-runtime, clipboard, type-text, click, proof-recommended, or proof-multi-app."
+            "Missing app runtime action. Pass --action launch, fulfill-pending, focus, close, close-all, restart-frame-stream, recover-window-capture, restore, bring-forward, prepare-sparse-package, request-notification-consent, quiet-when-idle, stop-runtime, clipboard, type-text, click, proof-recommended, or proof-multi-app."
         case .missingAppRuntimeReviewEvidenceDirectory:
             "Missing review evidence directory. Pass --evidence-dir /path/to/review-folder created by app-runtime-review-init."
         case .unsupportedAppRuntimeAction(let action):
-            "Unsupported app runtime action '\(action)'. Pass --action launch, fulfill-pending, focus, close, close-all, restart-frame-stream, recover-window-capture, reopen-window, maintain-frame-streams, restore, bring-forward, prepare-sparse-package, quiet-when-idle, stop-runtime, clipboard, type-text, click, proof-recommended, or proof-multi-app."
+            "Unsupported app runtime action '\(action)'. Pass --action launch, fulfill-pending, focus, close, close-all, restart-frame-stream, recover-window-capture, reopen-window, maintain-frame-streams, restore, bring-forward, prepare-sparse-package, request-notification-consent, quiet-when-idle, stop-runtime, clipboard, type-text, click, proof-recommended, or proof-multi-app."
         case .missingWindowId:
             "Missing Windows window id. Pass --window-id hwnd:XXXXXXXX from app-runtime-status or app-window-proof."
         case .missingAppRuntimeText:
@@ -95,7 +95,7 @@ enum VMControlError: Error, LocalizedError {
         }
     }
 
-    private static let usage = "Usage: veil-vmctl prepare --installer /path/to/Windows.iso [--drivers /path/to/virtio-win.iso] | veil-vmctl app-runtime-status [--json] [--demo] | veil-vmctl app-runtime-review [--json] [--demo] [--evidence-dir /path/to/screenshots] | veil-vmctl app-runtime-review-init [--json] [--demo] [--evidence-dir /path/to/screenshots] | veil-vmctl app-runtime-review-verify [--json] [--demo] --evidence-dir /path/to/screenshots | veil-vmctl app-runtime-action --action launch|fulfill-pending|focus|close|close-all|restart-frame-stream|recover-window-capture|reopen-window|maintain-frame-streams|restore|reconnect-restore|bring-forward|recover-display|wait-agent|repair-agent|prepare-sparse-package|quiet-when-idle|stop-runtime|clipboard|type-text|click|proof-recommended|proof-multi-app [--json] [--demo] [--wait-seconds 5] [--app-id winapp_notepad] [--window-id hwnd:XXXXXXXX] [--text \"...\"] [--x 240 --y 130] | veil-vmctl app-window-proof [--json] [--app-id winapp_notepad] [--wait-seconds 10] [--output /path/to/proof.json] | veil-vmctl coherence-proof [--json] [--app-id winapp_notepad] [--wait-seconds 10] [--output /path/to/proof.json] | veil-vmctl mvp-proof [--json] [--app-id winapp_notepad] [--wait-seconds 30] [--output /path/to/proof.json] [--require-proved] | veil-vmctl multi-app-proof [--json] [--app-ids winapp_notepad,winapp_calculator,winapp_paint] [--wait-seconds 10] [--output-dir /path/to/Diagnostics] [--require-complete] | veil-vmctl notification-proof [--json] [--wait-seconds 30] [--output /path/to/notification-proof.json] [--require-proved] | veil-vmctl guest-agent-wait [--json] [--wait-seconds 30] | veil-vmctl mark-installed [--json] | veil-vmctl providers [--json] | veil-vmctl export-diagnostics [--json] [--output /path/to/diagnostics.json] | veil-vmctl qemu-plan [--json] | veil-vmctl qemu-doctor [--json] | veil-vmctl qemu-install-status [--json] | veil-vmctl qemu-smoke [--json] [--seconds 45] | veil-vmctl qemu-start [--json] [--wait-seconds 15] [--native-display] | veil-vmctl qemu-display-smoke [--json] [--wait-seconds 5] | veil-vmctl qemu-capture [--json] [--output /path/to/console.png] | veil-vmctl qemu-powerdown [--json] [--wait-seconds 30] | veil-vmctl qemu-force-stop [--json] --i-understand-data-loss [--wait-seconds 10] | veil-vmctl qemu-sendkey [--json] key [key ...] | veil-vmctl qemu-type-text [--json] --text \"...\" | veil-vmctl qemu-click [--json] --x 0...32767 --y 0...32767 | veil-vmctl qemu-oobe-bypass [--json] | veil-vmctl qemu-install-agent [--json] [--wait-seconds 30] | veil-vmctl qemu-prepare-sparse-package [--json] [--wait-seconds 120]"
+    private static let usage = "Usage: veil-vmctl prepare --installer /path/to/Windows.iso [--drivers /path/to/virtio-win.iso] | veil-vmctl app-runtime-status [--json] [--demo] | veil-vmctl app-runtime-review [--json] [--demo] [--evidence-dir /path/to/screenshots] | veil-vmctl app-runtime-review-init [--json] [--demo] [--evidence-dir /path/to/screenshots] | veil-vmctl app-runtime-review-verify [--json] [--demo] --evidence-dir /path/to/screenshots | veil-vmctl app-runtime-action --action launch|fulfill-pending|focus|close|close-all|restart-frame-stream|recover-window-capture|reopen-window|maintain-frame-streams|restore|reconnect-restore|bring-forward|recover-display|wait-agent|repair-agent|prepare-sparse-package|request-notification-consent|quiet-when-idle|stop-runtime|clipboard|type-text|click|proof-recommended|proof-multi-app [--json] [--demo] [--wait-seconds 5] [--app-id winapp_notepad] [--window-id hwnd:XXXXXXXX] [--text \"...\"] [--x 240 --y 130] | veil-vmctl app-window-proof [--json] [--app-id winapp_notepad] [--wait-seconds 10] [--output /path/to/proof.json] | veil-vmctl coherence-proof [--json] [--app-id winapp_notepad] [--wait-seconds 10] [--output /path/to/proof.json] | veil-vmctl mvp-proof [--json] [--app-id winapp_notepad] [--wait-seconds 30] [--output /path/to/proof.json] [--require-proved] | veil-vmctl multi-app-proof [--json] [--app-ids winapp_notepad,winapp_calculator,winapp_paint] [--wait-seconds 10] [--output-dir /path/to/Diagnostics] [--require-complete] | veil-vmctl notification-proof [--json] [--wait-seconds 30] [--output /path/to/notification-proof.json] [--require-proved] | veil-vmctl guest-agent-wait [--json] [--wait-seconds 30] | veil-vmctl mark-installed [--json] | veil-vmctl providers [--json] | veil-vmctl export-diagnostics [--json] [--output /path/to/diagnostics.json] | veil-vmctl qemu-plan [--json] | veil-vmctl qemu-doctor [--json] | veil-vmctl qemu-install-status [--json] | veil-vmctl qemu-smoke [--json] [--seconds 45] | veil-vmctl qemu-start [--json] [--wait-seconds 15] [--native-display] | veil-vmctl qemu-display-smoke [--json] [--wait-seconds 5] | veil-vmctl qemu-capture [--json] [--output /path/to/console.png] | veil-vmctl qemu-powerdown [--json] [--wait-seconds 30] | veil-vmctl qemu-force-stop [--json] --i-understand-data-loss [--wait-seconds 10] | veil-vmctl qemu-sendkey [--json] key [key ...] | veil-vmctl qemu-type-text [--json] --text \"...\" | veil-vmctl qemu-click [--json] --x 0...32767 --y 0...32767 | veil-vmctl qemu-oobe-bypass [--json] | veil-vmctl qemu-install-agent [--json] [--wait-seconds 30] | veil-vmctl qemu-prepare-sparse-package [--json] [--wait-seconds 120]"
 }
 
 struct VMControlArguments {
@@ -116,6 +116,7 @@ struct VMControlArguments {
         case waitAgent = "wait-agent"
         case repairAgent = "repair-agent"
         case prepareSparsePackage = "prepare-sparse-package"
+        case requestNotificationConsent = "request-notification-consent"
         case quietWhenIdle = "quiet-when-idle"
         case stopRuntime = "stop-runtime"
         case clipboard
@@ -625,6 +626,13 @@ struct AppRuntimeDisplayRecovery: Codable, Equatable {
     var error: String?
 }
 
+struct AppRuntimeNotificationConsent: Codable, Equatable {
+    var kind: String = "windowsNotificationConsentRequest"
+    var command: String
+    var response: WindowsNotificationListenerResponse?
+    var error: String?
+}
+
 struct AppRuntimeActionReport: Codable, Equatable {
     var kind: String = "windowsAppRuntimeAction"
     var action: VMControlArguments.AppRuntimeAction
@@ -661,6 +669,7 @@ struct AppRuntimeActionReport: Codable, Equatable {
     var agentWait: AgentConnectionWaitReport?
     var agentRepair: QEMUGuestAgentInstallAttemptReport?
     var sparsePackagePreparation: QEMUGuestAgentInstallAttemptReport?
+    var notificationConsent: AppRuntimeNotificationConsent?
     var quietRuntime: WindowsAppRuntimeQuietPolicyStatus?
     var runtimeStop: VMRuntimeSnapshot?
     var status: WindowsAppRuntimeStatusReport
@@ -2898,6 +2907,7 @@ struct VeilVMControl {
         var agentWait: AgentConnectionWaitReport?
         var agentRepair: QEMUGuestAgentInstallAttemptReport?
         var sparsePackagePreparation: QEMUGuestAgentInstallAttemptReport?
+        var notificationConsent: AppRuntimeNotificationConsent?
         var foregroundWindowId: String?
         var foregroundWindowTitle: String?
         var quietRuntime: WindowsAppRuntimeQuietPolicyStatus?
@@ -3118,6 +3128,40 @@ struct VeilVMControl {
                     await model.load()
                 }
             }
+        case .requestNotificationConsent:
+            let command = "veil-vmctl app-runtime-action --json --action request-notification-consent"
+            if demo {
+                notificationConsent = AppRuntimeNotificationConsent(
+                    command: command,
+                    response: nil,
+                    error: "Omit --demo to request Windows notification listener consent from the live guest agent."
+                )
+            } else if model.health?.capabilities.packageIdentity != true {
+                notificationConsent = AppRuntimeNotificationConsent(
+                    command: command,
+                    response: nil,
+                    error: "Package identity is required before Windows notification listener consent can be requested."
+                )
+            } else {
+                do {
+                    let url = URL(string: endpoint) ?? URL(string: "ws://127.0.0.1:18444")!
+                    let client = VeilHostClient(transport: URLSessionWebSocketTransport(url: url))
+                    let response = try await client.requestWindowsNotificationListenerConsent()
+                    notificationConsent = AppRuntimeNotificationConsent(
+                        command: command,
+                        response: response,
+                        error: nil
+                    )
+                    accepted = response.accepted
+                    await model.load()
+                } catch {
+                    notificationConsent = AppRuntimeNotificationConsent(
+                        command: command,
+                        response: nil,
+                        error: String(describing: error)
+                    )
+                }
+            }
         case .quietWhenIdle:
             quietRuntime = model.quietRuntimeStatus()
             accepted = quietRuntime?.canQuietRuntime == true
@@ -3263,6 +3307,7 @@ struct VeilVMControl {
             agentWait: agentWait,
             agentRepair: agentRepair,
             sparsePackagePreparation: sparsePackagePreparation,
+            notificationConsent: notificationConsent,
             quietRuntime: quietRuntime,
             runtimeStop: runtimeStop,
             status: status,
@@ -3329,6 +3374,17 @@ struct VeilVMControl {
             print("Sparse package attempts: \(sparsePackagePreparation.agentWait.attempts)")
             print("Sparse package waited seconds: \(sparsePackagePreparation.agentWait.waitedSeconds)")
             print("Sparse package console: \(sparsePackagePreparation.postAttemptConsole.capture?.consoleScreenshotPath ?? "not captured")")
+        }
+        if let notificationConsent = report.notificationConsent {
+            print("Notification consent command: \(notificationConsent.command)")
+            if let response = notificationConsent.response {
+                print("Notification listener access: \(response.notificationListener.accessStatus)")
+                print("Notification listener ready: \(response.notificationListener.canListen ? "yes" : "no")")
+                print("Notification next action: \(response.notificationListener.recommendedAction)")
+            }
+            if let error = notificationConsent.error {
+                print("Notification consent error: \(error)")
+            }
         }
         if let launchPlan = report.launchPlan {
             print("Launch plan: \(launchPlan.recommendedAction)")
@@ -3602,6 +3658,11 @@ struct VeilVMControl {
                     "Run `veil-vmctl app-runtime-status --json` to confirm Daily Use package identity readiness.",
                     proofNextAction(from: status.proofPlan)
                 ])
+            case .requestNotificationConsent:
+                return [
+                    "Run `veil-vmctl notification-proof --json --require-proved` after triggering a Windows notification.",
+                    "Run `veil-vmctl app-runtime-status --json` to confirm notificationBridge.recommendedAction updates from consent to proof or receiving state."
+                ]
             case .quietWhenIdle:
                 return [
                     "Run `\(status.quietRuntime.recommendedStopCommand ?? "veil-vmctl app-runtime-action --json --action stop-runtime")` to stop the idle local Windows runtime.",
@@ -3753,6 +3814,23 @@ struct VeilVMControl {
                 status.dailyUseReadiness.recommendedCommand.map { "Run `\($0)` to retry the sparse package preparation path." },
                 "Confirm the Windows SDK is installed inside the guest if sparse package packing or signing fails.",
                 "Run `veil-vmctl app-runtime-status --json` and inspect dailyUseReadiness.packageIdentityStage, packageIdentityMessage, and packageIdentityEvidencePath before retrying."
+            ])
+        }
+
+        if action == .requestNotificationConsent {
+            if status.connection.mode == .demo {
+                return [
+                    "Omit `--demo` to request Windows notification listener consent from the live guest agent.",
+                    "Run `veil-vmctl app-runtime-status --json` to inspect the real notification listener state."
+                ]
+            }
+
+            return compactActions([
+                status.connection.capabilities?.packageIdentity == true
+                    ? nil
+                    : "Run `veil-vmctl app-runtime-action --json --action prepare-sparse-package --wait-seconds 120` before requesting notification consent.",
+                "Approve Windows notification listener access for Veil Agent if Windows shows the consent prompt.",
+                "Run `veil-vmctl app-runtime-status --json` and inspect connection.notificationListener.recommendedAction before retrying."
             ])
         }
 
