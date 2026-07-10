@@ -1553,12 +1553,45 @@ struct HostDashboardModelTests {
         }
 
         let olderProofURL = appWindowDirectory.appendingPathComponent("app-window-proof.json")
+        let calculatorProofURL = appWindowDirectory.appendingPathComponent("calculator-app-window-proof.json")
+        let paintProofURL = appWindowDirectory.appendingPathComponent("paint-app-window-proof.json")
         let latestProofURL = recommendedDirectory.appendingPathComponent("mvp-proof-latest.json")
         try Data("{}".utf8).write(to: olderProofURL)
         try Data(
             """
             {
+              "kind": "windowsAppWindowProof",
+              "appId": "winapp_calculator",
+              "firstFrameLatency": {
+                "measurement": "first-frame",
+                "elapsedMilliseconds": 780,
+                "freshFrameBudgetMilliseconds": 1000,
+                "staleFrameTimeoutMilliseconds": 5000,
+                "recommendedAction": "none"
+              }
+            }
+            """.utf8
+        ).write(to: calculatorProofURL)
+        try Data(
+            """
+            {
+              "kind": "windowsAppWindowProof",
+              "appId": "winapp_paint",
+              "firstFrameLatency": {
+                "measurement": "first-frame",
+                "elapsedMilliseconds": 5400,
+                "freshFrameBudgetMilliseconds": 1000,
+                "staleFrameTimeoutMilliseconds": 5000,
+                "recommendedAction": "tune-frame-latency"
+              }
+            }
+            """.utf8
+        ).write(to: paintProofURL)
+        try Data(
+            """
+            {
               "kind": "windowsMVPProof",
+              "appId": "winapp_notepad",
               "coherence": {
                 "initialFrameLatency": {
                   "measurement": "initial-frame",
@@ -1583,6 +1616,14 @@ struct HostDashboardModelTests {
             ofItemAtPath: olderProofURL.path
         )
         try FileManager.default.setAttributes(
+            [.modificationDate: Date(timeIntervalSince1970: 1_700_000_050)],
+            ofItemAtPath: calculatorProofURL.path
+        )
+        try FileManager.default.setAttributes(
+            [.modificationDate: Date(timeIntervalSince1970: 1_700_000_075)],
+            ofItemAtPath: paintProofURL.path
+        )
+        try FileManager.default.setAttributes(
             [.modificationDate: Date(timeIntervalSince1970: 1_700_000_100)],
             ofItemAtPath: latestProofURL.path
         )
@@ -1591,6 +1632,14 @@ struct HostDashboardModelTests {
 
         #expect(artifacts.diagnosticsDirectory == diagnosticsDirectory.path)
         #expect(artifacts.recommendedProofDirectory == recommendedDirectory.path)
+        #expect(artifacts.multiAppProofTargetAppIds == ["winapp_notepad", "winapp_calculator", "winapp_paint"])
+        #expect(artifacts.multiAppProofCoverageCount == 3)
+        #expect(artifacts.multiAppProofCoverageHealth == "complete")
+        #expect(artifacts.latestProofsByApp.map(\.appId) == ["winapp_notepad", "winapp_calculator", "winapp_paint"])
+        #expect(artifacts.latestProofsByApp[0].latestProofKind == "mvp")
+        #expect(artifacts.latestProofsByApp[1].latestProofLatencyHealth == "healthy")
+        #expect(artifacts.latestProofsByApp[2].latestProofLatencyHealth == "stale")
+        #expect(artifacts.latestProofsByApp[2].latestProofLatencyRecommendedAction == "tune-frame-latency")
         #expect(artifacts.latestProofKind == "mvp")
         #expect(artifacts.latestProofPath?.hasSuffix("/Recommended Proof/mvp-proof-latest.json") == true)
         #expect(artifacts.latestProofFileName == "mvp-proof-latest.json")

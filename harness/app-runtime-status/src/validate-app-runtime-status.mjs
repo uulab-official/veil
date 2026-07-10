@@ -7,6 +7,8 @@ const VALID_CAPTURE_STATES = new Set(["unavailable", "pending", "streaming"]);
 const VALID_FRAME_STREAM_STATUSES = new Set(["unavailable", "waitingForFirstFrame", "fresh", "delayed", "stale"]);
 const VALID_FRAME_LATENCY_HEALTH = new Set(["idle", "waiting", "healthy", "delayed", "stale"]);
 const VALID_PROOF_LATENCY_HEALTH = new Set(["healthy", "delayed", "stale"]);
+const VALID_PROOF_COVERAGE_HEALTH = new Set(["missing", "partial", "complete"]);
+const MULTI_APP_PROOF_TARGET_APP_IDS = ["winapp_notepad", "winapp_calculator", "winapp_paint"];
 const FRAME_LATENCY_BUDGET_MILLISECONDS = 1_000;
 const FRAME_STALE_TIMEOUT_MILLISECONDS = 5_000;
 const FIRST_FRAME_TIMEOUT_MILLISECONDS = 8_000;
@@ -1177,6 +1179,7 @@ function validateProofArtifacts(proofArtifacts) {
   requireString(proofArtifacts.diagnosticsDirectory, "proofArtifacts.diagnosticsDirectory");
   requireString(proofArtifacts.recommendedProofDirectory, "proofArtifacts.recommendedProofDirectory");
   requireString(proofArtifacts.reason, "proofArtifacts.reason");
+  validateProofArtifactCoverage(proofArtifacts);
 
   const hasLatest = proofArtifacts.latestProofKind !== undefined
     || proofArtifacts.latestProofPath !== undefined
@@ -1206,7 +1209,80 @@ function validateProofArtifacts(proofArtifacts) {
   validateProofArtifactLatency(proofArtifacts);
 }
 
-function validateProofArtifactLatency(proofArtifacts) {
+function validateProofArtifactCoverage(proofArtifacts) {
+  const hasCoverage = proofArtifacts.multiAppProofTargetAppIds !== undefined
+    || proofArtifacts.multiAppProofCoverageCount !== undefined
+    || proofArtifacts.multiAppProofCoverageHealth !== undefined
+    || proofArtifacts.latestProofsByApp !== undefined;
+
+  if (!hasCoverage) {
+    return;
+  }
+
+  if (!Array.isArray(proofArtifacts.multiAppProofTargetAppIds)) {
+    throw new TypeError("proofArtifacts.multiAppProofTargetAppIds must be an array.");
+  }
+  if (JSON.stringify(proofArtifacts.multiAppProofTargetAppIds) !== JSON.stringify(MULTI_APP_PROOF_TARGET_APP_IDS)) {
+    throw new TypeError("proofArtifacts.multiAppProofTargetAppIds must match the Daily Use proof target apps.");
+  }
+  requireNonNegativeInteger(proofArtifacts.multiAppProofCoverageCount, "proofArtifacts.multiAppProofCoverageCount");
+  requireString(proofArtifacts.multiAppProofCoverageHealth, "proofArtifacts.multiAppProofCoverageHealth");
+  if (!VALID_PROOF_COVERAGE_HEALTH.has(proofArtifacts.multiAppProofCoverageHealth)) {
+    throw new TypeError("proofArtifacts.multiAppProofCoverageHealth must be missing, partial, or complete.");
+  }
+  if (!Array.isArray(proofArtifacts.latestProofsByApp)) {
+    throw new TypeError("proofArtifacts.latestProofsByApp must be an array.");
+  }
+
+  const seenAppIds = new Set();
+  for (const proof of proofArtifacts.latestProofsByApp) {
+    validateProofArtifactAppSummary(proof);
+    if (seenAppIds.has(proof.appId)) {
+      throw new TypeError("proofArtifacts.latestProofsByApp must contain at most one summary per app.");
+    }
+    seenAppIds.add(proof.appId);
+  }
+
+  const expectedCoverageCount = MULTI_APP_PROOF_TARGET_APP_IDS
+    .filter((appId) => seenAppIds.has(appId))
+    .length;
+  if (proofArtifacts.multiAppProofCoverageCount !== expectedCoverageCount) {
+    throw new TypeError("proofArtifacts.multiAppProofCoverageCount must match latestProofsByApp target coverage.");
+  }
+
+  const expectedHealth = expectedCoverageCount === MULTI_APP_PROOF_TARGET_APP_IDS.length
+    ? "complete"
+    : expectedCoverageCount > 0
+      ? "partial"
+      : "missing";
+  if (proofArtifacts.multiAppProofCoverageHealth !== expectedHealth) {
+    throw new TypeError("proofArtifacts.multiAppProofCoverageHealth must match target app coverage.");
+  }
+}
+
+function validateProofArtifactAppSummary(proof) {
+  if (!proof || typeof proof !== "object" || Array.isArray(proof)) {
+    throw new TypeError("proofArtifacts.latestProofsByApp[] must be an object.");
+  }
+
+  requireString(proof.appId, "proofArtifacts.latestProofsByApp[].appId");
+  requireString(proof.latestProofKind, "proofArtifacts.latestProofsByApp[].latestProofKind");
+  if (!["recommended", "app-window", "coherence", "mvp"].includes(proof.latestProofKind)) {
+    throw new TypeError("proofArtifacts.latestProofsByApp[].latestProofKind must identify a known proof kind.");
+  }
+  requireString(proof.latestProofPath, "proofArtifacts.latestProofsByApp[].latestProofPath");
+  requireString(proof.latestProofFileName, "proofArtifacts.latestProofsByApp[].latestProofFileName");
+  if (!proof.latestProofPath.endsWith(".json") || !proof.latestProofFileName.endsWith(".json")) {
+    throw new TypeError("proofArtifacts.latestProofsByApp[] latest artifact must point to a JSON file.");
+  }
+  requireString(proof.latestProofModifiedAt, "proofArtifacts.latestProofsByApp[].latestProofModifiedAt");
+  if (Number.isNaN(Date.parse(proof.latestProofModifiedAt))) {
+    throw new TypeError("proofArtifacts.latestProofsByApp[].latestProofModifiedAt must be an ISO date.");
+  }
+  validateProofArtifactLatency(proof, "proofArtifacts.latestProofsByApp[]");
+}
+
+function validateProofArtifactLatency(proofArtifacts, fieldPrefix = "proofArtifacts") {
   const hasLatency = proofArtifacts.latestProofLatencyHealth !== undefined
     || proofArtifacts.latestProofSlowestLatencyMeasurement !== undefined
     || proofArtifacts.latestProofSlowestLatencyMilliseconds !== undefined
@@ -1218,28 +1294,28 @@ function validateProofArtifactLatency(proofArtifacts) {
     return;
   }
 
-  requireString(proofArtifacts.latestProofLatencyHealth, "proofArtifacts.latestProofLatencyHealth");
+  requireString(proofArtifacts.latestProofLatencyHealth, `${fieldPrefix}.latestProofLatencyHealth`);
   if (!VALID_PROOF_LATENCY_HEALTH.has(proofArtifacts.latestProofLatencyHealth)) {
-    throw new TypeError("proofArtifacts.latestProofLatencyHealth must be healthy, delayed, or stale.");
+    throw new TypeError(`${fieldPrefix}.latestProofLatencyHealth must be healthy, delayed, or stale.`);
   }
-  requireString(proofArtifacts.latestProofSlowestLatencyMeasurement, "proofArtifacts.latestProofSlowestLatencyMeasurement");
+  requireString(proofArtifacts.latestProofSlowestLatencyMeasurement, `${fieldPrefix}.latestProofSlowestLatencyMeasurement`);
   requireNonNegativeInteger(
     proofArtifacts.latestProofSlowestLatencyMilliseconds,
-    "proofArtifacts.latestProofSlowestLatencyMilliseconds"
+    `${fieldPrefix}.latestProofSlowestLatencyMilliseconds`
   );
   requireNonNegativeInteger(
     proofArtifacts.latestProofLatencyBudgetMilliseconds,
-    "proofArtifacts.latestProofLatencyBudgetMilliseconds"
+    `${fieldPrefix}.latestProofLatencyBudgetMilliseconds`
   );
   requireNonNegativeInteger(
     proofArtifacts.latestProofStaleTimeoutMilliseconds,
-    "proofArtifacts.latestProofStaleTimeoutMilliseconds"
+    `${fieldPrefix}.latestProofStaleTimeoutMilliseconds`
   );
   if (proofArtifacts.latestProofLatencyBudgetMilliseconds !== FRAME_LATENCY_BUDGET_MILLISECONDS) {
-    throw new TypeError("proofArtifacts.latestProofLatencyBudgetMilliseconds must match the app-screen latency budget.");
+    throw new TypeError(`${fieldPrefix}.latestProofLatencyBudgetMilliseconds must match the app-screen latency budget.`);
   }
   if (proofArtifacts.latestProofStaleTimeoutMilliseconds !== FRAME_STALE_TIMEOUT_MILLISECONDS) {
-    throw new TypeError("proofArtifacts.latestProofStaleTimeoutMilliseconds must match the app-screen stale timeout.");
+    throw new TypeError(`${fieldPrefix}.latestProofStaleTimeoutMilliseconds must match the app-screen stale timeout.`);
   }
 
   const elapsed = proofArtifacts.latestProofSlowestLatencyMilliseconds;
@@ -1249,7 +1325,7 @@ function validateProofArtifactLatency(proofArtifacts) {
       ? "delayed"
       : "stale";
   if (proofArtifacts.latestProofLatencyHealth !== expectedHealth) {
-    throw new TypeError("proofArtifacts.latestProofLatencyHealth must match the slowest proof latency.");
+    throw new TypeError(`${fieldPrefix}.latestProofLatencyHealth must match the slowest proof latency.`);
   }
 
   const expectedAction = expectedHealth === "healthy"
@@ -1257,9 +1333,9 @@ function validateProofArtifactLatency(proofArtifacts) {
     : expectedHealth === "delayed"
       ? "measure-again"
       : "tune-frame-latency";
-  requireString(proofArtifacts.latestProofLatencyRecommendedAction, "proofArtifacts.latestProofLatencyRecommendedAction");
+  requireString(proofArtifacts.latestProofLatencyRecommendedAction, `${fieldPrefix}.latestProofLatencyRecommendedAction`);
   if (proofArtifacts.latestProofLatencyRecommendedAction !== expectedAction) {
-    throw new TypeError("proofArtifacts.latestProofLatencyRecommendedAction must match the slowest proof latency.");
+    throw new TypeError(`${fieldPrefix}.latestProofLatencyRecommendedAction must match the slowest proof latency.`);
   }
 }
 

@@ -291,6 +291,14 @@
   "proofArtifacts": {
     "diagnosticsDirectory": "/Users/test/Library/Application Support/Veil/Diagnostics",
     "recommendedProofDirectory": "/Users/test/Library/Application Support/Veil/Diagnostics/Recommended Proof",
+    "multiAppProofTargetAppIds": [
+      "winapp_notepad",
+      "winapp_calculator",
+      "winapp_paint"
+    ],
+    "multiAppProofCoverageCount": 0,
+    "multiAppProofCoverageHealth": "missing",
+    "latestProofsByApp": [],
     "reason": "No app check artifact has been saved under Veil diagnostics yet."
   },
   "releaseGate": {

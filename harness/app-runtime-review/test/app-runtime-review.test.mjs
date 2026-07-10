@@ -64,6 +64,16 @@ test("rejects latest app check latency drift from embedded status", () => {
   );
 });
 
+test("rejects multi-app proof coverage drift from embedded status", () => {
+  const card = demoReviewCard();
+  card.evidence.multiAppProofCoverageHealth = "complete";
+
+  assert.throws(
+    () => validateAppRuntimeReview(card),
+    /multiAppProofCoverageHealth/
+  );
+});
+
 test("rejects cards with drifted minimum screenshot dimensions", () => {
   const card = demoReviewCard();
   card.minimumScreenshotWidth = 1;

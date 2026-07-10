@@ -1553,6 +1553,26 @@ test("rejects proof artifact latency health that drifts from slowest latency", (
   );
 });
 
+test("rejects multi-app proof coverage counts that drift from app summaries", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.mac-window-live.json", import.meta.url), "utf8"));
+  report.proofArtifacts.multiAppProofCoverageCount = 2;
+
+  assert.throws(
+    () => validateAppRuntimeStatus(report),
+    /multiAppProofCoverageCount/
+  );
+});
+
+test("rejects multi-app proof coverage health that drifts from app summaries", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.mac-window-live.json", import.meta.url), "utf8"));
+  report.proofArtifacts.latestProofsByApp = report.proofArtifacts.latestProofsByApp.filter((proof) => proof.appId !== "winapp_paint");
+
+  assert.throws(
+    () => validateAppRuntimeStatus(report),
+    /multiAppProofCoverageCount|multiAppProofCoverageHealth/
+  );
+});
+
 test("rejects release gate counts that drift from required steps", () => {
   const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.mac-window-live.json", import.meta.url), "utf8"));
   report.releaseGate.passingStepCount = 4;

@@ -309,6 +309,7 @@ function validateEvidence(evidence, status) {
   if (evidence.latestAppCheckModifiedAt !== undefined && Number.isNaN(Date.parse(evidence.latestAppCheckModifiedAt))) {
     throw new TypeError("evidence.latestAppCheckModifiedAt must be an ISO date.");
   }
+  validateEvidenceProofCoverage(evidence, status);
   validateEvidenceProofLatency(evidence, status);
   if (evidence.recommendedAppCheckCommand !== undefined) {
     requireString(evidence.recommendedAppCheckCommand, "evidence.recommendedAppCheckCommand");
@@ -323,6 +324,30 @@ function validateEvidence(evidence, status) {
   }
 
   return evidence.hostAppBundle;
+}
+
+function validateEvidenceProofCoverage(evidence, status) {
+  const proofArtifacts = status.proofArtifacts ?? {};
+  if (evidence.multiAppProofTargetAppIds !== undefined) {
+    if (!Array.isArray(evidence.multiAppProofTargetAppIds)) {
+      throw new TypeError("evidence.multiAppProofTargetAppIds must be an array.");
+    }
+    if (JSON.stringify(evidence.multiAppProofTargetAppIds) !== JSON.stringify(proofArtifacts.multiAppProofTargetAppIds)) {
+      throw new TypeError("app runtime review multiAppProofTargetAppIds must match status proof artifacts.");
+    }
+  }
+  if (evidence.multiAppProofCoverageCount !== undefined) {
+    requireNonNegativeInteger(evidence.multiAppProofCoverageCount, "evidence.multiAppProofCoverageCount");
+  }
+  if (evidence.multiAppProofCoverageHealth !== undefined) {
+    requireString(evidence.multiAppProofCoverageHealth, "evidence.multiAppProofCoverageHealth");
+  }
+  if (evidence.multiAppProofCoverageCount !== proofArtifacts.multiAppProofCoverageCount) {
+    throw new TypeError("app runtime review multiAppProofCoverageCount must match status proof artifacts.");
+  }
+  if (evidence.multiAppProofCoverageHealth !== proofArtifacts.multiAppProofCoverageHealth) {
+    throw new TypeError("app runtime review multiAppProofCoverageHealth must match status proof artifacts.");
+  }
 }
 
 function validateEvidenceProofLatency(evidence, status) {

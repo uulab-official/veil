@@ -248,7 +248,10 @@ Windows media, disk contents, product keys, or guest data. When that JSON carrie
 proof latency evidence, `proofArtifacts` also promotes the latest app-check
 latency health, slowest proof measurement, budget, stale timeout, and recommended
 latency action; review cards mirror the same fields so release evidence cannot
-hide a slow first-frame or post-input proof.
+hide a slow first-frame or post-input proof. `proofArtifacts.latestProofsByApp`
+keeps the latest proof per app, and `multiAppProofCoverageHealth` reports
+whether the Daily Use proof targets (`winapp_notepad`, `winapp_calculator`,
+`winapp_paint`) are `missing`, `partial`, or `complete`.
 
 `dailyUseReadiness` tracks the v1.5 integration preflight separately from the
 MVP app-check proof path. It requires live package identity before borderless

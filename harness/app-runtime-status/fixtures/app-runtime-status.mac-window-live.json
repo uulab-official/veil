@@ -331,6 +331,54 @@
   "proofArtifacts": {
     "diagnosticsDirectory": "/Users/test/Library/Application Support/Veil/Diagnostics",
     "recommendedProofDirectory": "/Users/test/Library/Application Support/Veil/Diagnostics/Recommended Proof",
+    "multiAppProofTargetAppIds": [
+      "winapp_notepad",
+      "winapp_calculator",
+      "winapp_paint"
+    ],
+    "multiAppProofCoverageCount": 3,
+    "multiAppProofCoverageHealth": "complete",
+    "latestProofsByApp": [
+      {
+        "appId": "winapp_notepad",
+        "latestProofKind": "mvp",
+        "latestProofPath": "/Users/test/Library/Application Support/Veil/Diagnostics/Recommended Proof/mvp-proof-latest.json",
+        "latestProofFileName": "mvp-proof-latest.json",
+        "latestProofModifiedAt": "2026-07-04T10:00:00Z",
+        "latestProofLatencyHealth": "delayed",
+        "latestProofSlowestLatencyMeasurement": "post-input-frame",
+        "latestProofSlowestLatencyMilliseconds": 1400,
+        "latestProofLatencyBudgetMilliseconds": 1000,
+        "latestProofStaleTimeoutMilliseconds": 5000,
+        "latestProofLatencyRecommendedAction": "measure-again"
+      },
+      {
+        "appId": "winapp_calculator",
+        "latestProofKind": "app-window",
+        "latestProofPath": "/Users/test/Library/Application Support/Veil/Diagnostics/App Window Proof/calculator-app-window-proof.json",
+        "latestProofFileName": "calculator-app-window-proof.json",
+        "latestProofModifiedAt": "2026-07-04T09:58:00Z",
+        "latestProofLatencyHealth": "healthy",
+        "latestProofSlowestLatencyMeasurement": "first-frame",
+        "latestProofSlowestLatencyMilliseconds": 780,
+        "latestProofLatencyBudgetMilliseconds": 1000,
+        "latestProofStaleTimeoutMilliseconds": 5000,
+        "latestProofLatencyRecommendedAction": "none"
+      },
+      {
+        "appId": "winapp_paint",
+        "latestProofKind": "app-window",
+        "latestProofPath": "/Users/test/Library/Application Support/Veil/Diagnostics/App Window Proof/paint-app-window-proof.json",
+        "latestProofFileName": "paint-app-window-proof.json",
+        "latestProofModifiedAt": "2026-07-04T09:59:00Z",
+        "latestProofLatencyHealth": "stale",
+        "latestProofSlowestLatencyMeasurement": "first-frame",
+        "latestProofSlowestLatencyMilliseconds": 5400,
+        "latestProofLatencyBudgetMilliseconds": 1000,
+        "latestProofStaleTimeoutMilliseconds": 5000,
+        "latestProofLatencyRecommendedAction": "tune-frame-latency"
+      }
+    ],
     "reason": "Latest app check artifact is available in Veil diagnostics.",
     "latestProofKind": "mvp",
     "latestProofPath": "/Users/test/Library/Application Support/Veil/Diagnostics/Recommended Proof/mvp-proof-latest.json",

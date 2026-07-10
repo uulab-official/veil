@@ -378,7 +378,10 @@ Rules:
   promotes the slowest proof latency as `latestProofLatencyHealth`,
   `latestProofSlowestLatencyMeasurement`,
   `latestProofSlowestLatencyMilliseconds`, the shared budget/timeout, and the
-  matching recommended action.
+  matching recommended action. It also reports `latestProofsByApp` plus
+  `multiAppProofTargetAppIds`, `multiAppProofCoverageCount`, and
+  `multiAppProofCoverageHealth` so Notepad, Calculator, and Paint coverage is
+  visible before claiming Daily Use quality.
 
 ## Window Focus
 

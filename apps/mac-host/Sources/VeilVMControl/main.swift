@@ -646,6 +646,9 @@ struct AppRuntimeReviewEvidence: Codable, Equatable {
     var latestAppCheckKind: String?
     var latestAppCheckPath: String?
     var latestAppCheckModifiedAt: Date?
+    var multiAppProofTargetAppIds: [String]?
+    var multiAppProofCoverageCount: Int?
+    var multiAppProofCoverageHealth: String?
     var latestAppCheckLatencyHealth: String?
     var latestAppCheckSlowestLatencyMeasurement: String?
     var latestAppCheckSlowestLatencyMilliseconds: Int?
@@ -1193,6 +1196,14 @@ struct VeilVMControl {
             print("Full app check command: \(proofCommand)")
         }
         print("App check artifacts: \(report.proofArtifacts.reason)")
+        print("App check coverage: \(report.proofArtifacts.multiAppProofCoverageHealth) (\(report.proofArtifacts.multiAppProofCoverageCount)/\(report.proofArtifacts.multiAppProofTargetAppIds.count))")
+        if !report.proofArtifacts.latestProofsByApp.isEmpty {
+            print("App check coverage apps:")
+            for appProof in report.proofArtifacts.latestProofsByApp {
+                let latency = appProof.latestProofLatencyHealth.map { " \($0)" } ?? ""
+                print("  - \(appProof.appId): \(appProof.latestProofKind)\(latency)")
+            }
+        }
         if let latestProofKind = report.proofArtifacts.latestProofKind {
             print("Latest app check kind: \(latestProofKind)")
         }
@@ -1321,6 +1332,11 @@ struct VeilVMControl {
         }
         if let latestPath = card.evidence.latestAppCheckPath {
             print("  Latest app check file: \(latestPath)")
+        }
+        if let coverageHealth = card.evidence.multiAppProofCoverageHealth,
+           let coverageCount = card.evidence.multiAppProofCoverageCount,
+           let targetCount = card.evidence.multiAppProofTargetAppIds?.count {
+            print("  App check coverage: \(coverageHealth) (\(coverageCount)/\(targetCount))")
         }
         if let latestLatencyHealth = card.evidence.latestAppCheckLatencyHealth {
             print("  Latest app check latency: \(latestLatencyHealth)")
@@ -2154,6 +2170,9 @@ struct VeilVMControl {
                 latestAppCheckKind: report.proofArtifacts.latestProofKind,
                 latestAppCheckPath: report.proofArtifacts.latestProofPath,
                 latestAppCheckModifiedAt: report.proofArtifacts.latestProofModifiedAt,
+                multiAppProofTargetAppIds: report.proofArtifacts.multiAppProofTargetAppIds,
+                multiAppProofCoverageCount: report.proofArtifacts.multiAppProofCoverageCount,
+                multiAppProofCoverageHealth: report.proofArtifacts.multiAppProofCoverageHealth,
                 latestAppCheckLatencyHealth: report.proofArtifacts.latestProofLatencyHealth,
                 latestAppCheckSlowestLatencyMeasurement: report.proofArtifacts.latestProofSlowestLatencyMeasurement,
                 latestAppCheckSlowestLatencyMilliseconds: report.proofArtifacts.latestProofSlowestLatencyMilliseconds,

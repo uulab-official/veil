@@ -262,6 +262,13 @@
       "latestAppCheckKind": "mvp",
       "latestAppCheckModifiedAt": "2026-07-04T15:28:35Z",
       "latestAppCheckPath": "/Users/bonjin/Library/Application Support/Veil/Diagnostics/MVP Proof/notepad-mvp-window-detect.json",
+      "multiAppProofTargetAppIds": [
+        "winapp_notepad",
+        "winapp_calculator",
+        "winapp_paint"
+      ],
+      "multiAppProofCoverageCount": 1,
+      "multiAppProofCoverageHealth": "partial",
       "latestAppCheckLatencyHealth": "delayed",
       "latestAppCheckSlowestLatencyMeasurement": "post-input-frame",
       "latestAppCheckSlowestLatencyMilliseconds": 1400,
@@ -686,6 +693,28 @@
       },
       "proofArtifacts": {
         "diagnosticsDirectory": "/Users/bonjin/Library/Application Support/Veil/Diagnostics",
+        "multiAppProofTargetAppIds": [
+          "winapp_notepad",
+          "winapp_calculator",
+          "winapp_paint"
+        ],
+        "multiAppProofCoverageCount": 1,
+        "multiAppProofCoverageHealth": "partial",
+        "latestProofsByApp": [
+          {
+            "appId": "winapp_notepad",
+            "latestProofKind": "mvp",
+            "latestProofPath": "/Users/bonjin/Library/Application Support/Veil/Diagnostics/MVP Proof/notepad-mvp-window-detect.json",
+            "latestProofFileName": "notepad-mvp-window-detect.json",
+            "latestProofModifiedAt": "2026-07-04T15:28:35Z",
+            "latestProofLatencyHealth": "delayed",
+            "latestProofSlowestLatencyMeasurement": "post-input-frame",
+            "latestProofSlowestLatencyMilliseconds": 1400,
+            "latestProofLatencyBudgetMilliseconds": 1000,
+            "latestProofStaleTimeoutMilliseconds": 5000,
+            "latestProofLatencyRecommendedAction": "measure-again"
+          }
+        ],
         "latestProofFileName": "notepad-mvp-window-detect.json",
         "latestProofKind": "mvp",
         "latestProofModifiedAt": "2026-07-04T15:28:35Z",

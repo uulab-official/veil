@@ -864,6 +864,10 @@ public struct WindowsAppRuntimeProofPlanStatus: Codable, Equatable, Sendable {
 public struct WindowsAppRuntimeProofArtifactStatus: Codable, Equatable, Sendable {
     public var diagnosticsDirectory: String
     public var recommendedProofDirectory: String
+    public var multiAppProofTargetAppIds: [String]
+    public var multiAppProofCoverageCount: Int
+    public var multiAppProofCoverageHealth: String
+    public var latestProofsByApp: [WindowsAppRuntimeProofArtifactAppSummary]
     public var latestProofKind: String?
     public var latestProofPath: String?
     public var latestProofFileName: String?
@@ -879,6 +883,10 @@ public struct WindowsAppRuntimeProofArtifactStatus: Codable, Equatable, Sendable
     public init(
         diagnosticsDirectory: String,
         recommendedProofDirectory: String,
+        multiAppProofTargetAppIds: [String] = WindowsAppRuntimeProofCoverageDefaults.targetAppIds,
+        multiAppProofCoverageCount: Int = 0,
+        multiAppProofCoverageHealth: String = "missing",
+        latestProofsByApp: [WindowsAppRuntimeProofArtifactAppSummary] = [],
         latestProofKind: String? = nil,
         latestProofPath: String? = nil,
         latestProofFileName: String? = nil,
@@ -893,6 +901,10 @@ public struct WindowsAppRuntimeProofArtifactStatus: Codable, Equatable, Sendable
     ) {
         self.diagnosticsDirectory = diagnosticsDirectory
         self.recommendedProofDirectory = recommendedProofDirectory
+        self.multiAppProofTargetAppIds = multiAppProofTargetAppIds
+        self.multiAppProofCoverageCount = multiAppProofCoverageCount
+        self.multiAppProofCoverageHealth = multiAppProofCoverageHealth
+        self.latestProofsByApp = latestProofsByApp
         self.latestProofKind = latestProofKind
         self.latestProofPath = latestProofPath
         self.latestProofFileName = latestProofFileName
@@ -904,6 +916,50 @@ public struct WindowsAppRuntimeProofArtifactStatus: Codable, Equatable, Sendable
         self.latestProofStaleTimeoutMilliseconds = latestProofStaleTimeoutMilliseconds
         self.latestProofLatencyRecommendedAction = latestProofLatencyRecommendedAction
         self.reason = reason
+    }
+}
+
+public enum WindowsAppRuntimeProofCoverageDefaults {
+    public static let targetAppIds = ["winapp_notepad", "winapp_calculator", "winapp_paint"]
+}
+
+public struct WindowsAppRuntimeProofArtifactAppSummary: Codable, Equatable, Sendable {
+    public var appId: String
+    public var latestProofKind: String
+    public var latestProofPath: String
+    public var latestProofFileName: String
+    public var latestProofModifiedAt: Date
+    public var latestProofLatencyHealth: String?
+    public var latestProofSlowestLatencyMeasurement: String?
+    public var latestProofSlowestLatencyMilliseconds: Int?
+    public var latestProofLatencyBudgetMilliseconds: Int?
+    public var latestProofStaleTimeoutMilliseconds: Int?
+    public var latestProofLatencyRecommendedAction: String?
+
+    public init(
+        appId: String,
+        latestProofKind: String,
+        latestProofPath: String,
+        latestProofFileName: String,
+        latestProofModifiedAt: Date,
+        latestProofLatencyHealth: String? = nil,
+        latestProofSlowestLatencyMeasurement: String? = nil,
+        latestProofSlowestLatencyMilliseconds: Int? = nil,
+        latestProofLatencyBudgetMilliseconds: Int? = nil,
+        latestProofStaleTimeoutMilliseconds: Int? = nil,
+        latestProofLatencyRecommendedAction: String? = nil
+    ) {
+        self.appId = appId
+        self.latestProofKind = latestProofKind
+        self.latestProofPath = latestProofPath
+        self.latestProofFileName = latestProofFileName
+        self.latestProofModifiedAt = latestProofModifiedAt
+        self.latestProofLatencyHealth = latestProofLatencyHealth
+        self.latestProofSlowestLatencyMeasurement = latestProofSlowestLatencyMeasurement
+        self.latestProofSlowestLatencyMilliseconds = latestProofSlowestLatencyMilliseconds
+        self.latestProofLatencyBudgetMilliseconds = latestProofLatencyBudgetMilliseconds
+        self.latestProofStaleTimeoutMilliseconds = latestProofStaleTimeoutMilliseconds
+        self.latestProofLatencyRecommendedAction = latestProofLatencyRecommendedAction
     }
 }
 
@@ -1286,6 +1342,11 @@ private struct ProofArtifactLatencySummary: Equatable {
     var recommendedAction: String
 }
 
+private struct ProofArtifactMetadata: Equatable {
+    var appId: String?
+    var latencySummary: ProofArtifactLatencySummary?
+}
+
 private struct ProofArtifactLatencyEvidence: Decodable {
     var measurement: String
     var elapsedMilliseconds: Int
@@ -1295,6 +1356,7 @@ private struct ProofArtifactLatencyEvidence: Decodable {
 }
 
 private struct ProofArtifactLatencyEnvelope: Decodable {
+    var appId: String?
     var firstFrameLatency: ProofArtifactLatencyEvidence?
     var initialFrameLatency: ProofArtifactLatencyEvidence?
     var postInputFrameLatency: ProofArtifactLatencyEvidence?
@@ -2348,24 +2410,45 @@ public final class HostDashboardModel {
             ("app-window", diagnosticsDirectory.appendingPathComponent("App Window Proof", isDirectory: true))
         ]
 
-        let latestProof = searchDirectories
+        let proofCandidates = searchDirectories
             .flatMap { proofArtifacts(in: $0.url, kind: $0.kind) }
-            .max { lhs, rhs in
+        let latestProof = proofCandidates.max { lhs, rhs in
                 lhs.modifiedAt < rhs.modifiedAt
             }
+        let latestProofsByApp = proofArtifactSummariesByApp(from: proofCandidates)
+        let targetAppIds = WindowsAppRuntimeProofCoverageDefaults.targetAppIds
+        let coveredTargetCount = Set(latestProofsByApp.map(\.appId))
+            .intersection(Set(targetAppIds))
+            .count
+        let coverageHealth: String
+        if coveredTargetCount == targetAppIds.count {
+            coverageHealth = "complete"
+        } else if coveredTargetCount > 0 {
+            coverageHealth = "partial"
+        } else {
+            coverageHealth = "missing"
+        }
 
         guard let latestProof else {
             return WindowsAppRuntimeProofArtifactStatus(
                 diagnosticsDirectory: diagnosticsDirectory.path,
                 recommendedProofDirectory: recommendedProofDirectory.path,
+                multiAppProofTargetAppIds: targetAppIds,
+                multiAppProofCoverageCount: coveredTargetCount,
+                multiAppProofCoverageHealth: coverageHealth,
+                latestProofsByApp: latestProofsByApp,
                 reason: "No app check artifact has been saved under Veil diagnostics yet."
             )
         }
 
-        let latencySummary = proofLatencySummary(for: latestProof.url)
+        let latencySummary = proofArtifactMetadata(for: latestProof.url).latencySummary
         return WindowsAppRuntimeProofArtifactStatus(
             diagnosticsDirectory: diagnosticsDirectory.path,
             recommendedProofDirectory: recommendedProofDirectory.path,
+            multiAppProofTargetAppIds: targetAppIds,
+            multiAppProofCoverageCount: coveredTargetCount,
+            multiAppProofCoverageHealth: coverageHealth,
+            latestProofsByApp: latestProofsByApp,
             latestProofKind: latestProof.kind,
             latestProofPath: latestProof.url.path,
             latestProofFileName: latestProof.url.lastPathComponent,
@@ -2807,10 +2890,58 @@ public final class HostDashboardModel {
         }
     }
 
-    private func proofLatencySummary(for url: URL) -> ProofArtifactLatencySummary? {
+    private func proofArtifactSummariesByApp(
+        from candidates: [ProofArtifactCandidate]
+    ) -> [WindowsAppRuntimeProofArtifactAppSummary] {
+        let latestByApp = candidates.reduce(into: [String: ProofArtifactCandidate]()) { result, candidate in
+            let metadata = proofArtifactMetadata(for: candidate.url)
+            guard let appId = metadata.appId else {
+                return
+            }
+            if let existing = result[appId],
+               existing.modifiedAt >= candidate.modifiedAt {
+                return
+            }
+            result[appId] = candidate
+        }
+
+        let targetOrder = Dictionary(
+            uniqueKeysWithValues: WindowsAppRuntimeProofCoverageDefaults.targetAppIds.enumerated().map { index, appId in
+                (appId, index)
+            }
+        )
+
+        return latestByApp
+            .map { appId, candidate in
+                let latencySummary = proofArtifactMetadata(for: candidate.url).latencySummary
+                return WindowsAppRuntimeProofArtifactAppSummary(
+                    appId: appId,
+                    latestProofKind: candidate.kind,
+                    latestProofPath: candidate.url.path,
+                    latestProofFileName: candidate.url.lastPathComponent,
+                    latestProofModifiedAt: candidate.modifiedAt,
+                    latestProofLatencyHealth: latencySummary?.health,
+                    latestProofSlowestLatencyMeasurement: latencySummary?.slowestMeasurement,
+                    latestProofSlowestLatencyMilliseconds: latencySummary?.slowestElapsedMilliseconds,
+                    latestProofLatencyBudgetMilliseconds: latencySummary?.freshFrameBudgetMilliseconds,
+                    latestProofStaleTimeoutMilliseconds: latencySummary?.staleFrameTimeoutMilliseconds,
+                    latestProofLatencyRecommendedAction: latencySummary?.recommendedAction
+                )
+            }
+            .sorted { lhs, rhs in
+                let lhsIndex = targetOrder[lhs.appId] ?? Int.max
+                let rhsIndex = targetOrder[rhs.appId] ?? Int.max
+                if lhsIndex != rhsIndex {
+                    return lhsIndex < rhsIndex
+                }
+                return lhs.appId < rhs.appId
+            }
+    }
+
+    private func proofArtifactMetadata(for url: URL) -> ProofArtifactMetadata {
         guard let data = try? Data(contentsOf: url),
               let envelope = try? JSONDecoder().decode(ProofArtifactLatencyEnvelope.self, from: data) else {
-            return nil
+            return ProofArtifactMetadata(appId: nil, latencySummary: nil)
         }
 
         let evidence = [
@@ -2824,7 +2955,7 @@ public final class HostDashboardModel {
         guard let slowest = evidence.max(by: { lhs, rhs in
             lhs.elapsedMilliseconds < rhs.elapsedMilliseconds
         }) else {
-            return nil
+            return ProofArtifactMetadata(appId: envelope.appId, latencySummary: nil)
         }
 
         let health: String
@@ -2840,13 +2971,16 @@ public final class HostDashboardModel {
             recommendedAction = "tune-frame-latency"
         }
 
-        return ProofArtifactLatencySummary(
-            health: health,
-            slowestMeasurement: slowest.measurement,
-            slowestElapsedMilliseconds: slowest.elapsedMilliseconds,
-            freshFrameBudgetMilliseconds: slowest.freshFrameBudgetMilliseconds,
-            staleFrameTimeoutMilliseconds: slowest.staleFrameTimeoutMilliseconds,
-            recommendedAction: recommendedAction
+        return ProofArtifactMetadata(
+            appId: envelope.appId,
+            latencySummary: ProofArtifactLatencySummary(
+                health: health,
+                slowestMeasurement: slowest.measurement,
+                slowestElapsedMilliseconds: slowest.elapsedMilliseconds,
+                freshFrameBudgetMilliseconds: slowest.freshFrameBudgetMilliseconds,
+                staleFrameTimeoutMilliseconds: slowest.staleFrameTimeoutMilliseconds,
+                recommendedAction: recommendedAction
+            )
         )
     }
 
