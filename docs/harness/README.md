@@ -340,6 +340,10 @@ request-notification-consent`; accepted reports must carry the agent's
 The launcher hero and menu bar primary action must route
 `dailyUse.requestNotificationConsent` to that same in-app request path so this
 Daily Use lane does not regress to terminal-only guidance.
+Once Windows listener access is allowed, `actions` must expose
+`dailyUse.verifyNotifications`; the launcher hero and menu bar route that action
+to the same notification proof path and save the JSON evidence under Veil
+diagnostics.
 The sibling `notificationBridge` section tracks the actual guest-to-host
 notification event path separately from that consent preflight. It is blocked
 until the live agent and package identity gate are present, moves to

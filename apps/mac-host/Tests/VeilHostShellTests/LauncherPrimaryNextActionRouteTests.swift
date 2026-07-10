@@ -91,6 +91,12 @@ struct LauncherPrimaryNextActionRouteTests {
         )
         #expect(
             LauncherPrimaryNextActionRoute.resolve(
+                actionId: "dailyUse.verifyNotifications",
+                command: nil
+            ) == .runNotificationProof
+        )
+        #expect(
+            LauncherPrimaryNextActionRoute.resolve(
                 actionId: "windowsApps.restartFrameStream",
                 command: nil
             ) == .restartFrameStream
@@ -189,6 +195,12 @@ struct LauncherPrimaryNextActionRouteTests {
                 command: "veil-vmctl app-runtime-action --json --action request-notification-consent"
             ) == .requestNotificationConsent
         )
+        #expect(
+            LauncherPrimaryNextActionRoute.resolve(
+                actionId: "dailyUse",
+                command: "veil-vmctl notification-proof --json --require-proved"
+            ) == .runNotificationProof
+        )
     }
 
     @Test("routes setup and app check commands")
@@ -276,6 +288,13 @@ struct LauncherPrimaryNextActionRouteTests {
                 command: "veil-vmctl app-runtime-action --json --action request-notification-consent",
                 runsInApp: true
             ) == .requestNotificationConsent
+        )
+        #expect(
+            LauncherPrimaryNextActionRoute.resolve(
+                actionId: "dailyUse.verifyNotifications",
+                command: "veil-vmctl notification-proof --json --require-proved",
+                runsInApp: true
+            ) == .runNotificationProof
         )
     }
 }

@@ -1832,6 +1832,14 @@ public final class HostDashboardModel {
                     )
                 ),
                 WindowsAppRuntimeActionStatus(
+                    id: "dailyUse.verifyNotifications",
+                    title: "Check Notifications",
+                    isAvailable: canRunWindowsNotificationProof(
+                        dailyUseReadiness: dailyUseReadiness,
+                        notificationBridge: notificationBridge
+                    )
+                ),
+                WindowsAppRuntimeActionStatus(
                     id: "runtime.recoverDisplay",
                     title: "Refresh Windows Display",
                     isAvailable: localRuntime.recommendedRecoveryCommand != nil
@@ -2007,6 +2015,10 @@ public final class HostDashboardModel {
             return previousAppsStatusTitle()
         }
 
+        if dailyUseReadiness.notificationBridgeRecommendedAction == "run-notification-proof" {
+            return "Notifications Check Needed"
+        }
+
         if dailyUseReadiness.recommendedAction == "prepare-sparse-package" {
             return "App Identity Needed"
         }
@@ -2050,6 +2062,10 @@ public final class HostDashboardModel {
 
         if canRestoreMirrorSessions || canReconnectRestoreMirrorSessions {
             return "arrow.counterclockwise.circle.fill"
+        }
+
+        if dailyUseReadiness.notificationBridgeRecommendedAction == "run-notification-proof" {
+            return "bell.badge.fill"
         }
 
         if dailyUseReadiness.recommendedAction == "prepare-sparse-package" {
@@ -2138,6 +2154,10 @@ public final class HostDashboardModel {
         if dailyUseReadiness.recommendedAction == "prepare-sparse-package",
            dailyUseReadiness.recommendedCommand != nil {
             return ("runtime.prepareSparsePackage", "Prepare Identity", true)
+        }
+
+        if dailyUseReadiness.notificationBridgeRecommendedAction == "run-notification-proof" {
+            return ("dailyUse.verifyNotifications", "Check Notifications", true)
         }
 
         if dailyUseReadiness.recommendedAction == "verify-daily-use-integrations",
@@ -2646,6 +2666,17 @@ public final class HostDashboardModel {
             || dailyUseReadiness.notificationBridgeRecommendedAction == "enable-notification-listener-settings"
     }
 
+    private func canRunWindowsNotificationProof(
+        dailyUseReadiness: WindowsAppRuntimeDailyUseReadinessStatus,
+        notificationBridge: WindowsAppRuntimeNotificationBridgeStatus
+    ) -> Bool {
+        hasLiveAgentConnection
+            && health?.capabilities.packageIdentity == true
+            && dailyUseReadiness.notificationBridgePreflightPassed
+            && notificationBridge.canReceiveNotifications
+            && notificationBridge.recommendedAction == "run-notification-proof"
+    }
+
     public func notificationBridgeStatus(
         dailyUseReadiness: WindowsAppRuntimeDailyUseReadinessStatus
     ) -> WindowsAppRuntimeNotificationBridgeStatus {
@@ -3004,6 +3035,7 @@ public final class HostDashboardModel {
              "windowsApps.closeAll",
              "runtime.quietWhenIdle",
              "runtime.stopWhenIdle",
+             "dailyUse.verifyNotifications",
              "dailyUse.verifyIntegrations",
              "proof.recommended",
              "proof.multiApp":
@@ -3406,7 +3438,8 @@ public final class HostDashboardModel {
         menuBarIntegration: WindowsAppRuntimeMenuBarIntegrationStatus
     ) -> String? {
         if primaryNextAction.actionId == "runtime.refreshStatus",
-           menuBarIntegration.primaryActionId == "dailyUse.verifyIntegrations",
+           (menuBarIntegration.primaryActionId == "dailyUse.verifyIntegrations"
+                || menuBarIntegration.primaryActionId == "dailyUse.verifyNotifications"),
            menuBarIntegration.primaryActionAvailable {
             return menuBarIntegration.primaryActionId
         }

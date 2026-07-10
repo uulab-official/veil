@@ -234,6 +234,11 @@
         "isAvailable": false
       },
       {
+        "id": "dailyUse.verifyNotifications",
+        "title": "Check Notifications",
+        "isAvailable": false
+      },
+      {
         "id": "runtime.recoverDisplay",
         "isAvailable": false,
         "title": "Refresh Windows Display"

@@ -16,6 +16,7 @@ enum LauncherPrimaryNextActionRoute: Equatable {
     case reopenWindow
     case quietWindows
     case requestNotificationConsent
+    case runNotificationProof
     case runRecommendedProof
     case runMultiAppProof
 
@@ -53,6 +54,8 @@ enum LauncherPrimaryNextActionRoute: Equatable {
             return .refreshRuntimeStatus
         case "dailyUse.requestNotificationConsent":
             return .requestNotificationConsent
+        case "dailyUse.verifyNotifications":
+            return .runNotificationProof
         case "windowsApps.reconnectRestore", "windowsApps.restorePrevious":
             return .reconnectPreviousApps
         case "windowsApps.closeAll":
@@ -85,6 +88,10 @@ enum LauncherPrimaryNextActionRoute: Equatable {
 
         if command.contains("multi-app-proof") {
             return .runMultiAppProof
+        }
+
+        if command.contains("notification-proof") {
+            return .runNotificationProof
         }
 
         if command.contains("--action repair-agent") || command.contains("qemu-install-agent") {
@@ -213,6 +220,8 @@ enum LauncherPrimaryNextActionRoute: Equatable {
             return "Quiet Windows"
         case .requestNotificationConsent:
             return "Allow Notifications"
+        case .runNotificationProof:
+            return "Check Notifications"
         case .runRecommendedProof:
             return "Check App"
         case .runMultiAppProof:
@@ -254,6 +263,8 @@ enum LauncherPrimaryNextActionRoute: Equatable {
             return "moon.zzz.fill"
         case .requestNotificationConsent:
             return "bell.badge"
+        case .runNotificationProof:
+            return "bell.badge.fill"
         case .runRecommendedProof:
             return "checkmark.seal"
         case .runMultiAppProof:

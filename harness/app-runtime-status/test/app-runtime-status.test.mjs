@@ -173,6 +173,7 @@ function installedRuntimeHeroSupports(actionId) {
     "runtime.prepareSparsePackage",
     "dailyUse.verifyIntegrations",
     "dailyUse.verifyWindowCapture",
+    "dailyUse.verifyNotifications",
     "runtime.startWindowsForApp",
     "runtime.prepareWindows",
     "runtime.refreshStatus",
@@ -208,9 +209,14 @@ function refreshOneScreenUX(report) {
       && report.visibleSurfacePolicy.expectedVisibleSurfaceCount === 1
       && report.launcherVisibility.shouldHideMainWindow === false);
   report.oneScreenUX.keepsDisplayRecoveryManual = report.visibleSurfacePolicy.keepsRecoveryDisplayManual;
-  report.oneScreenUX.primaryActionId = report.primaryNextAction.actionId ?? report.menuBarIntegration.primaryActionId;
+  report.oneScreenUX.primaryActionId = report.primaryNextAction.actionId === "runtime.refreshStatus"
+    && (report.menuBarIntegration.primaryActionId === "dailyUse.verifyIntegrations"
+      || report.menuBarIntegration.primaryActionId === "dailyUse.verifyNotifications")
+    && report.menuBarIntegration.primaryActionAvailable
+    ? report.menuBarIntegration.primaryActionId
+    : (report.primaryNextAction.actionId ?? report.menuBarIntegration.primaryActionId);
   report.oneScreenUX.heroRunsPrimaryAction = report.primaryNextAction.runsInApp
-    && installedRuntimeHeroSupports(report.primaryNextAction.actionId);
+    && installedRuntimeHeroSupports(report.oneScreenUX.primaryActionId);
 }
 
 function refreshLaunchOnboarding(report) {
@@ -1453,6 +1459,7 @@ test("accepts allowed Windows notification listener proof readiness", () => {
   report.notificationBridge.reason = "Windows notification listener consent is ready; run notification-proof and wait for the first notification.received event.";
   report.actions.find((action) => action.id === "runtime.prepareSparsePackage").isAvailable = false;
   report.actions.find((action) => action.id === "dailyUse.verifyIntegrations").isAvailable = true;
+  report.actions.find((action) => action.id === "dailyUse.verifyNotifications").isAvailable = true;
 
   assert.equal(validateAppRuntimeStatus(report), report);
 });

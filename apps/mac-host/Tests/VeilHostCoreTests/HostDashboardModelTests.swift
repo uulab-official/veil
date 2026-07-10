@@ -1413,6 +1413,7 @@ struct HostDashboardModelTests {
         #expect(report.notificationBridge.recommendedAction == "enable-notification-listener-settings")
         #expect(report.notificationBridge.reason.contains("listener consent"))
         #expect(report.actions.first { $0.id == "dailyUse.requestNotificationConsent" }?.isAvailable == true)
+        #expect(report.actions.first { $0.id == "dailyUse.verifyNotifications" }?.isAvailable == false)
     }
 
     @Test("Daily Use readiness allows notification proof after Windows listener consent")
@@ -1433,6 +1434,11 @@ struct HostDashboardModelTests {
         #expect(report.notificationBridge.recommendedAction == "run-notification-proof")
         #expect(report.notificationBridge.reason.contains("run notification-proof"))
         #expect(report.actions.first { $0.id == "dailyUse.requestNotificationConsent" }?.isAvailable == false)
+        #expect(report.actions.first { $0.id == "dailyUse.verifyNotifications" }?.isAvailable == true)
+        #expect(report.menuBarIntegration.primaryActionId == "dailyUse.verifyNotifications")
+        #expect(report.menuBarIntegration.primaryActionTitle == "Check Notifications")
+        #expect(report.oneScreenUX.primaryActionId == "dailyUse.verifyNotifications")
+        #expect(report.oneScreenUX.heroRunsPrimaryAction)
     }
 
     @Test("Daily Use readiness prefers multi-app proof when every target app is launchable")
@@ -1453,6 +1459,7 @@ struct HostDashboardModelTests {
         #expect(report.dailyUseReadiness.recommendedCommand == "veil-vmctl app-runtime-action --json --action proof-multi-app")
         #expect(report.actions.first { $0.id == "dailyUse.verifyIntegrations" }?.isAvailable == true)
         #expect(report.actions.first { $0.id == "proof.multiApp" }?.isAvailable == true)
+        #expect(report.actions.first { $0.id == "dailyUse.verifyNotifications" }?.isAvailable == false)
         #expect(report.menuBarIntegration.primaryActionId == "dailyUse.verifyIntegrations")
         #expect(report.oneScreenUX.primaryActionId == "dailyUse.verifyIntegrations")
         #expect(report.oneScreenUX.heroRunsPrimaryAction)
@@ -1479,6 +1486,7 @@ struct HostDashboardModelTests {
         #expect(report.actions.first { $0.id == "dailyUse.verifyWindowCapture" }?.isAvailable == true)
         #expect(report.actions.first { $0.id == "dailyUse.verifyIntegrations" }?.isAvailable == false)
         #expect(report.actions.first { $0.id == "dailyUse.requestNotificationConsent" }?.isAvailable == false)
+        #expect(report.actions.first { $0.id == "dailyUse.verifyNotifications" }?.isAvailable == false)
     }
 
     @Test("reports quiet runtime readiness after the final Windows app window closes")

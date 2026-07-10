@@ -131,6 +131,7 @@ struct VeilHostShellApp: App {
                 closeAllWindowsAppWindowsAction: closeAllWindowsAppWindows,
                 restartStaleFrameStreamsAction: restartStaleFrameStreams,
                 requestNotificationConsentAction: requestWindowsNotificationConsent,
+                runNotificationProofAction: runNotificationProof,
                 runRecommendedProofAction: runRecommendedProof,
                 runMultiAppProofAction: runMultiAppProof,
                 quietWindowsWhenIdleAction: quietWindowsWhenIdle,
@@ -282,6 +283,7 @@ struct VeilHostShellApp: App {
                 closeAllWindowsAppWindowsAction: closeAllWindowsAppWindows,
                 restartStaleFrameStreamsAction: restartStaleFrameStreams,
                 requestNotificationConsentAction: requestWindowsNotificationConsent,
+                runNotificationProofAction: runNotificationProof,
                 runRecommendedProofAction: runRecommendedProof,
                 runMultiAppProofAction: runMultiAppProof,
                 prepareReviewEvidenceAction: prepareReviewEvidenceFolder,
@@ -969,6 +971,28 @@ struct VeilHostShellApp: App {
         }
     }
 
+    private func runNotificationProof() {
+        Task { @MainActor in
+            activateMainWindow()
+            let report = model.runtimeStatusReport()
+            guard report.notificationBridge.canReceiveNotifications,
+                  report.notificationBridge.recommendedAction == "run-notification-proof" else {
+                displayMessage = report.notificationBridge.reason
+                return
+            }
+
+            displayMessage = "Waiting for a Windows notification to prove the Mac notification bridge."
+
+            do {
+                let url = try await writeNotificationProof()
+                displayMessage = "Windows notification check saved: \(url.path)"
+                await model.load()
+            } catch {
+                displayMessage = "Windows notification check could not complete: \(userMessage(for: error))"
+            }
+        }
+    }
+
     private func writeRecommendedProof(
         proofKind: String,
         appId: String,
@@ -1018,6 +1042,25 @@ struct VeilHostShellApp: App {
         default:
             throw RecommendedProofError.unsupportedKind(proofKind)
         }
+    }
+
+    private func writeNotificationProof() async throws -> URL {
+        let transport = URLSessionWebSocketTransport(url: URL(string: Self.agentURLString)!)
+        let client = VeilHostClient(transport: transport)
+        let directory = QEMUVMRuntimeBooter.defaultDiagnosticsDirectory()
+            .appendingPathComponent("Notification Proof", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+
+        let outputURL = directory.appendingPathComponent("notification-proof-\(Self.diagnosticTimestamp()).json")
+        var report = await client.proveWindowsNotificationBridge(
+            endpoint: Self.agentURLString,
+            eventSource: transport,
+            waitSeconds: 30,
+            notificationTimeoutNanoseconds: 30_000_000_000
+        )
+        report.savedProofPath = outputURL.path
+        try writeProof(report, to: outputURL)
+        return outputURL
     }
 
     private func writeMultiAppProof() async throws -> URL {
@@ -1735,6 +1778,7 @@ private struct VeilMenuBarMenu: View {
     var closeAllWindowsAppWindowsAction: () -> Void
     var restartStaleFrameStreamsAction: () -> Void
     var requestNotificationConsentAction: () -> Void
+    var runNotificationProofAction: () -> Void
     var runRecommendedProofAction: () -> Void
     var runMultiAppProofAction: () -> Void
     var prepareReviewEvidenceAction: () -> Void
@@ -2115,6 +2159,9 @@ private struct VeilMenuBarMenu: View {
         case .requestNotificationConsent:
             openMainWindow()
             requestNotificationConsentAction()
+        case .runNotificationProof:
+            openMainWindow()
+            runNotificationProofAction()
         case .refreshRuntimeStatus:
             openMainWindow()
         case .restartFrameStream:
@@ -2175,6 +2222,7 @@ enum MenuBarPrimaryActionRoute: Equatable {
     case waitForAgent
     case preparePackageIdentity
     case requestNotificationConsent
+    case runNotificationProof
     case refreshRuntimeStatus
     case restartFrameStream
     case recoverWindowCapture
@@ -2213,6 +2261,8 @@ enum MenuBarPrimaryActionRoute: Equatable {
             return .preparePackageIdentity
         case "dailyUse.requestNotificationConsent":
             return .requestNotificationConsent
+        case "dailyUse.verifyNotifications":
+            return .runNotificationProof
         case "windowsApps.launchSelected":
             return .launchSelectedApp
         case "proof.recommended":
@@ -2246,6 +2296,8 @@ enum MenuBarPrimaryActionRoute: Equatable {
             return "shippingbox"
         case .requestNotificationConsent:
             return "bell.badge"
+        case .runNotificationProof:
+            return "bell.badge.fill"
         case .refreshRuntimeStatus:
             return "arrow.clockwise"
         case .restartFrameStream:
@@ -2476,6 +2528,7 @@ private struct StandaloneMainWindowRoot: View {
             closeAllWindowsAppWindowsAction: {},
             restartStaleFrameStreamsAction: {},
             requestNotificationConsentAction: {},
+            runNotificationProofAction: {},
             runRecommendedProofAction: {},
             runMultiAppProofAction: {},
             quietWindowsWhenIdleAction: {},

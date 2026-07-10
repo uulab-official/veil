@@ -699,6 +699,7 @@ test("validates accepted notification consent request action", () => {
   report.status.notificationBridge.recommendedAction = "run-notification-proof";
   report.status.notificationBridge.reason = "Windows notification listener consent is ready; run notification-proof and wait for the first notification.received event.";
   report.status.actions.find((action) => action.id === "dailyUse.requestNotificationConsent").isAvailable = false;
+  report.status.actions.find((action) => action.id === "dailyUse.verifyNotifications").isAvailable = true;
   report.nextActions = [
     "Run `veil-vmctl notification-proof --json --require-proved` after triggering a Windows notification.",
     "Run `veil-vmctl app-runtime-status --json` to confirm notificationBridge.recommendedAction updates from consent to proof or receiving state."

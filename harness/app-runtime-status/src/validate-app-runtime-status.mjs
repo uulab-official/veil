@@ -1804,6 +1804,7 @@ function installedRuntimeHeroSupports(actionId) {
     "windowsApps.restartFrameStream",
     "runtime.quietWhenIdle",
     "runtime.stopWhenIdle",
+    "dailyUse.verifyNotifications",
     "proof.recommended"
   ].includes(actionId);
 }
@@ -1989,6 +1990,11 @@ function validateMenuBarIntegration(menuBarIntegration, report) {
     && menuBarIntegration.primaryActionTitle !== "Verify Daily Use") {
     throw new TypeError("menuBarIntegration.primaryActionTitle must expose Daily Use verification.");
   }
+
+  if (menuBarIntegration.primaryActionId === "dailyUse.verifyNotifications"
+    && menuBarIntegration.primaryActionTitle !== "Check Notifications") {
+    throw new TypeError("menuBarIntegration.primaryActionTitle must expose notification proof.");
+  }
 }
 
 function expectedMenuBarSymbolName(report) {
@@ -2006,6 +2012,10 @@ function expectedMenuBarSymbolName(report) {
 
   if (report.dailyUseReadiness.recommendedAction === "prepare-sparse-package") {
     return "shippingbox";
+  }
+
+  if (report.dailyUseReadiness.notificationBridgeRecommendedAction === "run-notification-proof") {
+    return "bell.badge.fill";
   }
 
   if (report.dailyUseReadiness.recommendedAction === "verify-daily-use-integrations") {
@@ -2080,6 +2090,11 @@ function expectedMenuBarPrimaryActionId(report) {
   if (report.dailyUseReadiness.recommendedAction === "prepare-sparse-package"
     && report.dailyUseReadiness.recommendedCommand !== undefined) {
     return "runtime.prepareSparsePackage";
+  }
+
+  if (report.dailyUseReadiness.notificationBridgeRecommendedAction === "run-notification-proof"
+    && report.notificationBridge.recommendedAction === "run-notification-proof") {
+    return "dailyUse.verifyNotifications";
   }
 
   if (report.dailyUseReadiness.recommendedAction === "verify-daily-use-integrations"
@@ -2248,13 +2263,18 @@ function validateOneScreenUX(oneScreenUX, report) {
     }
   }
 
-  const expectedPrimaryActionId = report.primaryNextAction.actionId ?? report.menuBarIntegration.primaryActionId;
+  const expectedPrimaryActionId = report.primaryNextAction.actionId === "runtime.refreshStatus"
+    && (report.menuBarIntegration.primaryActionId === "dailyUse.verifyIntegrations"
+      || report.menuBarIntegration.primaryActionId === "dailyUse.verifyNotifications")
+    && report.menuBarIntegration.primaryActionAvailable
+    ? report.menuBarIntegration.primaryActionId
+    : (report.primaryNextAction.actionId ?? report.menuBarIntegration.primaryActionId);
   if (oneScreenUX.primaryActionId !== expectedPrimaryActionId) {
     throw new TypeError("oneScreenUX.primaryActionId must match the executable next action or menu primary action.");
   }
 
   const expectedHeroRunsPrimaryAction = report.primaryNextAction.runsInApp
-    && installedRuntimeHeroSupports(report.primaryNextAction.actionId);
+    && installedRuntimeHeroSupports(expectedPrimaryActionId);
   if (oneScreenUX.heroRunsPrimaryAction !== expectedHeroRunsPrimaryAction) {
     throw new TypeError("oneScreenUX.heroRunsPrimaryAction must match whether the primary next action is supported by the app hero.");
   }
@@ -2460,6 +2480,7 @@ function validateActions(actions, report) {
     "dailyUse.verifyIntegrations",
     "dailyUse.verifyWindowCapture",
     "dailyUse.requestNotificationConsent",
+    "dailyUse.verifyNotifications",
     "runtime.recoverDisplay",
     "runtime.fulfillPendingLaunch",
     "runtime.waitAgent",
@@ -2565,6 +2586,16 @@ function validateActions(actions, report) {
       || report.dailyUseReadiness.notificationBridgeRecommendedAction === "enable-notification-listener-settings");
   if (notificationConsentAction.isAvailable !== canRequestNotificationConsent) {
     throw new TypeError("dailyUse.requestNotificationConsent availability must match Windows notification listener consent readiness.");
+  }
+
+  const notificationProofAction = actions.find((action) => action.id === "dailyUse.verifyNotifications");
+  const canRunNotificationProof = report.connection.hasLiveAgentConnection
+    && report.connection.capabilities?.packageIdentity === true
+    && report.dailyUseReadiness.notificationBridgePreflightPassed === true
+    && report.notificationBridge.canReceiveNotifications === true
+    && report.notificationBridge.recommendedAction === "run-notification-proof";
+  if (notificationProofAction.isAvailable !== canRunNotificationProof) {
+    throw new TypeError("dailyUse.verifyNotifications availability must match Windows notification proof readiness.");
   }
 
   const recoverDisplayAction = actions.find((action) => action.id === "runtime.recoverDisplay");
