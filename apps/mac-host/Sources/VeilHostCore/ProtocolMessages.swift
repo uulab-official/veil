@@ -20,6 +20,7 @@ public enum MessageType: String, Codable, Sendable {
     case windowCloseRequest = "window.close.request"
     case windowCloseResponse = "window.close.response"
     case clipboardTextSet = "clipboard.text.set"
+    case notificationReceived = "notification.received"
     case inputMouse = "input.mouse"
     case inputKey = "input.key"
     case error
@@ -426,6 +427,37 @@ public struct ClipboardTextSet: Codable, Equatable, Sendable {
         self.origin = origin
         self.sequence = sequence
         self.text = text
+    }
+}
+
+public struct WindowsNotificationReceivedEvent: Codable, Equatable, Sendable {
+    public var type: MessageType
+    public var notificationId: String
+    public var appId: String?
+    public var appName: String?
+    public var title: String
+    public var body: String?
+    public var receivedAt: String
+    public var sourceAumid: String?
+
+    public init(
+        type: MessageType = .notificationReceived,
+        notificationId: String,
+        appId: String? = nil,
+        appName: String? = nil,
+        title: String,
+        body: String? = nil,
+        receivedAt: String,
+        sourceAumid: String? = nil
+    ) {
+        self.type = type
+        self.notificationId = notificationId
+        self.appId = appId
+        self.appName = appName
+        self.title = title
+        self.body = body
+        self.receivedAt = receivedAt
+        self.sourceAumid = sourceAumid
     }
 }
 

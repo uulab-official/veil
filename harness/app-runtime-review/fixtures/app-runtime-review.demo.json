@@ -623,6 +623,13 @@
       "primarySurface": "launcher",
       "reason": "The main Veil launcher is the single normal surface until a live Windows app window is mirrored.",
       "shouldHideLauncher": false
+    },
+    "notificationBridge": {
+      "isEnabled": true,
+      "canReceiveNotifications": false,
+      "deliveredNotificationCount": 0,
+      "recommendedAction": "connect-agent",
+      "reason": "Connect the Windows app agent before listening for Windows notifications."
     }
   },
   "statusCommand": "veil-vmctl app-runtime-status --json",

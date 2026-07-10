@@ -330,6 +330,14 @@ state and `dailyUse.requestNotificationConsent` as an explicit unavailable lane
 until Windows notification consent automation exists. This keeps the app surface
 honest about what can be clicked today while still showing the remaining Daily
 Use work.
+The sibling `notificationBridge` section tracks the actual guest-to-host
+notification event path separately from that consent preflight. It is blocked
+until the live agent and package identity gate are present, moves to
+`verify-notification-listener-consent` while waiting for Windows listener
+permission, and only reports `receiving-windows-notifications` after a real
+`notification.received` event has reached the macOS host. The host retains only
+the latest short recent-notification window, and the harness rejects missing or
+malformed latest-notification evidence.
 The macOS launcher and menu bar route both `dailyUse.verifyIntegrations` and
 `proof.recommended` to the same recommended app-check action, keeping Daily Use
 verification reachable from the Parallels-style top-level controls.

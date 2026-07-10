@@ -501,6 +501,13 @@
       "printerBridgeRecommendedAction": "manual-ipp-experiment",
       "printerBridgeEndpointTemplate": "http://10.0.2.2:631/printers/<shared-printer-name>",
       "printerBridgeSetupHint": "Share the Mac printer, then add it in Windows as an IPP network printer at http://10.0.2.2:631/printers/<shared-printer-name>."
+    },
+    "notificationBridge": {
+      "isEnabled": true,
+      "canReceiveNotifications": false,
+      "deliveredNotificationCount": 0,
+      "recommendedAction": "prepare-sparse-package",
+      "reason": "A signed sparse package identity is required before Windows notification listener consent can be requested."
     }
   },
   "nextActions": [

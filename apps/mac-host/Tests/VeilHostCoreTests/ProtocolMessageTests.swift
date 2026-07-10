@@ -170,6 +170,20 @@ struct ProtocolMessageTests {
         #expect(clipboard.sequence == 43)
         #expect(clipboard.text == "hello from Windows")
     }
+
+    @Test("decodes Windows notification event")
+    func decodesWindowsNotificationEvent() throws {
+        let notification: WindowsNotificationReceivedEvent = try decodeFixture("notification.received")
+
+        #expect(notification.type == .notificationReceived)
+        #expect(notification.notificationId == "toast:winapp_notepad:0001")
+        #expect(notification.appId == "winapp_notepad")
+        #expect(notification.appName == "Notepad")
+        #expect(notification.title == "Notepad")
+        #expect(notification.body == "Autosaved Notes.txt")
+        #expect(notification.receivedAt == "2026-07-10T12:15:00Z")
+        #expect(notification.sourceAumid == "Microsoft.WindowsNotepad_8wekyb3d8bbwe!App")
+    }
 }
 
 private func decodeFixture<T: Decodable>(_ name: String) throws -> T {

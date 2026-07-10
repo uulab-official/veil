@@ -479,6 +479,16 @@ test("rejects reports without Daily Use readiness status", () => {
   );
 });
 
+test("rejects reports without notification bridge status", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.demo.json", import.meta.url), "utf8"));
+  delete report.notificationBridge;
+
+  assert.throws(
+    () => validateAppRuntimeStatus(report),
+    /notificationBridge/
+  );
+});
+
 test("rejects reports without release gate status", () => {
   const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.demo.json", import.meta.url), "utf8"));
   delete report.releaseGate;
@@ -1389,6 +1399,46 @@ test("rejects available notification consent action before automation exists", (
     () => validateAppRuntimeStatus(report),
     /requestNotificationConsent/
   );
+});
+
+test("accepts delivered Windows notification bridge status", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.mac-window-live.json", import.meta.url), "utf8"));
+  report.connection.capabilities.packageIdentity = true;
+  report.connection.packageIdentityStatus.succeeded = true;
+  report.connection.packageIdentityStatus.stage = "registered";
+  report.connection.packageIdentityStatus.message = "Sparse package registered and agent restarted with package identity.";
+  report.dailyUseReadiness.packageIdentityReady = true;
+  report.dailyUseReadiness.packageIdentityStatus = report.connection.packageIdentityStatus;
+  report.dailyUseReadiness.packageIdentitySucceeded = true;
+  report.dailyUseReadiness.packageIdentityStage = "registered";
+  report.dailyUseReadiness.packageIdentityMessage = "Sparse package registered and agent restarted with package identity.";
+  report.dailyUseReadiness.borderlessCapturePreflightPassed = true;
+  report.dailyUseReadiness.borderlessCaptureRecommendedAction = "verify-daily-use-integrations";
+  report.dailyUseReadiness.notificationBridgePreflightPassed = true;
+  report.dailyUseReadiness.notificationBridgeRecommendedAction = "verify-notification-listener-consent";
+  report.dailyUseReadiness.recommendedAction = "verify-daily-use-integrations";
+  report.dailyUseReadiness.recommendedCommand = "veil-vmctl app-runtime-action --json --action proof-recommended";
+  report.actions.find((action) => action.id === "runtime.prepareSparsePackage").isAvailable = false;
+  report.actions.find((action) => action.id === "dailyUse.verifyIntegrations").isAvailable = true;
+  report.notificationBridge = {
+    isEnabled: true,
+    canReceiveNotifications: true,
+    deliveredNotificationCount: 1,
+    latestNotification: {
+      type: "notification.received",
+      notificationId: "toast:winapp_notepad:0001",
+      appId: "winapp_notepad",
+      appName: "Notepad",
+      title: "Notepad",
+      body: "Autosaved Notes.txt",
+      receivedAt: "2026-07-10T12:15:00Z",
+      sourceAumid: "Microsoft.WindowsNotepad_8wekyb3d8bbwe!App"
+    },
+    recommendedAction: "receiving-windows-notifications",
+    reason: "Windows notification events are reaching the macOS host bridge."
+  };
+
+  assert.equal(validateAppRuntimeStatus(report), report);
 });
 
 test("rejects Daily Use window capture action availability drift", () => {

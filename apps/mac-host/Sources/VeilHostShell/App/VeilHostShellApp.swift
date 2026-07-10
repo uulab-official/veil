@@ -353,6 +353,8 @@ struct VeilHostShellApp: App {
                         syncLauncherWindowVisibility()
                     case .handledClipboardText:
                         syncGuestClipboardToPasteboard()
+                    case .handledWindowsNotification(let notificationId):
+                        displayMessage = "Windows notification received: \(notificationId)"
                     case .ignored:
                         return
                     }

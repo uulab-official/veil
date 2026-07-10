@@ -853,6 +853,32 @@ struct HostDashboardModelTests {
         ])
     }
 
+    @Test("consumes Windows notification events once")
+    @MainActor
+    func consumesWindowsNotificationEventsOnce() async throws {
+        let service = FakeDashboardService(health: .dailyUseReady)
+        let model = HostDashboardModel(service: service)
+
+        await model.load()
+        let firstResult = try await model.receiveProtocolMessage(
+            Data(WindowsNotificationReceivedEvent.notepadEventJSON.utf8)
+        )
+        let duplicateResult = try await model.receiveProtocolMessage(
+            Data(WindowsNotificationReceivedEvent.notepadEventJSON.utf8)
+        )
+
+        let notification = try #require(model.latestWindowsNotifications.first)
+        let report = model.runtimeStatusReport()
+        #expect(notification.notificationId == "toast:winapp_notepad:0001")
+        #expect(notification.title == "Notepad")
+        #expect(report.notificationBridge.canReceiveNotifications)
+        #expect(report.notificationBridge.deliveredNotificationCount == 1)
+        #expect(report.notificationBridge.latestNotification?.notificationId == "toast:winapp_notepad:0001")
+        #expect(report.notificationBridge.recommendedAction == "receiving-windows-notifications")
+        #expect(firstResult == .handledWindowsNotification(notificationId: "toast:winapp_notepad:0001"))
+        #expect(duplicateResult == .ignored)
+    }
+
     @Test("ignores frames for windows without a mirror session")
     @MainActor
     func ignoresFramesWithoutMirrorSession() async throws {
@@ -3008,5 +3034,11 @@ private extension WindowUpdatedEvent {
 private extension ClipboardTextSet {
     static var guestEventJSON: String {
         #"{"type":"clipboard.text.set","requestId":"evt_clipboard_43","origin":"guest","sequence":43,"text":"hello from Windows"}"#
+    }
+}
+
+private extension WindowsNotificationReceivedEvent {
+    static var notepadEventJSON: String {
+        #"{"type":"notification.received","notificationId":"toast:winapp_notepad:0001","appId":"winapp_notepad","appName":"Notepad","title":"Notepad","body":"Autosaved Notes.txt","receivedAt":"2026-07-10T12:15:00Z","sourceAumid":"Microsoft.WindowsNotepad_8wekyb3d8bbwe!App"}"#
     }
 }

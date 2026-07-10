@@ -59,6 +59,7 @@ export function validateAppRuntimeStatus(report) {
   validateProofPlan(report.proofPlan, report);
   validateProofArtifacts(report.proofArtifacts);
   validateDailyUseReadiness(report.dailyUseReadiness, report);
+  validateNotificationBridge(report.notificationBridge, report);
   validateReleaseGate(report.releaseGate, report);
   validatePrimaryNextAction(report.primaryNextAction, report);
   validateMenuBarIntegration(report.menuBarIntegration, report);
@@ -143,6 +144,79 @@ function validateCapabilities(capabilities) {
     "packageIdentity"
   ]) {
     requireBoolean(capabilities[field], `connection.capabilities.${field}`);
+  }
+}
+
+function validateNotificationBridge(notificationBridge, report) {
+  if (!notificationBridge || typeof notificationBridge !== "object" || Array.isArray(notificationBridge)) {
+    throw new TypeError("notificationBridge must be an object.");
+  }
+
+  requireBoolean(notificationBridge.isEnabled, "notificationBridge.isEnabled");
+  requireBoolean(notificationBridge.canReceiveNotifications, "notificationBridge.canReceiveNotifications");
+  requireNonNegativeInteger(notificationBridge.deliveredNotificationCount, "notificationBridge.deliveredNotificationCount");
+  requireString(notificationBridge.recommendedAction, "notificationBridge.recommendedAction");
+  requireString(notificationBridge.reason, "notificationBridge.reason");
+  if (notificationBridge.isEnabled !== true) {
+    throw new TypeError("notificationBridge must stay enabled for Daily Use readiness tracking.");
+  }
+  if (notificationBridge.deliveredNotificationCount < 0 || notificationBridge.deliveredNotificationCount > 5) {
+    throw new TypeError("notificationBridge.deliveredNotificationCount must stay within the retained recent-notification window.");
+  }
+
+  if (notificationBridge.latestNotification !== undefined) {
+    validateWindowsNotification(notificationBridge.latestNotification);
+  }
+  if (notificationBridge.deliveredNotificationCount === 0 && notificationBridge.latestNotification !== undefined) {
+    throw new TypeError("notificationBridge.latestNotification must be absent when deliveredNotificationCount is zero.");
+  }
+  if (notificationBridge.deliveredNotificationCount > 0 && notificationBridge.latestNotification === undefined) {
+    throw new TypeError("notificationBridge.latestNotification is required when notifications have been delivered.");
+  }
+
+  const expectedCanReceive = report.connection.hasLiveAgentConnection
+    && report.dailyUseReadiness.notificationBridgePreflightPassed === true;
+  if (notificationBridge.canReceiveNotifications !== expectedCanReceive) {
+    throw new TypeError("notificationBridge.canReceiveNotifications must require live agent and notification preflight readiness.");
+  }
+
+  const expectedAction = !report.connection.hasLiveAgentConnection
+    ? "connect-agent"
+    : report.dailyUseReadiness.notificationBridgePreflightPassed
+      ? notificationBridge.deliveredNotificationCount > 0
+        ? "receiving-windows-notifications"
+        : "verify-notification-listener-consent"
+      : report.dailyUseReadiness.notificationBridgeRecommendedAction;
+  if (notificationBridge.recommendedAction !== expectedAction) {
+    throw new TypeError("notificationBridge.recommendedAction must match the current notification bridge state.");
+  }
+}
+
+function validateWindowsNotification(notification) {
+  if (!notification || typeof notification !== "object" || Array.isArray(notification)) {
+    throw new TypeError("notificationBridge.latestNotification must be an object.");
+  }
+  requireString(notification.type, "notificationBridge.latestNotification.type");
+  if (notification.type !== "notification.received") {
+    throw new TypeError("notificationBridge.latestNotification.type must be notification.received.");
+  }
+  requireString(notification.notificationId, "notificationBridge.latestNotification.notificationId");
+  requireString(notification.title, "notificationBridge.latestNotification.title");
+  requireString(notification.receivedAt, "notificationBridge.latestNotification.receivedAt");
+  if (Number.isNaN(Date.parse(notification.receivedAt))) {
+    throw new TypeError("notificationBridge.latestNotification.receivedAt must be an ISO date.");
+  }
+  if (notification.appId !== undefined) {
+    requireString(notification.appId, "notificationBridge.latestNotification.appId");
+  }
+  if (notification.appName !== undefined) {
+    requireString(notification.appName, "notificationBridge.latestNotification.appName");
+  }
+  if (notification.body !== undefined) {
+    requireString(notification.body, "notificationBridge.latestNotification.body");
+  }
+  if (notification.sourceAumid !== undefined) {
+    requireString(notification.sourceAumid, "notificationBridge.latestNotification.sourceAumid");
   }
 }
 

@@ -1308,6 +1308,12 @@ struct VeilVMControl {
         print("Daily Use notifications preflight: \(report.dailyUseReadiness.notificationBridgePreflightPassed ? "ready" : "blocked")")
         print("Daily Use notifications action: \(report.dailyUseReadiness.notificationBridgeRecommendedAction)")
         print("Daily Use notifications requirement: \(report.dailyUseReadiness.notificationBridgeRequirement)")
+        print("Windows notification bridge: \(report.notificationBridge.canReceiveNotifications ? "ready" : "blocked")")
+        print("Windows notification action: \(report.notificationBridge.recommendedAction)")
+        print("Windows notifications delivered: \(report.notificationBridge.deliveredNotificationCount)")
+        if let latestNotification = report.notificationBridge.latestNotification {
+            print("Latest Windows notification: \(latestNotification.title)")
+        }
         print("Daily Use printer mode: \(report.dailyUseReadiness.printerBridgeMode)")
         print("Daily Use printer action: \(report.dailyUseReadiness.printerBridgeRecommendedAction)")
         print("Daily Use printer endpoint: \(report.dailyUseReadiness.printerBridgeEndpointTemplate)")

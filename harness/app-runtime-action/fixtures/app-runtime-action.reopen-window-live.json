@@ -562,7 +562,14 @@
         "state": "normal",
         "focused": true
       }
-    ]
+    ],
+    "notificationBridge": {
+      "isEnabled": true,
+      "canReceiveNotifications": false,
+      "deliveredNotificationCount": 0,
+      "recommendedAction": "prepare-sparse-package",
+      "reason": "A signed sparse package identity is required before Windows notification listener consent can be requested."
+    }
   },
   "nextActions": [
     "Confirm the reopened Windows app window is visible as a macOS window.",

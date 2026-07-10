@@ -250,6 +250,7 @@ public enum HostProtocolMessageResult: Equatable, Sendable {
     case handledWindowFrame(windowId: String)
     case handledWindowClosed(windowId: String)
     case handledClipboardText(sequence: Int)
+    case handledWindowsNotification(notificationId: String)
     case ignored
 }
 
@@ -1050,6 +1051,31 @@ public struct WindowsAppRuntimeDailyUseReadinessStatus: Codable, Equatable, Send
     }
 }
 
+public struct WindowsAppRuntimeNotificationBridgeStatus: Codable, Equatable, Sendable {
+    public var isEnabled: Bool
+    public var canReceiveNotifications: Bool
+    public var deliveredNotificationCount: Int
+    public var latestNotification: WindowsNotificationReceivedEvent?
+    public var recommendedAction: String
+    public var reason: String
+
+    public init(
+        isEnabled: Bool = true,
+        canReceiveNotifications: Bool,
+        deliveredNotificationCount: Int,
+        latestNotification: WindowsNotificationReceivedEvent? = nil,
+        recommendedAction: String,
+        reason: String
+    ) {
+        self.isEnabled = isEnabled
+        self.canReceiveNotifications = canReceiveNotifications
+        self.deliveredNotificationCount = deliveredNotificationCount
+        self.latestNotification = latestNotification
+        self.recommendedAction = recommendedAction
+        self.reason = reason
+    }
+}
+
 public struct WindowsAppRuntimeReleaseGateStepStatus: Codable, Equatable, Sendable {
     public var id: String
     public var title: String
@@ -1270,6 +1296,7 @@ public struct WindowsAppRuntimeStatusReport: Codable, Equatable, Sendable {
     public var proofPlan: WindowsAppRuntimeProofPlanStatus
     public var proofArtifacts: WindowsAppRuntimeProofArtifactStatus
     public var dailyUseReadiness: WindowsAppRuntimeDailyUseReadinessStatus
+    public var notificationBridge: WindowsAppRuntimeNotificationBridgeStatus
     public var releaseGate: WindowsAppRuntimeReleaseGateStatus
     public var primaryNextAction: WindowsAppRuntimePrimaryNextActionStatus
     public var actions: [WindowsAppRuntimeActionStatus]
@@ -1299,6 +1326,7 @@ public struct WindowsAppRuntimeStatusReport: Codable, Equatable, Sendable {
         proofPlan: WindowsAppRuntimeProofPlanStatus,
         proofArtifacts: WindowsAppRuntimeProofArtifactStatus,
         dailyUseReadiness: WindowsAppRuntimeDailyUseReadinessStatus,
+        notificationBridge: WindowsAppRuntimeNotificationBridgeStatus,
         releaseGate: WindowsAppRuntimeReleaseGateStatus,
         primaryNextAction: WindowsAppRuntimePrimaryNextActionStatus,
         actions: [WindowsAppRuntimeActionStatus]
@@ -1327,6 +1355,7 @@ public struct WindowsAppRuntimeStatusReport: Codable, Equatable, Sendable {
         self.proofPlan = proofPlan
         self.proofArtifacts = proofArtifacts
         self.dailyUseReadiness = dailyUseReadiness
+        self.notificationBridge = notificationBridge
         self.releaseGate = releaseGate
         self.primaryNextAction = primaryNextAction
         self.actions = actions
@@ -1396,6 +1425,7 @@ public final class HostDashboardModel {
     public private(set) var clipboardSequence = 0
     public private(set) var latestGuestClipboardText: String?
     public private(set) var lastGuestClipboardSequence = 0
+    public private(set) var latestWindowsNotifications: [WindowsNotificationReceivedEvent] = []
     public private(set) var restorableAppIds: [String] = []
     public private(set) var restorableAppWindowCounts: [String: Int] = [:]
     public private(set) var hasOpenedAppWindowThisSession = false
@@ -1583,6 +1613,7 @@ public final class HostDashboardModel {
         let proofPlan = proofPlanStatus()
         let proofArtifacts = proofArtifactStatus()
         let dailyUseReadiness = dailyUseReadinessStatus(proofPlan: proofPlan)
+        let notificationBridge = notificationBridgeStatus(dailyUseReadiness: dailyUseReadiness)
         let pendingLaunch = pendingLaunchStatus()
         let releaseGate = releaseGateStatus(
             localRuntime: localRuntime,
@@ -1691,6 +1722,7 @@ public final class HostDashboardModel {
             proofPlan: proofPlan,
             proofArtifacts: proofArtifacts,
             dailyUseReadiness: dailyUseReadiness,
+            notificationBridge: notificationBridge,
             releaseGate: releaseGate,
             primaryNextAction: primaryNextAction,
             actions: [
@@ -2584,6 +2616,48 @@ public final class HostDashboardModel {
             message = ""
         }
         return "A signed sparse package is required before borderless app capture or Windows notifications can be enabled; \(outcome) at stage \(status.stage)\(message)."
+    }
+
+    public func notificationBridgeStatus(
+        dailyUseReadiness: WindowsAppRuntimeDailyUseReadinessStatus
+    ) -> WindowsAppRuntimeNotificationBridgeStatus {
+        guard hasLiveAgentConnection else {
+            return WindowsAppRuntimeNotificationBridgeStatus(
+                canReceiveNotifications: false,
+                deliveredNotificationCount: latestWindowsNotifications.count,
+                latestNotification: latestWindowsNotifications.first,
+                recommendedAction: "connect-agent",
+                reason: "Connect the Windows app agent before listening for Windows notifications."
+            )
+        }
+
+        guard dailyUseReadiness.notificationBridgePreflightPassed else {
+            return WindowsAppRuntimeNotificationBridgeStatus(
+                canReceiveNotifications: false,
+                deliveredNotificationCount: latestWindowsNotifications.count,
+                latestNotification: latestWindowsNotifications.first,
+                recommendedAction: dailyUseReadiness.notificationBridgeRecommendedAction,
+                reason: "A signed sparse package identity is required before Windows notification listener consent can be requested."
+            )
+        }
+
+        if latestWindowsNotifications.isEmpty {
+            return WindowsAppRuntimeNotificationBridgeStatus(
+                canReceiveNotifications: true,
+                deliveredNotificationCount: 0,
+                latestNotification: nil,
+                recommendedAction: "verify-notification-listener-consent",
+                reason: "Package identity is ready; request Windows notification listener consent and wait for the first notification.received event."
+            )
+        }
+
+        return WindowsAppRuntimeNotificationBridgeStatus(
+            canReceiveNotifications: true,
+            deliveredNotificationCount: latestWindowsNotifications.count,
+            latestNotification: latestWindowsNotifications.first,
+            recommendedAction: "receiving-windows-notifications",
+            reason: "Windows notification events are reaching the macOS host bridge."
+        )
     }
 
     public func releaseGateStatus(
@@ -4154,6 +4228,20 @@ public final class HostDashboardModel {
         return true
     }
 
+    public func receiveWindowsNotification(_ notification: WindowsNotificationReceivedEvent) -> Bool {
+        guard !notification.notificationId.isEmpty,
+              !notification.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              !latestWindowsNotifications.contains(where: { $0.notificationId == notification.notificationId }) else {
+            return false
+        }
+
+        latestWindowsNotifications.insert(notification, at: 0)
+        if latestWindowsNotifications.count > 5 {
+            latestWindowsNotifications.removeLast(latestWindowsNotifications.count - 5)
+        }
+        return true
+    }
+
     public func receiveProtocolMessage(
         _ message: Data,
         decoder: JSONDecoder = .veilProtocol
@@ -4206,6 +4294,11 @@ public final class HostDashboardModel {
             let clipboard = try decoder.decode(ClipboardTextSet.self, from: message)
             return receiveClipboardText(clipboard)
                 ? .handledClipboardText(sequence: clipboard.sequence)
+                : .ignored
+        case .notificationReceived:
+            let notification = try decoder.decode(WindowsNotificationReceivedEvent.self, from: message)
+            return receiveWindowsNotification(notification)
+                ? .handledWindowsNotification(notificationId: notification.notificationId)
                 : .ignored
         default:
             return .ignored
