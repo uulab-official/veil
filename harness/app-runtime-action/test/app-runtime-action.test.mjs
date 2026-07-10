@@ -708,6 +708,55 @@ test("validates accepted notification consent request action", () => {
   assert.equal(validateAppRuntimeAction(report), report);
 });
 
+test("validates accepted notification proof action", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-action.prepare-sparse-package-live.json", import.meta.url), "utf8"));
+  const notificationProof = JSON.parse(readFileSync(new URL("../../notification-proof/fixtures/notification-proof.proved.json", import.meta.url), "utf8"));
+  report.action = "proof-notifications";
+  report.accepted = true;
+  delete report.sparsePackagePreparation;
+  report.notificationProof = notificationProof;
+  report.status.connection.notificationListener = {
+    isSupported: true,
+    canListen: true,
+    accessStatus: "allowed",
+    recommendedAction: "run-notification-proof",
+    requiresPackageIdentity: true
+  };
+  report.status.dailyUseReadiness.notificationBridgePreflightPassed = true;
+  report.status.dailyUseReadiness.notificationBridgeRecommendedAction = "run-notification-proof";
+  report.status.notificationBridge.canReceiveNotifications = true;
+  report.status.notificationBridge.recommendedAction = "run-notification-proof";
+  report.status.notificationBridge.reason = "Windows notification listener consent is ready; run notification-proof and wait for the first notification.received event.";
+  report.status.actions.find((action) => action.id === "dailyUse.requestNotificationConsent").isAvailable = false;
+  report.status.actions.find((action) => action.id === "dailyUse.verifyNotifications").isAvailable = true;
+  report.nextActions = [
+    "Run `veil-vmctl app-runtime-status --json` to confirm notificationBridge.recommendedAction is receiving-windows-notifications.",
+    "Attach the notification proof JSON report to the current Daily Use notification gate."
+  ];
+
+  assert.equal(validateAppRuntimeAction(report), report);
+});
+
+test("validates rejected notification proof action before listener readiness", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-action.proof-recommended-live.json", import.meta.url), "utf8"));
+  report.action = "proof-notifications";
+  report.accepted = false;
+  delete report.proof;
+  report.nextActions = [
+    "Run `veil-vmctl app-runtime-status --json` and inspect notificationBridge.recommendedAction before retrying.",
+    "Run `veil-vmctl app-runtime-action --json --action request-notification-consent` if notification listener access is not ready."
+  ];
+
+  assert.equal(validateAppRuntimeAction(report), report);
+
+  report.notificationProof = JSON.parse(readFileSync(new URL("../../notification-proof/fixtures/notification-proof.proved.json", import.meta.url), "utf8"));
+
+  assert.throws(
+    () => validateAppRuntimeAction(report),
+    /rejected proof-notifications/
+  );
+});
+
 test("accepts demo notification consent request only as a dry run", () => {
   const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-action.launch-demo.json", import.meta.url), "utf8"));
   report.action = "request-notification-consent";
@@ -1152,6 +1201,16 @@ test("rejects multi-app proof evidence on non-multi-app actions", () => {
   assert.throws(
     () => validateAppRuntimeAction(report),
     /multiAppProof is only allowed/
+  );
+});
+
+test("rejects notification proof evidence on non-notification-proof actions", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-action.launch-demo.json", import.meta.url), "utf8"));
+  report.notificationProof = JSON.parse(readFileSync(new URL("../../notification-proof/fixtures/notification-proof.proved.json", import.meta.url), "utf8"));
+
+  assert.throws(
+    () => validateAppRuntimeAction(report),
+    /notificationProof is only allowed/
   );
 });
 

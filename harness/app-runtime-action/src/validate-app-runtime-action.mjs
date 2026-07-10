@@ -4,8 +4,9 @@ import { fileURLToPath } from "node:url";
 import { validateAppRuntimeStatus } from "../../app-runtime-status/src/validate-app-runtime-status.mjs";
 import { validateGuestAgentWait } from "../../guest-agent-wait/src/validate-guest-agent-wait.mjs";
 import { validateMultiAppProof } from "../../multi-app-proof/src/validate-multi-app-proof.mjs";
+import { validateNotificationProof } from "../../notification-proof/src/validate-notification-proof.mjs";
 
-const VALID_ACTIONS = new Set(["launch", "fulfill-pending", "focus", "close", "close-all", "restart-frame-stream", "recover-window-capture", "reopen-window", "maintain-frame-streams", "restore", "reconnect-restore", "bring-forward", "recover-display", "wait-agent", "repair-agent", "prepare-sparse-package", "request-notification-consent", "quiet-when-idle", "stop-runtime", "clipboard", "type-text", "click", "proof-recommended", "proof-multi-app"]);
+const VALID_ACTIONS = new Set(["launch", "fulfill-pending", "focus", "close", "close-all", "restart-frame-stream", "recover-window-capture", "reopen-window", "maintain-frame-streams", "restore", "reconnect-restore", "bring-forward", "recover-display", "wait-agent", "repair-agent", "prepare-sparse-package", "request-notification-consent", "quiet-when-idle", "stop-runtime", "clipboard", "type-text", "click", "proof-recommended", "proof-multi-app", "proof-notifications"]);
 const VALID_CONNECTION_MODES = new Set(["agent", "demo"]);
 const VALID_CONSOLE_PREVIEW_STATES = new Set(["fresh", "stale", "unavailable"]);
 
@@ -60,6 +61,10 @@ export function validateAppRuntimeAction(report) {
 
   if (report.action !== "proof-multi-app" && report.multiAppProof !== undefined && report.multiAppProof !== null) {
     throw new TypeError("multiAppProof is only allowed for proof-multi-app actions.");
+  }
+
+  if (report.action !== "proof-notifications" && report.notificationProof !== undefined && report.notificationProof !== null) {
+    throw new TypeError("notificationProof is only allowed for proof-notifications actions.");
   }
 
   if (report.action !== "recover-display" && report.displayRecovery !== undefined && report.displayRecovery !== null) {
@@ -154,6 +159,9 @@ export function validateAppRuntimeAction(report) {
       break;
     case "proof-multi-app":
       validateProofMultiAppAction(report);
+      break;
+    case "proof-notifications":
+      validateProofNotificationsAction(report);
       break;
   }
 
@@ -506,6 +514,48 @@ function validateProofMultiAppAction(report) {
 
   if (report.accepted !== (report.multiAppProof.coverageHealth === "complete")) {
     throw new TypeError("proof-multi-app accepted must require complete coverage.");
+  }
+}
+
+function validateProofNotificationsAction(report) {
+  const canRunNotificationProof = report.status.connection.hasLiveAgentConnection
+    && report.status.connection.capabilities?.packageIdentity === true
+    && report.status.dailyUseReadiness.notificationBridgePreflightPassed === true
+    && report.status.notificationBridge.canReceiveNotifications === true
+    && report.status.notificationBridge.recommendedAction === "run-notification-proof";
+
+  if (!canRunNotificationProof) {
+    if (report.accepted) {
+      throw new TypeError("proof-notifications cannot be accepted before notification proof readiness.");
+    }
+    if (report.notificationProof !== undefined && report.notificationProof !== null) {
+      throw new TypeError("rejected proof-notifications actions without readiness cannot include notificationProof.");
+    }
+    if (!report.nextActions.some((action) => action.includes("notificationBridge.recommendedAction"))) {
+      throw new TypeError("rejected proof-notifications actions must point at notificationBridge inspection.");
+    }
+    return;
+  }
+
+  if (!report.notificationProof || typeof report.notificationProof !== "object" || Array.isArray(report.notificationProof)) {
+    throw new TypeError("proof-notifications actions must include notificationProof.");
+  }
+
+  validateNotificationProof(report.notificationProof);
+  if (report.notificationProof.status === "proved") {
+    validateNotificationProof(report.notificationProof, { requireProved: true });
+  }
+
+  if (report.notificationProof.endpoint !== report.endpoint) {
+    throw new TypeError("notificationProof.endpoint must match action endpoint.");
+  }
+
+  if (report.accepted !== (report.notificationProof.status === "proved")) {
+    throw new TypeError("proof-notifications accepted must match notificationProof.status.");
+  }
+
+  if (!report.nextActions.some((action) => action.includes("app-runtime-status"))) {
+    throw new TypeError("proof-notifications actions must point back to app-runtime-status.");
   }
 }
 

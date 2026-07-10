@@ -69,11 +69,11 @@ enum VMControlError: Error, LocalizedError {
         case .missingMultiAppProofAppIds:
             "Missing Windows app ids. Pass --app-ids winapp_notepad,winapp_calculator,winapp_paint or omit it to use the default multi-app proof set."
         case .missingAppRuntimeAction:
-            "Missing app runtime action. Pass --action launch, fulfill-pending, focus, close, close-all, restart-frame-stream, recover-window-capture, restore, bring-forward, prepare-sparse-package, request-notification-consent, quiet-when-idle, stop-runtime, clipboard, type-text, click, proof-recommended, or proof-multi-app."
+            "Missing app runtime action. Pass --action launch, fulfill-pending, focus, close, close-all, restart-frame-stream, recover-window-capture, restore, bring-forward, prepare-sparse-package, request-notification-consent, quiet-when-idle, stop-runtime, clipboard, type-text, click, proof-recommended, proof-multi-app, or proof-notifications."
         case .missingAppRuntimeReviewEvidenceDirectory:
             "Missing review evidence directory. Pass --evidence-dir /path/to/review-folder created by app-runtime-review-init."
         case .unsupportedAppRuntimeAction(let action):
-            "Unsupported app runtime action '\(action)'. Pass --action launch, fulfill-pending, focus, close, close-all, restart-frame-stream, recover-window-capture, reopen-window, maintain-frame-streams, restore, bring-forward, prepare-sparse-package, request-notification-consent, quiet-when-idle, stop-runtime, clipboard, type-text, click, proof-recommended, or proof-multi-app."
+            "Unsupported app runtime action '\(action)'. Pass --action launch, fulfill-pending, focus, close, close-all, restart-frame-stream, recover-window-capture, reopen-window, maintain-frame-streams, restore, bring-forward, prepare-sparse-package, request-notification-consent, quiet-when-idle, stop-runtime, clipboard, type-text, click, proof-recommended, proof-multi-app, or proof-notifications."
         case .missingWindowId:
             "Missing Windows window id. Pass --window-id hwnd:XXXXXXXX from app-runtime-status or app-window-proof."
         case .missingAppRuntimeText:
@@ -95,7 +95,7 @@ enum VMControlError: Error, LocalizedError {
         }
     }
 
-    private static let usage = "Usage: veil-vmctl prepare --installer /path/to/Windows.iso [--drivers /path/to/virtio-win.iso] | veil-vmctl app-runtime-status [--json] [--demo] | veil-vmctl app-runtime-review [--json] [--demo] [--evidence-dir /path/to/screenshots] | veil-vmctl app-runtime-review-init [--json] [--demo] [--evidence-dir /path/to/screenshots] | veil-vmctl app-runtime-review-verify [--json] [--demo] --evidence-dir /path/to/screenshots | veil-vmctl app-runtime-action --action launch|fulfill-pending|focus|close|close-all|restart-frame-stream|recover-window-capture|reopen-window|maintain-frame-streams|restore|reconnect-restore|bring-forward|recover-display|wait-agent|repair-agent|prepare-sparse-package|request-notification-consent|quiet-when-idle|stop-runtime|clipboard|type-text|click|proof-recommended|proof-multi-app [--json] [--demo] [--wait-seconds 5] [--app-id winapp_notepad] [--window-id hwnd:XXXXXXXX] [--text \"...\"] [--x 240 --y 130] | veil-vmctl app-window-proof [--json] [--app-id winapp_notepad] [--wait-seconds 10] [--output /path/to/proof.json] | veil-vmctl coherence-proof [--json] [--app-id winapp_notepad] [--wait-seconds 10] [--output /path/to/proof.json] | veil-vmctl mvp-proof [--json] [--app-id winapp_notepad] [--wait-seconds 30] [--output /path/to/proof.json] [--require-proved] | veil-vmctl multi-app-proof [--json] [--app-ids winapp_notepad,winapp_calculator,winapp_paint] [--wait-seconds 10] [--output-dir /path/to/Diagnostics] [--require-complete] | veil-vmctl notification-proof [--json] [--wait-seconds 30] [--output /path/to/notification-proof.json] [--require-proved] | veil-vmctl guest-agent-wait [--json] [--wait-seconds 30] | veil-vmctl mark-installed [--json] | veil-vmctl providers [--json] | veil-vmctl export-diagnostics [--json] [--output /path/to/diagnostics.json] | veil-vmctl qemu-plan [--json] | veil-vmctl qemu-doctor [--json] | veil-vmctl qemu-install-status [--json] | veil-vmctl qemu-smoke [--json] [--seconds 45] | veil-vmctl qemu-start [--json] [--wait-seconds 15] [--native-display] | veil-vmctl qemu-display-smoke [--json] [--wait-seconds 5] | veil-vmctl qemu-capture [--json] [--output /path/to/console.png] | veil-vmctl qemu-powerdown [--json] [--wait-seconds 30] | veil-vmctl qemu-force-stop [--json] --i-understand-data-loss [--wait-seconds 10] | veil-vmctl qemu-sendkey [--json] key [key ...] | veil-vmctl qemu-type-text [--json] --text \"...\" | veil-vmctl qemu-click [--json] --x 0...32767 --y 0...32767 | veil-vmctl qemu-oobe-bypass [--json] | veil-vmctl qemu-install-agent [--json] [--wait-seconds 30] | veil-vmctl qemu-prepare-sparse-package [--json] [--wait-seconds 120]"
+    private static let usage = "Usage: veil-vmctl prepare --installer /path/to/Windows.iso [--drivers /path/to/virtio-win.iso] | veil-vmctl app-runtime-status [--json] [--demo] | veil-vmctl app-runtime-review [--json] [--demo] [--evidence-dir /path/to/screenshots] | veil-vmctl app-runtime-review-init [--json] [--demo] [--evidence-dir /path/to/screenshots] | veil-vmctl app-runtime-review-verify [--json] [--demo] --evidence-dir /path/to/screenshots | veil-vmctl app-runtime-action --action launch|fulfill-pending|focus|close|close-all|restart-frame-stream|recover-window-capture|reopen-window|maintain-frame-streams|restore|reconnect-restore|bring-forward|recover-display|wait-agent|repair-agent|prepare-sparse-package|request-notification-consent|quiet-when-idle|stop-runtime|clipboard|type-text|click|proof-recommended|proof-multi-app|proof-notifications [--json] [--demo] [--wait-seconds 5] [--app-id winapp_notepad] [--window-id hwnd:XXXXXXXX] [--text \"...\"] [--x 240 --y 130] | veil-vmctl app-window-proof [--json] [--app-id winapp_notepad] [--wait-seconds 10] [--output /path/to/proof.json] | veil-vmctl coherence-proof [--json] [--app-id winapp_notepad] [--wait-seconds 10] [--output /path/to/proof.json] | veil-vmctl mvp-proof [--json] [--app-id winapp_notepad] [--wait-seconds 30] [--output /path/to/proof.json] [--require-proved] | veil-vmctl multi-app-proof [--json] [--app-ids winapp_notepad,winapp_calculator,winapp_paint] [--wait-seconds 10] [--output-dir /path/to/Diagnostics] [--require-complete] | veil-vmctl notification-proof [--json] [--wait-seconds 30] [--output /path/to/notification-proof.json] [--require-proved] | veil-vmctl guest-agent-wait [--json] [--wait-seconds 30] | veil-vmctl mark-installed [--json] | veil-vmctl providers [--json] | veil-vmctl export-diagnostics [--json] [--output /path/to/diagnostics.json] | veil-vmctl qemu-plan [--json] | veil-vmctl qemu-doctor [--json] | veil-vmctl qemu-install-status [--json] | veil-vmctl qemu-smoke [--json] [--seconds 45] | veil-vmctl qemu-start [--json] [--wait-seconds 15] [--native-display] | veil-vmctl qemu-display-smoke [--json] [--wait-seconds 5] | veil-vmctl qemu-capture [--json] [--output /path/to/console.png] | veil-vmctl qemu-powerdown [--json] [--wait-seconds 30] | veil-vmctl qemu-force-stop [--json] --i-understand-data-loss [--wait-seconds 10] | veil-vmctl qemu-sendkey [--json] key [key ...] | veil-vmctl qemu-type-text [--json] --text \"...\" | veil-vmctl qemu-click [--json] --x 0...32767 --y 0...32767 | veil-vmctl qemu-oobe-bypass [--json] | veil-vmctl qemu-install-agent [--json] [--wait-seconds 30] | veil-vmctl qemu-prepare-sparse-package [--json] [--wait-seconds 120]"
 }
 
 struct VMControlArguments {
@@ -124,6 +124,7 @@ struct VMControlArguments {
         case click
         case proofRecommended = "proof-recommended"
         case proofMultiApp = "proof-multi-app"
+        case proofNotifications = "proof-notifications"
     }
 
     enum QEMUStartDisplayMode: Equatable {
@@ -245,7 +246,7 @@ struct VMControlArguments {
                     text: stringArgument(named: "--text", from: arguments),
                     x: intArgument(named: "--x", from: arguments),
                     y: intArgument(named: "--y", from: arguments),
-                    waitSeconds: waitSecondsArgument(from: arguments) ?? (action == .proofMultiApp ? 10 : 5)
+                    waitSeconds: waitSecondsArgument(from: arguments) ?? (action == .proofNotifications ? 30 : (action == .proofMultiApp ? 10 : 5))
                 )
             )
         }
@@ -665,6 +666,7 @@ struct AppRuntimeActionReport: Codable, Equatable {
     var reopenedWindows: [WindowCreatedEvent]
     var proof: AppRuntimeRecommendedProofRun?
     var multiAppProof: WindowsMultiAppProofReport?
+    var notificationProof: WindowsNotificationProofReport?
     var displayRecovery: AppRuntimeDisplayRecovery?
     var agentWait: AgentConnectionWaitReport?
     var agentRepair: QEMUGuestAgentInstallAttemptReport?
@@ -2903,6 +2905,7 @@ struct VeilVMControl {
         var reopenedWindows: [WindowCreatedEvent] = []
         var proof: AppRuntimeRecommendedProofRun?
         var multiAppProof: WindowsMultiAppProofReport?
+        var notificationProof: WindowsNotificationProofReport?
         var displayRecovery: AppRuntimeDisplayRecovery?
         var agentWait: AgentConnectionWaitReport?
         var agentRepair: QEMUGuestAgentInstallAttemptReport?
@@ -3265,6 +3268,24 @@ struct VeilVMControl {
                 )
                 accepted = multiAppProof?.coverageHealth == "complete"
             }
+        case .proofNotifications:
+            let localRuntimeSnapshot = try? await LocalVMRuntimeService().loadSnapshot()
+            let currentStatus = model.runtimeStatusReport(
+                localRuntime: model.localRuntimeStatus(snapshot: localRuntimeSnapshot)
+            )
+            if currentStatus.notificationBridge.canReceiveNotifications,
+               currentStatus.notificationBridge.recommendedAction == "run-notification-proof" {
+                let url = URL(string: endpoint) ?? URL(string: "ws://127.0.0.1:18444")!
+                let transport = URLSessionWebSocketTransport(url: url)
+                let client = VeilHostClient(transport: transport)
+                notificationProof = await client.proveWindowsNotificationBridge(
+                    endpoint: endpoint,
+                    eventSource: transport,
+                    waitSeconds: waitSeconds,
+                    notificationTimeoutNanoseconds: UInt64(max(waitSeconds, 1)) * 1_000_000_000
+                )
+                accepted = notificationProof?.status == .proved
+            }
         }
 
         let localRuntimeSnapshot = try? await LocalVMRuntimeService().loadSnapshot()
@@ -3303,6 +3324,7 @@ struct VeilVMControl {
             reopenedWindows: reopenedWindows,
             proof: proof,
             multiAppProof: multiAppProof,
+            notificationProof: notificationProof,
             displayRecovery: displayRecovery,
             agentWait: agentWait,
             agentRepair: agentRepair,
@@ -3384,6 +3406,14 @@ struct VeilVMControl {
             }
             if let error = notificationConsent.error {
                 print("Notification consent error: \(error)")
+            }
+        }
+        if let notificationProof = report.notificationProof {
+            print("Notification proof: \(notificationProof.status.rawValue)")
+            print("Notification proof waited seconds: \(notificationProof.waitedForNotificationSeconds)")
+            if let notification = notificationProof.notification {
+                print("Notification proof title: \(notification.title)")
+                print("Notification proof id: \(notification.notificationId)")
             }
         }
         if let launchPlan = report.launchPlan {
@@ -3699,6 +3729,11 @@ struct VeilVMControl {
                     "Attach the Daily Use multi-app proof artifact to the current runtime gate.",
                     "Run `veil-vmctl app-runtime-status --json` to confirm proofArtifacts.multiAppProofCoverageHealth is complete."
                 ]
+            case .proofNotifications:
+                return [
+                    "Run `veil-vmctl app-runtime-status --json` to confirm notificationBridge.recommendedAction is receiving-windows-notifications.",
+                    "Attach the notification proof JSON report to the current Daily Use notification gate."
+                ]
             }
         }
 
@@ -3714,6 +3749,14 @@ struct VeilVMControl {
                 status.proofPlan.recommendedMultiAppProofCommand.map { "Run `\($0)` to retry the Daily Use app coverage check." },
                 "Run `veil-vmctl app-runtime-status --json` and confirm Notepad, Calculator, and Paint are all launchable before retrying."
             ])
+        }
+
+        if action == .proofNotifications {
+            return [
+                "Trigger a Windows toast notification while `proof-notifications` is running.",
+                "Run `veil-vmctl app-runtime-action --json --action request-notification-consent` if notification listener access is not ready.",
+                "Run `veil-vmctl app-runtime-status --json` and inspect notificationBridge.recommendedAction before retrying."
+            ]
         }
 
         if action == .stopRuntime {

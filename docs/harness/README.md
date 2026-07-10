@@ -44,7 +44,7 @@ Current executable pieces:
 - `harness/runtime-provider-probe`: a JSON validator for serverless local runtime provider output.
 - `harness/app-runtime-status`: a JSON validator for app runtime status, open HWND sessions, Dock integration state, and supported actions.
 - `harness/app-runtime-review`: a JSON validator for one-screen release review cards generated from app-runtime status, release-gate steps, screenshot slots, and latest app-check evidence.
-- `harness/app-runtime-action`: a JSON validator for launch, pending-launch fulfillment, bring-forward, focus, close, close-all, restore, guest-agent wait, input, clipboard, quiet-runtime, and recommended proof app-runtime actions.
+- `harness/app-runtime-action`: a JSON validator for launch, pending-launch fulfillment, bring-forward, focus, close, close-all, restore, guest-agent wait, input, clipboard, quiet-runtime, recommended proof, multi-app proof, and notification proof app-runtime actions.
 - `harness/app-window-proof`: a JSON validator for one app launch, one tracked HWND, first captured frame evidence, and first-frame latency budget evidence.
 - `harness/coherence-proof`: a JSON validator for one app launch, one tracked HWND, first and post-input frame evidence, frame latency budget evidence, mouse/key input, and host clipboard send evidence.
 - `harness/mvp-proof`: a JSON validator for the full Notepad MVP gate: guest-agent readiness plus Coherence proof evidence.
@@ -342,7 +342,9 @@ The launcher hero and menu bar primary action must route
 Daily Use lane does not regress to terminal-only guidance.
 Once Windows listener access is allowed, `actions` must expose
 `dailyUse.verifyNotifications`; the launcher hero and menu bar route that action
-to the same notification proof path and save the JSON evidence under Veil
+to `veil-vmctl app-runtime-action --json --action proof-notifications`, which
+runs the same notification proof path and embeds the resulting
+`notificationProof` report in the action JSON before saving evidence under Veil
 diagnostics.
 The sibling `notificationBridge` section tracks the actual guest-to-host
 notification event path separately from that consent preflight. It is blocked
@@ -596,6 +598,7 @@ swift run veil-vmctl app-runtime-action --json --action clipboard --text "hello 
 swift run veil-vmctl app-runtime-action --json --action type-text --window-id hwnd:0003029A --text "veil" | node ../../harness/app-runtime-action/src/validate-app-runtime-action.mjs
 swift run veil-vmctl app-runtime-action --json --action proof-recommended | node ../../harness/app-runtime-action/src/validate-app-runtime-action.mjs
 swift run veil-vmctl app-runtime-action --json --action proof-multi-app | node ../../harness/app-runtime-action/src/validate-app-runtime-action.mjs
+swift run veil-vmctl app-runtime-action --json --action proof-notifications --wait-seconds 30 | node ../../harness/app-runtime-action/src/validate-app-runtime-action.mjs
 swift run veil-vmctl app-runtime-action --json --action close --window-id hwnd:0003029A | node ../../harness/app-runtime-action/src/validate-app-runtime-action.mjs
 swift run veil-vmctl app-runtime-action --json --action close-all | node ../../harness/app-runtime-action/src/validate-app-runtime-action.mjs
 swift run veil-vmctl app-runtime-action --json --action quiet-when-idle | node ../../harness/app-runtime-action/src/validate-app-runtime-action.mjs
@@ -697,6 +700,13 @@ cd apps/mac-host
 proof="$HOME/Library/Application Support/Veil/Diagnostics/Notification Proof/notification-proof.json"
 swift run veil-vmctl notification-proof --json --output "$proof" --require-proved | node ../../harness/notification-proof/src/validate-notification-proof.mjs --require-proved
 node ../../harness/notification-proof/src/validate-notification-proof.mjs --require-proved < "$proof"
+```
+
+The app-shell action surface uses the same proof path:
+
+```bash
+cd apps/mac-host
+swift run veil-vmctl app-runtime-action --json --action proof-notifications --wait-seconds 30 | node ../../harness/app-runtime-action/src/validate-app-runtime-action.mjs
 ```
 
 Use this only after sparse package identity is live and Windows notification
