@@ -368,6 +368,11 @@ Saved notification proof JSON is summarized under
 app-runtime review evidence. The harness requires those paths to come from the
 `Notification Proof` diagnostics folder and requires proved artifacts to include
 the delivered notification id, title, and received timestamp.
+Saved printer bridge proof JSON is summarized under
+`proofArtifacts.latestPrinterBridgeProof*` in app-runtime status and mirrored
+into app-runtime review evidence. The harness requires those paths to come from
+the `Printer Proof` diagnostics folder, keeps the QEMU host IPP endpoint
+contract, and records only metadata for the Windows test-page evidence.
 The sibling `notificationBridge` section tracks the actual guest-to-host
 notification event path separately from that consent preflight. It is blocked
 until the live agent and package identity gate are present, moves to

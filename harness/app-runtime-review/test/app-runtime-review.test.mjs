@@ -100,6 +100,67 @@ test("rejects latest notification proof drift from embedded status", () => {
   );
 });
 
+test("rejects latest printer bridge proof drift from embedded status", () => {
+  const card = demoReviewCard();
+  Object.assign(card.status.proofArtifacts, {
+    latestPrinterBridgeProofPath: "/Users/test/Library/Application Support/Veil/Diagnostics/Printer Proof/printer-bridge-proof.json",
+    latestPrinterBridgeProofFileName: "printer-bridge-proof.json",
+    latestPrinterBridgeProofModifiedAt: "2026-07-10T12:30:00Z",
+    latestPrinterBridgeProofStatus: "proved",
+    latestPrinterBridgeProofEvidencePath: "/Users/test/Desktop/windows-test-page.pdf",
+    latestPrinterBridgeProofEvidenceFileName: "windows-test-page.pdf",
+    latestPrinterBridgeProofEvidenceByteCount: 8192,
+    latestPrinterBridgeProofEvidenceModifiedAt: "2026-07-10T12:29:00Z",
+    latestPrinterBridgeProofSharedPrinterName: "Office Printer",
+    latestPrinterBridgeProofWindowsPrinterName: "Veil Mac Printer",
+    latestPrinterBridgeProofIppEndpoint: "http://10.0.2.2:631/printers/Office%20Printer"
+  });
+  Object.assign(card.evidence, {
+    latestPrinterBridgeProofPath: card.status.proofArtifacts.latestPrinterBridgeProofPath,
+    latestPrinterBridgeProofModifiedAt: card.status.proofArtifacts.latestPrinterBridgeProofModifiedAt,
+    latestPrinterBridgeProofStatus: card.status.proofArtifacts.latestPrinterBridgeProofStatus,
+    latestPrinterBridgeProofEvidencePath: card.status.proofArtifacts.latestPrinterBridgeProofEvidencePath,
+    latestPrinterBridgeProofEvidenceFileName: "wrong-test-page.pdf",
+    latestPrinterBridgeProofEvidenceByteCount: card.status.proofArtifacts.latestPrinterBridgeProofEvidenceByteCount,
+    latestPrinterBridgeProofEvidenceModifiedAt: card.status.proofArtifacts.latestPrinterBridgeProofEvidenceModifiedAt,
+    latestPrinterBridgeProofIppEndpoint: card.status.proofArtifacts.latestPrinterBridgeProofIppEndpoint
+  });
+
+  assert.throws(
+    () => validateAppRuntimeReview(card),
+    /latestPrinterBridgeProofEvidenceFileName/
+  );
+});
+
+test("accepts latest printer bridge proof evidence mirrored from status", () => {
+  const card = demoReviewCard();
+  Object.assign(card.status.proofArtifacts, {
+    latestPrinterBridgeProofPath: "/Users/test/Library/Application Support/Veil/Diagnostics/Printer Proof/printer-bridge-proof.json",
+    latestPrinterBridgeProofFileName: "printer-bridge-proof.json",
+    latestPrinterBridgeProofModifiedAt: "2026-07-10T12:30:00Z",
+    latestPrinterBridgeProofStatus: "proved",
+    latestPrinterBridgeProofEvidencePath: "/Users/test/Desktop/windows-test-page.pdf",
+    latestPrinterBridgeProofEvidenceFileName: "windows-test-page.pdf",
+    latestPrinterBridgeProofEvidenceByteCount: 8192,
+    latestPrinterBridgeProofEvidenceModifiedAt: "2026-07-10T12:29:00Z",
+    latestPrinterBridgeProofSharedPrinterName: "Office Printer",
+    latestPrinterBridgeProofWindowsPrinterName: "Veil Mac Printer",
+    latestPrinterBridgeProofIppEndpoint: "http://10.0.2.2:631/printers/Office%20Printer"
+  });
+  Object.assign(card.evidence, {
+    latestPrinterBridgeProofPath: card.status.proofArtifacts.latestPrinterBridgeProofPath,
+    latestPrinterBridgeProofModifiedAt: card.status.proofArtifacts.latestPrinterBridgeProofModifiedAt,
+    latestPrinterBridgeProofStatus: card.status.proofArtifacts.latestPrinterBridgeProofStatus,
+    latestPrinterBridgeProofEvidencePath: card.status.proofArtifacts.latestPrinterBridgeProofEvidencePath,
+    latestPrinterBridgeProofEvidenceFileName: card.status.proofArtifacts.latestPrinterBridgeProofEvidenceFileName,
+    latestPrinterBridgeProofEvidenceByteCount: card.status.proofArtifacts.latestPrinterBridgeProofEvidenceByteCount,
+    latestPrinterBridgeProofEvidenceModifiedAt: card.status.proofArtifacts.latestPrinterBridgeProofEvidenceModifiedAt,
+    latestPrinterBridgeProofIppEndpoint: card.status.proofArtifacts.latestPrinterBridgeProofIppEndpoint
+  });
+
+  assert.equal(validateAppRuntimeReview(card), card);
+});
+
 test("rejects cards with drifted minimum screenshot dimensions", () => {
   const card = demoReviewCard();
   card.minimumScreenshotWidth = 1;

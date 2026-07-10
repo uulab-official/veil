@@ -789,6 +789,14 @@ struct AppRuntimeReviewEvidence: Codable, Equatable {
     var latestNotificationProofId: String?
     var latestNotificationProofTitle: String?
     var latestNotificationProofReceivedAt: Date?
+    var latestPrinterBridgeProofPath: String?
+    var latestPrinterBridgeProofModifiedAt: Date?
+    var latestPrinterBridgeProofStatus: String?
+    var latestPrinterBridgeProofEvidencePath: String?
+    var latestPrinterBridgeProofEvidenceFileName: String?
+    var latestPrinterBridgeProofEvidenceByteCount: Int?
+    var latestPrinterBridgeProofEvidenceModifiedAt: Date?
+    var latestPrinterBridgeProofIppEndpoint: String?
     var diagnosticsDirectory: String
     var screenshotEvidenceDirectory: String?
     var recommendedAppCheckCommand: String?
@@ -1551,6 +1559,15 @@ struct VeilVMControl {
         }
         if let notificationProofTitle = card.evidence.latestNotificationProofTitle {
             print("  Latest notification title: \(notificationProofTitle)")
+        }
+        if let printerProofPath = card.evidence.latestPrinterBridgeProofPath {
+            print("  Latest printer proof file: \(printerProofPath)")
+        }
+        if let printerProofStatus = card.evidence.latestPrinterBridgeProofStatus {
+            print("  Latest printer proof: \(printerProofStatus)")
+        }
+        if let printerProofEvidence = card.evidence.latestPrinterBridgeProofEvidenceFileName {
+            print("  Latest printer evidence: \(printerProofEvidence)")
         }
         if let coverageHealth = card.evidence.multiAppProofCoverageHealth,
            let coverageCount = card.evidence.multiAppProofCoverageCount,
@@ -2404,6 +2421,14 @@ struct VeilVMControl {
                 latestNotificationProofId: report.proofArtifacts.latestNotificationProofId,
                 latestNotificationProofTitle: report.proofArtifacts.latestNotificationProofTitle,
                 latestNotificationProofReceivedAt: report.proofArtifacts.latestNotificationProofReceivedAt,
+                latestPrinterBridgeProofPath: report.proofArtifacts.latestPrinterBridgeProofPath,
+                latestPrinterBridgeProofModifiedAt: report.proofArtifacts.latestPrinterBridgeProofModifiedAt,
+                latestPrinterBridgeProofStatus: report.proofArtifacts.latestPrinterBridgeProofStatus,
+                latestPrinterBridgeProofEvidencePath: report.proofArtifacts.latestPrinterBridgeProofEvidencePath,
+                latestPrinterBridgeProofEvidenceFileName: report.proofArtifacts.latestPrinterBridgeProofEvidenceFileName,
+                latestPrinterBridgeProofEvidenceByteCount: report.proofArtifacts.latestPrinterBridgeProofEvidenceByteCount,
+                latestPrinterBridgeProofEvidenceModifiedAt: report.proofArtifacts.latestPrinterBridgeProofEvidenceModifiedAt,
+                latestPrinterBridgeProofIppEndpoint: report.proofArtifacts.latestPrinterBridgeProofIppEndpoint,
                 diagnosticsDirectory: report.proofArtifacts.diagnosticsDirectory,
                 screenshotEvidenceDirectory: evidenceDirectoryURL?.path,
                 recommendedAppCheckCommand: report.proofPlan.recommendedProofCommand,

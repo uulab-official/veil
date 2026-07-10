@@ -312,6 +312,7 @@ function validateEvidence(evidence, status) {
   validateEvidenceProofCoverage(evidence, status);
   validateEvidenceProofLatency(evidence, status);
   validateEvidenceNotificationProof(evidence, status);
+  validateEvidencePrinterBridgeProof(evidence, status);
   if (evidence.recommendedAppCheckCommand !== undefined) {
     requireString(evidence.recommendedAppCheckCommand, "evidence.recommendedAppCheckCommand");
   }
@@ -358,6 +359,54 @@ function validateEvidenceNotificationProof(evidence, status) {
   if (evidence.latestNotificationProofReceivedAt !== undefined
     && Number.isNaN(Date.parse(evidence.latestNotificationProofReceivedAt))) {
     throw new TypeError("evidence.latestNotificationProofReceivedAt must be an ISO date.");
+  }
+}
+
+function validateEvidencePrinterBridgeProof(evidence, status) {
+  const proofArtifacts = status.proofArtifacts ?? {};
+  const fields = [
+    ["latestPrinterBridgeProofPath", "latestPrinterBridgeProofPath"],
+    ["latestPrinterBridgeProofModifiedAt", "latestPrinterBridgeProofModifiedAt"],
+    ["latestPrinterBridgeProofStatus", "latestPrinterBridgeProofStatus"],
+    ["latestPrinterBridgeProofEvidencePath", "latestPrinterBridgeProofEvidencePath"],
+    ["latestPrinterBridgeProofEvidenceFileName", "latestPrinterBridgeProofEvidenceFileName"],
+    ["latestPrinterBridgeProofEvidenceByteCount", "latestPrinterBridgeProofEvidenceByteCount"],
+    ["latestPrinterBridgeProofEvidenceModifiedAt", "latestPrinterBridgeProofEvidenceModifiedAt"],
+    ["latestPrinterBridgeProofIppEndpoint", "latestPrinterBridgeProofIppEndpoint"]
+  ];
+
+  for (const [evidenceField, statusField] of fields) {
+    if (evidence[evidenceField] !== proofArtifacts[statusField]) {
+      throw new TypeError(`evidence.${evidenceField} must match status proofArtifacts.${statusField}.`);
+    }
+  }
+
+  if (evidence.latestPrinterBridgeProofPath !== undefined) {
+    requireString(evidence.latestPrinterBridgeProofPath, "evidence.latestPrinterBridgeProofPath");
+    if (!evidence.latestPrinterBridgeProofPath.endsWith(".json")
+      || !evidence.latestPrinterBridgeProofPath.includes("/Printer Proof/")) {
+      throw new TypeError("evidence.latestPrinterBridgeProofPath must point to a Printer Proof JSON file.");
+    }
+  }
+  if (evidence.latestPrinterBridgeProofModifiedAt !== undefined
+    && Number.isNaN(Date.parse(evidence.latestPrinterBridgeProofModifiedAt))) {
+    throw new TypeError("evidence.latestPrinterBridgeProofModifiedAt must be an ISO date.");
+  }
+  if (evidence.latestPrinterBridgeProofEvidenceModifiedAt !== undefined
+    && Number.isNaN(Date.parse(evidence.latestPrinterBridgeProofEvidenceModifiedAt))) {
+    throw new TypeError("evidence.latestPrinterBridgeProofEvidenceModifiedAt must be an ISO date.");
+  }
+  if (evidence.latestPrinterBridgeProofEvidenceByteCount !== undefined) {
+    requireNonNegativeInteger(
+      evidence.latestPrinterBridgeProofEvidenceByteCount,
+      "evidence.latestPrinterBridgeProofEvidenceByteCount"
+    );
+  }
+  if (evidence.latestPrinterBridgeProofIppEndpoint !== undefined) {
+    requireString(evidence.latestPrinterBridgeProofIppEndpoint, "evidence.latestPrinterBridgeProofIppEndpoint");
+    if (!evidence.latestPrinterBridgeProofIppEndpoint.startsWith("http://10.0.2.2:631/printers/")) {
+      throw new TypeError("evidence.latestPrinterBridgeProofIppEndpoint must use the QEMU host IPP printer path.");
+    }
   }
 }
 
