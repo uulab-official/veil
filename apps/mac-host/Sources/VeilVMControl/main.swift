@@ -1070,6 +1070,21 @@ struct AppRuntimeReviewPrinterBridgeProofEvidence: Codable, Equatable {
     var issueReason: String?
 }
 
+struct AppRuntimeReviewNotificationProofEvidence: Codable, Equatable {
+    var path: String
+    var command: String
+    var requiredKind: String
+    var requiredStatus: String
+    var exists: Bool
+    var isValid: Bool
+    var kind: String?
+    var status: String?
+    var notificationId: String?
+    var title: String?
+    var receivedAt: Date?
+    var issueReason: String?
+}
+
 struct AppRuntimeReviewEvidenceVerification: Codable, Equatable {
     var kind: String = "windowsAppRuntimeReviewEvidenceVerification"
     var generatedAt: Date
@@ -1086,6 +1101,7 @@ struct AppRuntimeReviewEvidenceVerification: Codable, Equatable {
     var missingFiles: [String]
     var invalidScreenshotFiles: [AppRuntimeReviewInvalidScreenshotFile]
     var appCheckProof: AppRuntimeReviewAppCheckProofEvidence
+    var notificationProof: AppRuntimeReviewNotificationProofEvidence?
     var printerBridgeProof: AppRuntimeReviewPrinterBridgeProofEvidence?
     var screenshotEvidenceSummary: AppRuntimeReviewScreenshotEvidenceSummary
     var nextEvidenceAction: AppRuntimeReviewNextEvidenceAction
@@ -1778,11 +1794,13 @@ struct VeilVMControl {
             missingCaptureSteps: missingCaptureSteps
         )
         let appCheckProof = appRuntimeReviewAppCheckProofEvidence(file: appCheckProofFile)
+        let notificationProof = appRuntimeReviewNotificationProofEvidence(card: card)
         let printerBridgeProof = appRuntimeReviewPrinterBridgeProofEvidence(card: card)
         let nextEvidenceAction = appRuntimeReviewNextEvidenceAction(
             invalidCaptureSteps: invalidCaptureSteps,
             missingCaptureSteps: missingCaptureSteps,
             appCheckProof: appCheckProof,
+            notificationProof: notificationProof,
             printerBridgeProof: printerBridgeProof,
             openEvidenceDirectoryCommand: openEvidenceDirectoryCommand
         )
@@ -1801,11 +1819,13 @@ struct VeilVMControl {
                 && FileManager.default.fileExists(atPath: readmeURL.path)
                 && missingFiles.isEmpty
                 && appCheckProof.isValid
+                && (notificationProof?.isValid ?? true)
                 && (printerBridgeProof?.isValid ?? true)
                 && card.areRequiredScreenshotsAttached,
             missingFiles: missingFiles,
             invalidScreenshotFiles: invalidScreenshotFiles,
             appCheckProof: appCheckProof,
+            notificationProof: notificationProof,
             printerBridgeProof: printerBridgeProof,
             screenshotEvidenceSummary: screenshotEvidenceSummary,
             nextEvidenceAction: nextEvidenceAction,
@@ -1824,6 +1844,7 @@ struct VeilVMControl {
                 readmeExists: FileManager.default.fileExists(atPath: readmeURL.path),
                 invalidScreenshotFiles: invalidScreenshotFiles,
                 appCheckProof: appCheckProof,
+                notificationProof: notificationProof,
                 printerBridgeProof: printerBridgeProof,
                 invalidCaptureSteps: invalidCaptureSteps,
                 missingCaptureSteps: missingCaptureSteps,
@@ -1846,6 +1867,9 @@ struct VeilVMControl {
         print("Screenshots: \(verification.attachedScreenshotCount)/\(verification.requiredScreenshotCount) attached")
         print("Screenshot evidence: \(verification.screenshotEvidenceSummary.state)")
         print("App check proof: \(verification.appCheckProof.isValid ? "proved" : (verification.appCheckProof.issueReason ?? "missing"))")
+        if let notificationProof = verification.notificationProof {
+            print("Notification proof: \(notificationProof.isValid ? "proved" : (notificationProof.issueReason ?? "missing"))")
+        }
         if let printerBridgeProof = verification.printerBridgeProof {
             print("Printer bridge proof: \(printerBridgeProof.isValid ? "proved" : (printerBridgeProof.issueReason ?? "missing"))")
         }
@@ -2106,6 +2130,7 @@ struct VeilVMControl {
         invalidCaptureSteps: [AppRuntimeReviewMissingCaptureStep],
         missingCaptureSteps: [AppRuntimeReviewMissingCaptureStep],
         appCheckProof: AppRuntimeReviewAppCheckProofEvidence,
+        notificationProof: AppRuntimeReviewNotificationProofEvidence?,
         printerBridgeProof: AppRuntimeReviewPrinterBridgeProofEvidence?,
         openEvidenceDirectoryCommand: String
     ) -> AppRuntimeReviewNextEvidenceAction {
@@ -2148,6 +2173,19 @@ struct VeilVMControl {
             )
         }
 
+        if let notificationProof, !notificationProof.isValid {
+            return AppRuntimeReviewNextEvidenceAction(
+                kind: "regenerateNotificationProof",
+                title: "Regenerate Notification Proof",
+                command: notificationProof.command,
+                isReadyToShare: false,
+                expectedFileName: URL(fileURLWithPath: notificationProof.path).lastPathComponent,
+                path: notificationProof.path,
+                instruction: "Regenerate the Windows notification proof JSON before sharing review evidence.",
+                supportingCommand: "veil-vmctl app-runtime-status --json"
+            )
+        }
+
         if let printerBridgeProof, !printerBridgeProof.isValid {
             return AppRuntimeReviewNextEvidenceAction(
                 kind: "regeneratePrinterProof",
@@ -2179,6 +2217,7 @@ struct VeilVMControl {
         readmeExists: Bool,
         invalidScreenshotFiles: [AppRuntimeReviewInvalidScreenshotFile],
         appCheckProof: AppRuntimeReviewAppCheckProofEvidence,
+        notificationProof: AppRuntimeReviewNotificationProofEvidence?,
         printerBridgeProof: AppRuntimeReviewPrinterBridgeProofEvidence?,
         invalidCaptureSteps: [AppRuntimeReviewMissingCaptureStep],
         missingCaptureSteps: [AppRuntimeReviewMissingCaptureStep],
@@ -2209,6 +2248,13 @@ struct VeilVMControl {
                 actions.append("Run `\(appCheckProof.command)` to create `\(appCheckProof.expectedFileName)` with \(appCheckProof.requiredKind) status=\(appCheckProof.requiredStatus); current issue: \(issueReason).")
             } else {
                 actions.append("Run `\(appCheckProof.command)` to create `\(appCheckProof.expectedFileName)` with \(appCheckProof.requiredKind) status=\(appCheckProof.requiredStatus).")
+            }
+        }
+        if let notificationProof, !notificationProof.isValid {
+            if let issueReason = notificationProof.issueReason {
+                actions.append("Regenerate notification proof at `\(notificationProof.path)` with `\(notificationProof.command)`; current issue: \(issueReason).")
+            } else {
+                actions.append("Regenerate notification proof at `\(notificationProof.path)` with `\(notificationProof.command)`.")
             }
         }
         if let printerBridgeProof, !printerBridgeProof.isValid {
@@ -2783,6 +2829,109 @@ struct VeilVMControl {
             kind: nil,
             status: nil,
             appId: nil,
+            issueReason: reason
+        )
+    }
+
+    private static func appRuntimeReviewNotificationProofEvidence(
+        card: AppRuntimeReviewCard
+    ) -> AppRuntimeReviewNotificationProofEvidence? {
+        guard let path = card.evidence.latestNotificationProofPath else {
+            return nil
+        }
+
+        let requiredKind = "windowsNotificationProof"
+        let requiredStatus = "proved"
+        let command = "veil-vmctl notification-proof --json --require-proved --output \(shellQuoted(path))"
+        guard FileManager.default.fileExists(atPath: path) else {
+            return AppRuntimeReviewNotificationProofEvidence(
+                path: path,
+                command: command,
+                requiredKind: requiredKind,
+                requiredStatus: requiredStatus,
+                exists: false,
+                isValid: false,
+                kind: nil,
+                status: nil,
+                notificationId: nil,
+                title: nil,
+                receivedAt: nil,
+                issueReason: "missing"
+            )
+        }
+
+        do {
+            let data = try Data(contentsOf: URL(fileURLWithPath: path))
+            let object = try JSONSerialization.jsonObject(with: data)
+            guard let dictionary = object as? [String: Any] else {
+                return appRuntimeReviewInvalidNotificationProofEvidence(
+                    path: path,
+                    command: command,
+                    reason: "notObject"
+                )
+            }
+
+            let kind = dictionary["kind"] as? String
+            let status = dictionary["status"] as? String
+            let notification = dictionary["notification"] as? [String: Any]
+            let notificationId = notification?["notificationId"] as? String
+            let title = notification?["title"] as? String
+            let receivedAt = (notification?["receivedAt"] as? String).flatMap {
+                ISO8601DateFormatter().date(from: $0)
+            }
+            let issueReason: String?
+            if kind != requiredKind {
+                issueReason = "wrongKind"
+            } else if status != requiredStatus {
+                issueReason = "notProved"
+            } else if notificationId != card.evidence.latestNotificationProofId
+                || title != card.evidence.latestNotificationProofTitle
+                || receivedAt != card.evidence.latestNotificationProofReceivedAt {
+                issueReason = "notificationMismatch"
+            } else {
+                issueReason = nil
+            }
+
+            return AppRuntimeReviewNotificationProofEvidence(
+                path: path,
+                command: command,
+                requiredKind: requiredKind,
+                requiredStatus: requiredStatus,
+                exists: true,
+                isValid: issueReason == nil,
+                kind: kind,
+                status: status,
+                notificationId: notificationId,
+                title: title,
+                receivedAt: receivedAt,
+                issueReason: issueReason
+            )
+        } catch {
+            return appRuntimeReviewInvalidNotificationProofEvidence(
+                path: path,
+                command: command,
+                reason: "notValidJSON"
+            )
+        }
+    }
+
+    private static func appRuntimeReviewInvalidNotificationProofEvidence(
+        path: String,
+        command: String,
+        reason: String
+    ) -> AppRuntimeReviewNotificationProofEvidence {
+        AppRuntimeReviewNotificationProofEvidence(
+            path: path,
+            command: command,
+            requiredKind: "windowsNotificationProof",
+            requiredStatus: "proved",
+            exists: true,
+            isValid: false,
+            kind: nil,
+            status: nil,
+            notificationId: nil,
+            title: nil,
+            receivedAt: nil,
             issueReason: reason
         )
     }

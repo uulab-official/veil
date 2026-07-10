@@ -68,6 +68,7 @@ export function validateAppRuntimeReviewVerification(report) {
     validateInvalidScreenshotFile(file, index, report);
   }
   validateAppCheckProof(report.appCheckProof, report);
+  validateNotificationProof(report.notificationProof, report);
   validatePrinterBridgeProof(report.printerBridgeProof, report);
   validateScreenshotEvidenceSummary(report.screenshotEvidenceSummary, report);
   validateNextEvidenceActionShape(report.nextEvidenceAction);
@@ -160,6 +161,7 @@ export function validateAppRuntimeReviewVerification(report) {
     && report.readmeExists
     && report.missingFiles.length === 0
     && report.appCheckProof.isValid
+    && (report.notificationProof === undefined || report.notificationProof.isValid)
     && (report.printerBridgeProof === undefined || report.printerBridgeProof.isValid)
     && review.areRequiredScreenshotsAttached
   )) {
@@ -319,7 +321,14 @@ function validateNextEvidenceActionShape(action) {
     requireString(action.supportingCommand, "nextEvidenceAction.supportingCommand");
   }
 
-  if (!["shareEvidence", "captureMissingScreenshot", "replaceInvalidScreenshot", "runAppCheckProof", "regeneratePrinterProof"].includes(action.kind)) {
+  if (![
+    "shareEvidence",
+    "captureMissingScreenshot",
+    "replaceInvalidScreenshot",
+    "runAppCheckProof",
+    "regenerateNotificationProof",
+    "regeneratePrinterProof"
+  ].includes(action.kind)) {
     throw new TypeError("app runtime review verification nextEvidenceAction kind is unsupported.");
   }
 }
@@ -357,6 +366,22 @@ function validateNextEvidenceAction(action, report) {
       || action.supportingCommand !== "veil-vmctl app-runtime-status --json"
     ) {
       throw new TypeError("app runtime review verification nextEvidenceAction must run the app check proof before sharing.");
+    }
+    return;
+  }
+
+  if (report.notificationProof !== undefined && !report.notificationProof.isValid) {
+    if (
+      action.kind !== "regenerateNotificationProof"
+      || action.title !== "Regenerate Notification Proof"
+      || action.command !== report.notificationProof.command
+      || action.isReadyToShare !== false
+      || action.expectedFileName !== report.notificationProof.path.split("/").pop()
+      || action.path !== report.notificationProof.path
+      || action.instruction !== "Regenerate the Windows notification proof JSON before sharing review evidence."
+      || action.supportingCommand !== "veil-vmctl app-runtime-status --json"
+    ) {
+      throw new TypeError("app runtime review verification nextEvidenceAction must regenerate invalid notification proof before sharing.");
     }
     return;
   }
@@ -443,6 +468,78 @@ function validateAppCheckProof(proof, report) {
     }
   } else if (!["missing", "notValidJSON", "notObject", "wrongKind", "notProved"].includes(proof.issueReason)) {
     throw new TypeError("app runtime review verification invalid appCheckProof must include a supported issue reason.");
+  }
+}
+
+function validateNotificationProof(proof, report) {
+  const evidence = report.review?.evidence ?? {};
+  if (evidence.latestNotificationProofPath === undefined) {
+    if (proof !== undefined) {
+      throw new TypeError("app runtime review verification notificationProof must be absent when review evidence has no notification proof.");
+    }
+    return;
+  }
+
+  if (!proof || typeof proof !== "object" || Array.isArray(proof)) {
+    throw new TypeError("app runtime review verification notificationProof must be an object when review evidence has notification proof.");
+  }
+  requireString(proof.path, "notificationProof.path");
+  requireString(proof.command, "notificationProof.command");
+  requireString(proof.requiredKind, "notificationProof.requiredKind");
+  requireString(proof.requiredStatus, "notificationProof.requiredStatus");
+  requireBoolean(proof.exists, "notificationProof.exists");
+  requireBoolean(proof.isValid, "notificationProof.isValid");
+  if (proof.kind !== undefined) {
+    requireString(proof.kind, "notificationProof.kind");
+  }
+  if (proof.status !== undefined) {
+    requireString(proof.status, "notificationProof.status");
+  }
+  if (proof.notificationId !== undefined) {
+    requireString(proof.notificationId, "notificationProof.notificationId");
+  }
+  if (proof.title !== undefined) {
+    requireString(proof.title, "notificationProof.title");
+  }
+  if (proof.receivedAt !== undefined) {
+    requireString(proof.receivedAt, "notificationProof.receivedAt");
+    if (Number.isNaN(Date.parse(proof.receivedAt))) {
+      throw new TypeError("app runtime review verification notificationProof.receivedAt must be an ISO date.");
+    }
+  }
+  if (proof.issueReason !== undefined) {
+    requireString(proof.issueReason, "notificationProof.issueReason");
+  }
+
+  if (proof.path !== evidence.latestNotificationProofPath) {
+    throw new TypeError("app runtime review verification notificationProof path must match review evidence.");
+  }
+  if (!proof.path.endsWith(".json") || !proof.path.includes("/Notification Proof/")) {
+    throw new TypeError("app runtime review verification notificationProof path must point to Notification Proof diagnostics.");
+  }
+  if (!proof.command.includes("notification-proof --json")
+    || !proof.command.includes("--require-proved")
+    || !proof.command.includes("--output")
+    || !proof.command.includes(proof.path)) {
+    throw new TypeError("app runtime review verification notificationProof command must regenerate the saved proof path.");
+  }
+  if (proof.requiredKind !== "windowsNotificationProof" || proof.requiredStatus !== "proved") {
+    throw new TypeError("app runtime review verification notificationProof must require proved Windows notification proof.");
+  }
+  if (proof.isValid) {
+    if (
+      proof.exists !== true
+      || proof.kind !== proof.requiredKind
+      || proof.status !== proof.requiredStatus
+      || proof.notificationId !== evidence.latestNotificationProofId
+      || proof.title !== evidence.latestNotificationProofTitle
+      || proof.receivedAt !== evidence.latestNotificationProofReceivedAt
+      || proof.issueReason !== undefined
+    ) {
+      throw new TypeError("app runtime review verification valid notificationProof must match review evidence.");
+    }
+  } else if (!["missing", "notValidJSON", "notObject", "wrongKind", "notProved", "notificationMismatch"].includes(proof.issueReason)) {
+    throw new TypeError("app runtime review verification invalid notificationProof must include a supported issue reason.");
   }
 }
 

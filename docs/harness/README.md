@@ -367,7 +367,10 @@ Saved notification proof JSON is summarized under
 `proofArtifacts.latestNotificationProof*` in app-runtime status and mirrored into
 app-runtime review evidence. The harness requires those paths to come from the
 `Notification Proof` diagnostics folder and requires proved artifacts to include
-the delivered notification id, title, and received timestamp.
+the delivered notification id, title, and received timestamp. Review
+verification also reads the referenced notification proof JSON and blocks
+sharing if the file is missing, malformed, unproved, or no longer matches the
+review evidence metadata.
 Saved printer bridge proof JSON is summarized under
 `proofArtifacts.latestPrinterBridgeProof*` in app-runtime status and mirrored
 into app-runtime review evidence. The harness requires those paths to come from

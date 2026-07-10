@@ -265,6 +265,123 @@ test("rejects complete verification reports without proved app check proof", () 
   );
 });
 
+function markCompleteScreenshotsAndAppProof(report) {
+  report.attachedScreenshotCount = report.requiredScreenshotCount;
+  report.missingFiles = [];
+  report.invalidScreenshotFiles = [];
+  report.invalidCaptureSteps = [];
+  delete report.nextInvalidCaptureStep;
+  report.missingCaptureSteps = [];
+  delete report.nextMissingCaptureStep;
+  report.screenshotEvidenceSummary = {
+    state: "ready",
+    requiredScreenshotCount: report.requiredScreenshotCount,
+    validScreenshotCount: report.requiredScreenshotCount,
+    missingScreenshotCount: 0,
+    invalidScreenshotCount: 0,
+    pendingScreenshotCount: 0,
+    minimumWidth: report.minimumScreenshotWidth,
+    minimumHeight: report.minimumScreenshotHeight,
+    isScreenshotEvidenceReady: true,
+    nextStepKind: "shareEvidence",
+    nextStepTitle: "Share Review Evidence"
+  };
+  report.appCheckProof = {
+    ...report.appCheckProof,
+    exists: true,
+    isValid: true,
+    kind: "windowsMVPProof",
+    status: "proved",
+    appId: "winapp_notepad"
+  };
+  delete report.appCheckProof.issueReason;
+  report.review.attachedScreenshotCount = report.review.requiredScreenshotCount;
+  report.review.invalidScreenshotCount = 0;
+  report.review.areRequiredScreenshotsAttached = true;
+  for (const slot of report.review.screenshotSlots) {
+    slot.attachmentState = "attached";
+    slot.attachmentPath = `${report.evidenceDirectory}/${slot.expectedFileName}`;
+    slot.attachmentByteCount = 68;
+    slot.attachmentWidth = 1440;
+    slot.attachmentHeight = 900;
+  }
+}
+
+function attachNotificationProof(report, overrides = {}) {
+  Object.assign(report.review.status.proofArtifacts, {
+    latestNotificationProofPath: "/Users/test/Library/Application Support/Veil/Diagnostics/Notification Proof/notification-proof.json",
+    latestNotificationProofFileName: "notification-proof.json",
+    latestNotificationProofModifiedAt: "2026-07-10T12:20:00Z",
+    latestNotificationProofStatus: "proved",
+    latestNotificationProofId: "toast:winapp_notepad:0001",
+    latestNotificationProofTitle: "Notepad",
+    latestNotificationProofReceivedAt: "2026-07-10T12:15:00Z"
+  });
+  Object.assign(report.review.evidence, {
+    latestNotificationProofPath: report.review.status.proofArtifacts.latestNotificationProofPath,
+    latestNotificationProofModifiedAt: report.review.status.proofArtifacts.latestNotificationProofModifiedAt,
+    latestNotificationProofStatus: report.review.status.proofArtifacts.latestNotificationProofStatus,
+    latestNotificationProofId: report.review.status.proofArtifacts.latestNotificationProofId,
+    latestNotificationProofTitle: report.review.status.proofArtifacts.latestNotificationProofTitle,
+    latestNotificationProofReceivedAt: report.review.status.proofArtifacts.latestNotificationProofReceivedAt
+  });
+  report.notificationProof = {
+    path: report.review.evidence.latestNotificationProofPath,
+    command: `veil-vmctl notification-proof --json --require-proved --output '${report.review.evidence.latestNotificationProofPath}'`,
+    requiredKind: "windowsNotificationProof",
+    requiredStatus: "proved",
+    exists: true,
+    isValid: true,
+    kind: "windowsNotificationProof",
+    status: "proved",
+    notificationId: report.review.evidence.latestNotificationProofId,
+    title: report.review.evidence.latestNotificationProofTitle,
+    receivedAt: report.review.evidence.latestNotificationProofReceivedAt,
+    ...overrides
+  };
+}
+
+test("accepts verified notification proof evidence", () => {
+  const report = demoVerification();
+  attachNotificationProof(report);
+
+  assert.equal(validateAppRuntimeReviewVerification(report), report);
+});
+
+test("rejects missing notification proof verification when review evidence claims one", () => {
+  const report = demoVerification();
+  attachNotificationProof(report);
+  delete report.notificationProof;
+
+  assert.throws(
+    () => validateAppRuntimeReviewVerification(report),
+    /notificationProof/
+  );
+});
+
+test("prioritizes regenerating invalid notification proof before sharing", () => {
+  const report = demoVerification();
+  attachNotificationProof(report, {
+    isValid: false,
+    title: "Different title",
+    issueReason: "notificationMismatch"
+  });
+  markCompleteScreenshotsAndAppProof(report);
+  report.isComplete = false;
+  report.nextEvidenceAction = {
+    kind: "regenerateNotificationProof",
+    title: "Regenerate Notification Proof",
+    command: report.notificationProof.command,
+    isReadyToShare: false,
+    expectedFileName: "notification-proof.json",
+    path: report.notificationProof.path,
+    instruction: "Regenerate the Windows notification proof JSON before sharing review evidence.",
+    supportingCommand: "veil-vmctl app-runtime-status --json"
+  };
+
+  assert.equal(validateAppRuntimeReviewVerification(report), report);
+});
+
 function attachPrinterProof(report, overrides = {}) {
   Object.assign(report.review.status.proofArtifacts, {
     latestPrinterBridgeProofPath: "/Users/test/Library/Application Support/Veil/Diagnostics/Printer Proof/printer-bridge-proof.json",
