@@ -18,6 +18,7 @@ struct DetailView: View {
     var closeAllWindowsAppWindowsAction: () -> Void
     var restartStaleFrameStreamsAction: () -> Void
     var runRecommendedProofAction: () -> Void
+    var runMultiAppProofAction: () -> Void
     var quietWindowsWhenIdleAction: () -> Void
     var displayMessage: String?
 
@@ -54,6 +55,7 @@ struct DetailView: View {
                 closeAllWindowsAppWindowsAction: closeAllWindowsAppWindowsAction,
                 restartStaleFrameStreamsAction: restartStaleFrameStreamsAction,
                 runRecommendedProofAction: runRecommendedProofAction,
+                runMultiAppProofAction: runMultiAppProofAction,
                 quietWindowsWhenIdleAction: quietWindowsWhenIdleAction,
                 displayMessage: displayMessage
             )
@@ -79,7 +81,8 @@ struct DetailView: View {
                     launchOnboarding: runtimeStatusReport.launchOnboarding,
                     launchWindowsAppAction: launchWindowsAppAction,
                     runPrimaryNextAction: runPrimaryNextAction,
-                    runRecommendedProofAction: runRecommendedProofAction
+                    runRecommendedProofAction: runRecommendedProofAction,
+                    runMultiAppProofAction: runMultiAppProofAction
                 )
                     .padding(.horizontal, 14)
                     .padding(.bottom, 14)
@@ -150,6 +153,8 @@ struct DetailView: View {
             quietWindowsWhenIdleAction()
         case .runRecommendedProof:
             runRecommendedProofAction()
+        case .runMultiAppProof:
+            runMultiAppProofAction()
         }
     }
 }
@@ -173,6 +178,7 @@ private struct WindowsQuickLaunchPanel: View {
     var launchWindowsAppAction: () -> Void
     var runPrimaryNextAction: (LauncherPrimaryNextActionRoute) -> Void
     var runRecommendedProofAction: () -> Void
+    var runMultiAppProofAction: () -> Void
 
     var body: some View {
         ShellPanel(spacing: 12) {
@@ -256,6 +262,14 @@ private struct WindowsQuickLaunchPanel: View {
                 }
                 .disabled(proofPlan.recommendedProofCommand == nil)
                 .help("Check selected Windows app")
+
+                Button {
+                    runMultiAppProofAction()
+                } label: {
+                    Label("Check Daily Use", systemImage: "checkmark.seal.fill")
+                }
+                .disabled(proofPlan.recommendedMultiAppProofCommand == nil)
+                .help("Check Notepad, Calculator, and Paint")
             }
 
             Divider()

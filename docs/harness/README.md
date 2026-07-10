@@ -251,7 +251,11 @@ the strongest available check and returns a `proof` evidence summary inside the
 same action report. The matching Daily Use command surface is
 `veil-vmctl app-runtime-action --json --action proof-multi-app`, which runs the
 multi-app coverage check and returns the aggregate `windowsMultiAppProof` as
-`multiAppProof` inside the same action report. The status report also includes `proofArtifacts`, a
+`multiAppProof` inside the same action report. When the full Daily Use target
+set is launchable, `dailyUseReadiness.recommendedCommand` must point at that
+same `proof-multi-app` action so the launcher hero, menu bar primary action, and
+in-app Daily Use button all execute the same aggregate check. The status report
+also includes `proofArtifacts`, a
 metadata-only pointer to the latest saved app-check JSON under Veil diagnostics so
 automation can attach or inspect the current check evidence without copying
 Windows media, disk contents, product keys, or guest data. When that JSON carries

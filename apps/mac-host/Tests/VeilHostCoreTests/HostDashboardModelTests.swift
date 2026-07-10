@@ -1369,6 +1369,29 @@ struct HostDashboardModelTests {
         #expect(report.actions.first { $0.id == "proof.recommended" }?.isAvailable == true)
     }
 
+    @Test("Daily Use readiness prefers multi-app proof when every target app is launchable")
+    @MainActor
+    func dailyUseReadinessPrefersMultiAppProofWhenEveryTargetAppIsLaunchable() async throws {
+        let service = FakeDashboardService(
+            health: .dailyUseReady,
+            apps: [.notepad, .calculator, .paint]
+        )
+        let model = HostDashboardModel(service: service)
+
+        await model.load()
+        let report = model.runtimeStatusReport()
+
+        #expect(report.proofPlan.canRunMultiAppProof)
+        #expect(report.proofPlan.recommendedMultiAppProofCommand == "veil-vmctl multi-app-proof --json --require-complete")
+        #expect(report.dailyUseReadiness.recommendedAction == "verify-daily-use-integrations")
+        #expect(report.dailyUseReadiness.recommendedCommand == "veil-vmctl app-runtime-action --json --action proof-multi-app")
+        #expect(report.actions.first { $0.id == "dailyUse.verifyIntegrations" }?.isAvailable == true)
+        #expect(report.actions.first { $0.id == "proof.multiApp" }?.isAvailable == true)
+        #expect(report.menuBarIntegration.primaryActionId == "dailyUse.verifyIntegrations")
+        #expect(report.oneScreenUX.primaryActionId == "dailyUse.verifyIntegrations")
+        #expect(report.oneScreenUX.heroRunsPrimaryAction)
+    }
+
     @Test("Daily Use window capture action is available between package identity and capture readiness")
     @MainActor
     func dailyUseWindowCaptureActionIsAvailableBetweenPackageIdentityAndCaptureReadiness() async throws {

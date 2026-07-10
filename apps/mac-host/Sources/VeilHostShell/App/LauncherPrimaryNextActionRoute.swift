@@ -16,6 +16,7 @@ enum LauncherPrimaryNextActionRoute: Equatable {
     case reopenWindow
     case quietWindows
     case runRecommendedProof
+    case runMultiAppProof
 
     static func resolve(
         actionId: String,
@@ -61,8 +62,10 @@ enum LauncherPrimaryNextActionRoute: Equatable {
             return .reopenWindow
         case "runtime.quietWhenIdle", "runtime.stopWhenIdle":
             return .quietWindows
-        case "proof.recommended", "dailyUse.verifyIntegrations":
+        case "proof.recommended":
             return .runRecommendedProof
+        case "proof.multiApp", "dailyUse.verifyIntegrations":
+            return .runMultiAppProof
         default:
             break
         }
@@ -75,6 +78,10 @@ enum LauncherPrimaryNextActionRoute: Equatable {
             || command.contains("coherence-proof")
             || command.contains("mvp-proof") {
             return .runRecommendedProof
+        }
+
+        if command.contains("multi-app-proof") {
+            return .runMultiAppProof
         }
 
         if command.contains("--action repair-agent") || command.contains("qemu-install-agent") {
@@ -156,6 +163,10 @@ enum LauncherPrimaryNextActionRoute: Equatable {
             return .runRecommendedProof
         }
 
+        if command.contains("--action proof-multi-app") {
+            return .runMultiAppProof
+        }
+
         return nil
     }
 
@@ -195,6 +206,8 @@ enum LauncherPrimaryNextActionRoute: Equatable {
             return "Quiet Windows"
         case .runRecommendedProof:
             return "Check App"
+        case .runMultiAppProof:
+            return "Check Daily Use"
         }
     }
 
@@ -232,6 +245,8 @@ enum LauncherPrimaryNextActionRoute: Equatable {
             return "moon.zzz.fill"
         case .runRecommendedProof:
             return "checkmark.seal"
+        case .runMultiAppProof:
+            return "checkmark.seal.fill"
         }
     }
 }

@@ -34,6 +34,7 @@ struct VMRuntimeView: View {
     var closeAllWindowsAppWindowsAction: () -> Void
     var restartStaleFrameStreamsAction: () -> Void
     var runRecommendedProofAction: () -> Void
+    var runMultiAppProofAction: () -> Void
     var quietWindowsWhenIdleAction: () -> Void
     var displayMessage: String?
     @State private var pathPicker: PathPicker?
@@ -116,6 +117,7 @@ struct VMRuntimeView: View {
                     recommendedProofKind: recommendedProofKind,
                     recommendedProofCommand: recommendedProofCommand,
                     runRecommendedProofAction: runRecommendedProofAction,
+                    runMultiAppProofAction: runMultiAppProofAction,
                     quietWindowsWhenIdleAction: quietWindowsWhenIdleAction,
                     refreshAction: {
                         Task {
@@ -1380,6 +1382,7 @@ private struct WindowsSetupDisplayPanel: View {
     var recommendedProofKind: String?
     var recommendedProofCommand: String?
     var runRecommendedProofAction: () -> Void
+    var runMultiAppProofAction: () -> Void
     var quietWindowsWhenIdleAction: () -> Void
     var refreshAction: () -> Void
     var consolePointerTapAction: (Double, Double) -> Void
@@ -2377,6 +2380,8 @@ private struct WindowsSetupDisplayPanel: View {
             quietWindowsWhenIdleAction()
         case .runRecommendedProof:
             runRecommendedProofAction()
+        case .runMultiAppProof:
+            runMultiAppProofAction()
         }
     }
 

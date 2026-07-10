@@ -1160,7 +1160,9 @@ function validateDailyUseReadiness(dailyUseReadiness, report) {
   const expectedCommand = report.connection.hasLiveAgentConnection
     ? expectedPackageIdentityReady
       ? expectedBorderlessCapturePreflight && report.proofPlan.recommendedProofCommand !== undefined
-        ? "veil-vmctl app-runtime-action --json --action proof-recommended"
+        ? (report.proofPlan.recommendedMultiAppProofCommand !== undefined
+          ? "veil-vmctl app-runtime-action --json --action proof-multi-app"
+          : "veil-vmctl app-runtime-action --json --action proof-recommended")
         : "veil-vmctl app-runtime-status --json"
       : "veil-vmctl app-runtime-action --json --action prepare-sparse-package --wait-seconds 120"
     : "veil-vmctl guest-agent-wait --json --wait-seconds 30";
@@ -1982,7 +1984,8 @@ function expectedMenuBarPrimaryActionId(report) {
   }
 
   if (report.dailyUseReadiness.recommendedAction === "verify-daily-use-integrations"
-    && report.dailyUseReadiness.recommendedCommand === "veil-vmctl app-runtime-action --json --action proof-recommended") {
+    && (report.dailyUseReadiness.recommendedCommand === "veil-vmctl app-runtime-action --json --action proof-recommended"
+      || report.dailyUseReadiness.recommendedCommand === "veil-vmctl app-runtime-action --json --action proof-multi-app")) {
     return "dailyUse.verifyIntegrations";
   }
 
@@ -2442,7 +2445,8 @@ function validateActions(actions, report) {
 
   const verifyDailyUseAction = actions.find((action) => action.id === "dailyUse.verifyIntegrations");
   const canVerifyDailyUse = report.dailyUseReadiness.recommendedAction === "verify-daily-use-integrations"
-    && report.dailyUseReadiness.recommendedCommand === "veil-vmctl app-runtime-action --json --action proof-recommended";
+    && (report.dailyUseReadiness.recommendedCommand === "veil-vmctl app-runtime-action --json --action proof-recommended"
+      || report.dailyUseReadiness.recommendedCommand === "veil-vmctl app-runtime-action --json --action proof-multi-app");
   if (verifyDailyUseAction.isAvailable !== canVerifyDailyUse) {
     throw new TypeError("dailyUse.verifyIntegrations availability must match Daily Use verification readiness.");
   }

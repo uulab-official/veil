@@ -1779,7 +1779,8 @@ public final class HostDashboardModel {
                     id: "dailyUse.verifyIntegrations",
                     title: "Verify Daily Use",
                     isAvailable: dailyUseReadiness.recommendedAction == "verify-daily-use-integrations"
-                        && dailyUseReadiness.recommendedCommand == "veil-vmctl app-runtime-action --json --action proof-recommended"
+                        && (dailyUseReadiness.recommendedCommand == "veil-vmctl app-runtime-action --json --action proof-multi-app"
+                            || dailyUseReadiness.recommendedCommand == "veil-vmctl app-runtime-action --json --action proof-recommended")
                 ),
                 WindowsAppRuntimeActionStatus(
                     id: "dailyUse.verifyWindowCapture",
@@ -2102,7 +2103,7 @@ public final class HostDashboardModel {
         }
 
         if dailyUseReadiness.recommendedAction == "verify-daily-use-integrations",
-           dailyUseReadiness.recommendedCommand == "veil-vmctl app-runtime-action --json --action proof-recommended" {
+           dailyUseReadiness.recommendedCommand != nil {
             return ("dailyUse.verifyIntegrations", "Verify Daily Use", true)
         }
 
@@ -2539,8 +2540,12 @@ public final class HostDashboardModel {
 
         let packageStatus = health?.packageIdentityStatus
         let proofRecommendedCommand = "veil-vmctl app-runtime-action --json --action proof-recommended"
+        let multiAppProofCommand = "veil-vmctl app-runtime-action --json --action proof-multi-app"
+        let dailyUseProofCommand = proofPlan?.recommendedMultiAppProofCommand != nil
+            ? multiAppProofCommand
+            : proofRecommendedCommand
         let recommendedCommand = borderlessCapturePreflightPassed && proofPlan?.recommendedProofCommand != nil
-            ? proofRecommendedCommand
+            ? dailyUseProofCommand
             : "veil-vmctl app-runtime-status --json"
         let borderlessCaptureRecommendedAction = borderlessCapturePreflightPassed
             ? "verify-daily-use-integrations"
@@ -2894,6 +2899,7 @@ public final class HostDashboardModel {
              "windowsApps.closeAll",
              "runtime.quietWhenIdle",
              "runtime.stopWhenIdle",
+             "dailyUse.verifyIntegrations",
              "proof.recommended",
              "proof.multiApp":
             return true
@@ -3259,9 +3265,12 @@ public final class HostDashboardModel {
             || (visibleSurfacePolicy.primarySurface == "launcher"
                 && visibleSurfacePolicy.expectedVisibleSurfaceCount == 1
                 && !launcherVisibility.shouldHideMainWindow)
-        let primaryActionId = primaryNextAction.actionId ?? menuBarIntegration.primaryActionId
+        let primaryActionId = oneScreenPrimaryActionId(
+            primaryNextAction: primaryNextAction,
+            menuBarIntegration: menuBarIntegration
+        )
         let heroRunsPrimaryAction = primaryNextAction.runsInApp
-            && installedRuntimeHeroSupports(actionId: primaryNextAction.actionId)
+            && installedRuntimeHeroSupports(actionId: primaryActionId)
         let reason: String
 
         if isMirroringApps {
@@ -3285,6 +3294,19 @@ public final class HostDashboardModel {
             heroRunsPrimaryAction: heroRunsPrimaryAction,
             reason: reason
         )
+    }
+
+    private func oneScreenPrimaryActionId(
+        primaryNextAction: WindowsAppRuntimePrimaryNextActionStatus,
+        menuBarIntegration: WindowsAppRuntimeMenuBarIntegrationStatus
+    ) -> String? {
+        if primaryNextAction.actionId == "runtime.refreshStatus",
+           menuBarIntegration.primaryActionId == "dailyUse.verifyIntegrations",
+           menuBarIntegration.primaryActionAvailable {
+            return menuBarIntegration.primaryActionId
+        }
+
+        return primaryNextAction.actionId ?? menuBarIntegration.primaryActionId
     }
 
     public func launchOnboardingStatus(

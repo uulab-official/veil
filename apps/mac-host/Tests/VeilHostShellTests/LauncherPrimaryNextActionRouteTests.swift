@@ -69,7 +69,13 @@ struct LauncherPrimaryNextActionRouteTests {
             LauncherPrimaryNextActionRoute.resolve(
                 actionId: "dailyUse.verifyIntegrations",
                 command: nil
-            ) == .runRecommendedProof
+            ) == .runMultiAppProof
+        )
+        #expect(
+            LauncherPrimaryNextActionRoute.resolve(
+                actionId: "proof.multiApp",
+                command: nil
+            ) == .runMultiAppProof
         )
         #expect(
             LauncherPrimaryNextActionRoute.resolve(
@@ -158,6 +164,12 @@ struct LauncherPrimaryNextActionRouteTests {
                 actionId: "appCheckEvidence",
                 command: "veil-vmctl app-runtime-action --json --action proof-recommended"
             ) == .runRecommendedProof
+        )
+        #expect(
+            LauncherPrimaryNextActionRoute.resolve(
+                actionId: "dailyUse",
+                command: "veil-vmctl app-runtime-action --json --action proof-multi-app"
+            ) == .runMultiAppProof
         )
         #expect(
             LauncherPrimaryNextActionRoute.resolve(

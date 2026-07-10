@@ -845,7 +845,8 @@ extension AppRuntimeDockMenuTests {
         "windowsApps.recoverWindowCapture": (.recoverWindowCapture, "wrench.and.screwdriver"),
         "windowsApps.launchSelected": (.launchSelectedApp, "arrow.up.forward.app"),
         "proof.recommended": (.runRecommendedProof, "checkmark.seal"),
-        "dailyUse.verifyIntegrations": (.runRecommendedProof, "checkmark.seal"),
+        "proof.multiApp": (.runMultiAppProof, "checkmark.seal.fill"),
+        "dailyUse.verifyIntegrations": (.runMultiAppProof, "checkmark.seal.fill"),
         "dailyUse.verifyWindowCapture": (.refreshRuntimeStatus, "arrow.clockwise")
     ]
 }

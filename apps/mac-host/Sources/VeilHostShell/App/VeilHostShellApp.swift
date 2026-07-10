@@ -26,6 +26,48 @@ private enum RecommendedProofError: Error, LocalizedError {
     }
 }
 
+private struct ShellMultiAppProofReport: Encodable {
+    var kind = "windowsMultiAppProof"
+    var endpoint: String
+    var provedAt: Date
+    var proofDirectory: String
+    var aggregateReportPath: String
+    var appIds: [String]
+    var targetAppIds: [String]
+    var waitSeconds: Int
+    var proofKind: String
+    var provedAppCount: Int
+    var failedAppCount: Int
+    var coverageHealth: String
+    var results: [ShellMultiAppProofResult]
+    var nextActions: [String]
+}
+
+private struct ShellMultiAppProofResult: Encodable {
+    var appId: String
+    var status: String
+    var proofKind: String?
+    var proofPath: String?
+    var latencyHealth: String?
+    var slowestLatencyMeasurement: String?
+    var slowestLatencyMilliseconds: Int?
+    var latencyBudgetMilliseconds: Int?
+    var staleTimeoutMilliseconds: Int?
+    var latencyRecommendedAction: String?
+    var windowId: String?
+    var windowTitle: String?
+    var errorMessage: String?
+}
+
+private struct ShellMultiAppLatencySummary {
+    var health: String
+    var slowestMeasurement: String
+    var slowestElapsedMilliseconds: Int
+    var freshFrameBudgetMilliseconds: Int
+    var staleFrameTimeoutMilliseconds: Int
+    var recommendedAction: String
+}
+
 @main
 struct VeilHostShellApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
@@ -88,6 +130,7 @@ struct VeilHostShellApp: App {
                 closeAllWindowsAppWindowsAction: closeAllWindowsAppWindows,
                 restartStaleFrameStreamsAction: restartStaleFrameStreams,
                 runRecommendedProofAction: runRecommendedProof,
+                runMultiAppProofAction: runMultiAppProof,
                 quietWindowsWhenIdleAction: quietWindowsWhenIdle,
                 displayMessage: displayMessage
             )
@@ -237,6 +280,7 @@ struct VeilHostShellApp: App {
                 closeAllWindowsAppWindowsAction: closeAllWindowsAppWindows,
                 restartStaleFrameStreamsAction: restartStaleFrameStreams,
                 runRecommendedProofAction: runRecommendedProof,
+                runMultiAppProofAction: runMultiAppProof,
                 prepareReviewEvidenceAction: prepareReviewEvidenceFolder,
                 quietWindowsWhenIdleAction: quietWindowsWhenIdle,
                 refreshAppsAction: refreshApps,
@@ -895,6 +939,31 @@ struct VeilHostShellApp: App {
         }
     }
 
+    private func runMultiAppProof() {
+        Task { @MainActor in
+            activateMainWindow()
+            let proofPlan = model.runtimeStatusReport().proofPlan
+            guard proofPlan.recommendedMultiAppProofCommand != nil else {
+                displayMessage = "Daily Use app check needs Notepad, Calculator, and Paint to be launchable first."
+                return
+            }
+
+            if model.apps.isEmpty {
+                await model.load()
+            }
+
+            displayMessage = "Checking Daily Use apps: Notepad, Calculator, and Paint."
+
+            do {
+                let url = try await writeMultiAppProof()
+                displayMessage = "Daily Use app check saved: \(url.path)"
+                await model.load()
+            } catch {
+                displayMessage = "Daily Use app check could not complete: \(userMessage(for: error))"
+            }
+        }
+    }
+
     private func writeRecommendedProof(
         proofKind: String,
         appId: String,
@@ -946,6 +1015,105 @@ struct VeilHostShellApp: App {
         }
     }
 
+    private func writeMultiAppProof() async throws -> URL {
+        let appIds = WindowsAppRuntimeProofCoverageDefaults.targetAppIds
+        let endpoint = Self.agentURLString
+        let diagnosticsDirectory = QEMUVMRuntimeBooter.defaultDiagnosticsDirectory()
+        let coherenceProofDirectory = diagnosticsDirectory
+            .appendingPathComponent("Coherence Proof", isDirectory: true)
+        let recommendedProofDirectory = diagnosticsDirectory
+            .appendingPathComponent("Recommended Proof", isDirectory: true)
+        try FileManager.default.createDirectory(at: coherenceProofDirectory, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: recommendedProofDirectory, withIntermediateDirectories: true)
+
+        let stamp = Self.diagnosticTimestamp()
+        let aggregateURL = recommendedProofDirectory
+            .appendingPathComponent("multi-app-proof-\(stamp).json")
+        var results: [ShellMultiAppProofResult] = []
+
+        for appId in appIds {
+            let proofURL = coherenceProofDirectory
+                .appendingPathComponent("\(Self.proofFileComponent(appId))-coherence-proof-\(stamp).json")
+            let transport = URLSessionWebSocketTransport(url: URL(string: endpoint)!)
+            let client = VeilHostClient(transport: transport)
+
+            do {
+                var proof = try await client.proveCoherenceAppWindow(
+                    appId: appId,
+                    endpoint: endpoint,
+                    eventSource: transport,
+                    timeoutNanoseconds: 10_000_000_000
+                )
+                proof.savedProofPath = proofURL.path
+                try writeProof(proof, to: proofURL)
+
+                let latency = Self.multiAppLatencySummary(for: proof)
+                results.append(
+                    ShellMultiAppProofResult(
+                        appId: appId,
+                        status: "proved",
+                        proofKind: "coherence",
+                        proofPath: proofURL.path,
+                        latencyHealth: latency.health,
+                        slowestLatencyMeasurement: latency.slowestMeasurement,
+                        slowestLatencyMilliseconds: latency.slowestElapsedMilliseconds,
+                        latencyBudgetMilliseconds: latency.freshFrameBudgetMilliseconds,
+                        staleTimeoutMilliseconds: latency.staleFrameTimeoutMilliseconds,
+                        latencyRecommendedAction: latency.recommendedAction,
+                        windowId: proof.window.windowId,
+                        windowTitle: proof.window.title,
+                        errorMessage: nil
+                    )
+                )
+            } catch {
+                results.append(
+                    ShellMultiAppProofResult(
+                        appId: appId,
+                        status: "failed",
+                        proofKind: "coherence",
+                        proofPath: nil,
+                        latencyHealth: nil,
+                        slowestLatencyMeasurement: nil,
+                        slowestLatencyMilliseconds: nil,
+                        latencyBudgetMilliseconds: nil,
+                        staleTimeoutMilliseconds: nil,
+                        latencyRecommendedAction: nil,
+                        windowId: nil,
+                        windowTitle: nil,
+                        errorMessage: userMessage(for: error)
+                    )
+                )
+            }
+        }
+
+        let provedAppCount = results.filter { $0.status == "proved" }.count
+        let failedAppCount = results.count - provedAppCount
+        let coverageHealth = provedAppCount == appIds.count
+            ? "complete"
+            : (provedAppCount > 0 ? "partial" : "missing")
+        let report = ShellMultiAppProofReport(
+            endpoint: endpoint,
+            provedAt: Date(),
+            proofDirectory: coherenceProofDirectory.path,
+            aggregateReportPath: aggregateURL.path,
+            appIds: appIds,
+            targetAppIds: appIds,
+            waitSeconds: 10,
+            proofKind: "coherence",
+            provedAppCount: provedAppCount,
+            failedAppCount: failedAppCount,
+            coverageHealth: coverageHealth,
+            results: results,
+            nextActions: Self.multiAppProofNextActions(
+                coverageHealth: coverageHealth,
+                aggregateReportPath: aggregateURL.path,
+                failedResults: results.filter { $0.status == "failed" }
+            )
+        )
+        try writeProof(report, to: aggregateURL)
+        return aggregateURL
+    }
+
     private func writeProof<T: Encodable>(_ report: T, to outputURL: URL) throws {
         let data = try JSONEncoder.veilDiagnostics.encode(report)
         try data.write(to: outputURL, options: .atomic)
@@ -988,6 +1156,56 @@ struct VeilHostShellApp: App {
         formatter.formatOptions = [.withInternetDateTime]
         return formatter.string(from: date)
             .replacingOccurrences(of: ":", with: "-")
+    }
+
+    private static func proofFileComponent(_ appId: String) -> String {
+        let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_"))
+        return String(appId.unicodeScalars.map { scalar in
+            allowed.contains(scalar) ? Character(scalar) : "-"
+        })
+    }
+
+    private static func multiAppLatencySummary(
+        for proof: WindowsAppCoherenceProofReport
+    ) -> ShellMultiAppLatencySummary {
+        let slowest = [proof.initialFrameLatency, proof.postInputFrameLatency].max {
+            $0.elapsedMilliseconds < $1.elapsedMilliseconds
+        } ?? proof.postInputFrameLatency
+        let health: String
+        if slowest.elapsedMilliseconds <= slowest.freshFrameBudgetMilliseconds {
+            health = "healthy"
+        } else if slowest.elapsedMilliseconds <= slowest.staleFrameTimeoutMilliseconds {
+            health = "delayed"
+        } else {
+            health = "stale"
+        }
+
+        return ShellMultiAppLatencySummary(
+            health: health,
+            slowestMeasurement: slowest.measurement,
+            slowestElapsedMilliseconds: slowest.elapsedMilliseconds,
+            freshFrameBudgetMilliseconds: slowest.freshFrameBudgetMilliseconds,
+            staleFrameTimeoutMilliseconds: slowest.staleFrameTimeoutMilliseconds,
+            recommendedAction: slowest.recommendedAction
+        )
+    }
+
+    private static func multiAppProofNextActions(
+        coverageHealth: String,
+        aggregateReportPath: String,
+        failedResults: [ShellMultiAppProofResult]
+    ) -> [String] {
+        var actions = [
+            "Run `veil-vmctl app-runtime-status --json` to confirm proofArtifacts.multiAppProofCoverageHealth.",
+            "Attach `\(aggregateReportPath)` with the saved per-app proof artifacts when filing app-runtime evidence."
+        ]
+        if coverageHealth != "complete" {
+            actions.append("Run `veil-vmctl guest-agent-wait --json --wait-seconds 30` and retry `veil-vmctl multi-app-proof --json --require-complete` after the Windows app connection is live.")
+        }
+        for result in failedResults {
+            actions.append("Retry `veil-vmctl coherence-proof --json --app-id \(result.appId)` to isolate the \(result.appId) failure.")
+        }
+        return actions
     }
 
     private func configureWindowsAppWindowCloseBridge() {
@@ -1443,6 +1661,7 @@ private struct VeilMenuBarMenu: View {
     var closeAllWindowsAppWindowsAction: () -> Void
     var restartStaleFrameStreamsAction: () -> Void
     var runRecommendedProofAction: () -> Void
+    var runMultiAppProofAction: () -> Void
     var prepareReviewEvidenceAction: () -> Void
     var quietWindowsWhenIdleAction: () -> Void
     var refreshAppsAction: () -> Void
@@ -1549,6 +1768,12 @@ private struct VeilMenuBarMenu: View {
             runRecommendedProofAction()
         }
         .disabled(model.runtimeStatusReport().proofPlan.recommendedProofCommand == nil)
+
+        Button("Check Daily Use Apps", systemImage: "checkmark.seal.fill") {
+            openMainWindow()
+            runMultiAppProofAction()
+        }
+        .disabled(model.runtimeStatusReport().proofPlan.recommendedMultiAppProofCommand == nil)
 
         Button("Prepare Review Evidence", systemImage: "folder.badge.plus") {
             openMainWindow()
@@ -1828,6 +2053,9 @@ private struct VeilMenuBarMenu: View {
         case .runRecommendedProof:
             openMainWindow()
             runRecommendedProofAction()
+        case .runMultiAppProof:
+            openMainWindow()
+            runMultiAppProofAction()
         }
     }
 
@@ -1874,6 +2102,7 @@ enum MenuBarPrimaryActionRoute: Equatable {
     case reopenWindow
     case launchSelectedApp
     case runRecommendedProof
+    case runMultiAppProof
 
     static func resolve(actionId: String) -> MenuBarPrimaryActionRoute? {
         switch actionId {
@@ -1905,8 +2134,10 @@ enum MenuBarPrimaryActionRoute: Equatable {
             return .preparePackageIdentity
         case "windowsApps.launchSelected":
             return .launchSelectedApp
-        case "proof.recommended", "dailyUse.verifyIntegrations":
+        case "proof.recommended":
             return .runRecommendedProof
+        case "proof.multiApp", "dailyUse.verifyIntegrations":
+            return .runMultiAppProof
         default:
             return nil
         }
@@ -1942,6 +2173,8 @@ enum MenuBarPrimaryActionRoute: Equatable {
             return "arrow.triangle.2.circlepath"
         case .runRecommendedProof:
             return "checkmark.seal"
+        case .runMultiAppProof:
+            return "checkmark.seal.fill"
         }
     }
 }
@@ -2160,6 +2393,7 @@ private struct StandaloneMainWindowRoot: View {
             closeAllWindowsAppWindowsAction: {},
             restartStaleFrameStreamsAction: {},
             runRecommendedProofAction: {},
+            runMultiAppProofAction: {},
             quietWindowsWhenIdleAction: {},
             displayMessage: displayMessage
         )
