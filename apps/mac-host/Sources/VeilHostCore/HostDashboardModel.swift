@@ -1386,6 +1386,17 @@ public final class HostDashboardModel {
                         && dailyUseReadiness.recommendedCommand == "veil-vmctl app-runtime-action --json --action proof-recommended"
                 ),
                 WindowsAppRuntimeActionStatus(
+                    id: "dailyUse.verifyWindowCapture",
+                    title: "Verify Window Capture",
+                    isAvailable: dailyUseReadiness.borderlessCaptureRecommendedAction == "verify-window-capture"
+                        && dailyUseReadiness.recommendedCommand == "veil-vmctl app-runtime-status --json"
+                ),
+                WindowsAppRuntimeActionStatus(
+                    id: "dailyUse.requestNotificationConsent",
+                    title: "Check Notifications",
+                    isAvailable: false
+                ),
+                WindowsAppRuntimeActionStatus(
                     id: "runtime.recoverDisplay",
                     title: "Refresh Windows Display",
                     isAvailable: localRuntime.recommendedRecoveryCommand != nil

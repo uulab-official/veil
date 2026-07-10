@@ -155,6 +155,7 @@ function installedRuntimeHeroSupports(actionId) {
     "runtime.repairGuestAgentForApp",
     "runtime.prepareSparsePackage",
     "dailyUse.verifyIntegrations",
+    "dailyUse.verifyWindowCapture",
     "runtime.startWindowsForApp",
     "runtime.prepareWindows",
     "runtime.refreshStatus",
@@ -1225,6 +1226,26 @@ test("rejects Daily Use notification bridge guidance drift", () => {
   assert.throws(
     () => validateAppRuntimeStatus(report),
     /notificationBridgeRecommendedAction/
+  );
+});
+
+test("rejects available notification consent action before automation exists", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.demo.json", import.meta.url), "utf8"));
+  report.actions.find((action) => action.id === "dailyUse.requestNotificationConsent").isAvailable = true;
+
+  assert.throws(
+    () => validateAppRuntimeStatus(report),
+    /requestNotificationConsent/
+  );
+});
+
+test("rejects Daily Use window capture action availability drift", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.demo.json", import.meta.url), "utf8"));
+  report.actions.find((action) => action.id === "dailyUse.verifyWindowCapture").isAvailable = true;
+
+  assert.throws(
+    () => validateAppRuntimeStatus(report),
+    /verifyWindowCapture/
   );
 });
 

@@ -44,7 +44,7 @@ enum LauncherPrimaryNextActionRoute: Equatable {
             return .prepareWindows
         case "runtime.prepareSparsePackage":
             return .preparePackageIdentity
-        case "runtime.refreshStatus":
+        case "runtime.refreshStatus", "dailyUse.verifyWindowCapture":
             return .refreshRuntimeStatus
         case "windowsApps.reconnectRestore", "windowsApps.restorePrevious":
             return .reconnectPreviousApps

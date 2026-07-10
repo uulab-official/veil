@@ -1709,6 +1709,8 @@ private struct VeilMenuBarMenu: View {
         case .preparePackageIdentity:
             openMainWindow()
             prepareSparsePackageAction()
+        case .refreshRuntimeStatus:
+            openMainWindow()
         case .launchSelectedApp:
             if !model.hasLiveAgentConnection {
                 openMainWindow()
@@ -1757,6 +1759,7 @@ enum MenuBarPrimaryActionRoute: Equatable {
     case startWindowsForApp
     case waitForAgent
     case preparePackageIdentity
+    case refreshRuntimeStatus
     case launchSelectedApp
     case runRecommendedProof
 
@@ -1778,6 +1781,8 @@ enum MenuBarPrimaryActionRoute: Equatable {
             return .startWindowsForApp
         case "runtime.waitAgent":
             return .waitForAgent
+        case "dailyUse.verifyWindowCapture":
+            return .refreshRuntimeStatus
         case "runtime.prepareSparsePackage":
             return .preparePackageIdentity
         case "windowsApps.launchSelected":
@@ -1809,6 +1814,8 @@ enum MenuBarPrimaryActionRoute: Equatable {
             return "antenna.radiowaves.left.and.right"
         case .preparePackageIdentity:
             return "shippingbox"
+        case .refreshRuntimeStatus:
+            return "arrow.clockwise"
         case .runRecommendedProof:
             return "checkmark.seal"
         }

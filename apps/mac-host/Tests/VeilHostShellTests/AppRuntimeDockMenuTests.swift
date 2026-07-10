@@ -838,7 +838,8 @@ extension AppRuntimeDockMenuTests {
         "runtime.prepareSparsePackage": (.preparePackageIdentity, "shippingbox"),
         "windowsApps.launchSelected": (.launchSelectedApp, "arrow.up.forward.app"),
         "proof.recommended": (.runRecommendedProof, "checkmark.seal"),
-        "dailyUse.verifyIntegrations": (.runRecommendedProof, "checkmark.seal")
+        "dailyUse.verifyIntegrations": (.runRecommendedProof, "checkmark.seal"),
+        "dailyUse.verifyWindowCapture": (.refreshRuntimeStatus, "arrow.clockwise")
     ]
 }
 

@@ -931,6 +931,8 @@ struct HostDashboardModelTests {
         #expect(report.actions.first { $0.id == "runtime.repairGuestAgentForApp" }?.isAvailable == false)
         #expect(report.actions.first { $0.id == "runtime.prepareSparsePackage" }?.isAvailable == true)
         #expect(report.actions.first { $0.id == "dailyUse.verifyIntegrations" }?.isAvailable == false)
+        #expect(report.actions.first { $0.id == "dailyUse.verifyWindowCapture" }?.isAvailable == false)
+        #expect(report.actions.first { $0.id == "dailyUse.requestNotificationConsent" }?.isAvailable == false)
         #expect(report.actions.first { $0.id == "runtime.recoverDisplay" }?.isAvailable == false)
         #expect(report.actions.first { $0.id == "runtime.fulfillPendingLaunch" }?.isAvailable == false)
         #expect(report.actions.first { $0.id == "runtime.waitAgent" }?.isAvailable == false)
@@ -946,6 +948,8 @@ struct HostDashboardModelTests {
         #expect(actionTitles.contains("Check Windows App"))
         #expect(actionTitles.contains("Check App Connection"))
         #expect(actionTitles.contains("Verify Daily Use"))
+        #expect(actionTitles.contains("Verify Window Capture"))
+        #expect(actionTitles.contains("Check Notifications"))
         #expect(actionTitles.allSatisfy { !$0.contains("Guest Agent") })
         #expect(actionTitles.allSatisfy { !$0.contains("Runtime") })
         #expect(actionTitles.allSatisfy { !$0.contains("Proof") })
@@ -1003,7 +1007,32 @@ struct HostDashboardModelTests {
         #expect(report.menuBarIntegration.primaryActionAvailable)
         #expect(report.actions.first { $0.id == "runtime.prepareSparsePackage" }?.isAvailable == false)
         #expect(report.actions.first { $0.id == "dailyUse.verifyIntegrations" }?.isAvailable == true)
+        #expect(report.actions.first { $0.id == "dailyUse.verifyWindowCapture" }?.isAvailable == false)
+        #expect(report.actions.first { $0.id == "dailyUse.requestNotificationConsent" }?.isAvailable == false)
         #expect(report.actions.first { $0.id == "proof.recommended" }?.isAvailable == true)
+    }
+
+    @Test("Daily Use window capture action is available between package identity and capture readiness")
+    @MainActor
+    func dailyUseWindowCaptureActionIsAvailableBetweenPackageIdentityAndCaptureReadiness() async throws {
+        let service = FakeDashboardService(health: .packageIdentityWithoutWindowCapture)
+        let model = HostDashboardModel(service: service)
+
+        await model.load()
+        let report = model.runtimeStatusReport()
+
+        #expect(report.connection.capabilities?.packageIdentity == true)
+        #expect(report.connection.capabilities?.windowCapture == false)
+        #expect(report.dailyUseReadiness.packageIdentityReady)
+        #expect(report.dailyUseReadiness.borderlessCapturePreflightPassed == false)
+        #expect(report.dailyUseReadiness.borderlessCaptureRecommendedAction == "verify-window-capture")
+        #expect(report.dailyUseReadiness.notificationBridgeRecommendedAction == "verify-notification-listener-consent")
+        #expect(report.dailyUseReadiness.recommendedAction == "verify-window-capture")
+        #expect(report.dailyUseReadiness.recommendedCommand == "veil-vmctl app-runtime-status --json")
+        #expect(report.actions.first { $0.id == "runtime.prepareSparsePackage" }?.isAvailable == false)
+        #expect(report.actions.first { $0.id == "dailyUse.verifyWindowCapture" }?.isAvailable == true)
+        #expect(report.actions.first { $0.id == "dailyUse.verifyIntegrations" }?.isAvailable == false)
+        #expect(report.actions.first { $0.id == "dailyUse.requestNotificationConsent" }?.isAvailable == false)
     }
 
     @Test("reports quiet runtime readiness after the final Windows app window closes")
@@ -2352,6 +2381,12 @@ private extension AgentHealthResponse {
         response.packageIdentityStatus?.stage = "registered"
         response.packageIdentityStatus?.succeeded = true
         response.packageIdentityStatus?.message = "Sparse package registered and agent restarted with package identity."
+        return response
+    }
+
+    static var packageIdentityWithoutWindowCapture: AgentHealthResponse {
+        var response = dailyUseReady
+        response.capabilities.windowCapture = false
         return response
     }
 }

@@ -71,6 +71,12 @@ struct LauncherPrimaryNextActionRouteTests {
                 command: nil
             ) == .runRecommendedProof
         )
+        #expect(
+            LauncherPrimaryNextActionRoute.resolve(
+                actionId: "dailyUse.verifyWindowCapture",
+                command: nil
+            ) == .refreshRuntimeStatus
+        )
     }
 
     @Test("routes app runtime commands to launcher actions")

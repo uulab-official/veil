@@ -66,6 +66,16 @@
       "isAvailable": false
     },
     {
+      "id": "dailyUse.verifyWindowCapture",
+      "title": "Verify Window Capture",
+      "isAvailable": false
+    },
+    {
+      "id": "dailyUse.requestNotificationConsent",
+      "title": "Check Notifications",
+      "isAvailable": false
+    },
+    {
       "id": "runtime.recoverDisplay",
       "title": "Refresh Windows Display",
       "isAvailable": false

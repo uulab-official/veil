@@ -129,6 +129,7 @@ function installedRuntimeHeroSupports(actionId) {
     "runtime.repairGuestAgentForApp",
     "runtime.prepareSparsePackage",
     "dailyUse.verifyIntegrations",
+    "dailyUse.verifyWindowCapture",
     "runtime.startWindowsForApp",
     "runtime.prepareWindows",
     "runtime.refreshStatus",

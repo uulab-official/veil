@@ -244,6 +244,12 @@ command moves from status refresh to
 `actions` list exposes `dailyUse.verifyIntegrations` so the launcher can continue
 with an in-app app check instead of sending the operator back to a passive status
 screen.
+The same `actions` list now includes `dailyUse.verifyWindowCapture` for the
+intermediate "package identity exists, window capture still needs verification"
+state and `dailyUse.requestNotificationConsent` as an explicit unavailable lane
+until Windows notification consent automation exists. This keeps the app surface
+honest about what can be clicked today while still showing the remaining Daily
+Use work.
 The macOS launcher and menu bar route both `dailyUse.verifyIntegrations` and
 `proof.recommended` to the same recommended app-check action, keeping Daily Use
 verification reachable from the Parallels-style top-level controls.

@@ -1971,6 +1971,8 @@ function validateActions(actions, report) {
     "runtime.repairGuestAgentForApp",
     "runtime.prepareSparsePackage",
     "dailyUse.verifyIntegrations",
+    "dailyUse.verifyWindowCapture",
+    "dailyUse.requestNotificationConsent",
     "runtime.recoverDisplay",
     "runtime.fulfillPendingLaunch",
     "runtime.waitAgent",
@@ -2035,6 +2037,18 @@ function validateActions(actions, report) {
     && report.dailyUseReadiness.recommendedCommand === "veil-vmctl app-runtime-action --json --action proof-recommended";
   if (verifyDailyUseAction.isAvailable !== canVerifyDailyUse) {
     throw new TypeError("dailyUse.verifyIntegrations availability must match Daily Use verification readiness.");
+  }
+
+  const verifyWindowCaptureAction = actions.find((action) => action.id === "dailyUse.verifyWindowCapture");
+  const canVerifyWindowCapture = report.dailyUseReadiness.borderlessCaptureRecommendedAction === "verify-window-capture"
+    && report.dailyUseReadiness.recommendedCommand === "veil-vmctl app-runtime-status --json";
+  if (verifyWindowCaptureAction.isAvailable !== canVerifyWindowCapture) {
+    throw new TypeError("dailyUse.verifyWindowCapture availability must match Daily Use window capture gate.");
+  }
+
+  const notificationConsentAction = actions.find((action) => action.id === "dailyUse.requestNotificationConsent");
+  if (notificationConsentAction.isAvailable) {
+    throw new TypeError("dailyUse.requestNotificationConsent must stay unavailable until notification consent automation exists.");
   }
 
   const recoverDisplayAction = actions.find((action) => action.id === "runtime.recoverDisplay");
