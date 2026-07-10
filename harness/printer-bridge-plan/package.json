@@ -1,0 +1,13 @@
+{
+  "name": "@veil/printer-bridge-plan-harness",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "test": "node --test",
+    "validate": "node src/validate-printer-bridge-plan.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

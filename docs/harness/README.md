@@ -24,6 +24,7 @@ harness/
 ├─ mvp-proof/              JSON shape validation for guest wait plus Coherence proof
 ├─ multi-app-proof/        JSON shape validation for Notepad/Calculator/Paint proof coverage
 ├─ notification-proof/     JSON shape validation for Windows notification bridge proof
+├─ printer-bridge-plan/    JSON shape validation for Mac shared-printer to Windows IPP setup
 ├─ guest-agent-wait/       JSON shape validation for post-install guest-agent readiness
 ├─ qemu-boot-plan/         JSON shape validation for dry-run QEMU/HVF boot plans
 ├─ qemu-doctor/            JSON shape validation for QEMU/HVF readiness reports
@@ -50,6 +51,7 @@ Current executable pieces:
 - `harness/mvp-proof`: a JSON validator for the full Notepad MVP gate: guest-agent readiness plus Coherence proof evidence.
 - `harness/multi-app-proof`: a JSON validator for one command that runs Coherence proof coverage across Notepad, Calculator, and Paint and saves per-app artifacts for app-runtime status.
 - `harness/notification-proof`: a JSON validator for the Windows notification bridge gate: guest-agent readiness plus one real `notification.received` event from the guest.
+- `harness/printer-bridge-plan`: a JSON validator for the manual Mac shared-printer to Windows IPP setup plan.
 - `harness/guest-agent-wait`: a JSON validator for waiting until the installed Windows guest agent is reachable after setup/login.
 - `harness/qemu-boot-plan`: a JSON validator for dry-run QEMU/HVF Windows Arm boot plans.
 - `harness/qemu-doctor`: a JSON validator for QEMU/HVF readiness reports and next actions.
@@ -296,9 +298,12 @@ consent or settings blocker.
 The printer lane is intentionally explicit while it is still a manual
 experiment: `printerBridgeRecommendedAction=manual-ipp-experiment`,
 `printerBridgeEndpointTemplate=http://10.0.2.2:631/printers/<shared-printer-name>`,
+`printerBridgePlanCommand=veil-vmctl printer-bridge-plan --json --shared-printer <shared-printer-name>`,
 and `printerBridgeSetupHint` tell the app and CLI to guide users through Mac
 printer sharing plus Windows IPP network-printer registration over QEMU's
-existing user-mode network path.
+existing user-mode network path. The generated plan uses Windows PowerShell
+`Add-Printer -IppURL` and keeps the limitation explicit: Veil must not claim
+automatic printer support until a real Windows test page is proven.
 The `prepare-sparse-package` command is host-actionable:
 `veil-vmctl app-runtime-action --json --action prepare-sparse-package --wait-seconds 120`
 drives the attached `P.cmd` entrypoint through QEMU keyboard automation, while
@@ -712,6 +717,20 @@ The app-shell action surface uses the same proof path:
 ```bash
 cd apps/mac-host
 swift run veil-vmctl app-runtime-action --json --action proof-notifications --wait-seconds 30 | node ../../harness/app-runtime-action/src/validate-app-runtime-action.mjs
+```
+
+## Printer Bridge Plan Scenario
+
+The printer bridge plan command turns the current manual IPP experiment into a
+reproducible setup contract. It does not claim automatic printer provisioning;
+it produces the macOS sharing prerequisite, the Windows `Add-Printer -IppURL`
+command, verification steps, and proof limitations that must be satisfied before
+the lane can graduate beyond `manual-ipp-experiment`.
+
+```bash
+cd apps/mac-host
+swift run veil-vmctl printer-bridge-plan --json --shared-printer "Office Printer" | node ../../harness/printer-bridge-plan/src/validate-printer-bridge-plan.mjs
+node ../../harness/printer-bridge-plan/src/validate-printer-bridge-plan.mjs < ../../harness/printer-bridge-plan/fixtures/printer-bridge-plan.json
 ```
 
 Use this only after sparse package identity is live and Windows notification

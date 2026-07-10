@@ -1127,6 +1127,7 @@ function validateDailyUseReadiness(dailyUseReadiness, report) {
   requireString(dailyUseReadiness.printerBridgeMode, "dailyUseReadiness.printerBridgeMode");
   requireString(dailyUseReadiness.printerBridgeRecommendedAction, "dailyUseReadiness.printerBridgeRecommendedAction");
   requireString(dailyUseReadiness.printerBridgeEndpointTemplate, "dailyUseReadiness.printerBridgeEndpointTemplate");
+  requireString(dailyUseReadiness.printerBridgePlanCommand, "dailyUseReadiness.printerBridgePlanCommand");
   requireString(dailyUseReadiness.printerBridgeSetupHint, "dailyUseReadiness.printerBridgeSetupHint");
   requireString(dailyUseReadiness.recommendedAction, "dailyUseReadiness.recommendedAction");
   requireString(dailyUseReadiness.reason, "dailyUseReadiness.reason");
@@ -1170,6 +1171,9 @@ function validateDailyUseReadiness(dailyUseReadiness, report) {
   }
   if (dailyUseReadiness.printerBridgeEndpointTemplate !== "http://10.0.2.2:631/printers/<shared-printer-name>") {
     throw new TypeError("dailyUseReadiness.printerBridgeEndpointTemplate must expose the QEMU user-network IPP endpoint template.");
+  }
+  if (dailyUseReadiness.printerBridgePlanCommand !== "veil-vmctl printer-bridge-plan --json --shared-printer <shared-printer-name>") {
+    throw new TypeError("dailyUseReadiness.printerBridgePlanCommand must expose the printer bridge setup plan command.");
   }
   if (!dailyUseReadiness.printerBridgeSetupHint.includes("Share the Mac printer")
     || !dailyUseReadiness.printerBridgeSetupHint.includes("IPP network printer")) {

@@ -553,7 +553,8 @@
       "reason": "A signed sparse package is required before borderless app capture or Windows notifications can be enabled; last sparse package preparation is not complete at stage packageSigned (Sparse package signed; restart the agent through the package registration step.).",
       "printerBridgeRecommendedAction": "manual-ipp-experiment",
       "printerBridgeEndpointTemplate": "http://10.0.2.2:631/printers/<shared-printer-name>",
-      "printerBridgeSetupHint": "Share the Mac printer, then add it in Windows as an IPP network printer at http://10.0.2.2:631/printers/<shared-printer-name>."
+      "printerBridgeSetupHint": "Share the Mac printer, then add it in Windows as an IPP network printer at http://10.0.2.2:631/printers/<shared-printer-name>.",
+      "printerBridgePlanCommand": "veil-vmctl printer-bridge-plan --json --shared-printer <shared-printer-name>"
     },
     "notificationBridge": {
       "isEnabled": true,

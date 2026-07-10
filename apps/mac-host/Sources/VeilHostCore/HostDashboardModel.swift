@@ -1000,6 +1000,7 @@ public struct WindowsAppRuntimeProofArtifactAppSummary: Codable, Equatable, Send
 public enum WindowsAppRuntimePrinterBridgeDefaults {
     public static let recommendedAction = "manual-ipp-experiment"
     public static let endpointTemplate = "http://10.0.2.2:631/printers/<shared-printer-name>"
+    public static let planCommand = "veil-vmctl printer-bridge-plan --json --shared-printer <shared-printer-name>"
     public static let setupHint =
         "Share the Mac printer, then add it in Windows as an IPP network printer at http://10.0.2.2:631/printers/<shared-printer-name>."
 }
@@ -1023,6 +1024,7 @@ public struct WindowsAppRuntimeDailyUseReadinessStatus: Codable, Equatable, Send
     public var printerBridgeMode: String
     public var printerBridgeRecommendedAction: String
     public var printerBridgeEndpointTemplate: String
+    public var printerBridgePlanCommand: String
     public var printerBridgeSetupHint: String
     public var packageIdentityStatus: PackageIdentityStatus?
     public var packageIdentityStage: String?
@@ -1045,6 +1047,7 @@ public struct WindowsAppRuntimeDailyUseReadinessStatus: Codable, Equatable, Send
         printerBridgeMode: String,
         printerBridgeRecommendedAction: String = WindowsAppRuntimePrinterBridgeDefaults.recommendedAction,
         printerBridgeEndpointTemplate: String = WindowsAppRuntimePrinterBridgeDefaults.endpointTemplate,
+        printerBridgePlanCommand: String = WindowsAppRuntimePrinterBridgeDefaults.planCommand,
         printerBridgeSetupHint: String = WindowsAppRuntimePrinterBridgeDefaults.setupHint,
         packageIdentityStatus: PackageIdentityStatus? = nil,
         packageIdentityStage: String? = nil,
@@ -1066,6 +1069,7 @@ public struct WindowsAppRuntimeDailyUseReadinessStatus: Codable, Equatable, Send
         self.printerBridgeMode = printerBridgeMode
         self.printerBridgeRecommendedAction = printerBridgeRecommendedAction
         self.printerBridgeEndpointTemplate = printerBridgeEndpointTemplate
+        self.printerBridgePlanCommand = printerBridgePlanCommand
         self.printerBridgeSetupHint = printerBridgeSetupHint
         self.packageIdentityStatus = packageIdentityStatus
         self.packageIdentityStage = packageIdentityStage

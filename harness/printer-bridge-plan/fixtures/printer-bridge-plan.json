@@ -1,0 +1,35 @@
+{
+  "kind": "windowsPrinterBridgePlan",
+  "generatedAt": "2026-07-10T00:00:00Z",
+  "mode": "manual-ipp-experiment",
+  "hostAddress": "10.0.2.2",
+  "ippPort": 631,
+  "sharedPrinterName": "Office Printer",
+  "windowsPrinterName": "Veil Mac Printer",
+  "ippEndpoint": "http://10.0.2.2:631/printers/Office%20Printer",
+  "macOSSharingHint": "Enable macOS Printer Sharing, then share the target printer as Office Printer.",
+  "windowsAddPrinterCommand": "Add-Printer -Name 'Veil Mac Printer' -IppURL 'http://10.0.2.2:631/printers/Office%20Printer'",
+  "windowsVerifyPrinterCommand": "Get-Printer -Name 'Veil Mac Printer' | Format-List Name,Type,PrinterStatus",
+  "manualTestPageInstruction": "From Windows Settings, open Printers & scanners, select Veil Mac Printer, and print a test page.",
+  "setupSteps": [
+    "On macOS, enable Printer Sharing and share the printer name shown in sharedPrinterName.",
+    "Start the Veil Windows VM on the default QEMU user-mode network.",
+    "In an elevated Windows PowerShell session, run windowsAddPrinterCommand.",
+    "Open Windows Printers & scanners and confirm the new printer appears."
+  ],
+  "verificationSteps": [
+    "Run windowsVerifyPrinterCommand and confirm the printer is present.",
+    "Print a Windows test page and save screenshot or paper/PDF evidence before claiming printer bridge support.",
+    "Run `veil-vmctl app-runtime-status --json` and confirm dailyUseReadiness.printerBridgeRecommendedAction remains manual-ipp-experiment until live proof exists."
+  ],
+  "limitations": [
+    "This is a manual IPP experiment, not automatic Parallels-style printer provisioning yet.",
+    "It depends on macOS Printer Sharing, the Windows IPP print path, and the selected printer driver.",
+    "Veil must not claim printer bridge support until a real Windows test page proof is saved."
+  ],
+  "nextActions": [
+    "Run `veil-vmctl printer-bridge-plan --json --shared-printer <shared-printer-name>` with the actual macOS shared printer name.",
+    "Run the generated Add-Printer command inside Windows after the guest is installed and networked.",
+    "Save the successful Windows test-page evidence, then promote this from manual experiment to app-guided printer setup."
+  ]
+}

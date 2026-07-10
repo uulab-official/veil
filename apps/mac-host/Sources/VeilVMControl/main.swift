@@ -95,7 +95,7 @@ enum VMControlError: Error, LocalizedError {
         }
     }
 
-    private static let usage = "Usage: veil-vmctl prepare --installer /path/to/Windows.iso [--drivers /path/to/virtio-win.iso] | veil-vmctl app-runtime-status [--json] [--demo] | veil-vmctl app-runtime-review [--json] [--demo] [--evidence-dir /path/to/screenshots] | veil-vmctl app-runtime-review-init [--json] [--demo] [--evidence-dir /path/to/screenshots] | veil-vmctl app-runtime-review-verify [--json] [--demo] --evidence-dir /path/to/screenshots | veil-vmctl app-runtime-action --action launch|fulfill-pending|focus|close|close-all|restart-frame-stream|recover-window-capture|reopen-window|maintain-frame-streams|restore|reconnect-restore|bring-forward|recover-display|wait-agent|repair-agent|prepare-sparse-package|request-notification-consent|quiet-when-idle|stop-runtime|clipboard|type-text|click|proof-recommended|proof-multi-app|proof-notifications [--json] [--demo] [--wait-seconds 5] [--app-id winapp_notepad] [--window-id hwnd:XXXXXXXX] [--text \"...\"] [--x 240 --y 130] | veil-vmctl app-window-proof [--json] [--app-id winapp_notepad] [--wait-seconds 10] [--output /path/to/proof.json] | veil-vmctl coherence-proof [--json] [--app-id winapp_notepad] [--wait-seconds 10] [--output /path/to/proof.json] | veil-vmctl mvp-proof [--json] [--app-id winapp_notepad] [--wait-seconds 30] [--output /path/to/proof.json] [--require-proved] | veil-vmctl multi-app-proof [--json] [--app-ids winapp_notepad,winapp_calculator,winapp_paint] [--wait-seconds 10] [--output-dir /path/to/Diagnostics] [--require-complete] | veil-vmctl notification-proof [--json] [--wait-seconds 30] [--output /path/to/notification-proof.json] [--require-proved] | veil-vmctl guest-agent-wait [--json] [--wait-seconds 30] | veil-vmctl mark-installed [--json] | veil-vmctl providers [--json] | veil-vmctl export-diagnostics [--json] [--output /path/to/diagnostics.json] | veil-vmctl qemu-plan [--json] | veil-vmctl qemu-doctor [--json] | veil-vmctl qemu-install-status [--json] | veil-vmctl qemu-smoke [--json] [--seconds 45] | veil-vmctl qemu-start [--json] [--wait-seconds 15] [--native-display] | veil-vmctl qemu-display-smoke [--json] [--wait-seconds 5] | veil-vmctl qemu-capture [--json] [--output /path/to/console.png] | veil-vmctl qemu-powerdown [--json] [--wait-seconds 30] | veil-vmctl qemu-force-stop [--json] --i-understand-data-loss [--wait-seconds 10] | veil-vmctl qemu-sendkey [--json] key [key ...] | veil-vmctl qemu-type-text [--json] --text \"...\" | veil-vmctl qemu-click [--json] --x 0...32767 --y 0...32767 | veil-vmctl qemu-oobe-bypass [--json] | veil-vmctl qemu-install-agent [--json] [--wait-seconds 30] | veil-vmctl qemu-prepare-sparse-package [--json] [--wait-seconds 120]"
+    private static let usage = "Usage: veil-vmctl prepare --installer /path/to/Windows.iso [--drivers /path/to/virtio-win.iso] | veil-vmctl app-runtime-status [--json] [--demo] | veil-vmctl app-runtime-review [--json] [--demo] [--evidence-dir /path/to/screenshots] | veil-vmctl app-runtime-review-init [--json] [--demo] [--evidence-dir /path/to/screenshots] | veil-vmctl app-runtime-review-verify [--json] [--demo] --evidence-dir /path/to/screenshots | veil-vmctl app-runtime-action --action launch|fulfill-pending|focus|close|close-all|restart-frame-stream|recover-window-capture|reopen-window|maintain-frame-streams|restore|reconnect-restore|bring-forward|recover-display|wait-agent|repair-agent|prepare-sparse-package|request-notification-consent|quiet-when-idle|stop-runtime|clipboard|type-text|click|proof-recommended|proof-multi-app|proof-notifications [--json] [--demo] [--wait-seconds 5] [--app-id winapp_notepad] [--window-id hwnd:XXXXXXXX] [--text \"...\"] [--x 240 --y 130] | veil-vmctl app-window-proof [--json] [--app-id winapp_notepad] [--wait-seconds 10] [--output /path/to/proof.json] | veil-vmctl coherence-proof [--json] [--app-id winapp_notepad] [--wait-seconds 10] [--output /path/to/proof.json] | veil-vmctl mvp-proof [--json] [--app-id winapp_notepad] [--wait-seconds 30] [--output /path/to/proof.json] [--require-proved] | veil-vmctl multi-app-proof [--json] [--app-ids winapp_notepad,winapp_calculator,winapp_paint] [--wait-seconds 10] [--output-dir /path/to/Diagnostics] [--require-complete] | veil-vmctl notification-proof [--json] [--wait-seconds 30] [--output /path/to/notification-proof.json] [--require-proved] | veil-vmctl printer-bridge-plan [--json] [--shared-printer name] [--windows-printer-name name] | veil-vmctl guest-agent-wait [--json] [--wait-seconds 30] | veil-vmctl mark-installed [--json] | veil-vmctl providers [--json] | veil-vmctl export-diagnostics [--json] [--output /path/to/diagnostics.json] | veil-vmctl qemu-plan [--json] | veil-vmctl qemu-doctor [--json] | veil-vmctl qemu-install-status [--json] | veil-vmctl qemu-smoke [--json] [--seconds 45] | veil-vmctl qemu-start [--json] [--wait-seconds 15] [--native-display] | veil-vmctl qemu-display-smoke [--json] [--wait-seconds 5] | veil-vmctl qemu-capture [--json] [--output /path/to/console.png] | veil-vmctl qemu-powerdown [--json] [--wait-seconds 30] | veil-vmctl qemu-force-stop [--json] --i-understand-data-loss [--wait-seconds 10] | veil-vmctl qemu-sendkey [--json] key [key ...] | veil-vmctl qemu-type-text [--json] --text \"...\" | veil-vmctl qemu-click [--json] --x 0...32767 --y 0...32767 | veil-vmctl qemu-oobe-bypass [--json] | veil-vmctl qemu-install-agent [--json] [--wait-seconds 30] | veil-vmctl qemu-prepare-sparse-package [--json] [--wait-seconds 120]"
 }
 
 struct VMControlArguments {
@@ -144,6 +144,7 @@ struct VMControlArguments {
         case mvpProof(json: Bool, appId: String, waitSeconds: Int, outputPath: String?, requireProved: Bool)
         case multiAppProof(json: Bool, appIds: [String], waitSeconds: Int, outputDirectoryPath: String?, requireComplete: Bool)
         case notificationProof(json: Bool, waitSeconds: Int, outputPath: String?, requireProved: Bool)
+        case printerBridgePlan(json: Bool, sharedPrinterName: String?, windowsPrinterName: String?)
         case guestAgentWait(json: Bool, waitSeconds: Int)
         case markInstalled(json: Bool)
         case providers(json: Bool)
@@ -327,6 +328,16 @@ struct VMControlArguments {
             )
         }
 
+        if command == "printer-bridge-plan" {
+            return VMControlArguments(
+                command: .printerBridgePlan(
+                    json: arguments.contains("--json"),
+                    sharedPrinterName: stringArgument(named: "--shared-printer", from: arguments),
+                    windowsPrinterName: stringArgument(named: "--windows-printer-name", from: arguments)
+                )
+            )
+        }
+
         if command == "guest-agent-wait" {
             let waitSeconds = waitSecondsArgument(from: arguments) ?? 30
             return VMControlArguments(command: .guestAgentWait(json: arguments.contains("--json"), waitSeconds: waitSeconds))
@@ -503,6 +514,25 @@ struct VMControlArguments {
     private static func intArgument(named name: String, from arguments: [String]) -> Int? {
         stringArgument(named: name, from: arguments).flatMap(Int.init)
     }
+}
+
+struct WindowsPrinterBridgePlan: Codable, Equatable {
+    var kind: String = "windowsPrinterBridgePlan"
+    var generatedAt: Date
+    var mode: String
+    var hostAddress: String
+    var ippPort: Int
+    var sharedPrinterName: String
+    var windowsPrinterName: String
+    var ippEndpoint: String
+    var macOSSharingHint: String
+    var windowsAddPrinterCommand: String
+    var windowsVerifyPrinterCommand: String
+    var manualTestPageInstruction: String
+    var setupSteps: [String]
+    var verificationSteps: [String]
+    var limitations: [String]
+    var nextActions: [String]
 }
 
 struct QEMUConsoleCaptureRecord: Codable, Equatable {
@@ -1097,6 +1127,8 @@ struct VeilVMControl {
             _ = try await proveMultipleApps(json: json, appIds: appIds, waitSeconds: waitSeconds, outputDirectoryPath: outputDirectoryPath, requireComplete: requireComplete)
         case .notificationProof(let json, let waitSeconds, let outputPath, let requireProved):
             try await proveNotificationBridge(json: json, waitSeconds: waitSeconds, outputPath: outputPath, requireProved: requireProved)
+        case .printerBridgePlan(let json, let sharedPrinterName, let windowsPrinterName):
+            try printPrinterBridgePlan(json: json, sharedPrinterName: sharedPrinterName, windowsPrinterName: windowsPrinterName)
         case .guestAgentWait(let json, let waitSeconds):
             try await waitForGuestAgent(json: json, waitSeconds: waitSeconds)
         case .markInstalled(let json):
@@ -1360,6 +1392,7 @@ struct VeilVMControl {
         print("Daily Use printer mode: \(report.dailyUseReadiness.printerBridgeMode)")
         print("Daily Use printer action: \(report.dailyUseReadiness.printerBridgeRecommendedAction)")
         print("Daily Use printer endpoint: \(report.dailyUseReadiness.printerBridgeEndpointTemplate)")
+        print("Daily Use printer plan: \(report.dailyUseReadiness.printerBridgePlanCommand)")
         print("Daily Use printer setup: \(report.dailyUseReadiness.printerBridgeSetupHint)")
         if let packageIdentityStage = report.dailyUseReadiness.packageIdentityStage {
             print("Daily Use package identity stage: \(packageIdentityStage)")
@@ -4428,6 +4461,106 @@ struct VeilVMControl {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let data = try JSONEncoder.veilDiagnostics.encode(report)
         try data.write(to: outputURL, options: .atomic)
+    }
+
+    private static func printPrinterBridgePlan(
+        json: Bool,
+        sharedPrinterName: String?,
+        windowsPrinterName: String?
+    ) throws {
+        let plan = makePrinterBridgePlan(
+            sharedPrinterName: sharedPrinterName,
+            windowsPrinterName: windowsPrinterName
+        )
+
+        if json {
+            let data = try JSONEncoder.veilDiagnostics.encode(plan)
+            print(String(decoding: data, as: UTF8.self))
+            return
+        }
+
+        print("Windows printer bridge: \(plan.mode)")
+        print("IPP endpoint: \(plan.ippEndpoint)")
+        print("Windows printer: \(plan.windowsPrinterName)")
+        print("macOS setup: \(plan.macOSSharingHint)")
+        print("Windows command: \(plan.windowsAddPrinterCommand)")
+        print("Verify: \(plan.windowsVerifyPrinterCommand)")
+        print("Test page: \(plan.manualTestPageInstruction)")
+        print("Next actions:")
+        for action in plan.nextActions {
+            print("  - \(action)")
+        }
+    }
+
+    private static func makePrinterBridgePlan(
+        sharedPrinterName: String?,
+        windowsPrinterName: String?
+    ) -> WindowsPrinterBridgePlan {
+        let sharedPrinter = normalizedPrinterBridgeName(
+            sharedPrinterName,
+            fallback: "<shared-printer-name>"
+        )
+        let windowsPrinter = normalizedPrinterBridgeName(
+            windowsPrinterName,
+            fallback: "Veil Mac Printer"
+        )
+        let endpoint = printerBridgeEndpoint(sharedPrinterName: sharedPrinter)
+        let addCommand = "Add-Printer -Name \(powershellSingleQuoted(windowsPrinter)) -IppURL \(powershellSingleQuoted(endpoint))"
+        let verifyCommand = "Get-Printer -Name \(powershellSingleQuoted(windowsPrinter)) | Format-List Name,Type,PrinterStatus"
+
+        return WindowsPrinterBridgePlan(
+            generatedAt: Date(),
+            mode: WindowsAppRuntimePrinterBridgeDefaults.recommendedAction,
+            hostAddress: "10.0.2.2",
+            ippPort: 631,
+            sharedPrinterName: sharedPrinter,
+            windowsPrinterName: windowsPrinter,
+            ippEndpoint: endpoint,
+            macOSSharingHint: "Enable macOS Printer Sharing, then share the target printer as \(sharedPrinter).",
+            windowsAddPrinterCommand: addCommand,
+            windowsVerifyPrinterCommand: verifyCommand,
+            manualTestPageInstruction: "From Windows Settings, open Printers & scanners, select \(windowsPrinter), and print a test page.",
+            setupSteps: [
+                "On macOS, enable Printer Sharing and share the printer name shown in sharedPrinterName.",
+                "Start the Veil Windows VM on the default QEMU user-mode network.",
+                "In an elevated Windows PowerShell session, run windowsAddPrinterCommand.",
+                "Open Windows Printers & scanners and confirm the new printer appears."
+            ],
+            verificationSteps: [
+                "Run windowsVerifyPrinterCommand and confirm the printer is present.",
+                "Print a Windows test page and save screenshot or paper/PDF evidence before claiming printer bridge support.",
+                "Run `veil-vmctl app-runtime-status --json` and confirm dailyUseReadiness.printerBridgeRecommendedAction remains manual-ipp-experiment until live proof exists."
+            ],
+            limitations: [
+                "This is a manual IPP experiment, not automatic Parallels-style printer provisioning yet.",
+                "It depends on macOS Printer Sharing, the Windows IPP print path, and the selected printer driver.",
+                "Veil must not claim printer bridge support until a real Windows test page proof is saved."
+            ],
+            nextActions: [
+                "Run `veil-vmctl printer-bridge-plan --json --shared-printer <shared-printer-name>` with the actual macOS shared printer name.",
+                "Run the generated Add-Printer command inside Windows after the guest is installed and networked.",
+                "Save the successful Windows test-page evidence, then promote this from manual experiment to app-guided printer setup."
+            ]
+        )
+    }
+
+    private static func normalizedPrinterBridgeName(_ value: String?, fallback: String) -> String {
+        let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return trimmed.isEmpty ? fallback : trimmed
+    }
+
+    private static func printerBridgeEndpoint(sharedPrinterName: String) -> String {
+        if sharedPrinterName == "<shared-printer-name>" {
+            return WindowsAppRuntimePrinterBridgeDefaults.endpointTemplate
+        }
+
+        let allowed = CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~")
+        let encoded = sharedPrinterName.addingPercentEncoding(withAllowedCharacters: allowed) ?? sharedPrinterName
+        return "http://10.0.2.2:631/printers/\(encoded)"
+    }
+
+    private static func powershellSingleQuoted(_ value: String) -> String {
+        "'\(value.replacingOccurrences(of: "'", with: "''"))'"
     }
 
     private static func waitForGuestAgent(json: Bool, waitSeconds: Int) async throws {

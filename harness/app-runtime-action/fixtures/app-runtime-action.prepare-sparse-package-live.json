@@ -521,7 +521,8 @@
       "packageIdentityEvidencePath": "C:\\Users\\veil-user\\AppData\\Local\\Veil\\Agent\\package\\sparse-package-status.json",
       "printerBridgeRecommendedAction": "manual-ipp-experiment",
       "printerBridgeEndpointTemplate": "http://10.0.2.2:631/printers/<shared-printer-name>",
-      "printerBridgeSetupHint": "Share the Mac printer, then add it in Windows as an IPP network printer at http://10.0.2.2:631/printers/<shared-printer-name>."
+      "printerBridgeSetupHint": "Share the Mac printer, then add it in Windows as an IPP network printer at http://10.0.2.2:631/printers/<shared-printer-name>.",
+      "printerBridgePlanCommand": "veil-vmctl printer-bridge-plan --json --shared-printer <shared-printer-name>"
     },
     "notificationBridge": {
       "isEnabled": true,
