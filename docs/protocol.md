@@ -392,6 +392,10 @@ Rules:
   `recommendedMultiAppProofCommand=veil-vmctl multi-app-proof --json --require-complete`
   is present only when the live agent can launch all Daily Use target apps and
   supports window capture, input, and clipboard.
+- `app-runtime-action --action proof-multi-app` is the in-app/automation handoff
+  for that same Daily Use gate. Its action report keeps the single-app `proof`
+  field reserved for `proof-recommended` and returns the aggregate
+  `windowsMultiAppProof` as `multiAppProof`.
 
 ## Window Focus
 

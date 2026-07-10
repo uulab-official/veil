@@ -34,6 +34,7 @@ Goal: make mirrored Windows app surfaces report whether their frame stream is mi
 - [x] Added `veil-vmctl multi-app-proof --json --require-complete` so one command runs Coherence proof for Notepad, Calculator, and Paint, saves per-app proof artifacts, and writes a `windowsMultiAppProof` aggregate report.
 - [x] Added `harness/multi-app-proof` so the aggregate report validates app order, coverage counts, latency health, failed-app recovery copy, and complete-coverage requirements.
 - [x] Exposed the Daily Use multi-app proof gate through `app-runtime-status.proofPlan.recommendedMultiAppProofCommand` and `actions[].id=proof.multiApp` when the live catalog can launch Notepad, Calculator, and Paint.
+- [x] Added `veil-vmctl app-runtime-action --json --action proof-multi-app` so the Daily Use app set can be checked through the same app-runtime action surface as launch, restore, input, clipboard, and single-app proof.
 
 ## Status Semantics
 

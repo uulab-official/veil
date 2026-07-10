@@ -248,7 +248,10 @@ command is present, and `proof.multiApp`, available exactly when the multi-app
 coverage command is present. The matching single-app command surface is
 `veil-vmctl app-runtime-action --json --action proof-recommended`, which runs
 the strongest available check and returns a `proof` evidence summary inside the
-same action report. The status report also includes `proofArtifacts`, a
+same action report. The matching Daily Use command surface is
+`veil-vmctl app-runtime-action --json --action proof-multi-app`, which runs the
+multi-app coverage check and returns the aggregate `windowsMultiAppProof` as
+`multiAppProof` inside the same action report. The status report also includes `proofArtifacts`, a
 metadata-only pointer to the latest saved app-check JSON under Veil diagnostics so
 automation can attach or inspect the current check evidence without copying
 Windows media, disk contents, product keys, or guest data. When that JSON carries
@@ -565,6 +568,7 @@ swift run veil-vmctl app-runtime-action --json --action click --window-id hwnd:0
 swift run veil-vmctl app-runtime-action --json --action clipboard --text "hello from macOS" | node ../../harness/app-runtime-action/src/validate-app-runtime-action.mjs
 swift run veil-vmctl app-runtime-action --json --action type-text --window-id hwnd:0003029A --text "veil" | node ../../harness/app-runtime-action/src/validate-app-runtime-action.mjs
 swift run veil-vmctl app-runtime-action --json --action proof-recommended | node ../../harness/app-runtime-action/src/validate-app-runtime-action.mjs
+swift run veil-vmctl app-runtime-action --json --action proof-multi-app | node ../../harness/app-runtime-action/src/validate-app-runtime-action.mjs
 swift run veil-vmctl app-runtime-action --json --action close --window-id hwnd:0003029A | node ../../harness/app-runtime-action/src/validate-app-runtime-action.mjs
 swift run veil-vmctl app-runtime-action --json --action close-all | node ../../harness/app-runtime-action/src/validate-app-runtime-action.mjs
 swift run veil-vmctl app-runtime-action --json --action quiet-when-idle | node ../../harness/app-runtime-action/src/validate-app-runtime-action.mjs

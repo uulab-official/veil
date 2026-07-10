@@ -3,8 +3,9 @@ import { fileURLToPath } from "node:url";
 
 import { validateAppRuntimeStatus } from "../../app-runtime-status/src/validate-app-runtime-status.mjs";
 import { validateGuestAgentWait } from "../../guest-agent-wait/src/validate-guest-agent-wait.mjs";
+import { validateMultiAppProof } from "../../multi-app-proof/src/validate-multi-app-proof.mjs";
 
-const VALID_ACTIONS = new Set(["launch", "fulfill-pending", "focus", "close", "close-all", "restart-frame-stream", "recover-window-capture", "reopen-window", "maintain-frame-streams", "restore", "reconnect-restore", "bring-forward", "recover-display", "wait-agent", "repair-agent", "prepare-sparse-package", "quiet-when-idle", "stop-runtime", "clipboard", "type-text", "click", "proof-recommended"]);
+const VALID_ACTIONS = new Set(["launch", "fulfill-pending", "focus", "close", "close-all", "restart-frame-stream", "recover-window-capture", "reopen-window", "maintain-frame-streams", "restore", "reconnect-restore", "bring-forward", "recover-display", "wait-agent", "repair-agent", "prepare-sparse-package", "quiet-when-idle", "stop-runtime", "clipboard", "type-text", "click", "proof-recommended", "proof-multi-app"]);
 const VALID_CONNECTION_MODES = new Set(["agent", "demo"]);
 const VALID_CONSOLE_PREVIEW_STATES = new Set(["fresh", "stale", "unavailable"]);
 
@@ -55,6 +56,10 @@ export function validateAppRuntimeAction(report) {
 
   if (report.action !== "proof-recommended" && report.proof !== undefined && report.proof !== null) {
     throw new TypeError("proof is only allowed for proof-recommended actions.");
+  }
+
+  if (report.action !== "proof-multi-app" && report.multiAppProof !== undefined && report.multiAppProof !== null) {
+    throw new TypeError("multiAppProof is only allowed for proof-multi-app actions.");
   }
 
   if (report.action !== "recover-display" && report.displayRecovery !== undefined && report.displayRecovery !== null) {
@@ -139,6 +144,9 @@ export function validateAppRuntimeAction(report) {
       break;
     case "proof-recommended":
       validateProofRecommendedAction(report);
+      break;
+    case "proof-multi-app":
+      validateProofMultiAppAction(report);
       break;
   }
 
@@ -372,6 +380,36 @@ function validateProofRecommendedAction(report) {
   }
 
   validateRecommendedProofRun(report.proof, report);
+}
+
+function validateProofMultiAppAction(report) {
+  if (report.proofPlan.canRunMultiAppProof !== (report.proofPlan.recommendedMultiAppProofCommand !== undefined)) {
+    throw new TypeError("proof-multi-app readiness must match proofPlan.recommendedMultiAppProofCommand.");
+  }
+
+  if (report.multiAppProof === undefined || report.multiAppProof === null) {
+    if (report.accepted) {
+      throw new TypeError("accepted proof-multi-app actions must include multiAppProof.");
+    }
+    return;
+  }
+
+  validateMultiAppProof(report.multiAppProof);
+  if (report.multiAppProof.coverageHealth === "complete") {
+    validateMultiAppProof(report.multiAppProof, { requireComplete: true });
+  }
+
+  if (report.multiAppProof.endpoint !== report.endpoint) {
+    throw new TypeError("multiAppProof.endpoint must match action endpoint.");
+  }
+
+  if (report.multiAppProof.targetAppIds.join(",") !== report.status.proofArtifacts.multiAppProofTargetAppIds.join(",")) {
+    throw new TypeError("multiAppProof.targetAppIds must match status proofArtifacts target apps.");
+  }
+
+  if (report.accepted !== (report.multiAppProof.coverageHealth === "complete")) {
+    throw new TypeError("proof-multi-app accepted must require complete coverage.");
+  }
 }
 
 function validateOptionalPreviewStatus(value, fieldName) {

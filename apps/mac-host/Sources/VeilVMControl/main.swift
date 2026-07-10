@@ -68,11 +68,11 @@ enum VMControlError: Error, LocalizedError {
         case .missingMultiAppProofAppIds:
             "Missing Windows app ids. Pass --app-ids winapp_notepad,winapp_calculator,winapp_paint or omit it to use the default multi-app proof set."
         case .missingAppRuntimeAction:
-            "Missing app runtime action. Pass --action launch, fulfill-pending, focus, close, close-all, restart-frame-stream, recover-window-capture, restore, bring-forward, prepare-sparse-package, quiet-when-idle, stop-runtime, clipboard, type-text, click, or proof-recommended."
+            "Missing app runtime action. Pass --action launch, fulfill-pending, focus, close, close-all, restart-frame-stream, recover-window-capture, restore, bring-forward, prepare-sparse-package, quiet-when-idle, stop-runtime, clipboard, type-text, click, proof-recommended, or proof-multi-app."
         case .missingAppRuntimeReviewEvidenceDirectory:
             "Missing review evidence directory. Pass --evidence-dir /path/to/review-folder created by app-runtime-review-init."
         case .unsupportedAppRuntimeAction(let action):
-            "Unsupported app runtime action '\(action)'. Pass --action launch, fulfill-pending, focus, close, close-all, restart-frame-stream, recover-window-capture, reopen-window, maintain-frame-streams, restore, bring-forward, prepare-sparse-package, quiet-when-idle, stop-runtime, clipboard, type-text, click, or proof-recommended."
+            "Unsupported app runtime action '\(action)'. Pass --action launch, fulfill-pending, focus, close, close-all, restart-frame-stream, recover-window-capture, reopen-window, maintain-frame-streams, restore, bring-forward, prepare-sparse-package, quiet-when-idle, stop-runtime, clipboard, type-text, click, proof-recommended, or proof-multi-app."
         case .missingWindowId:
             "Missing Windows window id. Pass --window-id hwnd:XXXXXXXX from app-runtime-status or app-window-proof."
         case .missingAppRuntimeText:
@@ -92,7 +92,7 @@ enum VMControlError: Error, LocalizedError {
         }
     }
 
-    private static let usage = "Usage: veil-vmctl prepare --installer /path/to/Windows.iso [--drivers /path/to/virtio-win.iso] | veil-vmctl app-runtime-status [--json] [--demo] | veil-vmctl app-runtime-review [--json] [--demo] [--evidence-dir /path/to/screenshots] | veil-vmctl app-runtime-review-init [--json] [--demo] [--evidence-dir /path/to/screenshots] | veil-vmctl app-runtime-review-verify [--json] [--demo] --evidence-dir /path/to/screenshots | veil-vmctl app-runtime-action --action launch|fulfill-pending|focus|close|close-all|restart-frame-stream|recover-window-capture|reopen-window|maintain-frame-streams|restore|reconnect-restore|bring-forward|recover-display|wait-agent|repair-agent|prepare-sparse-package|quiet-when-idle|stop-runtime|clipboard|type-text|click|proof-recommended [--json] [--demo] [--wait-seconds 5] [--app-id winapp_notepad] [--window-id hwnd:XXXXXXXX] [--text \"...\"] [--x 240 --y 130] | veil-vmctl app-window-proof [--json] [--app-id winapp_notepad] [--wait-seconds 10] [--output /path/to/proof.json] | veil-vmctl coherence-proof [--json] [--app-id winapp_notepad] [--wait-seconds 10] [--output /path/to/proof.json] | veil-vmctl mvp-proof [--json] [--app-id winapp_notepad] [--wait-seconds 30] [--output /path/to/proof.json] [--require-proved] | veil-vmctl multi-app-proof [--json] [--app-ids winapp_notepad,winapp_calculator,winapp_paint] [--wait-seconds 10] [--output-dir /path/to/Diagnostics] [--require-complete] | veil-vmctl guest-agent-wait [--json] [--wait-seconds 30] | veil-vmctl mark-installed [--json] | veil-vmctl providers [--json] | veil-vmctl export-diagnostics [--json] [--output /path/to/diagnostics.json] | veil-vmctl qemu-plan [--json] | veil-vmctl qemu-doctor [--json] | veil-vmctl qemu-install-status [--json] | veil-vmctl qemu-smoke [--json] [--seconds 45] | veil-vmctl qemu-start [--json] [--wait-seconds 15] [--native-display] | veil-vmctl qemu-display-smoke [--json] [--wait-seconds 5] | veil-vmctl qemu-capture [--json] [--output /path/to/console.png] | veil-vmctl qemu-powerdown [--json] [--wait-seconds 30] | veil-vmctl qemu-force-stop [--json] --i-understand-data-loss [--wait-seconds 10] | veil-vmctl qemu-sendkey [--json] key [key ...] | veil-vmctl qemu-type-text [--json] --text \"...\" | veil-vmctl qemu-click [--json] --x 0...32767 --y 0...32767 | veil-vmctl qemu-oobe-bypass [--json] | veil-vmctl qemu-install-agent [--json] [--wait-seconds 30] | veil-vmctl qemu-prepare-sparse-package [--json] [--wait-seconds 120]"
+    private static let usage = "Usage: veil-vmctl prepare --installer /path/to/Windows.iso [--drivers /path/to/virtio-win.iso] | veil-vmctl app-runtime-status [--json] [--demo] | veil-vmctl app-runtime-review [--json] [--demo] [--evidence-dir /path/to/screenshots] | veil-vmctl app-runtime-review-init [--json] [--demo] [--evidence-dir /path/to/screenshots] | veil-vmctl app-runtime-review-verify [--json] [--demo] --evidence-dir /path/to/screenshots | veil-vmctl app-runtime-action --action launch|fulfill-pending|focus|close|close-all|restart-frame-stream|recover-window-capture|reopen-window|maintain-frame-streams|restore|reconnect-restore|bring-forward|recover-display|wait-agent|repair-agent|prepare-sparse-package|quiet-when-idle|stop-runtime|clipboard|type-text|click|proof-recommended|proof-multi-app [--json] [--demo] [--wait-seconds 5] [--app-id winapp_notepad] [--window-id hwnd:XXXXXXXX] [--text \"...\"] [--x 240 --y 130] | veil-vmctl app-window-proof [--json] [--app-id winapp_notepad] [--wait-seconds 10] [--output /path/to/proof.json] | veil-vmctl coherence-proof [--json] [--app-id winapp_notepad] [--wait-seconds 10] [--output /path/to/proof.json] | veil-vmctl mvp-proof [--json] [--app-id winapp_notepad] [--wait-seconds 30] [--output /path/to/proof.json] [--require-proved] | veil-vmctl multi-app-proof [--json] [--app-ids winapp_notepad,winapp_calculator,winapp_paint] [--wait-seconds 10] [--output-dir /path/to/Diagnostics] [--require-complete] | veil-vmctl guest-agent-wait [--json] [--wait-seconds 30] | veil-vmctl mark-installed [--json] | veil-vmctl providers [--json] | veil-vmctl export-diagnostics [--json] [--output /path/to/diagnostics.json] | veil-vmctl qemu-plan [--json] | veil-vmctl qemu-doctor [--json] | veil-vmctl qemu-install-status [--json] | veil-vmctl qemu-smoke [--json] [--seconds 45] | veil-vmctl qemu-start [--json] [--wait-seconds 15] [--native-display] | veil-vmctl qemu-display-smoke [--json] [--wait-seconds 5] | veil-vmctl qemu-capture [--json] [--output /path/to/console.png] | veil-vmctl qemu-powerdown [--json] [--wait-seconds 30] | veil-vmctl qemu-force-stop [--json] --i-understand-data-loss [--wait-seconds 10] | veil-vmctl qemu-sendkey [--json] key [key ...] | veil-vmctl qemu-type-text [--json] --text \"...\" | veil-vmctl qemu-click [--json] --x 0...32767 --y 0...32767 | veil-vmctl qemu-oobe-bypass [--json] | veil-vmctl qemu-install-agent [--json] [--wait-seconds 30] | veil-vmctl qemu-prepare-sparse-package [--json] [--wait-seconds 120]"
 }
 
 struct VMControlArguments {
@@ -119,6 +119,7 @@ struct VMControlArguments {
         case typeText = "type-text"
         case click
         case proofRecommended = "proof-recommended"
+        case proofMultiApp = "proof-multi-app"
     }
 
     enum QEMUStartDisplayMode: Equatable {
@@ -239,7 +240,7 @@ struct VMControlArguments {
                     text: stringArgument(named: "--text", from: arguments),
                     x: intArgument(named: "--x", from: arguments),
                     y: intArgument(named: "--y", from: arguments),
-                    waitSeconds: waitSecondsArgument(from: arguments) ?? 5
+                    waitSeconds: waitSecondsArgument(from: arguments) ?? (action == .proofMultiApp ? 10 : 5)
                 )
             )
         }
@@ -640,6 +641,7 @@ struct AppRuntimeActionReport: Codable, Equatable {
     var reopenRequestedWindowIds: [String]
     var reopenedWindows: [WindowCreatedEvent]
     var proof: AppRuntimeRecommendedProofRun?
+    var multiAppProof: WindowsMultiAppProofReport?
     var displayRecovery: AppRuntimeDisplayRecovery?
     var agentWait: AgentConnectionWaitReport?
     var agentRepair: QEMUGuestAgentInstallAttemptReport?
@@ -1060,7 +1062,7 @@ struct VeilVMControl {
         case .mvpProof(let json, let appId, let waitSeconds, let outputPath, let requireProved):
             try await proveMVP(json: json, appId: appId, waitSeconds: waitSeconds, outputPath: outputPath, requireProved: requireProved)
         case .multiAppProof(let json, let appIds, let waitSeconds, let outputDirectoryPath, let requireComplete):
-            try await proveMultipleApps(json: json, appIds: appIds, waitSeconds: waitSeconds, outputDirectoryPath: outputDirectoryPath, requireComplete: requireComplete)
+            _ = try await proveMultipleApps(json: json, appIds: appIds, waitSeconds: waitSeconds, outputDirectoryPath: outputDirectoryPath, requireComplete: requireComplete)
         case .guestAgentWait(let json, let waitSeconds):
             try await waitForGuestAgent(json: json, waitSeconds: waitSeconds)
         case .markInstalled(let json):
@@ -2868,6 +2870,7 @@ struct VeilVMControl {
         var reopenRequestedWindowIds: [String] = []
         var reopenedWindows: [WindowCreatedEvent] = []
         var proof: AppRuntimeRecommendedProofRun?
+        var multiAppProof: WindowsMultiAppProofReport?
         var displayRecovery: AppRuntimeDisplayRecovery?
         var agentWait: AgentConnectionWaitReport?
         var agentRepair: QEMUGuestAgentInstallAttemptReport?
@@ -3179,6 +3182,22 @@ struct VeilVMControl {
                 foregroundWindowTitle = proof?.windowTitle
                 accepted = proof?.status == .proved
             }
+        case .proofMultiApp:
+            let localRuntimeSnapshot = try? await LocalVMRuntimeService().loadSnapshot()
+            let currentStatus = model.runtimeStatusReport(
+                localRuntime: model.localRuntimeStatus(snapshot: localRuntimeSnapshot)
+            )
+            if currentStatus.proofPlan.recommendedMultiAppProofCommand != nil {
+                multiAppProof = try await proveMultipleApps(
+                    json: false,
+                    appIds: WindowsAppRuntimeProofCoverageDefaults.targetAppIds,
+                    waitSeconds: waitSeconds,
+                    outputDirectoryPath: nil,
+                    requireComplete: false,
+                    shouldPrint: false
+                )
+                accepted = multiAppProof?.coverageHealth == "complete"
+            }
         }
 
         let localRuntimeSnapshot = try? await LocalVMRuntimeService().loadSnapshot()
@@ -3216,6 +3235,7 @@ struct VeilVMControl {
             reopenRequestedWindowIds: reopenRequestedWindowIds,
             reopenedWindows: reopenedWindows,
             proof: proof,
+            multiAppProof: multiAppProof,
             displayRecovery: displayRecovery,
             agentWait: agentWait,
             agentRepair: agentRepair,
@@ -3362,6 +3382,10 @@ struct VeilVMControl {
             if let savedProofPath = proof.savedProofPath {
                 print("Proof artifact: \(savedProofPath)")
             }
+        }
+        if let multiAppProof = report.multiAppProof {
+            print("Daily Use app proof: \(multiAppProof.coverageHealth) (\(multiAppProof.provedAppCount)/\(multiAppProof.appIds.count))")
+            print("Daily Use app proof artifact: \(multiAppProof.aggregateReportPath)")
         }
         if let runtimeStop = report.runtimeStop {
             print("Runtime stop state: \(runtimeStop.state.rawValue)")
@@ -3586,6 +3610,11 @@ struct VeilVMControl {
                     "Attach the proof artifact or JSON report to the current runtime gate.",
                     "Run `veil-vmctl app-runtime-status --json` to inspect the next available Windows app runtime action."
                 ]
+            case .proofMultiApp:
+                return [
+                    "Attach the Daily Use multi-app proof artifact to the current runtime gate.",
+                    "Run `veil-vmctl app-runtime-status --json` to confirm proofArtifacts.multiAppProofCoverageHealth is complete."
+                ]
             }
         }
 
@@ -3593,6 +3622,13 @@ struct VeilVMControl {
             return compactActions([
                 proofNextAction(from: status.proofPlan),
                 "Run `veil-vmctl guest-agent-wait --json` if no proof command is available yet."
+            ])
+        }
+
+        if action == .proofMultiApp {
+            return compactActions([
+                status.proofPlan.recommendedMultiAppProofCommand.map { "Run `\($0)` to retry the Daily Use app coverage check." },
+                "Run `veil-vmctl app-runtime-status --json` and confirm Notepad, Calculator, and Paint are all launchable before retrying."
             ])
         }
 
@@ -3922,8 +3958,9 @@ struct VeilVMControl {
         appIds: [String],
         waitSeconds: Int,
         outputDirectoryPath: String?,
-        requireComplete: Bool
-    ) async throws {
+        requireComplete: Bool,
+        shouldPrint: Bool = true
+    ) async throws -> WindowsMultiAppProofReport {
         let endpoint = ProcessInfo.processInfo.environment["VEIL_AGENT_URL"] ?? "ws://127.0.0.1:18444"
         let url = URL(string: endpoint) ?? URL(string: "ws://127.0.0.1:18444")!
         let boundedWaitSeconds = min(max(waitSeconds, 1), 60)
@@ -4031,35 +4068,38 @@ struct VeilVMControl {
         )
         try writeProof(report, to: aggregateReportURL)
 
-        if json {
+        if json && shouldPrint {
             let data = try JSONEncoder.veilDiagnostics.encode(report)
             print(String(decoding: data, as: UTF8.self))
             if requireComplete, coverageHealth != "complete" {
                 throw VMControlError.multiAppProofIncomplete(nextActions)
             }
-            return
+            return report
         }
 
-        print("Windows multi-app proof: \(coverageHealth) (\(provedAppCount)/\(targetAppIds.count))")
-        print("Endpoint: \(endpoint)")
-        print("Proof directory: \(coherenceProofDirectory.path)")
-        print("Aggregate report: \(aggregateReportURL.path)")
-        for result in results {
-            if result.status == "proved" {
-                let latency = result.slowestLatencyMilliseconds.map(String.init) ?? "unknown"
-                let health = result.latencyHealth ?? "unknown"
-                print("  - \(result.appId): proved, latency \(health) \(latency)ms, proof \(result.proofPath ?? "not saved")")
-            } else {
-                print("  - \(result.appId): failed, \(result.errorMessage ?? "unknown error")")
+        if shouldPrint {
+            print("Windows multi-app proof: \(coverageHealth) (\(provedAppCount)/\(targetAppIds.count))")
+            print("Endpoint: \(endpoint)")
+            print("Proof directory: \(coherenceProofDirectory.path)")
+            print("Aggregate report: \(aggregateReportURL.path)")
+            for result in results {
+                if result.status == "proved" {
+                    let latency = result.slowestLatencyMilliseconds.map(String.init) ?? "unknown"
+                    let health = result.latencyHealth ?? "unknown"
+                    print("  - \(result.appId): proved, latency \(health) \(latency)ms, proof \(result.proofPath ?? "not saved")")
+                } else {
+                    print("  - \(result.appId): failed, \(result.errorMessage ?? "unknown error")")
+                }
             }
-        }
-        print("Next actions:")
-        for action in nextActions {
-            print("  - \(action)")
+            print("Next actions:")
+            for action in nextActions {
+                print("  - \(action)")
+            }
         }
         if requireComplete, coverageHealth != "complete" {
             throw VMControlError.multiAppProofIncomplete(nextActions)
         }
+        return report
     }
 
     private static func proofOutputURL(from outputPath: String?) -> URL? {

@@ -1,0 +1,679 @@
+{
+  "kind": "windowsAppRuntimeAction",
+  "action": "proof-multi-app",
+  "requestedAt": "2026-07-04T03:05:00Z",
+  "endpoint": "ws://127.0.0.1:18444",
+  "connectionMode": "agent",
+  "accepted": true,
+  "closedWindows": [],
+  "mouseInputs": [],
+  "keyInputs": [],
+  "restoredWindows": [],
+  "restoreRequestedAppIds": [],
+  "broughtForwardWindowIds": [],
+  "status": {
+    "kind": "windowsAppRuntimeStatus",
+    "generatedAt": "2026-07-03T13:20:00Z",
+    "phase": "connected",
+    "selectedAppId": "winapp_notepad",
+    "pendingLaunch": {
+      "isQueued": false,
+      "willLaunchOnAgentReconnect": false,
+      "recommendedAction": "none",
+      "reason": "No Windows app launch is queued."
+    },
+    "connection": {
+      "mode": "agent",
+      "hasLiveAgentConnection": true,
+      "agentVersion": "0.1.0",
+      "os": "windows-arm64",
+      "capabilities": {
+        "appList": true,
+        "appLaunch": true,
+        "windowTracking": true,
+        "windowCapture": true,
+        "input": true,
+        "clipboardText": true,
+        "packageIdentity": false
+      },
+      "packageIdentityStatus": {
+        "statusPath": "C:\\Users\\veil\\AppData\\Local\\Veil\\Agent\\package\\sparse-package-status.json",
+        "stage": "packageSigned",
+        "succeeded": false,
+        "message": "Sparse package signed; restart the agent through the package registration step."
+      }
+    },
+    "guestAgentDiagnostics": {
+      "endpoint": "ws://127.0.0.1:18444",
+      "isConnected": true,
+      "diagnosticCommand": "veil-host-probe --diagnose-agent",
+      "waitCommand": "veil-vmctl guest-agent-wait --json --wait-seconds 30",
+      "recommendedAction": "run-app-window-proof",
+      "reason": "The Windows app connection is ready; proceed to app launch and app checks."
+    },
+    "apps": [
+      {
+        "id": "winapp_notepad",
+        "name": "Notepad",
+        "canRequestLaunch": true,
+        "canLaunchNow": true
+      },
+      {
+        "id": "winapp_calculator",
+        "name": "Calculator",
+        "canRequestLaunch": true,
+        "canLaunchNow": true
+      },
+      {
+        "id": "winapp_paint",
+        "name": "Paint",
+        "canRequestLaunch": true,
+        "canLaunchNow": true
+      }
+    ],
+    "mirrorSessions": [
+      {
+        "windowId": "hwnd:0003029A",
+        "appId": "winapp_notepad",
+        "title": "Untitled - Notepad",
+        "captureState": "pending",
+        "canFocus": true,
+        "canClose": true,
+        "canSendInput": true,
+        "frameStreamStatus": "waitingForFirstFrame",
+        "receivedFrameCount": 0,
+        "frameStreamRecommendedAction": "wait-for-first-frame",
+        "frameStreamRestartCount": 0,
+        "frameStreamRecoveryEscalated": false,
+        "frameStreamReopenEscalated": false,
+        "frameStreamRequestedAt": "2026-07-03T13:20:00Z",
+        "frameStreamWaitingAgeMilliseconds": 0
+      }
+    ],
+    "restorableAppIds": [
+      "winapp_notepad"
+    ],
+    "dockIntegration": {
+      "isEnabled": true,
+      "openWindowCount": 1,
+      "pendingLaunchCount": 0,
+      "restorableAppCount": 1,
+      "badgeLabel": "1",
+      "canOpenMainWindow": true,
+      "canBringWindowsAppsForward": true,
+      "canRestorePreviousApps": false,
+      "canReconnectPreviousApps": false,
+      "canLaunchSelectedApp": true
+    },
+    "menuBarIntegration": {
+      "isEnabled": true,
+      "statusTitle": "1 Windows App Open",
+      "symbolName": "rectangle.stack.fill",
+      "primaryActionId": "dock.bringWindowsAppsForward",
+      "primaryActionTitle": "Bring Notepad Forward",
+      "primaryActionAvailable": true,
+      "canOpenMainWindow": true,
+      "canBringWindowsAppsForward": true,
+      "canRestorePreviousApps": false,
+      "canReconnectPreviousApps": false,
+      "canLaunchSelectedApp": true,
+      "canFulfillPendingLaunch": false
+    },
+    "launcherVisibility": {
+      "isEnabled": true,
+      "canOpenMainWindow": true,
+      "shouldHideMainWindow": true,
+      "keepsDockMenuAvailable": true,
+      "recommendedAction": "hide-main-window-use-app-windows",
+      "reason": "A live Windows app window is mirrored, so the main launcher should stay hidden while Dock and menu controls remain available."
+    },
+    "visibleSurfacePolicy": {
+      "isEnabled": true,
+      "primarySurface": "windows-app-windows",
+      "expectedVisibleSurfaceCount": 1,
+      "shouldHideLauncher": true,
+      "keepsRecoveryDisplayManual": true,
+      "reason": "Only mirrored Windows app windows should be visible during normal app runtime use; the main launcher and VM display stay out of the way unless recovery is requested."
+    },
+    "oneScreenUX": {
+      "isEnabled": true,
+      "mode": "windows-app-windows",
+      "expectedVisibleSurfaceCount": 1,
+      "usesSinglePrimarySurfaceFamily": true,
+      "hidesLauncherDuringAppMirroring": true,
+      "keepsMenuBarControlAvailable": true,
+      "keepsDockControlAvailable": true,
+      "canRecoverFromMenuOrDock": true,
+      "returnsToLauncherWhenNoAppWindows": true,
+      "keepsDisplayRecoveryManual": true,
+      "primaryActionId": "dock.bringWindowsAppsForward",
+      "heroRunsPrimaryAction": false,
+      "reason": "Windows app windows are the only normal work surface, with Dock and menu controls available for recovery."
+    },
+    "macWindowIntegration": {
+      "isEnabled": true,
+      "acceptsGuestWindowEvents": true,
+      "opensMacWindowsAutomatically": true,
+      "hidesLauncherWhenMirroring": true,
+      "mirroredWindowCount": 1,
+      "pendingFrameWindowCount": 1,
+      "streamingWindowCount": 0,
+      "reason": "Windows app windows are mirrored as macOS windows.",
+      "foregroundableWindowCount": 1,
+      "foregroundWindowId": "hwnd:0003029A",
+      "foregroundWindowTitle": "Untitled - Notepad",
+      "freshFrameWindowCount": 0,
+      "delayedFrameWindowCount": 0,
+      "staleFrameWindowCount": 0,
+      "frameLatencyHealth": "waiting",
+      "frameLatencyBudgetMilliseconds": 1000,
+      "frameStaleTimeoutMilliseconds": 5000,
+      "frameLatencyRecommendedAction": "wait-for-first-frame",
+      "slowestFrameWindowId": "hwnd:0003029A",
+      "slowestFrameWindowTitle": "Untitled - Notepad",
+      "slowestFrameAgeMilliseconds": 0
+    },
+    "quietRuntime": {
+      "isEnabled": true,
+      "hasOpenedAppWindowThisSession": true,
+      "openWindowCount": 1,
+      "canQuietRuntime": false,
+      "willQuietAutomatically": false,
+      "automaticQuietDelaySeconds": 8,
+      "recommendedAction": "keep-running",
+      "reason": "Windows app windows are still open."
+    },
+    "launchPlan": {
+      "selectedAppId": "winapp_notepad",
+      "canRequestSelectedAppLaunch": true,
+      "canLaunchSelectedAppNow": true,
+      "willOpenAppAutomatically": true,
+      "requiresRuntimeStart": false,
+      "requiresGuestAgent": false,
+      "recommendedAction": "launch-now",
+      "recommendedLaunchCommand": "veil-vmctl app-runtime-action --json --action launch --app-id winapp_notepad",
+      "reason": "The Windows app connection can open the selected app now."
+    },
+    "actions": [
+      {
+        "id": "dock.openMainWindow",
+        "title": "Open Veil From Dock",
+        "isAvailable": true
+      },
+      {
+        "id": "dock.bringWindowsAppsForward",
+        "title": "Bring Windows Apps Forward",
+        "isAvailable": true
+      },
+      {
+        "id": "windowsApps.restorePrevious",
+        "title": "Restore Previous Apps",
+        "isAvailable": false
+      },
+      {
+        "id": "windowsApps.reconnectRestore",
+        "title": "Reconnect Previous Apps",
+        "isAvailable": false
+      },
+      {
+        "id": "windowsApps.closeAll",
+        "title": "Close All Windows Apps",
+        "isAvailable": true
+      },
+      {
+        "id": "windowsApps.restartFrameStream",
+        "title": "Restart App Screen",
+        "isAvailable": false
+      },
+      {
+        "id": "windowsApps.maintainFrameStreams",
+        "title": "Keep App Screens Live",
+        "isAvailable": false
+      },
+      {
+        "id": "windowsApps.reopenWindow",
+        "title": "Reopen App Window",
+        "isAvailable": false
+      },
+      {
+        "id": "windowsApps.recoverWindowCapture",
+        "title": "Recover App Screen",
+        "isAvailable": false
+      },
+      {
+        "id": "macWindows.autoOpen",
+        "title": "Show App Windows Automatically",
+        "isAvailable": true
+      },
+      {
+        "id": "windowsApps.launchSelected",
+        "title": "Open Selected Windows App",
+        "isAvailable": true
+      },
+      {
+        "id": "runtime.prepareWindows",
+        "title": "Prepare Windows",
+        "isAvailable": false
+      },
+      {
+        "id": "runtime.refreshStatus",
+        "title": "Refresh Windows Status",
+        "isAvailable": true
+      },
+      {
+        "id": "runtime.startWindowsForApp",
+        "title": "Start Windows To Open App",
+        "isAvailable": false
+      },
+      {
+        "id": "runtime.repairGuestAgentForApp",
+        "title": "Repair App Connection",
+        "isAvailable": false
+      },
+      {
+        "id": "runtime.prepareSparsePackage",
+        "title": "Prepare Package Identity",
+        "isAvailable": true
+      },
+      {
+        "id": "dailyUse.verifyIntegrations",
+        "title": "Verify Daily Use",
+        "isAvailable": false
+      },
+      {
+        "id": "dailyUse.verifyWindowCapture",
+        "title": "Verify Window Capture",
+        "isAvailable": false
+      },
+      {
+        "id": "dailyUse.requestNotificationConsent",
+        "title": "Check Notifications",
+        "isAvailable": false
+      },
+      {
+        "id": "runtime.recoverDisplay",
+        "title": "Refresh Windows Display",
+        "isAvailable": false
+      },
+      {
+        "id": "runtime.fulfillPendingLaunch",
+        "title": "Open Queued Windows App",
+        "isAvailable": false
+      },
+      {
+        "id": "runtime.waitAgent",
+        "title": "Check App Connection",
+        "isAvailable": false
+      },
+      {
+        "id": "runtime.quietWhenIdle",
+        "title": "Quiet Windows When Idle",
+        "isAvailable": false
+      },
+      {
+        "id": "runtime.stopWhenIdle",
+        "title": "Stop Windows When Idle",
+        "isAvailable": false
+      },
+      {
+        "id": "proof.appWindow",
+        "title": "Check App Window",
+        "isAvailable": true
+      },
+      {
+        "id": "proof.coherence",
+        "title": "Check App Input",
+        "isAvailable": true
+      },
+      {
+        "id": "proof.mvp",
+        "title": "Check Full App Flow",
+        "isAvailable": true
+      },
+      {
+        "id": "proof.recommended",
+        "title": "Check Windows App",
+        "isAvailable": true
+      },
+      {
+        "id": "proof.multiApp",
+        "title": "Check Daily Use Apps",
+        "isAvailable": true
+      },
+      {
+        "id": "clipboard.setText",
+        "title": "Set Windows Clipboard Text",
+        "isAvailable": true
+      }
+    ],
+    "proofPlan": {
+      "selectedAppId": "winapp_notepad",
+      "canRunAppWindowProof": true,
+      "canRunCoherenceProof": true,
+      "canRunMVPProof": true,
+      "canRunMultiAppProof": true,
+      "recommendedAppWindowProofCommand": "veil-vmctl app-window-proof --json --app-id winapp_notepad",
+      "recommendedCoherenceProofCommand": "veil-vmctl coherence-proof --json --app-id winapp_notepad",
+      "recommendedMVPProofCommand": "veil-vmctl mvp-proof --json --app-id winapp_notepad --require-proved",
+      "reason": "The Windows app connection can run window, input, and full app checks for the selected app.",
+      "recommendedProofKind": "mvp",
+      "recommendedProofCommand": "veil-vmctl mvp-proof --json --app-id winapp_notepad --require-proved",
+      "recommendedMultiAppProofCommand": "veil-vmctl multi-app-proof --json --require-complete"
+    },
+    "proofArtifacts": {
+      "diagnosticsDirectory": "/Users/test/Library/Application Support/Veil/Diagnostics",
+      "recommendedProofDirectory": "/Users/test/Library/Application Support/Veil/Diagnostics/Recommended Proof",
+      "multiAppProofTargetAppIds": [
+        "winapp_notepad",
+        "winapp_calculator",
+        "winapp_paint"
+      ],
+      "multiAppProofCoverageCount": 3,
+      "multiAppProofCoverageHealth": "complete",
+      "latestProofsByApp": [
+        {
+          "appId": "winapp_notepad",
+          "latestProofKind": "mvp",
+          "latestProofPath": "/Users/test/Library/Application Support/Veil/Diagnostics/Recommended Proof/mvp-proof-latest.json",
+          "latestProofFileName": "mvp-proof-latest.json",
+          "latestProofModifiedAt": "2026-07-04T10:00:00Z",
+          "latestProofLatencyHealth": "delayed",
+          "latestProofSlowestLatencyMeasurement": "post-input-frame",
+          "latestProofSlowestLatencyMilliseconds": 1400,
+          "latestProofLatencyBudgetMilliseconds": 1000,
+          "latestProofStaleTimeoutMilliseconds": 5000,
+          "latestProofLatencyRecommendedAction": "measure-again"
+        },
+        {
+          "appId": "winapp_calculator",
+          "latestProofKind": "app-window",
+          "latestProofPath": "/Users/test/Library/Application Support/Veil/Diagnostics/App Window Proof/calculator-app-window-proof.json",
+          "latestProofFileName": "calculator-app-window-proof.json",
+          "latestProofModifiedAt": "2026-07-04T09:58:00Z",
+          "latestProofLatencyHealth": "healthy",
+          "latestProofSlowestLatencyMeasurement": "first-frame",
+          "latestProofSlowestLatencyMilliseconds": 780,
+          "latestProofLatencyBudgetMilliseconds": 1000,
+          "latestProofStaleTimeoutMilliseconds": 5000,
+          "latestProofLatencyRecommendedAction": "none"
+        },
+        {
+          "appId": "winapp_paint",
+          "latestProofKind": "app-window",
+          "latestProofPath": "/Users/test/Library/Application Support/Veil/Diagnostics/App Window Proof/paint-app-window-proof.json",
+          "latestProofFileName": "paint-app-window-proof.json",
+          "latestProofModifiedAt": "2026-07-04T09:59:00Z",
+          "latestProofLatencyHealth": "stale",
+          "latestProofSlowestLatencyMeasurement": "first-frame",
+          "latestProofSlowestLatencyMilliseconds": 5400,
+          "latestProofLatencyBudgetMilliseconds": 1000,
+          "latestProofStaleTimeoutMilliseconds": 5000,
+          "latestProofLatencyRecommendedAction": "tune-frame-latency"
+        }
+      ],
+      "reason": "Latest app check artifact is available in Veil diagnostics.",
+      "latestProofKind": "mvp",
+      "latestProofPath": "/Users/test/Library/Application Support/Veil/Diagnostics/Recommended Proof/mvp-proof-latest.json",
+      "latestProofFileName": "mvp-proof-latest.json",
+      "latestProofModifiedAt": "2026-07-04T10:00:00Z",
+      "latestProofLatencyHealth": "delayed",
+      "latestProofSlowestLatencyMeasurement": "post-input-frame",
+      "latestProofSlowestLatencyMilliseconds": 1400,
+      "latestProofLatencyBudgetMilliseconds": 1000,
+      "latestProofStaleTimeoutMilliseconds": 5000,
+      "latestProofLatencyRecommendedAction": "measure-again"
+    },
+    "releaseGate": {
+      "isEnabled": true,
+      "requiredStepCount": 5,
+      "passingStepCount": 5,
+      "isPassing": true,
+      "recommendedAction": "ready-for-release-card",
+      "reason": "The one-screen Windows app release gate has current setup, launch, app check, and close or restore evidence.",
+      "steps": [
+        {
+          "id": "windowsSetup",
+          "title": "Windows Setup Ready",
+          "state": "passed",
+          "isRequired": true,
+          "isPassing": true,
+          "evidence": "The local Windows runtime is already running; wait for the guest agent before opening Windows apps.",
+          "nextActionCommand": "veil-vmctl qemu-install-status --json"
+        },
+        {
+          "id": "oneScreenPath",
+          "title": "One-Screen App Path",
+          "state": "passed",
+          "isRequired": true,
+          "isPassing": true,
+          "evidence": "Only mirrored Windows app windows should be visible during normal app runtime use; the main launcher and VM display stay out of the way unless recovery is requested.",
+          "nextActionCommand": "veil-vmctl app-runtime-status --json"
+        },
+        {
+          "id": "openWindowsApp",
+          "title": "Open Notepad",
+          "state": "ready",
+          "isRequired": true,
+          "isPassing": true,
+          "evidence": "The Windows app connection can open the selected app now.",
+          "nextActionCommand": "veil-vmctl app-runtime-action --json --action launch --app-id winapp_notepad"
+        },
+        {
+          "id": "appCheckEvidence",
+          "title": "App Check Evidence",
+          "state": "passed",
+          "isRequired": true,
+          "isPassing": true,
+          "evidence": "Latest app check artifact is available in Veil diagnostics.",
+          "nextActionCommand": "veil-vmctl mvp-proof --json --app-id winapp_notepad --require-proved"
+        },
+        {
+          "id": "closeOrRestore",
+          "title": "Close Or Restore Apps",
+          "state": "ready",
+          "isRequired": true,
+          "isPassing": true,
+          "evidence": "Windows app windows are still open.",
+          "nextActionCommand": "veil-vmctl app-runtime-action --json --action close-all"
+        }
+      ],
+      "screenshotSlots": [
+        {
+          "id": "preBootLauncher",
+          "title": "Pre-Boot Launcher",
+          "expectedSurface": "One Veil launcher window with setup or start action visible.",
+          "isRequired": true
+        },
+        {
+          "id": "firstAppLaunch",
+          "title": "First App Launch",
+          "expectedSurface": "A selected Windows app is opening, queued, or ready with one concrete next action.",
+          "isRequired": true
+        },
+        {
+          "id": "appWindowOnly",
+          "title": "App Window Only",
+          "expectedSurface": "The mirrored Windows app window is visible while the launcher is hidden unless recovery is needed.",
+          "isRequired": true
+        },
+        {
+          "id": "menuRestore",
+          "title": "Menu Restore",
+          "expectedSurface": "Menu or Dock controls can bring forward, restore, reconnect, or close Windows app windows.",
+          "isRequired": true
+        },
+        {
+          "id": "closeQuiet",
+          "title": "Close And Quiet",
+          "expectedSurface": "After the final Windows app window closes, the launcher returns or quiet Windows action is available.",
+          "isRequired": true
+        }
+      ]
+    },
+    "localRuntime": {
+      "isKnown": true,
+      "state": "running",
+      "bootReady": true,
+      "canStart": false,
+      "isRunning": true,
+      "windowsInstalled": true,
+      "recommendedAction": "wait-for-guest-agent",
+      "recommendedInstallStatusCommand": "veil-vmctl qemu-install-status --json",
+      "reason": "The local Windows runtime is already running; wait for the guest agent before opening Windows apps.",
+      "installEvidence": {
+        "kind": "guestAgent",
+        "isInstalled": true,
+        "title": "Guest agent connected",
+        "detail": "Windows is running the Veil guest agent 0.1.0 over the local runtime channel."
+      }
+    },
+    "primaryNextAction": {
+      "id": "ready-for-release-card",
+      "title": "Review App Flow",
+      "source": "releaseGate",
+      "isAvailable": true,
+      "runsInApp": false,
+      "command": "veil-vmctl app-runtime-review --json",
+      "reason": "The one-screen Windows app release gate has current setup, launch, app check, and close or restore evidence."
+    },
+    "launchOnboarding": {
+      "isEnabled": true,
+      "state": "ready-for-review",
+      "currentStepId": "ready-for-release-card",
+      "currentStepTitle": "Review App Flow",
+      "usesSinglePrimarySurface": true,
+      "expectedVisibleSurfaceCount": 1,
+      "canContinueInApp": false,
+      "heroRunsPrimaryAction": false,
+      "keepsRecoveryInMenuOrDock": true,
+      "keepsVMDisplayManual": true,
+      "pendingLiveProof": false,
+      "primaryCommand": "veil-vmctl app-runtime-review --json",
+      "reason": "The app-first launch flow is ready for review evidence.",
+      "completedStepCount": 5,
+      "totalStepCount": 5,
+      "currentStepNumber": 5,
+      "progressLabel": "Step 5 of 5",
+      "currentStepDetail": "Review and share the current app-flow evidence."
+    },
+    "dailyUseReadiness": {
+      "isEnabled": true,
+      "packageIdentityReady": false,
+      "borderlessCapturePreflightPassed": false,
+      "borderlessCaptureRecommendedAction": "prepare-sparse-package",
+      "borderlessCaptureRequirement": "Requires signed sparse package identity plus windowCapture capability before borderless Windows Graphics Capture consent can be requested.",
+      "notificationBridgePreflightPassed": false,
+      "notificationBridgeRecommendedAction": "prepare-sparse-package",
+      "notificationBridgeRequirement": "Requires signed sparse package identity before Windows UserNotificationListener consent can be requested.",
+      "printerBridgeMode": "manual-ipp-experiment",
+      "packageIdentityStatus": {
+        "statusPath": "C:\\Users\\veil\\AppData\\Local\\Veil\\Agent\\package\\sparse-package-status.json",
+        "stage": "packageSigned",
+        "succeeded": false,
+        "message": "Sparse package signed; restart the agent through the package registration step."
+      },
+      "packageIdentityStage": "packageSigned",
+      "packageIdentitySucceeded": false,
+      "packageIdentityMessage": "Sparse package signed; restart the agent through the package registration step.",
+      "packageIdentityEvidencePath": "C:\\Users\\veil\\AppData\\Local\\Veil\\Agent\\package\\sparse-package-status.json",
+      "recommendedAction": "prepare-sparse-package",
+      "recommendedCommand": "veil-vmctl app-runtime-action --json --action prepare-sparse-package --wait-seconds 120",
+      "reason": "A signed sparse package is required before borderless app capture or Windows notifications can be enabled; last sparse package preparation is not complete at stage packageSigned (Sparse package signed; restart the agent through the package registration step.).",
+      "printerBridgeRecommendedAction": "manual-ipp-experiment",
+      "printerBridgeEndpointTemplate": "http://10.0.2.2:631/printers/<shared-printer-name>",
+      "printerBridgeSetupHint": "Share the Mac printer, then add it in Windows as an IPP network printer at http://10.0.2.2:631/printers/<shared-printer-name>."
+    }
+  },
+  "nextActions": [
+    "Attach the Daily Use multi-app proof artifact to the current runtime gate.",
+    "Run `veil-vmctl app-runtime-status --json` to confirm proofArtifacts.multiAppProofCoverageHealth is complete."
+  ],
+  "proofPlan": {
+    "selectedAppId": "winapp_notepad",
+    "canRunAppWindowProof": true,
+    "canRunCoherenceProof": true,
+    "canRunMVPProof": true,
+    "canRunMultiAppProof": true,
+    "recommendedAppWindowProofCommand": "veil-vmctl app-window-proof --json --app-id winapp_notepad",
+    "recommendedCoherenceProofCommand": "veil-vmctl coherence-proof --json --app-id winapp_notepad",
+    "recommendedMVPProofCommand": "veil-vmctl mvp-proof --json --app-id winapp_notepad --require-proved",
+    "reason": "The Windows app connection can run window, input, and full app checks for the selected app.",
+    "recommendedProofKind": "mvp",
+    "recommendedProofCommand": "veil-vmctl mvp-proof --json --app-id winapp_notepad --require-proved",
+    "recommendedMultiAppProofCommand": "veil-vmctl multi-app-proof --json --require-complete"
+  },
+  "restartedFrameWindowIds": [],
+  "recoveredFrameWindowIds": [],
+  "reopenRequestedWindowIds": [],
+  "reopenedWindows": [],
+  "multiAppProof": {
+    "kind": "windowsMultiAppProof",
+    "endpoint": "ws://127.0.0.1:18444",
+    "provedAt": "2026-07-10T02:30:00Z",
+    "proofDirectory": "/Users/test/Library/Application Support/Veil/Diagnostics/Coherence Proof",
+    "aggregateReportPath": "/Users/test/Library/Application Support/Veil/Diagnostics/Recommended Proof/multi-app-proof-20260710-023000.json",
+    "appIds": [
+      "winapp_notepad",
+      "winapp_calculator",
+      "winapp_paint"
+    ],
+    "targetAppIds": [
+      "winapp_notepad",
+      "winapp_calculator",
+      "winapp_paint"
+    ],
+    "waitSeconds": 10,
+    "proofKind": "coherence",
+    "provedAppCount": 3,
+    "failedAppCount": 0,
+    "coverageHealth": "complete",
+    "results": [
+      {
+        "appId": "winapp_notepad",
+        "status": "proved",
+        "proofKind": "coherence",
+        "proofPath": "/Users/test/Library/Application Support/Veil/Diagnostics/Coherence Proof/winapp_notepad-coherence-proof-20260710-023000.json",
+        "latencyHealth": "delayed",
+        "slowestLatencyMeasurement": "post-input-frame",
+        "slowestLatencyMilliseconds": 1400,
+        "latencyBudgetMilliseconds": 1000,
+        "staleTimeoutMilliseconds": 5000,
+        "latencyRecommendedAction": "measure-again",
+        "windowId": "hwnd:0003029A",
+        "windowTitle": "Untitled - Notepad"
+      },
+      {
+        "appId": "winapp_calculator",
+        "status": "proved",
+        "proofKind": "coherence",
+        "proofPath": "/Users/test/Library/Application Support/Veil/Diagnostics/Coherence Proof/winapp_calculator-coherence-proof-20260710-023000.json",
+        "latencyHealth": "healthy",
+        "slowestLatencyMeasurement": "initial-frame",
+        "slowestLatencyMilliseconds": 780,
+        "latencyBudgetMilliseconds": 1000,
+        "staleTimeoutMilliseconds": 5000,
+        "latencyRecommendedAction": "none",
+        "windowId": "hwnd:00040120",
+        "windowTitle": "Calculator"
+      },
+      {
+        "appId": "winapp_paint",
+        "status": "proved",
+        "proofKind": "coherence",
+        "proofPath": "/Users/test/Library/Application Support/Veil/Diagnostics/Coherence Proof/winapp_paint-coherence-proof-20260710-023000.json",
+        "latencyHealth": "stale",
+        "slowestLatencyMeasurement": "post-input-frame",
+        "slowestLatencyMilliseconds": 5400,
+        "latencyBudgetMilliseconds": 1000,
+        "staleTimeoutMilliseconds": 5000,
+        "latencyRecommendedAction": "tune-frame-latency",
+        "windowId": "hwnd:00050120",
+        "windowTitle": "Untitled - Paint"
+      }
+    ],
+    "nextActions": [
+      "Run `veil-vmctl app-runtime-status --json` to confirm proofArtifacts.multiAppProofCoverageHealth.",
+      "Attach `/Users/test/Library/Application Support/Veil/Diagnostics/Recommended Proof/multi-app-proof-20260710-023000.json` with the saved per-app proof artifacts when filing app-runtime evidence."
+    ]
+  }
+}

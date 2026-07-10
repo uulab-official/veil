@@ -616,6 +616,12 @@ test("validates recommended proof action fixture", () => {
   assert.equal(validateAppRuntimeAction(report), report);
 });
 
+test("validates multi-app proof action fixture", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-action.proof-multi-app-live.json", import.meta.url), "utf8"));
+
+  assert.equal(validateAppRuntimeAction(report), report);
+});
+
 test("validates wait-agent unavailable action fixture", () => {
   const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-action.wait-agent-unavailable.json", import.meta.url), "utf8"));
 
@@ -1019,6 +1025,26 @@ test("rejects accepted recommended proof actions without proof evidence", () => 
   );
 });
 
+test("rejects accepted multi-app proof actions without aggregate evidence", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-action.proof-multi-app-live.json", import.meta.url), "utf8"));
+  delete report.multiAppProof;
+
+  assert.throws(
+    () => validateAppRuntimeAction(report),
+    /multiAppProof/
+  );
+});
+
+test("rejects multi-app proof actions whose target apps drift from status", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-action.proof-multi-app-live.json", import.meta.url), "utf8"));
+  report.multiAppProof.targetAppIds = ["winapp_notepad", "winapp_calculator", "winapp_wordpad"];
+
+  assert.throws(
+    () => validateAppRuntimeAction(report),
+    /targetAppIds/
+  );
+});
+
 test("rejects proof evidence on non-proof actions", () => {
   const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-action.launch-demo.json", import.meta.url), "utf8"));
   report.proof = {
@@ -1036,6 +1062,16 @@ test("rejects proof evidence on non-proof actions", () => {
   assert.throws(
     () => validateAppRuntimeAction(report),
     /proof is only allowed/
+  );
+});
+
+test("rejects multi-app proof evidence on non-multi-app actions", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-action.launch-demo.json", import.meta.url), "utf8"));
+  report.multiAppProof = JSON.parse(readFileSync(new URL("../../multi-app-proof/fixtures/multi-app-proof.complete.json", import.meta.url), "utf8"));
+
+  assert.throws(
+    () => validateAppRuntimeAction(report),
+    /multiAppProof is only allowed/
   );
 });
 
