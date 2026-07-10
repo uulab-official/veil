@@ -1295,8 +1295,13 @@ function validateProofArtifacts(proofArtifacts) {
 
   requireString(proofArtifacts.diagnosticsDirectory, "proofArtifacts.diagnosticsDirectory");
   requireString(proofArtifacts.recommendedProofDirectory, "proofArtifacts.recommendedProofDirectory");
+  requireString(proofArtifacts.notificationProofDirectory, "proofArtifacts.notificationProofDirectory");
+  if (!proofArtifacts.notificationProofDirectory.endsWith("/Notification Proof")) {
+    throw new TypeError("proofArtifacts.notificationProofDirectory must point to the Notification Proof diagnostics folder.");
+  }
   requireString(proofArtifacts.reason, "proofArtifacts.reason");
   validateProofArtifactCoverage(proofArtifacts);
+  validateNotificationProofArtifactSummary(proofArtifacts);
 
   const hasLatest = proofArtifacts.latestProofKind !== undefined
     || proofArtifacts.latestProofPath !== undefined
@@ -1324,6 +1329,55 @@ function validateProofArtifacts(proofArtifacts) {
   }
 
   validateProofArtifactLatency(proofArtifacts);
+}
+
+function validateNotificationProofArtifactSummary(proofArtifacts) {
+  const hasNotificationProof = proofArtifacts.latestNotificationProofPath !== undefined
+    || proofArtifacts.latestNotificationProofFileName !== undefined
+    || proofArtifacts.latestNotificationProofModifiedAt !== undefined
+    || proofArtifacts.latestNotificationProofStatus !== undefined
+    || proofArtifacts.latestNotificationProofId !== undefined
+    || proofArtifacts.latestNotificationProofTitle !== undefined
+    || proofArtifacts.latestNotificationProofReceivedAt !== undefined;
+
+  if (!hasNotificationProof) {
+    return;
+  }
+
+  requireString(proofArtifacts.latestNotificationProofPath, "proofArtifacts.latestNotificationProofPath");
+  requireString(proofArtifacts.latestNotificationProofFileName, "proofArtifacts.latestNotificationProofFileName");
+  requireString(proofArtifacts.latestNotificationProofModifiedAt, "proofArtifacts.latestNotificationProofModifiedAt");
+  requireString(proofArtifacts.latestNotificationProofStatus, "proofArtifacts.latestNotificationProofStatus");
+
+  if (!proofArtifacts.latestNotificationProofPath.endsWith(".json")
+    || !proofArtifacts.latestNotificationProofFileName.endsWith(".json")) {
+    throw new TypeError("proofArtifacts latest notification proof artifact must point to a JSON file.");
+  }
+  if (!proofArtifacts.latestNotificationProofPath.includes("/Notification Proof/")) {
+    throw new TypeError("proofArtifacts.latestNotificationProofPath must come from the Notification Proof diagnostics folder.");
+  }
+  if (Number.isNaN(Date.parse(proofArtifacts.latestNotificationProofModifiedAt))) {
+    throw new TypeError("proofArtifacts.latestNotificationProofModifiedAt must be an ISO date.");
+  }
+  if (!["proved", "unavailable"].includes(proofArtifacts.latestNotificationProofStatus)) {
+    throw new TypeError("proofArtifacts.latestNotificationProofStatus must be proved or unavailable.");
+  }
+
+  if (proofArtifacts.latestNotificationProofStatus === "proved") {
+    requireString(proofArtifacts.latestNotificationProofId, "proofArtifacts.latestNotificationProofId");
+    requireString(proofArtifacts.latestNotificationProofTitle, "proofArtifacts.latestNotificationProofTitle");
+    requireString(proofArtifacts.latestNotificationProofReceivedAt, "proofArtifacts.latestNotificationProofReceivedAt");
+    if (Number.isNaN(Date.parse(proofArtifacts.latestNotificationProofReceivedAt))) {
+      throw new TypeError("proofArtifacts.latestNotificationProofReceivedAt must be an ISO date.");
+    }
+    return;
+  }
+
+  if (proofArtifacts.latestNotificationProofId !== undefined
+    || proofArtifacts.latestNotificationProofTitle !== undefined
+    || proofArtifacts.latestNotificationProofReceivedAt !== undefined) {
+    throw new TypeError("unavailable notification proof artifacts must not claim notification evidence.");
+  }
 }
 
 function validateProofArtifactCoverage(proofArtifacts) {

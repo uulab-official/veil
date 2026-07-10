@@ -311,6 +311,7 @@ function validateEvidence(evidence, status) {
   }
   validateEvidenceProofCoverage(evidence, status);
   validateEvidenceProofLatency(evidence, status);
+  validateEvidenceNotificationProof(evidence, status);
   if (evidence.recommendedAppCheckCommand !== undefined) {
     requireString(evidence.recommendedAppCheckCommand, "evidence.recommendedAppCheckCommand");
   }
@@ -324,6 +325,40 @@ function validateEvidence(evidence, status) {
   }
 
   return evidence.hostAppBundle;
+}
+
+function validateEvidenceNotificationProof(evidence, status) {
+  const proofArtifacts = status.proofArtifacts ?? {};
+  const fields = [
+    ["latestNotificationProofPath", "latestNotificationProofPath"],
+    ["latestNotificationProofModifiedAt", "latestNotificationProofModifiedAt"],
+    ["latestNotificationProofStatus", "latestNotificationProofStatus"],
+    ["latestNotificationProofId", "latestNotificationProofId"],
+    ["latestNotificationProofTitle", "latestNotificationProofTitle"],
+    ["latestNotificationProofReceivedAt", "latestNotificationProofReceivedAt"]
+  ];
+
+  for (const [evidenceField, statusField] of fields) {
+    if (evidence[evidenceField] !== proofArtifacts[statusField]) {
+      throw new TypeError(`evidence.${evidenceField} must match status proofArtifacts.${statusField}.`);
+    }
+  }
+
+  if (evidence.latestNotificationProofPath !== undefined) {
+    requireString(evidence.latestNotificationProofPath, "evidence.latestNotificationProofPath");
+    if (!evidence.latestNotificationProofPath.endsWith(".json")
+      || !evidence.latestNotificationProofPath.includes("/Notification Proof/")) {
+      throw new TypeError("evidence.latestNotificationProofPath must point to a Notification Proof JSON file.");
+    }
+  }
+  if (evidence.latestNotificationProofModifiedAt !== undefined
+    && Number.isNaN(Date.parse(evidence.latestNotificationProofModifiedAt))) {
+    throw new TypeError("evidence.latestNotificationProofModifiedAt must be an ISO date.");
+  }
+  if (evidence.latestNotificationProofReceivedAt !== undefined
+    && Number.isNaN(Date.parse(evidence.latestNotificationProofReceivedAt))) {
+    throw new TypeError("evidence.latestNotificationProofReceivedAt must be an ISO date.");
+  }
 }
 
 function validateEvidenceProofCoverage(evidence, status) {

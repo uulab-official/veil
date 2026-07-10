@@ -74,6 +74,32 @@ test("rejects multi-app proof coverage drift from embedded status", () => {
   );
 });
 
+test("rejects latest notification proof drift from embedded status", () => {
+  const card = demoReviewCard();
+  Object.assign(card.status.proofArtifacts, {
+    latestNotificationProofPath: "/Users/test/Library/Application Support/Veil/Diagnostics/Notification Proof/notification-proof.json",
+    latestNotificationProofFileName: "notification-proof.json",
+    latestNotificationProofModifiedAt: "2026-07-10T12:20:00Z",
+    latestNotificationProofStatus: "proved",
+    latestNotificationProofId: "toast:winapp_notepad:0001",
+    latestNotificationProofTitle: "Notepad",
+    latestNotificationProofReceivedAt: "2026-07-10T12:15:00Z"
+  });
+  Object.assign(card.evidence, {
+    latestNotificationProofPath: card.status.proofArtifacts.latestNotificationProofPath,
+    latestNotificationProofModifiedAt: card.status.proofArtifacts.latestNotificationProofModifiedAt,
+    latestNotificationProofStatus: "unavailable",
+    latestNotificationProofId: card.status.proofArtifacts.latestNotificationProofId,
+    latestNotificationProofTitle: card.status.proofArtifacts.latestNotificationProofTitle,
+    latestNotificationProofReceivedAt: card.status.proofArtifacts.latestNotificationProofReceivedAt
+  });
+
+  assert.throws(
+    () => validateAppRuntimeReview(card),
+    /latestNotificationProofStatus/
+  );
+});
+
 test("rejects cards with drifted minimum screenshot dimensions", () => {
   const card = demoReviewCard();
   card.minimumScreenshotWidth = 1;

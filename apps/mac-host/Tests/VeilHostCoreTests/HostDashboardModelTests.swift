@@ -1614,6 +1614,7 @@ struct HostDashboardModelTests {
             proofArtifacts: WindowsAppRuntimeProofArtifactStatus(
                 diagnosticsDirectory: "/tmp/Veil/Diagnostics",
                 recommendedProofDirectory: "/tmp/Veil/Diagnostics/Recommended Proof",
+                notificationProofDirectory: "/tmp/Veil/Diagnostics/Notification Proof",
                 latestProofKind: "mvp",
                 latestProofPath: "/tmp/Veil/Diagnostics/Recommended Proof/mvp-proof-latest.json",
                 latestProofFileName: "mvp-proof-latest.json",
@@ -1643,8 +1644,11 @@ struct HostDashboardModelTests {
             .appendingPathComponent("App Window Proof", isDirectory: true)
         let recommendedDirectory = diagnosticsDirectory
             .appendingPathComponent("Recommended Proof", isDirectory: true)
+        let notificationProofDirectory = diagnosticsDirectory
+            .appendingPathComponent("Notification Proof", isDirectory: true)
         try FileManager.default.createDirectory(at: appWindowDirectory, withIntermediateDirectories: true)
         try FileManager.default.createDirectory(at: recommendedDirectory, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: notificationProofDirectory, withIntermediateDirectories: true)
         defer {
             try? FileManager.default.removeItem(at: diagnosticsDirectory)
         }
@@ -1653,6 +1657,7 @@ struct HostDashboardModelTests {
         let calculatorProofURL = appWindowDirectory.appendingPathComponent("calculator-app-window-proof.json")
         let paintProofURL = appWindowDirectory.appendingPathComponent("paint-app-window-proof.json")
         let latestProofURL = recommendedDirectory.appendingPathComponent("mvp-proof-latest.json")
+        let notificationProofURL = notificationProofDirectory.appendingPathComponent("notification-proof.json")
         try Data("{}".utf8).write(to: olderProofURL)
         try Data(
             """
@@ -1708,6 +1713,21 @@ struct HostDashboardModelTests {
             }
             """.utf8
         ).write(to: latestProofURL)
+        try Data(
+            """
+            {
+              "kind": "windowsNotificationProof",
+              "endpoint": "ws://127.0.0.1:18444",
+              "status": "proved",
+              "notification": {
+                "type": "notification.received",
+                "notificationId": "toast:winapp_notepad:0001",
+                "title": "Notepad",
+                "receivedAt": "2026-07-10T12:15:00Z"
+              }
+            }
+            """.utf8
+        ).write(to: notificationProofURL)
         try FileManager.default.setAttributes(
             [.modificationDate: Date(timeIntervalSince1970: 1_700_000_000)],
             ofItemAtPath: olderProofURL.path
@@ -1724,11 +1744,16 @@ struct HostDashboardModelTests {
             [.modificationDate: Date(timeIntervalSince1970: 1_700_000_100)],
             ofItemAtPath: latestProofURL.path
         )
+        try FileManager.default.setAttributes(
+            [.modificationDate: Date(timeIntervalSince1970: 1_700_000_125)],
+            ofItemAtPath: notificationProofURL.path
+        )
 
         let artifacts = model.proofArtifactStatus(diagnosticsDirectory: diagnosticsDirectory)
 
         #expect(artifacts.diagnosticsDirectory == diagnosticsDirectory.path)
         #expect(artifacts.recommendedProofDirectory == recommendedDirectory.path)
+        #expect(artifacts.notificationProofDirectory == notificationProofDirectory.path)
         #expect(artifacts.multiAppProofTargetAppIds == ["winapp_notepad", "winapp_calculator", "winapp_paint"])
         #expect(artifacts.multiAppProofCoverageCount == 3)
         #expect(artifacts.multiAppProofCoverageHealth == "complete")
@@ -1747,6 +1772,13 @@ struct HostDashboardModelTests {
         #expect(artifacts.latestProofLatencyBudgetMilliseconds == 1_000)
         #expect(artifacts.latestProofStaleTimeoutMilliseconds == 5_000)
         #expect(artifacts.latestProofLatencyRecommendedAction == "measure-again")
+        #expect(artifacts.latestNotificationProofPath?.hasSuffix("/Notification Proof/notification-proof.json") == true)
+        #expect(artifacts.latestNotificationProofFileName == "notification-proof.json")
+        #expect(artifacts.latestNotificationProofModifiedAt == Date(timeIntervalSince1970: 1_700_000_125))
+        #expect(artifacts.latestNotificationProofStatus == "proved")
+        #expect(artifacts.latestNotificationProofId == "toast:winapp_notepad:0001")
+        #expect(artifacts.latestNotificationProofTitle == "Notepad")
+        #expect(artifacts.latestNotificationProofReceivedAt == ISO8601DateFormatter().date(from: "2026-07-10T12:15:00Z"))
         #expect(artifacts.reason == "Latest app check artifact is available in Veil diagnostics.")
     }
 

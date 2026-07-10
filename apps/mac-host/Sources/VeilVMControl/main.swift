@@ -717,6 +717,12 @@ struct AppRuntimeReviewEvidence: Codable, Equatable {
     var latestAppCheckLatencyBudgetMilliseconds: Int?
     var latestAppCheckStaleTimeoutMilliseconds: Int?
     var latestAppCheckLatencyRecommendedAction: String?
+    var latestNotificationProofPath: String?
+    var latestNotificationProofModifiedAt: Date?
+    var latestNotificationProofStatus: String?
+    var latestNotificationProofId: String?
+    var latestNotificationProofTitle: String?
+    var latestNotificationProofReceivedAt: Date?
     var diagnosticsDirectory: String
     var screenshotEvidenceDirectory: String?
     var recommendedAppCheckCommand: String?
@@ -1322,6 +1328,15 @@ struct VeilVMControl {
         if let latestProofPath = report.proofArtifacts.latestProofPath {
             print("Latest app check artifact: \(latestProofPath)")
         }
+        if let notificationProofPath = report.proofArtifacts.latestNotificationProofPath {
+            print("Latest notification proof artifact: \(notificationProofPath)")
+        }
+        if let notificationProofStatus = report.proofArtifacts.latestNotificationProofStatus {
+            print("Latest notification proof status: \(notificationProofStatus)")
+        }
+        if let notificationProofTitle = report.proofArtifacts.latestNotificationProofTitle {
+            print("Latest notification proof title: \(notificationProofTitle)")
+        }
         if let latestLatencyHealth = report.proofArtifacts.latestProofLatencyHealth {
             print("Latest app check latency: \(latestLatencyHealth)")
         }
@@ -1450,6 +1465,15 @@ struct VeilVMControl {
         }
         if let latestPath = card.evidence.latestAppCheckPath {
             print("  Latest app check file: \(latestPath)")
+        }
+        if let notificationProofPath = card.evidence.latestNotificationProofPath {
+            print("  Latest notification proof file: \(notificationProofPath)")
+        }
+        if let notificationProofStatus = card.evidence.latestNotificationProofStatus {
+            print("  Latest notification proof: \(notificationProofStatus)")
+        }
+        if let notificationProofTitle = card.evidence.latestNotificationProofTitle {
+            print("  Latest notification title: \(notificationProofTitle)")
         }
         if let coverageHealth = card.evidence.multiAppProofCoverageHealth,
            let coverageCount = card.evidence.multiAppProofCoverageCount,
@@ -2297,6 +2321,12 @@ struct VeilVMControl {
                 latestAppCheckLatencyBudgetMilliseconds: report.proofArtifacts.latestProofLatencyBudgetMilliseconds,
                 latestAppCheckStaleTimeoutMilliseconds: report.proofArtifacts.latestProofStaleTimeoutMilliseconds,
                 latestAppCheckLatencyRecommendedAction: report.proofArtifacts.latestProofLatencyRecommendedAction,
+                latestNotificationProofPath: report.proofArtifacts.latestNotificationProofPath,
+                latestNotificationProofModifiedAt: report.proofArtifacts.latestNotificationProofModifiedAt,
+                latestNotificationProofStatus: report.proofArtifacts.latestNotificationProofStatus,
+                latestNotificationProofId: report.proofArtifacts.latestNotificationProofId,
+                latestNotificationProofTitle: report.proofArtifacts.latestNotificationProofTitle,
+                latestNotificationProofReceivedAt: report.proofArtifacts.latestNotificationProofReceivedAt,
                 diagnosticsDirectory: report.proofArtifacts.diagnosticsDirectory,
                 screenshotEvidenceDirectory: evidenceDirectoryURL?.path,
                 recommendedAppCheckCommand: report.proofPlan.recommendedProofCommand,

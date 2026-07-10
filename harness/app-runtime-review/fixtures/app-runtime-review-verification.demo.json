@@ -736,7 +736,8 @@
         "latestProofStaleTimeoutMilliseconds": 5000,
         "latestProofLatencyRecommendedAction": "measure-again",
         "reason": "Latest app check artifact is available in Veil diagnostics.",
-        "recommendedProofDirectory": "/Users/bonjin/Library/Application Support/Veil/Diagnostics/Recommended Proof"
+        "recommendedProofDirectory": "/Users/bonjin/Library/Application Support/Veil/Diagnostics/Recommended Proof",
+        "notificationProofDirectory": "/Users/bonjin/Library/Application Support/Veil/Diagnostics/Notification Proof"
       },
       "proofPlan": {
         "canRunAppWindowProof": false,

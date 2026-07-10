@@ -265,6 +265,17 @@ private struct WindowsQuickLaunchPanel: View {
                     .help(latestProofFileName)
                 }
 
+                if let notificationProofFileName = proofArtifacts.latestNotificationProofFileName {
+                    Label(
+                        "Notifications",
+                        systemImage: proofArtifacts.latestNotificationProofStatus == "proved" ? "bell.badge.fill" : "bell.badge"
+                    )
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(proofArtifacts.latestNotificationProofStatus == "proved" ? .green : .secondary)
+                    .lineLimit(1)
+                    .help(notificationProofFileName)
+                }
+
                 Spacer()
 
                 Button {

@@ -346,6 +346,11 @@ to `veil-vmctl app-runtime-action --json --action proof-notifications`, which
 runs the same notification proof path and embeds the resulting
 `notificationProof` report in the action JSON before saving evidence under Veil
 diagnostics.
+Saved notification proof JSON is summarized under
+`proofArtifacts.latestNotificationProof*` in app-runtime status and mirrored into
+app-runtime review evidence. The harness requires those paths to come from the
+`Notification Proof` diagnostics folder and requires proved artifacts to include
+the delivered notification id, title, and received timestamp.
 The sibling `notificationBridge` section tracks the actual guest-to-host
 notification event path separately from that consent preflight. It is blocked
 until the live agent and package identity gate are present, moves to

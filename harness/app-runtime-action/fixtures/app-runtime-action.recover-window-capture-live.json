@@ -390,7 +390,8 @@
       "latestProofKind": "mvp",
       "latestProofPath": "/Users/test/Library/Application Support/Veil/Diagnostics/Recommended Proof/mvp-proof-latest.json",
       "latestProofFileName": "mvp-proof-latest.json",
-      "latestProofModifiedAt": "2026-07-04T10:00:00Z"
+      "latestProofModifiedAt": "2026-07-04T10:00:00Z",
+      "notificationProofDirectory": "/Users/test/Library/Application Support/Veil/Diagnostics/Notification Proof"
     },
     "releaseGate": {
       "isEnabled": true,

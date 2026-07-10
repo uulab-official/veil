@@ -22,6 +22,7 @@ Goal: start the Parallels-style Windows notification bridge without claiming the
 - [x] Added `veil-vmctl notification-proof` plus a `harness/notification-proof` validator for recording one guest-to-host Windows notification event as release evidence.
 - [x] Added `dailyUse.verifyNotifications` so the launcher hero and menu bar can run notification proof and save the JSON artifact from the app once Windows listener access is allowed.
 - [x] Added `app-runtime-action --action proof-notifications` so the app shell, CLI, and harness share one action report with embedded `notificationProof` evidence.
+- [x] Promoted saved notification proof artifacts into `app-runtime-status.proofArtifacts` and app-runtime review evidence so support can see the latest notification proof file, status, and delivered notification summary.
 - [x] Documented the protocol and harness contract.
 
 ## Still Open

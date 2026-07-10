@@ -874,6 +874,7 @@ public struct WindowsAppRuntimeProofPlanStatus: Codable, Equatable, Sendable {
 public struct WindowsAppRuntimeProofArtifactStatus: Codable, Equatable, Sendable {
     public var diagnosticsDirectory: String
     public var recommendedProofDirectory: String
+    public var notificationProofDirectory: String
     public var multiAppProofTargetAppIds: [String]
     public var multiAppProofCoverageCount: Int
     public var multiAppProofCoverageHealth: String
@@ -888,11 +889,19 @@ public struct WindowsAppRuntimeProofArtifactStatus: Codable, Equatable, Sendable
     public var latestProofLatencyBudgetMilliseconds: Int?
     public var latestProofStaleTimeoutMilliseconds: Int?
     public var latestProofLatencyRecommendedAction: String?
+    public var latestNotificationProofPath: String?
+    public var latestNotificationProofFileName: String?
+    public var latestNotificationProofModifiedAt: Date?
+    public var latestNotificationProofStatus: String?
+    public var latestNotificationProofId: String?
+    public var latestNotificationProofTitle: String?
+    public var latestNotificationProofReceivedAt: Date?
     public var reason: String
 
     public init(
         diagnosticsDirectory: String,
         recommendedProofDirectory: String,
+        notificationProofDirectory: String,
         multiAppProofTargetAppIds: [String] = WindowsAppRuntimeProofCoverageDefaults.targetAppIds,
         multiAppProofCoverageCount: Int = 0,
         multiAppProofCoverageHealth: String = "missing",
@@ -907,10 +916,18 @@ public struct WindowsAppRuntimeProofArtifactStatus: Codable, Equatable, Sendable
         latestProofLatencyBudgetMilliseconds: Int? = nil,
         latestProofStaleTimeoutMilliseconds: Int? = nil,
         latestProofLatencyRecommendedAction: String? = nil,
+        latestNotificationProofPath: String? = nil,
+        latestNotificationProofFileName: String? = nil,
+        latestNotificationProofModifiedAt: Date? = nil,
+        latestNotificationProofStatus: String? = nil,
+        latestNotificationProofId: String? = nil,
+        latestNotificationProofTitle: String? = nil,
+        latestNotificationProofReceivedAt: Date? = nil,
         reason: String
     ) {
         self.diagnosticsDirectory = diagnosticsDirectory
         self.recommendedProofDirectory = recommendedProofDirectory
+        self.notificationProofDirectory = notificationProofDirectory
         self.multiAppProofTargetAppIds = multiAppProofTargetAppIds
         self.multiAppProofCoverageCount = multiAppProofCoverageCount
         self.multiAppProofCoverageHealth = multiAppProofCoverageHealth
@@ -925,6 +942,13 @@ public struct WindowsAppRuntimeProofArtifactStatus: Codable, Equatable, Sendable
         self.latestProofLatencyBudgetMilliseconds = latestProofLatencyBudgetMilliseconds
         self.latestProofStaleTimeoutMilliseconds = latestProofStaleTimeoutMilliseconds
         self.latestProofLatencyRecommendedAction = latestProofLatencyRecommendedAction
+        self.latestNotificationProofPath = latestNotificationProofPath
+        self.latestNotificationProofFileName = latestNotificationProofFileName
+        self.latestNotificationProofModifiedAt = latestNotificationProofModifiedAt
+        self.latestNotificationProofStatus = latestNotificationProofStatus
+        self.latestNotificationProofId = latestNotificationProofId
+        self.latestNotificationProofTitle = latestNotificationProofTitle
+        self.latestNotificationProofReceivedAt = latestNotificationProofReceivedAt
         self.reason = reason
     }
 }
@@ -1385,6 +1409,13 @@ private struct ProofArtifactMetadata: Equatable {
     var latencySummary: ProofArtifactLatencySummary?
 }
 
+private struct NotificationProofArtifactMetadata: Equatable {
+    var status: String?
+    var notificationId: String?
+    var notificationTitle: String?
+    var notificationReceivedAt: Date?
+}
+
 private struct ProofArtifactLatencyEvidence: Decodable {
     var measurement: String
     var elapsedMilliseconds: Int
@@ -1404,6 +1435,17 @@ private struct ProofArtifactLatencyEnvelope: Decodable {
 private struct ProofArtifactCoherenceLatencyEnvelope: Decodable {
     var initialFrameLatency: ProofArtifactLatencyEvidence?
     var postInputFrameLatency: ProofArtifactLatencyEvidence?
+}
+
+private struct NotificationProofArtifactEnvelope: Decodable {
+    var status: String?
+    var notification: NotificationProofArtifactNotification?
+}
+
+private struct NotificationProofArtifactNotification: Decodable {
+    var notificationId: String?
+    var title: String?
+    var receivedAt: Date?
 }
 
 @MainActor
@@ -2494,6 +2536,8 @@ public final class HostDashboardModel {
     ) -> WindowsAppRuntimeProofArtifactStatus {
         let recommendedProofDirectory = diagnosticsDirectory
             .appendingPathComponent("Recommended Proof", isDirectory: true)
+        let notificationProofDirectory = diagnosticsDirectory
+            .appendingPathComponent("Notification Proof", isDirectory: true)
         let searchDirectories: [(kind: String, url: URL)] = [
             ("recommended", recommendedProofDirectory),
             ("mvp", diagnosticsDirectory.appendingPathComponent("MVP Proof", isDirectory: true)),
@@ -2506,6 +2550,13 @@ public final class HostDashboardModel {
         let latestProof = proofCandidates.max { lhs, rhs in
                 lhs.modifiedAt < rhs.modifiedAt
             }
+        let latestNotificationProof = proofArtifacts(in: notificationProofDirectory, kind: "notification")
+            .max { lhs, rhs in
+                lhs.modifiedAt < rhs.modifiedAt
+            }
+        let latestNotificationProofMetadata = latestNotificationProof.map {
+            notificationProofArtifactMetadata(for: $0.url)
+        }
         let latestProofsByApp = proofArtifactSummariesByApp(from: proofCandidates)
         let targetAppIds = WindowsAppRuntimeProofCoverageDefaults.targetAppIds
         let coveredTargetCount = Set(latestProofsByApp.map(\.appId))
@@ -2524,10 +2575,18 @@ public final class HostDashboardModel {
             return WindowsAppRuntimeProofArtifactStatus(
                 diagnosticsDirectory: diagnosticsDirectory.path,
                 recommendedProofDirectory: recommendedProofDirectory.path,
+                notificationProofDirectory: notificationProofDirectory.path,
                 multiAppProofTargetAppIds: targetAppIds,
                 multiAppProofCoverageCount: coveredTargetCount,
                 multiAppProofCoverageHealth: coverageHealth,
                 latestProofsByApp: latestProofsByApp,
+                latestNotificationProofPath: latestNotificationProof?.url.path,
+                latestNotificationProofFileName: latestNotificationProof?.url.lastPathComponent,
+                latestNotificationProofModifiedAt: latestNotificationProof?.modifiedAt,
+                latestNotificationProofStatus: latestNotificationProofMetadata?.status,
+                latestNotificationProofId: latestNotificationProofMetadata?.notificationId,
+                latestNotificationProofTitle: latestNotificationProofMetadata?.notificationTitle,
+                latestNotificationProofReceivedAt: latestNotificationProofMetadata?.notificationReceivedAt,
                 reason: "No app check artifact has been saved under Veil diagnostics yet."
             )
         }
@@ -2536,6 +2595,7 @@ public final class HostDashboardModel {
         return WindowsAppRuntimeProofArtifactStatus(
             diagnosticsDirectory: diagnosticsDirectory.path,
             recommendedProofDirectory: recommendedProofDirectory.path,
+            notificationProofDirectory: notificationProofDirectory.path,
             multiAppProofTargetAppIds: targetAppIds,
             multiAppProofCoverageCount: coveredTargetCount,
             multiAppProofCoverageHealth: coverageHealth,
@@ -2550,6 +2610,13 @@ public final class HostDashboardModel {
             latestProofLatencyBudgetMilliseconds: latencySummary?.freshFrameBudgetMilliseconds,
             latestProofStaleTimeoutMilliseconds: latencySummary?.staleFrameTimeoutMilliseconds,
             latestProofLatencyRecommendedAction: latencySummary?.recommendedAction,
+            latestNotificationProofPath: latestNotificationProof?.url.path,
+            latestNotificationProofFileName: latestNotificationProof?.url.lastPathComponent,
+            latestNotificationProofModifiedAt: latestNotificationProof?.modifiedAt,
+            latestNotificationProofStatus: latestNotificationProofMetadata?.status,
+            latestNotificationProofId: latestNotificationProofMetadata?.notificationId,
+            latestNotificationProofTitle: latestNotificationProofMetadata?.notificationTitle,
+            latestNotificationProofReceivedAt: latestNotificationProofMetadata?.notificationReceivedAt,
             reason: "Latest app check artifact is available in Veil diagnostics."
         )
     }
@@ -3157,6 +3224,27 @@ public final class HostDashboardModel {
                 staleFrameTimeoutMilliseconds: slowest.staleFrameTimeoutMilliseconds,
                 recommendedAction: recommendedAction
             )
+        )
+    }
+
+    private func notificationProofArtifactMetadata(for url: URL) -> NotificationProofArtifactMetadata {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        guard let data = try? Data(contentsOf: url),
+              let envelope = try? decoder.decode(NotificationProofArtifactEnvelope.self, from: data) else {
+            return NotificationProofArtifactMetadata(
+                status: nil,
+                notificationId: nil,
+                notificationTitle: nil,
+                notificationReceivedAt: nil
+            )
+        }
+
+        return NotificationProofArtifactMetadata(
+            status: envelope.status,
+            notificationId: envelope.notification?.notificationId,
+            notificationTitle: envelope.notification?.title,
+            notificationReceivedAt: envelope.notification?.receivedAt
         )
     }
 

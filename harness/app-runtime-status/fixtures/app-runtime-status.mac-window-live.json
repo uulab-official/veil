@@ -400,7 +400,8 @@
     "latestProofSlowestLatencyMilliseconds": 1400,
     "latestProofLatencyBudgetMilliseconds": 1000,
     "latestProofStaleTimeoutMilliseconds": 5000,
-    "latestProofLatencyRecommendedAction": "measure-again"
+    "latestProofLatencyRecommendedAction": "measure-again",
+    "notificationProofDirectory": "/Users/test/Library/Application Support/Veil/Diagnostics/Notification Proof"
   },
   "releaseGate": {
     "isEnabled": true,

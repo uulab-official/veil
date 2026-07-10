@@ -1719,6 +1719,45 @@ test("rejects proof artifact paths that do not point to JSON", () => {
   );
 });
 
+test("accepts latest notification proof artifact summaries", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.mac-window-live.json", import.meta.url), "utf8"));
+  report.proofArtifacts.latestNotificationProofPath = "/Users/test/Library/Application Support/Veil/Diagnostics/Notification Proof/notification-proof.json";
+  report.proofArtifacts.latestNotificationProofFileName = "notification-proof.json";
+  report.proofArtifacts.latestNotificationProofModifiedAt = "2026-07-10T12:20:00Z";
+  report.proofArtifacts.latestNotificationProofStatus = "proved";
+  report.proofArtifacts.latestNotificationProofId = "toast:winapp_notepad:0001";
+  report.proofArtifacts.latestNotificationProofTitle = "Notepad";
+  report.proofArtifacts.latestNotificationProofReceivedAt = "2026-07-10T12:15:00Z";
+
+  assert.equal(validateAppRuntimeStatus(report), report);
+});
+
+test("rejects proved notification proof artifacts without notification evidence", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.mac-window-live.json", import.meta.url), "utf8"));
+  report.proofArtifacts.latestNotificationProofPath = "/Users/test/Library/Application Support/Veil/Diagnostics/Notification Proof/notification-proof.json";
+  report.proofArtifacts.latestNotificationProofFileName = "notification-proof.json";
+  report.proofArtifacts.latestNotificationProofModifiedAt = "2026-07-10T12:20:00Z";
+  report.proofArtifacts.latestNotificationProofStatus = "proved";
+
+  assert.throws(
+    () => validateAppRuntimeStatus(report),
+    /latestNotificationProofId/
+  );
+});
+
+test("rejects notification proof artifacts outside the notification proof folder", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.mac-window-live.json", import.meta.url), "utf8"));
+  report.proofArtifacts.latestNotificationProofPath = "/Users/test/Library/Application Support/Veil/Diagnostics/Recommended Proof/notification-proof.json";
+  report.proofArtifacts.latestNotificationProofFileName = "notification-proof.json";
+  report.proofArtifacts.latestNotificationProofModifiedAt = "2026-07-10T12:20:00Z";
+  report.proofArtifacts.latestNotificationProofStatus = "unavailable";
+
+  assert.throws(
+    () => validateAppRuntimeStatus(report),
+    /Notification Proof/
+  );
+});
+
 test("rejects proof artifact latency health that drifts from slowest latency", () => {
   const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.mac-window-live.json", import.meta.url), "utf8"));
   report.proofArtifacts.latestProofLatencyHealth = "healthy";
