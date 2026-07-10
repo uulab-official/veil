@@ -261,6 +261,45 @@ public struct WindowsMVPProofReport: Codable, Equatable, Sendable {
     }
 }
 
+public enum WindowsNotificationProofStatus: String, Codable, Equatable, Sendable {
+    case proved
+    case unavailable
+}
+
+public struct WindowsNotificationProofReport: Codable, Equatable, Sendable {
+    public var kind: String
+    public var endpoint: String
+    public var status: WindowsNotificationProofStatus
+    public var provedAt: Date
+    public var wait: AgentConnectionWaitReport
+    public var notification: WindowsNotificationReceivedEvent?
+    public var waitedForNotificationSeconds: Int
+    public var savedProofPath: String?
+    public var nextActions: [String]
+
+    public init(
+        kind: String = "windowsNotificationProof",
+        endpoint: String,
+        status: WindowsNotificationProofStatus,
+        provedAt: Date,
+        wait: AgentConnectionWaitReport,
+        notification: WindowsNotificationReceivedEvent? = nil,
+        waitedForNotificationSeconds: Int,
+        savedProofPath: String? = nil,
+        nextActions: [String]
+    ) {
+        self.kind = kind
+        self.endpoint = endpoint
+        self.status = status
+        self.provedAt = provedAt
+        self.wait = wait
+        self.notification = notification
+        self.waitedForNotificationSeconds = waitedForNotificationSeconds
+        self.savedProofPath = savedProofPath
+        self.nextActions = nextActions
+    }
+}
+
 public enum AgentConnectionDiagnosticStatus: String, Codable, Equatable, Sendable {
     case connected
     case unavailable
@@ -428,6 +467,17 @@ public enum WindowsAppCoherenceProofError: Error, Equatable, LocalizedError, Sen
             "The Windows agent does not report \(capability) support, so Veil cannot prove Coherence-style app input yet."
         case .unsupportedProofText(let text):
             "The Coherence proof text contains unsupported keyboard characters: \(text)"
+        }
+    }
+}
+
+public enum WindowsNotificationProofError: Error, Equatable, LocalizedError, Sendable {
+    case notificationTimeout
+
+    public var errorDescription: String? {
+        switch self {
+        case .notificationTimeout:
+            "Timed out waiting for notification.received from the Windows agent."
         }
     }
 }
@@ -725,6 +775,72 @@ public struct VeilHostClient: HostDashboardService, Sendable {
                 "Attach the saved MVP proof artifact to release gates and app-runtime bug reports."
             ]
         )
+    }
+
+    public func proveWindowsNotificationBridge(
+        endpoint: String,
+        eventSource: any HostEventSource,
+        waitSeconds: Int = 30,
+        notificationTimeoutNanoseconds: UInt64 = 30_000_000_000
+    ) async -> WindowsNotificationProofReport {
+        let boundedWaitSeconds = max(waitSeconds, 0)
+        let wait = await waitForAgentConnection(endpoint: endpoint, timeoutSeconds: boundedWaitSeconds)
+        guard wait.status == .connected else {
+            return WindowsNotificationProofReport(
+                endpoint: endpoint,
+                status: .unavailable,
+                provedAt: Date(),
+                wait: wait,
+                waitedForNotificationSeconds: boundedWaitSeconds,
+                nextActions: wait.nextActions
+            )
+        }
+
+        if wait.diagnostic.health?.capabilities.packageIdentity != true {
+            return WindowsNotificationProofReport(
+                endpoint: endpoint,
+                status: .unavailable,
+                provedAt: Date(),
+                wait: wait,
+                waitedForNotificationSeconds: boundedWaitSeconds,
+                nextActions: [
+                    "Run `veil-vmctl qemu-prepare-sparse-package --json --wait-seconds 120` to register the signed sparse package.",
+                    "Run `veil-vmctl app-runtime-status --json` and confirm dailyUseReadiness.packageIdentityReady is true before retrying notification-proof."
+                ]
+            )
+        }
+
+        do {
+            let notification = try await firstNotification(
+                from: eventSource,
+                timeoutNanoseconds: notificationTimeoutNanoseconds
+            )
+            return WindowsNotificationProofReport(
+                endpoint: endpoint,
+                status: .proved,
+                provedAt: Date(),
+                wait: wait,
+                notification: notification,
+                waitedForNotificationSeconds: boundedWaitSeconds,
+                nextActions: [
+                    "Run `veil-vmctl app-runtime-status --json` to confirm notificationBridge.recommendedAction is receiving-windows-notifications.",
+                    "Open Veil.app and confirm the same Windows notification appears through macOS Notification Center."
+                ]
+            )
+        } catch {
+            return WindowsNotificationProofReport(
+                endpoint: endpoint,
+                status: .unavailable,
+                provedAt: Date(),
+                wait: wait,
+                waitedForNotificationSeconds: boundedWaitSeconds,
+                nextActions: [
+                    "Trigger a Windows toast notification from a packaged app while this command is running.",
+                    "Confirm Windows Settings allows Veil Agent to access notifications, then retry `veil-vmctl notification-proof --json`.",
+                    "Run `veil-vmctl app-runtime-status --json` to inspect notificationBridge.recommendedAction and latest package identity evidence."
+                ]
+            )
+        }
     }
 
     public func loadHealth() async throws -> AgentHealthResponse {
@@ -1070,6 +1186,37 @@ public struct VeilHostClient: HostDashboardService, Sendable {
             }
             group.cancelAll()
             return frame
+        }
+    }
+
+    private func firstNotification(
+        from eventSource: any HostEventSource,
+        timeoutNanoseconds: UInt64
+    ) async throws -> WindowsNotificationReceivedEvent {
+        try await withThrowingTaskGroup(of: WindowsNotificationReceivedEvent.self) { group in
+            group.addTask {
+                for try await message in eventSource.eventMessages() {
+                    let envelope = try decoder.decode(ProtocolMessageEnvelope.self, from: message)
+                    guard envelope.type == .notificationReceived else {
+                        continue
+                    }
+
+                    return try decoder.decode(WindowsNotificationReceivedEvent.self, from: message)
+                }
+
+                throw WindowsNotificationProofError.notificationTimeout
+            }
+
+            group.addTask {
+                try await Task.sleep(nanoseconds: timeoutNanoseconds)
+                throw WindowsNotificationProofError.notificationTimeout
+            }
+
+            guard let notification = try await group.next() else {
+                throw WindowsNotificationProofError.notificationTimeout
+            }
+            group.cancelAll()
+            return notification
         }
     }
 

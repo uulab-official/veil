@@ -23,6 +23,7 @@ harness/
 ├─ coherence-proof/        JSON shape validation for launch/HWND/frame/input/clipboard proof
 ├─ mvp-proof/              JSON shape validation for guest wait plus Coherence proof
 ├─ multi-app-proof/        JSON shape validation for Notepad/Calculator/Paint proof coverage
+├─ notification-proof/     JSON shape validation for Windows notification bridge proof
 ├─ guest-agent-wait/       JSON shape validation for post-install guest-agent readiness
 ├─ qemu-boot-plan/         JSON shape validation for dry-run QEMU/HVF boot plans
 ├─ qemu-doctor/            JSON shape validation for QEMU/HVF readiness reports
@@ -48,6 +49,7 @@ Current executable pieces:
 - `harness/coherence-proof`: a JSON validator for one app launch, one tracked HWND, first and post-input frame evidence, frame latency budget evidence, mouse/key input, and host clipboard send evidence.
 - `harness/mvp-proof`: a JSON validator for the full Notepad MVP gate: guest-agent readiness plus Coherence proof evidence.
 - `harness/multi-app-proof`: a JSON validator for one command that runs Coherence proof coverage across Notepad, Calculator, and Paint and saves per-app artifacts for app-runtime status.
+- `harness/notification-proof`: a JSON validator for the Windows notification bridge gate: guest-agent readiness plus one real `notification.received` event from the guest.
 - `harness/guest-agent-wait`: a JSON validator for waiting until the installed Windows guest agent is reachable after setup/login.
 - `harness/qemu-boot-plan`: a JSON validator for dry-run QEMU/HVF Windows Arm boot plans.
 - `harness/qemu-doctor`: a JSON validator for QEMU/HVF readiness reports and next actions.
@@ -669,6 +671,26 @@ agent is unavailable, the command returns recovery JSON instead of launching an
 app; `--require-proved` makes the CLI exit non-zero and the harness reject that
 recovery JSON as release proof. Omit `--require-proved` only when validating
 recovery-report shape.
+
+## Notification Proof Scenario
+
+The notification proof command is the release gate for the Parallels-style
+Windows notification bridge. It waits for the guest agent, requires package
+identity before listening for notification evidence, and records the first
+`notification.received` event that reaches the host.
+
+```bash
+cd apps/mac-host
+proof="$HOME/Library/Application Support/Veil/Diagnostics/Notification Proof/notification-proof.json"
+swift run veil-vmctl notification-proof --json --output "$proof" --require-proved | node ../../harness/notification-proof/src/validate-notification-proof.mjs --require-proved
+node ../../harness/notification-proof/src/validate-notification-proof.mjs --require-proved < "$proof"
+```
+
+Use this only after sparse package identity is live and Windows notification
+listener consent has been granted. While the proof command is running, trigger
+a Windows toast notification from inside the guest. Without `--require-proved`,
+the command returns recovery JSON for package identity, consent, or timeout
+states.
 
 ## Guest Agent Wait Scenario
 

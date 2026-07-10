@@ -1,0 +1,59 @@
+{
+  "kind": "windowsNotificationProof",
+  "endpoint": "ws://127.0.0.1:18444",
+  "status": "proved",
+  "provedAt": "2026-07-10T12:20:00Z",
+  "wait": {
+    "kind": "guestAgentWait",
+    "endpoint": "ws://127.0.0.1:18444",
+    "status": "connected",
+    "waitedSeconds": 30,
+    "attempts": 1,
+    "connectedAt": "2026-07-10T12:19:52Z",
+    "diagnostic": {
+      "status": "connected",
+      "endpoint": "ws://127.0.0.1:18444",
+      "health": {
+        "type": "agent.health.response",
+        "requestId": "req_health",
+        "protocolVersion": 1,
+        "agentVersion": "0.1.0",
+        "os": "windows-arm64",
+        "session": {
+          "interactive": true,
+          "user": "veil-user"
+        },
+        "capabilities": {
+          "appList": true,
+          "appLaunch": true,
+          "windowTracking": true,
+          "windowCapture": true,
+          "input": true,
+          "clipboardText": true,
+          "packageIdentity": true
+        }
+      },
+      "nextActions": [
+        "Run veil-host-probe --overview to verify app metadata."
+      ]
+    },
+    "nextActions": [
+      "Run `veil-vmctl app-runtime-status --json` to inspect app launch readiness."
+    ]
+  },
+  "notification": {
+    "type": "notification.received",
+    "notificationId": "toast:winapp_notepad:0001",
+    "appId": "winapp_notepad",
+    "appName": "Notepad",
+    "title": "Notepad",
+    "body": "Autosaved Notes.txt",
+    "receivedAt": "2026-07-10T12:15:00Z",
+    "sourceAumid": "Microsoft.WindowsNotepad_8wekyb3d8bbwe!App"
+  },
+  "waitedForNotificationSeconds": 30,
+  "nextActions": [
+    "Run `veil-vmctl app-runtime-status --json` to confirm notificationBridge.recommendedAction is receiving-windows-notifications.",
+    "Open Veil.app and confirm the same Windows notification appears through macOS Notification Center."
+  ]
+}

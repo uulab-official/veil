@@ -420,6 +420,49 @@ struct VeilHostClientTests {
         #expect(report.nextActions.contains("Inside Windows, run Veil Shared\\Veil Guest Agent\\Install Veil Agent.cmd."))
     }
 
+    @Test("reports notification proof blocked without package identity")
+    func reportsNotificationProofBlockedWithoutPackageIdentity() async throws {
+        let transport = RecordingTransport(responses: [
+            #"{"type":"agent.health.response","requestId":"req_health","protocolVersion":1,"agentVersion":"0.1.0","os":"windows-arm64","session":{"interactive":true,"user":"veil-user"},"capabilities":{"appList":true,"appLaunch":true,"windowTracking":true,"windowCapture":true,"input":true,"clipboardText":true,"packageIdentity":false}}"#
+        ])
+        let client = VeilHostClient(transport: transport)
+
+        let report = await client.proveWindowsNotificationBridge(
+            endpoint: "ws://127.0.0.1:18444",
+            eventSource: BufferedEventSource(messages: [WindowsNotificationReceivedEvent.notepadEventJSON]),
+            waitSeconds: 1,
+            notificationTimeoutNanoseconds: 1_000_000
+        )
+
+        #expect(report.kind == "windowsNotificationProof")
+        #expect(report.status == .unavailable)
+        #expect(report.wait.status == .connected)
+        #expect(report.notification == nil)
+        #expect(report.nextActions.contains("Run `veil-vmctl qemu-prepare-sparse-package --json --wait-seconds 120` to register the signed sparse package."))
+    }
+
+    @Test("proves Windows notification bridge after a notification event")
+    func provesWindowsNotificationBridgeAfterNotificationEvent() async throws {
+        let transport = RecordingTransport(responses: [
+            #"{"type":"agent.health.response","requestId":"req_health","protocolVersion":1,"agentVersion":"0.1.0","os":"windows-arm64","session":{"interactive":true,"user":"veil-user"},"capabilities":{"appList":true,"appLaunch":true,"windowTracking":true,"windowCapture":true,"input":true,"clipboardText":true,"packageIdentity":true}}"#
+        ])
+        let client = VeilHostClient(transport: transport)
+
+        let report = await client.proveWindowsNotificationBridge(
+            endpoint: "ws://127.0.0.1:18444",
+            eventSource: BufferedEventSource(messages: [WindowsNotificationReceivedEvent.notepadEventJSON]),
+            waitSeconds: 1,
+            notificationTimeoutNanoseconds: 1_000_000_000
+        )
+
+        #expect(report.kind == "windowsNotificationProof")
+        #expect(report.status == .proved)
+        #expect(report.wait.status == .connected)
+        #expect(report.notification?.notificationId == "toast:winapp_notepad:0001")
+        #expect(report.notification?.title == "Notepad")
+        #expect(report.nextActions.contains("Run `veil-vmctl app-runtime-status --json` to confirm notificationBridge.recommendedAction is receiving-windows-notifications."))
+    }
+
     @Test("fails when Notepad is missing from the app list")
     func failsWhenNotepadIsMissing() async throws {
         let transport = RecordingTransport(responses: [
@@ -632,5 +675,11 @@ private extension WindowFrameEvent {
 
     static var notepadPostInputFrameJSON: String {
         #"{"type":"window.frame","windowId":"hwnd:0003029A","frameId":"frame_000002","sequence":2,"format":"png","width":1,"height":1,"scale":1,"encodedData":"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII="}"#
+    }
+}
+
+private extension WindowsNotificationReceivedEvent {
+    static var notepadEventJSON: String {
+        #"{"type":"notification.received","notificationId":"toast:winapp_notepad:0001","appId":"winapp_notepad","appName":"Notepad","title":"Notepad","body":"Autosaved Notes.txt","receivedAt":"2026-07-10T12:15:00Z","sourceAumid":"Microsoft.WindowsNotepad_8wekyb3d8bbwe!App"}"#
     }
 }

@@ -1,0 +1,49 @@
+{
+  "kind": "windowsNotificationProof",
+  "endpoint": "ws://127.0.0.1:18444",
+  "status": "unavailable",
+  "provedAt": "2026-07-10T12:20:00Z",
+  "wait": {
+    "kind": "guestAgentWait",
+    "endpoint": "ws://127.0.0.1:18444",
+    "status": "connected",
+    "waitedSeconds": 30,
+    "attempts": 1,
+    "connectedAt": "2026-07-10T12:19:52Z",
+    "diagnostic": {
+      "status": "connected",
+      "endpoint": "ws://127.0.0.1:18444",
+      "health": {
+        "type": "agent.health.response",
+        "requestId": "req_health",
+        "protocolVersion": 1,
+        "agentVersion": "0.1.0",
+        "os": "windows-arm64",
+        "session": {
+          "interactive": true,
+          "user": "veil-user"
+        },
+        "capabilities": {
+          "appList": true,
+          "appLaunch": true,
+          "windowTracking": true,
+          "windowCapture": true,
+          "input": true,
+          "clipboardText": true,
+          "packageIdentity": false
+        }
+      },
+      "nextActions": [
+        "Run veil-host-probe --overview to verify app metadata."
+      ]
+    },
+    "nextActions": [
+      "Run `veil-vmctl app-runtime-status --json` to inspect app launch readiness."
+    ]
+  },
+  "waitedForNotificationSeconds": 30,
+  "nextActions": [
+    "Run `veil-vmctl qemu-prepare-sparse-package --json --wait-seconds 120` to register the signed sparse package.",
+    "Run `veil-vmctl app-runtime-status --json` and confirm dailyUseReadiness.packageIdentityReady is true before retrying notification-proof."
+  ]
+}

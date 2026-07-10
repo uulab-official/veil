@@ -30,6 +30,7 @@ enum VMControlError: Error, LocalizedError {
     case missingForceStopAcknowledgement
     case mvpProofNotProved([String])
     case multiAppProofIncomplete([String])
+    case notificationProofNotProved([String])
 
     var errorDescription: String? {
         switch self {
@@ -89,10 +90,12 @@ enum VMControlError: Error, LocalizedError {
             "MVP proof did not reach proved status. \(nextActions.joined(separator: " "))"
         case .multiAppProofIncomplete(let nextActions):
             "Multi-app proof did not cover every target app. \(nextActions.joined(separator: " "))"
+        case .notificationProofNotProved(let nextActions):
+            "Windows notification proof did not receive a notification. \(nextActions.joined(separator: " "))"
         }
     }
 
-    private static let usage = "Usage: veil-vmctl prepare --installer /path/to/Windows.iso [--drivers /path/to/virtio-win.iso] | veil-vmctl app-runtime-status [--json] [--demo] | veil-vmctl app-runtime-review [--json] [--demo] [--evidence-dir /path/to/screenshots] | veil-vmctl app-runtime-review-init [--json] [--demo] [--evidence-dir /path/to/screenshots] | veil-vmctl app-runtime-review-verify [--json] [--demo] --evidence-dir /path/to/screenshots | veil-vmctl app-runtime-action --action launch|fulfill-pending|focus|close|close-all|restart-frame-stream|recover-window-capture|reopen-window|maintain-frame-streams|restore|reconnect-restore|bring-forward|recover-display|wait-agent|repair-agent|prepare-sparse-package|quiet-when-idle|stop-runtime|clipboard|type-text|click|proof-recommended|proof-multi-app [--json] [--demo] [--wait-seconds 5] [--app-id winapp_notepad] [--window-id hwnd:XXXXXXXX] [--text \"...\"] [--x 240 --y 130] | veil-vmctl app-window-proof [--json] [--app-id winapp_notepad] [--wait-seconds 10] [--output /path/to/proof.json] | veil-vmctl coherence-proof [--json] [--app-id winapp_notepad] [--wait-seconds 10] [--output /path/to/proof.json] | veil-vmctl mvp-proof [--json] [--app-id winapp_notepad] [--wait-seconds 30] [--output /path/to/proof.json] [--require-proved] | veil-vmctl multi-app-proof [--json] [--app-ids winapp_notepad,winapp_calculator,winapp_paint] [--wait-seconds 10] [--output-dir /path/to/Diagnostics] [--require-complete] | veil-vmctl guest-agent-wait [--json] [--wait-seconds 30] | veil-vmctl mark-installed [--json] | veil-vmctl providers [--json] | veil-vmctl export-diagnostics [--json] [--output /path/to/diagnostics.json] | veil-vmctl qemu-plan [--json] | veil-vmctl qemu-doctor [--json] | veil-vmctl qemu-install-status [--json] | veil-vmctl qemu-smoke [--json] [--seconds 45] | veil-vmctl qemu-start [--json] [--wait-seconds 15] [--native-display] | veil-vmctl qemu-display-smoke [--json] [--wait-seconds 5] | veil-vmctl qemu-capture [--json] [--output /path/to/console.png] | veil-vmctl qemu-powerdown [--json] [--wait-seconds 30] | veil-vmctl qemu-force-stop [--json] --i-understand-data-loss [--wait-seconds 10] | veil-vmctl qemu-sendkey [--json] key [key ...] | veil-vmctl qemu-type-text [--json] --text \"...\" | veil-vmctl qemu-click [--json] --x 0...32767 --y 0...32767 | veil-vmctl qemu-oobe-bypass [--json] | veil-vmctl qemu-install-agent [--json] [--wait-seconds 30] | veil-vmctl qemu-prepare-sparse-package [--json] [--wait-seconds 120]"
+    private static let usage = "Usage: veil-vmctl prepare --installer /path/to/Windows.iso [--drivers /path/to/virtio-win.iso] | veil-vmctl app-runtime-status [--json] [--demo] | veil-vmctl app-runtime-review [--json] [--demo] [--evidence-dir /path/to/screenshots] | veil-vmctl app-runtime-review-init [--json] [--demo] [--evidence-dir /path/to/screenshots] | veil-vmctl app-runtime-review-verify [--json] [--demo] --evidence-dir /path/to/screenshots | veil-vmctl app-runtime-action --action launch|fulfill-pending|focus|close|close-all|restart-frame-stream|recover-window-capture|reopen-window|maintain-frame-streams|restore|reconnect-restore|bring-forward|recover-display|wait-agent|repair-agent|prepare-sparse-package|quiet-when-idle|stop-runtime|clipboard|type-text|click|proof-recommended|proof-multi-app [--json] [--demo] [--wait-seconds 5] [--app-id winapp_notepad] [--window-id hwnd:XXXXXXXX] [--text \"...\"] [--x 240 --y 130] | veil-vmctl app-window-proof [--json] [--app-id winapp_notepad] [--wait-seconds 10] [--output /path/to/proof.json] | veil-vmctl coherence-proof [--json] [--app-id winapp_notepad] [--wait-seconds 10] [--output /path/to/proof.json] | veil-vmctl mvp-proof [--json] [--app-id winapp_notepad] [--wait-seconds 30] [--output /path/to/proof.json] [--require-proved] | veil-vmctl multi-app-proof [--json] [--app-ids winapp_notepad,winapp_calculator,winapp_paint] [--wait-seconds 10] [--output-dir /path/to/Diagnostics] [--require-complete] | veil-vmctl notification-proof [--json] [--wait-seconds 30] [--output /path/to/notification-proof.json] [--require-proved] | veil-vmctl guest-agent-wait [--json] [--wait-seconds 30] | veil-vmctl mark-installed [--json] | veil-vmctl providers [--json] | veil-vmctl export-diagnostics [--json] [--output /path/to/diagnostics.json] | veil-vmctl qemu-plan [--json] | veil-vmctl qemu-doctor [--json] | veil-vmctl qemu-install-status [--json] | veil-vmctl qemu-smoke [--json] [--seconds 45] | veil-vmctl qemu-start [--json] [--wait-seconds 15] [--native-display] | veil-vmctl qemu-display-smoke [--json] [--wait-seconds 5] | veil-vmctl qemu-capture [--json] [--output /path/to/console.png] | veil-vmctl qemu-powerdown [--json] [--wait-seconds 30] | veil-vmctl qemu-force-stop [--json] --i-understand-data-loss [--wait-seconds 10] | veil-vmctl qemu-sendkey [--json] key [key ...] | veil-vmctl qemu-type-text [--json] --text \"...\" | veil-vmctl qemu-click [--json] --x 0...32767 --y 0...32767 | veil-vmctl qemu-oobe-bypass [--json] | veil-vmctl qemu-install-agent [--json] [--wait-seconds 30] | veil-vmctl qemu-prepare-sparse-package [--json] [--wait-seconds 120]"
 }
 
 struct VMControlArguments {
@@ -138,6 +141,7 @@ struct VMControlArguments {
         case coherenceProof(json: Bool, appId: String, waitSeconds: Int, outputPath: String?)
         case mvpProof(json: Bool, appId: String, waitSeconds: Int, outputPath: String?, requireProved: Bool)
         case multiAppProof(json: Bool, appIds: [String], waitSeconds: Int, outputDirectoryPath: String?, requireComplete: Bool)
+        case notificationProof(json: Bool, waitSeconds: Int, outputPath: String?, requireProved: Bool)
         case guestAgentWait(json: Bool, waitSeconds: Int)
         case markInstalled(json: Bool)
         case providers(json: Bool)
@@ -306,6 +310,17 @@ struct VMControlArguments {
                     waitSeconds: waitSecondsArgument(from: arguments) ?? 10,
                     outputDirectoryPath: stringArgument(named: "--output-dir", from: arguments),
                     requireComplete: arguments.contains("--require-complete")
+                )
+            )
+        }
+
+        if command == "notification-proof" {
+            return VMControlArguments(
+                command: .notificationProof(
+                    json: arguments.contains("--json"),
+                    waitSeconds: waitSecondsArgument(from: arguments) ?? 30,
+                    outputPath: stringArgument(named: "--output", from: arguments),
+                    requireProved: arguments.contains("--require-proved")
                 )
             )
         }
@@ -1063,6 +1078,8 @@ struct VeilVMControl {
             try await proveMVP(json: json, appId: appId, waitSeconds: waitSeconds, outputPath: outputPath, requireProved: requireProved)
         case .multiAppProof(let json, let appIds, let waitSeconds, let outputDirectoryPath, let requireComplete):
             _ = try await proveMultipleApps(json: json, appIds: appIds, waitSeconds: waitSeconds, outputDirectoryPath: outputDirectoryPath, requireComplete: requireComplete)
+        case .notificationProof(let json, let waitSeconds, let outputPath, let requireProved):
+            try await proveNotificationBridge(json: json, waitSeconds: waitSeconds, outputPath: outputPath, requireProved: requireProved)
         case .guestAgentWait(let json, let waitSeconds):
             try await waitForGuestAgent(json: json, waitSeconds: waitSeconds)
         case .markInstalled(let json):
@@ -3956,6 +3973,63 @@ struct VeilVMControl {
         }
         if requireProved, report.status != .proved {
             throw VMControlError.mvpProofNotProved(report.nextActions)
+        }
+    }
+
+    private static func proveNotificationBridge(
+        json: Bool,
+        waitSeconds: Int,
+        outputPath: String?,
+        requireProved: Bool
+    ) async throws {
+        let endpoint = ProcessInfo.processInfo.environment["VEIL_AGENT_URL"] ?? "ws://127.0.0.1:18444"
+        let url = URL(string: endpoint) ?? URL(string: "ws://127.0.0.1:18444")!
+        let boundedWaitSeconds = min(max(waitSeconds, 0), 300)
+        let transport = URLSessionWebSocketTransport(url: url)
+        let client = VeilHostClient(transport: transport)
+        var report = await client.proveWindowsNotificationBridge(
+            endpoint: endpoint,
+            eventSource: transport,
+            waitSeconds: boundedWaitSeconds,
+            notificationTimeoutNanoseconds: UInt64(max(boundedWaitSeconds, 1)) * 1_000_000_000
+        )
+        if let outputURL = proofOutputURL(from: outputPath) {
+            report.savedProofPath = outputURL.path
+            try writeProof(report, to: outputURL)
+        }
+
+        if json {
+            let data = try JSONEncoder.veilDiagnostics.encode(report)
+            print(String(decoding: data, as: UTF8.self))
+            if requireProved, report.status != .proved {
+                throw VMControlError.notificationProofNotProved(report.nextActions)
+            }
+            return
+        }
+
+        print("Windows notification proof: \(report.status.rawValue)")
+        print("Endpoint: \(report.endpoint)")
+        print("Agent wait: \(report.wait.status.rawValue) after \(report.wait.attempts) attempt(s)")
+        print("Waited for notification: \(report.waitedForNotificationSeconds)s")
+        if let notification = report.notification {
+            print("Notification: \(notification.title)")
+            print("Notification id: \(notification.notificationId)")
+            if let appName = notification.appName {
+                print("App: \(appName)")
+            }
+            if let sourceAumid = notification.sourceAumid {
+                print("Source AUMID: \(sourceAumid)")
+            }
+        }
+        if let savedProofPath = report.savedProofPath {
+            print("Saved proof: \(savedProofPath)")
+        }
+        print("Next actions:")
+        for action in report.nextActions {
+            print("  - \(action)")
+        }
+        if requireProved, report.status != .proved {
+            throw VMControlError.notificationProofNotProved(report.nextActions)
         }
     }
 
