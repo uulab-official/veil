@@ -265,6 +265,127 @@ test("rejects complete verification reports without proved app check proof", () 
   );
 });
 
+function attachPrinterProof(report, overrides = {}) {
+  Object.assign(report.review.status.proofArtifacts, {
+    latestPrinterBridgeProofPath: "/Users/test/Library/Application Support/Veil/Diagnostics/Printer Proof/printer-bridge-proof.json",
+    latestPrinterBridgeProofFileName: "printer-bridge-proof.json",
+    latestPrinterBridgeProofModifiedAt: "2026-07-10T12:30:00Z",
+    latestPrinterBridgeProofStatus: "proved",
+    latestPrinterBridgeProofEvidencePath: "/Users/test/Desktop/windows-test-page.pdf",
+    latestPrinterBridgeProofEvidenceFileName: "windows-test-page.pdf",
+    latestPrinterBridgeProofEvidenceByteCount: 8192,
+    latestPrinterBridgeProofEvidenceModifiedAt: "2026-07-10T12:29:00Z",
+    latestPrinterBridgeProofSharedPrinterName: "Office Printer",
+    latestPrinterBridgeProofWindowsPrinterName: "Veil Mac Printer",
+    latestPrinterBridgeProofIppEndpoint: "http://10.0.2.2:631/printers/Office%20Printer"
+  });
+  Object.assign(report.review.evidence, {
+    latestPrinterBridgeProofPath: report.review.status.proofArtifacts.latestPrinterBridgeProofPath,
+    latestPrinterBridgeProofModifiedAt: report.review.status.proofArtifacts.latestPrinterBridgeProofModifiedAt,
+    latestPrinterBridgeProofStatus: report.review.status.proofArtifacts.latestPrinterBridgeProofStatus,
+    latestPrinterBridgeProofEvidencePath: report.review.status.proofArtifacts.latestPrinterBridgeProofEvidencePath,
+    latestPrinterBridgeProofEvidenceFileName: report.review.status.proofArtifacts.latestPrinterBridgeProofEvidenceFileName,
+    latestPrinterBridgeProofEvidenceByteCount: report.review.status.proofArtifacts.latestPrinterBridgeProofEvidenceByteCount,
+    latestPrinterBridgeProofEvidenceModifiedAt: report.review.status.proofArtifacts.latestPrinterBridgeProofEvidenceModifiedAt,
+    latestPrinterBridgeProofIppEndpoint: report.review.status.proofArtifacts.latestPrinterBridgeProofIppEndpoint
+  });
+  report.printerBridgeProof = {
+    path: report.review.evidence.latestPrinterBridgeProofPath,
+    requiredKind: "windowsPrinterBridgeProof",
+    requiredStatus: "proved",
+    exists: true,
+    isValid: true,
+    kind: "windowsPrinterBridgeProof",
+    status: "proved",
+    evidencePath: report.review.evidence.latestPrinterBridgeProofEvidencePath,
+    evidenceFileName: report.review.evidence.latestPrinterBridgeProofEvidenceFileName,
+    evidenceByteCount: report.review.evidence.latestPrinterBridgeProofEvidenceByteCount,
+    ippEndpoint: report.review.evidence.latestPrinterBridgeProofIppEndpoint,
+    ...overrides
+  };
+}
+
+test("accepts verified printer bridge proof evidence", () => {
+  const report = demoVerification();
+  attachPrinterProof(report);
+
+  assert.equal(validateAppRuntimeReviewVerification(report), report);
+});
+
+test("rejects missing printer bridge proof verification when review evidence claims one", () => {
+  const report = demoVerification();
+  attachPrinterProof(report);
+  delete report.printerBridgeProof;
+
+  assert.throws(
+    () => validateAppRuntimeReviewVerification(report),
+    /printerBridgeProof/
+  );
+});
+
+test("prioritizes regenerating invalid printer bridge proof before sharing", () => {
+  const report = demoVerification();
+  attachPrinterProof(report, {
+    isValid: false,
+    kind: "windowsPrinterBridgeProof",
+    status: "proved",
+    evidenceFileName: "wrong-test-page.pdf",
+    issueReason: "evidenceMismatch"
+  });
+  report.attachedScreenshotCount = report.requiredScreenshotCount;
+  report.missingFiles = [];
+  report.invalidScreenshotFiles = [];
+  report.invalidCaptureSteps = [];
+  delete report.nextInvalidCaptureStep;
+  report.missingCaptureSteps = [];
+  delete report.nextMissingCaptureStep;
+  report.screenshotEvidenceSummary = {
+    state: "ready",
+    requiredScreenshotCount: report.requiredScreenshotCount,
+    validScreenshotCount: report.requiredScreenshotCount,
+    missingScreenshotCount: 0,
+    invalidScreenshotCount: 0,
+    pendingScreenshotCount: 0,
+    minimumWidth: report.minimumScreenshotWidth,
+    minimumHeight: report.minimumScreenshotHeight,
+    isScreenshotEvidenceReady: true,
+    nextStepKind: "shareEvidence",
+    nextStepTitle: "Share Review Evidence"
+  };
+  report.appCheckProof = {
+    ...report.appCheckProof,
+    exists: true,
+    isValid: true,
+    kind: "windowsMVPProof",
+    status: "proved",
+    appId: "winapp_notepad"
+  };
+  delete report.appCheckProof.issueReason;
+  report.review.attachedScreenshotCount = report.review.requiredScreenshotCount;
+  report.review.invalidScreenshotCount = 0;
+  report.review.areRequiredScreenshotsAttached = true;
+  for (const slot of report.review.screenshotSlots) {
+    slot.attachmentState = "attached";
+    slot.attachmentPath = `${report.evidenceDirectory}/${slot.expectedFileName}`;
+    slot.attachmentByteCount = 68;
+    slot.attachmentWidth = 1440;
+    slot.attachmentHeight = 900;
+  }
+  report.isComplete = false;
+  report.nextEvidenceAction = {
+    kind: "regeneratePrinterProof",
+    title: "Regenerate Printer Proof",
+    command: "veil-vmctl printer-bridge-proof --json --evidence ...",
+    isReadyToShare: false,
+    expectedFileName: "printer-bridge-proof.json",
+    path: report.printerBridgeProof.path,
+    instruction: "Regenerate the Windows printer test-page proof JSON before sharing review evidence.",
+    supportingCommand: "veil-vmctl app-runtime-status --json"
+  };
+
+  assert.equal(validateAppRuntimeReviewVerification(report), report);
+});
+
 test("accepts complete verification reports", () => {
   const report = demoVerification();
   report.attachedScreenshotCount = report.requiredScreenshotCount;

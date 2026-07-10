@@ -1055,6 +1055,21 @@ struct AppRuntimeReviewAppCheckProofEvidence: Codable, Equatable {
     var issueReason: String?
 }
 
+struct AppRuntimeReviewPrinterBridgeProofEvidence: Codable, Equatable {
+    var path: String
+    var requiredKind: String
+    var requiredStatus: String
+    var exists: Bool
+    var isValid: Bool
+    var kind: String?
+    var status: String?
+    var evidencePath: String?
+    var evidenceFileName: String?
+    var evidenceByteCount: Int?
+    var ippEndpoint: String?
+    var issueReason: String?
+}
+
 struct AppRuntimeReviewEvidenceVerification: Codable, Equatable {
     var kind: String = "windowsAppRuntimeReviewEvidenceVerification"
     var generatedAt: Date
@@ -1071,6 +1086,7 @@ struct AppRuntimeReviewEvidenceVerification: Codable, Equatable {
     var missingFiles: [String]
     var invalidScreenshotFiles: [AppRuntimeReviewInvalidScreenshotFile]
     var appCheckProof: AppRuntimeReviewAppCheckProofEvidence
+    var printerBridgeProof: AppRuntimeReviewPrinterBridgeProofEvidence?
     var screenshotEvidenceSummary: AppRuntimeReviewScreenshotEvidenceSummary
     var nextEvidenceAction: AppRuntimeReviewNextEvidenceAction
     var invalidCaptureSteps: [AppRuntimeReviewMissingCaptureStep]
@@ -1762,10 +1778,12 @@ struct VeilVMControl {
             missingCaptureSteps: missingCaptureSteps
         )
         let appCheckProof = appRuntimeReviewAppCheckProofEvidence(file: appCheckProofFile)
+        let printerBridgeProof = appRuntimeReviewPrinterBridgeProofEvidence(card: card)
         let nextEvidenceAction = appRuntimeReviewNextEvidenceAction(
             invalidCaptureSteps: invalidCaptureSteps,
             missingCaptureSteps: missingCaptureSteps,
             appCheckProof: appCheckProof,
+            printerBridgeProof: printerBridgeProof,
             openEvidenceDirectoryCommand: openEvidenceDirectoryCommand
         )
         let verification = AppRuntimeReviewEvidenceVerification(
@@ -1783,10 +1801,12 @@ struct VeilVMControl {
                 && FileManager.default.fileExists(atPath: readmeURL.path)
                 && missingFiles.isEmpty
                 && appCheckProof.isValid
+                && (printerBridgeProof?.isValid ?? true)
                 && card.areRequiredScreenshotsAttached,
             missingFiles: missingFiles,
             invalidScreenshotFiles: invalidScreenshotFiles,
             appCheckProof: appCheckProof,
+            printerBridgeProof: printerBridgeProof,
             screenshotEvidenceSummary: screenshotEvidenceSummary,
             nextEvidenceAction: nextEvidenceAction,
             invalidCaptureSteps: invalidCaptureSteps,
@@ -1804,6 +1824,7 @@ struct VeilVMControl {
                 readmeExists: FileManager.default.fileExists(atPath: readmeURL.path),
                 invalidScreenshotFiles: invalidScreenshotFiles,
                 appCheckProof: appCheckProof,
+                printerBridgeProof: printerBridgeProof,
                 invalidCaptureSteps: invalidCaptureSteps,
                 missingCaptureSteps: missingCaptureSteps,
                 reviewCommand: reviewCommand,
@@ -1825,6 +1846,9 @@ struct VeilVMControl {
         print("Screenshots: \(verification.attachedScreenshotCount)/\(verification.requiredScreenshotCount) attached")
         print("Screenshot evidence: \(verification.screenshotEvidenceSummary.state)")
         print("App check proof: \(verification.appCheckProof.isValid ? "proved" : (verification.appCheckProof.issueReason ?? "missing"))")
+        if let printerBridgeProof = verification.printerBridgeProof {
+            print("Printer bridge proof: \(printerBridgeProof.isValid ? "proved" : (printerBridgeProof.issueReason ?? "missing"))")
+        }
         print("Next evidence action: \(verification.nextEvidenceAction.title)")
         print("Next evidence command: \(verification.nextEvidenceAction.command)")
         print("Complete: \(verification.isComplete ? "yes" : "no")")
@@ -2082,6 +2106,7 @@ struct VeilVMControl {
         invalidCaptureSteps: [AppRuntimeReviewMissingCaptureStep],
         missingCaptureSteps: [AppRuntimeReviewMissingCaptureStep],
         appCheckProof: AppRuntimeReviewAppCheckProofEvidence,
+        printerBridgeProof: AppRuntimeReviewPrinterBridgeProofEvidence?,
         openEvidenceDirectoryCommand: String
     ) -> AppRuntimeReviewNextEvidenceAction {
         if let nextInvalidCaptureStep = invalidCaptureSteps.first {
@@ -2123,6 +2148,19 @@ struct VeilVMControl {
             )
         }
 
+        if let printerBridgeProof, !printerBridgeProof.isValid {
+            return AppRuntimeReviewNextEvidenceAction(
+                kind: "regeneratePrinterProof",
+                title: "Regenerate Printer Proof",
+                command: "veil-vmctl printer-bridge-proof --json --evidence ...",
+                isReadyToShare: false,
+                expectedFileName: URL(fileURLWithPath: printerBridgeProof.path).lastPathComponent,
+                path: printerBridgeProof.path,
+                instruction: "Regenerate the Windows printer test-page proof JSON before sharing review evidence.",
+                supportingCommand: "veil-vmctl app-runtime-status --json"
+            )
+        }
+
         return AppRuntimeReviewNextEvidenceAction(
             kind: "shareEvidence",
             title: "Share Review Evidence",
@@ -2141,6 +2179,7 @@ struct VeilVMControl {
         readmeExists: Bool,
         invalidScreenshotFiles: [AppRuntimeReviewInvalidScreenshotFile],
         appCheckProof: AppRuntimeReviewAppCheckProofEvidence,
+        printerBridgeProof: AppRuntimeReviewPrinterBridgeProofEvidence?,
         invalidCaptureSteps: [AppRuntimeReviewMissingCaptureStep],
         missingCaptureSteps: [AppRuntimeReviewMissingCaptureStep],
         reviewCommand: String,
@@ -2170,6 +2209,13 @@ struct VeilVMControl {
                 actions.append("Run `\(appCheckProof.command)` to create `\(appCheckProof.expectedFileName)` with \(appCheckProof.requiredKind) status=\(appCheckProof.requiredStatus); current issue: \(issueReason).")
             } else {
                 actions.append("Run `\(appCheckProof.command)` to create `\(appCheckProof.expectedFileName)` with \(appCheckProof.requiredKind) status=\(appCheckProof.requiredStatus).")
+            }
+        }
+        if let printerBridgeProof, !printerBridgeProof.isValid {
+            if let issueReason = printerBridgeProof.issueReason {
+                actions.append("Regenerate printer bridge proof at `\(printerBridgeProof.path)` with `veil-vmctl printer-bridge-proof --json --evidence ...`; current issue: \(issueReason).")
+            } else {
+                actions.append("Regenerate printer bridge proof at `\(printerBridgeProof.path)` with `veil-vmctl printer-bridge-proof --json --evidence ...`.")
             }
         }
         actions.append("Run `\(reviewCommand)` and confirm Screenshots is 5/5 attached.")
@@ -2737,6 +2783,101 @@ struct VeilVMControl {
             kind: nil,
             status: nil,
             appId: nil,
+            issueReason: reason
+        )
+    }
+
+    private static func appRuntimeReviewPrinterBridgeProofEvidence(
+        card: AppRuntimeReviewCard
+    ) -> AppRuntimeReviewPrinterBridgeProofEvidence? {
+        guard let path = card.evidence.latestPrinterBridgeProofPath else {
+            return nil
+        }
+
+        let requiredKind = "windowsPrinterBridgeProof"
+        let requiredStatus = "proved"
+        guard FileManager.default.fileExists(atPath: path) else {
+            return AppRuntimeReviewPrinterBridgeProofEvidence(
+                path: path,
+                requiredKind: requiredKind,
+                requiredStatus: requiredStatus,
+                exists: false,
+                isValid: false,
+                kind: nil,
+                status: nil,
+                evidencePath: nil,
+                evidenceFileName: nil,
+                evidenceByteCount: nil,
+                ippEndpoint: nil,
+                issueReason: "missing"
+            )
+        }
+
+        do {
+            let data = try Data(contentsOf: URL(fileURLWithPath: path))
+            let object = try JSONSerialization.jsonObject(with: data)
+            guard let dictionary = object as? [String: Any] else {
+                return appRuntimeReviewInvalidPrinterBridgeProofEvidence(path: path, reason: "notObject")
+            }
+
+            let kind = dictionary["kind"] as? String
+            let status = dictionary["status"] as? String
+            let evidencePath = dictionary["evidencePath"] as? String
+            let evidenceFileName = dictionary["evidenceFileName"] as? String
+            let evidenceByteCount = (dictionary["evidenceByteCount"] as? NSNumber)?.intValue
+            let plan = dictionary["plan"] as? [String: Any]
+            let ippEndpoint = plan?["ippEndpoint"] as? String
+            let issueReason: String?
+            if kind != requiredKind {
+                issueReason = "wrongKind"
+            } else if status != requiredStatus {
+                issueReason = "notProved"
+            } else if evidencePath != card.evidence.latestPrinterBridgeProofEvidencePath
+                || evidenceFileName != card.evidence.latestPrinterBridgeProofEvidenceFileName
+                || evidenceByteCount != card.evidence.latestPrinterBridgeProofEvidenceByteCount {
+                issueReason = "evidenceMismatch"
+            } else if ippEndpoint != card.evidence.latestPrinterBridgeProofIppEndpoint
+                || ippEndpoint?.hasPrefix("http://10.0.2.2:631/printers/") != true {
+                issueReason = "endpointMismatch"
+            } else {
+                issueReason = nil
+            }
+
+            return AppRuntimeReviewPrinterBridgeProofEvidence(
+                path: path,
+                requiredKind: requiredKind,
+                requiredStatus: requiredStatus,
+                exists: true,
+                isValid: issueReason == nil,
+                kind: kind,
+                status: status,
+                evidencePath: evidencePath,
+                evidenceFileName: evidenceFileName,
+                evidenceByteCount: evidenceByteCount,
+                ippEndpoint: ippEndpoint,
+                issueReason: issueReason
+            )
+        } catch {
+            return appRuntimeReviewInvalidPrinterBridgeProofEvidence(path: path, reason: "notValidJSON")
+        }
+    }
+
+    private static func appRuntimeReviewInvalidPrinterBridgeProofEvidence(
+        path: String,
+        reason: String
+    ) -> AppRuntimeReviewPrinterBridgeProofEvidence {
+        AppRuntimeReviewPrinterBridgeProofEvidence(
+            path: path,
+            requiredKind: "windowsPrinterBridgeProof",
+            requiredStatus: "proved",
+            exists: true,
+            isValid: false,
+            kind: nil,
+            status: nil,
+            evidencePath: nil,
+            evidenceFileName: nil,
+            evidenceByteCount: nil,
+            ippEndpoint: nil,
             issueReason: reason
         )
     }

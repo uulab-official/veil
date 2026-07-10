@@ -68,6 +68,7 @@ export function validateAppRuntimeReviewVerification(report) {
     validateInvalidScreenshotFile(file, index, report);
   }
   validateAppCheckProof(report.appCheckProof, report);
+  validatePrinterBridgeProof(report.printerBridgeProof, report);
   validateScreenshotEvidenceSummary(report.screenshotEvidenceSummary, report);
   validateNextEvidenceActionShape(report.nextEvidenceAction);
   if (!Array.isArray(report.invalidCaptureSteps)) {
@@ -159,6 +160,7 @@ export function validateAppRuntimeReviewVerification(report) {
     && report.readmeExists
     && report.missingFiles.length === 0
     && report.appCheckProof.isValid
+    && (report.printerBridgeProof === undefined || report.printerBridgeProof.isValid)
     && review.areRequiredScreenshotsAttached
   )) {
     throw new TypeError("app runtime review verification completeness must match evidence state.");
@@ -317,7 +319,7 @@ function validateNextEvidenceActionShape(action) {
     requireString(action.supportingCommand, "nextEvidenceAction.supportingCommand");
   }
 
-  if (!["shareEvidence", "captureMissingScreenshot", "replaceInvalidScreenshot", "runAppCheckProof"].includes(action.kind)) {
+  if (!["shareEvidence", "captureMissingScreenshot", "replaceInvalidScreenshot", "runAppCheckProof", "regeneratePrinterProof"].includes(action.kind)) {
     throw new TypeError("app runtime review verification nextEvidenceAction kind is unsupported.");
   }
 }
@@ -355,6 +357,22 @@ function validateNextEvidenceAction(action, report) {
       || action.supportingCommand !== "veil-vmctl app-runtime-status --json"
     ) {
       throw new TypeError("app runtime review verification nextEvidenceAction must run the app check proof before sharing.");
+    }
+    return;
+  }
+
+  if (report.printerBridgeProof !== undefined && !report.printerBridgeProof.isValid) {
+    if (
+      action.kind !== "regeneratePrinterProof"
+      || action.title !== "Regenerate Printer Proof"
+      || action.command !== "veil-vmctl printer-bridge-proof --json --evidence ..."
+      || action.isReadyToShare !== false
+      || action.expectedFileName !== report.printerBridgeProof.path.split("/").pop()
+      || action.path !== report.printerBridgeProof.path
+      || action.instruction !== "Regenerate the Windows printer test-page proof JSON before sharing review evidence."
+      || action.supportingCommand !== "veil-vmctl app-runtime-status --json"
+    ) {
+      throw new TypeError("app runtime review verification nextEvidenceAction must regenerate invalid printer proof before sharing.");
     }
     return;
   }
@@ -425,6 +443,75 @@ function validateAppCheckProof(proof, report) {
     }
   } else if (!["missing", "notValidJSON", "notObject", "wrongKind", "notProved"].includes(proof.issueReason)) {
     throw new TypeError("app runtime review verification invalid appCheckProof must include a supported issue reason.");
+  }
+}
+
+function validatePrinterBridgeProof(proof, report) {
+  const evidence = report.review?.evidence ?? {};
+  if (evidence.latestPrinterBridgeProofPath === undefined) {
+    if (proof !== undefined) {
+      throw new TypeError("app runtime review verification printerBridgeProof must be absent when review evidence has no printer proof.");
+    }
+    return;
+  }
+
+  if (!proof || typeof proof !== "object" || Array.isArray(proof)) {
+    throw new TypeError("app runtime review verification printerBridgeProof must be an object when review evidence has printer proof.");
+  }
+  requireString(proof.path, "printerBridgeProof.path");
+  requireString(proof.requiredKind, "printerBridgeProof.requiredKind");
+  requireString(proof.requiredStatus, "printerBridgeProof.requiredStatus");
+  requireBoolean(proof.exists, "printerBridgeProof.exists");
+  requireBoolean(proof.isValid, "printerBridgeProof.isValid");
+  if (proof.kind !== undefined) {
+    requireString(proof.kind, "printerBridgeProof.kind");
+  }
+  if (proof.status !== undefined) {
+    requireString(proof.status, "printerBridgeProof.status");
+  }
+  if (proof.evidencePath !== undefined) {
+    requireString(proof.evidencePath, "printerBridgeProof.evidencePath");
+  }
+  if (proof.evidenceFileName !== undefined) {
+    requireString(proof.evidenceFileName, "printerBridgeProof.evidenceFileName");
+  }
+  if (proof.evidenceByteCount !== undefined) {
+    requireNonNegativeInteger(proof.evidenceByteCount, "printerBridgeProof.evidenceByteCount");
+  }
+  if (proof.ippEndpoint !== undefined) {
+    requireString(proof.ippEndpoint, "printerBridgeProof.ippEndpoint");
+  }
+  if (proof.issueReason !== undefined) {
+    requireString(proof.issueReason, "printerBridgeProof.issueReason");
+  }
+
+  if (proof.path !== evidence.latestPrinterBridgeProofPath) {
+    throw new TypeError("app runtime review verification printerBridgeProof path must match review evidence.");
+  }
+  if (proof.requiredKind !== "windowsPrinterBridgeProof" || proof.requiredStatus !== "proved") {
+    throw new TypeError("app runtime review verification printerBridgeProof must require proved Windows printer bridge proof.");
+  }
+  if (!proof.path.endsWith(".json") || !proof.path.includes("/Printer Proof/")) {
+    throw new TypeError("app runtime review verification printerBridgeProof path must point to Printer Proof diagnostics.");
+  }
+  if (proof.isValid) {
+    if (
+      proof.exists !== true
+      || proof.kind !== proof.requiredKind
+      || proof.status !== proof.requiredStatus
+      || proof.evidencePath !== evidence.latestPrinterBridgeProofEvidencePath
+      || proof.evidenceFileName !== evidence.latestPrinterBridgeProofEvidenceFileName
+      || proof.evidenceByteCount !== evidence.latestPrinterBridgeProofEvidenceByteCount
+      || proof.ippEndpoint !== evidence.latestPrinterBridgeProofIppEndpoint
+      || proof.issueReason !== undefined
+    ) {
+      throw new TypeError("app runtime review verification valid printerBridgeProof must match review evidence.");
+    }
+    if (!proof.ippEndpoint.startsWith("http://10.0.2.2:631/printers/")) {
+      throw new TypeError("app runtime review verification printerBridgeProof must use QEMU host IPP.");
+    }
+  } else if (!["missing", "notValidJSON", "notObject", "wrongKind", "notProved", "evidenceMismatch", "endpointMismatch"].includes(proof.issueReason)) {
+    throw new TypeError("app runtime review verification invalid printerBridgeProof must include a supported issue reason.");
   }
 }
 

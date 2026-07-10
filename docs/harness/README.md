@@ -372,7 +372,10 @@ Saved printer bridge proof JSON is summarized under
 `proofArtifacts.latestPrinterBridgeProof*` in app-runtime status and mirrored
 into app-runtime review evidence. The harness requires those paths to come from
 the `Printer Proof` diagnostics folder, keeps the QEMU host IPP endpoint
-contract, and records only metadata for the Windows test-page evidence.
+contract, and records only metadata for the Windows test-page evidence. Review
+verification also reads the referenced printer proof JSON and blocks sharing if
+the file is missing, malformed, unproved, or no longer matches the review
+evidence metadata.
 The sibling `notificationBridge` section tracks the actual guest-to-host
 notification event path separately from that consent preflight. It is blocked
 until the live agent and package identity gate are present, moves to
