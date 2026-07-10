@@ -27,6 +27,7 @@ Goal: make mirrored Windows app surfaces report whether their frame stream is mi
 - [x] Added `windowsApps.maintainFrameStreams` and `veil-vmctl app-runtime-action --action maintain-frame-streams` so automation can run the strongest app-screen recovery in one handoff.
 - [x] Added a host-shell automatic maintenance loop that periodically keeps mirrored app screens live by reusing the same reopen/recover/restart priority order.
 - [x] Added first-frame timeout tracking with `frameStreamRequestedAt` and `frameStreamWaitingAgeMilliseconds` so blank pending app windows become stale after 8 seconds and enter automatic maintenance.
+- [x] Added aggregate frame latency health to `macWindowIntegration`, including the 1 second fresh-frame budget, 5 second stale-frame timeout, slowest app-screen window, and next latency action.
 
 ## Status Semantics
 
@@ -35,6 +36,7 @@ Goal: make mirrored Windows app surfaces report whether their frame stream is mi
 - `fresh`: latest frame age is at most 1 second.
 - `delayed`: latest frame age is over 1 second and at most 5 seconds.
 - `stale`: latest frame age is over 5 seconds, or the first frame has not arrived within 8 seconds of the frame subscription request.
+- `macWindowIntegration.frameLatencyHealth`: aggregate app-screen state derived from every mirrored window: `idle`, `waiting`, `healthy`, `delayed`, or `stale`.
 
 ## Verification
 

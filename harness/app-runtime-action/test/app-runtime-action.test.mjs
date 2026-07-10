@@ -221,6 +221,51 @@ function refreshLaunchOnboarding(report) {
   };
 }
 
+function refreshMacFrameLatency(report) {
+  const status = report.status;
+  const sessions = status.mirrorSessions;
+  const health = !status.connection.hasLiveAgentConnection || sessions.length === 0
+    ? "idle"
+    : (sessions.some((session) => session.frameStreamStatus === "stale")
+      ? "stale"
+      : (sessions.some((session) => session.frameStreamStatus === "delayed")
+        ? "delayed"
+        : (sessions.some((session) => session.frameStreamStatus === "waitingForFirstFrame")
+          ? "waiting"
+          : "healthy")));
+  const slowest = sessions.reduce((current, session) => {
+    const age = session.latestFrameAgeMilliseconds ?? session.frameStreamWaitingAgeMilliseconds;
+    if (age === undefined) {
+      return current;
+    }
+    if (current === undefined || age > current.age) {
+      return { windowId: session.windowId, title: session.title, age };
+    }
+    return current;
+  }, undefined);
+
+  status.macWindowIntegration.frameLatencyHealth = health;
+  status.macWindowIntegration.frameLatencyRecommendedAction = !status.connection.hasLiveAgentConnection
+    ? "wait-for-agent"
+    : (sessions.length === 0
+      ? "open-windows-app"
+      : ({
+        healthy: "none",
+        waiting: "wait-for-first-frame",
+        delayed: "refresh-runtime-status",
+        stale: "maintain-frame-streams"
+      })[health]);
+  if (slowest === undefined) {
+    delete status.macWindowIntegration.slowestFrameWindowId;
+    delete status.macWindowIntegration.slowestFrameWindowTitle;
+    delete status.macWindowIntegration.slowestFrameAgeMilliseconds;
+  } else {
+    status.macWindowIntegration.slowestFrameWindowId = slowest.windowId;
+    status.macWindowIntegration.slowestFrameWindowTitle = slowest.title;
+    status.macWindowIntegration.slowestFrameAgeMilliseconds = slowest.age;
+  }
+}
+
 function currentStepDetail(status) {
   if (status.releaseGate.isPassing) {
     return "Review and share the current app-flow evidence.";
@@ -1153,6 +1198,7 @@ test("rejects close-all actions that leave mirrored sessions open", () => {
   report.status.actions.find((action) => action.id === "runtime.quietWhenIdle").isAvailable = false;
   report.status.actions.find((action) => action.id === "runtime.stopWhenIdle").isAvailable = false;
   report.status.actions.find((action) => action.id === "dock.bringWindowsAppsForward").isAvailable = true;
+  refreshMacFrameLatency(report);
   setReleaseGateStep(report, "closeOrRestore", {
     state: "ready",
     isPassing: true,
@@ -1216,6 +1262,7 @@ test("allows rejected restore actions to keep requested app ids", () => {
   report.status.quietRuntime.openWindowCount = 0;
   report.status.actions.find((action) => action.id === "windowsApps.restorePrevious").isAvailable = true;
   report.status.actions.find((action) => action.id === "windowsApps.reconnectRestore").isAvailable = true;
+  refreshMacFrameLatency(report);
   setReleaseGateStep(report, "closeOrRestore", {
     state: "ready",
     isPassing: true,
@@ -1254,6 +1301,7 @@ test("rejects restore actions whose windows are absent from status", () => {
   report.status.quietRuntime.openWindowCount = 0;
   report.status.actions.find((action) => action.id === "windowsApps.restorePrevious").isAvailable = true;
   report.status.actions.find((action) => action.id === "windowsApps.reconnectRestore").isAvailable = true;
+  refreshMacFrameLatency(report);
   setReleaseGateStep(report, "closeOrRestore", {
     state: "ready",
     isPassing: true,

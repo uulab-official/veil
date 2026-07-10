@@ -1099,7 +1099,9 @@ struct VeilVMControl {
         print("Apps: \(report.apps.count)")
         print("Open Windows app windows: \(report.mirrorSessions.count)")
         for session in report.mirrorSessions {
-            let age = session.latestFrameAgeMilliseconds.map { "\($0)ms old" } ?? "no frame yet"
+            let age = session.latestFrameAgeMilliseconds.map { "\($0)ms old" }
+                ?? session.frameStreamWaitingAgeMilliseconds.map { "\($0)ms waiting" }
+                ?? "no frame yet"
             let interval = session.latestFrameIntervalMilliseconds.map { ", \($0)ms interval" } ?? ""
             let restarts = session.frameStreamRestartCount > 0 ? ", \(session.frameStreamRestartCount) restarts" : ""
             let escalation = session.frameStreamRecoveryEscalated ? ", recovery needed" : ""
@@ -1143,6 +1145,12 @@ struct VeilVMControl {
         print("Mac windows auto-open: \(report.macWindowIntegration.acceptsGuestWindowEvents ? "ready" : "waiting")")
         print("Mac mirrored windows: \(report.macWindowIntegration.mirroredWindowCount)")
         print("Mac frame streams: \(report.macWindowIntegration.freshFrameWindowCount) fresh, \(report.macWindowIntegration.delayedFrameWindowCount) delayed, \(report.macWindowIntegration.staleFrameWindowCount) stale")
+        print("Mac frame latency: \(report.macWindowIntegration.frameLatencyHealth) (\(report.macWindowIntegration.frameLatencyBudgetMilliseconds)ms budget, \(report.macWindowIntegration.frameStaleTimeoutMilliseconds)ms stale timeout)")
+        print("Mac frame latency action: \(report.macWindowIntegration.frameLatencyRecommendedAction)")
+        if let slowestFrameWindowId = report.macWindowIntegration.slowestFrameWindowId,
+           let slowestFrameAgeMilliseconds = report.macWindowIntegration.slowestFrameAgeMilliseconds {
+            print("Mac slowest app screen: \(slowestFrameWindowId) at \(slowestFrameAgeMilliseconds)ms")
+        }
         print("Mac foregroundable windows: \(report.macWindowIntegration.foregroundableWindowCount)")
         if let foregroundWindowId = report.macWindowIntegration.foregroundWindowId {
             print("Mac foreground window: \(foregroundWindowId)")

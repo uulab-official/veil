@@ -592,6 +592,13 @@ public struct WindowsAppRuntimeMacWindowIntegrationStatus: Codable, Equatable, S
     public var freshFrameWindowCount: Int
     public var delayedFrameWindowCount: Int
     public var staleFrameWindowCount: Int
+    public var frameLatencyHealth: String
+    public var frameLatencyBudgetMilliseconds: Int
+    public var frameStaleTimeoutMilliseconds: Int
+    public var slowestFrameWindowId: String?
+    public var slowestFrameWindowTitle: String?
+    public var slowestFrameAgeMilliseconds: Int?
+    public var frameLatencyRecommendedAction: String
     public var reason: String
 
     public init(
@@ -608,6 +615,13 @@ public struct WindowsAppRuntimeMacWindowIntegrationStatus: Codable, Equatable, S
         freshFrameWindowCount: Int,
         delayedFrameWindowCount: Int,
         staleFrameWindowCount: Int,
+        frameLatencyHealth: String = "idle",
+        frameLatencyBudgetMilliseconds: Int = WindowFrameStreamAssessment.freshFrameAgeThresholdMilliseconds,
+        frameStaleTimeoutMilliseconds: Int = WindowFrameStreamAssessment.delayedFrameAgeThresholdMilliseconds,
+        slowestFrameWindowId: String? = nil,
+        slowestFrameWindowTitle: String? = nil,
+        slowestFrameAgeMilliseconds: Int? = nil,
+        frameLatencyRecommendedAction: String = "none",
         reason: String
     ) {
         self.isEnabled = isEnabled
@@ -623,6 +637,13 @@ public struct WindowsAppRuntimeMacWindowIntegrationStatus: Codable, Equatable, S
         self.freshFrameWindowCount = freshFrameWindowCount
         self.delayedFrameWindowCount = delayedFrameWindowCount
         self.staleFrameWindowCount = staleFrameWindowCount
+        self.frameLatencyHealth = frameLatencyHealth
+        self.frameLatencyBudgetMilliseconds = frameLatencyBudgetMilliseconds
+        self.frameStaleTimeoutMilliseconds = frameStaleTimeoutMilliseconds
+        self.slowestFrameWindowId = slowestFrameWindowId
+        self.slowestFrameWindowTitle = slowestFrameWindowTitle
+        self.slowestFrameAgeMilliseconds = slowestFrameAgeMilliseconds
+        self.frameLatencyRecommendedAction = frameLatencyRecommendedAction
         self.reason = reason
     }
 }
@@ -2797,23 +2818,53 @@ public final class HostDashboardModel {
     ) -> WindowsAppRuntimeMacWindowIntegrationStatus {
         let pendingFrameWindowCount = mirrorSessions.filter { $0.captureState == .pending }.count
         let streamingWindowCount = mirrorSessions.filter { $0.captureState == .streaming }.count
-        let frameStatuses = mirrorSessions.map {
-            WindowFrameStreamAssessment.assess(session: $0, generatedAt: generatedAt).status
+        let frameAssessments = mirrorSessions.map { session in
+            (
+                session: session,
+                assessment: WindowFrameStreamAssessment.assess(session: session, generatedAt: generatedAt)
+            )
         }
+        let frameStatuses = frameAssessments.map(\.assessment.status)
         let freshFrameWindowCount = frameStatuses.filter { $0 == .fresh }.count
         let delayedFrameWindowCount = frameStatuses.filter { $0 == .delayed }.count
         let staleFrameWindowCount = frameStatuses.filter { $0 == .stale }.count
+        let slowestFrame = frameAssessments.compactMap { entry -> (session: WindowMirrorSession, age: Int)? in
+            let age = entry.assessment.latestFrameAgeMilliseconds
+                ?? entry.assessment.waitingForFirstFrameMilliseconds
+            guard let age else {
+                return nil
+            }
+
+            return (entry.session, age)
+        }
+        .max { lhs, rhs in lhs.age < rhs.age }
+        let frameLatencyHealth: String
+        let frameLatencyRecommendedAction: String
         let reason: String
 
         if !hasLiveAgentConnection {
+            frameLatencyHealth = "idle"
+            frameLatencyRecommendedAction = "wait-for-agent"
             reason = "Waiting for the Windows app connection before opening app windows on macOS automatically."
         } else if mirrorSessions.isEmpty {
+            frameLatencyHealth = "idle"
+            frameLatencyRecommendedAction = "open-windows-app"
             reason = "Ready to open the next Windows app as a macOS window."
         } else if staleFrameWindowCount > 0 {
+            frameLatencyHealth = "stale"
+            frameLatencyRecommendedAction = "maintain-frame-streams"
             reason = "Windows app windows are mirrored, but at least one frame stream is stale."
         } else if delayedFrameWindowCount > 0 {
+            frameLatencyHealth = "delayed"
+            frameLatencyRecommendedAction = "refresh-runtime-status"
             reason = "Windows app windows are mirrored, with at least one delayed frame stream."
+        } else if frameStatuses.contains(.waitingForFirstFrame) {
+            frameLatencyHealth = "waiting"
+            frameLatencyRecommendedAction = "wait-for-first-frame"
+            reason = "Windows app windows are mirrored and waiting for the first app screen frame."
         } else {
+            frameLatencyHealth = "healthy"
+            frameLatencyRecommendedAction = "none"
             reason = "Windows app windows are mirrored as macOS windows."
         }
 
@@ -2831,6 +2882,13 @@ public final class HostDashboardModel {
             freshFrameWindowCount: freshFrameWindowCount,
             delayedFrameWindowCount: delayedFrameWindowCount,
             staleFrameWindowCount: staleFrameWindowCount,
+            frameLatencyHealth: frameLatencyHealth,
+            frameLatencyBudgetMilliseconds: WindowFrameStreamAssessment.freshFrameAgeThresholdMilliseconds,
+            frameStaleTimeoutMilliseconds: WindowFrameStreamAssessment.delayedFrameAgeThresholdMilliseconds,
+            slowestFrameWindowId: slowestFrame?.session.id,
+            slowestFrameWindowTitle: slowestFrame?.session.window.title,
+            slowestFrameAgeMilliseconds: slowestFrame?.age,
+            frameLatencyRecommendedAction: frameLatencyRecommendedAction,
             reason: reason
         )
     }

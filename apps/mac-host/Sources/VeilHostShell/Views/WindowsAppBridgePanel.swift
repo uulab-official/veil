@@ -119,51 +119,31 @@ struct WindowsAppBridgePanel: View {
     }
 
     private var captureValue: String {
-        let assessments = model.mirrorSessions.map {
-            WindowFrameStreamAssessment.assess(session: $0)
-        }
-
-        if assessments.contains(where: { $0.status == .stale }) {
+        switch model.macWindowIntegrationStatus().frameLatencyHealth {
+        case "stale":
             return "Paused"
-        }
-
-        if assessments.contains(where: { $0.status == .delayed }) {
+        case "delayed":
             return "Delayed"
-        }
-
-        if assessments.contains(where: { $0.status == .fresh }) {
-            return "Live"
-        }
-
-        if assessments.contains(where: { $0.status == .waitingForFirstFrame }) {
+        case "waiting":
             return "Pending"
+        case "healthy":
+            return "Live"
+        default:
+            return model.health?.capabilities.windowCapture == true ? "Available" : "Planned"
         }
-
-        return model.health?.capabilities.windowCapture == true ? "Available" : "Planned"
     }
 
     private var captureTint: Color {
-        let assessments = model.mirrorSessions.map {
-            WindowFrameStreamAssessment.assess(session: $0)
-        }
-
-        if assessments.contains(where: { $0.status == .stale }) {
+        switch model.macWindowIntegrationStatus().frameLatencyHealth {
+        case "stale", "waiting":
             return .orange
-        }
-
-        if assessments.contains(where: { $0.status == .delayed }) {
+        case "delayed":
             return .yellow
-        }
-
-        if assessments.contains(where: { $0.status == .fresh }) {
+        case "healthy":
             return .green
+        default:
+            return model.health?.capabilities.windowCapture == true ? .green : .secondary
         }
-
-        if assessments.contains(where: { $0.status == .waitingForFirstFrame }) {
-            return .orange
-        }
-
-        return model.health?.capabilities.windowCapture == true ? .green : .secondary
     }
 
     private var packageIdentityValue: String {

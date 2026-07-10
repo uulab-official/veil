@@ -5,6 +5,9 @@ const VALID_CONNECTION_MODES = new Set(["agent", "demo"]);
 const VALID_PHASES = new Set(["idle", "loading", "connected", "launching", "failed"]);
 const VALID_CAPTURE_STATES = new Set(["unavailable", "pending", "streaming"]);
 const VALID_FRAME_STREAM_STATUSES = new Set(["unavailable", "waitingForFirstFrame", "fresh", "delayed", "stale"]);
+const VALID_FRAME_LATENCY_HEALTH = new Set(["idle", "waiting", "healthy", "delayed", "stale"]);
+const FRAME_LATENCY_BUDGET_MILLISECONDS = 1_000;
+const FRAME_STALE_TIMEOUT_MILLISECONDS = 5_000;
 const FIRST_FRAME_TIMEOUT_MILLISECONDS = 8_000;
 const VALID_CONSOLE_PREVIEW_STATES = new Set(["fresh", "stale", "unavailable"]);
 const VALID_AUTOMATIC_INSTALL_MEDIA_STATES = new Set(["current", "stale", "missing", "unavailable"]);
@@ -546,7 +549,29 @@ function validateMacWindowIntegration(macWindowIntegration, mirrorSessions, conn
   requireNonNegativeInteger(macWindowIntegration.freshFrameWindowCount, "macWindowIntegration.freshFrameWindowCount");
   requireNonNegativeInteger(macWindowIntegration.delayedFrameWindowCount, "macWindowIntegration.delayedFrameWindowCount");
   requireNonNegativeInteger(macWindowIntegration.staleFrameWindowCount, "macWindowIntegration.staleFrameWindowCount");
+  requireString(macWindowIntegration.frameLatencyHealth, "macWindowIntegration.frameLatencyHealth");
+  if (!VALID_FRAME_LATENCY_HEALTH.has(macWindowIntegration.frameLatencyHealth)) {
+    throw new TypeError(`Unsupported frame latency health: ${macWindowIntegration.frameLatencyHealth}`);
+  }
+  requireNonNegativeInteger(macWindowIntegration.frameLatencyBudgetMilliseconds, "macWindowIntegration.frameLatencyBudgetMilliseconds");
+  requireNonNegativeInteger(macWindowIntegration.frameStaleTimeoutMilliseconds, "macWindowIntegration.frameStaleTimeoutMilliseconds");
+  requireString(macWindowIntegration.frameLatencyRecommendedAction, "macWindowIntegration.frameLatencyRecommendedAction");
   requireString(macWindowIntegration.reason, "macWindowIntegration.reason");
+  if (macWindowIntegration.slowestFrameWindowId !== undefined) {
+    requireString(macWindowIntegration.slowestFrameWindowId, "macWindowIntegration.slowestFrameWindowId");
+  }
+  if (macWindowIntegration.slowestFrameWindowTitle !== undefined) {
+    requireString(macWindowIntegration.slowestFrameWindowTitle, "macWindowIntegration.slowestFrameWindowTitle");
+  }
+  if (macWindowIntegration.slowestFrameAgeMilliseconds !== undefined) {
+    requireNonNegativeInteger(macWindowIntegration.slowestFrameAgeMilliseconds, "macWindowIntegration.slowestFrameAgeMilliseconds");
+  }
+  if (macWindowIntegration.frameLatencyBudgetMilliseconds !== FRAME_LATENCY_BUDGET_MILLISECONDS) {
+    throw new TypeError("macWindowIntegration.frameLatencyBudgetMilliseconds must match the fresh frame budget.");
+  }
+  if (macWindowIntegration.frameStaleTimeoutMilliseconds !== FRAME_STALE_TIMEOUT_MILLISECONDS) {
+    throw new TypeError("macWindowIntegration.frameStaleTimeoutMilliseconds must match the stale frame timeout.");
+  }
 
   if (macWindowIntegration.mirroredWindowCount !== mirrorSessions.length) {
     throw new TypeError("macWindowIntegration.mirroredWindowCount must match mirrorSessions length.");
@@ -600,6 +625,29 @@ function validateMacWindowIntegration(macWindowIntegration, mirrorSessions, conn
     throw new TypeError("Mac frame stream quality counts cannot exceed mirroredWindowCount.");
   }
 
+  const expectedFrameLatencyHealth = expectedMacFrameLatencyHealth(mirrorSessions, connection);
+  if (macWindowIntegration.frameLatencyHealth !== expectedFrameLatencyHealth) {
+    throw new TypeError("macWindowIntegration.frameLatencyHealth must match aggregate frame stream state.");
+  }
+  const expectedFrameLatencyAction = expectedMacFrameLatencyRecommendedAction(mirrorSessions, connection);
+  if (macWindowIntegration.frameLatencyRecommendedAction !== expectedFrameLatencyAction) {
+    throw new TypeError("macWindowIntegration.frameLatencyRecommendedAction must match aggregate frame stream state.");
+  }
+  const expectedSlowestFrame = expectedMacSlowestFrame(mirrorSessions);
+  if (!expectedSlowestFrame) {
+    if (macWindowIntegration.slowestFrameWindowId !== undefined
+      || macWindowIntegration.slowestFrameWindowTitle !== undefined
+      || macWindowIntegration.slowestFrameAgeMilliseconds !== undefined) {
+      throw new TypeError("macWindowIntegration slowest frame fields must be omitted when no frame age is known.");
+    }
+  } else if (
+    macWindowIntegration.slowestFrameWindowId !== expectedSlowestFrame.windowId
+    || macWindowIntegration.slowestFrameWindowTitle !== expectedSlowestFrame.title
+    || macWindowIntegration.slowestFrameAgeMilliseconds !== expectedSlowestFrame.age
+  ) {
+    throw new TypeError("macWindowIntegration slowest frame fields must match the slowest mirror session.");
+  }
+
   if (macWindowIntegration.acceptsGuestWindowEvents !== connection.hasLiveAgentConnection) {
     throw new TypeError("macWindowIntegration.acceptsGuestWindowEvents must reflect live agent connection.");
   }
@@ -607,6 +655,62 @@ function validateMacWindowIntegration(macWindowIntegration, mirrorSessions, conn
   if (macWindowIntegration.hidesLauncherWhenMirroring && (!connection.hasLiveAgentConnection || mirrorSessions.length === 0)) {
     throw new TypeError("macWindowIntegration.hidesLauncherWhenMirroring requires a live mirrored Windows app window.");
   }
+}
+
+function expectedMacFrameLatencyHealth(mirrorSessions, connection) {
+  if (!connection.hasLiveAgentConnection || mirrorSessions.length === 0) {
+    return "idle";
+  }
+  if (mirrorSessions.some((session) => session.frameStreamStatus === "stale")) {
+    return "stale";
+  }
+  if (mirrorSessions.some((session) => session.frameStreamStatus === "delayed")) {
+    return "delayed";
+  }
+  if (mirrorSessions.some((session) => session.frameStreamStatus === "waitingForFirstFrame")) {
+    return "waiting";
+  }
+  return "healthy";
+}
+
+function expectedMacFrameLatencyRecommendedAction(mirrorSessions, connection) {
+  const health = expectedMacFrameLatencyHealth(mirrorSessions, connection);
+  if (!connection.hasLiveAgentConnection) {
+    return "wait-for-agent";
+  }
+  if (mirrorSessions.length === 0) {
+    return "open-windows-app";
+  }
+  switch (health) {
+    case "healthy":
+      return "none";
+    case "waiting":
+      return "wait-for-first-frame";
+    case "delayed":
+      return "refresh-runtime-status";
+    case "stale":
+      return "maintain-frame-streams";
+    default:
+      throw new TypeError(`Unsupported frame latency health: ${health}`);
+  }
+}
+
+function expectedMacSlowestFrame(mirrorSessions) {
+  let slowest;
+  for (const session of mirrorSessions) {
+    const age = session.latestFrameAgeMilliseconds ?? session.frameStreamWaitingAgeMilliseconds;
+    if (age === undefined) {
+      continue;
+    }
+    if (!slowest || age > slowest.age) {
+      slowest = {
+        windowId: session.windowId,
+        title: session.title,
+        age
+      };
+    }
+  }
+  return slowest;
 }
 
 function validateQuietRuntime(quietRuntime, mirrorSessions) {

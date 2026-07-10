@@ -747,6 +747,36 @@ test("rejects Mac foreground window identity that drifts from mirrored sessions"
   );
 });
 
+test("rejects Mac frame latency health drift", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.mac-window-live.json", import.meta.url), "utf8"));
+  report.macWindowIntegration.frameLatencyHealth = "healthy";
+
+  assert.throws(
+    () => validateAppRuntimeStatus(report),
+    /frameLatencyHealth/
+  );
+});
+
+test("rejects Mac frame latency action drift", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.mac-window-live.json", import.meta.url), "utf8"));
+  report.macWindowIntegration.frameLatencyRecommendedAction = "none";
+
+  assert.throws(
+    () => validateAppRuntimeStatus(report),
+    /frameLatencyRecommendedAction/
+  );
+});
+
+test("rejects Mac slowest frame drift", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.mac-window-live.json", import.meta.url), "utf8"));
+  report.macWindowIntegration.slowestFrameAgeMilliseconds = 999;
+
+  assert.throws(
+    () => validateAppRuntimeStatus(report),
+    /slowest frame/
+  );
+});
+
 test("accepts timed out first-frame streams as stale", () => {
   const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.mac-window-live.json", import.meta.url), "utf8"));
   const session = report.mirrorSessions[0];
@@ -755,6 +785,9 @@ test("accepts timed out first-frame streams as stale", () => {
   session.frameStreamWaitingAgeMilliseconds = 9000;
   session.frameStreamRecommendedAction = "restart-frame-subscription";
   report.macWindowIntegration.staleFrameWindowCount = 1;
+  report.macWindowIntegration.frameLatencyHealth = "stale";
+  report.macWindowIntegration.slowestFrameAgeMilliseconds = 9000;
+  report.macWindowIntegration.frameLatencyRecommendedAction = "maintain-frame-streams";
   report.macWindowIntegration.reason = "Windows app windows are mirrored, but at least one frame stream is stale.";
   report.actions.find((action) => action.id === "windowsApps.restartFrameStream").isAvailable = true;
   report.actions.find((action) => action.id === "windowsApps.maintainFrameStreams").isAvailable = true;
@@ -769,6 +802,9 @@ test("rejects first-frame stale status without timeout evidence", () => {
   session.frameStreamWaitingAgeMilliseconds = 3000;
   session.frameStreamRecommendedAction = "restart-frame-subscription";
   report.macWindowIntegration.staleFrameWindowCount = 1;
+  report.macWindowIntegration.frameLatencyHealth = "stale";
+  report.macWindowIntegration.slowestFrameAgeMilliseconds = 3000;
+  report.macWindowIntegration.frameLatencyRecommendedAction = "maintain-frame-streams";
   report.macWindowIntegration.reason = "Windows app windows are mirrored, but at least one frame stream is stale.";
   report.actions.find((action) => action.id === "windowsApps.restartFrameStream").isAvailable = true;
   report.actions.find((action) => action.id === "windowsApps.maintainFrameStreams").isAvailable = true;

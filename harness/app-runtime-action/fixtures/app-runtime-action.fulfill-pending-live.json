@@ -121,7 +121,14 @@
       "foregroundWindowTitle": "Untitled - Notepad",
       "freshFrameWindowCount": 0,
       "delayedFrameWindowCount": 0,
-      "staleFrameWindowCount": 0
+      "staleFrameWindowCount": 0,
+      "frameLatencyHealth": "waiting",
+      "frameLatencyBudgetMilliseconds": 1000,
+      "frameStaleTimeoutMilliseconds": 5000,
+      "frameLatencyRecommendedAction": "wait-for-first-frame",
+      "slowestFrameWindowId": "hwnd:0003029A",
+      "slowestFrameWindowTitle": "Untitled - Notepad",
+      "slowestFrameAgeMilliseconds": 0
     },
     "quietRuntime": {
       "isEnabled": true,

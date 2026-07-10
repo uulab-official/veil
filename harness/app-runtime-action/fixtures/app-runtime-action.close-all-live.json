@@ -93,7 +93,11 @@
       "foregroundableWindowCount": 0,
       "freshFrameWindowCount": 0,
       "delayedFrameWindowCount": 0,
-      "staleFrameWindowCount": 0
+      "staleFrameWindowCount": 0,
+      "frameLatencyHealth": "idle",
+      "frameLatencyBudgetMilliseconds": 1000,
+      "frameStaleTimeoutMilliseconds": 5000,
+      "frameLatencyRecommendedAction": "open-windows-app"
     },
     "quietRuntime": {
       "isEnabled": true,

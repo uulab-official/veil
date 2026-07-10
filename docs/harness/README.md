@@ -153,7 +153,14 @@ window after the guest agent is ready.
 `macWindowIntegration` records whether a live agent can feed guest HWND events
 into automatic macOS app-window presentation, including mirrored, pending-frame,
 streaming, foregroundable, fresh-frame, delayed-frame, and stale-frame window
-counts. Each `mirrorSessions[]` entry also carries `frameStreamStatus`,
+counts. The same object carries aggregate frame latency health:
+`frameLatencyHealth`, `frameLatencyBudgetMilliseconds`,
+`frameStaleTimeoutMilliseconds`, `slowestFrameWindowId`,
+`slowestFrameWindowTitle`, `slowestFrameAgeMilliseconds`, and
+`frameLatencyRecommendedAction`. Harness validators derive those fields from
+`mirrorSessions[]`, so app UI, CLI output, and review cards cannot disagree on
+whether the app screens are healthy, waiting, delayed, or stale. Each
+`mirrorSessions[]` entry also carries `frameStreamStatus`,
 `frameStreamRequestedAt`, `frameStreamWaitingAgeMilliseconds`,
 `latestFrameReceivedAt`, `latestFrameAgeMilliseconds`,
 `latestFrameIntervalMilliseconds`, `receivedFrameCount`, and

@@ -346,12 +346,14 @@ Rules:
 - Host-side app-runtime status records frame stream recovery evidence per HWND:
   `frameStreamRequestedAt`, `frameStreamWaitingAgeMilliseconds`,
   `frameStreamRestartCount`, `latestFrameStreamRestartedAt`, and
-  `frameStreamRecoveryEscalated`/`frameStreamReopenEscalated`. A restart is an
-  unsubscribe followed by a new subscribe. If no frame arrives within 8 seconds
-  of `frameStreamRequestedAt`, the host treats the still-pending stream as
-  `stale` and routes it through the same maintenance path as an old latest
-  frame. After two restart attempts on the same HWND still lead to a stale
-  stream, the host reports
+  `frameStreamRecoveryEscalated`/`frameStreamReopenEscalated`. Aggregate
+  `macWindowIntegration` status also reports `frameLatencyHealth`, the 1 second
+  fresh-frame budget, the 5 second stale-frame timeout, the slowest app-screen
+  window, and the next aggregate latency action. A restart is an unsubscribe
+  followed by a new subscribe. If no frame arrives within 8 seconds of
+  `frameStreamRequestedAt`, the host treats the still-pending stream as `stale`
+  and routes it through the same maintenance path as an old latest frame. After
+  two restart attempts on the same HWND still lead to a stale stream, the host reports
   `frameStreamRecommendedAction=recover-window-capture` instead of repeatedly
   recommending another subscription restart. The host-side
   `recover-window-capture` action focuses the HWND through the guest agent, then
