@@ -1,0 +1,41 @@
+{
+  "kind": "windowsPrinterBridgeProof",
+  "status": "proved",
+  "provedAt": "2026-07-10T12:30:00Z",
+  "evidencePath": "/Users/test/Desktop/windows-test-page.pdf",
+  "evidenceFileName": "windows-test-page.pdf",
+  "evidenceByteCount": 8192,
+  "evidenceModifiedAt": "2026-07-10T12:29:00Z",
+  "plan": {
+    "kind": "windowsPrinterBridgePlan",
+    "generatedAt": "2026-07-10T12:28:00Z",
+    "mode": "manual-ipp-experiment",
+    "hostAddress": "10.0.2.2",
+    "ippPort": 631,
+    "sharedPrinterName": "Office Printer",
+    "windowsPrinterName": "Veil Mac Printer",
+    "ippEndpoint": "http://10.0.2.2:631/printers/Office%20Printer",
+    "macOSSharingHint": "Enable macOS Printer Sharing, then share the target printer as Office Printer.",
+    "windowsAddPrinterCommand": "Add-Printer -Name 'Veil Mac Printer' -IppURL 'http://10.0.2.2:631/printers/Office%20Printer'",
+    "windowsVerifyPrinterCommand": "Get-Printer -Name 'Veil Mac Printer' | Format-List Name,Type,PrinterStatus",
+    "manualTestPageInstruction": "From Windows Settings, open Printers & scanners, select Veil Mac Printer, and print a test page.",
+    "setupSteps": [
+      "On macOS, enable Printer Sharing and share the printer name shown in sharedPrinterName."
+    ],
+    "verificationSteps": [
+      "Run windowsVerifyPrinterCommand and confirm the printer is present."
+    ],
+    "limitations": [
+      "This is a manual IPP experiment, not automatic Parallels-style printer provisioning yet."
+    ],
+    "nextActions": [
+      "Run the generated Add-Printer command inside Windows after the guest is installed and networked."
+    ]
+  },
+  "savedProofPath": "/Users/test/Library/Application Support/Veil/Diagnostics/Printer Proof/printer-bridge-proof.json",
+  "nextActions": [
+    "Run `veil-vmctl app-runtime-status --json` to confirm proofArtifacts.latestPrinterBridgeProofPath.",
+    "Keep the original evidence file available locally; Veil records metadata and does not copy printer output into diagnostics.",
+    "Use this proof before graduating printer bridge beyond manual-ipp-experiment."
+  ]
+}

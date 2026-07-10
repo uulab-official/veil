@@ -305,9 +305,9 @@ private struct WindowsQuickLaunchPanel: View {
 
             HStack(spacing: 12) {
                 StatusPill(
-                    title: "Printer Setup",
+                    title: printerBridgeStatusTitle,
                     symbolName: "printer",
-                    tint: .blue
+                    tint: printerBridgeTint
                 )
                 .frame(minWidth: 118, alignment: .leading)
 
@@ -488,14 +488,36 @@ private struct WindowsQuickLaunchPanel: View {
     }
 
     private var printerBridgeDetail: String {
-        "Manual IPP setup at \(dailyUseReadiness.printerBridgeEndpointTemplate)"
+        if let evidenceFileName = proofArtifacts.latestPrinterBridgeProofEvidenceFileName {
+            return "Latest test page proof: \(evidenceFileName)"
+        }
+
+        return "Manual IPP setup at \(dailyUseReadiness.printerBridgeEndpointTemplate)"
     }
 
     private var printerBridgeHelp: String {
-        [
+        var details = [
             dailyUseReadiness.printerBridgeSetupHint,
             "Command: \(dailyUseReadiness.printerBridgePlanCommand)"
-        ].joined(separator: "\n")
+        ]
+
+        if let proofPath = proofArtifacts.latestPrinterBridgeProofPath {
+            details.append("Latest proof: \(proofPath)")
+        }
+
+        if let evidencePath = proofArtifacts.latestPrinterBridgeProofEvidencePath {
+            details.append("Evidence: \(evidencePath)")
+        }
+
+        return details.joined(separator: "\n")
+    }
+
+    private var printerBridgeStatusTitle: String {
+        proofArtifacts.latestPrinterBridgeProofPath == nil ? "Printer Setup" : "Printer Proof"
+    }
+
+    private var printerBridgeTint: Color {
+        proofArtifacts.latestPrinterBridgeProofPath == nil ? .blue : .green
     }
 
     private var appFlowStatusTitle: String {

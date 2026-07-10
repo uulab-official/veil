@@ -25,6 +25,7 @@ harness/
 ├─ multi-app-proof/        JSON shape validation for Notepad/Calculator/Paint proof coverage
 ├─ notification-proof/     JSON shape validation for Windows notification bridge proof
 ├─ printer-bridge-plan/    JSON shape validation for Mac shared-printer to Windows IPP setup
+├─ printer-bridge-proof/   JSON shape validation for Windows printer test-page evidence
 ├─ guest-agent-wait/       JSON shape validation for post-install guest-agent readiness
 ├─ qemu-boot-plan/         JSON shape validation for dry-run QEMU/HVF boot plans
 ├─ qemu-doctor/            JSON shape validation for QEMU/HVF readiness reports
@@ -52,6 +53,7 @@ Current executable pieces:
 - `harness/multi-app-proof`: a JSON validator for one command that runs Coherence proof coverage across Notepad, Calculator, and Paint and saves per-app artifacts for app-runtime status.
 - `harness/notification-proof`: a JSON validator for the Windows notification bridge gate: guest-agent readiness plus one real `notification.received` event from the guest.
 - `harness/printer-bridge-plan`: a JSON validator for the manual Mac shared-printer to Windows IPP setup plan.
+- `harness/printer-bridge-proof`: a JSON validator for manual printer bridge evidence metadata after a Windows test page is saved.
 - `harness/guest-agent-wait`: a JSON validator for waiting until the installed Windows guest agent is reachable after setup/login.
 - `harness/qemu-boot-plan`: a JSON validator for dry-run QEMU/HVF Windows Arm boot plans.
 - `harness/qemu-doctor`: a JSON validator for QEMU/HVF readiness reports and next actions.
@@ -308,6 +310,12 @@ The app action surface must also include
 `actions[].id=dailyUse.planPrinterBridge` with title `Printer Setup`, so the
 launcher and menu-bar routers can keep printer setup in the same product action
 family as Daily Use app checks and notification checks.
+Once a Windows test page has been saved by the user, `veil-vmctl
+printer-bridge-proof --json --evidence /path/to/test-page.pdf` records proof
+metadata under `Diagnostics/Printer Proof` and `app-runtime-status` promotes the
+latest `proofArtifacts.latestPrinterBridgeProof*` summary. The proof command
+does not copy printer output into diagnostics; it records path, file name, byte
+count, modified date, and the generated IPP plan.
 The `prepare-sparse-package` command is host-actionable:
 `veil-vmctl app-runtime-action --json --action prepare-sparse-package --wait-seconds 120`
 drives the attached `P.cmd` entrypoint through QEMU keyboard automation, while
@@ -735,6 +743,15 @@ the lane can graduate beyond `manual-ipp-experiment`.
 cd apps/mac-host
 swift run veil-vmctl printer-bridge-plan --json --shared-printer "Office Printer" | node ../../harness/printer-bridge-plan/src/validate-printer-bridge-plan.mjs
 node ../../harness/printer-bridge-plan/src/validate-printer-bridge-plan.mjs < ../../harness/printer-bridge-plan/fixtures/printer-bridge-plan.json
+```
+
+After the Windows test page exists, save metadata proof:
+
+```bash
+cd apps/mac-host
+evidence="$HOME/Desktop/windows-test-page.pdf"
+swift run veil-vmctl printer-bridge-proof --json --evidence "$evidence" --shared-printer "Office Printer" | node ../../harness/printer-bridge-proof/src/validate-printer-bridge-proof.mjs
+node ../../harness/printer-bridge-proof/src/validate-printer-bridge-proof.mjs < "$HOME/Library/Application Support/Veil/Diagnostics/Printer Proof/printer-bridge-proof.json"
 ```
 
 Use this only after sparse package identity is live and Windows notification

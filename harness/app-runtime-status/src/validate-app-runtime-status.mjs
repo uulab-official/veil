@@ -1300,12 +1300,17 @@ function validateProofArtifacts(proofArtifacts) {
   requireString(proofArtifacts.diagnosticsDirectory, "proofArtifacts.diagnosticsDirectory");
   requireString(proofArtifacts.recommendedProofDirectory, "proofArtifacts.recommendedProofDirectory");
   requireString(proofArtifacts.notificationProofDirectory, "proofArtifacts.notificationProofDirectory");
+  requireString(proofArtifacts.printerProofDirectory, "proofArtifacts.printerProofDirectory");
   if (!proofArtifacts.notificationProofDirectory.endsWith("/Notification Proof")) {
     throw new TypeError("proofArtifacts.notificationProofDirectory must point to the Notification Proof diagnostics folder.");
+  }
+  if (!proofArtifacts.printerProofDirectory.endsWith("/Printer Proof")) {
+    throw new TypeError("proofArtifacts.printerProofDirectory must point to the Printer Proof diagnostics folder.");
   }
   requireString(proofArtifacts.reason, "proofArtifacts.reason");
   validateProofArtifactCoverage(proofArtifacts);
   validateNotificationProofArtifactSummary(proofArtifacts);
+  validatePrinterBridgeProofArtifactSummary(proofArtifacts);
 
   const hasLatest = proofArtifacts.latestProofKind !== undefined
     || proofArtifacts.latestProofPath !== undefined
@@ -1381,6 +1386,59 @@ function validateNotificationProofArtifactSummary(proofArtifacts) {
     || proofArtifacts.latestNotificationProofTitle !== undefined
     || proofArtifacts.latestNotificationProofReceivedAt !== undefined) {
     throw new TypeError("unavailable notification proof artifacts must not claim notification evidence.");
+  }
+}
+
+function validatePrinterBridgeProofArtifactSummary(proofArtifacts) {
+  const hasPrinterProof = proofArtifacts.latestPrinterBridgeProofPath !== undefined
+    || proofArtifacts.latestPrinterBridgeProofFileName !== undefined
+    || proofArtifacts.latestPrinterBridgeProofModifiedAt !== undefined
+    || proofArtifacts.latestPrinterBridgeProofStatus !== undefined
+    || proofArtifacts.latestPrinterBridgeProofEvidencePath !== undefined
+    || proofArtifacts.latestPrinterBridgeProofEvidenceFileName !== undefined
+    || proofArtifacts.latestPrinterBridgeProofEvidenceByteCount !== undefined
+    || proofArtifacts.latestPrinterBridgeProofEvidenceModifiedAt !== undefined
+    || proofArtifacts.latestPrinterBridgeProofSharedPrinterName !== undefined
+    || proofArtifacts.latestPrinterBridgeProofWindowsPrinterName !== undefined
+    || proofArtifacts.latestPrinterBridgeProofIppEndpoint !== undefined;
+
+  if (!hasPrinterProof) {
+    return;
+  }
+
+  requireString(proofArtifacts.latestPrinterBridgeProofPath, "proofArtifacts.latestPrinterBridgeProofPath");
+  requireString(proofArtifacts.latestPrinterBridgeProofFileName, "proofArtifacts.latestPrinterBridgeProofFileName");
+  requireString(proofArtifacts.latestPrinterBridgeProofModifiedAt, "proofArtifacts.latestPrinterBridgeProofModifiedAt");
+  requireString(proofArtifacts.latestPrinterBridgeProofStatus, "proofArtifacts.latestPrinterBridgeProofStatus");
+  requireString(proofArtifacts.latestPrinterBridgeProofEvidencePath, "proofArtifacts.latestPrinterBridgeProofEvidencePath");
+  requireString(proofArtifacts.latestPrinterBridgeProofEvidenceFileName, "proofArtifacts.latestPrinterBridgeProofEvidenceFileName");
+  requireNonNegativeInteger(
+    proofArtifacts.latestPrinterBridgeProofEvidenceByteCount,
+    "proofArtifacts.latestPrinterBridgeProofEvidenceByteCount"
+  );
+  requireString(proofArtifacts.latestPrinterBridgeProofSharedPrinterName, "proofArtifacts.latestPrinterBridgeProofSharedPrinterName");
+  requireString(proofArtifacts.latestPrinterBridgeProofWindowsPrinterName, "proofArtifacts.latestPrinterBridgeProofWindowsPrinterName");
+  requireString(proofArtifacts.latestPrinterBridgeProofIppEndpoint, "proofArtifacts.latestPrinterBridgeProofIppEndpoint");
+
+  if (!proofArtifacts.latestPrinterBridgeProofPath.endsWith(".json")
+    || !proofArtifacts.latestPrinterBridgeProofFileName.endsWith(".json")) {
+    throw new TypeError("proofArtifacts latest printer bridge proof artifact must point to a JSON file.");
+  }
+  if (!proofArtifacts.latestPrinterBridgeProofPath.includes("/Printer Proof/")) {
+    throw new TypeError("proofArtifacts.latestPrinterBridgeProofPath must come from the Printer Proof diagnostics folder.");
+  }
+  if (Number.isNaN(Date.parse(proofArtifacts.latestPrinterBridgeProofModifiedAt))) {
+    throw new TypeError("proofArtifacts.latestPrinterBridgeProofModifiedAt must be an ISO date.");
+  }
+  if (proofArtifacts.latestPrinterBridgeProofEvidenceModifiedAt !== undefined
+    && Number.isNaN(Date.parse(proofArtifacts.latestPrinterBridgeProofEvidenceModifiedAt))) {
+    throw new TypeError("proofArtifacts.latestPrinterBridgeProofEvidenceModifiedAt must be an ISO date.");
+  }
+  if (proofArtifacts.latestPrinterBridgeProofStatus !== "proved") {
+    throw new TypeError("proofArtifacts.latestPrinterBridgeProofStatus must be proved.");
+  }
+  if (!proofArtifacts.latestPrinterBridgeProofIppEndpoint.startsWith("http://10.0.2.2:631/printers/")) {
+    throw new TypeError("proofArtifacts.latestPrinterBridgeProofIppEndpoint must use the QEMU host IPP printer path.");
   }
 }
 

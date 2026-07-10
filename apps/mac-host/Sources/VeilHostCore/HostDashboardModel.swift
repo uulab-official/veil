@@ -875,6 +875,7 @@ public struct WindowsAppRuntimeProofArtifactStatus: Codable, Equatable, Sendable
     public var diagnosticsDirectory: String
     public var recommendedProofDirectory: String
     public var notificationProofDirectory: String
+    public var printerProofDirectory: String
     public var multiAppProofTargetAppIds: [String]
     public var multiAppProofCoverageCount: Int
     public var multiAppProofCoverageHealth: String
@@ -896,12 +897,24 @@ public struct WindowsAppRuntimeProofArtifactStatus: Codable, Equatable, Sendable
     public var latestNotificationProofId: String?
     public var latestNotificationProofTitle: String?
     public var latestNotificationProofReceivedAt: Date?
+    public var latestPrinterBridgeProofPath: String?
+    public var latestPrinterBridgeProofFileName: String?
+    public var latestPrinterBridgeProofModifiedAt: Date?
+    public var latestPrinterBridgeProofStatus: String?
+    public var latestPrinterBridgeProofEvidencePath: String?
+    public var latestPrinterBridgeProofEvidenceFileName: String?
+    public var latestPrinterBridgeProofEvidenceByteCount: Int?
+    public var latestPrinterBridgeProofEvidenceModifiedAt: Date?
+    public var latestPrinterBridgeProofSharedPrinterName: String?
+    public var latestPrinterBridgeProofWindowsPrinterName: String?
+    public var latestPrinterBridgeProofIppEndpoint: String?
     public var reason: String
 
     public init(
         diagnosticsDirectory: String,
         recommendedProofDirectory: String,
         notificationProofDirectory: String,
+        printerProofDirectory: String,
         multiAppProofTargetAppIds: [String] = WindowsAppRuntimeProofCoverageDefaults.targetAppIds,
         multiAppProofCoverageCount: Int = 0,
         multiAppProofCoverageHealth: String = "missing",
@@ -923,11 +936,23 @@ public struct WindowsAppRuntimeProofArtifactStatus: Codable, Equatable, Sendable
         latestNotificationProofId: String? = nil,
         latestNotificationProofTitle: String? = nil,
         latestNotificationProofReceivedAt: Date? = nil,
+        latestPrinterBridgeProofPath: String? = nil,
+        latestPrinterBridgeProofFileName: String? = nil,
+        latestPrinterBridgeProofModifiedAt: Date? = nil,
+        latestPrinterBridgeProofStatus: String? = nil,
+        latestPrinterBridgeProofEvidencePath: String? = nil,
+        latestPrinterBridgeProofEvidenceFileName: String? = nil,
+        latestPrinterBridgeProofEvidenceByteCount: Int? = nil,
+        latestPrinterBridgeProofEvidenceModifiedAt: Date? = nil,
+        latestPrinterBridgeProofSharedPrinterName: String? = nil,
+        latestPrinterBridgeProofWindowsPrinterName: String? = nil,
+        latestPrinterBridgeProofIppEndpoint: String? = nil,
         reason: String
     ) {
         self.diagnosticsDirectory = diagnosticsDirectory
         self.recommendedProofDirectory = recommendedProofDirectory
         self.notificationProofDirectory = notificationProofDirectory
+        self.printerProofDirectory = printerProofDirectory
         self.multiAppProofTargetAppIds = multiAppProofTargetAppIds
         self.multiAppProofCoverageCount = multiAppProofCoverageCount
         self.multiAppProofCoverageHealth = multiAppProofCoverageHealth
@@ -949,6 +974,17 @@ public struct WindowsAppRuntimeProofArtifactStatus: Codable, Equatable, Sendable
         self.latestNotificationProofId = latestNotificationProofId
         self.latestNotificationProofTitle = latestNotificationProofTitle
         self.latestNotificationProofReceivedAt = latestNotificationProofReceivedAt
+        self.latestPrinterBridgeProofPath = latestPrinterBridgeProofPath
+        self.latestPrinterBridgeProofFileName = latestPrinterBridgeProofFileName
+        self.latestPrinterBridgeProofModifiedAt = latestPrinterBridgeProofModifiedAt
+        self.latestPrinterBridgeProofStatus = latestPrinterBridgeProofStatus
+        self.latestPrinterBridgeProofEvidencePath = latestPrinterBridgeProofEvidencePath
+        self.latestPrinterBridgeProofEvidenceFileName = latestPrinterBridgeProofEvidenceFileName
+        self.latestPrinterBridgeProofEvidenceByteCount = latestPrinterBridgeProofEvidenceByteCount
+        self.latestPrinterBridgeProofEvidenceModifiedAt = latestPrinterBridgeProofEvidenceModifiedAt
+        self.latestPrinterBridgeProofSharedPrinterName = latestPrinterBridgeProofSharedPrinterName
+        self.latestPrinterBridgeProofWindowsPrinterName = latestPrinterBridgeProofWindowsPrinterName
+        self.latestPrinterBridgeProofIppEndpoint = latestPrinterBridgeProofIppEndpoint
         self.reason = reason
     }
 }
@@ -1420,6 +1456,17 @@ private struct NotificationProofArtifactMetadata: Equatable {
     var notificationReceivedAt: Date?
 }
 
+private struct PrinterBridgeProofArtifactMetadata: Equatable {
+    var status: String?
+    var evidencePath: String?
+    var evidenceFileName: String?
+    var evidenceByteCount: Int?
+    var evidenceModifiedAt: Date?
+    var sharedPrinterName: String?
+    var windowsPrinterName: String?
+    var ippEndpoint: String?
+}
+
 private struct ProofArtifactLatencyEvidence: Decodable {
     var measurement: String
     var elapsedMilliseconds: Int
@@ -1450,6 +1497,21 @@ private struct NotificationProofArtifactNotification: Decodable {
     var notificationId: String?
     var title: String?
     var receivedAt: Date?
+}
+
+private struct PrinterBridgeProofArtifactEnvelope: Decodable {
+    var status: String?
+    var evidencePath: String?
+    var evidenceFileName: String?
+    var evidenceByteCount: Int?
+    var evidenceModifiedAt: Date?
+    var plan: PrinterBridgeProofPlanEnvelope?
+}
+
+private struct PrinterBridgeProofPlanEnvelope: Decodable {
+    var sharedPrinterName: String?
+    var windowsPrinterName: String?
+    var ippEndpoint: String?
 }
 
 @MainActor
@@ -2548,6 +2610,8 @@ public final class HostDashboardModel {
             .appendingPathComponent("Recommended Proof", isDirectory: true)
         let notificationProofDirectory = diagnosticsDirectory
             .appendingPathComponent("Notification Proof", isDirectory: true)
+        let printerProofDirectory = diagnosticsDirectory
+            .appendingPathComponent("Printer Proof", isDirectory: true)
         let searchDirectories: [(kind: String, url: URL)] = [
             ("recommended", recommendedProofDirectory),
             ("mvp", diagnosticsDirectory.appendingPathComponent("MVP Proof", isDirectory: true)),
@@ -2566,6 +2630,13 @@ public final class HostDashboardModel {
             }
         let latestNotificationProofMetadata = latestNotificationProof.map {
             notificationProofArtifactMetadata(for: $0.url)
+        }
+        let latestPrinterBridgeProof = proofArtifacts(in: printerProofDirectory, kind: "printer-bridge")
+            .max { lhs, rhs in
+                lhs.modifiedAt < rhs.modifiedAt
+            }
+        let latestPrinterBridgeProofMetadata = latestPrinterBridgeProof.map {
+            printerBridgeProofArtifactMetadata(for: $0.url)
         }
         let latestProofsByApp = proofArtifactSummariesByApp(from: proofCandidates)
         let targetAppIds = WindowsAppRuntimeProofCoverageDefaults.targetAppIds
@@ -2586,6 +2657,7 @@ public final class HostDashboardModel {
                 diagnosticsDirectory: diagnosticsDirectory.path,
                 recommendedProofDirectory: recommendedProofDirectory.path,
                 notificationProofDirectory: notificationProofDirectory.path,
+                printerProofDirectory: printerProofDirectory.path,
                 multiAppProofTargetAppIds: targetAppIds,
                 multiAppProofCoverageCount: coveredTargetCount,
                 multiAppProofCoverageHealth: coverageHealth,
@@ -2597,6 +2669,17 @@ public final class HostDashboardModel {
                 latestNotificationProofId: latestNotificationProofMetadata?.notificationId,
                 latestNotificationProofTitle: latestNotificationProofMetadata?.notificationTitle,
                 latestNotificationProofReceivedAt: latestNotificationProofMetadata?.notificationReceivedAt,
+                latestPrinterBridgeProofPath: latestPrinterBridgeProof?.url.path,
+                latestPrinterBridgeProofFileName: latestPrinterBridgeProof?.url.lastPathComponent,
+                latestPrinterBridgeProofModifiedAt: latestPrinterBridgeProof?.modifiedAt,
+                latestPrinterBridgeProofStatus: latestPrinterBridgeProofMetadata?.status,
+                latestPrinterBridgeProofEvidencePath: latestPrinterBridgeProofMetadata?.evidencePath,
+                latestPrinterBridgeProofEvidenceFileName: latestPrinterBridgeProofMetadata?.evidenceFileName,
+                latestPrinterBridgeProofEvidenceByteCount: latestPrinterBridgeProofMetadata?.evidenceByteCount,
+                latestPrinterBridgeProofEvidenceModifiedAt: latestPrinterBridgeProofMetadata?.evidenceModifiedAt,
+                latestPrinterBridgeProofSharedPrinterName: latestPrinterBridgeProofMetadata?.sharedPrinterName,
+                latestPrinterBridgeProofWindowsPrinterName: latestPrinterBridgeProofMetadata?.windowsPrinterName,
+                latestPrinterBridgeProofIppEndpoint: latestPrinterBridgeProofMetadata?.ippEndpoint,
                 reason: "No app check artifact has been saved under Veil diagnostics yet."
             )
         }
@@ -2606,6 +2689,7 @@ public final class HostDashboardModel {
             diagnosticsDirectory: diagnosticsDirectory.path,
             recommendedProofDirectory: recommendedProofDirectory.path,
             notificationProofDirectory: notificationProofDirectory.path,
+            printerProofDirectory: printerProofDirectory.path,
             multiAppProofTargetAppIds: targetAppIds,
             multiAppProofCoverageCount: coveredTargetCount,
             multiAppProofCoverageHealth: coverageHealth,
@@ -2627,6 +2711,17 @@ public final class HostDashboardModel {
             latestNotificationProofId: latestNotificationProofMetadata?.notificationId,
             latestNotificationProofTitle: latestNotificationProofMetadata?.notificationTitle,
             latestNotificationProofReceivedAt: latestNotificationProofMetadata?.notificationReceivedAt,
+            latestPrinterBridgeProofPath: latestPrinterBridgeProof?.url.path,
+            latestPrinterBridgeProofFileName: latestPrinterBridgeProof?.url.lastPathComponent,
+            latestPrinterBridgeProofModifiedAt: latestPrinterBridgeProof?.modifiedAt,
+            latestPrinterBridgeProofStatus: latestPrinterBridgeProofMetadata?.status,
+            latestPrinterBridgeProofEvidencePath: latestPrinterBridgeProofMetadata?.evidencePath,
+            latestPrinterBridgeProofEvidenceFileName: latestPrinterBridgeProofMetadata?.evidenceFileName,
+            latestPrinterBridgeProofEvidenceByteCount: latestPrinterBridgeProofMetadata?.evidenceByteCount,
+            latestPrinterBridgeProofEvidenceModifiedAt: latestPrinterBridgeProofMetadata?.evidenceModifiedAt,
+            latestPrinterBridgeProofSharedPrinterName: latestPrinterBridgeProofMetadata?.sharedPrinterName,
+            latestPrinterBridgeProofWindowsPrinterName: latestPrinterBridgeProofMetadata?.windowsPrinterName,
+            latestPrinterBridgeProofIppEndpoint: latestPrinterBridgeProofMetadata?.ippEndpoint,
             reason: "Latest app check artifact is available in Veil diagnostics."
         )
     }
@@ -3256,6 +3351,35 @@ public final class HostDashboardModel {
             notificationId: envelope.notification?.notificationId,
             notificationTitle: envelope.notification?.title,
             notificationReceivedAt: envelope.notification?.receivedAt
+        )
+    }
+
+    private func printerBridgeProofArtifactMetadata(for url: URL) -> PrinterBridgeProofArtifactMetadata {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        guard let data = try? Data(contentsOf: url),
+              let envelope = try? decoder.decode(PrinterBridgeProofArtifactEnvelope.self, from: data) else {
+            return PrinterBridgeProofArtifactMetadata(
+                status: nil,
+                evidencePath: nil,
+                evidenceFileName: nil,
+                evidenceByteCount: nil,
+                evidenceModifiedAt: nil,
+                sharedPrinterName: nil,
+                windowsPrinterName: nil,
+                ippEndpoint: nil
+            )
+        }
+
+        return PrinterBridgeProofArtifactMetadata(
+            status: envelope.status,
+            evidencePath: envelope.evidencePath,
+            evidenceFileName: envelope.evidenceFileName,
+            evidenceByteCount: envelope.evidenceByteCount,
+            evidenceModifiedAt: envelope.evidenceModifiedAt,
+            sharedPrinterName: envelope.plan?.sharedPrinterName,
+            windowsPrinterName: envelope.plan?.windowsPrinterName,
+            ippEndpoint: envelope.plan?.ippEndpoint
         )
     }
 

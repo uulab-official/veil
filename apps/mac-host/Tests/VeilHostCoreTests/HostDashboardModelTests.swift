@@ -1618,6 +1618,7 @@ struct HostDashboardModelTests {
                 diagnosticsDirectory: "/tmp/Veil/Diagnostics",
                 recommendedProofDirectory: "/tmp/Veil/Diagnostics/Recommended Proof",
                 notificationProofDirectory: "/tmp/Veil/Diagnostics/Notification Proof",
+                printerProofDirectory: "/tmp/Veil/Diagnostics/Printer Proof",
                 latestProofKind: "mvp",
                 latestProofPath: "/tmp/Veil/Diagnostics/Recommended Proof/mvp-proof-latest.json",
                 latestProofFileName: "mvp-proof-latest.json",
@@ -1649,9 +1650,12 @@ struct HostDashboardModelTests {
             .appendingPathComponent("Recommended Proof", isDirectory: true)
         let notificationProofDirectory = diagnosticsDirectory
             .appendingPathComponent("Notification Proof", isDirectory: true)
+        let printerProofDirectory = diagnosticsDirectory
+            .appendingPathComponent("Printer Proof", isDirectory: true)
         try FileManager.default.createDirectory(at: appWindowDirectory, withIntermediateDirectories: true)
         try FileManager.default.createDirectory(at: recommendedDirectory, withIntermediateDirectories: true)
         try FileManager.default.createDirectory(at: notificationProofDirectory, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: printerProofDirectory, withIntermediateDirectories: true)
         defer {
             try? FileManager.default.removeItem(at: diagnosticsDirectory)
         }
@@ -1661,6 +1665,7 @@ struct HostDashboardModelTests {
         let paintProofURL = appWindowDirectory.appendingPathComponent("paint-app-window-proof.json")
         let latestProofURL = recommendedDirectory.appendingPathComponent("mvp-proof-latest.json")
         let notificationProofURL = notificationProofDirectory.appendingPathComponent("notification-proof.json")
+        let printerProofURL = printerProofDirectory.appendingPathComponent("printer-bridge-proof.json")
         try Data("{}".utf8).write(to: olderProofURL)
         try Data(
             """
@@ -1731,6 +1736,23 @@ struct HostDashboardModelTests {
             }
             """.utf8
         ).write(to: notificationProofURL)
+        try Data(
+            """
+            {
+              "kind": "windowsPrinterBridgeProof",
+              "status": "proved",
+              "evidencePath": "/tmp/Veil/printer-test-page.pdf",
+              "evidenceFileName": "printer-test-page.pdf",
+              "evidenceByteCount": 4096,
+              "evidenceModifiedAt": "2026-07-10T12:20:00Z",
+              "plan": {
+                "sharedPrinterName": "Office Printer",
+                "windowsPrinterName": "Veil Mac Printer",
+                "ippEndpoint": "http://10.0.2.2:631/printers/Office%20Printer"
+              }
+            }
+            """.utf8
+        ).write(to: printerProofURL)
         try FileManager.default.setAttributes(
             [.modificationDate: Date(timeIntervalSince1970: 1_700_000_000)],
             ofItemAtPath: olderProofURL.path
@@ -1751,12 +1773,17 @@ struct HostDashboardModelTests {
             [.modificationDate: Date(timeIntervalSince1970: 1_700_000_125)],
             ofItemAtPath: notificationProofURL.path
         )
+        try FileManager.default.setAttributes(
+            [.modificationDate: Date(timeIntervalSince1970: 1_700_000_150)],
+            ofItemAtPath: printerProofURL.path
+        )
 
         let artifacts = model.proofArtifactStatus(diagnosticsDirectory: diagnosticsDirectory)
 
         #expect(artifacts.diagnosticsDirectory == diagnosticsDirectory.path)
         #expect(artifacts.recommendedProofDirectory == recommendedDirectory.path)
         #expect(artifacts.notificationProofDirectory == notificationProofDirectory.path)
+        #expect(artifacts.printerProofDirectory == printerProofDirectory.path)
         #expect(artifacts.multiAppProofTargetAppIds == ["winapp_notepad", "winapp_calculator", "winapp_paint"])
         #expect(artifacts.multiAppProofCoverageCount == 3)
         #expect(artifacts.multiAppProofCoverageHealth == "complete")
@@ -1782,6 +1809,17 @@ struct HostDashboardModelTests {
         #expect(artifacts.latestNotificationProofId == "toast:winapp_notepad:0001")
         #expect(artifacts.latestNotificationProofTitle == "Notepad")
         #expect(artifacts.latestNotificationProofReceivedAt == ISO8601DateFormatter().date(from: "2026-07-10T12:15:00Z"))
+        #expect(artifacts.latestPrinterBridgeProofPath?.hasSuffix("/Printer Proof/printer-bridge-proof.json") == true)
+        #expect(artifacts.latestPrinterBridgeProofFileName == "printer-bridge-proof.json")
+        #expect(artifacts.latestPrinterBridgeProofModifiedAt == Date(timeIntervalSince1970: 1_700_000_150))
+        #expect(artifacts.latestPrinterBridgeProofStatus == "proved")
+        #expect(artifacts.latestPrinterBridgeProofEvidencePath == "/tmp/Veil/printer-test-page.pdf")
+        #expect(artifacts.latestPrinterBridgeProofEvidenceFileName == "printer-test-page.pdf")
+        #expect(artifacts.latestPrinterBridgeProofEvidenceByteCount == 4096)
+        #expect(artifacts.latestPrinterBridgeProofEvidenceModifiedAt == ISO8601DateFormatter().date(from: "2026-07-10T12:20:00Z"))
+        #expect(artifacts.latestPrinterBridgeProofSharedPrinterName == "Office Printer")
+        #expect(artifacts.latestPrinterBridgeProofWindowsPrinterName == "Veil Mac Printer")
+        #expect(artifacts.latestPrinterBridgeProofIppEndpoint == "http://10.0.2.2:631/printers/Office%20Printer")
         #expect(artifacts.reason == "Latest app check artifact is available in Veil diagnostics.")
     }
 

@@ -1398,6 +1398,46 @@ test("rejects Daily Use printer setup action drift", () => {
   );
 });
 
+test("accepts latest printer bridge proof artifact summaries", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.demo.json", import.meta.url), "utf8"));
+  Object.assign(report.proofArtifacts, {
+    latestPrinterBridgeProofPath: "/Users/test/Library/Application Support/Veil/Diagnostics/Printer Proof/printer-bridge-proof.json",
+    latestPrinterBridgeProofFileName: "printer-bridge-proof.json",
+    latestPrinterBridgeProofModifiedAt: "2026-07-10T12:30:00Z",
+    latestPrinterBridgeProofStatus: "proved",
+    latestPrinterBridgeProofEvidencePath: "/Users/test/Desktop/windows-test-page.pdf",
+    latestPrinterBridgeProofEvidenceFileName: "windows-test-page.pdf",
+    latestPrinterBridgeProofEvidenceByteCount: 8192,
+    latestPrinterBridgeProofEvidenceModifiedAt: "2026-07-10T12:29:00Z",
+    latestPrinterBridgeProofSharedPrinterName: "Office Printer",
+    latestPrinterBridgeProofWindowsPrinterName: "Veil Mac Printer",
+    latestPrinterBridgeProofIppEndpoint: "http://10.0.2.2:631/printers/Office%20Printer"
+  });
+
+  validateAppRuntimeStatus(report);
+});
+
+test("rejects printer bridge proof summaries outside QEMU host IPP", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.demo.json", import.meta.url), "utf8"));
+  Object.assign(report.proofArtifacts, {
+    latestPrinterBridgeProofPath: "/Users/test/Library/Application Support/Veil/Diagnostics/Printer Proof/printer-bridge-proof.json",
+    latestPrinterBridgeProofFileName: "printer-bridge-proof.json",
+    latestPrinterBridgeProofModifiedAt: "2026-07-10T12:30:00Z",
+    latestPrinterBridgeProofStatus: "proved",
+    latestPrinterBridgeProofEvidencePath: "/Users/test/Desktop/windows-test-page.pdf",
+    latestPrinterBridgeProofEvidenceFileName: "windows-test-page.pdf",
+    latestPrinterBridgeProofEvidenceByteCount: 8192,
+    latestPrinterBridgeProofSharedPrinterName: "Office Printer",
+    latestPrinterBridgeProofWindowsPrinterName: "Veil Mac Printer",
+    latestPrinterBridgeProofIppEndpoint: "http://localhost:631/printers/Office%20Printer"
+  });
+
+  assert.throws(
+    () => validateAppRuntimeStatus(report),
+    /latestPrinterBridgeProofIppEndpoint/
+  );
+});
+
 test("rejects Daily Use borderless capture guidance drift", () => {
   const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.mac-window-live.json", import.meta.url), "utf8"));
   report.dailyUseReadiness.borderlessCaptureRecommendedAction = "verify-daily-use-integrations";
