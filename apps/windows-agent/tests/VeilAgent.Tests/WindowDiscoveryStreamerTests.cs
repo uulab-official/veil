@@ -90,6 +90,29 @@ public class WindowDiscoveryStreamerTests
     }
 
     [Fact]
+    public async Task KeepsLaunchAndWindowTrackingWhenInitialCaptureFails()
+    {
+        var launched = Window("hwnd:00000001");
+        var desktop = new ScriptedWindowsDesktop(launched, new Queue<IReadOnlyList<LaunchedWindow>>());
+        var session = new AgentSession(desktop, new NoOpFrameCapture());
+        var request = new JsonObject
+        {
+            ["type"] = "app.launch.request",
+            ["requestId"] = "req_launch",
+            ["appId"] = "winapp_notepad"
+        };
+
+        var replies = await session.HandleAsync(request);
+
+        Assert.Equal(2, replies.DirectReplies.Count);
+        Assert.Equal("app.launch.response", replies.DirectReplies[0]["type"]!.GetValue<string>());
+        Assert.Equal("window.created", replies.DirectReplies[1]["type"]!.GetValue<string>());
+        Assert.Empty(replies.BroadcastEvents);
+        Assert.Equal(launched, replies.StreamWindow);
+        Assert.Equal(1, replies.NextFrameSequence);
+    }
+
+    [Fact]
     public async Task BroadcastsWindowCreatedForANewlyDiscoveredWindow()
     {
         // Regression test for Phase 3 (multi-window discovery): a second Notepad window opened

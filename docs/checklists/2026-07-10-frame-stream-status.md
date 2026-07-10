@@ -36,6 +36,9 @@ Goal: make mirrored Windows app surfaces report whether their frame stream is mi
 - [x] Exposed the Daily Use multi-app proof gate through `app-runtime-status.proofPlan.recommendedMultiAppProofCommand` and `actions[].id=proof.multiApp` when the live catalog can launch Notepad, Calculator, and Paint.
 - [x] Added `veil-vmctl app-runtime-action --json --action proof-multi-app` so the Daily Use app set can be checked through the same app-runtime action surface as launch, restore, input, clipboard, and single-app proof.
 - [x] Routed the launcher hero, menu bar primary action, and in-app Daily Use button to the multi-app proof when Notepad, Calculator, and Paint are all launchable, with an aggregate diagnostics JSON saved by the host shell.
+- [x] Removed the Windows agent's synthetic bootstrap-frame fallback so only a
+      real HWND capture can make an app screen fresh; failed capture ticks now
+      feed the existing waiting, stale, restart, recover, and reopen states.
 
 ## Status Semantics
 

@@ -56,9 +56,9 @@ test("windows agent streams continuing window frames after launch", async () => 
 
   assert.match(captureInterface, /CaptureFrameAsync\([^)]*int sequence/);
   assert.match(session, /StreamWindow:\s*launched/);
-  assert.match(session, /NextFrameSequence:\s*2/);
-  assert.match(session, /CaptureInitialFrameWithFallbackAsync/);
-  assert.match(session, /BootstrapPngFrameCapture/);
+  assert.match(session, /NextFrameSequence:\s*frame is null \? 1 : 2/);
+  assert.match(session, /CaptureInitialFrameOrNilAsync/);
+  assert.doesNotMatch(session, /BootstrapPngFrameCapture/);
   assert.match(session, /WaitAsync\(InitialFrameCaptureTimeout/);
   assert.match(session, /SerializeFrame\(WindowFrame frame\)/);
   assert.match(server, /StartFrameStream/);
@@ -66,9 +66,9 @@ test("windows agent streams continuing window frames after launch", async () => 
   assert.match(server, /SerializeFrame\(frame\)/);
   assert.match(streamer, /PeriodicTimer/);
   assert.match(streamer, /firstSequence/);
-  assert.match(streamer, /CaptureFrameWithFallbackAsync/);
+  assert.match(streamer, /TryCaptureFrameAsync/);
   assert.match(streamer, /WaitAsync\(CaptureTimeout/);
-  assert.match(streamer, /BootstrapPngFrameCapture/);
+  assert.doesNotMatch(streamer, /BootstrapPngFrameCapture/);
 });
 
 test("windows agent listens without HttpListener URL ACL requirements", async () => {

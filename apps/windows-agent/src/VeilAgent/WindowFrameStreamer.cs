@@ -4,7 +4,6 @@ public sealed class WindowFrameStreamer
 {
     private static readonly TimeSpan CaptureTimeout = TimeSpan.FromSeconds(2);
     private readonly IWindowFrameCapture capture;
-    private readonly IWindowFrameCapture fallbackCapture = new BootstrapPngFrameCapture();
     private readonly TimeSpan interval;
 
     public WindowFrameStreamer(IWindowFrameCapture capture, TimeSpan? interval = null)
@@ -25,13 +24,18 @@ public sealed class WindowFrameStreamer
 
         while (await timer.WaitForNextTickAsync(cancellationToken))
         {
-            var frame = await CaptureFrameWithFallbackAsync(window, sequence, cancellationToken);
+            var frame = await TryCaptureFrameAsync(window, sequence, cancellationToken);
+            if (frame is null)
+            {
+                continue;
+            }
+
             await onFrame(frame, cancellationToken);
             sequence += 1;
         }
     }
 
-    private async Task<WindowFrame> CaptureFrameWithFallbackAsync(
+    private async Task<WindowFrame?> TryCaptureFrameAsync(
         LaunchedWindow window,
         int sequence,
         CancellationToken cancellationToken
@@ -46,9 +50,9 @@ public sealed class WindowFrameStreamer
         catch (Exception error) when (error is not OperationCanceledException)
         {
             Console.Error.WriteLine(
-                $"Frame stream capture failed for {window.WindowId}; using bootstrap frame. {error.GetType().Name}: {error.Message}"
+                $"Frame stream capture failed for {window.WindowId}; waiting for the next real frame. {error.GetType().Name}: {error.Message}"
             );
-            return await fallbackCapture.CaptureFrameAsync(window, sequence, cancellationToken);
+            return null;
         }
     }
 }

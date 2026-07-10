@@ -304,7 +304,7 @@ Rules:
 
 ## Window Frame
 
-Early harness event from guest to host:
+Example production-sized frame event from guest to host:
 
 ```json
 {
@@ -313,8 +313,8 @@ Early harness event from guest to host:
   "frameId": "frame_000001",
   "sequence": 1,
   "format": "png",
-  "width": 1,
-  "height": 1,
+  "width": 600,
+  "height": 393,
   "scale": 1,
   "encodedData": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB..."
 }
@@ -326,6 +326,7 @@ Rules:
 - `sequence` is monotonically increasing per window.
 - `format` is `png` for the first correctness harness.
 - `encodedData` is base64 only for early harness spikes; production capture should move to a separate binary or media stream.
+- The guest must never substitute a synthetic 1x1 or placeholder image when HWND capture fails. It may emit `window.created` without an initial frame, then keep the live stream active. The host will mark a stream with no real frame as stale after its documented timeout and run restart, capture recovery, or app reopen actions.
 - `scale` is the window's real Windows DPI scale (`1` for 100%, `2` for 200%, etc), read via
   `GetDpiForWindow` once the guest process declares itself Per-Monitor-V2 DPI aware
   (`ProcessDpiAwareness.EnablePerMonitorV2`, called once at agent startup). This makes `width`/

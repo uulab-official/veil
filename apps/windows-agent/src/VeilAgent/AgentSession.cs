@@ -118,7 +118,7 @@ public sealed class AgentSession
         }
 
         TrackWindow(app, launched);
-        var frame = await CaptureInitialFrameWithFallbackAsync(launched, cancellationToken);
+        var frame = await CaptureInitialFrameOrNilAsync(launched, cancellationToken);
 
         return new AgentReplies(
             DirectReplies: new List<JsonObject>
@@ -126,12 +126,9 @@ public sealed class AgentSession
                 LaunchResponse(requestId, launched.ProcessId),
                 WindowCreatedEvent(app, launched)
             },
-            BroadcastEvents: new List<JsonObject>
-            {
-                WindowFrameEvent(frame)
-            },
+            BroadcastEvents: frame is null ? Array.Empty<JsonObject>() : [WindowFrameEvent(frame)],
             StreamWindow: launched,
-            NextFrameSequence: 2
+            NextFrameSequence: frame is null ? 1 : 2
         );
     }
 
@@ -204,7 +201,7 @@ public sealed class AgentSession
         }
 
         TrackWindow(app, launched);
-        var frame = await CaptureInitialFrameWithFallbackAsync(launched, cancellationToken);
+        var frame = await CaptureInitialFrameOrNilAsync(launched, cancellationToken);
 
         return new AgentReplies(
             DirectReplies: new List<JsonObject>
@@ -212,12 +209,9 @@ public sealed class AgentSession
                 FileOpenResponse(requestId, accepted: true, launched.ProcessId),
                 WindowCreatedEvent(app, launched)
             },
-            BroadcastEvents: new List<JsonObject>
-            {
-                WindowFrameEvent(frame)
-            },
+            BroadcastEvents: frame is null ? Array.Empty<JsonObject>() : [WindowFrameEvent(frame)],
             StreamWindow: launched,
-            NextFrameSequence: 2
+            NextFrameSequence: frame is null ? 1 : 2
         );
     }
 
@@ -299,7 +293,7 @@ public sealed class AgentSession
         });
     }
 
-    private async Task<WindowFrame> CaptureInitialFrameWithFallbackAsync(
+    private async Task<WindowFrame?> CaptureInitialFrameOrNilAsync(
         LaunchedWindow launched,
         CancellationToken cancellationToken
     )
@@ -313,9 +307,9 @@ public sealed class AgentSession
         catch (Exception error) when (error is not OperationCanceledException)
         {
             Console.Error.WriteLine(
-                $"Initial frame capture failed for {launched.WindowId}; using bootstrap frame. {error.GetType().Name}: {error.Message}"
+                $"Initial frame capture failed for {launched.WindowId}; waiting for the live frame stream. {error.GetType().Name}: {error.Message}"
             );
-            return await new BootstrapPngFrameCapture().CaptureFrameAsync(launched, sequence: 1, cancellationToken);
+            return null;
         }
     }
 
