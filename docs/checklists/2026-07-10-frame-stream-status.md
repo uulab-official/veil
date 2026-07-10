@@ -24,6 +24,8 @@ Goal: make mirrored Windows app surfaces report whether their frame stream is mi
 - [x] Added `frameStreamReopenEscalated` and promoted recovered HWNDs that stall again to `reopen-windows-app`.
 - [x] Wired `reopen-window` through `veil-vmctl app-runtime-action`, Dock/menu recovery, app-window buttons, and harness evidence.
 - [x] Added `reopenRequestedWindowIds` and `reopenedWindows` evidence so accepted reports prove the old HWND is gone and the reopened app window is tracked.
+- [x] Added `windowsApps.maintainFrameStreams` and `veil-vmctl app-runtime-action --action maintain-frame-streams` so automation can run the strongest app-screen recovery in one handoff.
+- [x] Added a host-shell automatic maintenance loop that periodically keeps mirrored app screens live by reusing the same reopen/recover/restart priority order.
 
 ## Status Semantics
 

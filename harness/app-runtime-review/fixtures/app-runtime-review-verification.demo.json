@@ -364,6 +364,11 @@
           "isAvailable": false
         },
         {
+          "id": "windowsApps.maintainFrameStreams",
+          "title": "Keep App Screens Live",
+          "isAvailable": false
+        },
+        {
           "id": "windowsApps.reopenWindow",
           "title": "Reopen App Window",
           "isAvailable": false

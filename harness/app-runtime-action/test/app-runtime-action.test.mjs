@@ -136,6 +136,7 @@ function installedRuntimeHeroSupports(actionId) {
     "windowsApps.reconnectRestore",
     "windowsApps.restorePrevious",
     "windowsApps.closeAll",
+    "windowsApps.maintainFrameStreams",
     "windowsApps.reopenWindow",
     "runtime.quietWhenIdle",
     "runtime.stopWhenIdle",
@@ -541,6 +542,12 @@ test("validates app runtime close-all action fixture", () => {
 
 test("validates app runtime restart frame stream fixture", () => {
   const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-action.restart-frame-stream-live.json", import.meta.url), "utf8"));
+
+  assert.equal(validateAppRuntimeAction(report), report);
+});
+
+test("validates app runtime maintain frame streams fixture", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-action.maintain-frame-streams-live.json", import.meta.url), "utf8"));
 
   assert.equal(validateAppRuntimeAction(report), report);
 });

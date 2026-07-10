@@ -39,6 +39,7 @@ struct VeilHostShellApp: App {
     @State private var agentReconnectTask: Task<Void, Never>?
     @State private var automaticQuietRuntimeTask: Task<Void, Never>?
     @State private var automaticGuestAgentRecoveryTask: Task<Void, Never>?
+    @State private var automaticFrameStreamMaintenanceTask: Task<Void, Never>?
     @State private var automaticGuestAgentRecoveryAttemptedTokens: Set<String> = []
     @State private var latestReviewEvidenceFolder: ReviewEvidenceFolder?
 
@@ -96,6 +97,7 @@ struct VeilHostShellApp: App {
                     configureWindowsAppWindowCloseBridge()
                     startAgentEventPumpIfNeeded()
                     startAgentReconnectPollerIfNeeded()
+                    startAutomaticFrameStreamMaintenanceLoopIfNeeded()
 
                     await model.loadRestoreIntent()
                     async let hostLoad: Void = model.load()
@@ -460,6 +462,23 @@ struct VeilHostShellApp: App {
         automaticQuietRuntimeTask = nil
     }
 
+    private func startAutomaticFrameStreamMaintenanceLoopIfNeeded() {
+        guard automaticFrameStreamMaintenanceTask == nil else {
+            return
+        }
+
+        automaticFrameStreamMaintenanceTask = Task { @MainActor in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(2))
+                guard !Task.isCancelled else {
+                    return
+                }
+
+                await performFrameStreamMaintenance(automatic: true)
+            }
+        }
+    }
+
     private func launchSelectedWindowsAppWindow() {
         Task { @MainActor in
             cancelAutomaticQuietRuntime()
@@ -726,55 +745,49 @@ struct VeilHostShellApp: App {
 
     private func restartStaleFrameStreams() {
         Task { @MainActor in
-            let reopenWindowIds = model.mirrorSessions
-                .filter { WindowFrameStreamAssessment.assess(session: $0).reopenEscalated }
-                .map(\.id)
-            var reopenedWindows: [WindowCreatedEvent] = []
-            for windowId in reopenWindowIds {
-                if let result = await model.reopenAppWindow(windowId: windowId) {
-                    windowsAppWindowPresenter.closeWindow(windowId: result.requestedWindowId)
-                    reopenedWindows.append(result.launch.window)
-                    if let session = model.mirrorSessions.first(where: { $0.id == result.launch.window.windowId }) {
-                        windowsAppWindowPresenter.showWindow(for: session)
-                    }
-                }
-            }
-            if !reopenedWindows.isEmpty {
-                displayMessage = reopenedWindows.count == 1
-                    ? "Reopening \(reopenedWindows[0].title)."
-                    : "Reopening \(reopenedWindows.count) app windows."
-                syncLauncherWindowVisibility()
-                return
-            }
-
-            let recoveredWindowIds = await model.recoverEscalatedFrameCaptures()
-            if !recoveredWindowIds.isEmpty {
-                for windowId in recoveredWindowIds {
-                    if let session = model.mirrorSessions.first(where: { $0.id == windowId }) {
-                        windowsAppWindowPresenter.showWindow(for: session)
-                    }
-                }
-                displayMessage = recoveredWindowIds.count == 1
-                    ? "Recovering app screen."
-                    : "Recovering \(recoveredWindowIds.count) app screens."
-                return
-            }
-
-            let restartedWindowIds = await model.restartStaleFrameSubscriptions()
-            guard !restartedWindowIds.isEmpty else {
-                displayMessage = "No paused app screens need restart."
-                return
-            }
-
-            for windowId in restartedWindowIds {
-                if let session = model.mirrorSessions.first(where: { $0.id == windowId }) {
-                    windowsAppWindowPresenter.showWindow(for: session)
-                }
-            }
-            displayMessage = restartedWindowIds.count == 1
-                ? "Restarting app screen."
-                : "Restarting \(restartedWindowIds.count) app screens."
+            await performFrameStreamMaintenance(automatic: false)
         }
+    }
+
+    @MainActor
+    private func performFrameStreamMaintenance(automatic: Bool) async {
+        let result = await model.maintainStaleFrameStreams()
+        guard result.didPerformMaintenance else {
+            if !automatic {
+                displayMessage = "No paused app screens need restart."
+            }
+            return
+        }
+
+        for reopened in result.reopenedWindows {
+            windowsAppWindowPresenter.closeWindow(windowId: reopened.requestedWindowId)
+            if let session = model.mirrorSessions.first(where: { $0.id == reopened.launch.window.windowId }) {
+                windowsAppWindowPresenter.showWindow(for: session)
+            }
+        }
+
+        for windowId in result.recoveredFrameWindowIds + result.restartedFrameWindowIds {
+            if let session = model.mirrorSessions.first(where: { $0.id == windowId }) {
+                windowsAppWindowPresenter.showWindow(for: session)
+            }
+        }
+
+        if !result.reopenedWindows.isEmpty {
+            displayMessage = result.reopenedWindows.count == 1
+                ? "Reopening \(result.reopenedWindows[0].launch.window.title)."
+                : "Reopening \(result.reopenedWindows.count) app windows."
+        } else if !result.recoveredFrameWindowIds.isEmpty {
+            displayMessage = result.recoveredFrameWindowIds.count == 1
+                ? "Recovering app screen."
+                : "Recovering \(result.recoveredFrameWindowIds.count) app screens."
+        } else if !automatic {
+            displayMessage = result.restartedFrameWindowIds.count == 1
+                ? "Restarting app screen."
+                : "Restarting \(result.restartedFrameWindowIds.count) app screens."
+        }
+
+        syncDockTileRuntimeStatus()
+        syncLauncherWindowVisibility()
     }
 
     private func configureDockMenuBridge() {

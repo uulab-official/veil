@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { validateAppRuntimeStatus } from "../../app-runtime-status/src/validate-app-runtime-status.mjs";
 import { validateGuestAgentWait } from "../../guest-agent-wait/src/validate-guest-agent-wait.mjs";
 
-const VALID_ACTIONS = new Set(["launch", "fulfill-pending", "focus", "close", "close-all", "restart-frame-stream", "recover-window-capture", "reopen-window", "restore", "reconnect-restore", "bring-forward", "recover-display", "wait-agent", "repair-agent", "prepare-sparse-package", "quiet-when-idle", "stop-runtime", "clipboard", "type-text", "click", "proof-recommended"]);
+const VALID_ACTIONS = new Set(["launch", "fulfill-pending", "focus", "close", "close-all", "restart-frame-stream", "recover-window-capture", "reopen-window", "maintain-frame-streams", "restore", "reconnect-restore", "bring-forward", "recover-display", "wait-agent", "repair-agent", "prepare-sparse-package", "quiet-when-idle", "stop-runtime", "clipboard", "type-text", "click", "proof-recommended"]);
 const VALID_CONNECTION_MODES = new Set(["agent", "demo"]);
 const VALID_CONSOLE_PREVIEW_STATES = new Set(["fresh", "stale", "unavailable"]);
 
@@ -97,6 +97,9 @@ export function validateAppRuntimeAction(report) {
       break;
     case "reopen-window":
       validateReopenWindowAction(report);
+      break;
+    case "maintain-frame-streams":
+      validateMaintainFrameStreamsAction(report);
       break;
     case "restore":
       validateRestoreAction(report);
@@ -858,6 +861,90 @@ function validateReopenWindowAction(report) {
   const foregroundWindow = report.reopenedWindows.at(-1);
   requireForegroundWindowIdentity(report, foregroundWindow.windowId, foregroundWindow.title, "accepted reopen-window actions");
   requireForegroundableMacWindow(report, "accepted reopen-window actions");
+}
+
+function validateMaintainFrameStreamsAction(report) {
+  if (!report.accepted) {
+    if (report.restartedFrameWindowIds.length !== 0
+      || report.recoveredFrameWindowIds.length !== 0
+      || report.reopenRequestedWindowIds.length !== 0
+      || report.reopenedWindows.length !== 0) {
+      throw new TypeError("rejected maintain-frame-streams actions cannot include frame maintenance evidence.");
+    }
+    return;
+  }
+
+  if (report.restartedFrameWindowIds.length === 0
+    && report.recoveredFrameWindowIds.length === 0
+    && report.reopenedWindows.length === 0) {
+    throw new TypeError("accepted maintain-frame-streams actions must include frame maintenance evidence.");
+  }
+
+  validateMaintainedRestartedFrameStreams(report);
+  validateMaintainedRecoveredFrameStreams(report);
+  validateMaintainedReopenedWindows(report);
+
+  const maintainAction = report.status.actions.find((action) => action.id === "windowsApps.maintainFrameStreams");
+  if (!maintainAction) {
+    throw new TypeError("maintain-frame-streams status must include windowsApps.maintainFrameStreams.");
+  }
+  if (maintainAction.isAvailable) {
+    throw new TypeError("accepted maintain-frame-streams actions must clear stale frame maintenance availability.");
+  }
+}
+
+function validateMaintainedRestartedFrameStreams(report) {
+  const sessionsById = new Map(report.status.mirrorSessions.map((session) => [session.windowId, session]));
+  for (const windowId of report.restartedFrameWindowIds) {
+    const session = sessionsById.get(windowId);
+    if (!session) {
+      throw new TypeError("restartedFrameWindowIds must be present in status.mirrorSessions.");
+    }
+    if (session.frameStreamStatus !== "waitingForFirstFrame") {
+      throw new TypeError("maintain-frame-streams must return restarted windows to waitingForFirstFrame.");
+    }
+    if (session.frameStreamRestartCount < 1 || session.latestFrameStreamRestartedAt === undefined) {
+      throw new TypeError("maintain-frame-streams must record restart evidence.");
+    }
+  }
+}
+
+function validateMaintainedRecoveredFrameStreams(report) {
+  const sessionsById = new Map(report.status.mirrorSessions.map((session) => [session.windowId, session]));
+  for (const windowId of report.recoveredFrameWindowIds) {
+    const session = sessionsById.get(windowId);
+    if (!session) {
+      throw new TypeError("recoveredFrameWindowIds must be present in status.mirrorSessions.");
+    }
+    if (session.frameStreamStatus !== "waitingForFirstFrame") {
+      throw new TypeError("maintain-frame-streams must return recovered windows to waitingForFirstFrame.");
+    }
+    if (session.frameStreamRecoveryEscalated) {
+      throw new TypeError("maintain-frame-streams must clear frameStreamRecoveryEscalated.");
+    }
+    if (session.frameStreamRestartCount < 1 || session.latestFrameStreamRestartedAt === undefined) {
+      throw new TypeError("maintain-frame-streams must record recovery evidence.");
+    }
+  }
+}
+
+function validateMaintainedReopenedWindows(report) {
+  const mirrorWindowIds = new Set(report.status.mirrorSessions.map((session) => session.windowId));
+  for (const windowId of report.reopenRequestedWindowIds) {
+    if (mirrorWindowIds.has(windowId)) {
+      throw new TypeError("maintain-frame-streams must remove requested stale HWNDs from status.mirrorSessions.");
+    }
+  }
+  if (report.reopenRequestedWindowIds.length !== report.reopenedWindows.length) {
+    throw new TypeError("reopenRequestedWindowIds must match reopenedWindows count.");
+  }
+
+  for (const window of report.reopenedWindows) {
+    validateWindow(window);
+    if (!mirrorWindowIds.has(window.windowId)) {
+      throw new TypeError("reopenedWindows must be present in status.mirrorSessions.");
+    }
+  }
 }
 
 function validateRestoreAction(report) {

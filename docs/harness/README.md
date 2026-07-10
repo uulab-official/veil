@@ -167,8 +167,11 @@ same HWND stalls again after capture recovery, `frameStreamRecommendedAction`
 must move to `reopen-windows-app`.
 When any mirrored app surface is stale, `actions[]` must expose
 `windowsApps.restartFrameStream` as available so the app can resubscribe the
-frame stream without falling back to a generic VM display. The executable
-handoff is `veil-vmctl app-runtime-action --json --action restart-frame-stream`;
+frame stream without falling back to a generic VM display. `actions[]` must also
+expose `windowsApps.maintainFrameStreams` as available so automation and the
+host shell can run the strongest recovery without user selection. The executable
+handoffs are `veil-vmctl app-runtime-action --json --action restart-frame-stream`
+and `veil-vmctl app-runtime-action --json --action maintain-frame-streams`;
 accepted reports must list the restarted HWNDs in `restartedFrameWindowIds` and
 return those sessions to `frameStreamStatus=waitingForFirstFrame` with restart
 evidence recorded on the matching `mirrorSessions[]` entry.
@@ -185,6 +188,11 @@ must list the old HWNDs in `reopenRequestedWindowIds`, list the new
 `window.created` records in `reopenedWindows`, remove the old HWNDs from
 `mirrorSessions[]`, and leave the reopened windows waiting for their next first
 frame or already fresh.
+Accepted `maintain-frame-streams` reports may include any combination of
+`restartedFrameWindowIds`, `recoveredFrameWindowIds`,
+`reopenRequestedWindowIds`, and `reopenedWindows`, but at least one maintenance
+evidence field must be non-empty and the resulting status must clear stale frame
+maintenance availability.
 The foregroundable count must move with mirrored HWND sessions so successful
 launch, restore, and pending-launch fulfillment reports prove the Windows app
 can be brought forward as a macOS window instead of merely existing inside the

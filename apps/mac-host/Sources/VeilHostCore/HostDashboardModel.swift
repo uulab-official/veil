@@ -421,6 +421,28 @@ public struct WindowsAppReopenResult: Equatable, Sendable {
     }
 }
 
+public struct WindowsAppFrameStreamMaintenanceResult: Equatable, Sendable {
+    public var reopenedWindows: [WindowsAppReopenResult]
+    public var recoveredFrameWindowIds: [String]
+    public var restartedFrameWindowIds: [String]
+
+    public init(
+        reopenedWindows: [WindowsAppReopenResult] = [],
+        recoveredFrameWindowIds: [String] = [],
+        restartedFrameWindowIds: [String] = []
+    ) {
+        self.reopenedWindows = reopenedWindows
+        self.recoveredFrameWindowIds = recoveredFrameWindowIds
+        self.restartedFrameWindowIds = restartedFrameWindowIds
+    }
+
+    public var didPerformMaintenance: Bool {
+        !reopenedWindows.isEmpty
+            || !recoveredFrameWindowIds.isEmpty
+            || !restartedFrameWindowIds.isEmpty
+    }
+}
+
 public struct WindowsAppRuntimeActionStatus: Codable, Equatable, Sendable {
     public var id: String
     public var title: String
@@ -1522,6 +1544,11 @@ public final class HostDashboardModel {
                 WindowsAppRuntimeActionStatus(
                     id: "windowsApps.restartFrameStream",
                     title: "Restart App Screen",
+                    isAvailable: macWindowIntegration.staleFrameWindowCount > 0
+                ),
+                WindowsAppRuntimeActionStatus(
+                    id: "windowsApps.maintainFrameStreams",
+                    title: "Keep App Screens Live",
                     isAvailable: macWindowIntegration.staleFrameWindowCount > 0
                 ),
                 WindowsAppRuntimeActionStatus(
@@ -3593,6 +3620,53 @@ public final class HostDashboardModel {
         }
 
         return reopenedWindows
+    }
+
+    @discardableResult
+    public func maintainStaleFrameStreams(
+        generatedAt: Date = Date()
+    ) async -> WindowsAppFrameStreamMaintenanceResult {
+        let assessments = mirrorSessions.map {
+            (
+                windowId: $0.id,
+                assessment: WindowFrameStreamAssessment.assess(session: $0, generatedAt: generatedAt)
+            )
+        }
+        let reopenWindowIds = assessments
+            .filter { $0.assessment.reopenEscalated }
+            .map(\.windowId)
+        let recoverWindowIds = assessments
+            .filter { $0.assessment.recoveryEscalated }
+            .map(\.windowId)
+        let restartWindowIds = assessments
+            .filter {
+                $0.assessment.status == .stale
+                    && !$0.assessment.recoveryEscalated
+                    && !$0.assessment.reopenEscalated
+            }
+            .map(\.windowId)
+
+        var result = WindowsAppFrameStreamMaintenanceResult()
+
+        for windowId in reopenWindowIds {
+            if let reopened = await reopenAppWindow(windowId: windowId) {
+                result.reopenedWindows.append(reopened)
+            }
+        }
+
+        for windowId in recoverWindowIds {
+            if await recoverFrameCapture(windowId: windowId, recoveredAt: generatedAt) {
+                result.recoveredFrameWindowIds.append(windowId)
+            }
+        }
+
+        for windowId in restartWindowIds {
+            if await restartFrameSubscription(windowId: windowId, restartedAt: generatedAt) {
+                result.restartedFrameWindowIds.append(windowId)
+            }
+        }
+
+        return result
     }
 
     @discardableResult

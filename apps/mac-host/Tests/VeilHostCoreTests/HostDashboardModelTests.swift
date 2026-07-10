@@ -342,6 +342,7 @@ struct HostDashboardModelTests {
         let report = model.runtimeStatusReport(generatedAt: Date(timeIntervalSince1970: 1_006.250))
         let windowStatus = try #require(report.mirrorSessions.first)
         let restartAction = try #require(report.actions.first { $0.id == "windowsApps.restartFrameStream" })
+        let maintainAction = try #require(report.actions.first { $0.id == "windowsApps.maintainFrameStreams" })
 
         #expect(windowStatus.frameStreamStatus == .stale)
         #expect(windowStatus.latestFrameAgeMilliseconds == 6_250)
@@ -352,6 +353,8 @@ struct HostDashboardModelTests {
         #expect(report.macWindowIntegration.staleFrameWindowCount == 1)
         #expect(restartAction.title == "Restart App Screen")
         #expect(restartAction.isAvailable)
+        #expect(maintainAction.title == "Keep App Screens Live")
+        #expect(maintainAction.isAvailable)
     }
 
     @Test("restarts frame subscription for a mirrored window")
@@ -543,6 +546,42 @@ struct HostDashboardModelTests {
         #expect(model.mirrorSessions.map(\.id) == ["hwnd:00010500"])
         #expect(model.mirrorSessions.first?.captureState == .pending)
         #expect(model.mirrorSessions.first?.frameStreamRestartCount == 0)
+    }
+
+    @Test("maintains stale frame streams with the strongest recovery")
+    @MainActor
+    func maintainsStaleFrameStreamsWithStrongestRecovery() async throws {
+        let service = FakeDashboardService(health: .captureReady)
+        service.launchWindows = [.notepad, .secondNotepad]
+        let model = HostDashboardModel(service: service)
+
+        await model.launchNotepad()
+        model.receiveWindowFrame(.notepadFirstFrame, receivedAt: Date(timeIntervalSince1970: 1_000))
+        await model.restartFrameSubscription(
+            windowId: "hwnd:0003029A",
+            restartedAt: Date(timeIntervalSince1970: 1_001)
+        )
+        model.receiveWindowFrame(.notepadSecondFrame, receivedAt: Date(timeIntervalSince1970: 1_002))
+        await model.restartFrameSubscription(
+            windowId: "hwnd:0003029A",
+            restartedAt: Date(timeIntervalSince1970: 1_003)
+        )
+        model.receiveWindowFrame(.notepadFirstFrame, receivedAt: Date(timeIntervalSince1970: 1_004))
+        await model.recoverFrameCapture(
+            windowId: "hwnd:0003029A",
+            recoveredAt: Date(timeIntervalSince1970: 1_005)
+        )
+        model.receiveWindowFrame(.notepadSecondFrame, receivedAt: Date(timeIntervalSince1970: 1_006))
+
+        let result = await model.maintainStaleFrameStreams(generatedAt: Date(timeIntervalSince1970: 1_012))
+
+        #expect(result.didPerformMaintenance)
+        #expect(result.reopenedWindows.map(\.requestedWindowId) == ["hwnd:0003029A"])
+        #expect(result.reopenedWindows.map(\.launch.window.windowId) == ["hwnd:00010500"])
+        #expect(result.recoveredFrameWindowIds == [])
+        #expect(result.restartedFrameWindowIds == [])
+        #expect(service.closedWindowIds == ["hwnd:0003029A"])
+        #expect(model.mirrorSessions.map(\.id) == ["hwnd:00010500"])
     }
 
     @Test("routes a protocol frame message into the matching mirror session")

@@ -163,6 +163,7 @@ function installedRuntimeHeroSupports(actionId) {
     "windowsApps.restorePrevious",
     "windowsApps.closeAll",
     "windowsApps.restartFrameStream",
+    "windowsApps.maintainFrameStreams",
     "windowsApps.reopenWindow",
     "runtime.quietWhenIdle",
     "runtime.stopWhenIdle",
@@ -765,6 +766,7 @@ test("rejects repeated stale frame restarts without recovery escalation", () => 
   report.macWindowIntegration.staleFrameWindowCount = 1;
   report.macWindowIntegration.reason = "Windows app windows are mirrored, but at least one frame stream is stale.";
   report.actions.find((action) => action.id === "windowsApps.restartFrameStream").isAvailable = true;
+  report.actions.find((action) => action.id === "windowsApps.maintainFrameStreams").isAvailable = true;
 
   assert.throws(
     () => validateAppRuntimeStatus(report),
@@ -791,6 +793,7 @@ test("rejects capture recovery stalls without app window reopen escalation", () 
   report.macWindowIntegration.staleFrameWindowCount = 1;
   report.macWindowIntegration.reason = "Windows app windows are mirrored, but at least one frame stream is stale.";
   report.actions.find((action) => action.id === "windowsApps.restartFrameStream").isAvailable = true;
+  report.actions.find((action) => action.id === "windowsApps.maintainFrameStreams").isAvailable = true;
   report.actions.find((action) => action.id === "windowsApps.recoverWindowCapture").isAvailable = true;
 
   assert.throws(

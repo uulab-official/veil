@@ -356,7 +356,12 @@ Rules:
   reports `frameStreamRecommendedAction=reopen-windows-app` and exposes
   `reopen-window`; accepted reports record the stale HWND in
   `reopenRequestedWindowIds`, remove it from `mirrorSessions[]`, and record the
-  newly opened app window in `reopenedWindows`.
+  newly opened app window in `reopenedWindows`. The combined
+  `maintain-frame-streams` action runs the same priority order in one handoff:
+  reopen any reopen-escalated app windows, recover any recovery-escalated
+  streams, then restart ordinary stale subscriptions. The host shell also uses
+  that combined action path for automatic app-screen maintenance while mirrored
+  Windows app windows are open.
 
 ## Window Focus
 
