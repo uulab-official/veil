@@ -26,24 +26,10 @@ function setReconnectMenuBarState(report, overrides = {}) {
   refreshLaunchOnboarding(report);
 }
 
-function setPackageIdentityWithoutWindowCapture(report) {
+function clearMirroredWindows(report) {
   report.mirrorSessions = [];
   report.restorableAppIds = [];
-
-  Object.assign(report.connection.capabilities, {
-    packageIdentity: true,
-    windowCapture: false
-  });
-  report.connection.packageIdentityStatus = {
-    statusPath: "C:\\Users\\veil\\AppData\\Local\\Veil\\Agent\\package\\sparse-package-status.json",
-    stage: "registered",
-    succeeded: true,
-    message: "Sparse package registered and agent restarted with package identity."
-  };
-  delete report.connection.notificationListener;
-
   Object.assign(report.macWindowIntegration, {
-    acceptsGuestWindowEvents: true,
     hidesLauncherWhenMirroring: false,
     mirroredWindowCount: 0,
     pendingFrameWindowCount: 0,
@@ -61,7 +47,6 @@ function setPackageIdentityWithoutWindowCapture(report) {
   delete report.macWindowIntegration.slowestFrameWindowId;
   delete report.macWindowIntegration.slowestFrameWindowTitle;
   delete report.macWindowIntegration.slowestFrameAgeMilliseconds;
-
   Object.assign(report.launcherVisibility, {
     shouldHideMainWindow: false,
     recommendedAction: "show-main-window",
@@ -82,6 +67,47 @@ function setPackageIdentityWithoutWindowCapture(report) {
     canReconnectPreviousApps: false
   });
   delete report.dockIntegration.badgeLabel;
+  Object.assign(report.menuBarIntegration, {
+    canBringWindowsAppsForward: false,
+    canRestorePreviousApps: false,
+    canReconnectPreviousApps: false
+  });
+  Object.assign(report.quietRuntime, {
+    openWindowCount: 0,
+    canQuietRuntime: true,
+    willQuietAutomatically: true,
+    recommendedAction: "quiet-when-idle",
+    recommendedStopCommand: "veil-vmctl app-runtime-action --json --action quiet-when-idle",
+    reason: "No Windows app windows are open; Windows can be quieted after a short idle delay."
+  });
+  report.actions.find((action) => action.id === "runtime.quietWhenIdle").isAvailable = true;
+  report.actions.find((action) => action.id === "runtime.stopWhenIdle").isAvailable = true;
+  const closeStep = report.releaseGate.steps.find((step) => step.id === "closeOrRestore");
+  Object.assign(closeStep, {
+    state: "ready",
+    isPassing: true,
+    evidence: "Windows can be quieted after app windows close.",
+    nextActionCommand: "veil-vmctl app-runtime-action --json --action quiet-when-idle"
+  });
+  refreshReleaseGateSummary(report);
+}
+
+function setPackageIdentityWithoutWindowCapture(report) {
+  clearMirroredWindows(report);
+
+  Object.assign(report.connection.capabilities, {
+    packageIdentity: true,
+    windowCapture: false
+  });
+  report.connection.packageIdentityStatus = {
+    statusPath: "C:\\Users\\veil\\AppData\\Local\\Veil\\Agent\\package\\sparse-package-status.json",
+    stage: "registered",
+    succeeded: true,
+    message: "Sparse package registered and agent restarted with package identity."
+  };
+  delete report.connection.notificationListener;
+
+  report.macWindowIntegration.acceptsGuestWindowEvents = true;
 
   Object.assign(report.dailyUseReadiness, {
     packageIdentityReady: true,
@@ -121,15 +147,6 @@ function setPackageIdentityWithoutWindowCapture(report) {
   delete report.proofPlan.recommendedProofKind;
   delete report.proofPlan.recommendedProofCommand;
 
-  Object.assign(report.quietRuntime, {
-    openWindowCount: 0,
-    canQuietRuntime: true,
-    willQuietAutomatically: true,
-    recommendedAction: "quiet-when-idle",
-    recommendedStopCommand: "veil-vmctl app-runtime-action --json --action quiet-when-idle",
-    reason: "No Windows app windows are open; Windows can be quieted after a short idle delay."
-  });
-
   const setAction = (id, isAvailable) => {
     report.actions.find((action) => action.id === id).isAvailable = isAvailable;
   };
@@ -160,13 +177,6 @@ function setPackageIdentityWithoutWindowCapture(report) {
 
   const appCheckStep = report.releaseGate.steps.find((step) => step.id === "appCheckEvidence");
   appCheckStep.nextActionCommand = undefined;
-  const closeStep = report.releaseGate.steps.find((step) => step.id === "closeOrRestore");
-  Object.assign(closeStep, {
-    state: "ready",
-    isPassing: true,
-    evidence: "Windows can be quieted after app windows close.",
-    nextActionCommand: "veil-vmctl app-runtime-action --json --action quiet-when-idle"
-  });
   refreshReleaseGateSummary(report);
 }
 
@@ -317,6 +327,7 @@ function installedRuntimeHeroSupports(actionId) {
     "runtime.prepareSparsePackage",
     "dailyUse.verifyIntegrations",
     "dailyUse.verifyWindowCapture",
+    "dailyUse.requestNotificationConsent",
     "dailyUse.verifyNotifications",
     "runtime.startWindowsForApp",
     "runtime.prepareWindows",
@@ -356,6 +367,7 @@ function refreshOneScreenUX(report) {
   report.oneScreenUX.primaryActionId = report.primaryNextAction.actionId === "runtime.refreshStatus"
     && (report.menuBarIntegration.primaryActionId === "dailyUse.verifyIntegrations"
       || report.menuBarIntegration.primaryActionId === "dailyUse.verifyWindowCapture"
+      || report.menuBarIntegration.primaryActionId === "dailyUse.requestNotificationConsent"
       || report.menuBarIntegration.primaryActionId === "dailyUse.verifyNotifications")
     && report.menuBarIntegration.primaryActionAvailable
     ? report.menuBarIntegration.primaryActionId
@@ -1649,6 +1661,7 @@ test("rejects Daily Use notification bridge guidance drift", () => {
 
 test("accepts blocked Windows notification listener consent readiness", () => {
   const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.mac-window-live.json", import.meta.url), "utf8"));
+  clearMirroredWindows(report);
   report.connection.capabilities.packageIdentity = true;
   report.connection.packageIdentityStatus.succeeded = true;
   report.connection.packageIdentityStatus.stage = "registered";
@@ -1676,8 +1689,68 @@ test("accepts blocked Windows notification listener consent readiness", () => {
   report.actions.find((action) => action.id === "runtime.prepareSparsePackage").isAvailable = false;
   report.actions.find((action) => action.id === "dailyUse.verifyIntegrations").isAvailable = true;
   report.actions.find((action) => action.id === "dailyUse.requestNotificationConsent").isAvailable = true;
+  Object.assign(report.menuBarIntegration, {
+    statusTitle: "Notifications Need Access",
+    symbolName: "bell.badge",
+    primaryActionId: "dailyUse.requestNotificationConsent",
+    primaryActionTitle: "Allow Notifications",
+    primaryActionAvailable: true
+  });
+  refreshOneScreenUX(report);
+  refreshLaunchOnboarding(report);
 
   assert.equal(validateAppRuntimeStatus(report), report);
+});
+
+test("rejects notification consent reports that leave the launcher on a passive refresh", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.mac-window-live.json", import.meta.url), "utf8"));
+  clearMirroredWindows(report);
+  report.connection.capabilities.packageIdentity = true;
+  report.connection.packageIdentityStatus.succeeded = true;
+  report.connection.packageIdentityStatus.stage = "registered";
+  report.connection.packageIdentityStatus.message = "Sparse package registered and agent restarted with package identity.";
+  report.connection.notificationListener = {
+    isSupported: true,
+    canListen: false,
+    accessStatus: "denied",
+    recommendedAction: "enable-notification-listener-settings",
+    requiresPackageIdentity: true
+  };
+  Object.assign(report.dailyUseReadiness, {
+    packageIdentityReady: true,
+    packageIdentityStatus: report.connection.packageIdentityStatus,
+    packageIdentitySucceeded: true,
+    packageIdentityStage: "registered",
+    packageIdentityMessage: "Sparse package registered and agent restarted with package identity.",
+    borderlessCapturePreflightPassed: true,
+    borderlessCaptureRecommendedAction: "verify-daily-use-integrations",
+    notificationBridgePreflightPassed: false,
+    notificationBridgeRecommendedAction: "enable-notification-listener-settings",
+    recommendedAction: "verify-daily-use-integrations",
+    recommendedCommand: "veil-vmctl app-runtime-action --json --action proof-recommended"
+  });
+  report.notificationBridge.recommendedAction = "enable-notification-listener-settings";
+  report.notificationBridge.reason = "Windows notification listener consent is required before Veil can mirror Windows notifications.";
+  report.actions.find((action) => action.id === "runtime.prepareSparsePackage").isAvailable = false;
+  report.actions.find((action) => action.id === "dailyUse.verifyIntegrations").isAvailable = true;
+  report.actions.find((action) => action.id === "dailyUse.requestNotificationConsent").isAvailable = true;
+  Object.assign(report.menuBarIntegration, {
+    statusTitle: "Notifications Need Access",
+    symbolName: "bell.badge",
+    primaryActionId: "runtime.refreshStatus",
+    primaryActionTitle: "Refresh Windows Status",
+    primaryActionAvailable: true,
+    canBringWindowsAppsForward: false,
+    canRestorePreviousApps: false,
+    canReconnectPreviousApps: false
+  });
+  refreshOneScreenUX(report);
+  refreshLaunchOnboarding(report);
+
+  assert.throws(
+    () => validateAppRuntimeStatus(report),
+    /primaryActionId/
+  );
 });
 
 test("accepts allowed Windows notification listener proof readiness", () => {

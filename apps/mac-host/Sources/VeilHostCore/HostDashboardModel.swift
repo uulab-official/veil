@@ -2129,6 +2129,10 @@ public final class HostDashboardModel {
             return previousAppsStatusTitle()
         }
 
+        if canRequestWindowsNotificationConsent(dailyUseReadiness: dailyUseReadiness) {
+            return "Notifications Need Access"
+        }
+
         if dailyUseReadiness.notificationBridgeRecommendedAction == "run-notification-proof" {
             return "Notifications Check Needed"
         }
@@ -2180,6 +2184,10 @@ public final class HostDashboardModel {
 
         if canRestoreMirrorSessions || canReconnectRestoreMirrorSessions {
             return "arrow.counterclockwise.circle.fill"
+        }
+
+        if canRequestWindowsNotificationConsent(dailyUseReadiness: dailyUseReadiness) {
+            return "bell.badge"
         }
 
         if dailyUseReadiness.notificationBridgeRecommendedAction == "run-notification-proof" {
@@ -2281,6 +2289,10 @@ public final class HostDashboardModel {
         if dailyUseReadiness.recommendedAction == "verify-window-capture",
            dailyUseReadiness.recommendedCommand != nil {
             return ("dailyUse.verifyWindowCapture", "Check App Screen", true)
+        }
+
+        if canRequestWindowsNotificationConsent(dailyUseReadiness: dailyUseReadiness) {
+            return ("dailyUse.requestNotificationConsent", "Allow Notifications", true)
         }
 
         if dailyUseReadiness.notificationBridgeRecommendedAction == "run-notification-proof" {
@@ -3220,6 +3232,7 @@ public final class HostDashboardModel {
              "windowsApps.closeAll",
              "runtime.quietWhenIdle",
              "runtime.stopWhenIdle",
+             "dailyUse.requestNotificationConsent",
              "dailyUse.verifyNotifications",
              "dailyUse.verifyIntegrations",
              "dailyUse.verifyWindowCapture",
@@ -3679,6 +3692,7 @@ public final class HostDashboardModel {
         if primaryNextAction.actionId == "runtime.refreshStatus",
            (menuBarIntegration.primaryActionId == "dailyUse.verifyIntegrations"
                 || menuBarIntegration.primaryActionId == "dailyUse.verifyWindowCapture"
+                || menuBarIntegration.primaryActionId == "dailyUse.requestNotificationConsent"
                 || menuBarIntegration.primaryActionId == "dailyUse.verifyNotifications"),
            menuBarIntegration.primaryActionAvailable {
             return menuBarIntegration.primaryActionId

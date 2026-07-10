@@ -1929,6 +1929,7 @@ function installedRuntimeHeroSupports(actionId) {
     "windowsApps.restartFrameStream",
     "runtime.quietWhenIdle",
     "runtime.stopWhenIdle",
+    "dailyUse.requestNotificationConsent",
     "dailyUse.verifyNotifications",
     "dailyUse.verifyIntegrations",
     "dailyUse.verifyWindowCapture",
@@ -2125,6 +2126,11 @@ function validateMenuBarIntegration(menuBarIntegration, report) {
     throw new TypeError("menuBarIntegration.primaryActionTitle must expose window capture verification.");
   }
 
+  if (menuBarIntegration.primaryActionId === "dailyUse.requestNotificationConsent"
+    && menuBarIntegration.primaryActionTitle !== "Allow Notifications") {
+    throw new TypeError("menuBarIntegration.primaryActionTitle must expose notification consent.");
+  }
+
   if (menuBarIntegration.primaryActionId === "dailyUse.verifyNotifications"
     && menuBarIntegration.primaryActionTitle !== "Check Notifications") {
     throw new TypeError("menuBarIntegration.primaryActionTitle must expose notification proof.");
@@ -2155,6 +2161,10 @@ function expectedMenuBarSymbolName(report) {
 
   if (report.dailyUseReadiness.recommendedAction === "verify-window-capture") {
     return "rectangle.dashed";
+  }
+
+  if (canRequestWindowsNotificationConsent(report)) {
+    return "bell.badge";
   }
 
   if (report.dailyUseReadiness.notificationBridgeRecommendedAction === "run-notification-proof") {
@@ -2240,6 +2250,10 @@ function expectedMenuBarPrimaryActionId(report) {
     return "dailyUse.verifyWindowCapture";
   }
 
+  if (canRequestWindowsNotificationConsent(report)) {
+    return "dailyUse.requestNotificationConsent";
+  }
+
   if (report.dailyUseReadiness.notificationBridgeRecommendedAction === "run-notification-proof"
     && report.notificationBridge.recommendedAction === "run-notification-proof") {
     return "dailyUse.verifyNotifications";
@@ -2260,6 +2274,14 @@ function expectedMenuBarPrimaryActionId(report) {
   }
 
   return "dock.openMainWindow";
+}
+
+function canRequestWindowsNotificationConsent(report) {
+  return report.connection.hasLiveAgentConnection === true
+    && report.connection.capabilities?.packageIdentity === true
+    && report.connection.notificationListener !== undefined
+    && (report.dailyUseReadiness.notificationBridgeRecommendedAction === "request-notification-listener-consent"
+      || report.dailyUseReadiness.notificationBridgeRecommendedAction === "enable-notification-listener-settings");
 }
 
 function expectedQueuedMenuBarPrimaryActionId(report) {
@@ -2414,6 +2436,7 @@ function validateOneScreenUX(oneScreenUX, report) {
   const expectedPrimaryActionId = report.primaryNextAction.actionId === "runtime.refreshStatus"
     && (report.menuBarIntegration.primaryActionId === "dailyUse.verifyIntegrations"
       || report.menuBarIntegration.primaryActionId === "dailyUse.verifyWindowCapture"
+      || report.menuBarIntegration.primaryActionId === "dailyUse.requestNotificationConsent"
       || report.menuBarIntegration.primaryActionId === "dailyUse.verifyNotifications")
     && report.menuBarIntegration.primaryActionAvailable
     ? report.menuBarIntegration.primaryActionId

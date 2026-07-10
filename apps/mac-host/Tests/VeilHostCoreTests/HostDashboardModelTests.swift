@@ -1417,6 +1417,15 @@ struct HostDashboardModelTests {
         #expect(report.notificationBridge.reason.contains("listener consent"))
         #expect(report.actions.first { $0.id == "dailyUse.requestNotificationConsent" }?.isAvailable == true)
         #expect(report.actions.first { $0.id == "dailyUse.verifyNotifications" }?.isAvailable == false)
+        #expect(report.menuBarIntegration.statusTitle == "Notifications Need Access")
+        #expect(report.menuBarIntegration.symbolName == "bell.badge")
+        #expect(report.menuBarIntegration.primaryActionId == "dailyUse.requestNotificationConsent")
+        #expect(report.menuBarIntegration.primaryActionTitle == "Allow Notifications")
+        #expect(report.menuBarIntegration.primaryActionAvailable)
+        #expect(report.oneScreenUX.primaryActionId == "dailyUse.requestNotificationConsent")
+        #expect(report.oneScreenUX.heroRunsPrimaryAction)
+        #expect(report.launchOnboarding.primaryActionId == "dailyUse.requestNotificationConsent")
+        #expect(report.launchOnboarding.canContinueInApp)
     }
 
     @Test("Daily Use readiness allows notification proof after Windows listener consent")

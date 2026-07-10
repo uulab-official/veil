@@ -360,7 +360,10 @@ automation surface for notification consent is `veil-vmctl app-runtime-action
 `notification.listener.response` and point the operator at `notification-proof`.
 The launcher hero and menu bar primary action must route
 `dailyUse.requestNotificationConsent` to that same in-app request path so this
-Daily Use lane does not regress to terminal-only guidance.
+Daily Use lane does not regress to terminal-only guidance. After package
+identity and app-screen capture are ready, that action is promoted as the
+single `Allow Notifications` launcher and menu-bar action; it must remain
+distinct from the later `Check Notifications` proof action.
 Once Windows listener access is allowed, `actions` must expose
 `dailyUse.verifyNotifications`; the launcher hero and menu bar route that action
 to `veil-vmctl app-runtime-action --json --action proof-notifications`, which
