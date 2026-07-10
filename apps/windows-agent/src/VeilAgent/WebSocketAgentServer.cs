@@ -15,17 +15,20 @@ public sealed class WebSocketAgentServer
     private readonly WindowFrameStreamer frameStreamer;
     private readonly ClipboardTextStreamer clipboardTextStreamer;
     private readonly WindowDiscoveryStreamer windowDiscoveryStreamer;
+    private readonly WindowsNotificationStreamer notificationStreamer;
     private readonly ConcurrentDictionary<Guid, WebSocket> clients = new();
     private readonly ConcurrentDictionary<string, CancellationTokenSource> frameStreamsByWindowId = new();
     private CancellationTokenSource? clipboardStreamCancellation;
     private CancellationTokenSource? windowDiscoveryStreamCancellation;
+    private CancellationTokenSource? notificationStreamCancellation;
 
     public WebSocketAgentServer(
         AgentEndpoint endpoint,
         AgentSession session,
         WindowFrameStreamer frameStreamer,
         ClipboardTextStreamer clipboardTextStreamer,
-        WindowDiscoveryStreamer windowDiscoveryStreamer
+        WindowDiscoveryStreamer windowDiscoveryStreamer,
+        WindowsNotificationStreamer? notificationStreamer = null
     )
     {
         this.endpoint = endpoint;
@@ -33,6 +36,7 @@ public sealed class WebSocketAgentServer
         this.frameStreamer = frameStreamer;
         this.clipboardTextStreamer = clipboardTextStreamer;
         this.windowDiscoveryStreamer = windowDiscoveryStreamer;
+        this.notificationStreamer = notificationStreamer ?? new WindowsNotificationStreamer(new DisabledWindowsNotificationListener());
     }
 
     public async Task RunAsync(CancellationToken cancellationToken = default)
@@ -41,6 +45,7 @@ public sealed class WebSocketAgentServer
         listener.Start();
         StartClipboardStream(cancellationToken);
         StartWindowDiscoveryStream(cancellationToken);
+        StartNotificationStream(cancellationToken);
 
         while (!cancellationToken.IsCancellationRequested)
         {
@@ -283,6 +288,37 @@ public sealed class WebSocketAgentServer
             {
                 Console.Error.WriteLine(
                     $"WebSocketAgentServer: window discovery stream stopped unexpectedly. {error.GetType().Name}: {error.Message}"
+                );
+            }
+        }, streamCancellation.Token);
+    }
+
+    private void StartNotificationStream(CancellationToken serverCancellationToken)
+    {
+        if (notificationStreamCancellation is not null)
+        {
+            return;
+        }
+
+        var streamCancellation = CancellationTokenSource.CreateLinkedTokenSource(serverCancellationToken);
+        notificationStreamCancellation = streamCancellation;
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await notificationStreamer.StreamAsync(
+                    async (message, token) => await BroadcastTextAsync(message.ToJsonString(ProtocolJson.Options), token),
+                    streamCancellation.Token
+                );
+            }
+            catch (OperationCanceledException)
+            {
+                // Expected when the agent shuts down.
+            }
+            catch (Exception error)
+            {
+                Console.Error.WriteLine(
+                    $"WebSocketAgentServer: notification stream stopped unexpectedly. {error.GetType().Name}: {error.Message}"
                 );
             }
         }, streamCancellation.Token);
