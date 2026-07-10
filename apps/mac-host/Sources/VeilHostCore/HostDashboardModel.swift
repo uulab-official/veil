@@ -2137,6 +2137,10 @@ public final class HostDashboardModel {
             return "App Identity Needed"
         }
 
+        if dailyUseReadiness.recommendedAction == "verify-window-capture" {
+            return "App Screen Check Needed"
+        }
+
         if dailyUseReadiness.recommendedAction == "verify-daily-use-integrations" {
             return "App Check Needed"
         }
@@ -2184,6 +2188,10 @@ public final class HostDashboardModel {
 
         if dailyUseReadiness.recommendedAction == "prepare-sparse-package" {
             return "shippingbox"
+        }
+
+        if dailyUseReadiness.recommendedAction == "verify-window-capture" {
+            return "rectangle.dashed"
         }
 
         if dailyUseReadiness.recommendedAction == "verify-daily-use-integrations" {
@@ -2268,6 +2276,11 @@ public final class HostDashboardModel {
         if dailyUseReadiness.recommendedAction == "prepare-sparse-package",
            dailyUseReadiness.recommendedCommand != nil {
             return ("runtime.prepareSparsePackage", "Prepare Identity", true)
+        }
+
+        if dailyUseReadiness.recommendedAction == "verify-window-capture",
+           dailyUseReadiness.recommendedCommand != nil {
+            return ("dailyUse.verifyWindowCapture", "Check App Screen", true)
         }
 
         if dailyUseReadiness.notificationBridgeRecommendedAction == "run-notification-proof" {
@@ -3209,6 +3222,7 @@ public final class HostDashboardModel {
              "runtime.stopWhenIdle",
              "dailyUse.verifyNotifications",
              "dailyUse.verifyIntegrations",
+             "dailyUse.verifyWindowCapture",
              "dailyUse.planPrinterBridge",
              "proof.recommended",
              "proof.multiApp":
@@ -3629,8 +3643,10 @@ public final class HostDashboardModel {
             primaryNextAction: primaryNextAction,
             menuBarIntegration: menuBarIntegration
         )
-        let heroRunsPrimaryAction = primaryNextAction.runsInApp
-            && installedRuntimeHeroSupports(actionId: primaryActionId)
+        let primaryActionComesFromMenu = primaryActionId == menuBarIntegration.primaryActionId
+            && primaryNextAction.actionId != primaryActionId
+        let heroRunsPrimaryAction = installedRuntimeHeroSupports(actionId: primaryActionId)
+            && (primaryNextAction.runsInApp || (primaryActionComesFromMenu && menuBarIntegration.primaryActionAvailable))
         let reason: String
 
         if isMirroringApps {
@@ -3662,6 +3678,7 @@ public final class HostDashboardModel {
     ) -> String? {
         if primaryNextAction.actionId == "runtime.refreshStatus",
            (menuBarIntegration.primaryActionId == "dailyUse.verifyIntegrations"
+                || menuBarIntegration.primaryActionId == "dailyUse.verifyWindowCapture"
                 || menuBarIntegration.primaryActionId == "dailyUse.verifyNotifications"),
            menuBarIntegration.primaryActionAvailable {
             return menuBarIntegration.primaryActionId

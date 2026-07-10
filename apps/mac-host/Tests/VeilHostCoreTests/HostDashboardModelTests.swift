@@ -1490,6 +1490,13 @@ struct HostDashboardModelTests {
         #expect(report.actions.first { $0.id == "dailyUse.verifyIntegrations" }?.isAvailable == false)
         #expect(report.actions.first { $0.id == "dailyUse.requestNotificationConsent" }?.isAvailable == false)
         #expect(report.actions.first { $0.id == "dailyUse.verifyNotifications" }?.isAvailable == false)
+        #expect(report.menuBarIntegration.statusTitle == "App Screen Check Needed")
+        #expect(report.menuBarIntegration.symbolName == "rectangle.dashed")
+        #expect(report.menuBarIntegration.primaryActionId == "dailyUse.verifyWindowCapture")
+        #expect(report.menuBarIntegration.primaryActionTitle == "Check App Screen")
+        #expect(report.menuBarIntegration.primaryActionAvailable)
+        #expect(report.oneScreenUX.primaryActionId == "dailyUse.verifyWindowCapture")
+        #expect(report.oneScreenUX.heroRunsPrimaryAction)
     }
 
     @Test("reports quiet runtime readiness after the final Windows app window closes")

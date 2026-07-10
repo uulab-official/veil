@@ -334,7 +334,8 @@ step.
 When no mirrored Windows app window, queued launch, or previous app restore is
 more urgent, the menu-bar primary action promotes the same Daily Use gate:
 `runtime.prepareSparsePackage` for package identity preparation and
-`dailyUse.verifyIntegrations` for the follow-up app check. This keeps the
+`dailyUse.verifyWindowCapture` for the intermediate app-screen capture check,
+then `dailyUse.verifyIntegrations` for the follow-up app check. This keeps the
 top-level menu bar useful for service-quality work instead of only opening the
 launcher.
 The app-runtime action harness includes a live accepted
@@ -351,8 +352,11 @@ The same `actions` list now includes `dailyUse.verifyWindowCapture` for the
 intermediate "package identity exists, window capture still needs verification"
 state and `dailyUse.requestNotificationConsent` when package identity exists but
 Windows `UserNotificationListener` access is still denied or unspecified. The
-matching automation surface is `veil-vmctl app-runtime-action --json --action
-request-notification-consent`; accepted reports must carry the agent's
+window-capture gate must also be promoted to the menu-bar primary action as
+`Check App Screen`, so a package-identity-ready report cannot jump straight to
+launching apps while borderless capture remains unverified. The matching
+automation surface for notification consent is `veil-vmctl app-runtime-action
+--json --action request-notification-consent`; accepted reports must carry the agent's
 `notification.listener.response` and point the operator at `notification-proof`.
 The launcher hero and menu bar primary action must route
 `dailyUse.requestNotificationConsent` to that same in-app request path so this

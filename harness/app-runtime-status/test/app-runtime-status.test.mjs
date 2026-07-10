@@ -26,6 +26,150 @@ function setReconnectMenuBarState(report, overrides = {}) {
   refreshLaunchOnboarding(report);
 }
 
+function setPackageIdentityWithoutWindowCapture(report) {
+  report.mirrorSessions = [];
+  report.restorableAppIds = [];
+
+  Object.assign(report.connection.capabilities, {
+    packageIdentity: true,
+    windowCapture: false
+  });
+  report.connection.packageIdentityStatus = {
+    statusPath: "C:\\Users\\veil\\AppData\\Local\\Veil\\Agent\\package\\sparse-package-status.json",
+    stage: "registered",
+    succeeded: true,
+    message: "Sparse package registered and agent restarted with package identity."
+  };
+  delete report.connection.notificationListener;
+
+  Object.assign(report.macWindowIntegration, {
+    acceptsGuestWindowEvents: true,
+    hidesLauncherWhenMirroring: false,
+    mirroredWindowCount: 0,
+    pendingFrameWindowCount: 0,
+    streamingWindowCount: 0,
+    foregroundableWindowCount: 0,
+    freshFrameWindowCount: 0,
+    delayedFrameWindowCount: 0,
+    staleFrameWindowCount: 0,
+    frameLatencyHealth: "idle",
+    frameLatencyRecommendedAction: "open-windows-app",
+    reason: "Windows app windows will open as macOS windows after the app screen check passes."
+  });
+  delete report.macWindowIntegration.foregroundWindowId;
+  delete report.macWindowIntegration.foregroundWindowTitle;
+  delete report.macWindowIntegration.slowestFrameWindowId;
+  delete report.macWindowIntegration.slowestFrameWindowTitle;
+  delete report.macWindowIntegration.slowestFrameAgeMilliseconds;
+
+  Object.assign(report.launcherVisibility, {
+    shouldHideMainWindow: false,
+    recommendedAction: "show-main-window",
+    reason: "The main Veil launcher is the single normal surface until a Windows app opens as a macOS window."
+  });
+  Object.assign(report.visibleSurfacePolicy, {
+    primarySurface: "launcher",
+    expectedVisibleSurfaceCount: 1,
+    shouldHideLauncher: false,
+    reason: "The launcher is the only normal setup surface until a Windows app opens as a macOS window."
+  });
+  Object.assign(report.dockIntegration, {
+    openWindowCount: 0,
+    restorableAppCount: 0,
+    restorableWindowCount: 0,
+    canBringWindowsAppsForward: false,
+    canRestorePreviousApps: false,
+    canReconnectPreviousApps: false
+  });
+  delete report.dockIntegration.badgeLabel;
+
+  Object.assign(report.dailyUseReadiness, {
+    packageIdentityReady: true,
+    packageIdentityStatus: report.connection.packageIdentityStatus,
+    packageIdentityStage: "registered",
+    packageIdentitySucceeded: true,
+    packageIdentityMessage: "Sparse package registered and agent restarted with package identity.",
+    packageIdentityEvidencePath: report.connection.packageIdentityStatus.statusPath,
+    borderlessCapturePreflightPassed: false,
+    borderlessCaptureRecommendedAction: "verify-window-capture",
+    notificationBridgePreflightPassed: true,
+    notificationBridgeRecommendedAction: "verify-notification-listener-consent",
+    recommendedAction: "verify-window-capture",
+    recommendedCommand: "veil-vmctl app-runtime-status --json",
+    reason: "Package identity is available, but window capture must be verified before borderless app capture can be enabled."
+  });
+
+  Object.assign(report.notificationBridge, {
+    canReceiveNotifications: true,
+    deliveredNotificationCount: 0,
+    recommendedAction: "verify-notification-listener-consent",
+    reason: "Windows notification listener consent is ready; run notification-proof and wait for the first notification.received event."
+  });
+  delete report.notificationBridge.latestNotification;
+
+  Object.assign(report.proofPlan, {
+    canRunAppWindowProof: false,
+    canRunCoherenceProof: false,
+    canRunMVPProof: false,
+    canRunMultiAppProof: false,
+    reason: "The Windows app connection must support window capture before the window check can run."
+  });
+  delete report.proofPlan.recommendedAppWindowProofCommand;
+  delete report.proofPlan.recommendedCoherenceProofCommand;
+  delete report.proofPlan.recommendedMVPProofCommand;
+  delete report.proofPlan.recommendedMultiAppProofCommand;
+  delete report.proofPlan.recommendedProofKind;
+  delete report.proofPlan.recommendedProofCommand;
+
+  Object.assign(report.quietRuntime, {
+    openWindowCount: 0,
+    canQuietRuntime: true,
+    willQuietAutomatically: true,
+    recommendedAction: "quiet-when-idle",
+    recommendedStopCommand: "veil-vmctl app-runtime-action --json --action quiet-when-idle",
+    reason: "No Windows app windows are open; Windows can be quieted after a short idle delay."
+  });
+
+  const setAction = (id, isAvailable) => {
+    report.actions.find((action) => action.id === id).isAvailable = isAvailable;
+  };
+  setAction("runtime.prepareSparsePackage", false);
+  setAction("dailyUse.verifyIntegrations", false);
+  setAction("dailyUse.verifyWindowCapture", true);
+  setAction("dailyUse.requestNotificationConsent", false);
+  setAction("dailyUse.verifyNotifications", false);
+  setAction("proof.appWindow", false);
+  setAction("proof.coherence", false);
+  setAction("proof.mvp", false);
+  setAction("proof.recommended", false);
+  setAction("proof.multiApp", false);
+  setAction("runtime.quietWhenIdle", true);
+  setAction("runtime.stopWhenIdle", true);
+  setAction("windowsApps.reconnectRestore", false);
+
+  Object.assign(report.menuBarIntegration, {
+    statusTitle: "App Screen Check Needed",
+    symbolName: "rectangle.dashed",
+    primaryActionId: "dailyUse.verifyWindowCapture",
+    primaryActionTitle: "Check App Screen",
+    primaryActionAvailable: true,
+    canBringWindowsAppsForward: false,
+    canRestorePreviousApps: false,
+    canReconnectPreviousApps: false
+  });
+
+  const appCheckStep = report.releaseGate.steps.find((step) => step.id === "appCheckEvidence");
+  appCheckStep.nextActionCommand = undefined;
+  const closeStep = report.releaseGate.steps.find((step) => step.id === "closeOrRestore");
+  Object.assign(closeStep, {
+    state: "ready",
+    isPassing: true,
+    evidence: "Windows can be quieted after app windows close.",
+    nextActionCommand: "veil-vmctl app-runtime-action --json --action quiet-when-idle"
+  });
+  refreshReleaseGateSummary(report);
+}
+
 function addLaunchableTargetApps(report) {
   for (const app of [
     { id: "winapp_calculator", name: "Calculator" },
@@ -211,12 +355,16 @@ function refreshOneScreenUX(report) {
   report.oneScreenUX.keepsDisplayRecoveryManual = report.visibleSurfacePolicy.keepsRecoveryDisplayManual;
   report.oneScreenUX.primaryActionId = report.primaryNextAction.actionId === "runtime.refreshStatus"
     && (report.menuBarIntegration.primaryActionId === "dailyUse.verifyIntegrations"
+      || report.menuBarIntegration.primaryActionId === "dailyUse.verifyWindowCapture"
       || report.menuBarIntegration.primaryActionId === "dailyUse.verifyNotifications")
     && report.menuBarIntegration.primaryActionAvailable
     ? report.menuBarIntegration.primaryActionId
     : (report.primaryNextAction.actionId ?? report.menuBarIntegration.primaryActionId);
-  report.oneScreenUX.heroRunsPrimaryAction = report.primaryNextAction.runsInApp
-    && installedRuntimeHeroSupports(report.oneScreenUX.primaryActionId);
+  const primaryActionComesFromMenu = report.oneScreenUX.primaryActionId === report.menuBarIntegration.primaryActionId
+    && report.primaryNextAction.actionId !== report.oneScreenUX.primaryActionId;
+  report.oneScreenUX.heroRunsPrimaryAction = installedRuntimeHeroSupports(report.oneScreenUX.primaryActionId)
+    && (report.primaryNextAction.runsInApp
+      || (primaryActionComesFromMenu && report.menuBarIntegration.primaryActionAvailable));
 }
 
 function refreshLaunchOnboarding(report) {
@@ -1620,6 +1768,25 @@ test("rejects Daily Use window capture action availability drift", () => {
   assert.throws(
     () => validateAppRuntimeStatus(report),
     /verifyWindowCapture/
+  );
+});
+
+test("accepts Daily Use window capture as the menu bar primary action", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.mac-window-live.json", import.meta.url), "utf8"));
+  setPackageIdentityWithoutWindowCapture(report);
+
+  assert.equal(validateAppRuntimeStatus(report), report);
+});
+
+test("rejects menu bar primary action that skips Daily Use window capture", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.mac-window-live.json", import.meta.url), "utf8"));
+  setPackageIdentityWithoutWindowCapture(report);
+  report.menuBarIntegration.primaryActionId = "windowsApps.launchSelected";
+  report.menuBarIntegration.primaryActionTitle = "Open Notepad";
+
+  assert.throws(
+    () => validateAppRuntimeStatus(report),
+    /primaryActionId/
   );
 });
 

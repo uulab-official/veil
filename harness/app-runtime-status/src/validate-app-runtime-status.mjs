@@ -1930,8 +1930,11 @@ function installedRuntimeHeroSupports(actionId) {
     "runtime.quietWhenIdle",
     "runtime.stopWhenIdle",
     "dailyUse.verifyNotifications",
+    "dailyUse.verifyIntegrations",
+    "dailyUse.verifyWindowCapture",
     "dailyUse.planPrinterBridge",
-    "proof.recommended"
+    "proof.recommended",
+    "proof.multiApp"
   ].includes(actionId);
 }
 
@@ -2117,6 +2120,11 @@ function validateMenuBarIntegration(menuBarIntegration, report) {
     throw new TypeError("menuBarIntegration.primaryActionTitle must expose Daily Use verification.");
   }
 
+  if (menuBarIntegration.primaryActionId === "dailyUse.verifyWindowCapture"
+    && menuBarIntegration.primaryActionTitle !== "Check App Screen") {
+    throw new TypeError("menuBarIntegration.primaryActionTitle must expose window capture verification.");
+  }
+
   if (menuBarIntegration.primaryActionId === "dailyUse.verifyNotifications"
     && menuBarIntegration.primaryActionTitle !== "Check Notifications") {
     throw new TypeError("menuBarIntegration.primaryActionTitle must expose notification proof.");
@@ -2143,6 +2151,10 @@ function expectedMenuBarSymbolName(report) {
 
   if (report.dailyUseReadiness.recommendedAction === "prepare-sparse-package") {
     return "shippingbox";
+  }
+
+  if (report.dailyUseReadiness.recommendedAction === "verify-window-capture") {
+    return "rectangle.dashed";
   }
 
   if (report.dailyUseReadiness.notificationBridgeRecommendedAction === "run-notification-proof") {
@@ -2221,6 +2233,11 @@ function expectedMenuBarPrimaryActionId(report) {
   if (report.dailyUseReadiness.recommendedAction === "prepare-sparse-package"
     && report.dailyUseReadiness.recommendedCommand !== undefined) {
     return "runtime.prepareSparsePackage";
+  }
+
+  if (report.dailyUseReadiness.recommendedAction === "verify-window-capture"
+    && report.dailyUseReadiness.recommendedCommand === "veil-vmctl app-runtime-status --json") {
+    return "dailyUse.verifyWindowCapture";
   }
 
   if (report.dailyUseReadiness.notificationBridgeRecommendedAction === "run-notification-proof"
@@ -2396,6 +2413,7 @@ function validateOneScreenUX(oneScreenUX, report) {
 
   const expectedPrimaryActionId = report.primaryNextAction.actionId === "runtime.refreshStatus"
     && (report.menuBarIntegration.primaryActionId === "dailyUse.verifyIntegrations"
+      || report.menuBarIntegration.primaryActionId === "dailyUse.verifyWindowCapture"
       || report.menuBarIntegration.primaryActionId === "dailyUse.verifyNotifications")
     && report.menuBarIntegration.primaryActionAvailable
     ? report.menuBarIntegration.primaryActionId
@@ -2404,8 +2422,11 @@ function validateOneScreenUX(oneScreenUX, report) {
     throw new TypeError("oneScreenUX.primaryActionId must match the executable next action or menu primary action.");
   }
 
-  const expectedHeroRunsPrimaryAction = report.primaryNextAction.runsInApp
-    && installedRuntimeHeroSupports(expectedPrimaryActionId);
+  const primaryActionComesFromMenu = expectedPrimaryActionId === report.menuBarIntegration.primaryActionId
+    && report.primaryNextAction.actionId !== expectedPrimaryActionId;
+  const expectedHeroRunsPrimaryAction = installedRuntimeHeroSupports(expectedPrimaryActionId)
+    && (report.primaryNextAction.runsInApp
+      || (primaryActionComesFromMenu && report.menuBarIntegration.primaryActionAvailable));
   if (oneScreenUX.heroRunsPrimaryAction !== expectedHeroRunsPrimaryAction) {
     throw new TypeError("oneScreenUX.heroRunsPrimaryAction must match whether the primary next action is supported by the app hero.");
   }
