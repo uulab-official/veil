@@ -141,6 +141,11 @@
       "isAvailable": false
     },
     {
+      "id": "proof.multiApp",
+      "title": "Check Daily Use Apps",
+      "isAvailable": false
+    },
+    {
       "id": "clipboard.setText",
       "isAvailable": false,
       "title": "Set Windows Clipboard Text"
@@ -286,6 +291,7 @@
     "canRunAppWindowProof": false,
     "canRunCoherenceProof": false,
     "canRunMVPProof": false,
+    "canRunMultiAppProof": false,
     "reason": "Wait for the Windows app connection before running app checks."
   },
   "proofArtifacts": {

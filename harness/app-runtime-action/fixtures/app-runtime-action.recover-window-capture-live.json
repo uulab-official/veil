@@ -18,7 +18,8 @@
     "recommendedMVPProofCommand": "veil-vmctl mvp-proof --json --app-id winapp_notepad --require-proved",
     "reason": "The Windows app connection can run window, input, and full app checks for the selected app.",
     "recommendedProofKind": "mvp",
-    "recommendedProofCommand": "veil-vmctl mvp-proof --json --app-id winapp_notepad --require-proved"
+    "recommendedProofCommand": "veil-vmctl mvp-proof --json --app-id winapp_notepad --require-proved",
+    "canRunMultiAppProof": false
   },
   "launch": null,
   "window": null,
@@ -354,6 +355,11 @@
         "isAvailable": true
       },
       {
+        "id": "proof.multiApp",
+        "isAvailable": false,
+        "title": "Check Daily Use Apps"
+      },
+      {
         "id": "clipboard.setText",
         "title": "Set Windows Clipboard Text",
         "isAvailable": true
@@ -369,7 +375,8 @@
       "recommendedMVPProofCommand": "veil-vmctl mvp-proof --json --app-id winapp_notepad --require-proved",
       "reason": "The Windows app connection can run window, input, and full app checks for the selected app.",
       "recommendedProofKind": "mvp",
-      "recommendedProofCommand": "veil-vmctl mvp-proof --json --app-id winapp_notepad --require-proved"
+      "recommendedProofCommand": "veil-vmctl mvp-proof --json --app-id winapp_notepad --require-proved",
+      "canRunMultiAppProof": false
     },
     "proofArtifacts": {
       "diagnosticsDirectory": "/Users/test/Library/Application Support/Veil/Diagnostics",

@@ -238,9 +238,14 @@ readiness booleans, and exact
 `veil-vmctl app-window-proof`, `coherence-proof`, and `mvp-proof --require-proved`
 commands so automation can move from status to app check without rebuilding command
 strings. It also exposes `recommendedProofKind` and `recommendedProofCommand`
-as the strongest currently available single app-check CTA. The `actions` list must
-include `proof.recommended`, available exactly when that recommended command is
-present. The matching command surface is
+as the strongest currently available single app-check CTA. When the live app
+catalog can launch all Daily Use proof targets and the agent supports capture,
+input, and clipboard, `proofPlan.canRunMultiAppProof=true` and
+`proofPlan.recommendedMultiAppProofCommand` must be
+`veil-vmctl multi-app-proof --json --require-complete`. The `actions` list must
+include `proof.recommended`, available exactly when the single-app recommended
+command is present, and `proof.multiApp`, available exactly when the multi-app
+coverage command is present. The matching single-app command surface is
 `veil-vmctl app-runtime-action --json --action proof-recommended`, which runs
 the strongest available check and returns a `proof` evidence summary inside the
 same action report. The status report also includes `proofArtifacts`, a

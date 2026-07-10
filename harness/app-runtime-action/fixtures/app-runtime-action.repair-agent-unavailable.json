@@ -278,6 +278,11 @@
         "title": "Check Windows App"
       },
       {
+        "id": "proof.multiApp",
+        "isAvailable": false,
+        "title": "Check Daily Use Apps"
+      },
+      {
         "id": "clipboard.setText",
         "isAvailable": false,
         "title": "Set Windows Clipboard Text"
@@ -288,7 +293,8 @@
       "canRunAppWindowProof": false,
       "canRunCoherenceProof": false,
       "canRunMVPProof": false,
-      "reason": "Wait for the live Windows agent before running proof commands."
+      "reason": "Wait for the live Windows agent before running proof commands.",
+      "canRunMultiAppProof": false
     },
     "guestAgentDiagnostics": {
       "endpoint": "ws://127.0.0.1:18444",
@@ -487,7 +493,8 @@
     "canRunAppWindowProof": false,
     "canRunCoherenceProof": false,
     "canRunMVPProof": false,
-    "reason": "Wait for the live Windows agent before running proof commands."
+    "reason": "Wait for the live Windows agent before running proof commands.",
+    "canRunMultiAppProof": false
   },
   "agentRepair": {
     "kind": "qemuGuestAgentInstallAttempt",

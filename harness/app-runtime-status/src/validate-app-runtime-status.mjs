@@ -904,6 +904,7 @@ function validateProofPlan(proofPlan, report) {
   requireBoolean(proofPlan.canRunAppWindowProof, "proofPlan.canRunAppWindowProof");
   requireBoolean(proofPlan.canRunCoherenceProof, "proofPlan.canRunCoherenceProof");
   requireBoolean(proofPlan.canRunMVPProof, "proofPlan.canRunMVPProof");
+  requireBoolean(proofPlan.canRunMultiAppProof, "proofPlan.canRunMultiAppProof");
   requireString(proofPlan.reason, "proofPlan.reason");
 
   if (proofPlan.selectedAppId !== undefined) {
@@ -925,6 +926,11 @@ function validateProofPlan(proofPlan, report) {
   const canRunCoherenceProof = canRunAppWindowProof
     && capabilities?.input === true
     && capabilities?.clipboardText === true;
+  const canRunMultiAppProof = report.connection.hasLiveAgentConnection
+    && capabilities?.windowCapture === true
+    && capabilities?.input === true
+    && capabilities?.clipboardText === true
+    && MULTI_APP_PROOF_TARGET_APP_IDS.every((appId) => report.apps.some((app) => app.id === appId && app.canLaunchNow === true));
 
   if (proofPlan.canRunAppWindowProof !== canRunAppWindowProof) {
     throw new TypeError("proofPlan.canRunAppWindowProof must match live app launch and window capture readiness.");
@@ -936,6 +942,10 @@ function validateProofPlan(proofPlan, report) {
 
   if (proofPlan.canRunMVPProof !== canRunCoherenceProof) {
     throw new TypeError("proofPlan.canRunMVPProof must match coherence proof readiness.");
+  }
+
+  if (proofPlan.canRunMultiAppProof !== canRunMultiAppProof) {
+    throw new TypeError("proofPlan.canRunMultiAppProof must match Daily Use target app proof readiness.");
   }
 
   const expectedAppWindowCommand = report.selectedAppId === undefined
@@ -966,6 +976,12 @@ function validateProofPlan(proofPlan, report) {
     "proofPlan.recommendedMVPProofCommand",
     proofPlan.canRunMVPProof,
     expectedMVPCommand
+  );
+  validateProofCommand(
+    proofPlan.recommendedMultiAppProofCommand,
+    "proofPlan.recommendedMultiAppProofCommand",
+    proofPlan.canRunMultiAppProof,
+    "veil-vmctl multi-app-proof --json --require-complete"
   );
 
   if (expectedRecommendedProof === undefined) {
@@ -2537,6 +2553,11 @@ function validateActions(actions, report) {
   const recommendedProofAction = actions.find((action) => action.id === "proof.recommended");
   if (recommendedProofAction.isAvailable !== (report.proofPlan.recommendedProofCommand !== undefined)) {
     throw new TypeError("proof.recommended availability must match proofPlan.recommendedProofCommand.");
+  }
+
+  const multiAppProofAction = actions.find((action) => action.id === "proof.multiApp");
+  if (multiAppProofAction.isAvailable !== (report.proofPlan.recommendedMultiAppProofCommand !== undefined)) {
+    throw new TypeError("proof.multiApp availability must match proofPlan.recommendedMultiAppProofCommand.");
   }
 }
 

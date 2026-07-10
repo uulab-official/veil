@@ -26,6 +26,23 @@ function setReconnectMenuBarState(report, overrides = {}) {
   refreshLaunchOnboarding(report);
 }
 
+function addLaunchableTargetApps(report) {
+  for (const app of [
+    { id: "winapp_calculator", name: "Calculator" },
+    { id: "winapp_paint", name: "Paint" }
+  ]) {
+    if (report.apps.some((candidate) => candidate.id === app.id)) {
+      continue;
+    }
+    report.apps.push({
+      id: app.id,
+      name: app.name,
+      canRequestLaunch: true,
+      canLaunchNow: true
+    });
+  }
+}
+
 function setReleaseGateStep(report, id, overrides) {
   Object.assign(report.releaseGate.steps.find((step) => step.id === id), overrides);
   refreshReleaseGateSummary(report);
@@ -1466,6 +1483,42 @@ test("rejects recommended proof availability that drifts from proof plan", () =>
   assert.throws(
     () => validateAppRuntimeStatus(report),
     /proof\.recommended/
+  );
+});
+
+test("accepts available multi-app proof when target apps are launchable", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.mac-window-live.json", import.meta.url), "utf8"));
+  addLaunchableTargetApps(report);
+  report.proofPlan.canRunMultiAppProof = true;
+  report.proofPlan.recommendedMultiAppProofCommand = "veil-vmctl multi-app-proof --json --require-complete";
+  report.actions.find((action) => action.id === "proof.multiApp").isAvailable = true;
+
+  assert.equal(validateAppRuntimeStatus(report), report);
+});
+
+test("rejects multi-app proof action availability that drifts from proof plan", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.mac-window-live.json", import.meta.url), "utf8"));
+  addLaunchableTargetApps(report);
+  report.proofPlan.canRunMultiAppProof = true;
+  report.proofPlan.recommendedMultiAppProofCommand = "veil-vmctl multi-app-proof --json --require-complete";
+  report.actions.find((action) => action.id === "proof.multiApp").isAvailable = false;
+
+  assert.throws(
+    () => validateAppRuntimeStatus(report),
+    /proof\.multiApp/
+  );
+});
+
+test("rejects multi-app proof command drift", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.mac-window-live.json", import.meta.url), "utf8"));
+  addLaunchableTargetApps(report);
+  report.proofPlan.canRunMultiAppProof = true;
+  report.proofPlan.recommendedMultiAppProofCommand = "veil-vmctl multi-app-proof --json";
+  report.actions.find((action) => action.id === "proof.multiApp").isAvailable = true;
+
+  assert.throws(
+    () => validateAppRuntimeStatus(report),
+    /recommendedMultiAppProofCommand/
   );
 });
 

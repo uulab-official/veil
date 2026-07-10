@@ -829,11 +829,13 @@ public struct WindowsAppRuntimeProofPlanStatus: Codable, Equatable, Sendable {
     public var canRunAppWindowProof: Bool
     public var canRunCoherenceProof: Bool
     public var canRunMVPProof: Bool
+    public var canRunMultiAppProof: Bool
     public var recommendedProofKind: String?
     public var recommendedProofCommand: String?
     public var recommendedAppWindowProofCommand: String?
     public var recommendedCoherenceProofCommand: String?
     public var recommendedMVPProofCommand: String?
+    public var recommendedMultiAppProofCommand: String?
     public var reason: String
 
     public init(
@@ -841,22 +843,26 @@ public struct WindowsAppRuntimeProofPlanStatus: Codable, Equatable, Sendable {
         canRunAppWindowProof: Bool,
         canRunCoherenceProof: Bool,
         canRunMVPProof: Bool,
+        canRunMultiAppProof: Bool = false,
         recommendedProofKind: String? = nil,
         recommendedProofCommand: String? = nil,
         recommendedAppWindowProofCommand: String? = nil,
         recommendedCoherenceProofCommand: String? = nil,
         recommendedMVPProofCommand: String? = nil,
+        recommendedMultiAppProofCommand: String? = nil,
         reason: String
     ) {
         self.selectedAppId = selectedAppId
         self.canRunAppWindowProof = canRunAppWindowProof
         self.canRunCoherenceProof = canRunCoherenceProof
         self.canRunMVPProof = canRunMVPProof
+        self.canRunMultiAppProof = canRunMultiAppProof
         self.recommendedProofKind = recommendedProofKind
         self.recommendedProofCommand = recommendedProofCommand
         self.recommendedAppWindowProofCommand = recommendedAppWindowProofCommand
         self.recommendedCoherenceProofCommand = recommendedCoherenceProofCommand
         self.recommendedMVPProofCommand = recommendedMVPProofCommand
+        self.recommendedMultiAppProofCommand = recommendedMultiAppProofCommand
         self.reason = reason
     }
 }
@@ -1833,6 +1839,11 @@ public final class HostDashboardModel {
                     isAvailable: proofPlan.recommendedProofCommand != nil
                 ),
                 WindowsAppRuntimeActionStatus(
+                    id: "proof.multiApp",
+                    title: "Check Daily Use Apps",
+                    isAvailable: proofPlan.recommendedMultiAppProofCommand != nil
+                ),
+                WindowsAppRuntimeActionStatus(
                     id: "clipboard.setText",
                     title: "Set Windows Clipboard Text",
                     isAvailable: canSendHostClipboardText
@@ -2326,12 +2337,23 @@ public final class HostDashboardModel {
     }
 
     public func proofPlanStatus() -> WindowsAppRuntimeProofPlanStatus {
+        let canRunMultiAppProof = hasLiveAgentConnection
+            && health?.capabilities.windowCapture == true
+            && health?.capabilities.input == true
+            && health?.capabilities.clipboardText == true
+            && WindowsAppRuntimeProofCoverageDefaults.targetAppIds.allSatisfy { canLaunchApp(appId: $0) }
+        let multiAppProofCommand = canRunMultiAppProof
+            ? "veil-vmctl multi-app-proof --json --require-complete"
+            : nil
+
         guard let selectedAppId else {
             return WindowsAppRuntimeProofPlanStatus(
                 selectedAppId: nil,
                 canRunAppWindowProof: false,
                 canRunCoherenceProof: false,
                 canRunMVPProof: false,
+                canRunMultiAppProof: canRunMultiAppProof,
+                recommendedMultiAppProofCommand: multiAppProofCommand,
                 reason: "Select a Windows app before running app checks."
             )
         }
@@ -2342,6 +2364,8 @@ public final class HostDashboardModel {
                 canRunAppWindowProof: false,
                 canRunCoherenceProof: false,
                 canRunMVPProof: false,
+                canRunMultiAppProof: canRunMultiAppProof,
+                recommendedMultiAppProofCommand: multiAppProofCommand,
                 reason: "Wait for the Windows app connection before running app checks."
             )
         }
@@ -2352,6 +2376,8 @@ public final class HostDashboardModel {
                 canRunAppWindowProof: false,
                 canRunCoherenceProof: false,
                 canRunMVPProof: false,
+                canRunMultiAppProof: canRunMultiAppProof,
+                recommendedMultiAppProofCommand: multiAppProofCommand,
                 reason: "The selected Windows app is not available for app checks."
             )
         }
@@ -2366,6 +2392,8 @@ public final class HostDashboardModel {
                 canRunAppWindowProof: false,
                 canRunCoherenceProof: false,
                 canRunMVPProof: false,
+                canRunMultiAppProof: canRunMultiAppProof,
+                recommendedMultiAppProofCommand: multiAppProofCommand,
                 reason: "The Windows app connection must support window capture before the window check can run."
             )
         }
@@ -2377,9 +2405,11 @@ public final class HostDashboardModel {
                 canRunAppWindowProof: true,
                 canRunCoherenceProof: false,
                 canRunMVPProof: false,
+                canRunMultiAppProof: canRunMultiAppProof,
                 recommendedProofKind: "app-window",
                 recommendedProofCommand: appWindowCommand,
                 recommendedAppWindowProofCommand: appWindowCommand,
+                recommendedMultiAppProofCommand: multiAppProofCommand,
                 reason: "The Windows app connection must support input and clipboard before full app checks can run."
             )
         }
@@ -2389,11 +2419,13 @@ public final class HostDashboardModel {
             canRunAppWindowProof: true,
             canRunCoherenceProof: true,
             canRunMVPProof: true,
+            canRunMultiAppProof: canRunMultiAppProof,
             recommendedProofKind: "mvp",
             recommendedProofCommand: mvpCommand,
             recommendedAppWindowProofCommand: appWindowCommand,
             recommendedCoherenceProofCommand: coherenceCommand,
             recommendedMVPProofCommand: mvpCommand,
+            recommendedMultiAppProofCommand: multiAppProofCommand,
             reason: "The Windows app connection can run window, input, and full app checks for the selected app."
         )
     }
@@ -2862,7 +2894,8 @@ public final class HostDashboardModel {
              "windowsApps.closeAll",
              "runtime.quietWhenIdle",
              "runtime.stopWhenIdle",
-             "proof.recommended":
+             "proof.recommended",
+             "proof.multiApp":
             return true
         default:
             return false

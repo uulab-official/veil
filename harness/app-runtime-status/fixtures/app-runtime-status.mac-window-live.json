@@ -311,6 +311,11 @@
       "isAvailable": true
     },
     {
+      "id": "proof.multiApp",
+      "title": "Check Daily Use Apps",
+      "isAvailable": false
+    },
+    {
       "id": "clipboard.setText",
       "title": "Set Windows Clipboard Text",
       "isAvailable": true
@@ -321,6 +326,7 @@
     "canRunAppWindowProof": true,
     "canRunCoherenceProof": true,
     "canRunMVPProof": true,
+    "canRunMultiAppProof": false,
     "recommendedAppWindowProofCommand": "veil-vmctl app-window-proof --json --app-id winapp_notepad",
     "recommendedCoherenceProofCommand": "veil-vmctl coherence-proof --json --app-id winapp_notepad",
     "recommendedMVPProofCommand": "veil-vmctl mvp-proof --json --app-id winapp_notepad --require-proved",

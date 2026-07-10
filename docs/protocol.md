@@ -386,6 +386,12 @@ Rules:
   `windowsMultiAppProof` diagnostics report; it does not add a new guest
   protocol message, but it standardizes how automation fills the saved
   artifacts that status and review surfaces already consume.
+- `app-runtime-status.proofPlan` exposes that coverage gate separately from the
+  selected-app proof recommendation. `recommendedProofCommand` remains the
+  strongest proof for the selected app, while
+  `recommendedMultiAppProofCommand=veil-vmctl multi-app-proof --json --require-complete`
+  is present only when the live agent can launch all Daily Use target apps and
+  supports window capture, input, and clipboard.
 
 ## Window Focus
 

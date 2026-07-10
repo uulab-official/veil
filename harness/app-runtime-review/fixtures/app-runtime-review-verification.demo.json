@@ -487,6 +487,11 @@
           "title": "Check Windows App"
         },
         {
+          "id": "proof.multiApp",
+          "isAvailable": false,
+          "title": "Check Daily Use Apps"
+        },
+        {
           "id": "clipboard.setText",
           "isAvailable": false,
           "title": "Set Windows Clipboard Text"
@@ -733,7 +738,8 @@
         "canRunCoherenceProof": false,
         "canRunMVPProof": false,
         "reason": "Wait for the Windows app connection before running app checks.",
-        "selectedAppId": "winapp_notepad"
+        "selectedAppId": "winapp_notepad",
+        "canRunMultiAppProof": false
       },
       "quietRuntime": {
         "automaticQuietDelaySeconds": 8,

@@ -1264,6 +1264,7 @@ struct VeilVMControl {
         print("App window check ready: \(report.proofPlan.canRunAppWindowProof ? "yes" : "no")")
         print("App input check ready: \(report.proofPlan.canRunCoherenceProof ? "yes" : "no")")
         print("Full app check ready: \(report.proofPlan.canRunMVPProof ? "yes" : "no")")
+        print("Daily Use app coverage check ready: \(report.proofPlan.canRunMultiAppProof ? "yes" : "no")")
         if let proofCommand = report.proofPlan.recommendedAppWindowProofCommand {
             print("App window check command: \(proofCommand)")
         }
@@ -1272,6 +1273,9 @@ struct VeilVMControl {
         }
         if let proofCommand = report.proofPlan.recommendedMVPProofCommand {
             print("Full app check command: \(proofCommand)")
+        }
+        if let proofCommand = report.proofPlan.recommendedMultiAppProofCommand {
+            print("Daily Use app coverage command: \(proofCommand)")
         }
         print("App check artifacts: \(report.proofArtifacts.reason)")
         print("App check coverage: \(report.proofArtifacts.multiAppProofCoverageHealth) (\(report.proofArtifacts.multiAppProofCoverageCount)/\(report.proofArtifacts.multiAppProofTargetAppIds.count))")

@@ -291,6 +291,11 @@
         "title": "Check Windows App"
       },
       {
+        "id": "proof.multiApp",
+        "isAvailable": false,
+        "title": "Check Daily Use Apps"
+      },
+      {
         "id": "clipboard.setText",
         "isAvailable": true,
         "title": "Set Windows Clipboard Text"
@@ -306,7 +311,8 @@
       "recommendedMVPProofCommand": "veil-vmctl mvp-proof --json --app-id winapp_notepad --require-proved",
       "reason": "The live Windows agent can run app-window, coherence, and MVP proof commands for the selected app.",
       "recommendedProofKind": "mvp",
-      "recommendedProofCommand": "veil-vmctl mvp-proof --json --app-id winapp_notepad --require-proved"
+      "recommendedProofCommand": "veil-vmctl mvp-proof --json --app-id winapp_notepad --require-proved",
+      "canRunMultiAppProof": false
     },
     "guestAgentDiagnostics": {
       "endpoint": "ws://127.0.0.1:18444",
@@ -511,7 +517,8 @@
     "recommendedMVPProofCommand": "veil-vmctl mvp-proof --json --app-id winapp_notepad --require-proved",
     "reason": "The live Windows agent can run app-window, coherence, and MVP proof commands for the selected app.",
     "recommendedProofKind": "mvp",
-    "recommendedProofCommand": "veil-vmctl mvp-proof --json --app-id winapp_notepad --require-proved"
+    "recommendedProofCommand": "veil-vmctl mvp-proof --json --app-id winapp_notepad --require-proved",
+    "canRunMultiAppProof": false
   },
   "proof": {
     "kind": "windowsAppRuntimeRecommendedProofRun",

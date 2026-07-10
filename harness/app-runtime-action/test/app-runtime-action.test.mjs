@@ -140,7 +140,8 @@ function installedRuntimeHeroSupports(actionId) {
     "windowsApps.reopenWindow",
     "runtime.quietWhenIdle",
     "runtime.stopWhenIdle",
-    "proof.recommended"
+    "proof.recommended",
+    "proof.multiApp"
   ].includes(actionId);
 }
 
