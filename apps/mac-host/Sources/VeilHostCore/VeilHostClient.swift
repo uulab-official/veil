@@ -78,6 +78,42 @@ public struct WindowFrameProofEvidence: Codable, Equatable, Sendable {
     }
 }
 
+public struct WindowFrameLatencyEvidence: Codable, Equatable, Sendable {
+    public var measurement: String
+    public var elapsedMilliseconds: Int
+    public var freshFrameBudgetMilliseconds: Int
+    public var staleFrameTimeoutMilliseconds: Int
+    public var isWithinFreshBudget: Bool
+    public var isWithinStaleTimeout: Bool
+    public var recommendedAction: String
+
+    public init(
+        measurement: String,
+        requestedAt: Date,
+        receivedAt: Date = Date(),
+        freshFrameBudgetMilliseconds: Int = WindowFrameStreamAssessment.freshFrameAgeThresholdMilliseconds,
+        staleFrameTimeoutMilliseconds: Int = WindowFrameStreamAssessment.delayedFrameAgeThresholdMilliseconds
+    ) {
+        let elapsedMilliseconds = max(0, Int((receivedAt.timeIntervalSince(requestedAt) * 1000).rounded()))
+        let recommendedAction: String
+        if elapsedMilliseconds <= freshFrameBudgetMilliseconds {
+            recommendedAction = "none"
+        } else if elapsedMilliseconds <= staleFrameTimeoutMilliseconds {
+            recommendedAction = "measure-again"
+        } else {
+            recommendedAction = "tune-frame-latency"
+        }
+
+        self.measurement = measurement
+        self.elapsedMilliseconds = elapsedMilliseconds
+        self.freshFrameBudgetMilliseconds = freshFrameBudgetMilliseconds
+        self.staleFrameTimeoutMilliseconds = staleFrameTimeoutMilliseconds
+        self.isWithinFreshBudget = elapsedMilliseconds <= freshFrameBudgetMilliseconds
+        self.isWithinStaleTimeout = elapsedMilliseconds <= staleFrameTimeoutMilliseconds
+        self.recommendedAction = recommendedAction
+    }
+}
+
 public struct WindowsAppWindowProofReport: Codable, Equatable, Sendable {
     public var kind: String
     public var endpoint: String
@@ -86,6 +122,7 @@ public struct WindowsAppWindowProofReport: Codable, Equatable, Sendable {
     public var launch: AppLaunchResponse
     public var window: WindowCreatedEvent
     public var frame: WindowFrameProofEvidence
+    public var firstFrameLatency: WindowFrameLatencyEvidence
     public var savedProofPath: String?
     public var nextActions: [String]
 
@@ -97,6 +134,7 @@ public struct WindowsAppWindowProofReport: Codable, Equatable, Sendable {
         launch: AppLaunchResponse,
         window: WindowCreatedEvent,
         frame: WindowFrameProofEvidence,
+        firstFrameLatency: WindowFrameLatencyEvidence,
         savedProofPath: String? = nil,
         nextActions: [String]
     ) {
@@ -107,6 +145,7 @@ public struct WindowsAppWindowProofReport: Codable, Equatable, Sendable {
         self.launch = launch
         self.window = window
         self.frame = frame
+        self.firstFrameLatency = firstFrameLatency
         self.savedProofPath = savedProofPath
         self.nextActions = nextActions
     }
@@ -146,6 +185,8 @@ public struct WindowsAppCoherenceProofReport: Codable, Equatable, Sendable {
     public var window: WindowCreatedEvent
     public var initialFrame: WindowFrameProofEvidence
     public var postInputFrame: WindowFrameProofEvidence
+    public var initialFrameLatency: WindowFrameLatencyEvidence
+    public var postInputFrameLatency: WindowFrameLatencyEvidence
     public var input: WindowsAppInputProofEvidence
     public var savedProofPath: String?
     public var nextActions: [String]
@@ -159,6 +200,8 @@ public struct WindowsAppCoherenceProofReport: Codable, Equatable, Sendable {
         window: WindowCreatedEvent,
         initialFrame: WindowFrameProofEvidence,
         postInputFrame: WindowFrameProofEvidence,
+        initialFrameLatency: WindowFrameLatencyEvidence,
+        postInputFrameLatency: WindowFrameLatencyEvidence,
         input: WindowsAppInputProofEvidence,
         savedProofPath: String? = nil,
         nextActions: [String]
@@ -171,6 +214,8 @@ public struct WindowsAppCoherenceProofReport: Codable, Equatable, Sendable {
         self.window = window
         self.initialFrame = initialFrame
         self.postInputFrame = postInputFrame
+        self.initialFrameLatency = initialFrameLatency
+        self.postInputFrameLatency = postInputFrameLatency
         self.input = input
         self.savedProofPath = savedProofPath
         self.nextActions = nextActions
@@ -520,8 +565,10 @@ public struct VeilHostClient: HostDashboardService, Sendable {
             timeoutNanoseconds: timeoutNanoseconds
         )
         try? await Task.sleep(nanoseconds: 200_000_000)
+        let firstFrameRequestedAt = Date()
         try await subscribeWindowFrames(windowId: launchResult.window.windowId)
         let firstFrame = try await frame
+        let firstFrameReceivedAt = Date()
 
         return WindowsAppWindowProofReport(
             endpoint: endpoint,
@@ -530,6 +577,11 @@ public struct VeilHostClient: HostDashboardService, Sendable {
             launch: launchResult.launch,
             window: launchResult.window,
             frame: WindowFrameProofEvidence(frame: firstFrame),
+            firstFrameLatency: WindowFrameLatencyEvidence(
+                measurement: "first-frame",
+                requestedAt: firstFrameRequestedAt,
+                receivedAt: firstFrameReceivedAt
+            ),
             nextActions: [
                 "Open the mirrored HWND in the Veil host shell as a macOS window.",
                 "Run `veil-vmctl app-runtime-status --json` to inspect active mirrored sessions and supported actions."
@@ -564,8 +616,10 @@ public struct VeilHostClient: HostDashboardService, Sendable {
             timeoutNanoseconds: timeoutNanoseconds
         )
         try? await Task.sleep(nanoseconds: 200_000_000)
+        let initialFrameRequestedAt = Date()
         try await subscribeWindowFrames(windowId: launchResult.window.windowId)
         let initialFrame = try await frame
+        let initialFrameReceivedAt = Date()
 
         async let postInputFrame = firstFrame(
             from: eventSource,
@@ -574,6 +628,7 @@ public struct VeilHostClient: HostDashboardService, Sendable {
             timeoutNanoseconds: timeoutNanoseconds
         )
         try? await Task.sleep(nanoseconds: 100_000_000)
+        let postInputFrameRequestedAt = Date()
 
         let click = Self.proofClickPoint(for: launchResult.window.bounds)
         let mouseInputs = [
@@ -597,6 +652,7 @@ public struct VeilHostClient: HostDashboardService, Sendable {
         )
         try await sendClipboardText(clipboard)
         let frameAfterInput = try await postInputFrame
+        let postInputFrameReceivedAt = Date()
 
         return WindowsAppCoherenceProofReport(
             endpoint: endpoint,
@@ -606,6 +662,16 @@ public struct VeilHostClient: HostDashboardService, Sendable {
             window: launchResult.window,
             initialFrame: WindowFrameProofEvidence(frame: initialFrame),
             postInputFrame: WindowFrameProofEvidence(frame: frameAfterInput),
+            initialFrameLatency: WindowFrameLatencyEvidence(
+                measurement: "initial-frame",
+                requestedAt: initialFrameRequestedAt,
+                receivedAt: initialFrameReceivedAt
+            ),
+            postInputFrameLatency: WindowFrameLatencyEvidence(
+                measurement: "post-input-frame",
+                requestedAt: postInputFrameRequestedAt,
+                receivedAt: postInputFrameReceivedAt
+            ),
             input: WindowsAppInputProofEvidence(
                 mouseEventsPosted: mouseInputs.map(\.event),
                 keyEventsPosted: keyInputs.map { "\($0.event):\($0.key)" },

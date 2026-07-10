@@ -1,6 +1,9 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
+const FRESH_FRAME_BUDGET_MILLISECONDS = 1000;
+const STALE_FRAME_TIMEOUT_MILLISECONDS = 5000;
+
 export function validateCoherenceProof(report) {
   if (!report || typeof report !== "object" || Array.isArray(report)) {
     throw new TypeError("Coherence proof report must be a JSON object.");
@@ -27,11 +30,53 @@ export function validateCoherenceProof(report) {
   if (report.postInputFrame.sequence <= report.initialFrame.sequence) {
     throw new TypeError("postInputFrame.sequence must be greater than initialFrame.sequence.");
   }
+  validateFrameLatency(report.initialFrameLatency, "initial-frame", "initialFrameLatency");
+  validateFrameLatency(report.postInputFrameLatency, "post-input-frame", "postInputFrameLatency");
   validateInput(report.input);
   validateSavedProofPath(report.savedProofPath);
   validateNextActions(report.nextActions);
 
   return report;
+}
+
+function validateFrameLatency(latency, measurement, fieldName) {
+  if (!latency || typeof latency !== "object" || Array.isArray(latency)) {
+    throw new TypeError(`${fieldName} must be an object.`);
+  }
+
+  requireString(latency.measurement, `${fieldName}.measurement`);
+  if (latency.measurement !== measurement) {
+    throw new TypeError(`${fieldName}.measurement must be ${measurement}.`);
+  }
+  requireInteger(latency.elapsedMilliseconds, `${fieldName}.elapsedMilliseconds`);
+  if (latency.elapsedMilliseconds < 0) {
+    throw new TypeError(`${fieldName}.elapsedMilliseconds must be non-negative.`);
+  }
+  requireInteger(latency.freshFrameBudgetMilliseconds, `${fieldName}.freshFrameBudgetMilliseconds`);
+  if (latency.freshFrameBudgetMilliseconds !== FRESH_FRAME_BUDGET_MILLISECONDS) {
+    throw new TypeError(`${fieldName}.freshFrameBudgetMilliseconds must be ${FRESH_FRAME_BUDGET_MILLISECONDS}.`);
+  }
+  requireInteger(latency.staleFrameTimeoutMilliseconds, `${fieldName}.staleFrameTimeoutMilliseconds`);
+  if (latency.staleFrameTimeoutMilliseconds !== STALE_FRAME_TIMEOUT_MILLISECONDS) {
+    throw new TypeError(`${fieldName}.staleFrameTimeoutMilliseconds must be ${STALE_FRAME_TIMEOUT_MILLISECONDS}.`);
+  }
+  requireBoolean(latency.isWithinFreshBudget, `${fieldName}.isWithinFreshBudget`);
+  if (latency.isWithinFreshBudget !== (latency.elapsedMilliseconds <= latency.freshFrameBudgetMilliseconds)) {
+    throw new TypeError(`${fieldName}.isWithinFreshBudget must match elapsedMilliseconds.`);
+  }
+  requireBoolean(latency.isWithinStaleTimeout, `${fieldName}.isWithinStaleTimeout`);
+  if (latency.isWithinStaleTimeout !== (latency.elapsedMilliseconds <= latency.staleFrameTimeoutMilliseconds)) {
+    throw new TypeError(`${fieldName}.isWithinStaleTimeout must match elapsedMilliseconds.`);
+  }
+  requireString(latency.recommendedAction, `${fieldName}.recommendedAction`);
+  const expectedAction = latency.elapsedMilliseconds <= latency.freshFrameBudgetMilliseconds
+    ? "none"
+    : latency.elapsedMilliseconds <= latency.staleFrameTimeoutMilliseconds
+      ? "measure-again"
+      : "tune-frame-latency";
+  if (latency.recommendedAction !== expectedAction) {
+    throw new TypeError(`${fieldName}.recommendedAction must be ${expectedAction}.`);
+  }
 }
 
 function validateLaunch(launch) {

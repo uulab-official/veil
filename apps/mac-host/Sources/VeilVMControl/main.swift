@@ -3686,6 +3686,7 @@ struct VeilVMControl {
         print("Window: \(report.window.windowId) \(report.window.title)")
         print("Frame: \(report.frame.width)x\(report.frame.height) \(report.frame.format) #\(report.frame.sequence)")
         print("Frame bytes: \(report.frame.encodedByteCount)")
+        print("First frame latency: \(report.firstFrameLatency.elapsedMilliseconds)ms (budget \(report.firstFrameLatency.freshFrameBudgetMilliseconds)ms, action \(report.firstFrameLatency.recommendedAction))")
         if let savedProofPath = report.savedProofPath {
             print("Saved proof: \(savedProofPath)")
         }
@@ -3724,6 +3725,8 @@ struct VeilVMControl {
         print("Window: \(report.window.windowId) \(report.window.title)")
         print("Initial frame: \(report.initialFrame.width)x\(report.initialFrame.height) \(report.initialFrame.format) #\(report.initialFrame.sequence)")
         print("Post-input frame: \(report.postInputFrame.width)x\(report.postInputFrame.height) \(report.postInputFrame.format) #\(report.postInputFrame.sequence)")
+        print("Initial frame latency: \(report.initialFrameLatency.elapsedMilliseconds)ms (budget \(report.initialFrameLatency.freshFrameBudgetMilliseconds)ms, action \(report.initialFrameLatency.recommendedAction))")
+        print("Post-input frame latency: \(report.postInputFrameLatency.elapsedMilliseconds)ms (budget \(report.postInputFrameLatency.freshFrameBudgetMilliseconds)ms, action \(report.postInputFrameLatency.recommendedAction))")
         let mouseEvents = report.input.mouseEventsPosted.joined(separator: ", ")
         print("Mouse events: \(mouseEvents)")
         print("Key events: \(report.input.keyEventsPosted.count)")
@@ -3771,6 +3774,7 @@ struct VeilVMControl {
         if let coherence = report.coherence {
             print("Window: \(coherence.window.windowId) \(coherence.window.title)")
             print("Frames: #\(coherence.initialFrame.sequence) -> #\(coherence.postInputFrame.sequence)")
+            print("Frame latency: initial \(coherence.initialFrameLatency.elapsedMilliseconds)ms, post-input \(coherence.postInputFrameLatency.elapsedMilliseconds)ms")
             print("Key events: \(coherence.input.keyEventsPosted.count)")
             print("Clipboard bytes: \(coherence.input.clipboardTextByteCount)")
         }

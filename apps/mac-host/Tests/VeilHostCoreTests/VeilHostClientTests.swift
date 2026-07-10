@@ -285,6 +285,10 @@ struct VeilHostClientTests {
         #expect(report.frame.windowId == "hwnd:0003029A")
         #expect(report.frame.format == "png")
         #expect(report.frame.encodedByteCount > 0)
+        #expect(report.firstFrameLatency.measurement == "first-frame")
+        #expect(report.firstFrameLatency.elapsedMilliseconds >= 0)
+        #expect(report.firstFrameLatency.freshFrameBudgetMilliseconds == 1_000)
+        #expect(report.firstFrameLatency.staleFrameTimeoutMilliseconds == 5_000)
         #expect(report.nextActions.contains("Run `veil-vmctl app-runtime-status --json` to inspect active mirrored sessions and supported actions."))
         #expect(transport.sentTypes == [
             "agent.health.request",
@@ -320,6 +324,14 @@ struct VeilHostClientTests {
         #expect(report.window.windowId == "hwnd:0003029A")
         #expect(report.initialFrame.sequence == 1)
         #expect(report.postInputFrame.sequence == 2)
+        #expect(report.initialFrameLatency.measurement == "initial-frame")
+        #expect(report.initialFrameLatency.elapsedMilliseconds >= 0)
+        #expect(report.initialFrameLatency.freshFrameBudgetMilliseconds == 1_000)
+        #expect(report.initialFrameLatency.staleFrameTimeoutMilliseconds == 5_000)
+        #expect(report.postInputFrameLatency.measurement == "post-input-frame")
+        #expect(report.postInputFrameLatency.elapsedMilliseconds >= 0)
+        #expect(report.postInputFrameLatency.freshFrameBudgetMilliseconds == 1_000)
+        #expect(report.postInputFrameLatency.staleFrameTimeoutMilliseconds == 5_000)
         #expect(report.input.mouseEventsPosted == ["leftDown", "leftUp"])
         #expect(report.input.keyEventsPosted == [
             "keyDown:v",
@@ -383,6 +395,7 @@ struct VeilHostClientTests {
         #expect(report.wait.status == .connected)
         #expect(report.coherence?.kind == "windowsAppCoherenceProof")
         #expect(report.coherence?.postInputFrame.sequence == 2)
+        #expect(report.coherence?.postInputFrameLatency.measurement == "post-input-frame")
         #expect(report.nextActions.contains("Attach the saved MVP proof artifact to release gates and app-runtime bug reports."))
         #expect(transport.sentTypes.first == "agent.health.request")
         #expect(transport.sentTypes.contains("clipboard.text.set"))

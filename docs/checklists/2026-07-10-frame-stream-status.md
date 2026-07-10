@@ -28,6 +28,7 @@ Goal: make mirrored Windows app surfaces report whether their frame stream is mi
 - [x] Added a host-shell automatic maintenance loop that periodically keeps mirrored app screens live by reusing the same reopen/recover/restart priority order.
 - [x] Added first-frame timeout tracking with `frameStreamRequestedAt` and `frameStreamWaitingAgeMilliseconds` so blank pending app windows become stale after 8 seconds and enter automatic maintenance.
 - [x] Added aggregate frame latency health to `macWindowIntegration`, including the 1 second fresh-frame budget, 5 second stale-frame timeout, slowest app-screen window, and next latency action.
+- [x] Added frame latency evidence to app-window, coherence, and MVP proof artifacts so first-frame and post-input responsiveness are validated against the same 1 second / 5 second budget as app-runtime status.
 
 ## Status Semantics
 
@@ -44,6 +45,9 @@ Goal: make mirrored Windows app surfaces report whether their frame stream is mi
 - [x] `npm test --prefix harness/app-runtime-status`
 - [x] `npm test --prefix harness/app-runtime-action`
 - [x] `npm test --prefix harness/app-runtime-review`
+- [x] `npm test --prefix harness/app-window-proof`
+- [x] `npm test --prefix harness/coherence-proof`
+- [x] `npm test --prefix harness/mvp-proof`
 
 ## Still Open
 

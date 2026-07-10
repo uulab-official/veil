@@ -86,3 +86,15 @@ test("rejects stale post-input frame evidence", () => {
     /postInputFrame\.sequence/
   );
 });
+
+test("rejects proved MVP proof with mismatched latency action", () => {
+  const report = readFixture("mvp-proof.proved.json");
+  report.coherence.initialFrameLatency.elapsedMilliseconds = 1500;
+  report.coherence.initialFrameLatency.isWithinFreshBudget = false;
+  report.coherence.initialFrameLatency.recommendedAction = "none";
+
+  assert.throws(
+    () => validateMVPProof(report),
+    /coherence\.initialFrameLatency\.recommendedAction/
+  );
+});

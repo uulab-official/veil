@@ -27,6 +27,19 @@ test("rejects stale post-input frame sequence", () => {
   );
 });
 
+test("rejects mismatched post-input frame latency freshness", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/coherence-proof.notepad.json", import.meta.url), "utf8"));
+  report.postInputFrameLatency.elapsedMilliseconds = 5200;
+  report.postInputFrameLatency.isWithinFreshBudget = false;
+  report.postInputFrameLatency.isWithinStaleTimeout = true;
+  report.postInputFrameLatency.recommendedAction = "measure-again";
+
+  assert.throws(
+    () => validateCoherenceProof(report),
+    /postInputFrameLatency\.isWithinStaleTimeout/
+  );
+});
+
 test("rejects proof without mouse click evidence", () => {
   const report = JSON.parse(readFileSync(new URL("../fixtures/coherence-proof.notepad.json", import.meta.url), "utf8"));
   report.input.mouseEventsPosted = ["move"];

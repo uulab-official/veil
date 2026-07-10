@@ -11,6 +11,15 @@
     "width": 1,
     "windowId": "hwnd:0003029A"
   },
+  "firstFrameLatency": {
+    "measurement": "first-frame",
+    "elapsedMilliseconds": 180,
+    "freshFrameBudgetMilliseconds": 1000,
+    "staleFrameTimeoutMilliseconds": 5000,
+    "isWithinFreshBudget": true,
+    "isWithinStaleTimeout": true,
+    "recommendedAction": "none"
+  },
   "kind": "windowsAppWindowProof",
   "launch": {
     "accepted": true,

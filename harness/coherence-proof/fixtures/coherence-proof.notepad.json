@@ -44,6 +44,24 @@
     "scale": 1,
     "encodedByteCount": 68
   },
+  "initialFrameLatency": {
+    "measurement": "initial-frame",
+    "elapsedMilliseconds": 190,
+    "freshFrameBudgetMilliseconds": 1000,
+    "staleFrameTimeoutMilliseconds": 5000,
+    "isWithinFreshBudget": true,
+    "isWithinStaleTimeout": true,
+    "recommendedAction": "none"
+  },
+  "postInputFrameLatency": {
+    "measurement": "post-input-frame",
+    "elapsedMilliseconds": 240,
+    "freshFrameBudgetMilliseconds": 1000,
+    "staleFrameTimeoutMilliseconds": 5000,
+    "isWithinFreshBudget": true,
+    "isWithinStaleTimeout": true,
+    "recommendedAction": "none"
+  },
   "input": {
     "mouseEventsPosted": [
       "leftDown",

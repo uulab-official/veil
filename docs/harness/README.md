@@ -43,8 +43,8 @@ Current executable pieces:
 - `harness/app-runtime-status`: a JSON validator for app runtime status, open HWND sessions, Dock integration state, and supported actions.
 - `harness/app-runtime-review`: a JSON validator for one-screen release review cards generated from app-runtime status, release-gate steps, screenshot slots, and latest app-check evidence.
 - `harness/app-runtime-action`: a JSON validator for launch, pending-launch fulfillment, bring-forward, focus, close, close-all, restore, guest-agent wait, input, clipboard, quiet-runtime, and recommended proof app-runtime actions.
-- `harness/app-window-proof`: a JSON validator for one app launch, one tracked HWND, and the first captured frame evidence.
-- `harness/coherence-proof`: a JSON validator for one app launch, one tracked HWND, first and post-input frame evidence, mouse/key input, and host clipboard send evidence.
+- `harness/app-window-proof`: a JSON validator for one app launch, one tracked HWND, first captured frame evidence, and first-frame latency budget evidence.
+- `harness/coherence-proof`: a JSON validator for one app launch, one tracked HWND, first and post-input frame evidence, frame latency budget evidence, mouse/key input, and host clipboard send evidence.
 - `harness/mvp-proof`: a JSON validator for the full Notepad MVP gate: guest-agent readiness plus Coherence proof evidence.
 - `harness/guest-agent-wait`: a JSON validator for waiting until the installed Windows guest agent is reachable after setup/login.
 - `harness/qemu-boot-plan`: a JSON validator for dry-run QEMU/HVF Windows Arm boot plans.
@@ -557,7 +557,8 @@ swift run veil-vmctl app-runtime-action --json --action stop-runtime | node ../.
 The app-window proof command is the strongest local bridge check before a full
 manual UI run: it asks the guest agent to launch one app, validates the returned
 `window.created` HWND, subscribes to that HWND's frame stream, and records the
-first PNG frame metadata.
+first PNG frame metadata plus first-frame latency against the 1 second fresh /
+5 second stale app-screen budget.
 
 ```bash
 cd apps/mac-host
@@ -582,7 +583,9 @@ or stop the VM; it only uses the forwarded guest-agent WebSocket.
 The coherence proof command is the MVP bridge check closest to the product
 demo: it launches a Windows app, captures the first HWND frame, posts a click,
 posts keyboard input, sends host clipboard text, and then waits for a newer
-frame from the same HWND stream.
+frame from the same HWND stream. The saved JSON records both initial-frame and
+post-input-frame latency evidence so the release gate can separate correctness
+from responsiveness regressions.
 
 ```bash
 cd apps/mac-host

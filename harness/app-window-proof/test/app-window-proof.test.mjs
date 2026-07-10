@@ -27,6 +27,18 @@ test("rejects mismatched frame window id", () => {
   );
 });
 
+test("rejects mismatched first frame latency action", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-window-proof.notepad.json", import.meta.url), "utf8"));
+  report.firstFrameLatency.elapsedMilliseconds = 1500;
+  report.firstFrameLatency.isWithinFreshBudget = false;
+  report.firstFrameLatency.recommendedAction = "none";
+
+  assert.throws(
+    () => validateAppWindowProof(report),
+    /firstFrameLatency\.recommendedAction/
+  );
+});
+
 test("rejects proof without app runtime next action", () => {
   const report = JSON.parse(readFileSync(new URL("../fixtures/app-window-proof.notepad.json", import.meta.url), "utf8"));
   report.nextActions = ["Open the mirrored HWND in the Veil host shell as a macOS window."];

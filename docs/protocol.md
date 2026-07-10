@@ -368,6 +368,12 @@ Rules:
   streams, then restart ordinary stale subscriptions. The host shell also uses
   that combined action path for automatic app-screen maintenance while mirrored
   Windows app windows are open.
+- Host-side proof artifacts reuse the same latency budget. `app-window-proof`
+  includes `firstFrameLatency`; `coherence-proof` and embedded MVP coherence
+  evidence include `initialFrameLatency` and `postInputFrameLatency`. Each
+  latency object records `elapsedMilliseconds`, `freshFrameBudgetMilliseconds`,
+  `staleFrameTimeoutMilliseconds`, freshness booleans, and the derived
+  `recommendedAction` (`none`, `measure-again`, or `tune-frame-latency`).
 
 ## Window Focus
 
