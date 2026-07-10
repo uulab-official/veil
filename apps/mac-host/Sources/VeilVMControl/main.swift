@@ -68,7 +68,7 @@ enum VMControlError: Error, LocalizedError {
         case .missingAppRuntimeReviewEvidenceDirectory:
             "Missing review evidence directory. Pass --evidence-dir /path/to/review-folder created by app-runtime-review-init."
         case .unsupportedAppRuntimeAction(let action):
-            "Unsupported app runtime action '\(action)'. Pass --action launch, fulfill-pending, focus, close, close-all, restart-frame-stream, recover-window-capture, restore, bring-forward, prepare-sparse-package, quiet-when-idle, stop-runtime, clipboard, type-text, click, or proof-recommended."
+            "Unsupported app runtime action '\(action)'. Pass --action launch, fulfill-pending, focus, close, close-all, restart-frame-stream, recover-window-capture, reopen-window, restore, bring-forward, prepare-sparse-package, quiet-when-idle, stop-runtime, clipboard, type-text, click, or proof-recommended."
         case .missingWindowId:
             "Missing Windows window id. Pass --window-id hwnd:XXXXXXXX from app-runtime-status or app-window-proof."
         case .missingAppRuntimeText:
@@ -86,7 +86,7 @@ enum VMControlError: Error, LocalizedError {
         }
     }
 
-    private static let usage = "Usage: veil-vmctl prepare --installer /path/to/Windows.iso [--drivers /path/to/virtio-win.iso] | veil-vmctl app-runtime-status [--json] [--demo] | veil-vmctl app-runtime-review [--json] [--demo] [--evidence-dir /path/to/screenshots] | veil-vmctl app-runtime-review-init [--json] [--demo] [--evidence-dir /path/to/screenshots] | veil-vmctl app-runtime-review-verify [--json] [--demo] --evidence-dir /path/to/screenshots | veil-vmctl app-runtime-action --action launch|fulfill-pending|focus|close|close-all|restart-frame-stream|recover-window-capture|restore|reconnect-restore|bring-forward|recover-display|wait-agent|repair-agent|prepare-sparse-package|quiet-when-idle|stop-runtime|clipboard|type-text|click|proof-recommended [--json] [--demo] [--wait-seconds 5] [--app-id winapp_notepad] [--window-id hwnd:XXXXXXXX] [--text \"...\"] [--x 240 --y 130] | veil-vmctl app-window-proof [--json] [--app-id winapp_notepad] [--wait-seconds 10] [--output /path/to/proof.json] | veil-vmctl coherence-proof [--json] [--app-id winapp_notepad] [--wait-seconds 10] [--output /path/to/proof.json] | veil-vmctl mvp-proof [--json] [--app-id winapp_notepad] [--wait-seconds 30] [--output /path/to/proof.json] [--require-proved] | veil-vmctl guest-agent-wait [--json] [--wait-seconds 30] | veil-vmctl mark-installed [--json] | veil-vmctl providers [--json] | veil-vmctl export-diagnostics [--json] [--output /path/to/diagnostics.json] | veil-vmctl qemu-plan [--json] | veil-vmctl qemu-doctor [--json] | veil-vmctl qemu-install-status [--json] | veil-vmctl qemu-smoke [--json] [--seconds 45] | veil-vmctl qemu-start [--json] [--wait-seconds 15] [--native-display] | veil-vmctl qemu-display-smoke [--json] [--wait-seconds 5] | veil-vmctl qemu-capture [--json] [--output /path/to/console.png] | veil-vmctl qemu-powerdown [--json] [--wait-seconds 30] | veil-vmctl qemu-force-stop [--json] --i-understand-data-loss [--wait-seconds 10] | veil-vmctl qemu-sendkey [--json] key [key ...] | veil-vmctl qemu-type-text [--json] --text \"...\" | veil-vmctl qemu-click [--json] --x 0...32767 --y 0...32767 | veil-vmctl qemu-oobe-bypass [--json] | veil-vmctl qemu-install-agent [--json] [--wait-seconds 30] | veil-vmctl qemu-prepare-sparse-package [--json] [--wait-seconds 120]"
+    private static let usage = "Usage: veil-vmctl prepare --installer /path/to/Windows.iso [--drivers /path/to/virtio-win.iso] | veil-vmctl app-runtime-status [--json] [--demo] | veil-vmctl app-runtime-review [--json] [--demo] [--evidence-dir /path/to/screenshots] | veil-vmctl app-runtime-review-init [--json] [--demo] [--evidence-dir /path/to/screenshots] | veil-vmctl app-runtime-review-verify [--json] [--demo] --evidence-dir /path/to/screenshots | veil-vmctl app-runtime-action --action launch|fulfill-pending|focus|close|close-all|restart-frame-stream|recover-window-capture|reopen-window|restore|reconnect-restore|bring-forward|recover-display|wait-agent|repair-agent|prepare-sparse-package|quiet-when-idle|stop-runtime|clipboard|type-text|click|proof-recommended [--json] [--demo] [--wait-seconds 5] [--app-id winapp_notepad] [--window-id hwnd:XXXXXXXX] [--text \"...\"] [--x 240 --y 130] | veil-vmctl app-window-proof [--json] [--app-id winapp_notepad] [--wait-seconds 10] [--output /path/to/proof.json] | veil-vmctl coherence-proof [--json] [--app-id winapp_notepad] [--wait-seconds 10] [--output /path/to/proof.json] | veil-vmctl mvp-proof [--json] [--app-id winapp_notepad] [--wait-seconds 30] [--output /path/to/proof.json] [--require-proved] | veil-vmctl guest-agent-wait [--json] [--wait-seconds 30] | veil-vmctl mark-installed [--json] | veil-vmctl providers [--json] | veil-vmctl export-diagnostics [--json] [--output /path/to/diagnostics.json] | veil-vmctl qemu-plan [--json] | veil-vmctl qemu-doctor [--json] | veil-vmctl qemu-install-status [--json] | veil-vmctl qemu-smoke [--json] [--seconds 45] | veil-vmctl qemu-start [--json] [--wait-seconds 15] [--native-display] | veil-vmctl qemu-display-smoke [--json] [--wait-seconds 5] | veil-vmctl qemu-capture [--json] [--output /path/to/console.png] | veil-vmctl qemu-powerdown [--json] [--wait-seconds 30] | veil-vmctl qemu-force-stop [--json] --i-understand-data-loss [--wait-seconds 10] | veil-vmctl qemu-sendkey [--json] key [key ...] | veil-vmctl qemu-type-text [--json] --text \"...\" | veil-vmctl qemu-click [--json] --x 0...32767 --y 0...32767 | veil-vmctl qemu-oobe-bypass [--json] | veil-vmctl qemu-install-agent [--json] [--wait-seconds 30] | veil-vmctl qemu-prepare-sparse-package [--json] [--wait-seconds 120]"
 }
 
 struct VMControlArguments {
@@ -98,6 +98,7 @@ struct VMControlArguments {
         case closeAll = "close-all"
         case restartFrameStream = "restart-frame-stream"
         case recoverWindowCapture = "recover-window-capture"
+        case reopenWindow = "reopen-window"
         case restore
         case reconnectRestore = "reconnect-restore"
         case bringForward = "bring-forward"
@@ -601,6 +602,8 @@ struct AppRuntimeActionReport: Codable, Equatable {
     var broughtForwardWindowIds: [String]
     var restartedFrameWindowIds: [String]
     var recoveredFrameWindowIds: [String]
+    var reopenRequestedWindowIds: [String]
+    var reopenedWindows: [WindowCreatedEvent]
     var proof: AppRuntimeRecommendedProofRun?
     var displayRecovery: AppRuntimeDisplayRecovery?
     var agentWait: AgentConnectionWaitReport?
@@ -1099,7 +1102,8 @@ struct VeilVMControl {
             let interval = session.latestFrameIntervalMilliseconds.map { ", \($0)ms interval" } ?? ""
             let restarts = session.frameStreamRestartCount > 0 ? ", \(session.frameStreamRestartCount) restarts" : ""
             let escalation = session.frameStreamRecoveryEscalated ? ", recovery needed" : ""
-            print("Window frame stream \(session.windowId): \(session.frameStreamStatus.rawValue) (\(age)\(interval), \(session.receivedFrameCount) frames\(restarts)\(escalation))")
+            let reopen = session.frameStreamReopenEscalated ? ", reopen needed" : ""
+            print("Window frame stream \(session.windowId): \(session.frameStreamStatus.rawValue) (\(age)\(interval), \(session.receivedFrameCount) frames\(restarts)\(escalation)\(reopen))")
         }
         print("Dock integration: \(report.dockIntegration.isEnabled ? "enabled" : "disabled")")
         print("Dock pending launches: \(report.dockIntegration.pendingLaunchCount)")
@@ -2725,6 +2729,8 @@ struct VeilVMControl {
         var broughtForwardWindowIds: [String] = []
         var restartedFrameWindowIds: [String] = []
         var recoveredFrameWindowIds: [String] = []
+        var reopenRequestedWindowIds: [String] = []
+        var reopenedWindows: [WindowCreatedEvent] = []
         var proof: AppRuntimeRecommendedProofRun?
         var displayRecovery: AppRuntimeDisplayRecovery?
         var agentWait: AgentConnectionWaitReport?
@@ -2829,6 +2835,29 @@ struct VeilVMControl {
                 foregroundWindowTitle = foregroundSession.window.title
             }
             accepted = !recoveredFrameWindowIds.isEmpty
+        case .reopenWindow:
+            let results: [WindowsAppReopenResult]
+            if let reopenWindowId = windowId,
+               !reopenWindowId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                if let result = await model.reopenAppWindow(windowId: reopenWindowId) {
+                    results = [result]
+                } else {
+                    results = []
+                }
+            } else {
+                results = await model.reopenEscalatedAppWindows()
+            }
+            reopenRequestedWindowIds = results.map(\.requestedWindowId)
+            reopenedWindows = results.map(\.launch.window)
+            if let foregroundWindow = reopenedWindows.last {
+                resolvedAppId = foregroundWindow.appId
+                resolvedWindowId = foregroundWindow.windowId
+                foregroundWindowId = foregroundWindow.windowId
+                foregroundWindowTitle = foregroundWindow.title
+            } else if let reopenWindowId = windowId {
+                resolvedWindowId = reopenWindowId
+            }
+            accepted = !reopenedWindows.isEmpty
         case .restore, .reconnectRestore:
             restoreRequestedAppIds = model.restorableAppIds
             let restored = await model.restoreMirroredWindowsAfterReconnect()
@@ -3030,6 +3059,8 @@ struct VeilVMControl {
             broughtForwardWindowIds: broughtForwardWindowIds,
             restartedFrameWindowIds: restartedFrameWindowIds,
             recoveredFrameWindowIds: recoveredFrameWindowIds,
+            reopenRequestedWindowIds: reopenRequestedWindowIds,
+            reopenedWindows: reopenedWindows,
             proof: proof,
             displayRecovery: displayRecovery,
             agentWait: agentWait,
@@ -3158,6 +3189,12 @@ struct VeilVMControl {
         }
         if !report.recoveredFrameWindowIds.isEmpty {
             print("Recovered app screen streams: \(report.recoveredFrameWindowIds.joined(separator: ", "))")
+        }
+        if !report.reopenRequestedWindowIds.isEmpty {
+            print("Reopen requested windows: \(report.reopenRequestedWindowIds.joined(separator: ", "))")
+        }
+        if !report.reopenedWindows.isEmpty {
+            print("Reopened app windows: \(report.reopenedWindows.map(\.windowId).joined(separator: ", "))")
         }
         if !report.restoreRequestedAppIds.isEmpty {
             print("Restore requested apps: \(report.restoreRequestedAppIds.joined(separator: ", "))")
@@ -3309,6 +3346,12 @@ struct VeilVMControl {
                     proofNextAction(from: status.proofPlan),
                     "Run `veil-host-probe --diagnose-agent` if the recovered app screen stalls again."
                 ])
+            case .reopenWindow:
+                return compactActions([
+                    "Confirm the reopened Windows app window is visible as a macOS window.",
+                    proofNextAction(from: status.proofPlan),
+                    "Run `veil-vmctl app-runtime-status --json` to confirm the old HWND is gone and the new one is waiting for frames or fresh."
+                ])
             case .restore:
                 return compactActions([
                     "Open or focus restored mirrored windows from the menu bar.",
@@ -3415,6 +3458,13 @@ struct VeilVMControl {
             return [
                 "Run `veil-vmctl app-runtime-status --json` and check mirrorSessions[].frameStreamRecoveryEscalated.",
                 "Run `veil-host-probe --diagnose-agent` if no escalated app screen recovery is available."
+            ]
+        }
+
+        if action == .reopenWindow {
+            return [
+                "Run `veil-vmctl app-runtime-status --json` and check mirrorSessions[].frameStreamReopenEscalated.",
+                "Run `veil-host-probe --diagnose-agent` if no app window can be reopened."
             ]
         }
 

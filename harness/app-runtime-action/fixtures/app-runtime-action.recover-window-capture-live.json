@@ -102,7 +102,8 @@
         "frameStreamRecommendedAction": "wait-for-first-frame",
         "frameStreamRestartCount": 3,
         "latestFrameStreamRestartedAt": "2026-07-10T00:40:00Z",
-        "frameStreamRecoveryEscalated": false
+        "frameStreamRecoveryEscalated": false,
+        "frameStreamReopenEscalated": false
       }
     ],
     "restorableAppIds": [
@@ -231,6 +232,11 @@
       {
         "id": "windowsApps.restartFrameStream",
         "title": "Restart App Screen",
+        "isAvailable": false
+      },
+      {
+        "id": "windowsApps.reopenWindow",
+        "title": "Reopen App Window",
         "isAvailable": false
       },
       {
@@ -528,5 +534,7 @@
   ],
   "recoveredFrameWindowIds": [
     "hwnd:0003029A"
-  ]
+  ],
+  "reopenRequestedWindowIds": [],
+  "reopenedWindows": []
 }

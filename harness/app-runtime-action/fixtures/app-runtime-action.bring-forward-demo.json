@@ -128,7 +128,8 @@
         "receivedFrameCount": 0,
         "frameStreamRecommendedAction": "enable-window-capture",
         "frameStreamRestartCount": 0,
-        "frameStreamRecoveryEscalated": false
+        "frameStreamRecoveryEscalated": false,
+        "frameStreamReopenEscalated": false
       }
     ],
     "restorableAppIds": [
@@ -163,6 +164,11 @@
       {
         "id": "windowsApps.restartFrameStream",
         "title": "Restart App Screen",
+        "isAvailable": false
+      },
+      {
+        "id": "windowsApps.reopenWindow",
+        "title": "Reopen App Window",
         "isAvailable": false
       },
       {
@@ -478,5 +484,7 @@
     "reason": "Wait for the live Windows agent before running proof commands."
   },
   "restartedFrameWindowIds": [],
-  "recoveredFrameWindowIds": []
+  "recoveredFrameWindowIds": [],
+  "reopenRequestedWindowIds": [],
+  "reopenedWindows": []
 }

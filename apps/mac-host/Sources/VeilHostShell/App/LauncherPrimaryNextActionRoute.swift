@@ -13,6 +13,7 @@ enum LauncherPrimaryNextActionRoute: Equatable {
     case closeAllWindowsApps
     case restartFrameStream
     case recoverWindowCapture
+    case reopenWindow
     case quietWindows
     case runRecommendedProof
 
@@ -56,6 +57,8 @@ enum LauncherPrimaryNextActionRoute: Equatable {
             return .restartFrameStream
         case "windowsApps.recoverWindowCapture":
             return .recoverWindowCapture
+        case "windowsApps.reopenWindow":
+            return .reopenWindow
         case "runtime.quietWhenIdle", "runtime.stopWhenIdle":
             return .quietWindows
         case "proof.recommended", "dailyUse.verifyIntegrations":
@@ -140,6 +143,10 @@ enum LauncherPrimaryNextActionRoute: Equatable {
             return .recoverWindowCapture
         }
 
+        if command.contains("--action reopen-window") {
+            return .reopenWindow
+        }
+
         if command.contains("--action stop-runtime")
             || command.contains("--action quiet-when-idle") {
             return .quietWindows
@@ -182,6 +189,8 @@ enum LauncherPrimaryNextActionRoute: Equatable {
             return "Restart Screen"
         case .recoverWindowCapture:
             return "Recover Screen"
+        case .reopenWindow:
+            return "Reopen App"
         case .quietWindows:
             return "Quiet Windows"
         case .runRecommendedProof:
@@ -217,6 +226,8 @@ enum LauncherPrimaryNextActionRoute: Equatable {
             return "arrow.clockwise"
         case .recoverWindowCapture:
             return "wrench.and.screwdriver"
+        case .reopenWindow:
+            return "arrow.triangle.2.circlepath"
         case .quietWindows:
             return "moon.zzz.fill"
         case .runRecommendedProof:

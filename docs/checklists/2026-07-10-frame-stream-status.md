@@ -21,6 +21,9 @@ Goal: make mirrored Windows app surfaces report whether their frame stream is mi
 - [x] Promoted repeated stale-screen restarts to `recover-window-capture` after two restart attempts on the same HWND.
 - [x] Wired `recover-window-capture` through `veil-vmctl app-runtime-action`, Dock/menu recovery, app-window buttons, and harness evidence.
 - [x] Added `recoveredFrameWindowIds` action evidence for accepted app screen recovery reports.
+- [x] Added `frameStreamReopenEscalated` and promoted recovered HWNDs that stall again to `reopen-windows-app`.
+- [x] Wired `reopen-window` through `veil-vmctl app-runtime-action`, Dock/menu recovery, app-window buttons, and harness evidence.
+- [x] Added `reopenRequestedWindowIds` and `reopenedWindows` evidence so accepted reports prove the old HWND is gone and the reopened app window is tracked.
 
 ## Status Semantics
 
@@ -40,4 +43,3 @@ Goal: make mirrored Windows app surfaces report whether their frame stream is mi
 ## Still Open
 
 - [ ] Tune live frame latency across Notepad, Calculator, and Paint after this status contract is visible in UI.
-- [ ] Add a final fallback that closes and reopens the Windows app if `recover-window-capture` also stalls.

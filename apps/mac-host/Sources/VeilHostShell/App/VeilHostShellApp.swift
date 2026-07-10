@@ -726,6 +726,27 @@ struct VeilHostShellApp: App {
 
     private func restartStaleFrameStreams() {
         Task { @MainActor in
+            let reopenWindowIds = model.mirrorSessions
+                .filter { WindowFrameStreamAssessment.assess(session: $0).reopenEscalated }
+                .map(\.id)
+            var reopenedWindows: [WindowCreatedEvent] = []
+            for windowId in reopenWindowIds {
+                if let result = await model.reopenAppWindow(windowId: windowId) {
+                    windowsAppWindowPresenter.closeWindow(windowId: result.requestedWindowId)
+                    reopenedWindows.append(result.launch.window)
+                    if let session = model.mirrorSessions.first(where: { $0.id == result.launch.window.windowId }) {
+                        windowsAppWindowPresenter.showWindow(for: session)
+                    }
+                }
+            }
+            if !reopenedWindows.isEmpty {
+                displayMessage = reopenedWindows.count == 1
+                    ? "Reopening \(reopenedWindows[0].title)."
+                    : "Reopening \(reopenedWindows.count) app windows."
+                syncLauncherWindowVisibility()
+                return
+            }
+
             let recoveredWindowIds = await model.recoverEscalatedFrameCaptures()
             if !recoveredWindowIds.isEmpty {
                 for windowId in recoveredWindowIds {
@@ -989,6 +1010,17 @@ struct VeilHostShellApp: App {
             Task { @MainActor in
                 let sessionBeforeRecovery = model.mirrorSessions.first(where: { $0.id == windowId })
                 let assessment = sessionBeforeRecovery.map { WindowFrameStreamAssessment.assess(session: $0) }
+                if assessment?.reopenEscalated == true,
+                   let result = await model.reopenAppWindow(windowId: windowId) {
+                    windowsAppWindowPresenter.closeWindow(windowId: result.requestedWindowId)
+                    if let session = model.mirrorSessions.first(where: { $0.id == result.launch.window.windowId }) {
+                        windowsAppWindowPresenter.showWindow(for: session)
+                    }
+                    displayMessage = "Reopening \(result.launch.window.title)."
+                    syncLauncherWindowVisibility()
+                    return
+                }
+
                 let shouldRecover = assessment?.recoveryEscalated == true
                 let didRecover: Bool
                 if shouldRecover {
@@ -1773,6 +1805,8 @@ private struct VeilMenuBarMenu: View {
             restartStaleFrameStreamsAction()
         case .recoverWindowCapture:
             restartStaleFrameStreamsAction()
+        case .reopenWindow:
+            restartStaleFrameStreamsAction()
         case .launchSelectedApp:
             if !model.hasLiveAgentConnection {
                 openMainWindow()
@@ -1824,6 +1858,7 @@ enum MenuBarPrimaryActionRoute: Equatable {
     case refreshRuntimeStatus
     case restartFrameStream
     case recoverWindowCapture
+    case reopenWindow
     case launchSelectedApp
     case runRecommendedProof
 
@@ -1851,6 +1886,8 @@ enum MenuBarPrimaryActionRoute: Equatable {
             return .restartFrameStream
         case "windowsApps.recoverWindowCapture":
             return .recoverWindowCapture
+        case "windowsApps.reopenWindow":
+            return .reopenWindow
         case "runtime.prepareSparsePackage":
             return .preparePackageIdentity
         case "windowsApps.launchSelected":
@@ -1888,6 +1925,8 @@ enum MenuBarPrimaryActionRoute: Equatable {
             return "arrow.clockwise"
         case .recoverWindowCapture:
             return "wrench.and.screwdriver"
+        case .reopenWindow:
+            return "arrow.triangle.2.circlepath"
         case .runRecommendedProof:
             return "checkmark.seal"
         }

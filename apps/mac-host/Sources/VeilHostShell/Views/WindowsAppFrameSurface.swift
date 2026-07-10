@@ -57,12 +57,12 @@ struct WindowsAppFrameSurface: View {
                     Button {
                         restartFrameStreamAction(session.id)
                     } label: {
-                        Text(assessment.recoveryEscalated ? "Recover" : "Restart")
+                        Text(frameRecoveryButtonTitle(assessment))
                             .font(.caption.weight(.semibold))
                     }
                     .buttonStyle(.plain)
                     .foregroundStyle(.white)
-                    .help(assessment.recoveryEscalated ? "Recover this app screen stream." : "Restart this app screen stream.")
+                    .help(frameRecoveryButtonHelp(assessment))
                 }
             }
             .padding(.horizontal, 10)
@@ -188,6 +188,9 @@ struct WindowsAppFrameSurface: View {
         case .delayed:
             return "Screen delayed \(seconds)s"
         case .stale:
+            if assessment.reopenEscalated {
+                return "App window needs reopen"
+            }
             if assessment.recoveryEscalated {
                 return "Screen recovery needed"
             }
@@ -209,6 +212,9 @@ struct WindowsAppFrameSurface: View {
         case .delayed:
             return "The latest app screen update is delayed. Refresh status if it keeps lagging."
         case .stale:
+            if assessment.reopenEscalated {
+                return "The app screen is still paused after capture recovery. Reopen this Windows app window."
+            }
             if assessment.recoveryEscalated {
                 return "The app screen is still paused after \(session.frameStreamRestartCount) restart attempts. Reopen the app window or run diagnostics."
             }
@@ -241,6 +247,24 @@ struct WindowsAppFrameSurface: View {
         ]
         .compactMap { $0 }
         .joined(separator: "\n")
+    }
+
+    private func frameRecoveryButtonTitle(_ assessment: WindowFrameStreamAssessment) -> String {
+        if assessment.reopenEscalated {
+            return "Reopen"
+        }
+
+        return assessment.recoveryEscalated ? "Recover" : "Restart"
+    }
+
+    private func frameRecoveryButtonHelp(_ assessment: WindowFrameStreamAssessment) -> String {
+        if assessment.reopenEscalated {
+            return "Close and reopen this Windows app window."
+        }
+
+        return assessment.recoveryEscalated
+            ? "Recover this app screen stream."
+            : "Restart this app screen stream."
     }
 
     private func accessibilityLabel(_ assessment: WindowFrameStreamAssessment) -> String {

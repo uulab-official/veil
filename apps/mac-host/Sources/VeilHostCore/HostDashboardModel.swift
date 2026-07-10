@@ -80,6 +80,7 @@ public struct WindowFrameStreamAssessment: Equatable, Sendable {
     public static let freshFrameAgeThresholdMilliseconds = 1_000
     public static let delayedFrameAgeThresholdMilliseconds = 5_000
     public static let recoveryEscalationRestartThreshold = 2
+    public static let reopenEscalationRestartThreshold = 3
 
     public var status: WindowFrameStreamStatus
     public var latestFrameAgeMilliseconds: Int?
@@ -87,6 +88,7 @@ public struct WindowFrameStreamAssessment: Equatable, Sendable {
     public var receivedFrameCount: Int
     public var recommendedAction: String
     public var recoveryEscalated: Bool
+    public var reopenEscalated: Bool
 
     public init(
         status: WindowFrameStreamStatus,
@@ -94,7 +96,8 @@ public struct WindowFrameStreamAssessment: Equatable, Sendable {
         latestFrameIntervalMilliseconds: Int? = nil,
         receivedFrameCount: Int = 0,
         recommendedAction: String,
-        recoveryEscalated: Bool = false
+        recoveryEscalated: Bool = false,
+        reopenEscalated: Bool = false
     ) {
         self.status = status
         self.latestFrameAgeMilliseconds = latestFrameAgeMilliseconds
@@ -102,6 +105,7 @@ public struct WindowFrameStreamAssessment: Equatable, Sendable {
         self.receivedFrameCount = receivedFrameCount
         self.recommendedAction = recommendedAction
         self.recoveryEscalated = recoveryEscalated
+        self.reopenEscalated = reopenEscalated
     }
 
     public static func assess(
@@ -129,19 +133,28 @@ public struct WindowFrameStreamAssessment: Equatable, Sendable {
         let status: WindowFrameStreamStatus
         let recommendedAction: String
         let recoveryEscalated: Bool
+        let reopenEscalated: Bool
 
         if ageMilliseconds <= freshFrameAgeThresholdMilliseconds {
             status = .fresh
             recommendedAction = "none"
             recoveryEscalated = false
+            reopenEscalated = false
         } else if ageMilliseconds <= delayedFrameAgeThresholdMilliseconds {
             status = .delayed
             recommendedAction = "refresh-runtime-status"
             recoveryEscalated = false
+            reopenEscalated = false
         } else {
             status = .stale
-            recoveryEscalated = session.frameStreamRestartCount >= recoveryEscalationRestartThreshold
-            recommendedAction = recoveryEscalated ? "recover-window-capture" : "restart-frame-subscription"
+            reopenEscalated = session.frameStreamRestartCount >= reopenEscalationRestartThreshold
+            recoveryEscalated = !reopenEscalated
+                && session.frameStreamRestartCount >= recoveryEscalationRestartThreshold
+            if reopenEscalated {
+                recommendedAction = "reopen-windows-app"
+            } else {
+                recommendedAction = recoveryEscalated ? "recover-window-capture" : "restart-frame-subscription"
+            }
         }
 
         return WindowFrameStreamAssessment(
@@ -150,7 +163,8 @@ public struct WindowFrameStreamAssessment: Equatable, Sendable {
             latestFrameIntervalMilliseconds: timing.latestFrameIntervalMilliseconds,
             receivedFrameCount: timing.receivedFrameCount,
             recommendedAction: recommendedAction,
-            recoveryEscalated: recoveryEscalated
+            recoveryEscalated: recoveryEscalated,
+            reopenEscalated: reopenEscalated
         )
     }
 }
@@ -347,6 +361,7 @@ public struct WindowsAppRuntimeWindowStatus: Codable, Equatable, Sendable {
     public var frameStreamRestartCount: Int
     public var latestFrameStreamRestartedAt: Date?
     public var frameStreamRecoveryEscalated: Bool
+    public var frameStreamReopenEscalated: Bool
     public var canFocus: Bool
     public var canClose: Bool
     public var canSendInput: Bool
@@ -365,6 +380,7 @@ public struct WindowsAppRuntimeWindowStatus: Codable, Equatable, Sendable {
         frameStreamRestartCount: Int = 0,
         latestFrameStreamRestartedAt: Date? = nil,
         frameStreamRecoveryEscalated: Bool = false,
+        frameStreamReopenEscalated: Bool = false,
         canFocus: Bool,
         canClose: Bool,
         canSendInput: Bool
@@ -382,9 +398,26 @@ public struct WindowsAppRuntimeWindowStatus: Codable, Equatable, Sendable {
         self.frameStreamRestartCount = frameStreamRestartCount
         self.latestFrameStreamRestartedAt = latestFrameStreamRestartedAt
         self.frameStreamRecoveryEscalated = frameStreamRecoveryEscalated
+        self.frameStreamReopenEscalated = frameStreamReopenEscalated
         self.canFocus = canFocus
         self.canClose = canClose
         self.canSendInput = canSendInput
+    }
+}
+
+public struct WindowsAppReopenResult: Equatable, Sendable {
+    public var requestedWindowId: String
+    public var close: WindowCloseResponse
+    public var launch: WindowsAppLaunchResult
+
+    public init(
+        requestedWindowId: String,
+        close: WindowCloseResponse,
+        launch: WindowsAppLaunchResult
+    ) {
+        self.requestedWindowId = requestedWindowId
+        self.close = close
+        self.launch = launch
     }
 }
 
@@ -1427,6 +1460,7 @@ public final class HostDashboardModel {
                     frameStreamRestartCount: session.frameStreamRestartCount,
                     latestFrameStreamRestartedAt: session.latestFrameStreamRestartedAt,
                     frameStreamRecoveryEscalated: frameStream.recoveryEscalated,
+                    frameStreamReopenEscalated: frameStream.reopenEscalated,
                     canFocus: canFocusMirrorSession(windowId: session.id),
                     canClose: canCloseMirrorSession(windowId: session.id),
                     canSendInput: canSendInput(to: session.id)
@@ -1489,6 +1523,11 @@ public final class HostDashboardModel {
                     id: "windowsApps.restartFrameStream",
                     title: "Restart App Screen",
                     isAvailable: macWindowIntegration.staleFrameWindowCount > 0
+                ),
+                WindowsAppRuntimeActionStatus(
+                    id: "windowsApps.reopenWindow",
+                    title: "Reopen App Window",
+                    isAvailable: hasReopenEscalatedFrameStream(generatedAt: generatedAt)
                 ),
                 WindowsAppRuntimeActionStatus(
                     id: "windowsApps.recoverWindowCapture",
@@ -1791,6 +1830,14 @@ public final class HostDashboardModel {
         dailyUseReadiness: WindowsAppRuntimeDailyUseReadinessStatus
     ) -> (id: String, title: String, isAvailable: Bool) {
         if !mirrorSessions.isEmpty {
+            if hasReopenEscalatedFrameStream() {
+                return (
+                    "windowsApps.reopenWindow",
+                    "Reopen App Window",
+                    true
+                )
+            }
+
             if hasEscalatedFrameStreamRecovery() {
                 return (
                     "windowsApps.recoverWindowCapture",
@@ -2728,6 +2775,15 @@ public final class HostDashboardModel {
         }
     }
 
+    public func hasReopenEscalatedFrameStream(generatedAt: Date = Date()) -> Bool {
+        mirrorSessions.contains {
+            WindowFrameStreamAssessment.assess(
+                session: $0,
+                generatedAt: generatedAt
+            ).reopenEscalated
+        }
+    }
+
     public func launcherVisibilityStatus(
         macWindowIntegration: WindowsAppRuntimeMacWindowIntegrationStatus? = nil
     ) -> WindowsAppRuntimeLauncherVisibilityStatus {
@@ -3495,6 +3551,48 @@ public final class HostDashboardModel {
         }
 
         return recoveredWindowIds
+    }
+
+    @discardableResult
+    public func reopenAppWindow(windowId: String) async -> WindowsAppReopenResult? {
+        guard let session = mirrorSessions.first(where: { $0.id == windowId }),
+              hasLiveAgentConnection else {
+            return nil
+        }
+
+        let appId = session.window.appId
+        guard let close = await closeMirrorSession(windowId: windowId),
+              close.accepted,
+              let launch = await launchApp(appId: appId) else {
+            return nil
+        }
+
+        return WindowsAppReopenResult(
+            requestedWindowId: windowId,
+            close: close,
+            launch: launch
+        )
+    }
+
+    @discardableResult
+    public func reopenEscalatedAppWindows(generatedAt: Date = Date()) async -> [WindowsAppReopenResult] {
+        let escalatedWindowIds = mirrorSessions
+            .filter {
+                WindowFrameStreamAssessment.assess(
+                    session: $0,
+                    generatedAt: generatedAt
+                ).reopenEscalated
+            }
+            .map(\.id)
+        var reopenedWindows: [WindowsAppReopenResult] = []
+
+        for windowId in escalatedWindowIds {
+            if let result = await reopenAppWindow(windowId: windowId) {
+                reopenedWindows.append(result)
+            }
+        }
+
+        return reopenedWindows
     }
 
     @discardableResult

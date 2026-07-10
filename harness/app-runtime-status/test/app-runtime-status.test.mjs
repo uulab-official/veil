@@ -163,6 +163,7 @@ function installedRuntimeHeroSupports(actionId) {
     "windowsApps.restorePrevious",
     "windowsApps.closeAll",
     "windowsApps.restartFrameStream",
+    "windowsApps.reopenWindow",
     "runtime.quietWhenIdle",
     "runtime.stopWhenIdle",
     "proof.recommended"
@@ -616,6 +617,7 @@ test("rejects Dock integration counts that drift from mirrored sessions", () => 
     frameStreamRecommendedAction: "none",
     frameStreamRestartCount: 0,
     frameStreamRecoveryEscalated: false,
+    frameStreamReopenEscalated: false,
     canFocus: true,
     canClose: true,
     canSendInput: true
@@ -757,6 +759,7 @@ test("rejects repeated stale frame restarts without recovery escalation", () => 
   session.latestFrameStreamRestartedAt = "2026-07-03T13:19:40Z";
   session.frameStreamRecommendedAction = "restart-frame-subscription";
   session.frameStreamRecoveryEscalated = false;
+  session.frameStreamReopenEscalated = false;
   report.macWindowIntegration.pendingFrameWindowCount = 0;
   report.macWindowIntegration.streamingWindowCount = 1;
   report.macWindowIntegration.staleFrameWindowCount = 1;
@@ -766,6 +769,33 @@ test("rejects repeated stale frame restarts without recovery escalation", () => 
   assert.throws(
     () => validateAppRuntimeStatus(report),
     /frameStreamRecoveryEscalated/
+  );
+});
+
+test("rejects capture recovery stalls without app window reopen escalation", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.mac-window-live.json", import.meta.url), "utf8"));
+  const session = report.mirrorSessions[0];
+  session.captureState = "streaming";
+  session.frameStreamStatus = "stale";
+  session.latestFrameReceivedAt = "2026-07-03T13:19:50Z";
+  session.latestFrameAgeMilliseconds = 10000;
+  session.latestFrameIntervalMilliseconds = 100;
+  session.receivedFrameCount = 3;
+  session.frameStreamRestartCount = 3;
+  session.latestFrameStreamRestartedAt = "2026-07-03T13:19:40Z";
+  session.frameStreamRecommendedAction = "recover-window-capture";
+  session.frameStreamRecoveryEscalated = true;
+  session.frameStreamReopenEscalated = false;
+  report.macWindowIntegration.pendingFrameWindowCount = 0;
+  report.macWindowIntegration.streamingWindowCount = 1;
+  report.macWindowIntegration.staleFrameWindowCount = 1;
+  report.macWindowIntegration.reason = "Windows app windows are mirrored, but at least one frame stream is stale.";
+  report.actions.find((action) => action.id === "windowsApps.restartFrameStream").isAvailable = true;
+  report.actions.find((action) => action.id === "windowsApps.recoverWindowCapture").isAvailable = true;
+
+  assert.throws(
+    () => validateAppRuntimeStatus(report),
+    /frameStreamReopenEscalated/
   );
 });
 

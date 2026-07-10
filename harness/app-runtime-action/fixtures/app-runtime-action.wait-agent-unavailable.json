@@ -164,6 +164,11 @@
         "isAvailable": false
       },
       {
+        "id": "windowsApps.reopenWindow",
+        "title": "Reopen App Window",
+        "isAvailable": false
+      },
+      {
         "id": "windowsApps.recoverWindowCapture",
         "title": "Recover App Screen",
         "isAvailable": false
@@ -503,5 +508,7 @@
     "waitedSeconds": 1
   },
   "restartedFrameWindowIds": [],
-  "recoveredFrameWindowIds": []
+  "recoveredFrameWindowIds": [],
+  "reopenRequestedWindowIds": [],
+  "reopenedWindows": []
 }

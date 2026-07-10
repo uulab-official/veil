@@ -146,7 +146,8 @@
         "receivedFrameCount": 0,
         "frameStreamRecommendedAction": "wait-for-first-frame",
         "frameStreamRestartCount": 0,
-        "frameStreamRecoveryEscalated": false
+        "frameStreamRecoveryEscalated": false,
+        "frameStreamReopenEscalated": false
       }
     ],
     "restorableAppIds": [
@@ -181,6 +182,11 @@
       {
         "id": "windowsApps.restartFrameStream",
         "title": "Restart App Screen",
+        "isAvailable": false
+      },
+      {
+        "id": "windowsApps.reopenWindow",
+        "title": "Reopen App Window",
         "isAvailable": false
       },
       {
@@ -508,5 +514,7 @@
     "recommendedProofCommand": "veil-vmctl mvp-proof --json --app-id winapp_notepad --require-proved"
   },
   "restartedFrameWindowIds": [],
-  "recoveredFrameWindowIds": []
+  "recoveredFrameWindowIds": [],
+  "reopenRequestedWindowIds": [],
+  "reopenedWindows": []
 }

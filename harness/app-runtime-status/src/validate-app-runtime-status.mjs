@@ -428,6 +428,7 @@ function validateMirrorSessions(sessions) {
     requireString(session.frameStreamRecommendedAction, "session.frameStreamRecommendedAction");
     requireNonNegativeInteger(session.frameStreamRestartCount, "session.frameStreamRestartCount");
     requireBoolean(session.frameStreamRecoveryEscalated, "session.frameStreamRecoveryEscalated");
+    requireBoolean(session.frameStreamReopenEscalated, "session.frameStreamReopenEscalated");
     if (session.latestFrameReceivedAt !== undefined) {
       requireString(session.latestFrameReceivedAt, "session.latestFrameReceivedAt");
       if (Number.isNaN(Date.parse(session.latestFrameReceivedAt))) {
@@ -470,7 +471,13 @@ function validateMirrorSessions(sessions) {
         throw new TypeError("Received frames require an active frame stream status.");
       }
     }
-    const shouldEscalateFrameRecovery = session.frameStreamStatus === "stale" && session.frameStreamRestartCount >= 2;
+    const shouldEscalateFrameReopen = session.frameStreamStatus === "stale" && session.frameStreamRestartCount >= 3;
+    if (session.frameStreamReopenEscalated !== shouldEscalateFrameReopen) {
+      throw new TypeError("frameStreamReopenEscalated must reflect repeated stale frame capture recovery attempts.");
+    }
+    const shouldEscalateFrameRecovery = session.frameStreamStatus === "stale"
+      && session.frameStreamRestartCount >= 2
+      && !shouldEscalateFrameReopen;
     if (session.frameStreamRecoveryEscalated !== shouldEscalateFrameRecovery) {
       throw new TypeError("frameStreamRecoveryEscalated must reflect repeated stale frame stream restarts.");
     }
@@ -495,6 +502,9 @@ function expectedFrameStreamRecommendedAction(session) {
     case "delayed":
       return "refresh-runtime-status";
     case "stale":
+      if (session.frameStreamReopenEscalated) {
+        return "reopen-windows-app";
+      }
       return session.frameStreamRecoveryEscalated ? "recover-window-capture" : "restart-frame-subscription";
     default:
       throw new TypeError(`Unsupported frame stream status: ${session.frameStreamStatus}`);
@@ -2060,6 +2070,7 @@ function validateActions(actions, report) {
     "windowsApps.reconnectRestore",
     "windowsApps.closeAll",
     "windowsApps.restartFrameStream",
+    "windowsApps.reopenWindow",
     "windowsApps.recoverWindowCapture",
     "macWindows.autoOpen",
     "windowsApps.launchSelected",
@@ -2128,6 +2139,12 @@ function validateActions(actions, report) {
   const canRecoverWindowCapture = report.mirrorSessions.some((session) => session.frameStreamRecoveryEscalated);
   if (recoverWindowCaptureAction.isAvailable !== canRecoverWindowCapture) {
     throw new TypeError("windowsApps.recoverWindowCapture availability must match escalated frame streams.");
+  }
+
+  const reopenWindowAction = actions.find((action) => action.id === "windowsApps.reopenWindow");
+  const canReopenWindow = report.mirrorSessions.some((session) => session.frameStreamReopenEscalated);
+  if (reopenWindowAction.isAvailable !== canReopenWindow) {
+    throw new TypeError("windowsApps.reopenWindow availability must match reopen-escalated frame streams.");
   }
 
   const repairAction = actions.find((action) => action.id === "runtime.repairGuestAgentForApp");

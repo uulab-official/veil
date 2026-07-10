@@ -345,13 +345,18 @@ Rules:
 - The macOS host subscribes after launching a capture-capable app window and unsubscribes before closing the mirrored window.
 - Host-side app-runtime status records frame stream recovery evidence per HWND:
   `frameStreamRestartCount`, `latestFrameStreamRestartedAt`, and
-  `frameStreamRecoveryEscalated`. A restart is an unsubscribe followed by a new
-  subscribe. After two restart attempts on the same HWND still lead to a stale
-  stream, the host reports `frameStreamRecommendedAction=recover-window-capture`
-  instead of repeatedly recommending another subscription restart. The host-side
+  `frameStreamRecoveryEscalated`/`frameStreamReopenEscalated`. A restart is an
+  unsubscribe followed by a new subscribe. After two restart attempts on the
+  same HWND still lead to a stale stream, the host reports
+  `frameStreamRecommendedAction=recover-window-capture` instead of repeatedly
+  recommending another subscription restart. The host-side
   `recover-window-capture` action focuses the HWND through the guest agent, then
   performs a fresh unsubscribe/subscribe cycle and records the recovered HWND in
-  `recoveredFrameWindowIds`.
+  `recoveredFrameWindowIds`. If that recovered HWND stalls again, the host
+  reports `frameStreamRecommendedAction=reopen-windows-app` and exposes
+  `reopen-window`; accepted reports record the stale HWND in
+  `reopenRequestedWindowIds`, remove it from `mirrorSessions[]`, and record the
+  newly opened app window in `reopenedWindows`.
 
 ## Window Focus
 

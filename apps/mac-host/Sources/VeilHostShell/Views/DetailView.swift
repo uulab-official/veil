@@ -144,6 +144,8 @@ struct DetailView: View {
             restartStaleFrameStreamsAction()
         case .recoverWindowCapture:
             restartStaleFrameStreamsAction()
+        case .reopenWindow:
+            restartStaleFrameStreamsAction()
         case .quietWindows:
             quietWindowsWhenIdleAction()
         case .runRecommendedProof:

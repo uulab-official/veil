@@ -136,6 +136,7 @@ function installedRuntimeHeroSupports(actionId) {
     "windowsApps.reconnectRestore",
     "windowsApps.restorePrevious",
     "windowsApps.closeAll",
+    "windowsApps.reopenWindow",
     "runtime.quietWhenIdle",
     "runtime.stopWhenIdle",
     "proof.recommended"
@@ -546,6 +547,12 @@ test("validates app runtime restart frame stream fixture", () => {
 
 test("validates app runtime recover window capture fixture", () => {
   const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-action.recover-window-capture-live.json", import.meta.url), "utf8"));
+
+  assert.equal(validateAppRuntimeAction(report), report);
+});
+
+test("validates app runtime reopen window fixture", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-action.reopen-window-live.json", import.meta.url), "utf8"));
 
   assert.equal(validateAppRuntimeAction(report), report);
 });
@@ -1102,6 +1109,7 @@ test("rejects close-all actions that leave mirrored sessions open", () => {
       frameStreamRecommendedAction: "wait-for-first-frame",
       frameStreamRestartCount: 0,
       frameStreamRecoveryEscalated: false,
+      frameStreamReopenEscalated: false,
       canFocus: true,
       canClose: true,
       canSendInput: true

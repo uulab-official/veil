@@ -132,6 +132,9 @@ enum AppRuntimeDockMenuFactory {
         if !model.mirrorSessions.isEmpty {
             let status = model.runtimeStatusReport()
             let hasStaleFrameStream = status.macWindowIntegration.staleFrameWindowCount > 0
+            let hasReopenEscalatedFrameStream = status.actions.contains {
+                $0.id == "windowsApps.reopenWindow" && $0.isAvailable
+            }
             let hasEscalatedFrameRecovery = status.actions.contains {
                 $0.id == "windowsApps.recoverWindowCapture" && $0.isAvailable
             }
@@ -149,7 +152,9 @@ enum AppRuntimeDockMenuFactory {
             if hasStaleFrameStream {
                 menu.addItem(
                     item(
-                        hasEscalatedFrameRecovery ? "Recover App Screen" : "Restart App Screen",
+                        hasReopenEscalatedFrameStream
+                            ? "Reopen App Window"
+                            : hasEscalatedFrameRecovery ? "Recover App Screen" : "Restart App Screen",
                         action: #selector(AppRuntimeDockMenuTarget.restartStaleFrameStreams(_:)),
                         target: target
                     )

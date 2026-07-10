@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { validateAppRuntimeStatus } from "../../app-runtime-status/src/validate-app-runtime-status.mjs";
 import { validateGuestAgentWait } from "../../guest-agent-wait/src/validate-guest-agent-wait.mjs";
 
-const VALID_ACTIONS = new Set(["launch", "fulfill-pending", "focus", "close", "close-all", "restart-frame-stream", "recover-window-capture", "restore", "reconnect-restore", "bring-forward", "recover-display", "wait-agent", "repair-agent", "prepare-sparse-package", "quiet-when-idle", "stop-runtime", "clipboard", "type-text", "click", "proof-recommended"]);
+const VALID_ACTIONS = new Set(["launch", "fulfill-pending", "focus", "close", "close-all", "restart-frame-stream", "recover-window-capture", "reopen-window", "restore", "reconnect-restore", "bring-forward", "recover-display", "wait-agent", "repair-agent", "prepare-sparse-package", "quiet-when-idle", "stop-runtime", "clipboard", "type-text", "click", "proof-recommended"]);
 const VALID_CONNECTION_MODES = new Set(["agent", "demo"]);
 const VALID_CONSOLE_PREVIEW_STATES = new Set(["fresh", "stale", "unavailable"]);
 
@@ -44,6 +44,10 @@ export function validateAppRuntimeAction(report) {
   }
   validateStringArray(report.restartedFrameWindowIds, "restartedFrameWindowIds");
   validateStringArray(report.recoveredFrameWindowIds, "recoveredFrameWindowIds");
+  validateStringArray(report.reopenRequestedWindowIds, "reopenRequestedWindowIds");
+  if (!Array.isArray(report.reopenedWindows)) {
+    throw new TypeError("reopenedWindows must be an array.");
+  }
 
   if (report.action !== "stop-runtime" && report.runtimeStop !== undefined && report.runtimeStop !== null) {
     throw new TypeError("runtimeStop is only allowed for stop-runtime actions.");
@@ -90,6 +94,9 @@ export function validateAppRuntimeAction(report) {
       break;
     case "recover-window-capture":
       validateRecoverWindowCaptureAction(report);
+      break;
+    case "reopen-window":
+      validateReopenWindowAction(report);
       break;
     case "restore":
       validateRestoreAction(report);
@@ -799,6 +806,58 @@ function validateRecoverWindowCaptureAction(report) {
   if (report.windowId !== undefined && report.windowId !== report.recoveredFrameWindowIds.at(-1)) {
     throw new TypeError("recover-window-capture windowId must identify the last recovered window.");
   }
+}
+
+function validateReopenWindowAction(report) {
+  if (!report.accepted) {
+    if (report.reopenRequestedWindowIds.length !== 0 || report.reopenedWindows.length !== 0) {
+      throw new TypeError("rejected reopen-window actions cannot include reopened window evidence.");
+    }
+    return;
+  }
+
+  if (report.reopenRequestedWindowIds.length === 0) {
+    throw new TypeError("accepted reopen-window actions must include reopenRequestedWindowIds.");
+  }
+  if (report.reopenedWindows.length === 0) {
+    throw new TypeError("accepted reopen-window actions must include reopenedWindows.");
+  }
+  if (report.reopenRequestedWindowIds.length !== report.reopenedWindows.length) {
+    throw new TypeError("reopenRequestedWindowIds must match reopenedWindows count.");
+  }
+
+  const mirrorWindowIds = new Set(report.status.mirrorSessions.map((session) => session.windowId));
+  for (const windowId of report.reopenRequestedWindowIds) {
+    if (mirrorWindowIds.has(windowId)) {
+      throw new TypeError("accepted reopen-window actions must remove requested stale HWNDs from status.mirrorSessions.");
+    }
+  }
+
+  for (const window of report.reopenedWindows) {
+    validateWindow(window);
+    if (!mirrorWindowIds.has(window.windowId)) {
+      throw new TypeError("reopenedWindows must be present in status.mirrorSessions.");
+    }
+    const session = report.status.mirrorSessions.find((candidate) => candidate.windowId === window.windowId);
+    if (session.frameStreamStatus !== "waitingForFirstFrame" && session.frameStreamStatus !== "fresh") {
+      throw new TypeError("accepted reopen-window actions must leave reopened windows waiting for frames or fresh.");
+    }
+    if (session.frameStreamReopenEscalated) {
+      throw new TypeError("accepted reopen-window actions must clear frameStreamReopenEscalated.");
+    }
+  }
+
+  const reopenAction = report.status.actions.find((action) => action.id === "windowsApps.reopenWindow");
+  if (!reopenAction) {
+    throw new TypeError("reopen-window status must include windowsApps.reopenWindow.");
+  }
+  if (reopenAction.isAvailable) {
+    throw new TypeError("accepted reopen-window actions must clear reopen availability.");
+  }
+
+  const foregroundWindow = report.reopenedWindows.at(-1);
+  requireForegroundWindowIdentity(report, foregroundWindow.windowId, foregroundWindow.title, "accepted reopen-window actions");
+  requireForegroundableMacWindow(report, "accepted reopen-window actions");
 }
 
 function validateRestoreAction(report) {

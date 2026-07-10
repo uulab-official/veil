@@ -159,10 +159,12 @@ counts. Each `mirrorSessions[]` entry also carries `frameStreamStatus`,
 `frameStreamRecommendedAction` so app UI and CLI output can distinguish "waiting
 for first frame" from a fresh, delayed, or stale mirrored Windows app surface.
 The same session record carries `frameStreamRestartCount`,
-`latestFrameStreamRestartedAt`, and `frameStreamRecoveryEscalated`; after two
-stale restart attempts on the same HWND, `frameStreamRecommendedAction` must
-move from `restart-frame-subscription` to `recover-window-capture` so support
-does not loop on a weak recovery.
+`latestFrameStreamRestartedAt`, `frameStreamRecoveryEscalated`, and
+`frameStreamReopenEscalated`; after two stale restart attempts on the same HWND,
+`frameStreamRecommendedAction` must move from `restart-frame-subscription` to
+`recover-window-capture` so support does not loop on a weak recovery. If the
+same HWND stalls again after capture recovery, `frameStreamRecommendedAction`
+must move to `reopen-windows-app`.
 When any mirrored app surface is stale, `actions[]` must expose
 `windowsApps.restartFrameStream` as available so the app can resubscribe the
 frame stream without falling back to a generic VM display. The executable
@@ -176,6 +178,13 @@ When `frameStreamRecoveryEscalated=true`, `actions[]` must also expose
 reports must list the recovered HWNDs in `recoveredFrameWindowIds`, clear
 `frameStreamRecoveryEscalated`, and leave those sessions waiting for the next
 first frame.
+When `frameStreamReopenEscalated=true`, `actions[]` must expose
+`windowsApps.reopenWindow` as available. The executable handoff is
+`veil-vmctl app-runtime-action --json --action reopen-window`; accepted reports
+must list the old HWNDs in `reopenRequestedWindowIds`, list the new
+`window.created` records in `reopenedWindows`, remove the old HWNDs from
+`mirrorSessions[]`, and leave the reopened windows waiting for their next first
+frame or already fresh.
 The foregroundable count must move with mirrored HWND sessions so successful
 launch, restore, and pending-launch fulfillment reports prove the Windows app
 can be brought forward as a macOS window instead of merely existing inside the

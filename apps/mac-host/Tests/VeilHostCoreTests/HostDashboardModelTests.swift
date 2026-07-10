@@ -323,6 +323,7 @@ struct HostDashboardModelTests {
         #expect(windowStatus.frameStreamRestartCount == 0)
         #expect(windowStatus.latestFrameStreamRestartedAt == nil)
         #expect(windowStatus.frameStreamRecoveryEscalated == false)
+        #expect(windowStatus.frameStreamReopenEscalated == false)
         #expect(report.macWindowIntegration.freshFrameWindowCount == 1)
         #expect(report.macWindowIntegration.delayedFrameWindowCount == 0)
         #expect(report.macWindowIntegration.staleFrameWindowCount == 0)
@@ -347,6 +348,7 @@ struct HostDashboardModelTests {
         #expect(windowStatus.frameStreamRecommendedAction == "restart-frame-subscription")
         #expect(windowStatus.frameStreamRestartCount == 0)
         #expect(windowStatus.frameStreamRecoveryEscalated == false)
+        #expect(windowStatus.frameStreamReopenEscalated == false)
         #expect(report.macWindowIntegration.staleFrameWindowCount == 1)
         #expect(restartAction.title == "Restart App Screen")
         #expect(restartAction.isAvailable)
@@ -427,6 +429,7 @@ struct HostDashboardModelTests {
         #expect(windowStatus.frameStreamRestartCount == 2)
         #expect(windowStatus.latestFrameStreamRestartedAt == Date(timeIntervalSince1970: 1_003))
         #expect(windowStatus.frameStreamRecoveryEscalated)
+        #expect(windowStatus.frameStreamReopenEscalated == false)
         #expect(recoverAction.title == "Recover App Screen")
         #expect(recoverAction.isAvailable)
     }
@@ -464,6 +467,82 @@ struct HostDashboardModelTests {
         #expect(session.frameTiming == nil)
         #expect(session.frameStreamRestartCount == 3)
         #expect(session.latestFrameStreamRestartedAt == Date(timeIntervalSince1970: 1_010))
+    }
+
+    @Test("escalates frame stream recovery to app window reopen after capture recovery stalls")
+    @MainActor
+    func escalatesFrameStreamRecoveryToAppWindowReopenAfterCaptureRecoveryStalls() async throws {
+        let service = FakeDashboardService(health: .captureReady)
+        let model = HostDashboardModel(service: service)
+
+        await model.launchNotepad()
+        model.receiveWindowFrame(.notepadFirstFrame, receivedAt: Date(timeIntervalSince1970: 1_000))
+        await model.restartFrameSubscription(
+            windowId: "hwnd:0003029A",
+            restartedAt: Date(timeIntervalSince1970: 1_001)
+        )
+        model.receiveWindowFrame(.notepadSecondFrame, receivedAt: Date(timeIntervalSince1970: 1_002))
+        await model.restartFrameSubscription(
+            windowId: "hwnd:0003029A",
+            restartedAt: Date(timeIntervalSince1970: 1_003)
+        )
+        model.receiveWindowFrame(.notepadFirstFrame, receivedAt: Date(timeIntervalSince1970: 1_004))
+        await model.recoverFrameCapture(
+            windowId: "hwnd:0003029A",
+            recoveredAt: Date(timeIntervalSince1970: 1_005)
+        )
+        model.receiveWindowFrame(.notepadSecondFrame, receivedAt: Date(timeIntervalSince1970: 1_006))
+
+        let report = model.runtimeStatusReport(generatedAt: Date(timeIntervalSince1970: 1_012))
+        let windowStatus = try #require(report.mirrorSessions.first)
+        let reopenAction = try #require(report.actions.first { $0.id == "windowsApps.reopenWindow" })
+        let recoverAction = try #require(report.actions.first { $0.id == "windowsApps.recoverWindowCapture" })
+
+        #expect(windowStatus.frameStreamStatus == .stale)
+        #expect(windowStatus.frameStreamRecommendedAction == "reopen-windows-app")
+        #expect(windowStatus.frameStreamRestartCount == 3)
+        #expect(windowStatus.latestFrameStreamRestartedAt == Date(timeIntervalSince1970: 1_005))
+        #expect(windowStatus.frameStreamRecoveryEscalated == false)
+        #expect(windowStatus.frameStreamReopenEscalated)
+        #expect(reopenAction.title == "Reopen App Window")
+        #expect(reopenAction.isAvailable)
+        #expect(recoverAction.isAvailable == false)
+    }
+
+    @Test("reopens escalated app windows by closing the stale HWND and launching the same app")
+    @MainActor
+    func reopensEscalatedAppWindowsByClosingStaleHWNDAndLaunchingSameApp() async throws {
+        let service = FakeDashboardService(health: .captureReady)
+        service.launchWindows = [.notepad, .secondNotepad]
+        let model = HostDashboardModel(service: service)
+
+        await model.launchNotepad()
+        model.receiveWindowFrame(.notepadFirstFrame, receivedAt: Date(timeIntervalSince1970: 1_000))
+        await model.restartFrameSubscription(
+            windowId: "hwnd:0003029A",
+            restartedAt: Date(timeIntervalSince1970: 1_001)
+        )
+        model.receiveWindowFrame(.notepadSecondFrame, receivedAt: Date(timeIntervalSince1970: 1_002))
+        await model.restartFrameSubscription(
+            windowId: "hwnd:0003029A",
+            restartedAt: Date(timeIntervalSince1970: 1_003)
+        )
+        model.receiveWindowFrame(.notepadFirstFrame, receivedAt: Date(timeIntervalSince1970: 1_004))
+        await model.recoverFrameCapture(
+            windowId: "hwnd:0003029A",
+            recoveredAt: Date(timeIntervalSince1970: 1_005)
+        )
+        model.receiveWindowFrame(.notepadSecondFrame, receivedAt: Date(timeIntervalSince1970: 1_006))
+
+        let results = await model.reopenEscalatedAppWindows(generatedAt: Date(timeIntervalSince1970: 1_012))
+
+        #expect(results.map(\.requestedWindowId) == ["hwnd:0003029A"])
+        #expect(results.map(\.launch.window.windowId) == ["hwnd:00010500"])
+        #expect(service.closedWindowIds == ["hwnd:0003029A"])
+        #expect(service.launchedAppIds == ["winapp_notepad", "winapp_notepad"])
+        #expect(model.mirrorSessions.map(\.id) == ["hwnd:00010500"])
+        #expect(model.mirrorSessions.first?.captureState == .pending)
+        #expect(model.mirrorSessions.first?.frameStreamRestartCount == 0)
     }
 
     @Test("routes a protocol frame message into the matching mirror session")

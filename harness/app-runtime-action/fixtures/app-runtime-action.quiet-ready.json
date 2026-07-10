@@ -154,6 +154,11 @@
         "isAvailable": false
       },
       {
+        "id": "windowsApps.reopenWindow",
+        "title": "Reopen App Window",
+        "isAvailable": false
+      },
+      {
         "id": "windowsApps.recoverWindowCapture",
         "title": "Recover App Screen",
         "isAvailable": false
@@ -478,5 +483,7 @@
     "recommendedProofCommand": "veil-vmctl mvp-proof --json --app-id winapp_notepad --require-proved"
   },
   "restartedFrameWindowIds": [],
-  "recoveredFrameWindowIds": []
+  "recoveredFrameWindowIds": [],
+  "reopenRequestedWindowIds": [],
+  "reopenedWindows": []
 }
