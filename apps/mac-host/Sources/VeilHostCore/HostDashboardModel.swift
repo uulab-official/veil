@@ -79,12 +79,14 @@ public struct WindowFrameTiming: Codable, Equatable, Sendable {
 public struct WindowFrameStreamAssessment: Equatable, Sendable {
     public static let freshFrameAgeThresholdMilliseconds = 1_000
     public static let delayedFrameAgeThresholdMilliseconds = 5_000
+    public static let firstFrameTimeoutThresholdMilliseconds = 8_000
     public static let recoveryEscalationRestartThreshold = 2
     public static let reopenEscalationRestartThreshold = 3
 
     public var status: WindowFrameStreamStatus
     public var latestFrameAgeMilliseconds: Int?
     public var latestFrameIntervalMilliseconds: Int?
+    public var waitingForFirstFrameMilliseconds: Int?
     public var receivedFrameCount: Int
     public var recommendedAction: String
     public var recoveryEscalated: Bool
@@ -94,6 +96,7 @@ public struct WindowFrameStreamAssessment: Equatable, Sendable {
         status: WindowFrameStreamStatus,
         latestFrameAgeMilliseconds: Int? = nil,
         latestFrameIntervalMilliseconds: Int? = nil,
+        waitingForFirstFrameMilliseconds: Int? = nil,
         receivedFrameCount: Int = 0,
         recommendedAction: String,
         recoveryEscalated: Bool = false,
@@ -102,6 +105,7 @@ public struct WindowFrameStreamAssessment: Equatable, Sendable {
         self.status = status
         self.latestFrameAgeMilliseconds = latestFrameAgeMilliseconds
         self.latestFrameIntervalMilliseconds = latestFrameIntervalMilliseconds
+        self.waitingForFirstFrameMilliseconds = waitingForFirstFrameMilliseconds
         self.receivedFrameCount = receivedFrameCount
         self.recommendedAction = recommendedAction
         self.recoveryEscalated = recoveryEscalated
@@ -120,8 +124,35 @@ public struct WindowFrameStreamAssessment: Equatable, Sendable {
         }
 
         guard let timing = session.frameTiming else {
+            let waitingMilliseconds = session.frameStreamRequestedAt.map {
+                max(0, Int((generatedAt.timeIntervalSince($0) * 1000).rounded()))
+            }
+            if let waitingMilliseconds,
+               waitingMilliseconds >= firstFrameTimeoutThresholdMilliseconds {
+                let reopenEscalated = session.frameStreamRestartCount >= reopenEscalationRestartThreshold
+                let recoveryEscalated = !reopenEscalated
+                    && session.frameStreamRestartCount >= recoveryEscalationRestartThreshold
+                let recommendedAction: String
+                if reopenEscalated {
+                    recommendedAction = "reopen-windows-app"
+                } else {
+                    recommendedAction = recoveryEscalated
+                        ? "recover-window-capture"
+                        : "restart-frame-subscription"
+                }
+
+                return WindowFrameStreamAssessment(
+                    status: .stale,
+                    waitingForFirstFrameMilliseconds: waitingMilliseconds,
+                    recommendedAction: recommendedAction,
+                    recoveryEscalated: recoveryEscalated,
+                    reopenEscalated: reopenEscalated
+                )
+            }
+
             return WindowFrameStreamAssessment(
                 status: .waitingForFirstFrame,
+                waitingForFirstFrameMilliseconds: waitingMilliseconds,
                 recommendedAction: "wait-for-first-frame"
             )
         }
@@ -176,6 +207,7 @@ public struct WindowMirrorSession: Codable, Equatable, Identifiable, Sendable {
     public var captureState: WindowCaptureState
     public var latestFrame: WindowFrameEvent?
     public var frameTiming: WindowFrameTiming?
+    public var frameStreamRequestedAt: Date?
     public var frameStreamRestartCount: Int
     public var latestFrameStreamRestartedAt: Date?
 
@@ -185,6 +217,7 @@ public struct WindowMirrorSession: Codable, Equatable, Identifiable, Sendable {
         captureState: WindowCaptureState,
         latestFrame: WindowFrameEvent? = nil,
         frameTiming: WindowFrameTiming? = nil,
+        frameStreamRequestedAt: Date? = nil,
         frameStreamRestartCount: Int = 0,
         latestFrameStreamRestartedAt: Date? = nil
     ) {
@@ -193,6 +226,7 @@ public struct WindowMirrorSession: Codable, Equatable, Identifiable, Sendable {
         self.captureState = captureState
         self.latestFrame = latestFrame
         self.frameTiming = frameTiming
+        self.frameStreamRequestedAt = frameStreamRequestedAt
         self.frameStreamRestartCount = frameStreamRestartCount
         self.latestFrameStreamRestartedAt = latestFrameStreamRestartedAt
     }
@@ -353,9 +387,11 @@ public struct WindowsAppRuntimeWindowStatus: Codable, Equatable, Sendable {
     public var title: String
     public var captureState: WindowCaptureState
     public var frameStreamStatus: WindowFrameStreamStatus
+    public var frameStreamRequestedAt: Date?
     public var latestFrameReceivedAt: Date?
     public var latestFrameAgeMilliseconds: Int?
     public var latestFrameIntervalMilliseconds: Int?
+    public var frameStreamWaitingAgeMilliseconds: Int?
     public var receivedFrameCount: Int
     public var frameStreamRecommendedAction: String
     public var frameStreamRestartCount: Int
@@ -372,9 +408,11 @@ public struct WindowsAppRuntimeWindowStatus: Codable, Equatable, Sendable {
         title: String,
         captureState: WindowCaptureState,
         frameStreamStatus: WindowFrameStreamStatus,
+        frameStreamRequestedAt: Date? = nil,
         latestFrameReceivedAt: Date? = nil,
         latestFrameAgeMilliseconds: Int? = nil,
         latestFrameIntervalMilliseconds: Int? = nil,
+        frameStreamWaitingAgeMilliseconds: Int? = nil,
         receivedFrameCount: Int = 0,
         frameStreamRecommendedAction: String,
         frameStreamRestartCount: Int = 0,
@@ -390,9 +428,11 @@ public struct WindowsAppRuntimeWindowStatus: Codable, Equatable, Sendable {
         self.title = title
         self.captureState = captureState
         self.frameStreamStatus = frameStreamStatus
+        self.frameStreamRequestedAt = frameStreamRequestedAt
         self.latestFrameReceivedAt = latestFrameReceivedAt
         self.latestFrameAgeMilliseconds = latestFrameAgeMilliseconds
         self.latestFrameIntervalMilliseconds = latestFrameIntervalMilliseconds
+        self.frameStreamWaitingAgeMilliseconds = frameStreamWaitingAgeMilliseconds
         self.receivedFrameCount = receivedFrameCount
         self.frameStreamRecommendedAction = frameStreamRecommendedAction
         self.frameStreamRestartCount = frameStreamRestartCount
@@ -1474,9 +1514,11 @@ public final class HostDashboardModel {
                     title: session.window.title,
                     captureState: session.captureState,
                     frameStreamStatus: frameStream.status,
+                    frameStreamRequestedAt: session.frameStreamRequestedAt,
                     latestFrameReceivedAt: session.frameTiming?.latestFrameReceivedAt,
                     latestFrameAgeMilliseconds: frameStream.latestFrameAgeMilliseconds,
                     latestFrameIntervalMilliseconds: frameStream.latestFrameIntervalMilliseconds,
+                    frameStreamWaitingAgeMilliseconds: frameStream.waitingForFirstFrameMilliseconds,
                     receivedFrameCount: frameStream.receivedFrameCount,
                     frameStreamRecommendedAction: frameStream.recommendedAction,
                     frameStreamRestartCount: session.frameStreamRestartCount,
@@ -3498,6 +3540,7 @@ public final class HostDashboardModel {
             mirrorSessions[index].captureState = .pending
             mirrorSessions[index].frameTiming = nil
             mirrorSessions[index].latestFrame = nil
+            mirrorSessions[index].frameStreamRequestedAt = restartedAt
             mirrorSessions[index].frameStreamRestartCount += 1
             mirrorSessions[index].latestFrameStreamRestartedAt = restartedAt
             return true
@@ -3549,6 +3592,7 @@ public final class HostDashboardModel {
             mirrorSessions[index].captureState = .pending
             mirrorSessions[index].frameTiming = nil
             mirrorSessions[index].latestFrame = nil
+            mirrorSessions[index].frameStreamRequestedAt = recoveredAt
             mirrorSessions[index].frameStreamRestartCount += 1
             mirrorSessions[index].latestFrameStreamRestartedAt = recoveredAt
             return true
@@ -3879,7 +3923,8 @@ public final class HostDashboardModel {
         let session = WindowMirrorSession(
             window: window,
             connectionMode: connectionMode,
-            captureState: captureState
+            captureState: captureState,
+            frameStreamRequestedAt: captureState == .pending ? Date() : nil
         )
 
         if let index = mirrorSessions.firstIndex(where: { $0.id == session.id }) {

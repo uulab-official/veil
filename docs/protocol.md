@@ -344,10 +344,14 @@ Rules:
 - These requests do not require a success response. Invalid requests may still return structured errors.
 - The macOS host subscribes after launching a capture-capable app window and unsubscribes before closing the mirrored window.
 - Host-side app-runtime status records frame stream recovery evidence per HWND:
+  `frameStreamRequestedAt`, `frameStreamWaitingAgeMilliseconds`,
   `frameStreamRestartCount`, `latestFrameStreamRestartedAt`, and
   `frameStreamRecoveryEscalated`/`frameStreamReopenEscalated`. A restart is an
-  unsubscribe followed by a new subscribe. After two restart attempts on the
-  same HWND still lead to a stale stream, the host reports
+  unsubscribe followed by a new subscribe. If no frame arrives within 8 seconds
+  of `frameStreamRequestedAt`, the host treats the still-pending stream as
+  `stale` and routes it through the same maintenance path as an old latest
+  frame. After two restart attempts on the same HWND still lead to a stale
+  stream, the host reports
   `frameStreamRecommendedAction=recover-window-capture` instead of repeatedly
   recommending another subscription restart. The host-side
   `recover-window-capture` action focuses the HWND through the guest agent, then

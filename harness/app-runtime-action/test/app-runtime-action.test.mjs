@@ -1112,6 +1112,8 @@ test("rejects close-all actions that leave mirrored sessions open", () => {
       title: "Untitled - Notepad",
       captureState: "pending",
       frameStreamStatus: "waitingForFirstFrame",
+      frameStreamRequestedAt: report.status.generatedAt,
+      frameStreamWaitingAgeMilliseconds: 0,
       receivedFrameCount: 0,
       frameStreamRecommendedAction: "wait-for-first-frame",
       frameStreamRestartCount: 0,

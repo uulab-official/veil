@@ -134,7 +134,9 @@
         "frameStreamRecommendedAction": "wait-for-first-frame",
         "frameStreamRestartCount": 0,
         "frameStreamRecoveryEscalated": false,
-        "frameStreamReopenEscalated": false
+        "frameStreamReopenEscalated": false,
+        "frameStreamRequestedAt": "2026-07-04T03:05:01Z",
+        "frameStreamWaitingAgeMilliseconds": 0
       }
     ],
     "restorableAppIds": [

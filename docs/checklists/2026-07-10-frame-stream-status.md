@@ -26,14 +26,15 @@ Goal: make mirrored Windows app surfaces report whether their frame stream is mi
 - [x] Added `reopenRequestedWindowIds` and `reopenedWindows` evidence so accepted reports prove the old HWND is gone and the reopened app window is tracked.
 - [x] Added `windowsApps.maintainFrameStreams` and `veil-vmctl app-runtime-action --action maintain-frame-streams` so automation can run the strongest app-screen recovery in one handoff.
 - [x] Added a host-shell automatic maintenance loop that periodically keeps mirrored app screens live by reusing the same reopen/recover/restart priority order.
+- [x] Added first-frame timeout tracking with `frameStreamRequestedAt` and `frameStreamWaitingAgeMilliseconds` so blank pending app windows become stale after 8 seconds and enter automatic maintenance.
 
 ## Status Semantics
 
 - `unavailable`: capture cannot produce frames for this mirror session.
-- `waitingForFirstFrame`: capture is pending or streaming, but no frame has arrived yet.
+- `waitingForFirstFrame`: capture is pending or streaming, but no frame has arrived yet and the wait is still under the 8 second timeout.
 - `fresh`: latest frame age is at most 1 second.
 - `delayed`: latest frame age is over 1 second and at most 5 seconds.
-- `stale`: latest frame age is over 5 seconds.
+- `stale`: latest frame age is over 5 seconds, or the first frame has not arrived within 8 seconds of the frame subscription request.
 
 ## Verification
 

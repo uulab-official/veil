@@ -5,6 +5,7 @@ const VALID_CONNECTION_MODES = new Set(["agent", "demo"]);
 const VALID_PHASES = new Set(["idle", "loading", "connected", "launching", "failed"]);
 const VALID_CAPTURE_STATES = new Set(["unavailable", "pending", "streaming"]);
 const VALID_FRAME_STREAM_STATUSES = new Set(["unavailable", "waitingForFirstFrame", "fresh", "delayed", "stale"]);
+const FIRST_FRAME_TIMEOUT_MILLISECONDS = 8_000;
 const VALID_CONSOLE_PREVIEW_STATES = new Set(["fresh", "stale", "unavailable"]);
 const VALID_AUTOMATIC_INSTALL_MEDIA_STATES = new Set(["current", "stale", "missing", "unavailable"]);
 const VALID_INSTALL_EVIDENCE_KINDS = new Set([
@@ -429,6 +430,12 @@ function validateMirrorSessions(sessions) {
     requireNonNegativeInteger(session.frameStreamRestartCount, "session.frameStreamRestartCount");
     requireBoolean(session.frameStreamRecoveryEscalated, "session.frameStreamRecoveryEscalated");
     requireBoolean(session.frameStreamReopenEscalated, "session.frameStreamReopenEscalated");
+    if (session.frameStreamRequestedAt !== undefined) {
+      requireString(session.frameStreamRequestedAt, "session.frameStreamRequestedAt");
+      if (Number.isNaN(Date.parse(session.frameStreamRequestedAt))) {
+        throw new TypeError("session.frameStreamRequestedAt must be an ISO date.");
+      }
+    }
     if (session.latestFrameReceivedAt !== undefined) {
       requireString(session.latestFrameReceivedAt, "session.latestFrameReceivedAt");
       if (Number.isNaN(Date.parse(session.latestFrameReceivedAt))) {
@@ -440,6 +447,9 @@ function validateMirrorSessions(sessions) {
     }
     if (session.latestFrameIntervalMilliseconds !== undefined) {
       requireNonNegativeInteger(session.latestFrameIntervalMilliseconds, "session.latestFrameIntervalMilliseconds");
+    }
+    if (session.frameStreamWaitingAgeMilliseconds !== undefined) {
+      requireNonNegativeInteger(session.frameStreamWaitingAgeMilliseconds, "session.frameStreamWaitingAgeMilliseconds");
     }
     if (session.latestFrameStreamRestartedAt !== undefined) {
       requireString(session.latestFrameStreamRestartedAt, "session.latestFrameStreamRestartedAt");
@@ -456,12 +466,21 @@ function validateMirrorSessions(sessions) {
     if (session.captureState === "unavailable" && session.frameStreamStatus !== "unavailable") {
       throw new TypeError("Unavailable capture sessions must report unavailable frame streams.");
     }
-    if (session.captureState !== "unavailable" && session.receivedFrameCount === 0 && session.frameStreamStatus !== "waitingForFirstFrame") {
-      throw new TypeError("Capture sessions without received frames must wait for the first frame.");
+    const timedOutWaitingForFirstFrame = session.receivedFrameCount === 0
+      && session.frameStreamStatus === "stale"
+      && session.frameStreamWaitingAgeMilliseconds >= FIRST_FRAME_TIMEOUT_MILLISECONDS;
+    if (session.captureState !== "unavailable"
+      && session.receivedFrameCount === 0
+      && session.frameStreamStatus !== "waitingForFirstFrame"
+      && !timedOutWaitingForFirstFrame) {
+      throw new TypeError("Capture sessions without received frames must wait for the first frame unless first-frame delivery timed out.");
     }
     if (session.receivedFrameCount === 0) {
       if (session.latestFrameReceivedAt !== undefined || session.latestFrameAgeMilliseconds !== undefined || session.latestFrameIntervalMilliseconds !== undefined) {
         throw new TypeError("Frame timing fields require at least one received frame.");
+      }
+      if (session.captureState !== "unavailable" && session.frameStreamRequestedAt === undefined) {
+        throw new TypeError("Capture sessions waiting for frames require frameStreamRequestedAt.");
       }
     } else {
       if (session.latestFrameReceivedAt === undefined || session.latestFrameAgeMilliseconds === undefined) {
@@ -577,8 +596,8 @@ function validateMacWindowIntegration(macWindowIntegration, mirrorSessions, conn
     throw new TypeError("macWindowIntegration frame counts cannot exceed mirroredWindowCount.");
   }
 
-  if (macWindowIntegration.freshFrameWindowCount + macWindowIntegration.delayedFrameWindowCount + macWindowIntegration.staleFrameWindowCount > macWindowIntegration.streamingWindowCount) {
-    throw new TypeError("Mac frame stream quality counts cannot exceed streamingWindowCount.");
+  if (macWindowIntegration.freshFrameWindowCount + macWindowIntegration.delayedFrameWindowCount + macWindowIntegration.staleFrameWindowCount > macWindowIntegration.mirroredWindowCount) {
+    throw new TypeError("Mac frame stream quality counts cannot exceed mirroredWindowCount.");
   }
 
   if (macWindowIntegration.acceptsGuestWindowEvents !== connection.hasLiveAgentConnection) {

@@ -103,7 +103,9 @@
         "frameStreamRestartCount": 3,
         "latestFrameStreamRestartedAt": "2026-07-10T00:40:00Z",
         "frameStreamRecoveryEscalated": false,
-        "frameStreamReopenEscalated": false
+        "frameStreamReopenEscalated": false,
+        "frameStreamRequestedAt": "2026-07-10T00:40:00Z",
+        "frameStreamWaitingAgeMilliseconds": 0
       }
     ],
     "restorableAppIds": [

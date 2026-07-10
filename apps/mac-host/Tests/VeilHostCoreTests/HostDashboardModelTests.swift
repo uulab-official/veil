@@ -318,6 +318,7 @@ struct HostDashboardModelTests {
         #expect(windowStatus.latestFrameReceivedAt == secondFrameAt)
         #expect(windowStatus.latestFrameAgeMilliseconds == 500)
         #expect(windowStatus.latestFrameIntervalMilliseconds == 125)
+        #expect(windowStatus.frameStreamWaitingAgeMilliseconds == nil)
         #expect(windowStatus.receivedFrameCount == 2)
         #expect(windowStatus.frameStreamRecommendedAction == "none")
         #expect(windowStatus.frameStreamRestartCount == 0)
@@ -357,6 +358,29 @@ struct HostDashboardModelTests {
         #expect(maintainAction.isAvailable)
     }
 
+    @Test("promotes first frame timeout to stale frame stream")
+    @MainActor
+    func promotesFirstFrameTimeoutToStaleFrameStream() async throws {
+        let service = FakeDashboardService(health: .captureReady)
+        let model = HostDashboardModel(service: service)
+
+        await model.launchNotepad()
+        let requestedAt = try #require(model.mirrorSessions.first?.frameStreamRequestedAt)
+        let report = model.runtimeStatusReport(generatedAt: requestedAt.addingTimeInterval(8.25))
+        let windowStatus = try #require(report.mirrorSessions.first)
+        let maintainAction = try #require(report.actions.first { $0.id == "windowsApps.maintainFrameStreams" })
+
+        #expect(windowStatus.frameStreamStatus == .stale)
+        #expect(windowStatus.frameStreamRequestedAt == requestedAt)
+        #expect(windowStatus.frameStreamWaitingAgeMilliseconds == 8_250)
+        #expect(windowStatus.latestFrameReceivedAt == nil)
+        #expect(windowStatus.latestFrameAgeMilliseconds == nil)
+        #expect(windowStatus.receivedFrameCount == 0)
+        #expect(windowStatus.frameStreamRecommendedAction == "restart-frame-subscription")
+        #expect(report.macWindowIntegration.staleFrameWindowCount == 1)
+        #expect(maintainAction.isAvailable)
+    }
+
     @Test("restarts frame subscription for a mirrored window")
     @MainActor
     func restartsFrameSubscriptionForMirroredWindow() async throws {
@@ -379,8 +403,34 @@ struct HostDashboardModelTests {
         #expect(session.captureState == .pending)
         #expect(session.latestFrame == nil)
         #expect(session.frameTiming == nil)
+        #expect(session.frameStreamRequestedAt == restartedAt)
         #expect(session.frameStreamRestartCount == 1)
         #expect(session.latestFrameStreamRestartedAt == restartedAt)
+    }
+
+    @Test("maintenance restarts timed out first frame streams")
+    @MainActor
+    func maintenanceRestartsTimedOutFirstFrameStreams() async throws {
+        let service = FakeDashboardService(health: .captureReady)
+        let model = HostDashboardModel(service: service)
+
+        await model.launchNotepad()
+        let requestedAt = try #require(model.mirrorSessions.first?.frameStreamRequestedAt)
+        let maintenanceAt = requestedAt.addingTimeInterval(8.25)
+        let result = await model.maintainStaleFrameStreams(generatedAt: maintenanceAt)
+        let session = try #require(model.mirrorSessions.first)
+
+        #expect(result.didPerformMaintenance)
+        #expect(result.reopenedWindows == [])
+        #expect(result.recoveredFrameWindowIds == [])
+        #expect(result.restartedFrameWindowIds == ["hwnd:0003029A"])
+        #expect(service.frameUnsubscriptions == ["hwnd:0003029A"])
+        #expect(service.frameSubscriptions == ["hwnd:0003029A", "hwnd:0003029A"])
+        #expect(session.captureState == .pending)
+        #expect(session.frameTiming == nil)
+        #expect(session.frameStreamRequestedAt == maintenanceAt)
+        #expect(session.frameStreamRestartCount == 1)
+        #expect(session.latestFrameStreamRestartedAt == maintenanceAt)
     }
 
     @Test("restarts all stale frame subscriptions")

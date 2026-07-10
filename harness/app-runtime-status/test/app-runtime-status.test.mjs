@@ -747,6 +747,38 @@ test("rejects Mac foreground window identity that drifts from mirrored sessions"
   );
 });
 
+test("accepts timed out first-frame streams as stale", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.mac-window-live.json", import.meta.url), "utf8"));
+  const session = report.mirrorSessions[0];
+  session.frameStreamStatus = "stale";
+  session.frameStreamRequestedAt = "2026-07-03T13:19:51Z";
+  session.frameStreamWaitingAgeMilliseconds = 9000;
+  session.frameStreamRecommendedAction = "restart-frame-subscription";
+  report.macWindowIntegration.staleFrameWindowCount = 1;
+  report.macWindowIntegration.reason = "Windows app windows are mirrored, but at least one frame stream is stale.";
+  report.actions.find((action) => action.id === "windowsApps.restartFrameStream").isAvailable = true;
+  report.actions.find((action) => action.id === "windowsApps.maintainFrameStreams").isAvailable = true;
+
+  assert.equal(validateAppRuntimeStatus(report), report);
+});
+
+test("rejects first-frame stale status without timeout evidence", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.mac-window-live.json", import.meta.url), "utf8"));
+  const session = report.mirrorSessions[0];
+  session.frameStreamStatus = "stale";
+  session.frameStreamWaitingAgeMilliseconds = 3000;
+  session.frameStreamRecommendedAction = "restart-frame-subscription";
+  report.macWindowIntegration.staleFrameWindowCount = 1;
+  report.macWindowIntegration.reason = "Windows app windows are mirrored, but at least one frame stream is stale.";
+  report.actions.find((action) => action.id === "windowsApps.restartFrameStream").isAvailable = true;
+  report.actions.find((action) => action.id === "windowsApps.maintainFrameStreams").isAvailable = true;
+
+  assert.throws(
+    () => validateAppRuntimeStatus(report),
+    /first frame/
+  );
+});
+
 test("rejects repeated stale frame restarts without recovery escalation", () => {
   const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.mac-window-live.json", import.meta.url), "utf8"));
   const session = report.mirrorSessions[0];

@@ -154,10 +154,16 @@ window after the guest agent is ready.
 into automatic macOS app-window presentation, including mirrored, pending-frame,
 streaming, foregroundable, fresh-frame, delayed-frame, and stale-frame window
 counts. Each `mirrorSessions[]` entry also carries `frameStreamStatus`,
+`frameStreamRequestedAt`, `frameStreamWaitingAgeMilliseconds`,
 `latestFrameReceivedAt`, `latestFrameAgeMilliseconds`,
 `latestFrameIntervalMilliseconds`, `receivedFrameCount`, and
 `frameStreamRecommendedAction` so app UI and CLI output can distinguish "waiting
-for first frame" from a fresh, delayed, or stale mirrored Windows app surface.
+for first frame" from a timed-out first frame, fresh, delayed, or stale mirrored
+Windows app surface.
+Pending capture sessions with no received frame remain
+`waitingForFirstFrame` until `frameStreamWaitingAgeMilliseconds` reaches 8
+seconds; after that, they must become `stale` so the automatic app-screen
+maintenance path can recover blank windows without a separate manual diagnosis.
 The same session record carries `frameStreamRestartCount`,
 `latestFrameStreamRestartedAt`, `frameStreamRecoveryEscalated`, and
 `frameStreamReopenEscalated`; after two stale restart attempts on the same HWND,
