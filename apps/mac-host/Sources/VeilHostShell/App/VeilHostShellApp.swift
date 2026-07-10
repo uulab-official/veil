@@ -74,6 +74,7 @@ struct VeilHostShellApp: App {
     private let vmRuntimeBooter: QEMUVMRuntimeBooter
     private let windowsAppWindowPresenter = WindowsAppWindowPresenter()
     private let agentTransport: URLSessionWebSocketTransport
+    private let windowsNotificationPresenter = WindowsNotificationPresenter(center: MacUserNotificationCenter())
     @State private var model: HostDashboardModel
     @State private var vmModel: VMRuntimeModel
     @State private var displayMessage: String?
@@ -354,7 +355,7 @@ struct VeilHostShellApp: App {
                     case .handledClipboardText:
                         syncGuestClipboardToPasteboard()
                     case .handledWindowsNotification(let notificationId):
-                        displayMessage = "Windows notification received: \(notificationId)"
+                        presentWindowsNotification(notificationId: notificationId)
                     case .ignored:
                         return
                     }
@@ -1457,6 +1458,26 @@ struct VeilHostShellApp: App {
     private func activateMainWindow() {
         Task { @MainActor in
             MainWindowChrome.showMainWindow()
+        }
+    }
+
+    private func presentWindowsNotification(notificationId: String) {
+        guard let notification = model.latestWindowsNotifications.first(where: { $0.notificationId == notificationId }) else {
+            return
+        }
+
+        Task { @MainActor in
+            let result = await windowsNotificationPresenter.present(notification)
+            switch result {
+            case .scheduled:
+                displayMessage = "Windows notification shown on macOS: \(notification.title)"
+            case .permissionDenied:
+                displayMessage = "Windows notification received, but macOS notifications are not allowed for Veil."
+            case .authorizationRequestDeclined:
+                displayMessage = "Windows notification received, but notification permission was not granted."
+            case .invalidNotification:
+                displayMessage = "Windows notification received, but it was missing a title."
+            }
         }
     }
 

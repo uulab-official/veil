@@ -13,10 +13,11 @@ Goal: start the Parallels-style Windows notification bridge without claiming the
 - [x] Added `app-runtime-status.notificationBridge` with readiness, delivered count, latest notification evidence, and the next recommended action.
 - [x] Added app-runtime status harness validation for blocked, consent-needed, and receiving notification states.
 - [x] Updated app-runtime action/review fixtures that embed status snapshots.
+- [x] Added a macOS `UNUserNotificationCenter` presenter for received Windows notification events, with permission-state handling and Swift tests.
 - [x] Documented the protocol and harness contract.
 
 ## Still Open
 
 - [ ] Implement the real Windows `UserNotificationListener` subscription after sparse package identity and consent are live-verified.
-- [ ] Present received Windows notifications through macOS `UNUserNotificationCenter` once the guest event stream is proven against a real Windows app.
+- [ ] Live-verify macOS notification presentation with a real Windows app notification emitted by the guest listener.
 - [ ] Add a live proof command that triggers or records a real Windows notification and verifies the macOS host received it.
