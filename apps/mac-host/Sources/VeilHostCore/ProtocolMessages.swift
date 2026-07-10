@@ -51,6 +51,7 @@ public struct AgentHealthResponse: Codable, Equatable, Sendable {
     public var session: AgentSession
     public var capabilities: AgentCapabilities
     public var packageIdentityStatus: PackageIdentityStatus? = nil
+    public var notificationListener: WindowsNotificationListenerStatus? = nil
 }
 
 public struct AgentSession: Codable, Equatable, Sendable {
@@ -78,6 +79,15 @@ public struct PackageIdentityStatus: Codable, Equatable, Sendable {
     public var updatedAt: String?
     public var packagePath: String?
     public var certificatePath: String?
+}
+
+public struct WindowsNotificationListenerStatus: Codable, Equatable, Sendable {
+    public var isSupported: Bool
+    public var canListen: Bool
+    public var accessStatus: String
+    public var recommendedAction: String
+    public var requiresPackageIdentity: Bool
+    public var message: String?
 }
 
 public struct AppListRequest: Codable, Equatable, Sendable {

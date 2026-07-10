@@ -96,8 +96,28 @@ export function validateAgentHealthResponse(response) {
   if (response.packageIdentityStatus !== undefined) {
     validatePackageIdentityStatus(response.packageIdentityStatus);
   }
+  if (response.notificationListener !== undefined) {
+    validateNotificationListenerStatus(response.notificationListener);
+  }
 
   return response;
+}
+
+function validateNotificationListenerStatus(status) {
+  if (!status || typeof status !== "object" || Array.isArray(status)) {
+    throw new TypeError("Agent health response field 'notificationListener' must be an object when present.");
+  }
+
+  for (const field of ["isSupported", "canListen", "requiresPackageIdentity"]) {
+    if (typeof status[field] !== "boolean") {
+      throw new TypeError(`Agent health response field 'notificationListener.${field}' must be a boolean.`);
+    }
+  }
+  requireNonEmptyString(status.accessStatus, "notificationListener.accessStatus", "Agent health response");
+  requireNonEmptyString(status.recommendedAction, "notificationListener.recommendedAction", "Agent health response");
+  if (status.message !== undefined) {
+    requireNonEmptyString(status.message, "notificationListener.message", "Agent health response");
+  }
 }
 
 function validatePackageIdentityStatus(status) {

@@ -1395,6 +1395,44 @@ struct HostDashboardModelTests {
         #expect(report.actions.first { $0.id == "proof.recommended" }?.isAvailable == true)
     }
 
+    @Test("Daily Use readiness blocks notification bridge until Windows listener consent")
+    @MainActor
+    func dailyUseReadinessBlocksNotificationBridgeUntilWindowsListenerConsent() async throws {
+        let service = FakeDashboardService(health: .notificationConsentDenied)
+        let model = HostDashboardModel(service: service)
+
+        await model.load()
+        let report = model.runtimeStatusReport()
+
+        #expect(report.connection.notificationListener?.accessStatus == "denied")
+        #expect(report.connection.notificationListener?.canListen == false)
+        #expect(report.dailyUseReadiness.packageIdentityReady)
+        #expect(report.dailyUseReadiness.notificationBridgePreflightPassed == false)
+        #expect(report.dailyUseReadiness.notificationBridgeRecommendedAction == "enable-notification-listener-settings")
+        #expect(report.notificationBridge.canReceiveNotifications == false)
+        #expect(report.notificationBridge.recommendedAction == "enable-notification-listener-settings")
+        #expect(report.notificationBridge.reason.contains("listener consent"))
+    }
+
+    @Test("Daily Use readiness allows notification proof after Windows listener consent")
+    @MainActor
+    func dailyUseReadinessAllowsNotificationProofAfterWindowsListenerConsent() async throws {
+        let service = FakeDashboardService(health: .notificationConsentAllowed)
+        let model = HostDashboardModel(service: service)
+
+        await model.load()
+        let report = model.runtimeStatusReport()
+
+        #expect(report.connection.notificationListener?.accessStatus == "allowed")
+        #expect(report.connection.notificationListener?.canListen == true)
+        #expect(report.dailyUseReadiness.notificationBridgePreflightPassed)
+        #expect(report.dailyUseReadiness.notificationBridgeRecommendedAction == "run-notification-proof")
+        #expect(report.notificationBridge.canReceiveNotifications)
+        #expect(report.notificationBridge.deliveredNotificationCount == 0)
+        #expect(report.notificationBridge.recommendedAction == "run-notification-proof")
+        #expect(report.notificationBridge.reason.contains("run notification-proof"))
+    }
+
     @Test("Daily Use readiness prefers multi-app proof when every target app is launchable")
     @MainActor
     func dailyUseReadinessPrefersMultiAppProofWhenEveryTargetAppIsLaunchable() async throws {
@@ -2864,6 +2902,30 @@ private extension AgentHealthResponse {
         response.packageIdentityStatus?.stage = "registered"
         response.packageIdentityStatus?.succeeded = true
         response.packageIdentityStatus?.message = "Sparse package registered and agent restarted with package identity."
+        return response
+    }
+
+    static var notificationConsentDenied: AgentHealthResponse {
+        var response = dailyUseReady
+        response.notificationListener = WindowsNotificationListenerStatus(
+            isSupported: true,
+            canListen: false,
+            accessStatus: "denied",
+            recommendedAction: "enable-notification-listener-settings",
+            requiresPackageIdentity: true
+        )
+        return response
+    }
+
+    static var notificationConsentAllowed: AgentHealthResponse {
+        var response = dailyUseReady
+        response.notificationListener = WindowsNotificationListenerStatus(
+            isSupported: true,
+            canListen: true,
+            accessStatus: "allowed",
+            recommendedAction: "run-notification-proof",
+            requiresPackageIdentity: true
+        )
         return response
     }
 

@@ -288,7 +288,11 @@ the signed sparse package plus `windowCapture` capability prerequisite for
 borderless Windows Graphics Capture consent, while
 `notificationBridgeRecommendedAction` and `notificationBridgeRequirement` keep
 the Windows `UserNotificationListener` consent spike tied to package identity
-instead of presenting notifications as generally ready.
+instead of presenting notifications as generally ready. When the live agent
+reports `connection.notificationListener`, the harness expects
+`notificationBridgePreflightPassed` to stay false until `canListen=true`; denied
+or unspecified Windows listener access must keep the next action on the specific
+consent or settings blocker.
 The printer lane is intentionally explicit while it is still a manual
 experiment: `printerBridgeRecommendedAction=manual-ipp-experiment`,
 `printerBridgeEndpointTemplate=http://10.0.2.2:631/printers/<shared-printer-name>`,
@@ -335,8 +339,9 @@ Use work.
 The sibling `notificationBridge` section tracks the actual guest-to-host
 notification event path separately from that consent preflight. It is blocked
 until the live agent and package identity gate are present, moves to
-`verify-notification-listener-consent` while waiting for Windows listener
-permission, and only reports `receiving-windows-notifications` after a real
+the listener-specific action from `connection.notificationListener` while
+waiting for Windows listener permission, moves to `run-notification-proof` once
+listener access is allowed, and only reports `receiving-windows-notifications` after a real
 `notification.received` event has reached the macOS host. The host retains only
 the latest short recent-notification window, and the harness rejects missing or
 malformed latest-notification evidence.

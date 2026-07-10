@@ -25,5 +25,12 @@
     "updatedAt": "2026-07-10T05:40:00.0000000+09:00",
     "packagePath": "C:\\Users\\veil\\AppData\\Local\\Veil\\Agent\\package\\VeilAgent.Identity.msix",
     "certificatePath": "C:\\Users\\veil\\AppData\\Local\\Veil\\Agent\\package\\VeilAgent.Identity.cer"
+  },
+  "notificationListener": {
+    "isSupported": true,
+    "canListen": false,
+    "accessStatus": "packageIdentityRequired",
+    "recommendedAction": "prepare-sparse-package",
+    "requiresPackageIdentity": true
   }
 }

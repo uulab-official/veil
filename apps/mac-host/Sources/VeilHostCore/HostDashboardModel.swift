@@ -261,6 +261,7 @@ public struct WindowsAppRuntimeConnectionStatus: Codable, Equatable, Sendable {
     public var os: String?
     public var capabilities: AgentCapabilities?
     public var packageIdentityStatus: PackageIdentityStatus?
+    public var notificationListener: WindowsNotificationListenerStatus?
     public var connectionDetail: String?
 
     public init(
@@ -270,6 +271,7 @@ public struct WindowsAppRuntimeConnectionStatus: Codable, Equatable, Sendable {
         os: String?,
         capabilities: AgentCapabilities? = nil,
         packageIdentityStatus: PackageIdentityStatus? = nil,
+        notificationListener: WindowsNotificationListenerStatus? = nil,
         connectionDetail: String?
     ) {
         self.mode = mode
@@ -278,6 +280,7 @@ public struct WindowsAppRuntimeConnectionStatus: Codable, Equatable, Sendable {
         self.os = os
         self.capabilities = capabilities
         self.packageIdentityStatus = packageIdentityStatus
+        self.notificationListener = notificationListener
         self.connectionDetail = connectionDetail
     }
 }
@@ -981,7 +984,7 @@ public enum WindowsAppRuntimeDailyUseIntegrationDefaults {
     public static let borderlessCaptureRequirement =
         "Requires signed sparse package identity plus windowCapture capability before borderless Windows Graphics Capture consent can be requested."
     public static let notificationBridgeRequirement =
-        "Requires signed sparse package identity before Windows UserNotificationListener consent can be requested."
+        "Requires signed sparse package identity and Windows UserNotificationListener consent before Windows notifications can be mirrored."
 }
 
 public struct WindowsAppRuntimeDailyUseReadinessStatus: Codable, Equatable, Sendable {
@@ -1658,6 +1661,7 @@ public final class HostDashboardModel {
                 os: hasLiveAgentConnection ? health?.os : nil,
                 capabilities: hasLiveAgentConnection ? health?.capabilities : nil,
                 packageIdentityStatus: hasLiveAgentConnection ? health?.packageIdentityStatus : nil,
+                notificationListener: hasLiveAgentConnection ? health?.notificationListener : nil,
                 connectionDetail: connectionDetail
             ),
             guestAgentDiagnostics: guestAgentDiagnosticsStatus(endpoint: agentEndpoint),
@@ -2549,6 +2553,7 @@ public final class HostDashboardModel {
         let packageIdentityReady = health?.capabilities.packageIdentity == true
         let borderlessCapturePreflightPassed = packageIdentityReady && health?.capabilities.windowCapture == true
         let notificationBridgePreflightPassed = packageIdentityReady
+            && (health?.notificationListener?.canListen ?? true)
 
         if !packageIdentityReady {
             let packageStatus = health?.packageIdentityStatus
@@ -2582,13 +2587,21 @@ public final class HostDashboardModel {
         let borderlessCaptureRecommendedAction = borderlessCapturePreflightPassed
             ? "verify-daily-use-integrations"
             : "verify-window-capture"
+        let notificationBridgeRecommendedAction: String
+        if let notificationListener = health?.notificationListener {
+            notificationBridgeRecommendedAction = notificationListener.canListen
+                ? "run-notification-proof"
+                : notificationListener.recommendedAction
+        } else {
+            notificationBridgeRecommendedAction = "verify-notification-listener-consent"
+        }
 
         return WindowsAppRuntimeDailyUseReadinessStatus(
             packageIdentityReady: true,
             borderlessCapturePreflightPassed: borderlessCapturePreflightPassed,
             borderlessCaptureRecommendedAction: borderlessCaptureRecommendedAction,
             notificationBridgePreflightPassed: notificationBridgePreflightPassed,
-            notificationBridgeRecommendedAction: "verify-notification-listener-consent",
+            notificationBridgeRecommendedAction: notificationBridgeRecommendedAction,
             printerBridgeMode: "manual-ipp-experiment",
             packageIdentityStatus: packageStatus,
             packageIdentityStage: packageStatus?.stage,
@@ -2632,12 +2645,15 @@ public final class HostDashboardModel {
         }
 
         guard dailyUseReadiness.notificationBridgePreflightPassed else {
+            let reason = dailyUseReadiness.notificationBridgeRecommendedAction == "prepare-sparse-package"
+                ? "A signed sparse package identity is required before Windows notification listener consent can be requested."
+                : "Windows notification listener consent is required before Veil can mirror Windows notifications."
             return WindowsAppRuntimeNotificationBridgeStatus(
                 canReceiveNotifications: false,
                 deliveredNotificationCount: latestWindowsNotifications.count,
                 latestNotification: latestWindowsNotifications.first,
                 recommendedAction: dailyUseReadiness.notificationBridgeRecommendedAction,
-                reason: "A signed sparse package identity is required before Windows notification listener consent can be requested."
+                reason: reason
             )
         }
 
@@ -2646,8 +2662,8 @@ public final class HostDashboardModel {
                 canReceiveNotifications: true,
                 deliveredNotificationCount: 0,
                 latestNotification: nil,
-                recommendedAction: "verify-notification-listener-consent",
-                reason: "Package identity is ready; request Windows notification listener consent and wait for the first notification.received event."
+                recommendedAction: dailyUseReadiness.notificationBridgeRecommendedAction,
+                reason: "Windows notification listener consent is ready; run notification-proof and wait for the first notification.received event."
             )
         }
 

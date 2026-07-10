@@ -72,6 +72,13 @@ Response:
     "updatedAt": "2026-07-10T05:40:00.0000000+09:00",
     "packagePath": "C:\\Users\\veil\\AppData\\Local\\Veil\\Agent\\package\\VeilAgent.Identity.msix",
     "certificatePath": "C:\\Users\\veil\\AppData\\Local\\Veil\\Agent\\package\\VeilAgent.Identity.cer"
+  },
+  "notificationListener": {
+    "isSupported": true,
+    "canListen": false,
+    "accessStatus": "packageIdentityRequired",
+    "recommendedAction": "prepare-sparse-package",
+    "requiresPackageIdentity": true
   }
 }
 ```
@@ -89,6 +96,15 @@ whether sparse package preparation has not run, failed, or reached a later
 stage. The object must not include certificate passwords or PFX private-key
 contents; it only carries paths, the latest stage, success state, and a human
 failure/progress message.
+
+`notificationListener` is optional for backwards compatibility. Current agents
+include it so the host can distinguish the sparse-package prerequisite from the
+Windows `UserNotificationListener` consent state. `canListen=true` means the
+agent can start the package-gated listener and the next proof step is
+`run-notification-proof`; otherwise `recommendedAction` names the specific
+blocker, such as `prepare-sparse-package`,
+`request-notification-listener-consent`, or
+`enable-notification-listener-settings`.
 
 ## App List
 

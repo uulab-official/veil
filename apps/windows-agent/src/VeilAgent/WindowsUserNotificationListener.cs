@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Runtime.CompilerServices;
+using System.Text.Json.Nodes;
 using Windows.Foundation;
 using Windows.UI.Notifications;
 using Windows.UI.Notifications.Management;
@@ -155,4 +156,91 @@ public static class WindowsNotificationListenerFactory
 
         return new WindowsUserNotificationListener();
     }
+}
+
+public interface IWindowsNotificationAccessProbe
+{
+    JsonObject ReadStatus(bool hasPackageIdentity);
+}
+
+public sealed class WindowsNotificationAccessProbe : IWindowsNotificationAccessProbe
+{
+    public JsonObject ReadStatus(bool hasPackageIdentity)
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return Status(
+                isSupported: false,
+                canListen: false,
+                accessStatus: "unsupported",
+                recommendedAction: "unsupported-on-this-host"
+            );
+        }
+
+        if (!hasPackageIdentity)
+        {
+            return Status(
+                isSupported: true,
+                canListen: false,
+                accessStatus: "packageIdentityRequired",
+                recommendedAction: "prepare-sparse-package"
+            );
+        }
+
+        try
+        {
+            return UserNotificationListener.Current.GetAccessStatus() switch
+            {
+                UserNotificationListenerAccessStatus.Allowed => Status(
+                    isSupported: true,
+                    canListen: true,
+                    accessStatus: "allowed",
+                    recommendedAction: "run-notification-proof"
+                ),
+                UserNotificationListenerAccessStatus.Denied => Status(
+                    isSupported: true,
+                    canListen: false,
+                    accessStatus: "denied",
+                    recommendedAction: "enable-notification-listener-settings"
+                ),
+                UserNotificationListenerAccessStatus.Unspecified => Status(
+                    isSupported: true,
+                    canListen: false,
+                    accessStatus: "unspecified",
+                    recommendedAction: "request-notification-listener-consent"
+                ),
+                _ => Status(
+                    isSupported: true,
+                    canListen: false,
+                    accessStatus: "unknown",
+                    recommendedAction: "inspect-notification-listener"
+                )
+            };
+        }
+        catch (Exception error)
+        {
+            var status = Status(
+                isSupported: true,
+                canListen: false,
+                accessStatus: "unknown",
+                recommendedAction: "inspect-notification-listener"
+            );
+            status["message"] = $"{error.GetType().Name}: {error.Message}";
+            return status;
+        }
+    }
+
+    private static JsonObject Status(
+        bool isSupported,
+        bool canListen,
+        string accessStatus,
+        string recommendedAction
+    ) => new()
+    {
+        ["isSupported"] = isSupported,
+        ["canListen"] = canListen,
+        ["accessStatus"] = accessStatus,
+        ["recommendedAction"] = recommendedAction,
+        ["requiresPackageIdentity"] = true
+    };
 }

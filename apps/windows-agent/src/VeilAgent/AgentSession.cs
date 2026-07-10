@@ -44,6 +44,7 @@ public sealed class AgentSession
     private readonly IWindowFrameCapture capture;
     private readonly IPackageIdentityProbe packageIdentityProbe;
     private readonly ISparsePackageStatusProbe sparsePackageStatusProbe;
+    private readonly IWindowsNotificationAccessProbe notificationAccessProbe;
     private readonly Dictionary<string, LaunchedWindow> trackedWindowsById = new();
     private readonly Dictionary<string, WindowsAppDescriptor> appByWindowId = new();
     private readonly object trackedWindowsGate = new();
@@ -52,13 +53,15 @@ public sealed class AgentSession
         IWindowsDesktop desktop,
         IWindowFrameCapture capture,
         IPackageIdentityProbe? packageIdentityProbe = null,
-        ISparsePackageStatusProbe? sparsePackageStatusProbe = null
+        ISparsePackageStatusProbe? sparsePackageStatusProbe = null,
+        IWindowsNotificationAccessProbe? notificationAccessProbe = null
     )
     {
         this.desktop = desktop;
         this.capture = capture;
         this.packageIdentityProbe = packageIdentityProbe ?? new WindowsPackageIdentityProbe();
         this.sparsePackageStatusProbe = sparsePackageStatusProbe ?? new SparsePackageStatusProbe();
+        this.notificationAccessProbe = notificationAccessProbe ?? new WindowsNotificationAccessProbe();
     }
 
     public async Task<AgentReplies> HandleAsync(JsonObject request, CancellationToken cancellationToken = default)
@@ -527,6 +530,7 @@ public sealed class AgentSession
 
     private JsonObject HealthResponse(string? requestId)
     {
+        var hasPackageIdentity = packageIdentityProbe.HasPackageIdentity;
         var response = new JsonObject
         {
             ["type"] = MessageTypes.AgentHealthResponse,
@@ -547,8 +551,9 @@ public sealed class AgentSession
                 ["windowCapture"] = true,
                 ["input"] = true,
                 ["clipboardText"] = true,
-                ["packageIdentity"] = packageIdentityProbe.HasPackageIdentity
-            }
+                ["packageIdentity"] = hasPackageIdentity
+            },
+            ["notificationListener"] = notificationAccessProbe.ReadStatus(hasPackageIdentity)
         };
 
         var sparsePackageStatus = sparsePackageStatusProbe.ReadStatus();

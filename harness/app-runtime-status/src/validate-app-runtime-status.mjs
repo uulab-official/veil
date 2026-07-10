@@ -102,7 +102,7 @@ function validateConnection(connection) {
   }
 
   if (!connection.hasLiveAgentConnection) {
-    for (const field of ["agentVersion", "os", "capabilities", "packageIdentityStatus"]) {
+    for (const field of ["agentVersion", "os", "capabilities", "packageIdentityStatus", "notificationListener"]) {
       if (connection[field] !== undefined) {
         throw new TypeError(`connection.${field} is only allowed when a live agent is connected.`);
       }
@@ -127,6 +127,9 @@ function validateConnection(connection) {
   if (connection.packageIdentityStatus !== undefined) {
     validatePackageIdentityStatus(connection.packageIdentityStatus, "connection.packageIdentityStatus");
   }
+  if (connection.notificationListener !== undefined) {
+    validateNotificationListenerStatus(connection.notificationListener, "connection.notificationListener");
+  }
 }
 
 function validateCapabilities(capabilities) {
@@ -144,6 +147,21 @@ function validateCapabilities(capabilities) {
     "packageIdentity"
   ]) {
     requireBoolean(capabilities[field], `connection.capabilities.${field}`);
+  }
+}
+
+function validateNotificationListenerStatus(status, prefix) {
+  if (!status || typeof status !== "object" || Array.isArray(status)) {
+    throw new TypeError(`${prefix} must be an object.`);
+  }
+
+  requireBoolean(status.isSupported, `${prefix}.isSupported`);
+  requireBoolean(status.canListen, `${prefix}.canListen`);
+  requireBoolean(status.requiresPackageIdentity, `${prefix}.requiresPackageIdentity`);
+  requireString(status.accessStatus, `${prefix}.accessStatus`);
+  requireString(status.recommendedAction, `${prefix}.recommendedAction`);
+  if (status.message !== undefined) {
+    requireString(status.message, `${prefix}.message`);
   }
 }
 
@@ -185,7 +203,7 @@ function validateNotificationBridge(notificationBridge, report) {
     : report.dailyUseReadiness.notificationBridgePreflightPassed
       ? notificationBridge.deliveredNotificationCount > 0
         ? "receiving-windows-notifications"
-        : "verify-notification-listener-consent"
+        : report.dailyUseReadiness.notificationBridgeRecommendedAction
       : report.dailyUseReadiness.notificationBridgeRecommendedAction;
   if (notificationBridge.recommendedAction !== expectedAction) {
     throw new TypeError("notificationBridge.recommendedAction must match the current notification bridge state.");
@@ -1163,6 +1181,9 @@ function validateDailyUseReadiness(dailyUseReadiness, report) {
     && capabilities?.packageIdentity === true;
   const expectedBorderlessCapturePreflight = expectedPackageIdentityReady
     && capabilities?.windowCapture === true;
+  const notificationListener = report.connection.notificationListener;
+  const expectedNotificationPreflight = expectedPackageIdentityReady
+    && (notificationListener === undefined || notificationListener.canListen === true);
   const expectedBorderlessAction = !report.connection.hasLiveAgentConnection
     ? "connect-agent"
     : expectedPackageIdentityReady
@@ -1173,7 +1194,11 @@ function validateDailyUseReadiness(dailyUseReadiness, report) {
   const expectedNotificationAction = !report.connection.hasLiveAgentConnection
     ? "connect-agent"
     : expectedPackageIdentityReady
-      ? "verify-notification-listener-consent"
+      ? notificationListener === undefined
+        ? "verify-notification-listener-consent"
+        : notificationListener.canListen
+          ? "run-notification-proof"
+          : notificationListener.recommendedAction
       : "prepare-sparse-package";
 
   if (dailyUseReadiness.packageIdentityReady !== expectedPackageIdentityReady) {
@@ -1187,8 +1212,8 @@ function validateDailyUseReadiness(dailyUseReadiness, report) {
     throw new TypeError("dailyUseReadiness.borderlessCaptureRecommendedAction must match the current borderless capture gate.");
   }
 
-  if (dailyUseReadiness.notificationBridgePreflightPassed !== expectedPackageIdentityReady) {
-    throw new TypeError("dailyUseReadiness.notificationBridgePreflightPassed must require package identity.");
+  if (dailyUseReadiness.notificationBridgePreflightPassed !== expectedNotificationPreflight) {
+    throw new TypeError("dailyUseReadiness.notificationBridgePreflightPassed must require package identity and notification listener readiness when reported.");
   }
   if (dailyUseReadiness.notificationBridgeRecommendedAction !== expectedNotificationAction) {
     throw new TypeError("dailyUseReadiness.notificationBridgeRecommendedAction must match the current notification bridge gate.");

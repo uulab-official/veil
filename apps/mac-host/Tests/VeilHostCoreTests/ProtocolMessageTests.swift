@@ -19,6 +19,8 @@ struct ProtocolMessageTests {
         #expect(response.packageIdentityStatus?.stage == "packageSigned")
         #expect(response.packageIdentityStatus?.succeeded == false)
         #expect(response.packageIdentityStatus?.statusPath.contains("sparse-package-status.json") == true)
+        #expect(response.notificationListener?.accessStatus == "packageIdentityRequired")
+        #expect(response.notificationListener?.recommendedAction == "prepare-sparse-package")
     }
 
     @Test("decodes app list response")

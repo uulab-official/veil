@@ -1391,6 +1391,71 @@ test("rejects Daily Use notification bridge guidance drift", () => {
   );
 });
 
+test("accepts blocked Windows notification listener consent readiness", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.mac-window-live.json", import.meta.url), "utf8"));
+  report.connection.capabilities.packageIdentity = true;
+  report.connection.packageIdentityStatus.succeeded = true;
+  report.connection.packageIdentityStatus.stage = "registered";
+  report.connection.packageIdentityStatus.message = "Sparse package registered and agent restarted with package identity.";
+  report.connection.notificationListener = {
+    isSupported: true,
+    canListen: false,
+    accessStatus: "denied",
+    recommendedAction: "enable-notification-listener-settings",
+    requiresPackageIdentity: true
+  };
+  report.dailyUseReadiness.packageIdentityReady = true;
+  report.dailyUseReadiness.packageIdentityStatus = report.connection.packageIdentityStatus;
+  report.dailyUseReadiness.packageIdentitySucceeded = true;
+  report.dailyUseReadiness.packageIdentityStage = "registered";
+  report.dailyUseReadiness.packageIdentityMessage = "Sparse package registered and agent restarted with package identity.";
+  report.dailyUseReadiness.borderlessCapturePreflightPassed = true;
+  report.dailyUseReadiness.borderlessCaptureRecommendedAction = "verify-daily-use-integrations";
+  report.dailyUseReadiness.notificationBridgePreflightPassed = false;
+  report.dailyUseReadiness.notificationBridgeRecommendedAction = "enable-notification-listener-settings";
+  report.dailyUseReadiness.recommendedAction = "verify-daily-use-integrations";
+  report.dailyUseReadiness.recommendedCommand = "veil-vmctl app-runtime-action --json --action proof-recommended";
+  report.notificationBridge.recommendedAction = "enable-notification-listener-settings";
+  report.notificationBridge.reason = "Windows notification listener consent is required before Veil can mirror Windows notifications.";
+  report.actions.find((action) => action.id === "runtime.prepareSparsePackage").isAvailable = false;
+  report.actions.find((action) => action.id === "dailyUse.verifyIntegrations").isAvailable = true;
+
+  assert.equal(validateAppRuntimeStatus(report), report);
+});
+
+test("accepts allowed Windows notification listener proof readiness", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.mac-window-live.json", import.meta.url), "utf8"));
+  report.connection.capabilities.packageIdentity = true;
+  report.connection.packageIdentityStatus.succeeded = true;
+  report.connection.packageIdentityStatus.stage = "registered";
+  report.connection.packageIdentityStatus.message = "Sparse package registered and agent restarted with package identity.";
+  report.connection.notificationListener = {
+    isSupported: true,
+    canListen: true,
+    accessStatus: "allowed",
+    recommendedAction: "run-notification-proof",
+    requiresPackageIdentity: true
+  };
+  report.dailyUseReadiness.packageIdentityReady = true;
+  report.dailyUseReadiness.packageIdentityStatus = report.connection.packageIdentityStatus;
+  report.dailyUseReadiness.packageIdentitySucceeded = true;
+  report.dailyUseReadiness.packageIdentityStage = "registered";
+  report.dailyUseReadiness.packageIdentityMessage = "Sparse package registered and agent restarted with package identity.";
+  report.dailyUseReadiness.borderlessCapturePreflightPassed = true;
+  report.dailyUseReadiness.borderlessCaptureRecommendedAction = "verify-daily-use-integrations";
+  report.dailyUseReadiness.notificationBridgePreflightPassed = true;
+  report.dailyUseReadiness.notificationBridgeRecommendedAction = "run-notification-proof";
+  report.dailyUseReadiness.recommendedAction = "verify-daily-use-integrations";
+  report.dailyUseReadiness.recommendedCommand = "veil-vmctl app-runtime-action --json --action proof-recommended";
+  report.notificationBridge.canReceiveNotifications = true;
+  report.notificationBridge.recommendedAction = "run-notification-proof";
+  report.notificationBridge.reason = "Windows notification listener consent is ready; run notification-proof and wait for the first notification.received event.";
+  report.actions.find((action) => action.id === "runtime.prepareSparsePackage").isAvailable = false;
+  report.actions.find((action) => action.id === "dailyUse.verifyIntegrations").isAvailable = true;
+
+  assert.equal(validateAppRuntimeStatus(report), report);
+});
+
 test("rejects available notification consent action before automation exists", () => {
   const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.demo.json", import.meta.url), "utf8"));
   report.actions.find((action) => action.id === "dailyUse.requestNotificationConsent").isAvailable = true;

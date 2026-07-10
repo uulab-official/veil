@@ -205,7 +205,8 @@ test("windows agent reports package identity from the Windows app model API", as
   assert.match(session, /ISparsePackageStatusProbe/);
   assert.match(session, /new WindowsPackageIdentityProbe\(\)/);
   assert.match(session, /new SparsePackageStatusProbe\(\)/);
-  assert.match(session, /\["packageIdentity"\]\s*=\s*packageIdentityProbe\.HasPackageIdentity/);
+  assert.match(session, /var hasPackageIdentity\s*=\s*packageIdentityProbe\.HasPackageIdentity/);
+  assert.match(session, /\["packageIdentity"\]\s*=\s*hasPackageIdentity/);
   assert.match(session, /\["packageIdentityStatus"\]\s*=\s*sparsePackageStatus/);
   assert.doesNotMatch(session, /\["packageIdentity"\]\s*=\s*false/);
   assert.match(packageIdentityProbe, /GetCurrentPackageFullName/);
@@ -223,19 +224,26 @@ test("windows agent wires package-gated Windows notification listener", async ()
   const program = await readFile(resolve(agentRoot, "src/VeilAgent/Program.cs"), "utf8");
   const manifest = await readFile(resolve(agentRoot, "package/AppxManifest.xml"), "utf8");
   const listener = await readFile(resolve(agentRoot, "src/VeilAgent/WindowsUserNotificationListener.cs"), "utf8");
+  const session = await readFile(resolve(agentRoot, "src/VeilAgent/AgentSession.cs"), "utf8");
   const streamer = await readFile(resolve(agentRoot, "src/VeilAgent/WindowsNotificationStreamer.cs"), "utf8");
   const models = await readFile(resolve(agentRoot, "src/VeilAgent/WindowsNotificationModels.cs"), "utf8");
 
   assert.match(project, /net8\.0-windows10\.0\.19041\.0/);
   assert.match(program, /WindowsNotificationListenerFactory\.Create\(packageIdentityProbe\)/);
   assert.match(manifest, /uap3:Capability Name="userNotificationListener"/);
+  assert.match(listener, /IWindowsNotificationAccessProbe/);
+  assert.match(listener, /WindowsNotificationAccessProbe/);
   assert.match(listener, /UserNotificationListener\.Current/);
   assert.match(listener, /GetAccessStatus\(\)\s*!=\s*UserNotificationListenerAccessStatus\.Allowed/);
+  assert.match(listener, /UserNotificationListener\.Current\.GetAccessStatus\(\)/);
   assert.match(listener, /GetNotificationsAsync\(NotificationKinds\.Toast\)/);
   assert.match(listener, /NotificationChanged/);
   assert.match(listener, /KnownNotificationBindings\.ToastGeneric/);
   assert.match(listener, /OperatingSystem\.IsWindows\(\)/);
   assert.match(listener, /packageIdentityProbe\.HasPackageIdentity/);
+  assert.match(session, /IWindowsNotificationAccessProbe/);
+  assert.match(session, /notificationAccessProbe\.ReadStatus\(hasPackageIdentity\)/);
+  assert.match(session, /\["notificationListener"\]/);
   assert.match(streamer, /TryAccept/);
   assert.match(models, /MessageTypes\.NotificationReceived/);
 });

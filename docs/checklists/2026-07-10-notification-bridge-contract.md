@@ -16,6 +16,7 @@ Goal: start the Parallels-style Windows notification bridge without claiming the
 - [x] Added a macOS `UNUserNotificationCenter` presenter for received Windows notification events, with permission-state handling and Swift tests.
 - [x] Added a Windows agent notification streamer boundary that broadcasts `notification.received` events and filters duplicate or invalid notifications under .NET tests.
 - [x] Moved the Windows agent to a Windows SDK-versioned target framework and added a `UserNotificationListener` adapter that syncs toast notifications only when package identity and listener access are available.
+- [x] Added `agent.health.response.notificationListener` so the host can show whether the blocker is sparse package identity, Windows listener consent, denied settings, or a ready proof path.
 - [x] Added `veil-vmctl notification-proof` plus a `harness/notification-proof` validator for recording one guest-to-host Windows notification event as release evidence.
 - [x] Documented the protocol and harness contract.
 

@@ -22,6 +22,24 @@ public class AgentSessionHealthTests
         public JsonObject? ReadStatus() => Status;
     }
 
+    private sealed class FakeNotificationAccessProbe : IWindowsNotificationAccessProbe
+    {
+        public JsonObject Status { get; init; } = new()
+        {
+            ["isSupported"] = true,
+            ["canListen"] = false,
+            ["accessStatus"] = "packageIdentityRequired",
+            ["recommendedAction"] = "prepare-sparse-package",
+            ["requiresPackageIdentity"] = true
+        };
+
+        public JsonObject ReadStatus(bool hasPackageIdentity)
+        {
+            Status["packageIdentityInput"] = hasPackageIdentity;
+            return Status;
+        }
+    }
+
     private sealed class NoOpWindowsDesktop : IWindowsDesktop
     {
         public Task<LaunchedWindow> LaunchAppAsync(WindowsAppDescriptor app, CancellationToken cancellationToken) =>
@@ -84,6 +102,41 @@ public class AgentSessionHealthTests
         var response = Assert.Single(replies.DirectReplies);
         Assert.Equal(MessageTypes.AgentHealthResponse, response["type"]!.GetValue<string>());
         Assert.Equal(hasPackageIdentity, response["capabilities"]!["packageIdentity"]!.GetValue<bool>());
+    }
+
+    [Fact]
+    public async Task HealthResponseIncludesNotificationListenerStatus()
+    {
+        var session = new AgentSession(
+            new NoOpWindowsDesktop(),
+            new NoOpFrameCapture(),
+            new FakePackageIdentityProbe(true),
+            notificationAccessProbe: new FakeNotificationAccessProbe
+            {
+                Status = new JsonObject
+                {
+                    ["isSupported"] = true,
+                    ["canListen"] = true,
+                    ["accessStatus"] = "allowed",
+                    ["recommendedAction"] = "run-notification-proof",
+                    ["requiresPackageIdentity"] = true
+                }
+            }
+        );
+
+        var replies = await session.HandleAsync(new JsonObject
+        {
+            ["type"] = MessageTypes.AgentHealthRequest,
+            ["requestId"] = "req_health"
+        });
+
+        var response = Assert.Single(replies.DirectReplies);
+        var notificationListener = Assert.IsType<JsonObject>(response["notificationListener"]);
+        Assert.True(notificationListener["isSupported"]!.GetValue<bool>());
+        Assert.True(notificationListener["canListen"]!.GetValue<bool>());
+        Assert.Equal("allowed", notificationListener["accessStatus"]!.GetValue<string>());
+        Assert.Equal("run-notification-proof", notificationListener["recommendedAction"]!.GetValue<string>());
+        Assert.True(notificationListener["packageIdentityInput"]!.GetValue<bool>());
     }
 
     [Fact]
