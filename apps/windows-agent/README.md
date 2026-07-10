@@ -37,6 +37,11 @@ The agent also takes a named mutex per configured port, so duplicate launches
 for the same forwarded WebSocket endpoint exit instead of racing for the
 listener.
 
+The listener also survives short-lived TCP reachability probes that reset while
+Windows is accepting the connection. Those probes are not valid WebSocket
+sessions and must not terminate the long-running guest agent; a transient
+accept reset is logged and the listener continues waiting for the next client.
+
 ## Install In Windows
 
 After Windows 11 Arm reaches the desktop, use the bundle that the macOS host stages on the `VEIL_AUTO` media or in the VM shared folder:

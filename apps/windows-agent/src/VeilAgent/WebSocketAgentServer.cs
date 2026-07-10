@@ -49,10 +49,28 @@ public sealed class WebSocketAgentServer
 
         while (!cancellationToken.IsCancellationRequested)
         {
-            var client = await listener.AcceptTcpClientAsync(cancellationToken);
+            TcpClient client;
+            try
+            {
+                client = await listener.AcceptTcpClientAsync(cancellationToken);
+            }
+            catch (SocketException error) when (IsTransientAcceptSocketError(error.SocketErrorCode))
+            {
+                // A client can reset the connection while Windows is accepting it. This happens
+                // with short-lived TCP probes and must not terminate the long-running agent.
+                Console.Error.WriteLine(
+                    $"WebSocketAgentServer: ignoring transient accept failure {error.SocketErrorCode}."
+                );
+                continue;
+            }
             _ = Task.Run(() => HandleClientAsync(client, cancellationToken), cancellationToken);
         }
     }
+
+    internal static bool IsTransientAcceptSocketError(SocketError error) => error is
+        SocketError.ConnectionAborted or
+        SocketError.ConnectionReset or
+        SocketError.Interrupted;
 
     private async Task HandleClientAsync(TcpClient client, CancellationToken cancellationToken)
     {

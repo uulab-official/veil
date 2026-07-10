@@ -79,6 +79,8 @@ test("windows agent listens without HttpListener URL ACL requirements", async ()
   assert.match(endpoint, /IPAddress\.Any/);
   assert.match(server, /TcpListener\(endpoint\.ListenAddress,\s*endpoint\.Port\)/);
   assert.match(server, /AcceptTcpClientAsync\(cancellationToken\)/);
+  assert.match(server, /IsTransientAcceptSocketError/);
+  assert.match(server, /SocketError\.ConnectionReset/);
   assert.match(server, /Sec-WebSocket-Accept/);
   assert.match(server, /WebSocket\.CreateFromStream/);
   assert.doesNotMatch(server, /HttpListener/);
