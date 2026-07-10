@@ -6,6 +6,16 @@ namespace VeilAgent.Tests;
 
 public class WindowsNotificationStreamerTests
 {
+    private sealed class FakePackageIdentityProbe : IPackageIdentityProbe
+    {
+        public FakePackageIdentityProbe(bool hasPackageIdentity)
+        {
+            HasPackageIdentity = hasPackageIdentity;
+        }
+
+        public bool HasPackageIdentity { get; }
+    }
+
     [Fact]
     public async Task BroadcastsWindowsNotificationsAsProtocolEvents()
     {
@@ -90,6 +100,27 @@ public class WindowsNotificationStreamerTests
         var notification = Assert.Single(broadcasts);
         Assert.Equal("toast:duplicate", notification["notificationId"]!.GetValue<string>());
         Assert.Equal("First", notification["body"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public void FactoryKeepsListenerDisabledWithoutPackageIdentity()
+    {
+        var listener = WindowsNotificationListenerFactory.Create(new FakePackageIdentityProbe(false));
+
+        Assert.IsType<DisabledWindowsNotificationListener>(listener);
+    }
+
+    [Fact]
+    public void FactoryKeepsListenerDisabledOutsideWindows()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        var listener = WindowsNotificationListenerFactory.Create(new FakePackageIdentityProbe(true));
+
+        Assert.IsType<DisabledWindowsNotificationListener>(listener);
     }
 
     private sealed class ScriptedNotificationListener : IWindowsNotificationListener

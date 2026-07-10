@@ -569,7 +569,7 @@ Rules:
 - `appId`, `appName`, `body`, and `sourceAumid` are optional because Windows notifications can come from apps Veil did not launch directly.
 - The macOS host keeps only a short recent-notification window in app-runtime status and ignores duplicate `notificationId` values.
 - The Windows agent notification streamer also drops duplicate `notificationId` values and notifications missing a non-empty title before broadcasting to host clients.
-- Real guest emission requires the signed sparse package identity and Windows `UserNotificationListener` consent gate described by `dailyUseReadiness.notificationBridgeRecommendedAction`.
+- Real guest emission requires the signed sparse package identity and Windows `UserNotificationListener` consent gate described by `dailyUseReadiness.notificationBridgeRecommendedAction`. The first agent adapter syncs current toast notifications and re-syncs on Windows notification changes; live proof still has to show that this path runs inside the signed package on the real guest.
 
 ## Error
 

@@ -14,9 +14,10 @@ var desktop = new WindowsDesktop();
 var capture = new GdiWindowFrameCapture();
 var streamer = new WindowFrameStreamer(capture);
 var clipboardStreamer = new ClipboardTextStreamer(desktop);
-var session = new AgentSession(desktop, capture);
+var packageIdentityProbe = new WindowsPackageIdentityProbe();
+var session = new AgentSession(desktop, capture, packageIdentityProbe);
 var windowDiscoveryStreamer = new WindowDiscoveryStreamer(session, desktop);
-var notificationStreamer = new WindowsNotificationStreamer(new DisabledWindowsNotificationListener());
+var notificationStreamer = new WindowsNotificationStreamer(WindowsNotificationListenerFactory.Create(packageIdentityProbe));
 var server = new WebSocketAgentServer(endpoint, session, streamer, clipboardStreamer, windowDiscoveryStreamer, notificationStreamer);
 
 Console.WriteLine($"Veil Windows Agent listening on {endpoint.WebSocketUrl}");
