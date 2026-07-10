@@ -1090,6 +1090,11 @@ struct VeilVMControl {
         print("Pending launch action: \(report.pendingLaunch.recommendedAction)")
         print("Apps: \(report.apps.count)")
         print("Open Windows app windows: \(report.mirrorSessions.count)")
+        for session in report.mirrorSessions {
+            let age = session.latestFrameAgeMilliseconds.map { "\($0)ms old" } ?? "no frame yet"
+            let interval = session.latestFrameIntervalMilliseconds.map { ", \($0)ms interval" } ?? ""
+            print("Window frame stream \(session.windowId): \(session.frameStreamStatus.rawValue) (\(age)\(interval), \(session.receivedFrameCount) frames)")
+        }
         print("Dock integration: \(report.dockIntegration.isEnabled ? "enabled" : "disabled")")
         print("Dock pending launches: \(report.dockIntegration.pendingLaunchCount)")
         print("Dock runtime badge: \(report.dockIntegration.badgeLabel ?? "none")")
@@ -1126,6 +1131,7 @@ struct VeilVMControl {
         print("Mac window integration: \(report.macWindowIntegration.isEnabled ? "enabled" : "disabled")")
         print("Mac windows auto-open: \(report.macWindowIntegration.acceptsGuestWindowEvents ? "ready" : "waiting")")
         print("Mac mirrored windows: \(report.macWindowIntegration.mirroredWindowCount)")
+        print("Mac frame streams: \(report.macWindowIntegration.freshFrameWindowCount) fresh, \(report.macWindowIntegration.delayedFrameWindowCount) delayed, \(report.macWindowIntegration.staleFrameWindowCount) stale")
         print("Mac foregroundable windows: \(report.macWindowIntegration.foregroundableWindowCount)")
         if let foregroundWindowId = report.macWindowIntegration.foregroundWindowId {
             print("Mac foreground window: \(foregroundWindowId)")

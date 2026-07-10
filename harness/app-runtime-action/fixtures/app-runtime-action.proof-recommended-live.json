@@ -86,7 +86,10 @@
       "reason": "Guest HWND sessions are mirrored as macOS windows.",
       "foregroundableWindowCount": 1,
       "foregroundWindowId": "hwnd:0003029A",
-      "foregroundWindowTitle": "Untitled - Notepad"
+      "foregroundWindowTitle": "Untitled - Notepad",
+      "freshFrameWindowCount": 0,
+      "delayedFrameWindowCount": 0,
+      "staleFrameWindowCount": 0
     },
     "quietRuntime": {
       "isEnabled": true,
@@ -125,7 +128,10 @@
         "captureState": "pending",
         "canFocus": true,
         "canClose": true,
-        "canSendInput": true
+        "canSendInput": true,
+        "frameStreamStatus": "waitingForFirstFrame",
+        "receivedFrameCount": 0,
+        "frameStreamRecommendedAction": "wait-for-first-frame"
       }
     ],
     "restorableAppIds": [

@@ -607,6 +607,12 @@ test("rejects Dock integration counts that drift from mirrored sessions", () => 
     appId: "winapp_notepad",
     title: "Untitled - Notepad",
     captureState: "streaming",
+    frameStreamStatus: "fresh",
+    latestFrameReceivedAt: report.generatedAt,
+    latestFrameAgeMilliseconds: 0,
+    latestFrameIntervalMilliseconds: 0,
+    receivedFrameCount: 1,
+    frameStreamRecommendedAction: "none",
     canFocus: true,
     canClose: true,
     canSendInput: true

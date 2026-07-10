@@ -1085,6 +1085,9 @@ test("rejects close-all actions that leave mirrored sessions open", () => {
       appId: "winapp_notepad",
       title: "Untitled - Notepad",
       captureState: "pending",
+      frameStreamStatus: "waitingForFirstFrame",
+      receivedFrameCount: 0,
+      frameStreamRecommendedAction: "wait-for-first-frame",
       canFocus: true,
       canClose: true,
       canSendInput: true
@@ -1103,6 +1106,9 @@ test("rejects close-all actions that leave mirrored sessions open", () => {
   report.status.macWindowIntegration.foregroundWindowId = "hwnd:STILL_OPEN";
   report.status.macWindowIntegration.foregroundWindowTitle = "Untitled - Notepad";
   report.status.macWindowIntegration.pendingFrameWindowCount = 1;
+  report.status.macWindowIntegration.freshFrameWindowCount = 0;
+  report.status.macWindowIntegration.delayedFrameWindowCount = 0;
+  report.status.macWindowIntegration.staleFrameWindowCount = 0;
   report.status.macWindowIntegration.hidesLauncherWhenMirroring = true;
   report.status.launcherVisibility.shouldHideMainWindow = true;
   report.status.launcherVisibility.recommendedAction = "hide-main-window-use-app-windows";

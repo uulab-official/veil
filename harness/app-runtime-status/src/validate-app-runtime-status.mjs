@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 const VALID_CONNECTION_MODES = new Set(["agent", "demo"]);
 const VALID_PHASES = new Set(["idle", "loading", "connected", "launching", "failed"]);
 const VALID_CAPTURE_STATES = new Set(["unavailable", "pending", "streaming"]);
+const VALID_FRAME_STREAM_STATUSES = new Set(["unavailable", "waitingForFirstFrame", "fresh", "delayed", "stale"]);
 const VALID_CONSOLE_PREVIEW_STATES = new Set(["fresh", "stale", "unavailable"]);
 const VALID_AUTOMATIC_INSTALL_MEDIA_STATES = new Set(["current", "stale", "missing", "unavailable"]);
 const VALID_INSTALL_EVIDENCE_KINDS = new Set([
@@ -419,6 +420,42 @@ function validateMirrorSessions(sessions) {
     if (!VALID_CAPTURE_STATES.has(session.captureState)) {
       throw new TypeError(`Unsupported capture state: ${session.captureState}`);
     }
+    requireString(session.frameStreamStatus, "session.frameStreamStatus");
+    if (!VALID_FRAME_STREAM_STATUSES.has(session.frameStreamStatus)) {
+      throw new TypeError(`Unsupported frame stream status: ${session.frameStreamStatus}`);
+    }
+    requireNonNegativeInteger(session.receivedFrameCount, "session.receivedFrameCount");
+    requireString(session.frameStreamRecommendedAction, "session.frameStreamRecommendedAction");
+    if (session.latestFrameReceivedAt !== undefined) {
+      requireString(session.latestFrameReceivedAt, "session.latestFrameReceivedAt");
+      if (Number.isNaN(Date.parse(session.latestFrameReceivedAt))) {
+        throw new TypeError("session.latestFrameReceivedAt must be an ISO date.");
+      }
+    }
+    if (session.latestFrameAgeMilliseconds !== undefined) {
+      requireNonNegativeInteger(session.latestFrameAgeMilliseconds, "session.latestFrameAgeMilliseconds");
+    }
+    if (session.latestFrameIntervalMilliseconds !== undefined) {
+      requireNonNegativeInteger(session.latestFrameIntervalMilliseconds, "session.latestFrameIntervalMilliseconds");
+    }
+    if (session.captureState === "unavailable" && session.frameStreamStatus !== "unavailable") {
+      throw new TypeError("Unavailable capture sessions must report unavailable frame streams.");
+    }
+    if (session.captureState !== "unavailable" && session.receivedFrameCount === 0 && session.frameStreamStatus !== "waitingForFirstFrame") {
+      throw new TypeError("Capture sessions without received frames must wait for the first frame.");
+    }
+    if (session.receivedFrameCount === 0) {
+      if (session.latestFrameReceivedAt !== undefined || session.latestFrameAgeMilliseconds !== undefined || session.latestFrameIntervalMilliseconds !== undefined) {
+        throw new TypeError("Frame timing fields require at least one received frame.");
+      }
+    } else {
+      if (session.latestFrameReceivedAt === undefined || session.latestFrameAgeMilliseconds === undefined) {
+        throw new TypeError("Received frames require latest frame timing fields.");
+      }
+      if (session.frameStreamStatus === "waitingForFirstFrame" || session.frameStreamStatus === "unavailable") {
+        throw new TypeError("Received frames require an active frame stream status.");
+      }
+    }
     requireBoolean(session.canFocus, "session.canFocus");
     requireBoolean(session.canClose, "session.canClose");
     requireBoolean(session.canSendInput, "session.canSendInput");
@@ -438,6 +475,9 @@ function validateMacWindowIntegration(macWindowIntegration, mirrorSessions, conn
   requireNonNegativeInteger(macWindowIntegration.foregroundableWindowCount, "macWindowIntegration.foregroundableWindowCount");
   requireNonNegativeInteger(macWindowIntegration.pendingFrameWindowCount, "macWindowIntegration.pendingFrameWindowCount");
   requireNonNegativeInteger(macWindowIntegration.streamingWindowCount, "macWindowIntegration.streamingWindowCount");
+  requireNonNegativeInteger(macWindowIntegration.freshFrameWindowCount, "macWindowIntegration.freshFrameWindowCount");
+  requireNonNegativeInteger(macWindowIntegration.delayedFrameWindowCount, "macWindowIntegration.delayedFrameWindowCount");
+  requireNonNegativeInteger(macWindowIntegration.staleFrameWindowCount, "macWindowIntegration.staleFrameWindowCount");
   requireString(macWindowIntegration.reason, "macWindowIntegration.reason");
 
   if (macWindowIntegration.mirroredWindowCount !== mirrorSessions.length) {
@@ -472,8 +512,24 @@ function validateMacWindowIntegration(macWindowIntegration, mirrorSessions, conn
     throw new TypeError("macWindowIntegration.streamingWindowCount must match streaming mirror sessions.");
   }
 
+  if (macWindowIntegration.freshFrameWindowCount !== mirrorSessions.filter((session) => session.frameStreamStatus === "fresh").length) {
+    throw new TypeError("macWindowIntegration.freshFrameWindowCount must match fresh frame streams.");
+  }
+
+  if (macWindowIntegration.delayedFrameWindowCount !== mirrorSessions.filter((session) => session.frameStreamStatus === "delayed").length) {
+    throw new TypeError("macWindowIntegration.delayedFrameWindowCount must match delayed frame streams.");
+  }
+
+  if (macWindowIntegration.staleFrameWindowCount !== mirrorSessions.filter((session) => session.frameStreamStatus === "stale").length) {
+    throw new TypeError("macWindowIntegration.staleFrameWindowCount must match stale frame streams.");
+  }
+
   if (macWindowIntegration.pendingFrameWindowCount + macWindowIntegration.streamingWindowCount > macWindowIntegration.mirroredWindowCount) {
     throw new TypeError("macWindowIntegration frame counts cannot exceed mirroredWindowCount.");
+  }
+
+  if (macWindowIntegration.freshFrameWindowCount + macWindowIntegration.delayedFrameWindowCount + macWindowIntegration.staleFrameWindowCount > macWindowIntegration.streamingWindowCount) {
+    throw new TypeError("Mac frame stream quality counts cannot exceed streamingWindowCount.");
   }
 
   if (macWindowIntegration.acceptsGuestWindowEvents !== connection.hasLiveAgentConnection) {

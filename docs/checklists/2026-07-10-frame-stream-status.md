@@ -1,0 +1,35 @@
+# Frame Stream Status Contract
+
+Date: 2026-07-10
+
+Goal: make mirrored Windows app surfaces report whether their frame stream is missing, fresh, delayed, or stale before claiming additional Parallels-style polish.
+
+## Completed
+
+- [x] Added `WindowFrameStreamStatus` to the macOS host model.
+- [x] Added per-HWND frame stream fields to `WindowsAppRuntimeWindowStatus`.
+- [x] Added aggregate fresh/delayed/stale frame counts to `macWindowIntegration`.
+- [x] Updated `veil-vmctl app-runtime-status` text output to show per-window frame stream quality.
+- [x] Updated app-runtime status/action/review fixtures and validators.
+- [x] Added Swift coverage for first-frame waiting and fresh frame age reporting.
+
+## Status Semantics
+
+- `unavailable`: capture cannot produce frames for this mirror session.
+- `waitingForFirstFrame`: capture is pending or streaming, but no frame has arrived yet.
+- `fresh`: latest frame age is at most 1 second.
+- `delayed`: latest frame age is over 1 second and at most 5 seconds.
+- `stale`: latest frame age is over 5 seconds.
+
+## Verification
+
+- [x] `swift test --package-path apps/mac-host`
+- [x] `npm test --prefix harness/app-runtime-status`
+- [x] `npm test --prefix harness/app-runtime-action`
+- [x] `npm test --prefix harness/app-runtime-review`
+
+## Still Open
+
+- [ ] Tune live frame latency across Notepad, Calculator, and Paint after this status contract is visible in UI.
+- [ ] Wire stale frame streams to an explicit frame-subscription restart action instead of status guidance only.
+- [ ] Use this signal in the main launcher/window chrome so blank app surfaces explain themselves without exposing diagnostic noise.

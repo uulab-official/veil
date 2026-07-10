@@ -87,7 +87,10 @@
       "pendingFrameWindowCount": 0,
       "streamingWindowCount": 0,
       "reason": "Waiting for the live Windows agent before guest HWND events can open macOS windows automatically.",
-      "foregroundableWindowCount": 0
+      "foregroundableWindowCount": 0,
+      "freshFrameWindowCount": 0,
+      "delayedFrameWindowCount": 0,
+      "staleFrameWindowCount": 0
     },
     "quietRuntime": {
       "isEnabled": true,

@@ -217,7 +217,10 @@
     "pendingFrameWindowCount": 0,
     "reason": "Waiting for the Windows app connection before opening app windows on macOS automatically.",
     "streamingWindowCount": 0,
-    "foregroundableWindowCount": 0
+    "foregroundableWindowCount": 0,
+    "freshFrameWindowCount": 0,
+    "delayedFrameWindowCount": 0,
+    "staleFrameWindowCount": 0
   },
   "quietRuntime": {
     "canQuietRuntime": false,

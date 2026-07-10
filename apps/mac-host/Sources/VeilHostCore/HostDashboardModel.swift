@@ -49,6 +49,14 @@ public enum WindowCaptureState: String, Codable, Equatable, Sendable {
     case streaming
 }
 
+public enum WindowFrameStreamStatus: String, Codable, Equatable, Sendable {
+    case unavailable
+    case waitingForFirstFrame
+    case fresh
+    case delayed
+    case stale
+}
+
 public struct WindowFrameTiming: Codable, Equatable, Sendable {
     public var firstFrameReceivedAt: Date
     public var latestFrameReceivedAt: Date
@@ -245,6 +253,12 @@ public struct WindowsAppRuntimeWindowStatus: Codable, Equatable, Sendable {
     public var appId: String
     public var title: String
     public var captureState: WindowCaptureState
+    public var frameStreamStatus: WindowFrameStreamStatus
+    public var latestFrameReceivedAt: Date?
+    public var latestFrameAgeMilliseconds: Int?
+    public var latestFrameIntervalMilliseconds: Int?
+    public var receivedFrameCount: Int
+    public var frameStreamRecommendedAction: String
     public var canFocus: Bool
     public var canClose: Bool
     public var canSendInput: Bool
@@ -254,6 +268,12 @@ public struct WindowsAppRuntimeWindowStatus: Codable, Equatable, Sendable {
         appId: String,
         title: String,
         captureState: WindowCaptureState,
+        frameStreamStatus: WindowFrameStreamStatus,
+        latestFrameReceivedAt: Date? = nil,
+        latestFrameAgeMilliseconds: Int? = nil,
+        latestFrameIntervalMilliseconds: Int? = nil,
+        receivedFrameCount: Int = 0,
+        frameStreamRecommendedAction: String,
         canFocus: Bool,
         canClose: Bool,
         canSendInput: Bool
@@ -262,6 +282,12 @@ public struct WindowsAppRuntimeWindowStatus: Codable, Equatable, Sendable {
         self.appId = appId
         self.title = title
         self.captureState = captureState
+        self.frameStreamStatus = frameStreamStatus
+        self.latestFrameReceivedAt = latestFrameReceivedAt
+        self.latestFrameAgeMilliseconds = latestFrameAgeMilliseconds
+        self.latestFrameIntervalMilliseconds = latestFrameIntervalMilliseconds
+        self.receivedFrameCount = receivedFrameCount
+        self.frameStreamRecommendedAction = frameStreamRecommendedAction
         self.canFocus = canFocus
         self.canClose = canClose
         self.canSendInput = canSendInput
@@ -374,6 +400,9 @@ public struct WindowsAppRuntimeMacWindowIntegrationStatus: Codable, Equatable, S
     public var foregroundWindowTitle: String?
     public var pendingFrameWindowCount: Int
     public var streamingWindowCount: Int
+    public var freshFrameWindowCount: Int
+    public var delayedFrameWindowCount: Int
+    public var staleFrameWindowCount: Int
     public var reason: String
 
     public init(
@@ -387,6 +416,9 @@ public struct WindowsAppRuntimeMacWindowIntegrationStatus: Codable, Equatable, S
         foregroundWindowTitle: String? = nil,
         pendingFrameWindowCount: Int,
         streamingWindowCount: Int,
+        freshFrameWindowCount: Int,
+        delayedFrameWindowCount: Int,
+        staleFrameWindowCount: Int,
         reason: String
     ) {
         self.isEnabled = isEnabled
@@ -399,6 +431,9 @@ public struct WindowsAppRuntimeMacWindowIntegrationStatus: Codable, Equatable, S
         self.foregroundWindowTitle = foregroundWindowTitle
         self.pendingFrameWindowCount = pendingFrameWindowCount
         self.streamingWindowCount = streamingWindowCount
+        self.freshFrameWindowCount = freshFrameWindowCount
+        self.delayedFrameWindowCount = delayedFrameWindowCount
+        self.staleFrameWindowCount = staleFrameWindowCount
         self.reason = reason
     }
 }
@@ -1211,7 +1246,7 @@ public final class HostDashboardModel {
     ) -> WindowsAppRuntimeStatusReport {
         let localRuntime = localRuntimeWithGuestAgentEvidence(localRuntime ?? localRuntimeStatus(snapshot: nil))
         let quietRuntime = quietRuntimeStatus(localRuntime: localRuntime)
-        let macWindowIntegration = macWindowIntegrationStatus()
+        let macWindowIntegration = macWindowIntegrationStatus(generatedAt: generatedAt)
         let launcherVisibility = launcherVisibilityStatus(
             macWindowIntegration: macWindowIntegration
         )
@@ -1280,11 +1315,18 @@ public final class HostDashboardModel {
                 )
             },
             mirrorSessions: mirrorSessions.map { session in
-                WindowsAppRuntimeWindowStatus(
+                let frameStreamStatus = frameStreamStatus(for: session, generatedAt: generatedAt)
+                return WindowsAppRuntimeWindowStatus(
                     windowId: session.id,
                     appId: session.window.appId,
                     title: session.window.title,
                     captureState: session.captureState,
+                    frameStreamStatus: frameStreamStatus,
+                    latestFrameReceivedAt: session.frameTiming?.latestFrameReceivedAt,
+                    latestFrameAgeMilliseconds: latestFrameAgeMilliseconds(for: session, generatedAt: generatedAt),
+                    latestFrameIntervalMilliseconds: session.frameTiming?.latestFrameIntervalMilliseconds,
+                    receivedFrameCount: session.frameTiming?.receivedFrameCount ?? 0,
+                    frameStreamRecommendedAction: frameStreamRecommendedAction(for: frameStreamStatus),
                     canFocus: canFocusMirrorSession(windowId: session.id),
                     canClose: canCloseMirrorSession(windowId: session.id),
                     canSendInput: canSendInput(to: session.id)
@@ -2516,15 +2558,79 @@ public final class HostDashboardModel {
         return localRuntime.state == .running || localRuntime.state == .suspended
     }
 
-    public func macWindowIntegrationStatus() -> WindowsAppRuntimeMacWindowIntegrationStatus {
+    private static let freshFrameAgeThresholdMilliseconds = 1_000
+    private static let delayedFrameAgeThresholdMilliseconds = 5_000
+
+    private func latestFrameAgeMilliseconds(
+        for session: WindowMirrorSession,
+        generatedAt: Date
+    ) -> Int? {
+        guard let latestFrameReceivedAt = session.frameTiming?.latestFrameReceivedAt else {
+            return nil
+        }
+
+        return max(0, Int((generatedAt.timeIntervalSince(latestFrameReceivedAt) * 1000).rounded()))
+    }
+
+    private func frameStreamStatus(
+        for session: WindowMirrorSession,
+        generatedAt: Date
+    ) -> WindowFrameStreamStatus {
+        guard session.captureState != .unavailable else {
+            return .unavailable
+        }
+
+        guard let ageMilliseconds = latestFrameAgeMilliseconds(for: session, generatedAt: generatedAt) else {
+            return .waitingForFirstFrame
+        }
+
+        if ageMilliseconds <= Self.freshFrameAgeThresholdMilliseconds {
+            return .fresh
+        }
+
+        if ageMilliseconds <= Self.delayedFrameAgeThresholdMilliseconds {
+            return .delayed
+        }
+
+        return .stale
+    }
+
+    private func frameStreamRecommendedAction(
+        for status: WindowFrameStreamStatus
+    ) -> String {
+        switch status {
+        case .unavailable:
+            return "enable-window-capture"
+        case .waitingForFirstFrame:
+            return "wait-for-first-frame"
+        case .fresh:
+            return "none"
+        case .delayed:
+            return "refresh-runtime-status"
+        case .stale:
+            return "restart-frame-subscription"
+        }
+    }
+
+    public func macWindowIntegrationStatus(
+        generatedAt: Date = Date()
+    ) -> WindowsAppRuntimeMacWindowIntegrationStatus {
         let pendingFrameWindowCount = mirrorSessions.filter { $0.captureState == .pending }.count
         let streamingWindowCount = mirrorSessions.filter { $0.captureState == .streaming }.count
+        let frameStatuses = mirrorSessions.map { frameStreamStatus(for: $0, generatedAt: generatedAt) }
+        let freshFrameWindowCount = frameStatuses.filter { $0 == .fresh }.count
+        let delayedFrameWindowCount = frameStatuses.filter { $0 == .delayed }.count
+        let staleFrameWindowCount = frameStatuses.filter { $0 == .stale }.count
         let reason: String
 
         if !hasLiveAgentConnection {
             reason = "Waiting for the Windows app connection before opening app windows on macOS automatically."
         } else if mirrorSessions.isEmpty {
             reason = "Ready to open the next Windows app as a macOS window."
+        } else if staleFrameWindowCount > 0 {
+            reason = "Windows app windows are mirrored, but at least one frame stream is stale."
+        } else if delayedFrameWindowCount > 0 {
+            reason = "Windows app windows are mirrored, with at least one delayed frame stream."
         } else {
             reason = "Windows app windows are mirrored as macOS windows."
         }
@@ -2540,6 +2646,9 @@ public final class HostDashboardModel {
             foregroundWindowTitle: mirrorSessions.last?.window.title,
             pendingFrameWindowCount: pendingFrameWindowCount,
             streamingWindowCount: streamingWindowCount,
+            freshFrameWindowCount: freshFrameWindowCount,
+            delayedFrameWindowCount: delayedFrameWindowCount,
+            staleFrameWindowCount: staleFrameWindowCount,
             reason: reason
         )
     }

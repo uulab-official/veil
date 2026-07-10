@@ -106,7 +106,10 @@
       "reason": "Waiting for the live Windows agent before guest HWND events can open macOS windows automatically.",
       "foregroundableWindowCount": 1,
       "foregroundWindowId": "hwnd:DEMO0001",
-      "foregroundWindowTitle": "Untitled - Notepad"
+      "foregroundWindowTitle": "Untitled - Notepad",
+      "freshFrameWindowCount": 0,
+      "delayedFrameWindowCount": 0,
+      "staleFrameWindowCount": 0
     },
     "quietRuntime": {
       "isEnabled": true,
@@ -147,7 +150,10 @@
         "captureState": "unavailable",
         "canFocus": true,
         "canClose": true,
-        "canSendInput": false
+        "canSendInput": false,
+        "frameStreamStatus": "unavailable",
+        "receivedFrameCount": 0,
+        "frameStreamRecommendedAction": "enable-window-capture"
       }
     ],
     "restorableAppIds": [

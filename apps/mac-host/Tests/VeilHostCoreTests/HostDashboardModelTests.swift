@@ -56,6 +56,9 @@ struct HostDashboardModelTests {
             foregroundableWindowCount: 0,
             pendingFrameWindowCount: 0,
             streamingWindowCount: 0,
+            freshFrameWindowCount: 0,
+            delayedFrameWindowCount: 0,
+            staleFrameWindowCount: 0,
             reason: "Waiting."
         )
         let menuBarIntegration = WindowsAppRuntimeMenuBarIntegrationStatus(
@@ -308,6 +311,18 @@ struct HostDashboardModelTests {
         #expect(session.frameTiming?.latestFrameReceivedAt == secondFrameAt)
         #expect(session.frameTiming?.latestFrameIntervalMilliseconds == 125)
         #expect(session.frameTiming?.receivedFrameCount == 2)
+
+        let report = model.runtimeStatusReport(generatedAt: Date(timeIntervalSince1970: 1_000.625))
+        let windowStatus = try #require(report.mirrorSessions.first)
+        #expect(windowStatus.frameStreamStatus == .fresh)
+        #expect(windowStatus.latestFrameReceivedAt == secondFrameAt)
+        #expect(windowStatus.latestFrameAgeMilliseconds == 500)
+        #expect(windowStatus.latestFrameIntervalMilliseconds == 125)
+        #expect(windowStatus.receivedFrameCount == 2)
+        #expect(windowStatus.frameStreamRecommendedAction == "none")
+        #expect(report.macWindowIntegration.freshFrameWindowCount == 1)
+        #expect(report.macWindowIntegration.delayedFrameWindowCount == 0)
+        #expect(report.macWindowIntegration.staleFrameWindowCount == 0)
     }
 
     @Test("routes a protocol frame message into the matching mirror session")
@@ -798,6 +813,11 @@ struct HostDashboardModelTests {
         #expect(report.apps.map(\.canLaunchNow) == [true])
         #expect(report.mirrorSessions.map(\.windowId) == ["hwnd:0003029A"])
         #expect(report.mirrorSessions.map(\.title) == ["Untitled - Notepad"])
+        #expect(report.mirrorSessions.map(\.frameStreamStatus) == [.waitingForFirstFrame])
+        #expect(report.mirrorSessions.map(\.latestFrameAgeMilliseconds) == [nil])
+        #expect(report.mirrorSessions.map(\.latestFrameIntervalMilliseconds) == [nil])
+        #expect(report.mirrorSessions.map(\.receivedFrameCount) == [0])
+        #expect(report.mirrorSessions.map(\.frameStreamRecommendedAction) == ["wait-for-first-frame"])
         #expect(report.mirrorSessions.map(\.canFocus) == [true])
         #expect(report.mirrorSessions.map(\.canClose) == [true])
         #expect(report.mirrorSessions.map(\.canSendInput) == [true])
@@ -853,6 +873,9 @@ struct HostDashboardModelTests {
         #expect(report.macWindowIntegration.foregroundWindowTitle == "Untitled - Notepad")
         #expect(report.macWindowIntegration.pendingFrameWindowCount == 1)
         #expect(report.macWindowIntegration.streamingWindowCount == 0)
+        #expect(report.macWindowIntegration.freshFrameWindowCount == 0)
+        #expect(report.macWindowIntegration.delayedFrameWindowCount == 0)
+        #expect(report.macWindowIntegration.staleFrameWindowCount == 0)
         #expect(report.macWindowIntegration.reason == "Windows app windows are mirrored as macOS windows.")
         #expect(!report.macWindowIntegration.reason.contains("Windows agent"))
         #expect(!report.macWindowIntegration.reason.contains("HWND"))

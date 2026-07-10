@@ -152,12 +152,18 @@ Windows if needed, and let the reconnect path open the mirrored macOS app
 window after the guest agent is ready.
 `macWindowIntegration` records whether a live agent can feed guest HWND events
 into automatic macOS app-window presentation, including mirrored, pending-frame,
-streaming, and foregroundable window counts. The foregroundable count must move
-with mirrored HWND sessions so successful launch, restore, and pending-launch
-fulfillment reports prove the Windows app can be brought forward as a macOS
-window instead of merely existing inside the guest. When mirrored windows are
-open, `foregroundWindowId` and `foregroundWindowTitle` name the HWND that
-Dock/menu bring-forward actions should make frontmost.
+streaming, foregroundable, fresh-frame, delayed-frame, and stale-frame window
+counts. Each `mirrorSessions[]` entry also carries `frameStreamStatus`,
+`latestFrameReceivedAt`, `latestFrameAgeMilliseconds`,
+`latestFrameIntervalMilliseconds`, `receivedFrameCount`, and
+`frameStreamRecommendedAction` so app UI and CLI output can distinguish "waiting
+for first frame" from a fresh, delayed, or stale mirrored Windows app surface.
+The foregroundable count must move with mirrored HWND sessions so successful
+launch, restore, and pending-launch fulfillment reports prove the Windows app
+can be brought forward as a macOS window instead of merely existing inside the
+guest. When mirrored windows are open, `foregroundWindowId` and
+`foregroundWindowTitle` name the HWND that Dock/menu bring-forward actions
+should make frontmost.
 `launcherVisibility` records the matching Coherence policy: while live mirrored
 Windows app windows are open, the main Veil launcher should stay hidden and
 Dock/menu controls should remain available for recovery and window management.
