@@ -188,6 +188,9 @@ struct WindowsAppFrameSurface: View {
         case .delayed:
             return "Screen delayed \(seconds)s"
         case .stale:
+            if assessment.recoveryEscalated {
+                return "Screen recovery needed"
+            }
             return "Screen paused \(seconds)s"
         case .waitingForFirstFrame:
             return "Waiting for screen"
@@ -206,6 +209,9 @@ struct WindowsAppFrameSurface: View {
         case .delayed:
             return "The latest app screen update is delayed. Refresh status if it keeps lagging."
         case .stale:
+            if assessment.recoveryEscalated {
+                return "The app screen is still paused after \(session.frameStreamRestartCount) restart attempts. Reopen the app window or run diagnostics."
+            }
             return "The app screen has stopped updating. Restart the screen stream."
         case .waitingForFirstFrame:
             return "Waiting for the first Windows app screen."

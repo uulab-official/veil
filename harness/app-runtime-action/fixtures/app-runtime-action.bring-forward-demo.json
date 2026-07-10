@@ -126,7 +126,9 @@
         "canSendInput": false,
         "frameStreamStatus": "unavailable",
         "receivedFrameCount": 0,
-        "frameStreamRecommendedAction": "enable-window-capture"
+        "frameStreamRecommendedAction": "enable-window-capture",
+        "frameStreamRestartCount": 0,
+        "frameStreamRecoveryEscalated": false
       }
     ],
     "restorableAppIds": [

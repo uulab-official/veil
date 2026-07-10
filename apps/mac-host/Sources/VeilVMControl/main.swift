@@ -1095,7 +1095,9 @@ struct VeilVMControl {
         for session in report.mirrorSessions {
             let age = session.latestFrameAgeMilliseconds.map { "\($0)ms old" } ?? "no frame yet"
             let interval = session.latestFrameIntervalMilliseconds.map { ", \($0)ms interval" } ?? ""
-            print("Window frame stream \(session.windowId): \(session.frameStreamStatus.rawValue) (\(age)\(interval), \(session.receivedFrameCount) frames)")
+            let restarts = session.frameStreamRestartCount > 0 ? ", \(session.frameStreamRestartCount) restarts" : ""
+            let escalation = session.frameStreamRecoveryEscalated ? ", recovery needed" : ""
+            print("Window frame stream \(session.windowId): \(session.frameStreamStatus.rawValue) (\(age)\(interval), \(session.receivedFrameCount) frames\(restarts)\(escalation))")
         }
         print("Dock integration: \(report.dockIntegration.isEnabled ? "enabled" : "disabled")")
         print("Dock pending launches: \(report.dockIntegration.pendingLaunchCount)")

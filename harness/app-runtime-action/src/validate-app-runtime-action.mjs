@@ -745,6 +745,9 @@ function validateRestartFrameStreamAction(report) {
     if (session.receivedFrameCount !== 0) {
       throw new TypeError("accepted restart-frame-stream actions must clear stale frame timing.");
     }
+    if (session.frameStreamRestartCount < 1 || session.latestFrameStreamRestartedAt === undefined) {
+      throw new TypeError("accepted restart-frame-stream actions must record frame stream restart evidence.");
+    }
   }
 
   if (report.windowId !== undefined && report.windowId !== report.restartedFrameWindowIds.at(-1)) {

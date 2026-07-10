@@ -614,6 +614,8 @@ test("rejects Dock integration counts that drift from mirrored sessions", () => 
     latestFrameIntervalMilliseconds: 0,
     receivedFrameCount: 1,
     frameStreamRecommendedAction: "none",
+    frameStreamRestartCount: 0,
+    frameStreamRecoveryEscalated: false,
     canFocus: true,
     canClose: true,
     canSendInput: true
@@ -739,6 +741,31 @@ test("rejects Mac foreground window identity that drifts from mirrored sessions"
   assert.throws(
     () => validateAppRuntimeStatus(report),
     /foregroundWindowId/
+  );
+});
+
+test("rejects repeated stale frame restarts without recovery escalation", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.mac-window-live.json", import.meta.url), "utf8"));
+  const session = report.mirrorSessions[0];
+  session.captureState = "streaming";
+  session.frameStreamStatus = "stale";
+  session.latestFrameReceivedAt = "2026-07-03T13:19:50Z";
+  session.latestFrameAgeMilliseconds = 10000;
+  session.latestFrameIntervalMilliseconds = 100;
+  session.receivedFrameCount = 3;
+  session.frameStreamRestartCount = 2;
+  session.latestFrameStreamRestartedAt = "2026-07-03T13:19:40Z";
+  session.frameStreamRecommendedAction = "restart-frame-subscription";
+  session.frameStreamRecoveryEscalated = false;
+  report.macWindowIntegration.pendingFrameWindowCount = 0;
+  report.macWindowIntegration.streamingWindowCount = 1;
+  report.macWindowIntegration.staleFrameWindowCount = 1;
+  report.macWindowIntegration.reason = "Windows app windows are mirrored, but at least one frame stream is stale.";
+  report.actions.find((action) => action.id === "windowsApps.restartFrameStream").isAvailable = true;
+
+  assert.throws(
+    () => validateAppRuntimeStatus(report),
+    /frameStreamRecoveryEscalated/
   );
 });
 

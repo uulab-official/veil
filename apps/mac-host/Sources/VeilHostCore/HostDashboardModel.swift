@@ -79,25 +79,29 @@ public struct WindowFrameTiming: Codable, Equatable, Sendable {
 public struct WindowFrameStreamAssessment: Equatable, Sendable {
     public static let freshFrameAgeThresholdMilliseconds = 1_000
     public static let delayedFrameAgeThresholdMilliseconds = 5_000
+    public static let recoveryEscalationRestartThreshold = 2
 
     public var status: WindowFrameStreamStatus
     public var latestFrameAgeMilliseconds: Int?
     public var latestFrameIntervalMilliseconds: Int?
     public var receivedFrameCount: Int
     public var recommendedAction: String
+    public var recoveryEscalated: Bool
 
     public init(
         status: WindowFrameStreamStatus,
         latestFrameAgeMilliseconds: Int? = nil,
         latestFrameIntervalMilliseconds: Int? = nil,
         receivedFrameCount: Int = 0,
-        recommendedAction: String
+        recommendedAction: String,
+        recoveryEscalated: Bool = false
     ) {
         self.status = status
         self.latestFrameAgeMilliseconds = latestFrameAgeMilliseconds
         self.latestFrameIntervalMilliseconds = latestFrameIntervalMilliseconds
         self.receivedFrameCount = receivedFrameCount
         self.recommendedAction = recommendedAction
+        self.recoveryEscalated = recoveryEscalated
     }
 
     public static func assess(
@@ -124,16 +128,20 @@ public struct WindowFrameStreamAssessment: Equatable, Sendable {
         )
         let status: WindowFrameStreamStatus
         let recommendedAction: String
+        let recoveryEscalated: Bool
 
         if ageMilliseconds <= freshFrameAgeThresholdMilliseconds {
             status = .fresh
             recommendedAction = "none"
+            recoveryEscalated = false
         } else if ageMilliseconds <= delayedFrameAgeThresholdMilliseconds {
             status = .delayed
             recommendedAction = "refresh-runtime-status"
+            recoveryEscalated = false
         } else {
             status = .stale
-            recommendedAction = "restart-frame-subscription"
+            recoveryEscalated = session.frameStreamRestartCount >= recoveryEscalationRestartThreshold
+            recommendedAction = recoveryEscalated ? "recover-window-capture" : "restart-frame-subscription"
         }
 
         return WindowFrameStreamAssessment(
@@ -141,7 +149,8 @@ public struct WindowFrameStreamAssessment: Equatable, Sendable {
             latestFrameAgeMilliseconds: ageMilliseconds,
             latestFrameIntervalMilliseconds: timing.latestFrameIntervalMilliseconds,
             receivedFrameCount: timing.receivedFrameCount,
-            recommendedAction: recommendedAction
+            recommendedAction: recommendedAction,
+            recoveryEscalated: recoveryEscalated
         )
     }
 }
@@ -153,19 +162,25 @@ public struct WindowMirrorSession: Codable, Equatable, Identifiable, Sendable {
     public var captureState: WindowCaptureState
     public var latestFrame: WindowFrameEvent?
     public var frameTiming: WindowFrameTiming?
+    public var frameStreamRestartCount: Int
+    public var latestFrameStreamRestartedAt: Date?
 
     public init(
         window: WindowCreatedEvent,
         connectionMode: HostConnectionMode,
         captureState: WindowCaptureState,
         latestFrame: WindowFrameEvent? = nil,
-        frameTiming: WindowFrameTiming? = nil
+        frameTiming: WindowFrameTiming? = nil,
+        frameStreamRestartCount: Int = 0,
+        latestFrameStreamRestartedAt: Date? = nil
     ) {
         self.window = window
         self.connectionMode = connectionMode
         self.captureState = captureState
         self.latestFrame = latestFrame
         self.frameTiming = frameTiming
+        self.frameStreamRestartCount = frameStreamRestartCount
+        self.latestFrameStreamRestartedAt = latestFrameStreamRestartedAt
     }
 }
 
@@ -329,6 +344,9 @@ public struct WindowsAppRuntimeWindowStatus: Codable, Equatable, Sendable {
     public var latestFrameIntervalMilliseconds: Int?
     public var receivedFrameCount: Int
     public var frameStreamRecommendedAction: String
+    public var frameStreamRestartCount: Int
+    public var latestFrameStreamRestartedAt: Date?
+    public var frameStreamRecoveryEscalated: Bool
     public var canFocus: Bool
     public var canClose: Bool
     public var canSendInput: Bool
@@ -344,6 +362,9 @@ public struct WindowsAppRuntimeWindowStatus: Codable, Equatable, Sendable {
         latestFrameIntervalMilliseconds: Int? = nil,
         receivedFrameCount: Int = 0,
         frameStreamRecommendedAction: String,
+        frameStreamRestartCount: Int = 0,
+        latestFrameStreamRestartedAt: Date? = nil,
+        frameStreamRecoveryEscalated: Bool = false,
         canFocus: Bool,
         canClose: Bool,
         canSendInput: Bool
@@ -358,6 +379,9 @@ public struct WindowsAppRuntimeWindowStatus: Codable, Equatable, Sendable {
         self.latestFrameIntervalMilliseconds = latestFrameIntervalMilliseconds
         self.receivedFrameCount = receivedFrameCount
         self.frameStreamRecommendedAction = frameStreamRecommendedAction
+        self.frameStreamRestartCount = frameStreamRestartCount
+        self.latestFrameStreamRestartedAt = latestFrameStreamRestartedAt
+        self.frameStreamRecoveryEscalated = frameStreamRecoveryEscalated
         self.canFocus = canFocus
         self.canClose = canClose
         self.canSendInput = canSendInput
@@ -1400,6 +1424,9 @@ public final class HostDashboardModel {
                     latestFrameIntervalMilliseconds: frameStream.latestFrameIntervalMilliseconds,
                     receivedFrameCount: frameStream.receivedFrameCount,
                     frameStreamRecommendedAction: frameStream.recommendedAction,
+                    frameStreamRestartCount: session.frameStreamRestartCount,
+                    latestFrameStreamRestartedAt: session.latestFrameStreamRestartedAt,
+                    frameStreamRecoveryEscalated: frameStream.recoveryEscalated,
                     canFocus: canFocusMirrorSession(windowId: session.id),
                     canClose: canCloseMirrorSession(windowId: session.id),
                     canSendInput: canSendInput(to: session.id)
@@ -3353,7 +3380,7 @@ public final class HostDashboardModel {
     }
 
     @discardableResult
-    public func restartFrameSubscription(windowId: String) async -> Bool {
+    public func restartFrameSubscription(windowId: String, restartedAt: Date = Date()) async -> Bool {
         guard let index = mirrorSessions.firstIndex(where: { $0.id == windowId }),
               mirrorSessions[index].captureState != .unavailable,
               hasLiveAgentConnection else {
@@ -3366,6 +3393,8 @@ public final class HostDashboardModel {
             mirrorSessions[index].captureState = .pending
             mirrorSessions[index].frameTiming = nil
             mirrorSessions[index].latestFrame = nil
+            mirrorSessions[index].frameStreamRestartCount += 1
+            mirrorSessions[index].latestFrameStreamRestartedAt = restartedAt
             return true
         } catch {
             errorMessage = userMessage(for: error)
@@ -3387,7 +3416,7 @@ public final class HostDashboardModel {
         var restartedWindowIds: [String] = []
 
         for windowId in staleWindowIds {
-            if await restartFrameSubscription(windowId: windowId) {
+            if await restartFrameSubscription(windowId: windowId, restartedAt: generatedAt) {
                 restartedWindowIds.append(windowId)
             }
         }

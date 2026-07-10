@@ -426,6 +426,8 @@ function validateMirrorSessions(sessions) {
     }
     requireNonNegativeInteger(session.receivedFrameCount, "session.receivedFrameCount");
     requireString(session.frameStreamRecommendedAction, "session.frameStreamRecommendedAction");
+    requireNonNegativeInteger(session.frameStreamRestartCount, "session.frameStreamRestartCount");
+    requireBoolean(session.frameStreamRecoveryEscalated, "session.frameStreamRecoveryEscalated");
     if (session.latestFrameReceivedAt !== undefined) {
       requireString(session.latestFrameReceivedAt, "session.latestFrameReceivedAt");
       if (Number.isNaN(Date.parse(session.latestFrameReceivedAt))) {
@@ -437,6 +439,18 @@ function validateMirrorSessions(sessions) {
     }
     if (session.latestFrameIntervalMilliseconds !== undefined) {
       requireNonNegativeInteger(session.latestFrameIntervalMilliseconds, "session.latestFrameIntervalMilliseconds");
+    }
+    if (session.latestFrameStreamRestartedAt !== undefined) {
+      requireString(session.latestFrameStreamRestartedAt, "session.latestFrameStreamRestartedAt");
+      if (Number.isNaN(Date.parse(session.latestFrameStreamRestartedAt))) {
+        throw new TypeError("session.latestFrameStreamRestartedAt must be an ISO date.");
+      }
+    }
+    if (session.frameStreamRestartCount === 0 && session.latestFrameStreamRestartedAt !== undefined) {
+      throw new TypeError("latestFrameStreamRestartedAt requires at least one frame stream restart.");
+    }
+    if (session.frameStreamRestartCount > 0 && session.latestFrameStreamRestartedAt === undefined) {
+      throw new TypeError("frameStreamRestartCount requires latestFrameStreamRestartedAt.");
     }
     if (session.captureState === "unavailable" && session.frameStreamStatus !== "unavailable") {
       throw new TypeError("Unavailable capture sessions must report unavailable frame streams.");
@@ -456,9 +470,34 @@ function validateMirrorSessions(sessions) {
         throw new TypeError("Received frames require an active frame stream status.");
       }
     }
+    const shouldEscalateFrameRecovery = session.frameStreamStatus === "stale" && session.frameStreamRestartCount >= 2;
+    if (session.frameStreamRecoveryEscalated !== shouldEscalateFrameRecovery) {
+      throw new TypeError("frameStreamRecoveryEscalated must reflect repeated stale frame stream restarts.");
+    }
+    const expectedFrameAction = expectedFrameStreamRecommendedAction(session);
+    if (session.frameStreamRecommendedAction !== expectedFrameAction) {
+      throw new TypeError("frameStreamRecommendedAction must match frame stream state.");
+    }
     requireBoolean(session.canFocus, "session.canFocus");
     requireBoolean(session.canClose, "session.canClose");
     requireBoolean(session.canSendInput, "session.canSendInput");
+  }
+}
+
+function expectedFrameStreamRecommendedAction(session) {
+  switch (session.frameStreamStatus) {
+    case "unavailable":
+      return "enable-window-capture";
+    case "waitingForFirstFrame":
+      return "wait-for-first-frame";
+    case "fresh":
+      return "none";
+    case "delayed":
+      return "refresh-runtime-status";
+    case "stale":
+      return session.frameStreamRecoveryEscalated ? "recover-window-capture" : "restart-frame-subscription";
+    default:
+      throw new TypeError(`Unsupported frame stream status: ${session.frameStreamStatus}`);
   }
 }
 

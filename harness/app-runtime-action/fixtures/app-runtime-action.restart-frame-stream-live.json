@@ -101,7 +101,10 @@
         "canSendInput": true,
         "frameStreamStatus": "waitingForFirstFrame",
         "receivedFrameCount": 0,
-        "frameStreamRecommendedAction": "wait-for-first-frame"
+        "frameStreamRecommendedAction": "wait-for-first-frame",
+        "frameStreamRestartCount": 1,
+        "latestFrameStreamRestartedAt": "2026-07-10T00:30:00Z",
+        "frameStreamRecoveryEscalated": false
       }
     ],
     "restorableAppIds": [

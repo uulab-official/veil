@@ -343,6 +343,12 @@ Rules:
 - `format` is `png` for the first stream control implementation.
 - These requests do not require a success response. Invalid requests may still return structured errors.
 - The macOS host subscribes after launching a capture-capable app window and unsubscribes before closing the mirrored window.
+- Host-side app-runtime status records frame stream recovery evidence per HWND:
+  `frameStreamRestartCount`, `latestFrameStreamRestartedAt`, and
+  `frameStreamRecoveryEscalated`. A restart is an unsubscribe followed by a new
+  subscribe. After two restart attempts on the same HWND still lead to a stale
+  stream, the host reports `frameStreamRecommendedAction=recover-window-capture`
+  instead of repeatedly recommending another subscription restart.
 
 ## Window Focus
 

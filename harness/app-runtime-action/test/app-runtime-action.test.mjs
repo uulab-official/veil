@@ -1094,6 +1094,8 @@ test("rejects close-all actions that leave mirrored sessions open", () => {
       frameStreamStatus: "waitingForFirstFrame",
       receivedFrameCount: 0,
       frameStreamRecommendedAction: "wait-for-first-frame",
+      frameStreamRestartCount: 0,
+      frameStreamRecoveryEscalated: false,
       canFocus: true,
       canClose: true,
       canSendInput: true

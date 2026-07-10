@@ -320,6 +320,9 @@ struct HostDashboardModelTests {
         #expect(windowStatus.latestFrameIntervalMilliseconds == 125)
         #expect(windowStatus.receivedFrameCount == 2)
         #expect(windowStatus.frameStreamRecommendedAction == "none")
+        #expect(windowStatus.frameStreamRestartCount == 0)
+        #expect(windowStatus.latestFrameStreamRestartedAt == nil)
+        #expect(windowStatus.frameStreamRecoveryEscalated == false)
         #expect(report.macWindowIntegration.freshFrameWindowCount == 1)
         #expect(report.macWindowIntegration.delayedFrameWindowCount == 0)
         #expect(report.macWindowIntegration.staleFrameWindowCount == 0)
@@ -342,6 +345,8 @@ struct HostDashboardModelTests {
         #expect(windowStatus.frameStreamStatus == .stale)
         #expect(windowStatus.latestFrameAgeMilliseconds == 6_250)
         #expect(windowStatus.frameStreamRecommendedAction == "restart-frame-subscription")
+        #expect(windowStatus.frameStreamRestartCount == 0)
+        #expect(windowStatus.frameStreamRecoveryEscalated == false)
         #expect(report.macWindowIntegration.staleFrameWindowCount == 1)
         #expect(restartAction.title == "Restart App Screen")
         #expect(restartAction.isAvailable)
@@ -356,7 +361,11 @@ struct HostDashboardModelTests {
         await model.launchNotepad()
         model.receiveWindowFrame(.notepadFirstFrame, receivedAt: Date(timeIntervalSince1970: 1_000))
 
-        let didRestart = await model.restartFrameSubscription(windowId: "hwnd:0003029A")
+        let restartedAt = Date(timeIntervalSince1970: 1_001)
+        let didRestart = await model.restartFrameSubscription(
+            windowId: "hwnd:0003029A",
+            restartedAt: restartedAt
+        )
         let session = try #require(model.mirrorSessions.first)
 
         #expect(didRestart)
@@ -365,6 +374,8 @@ struct HostDashboardModelTests {
         #expect(session.captureState == .pending)
         #expect(session.latestFrame == nil)
         #expect(session.frameTiming == nil)
+        #expect(session.frameStreamRestartCount == 1)
+        #expect(session.latestFrameStreamRestartedAt == restartedAt)
     }
 
     @Test("restarts all stale frame subscriptions")
@@ -384,6 +395,37 @@ struct HostDashboardModelTests {
         #expect(service.frameUnsubscriptions == ["hwnd:0003029A"])
         #expect(service.frameSubscriptions == ["hwnd:0003029A", "hwnd:0003029A"])
         #expect(model.mirrorSessions.first?.captureState == .pending)
+        #expect(model.mirrorSessions.first?.frameStreamRestartCount == 1)
+        #expect(model.mirrorSessions.first?.latestFrameStreamRestartedAt == Date(timeIntervalSince1970: 1_006))
+    }
+
+    @Test("escalates frame stream recovery after repeated stale restarts")
+    @MainActor
+    func escalatesFrameStreamRecoveryAfterRepeatedStaleRestarts() async throws {
+        let service = FakeDashboardService(health: .captureReady)
+        let model = HostDashboardModel(service: service)
+
+        await model.launchNotepad()
+        model.receiveWindowFrame(.notepadFirstFrame, receivedAt: Date(timeIntervalSince1970: 1_000))
+        await model.restartFrameSubscription(
+            windowId: "hwnd:0003029A",
+            restartedAt: Date(timeIntervalSince1970: 1_001)
+        )
+        model.receiveWindowFrame(.notepadSecondFrame, receivedAt: Date(timeIntervalSince1970: 1_002))
+        await model.restartFrameSubscription(
+            windowId: "hwnd:0003029A",
+            restartedAt: Date(timeIntervalSince1970: 1_003)
+        )
+        model.receiveWindowFrame(.notepadFirstFrame, receivedAt: Date(timeIntervalSince1970: 1_004))
+
+        let report = model.runtimeStatusReport(generatedAt: Date(timeIntervalSince1970: 1_010))
+        let windowStatus = try #require(report.mirrorSessions.first)
+
+        #expect(windowStatus.frameStreamStatus == .stale)
+        #expect(windowStatus.frameStreamRecommendedAction == "recover-window-capture")
+        #expect(windowStatus.frameStreamRestartCount == 2)
+        #expect(windowStatus.latestFrameStreamRestartedAt == Date(timeIntervalSince1970: 1_003))
+        #expect(windowStatus.frameStreamRecoveryEscalated)
     }
 
     @Test("routes a protocol frame message into the matching mirror session")
@@ -879,6 +921,9 @@ struct HostDashboardModelTests {
         #expect(report.mirrorSessions.map(\.latestFrameIntervalMilliseconds) == [nil])
         #expect(report.mirrorSessions.map(\.receivedFrameCount) == [0])
         #expect(report.mirrorSessions.map(\.frameStreamRecommendedAction) == ["wait-for-first-frame"])
+        #expect(report.mirrorSessions.map(\.frameStreamRestartCount) == [0])
+        #expect(report.mirrorSessions.map(\.latestFrameStreamRestartedAt) == [nil])
+        #expect(report.mirrorSessions.map(\.frameStreamRecoveryEscalated) == [false])
         #expect(report.mirrorSessions.map(\.canFocus) == [true])
         #expect(report.mirrorSessions.map(\.canClose) == [true])
         #expect(report.mirrorSessions.map(\.canSendInput) == [true])
