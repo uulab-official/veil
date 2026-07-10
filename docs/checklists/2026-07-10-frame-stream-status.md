@@ -29,6 +29,7 @@ Goal: make mirrored Windows app surfaces report whether their frame stream is mi
 - [x] Added first-frame timeout tracking with `frameStreamRequestedAt` and `frameStreamWaitingAgeMilliseconds` so blank pending app windows become stale after 8 seconds and enter automatic maintenance.
 - [x] Added aggregate frame latency health to `macWindowIntegration`, including the 1 second fresh-frame budget, 5 second stale-frame timeout, slowest app-screen window, and next latency action.
 - [x] Added frame latency evidence to app-window, coherence, and MVP proof artifacts so first-frame and post-input responsiveness are validated against the same 1 second / 5 second budget as app-runtime status.
+- [x] Promoted latest saved proof latency into `proofArtifacts` and app-runtime review cards so review evidence shows the slowest app-check latency and recommended latency action.
 
 ## Status Semantics
 

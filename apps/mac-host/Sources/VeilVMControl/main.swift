@@ -646,6 +646,12 @@ struct AppRuntimeReviewEvidence: Codable, Equatable {
     var latestAppCheckKind: String?
     var latestAppCheckPath: String?
     var latestAppCheckModifiedAt: Date?
+    var latestAppCheckLatencyHealth: String?
+    var latestAppCheckSlowestLatencyMeasurement: String?
+    var latestAppCheckSlowestLatencyMilliseconds: Int?
+    var latestAppCheckLatencyBudgetMilliseconds: Int?
+    var latestAppCheckStaleTimeoutMilliseconds: Int?
+    var latestAppCheckLatencyRecommendedAction: String?
     var diagnosticsDirectory: String
     var screenshotEvidenceDirectory: String?
     var recommendedAppCheckCommand: String?
@@ -1193,6 +1199,13 @@ struct VeilVMControl {
         if let latestProofPath = report.proofArtifacts.latestProofPath {
             print("Latest app check artifact: \(latestProofPath)")
         }
+        if let latestLatencyHealth = report.proofArtifacts.latestProofLatencyHealth {
+            print("Latest app check latency: \(latestLatencyHealth)")
+        }
+        if let latestLatencyMilliseconds = report.proofArtifacts.latestProofSlowestLatencyMilliseconds,
+           let latestLatencyMeasurement = report.proofArtifacts.latestProofSlowestLatencyMeasurement {
+            print("Slowest app check latency: \(latestLatencyMeasurement) \(latestLatencyMilliseconds)ms")
+        }
         print("Daily Use package identity: \(report.dailyUseReadiness.packageIdentityReady ? "ready" : "needed")")
         print("Daily Use borderless capture preflight: \(report.dailyUseReadiness.borderlessCapturePreflightPassed ? "ready" : "blocked")")
         print("Daily Use borderless action: \(report.dailyUseReadiness.borderlessCaptureRecommendedAction)")
@@ -1308,6 +1321,13 @@ struct VeilVMControl {
         }
         if let latestPath = card.evidence.latestAppCheckPath {
             print("  Latest app check file: \(latestPath)")
+        }
+        if let latestLatencyHealth = card.evidence.latestAppCheckLatencyHealth {
+            print("  Latest app check latency: \(latestLatencyHealth)")
+        }
+        if let latestLatencyMilliseconds = card.evidence.latestAppCheckSlowestLatencyMilliseconds,
+           let latestLatencyMeasurement = card.evidence.latestAppCheckSlowestLatencyMeasurement {
+            print("  Slowest app check latency: \(latestLatencyMeasurement) \(latestLatencyMilliseconds)ms")
         }
         if let recommendedCommand = card.evidence.recommendedAppCheckCommand {
             print("  Recommended app check: \(recommendedCommand)")
@@ -2134,6 +2154,12 @@ struct VeilVMControl {
                 latestAppCheckKind: report.proofArtifacts.latestProofKind,
                 latestAppCheckPath: report.proofArtifacts.latestProofPath,
                 latestAppCheckModifiedAt: report.proofArtifacts.latestProofModifiedAt,
+                latestAppCheckLatencyHealth: report.proofArtifacts.latestProofLatencyHealth,
+                latestAppCheckSlowestLatencyMeasurement: report.proofArtifacts.latestProofSlowestLatencyMeasurement,
+                latestAppCheckSlowestLatencyMilliseconds: report.proofArtifacts.latestProofSlowestLatencyMilliseconds,
+                latestAppCheckLatencyBudgetMilliseconds: report.proofArtifacts.latestProofLatencyBudgetMilliseconds,
+                latestAppCheckStaleTimeoutMilliseconds: report.proofArtifacts.latestProofStaleTimeoutMilliseconds,
+                latestAppCheckLatencyRecommendedAction: report.proofArtifacts.latestProofLatencyRecommendedAction,
                 diagnosticsDirectory: report.proofArtifacts.diagnosticsDirectory,
                 screenshotEvidenceDirectory: evidenceDirectoryURL?.path,
                 recommendedAppCheckCommand: report.proofPlan.recommendedProofCommand,

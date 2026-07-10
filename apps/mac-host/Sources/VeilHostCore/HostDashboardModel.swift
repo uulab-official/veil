@@ -868,6 +868,12 @@ public struct WindowsAppRuntimeProofArtifactStatus: Codable, Equatable, Sendable
     public var latestProofPath: String?
     public var latestProofFileName: String?
     public var latestProofModifiedAt: Date?
+    public var latestProofLatencyHealth: String?
+    public var latestProofSlowestLatencyMeasurement: String?
+    public var latestProofSlowestLatencyMilliseconds: Int?
+    public var latestProofLatencyBudgetMilliseconds: Int?
+    public var latestProofStaleTimeoutMilliseconds: Int?
+    public var latestProofLatencyRecommendedAction: String?
     public var reason: String
 
     public init(
@@ -877,6 +883,12 @@ public struct WindowsAppRuntimeProofArtifactStatus: Codable, Equatable, Sendable
         latestProofPath: String? = nil,
         latestProofFileName: String? = nil,
         latestProofModifiedAt: Date? = nil,
+        latestProofLatencyHealth: String? = nil,
+        latestProofSlowestLatencyMeasurement: String? = nil,
+        latestProofSlowestLatencyMilliseconds: Int? = nil,
+        latestProofLatencyBudgetMilliseconds: Int? = nil,
+        latestProofStaleTimeoutMilliseconds: Int? = nil,
+        latestProofLatencyRecommendedAction: String? = nil,
         reason: String
     ) {
         self.diagnosticsDirectory = diagnosticsDirectory
@@ -885,6 +897,12 @@ public struct WindowsAppRuntimeProofArtifactStatus: Codable, Equatable, Sendable
         self.latestProofPath = latestProofPath
         self.latestProofFileName = latestProofFileName
         self.latestProofModifiedAt = latestProofModifiedAt
+        self.latestProofLatencyHealth = latestProofLatencyHealth
+        self.latestProofSlowestLatencyMeasurement = latestProofSlowestLatencyMeasurement
+        self.latestProofSlowestLatencyMilliseconds = latestProofSlowestLatencyMilliseconds
+        self.latestProofLatencyBudgetMilliseconds = latestProofLatencyBudgetMilliseconds
+        self.latestProofStaleTimeoutMilliseconds = latestProofStaleTimeoutMilliseconds
+        self.latestProofLatencyRecommendedAction = latestProofLatencyRecommendedAction
         self.reason = reason
     }
 }
@@ -1257,6 +1275,35 @@ private struct ProofArtifactCandidate {
     var kind: String
     var url: URL
     var modifiedAt: Date
+}
+
+private struct ProofArtifactLatencySummary: Equatable {
+    var health: String
+    var slowestMeasurement: String
+    var slowestElapsedMilliseconds: Int
+    var freshFrameBudgetMilliseconds: Int
+    var staleFrameTimeoutMilliseconds: Int
+    var recommendedAction: String
+}
+
+private struct ProofArtifactLatencyEvidence: Decodable {
+    var measurement: String
+    var elapsedMilliseconds: Int
+    var freshFrameBudgetMilliseconds: Int
+    var staleFrameTimeoutMilliseconds: Int
+    var recommendedAction: String
+}
+
+private struct ProofArtifactLatencyEnvelope: Decodable {
+    var firstFrameLatency: ProofArtifactLatencyEvidence?
+    var initialFrameLatency: ProofArtifactLatencyEvidence?
+    var postInputFrameLatency: ProofArtifactLatencyEvidence?
+    var coherence: ProofArtifactCoherenceLatencyEnvelope?
+}
+
+private struct ProofArtifactCoherenceLatencyEnvelope: Decodable {
+    var initialFrameLatency: ProofArtifactLatencyEvidence?
+    var postInputFrameLatency: ProofArtifactLatencyEvidence?
 }
 
 @MainActor
@@ -2315,6 +2362,7 @@ public final class HostDashboardModel {
             )
         }
 
+        let latencySummary = proofLatencySummary(for: latestProof.url)
         return WindowsAppRuntimeProofArtifactStatus(
             diagnosticsDirectory: diagnosticsDirectory.path,
             recommendedProofDirectory: recommendedProofDirectory.path,
@@ -2322,6 +2370,12 @@ public final class HostDashboardModel {
             latestProofPath: latestProof.url.path,
             latestProofFileName: latestProof.url.lastPathComponent,
             latestProofModifiedAt: latestProof.modifiedAt,
+            latestProofLatencyHealth: latencySummary?.health,
+            latestProofSlowestLatencyMeasurement: latencySummary?.slowestMeasurement,
+            latestProofSlowestLatencyMilliseconds: latencySummary?.slowestElapsedMilliseconds,
+            latestProofLatencyBudgetMilliseconds: latencySummary?.freshFrameBudgetMilliseconds,
+            latestProofStaleTimeoutMilliseconds: latencySummary?.staleFrameTimeoutMilliseconds,
+            latestProofLatencyRecommendedAction: latencySummary?.recommendedAction,
             reason: "Latest app check artifact is available in Veil diagnostics."
         )
     }
@@ -2751,6 +2805,49 @@ public final class HostDashboardModel {
 
             return ProofArtifactCandidate(kind: proofKind(for: url, fallback: kind), url: url, modifiedAt: modifiedAt)
         }
+    }
+
+    private func proofLatencySummary(for url: URL) -> ProofArtifactLatencySummary? {
+        guard let data = try? Data(contentsOf: url),
+              let envelope = try? JSONDecoder().decode(ProofArtifactLatencyEnvelope.self, from: data) else {
+            return nil
+        }
+
+        let evidence = [
+            envelope.firstFrameLatency,
+            envelope.initialFrameLatency,
+            envelope.postInputFrameLatency,
+            envelope.coherence?.initialFrameLatency,
+            envelope.coherence?.postInputFrameLatency
+        ].compactMap { $0 }
+
+        guard let slowest = evidence.max(by: { lhs, rhs in
+            lhs.elapsedMilliseconds < rhs.elapsedMilliseconds
+        }) else {
+            return nil
+        }
+
+        let health: String
+        let recommendedAction: String
+        if slowest.elapsedMilliseconds <= slowest.freshFrameBudgetMilliseconds {
+            health = "healthy"
+            recommendedAction = "none"
+        } else if slowest.elapsedMilliseconds <= slowest.staleFrameTimeoutMilliseconds {
+            health = "delayed"
+            recommendedAction = "measure-again"
+        } else {
+            health = "stale"
+            recommendedAction = "tune-frame-latency"
+        }
+
+        return ProofArtifactLatencySummary(
+            health: health,
+            slowestMeasurement: slowest.measurement,
+            slowestElapsedMilliseconds: slowest.elapsedMilliseconds,
+            freshFrameBudgetMilliseconds: slowest.freshFrameBudgetMilliseconds,
+            staleFrameTimeoutMilliseconds: slowest.staleFrameTimeoutMilliseconds,
+            recommendedAction: recommendedAction
+        )
     }
 
     private func proofKind(for url: URL, fallback: String) -> String {

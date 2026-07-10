@@ -1555,7 +1555,29 @@ struct HostDashboardModelTests {
         let olderProofURL = appWindowDirectory.appendingPathComponent("app-window-proof.json")
         let latestProofURL = recommendedDirectory.appendingPathComponent("mvp-proof-latest.json")
         try Data("{}".utf8).write(to: olderProofURL)
-        try Data("{}".utf8).write(to: latestProofURL)
+        try Data(
+            """
+            {
+              "kind": "windowsMVPProof",
+              "coherence": {
+                "initialFrameLatency": {
+                  "measurement": "initial-frame",
+                  "elapsedMilliseconds": 900,
+                  "freshFrameBudgetMilliseconds": 1000,
+                  "staleFrameTimeoutMilliseconds": 5000,
+                  "recommendedAction": "none"
+                },
+                "postInputFrameLatency": {
+                  "measurement": "post-input-frame",
+                  "elapsedMilliseconds": 1400,
+                  "freshFrameBudgetMilliseconds": 1000,
+                  "staleFrameTimeoutMilliseconds": 5000,
+                  "recommendedAction": "measure-again"
+                }
+              }
+            }
+            """.utf8
+        ).write(to: latestProofURL)
         try FileManager.default.setAttributes(
             [.modificationDate: Date(timeIntervalSince1970: 1_700_000_000)],
             ofItemAtPath: olderProofURL.path
@@ -1573,6 +1595,12 @@ struct HostDashboardModelTests {
         #expect(artifacts.latestProofPath?.hasSuffix("/Recommended Proof/mvp-proof-latest.json") == true)
         #expect(artifacts.latestProofFileName == "mvp-proof-latest.json")
         #expect(artifacts.latestProofModifiedAt == Date(timeIntervalSince1970: 1_700_000_100))
+        #expect(artifacts.latestProofLatencyHealth == "delayed")
+        #expect(artifacts.latestProofSlowestLatencyMeasurement == "post-input-frame")
+        #expect(artifacts.latestProofSlowestLatencyMilliseconds == 1_400)
+        #expect(artifacts.latestProofLatencyBudgetMilliseconds == 1_000)
+        #expect(artifacts.latestProofStaleTimeoutMilliseconds == 5_000)
+        #expect(artifacts.latestProofLatencyRecommendedAction == "measure-again")
         #expect(artifacts.reason == "Latest app check artifact is available in Veil diagnostics.")
     }
 

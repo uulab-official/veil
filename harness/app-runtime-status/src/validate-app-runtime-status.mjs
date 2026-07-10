@@ -6,6 +6,7 @@ const VALID_PHASES = new Set(["idle", "loading", "connected", "launching", "fail
 const VALID_CAPTURE_STATES = new Set(["unavailable", "pending", "streaming"]);
 const VALID_FRAME_STREAM_STATUSES = new Set(["unavailable", "waitingForFirstFrame", "fresh", "delayed", "stale"]);
 const VALID_FRAME_LATENCY_HEALTH = new Set(["idle", "waiting", "healthy", "delayed", "stale"]);
+const VALID_PROOF_LATENCY_HEALTH = new Set(["healthy", "delayed", "stale"]);
 const FRAME_LATENCY_BUDGET_MILLISECONDS = 1_000;
 const FRAME_STALE_TIMEOUT_MILLISECONDS = 5_000;
 const FIRST_FRAME_TIMEOUT_MILLISECONDS = 8_000;
@@ -1200,6 +1201,65 @@ function validateProofArtifacts(proofArtifacts) {
 
   if (Number.isNaN(Date.parse(proofArtifacts.latestProofModifiedAt))) {
     throw new TypeError("proofArtifacts.latestProofModifiedAt must be an ISO date.");
+  }
+
+  validateProofArtifactLatency(proofArtifacts);
+}
+
+function validateProofArtifactLatency(proofArtifacts) {
+  const hasLatency = proofArtifacts.latestProofLatencyHealth !== undefined
+    || proofArtifacts.latestProofSlowestLatencyMeasurement !== undefined
+    || proofArtifacts.latestProofSlowestLatencyMilliseconds !== undefined
+    || proofArtifacts.latestProofLatencyBudgetMilliseconds !== undefined
+    || proofArtifacts.latestProofStaleTimeoutMilliseconds !== undefined
+    || proofArtifacts.latestProofLatencyRecommendedAction !== undefined;
+
+  if (!hasLatency) {
+    return;
+  }
+
+  requireString(proofArtifacts.latestProofLatencyHealth, "proofArtifacts.latestProofLatencyHealth");
+  if (!VALID_PROOF_LATENCY_HEALTH.has(proofArtifacts.latestProofLatencyHealth)) {
+    throw new TypeError("proofArtifacts.latestProofLatencyHealth must be healthy, delayed, or stale.");
+  }
+  requireString(proofArtifacts.latestProofSlowestLatencyMeasurement, "proofArtifacts.latestProofSlowestLatencyMeasurement");
+  requireNonNegativeInteger(
+    proofArtifacts.latestProofSlowestLatencyMilliseconds,
+    "proofArtifacts.latestProofSlowestLatencyMilliseconds"
+  );
+  requireNonNegativeInteger(
+    proofArtifacts.latestProofLatencyBudgetMilliseconds,
+    "proofArtifacts.latestProofLatencyBudgetMilliseconds"
+  );
+  requireNonNegativeInteger(
+    proofArtifacts.latestProofStaleTimeoutMilliseconds,
+    "proofArtifacts.latestProofStaleTimeoutMilliseconds"
+  );
+  if (proofArtifacts.latestProofLatencyBudgetMilliseconds !== FRAME_LATENCY_BUDGET_MILLISECONDS) {
+    throw new TypeError("proofArtifacts.latestProofLatencyBudgetMilliseconds must match the app-screen latency budget.");
+  }
+  if (proofArtifacts.latestProofStaleTimeoutMilliseconds !== FRAME_STALE_TIMEOUT_MILLISECONDS) {
+    throw new TypeError("proofArtifacts.latestProofStaleTimeoutMilliseconds must match the app-screen stale timeout.");
+  }
+
+  const elapsed = proofArtifacts.latestProofSlowestLatencyMilliseconds;
+  const expectedHealth = elapsed <= proofArtifacts.latestProofLatencyBudgetMilliseconds
+    ? "healthy"
+    : elapsed <= proofArtifacts.latestProofStaleTimeoutMilliseconds
+      ? "delayed"
+      : "stale";
+  if (proofArtifacts.latestProofLatencyHealth !== expectedHealth) {
+    throw new TypeError("proofArtifacts.latestProofLatencyHealth must match the slowest proof latency.");
+  }
+
+  const expectedAction = expectedHealth === "healthy"
+    ? "none"
+    : expectedHealth === "delayed"
+      ? "measure-again"
+      : "tune-frame-latency";
+  requireString(proofArtifacts.latestProofLatencyRecommendedAction, "proofArtifacts.latestProofLatencyRecommendedAction");
+  if (proofArtifacts.latestProofLatencyRecommendedAction !== expectedAction) {
+    throw new TypeError("proofArtifacts.latestProofLatencyRecommendedAction must match the slowest proof latency.");
   }
 }
 

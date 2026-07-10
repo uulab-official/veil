@@ -1543,6 +1543,16 @@ test("rejects proof artifact paths that do not point to JSON", () => {
   );
 });
 
+test("rejects proof artifact latency health that drifts from slowest latency", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.mac-window-live.json", import.meta.url), "utf8"));
+  report.proofArtifacts.latestProofLatencyHealth = "healthy";
+
+  assert.throws(
+    () => validateAppRuntimeStatus(report),
+    /latestProofLatencyHealth/
+  );
+});
+
 test("rejects release gate counts that drift from required steps", () => {
   const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.mac-window-live.json", import.meta.url), "utf8"));
   report.releaseGate.passingStepCount = 4;

@@ -54,6 +54,16 @@ test("rejects launch onboarding drift from embedded status", () => {
   );
 });
 
+test("rejects latest app check latency drift from embedded status", () => {
+  const card = demoReviewCard();
+  card.evidence.latestAppCheckLatencyHealth = "healthy";
+
+  assert.throws(
+    () => validateAppRuntimeReview(card),
+    /latestAppCheckLatencyHealth/
+  );
+});
+
 test("rejects cards with drifted minimum screenshot dimensions", () => {
   const card = demoReviewCard();
   card.minimumScreenshotWidth = 1;

@@ -309,6 +309,7 @@ function validateEvidence(evidence, status) {
   if (evidence.latestAppCheckModifiedAt !== undefined && Number.isNaN(Date.parse(evidence.latestAppCheckModifiedAt))) {
     throw new TypeError("evidence.latestAppCheckModifiedAt must be an ISO date.");
   }
+  validateEvidenceProofLatency(evidence, status);
   if (evidence.recommendedAppCheckCommand !== undefined) {
     requireString(evidence.recommendedAppCheckCommand, "evidence.recommendedAppCheckCommand");
   }
@@ -322,6 +323,28 @@ function validateEvidence(evidence, status) {
   }
 
   return evidence.hostAppBundle;
+}
+
+function validateEvidenceProofLatency(evidence, status) {
+  const proofArtifacts = status.proofArtifacts ?? {};
+  for (const [evidenceField, statusField] of [
+    ["latestAppCheckLatencyHealth", "latestProofLatencyHealth"],
+    ["latestAppCheckSlowestLatencyMeasurement", "latestProofSlowestLatencyMeasurement"],
+    ["latestAppCheckSlowestLatencyMilliseconds", "latestProofSlowestLatencyMilliseconds"],
+    ["latestAppCheckLatencyBudgetMilliseconds", "latestProofLatencyBudgetMilliseconds"],
+    ["latestAppCheckStaleTimeoutMilliseconds", "latestProofStaleTimeoutMilliseconds"],
+    ["latestAppCheckLatencyRecommendedAction", "latestProofLatencyRecommendedAction"]
+  ]) {
+    if (evidence[evidenceField] !== undefined && typeof evidence[evidenceField] === "string") {
+      requireString(evidence[evidenceField], `evidence.${evidenceField}`);
+    }
+    if (evidence[evidenceField] !== undefined && typeof evidence[evidenceField] === "number") {
+      requireNonNegativeInteger(evidence[evidenceField], `evidence.${evidenceField}`);
+    }
+    if (evidence[evidenceField] !== proofArtifacts[statusField]) {
+      throw new TypeError(`app runtime review ${evidenceField} must match status proof artifacts.`);
+    }
+  }
 }
 
 function isEvidenceVerifyCommand(command, evidenceDirectory) {

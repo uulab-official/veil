@@ -244,7 +244,11 @@ the strongest available check and returns a `proof` evidence summary inside the
 same action report. The status report also includes `proofArtifacts`, a
 metadata-only pointer to the latest saved app-check JSON under Veil diagnostics so
 automation can attach or inspect the current check evidence without copying
-Windows media, disk contents, product keys, or guest data.
+Windows media, disk contents, product keys, or guest data. When that JSON carries
+proof latency evidence, `proofArtifacts` also promotes the latest app-check
+latency health, slowest proof measurement, budget, stale timeout, and recommended
+latency action; review cards mirror the same fields so release evidence cannot
+hide a slow first-frame or post-input proof.
 
 `dailyUseReadiness` tracks the v1.5 integration preflight separately from the
 MVP app-check proof path. It requires live package identity before borderless

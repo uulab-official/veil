@@ -335,7 +335,13 @@
     "latestProofKind": "mvp",
     "latestProofPath": "/Users/test/Library/Application Support/Veil/Diagnostics/Recommended Proof/mvp-proof-latest.json",
     "latestProofFileName": "mvp-proof-latest.json",
-    "latestProofModifiedAt": "2026-07-04T10:00:00Z"
+    "latestProofModifiedAt": "2026-07-04T10:00:00Z",
+    "latestProofLatencyHealth": "delayed",
+    "latestProofSlowestLatencyMeasurement": "post-input-frame",
+    "latestProofSlowestLatencyMilliseconds": 1400,
+    "latestProofLatencyBudgetMilliseconds": 1000,
+    "latestProofStaleTimeoutMilliseconds": 5000,
+    "latestProofLatencyRecommendedAction": "measure-again"
   },
   "releaseGate": {
     "isEnabled": true,

@@ -374,6 +374,11 @@ Rules:
   latency object records `elapsedMilliseconds`, `freshFrameBudgetMilliseconds`,
   `staleFrameTimeoutMilliseconds`, freshness booleans, and the derived
   `recommendedAction` (`none`, `measure-again`, or `tune-frame-latency`).
+  `app-runtime-status.proofArtifacts` parses the latest saved proof JSON and
+  promotes the slowest proof latency as `latestProofLatencyHealth`,
+  `latestProofSlowestLatencyMeasurement`,
+  `latestProofSlowestLatencyMilliseconds`, the shared budget/timeout, and the
+  matching recommended action.
 
 ## Window Focus
 
