@@ -4,6 +4,7 @@ import Observation
 public protocol HostDashboardService: Sendable {
     func loadOverview() async throws -> HostOverview
     func launchApp(appId: String) async throws -> WindowsAppLaunchResult
+    func restoreApp(appId: String) async throws -> WindowsAppLaunchResult
     func launchNotepad() async throws -> NotepadLaunchResult
     func openFile(appId: String, fileName: String, contentBase64: String) async throws -> WindowsAppLaunchResult
     func focusWindow(windowId: String) async throws -> WindowFocusResponse
@@ -14,6 +15,12 @@ public protocol HostDashboardService: Sendable {
     func subscribeWindowFrames(windowId: String) async throws
     func unsubscribeWindowFrames(windowId: String) async throws
     func waitForAgentConnection(endpoint: String, timeoutSeconds: Int) async -> AgentConnectionWaitReport
+}
+
+public extension HostDashboardService {
+    func restoreApp(appId: String) async throws -> WindowsAppLaunchResult {
+        try await launchApp(appId: appId)
+    }
 }
 
 public struct HostOverview: Codable, Equatable, Sendable {
@@ -4098,7 +4105,7 @@ public final class HostDashboardModel {
 
         var restored: [NotepadLaunchResult] = []
         for appId in restorableAppIdsForLaunches() {
-            if let result = await launchApp(appId: appId) {
+            if let result = await launchApp(appId: appId, preferExistingWindow: true) {
                 restored.append(result)
             }
         }
@@ -4134,12 +4141,17 @@ public final class HostDashboardModel {
     }
 
     @discardableResult
-    public func launchApp(appId: String) async -> WindowsAppLaunchResult? {
+    public func launchApp(
+        appId: String,
+        preferExistingWindow: Bool = false
+    ) async -> WindowsAppLaunchResult? {
         phase = .launching
         errorMessage = nil
 
         do {
-            let result = try await service.launchApp(appId: appId)
+            let result = try await (preferExistingWindow
+                ? service.restoreApp(appId: appId)
+                : service.launchApp(appId: appId))
             return try await applyWindowsAppLaunchResult(result)
         } catch {
             errorMessage = userMessage(for: error)
@@ -4758,9 +4770,12 @@ public final class HostDashboardModel {
     }
 
     private func restorableAppIdsForLaunches() -> [String] {
-        restorableAppIds.flatMap { appId in
-            Array(repeating: appId, count: max(1, restorableAppWindowCounts[appId] ?? 1))
-        }
+        // A persisted count records how many windows were open for diagnostics, not how many
+        // launch requests a reconnect may issue. Replaying the count reopens duplicate Windows
+        // instances when an app already owns the restored HWND. New document windows arrive from
+        // the guest discovery stream after the first stable app window is attached.
+        var seen: Set<String> = []
+        return restorableAppIds.filter { seen.insert($0).inserted }
     }
 
     private func mergedOpenWindows() -> [WindowCreatedEvent] {

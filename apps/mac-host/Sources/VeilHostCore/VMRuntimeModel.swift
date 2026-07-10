@@ -1994,7 +1994,10 @@ public struct LocalVMRuntimeService: VMRuntimeService {
     }
 
     private static func shouldPrepareAutomaticInstallMedia(for profile: VMProfile) -> Bool {
-        profile.windowsInstalled != true || profile.guestAgentVersion == nil
+        // VEIL_AUTO is guest support media after the first Windows setup, not just an
+        // unattended-install artifact. Keep staging it so a newer agent bundle can be
+        // delivered through the next normal QEMU boot without reattaching Windows setup media.
+        true
     }
 
     private static func prepareGuestAgentInstallerBundle(for profile: VMProfile) throws {

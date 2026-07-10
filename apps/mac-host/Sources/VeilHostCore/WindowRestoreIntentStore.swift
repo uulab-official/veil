@@ -10,9 +10,8 @@ public struct WindowRestoreIntent: Codable, Equatable, Sendable {
     }
 
     public var appIdsForRestoreLaunches: [String] {
-        appIds.flatMap { appId in
-            Array(repeating: appId, count: max(1, appWindowCounts?[appId] ?? 1))
-        }
+        var seen: Set<String> = []
+        return appIds.filter { seen.insert($0).inserted }
     }
 
     public var normalizedAppWindowCounts: [String: Int] {

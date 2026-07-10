@@ -2487,9 +2487,9 @@ struct HostDashboardModelTests {
         #expect(primary.frameSubscriptions == ["hwnd:0003029A", "hwnd:0003029A"])
     }
 
-    @Test("restores multiple same-app windows after reconnect")
+    @Test("reconnect restores one existing HWND per app even when a prior count is persisted")
     @MainActor
-    func restoresMultipleSameAppWindowsAfterReconnect() async throws {
+    func reconnectRestoresOneStableSameAppWindow() async throws {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
         let intentStore = JSONWindowRestoreIntentStore(directory: directory)
@@ -2507,17 +2507,17 @@ struct HostDashboardModelTests {
         await model.load()
         let restored = await model.restoreMirroredWindowsAfterReconnect()
 
-        #expect(restored.map(\.window.windowId) == ["hwnd:0003029A", "hwnd:00010500"])
-        #expect(model.mirrorSessions.map(\.id) == ["hwnd:0003029A", "hwnd:00010500"])
+        #expect(restored.map(\.window.windowId) == ["hwnd:0003029A"])
+        #expect(model.mirrorSessions.map(\.id) == ["hwnd:0003029A"])
         #expect(model.restorableAppIds == ["winapp_notepad"])
-        #expect(model.restorableAppWindowCounts == ["winapp_notepad": 2])
-        #expect(try await intentStore.load()?.appWindowCounts == ["winapp_notepad": 2])
-        #expect(service.launchedAppIds == ["winapp_notepad", "winapp_notepad"])
-        #expect(service.frameSubscriptions == ["hwnd:0003029A", "hwnd:00010500"])
+        #expect(model.restorableAppWindowCounts == ["winapp_notepad": 1])
+        #expect(try await intentStore.load()?.appWindowCounts == ["winapp_notepad": 1])
+        #expect(service.launchedAppIds == ["winapp_notepad"])
+        #expect(service.frameSubscriptions == ["hwnd:0003029A"])
 
         let report = model.runtimeStatusReport()
         #expect(report.dockIntegration.restorableAppCount == 1)
-        #expect(report.dockIntegration.restorableWindowCount == 2)
+        #expect(report.dockIntegration.restorableWindowCount == 1)
     }
 
     @Test("clears a stale error message when there is nothing to restore")

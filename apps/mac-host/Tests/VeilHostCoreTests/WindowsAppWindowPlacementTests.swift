@@ -24,21 +24,21 @@ struct WindowsAppWindowPlacementTests {
             visibleFrame: HostVisibleFrameGeometry(x: 0, y: 0, width: 1440, height: 900)
         )
 
-        #expect(frame.width == 1040)
-        #expect(frame.height == 780)
+        #expect(frame.width == 720)
+        #expect(frame.height == 540)
     }
 
-    @Test("opens normal app windows as a large work surface")
-    func opensNormalAppWindowsAsLargeWorkSurface() throws {
+    @Test("keeps normal app windows close to their guest scale")
+    func keepsNormalAppWindowsCloseToGuestScale() throws {
         let frame = WindowsAppWindowPlacement.initialFrame(
             for: WindowBounds(x: 0, y: 0, width: 800, height: 600),
             visibleFrame: HostVisibleFrameGeometry(x: 0, y: 0, width: 1440, height: 900)
         )
 
-        #expect(frame.width == 1040)
-        #expect(frame.height == 780)
-        #expect(frame.x == 200)
-        #expect(frame.y == 60)
+        #expect(frame.width == 800)
+        #expect(frame.height == 600)
+        #expect(frame.x == 320)
+        #expect(frame.y == 150)
     }
 
     @Test("clamps large app windows to the visible display")

@@ -107,17 +107,32 @@ public sealed class AgentSession
             return AgentReplies.Direct(ErrorResponse(requestId, "app_not_found", $"No app exists for id {appId}"));
         }
 
+        var reuseExistingWindow = request["reuseExistingWindow"]?.GetValue<bool>() ?? false;
         LaunchedWindow launched;
         try
         {
-            launched = await desktop.LaunchAppAsync(app, cancellationToken);
+            var existingWindows = reuseExistingWindow
+                ? desktop.DiscoverAdditionalWindows(app, new HashSet<string>())
+                : Array.Empty<LaunchedWindow>();
+            if (existingWindows.Count > 0)
+            {
+                // A reconnect must attach to existing guest windows instead of opening another
+                // instance. Track every matching HWND quietly so discovery cannot turn old
+                // windows into duplicate macOS mirrors immediately after the restore.
+                TrackWindows(app, existingWindows);
+                launched = existingWindows.FirstOrDefault(window => window.Focused) ?? existingWindows[0];
+            }
+            else
+            {
+                launched = await desktop.LaunchAppAsync(app, cancellationToken);
+                TrackWindow(app, launched);
+            }
         }
         catch (Exception error) when (error is not OperationCanceledException)
         {
             return AgentReplies.Direct(ErrorResponse(requestId, "app_launch_failed", error.Message));
         }
 
-        TrackWindow(app, launched);
         var frame = await CaptureInitialFrameOrNilAsync(launched, cancellationToken);
 
         return new AgentReplies(
@@ -680,6 +695,18 @@ public sealed class AgentSession
         {
             trackedWindowsById[window.WindowId] = window;
             appByWindowId[window.WindowId] = app;
+        }
+    }
+
+    private void TrackWindows(WindowsAppDescriptor app, IEnumerable<LaunchedWindow> windows)
+    {
+        lock (trackedWindowsGate)
+        {
+            foreach (var window in windows)
+            {
+                trackedWindowsById[window.WindowId] = window;
+                appByWindowId[window.WindowId] = app;
+            }
         }
     }
 

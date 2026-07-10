@@ -501,6 +501,17 @@ public struct VeilHostClient: HostDashboardService, Sendable {
     }
 
     public func launchApp(appId: String) async throws -> WindowsAppLaunchResult {
+        try await requestAppLaunch(appId: appId, reuseExistingWindow: false)
+    }
+
+    public func restoreApp(appId: String) async throws -> WindowsAppLaunchResult {
+        try await requestAppLaunch(appId: appId, reuseExistingWindow: true)
+    }
+
+    private func requestAppLaunch(
+        appId: String,
+        reuseExistingWindow: Bool
+    ) async throws -> WindowsAppLaunchResult {
         let overview = try await loadOverview()
 
         guard overview.apps.contains(where: { $0.id == appId }) else {
@@ -508,7 +519,11 @@ public struct VeilHostClient: HostDashboardService, Sendable {
         }
 
         let launchReplies = try await transport.send(
-            encoder.encode(AppLaunchRequest(requestId: "req_launch_\(requestIdSuffix(for: appId))", appId: appId)),
+            encoder.encode(AppLaunchRequest(
+                requestId: "req_launch_\(requestIdSuffix(for: appId))",
+                appId: appId,
+                reuseExistingWindow: reuseExistingWindow
+            )),
             expectedReplies: 2
         )
 

@@ -193,6 +193,22 @@ struct VeilHostClientTests {
         #expect(result.window.title == "Calculator")
     }
 
+    @Test("reconnect restore requests an existing Windows HWND before launching another instance")
+    func restoresExistingWindowsAppWindow() async throws {
+        let transport = RecordingTransport(responses: [
+            #"{"type":"agent.health.response","requestId":"req_health","protocolVersion":1,"agentVersion":"0.1.0","os":"windows-arm64","session":{"interactive":true,"user":"veil-user"},"capabilities":{"appList":true,"appLaunch":true,"windowTracking":true,"windowCapture":false,"input":false,"clipboardText":false,"packageIdentity":false}}"#,
+            #"{"type":"app.list.response","requestId":"req_apps","apps":[{"id":"winapp_notepad","name":"Notepad","exePath":"notepad.exe","publisher":"Microsoft","iconId":"icon_notepad"}]}"#,
+            #"{"type":"app.launch.response","requestId":"req_launch_winapp_notepad","accepted":true,"processId":4912}"#,
+            #"{"type":"window.created","windowId":"hwnd:0003029A","processId":4912,"appId":"winapp_notepad","title":"Untitled - Notepad","bounds":{"x":10,"y":10,"width":1280,"height":800},"state":"normal","focused":true}"#
+        ])
+        let client = VeilHostClient(transport: transport)
+
+        let result = try await client.restoreApp(appId: "winapp_notepad")
+
+        #expect(result.window.windowId == "hwnd:0003029A")
+        #expect(transport.reuseExistingWindowRequests == [true])
+    }
+
     @Test("opens a dropped file and launches the target app with it")
     func opensADroppedFileAndLaunchesTheTargetAppWithIt() async throws {
         let transport = RecordingTransport(responses: [
@@ -604,6 +620,7 @@ private final class RecordingTransport: HostTransport, @unchecked Sendable {
     private var responses: [String]
     private(set) var sentTypes: [String] = []
     private(set) var sentAppIds: [String] = []
+    private(set) var reuseExistingWindowRequests: [Bool] = []
     private(set) var expectedReplyCounts: [Int] = []
 
     init(responses: [String]) {
@@ -615,6 +632,9 @@ private final class RecordingTransport: HostTransport, @unchecked Sendable {
         sentTypes.append(object?["type"] as? String ?? "")
         if let appId = object?["appId"] as? String {
             sentAppIds.append(appId)
+        }
+        if object?["type"] as? String == "app.launch.request" {
+            reuseExistingWindowRequests.append(object?["reuseExistingWindow"] as? Bool ?? false)
         }
         expectedReplyCounts.append(expectedReplies)
 

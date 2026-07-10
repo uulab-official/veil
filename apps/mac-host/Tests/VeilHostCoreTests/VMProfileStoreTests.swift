@@ -1160,8 +1160,9 @@ struct VMProfileStoreTests {
         #expect(snapshot.detail == "Windows is installed and can be started.")
         #expect(snapshot.installationSteps.first { $0.id == "windows-installer" }?.detail.contains("no longer required") == true)
         #expect(snapshot.preflightChecks.first { $0.id == "installer-media" }?.state == .passed)
-        #expect(devices.storageDevices.map(\.role) == ["system-disk"])
-        #expect(devices.storageDevices.map(\.path) == [diskURL.path])
+        #expect(devices.storageDevices.map(\.role) == ["auto-install", "system-disk"])
+        #expect(devices.storageDevices.map(\.path) == [nil, diskURL.path])
+        #expect(devices.storageDevices.first?.readOnly == true)
     }
 
     @Test("prepare default VM applies injected adaptive resource plan")

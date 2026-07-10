@@ -27,8 +27,10 @@ public enum WindowsAppWindowPlacement {
         let isCompactUtilityWindow = sourceWidth <= 640
             && sourceHeight >= 640
             && sourceHeight >= sourceWidth * 1.1
-        let preferredMinimumWidth = isCompactUtilityWindow ? 520.0 : 1040.0
-        let preferredMinimumHeight = isCompactUtilityWindow ? 360.0 : 640.0
+        // Preserve a readable native-like scale for normal Windows apps instead of enlarging a
+        // small guest HWND until its text looks like a full-screen VM console.
+        let preferredMinimumWidth = isCompactUtilityWindow ? 520.0 : 720.0
+        let preferredMinimumHeight = isCompactUtilityWindow ? 360.0 : 480.0
         let minimumWidth = min(preferredMinimumWidth, maximumWidth)
         let minimumHeight = min(preferredMinimumHeight, maximumHeight)
 

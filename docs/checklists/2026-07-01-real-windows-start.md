@@ -251,6 +251,8 @@ Goal: keep the main Veil experience pointed at real local Windows boot and conso
 - [x] Promote guest-agent repair into `app-runtime-action --action repair-agent`, with `agentRepair` evidence and pending-launch fulfillment, so the app button and harness share one product action instead of pointing at the lower-level QEMU command.
 - [x] Make `app-runtime-action --demo --action repair-agent` a dry run with no `agentRepair` evidence, preventing harness/demo checks from sending QEMU input to the real local VM.
 - [x] Reproduce and fix a live guest-agent listener crash caused by short-lived host TCP probes: Windows logged `SocketException` 10054 from `AcceptTcpClientAsync`, while host forwarding still appeared TCP-open. The listener now keeps running after transient accept resets; the republished bundle, rebuilt `VeilAutoInstall.iso`, QEMU/HVF restart, and `mvp-proof --require-proved` all completed successfully with real Notepad frame, input, and clipboard evidence.
+- [x] Keep the read-only `VEIL_AUTO` guest support ISO attached after Windows installation while detaching the Windows installer ISO and booting the NVMe system disk. This preserves automatic guest-agent repair and update delivery on normal QEMU/HVF launches.
+- [x] Make reconnect restore app-first and bounded: persisted same-app window counts are retained for status but reconnect reuses one existing HWND per app, preventing a stale count from opening an unbounded cascade of duplicate macOS windows. Normal mirrored app windows now retain a compact native-like scale instead of expanding small guest windows to a VM-sized surface.
 
 ## Next
 

@@ -10,6 +10,8 @@ public class WindowDiscoveryStreamerTests
         private readonly LaunchedWindow launchedWindow;
         private readonly Queue<IReadOnlyList<LaunchedWindow>> discoveryScript;
         private readonly HashSet<string> closedWindowIds;
+        public int LaunchAppCallCount { get; private set; }
+        public List<IReadOnlySet<string>> DiscoveryKnownWindowIds { get; } = [];
 
         public ScriptedWindowsDesktop(
             LaunchedWindow launchedWindow,
@@ -22,8 +24,11 @@ public class WindowDiscoveryStreamerTests
             this.closedWindowIds = closedWindowIds is null ? [] : new HashSet<string>(closedWindowIds);
         }
 
-        public Task<LaunchedWindow> LaunchAppAsync(WindowsAppDescriptor app, CancellationToken cancellationToken) =>
-            Task.FromResult(launchedWindow);
+        public Task<LaunchedWindow> LaunchAppAsync(WindowsAppDescriptor app, CancellationToken cancellationToken)
+        {
+            LaunchAppCallCount += 1;
+            return Task.FromResult(launchedWindow);
+        }
 
         public Task<LaunchedWindow> LaunchAppWithFileAsync(WindowsAppDescriptor app, string filePath, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
@@ -31,8 +36,11 @@ public class WindowDiscoveryStreamerTests
         public Task<LaunchedWindow> LaunchNotepadAsync(CancellationToken cancellationToken) =>
             Task.FromResult(launchedWindow);
 
-        public IReadOnlyList<LaunchedWindow> DiscoverAdditionalWindows(WindowsAppDescriptor app, IReadOnlySet<string> knownWindowIds) =>
-            discoveryScript.Count == 0 ? Array.Empty<LaunchedWindow>() : discoveryScript.Dequeue();
+        public IReadOnlyList<LaunchedWindow> DiscoverAdditionalWindows(WindowsAppDescriptor app, IReadOnlySet<string> knownWindowIds)
+        {
+            DiscoveryKnownWindowIds.Add(new HashSet<string>(knownWindowIds));
+            return discoveryScript.Count == 0 ? Array.Empty<LaunchedWindow>() : discoveryScript.Dequeue();
+        }
 
         // Every window is "still open" unless the test explicitly scripts it as closed -- keeps the
         // pruning pass a no-op for tests that are only exercising discovery.
@@ -110,6 +118,53 @@ public class WindowDiscoveryStreamerTests
         Assert.Empty(replies.BroadcastEvents);
         Assert.Equal(launched, replies.StreamWindow);
         Assert.Equal(1, replies.NextFrameSequence);
+    }
+
+    [Fact]
+    public async Task RestoreReusesAnExistingWindowAndSuppressesDuplicateDiscovery()
+    {
+        var existingFocusedWindow = Window("hwnd:00000001");
+        var existingBackgroundWindow = Window("hwnd:00000002") with { Focused = false };
+        var desktop = new ScriptedWindowsDesktop(
+            Window("hwnd:new"),
+            new Queue<IReadOnlyList<LaunchedWindow>>([
+                [existingFocusedWindow, existingBackgroundWindow],
+                [existingBackgroundWindow]
+            ])
+        );
+        var session = new AgentSession(desktop, new NoOpFrameCapture());
+
+        var replies = await session.HandleAsync(new JsonObject
+        {
+            ["type"] = "app.launch.request",
+            ["requestId"] = "req_restore",
+            ["appId"] = "winapp_notepad",
+            ["reuseExistingWindow"] = true
+        });
+
+        Assert.Equal(0, desktop.LaunchAppCallCount);
+        Assert.Equal(existingFocusedWindow.WindowId, replies.DirectReplies[1]["windowId"]!.GetValue<string>());
+
+        var streamer = new WindowDiscoveryStreamer(session, desktop, interval: TimeSpan.FromMilliseconds(5));
+        var broadcasts = new List<JsonObject>();
+        using var cancellation = new CancellationTokenSource(TimeSpan.FromMilliseconds(40));
+        var streamTask = streamer.StreamAsync(
+            (message, _) =>
+            {
+                broadcasts.Add(message);
+                return Task.CompletedTask;
+            },
+            cancellation.Token
+        );
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => streamTask);
+
+        Assert.Empty(broadcasts);
+        Assert.Contains(desktop.DiscoveryKnownWindowIds, knownWindowIds =>
+            knownWindowIds.Count == 2
+            && knownWindowIds.Contains(existingFocusedWindow.WindowId)
+            && knownWindowIds.Contains(existingBackgroundWindow.WindowId)
+        );
     }
 
     [Fact]

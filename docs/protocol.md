@@ -178,7 +178,8 @@ Request:
   "type": "app.launch.request",
   "requestId": "req_003",
   "appId": "winapp_calculator",
-  "args": []
+  "args": [],
+  "reuseExistingWindow": false
 }
 ```
 
@@ -196,6 +197,10 @@ Response:
 Rules:
 
 - `appId` must be one of the IDs returned by the latest `app.list.response`.
+- `reuseExistingWindow` defaults to `false`. A host reconnect sets it to `true` to
+  reuse a matching already-visible guest HWND before creating a new app process.
+  The guest silently tracks all matching pre-existing windows during that lookup,
+  so its later discovery stream cannot surface them as duplicate macOS mirrors.
 - `app.launch.response.processId` must match the subsequent `window.created.processId`.
 - `window.created.appId` identifies the launched app; the launch/window acceptance contract is not Notepad-specific.
 

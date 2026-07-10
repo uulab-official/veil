@@ -21,7 +21,7 @@ struct WindowRestoreIntentStoreTests {
         #expect(loaded == intent)
         #expect(loaded?.appIds == ["winapp_notepad"])
         #expect(loaded?.appWindowCounts == ["winapp_notepad": 2])
-        #expect(loaded?.appIdsForRestoreLaunches == ["winapp_notepad", "winapp_notepad"])
+        #expect(loaded?.appIdsForRestoreLaunches == ["winapp_notepad"])
         #expect(loaded?.normalizedAppWindowCounts == ["winapp_notepad": 2])
     }
 

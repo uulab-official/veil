@@ -147,12 +147,21 @@ public struct AppLaunchRequest: Codable, Equatable, Sendable {
     public var requestId: String
     public var appId: String
     public var args: [String]
+    /// Set only by reconnect/restore flows. The guest reuses an existing HWND
+    /// when possible instead of opening a second Windows app instance.
+    public var reuseExistingWindow: Bool
 
-    public init(requestId: String, appId: String, args: [String] = []) {
+    public init(
+        requestId: String,
+        appId: String,
+        args: [String] = [],
+        reuseExistingWindow: Bool = false
+    ) {
         self.type = .appLaunchRequest
         self.requestId = requestId
         self.appId = appId
         self.args = args
+        self.reuseExistingWindow = reuseExistingWindow
     }
 }
 

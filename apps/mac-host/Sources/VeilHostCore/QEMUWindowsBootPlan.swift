@@ -189,7 +189,9 @@ public struct QEMUWindowsBootPlanner: Sendable {
     public func makePlan(for profile: VMProfile) throws -> QEMUWindowsBootPlan {
         let windowsInstalled = profile.windowsInstalled == true
         let shouldAttachInstallerMedia = !windowsInstalled
-        let shouldAttachAutomaticInstallMedia = !windowsInstalled || profile.guestAgentVersion == nil
+        // Windows always boots from the system disk after installation, but the separate
+        // VEIL_AUTO support ISO must remain read-only attached so agent repair and updates can
+        // reach an already-installed guest without reattaching the Windows installer ISO.
         let installerMediaPath = nonEmpty(profile.installerMediaPath)
 
         guard !shouldAttachInstallerMedia || installerMediaPath != nil else {
@@ -202,11 +204,9 @@ public struct QEMUWindowsBootPlanner: Sendable {
 
         let cpuCount = max(2, profile.cpuCount)
         let memoryMB = max(4_096, profile.memoryMB)
-        let automaticInstallMediaPath = shouldAttachAutomaticInstallMedia
-            ? URL(fileURLWithPath: profile.sharedFolderPath)
-                .appendingPathComponent("VeilAutoInstall.iso")
-                .path
-            : nil
+        let automaticInstallMediaPath = URL(fileURLWithPath: profile.sharedFolderPath)
+            .appendingPathComponent("VeilAutoInstall.iso")
+            .path
         let driverMediaPath = nonEmpty(profile.driverMediaPath)
         var warnings = configurationWarnings
 
@@ -278,12 +278,10 @@ public struct QEMUWindowsBootPlanner: Sendable {
             ])
         }
 
-        if let automaticInstallMediaPath {
-            arguments.append(contentsOf: [
-                "-drive", "driver=raw,file.driver=file,file.locking=off,file.filename=\(automaticInstallMediaPath),if=none,id=autounattend,media=cdrom,readonly=on",
-                "-device", "usb-storage,drive=autounattend"
-            ])
-        }
+        arguments.append(contentsOf: [
+            "-drive", "driver=raw,file.driver=file,file.locking=off,file.filename=\(automaticInstallMediaPath),if=none,id=autounattend,media=cdrom,readonly=on",
+            "-device", "usb-storage,drive=autounattend"
+        ])
 
         if let driverMediaPath {
             arguments.append(contentsOf: [
@@ -308,7 +306,7 @@ public struct QEMUWindowsBootPlanner: Sendable {
             networkAdapter: networkAdapter,
             networkDeviceArgument: networkAdapter.deviceArgument,
             summary: windowsInstalled
-                ? "Dry-run QEMU/HVF command plan for \(profile.name). Windows boots from the installed system disk; installer media is not attached."
+                ? "Dry-run QEMU/HVF command plan for \(profile.name). Windows boots from the installed system disk; the Windows installer ISO is detached and read-only Veil guest support media stays attached."
                 : "Dry-run QEMU/HVF command plan for \(profile.name). Veil does not execute this plan yet.",
             arguments: arguments,
             warnings: warnings
@@ -578,16 +576,6 @@ public struct QEMUWindowsReadinessDoctor: Sendable {
     }
 
     private func automaticInstallMediaCheck(profile: VMProfile?, plan: QEMUWindowsBootPlan?) -> QEMUWindowsReadinessCheck {
-        if profile?.windowsInstalled == true,
-           profile?.guestAgentVersion != nil {
-            return QEMUWindowsReadinessCheck(
-                id: "automatic-install-media",
-                title: "Automatic install media",
-                state: .passed,
-                detail: "Guest agent evidence is present; automatic install media is no longer attached at boot."
-            )
-        }
-
         guard let path = nonEmpty(plan?.automaticInstallMediaPath) else {
             return QEMUWindowsReadinessCheck(
                 id: "automatic-install-media",
@@ -610,7 +598,7 @@ public struct QEMUWindowsReadinessDoctor: Sendable {
             id: "automatic-install-media",
             title: "Automatic install media",
             state: .passed,
-            detail: "Automatic setup media is available at \(path)."
+            detail: "Read-only Veil guest support media is available at \(path) for install, repair, and agent updates."
         )
     }
 

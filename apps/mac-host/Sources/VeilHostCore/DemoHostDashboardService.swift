@@ -37,6 +37,10 @@ public struct FallbackHostDashboardService: HostDashboardService, Sendable {
         try await primary.launchApp(appId: appId)
     }
 
+    public func restoreApp(appId: String) async throws -> WindowsAppLaunchResult {
+        try await primary.restoreApp(appId: appId)
+    }
+
     public func launchNotepad() async throws -> NotepadLaunchResult {
         try await launchApp(appId: "winapp_notepad")
     }

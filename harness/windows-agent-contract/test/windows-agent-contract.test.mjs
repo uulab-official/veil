@@ -71,6 +71,15 @@ test("windows agent streams continuing window frames after launch", async () => 
   assert.doesNotMatch(streamer, /BootstrapPngFrameCapture/);
 });
 
+test("windows agent restores existing guest windows without creating duplicate Mac mirrors", async () => {
+  const session = await readFile(resolve(agentRoot, "src/VeilAgent/AgentSession.cs"), "utf8");
+
+  assert.match(session, /reuseExistingWindow/);
+  assert.match(session, /DiscoverAdditionalWindows\(app, new HashSet<string>\(\)\)/);
+  assert.match(session, /TrackWindows\(app, existingWindows\)/);
+  assert.match(session, /FirstOrDefault\(window => window\.Focused\)/);
+});
+
 test("windows agent listens without HttpListener URL ACL requirements", async () => {
   const endpoint = await readFile(resolve(agentRoot, "src/VeilAgent/AgentEndpoint.cs"), "utf8");
   const server = await readFile(resolve(agentRoot, "src/VeilAgent/WebSocketAgentServer.cs"), "utf8");

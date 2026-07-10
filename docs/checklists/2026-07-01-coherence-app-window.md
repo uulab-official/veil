@@ -33,15 +33,17 @@ Goal: make Veil's product direction visible as "Windows app as a macOS window" i
 - [x] Save initial and post-input Notepad smoke frames as PNG evidence when an output directory is provided.
 - [x] Replace the mirrored-window blank placeholder with capture-state-aware pending, unavailable, and undecodable-frame surfaces.
 - [x] Track first-frame receipt, frame count, and latest frame interval on mirrored app sessions.
-- [x] Make normal mirrored Windows app windows open as a large work surface instead of inheriting small HWND bounds.
+- [x] Keep normal mirrored Windows app windows at a compact native-like work scale instead of expanding a small HWND into a VM-sized surface.
 - [x] Keep mirrored app-window chrome frame-first with a black full-window surface and hidden title text.
 - [x] Hide the main Veil launcher after automatic reconnect or restore opens mirrored Windows app windows.
 - [x] Add `window.closed` lifecycle events so guest-side close state removes the macOS mirror window and restore intent.
 - [x] Handle async `window.created` lifecycle events so guest-created HWNDs open as macOS mirror windows.
 - [x] Add `window.updated` lifecycle events so title, bounds, state, and focus metadata stay current without resetting frames.
 - [x] Add explicit `window.focus.request` handling so bringing a macOS mirror window forward also asks Windows to foreground the HWND.
+- [x] Reconnect by reusing one focused existing HWND per app, silently track other existing matching HWNDs, and never replay persisted window counts as new launch requests.
 
 ## Next
 
-- [ ] Validate keyboard input inside Windows 11 Arm with Notepad focused.
-- [ ] Record real Windows 11 Arm first-frame time and frame cadence evidence from the guest agent.
+- [x] Validate keyboard input inside Windows 11 Arm with Notepad focused through the real `mvp-proof` harness.
+- [x] Record real Windows 11 Arm first-frame and post-input frame evidence from the guest agent.
+- [ ] Tune real post-input frame delivery to consistently remain below the fresh-frame budget.
