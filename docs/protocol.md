@@ -381,7 +381,11 @@ Rules:
   matching recommended action. It also reports `latestProofsByApp` plus
   `multiAppProofTargetAppIds`, `multiAppProofCoverageCount`, and
   `multiAppProofCoverageHealth` so Notepad, Calculator, and Paint coverage is
-  visible before claiming Daily Use quality.
+  visible before claiming Daily Use quality. `veil-vmctl multi-app-proof`
+  writes one saved Coherence proof per target app and an aggregate
+  `windowsMultiAppProof` diagnostics report; it does not add a new guest
+  protocol message, but it standardizes how automation fills the saved
+  artifacts that status and review surfaces already consume.
 
 ## Window Focus
 

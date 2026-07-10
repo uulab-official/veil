@@ -6,7 +6,9 @@ export function createSession(options = {}) {
   const broadcast = options.broadcast ?? (async () => {});
   const onInput = options.onInput ?? (async () => {});
   const nextFrameSequence = options.nextFrameSequence ?? (() => 1);
-  const trackedWindowIds = new Set(options.trackedWindowIds ?? ["hwnd:0003029A"]);
+  const trackedWindowIds = options.trackedWindowIds instanceof Set
+    ? options.trackedWindowIds
+    : new Set(options.trackedWindowIds ?? ["hwnd:0003029A"]);
 
   return {
     async handle(message) {

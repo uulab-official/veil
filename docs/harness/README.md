@@ -22,6 +22,7 @@ harness/
 ├─ app-window-proof/       JSON shape validation for launch/HWND/first-frame proof
 ├─ coherence-proof/        JSON shape validation for launch/HWND/frame/input/clipboard proof
 ├─ mvp-proof/              JSON shape validation for guest wait plus Coherence proof
+├─ multi-app-proof/        JSON shape validation for Notepad/Calculator/Paint proof coverage
 ├─ guest-agent-wait/       JSON shape validation for post-install guest-agent readiness
 ├─ qemu-boot-plan/         JSON shape validation for dry-run QEMU/HVF boot plans
 ├─ qemu-doctor/            JSON shape validation for QEMU/HVF readiness reports
@@ -46,6 +47,7 @@ Current executable pieces:
 - `harness/app-window-proof`: a JSON validator for one app launch, one tracked HWND, first captured frame evidence, and first-frame latency budget evidence.
 - `harness/coherence-proof`: a JSON validator for one app launch, one tracked HWND, first and post-input frame evidence, frame latency budget evidence, mouse/key input, and host clipboard send evidence.
 - `harness/mvp-proof`: a JSON validator for the full Notepad MVP gate: guest-agent readiness plus Coherence proof evidence.
+- `harness/multi-app-proof`: a JSON validator for one command that runs Coherence proof coverage across Notepad, Calculator, and Paint and saves per-app artifacts for app-runtime status.
 - `harness/guest-agent-wait`: a JSON validator for waiting until the installed Windows guest agent is reachable after setup/login.
 - `harness/qemu-boot-plan`: a JSON validator for dry-run QEMU/HVF Windows Arm boot plans.
 - `harness/qemu-doctor`: a JSON validator for QEMU/HVF readiness reports and next actions.
@@ -251,7 +253,12 @@ latency action; review cards mirror the same fields so release evidence cannot
 hide a slow first-frame or post-input proof. `proofArtifacts.latestProofsByApp`
 keeps the latest proof per app, and `multiAppProofCoverageHealth` reports
 whether the Daily Use proof targets (`winapp_notepad`, `winapp_calculator`,
-`winapp_paint`) are `missing`, `partial`, or `complete`.
+`winapp_paint`) are `missing`, `partial`, or `complete`. The matching automation
+surface is `veil-vmctl multi-app-proof --json --require-complete`, which runs
+Coherence proof for the target apps, writes the per-app JSON files under
+`Coherence Proof`, writes an aggregate report under `Recommended Proof`, and
+then lets `app-runtime-status` promote complete coverage without hand-editing
+diagnostics.
 
 `dailyUseReadiness` tracks the v1.5 integration preflight separately from the
 MVP app-check proof path. It requires live package identity before borderless
@@ -603,6 +610,25 @@ node ../../harness/coherence-proof/src/validate-coherence-proof.mjs < "$proof"
 
 Run this after `guest-agent-wait` reports connected and before claiming the
 Notepad MVP loop is usable. The command does not start or stop the VM.
+
+## Multi-App Proof Scenario
+
+The multi-app proof command is the Daily Use app coverage gate. It sequentially
+runs the Coherence proof for Notepad, Calculator, and Paint, keeps going after
+per-app failures, saves every successful proof into the diagnostics
+`Coherence Proof` directory, and saves a coverage summary into
+`Recommended Proof`.
+
+```bash
+cd apps/mac-host
+swift run veil-vmctl multi-app-proof --json --require-complete | node ../../harness/multi-app-proof/src/validate-multi-app-proof.mjs --require-complete
+swift run veil-vmctl app-runtime-status --json | node ../../harness/app-runtime-status/src/validate-app-runtime-status.mjs
+```
+
+Expected: the first command reports `coverageHealth=complete` only when all
+three apps complete launch, HWND tracking, initial/post-input frame capture,
+mouse/key input, and host clipboard send. The second command should then show
+`proofArtifacts.multiAppProofCoverageHealth=complete`.
 
 ## MVP Proof Scenario
 

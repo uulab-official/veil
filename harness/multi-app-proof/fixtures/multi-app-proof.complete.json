@@ -1,0 +1,70 @@
+{
+  "kind": "windowsMultiAppProof",
+  "endpoint": "ws://127.0.0.1:18444",
+  "provedAt": "2026-07-10T02:30:00Z",
+  "proofDirectory": "/Users/test/Library/Application Support/Veil/Diagnostics/Coherence Proof",
+  "aggregateReportPath": "/Users/test/Library/Application Support/Veil/Diagnostics/Recommended Proof/multi-app-proof-20260710-023000.json",
+  "appIds": [
+    "winapp_notepad",
+    "winapp_calculator",
+    "winapp_paint"
+  ],
+  "targetAppIds": [
+    "winapp_notepad",
+    "winapp_calculator",
+    "winapp_paint"
+  ],
+  "waitSeconds": 10,
+  "proofKind": "coherence",
+  "provedAppCount": 3,
+  "failedAppCount": 0,
+  "coverageHealth": "complete",
+  "results": [
+    {
+      "appId": "winapp_notepad",
+      "status": "proved",
+      "proofKind": "coherence",
+      "proofPath": "/Users/test/Library/Application Support/Veil/Diagnostics/Coherence Proof/winapp_notepad-coherence-proof-20260710-023000.json",
+      "latencyHealth": "delayed",
+      "slowestLatencyMeasurement": "post-input-frame",
+      "slowestLatencyMilliseconds": 1400,
+      "latencyBudgetMilliseconds": 1000,
+      "staleTimeoutMilliseconds": 5000,
+      "latencyRecommendedAction": "measure-again",
+      "windowId": "hwnd:0003029A",
+      "windowTitle": "Untitled - Notepad"
+    },
+    {
+      "appId": "winapp_calculator",
+      "status": "proved",
+      "proofKind": "coherence",
+      "proofPath": "/Users/test/Library/Application Support/Veil/Diagnostics/Coherence Proof/winapp_calculator-coherence-proof-20260710-023000.json",
+      "latencyHealth": "healthy",
+      "slowestLatencyMeasurement": "initial-frame",
+      "slowestLatencyMilliseconds": 780,
+      "latencyBudgetMilliseconds": 1000,
+      "staleTimeoutMilliseconds": 5000,
+      "latencyRecommendedAction": "none",
+      "windowId": "hwnd:00040120",
+      "windowTitle": "Calculator"
+    },
+    {
+      "appId": "winapp_paint",
+      "status": "proved",
+      "proofKind": "coherence",
+      "proofPath": "/Users/test/Library/Application Support/Veil/Diagnostics/Coherence Proof/winapp_paint-coherence-proof-20260710-023000.json",
+      "latencyHealth": "stale",
+      "slowestLatencyMeasurement": "post-input-frame",
+      "slowestLatencyMilliseconds": 5400,
+      "latencyBudgetMilliseconds": 1000,
+      "staleTimeoutMilliseconds": 5000,
+      "latencyRecommendedAction": "tune-frame-latency",
+      "windowId": "hwnd:00050120",
+      "windowTitle": "Untitled - Paint"
+    }
+  ],
+  "nextActions": [
+    "Run `veil-vmctl app-runtime-status --json` to confirm proofArtifacts.multiAppProofCoverageHealth.",
+    "Attach `/Users/test/Library/Application Support/Veil/Diagnostics/Recommended Proof/multi-app-proof-20260710-023000.json` with the saved per-app proof artifacts when filing app-runtime evidence."
+  ]
+}

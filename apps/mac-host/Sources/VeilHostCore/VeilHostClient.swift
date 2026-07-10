@@ -564,7 +564,7 @@ public struct VeilHostClient: HostDashboardService, Sendable {
             windowId: launchResult.window.windowId,
             timeoutNanoseconds: timeoutNanoseconds
         )
-        try? await Task.sleep(nanoseconds: 200_000_000)
+        try? await Task.sleep(nanoseconds: 500_000_000)
         let firstFrameRequestedAt = Date()
         try await subscribeWindowFrames(windowId: launchResult.window.windowId)
         let firstFrame = try await frame
@@ -615,7 +615,7 @@ public struct VeilHostClient: HostDashboardService, Sendable {
             windowId: launchResult.window.windowId,
             timeoutNanoseconds: timeoutNanoseconds
         )
-        try? await Task.sleep(nanoseconds: 200_000_000)
+        try? await Task.sleep(nanoseconds: 500_000_000)
         let initialFrameRequestedAt = Date()
         try await subscribeWindowFrames(windowId: launchResult.window.windowId)
         let initialFrame = try await frame

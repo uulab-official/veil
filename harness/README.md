@@ -17,6 +17,7 @@ harness/
 ├─ app-window-proof/       Validates app launch/HWND/first-frame proof JSON
 ├─ coherence-proof/        Validates launch/HWND/frame/input/clipboard proof JSON
 ├─ mvp-proof/              Validates guest wait plus Coherence proof JSON
+├─ multi-app-proof/        Validates Notepad/Calculator/Paint proof coverage JSON
 ├─ guest-agent-wait/       Validates post-install guest-agent readiness JSON
 ├─ export-diagnostics/     Validates the metadata-only diagnostics bundle JSON
 ├─ qemu-boot-plan/         Validates dry-run QEMU/HVF Windows boot plan JSON
@@ -170,6 +171,17 @@ node ../../harness/mvp-proof/src/validate-mvp-proof.mjs --require-proved < "$pro
 
 Expected: JSON proves the guest agent became reachable and the Notepad
 Coherence-style launch/frame/input/clipboard loop completed.
+
+For the Daily Use multi-app proof:
+
+```bash
+swift run veil-vmctl multi-app-proof --json --require-complete | node ../../harness/multi-app-proof/src/validate-multi-app-proof.mjs --require-complete
+swift run veil-vmctl app-runtime-status --json | node ../../harness/app-runtime-status/src/validate-app-runtime-status.mjs
+```
+
+Expected: JSON reports complete coverage only after Notepad, Calculator, and
+Paint each produce saved Coherence proof artifacts. The follow-up status run
+should surface that coverage in `proofArtifacts.latestProofsByApp`.
 
 For the full launch acceptance flow:
 

@@ -6,6 +6,7 @@ export function createFakeAgentServer({ host = "127.0.0.1", port = 18444, onInpu
   const server = new WebSocketServer({ host, port });
   const clients = new Set();
   let frameSequence = 1;
+  const trackedWindowIds = new Set(["hwnd:0003029A"]);
 
   server.on("connection", (socket) => {
     clients.add(socket);
@@ -15,6 +16,7 @@ export function createFakeAgentServer({ host = "127.0.0.1", port = 18444, onInpu
 
     const session = createSession({
       onInput,
+      trackedWindowIds,
       nextFrameSequence: () => {
         frameSequence += 1;
         return frameSequence;
