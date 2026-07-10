@@ -160,7 +160,10 @@ counts. Each `mirrorSessions[]` entry also carries `frameStreamStatus`,
 for first frame" from a fresh, delayed, or stale mirrored Windows app surface.
 When any mirrored app surface is stale, `actions[]` must expose
 `windowsApps.restartFrameStream` as available so the app can resubscribe the
-frame stream without falling back to a generic VM display.
+frame stream without falling back to a generic VM display. The executable
+handoff is `veil-vmctl app-runtime-action --json --action restart-frame-stream`;
+accepted reports must list the restarted HWNDs in `restartedFrameWindowIds` and
+return those sessions to `frameStreamStatus=waitingForFirstFrame`.
 The foregroundable count must move with mirrored HWND sessions so successful
 launch, restore, and pending-launch fulfillment reports prove the Windows app
 can be brought forward as a macOS window instead of merely existing inside the

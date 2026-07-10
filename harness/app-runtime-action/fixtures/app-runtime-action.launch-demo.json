@@ -496,5 +496,6 @@
     "canRunCoherenceProof": false,
     "canRunMVPProof": false,
     "reason": "Wait for the live Windows agent before running proof commands."
-  }
+  },
+  "restartedFrameWindowIds": []
 }

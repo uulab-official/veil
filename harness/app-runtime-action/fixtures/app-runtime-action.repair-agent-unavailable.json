@@ -543,5 +543,6 @@
       "Inside Windows, run Veil Shared\\Veil Guest Agent\\Repair Veil Agent Connectivity.cmd as Administrator.",
       "Run `veil-host-probe --diagnose-agent` after the repair attempt."
     ]
-  }
+  },
+  "restartedFrameWindowIds": []
 }

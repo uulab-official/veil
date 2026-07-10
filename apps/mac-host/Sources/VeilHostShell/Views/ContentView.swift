@@ -16,6 +16,7 @@ struct ContentView: View {
     var fulfillPendingLaunchAction: () -> Void
     var restoreWindowsAppWindowsAction: () -> Void
     var closeAllWindowsAppWindowsAction: () -> Void
+    var restartStaleFrameStreamsAction: () -> Void
     var runRecommendedProofAction: () -> Void
     var quietWindowsWhenIdleAction: () -> Void
     var displayMessage: String?
@@ -51,6 +52,7 @@ struct ContentView: View {
                     fulfillPendingLaunchAction: fulfillPendingLaunchAction,
                     restoreWindowsAppWindowsAction: restoreWindowsAppWindowsAction,
                     closeAllWindowsAppWindowsAction: closeAllWindowsAppWindowsAction,
+                    restartStaleFrameStreamsAction: restartStaleFrameStreamsAction,
                     runRecommendedProofAction: runRecommendedProofAction,
                     quietWindowsWhenIdleAction: quietWindowsWhenIdleAction,
                     displayMessage: displayMessage

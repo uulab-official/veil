@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { validateAppRuntimeStatus } from "../../app-runtime-status/src/validate-app-runtime-status.mjs";
 import { validateGuestAgentWait } from "../../guest-agent-wait/src/validate-guest-agent-wait.mjs";
 
-const VALID_ACTIONS = new Set(["launch", "fulfill-pending", "focus", "close", "close-all", "restore", "reconnect-restore", "bring-forward", "recover-display", "wait-agent", "repair-agent", "prepare-sparse-package", "quiet-when-idle", "stop-runtime", "clipboard", "type-text", "click", "proof-recommended"]);
+const VALID_ACTIONS = new Set(["launch", "fulfill-pending", "focus", "close", "close-all", "restart-frame-stream", "restore", "reconnect-restore", "bring-forward", "recover-display", "wait-agent", "repair-agent", "prepare-sparse-package", "quiet-when-idle", "stop-runtime", "clipboard", "type-text", "click", "proof-recommended"]);
 const VALID_CONNECTION_MODES = new Set(["agent", "demo"]);
 const VALID_CONSOLE_PREVIEW_STATES = new Set(["fresh", "stale", "unavailable"]);
 
@@ -42,6 +42,7 @@ export function validateAppRuntimeAction(report) {
   if (!Array.isArray(report.restoredWindows)) {
     throw new TypeError("restoredWindows must be an array.");
   }
+  validateStringArray(report.restartedFrameWindowIds, "restartedFrameWindowIds");
 
   if (report.action !== "stop-runtime" && report.runtimeStop !== undefined && report.runtimeStop !== null) {
     throw new TypeError("runtimeStop is only allowed for stop-runtime actions.");
@@ -82,6 +83,9 @@ export function validateAppRuntimeAction(report) {
       break;
     case "close-all":
       validateCloseAllAction(report);
+      break;
+    case "restart-frame-stream":
+      validateRestartFrameStreamAction(report);
       break;
     case "restore":
       validateRestoreAction(report);
@@ -629,7 +633,7 @@ function validateProofNextActions(report) {
     return;
   }
 
-  if (!["launch", "fulfill-pending", "focus", "restore", "reconnect-restore", "bring-forward", "clipboard"].includes(report.action)) {
+  if (!["launch", "fulfill-pending", "focus", "restore", "reconnect-restore", "bring-forward", "restart-frame-stream", "clipboard"].includes(report.action)) {
     return;
   }
 
@@ -706,6 +710,45 @@ function validateCloseAllAction(report) {
   const closeAllAction = report.status.actions.find((action) => action.id === "windowsApps.closeAll");
   if (!closeAllAction || closeAllAction.isAvailable) {
     throw new TypeError("accepted close-all actions must make windowsApps.closeAll unavailable.");
+  }
+}
+
+function validateRestartFrameStreamAction(report) {
+  if (!report.accepted) {
+    if (report.restartedFrameWindowIds.length !== 0) {
+      throw new TypeError("rejected restart-frame-stream actions cannot include restartedFrameWindowIds.");
+    }
+    return;
+  }
+
+  if (report.restartedFrameWindowIds.length === 0) {
+    throw new TypeError("accepted restart-frame-stream actions must include restartedFrameWindowIds.");
+  }
+
+  const restartAction = report.status.actions.find((action) => action.id === "windowsApps.restartFrameStream");
+  if (!restartAction) {
+    throw new TypeError("restart-frame-stream status must include windowsApps.restartFrameStream.");
+  }
+  if (restartAction.isAvailable) {
+    throw new TypeError("accepted restart-frame-stream actions must clear stale frame restart availability.");
+  }
+
+  const sessionsById = new Map(report.status.mirrorSessions.map((session) => [session.windowId, session]));
+  for (const windowId of report.restartedFrameWindowIds) {
+    const session = sessionsById.get(windowId);
+    if (!session) {
+      throw new TypeError("restartedFrameWindowIds must be present in status.mirrorSessions.");
+    }
+    if (session.frameStreamStatus !== "waitingForFirstFrame") {
+      throw new TypeError("accepted restart-frame-stream actions must return restarted windows to waitingForFirstFrame.");
+    }
+    if (session.receivedFrameCount !== 0) {
+      throw new TypeError("accepted restart-frame-stream actions must clear stale frame timing.");
+    }
+  }
+
+  if (report.windowId !== undefined && report.windowId !== report.restartedFrameWindowIds.at(-1)) {
+    throw new TypeError("restart-frame-stream windowId must identify the last restarted window.");
   }
 }
 

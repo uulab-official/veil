@@ -11,6 +11,7 @@ enum LauncherPrimaryNextActionRoute: Equatable {
     case refreshRuntimeStatus
     case reconnectPreviousApps
     case closeAllWindowsApps
+    case restartFrameStream
     case quietWindows
     case runRecommendedProof
 
@@ -50,6 +51,8 @@ enum LauncherPrimaryNextActionRoute: Equatable {
             return .reconnectPreviousApps
         case "windowsApps.closeAll":
             return .closeAllWindowsApps
+        case "windowsApps.restartFrameStream":
+            return .restartFrameStream
         case "runtime.quietWhenIdle", "runtime.stopWhenIdle":
             return .quietWindows
         case "proof.recommended", "dailyUse.verifyIntegrations":
@@ -126,6 +129,10 @@ enum LauncherPrimaryNextActionRoute: Equatable {
             return .closeAllWindowsApps
         }
 
+        if command.contains("--action restart-frame-stream") {
+            return .restartFrameStream
+        }
+
         if command.contains("--action stop-runtime")
             || command.contains("--action quiet-when-idle") {
             return .quietWindows
@@ -164,6 +171,8 @@ enum LauncherPrimaryNextActionRoute: Equatable {
             return "Reconnect Apps"
         case .closeAllWindowsApps:
             return "Close Apps"
+        case .restartFrameStream:
+            return "Restart Screen"
         case .quietWindows:
             return "Quiet Windows"
         case .runRecommendedProof:
@@ -195,6 +204,8 @@ enum LauncherPrimaryNextActionRoute: Equatable {
             return "arrow.clockwise.square"
         case .closeAllWindowsApps:
             return "xmark.circle.fill"
+        case .restartFrameStream:
+            return "arrow.clockwise"
         case .quietWindows:
             return "moon.zzz.fill"
         case .runRecommendedProof:

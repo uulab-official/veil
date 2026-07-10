@@ -77,6 +77,12 @@ struct LauncherPrimaryNextActionRouteTests {
                 command: nil
             ) == .refreshRuntimeStatus
         )
+        #expect(
+            LauncherPrimaryNextActionRoute.resolve(
+                actionId: "windowsApps.restartFrameStream",
+                command: nil
+            ) == .restartFrameStream
+        )
     }
 
     @Test("routes app runtime commands to launcher actions")
@@ -122,6 +128,12 @@ struct LauncherPrimaryNextActionRouteTests {
                 actionId: "closeOrRestore",
                 command: "veil-vmctl app-runtime-action --json --action close-all"
             ) == .closeAllWindowsApps
+        )
+        #expect(
+            LauncherPrimaryNextActionRoute.resolve(
+                actionId: "openWindowsApp",
+                command: "veil-vmctl app-runtime-action --json --action restart-frame-stream"
+            ) == .restartFrameStream
         )
         #expect(
             LauncherPrimaryNextActionRoute.resolve(

@@ -3375,6 +3375,27 @@ public final class HostDashboardModel {
     }
 
     @discardableResult
+    public func restartStaleFrameSubscriptions(generatedAt: Date = Date()) async -> [String] {
+        let staleWindowIds = mirrorSessions
+            .filter {
+                WindowFrameStreamAssessment.assess(
+                    session: $0,
+                    generatedAt: generatedAt
+                ).status == .stale
+            }
+            .map(\.id)
+        var restartedWindowIds: [String] = []
+
+        for windowId in staleWindowIds {
+            if await restartFrameSubscription(windowId: windowId) {
+                restartedWindowIds.append(windowId)
+            }
+        }
+
+        return restartedWindowIds
+    }
+
+    @discardableResult
     public func closeAllMirrorSessions() async -> [WindowCloseResponse] {
         let windowIds = mirrorSessions.map(\.id)
         var responses: [WindowCloseResponse] = []

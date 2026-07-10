@@ -10,6 +10,7 @@ private final class AppRuntimeDockMenuTarget: NSObject {
     var focusWindowsAppWindowAction: ((String) -> Void)?
     var closeWindowsAppWindowAction: ((String) -> Void)?
     var closeAllWindowsAppWindowsAction: (() -> Void)?
+    var restartStaleFrameStreamsAction: (() -> Void)?
     var restoreWindowsAppWindowsAction: (() -> Void)?
     var launchWindowsAppByIdAction: ((String) -> Void)?
     var fulfillPendingLaunchAction: (() -> Void)?
@@ -45,6 +46,10 @@ private final class AppRuntimeDockMenuTarget: NSObject {
 
     @objc func closeAllWindowsApps(_ sender: NSMenuItem) {
         closeAllWindowsAppWindowsAction?()
+    }
+
+    @objc func restartStaleFrameStreams(_ sender: NSMenuItem) {
+        restartStaleFrameStreamsAction?()
     }
 
     @objc func restoreWindowsApps(_ sender: NSMenuItem) {
@@ -94,6 +99,7 @@ enum AppRuntimeDockMenuFactory {
         focusWindowsAppWindowAction: @escaping (String) -> Void,
         closeWindowsAppWindowAction: @escaping (String) -> Void,
         closeAllWindowsAppWindowsAction: @escaping () -> Void,
+        restartStaleFrameStreamsAction: @escaping () -> Void,
         restoreWindowsAppWindowsAction: @escaping () -> Void,
         launchWindowsAppByIdAction: @escaping (String) -> Void,
         fulfillPendingLaunchAction: @escaping () -> Void,
@@ -109,6 +115,7 @@ enum AppRuntimeDockMenuFactory {
         target.focusWindowsAppWindowAction = focusWindowsAppWindowAction
         target.closeWindowsAppWindowAction = closeWindowsAppWindowAction
         target.closeAllWindowsAppWindowsAction = closeAllWindowsAppWindowsAction
+        target.restartStaleFrameStreamsAction = restartStaleFrameStreamsAction
         target.restoreWindowsAppWindowsAction = restoreWindowsAppWindowsAction
         target.launchWindowsAppByIdAction = launchWindowsAppByIdAction
         target.fulfillPendingLaunchAction = fulfillPendingLaunchAction
@@ -123,6 +130,8 @@ enum AppRuntimeDockMenuFactory {
         menu.addItem(.separator())
 
         if !model.mirrorSessions.isEmpty {
+            let status = model.runtimeStatusReport()
+            let hasStaleFrameStream = status.macWindowIntegration.staleFrameWindowCount > 0
             menu.addItem(
                 item(
                     WindowsShellCopy.bringWindowsAppsForwardTitle(
@@ -134,6 +143,15 @@ enum AppRuntimeDockMenuFactory {
                 )
             )
             menu.addItem(item("Open Veil", action: #selector(AppRuntimeDockMenuTarget.openVeil(_:)), target: target))
+            if hasStaleFrameStream {
+                menu.addItem(
+                    item(
+                        "Restart App Screen",
+                        action: #selector(AppRuntimeDockMenuTarget.restartStaleFrameStreams(_:)),
+                        target: target
+                    )
+                )
+            }
             menu.addItem(.separator())
 
             for session in model.mirrorSessions {

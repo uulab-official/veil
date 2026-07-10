@@ -16,6 +16,7 @@ struct DetailView: View {
     var fulfillPendingLaunchAction: () -> Void
     var restoreWindowsAppWindowsAction: () -> Void
     var closeAllWindowsAppWindowsAction: () -> Void
+    var restartStaleFrameStreamsAction: () -> Void
     var runRecommendedProofAction: () -> Void
     var quietWindowsWhenIdleAction: () -> Void
     var displayMessage: String?
@@ -51,6 +52,7 @@ struct DetailView: View {
                 fulfillPendingLaunchAction: fulfillPendingLaunchAction,
                 restoreWindowsAppWindowsAction: restoreWindowsAppWindowsAction,
                 closeAllWindowsAppWindowsAction: closeAllWindowsAppWindowsAction,
+                restartStaleFrameStreamsAction: restartStaleFrameStreamsAction,
                 runRecommendedProofAction: runRecommendedProofAction,
                 quietWindowsWhenIdleAction: quietWindowsWhenIdleAction,
                 displayMessage: displayMessage
@@ -138,6 +140,8 @@ struct DetailView: View {
             restoreWindowsAppWindowsAction()
         case .closeAllWindowsApps:
             closeAllWindowsAppWindowsAction()
+        case .restartFrameStream:
+            restartStaleFrameStreamsAction()
         case .quietWindows:
             quietWindowsWhenIdleAction()
         case .runRecommendedProof:

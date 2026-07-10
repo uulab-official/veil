@@ -367,6 +367,25 @@ struct HostDashboardModelTests {
         #expect(session.frameTiming == nil)
     }
 
+    @Test("restarts all stale frame subscriptions")
+    @MainActor
+    func restartsAllStaleFrameSubscriptions() async throws {
+        let service = FakeDashboardService(health: .captureReady)
+        let model = HostDashboardModel(service: service)
+
+        await model.launchNotepad()
+        model.receiveWindowFrame(.notepadFirstFrame, receivedAt: Date(timeIntervalSince1970: 1_000))
+
+        let restartedWindowIds = await model.restartStaleFrameSubscriptions(
+            generatedAt: Date(timeIntervalSince1970: 1_006)
+        )
+
+        #expect(restartedWindowIds == ["hwnd:0003029A"])
+        #expect(service.frameUnsubscriptions == ["hwnd:0003029A"])
+        #expect(service.frameSubscriptions == ["hwnd:0003029A", "hwnd:0003029A"])
+        #expect(model.mirrorSessions.first?.captureState == .pending)
+    }
+
     @Test("routes a protocol frame message into the matching mirror session")
     @MainActor
     func routesProtocolFrameMessageIntoMirrorSession() async throws {

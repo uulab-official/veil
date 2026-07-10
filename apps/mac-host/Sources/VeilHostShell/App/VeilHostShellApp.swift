@@ -85,6 +85,7 @@ struct VeilHostShellApp: App {
                 fulfillPendingLaunchAction: fulfillPendingWindowsAppWindow,
                 restoreWindowsAppWindowsAction: restoreWindowsAppWindows,
                 closeAllWindowsAppWindowsAction: closeAllWindowsAppWindows,
+                restartStaleFrameStreamsAction: restartStaleFrameStreams,
                 runRecommendedProofAction: runRecommendedProof,
                 quietWindowsWhenIdleAction: quietWindowsWhenIdle,
                 displayMessage: displayMessage
@@ -232,6 +233,7 @@ struct VeilHostShellApp: App {
                 focusWindowsAppWindowAction: focusWindowsAppWindow(windowId:),
                 closeWindowsAppWindowAction: closeWindowsAppWindow(windowId:),
                 closeAllWindowsAppWindowsAction: closeAllWindowsAppWindows,
+                restartStaleFrameStreamsAction: restartStaleFrameStreams,
                 runRecommendedProofAction: runRecommendedProof,
                 prepareReviewEvidenceAction: prepareReviewEvidenceFolder,
                 quietWindowsWhenIdleAction: quietWindowsWhenIdle,
@@ -722,6 +724,25 @@ struct VeilHostShellApp: App {
         }
     }
 
+    private func restartStaleFrameStreams() {
+        Task { @MainActor in
+            let restartedWindowIds = await model.restartStaleFrameSubscriptions()
+            guard !restartedWindowIds.isEmpty else {
+                displayMessage = "No paused app screens need restart."
+                return
+            }
+
+            for windowId in restartedWindowIds {
+                if let session = model.mirrorSessions.first(where: { $0.id == windowId }) {
+                    windowsAppWindowPresenter.showWindow(for: session)
+                }
+            }
+            displayMessage = restartedWindowIds.count == 1
+                ? "Restarting app screen."
+                : "Restarting \(restartedWindowIds.count) app screens."
+        }
+    }
+
     private func configureDockMenuBridge() {
         appDelegate.reopenHandler = {
             let destination = LauncherReopenPolicy.destination(
@@ -745,6 +766,7 @@ struct VeilHostShellApp: App {
                 focusWindowsAppWindowAction: focusWindowsAppWindow(windowId:),
                 closeWindowsAppWindowAction: closeWindowsAppWindow(windowId:),
                 closeAllWindowsAppWindowsAction: closeAllWindowsAppWindows,
+                restartStaleFrameStreamsAction: restartStaleFrameStreams,
                 restoreWindowsAppWindowsAction: restoreWindowsAppWindows,
                 launchWindowsAppByIdAction: launchWindowsAppWindow(appId:),
                 fulfillPendingLaunchAction: fulfillPendingWindowsAppWindow,
@@ -1351,6 +1373,7 @@ private struct VeilMenuBarMenu: View {
     var focusWindowsAppWindowAction: (String) -> Void
     var closeWindowsAppWindowAction: (String) -> Void
     var closeAllWindowsAppWindowsAction: () -> Void
+    var restartStaleFrameStreamsAction: () -> Void
     var runRecommendedProofAction: () -> Void
     var prepareReviewEvidenceAction: () -> Void
     var quietWindowsWhenIdleAction: () -> Void
@@ -1723,6 +1746,8 @@ private struct VeilMenuBarMenu: View {
             prepareSparsePackageAction()
         case .refreshRuntimeStatus:
             openMainWindow()
+        case .restartFrameStream:
+            restartStaleFrameStreamsAction()
         case .launchSelectedApp:
             if !model.hasLiveAgentConnection {
                 openMainWindow()
@@ -1772,6 +1797,7 @@ enum MenuBarPrimaryActionRoute: Equatable {
     case waitForAgent
     case preparePackageIdentity
     case refreshRuntimeStatus
+    case restartFrameStream
     case launchSelectedApp
     case runRecommendedProof
 
@@ -1795,6 +1821,8 @@ enum MenuBarPrimaryActionRoute: Equatable {
             return .waitForAgent
         case "dailyUse.verifyWindowCapture":
             return .refreshRuntimeStatus
+        case "windowsApps.restartFrameStream":
+            return .restartFrameStream
         case "runtime.prepareSparsePackage":
             return .preparePackageIdentity
         case "windowsApps.launchSelected":
@@ -1827,6 +1855,8 @@ enum MenuBarPrimaryActionRoute: Equatable {
         case .preparePackageIdentity:
             return "shippingbox"
         case .refreshRuntimeStatus:
+            return "arrow.clockwise"
+        case .restartFrameStream:
             return "arrow.clockwise"
         case .runRecommendedProof:
             return "checkmark.seal"
@@ -2046,6 +2076,7 @@ private struct StandaloneMainWindowRoot: View {
             fulfillPendingLaunchAction: launchSelectedWindowsApp,
             restoreWindowsAppWindowsAction: {},
             closeAllWindowsAppWindowsAction: {},
+            restartStaleFrameStreamsAction: {},
             runRecommendedProofAction: {},
             quietWindowsWhenIdleAction: {},
             displayMessage: displayMessage

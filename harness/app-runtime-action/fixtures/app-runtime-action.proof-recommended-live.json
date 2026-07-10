@@ -501,5 +501,6 @@
       "Open the mirrored HWND in the Veil host shell as a macOS window.",
       "Attach the saved MVP proof artifact to release gates and app-runtime bug reports."
     ]
-  }
+  },
+  "restartedFrameWindowIds": []
 }

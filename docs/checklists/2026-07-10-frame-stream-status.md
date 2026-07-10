@@ -15,6 +15,8 @@ Goal: make mirrored Windows app surfaces report whether their frame stream is mi
 - [x] Shared the frame stream assessment logic between host status, app-window UI, and launcher metrics.
 - [x] Added a stale-screen overlay with an in-window restart action.
 - [x] Added `windowsApps.restartFrameStream` to the app-runtime action contract.
+- [x] Wired stale-screen restart through `veil-vmctl app-runtime-action --action restart-frame-stream`, Dock/menu recovery, and launcher primary-action routing.
+- [x] Added `restartedFrameWindowIds` action evidence so the harness can prove restarted HWNDs return to `waitingForFirstFrame`.
 
 ## Status Semantics
 

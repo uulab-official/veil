@@ -481,5 +481,6 @@
     "reason": "The live Windows agent can run app-window, coherence, and MVP proof commands for the selected app.",
     "recommendedProofKind": "mvp",
     "recommendedProofCommand": "veil-vmctl mvp-proof --json --app-id winapp_calculator --require-proved"
-  }
+  },
+  "restartedFrameWindowIds": []
 }
