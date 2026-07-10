@@ -83,6 +83,12 @@ struct LauncherPrimaryNextActionRouteTests {
                 command: nil
             ) == .restartFrameStream
         )
+        #expect(
+            LauncherPrimaryNextActionRoute.resolve(
+                actionId: "windowsApps.recoverWindowCapture",
+                command: nil
+            ) == .recoverWindowCapture
+        )
     }
 
     @Test("routes app runtime commands to launcher actions")
@@ -134,6 +140,12 @@ struct LauncherPrimaryNextActionRouteTests {
                 actionId: "openWindowsApp",
                 command: "veil-vmctl app-runtime-action --json --action restart-frame-stream"
             ) == .restartFrameStream
+        )
+        #expect(
+            LauncherPrimaryNextActionRoute.resolve(
+                actionId: "openWindowsApp",
+                command: "veil-vmctl app-runtime-action --json --action recover-window-capture"
+            ) == .recoverWindowCapture
         )
         #expect(
             LauncherPrimaryNextActionRoute.resolve(

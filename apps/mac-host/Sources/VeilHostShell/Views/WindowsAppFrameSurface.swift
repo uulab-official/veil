@@ -57,12 +57,12 @@ struct WindowsAppFrameSurface: View {
                     Button {
                         restartFrameStreamAction(session.id)
                     } label: {
-                        Text("Restart")
+                        Text(assessment.recoveryEscalated ? "Recover" : "Restart")
                             .font(.caption.weight(.semibold))
                     }
                     .buttonStyle(.plain)
                     .foregroundStyle(.white)
-                    .help("Restart this app screen stream.")
+                    .help(assessment.recoveryEscalated ? "Recover this app screen stream." : "Restart this app screen stream.")
                 }
             }
             .padding(.horizontal, 10)

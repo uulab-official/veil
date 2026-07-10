@@ -842,6 +842,7 @@ extension AppRuntimeDockMenuTests {
         "runtime.waitAgent": (.waitForAgent, "antenna.radiowaves.left.and.right"),
         "runtime.prepareSparsePackage": (.preparePackageIdentity, "shippingbox"),
         "windowsApps.restartFrameStream": (.restartFrameStream, "arrow.clockwise"),
+        "windowsApps.recoverWindowCapture": (.recoverWindowCapture, "wrench.and.screwdriver"),
         "windowsApps.launchSelected": (.launchSelectedApp, "arrow.up.forward.app"),
         "proof.recommended": (.runRecommendedProof, "checkmark.seal"),
         "dailyUse.verifyIntegrations": (.runRecommendedProof, "checkmark.seal"),

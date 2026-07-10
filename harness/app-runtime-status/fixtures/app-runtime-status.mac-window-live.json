@@ -191,6 +191,11 @@
       "isAvailable": false
     },
     {
+      "id": "windowsApps.recoverWindowCapture",
+      "title": "Recover App Screen",
+      "isAvailable": false
+    },
+    {
       "id": "macWindows.autoOpen",
       "title": "Show App Windows Automatically",
       "isAvailable": true

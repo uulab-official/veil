@@ -171,6 +171,11 @@
         "isAvailable": false
       },
       {
+        "id": "windowsApps.recoverWindowCapture",
+        "title": "Recover App Screen",
+        "isAvailable": false
+      },
+      {
         "id": "macWindows.autoOpen",
         "isAvailable": true,
         "title": "Show App Windows Automatically"
@@ -504,5 +509,6 @@
       "Attach the saved MVP proof artifact to release gates and app-runtime bug reports."
     ]
   },
-  "restartedFrameWindowIds": []
+  "restartedFrameWindowIds": [],
+  "recoveredFrameWindowIds": []
 }

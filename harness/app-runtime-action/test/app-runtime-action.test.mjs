@@ -544,6 +544,12 @@ test("validates app runtime restart frame stream fixture", () => {
   assert.equal(validateAppRuntimeAction(report), report);
 });
 
+test("validates app runtime recover window capture fixture", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-action.recover-window-capture-live.json", import.meta.url), "utf8"));
+
+  assert.equal(validateAppRuntimeAction(report), report);
+});
+
 test("validates recommended proof action fixture", () => {
   const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-action.proof-recommended-live.json", import.meta.url), "utf8"));
 

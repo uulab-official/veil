@@ -175,6 +175,11 @@
         "isAvailable": false
       },
       {
+        "id": "windowsApps.recoverWindowCapture",
+        "title": "Recover App Screen",
+        "isAvailable": false
+      },
+      {
         "id": "macWindows.autoOpen",
         "isAvailable": true,
         "title": "Show App Windows Automatically"
@@ -596,5 +601,6 @@
       "Run `veil-vmctl app-runtime-action --json --action proof-recommended` to continue the strongest available Windows app check."
     ]
   },
-  "restartedFrameWindowIds": []
+  "restartedFrameWindowIds": [],
+  "recoveredFrameWindowIds": []
 }

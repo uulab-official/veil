@@ -420,12 +420,50 @@ struct HostDashboardModelTests {
 
         let report = model.runtimeStatusReport(generatedAt: Date(timeIntervalSince1970: 1_010))
         let windowStatus = try #require(report.mirrorSessions.first)
+        let recoverAction = try #require(report.actions.first { $0.id == "windowsApps.recoverWindowCapture" })
 
         #expect(windowStatus.frameStreamStatus == .stale)
         #expect(windowStatus.frameStreamRecommendedAction == "recover-window-capture")
         #expect(windowStatus.frameStreamRestartCount == 2)
         #expect(windowStatus.latestFrameStreamRestartedAt == Date(timeIntervalSince1970: 1_003))
         #expect(windowStatus.frameStreamRecoveryEscalated)
+        #expect(recoverAction.title == "Recover App Screen")
+        #expect(recoverAction.isAvailable)
+    }
+
+    @Test("recovers escalated frame capture with focus and resubscribe")
+    @MainActor
+    func recoversEscalatedFrameCaptureWithFocusAndResubscribe() async throws {
+        let service = FakeDashboardService(health: .captureReady)
+        let model = HostDashboardModel(service: service)
+
+        await model.launchNotepad()
+        model.receiveWindowFrame(.notepadFirstFrame, receivedAt: Date(timeIntervalSince1970: 1_000))
+        await model.restartFrameSubscription(
+            windowId: "hwnd:0003029A",
+            restartedAt: Date(timeIntervalSince1970: 1_001)
+        )
+        model.receiveWindowFrame(.notepadSecondFrame, receivedAt: Date(timeIntervalSince1970: 1_002))
+        await model.restartFrameSubscription(
+            windowId: "hwnd:0003029A",
+            restartedAt: Date(timeIntervalSince1970: 1_003)
+        )
+        model.receiveWindowFrame(.notepadFirstFrame, receivedAt: Date(timeIntervalSince1970: 1_004))
+
+        let recoveredWindowIds = await model.recoverEscalatedFrameCaptures(
+            generatedAt: Date(timeIntervalSince1970: 1_010)
+        )
+        let session = try #require(model.mirrorSessions.first)
+
+        #expect(recoveredWindowIds == ["hwnd:0003029A"])
+        #expect(service.focusedWindowIds == ["hwnd:0003029A"])
+        #expect(service.frameUnsubscriptions == ["hwnd:0003029A", "hwnd:0003029A", "hwnd:0003029A"])
+        #expect(service.frameSubscriptions == ["hwnd:0003029A", "hwnd:0003029A", "hwnd:0003029A", "hwnd:0003029A"])
+        #expect(session.captureState == .pending)
+        #expect(session.latestFrame == nil)
+        #expect(session.frameTiming == nil)
+        #expect(session.frameStreamRestartCount == 3)
+        #expect(session.latestFrameStreamRestartedAt == Date(timeIntervalSince1970: 1_010))
     }
 
     @Test("routes a protocol frame message into the matching mirror session")

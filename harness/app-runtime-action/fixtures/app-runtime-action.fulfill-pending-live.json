@@ -203,6 +203,11 @@
         "isAvailable": false
       },
       {
+        "id": "windowsApps.recoverWindowCapture",
+        "title": "Recover App Screen",
+        "isAvailable": false
+      },
+      {
         "id": "macWindows.autoOpen",
         "isAvailable": true,
         "title": "Show App Windows Automatically"
@@ -521,5 +526,6 @@
     "recommendedProofKind": "mvp",
     "recommendedProofCommand": "veil-vmctl mvp-proof --json --app-id winapp_notepad --require-proved"
   },
-  "restartedFrameWindowIds": []
+  "restartedFrameWindowIds": [],
+  "recoveredFrameWindowIds": []
 }

@@ -164,6 +164,11 @@
         "isAvailable": false
       },
       {
+        "id": "windowsApps.recoverWindowCapture",
+        "title": "Recover App Screen",
+        "isAvailable": false
+      },
+      {
         "id": "macWindows.autoOpen",
         "isAvailable": false,
         "title": "Show App Windows Automatically"
@@ -497,5 +502,6 @@
     "status": "unavailable",
     "waitedSeconds": 1
   },
-  "restartedFrameWindowIds": []
+  "restartedFrameWindowIds": [],
+  "recoveredFrameWindowIds": []
 }

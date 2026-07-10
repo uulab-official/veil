@@ -236,6 +236,11 @@
         "isAvailable": false
       },
       {
+        "id": "windowsApps.recoverWindowCapture",
+        "title": "Recover App Screen",
+        "isAvailable": false
+      },
+      {
         "id": "macWindows.autoOpen",
         "title": "Show App Windows Automatically",
         "isAvailable": true
@@ -521,5 +526,6 @@
   "nextActions": [
     "Run `veil-vmctl app-runtime-status --json` to confirm frameStreamStatus returns to waitingForFirstFrame or fresh.",
     "Run `veil-vmctl mvp-proof --json --app-id winapp_notepad --require-proved` to continue Windows app verification."
-  ]
+  ],
+  "recoveredFrameWindowIds": []
 }

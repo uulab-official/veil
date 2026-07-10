@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { validateAppRuntimeStatus } from "../../app-runtime-status/src/validate-app-runtime-status.mjs";
 import { validateGuestAgentWait } from "../../guest-agent-wait/src/validate-guest-agent-wait.mjs";
 
-const VALID_ACTIONS = new Set(["launch", "fulfill-pending", "focus", "close", "close-all", "restart-frame-stream", "restore", "reconnect-restore", "bring-forward", "recover-display", "wait-agent", "repair-agent", "prepare-sparse-package", "quiet-when-idle", "stop-runtime", "clipboard", "type-text", "click", "proof-recommended"]);
+const VALID_ACTIONS = new Set(["launch", "fulfill-pending", "focus", "close", "close-all", "restart-frame-stream", "recover-window-capture", "restore", "reconnect-restore", "bring-forward", "recover-display", "wait-agent", "repair-agent", "prepare-sparse-package", "quiet-when-idle", "stop-runtime", "clipboard", "type-text", "click", "proof-recommended"]);
 const VALID_CONNECTION_MODES = new Set(["agent", "demo"]);
 const VALID_CONSOLE_PREVIEW_STATES = new Set(["fresh", "stale", "unavailable"]);
 
@@ -43,6 +43,7 @@ export function validateAppRuntimeAction(report) {
     throw new TypeError("restoredWindows must be an array.");
   }
   validateStringArray(report.restartedFrameWindowIds, "restartedFrameWindowIds");
+  validateStringArray(report.recoveredFrameWindowIds, "recoveredFrameWindowIds");
 
   if (report.action !== "stop-runtime" && report.runtimeStop !== undefined && report.runtimeStop !== null) {
     throw new TypeError("runtimeStop is only allowed for stop-runtime actions.");
@@ -86,6 +87,9 @@ export function validateAppRuntimeAction(report) {
       break;
     case "restart-frame-stream":
       validateRestartFrameStreamAction(report);
+      break;
+    case "recover-window-capture":
+      validateRecoverWindowCaptureAction(report);
       break;
     case "restore":
       validateRestoreAction(report);
@@ -633,7 +637,7 @@ function validateProofNextActions(report) {
     return;
   }
 
-  if (!["launch", "fulfill-pending", "focus", "restore", "reconnect-restore", "bring-forward", "restart-frame-stream", "clipboard"].includes(report.action)) {
+  if (!["launch", "fulfill-pending", "focus", "restore", "reconnect-restore", "bring-forward", "restart-frame-stream", "recover-window-capture", "clipboard"].includes(report.action)) {
     return;
   }
 
@@ -752,6 +756,48 @@ function validateRestartFrameStreamAction(report) {
 
   if (report.windowId !== undefined && report.windowId !== report.restartedFrameWindowIds.at(-1)) {
     throw new TypeError("restart-frame-stream windowId must identify the last restarted window.");
+  }
+}
+
+function validateRecoverWindowCaptureAction(report) {
+  if (!report.accepted) {
+    if (report.recoveredFrameWindowIds.length !== 0) {
+      throw new TypeError("rejected recover-window-capture actions cannot include recoveredFrameWindowIds.");
+    }
+    return;
+  }
+
+  if (report.recoveredFrameWindowIds.length === 0) {
+    throw new TypeError("accepted recover-window-capture actions must include recoveredFrameWindowIds.");
+  }
+
+  const recoverAction = report.status.actions.find((action) => action.id === "windowsApps.recoverWindowCapture");
+  if (!recoverAction) {
+    throw new TypeError("recover-window-capture status must include windowsApps.recoverWindowCapture.");
+  }
+  if (recoverAction.isAvailable) {
+    throw new TypeError("accepted recover-window-capture actions must clear recovery availability.");
+  }
+
+  const sessionsById = new Map(report.status.mirrorSessions.map((session) => [session.windowId, session]));
+  for (const windowId of report.recoveredFrameWindowIds) {
+    const session = sessionsById.get(windowId);
+    if (!session) {
+      throw new TypeError("recoveredFrameWindowIds must be present in status.mirrorSessions.");
+    }
+    if (session.frameStreamStatus !== "waitingForFirstFrame") {
+      throw new TypeError("accepted recover-window-capture actions must return recovered windows to waitingForFirstFrame.");
+    }
+    if (session.frameStreamRecoveryEscalated) {
+      throw new TypeError("accepted recover-window-capture actions must clear frameStreamRecoveryEscalated.");
+    }
+    if (session.frameStreamRestartCount < 1 || session.latestFrameStreamRestartedAt === undefined) {
+      throw new TypeError("accepted recover-window-capture actions must record recovery restart evidence.");
+    }
+  }
+
+  if (report.windowId !== undefined && report.windowId !== report.recoveredFrameWindowIds.at(-1)) {
+    throw new TypeError("recover-window-capture windowId must identify the last recovered window.");
   }
 }
 

@@ -348,7 +348,10 @@ Rules:
   `frameStreamRecoveryEscalated`. A restart is an unsubscribe followed by a new
   subscribe. After two restart attempts on the same HWND still lead to a stale
   stream, the host reports `frameStreamRecommendedAction=recover-window-capture`
-  instead of repeatedly recommending another subscription restart.
+  instead of repeatedly recommending another subscription restart. The host-side
+  `recover-window-capture` action focuses the HWND through the guest agent, then
+  performs a fresh unsubscribe/subscribe cycle and records the recovered HWND in
+  `recoveredFrameWindowIds`.
 
 ## Window Focus
 

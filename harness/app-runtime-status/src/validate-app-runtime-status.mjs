@@ -2060,6 +2060,7 @@ function validateActions(actions, report) {
     "windowsApps.reconnectRestore",
     "windowsApps.closeAll",
     "windowsApps.restartFrameStream",
+    "windowsApps.recoverWindowCapture",
     "macWindows.autoOpen",
     "windowsApps.launchSelected",
     "runtime.prepareWindows",
@@ -2121,6 +2122,12 @@ function validateActions(actions, report) {
   const canRestartFrameStream = report.macWindowIntegration.staleFrameWindowCount > 0;
   if (restartFrameStreamAction.isAvailable !== canRestartFrameStream) {
     throw new TypeError("windowsApps.restartFrameStream availability must match stale frame streams.");
+  }
+
+  const recoverWindowCaptureAction = actions.find((action) => action.id === "windowsApps.recoverWindowCapture");
+  const canRecoverWindowCapture = report.mirrorSessions.some((session) => session.frameStreamRecoveryEscalated);
+  if (recoverWindowCaptureAction.isAvailable !== canRecoverWindowCapture) {
+    throw new TypeError("windowsApps.recoverWindowCapture availability must match escalated frame streams.");
   }
 
   const repairAction = actions.find((action) => action.id === "runtime.repairGuestAgentForApp");

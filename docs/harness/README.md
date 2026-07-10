@@ -170,6 +170,12 @@ handoff is `veil-vmctl app-runtime-action --json --action restart-frame-stream`;
 accepted reports must list the restarted HWNDs in `restartedFrameWindowIds` and
 return those sessions to `frameStreamStatus=waitingForFirstFrame` with restart
 evidence recorded on the matching `mirrorSessions[]` entry.
+When `frameStreamRecoveryEscalated=true`, `actions[]` must also expose
+`windowsApps.recoverWindowCapture` as available. The executable handoff is
+`veil-vmctl app-runtime-action --json --action recover-window-capture`; accepted
+reports must list the recovered HWNDs in `recoveredFrameWindowIds`, clear
+`frameStreamRecoveryEscalated`, and leave those sessions waiting for the next
+first frame.
 The foregroundable count must move with mirrored HWND sessions so successful
 launch, restore, and pending-launch fulfillment reports prove the Windows app
 can be brought forward as a macOS window instead of merely existing inside the

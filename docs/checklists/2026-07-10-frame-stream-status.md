@@ -19,6 +19,8 @@ Goal: make mirrored Windows app surfaces report whether their frame stream is mi
 - [x] Added `restartedFrameWindowIds` action evidence so the harness can prove restarted HWNDs return to `waitingForFirstFrame`.
 - [x] Added per-HWND restart count, last restart timestamp, and `frameStreamRecoveryEscalated` evidence.
 - [x] Promoted repeated stale-screen restarts to `recover-window-capture` after two restart attempts on the same HWND.
+- [x] Wired `recover-window-capture` through `veil-vmctl app-runtime-action`, Dock/menu recovery, app-window buttons, and harness evidence.
+- [x] Added `recoveredFrameWindowIds` action evidence for accepted app screen recovery reports.
 
 ## Status Semantics
 
@@ -38,4 +40,4 @@ Goal: make mirrored Windows app surfaces report whether their frame stream is mi
 ## Still Open
 
 - [ ] Tune live frame latency across Notepad, Calculator, and Paint after this status contract is visible in UI.
-- [ ] Turn `recover-window-capture` into a stronger automated recovery command instead of guidance-only status.
+- [ ] Add a final fallback that closes and reopens the Windows app if `recover-window-capture` also stalls.

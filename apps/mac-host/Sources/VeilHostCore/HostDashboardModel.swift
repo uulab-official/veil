@@ -1491,6 +1491,11 @@ public final class HostDashboardModel {
                     isAvailable: macWindowIntegration.staleFrameWindowCount > 0
                 ),
                 WindowsAppRuntimeActionStatus(
+                    id: "windowsApps.recoverWindowCapture",
+                    title: "Recover App Screen",
+                    isAvailable: hasEscalatedFrameStreamRecovery(generatedAt: generatedAt)
+                ),
+                WindowsAppRuntimeActionStatus(
                     id: "macWindows.autoOpen",
                     title: "Show App Windows Automatically",
                     isAvailable: macWindowIntegration.acceptsGuestWindowEvents
@@ -1786,6 +1791,14 @@ public final class HostDashboardModel {
         dailyUseReadiness: WindowsAppRuntimeDailyUseReadinessStatus
     ) -> (id: String, title: String, isAvailable: Bool) {
         if !mirrorSessions.isEmpty {
+            if hasEscalatedFrameStreamRecovery() {
+                return (
+                    "windowsApps.recoverWindowCapture",
+                    "Recover App Screen",
+                    true
+                )
+            }
+
             return (
                 "dock.bringWindowsAppsForward",
                 bringWindowsAppsForwardTitle(),
@@ -2706,6 +2719,15 @@ public final class HostDashboardModel {
         )
     }
 
+    public func hasEscalatedFrameStreamRecovery(generatedAt: Date = Date()) -> Bool {
+        mirrorSessions.contains {
+            WindowFrameStreamAssessment.assess(
+                session: $0,
+                generatedAt: generatedAt
+            ).recoveryEscalated
+        }
+    }
+
     public func launcherVisibilityStatus(
         macWindowIntegration: WindowsAppRuntimeMacWindowIntegrationStatus? = nil
     ) -> WindowsAppRuntimeLauncherVisibilityStatus {
@@ -3422,6 +3444,57 @@ public final class HostDashboardModel {
         }
 
         return restartedWindowIds
+    }
+
+    @discardableResult
+    public func recoverFrameCapture(windowId: String, recoveredAt: Date = Date()) async -> Bool {
+        guard let index = mirrorSessions.firstIndex(where: { $0.id == windowId }),
+              mirrorSessions[index].captureState != .unavailable,
+              hasLiveAgentConnection else {
+            return false
+        }
+
+        do {
+            let focus = try await service.focusWindow(windowId: windowId)
+            guard focus.accepted else {
+                return false
+            }
+            markFocusedWindow(windowId: windowId)
+
+            try await service.unsubscribeWindowFrames(windowId: windowId)
+            try await service.subscribeWindowFrames(windowId: windowId)
+            mirrorSessions[index].captureState = .pending
+            mirrorSessions[index].frameTiming = nil
+            mirrorSessions[index].latestFrame = nil
+            mirrorSessions[index].frameStreamRestartCount += 1
+            mirrorSessions[index].latestFrameStreamRestartedAt = recoveredAt
+            return true
+        } catch {
+            errorMessage = userMessage(for: error)
+            phase = .failed
+            return false
+        }
+    }
+
+    @discardableResult
+    public func recoverEscalatedFrameCaptures(generatedAt: Date = Date()) async -> [String] {
+        let escalatedWindowIds = mirrorSessions
+            .filter {
+                WindowFrameStreamAssessment.assess(
+                    session: $0,
+                    generatedAt: generatedAt
+                ).recoveryEscalated
+            }
+            .map(\.id)
+        var recoveredWindowIds: [String] = []
+
+        for windowId in escalatedWindowIds {
+            if await recoverFrameCapture(windowId: windowId, recoveredAt: generatedAt) {
+                recoveredWindowIds.append(windowId)
+            }
+        }
+
+        return recoveredWindowIds
     }
 
     @discardableResult

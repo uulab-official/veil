@@ -726,6 +726,19 @@ struct VeilHostShellApp: App {
 
     private func restartStaleFrameStreams() {
         Task { @MainActor in
+            let recoveredWindowIds = await model.recoverEscalatedFrameCaptures()
+            if !recoveredWindowIds.isEmpty {
+                for windowId in recoveredWindowIds {
+                    if let session = model.mirrorSessions.first(where: { $0.id == windowId }) {
+                        windowsAppWindowPresenter.showWindow(for: session)
+                    }
+                }
+                displayMessage = recoveredWindowIds.count == 1
+                    ? "Recovering app screen."
+                    : "Recovering \(recoveredWindowIds.count) app screens."
+                return
+            }
+
             let restartedWindowIds = await model.restartStaleFrameSubscriptions()
             guard !restartedWindowIds.isEmpty else {
                 displayMessage = "No paused app screens need restart."
@@ -974,14 +987,24 @@ struct VeilHostShellApp: App {
         }
         windowsAppWindowPresenter.onRestartFrameStream = { windowId in
             Task { @MainActor in
-                let didRestart = await model.restartFrameSubscription(windowId: windowId)
-                guard didRestart,
+                let sessionBeforeRecovery = model.mirrorSessions.first(where: { $0.id == windowId })
+                let assessment = sessionBeforeRecovery.map { WindowFrameStreamAssessment.assess(session: $0) }
+                let shouldRecover = assessment?.recoveryEscalated == true
+                let didRecover: Bool
+                if shouldRecover {
+                    didRecover = await model.recoverFrameCapture(windowId: windowId)
+                } else {
+                    didRecover = await model.restartFrameSubscription(windowId: windowId)
+                }
+                guard didRecover,
                       let session = model.mirrorSessions.first(where: { $0.id == windowId }) else {
                     return
                 }
 
                 windowsAppWindowPresenter.showWindow(for: session)
-                displayMessage = "Restarting \(session.window.title) screen."
+                displayMessage = shouldRecover
+                    ? "Recovering \(session.window.title) screen."
+                    : "Restarting \(session.window.title) screen."
             }
         }
         windowsAppWindowPresenter.onPasteShortcut = { windowId, key, windowsVirtualKey, modifiers, text in
@@ -1748,6 +1771,8 @@ private struct VeilMenuBarMenu: View {
             openMainWindow()
         case .restartFrameStream:
             restartStaleFrameStreamsAction()
+        case .recoverWindowCapture:
+            restartStaleFrameStreamsAction()
         case .launchSelectedApp:
             if !model.hasLiveAgentConnection {
                 openMainWindow()
@@ -1798,6 +1823,7 @@ enum MenuBarPrimaryActionRoute: Equatable {
     case preparePackageIdentity
     case refreshRuntimeStatus
     case restartFrameStream
+    case recoverWindowCapture
     case launchSelectedApp
     case runRecommendedProof
 
@@ -1823,6 +1849,8 @@ enum MenuBarPrimaryActionRoute: Equatable {
             return .refreshRuntimeStatus
         case "windowsApps.restartFrameStream":
             return .restartFrameStream
+        case "windowsApps.recoverWindowCapture":
+            return .recoverWindowCapture
         case "runtime.prepareSparsePackage":
             return .preparePackageIdentity
         case "windowsApps.launchSelected":
@@ -1858,6 +1886,8 @@ enum MenuBarPrimaryActionRoute: Equatable {
             return "arrow.clockwise"
         case .restartFrameStream:
             return "arrow.clockwise"
+        case .recoverWindowCapture:
+            return "wrench.and.screwdriver"
         case .runRecommendedProof:
             return "checkmark.seal"
         }

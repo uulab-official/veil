@@ -2369,6 +2369,8 @@ private struct WindowsSetupDisplayPanel: View {
             closeAllWindowsAppWindowsAction()
         case .restartFrameStream:
             restartStaleFrameStreamsAction()
+        case .recoverWindowCapture:
+            restartStaleFrameStreamsAction()
         case .quietWindows:
             quietWindowsWhenIdleAction()
         case .runRecommendedProof:
