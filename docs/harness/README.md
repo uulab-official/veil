@@ -337,6 +337,9 @@ Windows `UserNotificationListener` access is still denied or unspecified. The
 matching automation surface is `veil-vmctl app-runtime-action --json --action
 request-notification-consent`; accepted reports must carry the agent's
 `notification.listener.response` and point the operator at `notification-proof`.
+The launcher hero and menu bar primary action must route
+`dailyUse.requestNotificationConsent` to that same in-app request path so this
+Daily Use lane does not regress to terminal-only guidance.
 The sibling `notificationBridge` section tracks the actual guest-to-host
 notification event path separately from that consent preflight. It is blocked
 until the live agent and package identity gate are present, moves to

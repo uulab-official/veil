@@ -18,6 +18,7 @@ Goal: start the Parallels-style Windows notification bridge without claiming the
 - [x] Moved the Windows agent to a Windows SDK-versioned target framework and added a `UserNotificationListener` adapter that syncs toast notifications only when package identity and listener access are available.
 - [x] Added `agent.health.response.notificationListener` so the host can show whether the blocker is sparse package identity, Windows listener consent, denied settings, or a ready proof path.
 - [x] Added `notification.listener.request/response` plus `app-runtime-action --action request-notification-consent` so the host can ask the packaged agent to request Windows listener access before running proof.
+- [x] Routed `dailyUse.requestNotificationConsent` through the launcher primary action and menu bar primary action so notification consent is app-executable, not CLI-only.
 - [x] Added `veil-vmctl notification-proof` plus a `harness/notification-proof` validator for recording one guest-to-host Windows notification event as release evidence.
 - [x] Documented the protocol and harness contract.
 

@@ -17,6 +17,7 @@ struct DetailView: View {
     var restoreWindowsAppWindowsAction: () -> Void
     var closeAllWindowsAppWindowsAction: () -> Void
     var restartStaleFrameStreamsAction: () -> Void
+    var requestNotificationConsentAction: () -> Void
     var runRecommendedProofAction: () -> Void
     var runMultiAppProofAction: () -> Void
     var quietWindowsWhenIdleAction: () -> Void
@@ -54,6 +55,7 @@ struct DetailView: View {
                 restoreWindowsAppWindowsAction: restoreWindowsAppWindowsAction,
                 closeAllWindowsAppWindowsAction: closeAllWindowsAppWindowsAction,
                 restartStaleFrameStreamsAction: restartStaleFrameStreamsAction,
+                requestNotificationConsentAction: requestNotificationConsentAction,
                 runRecommendedProofAction: runRecommendedProofAction,
                 runMultiAppProofAction: runMultiAppProofAction,
                 quietWindowsWhenIdleAction: quietWindowsWhenIdleAction,
@@ -81,6 +83,7 @@ struct DetailView: View {
                     launchOnboarding: runtimeStatusReport.launchOnboarding,
                     launchWindowsAppAction: launchWindowsAppAction,
                     runPrimaryNextAction: runPrimaryNextAction,
+                    requestNotificationConsentAction: requestNotificationConsentAction,
                     runRecommendedProofAction: runRecommendedProofAction,
                     runMultiAppProofAction: runMultiAppProofAction
                 )
@@ -151,6 +154,8 @@ struct DetailView: View {
             restartStaleFrameStreamsAction()
         case .quietWindows:
             quietWindowsWhenIdleAction()
+        case .requestNotificationConsent:
+            requestNotificationConsentAction()
         case .runRecommendedProof:
             runRecommendedProofAction()
         case .runMultiAppProof:
@@ -177,6 +182,7 @@ private struct WindowsQuickLaunchPanel: View {
     var launchOnboarding: WindowsAppRuntimeLaunchOnboardingStatus
     var launchWindowsAppAction: () -> Void
     var runPrimaryNextAction: (LauncherPrimaryNextActionRoute) -> Void
+    var requestNotificationConsentAction: () -> Void
     var runRecommendedProofAction: () -> Void
     var runMultiAppProofAction: () -> Void
 

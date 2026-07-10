@@ -17,6 +17,7 @@ struct ContentView: View {
     var restoreWindowsAppWindowsAction: () -> Void
     var closeAllWindowsAppWindowsAction: () -> Void
     var restartStaleFrameStreamsAction: () -> Void
+    var requestNotificationConsentAction: () -> Void
     var runRecommendedProofAction: () -> Void
     var runMultiAppProofAction: () -> Void
     var quietWindowsWhenIdleAction: () -> Void
@@ -54,6 +55,7 @@ struct ContentView: View {
                     restoreWindowsAppWindowsAction: restoreWindowsAppWindowsAction,
                     closeAllWindowsAppWindowsAction: closeAllWindowsAppWindowsAction,
                     restartStaleFrameStreamsAction: restartStaleFrameStreamsAction,
+                    requestNotificationConsentAction: requestNotificationConsentAction,
                     runRecommendedProofAction: runRecommendedProofAction,
                     runMultiAppProofAction: runMultiAppProofAction,
                     quietWindowsWhenIdleAction: quietWindowsWhenIdleAction,

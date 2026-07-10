@@ -15,6 +15,7 @@ enum LauncherPrimaryNextActionRoute: Equatable {
     case recoverWindowCapture
     case reopenWindow
     case quietWindows
+    case requestNotificationConsent
     case runRecommendedProof
     case runMultiAppProof
 
@@ -50,6 +51,8 @@ enum LauncherPrimaryNextActionRoute: Equatable {
             return .preparePackageIdentity
         case "runtime.refreshStatus", "dailyUse.verifyWindowCapture":
             return .refreshRuntimeStatus
+        case "dailyUse.requestNotificationConsent":
+            return .requestNotificationConsent
         case "windowsApps.reconnectRestore", "windowsApps.restorePrevious":
             return .reconnectPreviousApps
         case "windowsApps.closeAll":
@@ -159,6 +162,10 @@ enum LauncherPrimaryNextActionRoute: Equatable {
             return .quietWindows
         }
 
+        if command.contains("--action request-notification-consent") {
+            return .requestNotificationConsent
+        }
+
         if command.contains("--action proof-recommended") {
             return .runRecommendedProof
         }
@@ -204,6 +211,8 @@ enum LauncherPrimaryNextActionRoute: Equatable {
             return "Reopen App"
         case .quietWindows:
             return "Quiet Windows"
+        case .requestNotificationConsent:
+            return "Allow Notifications"
         case .runRecommendedProof:
             return "Check App"
         case .runMultiAppProof:
@@ -243,6 +252,8 @@ enum LauncherPrimaryNextActionRoute: Equatable {
             return "arrow.triangle.2.circlepath"
         case .quietWindows:
             return "moon.zzz.fill"
+        case .requestNotificationConsent:
+            return "bell.badge"
         case .runRecommendedProof:
             return "checkmark.seal"
         case .runMultiAppProof:

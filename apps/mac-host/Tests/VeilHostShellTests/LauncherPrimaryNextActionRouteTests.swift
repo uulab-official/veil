@@ -85,6 +85,12 @@ struct LauncherPrimaryNextActionRouteTests {
         )
         #expect(
             LauncherPrimaryNextActionRoute.resolve(
+                actionId: "dailyUse.requestNotificationConsent",
+                command: nil
+            ) == .requestNotificationConsent
+        )
+        #expect(
+            LauncherPrimaryNextActionRoute.resolve(
                 actionId: "windowsApps.restartFrameStream",
                 command: nil
             ) == .restartFrameStream
@@ -177,6 +183,12 @@ struct LauncherPrimaryNextActionRouteTests {
                 command: "veil-vmctl app-runtime-action --json --action prepare-sparse-package --wait-seconds 120"
             ) == .preparePackageIdentity
         )
+        #expect(
+            LauncherPrimaryNextActionRoute.resolve(
+                actionId: "dailyUse",
+                command: "veil-vmctl app-runtime-action --json --action request-notification-consent"
+            ) == .requestNotificationConsent
+        )
     }
 
     @Test("routes setup and app check commands")
@@ -257,6 +269,13 @@ struct LauncherPrimaryNextActionRouteTests {
                 command: "veil-vmctl mvp-proof --json --app-id winapp_notepad --require-proved",
                 runsInApp: false
             ) == nil
+        )
+        #expect(
+            LauncherPrimaryNextActionRoute.resolve(
+                actionId: "dailyUse.requestNotificationConsent",
+                command: "veil-vmctl app-runtime-action --json --action request-notification-consent",
+                runsInApp: true
+            ) == .requestNotificationConsent
         )
     }
 }

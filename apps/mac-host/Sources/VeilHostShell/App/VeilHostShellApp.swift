@@ -130,6 +130,7 @@ struct VeilHostShellApp: App {
                 restoreWindowsAppWindowsAction: restoreWindowsAppWindows,
                 closeAllWindowsAppWindowsAction: closeAllWindowsAppWindows,
                 restartStaleFrameStreamsAction: restartStaleFrameStreams,
+                requestNotificationConsentAction: requestWindowsNotificationConsent,
                 runRecommendedProofAction: runRecommendedProof,
                 runMultiAppProofAction: runMultiAppProof,
                 quietWindowsWhenIdleAction: quietWindowsWhenIdle,
@@ -280,6 +281,7 @@ struct VeilHostShellApp: App {
                 closeWindowsAppWindowAction: closeWindowsAppWindow(windowId:),
                 closeAllWindowsAppWindowsAction: closeAllWindowsAppWindows,
                 restartStaleFrameStreamsAction: restartStaleFrameStreams,
+                requestNotificationConsentAction: requestWindowsNotificationConsent,
                 runRecommendedProofAction: runRecommendedProof,
                 runMultiAppProofAction: runMultiAppProof,
                 prepareReviewEvidenceAction: prepareReviewEvidenceFolder,
@@ -1360,6 +1362,55 @@ struct VeilHostShellApp: App {
         }
     }
 
+    private func requestWindowsNotificationConsent() {
+        Task { @MainActor in
+            activateMainWindow()
+
+            guard model.hasLiveAgentConnection else {
+                displayMessage = "Connect the Windows app connection before allowing Windows notifications."
+                return
+            }
+
+            guard model.health?.capabilities.packageIdentity == true else {
+                displayMessage = "Prepare Windows package identity before allowing Windows notifications."
+                return
+            }
+
+            displayMessage = "Asking Windows to allow Veil notifications."
+
+            do {
+                let client = VeilHostClient(
+                    transport: URLSessionWebSocketTransport(url: URL(string: Self.agentURLString)!)
+                )
+                let response = try await client.requestWindowsNotificationListenerConsent()
+                await model.load()
+
+                if response.accepted {
+                    displayMessage = "Windows notifications are allowed. Run the notification check after a Windows notification appears."
+                } else {
+                    displayMessage = notificationConsentMessage(for: response.notificationListener)
+                }
+            } catch {
+                displayMessage = "Windows notification access could not be requested: \(userMessage(for: error))"
+            }
+        }
+    }
+
+    private func notificationConsentMessage(for status: WindowsNotificationListenerStatus) -> String {
+        switch status.recommendedAction {
+        case "request-notification-listener-consent":
+            return "Windows has not allowed Veil notifications yet. Try Allow Notifications again from Veil."
+        case "enable-notification-listener-settings":
+            return "Allow Veil in Windows notification access settings, then run the notification check."
+        case "prepare-sparse-package":
+            return "Prepare Windows package identity before allowing Windows notifications."
+        case "connect-agent":
+            return "Connect the Windows app connection before allowing Windows notifications."
+        default:
+            return status.message ?? "Windows notification access is not ready yet."
+        }
+    }
+
     private func waitForGuestAgent() {
         Task { @MainActor in
             activateMainWindow()
@@ -1683,6 +1734,7 @@ private struct VeilMenuBarMenu: View {
     var closeWindowsAppWindowAction: (String) -> Void
     var closeAllWindowsAppWindowsAction: () -> Void
     var restartStaleFrameStreamsAction: () -> Void
+    var requestNotificationConsentAction: () -> Void
     var runRecommendedProofAction: () -> Void
     var runMultiAppProofAction: () -> Void
     var prepareReviewEvidenceAction: () -> Void
@@ -2060,6 +2112,9 @@ private struct VeilMenuBarMenu: View {
         case .preparePackageIdentity:
             openMainWindow()
             prepareSparsePackageAction()
+        case .requestNotificationConsent:
+            openMainWindow()
+            requestNotificationConsentAction()
         case .refreshRuntimeStatus:
             openMainWindow()
         case .restartFrameStream:
@@ -2119,6 +2174,7 @@ enum MenuBarPrimaryActionRoute: Equatable {
     case startWindowsForApp
     case waitForAgent
     case preparePackageIdentity
+    case requestNotificationConsent
     case refreshRuntimeStatus
     case restartFrameStream
     case recoverWindowCapture
@@ -2155,6 +2211,8 @@ enum MenuBarPrimaryActionRoute: Equatable {
             return .reopenWindow
         case "runtime.prepareSparsePackage":
             return .preparePackageIdentity
+        case "dailyUse.requestNotificationConsent":
+            return .requestNotificationConsent
         case "windowsApps.launchSelected":
             return .launchSelectedApp
         case "proof.recommended":
@@ -2186,6 +2244,8 @@ enum MenuBarPrimaryActionRoute: Equatable {
             return "antenna.radiowaves.left.and.right"
         case .preparePackageIdentity:
             return "shippingbox"
+        case .requestNotificationConsent:
+            return "bell.badge"
         case .refreshRuntimeStatus:
             return "arrow.clockwise"
         case .restartFrameStream:
@@ -2415,6 +2475,7 @@ private struct StandaloneMainWindowRoot: View {
             restoreWindowsAppWindowsAction: {},
             closeAllWindowsAppWindowsAction: {},
             restartStaleFrameStreamsAction: {},
+            requestNotificationConsentAction: {},
             runRecommendedProofAction: {},
             runMultiAppProofAction: {},
             quietWindowsWhenIdleAction: {},

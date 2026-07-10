@@ -33,6 +33,7 @@ struct VMRuntimeView: View {
     var restoreWindowsAppWindowsAction: () -> Void
     var closeAllWindowsAppWindowsAction: () -> Void
     var restartStaleFrameStreamsAction: () -> Void
+    var requestNotificationConsentAction: () -> Void
     var runRecommendedProofAction: () -> Void
     var runMultiAppProofAction: () -> Void
     var quietWindowsWhenIdleAction: () -> Void
@@ -103,6 +104,7 @@ struct VMRuntimeView: View {
                     restoreWindowsAppWindowsAction: restoreWindowsAppWindowsAction,
                     closeAllWindowsAppWindowsAction: closeAllWindowsAppWindowsAction,
                     restartStaleFrameStreamsAction: restartStaleFrameStreamsAction,
+                    requestNotificationConsentAction: requestNotificationConsentAction,
                     canLaunchWindowsApp: canLaunchWindowsApp,
                     canRequestWindowsAppLaunch: canRequestWindowsAppLaunch,
                     selectedWindowsAppName: selectedWindowsAppName,
@@ -1368,6 +1370,7 @@ private struct WindowsSetupDisplayPanel: View {
     var restoreWindowsAppWindowsAction: () -> Void
     var closeAllWindowsAppWindowsAction: () -> Void
     var restartStaleFrameStreamsAction: () -> Void
+    var requestNotificationConsentAction: () -> Void
     var canLaunchWindowsApp: Bool
     var canRequestWindowsAppLaunch: Bool
     var selectedWindowsAppName: String?
@@ -2378,6 +2381,8 @@ private struct WindowsSetupDisplayPanel: View {
             restartStaleFrameStreamsAction()
         case .quietWindows:
             quietWindowsWhenIdleAction()
+        case .requestNotificationConsent:
+            requestNotificationConsentAction()
         case .runRecommendedProof:
             runRecommendedProofAction()
         case .runMultiAppProof:

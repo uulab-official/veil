@@ -847,7 +847,8 @@ extension AppRuntimeDockMenuTests {
         "proof.recommended": (.runRecommendedProof, "checkmark.seal"),
         "proof.multiApp": (.runMultiAppProof, "checkmark.seal.fill"),
         "dailyUse.verifyIntegrations": (.runMultiAppProof, "checkmark.seal.fill"),
-        "dailyUse.verifyWindowCapture": (.refreshRuntimeStatus, "arrow.clockwise")
+        "dailyUse.verifyWindowCapture": (.refreshRuntimeStatus, "arrow.clockwise"),
+        "dailyUse.requestNotificationConsent": (.requestNotificationConsent, "bell.badge")
     ]
 }
 
