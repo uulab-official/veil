@@ -16,6 +16,10 @@ Windows app, never a replay of stale documents or a duplicate-window cascade.
 - [x] Ignore discovery events until the host has established a capture-capable
   live agent overview, preventing a startup placeholder from becoming a blank
   app window.
+- [x] Treat asynchronous guest discovery as metadata-only in the normal path;
+  only an explicit host launch or restore response may create a macOS window.
+- [x] Add a presenter-level one-window-per-app guard as a final defense if an
+  unexpected HWND reaches the macOS window layer.
 - [x] Keep automatic startup restore bounded to three reuse-only attempts.
 - [x] Isolate the local QEMU stop unit test from the real QEMU launch-record
   directory so test fixtures cannot inspect the live Windows VM.

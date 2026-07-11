@@ -4596,11 +4596,11 @@ public final class HostDashboardModel {
         switch envelope.type {
         case .windowCreated:
             let event = try decoder.decode(WindowCreatedEvent.self, from: message)
-            // The event WebSocket can connect before the overview request establishes a live
-            // agent-backed model. Do not let startup discovery create a demo/unavailable mirror;
-            // the subsequent restore or explicit launch owns the first real app window.
-            guard hasLiveAgentConnection,
-                  shouldAcceptAutomaticWindowEvent(event) else {
+            // Discovery is guest-owned and can enumerate every tracked process after reconnect.
+            // The normal app-first path only opens macOS windows from an explicit host launch or
+            // restore response. A later event may refresh an already-owned HWND, but it cannot
+            // create another macOS window by itself.
+            guard shouldAcceptTrackedWindowEvent(event) else {
                 return .ignored
             }
             storeActiveWindow(event)
@@ -4702,18 +4702,9 @@ public final class HostDashboardModel {
         activeWindows.append(window)
     }
 
-    private func shouldAcceptAutomaticWindowEvent(_ event: WindowCreatedEvent) -> Bool {
-        if activeWindows.contains(where: { $0.windowId == event.windowId })
-            || mirrorSessions.contains(where: { $0.id == event.windowId }) {
-            return true
-        }
-
-        // A normal reconnect mirrors the first window for each app. The guest can legitimately
-        // discover older documents while its state settles; treating each one as a new macOS
-        // window creates a cascade and makes the launcher unusable. Explicit host launches still
-        // enter through applyWindowsAppLaunchResult, so they are not blocked by this event guard.
-        return !activeWindows.contains(where: { $0.appId == event.appId })
-            && !mirrorSessions.contains(where: { $0.window.appId == event.appId })
+    private func shouldAcceptTrackedWindowEvent(_ event: WindowCreatedEvent) -> Bool {
+        activeWindows.contains(where: { $0.windowId == event.windowId })
+            || mirrorSessions.contains(where: { $0.id == event.windowId })
     }
 
     private func storeMirrorSession(

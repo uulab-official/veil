@@ -665,9 +665,9 @@ struct HostDashboardModelTests {
         #expect(session.latestFrame?.frameId == "frame_000001")
     }
 
-    @Test("routes a protocol created message into automatic mirrored window setup")
+    @Test("ignores unrequested protocol created messages")
     @MainActor
-    func routesProtocolCreatedMessageIntoAutomaticMirrorSession() async throws {
+    func ignoresUnrequestedProtocolCreatedMessage() async throws {
         let service = FakeDashboardService(health: .captureReady, apps: [.notepad, .paint])
         let model = HostDashboardModel(service: service)
         let message = Data(WindowCreatedEvent.paintCreatedJSON.utf8)
@@ -675,17 +675,14 @@ struct HostDashboardModelTests {
         await model.load()
         let result = try await model.receiveProtocolMessage(message)
 
-        let session = try #require(model.mirrorSessions.first)
-        #expect(result == .handledWindowCreated(windowId: "hwnd:0005029C"))
-        #expect(model.activeWindows.map(\.windowId) == ["hwnd:0005029C"])
-        #expect(session.id == "hwnd:0005029C")
-        #expect(session.window.appId == "winapp_paint")
-        #expect(session.captureState == .pending)
-        #expect(model.restorableAppIds == ["winapp_paint"])
-        #expect(service.frameSubscriptions == ["hwnd:0005029C"])
+        #expect(result == .ignored)
+        #expect(model.activeWindows.isEmpty)
+        #expect(model.mirrorSessions.isEmpty)
+        #expect(model.restorableAppIds.isEmpty)
+        #expect(service.frameSubscriptions.isEmpty)
     }
 
-    @Test("ignores discovery until the live agent overview is established")
+    @Test("ignores discovery before the live agent overview is established")
     @MainActor
     func ignoresProtocolCreatedMessageBeforeLiveAgentOverview() async throws {
         let service = FakeDashboardService(health: .captureReady, apps: [.notepad, .paint])
