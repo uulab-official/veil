@@ -6,7 +6,6 @@ import VeilHostCore
 @MainActor
 final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
     private var windowsById: [String: NSWindow] = [:]
-    private var appIdByWindowId: [String: String] = [:]
     private var windowOrder: [String] = []
     private var suppressedCloseWindowIds: Set<String> = []
     private(set) var foregroundWindowId: String?
@@ -28,11 +27,11 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
             return
         }
 
-        // This is a second, UI-level guard behind HostDashboardModel's app-first policy. An
-        // unexpected guest HWND for the same app must replace the old presenter entry, never
-        // accumulate a cascade of native macOS windows.
-        if let existingWindowId = appIdByWindowId.first(where: { $0.value == session.window.appId })?.key {
-            closeWindow(windowId: existingWindowId)
+        // The pre-alpha app-first shell intentionally has a single visible Windows app surface.
+        // Guest discovery, reconnect races, or repeated menu actions must never multiply native
+        // macOS windows. A user closes the active app window before opening another app.
+        guard windowsById.isEmpty else {
+            return
         }
 
         let window = NSWindow(
@@ -50,7 +49,6 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
             for: session
         )
         windowsById[session.id] = window
-        appIdByWindowId[session.id] = session.window.appId
         present(window, windowId: session.id)
     }
 
@@ -60,7 +58,6 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
             window.close()
         }
         windowsById.removeAll()
-        appIdByWindowId.removeAll()
         windowOrder.removeAll()
         foregroundWindowId = nil
     }
@@ -75,7 +72,6 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
         }
         window.close()
         windowsById[windowId] = nil
-        appIdByWindowId[windowId] = nil
         forgetWindowId(windowId)
     }
 
@@ -100,7 +96,6 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
         }
 
         windowsById[windowId] = nil
-        appIdByWindowId[windowId] = nil
         forgetWindowId(windowId)
 
         if suppressedCloseWindowIds.remove(windowId) == nil {

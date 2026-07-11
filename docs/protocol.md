@@ -278,7 +278,7 @@ Event:
 Rules:
 
 - `window.created` can arrive as part of a host launch response or as an async guest lifecycle event.
-- The normal app-first host path opens a macOS mirror only from an explicit launch or restore response. An async discovery event may update an already tracked HWND, but it must not create an unrequested macOS window.
+- The normal app-first host path opens a macOS mirror only from an explicit launch or restore response. An async discovery event may update an already tracked HWND, but it must not create an unrequested macOS window. The pre-alpha shell presents one Windows app window total; the active app must be closed before another is opened.
 - The host tracks explicit-launch HWNDs, persists one app restore target, and subscribes to frame capture when the connected agent advertises `windowCapture`.
 
 ## Window Updated

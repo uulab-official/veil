@@ -18,8 +18,8 @@ Windows app, never a replay of stale documents or a duplicate-window cascade.
   app window.
 - [x] Treat asynchronous guest discovery as metadata-only in the normal path;
   only an explicit host launch or restore response may create a macOS window.
-- [x] Add a presenter-level one-window-per-app guard as a final defense if an
-  unexpected HWND reaches the macOS window layer.
+- [x] Cap the pre-alpha presenter at one visible Windows app window total;
+  a user closes the active app before opening another app.
 - [x] Keep automatic startup restore bounded to three reuse-only attempts.
 - [x] Isolate the local QEMU stop unit test from the real QEMU launch-record
   directory so test fixtures cannot inspect the live Windows VM.
