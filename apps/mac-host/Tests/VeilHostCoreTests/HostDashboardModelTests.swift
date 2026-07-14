@@ -1869,6 +1869,41 @@ struct HostDashboardModelTests {
         #expect(service.restoreCount == 1)
     }
 
+    @Test("coalesces concurrent launches for the same Windows app")
+    @MainActor
+    func coalescesConcurrentSameAppLaunches() async throws {
+        let service = FakeDashboardService(launchDelay: .milliseconds(50))
+        let model = HostDashboardModel(service: service)
+
+        async let firstLaunch = model.launchNotepad()
+        async let secondLaunch = model.launchNotepad()
+        let results = await [firstLaunch, secondLaunch]
+
+        #expect(results.compactMap { $0 }.map(\.window.windowId) == [
+            "hwnd:0003029A",
+            "hwnd:0003029A"
+        ])
+        #expect(service.launchCount == 1)
+        #expect(service.restoreCount == 0)
+        #expect(model.mirrorSessions.map(\.id) == ["hwnd:0003029A"])
+    }
+
+    @Test("allows a retry after a coalesced app launch fails")
+    @MainActor
+    func allowsRetryAfterAppLaunchFailure() async throws {
+        let service = FakeDashboardService(error: VeilHostError.appMissing("winapp_notepad"))
+        let model = HostDashboardModel(service: service)
+
+        let failedLaunch = await model.launchNotepad()
+        service.error = nil
+        let retriedLaunch = await model.launchNotepad()
+
+        #expect(failedLaunch == nil)
+        #expect(retriedLaunch?.window.windowId == "hwnd:0003029A")
+        #expect(service.launchCount == 1)
+        #expect(model.phase == .connected)
+    }
+
     @Test("stores service failures as user visible errors")
     @MainActor
     func storesServiceFailures() async throws {
@@ -2736,6 +2771,7 @@ private final class FakeDashboardService: HostDashboardService {
     var closeAccepted: Bool
     var agentWaitReport: AgentConnectionWaitReport?
     var launchWindows: [WindowCreatedEvent] = []
+    var launchDelay: Duration?
     private(set) var loadCount = 0
     private(set) var launchCount = 0
     private(set) var restoreCount = 0
@@ -2754,13 +2790,15 @@ private final class FakeDashboardService: HostDashboardService {
         health: AgentHealthResponse = .fixture,
         apps: [WindowsApp] = [.notepad],
         closeAccepted: Bool = true,
-        agentWaitReport: AgentConnectionWaitReport? = nil
+        agentWaitReport: AgentConnectionWaitReport? = nil,
+        launchDelay: Duration? = nil
     ) {
         self.error = error
         self.health = health
         self.apps = apps
         self.closeAccepted = closeAccepted
         self.agentWaitReport = agentWaitReport
+        self.launchDelay = launchDelay
     }
 
     func loadOverview() async throws -> HostOverview {
@@ -2782,6 +2820,9 @@ private final class FakeDashboardService: HostDashboardService {
 
         launchCount += 1
         launchedAppIds.append(appId)
+        if let launchDelay {
+            try await Task.sleep(for: launchDelay)
+        }
         let window = launchWindows.isEmpty ? .fixture(appId: appId) : launchWindows.removeFirst()
         return WindowsAppLaunchResult(
             health: health,

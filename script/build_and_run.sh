@@ -160,6 +160,8 @@ cleanup_verify() {
 }
 
 case "$MODE" in
+  --build-only|build-only)
+    ;;
   run)
     open_app
     ;;
@@ -198,7 +200,7 @@ case "$MODE" in
     exit 0
     ;;
   *)
-    echo "usage: $0 [run|--start-vm|--debug|--logs|--telemetry|--verify|--verify-keep-running]" >&2
+    echo "usage: $0 [--build-only|run|--start-vm|--debug|--logs|--telemetry|--verify|--verify-keep-running]" >&2
     exit 2
     ;;
 esac

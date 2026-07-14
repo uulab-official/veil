@@ -1557,6 +1557,7 @@ public final class HostDashboardModel {
     private let service: any HostDashboardService
     private let restoreIntentStore: any WindowRestoreIntentStore
     private let pendingLaunchIntentStore: any PendingLaunchIntentStore
+    @ObservationIgnored private var appLaunchTasks: [String: Task<WindowsAppLaunchResult?, Never>] = [:]
     private let automaticQuietDelaySeconds = 8
 
     public init(
@@ -4153,6 +4154,29 @@ public final class HostDashboardModel {
     public func launchApp(
         appId: String,
         preferExistingWindow: Bool = false
+    ) async -> WindowsAppLaunchResult? {
+        if let task = appLaunchTasks[appId] {
+            return await task.value
+        }
+
+        let task = Task<WindowsAppLaunchResult?, Never> { @MainActor [weak self] in
+            guard let self else {
+                return nil
+            }
+            return await self.performAppLaunch(
+                appId: appId,
+                preferExistingWindow: preferExistingWindow
+            )
+        }
+        appLaunchTasks[appId] = task
+        let result = await task.value
+        appLaunchTasks[appId] = nil
+        return result
+    }
+
+    private func performAppLaunch(
+        appId: String,
+        preferExistingWindow: Bool
     ) async -> WindowsAppLaunchResult? {
         phase = .launching
         errorMessage = nil

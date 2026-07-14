@@ -21,8 +21,12 @@ Windows app, never a replay of stale documents or a duplicate-window cascade.
 - [x] Cap the pre-alpha presenter at one visible Windows app window total;
   a user closes the active app before opening another app.
 - [x] Keep automatic startup restore bounded to three reuse-only attempts.
+- [x] Coalesce concurrent launch, restore, and pending-launch requests for the
+      same app so MainActor reentrancy cannot send duplicate Windows launches.
+- [x] Cover the launch race with a delayed-service regression test and verify a
+      failed shared launch is removed before the next retry.
 - [x] Isolate the local QEMU stop unit test from the real QEMU launch-record
-  directory so test fixtures cannot inspect the live Windows VM.
+      directory so test fixtures cannot inspect the live Windows VM.
 - [x] Cover legacy restore migration, repeated launch reuse, and duplicate
   same-app discovery in the macOS host test suite.
 
