@@ -953,32 +953,35 @@ system disk without requiring or attaching the Windows installer ISO. The macOS
 host shell exposes the same transition as Mark Windows Installed while the
 console is running and no guest-agent evidence exists yet.
 
-`veil-vmctl qemu-install-agent [--json] [--wait-seconds 30]` is the safer one-command form for the
-common post-desktop recovery path: it focuses the Windows desktop through QMP
-pointer input, opens Run with the Windows key, selects any stale Run history,
-scans the attached drive letters for `Veil Guest Agent\V.cmd`, and runs that
-short automation entrypoint. On QMP launch records it clicks Run's confirmation
-button after the typed command has settled; keyboard-only fallback records still
-use Enter. `V.cmd`
-runs `Repair Veil Agent Connectivity.cmd` when present and falls back to
-`Install Veil Agent.cmd` for older media layouts. Use it only when the Windows
-desktop is visible in the console and the host probe still reports the guest
-agent unavailable. The repair path writes
+`veil-vmctl qemu-install-agent [--json] [--wait-seconds 30]` is the bounded
+post-desktop recovery path. It first returns without input when guest-agent
+health already succeeds. Otherwise it reads the active loopback VNC frame,
+wakes one blank display, requires a visible desktop, opens Run at most twice,
+selects stale Run history, scans attached drives for `Veil Guest Agent\V.cmd`,
+and sends the command only after Run OCR or a meaningful frame change is ready.
+On QMP launch records it clicks Run's confirmation button after the typed command
+has settled; keyboard-only fallback records still use Enter. `V.cmd` runs
+`Repair Veil Agent Connectivity.cmd` when present and falls back to
+`Install Veil Agent.cmd` for older media layouts. The repair path writes
 `%LOCALAPPDATA%\Veil\Agent\logs\repair-status.json` from the elevated Windows
 process; success now means the guest itself received `agent.health.response`
 over `ws://127.0.0.1:18444/` and over a non-loopback Windows guest IPv4 address,
 not just that TCP port 18444 opened. The JSON report includes the desktop
-activation tap, Run confirmation tap, bounded key-send evidence, and a
-guest-agent wait result. It waits eight seconds for a busy guest to surface UAC,
-sends one bounded approval tap, then sends the same keyboard approval that worked in live Korean
-Windows UAC (`left`, `ret`) because the prompt often focuses No by default. It
-keeps the `V.cmd` console visible briefly after the repair command returns, then
-captures `postAttemptConsole` with a screenshot path and review hints, so a
-failed attempt records whether the command reached a live agent or needs
-screenshot-backed Run/UAC/PowerShell inspection. The macOS host shell uses the same
-Core activation and key-sequence path for its Install Guest Agent button and
-menu bar item, so CLI and GUI recovery stay on the same bounded QMP path with a
-keyboard fallback for older launch records.
+activation tap, Run confirmation tap, bounded key-send evidence,
+`desktopReadiness`, `runReadiness`, `uacReadiness`, and the guest-agent wait
+result. Local macOS Vision OCR recognizes Korean and English UI text; luminance,
+modal contrast, and frame-difference metrics provide a fallback. UAC approval is
+never sent unless a UAC or centered-modal observation is ready. Polling images
+use stable `qemu-readiness-<phase>-latest.png` names, replacing prior evidence
+instead of creating an unbounded image history. The macOS host shell uses the
+same Core activation and key-sequence path for its Install Guest Agent button and
+menu bar item.
+
+`veil-vmctl qemu-display-smoke --json` reports the active VNC frame's
+`visualState`, pixel metrics, bounded OCR text, and latest PNG path. Treat this
+as the authoritative embedded-display evidence. HMP `screendump` remains a
+compatibility fallback because it can capture an inactive QEMU display head
+after Windows switches to the VirtIO display.
 
 `veil-vmctl qemu-click [--json] --x <0...32767> --y <0...32767>` sends a bounded
 absolute left-click through QMP `input-send-event`. It is intended for

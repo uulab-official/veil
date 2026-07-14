@@ -1579,7 +1579,11 @@ public enum QEMUGuestAgentInstallKeySequence {
     public static let commandText =
         #"cmd.exe /c for %d in (D E F G H I J K L M N O P Q R S T U V W X Y Z) do if exist "%d:\Veil Guest Agent\V.cmd" call "%d:\Veil Guest Agent\V.cmd""#
 
-    public static var stepsAfterRunOpened: [QEMUKeySequenceStep] {
+    public static let openRunSteps: [QEMUKeySequenceStep] = [
+        QEMUKeySequenceStep(key: "meta-r", delayAfterSend: 1.0)
+    ]
+
+    public static var commandTextSteps: [QEMUKeySequenceStep] {
         get throws {
             var textSteps = try QEMUQMPKeyboardCommandBuilder
                 .keySequence(forText: commandText)
@@ -1588,9 +1592,14 @@ public enum QEMUGuestAgentInstallKeySequence {
                 textSteps[textSteps.count - 1].delayAfterSend = 1.0
             }
             return [
-                QEMUKeySequenceStep(key: "meta-r", delayAfterSend: 1.0),
                 QEMUKeySequenceStep(key: "ctrl-a", delayAfterSend: 0.2)
             ] + textSteps
+        }
+    }
+
+    public static var stepsAfterRunOpened: [QEMUKeySequenceStep] {
+        get throws {
+            openRunSteps + (try commandTextSteps)
         }
     }
 
@@ -1617,7 +1626,9 @@ public enum QEMUSparsePackagePreparationKeySequence {
     public static let commandText =
         #"cmd.exe /c for %d in (D E F G H I J K L M N O P Q R S T U V W X Y Z) do if exist "%d:\Veil Guest Agent\P.cmd" call "%d:\Veil Guest Agent\P.cmd""#
 
-    public static var stepsAfterRunOpened: [QEMUKeySequenceStep] {
+    public static let openRunSteps = QEMUGuestAgentInstallKeySequence.openRunSteps
+
+    public static var commandTextSteps: [QEMUKeySequenceStep] {
         get throws {
             var textSteps = try QEMUQMPKeyboardCommandBuilder
                 .keySequence(forText: commandText)
@@ -1626,9 +1637,14 @@ public enum QEMUSparsePackagePreparationKeySequence {
                 textSteps[textSteps.count - 1].delayAfterSend = 1.0
             }
             return [
-                QEMUKeySequenceStep(key: "meta-r", delayAfterSend: 1.0),
                 QEMUKeySequenceStep(key: "ctrl-a", delayAfterSend: 0.2)
             ] + textSteps
+        }
+    }
+
+    public static var stepsAfterRunOpened: [QEMUKeySequenceStep] {
+        get throws {
+            openRunSteps + (try commandTextSteps)
         }
     }
 

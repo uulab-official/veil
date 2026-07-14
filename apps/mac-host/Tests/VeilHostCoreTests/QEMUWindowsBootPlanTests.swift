@@ -1290,6 +1290,8 @@ struct QEMUWindowsBootPlanTests {
     @Test("guest agent install sequence supports direct Run dialog input")
     func guestAgentInstallSequenceSupportsDirectRunDialogInput() throws {
         let steps = try QEMUGuestAgentInstallKeySequence.stepsAfterRunOpened
+        let openRunSteps = QEMUGuestAgentInstallKeySequence.openRunSteps
+        let commandTextSteps = try QEMUGuestAgentInstallKeySequence.commandTextSteps
         let fallbackSteps = try QEMUGuestAgentInstallKeySequence.steps
         let keys = steps.map(\.key)
 
@@ -1305,6 +1307,9 @@ struct QEMUWindowsBootPlanTests {
         #expect(QEMUGuestAgentInstallKeySequence.uacApproveTapNormalizedY > 0.7)
         #expect(QEMUGuestAgentInstallKeySequence.uacApproveTapNormalizedY < 0.8)
         #expect(Array(keys.prefix(7)) == ["meta-r", "ctrl-a", "c", "m", "d", "dot", "e"])
+        #expect(openRunSteps.map(\.key) == ["meta-r"])
+        #expect(commandTextSteps.first?.key == "ctrl-a")
+        #expect(steps == openRunSteps + commandTextSteps)
         #expect(keys.last != "ret")
         #expect(steps.last?.delayAfterSend == 1.0)
         #expect(keys.count < fallbackSteps.count)

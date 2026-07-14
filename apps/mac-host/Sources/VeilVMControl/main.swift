@@ -1,5 +1,9 @@
 import Foundation
 import Darwin
+import CoreGraphics
+import ImageIO
+import UniformTypeIdentifiers
+import Vision
 import VeilHostCore
 
 enum VMControlError: Error, LocalizedError {
@@ -581,8 +585,39 @@ struct QEMUConsoleCaptureRecord: Codable, Equatable {
 struct QEMUGuestAgentInstallConsoleEvidence: Codable, Equatable {
     var kind: String = "qemuGuestAgentInstallConsoleEvidence"
     var capture: QEMUConsoleCaptureRecord?
+    var visualObservation: QEMUConsoleVisualObservation?
     var reviewHint: String
     var expectedVisibleStates: [String]
+}
+
+enum QEMUConsoleReadinessStatus: String, Codable, Equatable {
+    case ready
+    case timedOut
+    case unavailable
+    case skipped
+}
+
+struct QEMUConsoleVisualObservation: Codable, Equatable {
+    var phase: String
+    var attempt: Int
+    var capturedAt: Date
+    var source: String
+    var screenshotPath: String?
+    var state: QEMUConsoleVisualState
+    var recognizedText: [String]
+    var metrics: QEMUConsoleFrameMetrics?
+    var differenceFromReference: QEMUConsoleFrameDifference?
+    var wakeKeySent: Bool
+    var errorMessage: String?
+}
+
+struct QEMUConsoleReadinessReport: Codable, Equatable {
+    var phase: String
+    var status: QEMUConsoleReadinessStatus
+    var expectedStates: [QEMUConsoleVisualState]
+    var timeoutSeconds: Int
+    var attempts: Int
+    var observations: [QEMUConsoleVisualObservation]
 }
 
 struct QEMUKeySendResult: Codable, Equatable {
@@ -610,10 +645,18 @@ struct QEMUGuestAgentInstallAttemptReport: Codable, Equatable {
     var uacApprovalTap: QEMUPointerTapRecord?
     var uacApprovalKeySend: QEMUKeySendRecord?
     var keySend: QEMUKeySendRecord
+    var desktopReadiness: QEMUConsoleReadinessReport
+    var runReadiness: QEMUConsoleReadinessReport
+    var uacReadiness: QEMUConsoleReadinessReport
     var agentWait: AgentConnectionWaitReport
     var postAttemptConsole: QEMUGuestAgentInstallConsoleEvidence
     var status: AgentConnectionWaitStatus
     var nextActions: [String]
+}
+
+private struct QEMUConsoleVisualSnapshot {
+    var frame: RFBRenderedFrame
+    var observation: QEMUConsoleVisualObservation
 }
 
 struct QEMUPointerClickRecord: Codable, Equatable {
@@ -659,6 +702,10 @@ struct QEMUDisplaySmokeRecord: Codable, Equatable {
     var height: Int
     var frameSequence: Int
     var pixelByteCount: Int
+    var visualState: QEMUConsoleVisualState
+    var frameMetrics: QEMUConsoleFrameMetrics
+    var recognizedText: [String]
+    var screenshotPath: String?
     var waitedSeconds: Int
     var capturedAt: Date
 }
@@ -3852,14 +3899,14 @@ struct VeilVMControl {
             print("Agent repair: \(agentRepair.status.rawValue)")
             print("Agent repair attempts: \(agentRepair.agentWait.attempts)")
             print("Agent repair waited seconds: \(agentRepair.agentWait.waitedSeconds)")
-            print("Agent repair console: \(agentRepair.postAttemptConsole.capture?.consoleScreenshotPath ?? "not captured")")
+            print("Agent repair console: \(agentRepair.postAttemptConsole.visualObservation?.screenshotPath ?? agentRepair.postAttemptConsole.capture?.consoleScreenshotPath ?? "not captured")")
         }
         if let sparsePackagePreparation = report.sparsePackagePreparation {
             print("Sparse package preparation: \(sparsePackagePreparation.status.rawValue)")
             print("Sparse package package identity: \(sparsePackagePreparation.agentWait.diagnostic.health?.capabilities.packageIdentity == true ? "ready" : "needed")")
             print("Sparse package attempts: \(sparsePackagePreparation.agentWait.attempts)")
             print("Sparse package waited seconds: \(sparsePackagePreparation.agentWait.waitedSeconds)")
-            print("Sparse package console: \(sparsePackagePreparation.postAttemptConsole.capture?.consoleScreenshotPath ?? "not captured")")
+            print("Sparse package console: \(sparsePackagePreparation.postAttemptConsole.visualObservation?.screenshotPath ?? sparsePackagePreparation.postAttemptConsole.capture?.consoleScreenshotPath ?? "not captured")")
         }
         if let notificationConsent = report.notificationConsent {
             print("Notification consent command: \(notificationConsent.command)")
@@ -5447,14 +5494,17 @@ struct VeilVMControl {
         }
 
         let boundedWaitSeconds = min(max(waitSeconds, 1), 30)
-        let socket = try RFBLoopbackSocket(host: host, port: port, timeoutSeconds: boundedWaitSeconds)
-        let client = RFBFrameStreamClient(stream: socket)
-        let serverInit = try client.startSharedSession()
-        let renderer = try RFBFramebufferRenderer(serverInit: serverInit)
-        try client.requestFramebufferUpdate(incremental: false)
-        let update = try client.readFramebufferUpdate()
-        let frame = try renderer.apply(update)
-        socket.close()
+        let snapshot = try qemuConsoleVisualSnapshot(
+            phase: "display-smoke",
+            attempt: 1,
+            referenceFrame: nil
+        )
+        let frame = snapshot.frame
+        guard let metrics = snapshot.observation.metrics else {
+            throw VMControlError.qemuScreenshotCaptureFailed(
+                snapshot.observation.screenshotPath ?? "QEMU VNC frame"
+            )
+        }
 
         let record = QEMUDisplaySmokeRecord(
             pid: launchRecord.pid,
@@ -5463,6 +5513,10 @@ struct VeilVMControl {
             height: frame.height,
             frameSequence: frame.sequence,
             pixelByteCount: frame.rgbaPixels.count,
+            visualState: snapshot.observation.state,
+            frameMetrics: metrics,
+            recognizedText: snapshot.observation.recognizedText,
+            screenshotPath: snapshot.observation.screenshotPath,
             waitedSeconds: boundedWaitSeconds,
             capturedAt: Date()
         )
@@ -5478,6 +5532,8 @@ struct VeilVMControl {
         print("Endpoint: \(record.endpoint)")
         print("Frame: \(record.width)x\(record.height) #\(record.frameSequence)")
         print("RGBA bytes: \(record.pixelByteCount)")
+        print("Visual state: \(record.visualState.rawValue)")
+        print("Screenshot: \(record.screenshotPath ?? "not captured")")
     }
 
     private static func captureQEMUConsole(json: Bool, outputPath: String?) async throws {
@@ -5545,6 +5601,270 @@ struct VeilVMControl {
             capturedAt: capturedAt
         )
         return captureRecord
+    }
+
+    private static func qemuConsoleVisualSnapshot(
+        phase: String,
+        attempt: Int,
+        referenceFrame: RFBRenderedFrame?,
+        recognizeText: Bool = true
+    ) throws -> QEMUConsoleVisualSnapshot {
+        let launchRecord = try latestQEMULaunchRecord()
+        guard let host = launchRecord.vncHost?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !host.isEmpty,
+              let port = launchRecord.vncPort else {
+            throw VMControlError.missingQEMUDisplayEndpoint
+        }
+
+        let socket = try RFBLoopbackSocket(host: host, port: port, timeoutSeconds: 3)
+        defer { socket.close() }
+        let client = RFBFrameStreamClient(stream: socket)
+        let serverInit = try client.startSharedSession()
+        let renderer = try RFBFramebufferRenderer(serverInit: serverInit)
+        try client.requestFramebufferUpdate(incremental: false)
+        let update = try client.readFramebufferUpdate()
+        let frame = try renderer.apply(update)
+        let metrics = try QEMUConsoleFrameAnalyzer.analyze(
+            width: frame.width,
+            height: frame.height,
+            rgbaPixels: frame.rgbaPixels
+        )
+        let recognizedText = metrics.isBlank || !recognizeText
+            ? []
+            : qemuConsoleRecognizedText(frame: frame)
+        let state = QEMUConsoleVisualStateClassifier.classify(
+            metrics: metrics,
+            recognizedText: recognizedText
+        )
+        let difference = try referenceFrame.map {
+            try QEMUConsoleFrameAnalyzer.difference(from: $0, to: frame)
+        }
+        let screenshotURL = diagnosticsDirectory()
+            .appendingPathComponent("QEMU Launch", isDirectory: true)
+            .appendingPathComponent("qemu-readiness-\(qemuSafePhaseName(phase))-latest.png")
+        try writeQEMUConsolePNG(frame: frame, to: screenshotURL)
+
+        return QEMUConsoleVisualSnapshot(
+            frame: frame,
+            observation: QEMUConsoleVisualObservation(
+                phase: phase,
+                attempt: attempt,
+                capturedAt: Date(),
+                source: "vnc",
+                screenshotPath: screenshotURL.path,
+                state: state,
+                recognizedText: Array(recognizedText.prefix(24)),
+                metrics: metrics,
+                differenceFromReference: difference,
+                wakeKeySent: false,
+                errorMessage: nil
+            )
+        )
+    }
+
+    private static func waitForQEMUConsoleReadiness(
+        phase: String,
+        timeoutSeconds: Int,
+        referenceFrame: RFBRenderedFrame?,
+        expectedStates: [QEMUConsoleVisualState],
+        acceptMeaningfulChange: Bool,
+        wakeWhenBlank: Bool,
+        recognizeText: Bool = true
+    ) async -> (report: QEMUConsoleReadinessReport, snapshot: QEMUConsoleVisualSnapshot?) {
+        let boundedTimeout = min(max(timeoutSeconds, 1), 30)
+        let deadline = Date().addingTimeInterval(TimeInterval(boundedTimeout))
+        var observations: [QEMUConsoleVisualObservation] = []
+        var latestSnapshot: QEMUConsoleVisualSnapshot?
+        var attempt = 0
+        var didSendWakeKey = false
+
+        repeat {
+            attempt += 1
+            do {
+                var snapshot = try qemuConsoleVisualSnapshot(
+                    phase: phase,
+                    attempt: attempt,
+                    referenceFrame: referenceFrame,
+                    recognizeText: recognizeText
+                )
+                let isExpectedState = expectedStates.contains(snapshot.observation.state)
+                let hasAcceptedChange = acceptMeaningfulChange
+                    && snapshot.observation.differenceFromReference?.hasMeaningfulChange == true
+                    && snapshot.observation.state != .blank
+                if isExpectedState || hasAcceptedChange {
+                    observations.append(snapshot.observation)
+                    return (
+                        QEMUConsoleReadinessReport(
+                            phase: phase,
+                            status: .ready,
+                            expectedStates: expectedStates,
+                            timeoutSeconds: boundedTimeout,
+                            attempts: attempt,
+                            observations: observations
+                        ),
+                        snapshot
+                    )
+                }
+
+                if wakeWhenBlank,
+                   snapshot.observation.state == .blank,
+                   !didSendWakeKey {
+                    _ = try? await qemuKeySendRecord(steps: [
+                        QEMUKeySequenceStep(key: "esc", delayAfterSend: 0.2),
+                        QEMUKeySequenceStep(key: "shift", delayAfterSend: 0.2)
+                    ])
+                    snapshot.observation.wakeKeySent = true
+                    didSendWakeKey = true
+                }
+                observations.append(snapshot.observation)
+                latestSnapshot = snapshot
+            } catch {
+                observations.append(QEMUConsoleVisualObservation(
+                    phase: phase,
+                    attempt: attempt,
+                    capturedAt: Date(),
+                    source: "vnc",
+                    screenshotPath: nil,
+                    state: .unknown,
+                    recognizedText: [],
+                    metrics: nil,
+                    differenceFromReference: nil,
+                    wakeKeySent: false,
+                    errorMessage: error.localizedDescription
+                ))
+            }
+
+            if Date() < deadline {
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+            }
+        } while Date() < deadline
+
+        let status: QEMUConsoleReadinessStatus = observations.allSatisfy { $0.errorMessage != nil }
+            ? .unavailable
+            : .timedOut
+        return (
+            QEMUConsoleReadinessReport(
+                phase: phase,
+                status: status,
+                expectedStates: expectedStates,
+                timeoutSeconds: boundedTimeout,
+                attempts: attempt,
+                observations: observations
+            ),
+            latestSnapshot
+        )
+    }
+
+    private static func mergeQEMUConsoleReadinessReports(
+        _ first: (report: QEMUConsoleReadinessReport, snapshot: QEMUConsoleVisualSnapshot?),
+        _ second: (report: QEMUConsoleReadinessReport, snapshot: QEMUConsoleVisualSnapshot?)
+    ) -> (report: QEMUConsoleReadinessReport, snapshot: QEMUConsoleVisualSnapshot?) {
+        let status = second.report.status == .ready ? .ready : second.report.status
+        return (
+            QEMUConsoleReadinessReport(
+                phase: first.report.phase,
+                status: status,
+                expectedStates: first.report.expectedStates,
+                timeoutSeconds: first.report.timeoutSeconds + second.report.timeoutSeconds,
+                attempts: first.report.attempts + second.report.attempts,
+                observations: first.report.observations + second.report.observations
+            ),
+            second.snapshot ?? first.snapshot
+        )
+    }
+
+    private static func qemuSkippedConsoleReadinessReport(phase: String) -> QEMUConsoleReadinessReport {
+        QEMUConsoleReadinessReport(
+            phase: phase,
+            status: .skipped,
+            expectedStates: [],
+            timeoutSeconds: 0,
+            attempts: 0,
+            observations: []
+        )
+    }
+
+    private static func mergedQEMUKeySendRecord(
+        _ records: [QEMUKeySendRecord]
+    ) async throws -> QEMUKeySendRecord {
+        guard let first = records.first else {
+            return try await qemuKeySendRecord(steps: [])
+        }
+        return QEMUKeySendRecord(
+            monitorSocketPath: first.monitorSocketPath,
+            keys: records.flatMap(\.keys),
+            results: records.flatMap(\.results),
+            sentAt: records.last?.sentAt ?? first.sentAt
+        )
+    }
+
+    private static func qemuConsoleRecognizedText(frame: RFBRenderedFrame) -> [String] {
+        guard let image = qemuConsoleCGImage(frame: frame) else {
+            return []
+        }
+        let request = VNRecognizeTextRequest()
+        request.recognitionLevel = .fast
+        request.usesLanguageCorrection = false
+        request.recognitionLanguages = ["ko-KR", "en-US"]
+        do {
+            try VNImageRequestHandler(cgImage: image, orientation: .up).perform([request])
+            return (request.results ?? []).compactMap {
+                $0.topCandidates(1).first?.string.trimmingCharacters(in: .whitespacesAndNewlines)
+            }.filter { !$0.isEmpty }
+        } catch {
+            return []
+        }
+    }
+
+    private static func writeQEMUConsolePNG(frame: RFBRenderedFrame, to url: URL) throws {
+        guard let image = qemuConsoleCGImage(frame: frame) else {
+            throw VMControlError.qemuScreenshotCaptureFailed(url.path)
+        }
+        try FileManager.default.createDirectory(
+            at: url.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        guard let destination = CGImageDestinationCreateWithURL(
+            url as CFURL,
+            UTType.png.identifier as CFString,
+            1,
+            nil
+        ) else {
+            throw VMControlError.qemuScreenshotCaptureFailed(url.path)
+        }
+        CGImageDestinationAddImage(destination, image, nil)
+        guard CGImageDestinationFinalize(destination) else {
+            throw VMControlError.qemuScreenshotCaptureFailed(url.path)
+        }
+    }
+
+    private static func qemuConsoleCGImage(frame: RFBRenderedFrame) -> CGImage? {
+        guard frame.width > 0,
+              frame.height > 0,
+              frame.rgbaPixels.count >= frame.width * frame.height * 4,
+              let provider = CGDataProvider(data: frame.rgbaPixels as CFData),
+              let colorSpace = CGColorSpace(name: CGColorSpace.sRGB) else {
+            return nil
+        }
+        return CGImage(
+            width: frame.width,
+            height: frame.height,
+            bitsPerComponent: 8,
+            bitsPerPixel: 32,
+            bytesPerRow: frame.width * 4,
+            space: colorSpace,
+            bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.last.rawValue),
+            provider: provider,
+            decode: nil,
+            shouldInterpolate: false,
+            intent: .defaultIntent
+        )
+    }
+
+    private static func qemuSafePhaseName(_ phase: String) -> String {
+        let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_"))
+        return phase.unicodeScalars.map { allowed.contains($0) ? Character(String($0)) : "-" }
+            .reduce(into: "") { $0.append($1) }
     }
 
     private static func powerDownQEMU(json: Bool, waitSeconds: Int) async throws {
@@ -5653,9 +5973,12 @@ struct VeilVMControl {
         print("UAC approval tap: \(report.uacApprovalTap == nil ? "not sent" : "sent")")
         print("UAC approval keys: \(report.uacApprovalKeySend == nil ? "not sent" : "sent")")
         print("Keys sent: \(report.keySend.keys.count)")
+        print("Desktop readiness: \(report.desktopReadiness.status.rawValue) (\(report.desktopReadiness.attempts) captures)")
+        print("Run readiness: \(report.runReadiness.status.rawValue) (\(report.runReadiness.attempts) captures)")
+        print("UAC readiness: \(report.uacReadiness.status.rawValue) (\(report.uacReadiness.attempts) captures)")
         print("Waited seconds: \(report.agentWait.waitedSeconds)")
         print("Attempts: \(report.agentWait.attempts)")
-        print("Post-attempt console: \(report.postAttemptConsole.capture?.consoleScreenshotPath ?? "not captured")")
+        print("Post-attempt console: \(report.postAttemptConsole.visualObservation?.screenshotPath ?? report.postAttemptConsole.capture?.consoleScreenshotPath ?? "not captured")")
         print("Next actions:")
         for action in report.nextActions {
             print("  - \(action)")
@@ -5677,9 +6000,12 @@ struct VeilVMControl {
         print("UAC approval tap: \(report.uacApprovalTap == nil ? "not sent" : "sent")")
         print("UAC approval keys: \(report.uacApprovalKeySend == nil ? "not sent" : "sent")")
         print("Keys sent: \(report.keySend.keys.count)")
+        print("Desktop readiness: \(report.desktopReadiness.status.rawValue) (\(report.desktopReadiness.attempts) captures)")
+        print("Run readiness: \(report.runReadiness.status.rawValue) (\(report.runReadiness.attempts) captures)")
+        print("UAC readiness: \(report.uacReadiness.status.rawValue) (\(report.uacReadiness.attempts) captures)")
         print("Waited seconds: \(report.agentWait.waitedSeconds)")
         print("Attempts: \(report.agentWait.attempts)")
-        print("Post-attempt console: \(report.postAttemptConsole.capture?.consoleScreenshotPath ?? "not captured")")
+        print("Post-attempt console: \(report.postAttemptConsole.visualObservation?.screenshotPath ?? report.postAttemptConsole.capture?.consoleScreenshotPath ?? "not captured")")
         print("Next actions:")
         for action in report.nextActions {
             print("  - \(action)")
@@ -5689,9 +6015,13 @@ struct VeilVMControl {
     private static func qemuSparsePackagePreparationAttemptReport(waitSeconds: Int) async throws -> QEMUGuestAgentInstallAttemptReport {
         var report = try await qemuGuestCommandAttemptReport(
             commandText: QEMUSparsePackagePreparationKeySequence.commandText,
-            steps: QEMUSparsePackagePreparationKeySequence.steps,
-            stepsAfterRunOpened: QEMUSparsePackagePreparationKeySequence.stepsAfterRunOpened,
+            fallbackSteps: QEMUSparsePackagePreparationKeySequence.steps,
+            openRunSteps: QEMUSparsePackagePreparationKeySequence.openRunSteps,
+            commandTextSteps: QEMUSparsePackagePreparationKeySequence.commandTextSteps,
             waitSeconds: waitSeconds,
+            isAlreadySatisfied: { report in
+                report.diagnostic.health?.capabilities.packageIdentity == true
+            },
             nextActions: { agentWait, waitSeconds, consoleEvidence in
                 sparsePackagePreparationNextActions(
                     agentWait: agentWait,
@@ -5707,9 +6037,11 @@ struct VeilVMControl {
     private static func qemuGuestAgentInstallAttemptReport(waitSeconds: Int) async throws -> QEMUGuestAgentInstallAttemptReport {
         try await qemuGuestCommandAttemptReport(
             commandText: QEMUGuestAgentInstallKeySequence.commandText,
-            steps: QEMUGuestAgentInstallKeySequence.steps,
-            stepsAfterRunOpened: QEMUGuestAgentInstallKeySequence.stepsAfterRunOpened,
+            fallbackSteps: QEMUGuestAgentInstallKeySequence.steps,
+            openRunSteps: QEMUGuestAgentInstallKeySequence.openRunSteps,
+            commandTextSteps: QEMUGuestAgentInstallKeySequence.commandTextSteps,
             waitSeconds: waitSeconds,
+            isAlreadySatisfied: { $0.status == .connected },
             nextActions: { agentWait, waitSeconds, consoleEvidence in
                 guestAgentInstallNextActions(
                     agentWait: agentWait,
@@ -5722,35 +6054,150 @@ struct VeilVMControl {
 
     private static func qemuGuestCommandAttemptReport(
         commandText: String,
-        steps: @autoclosure () throws -> [QEMUKeySequenceStep],
-        stepsAfterRunOpened: @autoclosure () throws -> [QEMUKeySequenceStep],
+        fallbackSteps: @autoclosure () throws -> [QEMUKeySequenceStep],
+        openRunSteps: @autoclosure () throws -> [QEMUKeySequenceStep],
+        commandTextSteps: @autoclosure () throws -> [QEMUKeySequenceStep],
         waitSeconds: Int,
+        isAlreadySatisfied: (AgentConnectionWaitReport) -> Bool,
         nextActions: (AgentConnectionWaitReport, Int, QEMUGuestAgentInstallConsoleEvidence) -> [String]
     ) async throws -> QEMUGuestAgentInstallAttemptReport {
+        let preflight = await guestAgentWaitReport(waitSeconds: min(max(waitSeconds, 1), 3))
+        if isAlreadySatisfied(preflight) {
+            let keySend = try await qemuKeySendRecord(steps: [])
+            let skippedReadiness = qemuSkippedConsoleReadinessReport(phase: "already-satisfied")
+            let postAttemptConsole = qemuSkippedGuestAgentInstallConsoleEvidence()
+            return QEMUGuestAgentInstallAttemptReport(
+                commandText: commandText,
+                activationTap: nil,
+                runConfirmationTap: nil,
+                uacApprovalTap: nil,
+                uacApprovalKeySend: nil,
+                keySend: keySend,
+                desktopReadiness: skippedReadiness,
+                runReadiness: skippedReadiness,
+                uacReadiness: skippedReadiness,
+                agentWait: preflight,
+                postAttemptConsole: postAttemptConsole,
+                status: preflight.status,
+                nextActions: nextActions(preflight, waitSeconds, postAttemptConsole)
+            )
+        }
+
+        let desktopTimeout = min(max(waitSeconds / 3, 8), 30)
+        let desktopResult = await waitForQEMUConsoleReadiness(
+            phase: "desktop",
+            timeoutSeconds: desktopTimeout,
+            referenceFrame: nil,
+            expectedStates: [.desktop, .runDialog, .commandShell],
+            acceptMeaningfulChange: false,
+            wakeWhenBlank: true,
+            recognizeText: false
+        )
+        guard desktopResult.report.status == .ready,
+              let desktopSnapshot = desktopResult.snapshot else {
+            let keySend = try await qemuKeySendRecord(steps: [])
+            let postAttemptConsole = qemuGuestAgentInstallConsoleEvidence()
+            return QEMUGuestAgentInstallAttemptReport(
+                commandText: commandText,
+                activationTap: nil,
+                runConfirmationTap: nil,
+                uacApprovalTap: nil,
+                uacApprovalKeySend: nil,
+                keySend: keySend,
+                desktopReadiness: desktopResult.report,
+                runReadiness: qemuSkippedConsoleReadinessReport(phase: "run"),
+                uacReadiness: qemuSkippedConsoleReadinessReport(phase: "uac"),
+                agentWait: preflight,
+                postAttemptConsole: postAttemptConsole,
+                status: preflight.status,
+                nextActions: nextActions(preflight, waitSeconds, postAttemptConsole)
+            )
+        }
+
         let activationTap = try? await qemuGuestAgentInstallActivationTapRecord()
-        if activationTap != nil {
-            try? await Task.sleep(nanoseconds: 800_000_000)
-        }
-        let resolvedSteps: [QEMUKeySequenceStep]
+        var keySendRecords: [QEMUKeySendRecord] = []
+        var runReadiness: QEMUConsoleReadinessReport
+        var runSnapshot: QEMUConsoleVisualSnapshot?
         if activationTap == nil {
-            resolvedSteps = try steps()
+            keySendRecords.append(try await qemuKeySendRecord(steps: try fallbackSteps()))
+            runReadiness = qemuSkippedConsoleReadinessReport(phase: "run-keyboard-fallback")
+            runSnapshot = nil
         } else {
-            resolvedSteps = try stepsAfterRunOpened()
+            try? await Task.sleep(nanoseconds: 500_000_000)
+            keySendRecords.append(try await qemuKeySendRecord(steps: try openRunSteps()))
+            var runResult = await waitForQEMUConsoleReadiness(
+                phase: "run",
+                timeoutSeconds: 6,
+                referenceFrame: desktopSnapshot.frame,
+                expectedStates: [.runDialog],
+                acceptMeaningfulChange: true,
+                wakeWhenBlank: false
+            )
+            if runResult.report.status != .ready {
+                keySendRecords.append(try await qemuKeySendRecord(steps: [
+                    QEMUKeySequenceStep(key: "esc", delayAfterSend: 0.3)
+                ] + (try openRunSteps())))
+                let retryResult = await waitForQEMUConsoleReadiness(
+                    phase: "run-retry",
+                    timeoutSeconds: 6,
+                    referenceFrame: desktopSnapshot.frame,
+                    expectedStates: [.runDialog],
+                    acceptMeaningfulChange: true,
+                    wakeWhenBlank: false
+                )
+                runResult = mergeQEMUConsoleReadinessReports(runResult, retryResult)
+            }
+            runReadiness = runResult.report
+            runSnapshot = runResult.snapshot
+            if runReadiness.status == .ready {
+                keySendRecords.append(try await qemuKeySendRecord(steps: try commandTextSteps()))
+            }
         }
-        let keySend = try await qemuKeySendRecord(steps: resolvedSteps)
-        let runConfirmationTap = activationTap == nil
-            ? nil
-            : try? await qemuGuestCommandRunConfirmationTapRecord()
-        if activationTap != nil && runConfirmationTap == nil {
-            _ = try? await qemuKeySendRecord(steps: [QEMUKeySequenceStep(key: "ret", delayAfterSend: 1.0)])
+
+        var runConfirmationTap: QEMUPointerTapRecord?
+        var uacReadiness = qemuSkippedConsoleReadinessReport(phase: "uac")
+        var uacApprovalTap: QEMUPointerTapRecord?
+        var uacApprovalKeySend: QEMUKeySendRecord?
+        if activationTap != nil, runReadiness.status == .ready {
+            let typedSnapshot = try? qemuConsoleVisualSnapshot(
+                phase: "run-command",
+                attempt: 1,
+                referenceFrame: runSnapshot?.frame,
+                recognizeText: false
+            )
+            runConfirmationTap = try? await qemuGuestCommandRunConfirmationTapRecord()
+            if runConfirmationTap == nil {
+                keySendRecords.append(try await qemuKeySendRecord(steps: [
+                    QEMUKeySequenceStep(key: "ret", delayAfterSend: 1.0)
+                ]))
+            }
+
+            let uacTimeout = min(max(waitSeconds / 2, 12), 30)
+            let uacResult = await waitForQEMUConsoleReadiness(
+                phase: "uac",
+                timeoutSeconds: uacTimeout,
+                referenceFrame: typedSnapshot?.frame ?? runSnapshot?.frame,
+                expectedStates: [.uacPrompt, .modalPrompt],
+                acceptMeaningfulChange: false,
+                wakeWhenBlank: false
+            )
+            uacReadiness = uacResult.report
+            if uacReadiness.status == .ready {
+                uacApprovalTap = try? await qemuGuestAgentInstallUACApprovalTapRecord()
+                if uacApprovalTap != nil {
+                    try? await Task.sleep(nanoseconds: 600_000_000)
+                }
+                uacApprovalKeySend = try? await qemuKeySendRecord(
+                    steps: QEMUGuestAgentInstallKeySequence.uacApproveKeySteps
+                )
+                if let uacApprovalKeySend {
+                    keySendRecords.append(uacApprovalKeySend)
+                }
+            }
         }
-        try? await Task.sleep(nanoseconds: 8_000_000_000)
-        let uacApprovalTap = try? await qemuGuestAgentInstallUACApprovalTapRecord()
-        if uacApprovalTap != nil {
-            try? await Task.sleep(nanoseconds: 2_000_000_000)
-        }
-        let uacApprovalKeySend = try? await qemuKeySendRecord(steps: QEMUGuestAgentInstallKeySequence.uacApproveKeySteps)
-        try? await Task.sleep(nanoseconds: 1_500_000_000)
+
+        let keySend = try await mergedQEMUKeySendRecord(keySendRecords)
+        try? await Task.sleep(nanoseconds: 1_000_000_000)
         let agentWait = await guestAgentWaitReport(waitSeconds: waitSeconds)
         let postAttemptConsole = qemuGuestAgentInstallConsoleEvidence()
         let nextActions = nextActions(agentWait, waitSeconds, postAttemptConsole)
@@ -5761,6 +6208,9 @@ struct VeilVMControl {
             uacApprovalTap: uacApprovalTap,
             uacApprovalKeySend: uacApprovalKeySend,
             keySend: keySend,
+            desktopReadiness: desktopResult.report,
+            runReadiness: runReadiness,
+            uacReadiness: uacReadiness,
             agentWait: agentWait,
             postAttemptConsole: postAttemptConsole,
             status: agentWait.status,
@@ -5777,19 +6227,46 @@ struct VeilVMControl {
         ]
 
         do {
+            let snapshot = try qemuConsoleVisualSnapshot(
+                phase: "post-attempt",
+                attempt: 1,
+                referenceFrame: nil
+            )
+            return QEMUGuestAgentInstallConsoleEvidence(
+                capture: nil,
+                visualObservation: snapshot.observation,
+                reviewHint: "The VNC observation is the active Windows display; inspect its state, OCR text, metrics, and latest screenshot together.",
+                expectedVisibleStates: expectedVisibleStates
+            )
+        } catch {
+            // Keep the HMP capture only as a compatibility fallback for launch records without VNC.
+        }
+
+        do {
             let capture = try captureLatestQEMUConsole()
             return QEMUGuestAgentInstallConsoleEvidence(
                 capture: capture,
+                visualObservation: nil,
                 reviewHint: "Inspect the screenshot to confirm whether the post-attempt Windows screen shows Run, UAC, PowerShell, or only the desktop.",
                 expectedVisibleStates: expectedVisibleStates
             )
         } catch {
             return QEMUGuestAgentInstallConsoleEvidence(
                 capture: nil,
+                visualObservation: nil,
                 reviewHint: "Console screenshot could not be captured after the install attempt: \(error.localizedDescription)",
                 expectedVisibleStates: expectedVisibleStates
             )
         }
+    }
+
+    private static func qemuSkippedGuestAgentInstallConsoleEvidence() -> QEMUGuestAgentInstallConsoleEvidence {
+        QEMUGuestAgentInstallConsoleEvidence(
+            capture: nil,
+            visualObservation: nil,
+            reviewHint: "Guest-agent health was already satisfied, so Veil skipped recovery input and post-attempt screen capture.",
+            expectedVisibleStates: []
+        )
     }
 
     private static func qemuGuestAgentInstallActivationTapRecord() async throws -> QEMUPointerTapRecord {
@@ -5841,9 +6318,13 @@ struct VeilVMControl {
         }
 
         var actions = agentWait.nextActions
-        if let capture = consoleEvidence.capture {
+        if let visualObservation = consoleEvidence.visualObservation,
+           let screenshotPath = visualObservation.screenshotPath {
+            actions.append("Inspect postAttemptConsole.visualObservation at \(screenshotPath); Veil classified the active VNC display as \(visualObservation.state.rawValue).")
+            actions.append("If the active display still shows an administrator prompt, retry `qemu-install-agent`; approval is sent only after UAC or centered-modal readiness is observed.")
+        } else if let capture = consoleEvidence.capture {
             actions.append("Inspect postAttemptConsole.capture.consoleScreenshotPath at \(capture.consoleScreenshotPath) for Run, UAC, PowerShell, or desktop-only evidence.")
-            actions.append("If the screenshot still shows the Windows administrator approval prompt, send `veil-vmctl qemu-sendkey --json left ret` or retry `qemu-install-agent`; the automated path now sends the same keyboard approval after the pointer tap.")
+            actions.append("If the fallback screenshot still shows the Windows administrator approval prompt, retry `qemu-install-agent` after confirming the embedded display is available.")
         } else {
             actions.append("Run `veil-vmctl qemu-capture --json` and confirm whether the Windows desktop showed Run, UAC, or PowerShell during the install attempt.")
         }
@@ -5870,7 +6351,10 @@ struct VeilVMControl {
                 actions.append("Inspect dailyUseReadiness.packageIdentityMessage=\(message)")
             }
         }
-        if let capture = consoleEvidence.capture {
+        if let visualObservation = consoleEvidence.visualObservation,
+           let screenshotPath = visualObservation.screenshotPath {
+            actions.append("Inspect postAttemptConsole.visualObservation at \(screenshotPath); Veil classified the active VNC display as \(visualObservation.state.rawValue).")
+        } else if let capture = consoleEvidence.capture {
             actions.append("Inspect postAttemptConsole.capture.consoleScreenshotPath at \(capture.consoleScreenshotPath) for the sparse package build or package identity failure.")
         } else {
             actions.append("Run `veil-vmctl qemu-capture --json` and confirm whether the Windows desktop showed the sparse package command output.")

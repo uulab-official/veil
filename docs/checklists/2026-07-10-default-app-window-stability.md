@@ -69,5 +69,14 @@ Windows app, never a replay of stale documents or a duplicate-window cascade.
 - [x] Select stale Run history, wait for the command text to settle, click Run's
   confirmation button through QMP, and delay UAC approval to address the live
   lost-Enter and late-prompt failures.
-- [ ] Add screenshot-backed desktop/UAC readiness classification and bounded
-  retry so exceptionally busy post-boot guests do not consume recovery input.
+- [x] Add VNC-frame desktop, Run, UAC, command-shell, blank-frame, and centered
+  modal classification with local Vision OCR plus pixel-metric fallbacks.
+- [x] Gate recovery input on a visible desktop, wake one blank display with a
+  bounded key sequence, retry Run opening once, and send UAC approval only after
+  the prompt or centered modal is observed.
+- [x] Skip repair, Run input, UAC input, and post-attempt capture when preflight
+  guest-agent health is already satisfied.
+- [ ] Capture one forced live recovery report that proves the new Run and UAC
+  readiness observations end to end. The July 14 live pass proved black-frame
+  detection, wake-to-desktop classification, and zero-input connected preflight;
+  the agent reconnected before a forced UAC run was needed.
