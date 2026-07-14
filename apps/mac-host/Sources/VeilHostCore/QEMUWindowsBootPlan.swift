@@ -1567,6 +1567,8 @@ public enum QEMUOOBEBypassKeySequence {
 public enum QEMUGuestAgentInstallKeySequence {
     public static let startButtonTapNormalizedX = 0.304
     public static let startButtonTapNormalizedY = 0.958
+    public static let runConfirmTapNormalizedX = 0.21
+    public static let runConfirmTapNormalizedY = 0.85
     public static let uacApproveTapNormalizedX = 0.375
     public static let uacApproveTapNormalizedY = 0.745
     public static let uacApproveKeySteps: [QEMUKeySequenceStep] = [
@@ -1579,14 +1581,16 @@ public enum QEMUGuestAgentInstallKeySequence {
 
     public static var stepsAfterRunOpened: [QEMUKeySequenceStep] {
         get throws {
-            let textSteps = try QEMUQMPKeyboardCommandBuilder
+            var textSteps = try QEMUQMPKeyboardCommandBuilder
                 .keySequence(forText: commandText)
                 .map { QEMUKeySequenceStep(key: $0, delayAfterSend: 0.035) }
+            if !textSteps.isEmpty {
+                textSteps[textSteps.count - 1].delayAfterSend = 1.0
+            }
             return [
-                QEMUKeySequenceStep(key: "meta-r", delayAfterSend: 1.0)
-            ] + textSteps + [
-                QEMUKeySequenceStep(key: "ret", delayAfterSend: 1.0)
-            ]
+                QEMUKeySequenceStep(key: "meta-r", delayAfterSend: 1.0),
+                QEMUKeySequenceStep(key: "ctrl-a", delayAfterSend: 0.2)
+            ] + textSteps
         }
     }
 
@@ -1594,7 +1598,9 @@ public enum QEMUGuestAgentInstallKeySequence {
         get throws {
             return [
                 QEMUKeySequenceStep(key: "esc", delayAfterSend: 0.3)
-            ] + (try stepsAfterRunOpened)
+            ] + (try stepsAfterRunOpened) + [
+                QEMUKeySequenceStep(key: "ret", delayAfterSend: 1.0)
+            ]
         }
     }
 }
@@ -1602,6 +1608,8 @@ public enum QEMUGuestAgentInstallKeySequence {
 public enum QEMUSparsePackagePreparationKeySequence {
     public static let startButtonTapNormalizedX = QEMUGuestAgentInstallKeySequence.startButtonTapNormalizedX
     public static let startButtonTapNormalizedY = QEMUGuestAgentInstallKeySequence.startButtonTapNormalizedY
+    public static let runConfirmTapNormalizedX = QEMUGuestAgentInstallKeySequence.runConfirmTapNormalizedX
+    public static let runConfirmTapNormalizedY = QEMUGuestAgentInstallKeySequence.runConfirmTapNormalizedY
     public static let uacApproveTapNormalizedX = QEMUGuestAgentInstallKeySequence.uacApproveTapNormalizedX
     public static let uacApproveTapNormalizedY = QEMUGuestAgentInstallKeySequence.uacApproveTapNormalizedY
     public static let uacApproveKeySteps = QEMUGuestAgentInstallKeySequence.uacApproveKeySteps
@@ -1611,14 +1619,16 @@ public enum QEMUSparsePackagePreparationKeySequence {
 
     public static var stepsAfterRunOpened: [QEMUKeySequenceStep] {
         get throws {
-            let textSteps = try QEMUQMPKeyboardCommandBuilder
+            var textSteps = try QEMUQMPKeyboardCommandBuilder
                 .keySequence(forText: commandText)
                 .map { QEMUKeySequenceStep(key: $0, delayAfterSend: 0.035) }
+            if !textSteps.isEmpty {
+                textSteps[textSteps.count - 1].delayAfterSend = 1.0
+            }
             return [
-                QEMUKeySequenceStep(key: "meta-r", delayAfterSend: 1.0)
-            ] + textSteps + [
-                QEMUKeySequenceStep(key: "ret", delayAfterSend: 1.0)
-            ]
+                QEMUKeySequenceStep(key: "meta-r", delayAfterSend: 1.0),
+                QEMUKeySequenceStep(key: "ctrl-a", delayAfterSend: 0.2)
+            ] + textSteps
         }
     }
 
@@ -1626,7 +1636,9 @@ public enum QEMUSparsePackagePreparationKeySequence {
         get throws {
             return [
                 QEMUKeySequenceStep(key: "esc", delayAfterSend: 0.3)
-            ] + (try stepsAfterRunOpened)
+            ] + (try stepsAfterRunOpened) + [
+                QEMUKeySequenceStep(key: "ret", delayAfterSend: 1.0)
+            ]
         }
     }
 }

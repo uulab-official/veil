@@ -606,6 +606,7 @@ struct QEMUGuestAgentInstallAttemptReport: Codable, Equatable {
     var kind: String = "qemuGuestAgentInstallAttempt"
     var commandText: String
     var activationTap: QEMUPointerTapRecord?
+    var runConfirmationTap: QEMUPointerTapRecord?
     var uacApprovalTap: QEMUPointerTapRecord?
     var uacApprovalKeySend: QEMUKeySendRecord?
     var keySend: QEMUKeySendRecord
@@ -5648,6 +5649,7 @@ struct VeilVMControl {
         print("QEMU sparse package preparation attempt: \(report.status.rawValue)")
         print("Package identity: \(report.agentWait.diagnostic.health?.capabilities.packageIdentity == true ? "ready" : "needed")")
         print("Activation tap: \(report.activationTap == nil ? "fallback keyboard" : "sent")")
+        print("Run confirmation tap: \(report.runConfirmationTap == nil ? "fallback keyboard" : "sent")")
         print("UAC approval tap: \(report.uacApprovalTap == nil ? "not sent" : "sent")")
         print("UAC approval keys: \(report.uacApprovalKeySend == nil ? "not sent" : "sent")")
         print("Keys sent: \(report.keySend.keys.count)")
@@ -5671,6 +5673,7 @@ struct VeilVMControl {
 
         print("QEMU guest agent install attempt: \(report.status.rawValue)")
         print("Activation tap: \(report.activationTap == nil ? "fallback keyboard" : "sent")")
+        print("Run confirmation tap: \(report.runConfirmationTap == nil ? "fallback keyboard" : "sent")")
         print("UAC approval tap: \(report.uacApprovalTap == nil ? "not sent" : "sent")")
         print("UAC approval keys: \(report.uacApprovalKeySend == nil ? "not sent" : "sent")")
         print("Keys sent: \(report.keySend.keys.count)")
@@ -5735,7 +5738,13 @@ struct VeilVMControl {
             resolvedSteps = try stepsAfterRunOpened()
         }
         let keySend = try await qemuKeySendRecord(steps: resolvedSteps)
-        try? await Task.sleep(nanoseconds: 5_000_000_000)
+        let runConfirmationTap = activationTap == nil
+            ? nil
+            : try? await qemuGuestCommandRunConfirmationTapRecord()
+        if activationTap != nil && runConfirmationTap == nil {
+            _ = try? await qemuKeySendRecord(steps: [QEMUKeySequenceStep(key: "ret", delayAfterSend: 1.0)])
+        }
+        try? await Task.sleep(nanoseconds: 8_000_000_000)
         let uacApprovalTap = try? await qemuGuestAgentInstallUACApprovalTapRecord()
         if uacApprovalTap != nil {
             try? await Task.sleep(nanoseconds: 2_000_000_000)
@@ -5748,6 +5757,7 @@ struct VeilVMControl {
         return QEMUGuestAgentInstallAttemptReport(
             commandText: commandText,
             activationTap: activationTap,
+            runConfirmationTap: runConfirmationTap,
             uacApprovalTap: uacApprovalTap,
             uacApprovalKeySend: uacApprovalKeySend,
             keySend: keySend,
@@ -5803,6 +5813,18 @@ struct VeilVMControl {
         return try await sender.sendTap(
             normalizedX: QEMUGuestAgentInstallKeySequence.uacApproveTapNormalizedX,
             normalizedY: QEMUGuestAgentInstallKeySequence.uacApproveTapNormalizedY
+        )
+    }
+
+    private static func qemuGuestCommandRunConfirmationTapRecord() async throws -> QEMUPointerTapRecord {
+        let launchRecordStore = JSONQEMULaunchRecordStore(
+            directory: diagnosticsDirectory()
+                .appendingPathComponent("QEMU Launch", isDirectory: true)
+        )
+        let sender = QEMUPointerEventSender(launchRecordStore: launchRecordStore)
+        return try await sender.sendTap(
+            normalizedX: QEMUGuestAgentInstallKeySequence.runConfirmTapNormalizedX,
+            normalizedY: QEMUGuestAgentInstallKeySequence.runConfirmTapNormalizedY
         )
     }
 

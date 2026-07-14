@@ -66,6 +66,8 @@ Windows app, never a replay of stale documents or a duplicate-window cascade.
 - [ ] Productize the managed-guest Notepad startup policy without editing the
   private packaged-app `settings.dat` hive; the current live proof used the
   supported Notepad settings UI.
-- [ ] Replace fixed Run/UAC timing in `qemu-install-agent` with a bounded,
-  screenshot-backed readiness/retry flow so a busy post-boot desktop cannot
-  consume the install command or approval keys.
+- [x] Select stale Run history, wait for the command text to settle, click Run's
+  confirmation button through QMP, and delay UAC approval to address the live
+  lost-Enter and late-prompt failures.
+- [ ] Add screenshot-backed desktop/UAC readiness classification and bounded
+  retry so exceptionally busy post-boot guests do not consume recovery input.

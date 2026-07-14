@@ -1259,7 +1259,7 @@ struct QEMUWindowsBootPlanTests {
         let steps = try QEMUGuestAgentInstallKeySequence.steps
         let keys = steps.map(\.key)
 
-        #expect(Array(keys.prefix(2)) == ["esc", "meta-r"])
+        #expect(Array(keys.prefix(3)) == ["esc", "meta-r", "ctrl-a"])
         #expect(keys.last == "ret")
         #expect(QEMUGuestAgentInstallKeySequence.commandText.hasPrefix("cmd.exe /c for %d"))
         #expect(QEMUGuestAgentInstallKeySequence.commandText.contains("V.cmd"))
@@ -1276,7 +1276,7 @@ struct QEMUWindowsBootPlanTests {
         let steps = try QEMUSparsePackagePreparationKeySequence.steps
         let keys = steps.map(\.key)
 
-        #expect(Array(keys.prefix(2)) == ["esc", "meta-r"])
+        #expect(Array(keys.prefix(3)) == ["esc", "meta-r", "ctrl-a"])
         #expect(keys.last == "ret")
         #expect(QEMUSparsePackagePreparationKeySequence.commandText.hasPrefix("cmd.exe /c for %d"))
         #expect(QEMUSparsePackagePreparationKeySequence.commandText.contains("P.cmd"))
@@ -1296,12 +1296,17 @@ struct QEMUWindowsBootPlanTests {
         #expect(QEMUGuestAgentInstallKeySequence.startButtonTapNormalizedX > 0.25)
         #expect(QEMUGuestAgentInstallKeySequence.startButtonTapNormalizedX < 0.35)
         #expect(QEMUGuestAgentInstallKeySequence.startButtonTapNormalizedY > 0.9)
+        #expect(QEMUGuestAgentInstallKeySequence.runConfirmTapNormalizedX > 0.15)
+        #expect(QEMUGuestAgentInstallKeySequence.runConfirmTapNormalizedX < 0.3)
+        #expect(QEMUGuestAgentInstallKeySequence.runConfirmTapNormalizedY > 0.8)
+        #expect(QEMUGuestAgentInstallKeySequence.runConfirmTapNormalizedY < 0.9)
         #expect(QEMUGuestAgentInstallKeySequence.uacApproveTapNormalizedX > 0.3)
         #expect(QEMUGuestAgentInstallKeySequence.uacApproveTapNormalizedX < 0.45)
         #expect(QEMUGuestAgentInstallKeySequence.uacApproveTapNormalizedY > 0.7)
         #expect(QEMUGuestAgentInstallKeySequence.uacApproveTapNormalizedY < 0.8)
-        #expect(Array(keys.prefix(6)) == ["meta-r", "c", "m", "d", "dot", "e"])
-        #expect(keys.last == "ret")
+        #expect(Array(keys.prefix(7)) == ["meta-r", "ctrl-a", "c", "m", "d", "dot", "e"])
+        #expect(keys.last != "ret")
+        #expect(steps.last?.delayAfterSend == 1.0)
         #expect(keys.count < fallbackSteps.count)
     }
 

@@ -955,8 +955,11 @@ console is running and no guest-agent evidence exists yet.
 
 `veil-vmctl qemu-install-agent [--json] [--wait-seconds 30]` is the safer one-command form for the
 common post-desktop recovery path: it focuses the Windows desktop through QMP
-pointer input, opens Run with the Windows key, scans the attached drive letters
-for `Veil Guest Agent\V.cmd`, and runs that short automation entrypoint. `V.cmd`
+pointer input, opens Run with the Windows key, selects any stale Run history,
+scans the attached drive letters for `Veil Guest Agent\V.cmd`, and runs that
+short automation entrypoint. On QMP launch records it clicks Run's confirmation
+button after the typed command has settled; keyboard-only fallback records still
+use Enter. `V.cmd`
 runs `Repair Veil Agent Connectivity.cmd` when present and falls back to
 `Install Veil Agent.cmd` for older media layouts. Use it only when the Windows
 desktop is visible in the console and the host probe still reports the guest
@@ -964,9 +967,10 @@ agent unavailable. The repair path writes
 `%LOCALAPPDATA%\Veil\Agent\logs\repair-status.json` from the elevated Windows
 process; success now means the guest itself received `agent.health.response`
 over `ws://127.0.0.1:18444/` and over a non-loopback Windows guest IPv4 address,
-not just that TCP port 18444 opened. The JSON report includes the desktop activation tap, bounded key-send evidence, and a
-guest-agent wait result. It sends one bounded UAC approval tap after the command
-sequence, then sends the same keyboard approval that worked in live Korean
+not just that TCP port 18444 opened. The JSON report includes the desktop
+activation tap, Run confirmation tap, bounded key-send evidence, and a
+guest-agent wait result. It waits eight seconds for a busy guest to surface UAC,
+sends one bounded approval tap, then sends the same keyboard approval that worked in live Korean
 Windows UAC (`left`, `ret`) because the prompt often focuses No by default. It
 keeps the `V.cmd` console visible briefly after the repair command returns, then
 captures `postAttemptConsole` with a screenshot path and review hints, so a
