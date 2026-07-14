@@ -174,6 +174,7 @@ struct VeilHostClientTests {
         #expect(result.apps.map(\.id) == ["winapp_notepad"])
         #expect(result.launch.processId == 4912)
         #expect(result.window.windowId == "hwnd:0003029A")
+        #expect(transport.reuseExistingWindowRequests == [true])
     }
 
     @Test("launches a selected Windows app id")
@@ -189,6 +190,7 @@ struct VeilHostClientTests {
         let result = try await client.launchApp(appId: "winapp_calculator")
 
         #expect(transport.sentAppIds == ["winapp_calculator"])
+        #expect(transport.reuseExistingWindowRequests == [true])
         #expect(result.window.appId == "winapp_calculator")
         #expect(result.window.title == "Calculator")
     }

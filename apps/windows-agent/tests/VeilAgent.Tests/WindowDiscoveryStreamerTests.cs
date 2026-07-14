@@ -73,6 +73,59 @@ public class WindowDiscoveryStreamerTests
             throw new NotSupportedException();
     }
 
+    private sealed class ConcurrentLaunchWindowsDesktop : IWindowsDesktop
+    {
+        private readonly LaunchedWindow window;
+        private int windowIsVisible;
+        private int launchAppCallCount;
+
+        public ConcurrentLaunchWindowsDesktop(LaunchedWindow window)
+        {
+            this.window = window;
+        }
+
+        public int LaunchAppCallCount => Volatile.Read(ref launchAppCallCount);
+
+        public async Task<LaunchedWindow> LaunchAppAsync(WindowsAppDescriptor app, CancellationToken cancellationToken)
+        {
+            Interlocked.Increment(ref launchAppCallCount);
+            await Task.Delay(TimeSpan.FromMilliseconds(50), cancellationToken);
+            Volatile.Write(ref windowIsVisible, 1);
+            return window;
+        }
+
+        public Task<LaunchedWindow> LaunchAppWithFileAsync(WindowsAppDescriptor app, string filePath, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+
+        public Task<LaunchedWindow> LaunchNotepadAsync(CancellationToken cancellationToken) =>
+            LaunchAppAsync(new WindowsAppDescriptor("winapp_notepad", "Notepad", "notepad.exe", "Microsoft", "icon_notepad"), cancellationToken);
+
+        public IReadOnlyList<LaunchedWindow> DiscoverAdditionalWindows(WindowsAppDescriptor app, IReadOnlySet<string> knownWindowIds) =>
+            Volatile.Read(ref windowIsVisible) == 1 ? [window] : Array.Empty<LaunchedWindow>();
+
+        public bool IsWindowStillOpen(string windowId) => Volatile.Read(ref windowIsVisible) == 1;
+
+        public Task<bool> FocusWindowAsync(string windowId, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+
+        public Task<bool> CloseWindowAsync(string windowId, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+
+        public Task<bool> SendMouseInputAsync(WindowMouseInput input, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+
+        public Task<bool> SendKeyInputAsync(WindowKeyInput input, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+
+        public Task SetClipboardTextAsync(string text, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+
+        public Task<string?> GetClipboardTextAsync(CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+
+        public bool TryConsumeHostClipboardEcho(string text) => false;
+    }
+
     private static LaunchedWindow Window(string windowId) => new(
         WindowId: windowId,
         Hwnd: 0,
@@ -164,6 +217,32 @@ public class WindowDiscoveryStreamerTests
             knownWindowIds.Count == 2
             && knownWindowIds.Contains(existingFocusedWindow.WindowId)
             && knownWindowIds.Contains(existingBackgroundWindow.WindowId)
+        );
+    }
+
+    [Fact]
+    public async Task ConcurrentReuseRequestsLaunchOneWindowsAppProcess()
+    {
+        var window = Window("hwnd:00000001");
+        var desktop = new ConcurrentLaunchWindowsDesktop(window);
+        var session = new AgentSession(desktop, new NoOpFrameCapture());
+
+        static JsonObject Request(string requestId) => new()
+        {
+            ["type"] = "app.launch.request",
+            ["requestId"] = requestId,
+            ["appId"] = "winapp_notepad",
+            ["reuseExistingWindow"] = true
+        };
+
+        var firstRequest = session.HandleAsync(Request("req_launch_1"));
+        await Task.Delay(TimeSpan.FromMilliseconds(5));
+        var secondRequest = session.HandleAsync(Request("req_launch_2"));
+        var replies = await Task.WhenAll(firstRequest, secondRequest);
+
+        Assert.Equal(1, desktop.LaunchAppCallCount);
+        Assert.All(replies, reply =>
+            Assert.Equal(window.WindowId, reply.DirectReplies[1]["windowId"]!.GetValue<string>())
         );
     }
 

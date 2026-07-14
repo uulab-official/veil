@@ -179,7 +179,7 @@ Request:
   "requestId": "req_003",
   "appId": "winapp_calculator",
   "args": [],
-  "reuseExistingWindow": false
+  "reuseExistingWindow": true
 }
 ```
 
@@ -197,9 +197,15 @@ Response:
 Rules:
 
 - `appId` must be one of the IDs returned by the latest `app.list.response`.
-- `reuseExistingWindow` defaults to `false`. A host reconnect sets it to `true` to
-  reuse a matching already-visible guest HWND before creating a new app process.
-  The guest silently tracks all matching pre-existing windows during that lookup,
+- `reuseExistingWindow` defaults to `false` for backwards compatibility. Veil's
+  first-party app-first launch and reconnect paths set it to `true`, so an ordinary
+  open action reuses a matching visible guest HWND before creating a process.
+  `false` is reserved for a future explicit new-window action and is not exposed by
+  the pre-alpha shell.
+- The guest serializes launch/reuse decisions per app. Concurrent requests for the
+  same app re-check visible HWNDs after the first request completes, preventing a
+  launch race from creating duplicate Windows processes.
+- The guest silently tracks all matching pre-existing windows during reuse lookup,
   so its later discovery stream cannot surface them as duplicate macOS mirrors.
 - `app.launch.response.processId` must match the subsequent `window.created.processId`.
 - `window.created.appId` identifies the launched app; the launch/window acceptance contract is not Notepad-specific.

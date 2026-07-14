@@ -501,7 +501,7 @@ public struct VeilHostClient: HostDashboardService, Sendable {
     }
 
     public func launchApp(appId: String) async throws -> WindowsAppLaunchResult {
-        try await requestAppLaunch(appId: appId, reuseExistingWindow: false)
+        try await requestAppLaunch(appId: appId, reuseExistingWindow: true)
     }
 
     public func restoreApp(appId: String) async throws -> WindowsAppLaunchResult {

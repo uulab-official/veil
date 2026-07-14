@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
@@ -47,6 +48,7 @@ public sealed class AgentSession
     private readonly IWindowsNotificationAccessProbe notificationAccessProbe;
     private readonly Dictionary<string, LaunchedWindow> trackedWindowsById = new();
     private readonly Dictionary<string, WindowsAppDescriptor> appByWindowId = new();
+    private readonly ConcurrentDictionary<string, SemaphoreSlim> appLaunchGates = new();
     private readonly object trackedWindowsGate = new();
 
     public AgentSession(
@@ -108,29 +110,38 @@ public sealed class AgentSession
         }
 
         var reuseExistingWindow = request["reuseExistingWindow"]?.GetValue<bool>() ?? false;
+        var launchGate = appLaunchGates.GetOrAdd(app.Id, _ => new SemaphoreSlim(1, 1));
         LaunchedWindow launched;
+        await launchGate.WaitAsync(cancellationToken);
         try
         {
-            var existingWindows = reuseExistingWindow
-                ? desktop.DiscoverAdditionalWindows(app, new HashSet<string>())
-                : Array.Empty<LaunchedWindow>();
-            if (existingWindows.Count > 0)
+            try
             {
-                // A reconnect must attach to existing guest windows instead of opening another
-                // instance. Track every matching HWND quietly so discovery cannot turn old
-                // windows into duplicate macOS mirrors immediately after the restore.
-                TrackWindows(app, existingWindows);
-                launched = existingWindows.FirstOrDefault(window => window.Focused) ?? existingWindows[0];
+                var existingWindows = reuseExistingWindow
+                    ? desktop.DiscoverAdditionalWindows(app, new HashSet<string>())
+                    : Array.Empty<LaunchedWindow>();
+                if (existingWindows.Count > 0)
+                {
+                    // An app-first open or reconnect attaches to an existing guest window instead
+                    // of opening another instance. Track every matching HWND quietly so discovery
+                    // cannot turn old windows into duplicate macOS mirrors after the request.
+                    TrackWindows(app, existingWindows);
+                    launched = existingWindows.FirstOrDefault(window => window.Focused) ?? existingWindows[0];
+                }
+                else
+                {
+                    launched = await desktop.LaunchAppAsync(app, cancellationToken);
+                    TrackWindow(app, launched);
+                }
             }
-            else
+            catch (Exception error) when (error is not OperationCanceledException)
             {
-                launched = await desktop.LaunchAppAsync(app, cancellationToken);
-                TrackWindow(app, launched);
+                return AgentReplies.Direct(ErrorResponse(requestId, "app_launch_failed", error.Message));
             }
         }
-        catch (Exception error) when (error is not OperationCanceledException)
+        finally
         {
-            return AgentReplies.Direct(ErrorResponse(requestId, "app_launch_failed", error.Message));
+            launchGate.Release();
         }
 
         var frame = await CaptureInitialFrameOrNilAsync(launched, cancellationToken);
