@@ -20,6 +20,7 @@ $StartScript = Join-Path $InstallRoot "scripts\Start-VeilAgent.ps1"
 $InstalledScriptsRoot = Join-Path $InstallRoot "scripts"
 $InstallRootApp = Join-Path $InstallRoot "app"
 $AgentExe = Join-Path $InstallRootApp "VeilAgent.exe"
+$TaskName = "VeilAgent"
 $LogRoot = Join-Path $InstallRoot "logs"
 $RepairLogPath = Join-Path $LogRoot "repair.log"
 
@@ -253,6 +254,57 @@ function Install-VeilVirtIONetworkDriver {
     return $true
 }
 
+function Start-VeilAgentAsStandardUser {
+    param(
+        [string]$StartScriptPath,
+        [int]$TimeoutSeconds = 30
+    )
+
+    # The repair itself must be elevated for driver and firewall work, but the agent launches
+    # desktop apps on behalf of the signed-in user. Starting it directly here would make every
+    # child app elevated and break normal window control. Re-register and run the interactive
+    # logon task at Limited integrity instead.
+    $Action = New-ScheduledTaskAction `
+        -Execute "powershell.exe" `
+        -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$StartScriptPath`" -InstallRoot `"$InstallRoot`" -Port $Port"
+    $Trigger = New-ScheduledTaskTrigger -AtLogOn
+    $InteractiveUser = "$env:USERDOMAIN\$env:USERNAME"
+    $Principal = New-ScheduledTaskPrincipal `
+        -UserId $InteractiveUser `
+        -LogonType Interactive `
+        -RunLevel Limited
+    $Settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
+
+    Register-ScheduledTask `
+        -TaskName $TaskName `
+        -Action $Action `
+        -Trigger $Trigger `
+        -Principal $Principal `
+        -Settings $Settings `
+        -Force | Out-Null
+    Write-Host "Registered limited interactive VeilAgent task for $InteractiveUser."
+
+    Start-ScheduledTask -TaskName $TaskName
+    Write-VeilRepairStatus -Stage "standardUserAgentStartRequested" -Succeeded $false -Message "Requested VeilAgent start through the limited interactive logon task."
+
+    $Deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    do {
+        $RunningAgent = Get-Process -Name "VeilAgent" -ErrorAction SilentlyContinue |
+            Where-Object { $_.Path -eq $AgentExe } |
+            Select-Object -First 1
+        if ($RunningAgent) {
+            Write-Host "Limited interactive VeilAgent process appeared. PID=$($RunningAgent.Id)"
+            # The process already exists, so Start-VeilAgent.ps1 only performs its bounded health
+            # probes here; it cannot fall through to an elevated Start-Process call.
+            & $StartScriptPath -InstallRoot $InstallRoot -Port $Port
+            return
+        }
+        Start-Sleep -Milliseconds 500
+    } while ((Get-Date) -lt $Deadline)
+
+    throw "Timed out waiting for the limited interactive VeilAgent task to start $AgentExe."
+}
+
 if (-not (Test-VeilAdministrator)) {
     Write-Host "Repair-VeilAgentConnectivity.ps1 started at $(Get-Date -Format o)."
     Write-Host "InstallRoot=$InstallRoot"
@@ -335,7 +387,7 @@ try {
         throw "Start-VeilAgent.ps1 was not found in the installed scripts or source media."
     }
 
-    & $StartScript -InstallRoot $InstallRoot -Port $Port
+    Start-VeilAgentAsStandardUser -StartScriptPath $StartScript
     Write-VeilRepairStatus -Stage "guestAgentHealthSucceeded" -Succeeded $true -Message "VeilAgent answered agent.health.response inside Windows on loopback and guest IPv4."
     Write-Host "VeilAgent connectivity repair completed. Firewall rules are present and loopback plus guest IPv4 health succeeded."
 } catch {

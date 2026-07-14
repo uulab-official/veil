@@ -448,6 +448,12 @@ test("windows agent includes user-logon install and uninstall scripts", async ()
   assert.match(repair, /NetKVM\\w11\\ARM64/);
   assert.match(repair, /pnputil\s+\/add-driver/);
   assert.match(repair, /networkDriverInstalled/);
+  assert.match(repair, /function\s+Start-VeilAgentAsStandardUser/);
+  assert.match(repair, /New-ScheduledTaskPrincipal[\s\S]+-LogonType\s+Interactive[\s\S]+-RunLevel\s+Limited/);
+  assert.match(repair, /Register-ScheduledTask[\s\S]+-TaskName\s+\$TaskName/);
+  assert.match(repair, /Start-ScheduledTask\s+-TaskName\s+\$TaskName/);
+  assert.match(repair, /standardUserAgentStartRequested/);
+  assert.match(repair, /Start-VeilAgentAsStandardUser\s+-StartScriptPath\s+\$StartScript/);
   assert.match(repair, /guestAgentHealthSucceeded/);
   assert.match(bootstrap, /Bootstrap-VeilAgentFromMedia/);
   assert.match(bootstrap, /Install Veil Agent\.cmd/);

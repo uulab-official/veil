@@ -113,6 +113,11 @@ public sealed class WebSocketAgentServer
                         break;
                     }
 
+                    // Connections that send RPC requests are short-lived request channels. Keep
+                    // background window, frame, clipboard, and notification events on the passive
+                    // event channel so they cannot be counted as replies to an unrelated request.
+                    clients.TryRemove(clientId, out _);
+
                     var request = JsonNode.Parse(requestText)?.AsObject()
                         ?? new JsonObject { ["type"] = "invalid" };
                     var replies = await session.HandleAsync(request, cancellationToken);

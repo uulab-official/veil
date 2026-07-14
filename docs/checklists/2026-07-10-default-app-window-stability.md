@@ -25,6 +25,14 @@ Windows app, never a replay of stale documents or a duplicate-window cascade.
       same app so MainActor reentrancy cannot send duplicate Windows launches.
 - [x] Cover the launch race with a delayed-service regression test and verify a
       failed shared launch is removed before the next retry.
+- [x] Serialize same-app guest launches and make normal host launches request
+      existing-window reuse, so concurrent clients cannot both create Notepad.
+- [x] Remove request WebSockets from the guest event-broadcast set after their
+      first request, preventing unrelated window/frame events from occupying
+      `app.launch` reply slots and triggering retries.
+- [x] Restart the guest agent through a `RunLevel Limited` interactive task
+      after elevated firewall repair, so launched Windows apps remain under the
+      signed-in user's normal integrity level.
 - [x] Isolate the local QEMU stop unit test from the real QEMU launch-record
       directory so test fixtures cannot inspect the live Windows VM.
 - [x] Cover legacy restore migration, repeated launch reuse, and duplicate
@@ -37,6 +45,17 @@ Windows app, never a replay of stale documents or a duplicate-window cascade.
 - [x] Reconnect the currently running Windows 11 Arm guest agent, then launch
   the built host shell and visually confirm one visible Veil Notepad mirror
   window with a live frame (no launcher or duplicate app window).
+- [x] On July 14, 2026, deploy the refreshed Windows Arm agent, observe
+  `standardUserAgentStartRequested` followed by
+  `guestAgentHealthSucceeded=True`, and confirm a standard-user command can
+  terminate the agent-launched Notepad process without access denied.
+- [x] Configure the managed test guest's Notepad startup policy to begin a new
+  session instead of replaying prior unsaved tabs, then visually confirm one
+  guest Notepad window.
+- [x] Run `app-window-proof` twice against the live guest and confirm both calls
+  reuse PID `9328` and HWND `hwnd:000602DC` with a 600 x 393 PNG frame.
+- [x] Run `mvp-proof --require-proved` on the same HWND and confirm mouse,
+  keyboard, clipboard, and post-input frame evidence with `status=proved`.
 
 ## Follow-up
 
@@ -44,3 +63,9 @@ Windows app, never a replay of stale documents or a duplicate-window cascade.
   allowing more than one mirrored window for the same app in the normal path.
 - [ ] Keep guest-agent recovery separate from window creation: an unavailable
   agent must leave the launcher recoverable, not create placeholder windows.
+- [ ] Productize the managed-guest Notepad startup policy without editing the
+  private packaged-app `settings.dat` hive; the current live proof used the
+  supported Notepad settings UI.
+- [ ] Replace fixed Run/UAC timing in `qemu-install-agent` with a bounded,
+  screenshot-backed readiness/retry flow so a busy post-boot desktop cannot
+  consume the install command or approval keys.
