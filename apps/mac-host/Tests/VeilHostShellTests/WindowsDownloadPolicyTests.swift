@@ -66,4 +66,57 @@ struct WindowsDownloadPolicyTests {
 
         #expect(failure == nil)
     }
+
+    @Test("selects Korean automatically for a Korean Mac")
+    func selectsKoreanLanguage() {
+        #expect(
+            WindowsDownloadLanguagePolicy.preferredMicrosoftLanguageNames(
+                preferredLanguages: ["ko-KR"]
+            ) == ["Korean", "English"]
+        )
+    }
+
+    @Test("uses international English for a British English Mac")
+    func selectsInternationalEnglish() {
+        #expect(
+            WindowsDownloadLanguagePolicy.preferredMicrosoftLanguageNames(
+                preferredLanguages: ["en-GB"]
+            ) == ["English International", "English"]
+        )
+    }
+
+    @Test("distinguishes simplified and traditional Chinese")
+    func selectsChineseScript() {
+        #expect(
+            WindowsDownloadLanguagePolicy.preferredMicrosoftLanguageNames(
+                preferredLanguages: ["zh-Hans"]
+            ).first == "Chinese Simplified"
+        )
+        #expect(
+            WindowsDownloadLanguagePolicy.preferredMicrosoftLanguageNames(
+                preferredLanguages: ["zh-Hant"]
+            ).first == "Chinese Traditional"
+        )
+    }
+
+    @Test("falls back to English for an unavailable Windows language")
+    func fallsBackToEnglish() {
+        #expect(
+            WindowsDownloadLanguagePolicy.preferredMicrosoftLanguageNames(
+                preferredLanguages: ["vi-VN"]
+            ) == ["English"]
+        )
+    }
+
+    @Test("automation uses Microsoft page controls without calling the private connector")
+    func automationUsesPublicPageControls() {
+        let script = WindowsDownloadPageAutomation.script(preferredLanguageNames: ["Korean", "English"])
+
+        #expect(script.contains("product-edition"))
+        #expect(script.contains("product-languages"))
+        #expect(script.contains("submit-product-edition"))
+        #expect(script.contains("submit-sku"))
+        #expect(script.contains("Korean"))
+        #expect(!script.contains("software-download-connector"))
+    }
 }
