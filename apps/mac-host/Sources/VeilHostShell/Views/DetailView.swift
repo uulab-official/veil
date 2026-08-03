@@ -131,8 +131,7 @@ struct DetailView: View {
 
     private var runtimeStatusReport: WindowsAppRuntimeStatusReport {
         model.runtimeStatusReport(
-            localRuntime: model.localRuntimeStatus(snapshot: vmModel.snapshot),
-            hostBackingScale: HostDisplayScale.current
+            localRuntime: model.localRuntimeStatus(snapshot: vmModel.snapshot)
         )
     }
 

@@ -9,7 +9,7 @@ Date: 2026-08-02
 - [x] Swift host 패키지가 컴파일된다.
   - 확인: `swift test --disable-sandbox` 빌드 단계 통과.
 - [x] Swift 테스트 전체 통과.
-  - 확인: `swift test --disable-sandbox` — 651 tests / 53 suites.
+  - 확인: clean `develop` 기준 `swift test --disable-sandbox` — 332 tests / 18 suites.
 - [ ] Windows agent `dotnet test` 통과.
 - [x] protocol 및 주요 harness 테스트 통과.
   - 확인: bundled Node로 protocol/harness 626 tests 통과; fake-agent 24개와 fake-host 8개 포함.
@@ -27,6 +27,9 @@ Date: 2026-08-02
 - [x] 드롭다운 앱 선택을 앱 아이콘 타일 중심의 즉시 실행 런처로 바꾼다.
 - [x] Windows가 설치되지 않은 상태에서는 앱 실행보다 설치 동작을 우선한다.
 - [x] 설치 전에는 앱 카탈로그와 중복 CTA를 숨기고 Windows 설정 화면 하나만 표시한다.
+- [x] 일반 실행에서 자동 데모 fallback을 제거하고 `--demo` 또는 `VEIL_DEMO_MODE=1`로만 명시적으로 허용한다.
+- [x] 커밋되지 않은 Retina scale API 참조를 제거해 `develop` 기본 Swift 빌드를 복구한다.
+  - 확인: `./script/build_and_run.sh --verify-keep-running` 통과; agent가 없는 기본 화면에 데모 앱 타일이 표시되지 않음.
 - [ ] VM 설정을 별도 설정 시트로 분리한다.
 - [ ] Windows ISO로 VM을 준비하고 QEMU/HVF 또는 Apple Virtualization으로 실제 Windows desktop 표시를 검증한다.
 

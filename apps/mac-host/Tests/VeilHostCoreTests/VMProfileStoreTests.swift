@@ -967,7 +967,12 @@ struct VMProfileStoreTests {
         )
         try await store.save(profile)
 
-        let service = LocalVMRuntimeService(profileStore: store)
+        let providerProbe = VMRuntimeProviderProbe(
+            environment: ["VEIL_QEMU_SYSTEM_AARCH64": "/opt/veil/bin/qemu-system-aarch64"],
+            fileExists: { path in path == "/opt/veil/bin/qemu-system-aarch64" },
+            executableVersion: { _ in "QEMU emulator version 11.0.2" }
+        )
+        let service = LocalVMRuntimeService(profileStore: store, providerProbe: providerProbe)
         let snapshot = try await service.loadSnapshot()
         let provider = try #require(snapshot.runtimeProvider)
 
