@@ -2,6 +2,7 @@ import AppKit
 import SwiftUI
 import UniformTypeIdentifiers
 import VeilHostCore
+import Virtualization
 
 struct VMRuntimeView: View {
     @Bindable var model: VMRuntimeModel
@@ -1437,17 +1438,17 @@ private struct WindowsSetupDisplayPanel: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onAppear {
-            showsFullDesktop = snapshot.state == .running && displaySurface != nil
+            showsFullDesktop = hasDesktopDisplay
         }
         .onChange(of: snapshot.state) { _, newState in
             if newState == .running {
-                showsFullDesktop = displaySurface != nil
+                showsFullDesktop = hasDesktopDisplay
             } else {
                 showsFullDesktop = false
             }
         }
         .onChange(of: snapshot.latestConsoleLaunch) { _, _ in
-            if snapshot.state == .running, displaySurface != nil {
+            if snapshot.state == .running, hasDesktopDisplay {
                 showsFullDesktop = true
             }
         }
@@ -1485,7 +1486,10 @@ private struct WindowsSetupDisplayPanel: View {
 
     private var installDisplaySurface: some View {
         ZStack {
-            if let displaySurface {
+            if displaySelection == .appleVirtualMachine,
+               let embeddedVirtualMachine {
+                EmbeddedVirtualMachineView(virtualMachine: embeddedVirtualMachine)
+            } else if let displaySurface {
                 WindowsEmbeddedDisplayPreview(
                     image: displayScreenshotImage,
                     surface: displaySurface,
@@ -1503,7 +1507,11 @@ private struct WindowsSetupDisplayPanel: View {
 
     @ViewBuilder
     private var launcherDisplaySurface: some View {
-        if showsFullDesktop, let displaySurface {
+        if showsFullDesktop,
+           displaySelection == .appleVirtualMachine,
+           let embeddedVirtualMachine {
+            EmbeddedVirtualMachineView(virtualMachine: embeddedVirtualMachine)
+        } else if showsFullDesktop, let displaySurface {
             WindowsEmbeddedDisplayPreview(
                 image: displayScreenshotImage,
                 surface: displaySurface,
@@ -1537,7 +1545,7 @@ private struct WindowsSetupDisplayPanel: View {
                 runtimeSetupMenu
             }
 
-            if displaySurface != nil || canStop || snapshot.state == .starting {
+            if hasDesktopDisplay || canStop || snapshot.state == .starting {
                 Button(action: runEffectivePrimaryAction) {
                     Label(effectivePrimaryTitle, systemImage: effectivePrimarySymbol)
                         .frame(minWidth: canStop ? 124 : 142)
@@ -1578,6 +1586,29 @@ private struct WindowsSetupDisplayPanel: View {
             screenshotPath: path,
             isLiveCapable: false
         )
+    }
+
+    @MainActor
+    private var embeddedVirtualMachine: VZVirtualMachine? {
+        guard snapshot.runtimeProvider?.kind == .appleVirtualization,
+              snapshot.state == .running || snapshot.state == .starting else {
+            return nil
+        }
+
+        return VirtualizationVMRuntimeBooter.shared.activeVirtualMachine
+    }
+
+    private var displaySelection: RuntimeDisplaySelection {
+        RuntimeDisplaySelection.resolve(
+            provider: snapshot.runtimeProvider?.kind,
+            state: snapshot.state,
+            hasAppleVirtualMachine: embeddedVirtualMachine != nil,
+            hasCapturedSurface: displaySurface != nil
+        )
+    }
+
+    private var hasDesktopDisplay: Bool {
+        displaySelection != .placeholder
     }
 
     private var displayScreenshotRevisionID: String {

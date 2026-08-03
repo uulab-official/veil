@@ -449,9 +449,9 @@ struct VeilHostShellApp: App {
             await vmModel.start()
 
             if vmModel.snapshot?.state == .running || vmModel.snapshot?.state == .starting {
-                displayMessage = vmRuntimeBooter.supportsNativeDisplayWindow
-                    ? "Windows is running in recovery display mode."
-                    : "Windows is running inside the main Veil window. Setup evidence refreshes here."
+                displayMessage = vmRuntimeBooter.usesEmbeddedDisplaySurface
+                    ? "Windows is running inside the main Veil window."
+                    : "Windows is running in recovery display mode."
                 scheduleAutomaticGuestAgentRecoveryIfNeeded()
             } else if let errorMessage = vmModel.errorMessage {
                 displayMessage = "Windows display could not start: \(errorMessage)"
@@ -2574,9 +2574,9 @@ private struct StandaloneMainWindowRoot: View {
             await vmModel.start()
 
             if vmModel.snapshot?.state == .running || vmModel.snapshot?.state == .starting {
-                displayMessage = vmRuntimeBooter.supportsNativeDisplayWindow
-                    ? "Windows is running in recovery display mode."
-                    : "Windows is running inside the main Veil window. Setup evidence refreshes here."
+                displayMessage = vmRuntimeBooter.usesEmbeddedDisplaySurface
+                    ? "Windows is running inside the main Veil window."
+                    : "Windows is running in recovery display mode."
             } else if let errorMessage = vmModel.errorMessage {
                 displayMessage = "Windows display could not start: \(errorMessage)"
             }

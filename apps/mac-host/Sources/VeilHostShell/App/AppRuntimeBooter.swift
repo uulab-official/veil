@@ -87,6 +87,15 @@ final class AppRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
         }
     }
 
+    var usesEmbeddedDisplaySurface: Bool {
+        switch provider {
+        case .qemu:
+            !qemuBooter.supportsNativeDisplayWindow
+        case .appleVirtualization:
+            true
+        }
+    }
+
     func runtimeState() async -> VMRuntimeState? {
         switch provider {
         case .qemu:
@@ -101,11 +110,7 @@ final class AppRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
         case .qemu:
             return try await qemuBooter.start(profile: profile)
         case .appleVirtualization:
-            let state = try await virtualizationBooter.start(profile: profile)
-            if state == .running || state == .starting {
-                _ = await showVirtualizationConsole()
-            }
-            return state
+            return try await virtualizationBooter.start(profile: profile)
         }
     }
 
