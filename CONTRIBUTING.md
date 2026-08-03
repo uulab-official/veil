@@ -47,7 +47,8 @@ Run the complete local regression gate before calling a cross-component change d
 ```
 
 The command installs locked Node dependencies, then verifies the Swift host, Windows agent,
-protocol and harness packages, and the signed macOS app launch contract. It checks every required
+protocol and harness packages, the signed macOS app launch contract, and an isolated install,
+guarded replacement, uninstall, user-data preservation, and reinstall cycle. It checks every required
 tool before starting, so a missing SDK cannot leave a misleading partial-success log. Use
 `./script/test_all.sh --list` to inspect the exact scope. Skip flags are intended only for an
 explicitly documented platform limitation, not for release evidence.

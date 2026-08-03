@@ -163,6 +163,18 @@ For the Codex desktop Run button, use:
 That script builds `veil-host-shell`, stages `dist/Veil.app`, and launches it as a macOS app bundle.
 Use `./script/build_and_run.sh --verify` when you want the same bundle build plus a launch check that confirms the `veil-host-shell` process starts, writes a main-window verification report, satisfies the one visible branded launcher-window contract, then cleans up the launched app. If that contract fails, the script preserves the report as `dist/veil-launch-report-failed-*.plist` and still cleans up the launched process. Use `./script/build_and_run.sh --verify-keep-running` when you want to leave the staged app open for manual inspection.
 
+Exercise the local install lifecycle with explicit, guarded commands:
+
+```bash
+./script/build_and_run.sh --build-only
+./script/install_macos.sh
+./script/uninstall_macos.sh
+./script/install_macos.sh
+./script/test_macos_lifecycle.sh --skip-build
+```
+
+The installer validates Veil's bundle identifier and signature and refuses to replace an existing app unless `--replace` is explicit. The uninstaller moves only the verified app bundle to Trash; it preserves profiles, Windows media, VM disks, diagnostics, and shared folders so reinstalling restores the local setup.
+
 `build_and_run.sh` creates an ad-hoc signed development bundle. Do not distribute that bundle: ad-hoc signing does not establish Gatekeeper trust on another Mac. Direct distribution uses the separate release gate:
 
 ```bash

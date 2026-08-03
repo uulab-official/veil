@@ -78,7 +78,7 @@ list_gate() {
     echo "  - $(relative_path "$(dirname "$package_file")")"
   done < <(test_package_files)
   if [[ "$(uname -s)" == "Darwin" && "$SKIP_APP_VERIFY" -eq 0 ]]; then
-    echo "macOS app: ./script/build_and_run.sh --verify"
+    echo "macOS app: ./script/build_and_run.sh --verify + ./script/test_macos_lifecycle.sh --skip-build"
   else
     echo "macOS app: skipped"
   fi
@@ -106,6 +106,8 @@ preflight() {
   if [[ "$(uname -s)" == "Darwin" && "$SKIP_APP_VERIFY" -eq 0 ]]; then
     require_command codesign "Install the current Xcode command-line tools." || blocked=1
     require_command plutil "Use a supported macOS development host." || blocked=1
+    require_command ditto "Use a supported macOS development host." || blocked=1
+    require_command xattr "Use a supported macOS development host." || blocked=1
   fi
 
   if [[ "$blocked" -ne 0 ]]; then
@@ -156,6 +158,8 @@ run_node_tests
 if [[ "$(uname -s)" == "Darwin" && "$SKIP_APP_VERIFY" -eq 0 ]]; then
   echo "==> macOS app bundle and launch contract"
   "$ROOT_DIR/script/build_and_run.sh" --verify
+  echo "==> macOS app install and uninstall lifecycle"
+  "$ROOT_DIR/script/test_macos_lifecycle.sh" --skip-build
 else
   echo "==> macOS app verification skipped"
 fi
