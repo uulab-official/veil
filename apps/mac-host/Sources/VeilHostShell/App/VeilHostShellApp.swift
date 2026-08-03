@@ -96,13 +96,7 @@ struct VeilHostShellApp: App {
         self.agentTransport = transport
         _model = State(
             initialValue: HostDashboardModel(
-                service: FallbackHostDashboardService(
-                    primary: VeilHostClient(
-                        transport: transport
-                    ),
-                    fallback: DemoHostDashboardService(),
-                    primaryEndpointDescription: Self.agentURLString
-                )
+                service: HostDashboardServiceMode.resolve().makeService(transport: transport)
             )
         )
         _vmModel = State(
@@ -2534,11 +2528,7 @@ private struct StandaloneMainWindowRoot: View {
         self.vmRuntimeBooter = runtimeBooter
         _model = State(
             initialValue: HostDashboardModel(
-                service: FallbackHostDashboardService(
-                    primary: VeilHostClient(transport: transport),
-                    fallback: DemoHostDashboardService(),
-                    primaryEndpointDescription: Self.agentURLString
-                )
+                service: HostDashboardServiceMode.resolve().makeService(transport: transport)
             )
         )
         _vmModel = State(

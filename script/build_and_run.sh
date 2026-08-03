@@ -174,6 +174,9 @@ case "$MODE" in
   --start-vm|start-vm)
     open_app --start-vm
     ;;
+  --demo|demo)
+    open_app --demo
+    ;;
   --debug|debug)
     lldb -- "$APP_BINARY"
     ;;
@@ -206,7 +209,7 @@ case "$MODE" in
     exit 0
     ;;
   *)
-    echo "usage: $0 [--build-only|run|--start-vm|--debug|--logs|--telemetry|--verify|--verify-keep-running]" >&2
+    echo "usage: $0 [--build-only|run|--start-vm|--demo|--debug|--logs|--telemetry|--verify|--verify-keep-running]" >&2
     exit 2
     ;;
 esac
