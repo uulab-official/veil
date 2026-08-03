@@ -1663,6 +1663,14 @@ private struct WindowsSetupDisplayPanel: View {
                     .lineLimit(1)
                     .minimumScaleFactor(0.82)
 
+                if showsUnavailableGuestAgentRoute {
+                    Label("Console available • Windows app integration needs QEMU or a configured endpoint", systemImage: "network.slash")
+                        .font(.callout.weight(.medium))
+                        .foregroundStyle(.orange)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                }
+
                 if effectiveInstallEvidence.isInstalled {
                     Label(launchOnboardingTitle, systemImage: launchOnboardingSymbolName)
                         .font(.callout.weight(.semibold))
@@ -2197,6 +2205,11 @@ private struct WindowsSetupDisplayPanel: View {
         default:
             LinearGradient(colors: [Color(red: 0.02, green: 0.32, blue: 0.62), Color(red: 0.08, green: 0.09, blue: 0.14)], startPoint: .topLeading, endPoint: .bottomTrailing)
         }
+    }
+
+    private var showsUnavailableGuestAgentRoute: Bool {
+        agentDiagnostic?.status == .unavailable
+            && agentDiagnostic?.endpoint.hasPrefix("unavailable://") == true
     }
 
     private func resourceName(from path: String?) -> String? {
