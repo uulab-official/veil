@@ -36,6 +36,13 @@ Starting a local virtual machine with user-provided installer media and a blank 
 
 Veil must not upload, mirror, or serve Windows ISO files through project-owned storage, including Appwrite Storage buckets or other object-storage services. If a future Appwrite integration exists, it may store only metadata such as official download-page references, hashes supplied by the user, setup state, or user-owned private file references. It must not make Veil a Windows image distributor.
 
+Veil may display Microsoft's official Windows 11 Arm64 download page and receive the user-initiated ISO response directly from Microsoft into Veil's local Application Support directory. This flow must keep Microsoft's edition and language choices visible, accept downloads only over HTTPS from Microsoft-owned domains, and retain an existing-ISO fallback. Veil must not depend on Microsoft's unpublished software-download connector as a stable API, manufacture a permanent ISO URL, bypass Microsoft's page choices, or proxy the response through project infrastructure. Downloading media does not grant a Windows license or activation rights.
+
+Official references:
+
+- Windows 11 Arm ISO overview: https://learn.microsoft.com/en-us/windows/arm/iso
+- Download Windows 11 for Arm-based PCs: https://www.microsoft.com/en-us/software-download/windows11arm64
+
 ## Unattended Setup Keys
 
 Generated answer files must not include Windows product keys, including generic setup keys. Microsoft documents `microsoft-windows-setup\UserData\ProductKey\Key` as a 25-character product-key value and explicitly notes that empty values are unsupported:
