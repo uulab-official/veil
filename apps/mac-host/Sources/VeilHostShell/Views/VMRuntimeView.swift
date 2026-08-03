@@ -1709,6 +1709,8 @@ private struct WindowsSetupDisplayPanel: View {
                 .buttonStyle(.plain)
                 .disabled(effectivePrimaryDisabled)
                 .help(effectivePrimaryHelp)
+                .accessibilityLabel(effectivePrimaryTitle)
+                .accessibilityHint(effectivePrimaryHelp)
 
                 Text(effectivePrimaryTitle)
                     .font(.headline.weight(.semibold))
@@ -1716,7 +1718,7 @@ private struct WindowsSetupDisplayPanel: View {
                     .minimumScaleFactor(0.82)
 
                 if showsUnavailableGuestAgentRoute {
-                    Label("Console available • Windows app integration needs QEMU or a configured endpoint", systemImage: "network.slash")
+                    Label("Windows setup is available • Mac app windows require QEMU or a configured endpoint", systemImage: "network.slash")
                         .font(.callout.weight(.medium))
                         .foregroundStyle(.orange)
                         .lineLimit(1)
@@ -2117,7 +2119,7 @@ private struct WindowsSetupDisplayPanel: View {
         }
 
         if snapshot.runtimeProvider?.kind == .appleVirtualization {
-            return "Apple Virtualization fallback • bring your Windows 11 Arm installer"
+            return "Apple Virtualization compatibility mode • bring your Windows 11 Arm installer"
         }
 
         return "Bring your own Windows 11 Arm installer"
