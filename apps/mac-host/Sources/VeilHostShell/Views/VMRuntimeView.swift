@@ -89,7 +89,7 @@ struct VMRuntimeView: View {
                             startDisplayHandoffProgress()
                             startVMAction()
                         } else if !snapshot.windowsInstalled && (snapshot.installerMediaPath == nil || needsInstallerPickerAccess(snapshot)) {
-                            pathPicker = .installerMedia
+                            pathPicker = .installerAndStart
                         } else {
                             Task {
                                 await model.prepareDefaultVM()
@@ -178,7 +178,7 @@ struct VMRuntimeView: View {
                     primarySymbol: model.phase == .loading ? "arrow.triangle.2.circlepath" : "opticaldisc",
                     secondaryTitle: "Refresh",
                     primaryAction: {
-                        pathPicker = .installerMedia
+                        pathPicker = .installerAndStart
                     },
                     secondaryAction: {
                         Task {
@@ -391,6 +391,18 @@ struct VMRuntimeView: View {
                     driverMediaPath: currentDriver,
                     virtualDiskPath: currentDisk
                 )
+            case .installerAndStart:
+                let isReadyToStart = await model.prepareWindowsInstallation(
+                    installerMediaPath: path,
+                    driverMediaPath: currentDriver,
+                    virtualDiskPath: currentDisk
+                )
+                guard isReadyToStart else {
+                    return
+                }
+
+                startDisplayHandoffProgress()
+                startVMAction()
             case .driverMedia:
                 await model.updateProfilePaths(
                     installerMediaPath: currentInstaller,
@@ -1690,7 +1702,7 @@ private struct WindowsSetupDisplayPanel: View {
         }
 
         if snapshot.installerMediaPath == nil || installerNeedsFilePickerAccess {
-            return "Choose ISO"
+            return "Choose ISO and Install"
         }
 
         return snapshot.profileName == nil ? "Prepare Windows" : "Continue Setup"
@@ -2202,8 +2214,8 @@ private struct WindowsSetupDisplayPanel: View {
             return installSimulation.phase == .running ? "Starting..." : "Start Windows"
         }
 
-        if installerNeedsFilePickerAccess {
-            return "Choose ISO"
+        if snapshot.installerMediaPath == nil || installerNeedsFilePickerAccess {
+            return "Choose ISO and Install"
         }
 
         return snapshot.profileName == nil ? "Prepare Windows" : "Continue Setup"
@@ -2238,7 +2250,7 @@ private struct WindowsSetupDisplayPanel: View {
             return "play.fill"
         }
 
-        if installerNeedsFilePickerAccess {
+        if snapshot.installerMediaPath == nil || installerNeedsFilePickerAccess {
             return "opticaldisc"
         }
 
@@ -2275,6 +2287,10 @@ private struct WindowsSetupDisplayPanel: View {
 
         if canStart {
             return "Start Windows Setup inside Veil's embedded display."
+        }
+
+        if snapshot.installerMediaPath == nil {
+            return "Choose a Windows 11 Arm ISO. Veil will prepare the VM and open Windows Setup automatically."
         }
 
         if installerNeedsFilePickerAccess {
@@ -3454,6 +3470,7 @@ private struct SetupItemRow: View {
 
 private enum PathPicker: Identifiable {
     case installerMedia
+    case installerAndStart
     case driverMedia
     case virtualDisk
 
@@ -3461,6 +3478,8 @@ private enum PathPicker: Identifiable {
         switch self {
         case .installerMedia:
             "installerMedia"
+        case .installerAndStart:
+            "installerAndStart"
         case .driverMedia:
             "driverMedia"
         case .virtualDisk:

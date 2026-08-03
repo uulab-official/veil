@@ -9,7 +9,7 @@ Date: 2026-08-02
 - [x] Swift host 패키지가 컴파일된다.
   - 확인: `swift test --disable-sandbox` 빌드 단계 통과.
 - [x] Swift 테스트 전체 통과.
-  - 확인: clean `develop` 기준 `swift test --disable-sandbox` — 332 tests / 18 suites.
+  - 확인: clean `develop` 기준 `swift test --disable-sandbox` — 334 tests / 18 suites.
 - [ ] Windows agent `dotnet test` 통과.
 - [x] protocol 및 주요 harness 테스트 통과.
   - 확인: bundled Node로 protocol/harness 626 tests 통과; fake-agent 24개와 fake-host 8개 포함.
@@ -30,12 +30,15 @@ Date: 2026-08-02
 - [x] 일반 실행에서 자동 데모 fallback을 제거하고 `--demo` 또는 `VEIL_DEMO_MODE=1`로만 명시적으로 허용한다.
 - [x] 커밋되지 않은 Retina scale API 참조를 제거해 `develop` 기본 Swift 빌드를 복구한다.
   - 확인: `./script/build_and_run.sh --verify-keep-running` 통과; agent가 없는 기본 화면에 데모 앱 타일이 표시되지 않음.
+- [x] 첫 화면의 `Choose ISO and Install`에서 ISO 저장 → 기본 VM/디스크 준비 → Windows Setup 부팅 시작을 한 동작으로 연결한다.
+  - 확인: 성공/실패 모델 테스트, 앱 번들 실행 검증, macOS 파일 선택기 진입 확인. 실제 Windows ISO 부팅 증거는 아래 실기 항목으로 유지한다.
 - [ ] VM 설정을 별도 설정 시트로 분리한다.
 - [ ] Windows ISO로 VM을 준비하고 QEMU/HVF 또는 Apple Virtualization으로 실제 Windows desktop 표시를 검증한다.
 
 ## P0 — Parallels급 기본 사용 루프
 
 - [ ] 첫 실행에서 Windows 11 Arm ISO 선택부터 VM 생성·설치 시작까지 한 화면에서 완료한다.
+  - 코드 경로는 연결됨. 실제 Windows 11 Arm ISO로 임베디드 Windows Setup 화면이 뜨는 실기 증거가 필요하다.
 - [ ] 앱 셸에서 `Windows 시작 → guest agent 연결/복구 → 선택 앱 실행 → macOS 창 표시`를 터미널 없이 완료한다.
 - [ ] Windows 부팅 중에는 라이브 display surface와 명확한 부팅 상태를 함께 표시한다.
 - [ ] Windows 설치 후에는 설정 화면보다 앱 타일 런처가 기본 화면이 된다.
