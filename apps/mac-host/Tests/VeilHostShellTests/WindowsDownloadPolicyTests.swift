@@ -116,7 +116,99 @@ struct WindowsDownloadPolicyTests {
         #expect(script.contains("product-languages"))
         #expect(script.contains("submit-product-edition"))
         #expect(script.contains("submit-sku"))
+        #expect(script.contains("SHA-256"))
+        #expect(script.contains("querySelectorAll('tr')"))
+        #expect(script.contains("sha256"))
         #expect(script.contains("Korean"))
         #expect(!script.contains("software-download-connector"))
+    }
+
+    @Test("normalizes a Microsoft SHA-256 value")
+    func normalizesSHA256() {
+        let digest = "723fdcb737b39a5ec1f4b0eadacf288f1a2c4c4c8c845eb1f6a433cc264bd426"
+
+        #expect(WindowsISOHashPolicy.normalizedSHA256("  \(digest)\n") == digest.uppercased())
+    }
+
+    @Test("rejects missing and malformed SHA-256 values", arguments: [nil, "1234", String(repeating: "Z", count: 64)])
+    func rejectsInvalidSHA256(digest: String?) {
+        #expect(WindowsISOHashPolicy.normalizedSHA256(digest) == nil)
+    }
+
+    @Test("detects an ISO hash mismatch")
+    func detectsHashMismatch() {
+        let expected = String(repeating: "A", count: 64)
+        let actual = String(repeating: "B", count: 64)
+
+        #expect(WindowsISOHashPolicy.failureReason(expected: expected, actual: actual)?.contains("damaged") == true)
+    }
+
+    @Test("streams SHA-256 calculation without loading the whole file")
+    func calculatesSHA256() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("veil-windows-hash-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let file = directory.appendingPathComponent("sample.iso")
+        try Data("abc".utf8).write(to: file)
+
+        let digest = try await WindowsISOIntegrityVerifier.sha256(for: file)
+
+        #expect(digest == "BA7816BF8F01CFEA414140DE5DAE2223B00361A396177A9CB410FF61F20015AD")
+    }
+
+    @Test("rejects HTTP errors before creating a destination")
+    func rejectsHTTPError() {
+        let failure = WindowsDownloadResponsePolicy.failureReason(
+            statusCode: 503,
+            expectedContentLength: 7_000_000_000,
+            availableCapacity: 20_000_000_000
+        )
+
+        #expect(failure?.contains("HTTP 503") == true)
+    }
+
+    @Test("rejects implausibly short download responses")
+    func rejectsShortResponse() {
+        let failure = WindowsDownloadResponsePolicy.failureReason(
+            statusCode: 200,
+            expectedContentLength: WindowsISOFileValidator.minimumPlausibleSize - 1,
+            availableCapacity: 20_000_000_000
+        )
+
+        #expect(failure?.contains("incomplete") == true)
+    }
+
+    @Test("requires download size plus a storage reserve")
+    func rejectsLowStorage() {
+        let failure = WindowsDownloadResponsePolicy.failureReason(
+            statusCode: 200,
+            expectedContentLength: 7_000_000_000,
+            availableCapacity: 8_999_999_999
+        )
+
+        #expect(failure?.contains("Not enough free storage") == true)
+    }
+
+    @Test("accepts a valid response when storage is sufficient")
+    func acceptsValidResponse() {
+        #expect(
+            WindowsDownloadResponsePolicy.failureReason(
+                statusCode: 200,
+                expectedContentLength: 7_000_000_000,
+                availableCapacity: 9_000_000_000
+            ) == nil
+        )
+    }
+
+    @Test("does not invent a storage failure when macOS omits capacity")
+    func acceptsUnknownStorageCapacity() {
+        #expect(
+            WindowsDownloadResponsePolicy.failureReason(
+                statusCode: 200,
+                expectedContentLength: 7_000_000_000,
+                availableCapacity: nil
+            ) == nil
+        )
     }
 }

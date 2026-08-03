@@ -1,5 +1,6 @@
 import AppKit
 import Combine
+import CryptoKit
 import SwiftUI
 import WebKit
 
@@ -96,6 +97,97 @@ enum WindowsISOFileValidator {
     }
 }
 
+enum WindowsDownloadResponsePolicy {
+    static let minimumFallbackCapacity: Int64 = 10_000_000_000
+    static let reservedCapacity: Int64 = 2_000_000_000
+
+    static func failureReason(
+        statusCode: Int?,
+        expectedContentLength: Int64,
+        availableCapacity: Int64?
+    ) -> String? {
+        if let statusCode, !(200...299).contains(statusCode) {
+            return "Microsoft's Windows download returned HTTP \(statusCode). Reload the official page and try again."
+        }
+
+        if expectedContentLength > 0,
+           expectedContentLength < WindowsISOFileValidator.minimumPlausibleSize {
+            return "Microsoft returned an incomplete Windows ISO response. Reload the official page and try again."
+        }
+
+        guard let availableCapacity else {
+            return nil
+        }
+
+        let requiredCapacity: Int64
+        if expectedContentLength > 0 {
+            let (capacity, overflow) = expectedContentLength.addingReportingOverflow(reservedCapacity)
+            requiredCapacity = overflow ? Int64.max : capacity
+        } else {
+            requiredCapacity = minimumFallbackCapacity
+        }
+
+        guard availableCapacity >= requiredCapacity else {
+            let formatter = ByteCountFormatter()
+            formatter.countStyle = .file
+            return "Not enough free storage for Windows. Veil needs \(formatter.string(fromByteCount: requiredCapacity)) but only \(formatter.string(fromByteCount: availableCapacity)) is available."
+        }
+
+        return nil
+    }
+}
+
+enum WindowsISOHashPolicy {
+    static func normalizedSHA256(_ value: String?) -> String? {
+        guard let value else {
+            return nil
+        }
+
+        let normalized = value
+            .filter { !$0.isWhitespace }
+            .uppercased()
+        guard normalized.count == 64,
+              normalized.unicodeScalars.allSatisfy({
+                  CharacterSet(charactersIn: "0123456789ABCDEF").contains($0)
+              }) else {
+            return nil
+        }
+        return normalized
+    }
+
+    static func failureReason(expected: String?, actual: String) -> String? {
+        guard let expected = normalizedSHA256(expected) else {
+            return "Microsoft did not publish a valid SHA-256 for this ISO. Veil did not keep the unverified download."
+        }
+
+        guard normalizedSHA256(actual) == expected else {
+            return "The Windows ISO failed Microsoft's SHA-256 integrity check. Veil removed the damaged download; try again."
+        }
+
+        return nil
+    }
+}
+
+enum WindowsISOIntegrityVerifier {
+    static func sha256(for url: URL) async throws -> String {
+        try await Task.detached(priority: .utility) {
+            let handle = try FileHandle(forReadingFrom: url)
+            defer { try? handle.close() }
+
+            var hasher = SHA256()
+            while let data = try handle.read(upToCount: 4 * 1_024 * 1_024), !data.isEmpty {
+                try Task.checkCancellation()
+                hasher.update(data: data)
+            }
+            try Task.checkCancellation()
+
+            return hasher.finalize()
+                .map { String(format: "%02X", $0) }
+                .joined()
+        }.value
+    }
+}
+
 enum WindowsDownloadLanguagePolicy {
     static func preferredMicrosoftLanguageNames(
         preferredLanguages: [String] = Locale.preferredLanguages
@@ -160,7 +252,7 @@ enum WindowsDownloadPageAutomation {
           const preferredLanguages = \(languagesJSON);
           const normalize = value => (value || '').replace(/\\s+/g, ' ').trim().toLowerCase();
           const visible = element => !!element && (element.offsetWidth > 0 || element.offsetHeight > 0 || element.getClientRects().length > 0);
-          const response = (stage, detail = '', url = '') => JSON.stringify({ stage, detail, url });
+          const response = (stage, detail = '', url = '', sha256 = '') => JSON.stringify({ stage, detail, url, sha256 });
 
           const isoLink = Array.from(document.querySelectorAll('a[href]')).find(anchor => {
             try {
@@ -172,7 +264,25 @@ enum WindowsDownloadPageAutomation {
             }
           });
           if (isoLink) {
-            return response('download-ready', isoLink.textContent || 'Windows 11 Arm64', isoLink.href);
+            const languageSelect = document.getElementById('product-languages');
+            const selectedLanguage = languageSelect?.options[languageSelect.selectedIndex]?.textContent
+              || preferredLanguages[0]
+              || 'English';
+            const expectedHashLabel = normalize(`${selectedLanguage} 64-bit`);
+            const hashRow = Array.from(document.querySelectorAll('tr')).find(row => {
+              const cells = Array.from(row.querySelectorAll('th, td'))
+                .map(cell => (cell.textContent || '').replace(/\\s+/g, ' ').trim());
+              return cells.length >= 2
+                && normalize(cells[0]) === expectedHashLabel
+                && /^[a-f0-9]{64}$/i.test(cells[1].replace(/\\s+/g, ''));
+            });
+            const publishedHash = hashRow
+              ? Array.from(hashRow.querySelectorAll('th, td'))[1].textContent.replace(/\\s+/g, '').trim()
+              : '';
+            if (!publishedHash) {
+              return response('waiting-hash', `Waiting for Microsoft's ${selectedLanguage} SHA-256`);
+            }
+            return response('download-ready', selectedLanguage.trim(), isoLink.href, publishedHash);
           }
 
           const visibleError = Array.from(document.querySelectorAll('.modal, [role="dialog"]'))
@@ -230,6 +340,7 @@ private struct WindowsDownloadAutomationResponse: Decodable {
     var stage: String
     var detail: String
     var url: String
+    var sha256: String
 }
 
 enum WindowsDownloadPhase: Equatable {
@@ -237,6 +348,7 @@ enum WindowsDownloadPhase: Equatable {
     case automating(step: String)
     case requestingDownload(language: String)
     case downloading(filename: String)
+    case verifying(filename: String)
     case downloaded(URL)
     case failed(String)
 }
@@ -261,8 +373,10 @@ final class WindowsDownloadController: NSObject, ObservableObject {
     private var hasLoadedLandingPage = false
     private var hasRequestedDownload = false
     private var selectedLanguageName: String?
+    private var expectedSHA256: String?
     private var automationTask: Task<Void, Never>?
     private var progressTask: Task<Void, Never>?
+    private var verificationTask: Task<Void, Never>?
 
     func loadLandingPage() {
         guard !hasLoadedLandingPage else {
@@ -272,6 +386,7 @@ final class WindowsDownloadController: NSObject, ObservableObject {
         hasLoadedLandingPage = true
         hasRequestedDownload = false
         selectedLanguageName = nil
+        expectedSHA256 = nil
         phase = .loadingPage
         webView.load(URLRequest(url: WindowsDownloadURLPolicy.landingPageURL))
     }
@@ -281,6 +396,7 @@ final class WindowsDownloadController: NSObject, ObservableObject {
         destinationURL = nil
         hasRequestedDownload = false
         selectedLanguageName = nil
+        expectedSHA256 = nil
         phase = .loadingPage
         webView.load(URLRequest(url: WindowsDownloadURLPolicy.landingPageURL))
     }
@@ -290,7 +406,10 @@ final class WindowsDownloadController: NSObject, ObservableObject {
         automationTask = nil
         progressTask?.cancel()
         progressTask = nil
+        verificationTask?.cancel()
+        verificationTask = nil
         downloadProgress = nil
+        expectedSHA256 = nil
         let partialDestination = destinationURL
         destinationURL = nil
 
@@ -334,6 +453,8 @@ final class WindowsDownloadController: NSObject, ObservableObject {
         automationTask = nil
         progressTask?.cancel()
         progressTask = nil
+        verificationTask?.cancel()
+        verificationTask = nil
         downloadProgress = nil
         activeDownload = nil
         if removePartialFile {
@@ -409,6 +530,8 @@ final class WindowsDownloadController: NSObject, ObservableObject {
             phase = .automating(step: "Waiting for Microsoft to issue the ISO link")
         case "waiting":
             phase = .automating(step: result.detail)
+        case "waiting-hash":
+            phase = .automating(step: result.detail)
         case "download-ready":
             guard let url = URL(string: result.url),
                   WindowsDownloadURLPolicy.allowsISOResponse(url: url, suggestedFilename: nil) else {
@@ -416,7 +539,14 @@ final class WindowsDownloadController: NSObject, ObservableObject {
                 return true
             }
 
+            guard let publishedSHA256 = WindowsISOHashPolicy.normalizedSHA256(result.sha256) else {
+                fail("Microsoft did not expose a valid SHA-256 for this ISO. Show the Microsoft page or reload to try again.", removePartialFile: false)
+                return true
+            }
+
             hasRequestedDownload = true
+            selectedLanguageName = result.detail.trimmingCharacters(in: .whitespacesAndNewlines)
+            expectedSHA256 = publishedSHA256
             phase = .requestingDownload(language: selectedLanguageName ?? "Windows 11 Arm64")
             webView.load(URLRequest(url: url))
             return true
@@ -485,7 +615,7 @@ extension WindowsDownloadController: WKNavigationDelegate {
         switch phase {
         case .loadingPage, .automating:
             startAutomationIfNeeded()
-        case .requestingDownload, .downloading, .downloaded, .failed:
+        case .requestingDownload, .downloading, .verifying, .downloaded, .failed:
             break
         }
     }
@@ -535,6 +665,17 @@ extension WindowsDownloadController: WKDownloadDelegate {
 
         do {
             let directory = try WindowsDownloadDestination.downloadsDirectory()
+            let availableCapacity = try? directory.resourceValues(
+                forKeys: [.volumeAvailableCapacityForImportantUsageKey]
+            ).volumeAvailableCapacityForImportantUsage
+            if let failure = WindowsDownloadResponsePolicy.failureReason(
+                statusCode: (response as? HTTPURLResponse)?.statusCode,
+                expectedContentLength: response.expectedContentLength,
+                availableCapacity: availableCapacity
+            ) {
+                fail(failure)
+                return nil
+            }
             let destination = WindowsDownloadDestination.availableISOURL(
                 suggestedFilename: suggestedFilename,
                 in: directory
@@ -593,9 +734,8 @@ extension WindowsDownloadController: WKDownloadDelegate {
             activeDownload = nil
             progressTask?.cancel()
             progressTask = nil
-            downloadProgress = 1
-            self.destinationURL = nil
-            phase = .downloaded(destinationURL)
+            downloadProgress = nil
+            beginIntegrityVerification(of: destinationURL)
         } catch {
             fail("Veil could not verify the downloaded Windows ISO: \(error.localizedDescription)")
         }
@@ -606,6 +746,42 @@ extension WindowsDownloadController: WKDownloadDelegate {
             return
         }
         fail("The Windows ISO download failed: \(error.localizedDescription)")
+    }
+
+    private func beginIntegrityVerification(of url: URL) {
+        let expectedSHA256 = expectedSHA256
+        verificationTask?.cancel()
+        phase = .verifying(filename: url.lastPathComponent)
+        verificationTask = Task { @MainActor [weak self] in
+            do {
+                let actualSHA256 = try await WindowsISOIntegrityVerifier.sha256(for: url)
+                try Task.checkCancellation()
+
+                guard let self, self.destinationURL == url else {
+                    return
+                }
+                if let failure = WindowsISOHashPolicy.failureReason(
+                    expected: expectedSHA256,
+                    actual: actualSHA256
+                ) {
+                    self.fail(failure)
+                    return
+                }
+
+                self.verificationTask = nil
+                self.expectedSHA256 = nil
+                self.destinationURL = nil
+                self.downloadProgress = 1
+                self.phase = .downloaded(url)
+            } catch is CancellationError {
+                return
+            } catch {
+                guard let self, self.destinationURL == url else {
+                    return
+                }
+                self.fail("Veil could not verify the downloaded Windows ISO: \(error.localizedDescription)")
+            }
+        }
     }
 }
 
@@ -811,7 +987,7 @@ struct WindowsDownloadSheet: View {
             case .automating, .requestingDownload:
                 Image(systemName: "sparkles")
                     .foregroundStyle(.tint)
-            case .loadingPage, .downloading:
+            case .loadingPage, .downloading, .verifying:
                 EmptyView()
             }
         }
@@ -819,7 +995,7 @@ struct WindowsDownloadSheet: View {
 
     private var isBusy: Bool {
         switch controller.phase {
-        case .loadingPage, .automating, .requestingDownload, .downloading:
+        case .loadingPage, .automating, .requestingDownload, .downloading, .verifying:
             return true
         case .downloaded, .failed:
             return false
@@ -840,6 +1016,8 @@ struct WindowsDownloadSheet: View {
             return "Starting the official ISO download"
         case .downloading(let filename):
             return "Downloading \(filename)"
+        case .verifying:
+            return "Verifying Windows ISO"
         case .downloaded:
             return "Windows ISO downloaded"
         case .failed:
@@ -860,6 +1038,8 @@ struct WindowsDownloadSheet: View {
                 return "\(Int(progress * 100))% complete. The ISO is being saved locally in Veil's Application Support folder."
             }
             return "The ISO is being saved locally in Veil's Application Support folder. Keep this window open."
+        case .verifying:
+            return "Veil is comparing the completed file with Microsoft's published SHA-256. Keep this window open."
         case .downloaded:
             return "The ISO is complete. Veil is handing it to the local VM setup flow."
         case .failed(let message):
