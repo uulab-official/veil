@@ -116,7 +116,8 @@ struct DetailView: View {
 
     private var runtimeStatusReport: WindowsAppRuntimeStatusReport {
         model.runtimeStatusReport(
-            localRuntime: model.localRuntimeStatus(snapshot: vmModel.snapshot)
+            localRuntime: model.localRuntimeStatus(snapshot: vmModel.snapshot),
+            hostBackingScale: HostDisplayScale.current
         )
     }
 
@@ -245,157 +246,9 @@ private struct WindowsQuickLaunchPanel: View {
                 Spacer()
             }
 
-            Divider()
-
-            HStack(spacing: 12) {
-                StatusPill(
-                    title: appCheckStatusTitle,
-                    symbolName: appCheckSymbolName,
-                    tint: appCheckTint
-                )
-                .frame(minWidth: 118, alignment: .leading)
-
-                Text(appCheckDetail)
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-
-                if let latestProofFileName = proofArtifacts.latestProofFileName {
-                    Label(
-                        "Latest Check",
-                        systemImage: "doc.text"
-                    )
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .help(latestProofFileName)
-                }
-
-                if let notificationProofFileName = proofArtifacts.latestNotificationProofFileName {
-                    Label(
-                        "Notifications",
-                        systemImage: proofArtifacts.latestNotificationProofStatus == "proved" ? "bell.badge.fill" : "bell.badge"
-                    )
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(proofArtifacts.latestNotificationProofStatus == "proved" ? .green : .secondary)
-                    .lineLimit(1)
-                    .help(notificationProofFileName)
-                }
-
-                Spacer()
-
-                Button {
-                    runRecommendedProofAction()
-                } label: {
-                    Label("Check App", systemImage: "checkmark.seal")
-                }
-                .disabled(proofPlan.recommendedProofCommand == nil)
-                .help("Check selected Windows app")
-
-                Button {
-                    runMultiAppProofAction()
-                } label: {
-                    Label("Check Daily Use", systemImage: "checkmark.seal.fill")
-                }
-                .disabled(proofPlan.recommendedMultiAppProofCommand == nil)
-                .help("Check Notepad, Calculator, and Paint")
-            }
-
-            Divider()
-
-            HStack(spacing: 12) {
-                StatusPill(
-                    title: printerBridgeStatusTitle,
-                    symbolName: "printer",
-                    tint: printerBridgeTint
-                )
-                .frame(minWidth: 118, alignment: .leading)
-
-                Text(printerBridgeDetail)
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .help(printerBridgeHelp)
-
-                Spacer()
-
-                Button {
-                    runPrimaryNextAction(.showPrinterBridgePlan)
-                } label: {
-                    Label("Printer Setup", systemImage: "printer")
-                }
-                .buttonStyle(.bordered)
-                .help(printerBridgeHelp)
-            }
-
-            Divider()
-
-            HStack(spacing: 12) {
-                StatusPill(
-                    title: launchOnboardingTitle,
-                    symbolName: launchOnboardingSymbolName,
-                    tint: launchOnboardingTint
-                )
-                .frame(minWidth: 118, alignment: .leading)
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(launchOnboarding.currentStepDetail)
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-
-                    Label(launchOnboardingDetail, systemImage: "arrow.forward.circle")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(launchOnboarding.canContinueInApp ? .primary : .secondary)
-                        .lineLimit(1)
-                        .help(launchOnboardingHelp)
-
-                    Label(oneScreenUXTitle, systemImage: oneScreenUXSymbolName)
-                        .font(.caption)
-                        .foregroundStyle(oneScreenUX.usesSinglePrimarySurfaceFamily
-                            && oneScreenUX.canRecoverFromMenuOrDock
-                            && oneScreenUX.returnsToLauncherWhenNoAppWindows ? Color.secondary : Color.orange)
-                        .lineLimit(1)
-                        .help(oneScreenUX.reason)
-
-                    Label(appAutomationTitle, systemImage: appAutomationSymbolName)
-                        .font(.caption)
-                        .foregroundStyle(launchPlan.willOpenAppAutomatically ? Color.secondary : Color.orange)
-                        .lineLimit(1)
-                        .help(launchPlan.reason)
-                }
-
-                Spacer()
-
-                VStack(alignment: .trailing, spacing: 5) {
-                    Text(launchOnboarding.progressLabel)
-                        .font(.caption2.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                        .help("App flow progress")
-
-                    HStack(spacing: 5) {
-                        ForEach(releaseGate.steps, id: \.id) { step in
-                            Circle()
-                                .fill(step.isPassing ? Color.green : Color.secondary.opacity(0.35))
-                                .frame(width: 6, height: 6)
-                                .help(step.title)
-                        }
-                    }
-                    .accessibilityLabel("App flow progress")
-                }
-
-                if let primaryNextActionRoute {
-                    Button {
-                        runPrimaryNextAction(primaryNextActionRoute)
-                    } label: {
-                        Label(primaryNextActionRoute.buttonTitle, systemImage: primaryNextActionRoute.symbolName)
-                    }
-                    .buttonStyle(.bordered)
-                    .disabled(!launchOnboarding.canContinueInApp)
-                    .help(launchOnboardingHelp)
-                }
-            }
+            Text("Advanced checks, printer setup, and recovery actions are available from More.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
         }
     }
 

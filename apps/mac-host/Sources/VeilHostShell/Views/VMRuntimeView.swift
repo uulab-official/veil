@@ -48,7 +48,7 @@ struct VMRuntimeView: View {
             if let snapshot = model.snapshot {
                 WindowsSetupDisplayPanel(
                     snapshot: snapshot,
-                    guestAgentInstallEvidence: guestAgentInstallEvidence,
+                    guestAgentInstallEvidence: validGuestAgentEvidence(for: snapshot),
                     agentDiagnostic: agentDiagnostic,
                     statusText: model.statusText,
                     canStart: model.canStart,
@@ -235,7 +235,18 @@ struct VMRuntimeView: View {
 
     private func canInstallGuestAgent(for snapshot: VMRuntimeSnapshot) -> Bool {
         canShowDisplay(for: snapshot)
-            && (guestAgentInstallEvidence ?? snapshot.installEvidence).kind != .guestAgent
+            && (validGuestAgentEvidence(for: snapshot) ?? snapshot.installEvidence).kind != .guestAgent
+    }
+
+    /// A guest health response is not a local VM installation record. Do not let a
+    /// stale/demo agent response make the shell look like Windows is installed when
+    /// the local profile and disk are absent.
+    private func validGuestAgentEvidence(for snapshot: VMRuntimeSnapshot) -> VMInstallEvidenceSummary? {
+        guard snapshot.profileName != nil else {
+            return nil
+        }
+
+        return guestAgentInstallEvidence
     }
 
     private func canRecoverRuntimeDisplay(for snapshot: VMRuntimeSnapshot) -> Bool {
@@ -1397,7 +1408,9 @@ private struct WindowsSetupDisplayPanel: View {
     var isShowingDetails: Bool
     var installSimulation: InstallSimulationState
     @State private var showsAgentDiagnosticPopover = false
-    @State private var showsFullDesktop = false
+    // A running VM should open on its actual Windows display. The launcher is the
+    // fallback shown while setup is incomplete or the display endpoint is unavailable.
+    @State private var showsFullDesktop = true
 
     var body: some View {
         Group {
@@ -1408,9 +1421,19 @@ private struct WindowsSetupDisplayPanel: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .onAppear {
+            showsFullDesktop = snapshot.state == .running && displaySurface != nil
+        }
         .onChange(of: snapshot.state) { _, newState in
-            if newState != .running {
+            if newState == .running {
+                showsFullDesktop = displaySurface != nil
+            } else {
                 showsFullDesktop = false
+            }
+        }
+        .onChange(of: snapshot.latestConsoleLaunch) { _, _ in
+            if snapshot.state == .running, displaySurface != nil {
+                showsFullDesktop = true
             }
         }
     }
@@ -1507,7 +1530,6 @@ private struct WindowsSetupDisplayPanel: View {
                 .controlSize(.large)
                 .disabled(effectivePrimaryDisabled)
 
-            runtimeActionButton
             runtimeMoreMenu
         }
         .controlSize(.regular)
@@ -1555,12 +1577,12 @@ private struct WindowsSetupDisplayPanel: View {
             VStack(spacing: 16) {
                 Spacer(minLength: 8)
 
-                WindowsLogoMark(size: 82)
+                WindowsLogoMark(size: 64)
                     .shadow(color: .black.opacity(0.18), radius: 16, y: 8)
 
                 VStack(spacing: 4) {
                     Text(machineTitle)
-                        .font(.system(size: 34, weight: .semibold))
+                        .font(.system(size: 30, weight: .semibold))
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
                     Text(machineSubtitle)
@@ -1600,37 +1622,6 @@ private struct WindowsSetupDisplayPanel: View {
                         .lineLimit(1)
                         .help(launchOnboardingHelp)
 
-                    Label(launchOnboardingDetail, systemImage: "arrow.forward.circle")
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(.white.opacity(launchOnboarding.canContinueInApp ? 0.78 : 0.62))
-                        .lineLimit(1)
-                        .help(launchOnboarding.reason)
-
-                    Label(launchOnboarding.currentStepDetail, systemImage: "text.bubble")
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(.white.opacity(0.70))
-                        .lineLimit(1)
-                        .help(launchOnboardingHelp)
-
-                    Label(launchOnboarding.progressLabel, systemImage: "checklist")
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(.white.opacity(0.66))
-                        .lineLimit(1)
-                        .help("App flow progress")
-
-                    Label(oneScreenUXTitle, systemImage: oneScreenUXSymbolName)
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(.white.opacity(oneScreenUX.usesSinglePrimarySurfaceFamily
-                            && oneScreenUX.canRecoverFromMenuOrDock
-                            && oneScreenUX.returnsToLauncherWhenNoAppWindows ? 0.70 : 0.92))
-                        .lineLimit(1)
-                        .help(oneScreenUX.reason)
-
-                    Label(appAutomationTitle, systemImage: appAutomationSymbolName)
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(.white.opacity(launchPlan.willOpenAppAutomatically ? 0.70 : 0.92))
-                        .lineLimit(1)
-                        .help(launchPlan.reason)
                 }
 
                 if installSimulation.phase != .idle {
@@ -1716,19 +1707,17 @@ private struct WindowsSetupDisplayPanel: View {
     private var horizontalActions: some View {
         HStack(spacing: 8) {
             Spacer(minLength: 4)
-            runtimeActionButton
-
             if snapshot.state == .running {
                 Button {
                     showsFullDesktop.toggle()
                 } label: {
                     Label(
-                        showsFullDesktop ? "Hide Desktop" : "Show Desktop",
+                        showsFullDesktop ? "Show Apps" : "Show Desktop",
                         systemImage: showsFullDesktop ? "macwindow" : "display"
                     )
                     .labelStyle(.iconOnly)
                 }
-                    .help(showsFullDesktop ? "Return to the Windows app launcher" : "Show the full Windows desktop instead of individual app windows")
+                    .help(showsFullDesktop ? "Return to the Windows app launcher" : "Show the live Windows desktop")
             }
 
             runtimeMoreMenu
