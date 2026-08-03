@@ -1574,6 +1574,30 @@ public final class VMRuntimeModel {
         }
     }
 
+    /// Stores the user-selected installer and prepares every local resource needed
+    /// for the first Windows boot. The caller starts the VM only when this returns
+    /// true, so invalid media or missing host prerequisites remain visible instead
+    /// of launching a VM that cannot reach Windows Setup.
+    @discardableResult
+    public func prepareWindowsInstallation(
+        installerMediaPath: String,
+        driverMediaPath: String?,
+        virtualDiskPath: String?
+    ) async -> Bool {
+        await updateProfilePaths(
+            installerMediaPath: installerMediaPath,
+            driverMediaPath: driverMediaPath,
+            virtualDiskPath: virtualDiskPath
+        )
+
+        guard phase == .loaded else {
+            return false
+        }
+
+        await prepareDefaultVM()
+        return phase == .loaded && canStart
+    }
+
     public func markGuestAgentConnected(agentVersion: String) async {
         phase = .loading
         errorMessage = nil
