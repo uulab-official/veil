@@ -9,7 +9,7 @@ Date: 2026-08-02
 - [x] Swift host 패키지가 컴파일된다.
   - 확인: `swift test --disable-sandbox` 빌드 단계 통과.
 - [x] Swift 테스트 전체 통과.
-  - 확인: clean feature 기준 `swift test --disable-sandbox` — 366 tests / 25 suites.
+  - 확인: clean feature 기준 `swift test --disable-sandbox` — 371 tests / 25 suites.
 - [ ] Windows agent `dotnet test` 통과.
 - [x] protocol 및 주요 harness 테스트 통과.
   - 확인: bundled Node로 protocol/harness 626 tests 통과; fake-agent 24개와 fake-host 8개 포함.
@@ -39,6 +39,8 @@ Date: 2026-08-02
   - 확인: 성공/실패 모델 테스트, 앱 번들 실행 검증, macOS 파일 선택기 진입 확인. 실제 Windows ISO 부팅 증거는 아래 실기 항목으로 유지한다.
 - [x] 첫 화면에서 Microsoft 공식 최신 Windows 11 Arm64 다운로드를 시작하고 완료된 ISO를 설치 준비 경로로 자동 전달한다.
   - 확인: 공식 `microsoft.com` 페이지의 25H2 선택 화면을 실제 앱 WebView에서 확인. HTTPS Microsoft 도메인/ISO 응답 제한, 위장 도메인 차단, 파일명 정리, 1GB 미만 부분 파일 차단 정책 테스트 8개 통과. 실제 다중 GB ISO 전체 다운로드와 부팅은 아래 실기 항목으로 유지한다.
+- [x] Microsoft 페이지 조작 없이 최신 Arm64 에디션과 Mac 언어를 자동 선택하고 실제 ISO 다운로드를 시작한다.
+  - 확인: 한국어 Mac에서 `Win11_25H2_Korean_Arm64_v2.iso`가 사용자 선택 없이 시작되어 4%까지 진행됨. 검증 취소 후 부분 파일이 제거됨. 언어/페이지 자동화 정책을 포함한 다운로드 테스트 13개 통과.
 - [x] UI가 보고하는 provider와 실제 boot runner를 일치시키고 QEMU 미설치 시 Apple Virtualization 콘솔 fallback을 연다.
   - 확인: QEMU 우선, Apple fallback, 명시적 override 정책 테스트. 이 Mac의 진단은 QEMU 미설치와 Apple Virtualization active를 확인했다.
 - [x] VM 설정을 별도 설정 시트로 분리한다.
@@ -49,6 +51,7 @@ Date: 2026-08-02
 
 - [ ] 첫 실행에서 Windows 11 Arm ISO 선택부터 VM 생성·설치 시작까지 한 화면에서 완료한다.
   - [x] Microsoft 공식 페이지 → 최신 Arm64 ISO 로컬 저장 → VM 준비/시작 코드 경로와 기존 ISO fallback을 연결했다.
+  - [x] 에디션·언어 선택과 임시 다운로드 링크 발급도 자동화했다.
   - [ ] 실제 전체 ISO 다운로드 후 임베디드 Windows Setup 화면이 뜨는 실기 증거가 필요하다.
 - [ ] 앱 셸에서 `Windows 시작 → guest agent 연결/복구 → 선택 앱 실행 → macOS 창 표시`를 터미널 없이 완료한다.
   - [x] 앱 실행 요청을 `요청 → Windows 시작/재개 → agent 대기 → queued launch 실행 → 차단 사유 표시` 상태 결정으로 통합한다.

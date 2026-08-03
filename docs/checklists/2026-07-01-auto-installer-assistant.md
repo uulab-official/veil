@@ -21,6 +21,9 @@ Goal: move Veil toward the Parallels-style install assistant flow while keeping 
 - [x] Embed Microsoft's official Windows 11 Arm64 page, capture only Microsoft HTTPS ISO responses, save them locally, and hand completed media to VM preparation.
 - [x] Preserve edition/language selection on Microsoft's page instead of depending on its unpublished, expiring download-link connector.
 - [x] Reject lookalike hosts, non-ISO responses, unsafe suggested filenames, and implausibly small partial downloads before VM preparation.
+- [x] Automatically select the current Arm64 edition and the Mac's preferred Windows language on Microsoft's page, then start the issued temporary ISO link without user webpage interaction.
+- [x] Keep the Microsoft page and existing-ISO picker as explicit fallbacks if the official page contract changes.
+- [x] Cancel and unlink partial multi-gigabyte ISO downloads when the sheet closes.
 
 ## Next
 
