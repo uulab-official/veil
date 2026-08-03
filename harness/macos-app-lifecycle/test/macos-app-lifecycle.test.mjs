@@ -53,3 +53,22 @@ test("first-run hero exposes a named action and unambiguous compatibility copy",
   assert.match(source, /Windows setup is available • Mac app windows require QEMU/);
   assert.doesNotMatch(source, /Console available • Windows app integration needs QEMU/);
 });
+
+test("Windows setup requires explicit license consent for downloaded and selected ISOs", async () => {
+  const downloadSheet = await readRootFile("apps/mac-host/Sources/VeilHostShell/Views/WindowsDownloadSheet.swift");
+  const runtimeView = await readRootFile("apps/mac-host/Sources/VeilHostShell/Views/VMRuntimeView.swift");
+
+  assert.match(downloadSheet, /https:\/\/www\.microsoft\.com\/useterms/);
+  assert.match(downloadSheet, /I Agree and Install Windows/);
+  assert.match(downloadSheet, /Review and Prepare Windows/);
+  assert.match(downloadSheet, /\.alert\(WindowsLicenseConsentPolicy\.title/);
+  assert.doesNotMatch(downloadSheet, /\.onChange\(of: controller\.phase\)[\s\S]*prepareDownloadedISO/);
+  assert.match(runtimeView, /pendingInstallerConsent = \.selected/);
+  assert.match(runtimeView, /\.alert\(WindowsLicenseConsentPolicy\.title/);
+  assert.match(runtimeView, /prepareAcceptedInstallation/);
+  assert.match(runtimeView, /snapshot\.windowsInstalled[\s\S]*pendingInstallerConsent = \.prepared/);
+
+  const appSource = await readRootFile("apps/mac-host/Sources/VeilHostShell/App/VeilHostShellApp.swift");
+  assert.match(appSource, /startWindowsFromMenuAction/);
+  assert.match(appSource, /guard vmModel\.snapshot\?\.windowsInstalled == true/);
+});
