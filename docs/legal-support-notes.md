@@ -2,6 +2,19 @@
 
 This document is not legal advice. It exists to keep product and README wording honest.
 
+## macOS Direct Distribution
+
+The local `script/build_and_run.sh` output is an ad-hoc signed development bundle. It must not be published or described as a trusted downloadable release. Direct downloads require an Apple-issued Developer ID Application certificate, hardened runtime, Apple notarization, a stapled ticket, and a successful Gatekeeper assessment. Release entitlements must not enable `com.apple.security.get-task-allow`.
+
+Signing private keys and notarization credentials must stay in the maintainer's Keychain or approved CI secret store. They must never be committed, copied into release archives, written to release reports, or requested through the app UI. The repository may contain only the public release workflow, entitlement declarations, and credential-free evidence.
+
+Official references:
+
+- Developer ID: https://developer.apple.com/developer-id/
+- Notarizing macOS software before distribution: https://developer.apple.com/documentation/security/notarizing-macos-software-before-distribution
+- Preparing an app for distribution: https://developer.apple.com/documentation/xcode/preparing-your-app-for-distribution
+- Gatekeeper and runtime protection: https://support.apple.com/guide/security/sec5599b66df/web
+
 ## Windows Distribution
 
 Veil must not bundle:

@@ -152,6 +152,23 @@ For the Codex desktop Run button, use:
 That script builds `veil-host-shell`, stages `dist/Veil.app`, and launches it as a macOS app bundle.
 Use `./script/build_and_run.sh --verify` when you want the same bundle build plus a launch check that confirms the `veil-host-shell` process starts, writes a main-window verification report, satisfies the one visible branded launcher-window contract, then cleans up the launched app. If that contract fails, the script preserves the report as `dist/veil-launch-report-failed-*.plist` and still cleans up the launched process. Use `./script/build_and_run.sh --verify-keep-running` when you want to leave the staged app open for manual inspection.
 
+`build_and_run.sh` creates an ad-hoc signed development bundle. Do not distribute that bundle: ad-hoc signing does not establish Gatekeeper trust on another Mac. Direct distribution uses the separate release gate:
+
+```bash
+xcrun notarytool store-credentials "veil-notary" --apple-id "..." --team-id "..." --password "..."
+
+VEIL_DEVELOPER_ID_APPLICATION="Developer ID Application: ..." \
+VEIL_NOTARY_KEYCHAIN_PROFILE="veil-notary" \
+./script/release_macos.sh --preflight
+
+VEIL_DEVELOPER_ID_APPLICATION="Developer ID Application: ..." \
+VEIL_NOTARY_KEYCHAIN_PROFILE="veil-notary" \
+VEIL_RELEASE_VERSION="0.1.0" \
+./script/release_macos.sh --notarize
+```
+
+The release script refuses ad-hoc or development certificates, uses a release entitlement file without debugger attachment, enables hardened runtime and a secure timestamp, submits with `notarytool`, staples and validates the ticket, runs a Gatekeeper assessment, and writes a credential-free report under `dist/release`. `--package` creates an explicitly unnotarized rehearsal archive and must not be distributed. Apple documents the [Developer ID](https://developer.apple.com/developer-id/) and [notarization](https://developer.apple.com/documentation/security/notarizing-macos-software-before-distribution) requirements for software distributed outside the Mac App Store.
+
 Normal app launches use only the real Windows guest agent at `VEIL_AGENT_URL` or `ws://127.0.0.1:18444`. Connection failures stay visible and never populate the launcher with fake Windows apps. For UI development only, run `./script/build_and_run.sh --demo` or set `VEIL_DEMO_MODE=1` to opt into the internal demo service. Run `harness/fake-agent` when you want to test the real WebSocket harness path.
 
 The app list supports selection. The real Windows agent and built-in demo launch by selected `appId`; the external fake-agent harness remains a narrow Notepad transport contract.
@@ -160,7 +177,7 @@ The shell also includes a VM Runtime panel. That panel is a capability, profile-
 
 The VM Runtime panel can prepare a default local Windows 11 Arm VM in one step: profile, shared folder, and blank sparse virtual disk at `~/Virtual Machines/Veil/Windows 11 Arm.img`. During preparation Veil applies an adaptive resource profile from the current Mac: half of available CPU cores up to a safe cap, 25% of physical memory rounded to a conservative VM cap, and a 128 GB default sparse disk. Virtualization.framework still allocates memory on demand under that configured cap; Veil does not claim live hot-resizing yet. The boot spike keeps EFI variables and the generic machine identifier next to that disk as `Windows 11 Arm.efi` and `Windows 11 Arm.machine-id`. This writes local configuration and empty VM state files only; it does not install Windows, include Windows media, or bypass licensing.
 
-On first launch, `Choose ISO and Install` stores access to the user-selected Windows 11 Arm ISO, prepares the default profile, sparse disk, shared folder, and automatic install media, then starts the local VM so Windows Setup can appear in the embedded display. If media validation or a host prerequisite fails, Veil stays on the setup screen and shows the blocker instead of starting an unusable VM. `Setup > Choose ISO` remains a configuration-only action for replacing media without automatically starting Windows.
+On first launch, `Choose ISO and Install` stores access to the user-selected Windows 11 Arm ISO, prepares the default profile, sparse disk, shared folder, and automatic install media, then starts the local VM so Windows Setup can appear in the embedded display. If media validation or a host prerequisite fails, Veil stays on the setup screen and shows the blocker instead of starting an unusable VM. The separate Windows Settings sheet owns configuration-only installer, driver, disk, provider, and resource actions without crowding the main display.
 
 Veil now selects the same local provider it reports in the UI. QEMU/HVF remains preferred when `qemu-system-aarch64` is available. When QEMU is absent on an Apple Silicon Mac, Veil falls back to Virtualization.framework and embeds its native `VZVirtualMachineView` directly in the main Windows card after VM start, instead of calling a missing QEMU executable or forcing a second console window. The separate native console remains available only as a recovery display. Set `VEIL_VM_PROVIDER=qemu` or `VEIL_VM_PROVIDER=apple` for an explicit development override. QEMU-only guest setup automation remains unavailable in the Apple fallback and reports that limitation rather than pretending the command ran.
 

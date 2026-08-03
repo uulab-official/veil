@@ -53,6 +53,9 @@ Date: 2026-08-02
 - [ ] Windows 부팅 중에는 라이브 display surface와 명확한 부팅 상태를 함께 표시한다.
 - [ ] Windows 설치 후에는 설정 화면보다 앱 타일 런처가 기본 화면이 된다.
 - [ ] Developer ID 서명과 notarization으로 다른 Mac에서도 “손상됨” 없이 실행한다.
+  - [x] ad-hoc 개발 빌드와 배포 빌드를 분리하고 Developer ID/hardened runtime/notarytool/stapling/Gatekeeper 릴리스 게이트를 추가한다.
+    - 확인: macOS release harness 5개 통과, 인증서가 없는 환경에서 컴파일 전에 명확한 차단 안내 확인.
+  - [ ] 실제 Developer ID 인증서로 Apple notarization `Accepted`와 별도 Mac 다운로드 실행을 검증한다.
 
 ## P1 — 실기 검증이 필요한 기능
 

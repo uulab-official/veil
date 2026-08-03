@@ -14,6 +14,7 @@ harness/
 ├─ app-runtime-status/     Validates host app-runtime status/actions JSON
 ├─ app-runtime-review/     Validates one-screen release review card JSON
 ├─ app-runtime-action/     Validates host app-runtime launch/focus/close/input/clipboard/proof JSON
+├─ macos-release/          Validates the Developer ID and notarization release gate contract
 ├─ app-window-proof/       Validates app launch/HWND/first-frame proof JSON
 ├─ coherence-proof/        Validates launch/HWND/frame/input/clipboard proof JSON
 ├─ mvp-proof/              Validates guest wait plus Coherence proof JSON
