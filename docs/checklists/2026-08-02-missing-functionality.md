@@ -9,7 +9,7 @@ Date: 2026-08-02
 - [x] Swift host 패키지가 컴파일된다.
   - 확인: `swift test --disable-sandbox` 빌드 단계 통과.
 - [x] Swift 테스트 전체 통과.
-  - 확인: clean feature 기준 `swift test --disable-sandbox` — 358 tests / 24 suites.
+  - 확인: clean feature 기준 `swift test --disable-sandbox` — 366 tests / 25 suites.
 - [ ] Windows agent `dotnet test` 통과.
 - [x] protocol 및 주요 harness 테스트 통과.
   - 확인: bundled Node로 protocol/harness 626 tests 통과; fake-agent 24개와 fake-host 8개 포함.
@@ -37,6 +37,8 @@ Date: 2026-08-02
   - 확인: `./script/build_and_run.sh --verify-keep-running` 통과; agent가 없는 기본 화면에 데모 앱 타일이 표시되지 않음.
 - [x] 첫 화면의 `Choose ISO and Install`에서 ISO 저장 → 기본 VM/디스크 준비 → Windows Setup 부팅 시작을 한 동작으로 연결한다.
   - 확인: 성공/실패 모델 테스트, 앱 번들 실행 검증, macOS 파일 선택기 진입 확인. 실제 Windows ISO 부팅 증거는 아래 실기 항목으로 유지한다.
+- [x] 첫 화면에서 Microsoft 공식 최신 Windows 11 Arm64 다운로드를 시작하고 완료된 ISO를 설치 준비 경로로 자동 전달한다.
+  - 확인: 공식 `microsoft.com` 페이지의 25H2 선택 화면을 실제 앱 WebView에서 확인. HTTPS Microsoft 도메인/ISO 응답 제한, 위장 도메인 차단, 파일명 정리, 1GB 미만 부분 파일 차단 정책 테스트 8개 통과. 실제 다중 GB ISO 전체 다운로드와 부팅은 아래 실기 항목으로 유지한다.
 - [x] UI가 보고하는 provider와 실제 boot runner를 일치시키고 QEMU 미설치 시 Apple Virtualization 콘솔 fallback을 연다.
   - 확인: QEMU 우선, Apple fallback, 명시적 override 정책 테스트. 이 Mac의 진단은 QEMU 미설치와 Apple Virtualization active를 확인했다.
 - [x] VM 설정을 별도 설정 시트로 분리한다.
@@ -46,7 +48,8 @@ Date: 2026-08-02
 ## P0 — Parallels급 기본 사용 루프
 
 - [ ] 첫 실행에서 Windows 11 Arm ISO 선택부터 VM 생성·설치 시작까지 한 화면에서 완료한다.
-  - 코드 경로는 연결됨. 실제 Windows 11 Arm ISO로 임베디드 Windows Setup 화면이 뜨는 실기 증거가 필요하다.
+  - [x] Microsoft 공식 페이지 → 최신 Arm64 ISO 로컬 저장 → VM 준비/시작 코드 경로와 기존 ISO fallback을 연결했다.
+  - [ ] 실제 전체 ISO 다운로드 후 임베디드 Windows Setup 화면이 뜨는 실기 증거가 필요하다.
 - [ ] 앱 셸에서 `Windows 시작 → guest agent 연결/복구 → 선택 앱 실행 → macOS 창 표시`를 터미널 없이 완료한다.
   - [x] 앱 실행 요청을 `요청 → Windows 시작/재개 → agent 대기 → queued launch 실행 → 차단 사유 표시` 상태 결정으로 통합한다.
     - 확인: lifecycle coordinator 단위 테스트 7개 통과. 실제 VM end-to-end 증거가 남아 있어 상위 항목은 미완료로 유지한다.

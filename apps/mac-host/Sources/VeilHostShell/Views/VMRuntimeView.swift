@@ -90,7 +90,7 @@ struct VMRuntimeView: View {
                             startDisplayHandoffProgress()
                             startVMAction()
                         } else if !snapshot.windowsInstalled && (snapshot.installerMediaPath == nil || needsInstallerPickerAccess(snapshot)) {
-                            pathPicker = .installerAndStart
+                            presentedSheet = .windowsDownload
                         } else {
                             Task {
                                 await model.prepareDefaultVM()
@@ -174,11 +174,11 @@ struct VMRuntimeView: View {
                     subtitle: model.phase == .loading
                         ? "Opening Windows on this Mac."
                         : "Install and run Windows locally on this Mac.",
-                    primaryTitle: model.phase == .loading ? "Loading..." : "Choose Windows ISO",
-                    primarySymbol: model.phase == .loading ? "arrow.triangle.2.circlepath" : "opticaldisc",
+                    primaryTitle: model.phase == .loading ? "Loading..." : "Download Windows 11",
+                    primarySymbol: model.phase == .loading ? "arrow.triangle.2.circlepath" : "arrow.down.circle",
                     secondaryTitle: "Refresh",
                     primaryAction: {
-                        pathPicker = .installerAndStart
+                        presentedSheet = .windowsDownload
                     },
                     secondaryAction: {
                         Task {
@@ -209,21 +209,34 @@ struct VMRuntimeView: View {
         .task(id: model.snapshot?.state) {
             await refreshRuntimeEvidenceWhileRunning()
         }
-        .sheet(item: $presentedSheet) { _ in
-            VMSettingsSheet(model: model) { snapshot, policy in
-                ViewThatFits(in: .horizontal) {
-                    HStack(alignment: .top, spacing: 14) {
-                        setupColumn(snapshot, canChangeResources: policy.canChangeResources)
-                            .frame(minWidth: 380)
-                        runtimeDetailColumn(snapshot)
-                            .frame(minWidth: 380)
-                    }
+        .sheet(item: $presentedSheet) { destination in
+            switch destination {
+            case .settings:
+                VMSettingsSheet(model: model) { snapshot, policy in
+                    ViewThatFits(in: .horizontal) {
+                        HStack(alignment: .top, spacing: 14) {
+                            setupColumn(snapshot, canChangeResources: policy.canChangeResources)
+                                .frame(minWidth: 380)
+                            runtimeDetailColumn(snapshot)
+                                .frame(minWidth: 380)
+                        }
 
-                    VStack(alignment: .leading, spacing: 14) {
-                        setupColumn(snapshot, canChangeResources: policy.canChangeResources)
-                        runtimeDetailColumn(snapshot)
+                        VStack(alignment: .leading, spacing: 14) {
+                            setupColumn(snapshot, canChangeResources: policy.canChangeResources)
+                            runtimeDetailColumn(snapshot)
+                        }
                     }
                 }
+            case .windowsDownload:
+                WindowsDownloadSheet(
+                    prepareDownloadedISO: prepareDownloadedISO,
+                    useExistingISO: {
+                        Task { @MainActor in
+                            try? await Task.sleep(for: .milliseconds(250))
+                            pathPicker = .installerAndStart
+                        }
+                    }
+                )
             }
         }
     }
@@ -421,6 +434,22 @@ struct VMRuntimeView: View {
                 )
             }
         }
+    }
+
+    @MainActor
+    private func prepareDownloadedISO(_ url: URL) async -> Bool {
+        let isReadyToStart = await model.prepareWindowsInstallation(
+            installerMediaPath: url.path,
+            driverMediaPath: model.snapshot?.driverMediaPath,
+            virtualDiskPath: model.snapshot?.virtualDiskPath
+        )
+        guard isReadyToStart else {
+            return false
+        }
+
+        startDisplayHandoffProgress()
+        startVMAction()
+        return true
     }
 
     private func diagnosticsDirectory() -> URL {
@@ -1743,7 +1772,7 @@ private struct WindowsSetupDisplayPanel: View {
         }
 
         if snapshot.installerMediaPath == nil || installerNeedsFilePickerAccess {
-            return "Choose ISO and Install"
+            return "Download Windows 11"
         }
 
         return snapshot.profileName == nil ? "Prepare Windows" : "Continue Setup"
@@ -1934,7 +1963,7 @@ private struct WindowsSetupDisplayPanel: View {
             return selectedInstallerName
         }
 
-        return "Choose a Windows 11 Arm ISO"
+        return "Download the latest Windows 11 Arm64 ISO or use an existing ISO"
     }
 
     private var effectiveInstallEvidence: VMInstallEvidenceSummary {
@@ -2242,7 +2271,7 @@ private struct WindowsSetupDisplayPanel: View {
         }
 
         if snapshot.installerMediaPath == nil || installerNeedsFilePickerAccess {
-            return "Choose ISO and Install"
+            return "Download Windows 11"
         }
 
         return snapshot.profileName == nil ? "Prepare Windows" : "Continue Setup"
@@ -2278,7 +2307,7 @@ private struct WindowsSetupDisplayPanel: View {
         }
 
         if snapshot.installerMediaPath == nil || installerNeedsFilePickerAccess {
-            return "opticaldisc"
+            return "arrow.down.circle"
         }
 
         return "wand.and.stars"
@@ -2317,11 +2346,11 @@ private struct WindowsSetupDisplayPanel: View {
         }
 
         if snapshot.installerMediaPath == nil {
-            return "Choose a Windows 11 Arm ISO. Veil will prepare the VM and open Windows Setup automatically."
+            return "Download the latest Windows 11 Arm64 ISO from Microsoft. Veil will save it, prepare the VM, and open Windows Setup automatically."
         }
 
         if installerNeedsFilePickerAccess {
-            return "Re-select the ISO so Veil can store macOS file access."
+            return "Download Windows again or use the existing ISO so Veil can restore macOS file access."
         }
 
         return "Create the profile, disk, shared folder, and install media."
