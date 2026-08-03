@@ -38,6 +38,8 @@ Responsibilities:
 - expose a narrow shared folder,
 - store user settings and VM profiles.
 
+The app launcher resolves each user request through one host-side lifecycle decision: request the app, start or resume Windows, wait for the guest agent, fulfill the queued launch, or report a provider/setup blocker. This keeps launch intent queued across VM startup and prevents an unavailable provider endpoint from entering a misleading repair loop.
+
 ## Serverless Local Runtime
 
 Veil should not require a cloud service or remote VM backend to run Windows apps. The host app owns a local runtime provider boundary that can be implemented by Apple Virtualization, QEMU/HVF, or another local engine if the project proves it is needed. This is the UTM-like part of the architecture: VM execution remains a local Mac concern, while Veil's product layer focuses on app-window coherence instead of generic VM management.
