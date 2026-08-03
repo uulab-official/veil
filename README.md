@@ -103,6 +103,17 @@ Expected output includes `agent.health.response`, `app.launch.response`, and `wi
 
 See [harness/README.md](harness/README.md) for details.
 
+Run the complete deterministic regression gate before sharing a cross-component build:
+
+```bash
+./script/test_all.sh
+```
+
+It preflights every required tool before running Swift, .NET, protocol and harness tests, installs
+locked Node dependencies with `npm ci`, and verifies the signed macOS app launch contract. Run
+`./script/test_all.sh --list` to see the discovered packages. Platform skips must be requested
+explicitly and do not count as full release evidence.
+
 ## macOS Host Probe
 
 The first Swift host-side executable lives in `apps/mac-host`:

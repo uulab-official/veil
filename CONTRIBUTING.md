@@ -40,6 +40,18 @@ A change is done when:
 - The local verification command is listed in the PR.
 - Known limitations are written down instead of hidden.
 
+Run the complete local regression gate before calling a cross-component change done:
+
+```bash
+./script/test_all.sh
+```
+
+The command installs locked Node dependencies, then verifies the Swift host, Windows agent,
+protocol and harness packages, and the signed macOS app launch contract. It checks every required
+tool before starting, so a missing SDK cannot leave a misleading partial-success log. Use
+`./script/test_all.sh --list` to inspect the exact scope. Skip flags are intended only for an
+explicitly documented platform limitation, not for release evidence.
+
 ## AI-Assisted Work
 
 Codex, Claude, and other agents should follow:
