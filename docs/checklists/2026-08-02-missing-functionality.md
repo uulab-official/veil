@@ -9,7 +9,7 @@ Date: 2026-08-02
 - [x] Swift host 패키지가 컴파일된다.
   - 확인: `swift test --disable-sandbox` 빌드 단계 통과.
 - [x] Swift 테스트 전체 통과.
-  - 확인: clean `develop` 기준 `swift test --disable-sandbox` — 334 tests / 18 suites.
+  - 확인: clean `develop` 기준 `swift test --disable-sandbox` — 337 tests / 19 suites.
 - [ ] Windows agent `dotnet test` 통과.
 - [x] protocol 및 주요 harness 테스트 통과.
   - 확인: bundled Node로 protocol/harness 626 tests 통과; fake-agent 24개와 fake-host 8개 포함.
@@ -32,6 +32,8 @@ Date: 2026-08-02
   - 확인: `./script/build_and_run.sh --verify-keep-running` 통과; agent가 없는 기본 화면에 데모 앱 타일이 표시되지 않음.
 - [x] 첫 화면의 `Choose ISO and Install`에서 ISO 저장 → 기본 VM/디스크 준비 → Windows Setup 부팅 시작을 한 동작으로 연결한다.
   - 확인: 성공/실패 모델 테스트, 앱 번들 실행 검증, macOS 파일 선택기 진입 확인. 실제 Windows ISO 부팅 증거는 아래 실기 항목으로 유지한다.
+- [x] UI가 보고하는 provider와 실제 boot runner를 일치시키고 QEMU 미설치 시 Apple Virtualization 콘솔 fallback을 연다.
+  - 확인: QEMU 우선, Apple fallback, 명시적 override 정책 테스트. 이 Mac의 진단은 QEMU 미설치와 Apple Virtualization active를 확인했다.
 - [ ] VM 설정을 별도 설정 시트로 분리한다.
 - [ ] Windows ISO로 VM을 준비하고 QEMU/HVF 또는 Apple Virtualization으로 실제 Windows desktop 표시를 검증한다.
 
