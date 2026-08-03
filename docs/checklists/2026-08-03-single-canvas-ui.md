@@ -15,13 +15,19 @@ Date: 2026-08-03
 - [x] 실제 Windows 캡처와 Apple Virtualization 화면의 둥근 모니터 프레임을 제거한다.
 - [x] 불필요해진 상태 카드 및 증거 표시 계산 코드를 제거한다.
 - [x] 앱 Dock에 접근성 컨테이너 이름과 각 앱 실행 레이블을 유지한다.
-- [x] `RuntimeDisplaySelectionTests` 3개가 통과한다.
-- [x] 전체 Swift 테스트 380개 / 25 suites가 통과한다.
+- [x] 라이브 Windows 데스크톱 표시 중에는 앱 Dock을 숨겨 작업 표시줄과 입력 영역을 가리지 않는다.
+- [x] 데스크톱/앱 전환 상태를 상위 화면 한곳에서 소유하고 자식 화면에는 Binding으로 전달한다.
+- [x] 실제 데스크톱 표시가 없을 때는 무효한 데스크톱 전환 버튼을 노출하지 않는다.
+- [x] 화면 캡처가 갱신되어도 사용자가 선택한 앱 보기를 데스크톱으로 강제 전환하지 않는다.
+- [x] VM 정지 후 남은 마지막 캡처를 라이브 Windows 화면처럼 표시하지 않는다.
+- [x] `RuntimeDisplaySelectionTests` 4개가 통과한다.
+- [x] `RuntimeWorkspacePresentationPolicyTests` 3개가 통과한다.
+- [x] 전체 Swift 테스트 384개 / 26 suites가 통과한다.
 - [x] `./script/build_and_run.sh --verify` 앱 번들 검증이 통과한다.
 - [x] 빌드된 앱에서 설치 화면이 단일 전체 폭 캔버스로 표시됨을 확인한다.
 
 ## 남은 실기 게이트
 
 - [ ] guest agent가 연결된 실제 설치 완료 상태에서 앱 Dock의 Notepad·Calculator·Paint 실행을 확인한다.
-- [ ] 실제 QEMU/VNC Windows 화면에서 상단 도구와 하단 앱 Dock이 입력 영역을 방해하지 않는지 확인한다.
+- [ ] 실제 QEMU/VNC Windows 화면에서 상단 도구가 입력 영역을 방해하지 않는지 확인한다.
 - [ ] 작은 창 크기에서 앱 Dock 가로 스크롤과 상태 배지가 잘리지 않는지 확인한다.

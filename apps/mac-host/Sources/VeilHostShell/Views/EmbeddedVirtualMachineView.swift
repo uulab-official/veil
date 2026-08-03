@@ -21,7 +21,7 @@ enum RuntimeDisplaySelection: Equatable {
             return .appleVirtualMachine
         }
 
-        if hasCapturedSurface {
+        if canShowRunningDisplay, hasCapturedSurface {
             return .capturedSurface
         }
 

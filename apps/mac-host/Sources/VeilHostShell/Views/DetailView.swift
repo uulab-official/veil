@@ -23,6 +23,7 @@ struct DetailView: View {
     var runMultiAppProofAction: () -> Void
     var quietWindowsWhenIdleAction: () -> Void
     var displayMessage: String?
+    @State private var showsWindowsDesktop = true
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -61,10 +62,11 @@ struct DetailView: View {
                 runRecommendedProofAction: runRecommendedProofAction,
                 runMultiAppProofAction: runMultiAppProofAction,
                 quietWindowsWhenIdleAction: quietWindowsWhenIdleAction,
-                displayMessage: displayMessage
+                displayMessage: displayMessage,
+                showsFullDesktop: $showsWindowsDesktop
             )
 
-            if shouldShowAppLauncher {
+            if shouldShowAppDock {
                 WindowsQuickLaunchPanel(
                     apps: model.apps,
                     mirrorSessions: model.mirrorSessions,
@@ -88,17 +90,19 @@ struct DetailView: View {
 
     /// Demo or stale app catalogs must not make first-run setup look complete. The
     /// launcher appears only after a local VM profile has real installation evidence.
-    private var shouldShowAppLauncher: Bool {
-        guard !model.apps.isEmpty,
-              let snapshot = vmModel.snapshot else {
+    private var shouldShowAppDock: Bool {
+        guard let snapshot = vmModel.snapshot else {
             return false
         }
 
-        if snapshot.installEvidence.isInstalled {
-            return true
-        }
+        let hasInstalledWindows = snapshot.installEvidence.isInstalled ||
+            (snapshot.profileName != nil && model.guestAgentInstallEvidence?.isInstalled == true)
 
-        return snapshot.profileName != nil && model.guestAgentInstallEvidence?.isInstalled == true
+        return RuntimeWorkspacePresentationPolicy.showsAppDock(
+            hasApps: !model.apps.isEmpty,
+            hasInstalledWindows: hasInstalledWindows,
+            showsFullDesktop: showsWindowsDesktop
+        )
     }
 
     private var pendingWindowsAppName: String? {
@@ -119,6 +123,16 @@ struct DetailView: View {
         )
     }
 
+}
+
+enum RuntimeWorkspacePresentationPolicy {
+    static func showsAppDock(
+        hasApps: Bool,
+        hasInstalledWindows: Bool,
+        showsFullDesktop: Bool
+    ) -> Bool {
+        hasApps && hasInstalledWindows && !showsFullDesktop
+    }
 }
 
 private struct WindowsQuickLaunchPanel: View {
