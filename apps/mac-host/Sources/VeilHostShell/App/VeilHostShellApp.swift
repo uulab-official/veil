@@ -129,7 +129,12 @@ struct VeilHostShellApp: App {
                 quietWindowsWhenIdleAction: quietWindowsWhenIdle,
                 displayMessage: displayMessage
             )
-                .frame(minWidth: 1180, idealWidth: 1500, minHeight: 760, idealHeight: 900)
+                .frame(
+                    minWidth: MainWindowLayout.minimumSupportedSize.width,
+                    idealWidth: 1500,
+                    minHeight: MainWindowLayout.minimumSupportedSize.height,
+                    idealHeight: 900
+                )
                 .task {
                     configureDockMenuBridge()
                     configureWindowsAppWindowCloseBridge()
@@ -170,11 +175,7 @@ struct VeilHostShellApp: App {
         .defaultSize(width: 1440, height: 900)
         .defaultWindowPlacement { _, context in
             let visibleRect = context.defaultDisplay.visibleRect
-            let preferredSize = CGSize(width: 1440, height: 900)
-            let size = CGSize(
-                width: min(preferredSize.width, visibleRect.width * 0.96),
-                height: min(preferredSize.height, visibleRect.height * 0.96)
-            )
+            let size = MainWindowLayout.fittedSize(for: visibleRect.size)
             return WindowPlacement(size: size)
         }
         .commands {
@@ -2484,7 +2485,9 @@ private enum MainWindowChrome {
     }
 
     private static func configure(_ window: NSWindow) {
-        window.minSize = NSSize(width: 1180, height: 760)
+        let visibleSize = window.screen?.visibleFrame.size ?? NSScreen.main?.visibleFrame.size
+            ?? MainWindowLayout.preferredSize
+        window.minSize = MainWindowLayout.minimumSize(for: visibleSize)
         window.maxSize = NSSize(width: 2048, height: 1536)
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
@@ -2496,11 +2499,7 @@ private enum MainWindowChrome {
 
     private static func fitToPreferredSize(_ window: NSWindow) {
         let visibleFrame = window.screen?.visibleFrame ?? NSScreen.main?.visibleFrame ?? window.frame
-        let preferredSize = NSSize(width: 1440, height: 900)
-        let targetSize = NSSize(
-            width: min(preferredSize.width, visibleFrame.width * 0.96),
-            height: min(preferredSize.height, visibleFrame.height * 0.96)
-        )
+        let targetSize = MainWindowLayout.fittedSize(for: visibleFrame.size)
         let sizeDelta = abs(window.frame.width - targetSize.width) + abs(window.frame.height - targetSize.height)
         guard sizeDelta > 16 else {
             return
@@ -2579,7 +2578,12 @@ private struct StandaloneMainWindowRoot: View {
             quietWindowsWhenIdleAction: {},
             displayMessage: displayMessage
         )
-        .frame(minWidth: 1120, idealWidth: 1440, minHeight: 700, idealHeight: 900)
+        .frame(
+            minWidth: MainWindowLayout.minimumSupportedSize.width,
+            idealWidth: MainWindowLayout.preferredSize.width,
+            minHeight: MainWindowLayout.minimumSupportedSize.height,
+            idealHeight: MainWindowLayout.preferredSize.height
+        )
         .task {
             async let hostLoad: Void = model.load()
             async let vmLoad: Void = vmModel.load()

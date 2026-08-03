@@ -161,7 +161,7 @@ private struct WindowsQuickLaunchPanel: View {
                 .frame(height: 40)
 
             ScrollView(.horizontal) {
-                HStack(spacing: 6) {
+                LazyHStack(spacing: 6) {
                     ForEach(apps) { app in
                         WindowsQuickLaunchTile(
                             app: app,
