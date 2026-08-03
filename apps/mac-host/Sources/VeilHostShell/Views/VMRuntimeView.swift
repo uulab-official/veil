@@ -950,8 +950,7 @@ private struct WindowsEmbeddedDisplayPreview: View {
 
     var body: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(.black)
+            Color.black
 
             if let renderedImage {
                 Image(nsImage: renderedImage)
@@ -992,10 +991,6 @@ private struct WindowsEmbeddedDisplayPreview: View {
             )
         }
         .aspectRatio(16 / 9, contentMode: .fit)
-        .overlay {
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .strokeBorder(.white.opacity(0.16), lineWidth: 1)
-        }
         .help("Latest Windows display")
         .accessibilityLabel(surface.kind == .vncLoopback ? "Embedded Windows display endpoint" : "Latest Windows display screenshot")
         .accessibilityValue(surface.endpoint ?? path)
@@ -1486,16 +1481,21 @@ private struct WindowsSetupDisplayPanel: View {
     }
 
     private var installedLauncherStage: some View {
-        ZStack(alignment: .bottom) {
+        ZStack(alignment: .topTrailing) {
             launcherDisplaySurface
 
-            launcherFooter
+            horizontalActions
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
                 .background(.black.opacity(0.18))
-                .background(.ultraThinMaterial)
-                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                .padding(10)
+                .background(.ultraThinMaterial, in: Capsule())
+                .overlay {
+                    Capsule()
+                        .strokeBorder(.white.opacity(0.14), lineWidth: 1)
+                }
+                .padding(16)
         }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var installProcessStage: some View {
@@ -1509,10 +1509,6 @@ private struct WindowsSetupDisplayPanel: View {
                 .padding(10)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
-        .overlay {
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .strokeBorder(.white.opacity(0.14), lineWidth: 1)
-        }
     }
 
     private var installDisplaySurface: some View {
@@ -1650,7 +1646,7 @@ private struct WindowsSetupDisplayPanel: View {
 
     private var machineDisplay: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
+            Rectangle()
                 .fill(machineHeroGradient)
 
             VStack(spacing: 16) {
@@ -1729,10 +1725,6 @@ private struct WindowsSetupDisplayPanel: View {
             .foregroundStyle(.white)
             .padding(24)
         }
-        .overlay {
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .strokeBorder(.white.opacity(0.16), lineWidth: 1)
-        }
     }
 
     private var installPrimaryTitle: String {
@@ -1778,24 +1770,8 @@ private struct WindowsSetupDisplayPanel: View {
         return snapshot.profileName == nil ? "Prepare Windows" : "Continue Setup"
     }
 
-    private var launcherFooter: some View {
-        HStack(spacing: 10) {
-            ForEach(metadataItems) { item in
-                LauncherMetadataChip(item: item)
-            }
-
-            Spacer(minLength: 12)
-
-            horizontalActions
-                .frame(minWidth: 300, alignment: .trailing)
-        }
-        .padding(.horizontal, 22)
-        .padding(.vertical, 14)
-    }
-
     private var horizontalActions: some View {
         HStack(spacing: 8) {
-            Spacer(minLength: 4)
             if snapshot.state == .running {
                 Button {
                     showsFullDesktop.toggle()
@@ -2057,88 +2033,6 @@ private struct WindowsSetupDisplayPanel: View {
                 state: snapshot.state == .running ? .current : .pending
             )
         ]
-    }
-
-    private var metadataItems: [LauncherMetadataItem] {
-        WindowsShellCopy.installedLauncherMetadata(
-            windowsIsRunning: snapshot.state == .running || snapshot.state == .starting,
-            windowsCanStart: canStart,
-            displayNeedsRefresh: canRecoverRuntimeDisplay,
-            appValue: appMetadataValue,
-            appTone: appMetadataTone,
-            appConnectionReady: canLaunchWindowsApp || canFulfillPendingLaunch,
-            appConnectionWaiting: pendingLaunch.isQueued || canRequestWindowsAppLaunch
-        )
-        .map { status in
-            LauncherMetadataItem(
-                title: status.title,
-                value: status.value,
-                symbolName: status.symbolName,
-                tint: color(for: status.tone)
-            )
-        }
-    }
-
-    private var appMetadataValue: String {
-        guard let activeMirrorSession else {
-            if canFulfillPendingLaunch {
-                return "Ready"
-            }
-
-            if pendingLaunch.willLaunchOnAgentReconnect {
-                switch snapshot.state {
-                case .running, .starting:
-                    return "Connecting"
-                default:
-                    return "Queued"
-                }
-            }
-
-            if canLaunchWindowsApp {
-                return appDisplayName
-            }
-
-            return canRequestWindowsAppLaunch ? "Ready to queue" : "After connection"
-        }
-
-        return activeMirrorSession.latestFrame == nil ? "Opening" : "Mac Window"
-    }
-
-    private var appMetadataTint: Color {
-        color(for: appMetadataTone)
-    }
-
-    private var appMetadataTone: WindowsShellStatusTone {
-        guard let activeMirrorSession else {
-            if canFulfillPendingLaunch {
-                return .green
-            }
-
-            if pendingLaunch.isQueued {
-                return .blue
-            }
-
-            if canLaunchWindowsApp {
-                return .green
-            }
-
-            return canRequestWindowsAppLaunch ? .blue : .secondary
-        }
-
-        return activeMirrorSession.latestFrame == nil ? .orange : .green
-    }
-
-    private func color(for tone: WindowsShellStatusTone) -> Color {
-        switch tone {
-        case .green:
-            .green
-        case .blue:
-            .blue
-        case .orange:
-            .orange
-        case .secondary:
-            .secondary
-        }
     }
 
     private var appDisplayName: String {
@@ -2720,7 +2614,7 @@ private struct WindowsSetupDisplayPanel: View {
     }
 }
 
-private struct WindowsLogoMark: View {
+struct WindowsLogoMark: View {
     var size: CGFloat
 
     var body: some View {
@@ -2930,46 +2824,6 @@ private struct WindowsDisplayLaunchEvidenceStrip: View {
         ]
         .compactMap { $0 }
         .joined(separator: "\n")
-    }
-}
-
-private struct LauncherMetadataItem: Identifiable {
-    var id: String { title }
-    var title: String
-    var value: String
-    var symbolName: String
-    var tint: Color
-}
-
-private struct LauncherMetadataChip: View {
-    var item: LauncherMetadataItem
-
-    var body: some View {
-        HStack(spacing: 8) {
-            Image(systemName: item.symbolName)
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(item.tint)
-                .frame(width: 24, height: 24)
-                .background(item.tint.opacity(0.11), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
-
-            VStack(alignment: .leading, spacing: 1) {
-                Text(item.title)
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                Text(item.value)
-                    .font(.caption.weight(.semibold))
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-            }
-        }
-        .padding(.horizontal, 9)
-        .padding(.vertical, 7)
-        .frame(maxWidth: 138, alignment: .leading)
-        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .strokeBorder(.quaternary, lineWidth: 1)
-        }
     }
 }
 

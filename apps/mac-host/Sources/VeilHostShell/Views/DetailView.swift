@@ -25,7 +25,7 @@ struct DetailView: View {
     var displayMessage: String?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        ZStack(alignment: .bottom) {
             VMRuntimeView(
                 model: vmModel,
                 guestAgentInstallEvidence: model.guestAgentInstallEvidence,
@@ -63,8 +63,6 @@ struct DetailView: View {
                 quietWindowsWhenIdleAction: quietWindowsWhenIdleAction,
                 displayMessage: displayMessage
             )
-            .padding(.horizontal, 14)
-            .padding(.top, 14)
 
             if shouldShowAppLauncher {
                 WindowsQuickLaunchPanel(
@@ -72,29 +70,15 @@ struct DetailView: View {
                     mirrorSessions: model.mirrorSessions,
                     selectedAppId: $model.selectedAppId,
                     canFulfillPendingLaunch: model.canFulfillPendingLaunch,
-                    canLaunchSelectedApp: model.canLaunchSelectedApp,
-                    canRequestSelectedAppLaunch: model.canRequestSelectedAppLaunch,
                     hasLiveAgentConnection: model.hasLiveAgentConnection,
                     phase: model.phase,
-                    proofPlan: proofPlan,
-                    proofArtifacts: runtimeStatusReport.proofArtifacts,
-                    dailyUseReadiness: runtimeStatusReport.dailyUseReadiness,
-                    releaseGate: runtimeStatusReport.releaseGate,
-                    launchPlan: runtimeStatusReport.launchPlan,
-                    primaryNextAction: runtimeStatusReport.primaryNextAction,
-                    oneScreenUX: runtimeStatusReport.oneScreenUX,
-                    launchOnboarding: runtimeStatusReport.launchOnboarding,
-                    launchWindowsAppAction: launchWindowsAppAction,
-                    runPrimaryNextAction: runPrimaryNextAction,
-                    requestNotificationConsentAction: requestNotificationConsentAction,
-                    runNotificationProofAction: runNotificationProofAction,
-                    runRecommendedProofAction: runRecommendedProofAction,
-                    runMultiAppProofAction: runMultiAppProofAction
+                    launchWindowsAppAction: launchWindowsAppAction
                 )
-                    .padding(.horizontal, 14)
-                    .padding(.bottom, 14)
+                .padding(.horizontal, 22)
+                .padding(.bottom, 18)
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var activeMirrorSession: WindowMirrorSession? {
@@ -135,58 +119,6 @@ struct DetailView: View {
         )
     }
 
-    private func runPrimaryNextAction(_ route: LauncherPrimaryNextActionRoute) {
-        switch route {
-        case .launchSelectedApp:
-            launchWindowsAppAction()
-        case .fulfillPendingLaunch:
-            fulfillPendingLaunchAction()
-        case .recoverDisplay:
-            recoverRuntimeDisplayAction()
-        case .waitForAgent:
-            waitForGuestAgentAction()
-        case .repairAppConnection:
-            repairGuestAgentForAppLaunchAction()
-        case .startWindows:
-            startVMAction()
-        case .startWindowsForApp:
-            launchWindowsAppAction()
-        case .prepareWindows:
-            Task {
-                await vmModel.prepareDefaultVM()
-            }
-        case .preparePackageIdentity:
-            prepareSparsePackageAction()
-        case .refreshRuntimeStatus:
-            Task {
-                await vmModel.load()
-            }
-        case .reconnectPreviousApps:
-            restoreWindowsAppWindowsAction()
-        case .closeAllWindowsApps:
-            closeAllWindowsAppWindowsAction()
-        case .restartFrameStream:
-            restartStaleFrameStreamsAction()
-        case .recoverWindowCapture:
-            restartStaleFrameStreamsAction()
-        case .reopenWindow:
-            restartStaleFrameStreamsAction()
-        case .quietWindows:
-            quietWindowsWhenIdleAction()
-        case .requestNotificationConsent:
-            requestNotificationConsentAction()
-        case .runNotificationProof:
-            runNotificationProofAction()
-        case .showPrinterBridgePlan:
-            Task {
-                await vmModel.load()
-            }
-        case .runRecommendedProof:
-            runRecommendedProofAction()
-        case .runMultiAppProof:
-            runMultiAppProofAction()
-        }
-    }
 }
 
 private struct WindowsQuickLaunchPanel: View {
@@ -194,84 +126,77 @@ private struct WindowsQuickLaunchPanel: View {
     var mirrorSessions: [WindowMirrorSession]
     @Binding var selectedAppId: String?
     var canFulfillPendingLaunch: Bool
-    var canLaunchSelectedApp: Bool
-    var canRequestSelectedAppLaunch: Bool
     var hasLiveAgentConnection: Bool
     var phase: HostDashboardPhase
-    var proofPlan: WindowsAppRuntimeProofPlanStatus
-    var proofArtifacts: WindowsAppRuntimeProofArtifactStatus
-    var dailyUseReadiness: WindowsAppRuntimeDailyUseReadinessStatus
-    var releaseGate: WindowsAppRuntimeReleaseGateStatus
-    var launchPlan: WindowsAppRuntimeLaunchPlanStatus
-    var primaryNextAction: WindowsAppRuntimePrimaryNextActionStatus
-    var oneScreenUX: WindowsAppRuntimeOneScreenUXStatus
-    var launchOnboarding: WindowsAppRuntimeLaunchOnboardingStatus
     var launchWindowsAppAction: () -> Void
-    var runPrimaryNextAction: (LauncherPrimaryNextActionRoute) -> Void
-    var requestNotificationConsentAction: () -> Void
-    var runNotificationProofAction: () -> Void
-    var runRecommendedProofAction: () -> Void
-    var runMultiAppProofAction: () -> Void
 
     var body: some View {
-        ShellPanel(spacing: 12) {
-            HStack(spacing: 12) {
-                ShellPanelHeader(
-                    title: "Windows Apps",
-                    subtitle: "Pick an app and open it as a native macOS window.",
-                    symbolName: "macwindow.on.rectangle"
-                )
+        HStack(spacing: 10) {
+            WindowsLogoMark(size: 34)
 
-                Spacer()
+            VStack(alignment: .leading, spacing: 1) {
+                Text("Windows Apps")
+                    .font(.caption.weight(.semibold))
+                Text(connectionTitle)
+                    .font(.caption2)
+                    .foregroundStyle(connectionTint)
+            }
+            .frame(width: 92, alignment: .leading)
+
+            Divider()
+                .frame(height: 40)
+
+            ScrollView(.horizontal) {
+                HStack(spacing: 6) {
+                    ForEach(apps) { app in
+                        WindowsQuickLaunchTile(
+                            app: app,
+                            isSelected: selectedAppId == app.id,
+                            openWindowCount: mirrorSessions.filter { $0.window.appId == app.id }.count,
+                            isDisabled: phase == .loading || phase == .launching
+                        ) {
+                            selectedAppId = app.id
+                            launchWindowsAppAction()
+                        }
+                    }
+                }
+                .padding(.horizontal, 2)
+            }
+            .scrollIndicators(.hidden)
+
+            if !mirrorSessions.isEmpty || canFulfillPendingLaunch {
+                Divider()
+                    .frame(height: 40)
 
                 StatusPill(
                     title: runningAppStateTitle,
                     symbolName: runningAppStateSymbol,
-                    tint: mirrorSessions.isEmpty ? .secondary : .green
+                    tint: mirrorSessions.isEmpty ? .blue : .green
                 )
             }
-
-            if apps.isEmpty {
-                ContentUnavailableView(
-                    "No Windows Apps",
-                    systemImage: "square.grid.2x2",
-                    description: Text("Start Windows to load the installed app list.")
-                )
-                .frame(maxWidth: .infinity, minHeight: 118)
-            } else {
-                ScrollView(.horizontal) {
-                    HStack(spacing: 12) {
-                        ForEach(apps) { app in
-                            WindowsQuickLaunchTile(
-                                app: app,
-                                isSelected: selectedAppId == app.id,
-                                openWindowCount: mirrorSessions.filter { $0.window.appId == app.id }.count,
-                                isDisabled: phase == .loading || phase == .launching
-                            ) {
-                                selectedAppId = app.id
-                                launchWindowsAppAction()
-                            }
-                        }
-                    }
-                    .padding(.vertical, 2)
-                }
-                .scrollIndicators(.hidden)
-            }
-
-            HStack(spacing: 8) {
-                Label(
-                    hasLiveAgentConnection ? "Windows is ready" : "Windows starts when an app opens",
-                    systemImage: hasLiveAgentConnection ? "checkmark.circle.fill" : "power"
-                )
-                .foregroundStyle(hasLiveAgentConnection ? Color.green : Color.secondary)
-
-                Spacer()
-
-                Text("Setup and recovery are in More.")
-                    .foregroundStyle(.secondary)
-            }
-            .font(.caption)
         }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 9)
+        .frame(maxWidth: 760)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .strokeBorder(.white.opacity(0.16), lineWidth: 1)
+        }
+        .shadow(color: .black.opacity(0.28), radius: 20, y: 10)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Windows app dock")
+    }
+
+    private var connectionTitle: String {
+        if hasLiveAgentConnection {
+            return "Ready"
+        }
+        return canFulfillPendingLaunch ? "App queued" : "Starts on demand"
+    }
+
+    private var connectionTint: Color {
+        hasLiveAgentConnection ? .green : (canFulfillPendingLaunch ? .blue : .secondary)
     }
 
     private var runningAppStateTitle: String {
@@ -295,204 +220,6 @@ private struct WindowsQuickLaunchPanel: View {
         return "macwindow.badge.plus"
     }
 
-    private var appCheckStatusTitle: String {
-        WindowsShellCopy.appCheckStatusTitle(
-            recommendedProofKind: proofPlan.recommendedProofKind,
-            latestProofFileName: proofArtifacts.latestProofFileName
-        )
-    }
-
-    private var appCheckDetail: String {
-        WindowsShellCopy.appCheckDetail(
-            canRunMVPProof: proofPlan.canRunMVPProof,
-            canRunCoherenceProof: proofPlan.canRunCoherenceProof,
-            canRunAppWindowProof: proofPlan.canRunAppWindowProof,
-            recommendedProofCommand: proofPlan.recommendedProofCommand,
-            latestProofFileName: proofArtifacts.latestProofFileName,
-            reason: proofPlan.reason
-        )
-    }
-
-    private var appCheckSymbolName: String {
-        switch proofPlan.recommendedProofKind {
-        case "mvp":
-            return "checkmark.seal.fill"
-        case "coherence":
-            return "keyboard.badge.ellipsis"
-        case "app-window":
-            return "macwindow"
-        default:
-            return proofArtifacts.latestProofFileName == nil ? "clock" : "doc.text"
-        }
-    }
-
-    private var appCheckTint: Color {
-        if proofPlan.canRunMVPProof {
-            return .green
-        }
-
-        if proofPlan.recommendedProofCommand != nil {
-            return .blue
-        }
-
-        return proofArtifacts.latestProofFileName == nil ? .secondary : .green
-    }
-
-    private var printerBridgeDetail: String {
-        if let evidenceFileName = proofArtifacts.latestPrinterBridgeProofEvidenceFileName {
-            return "Latest test page proof: \(evidenceFileName)"
-        }
-
-        return "Manual IPP setup at \(dailyUseReadiness.printerBridgeEndpointTemplate)"
-    }
-
-    private var printerBridgeHelp: String {
-        var details = [
-            dailyUseReadiness.printerBridgeSetupHint,
-            "Command: \(dailyUseReadiness.printerBridgePlanCommand)"
-        ]
-
-        if let proofPath = proofArtifacts.latestPrinterBridgeProofPath {
-            details.append("Latest proof: \(proofPath)")
-        }
-
-        if let evidencePath = proofArtifacts.latestPrinterBridgeProofEvidencePath {
-            details.append("Evidence: \(evidencePath)")
-        }
-
-        return details.joined(separator: "\n")
-    }
-
-    private var printerBridgeStatusTitle: String {
-        proofArtifacts.latestPrinterBridgeProofPath == nil ? "Printer Setup" : "Printer Proof"
-    }
-
-    private var printerBridgeTint: Color {
-        proofArtifacts.latestPrinterBridgeProofPath == nil ? .blue : .green
-    }
-
-    private var appFlowStatusTitle: String {
-        WindowsShellCopy.appFlowStatusTitle(
-            isPassing: releaseGate.isPassing,
-            passingStepCount: releaseGate.passingStepCount,
-            requiredStepCount: releaseGate.requiredStepCount
-        )
-    }
-
-    private var launchOnboardingTitle: String {
-        WindowsShellCopy.launchOnboardingTitle(
-            state: launchOnboarding.state,
-            canContinueInApp: launchOnboarding.canContinueInApp
-        )
-    }
-
-    private var launchOnboardingDetail: String {
-        WindowsShellCopy.launchOnboardingDetail(
-            currentStepTitle: launchOnboarding.currentStepTitle,
-            pendingLiveProof: launchOnboarding.pendingLiveProof
-        )
-    }
-
-    private var launchOnboardingSymbolName: String {
-        WindowsShellCopy.launchOnboardingSymbolName(
-            state: launchOnboarding.state,
-            canContinueInApp: launchOnboarding.canContinueInApp
-        )
-    }
-
-    private var launchOnboardingTint: Color {
-        if launchOnboarding.state == "ready-for-review" {
-            return .green
-        }
-
-        return launchOnboarding.canContinueInApp ? .blue : .orange
-    }
-
-    private var oneScreenUXTitle: String {
-        if primaryNextAction.runsInApp && !oneScreenUX.heroRunsPrimaryAction {
-            return "Hero action needs attention"
-        }
-
-        if !oneScreenUX.canRecoverFromMenuOrDock {
-            return "Recovery needs attention"
-        }
-
-        if !oneScreenUX.returnsToLauncherWhenNoAppWindows {
-            return "Launcher fallback needs attention"
-        }
-
-        if oneScreenUX.mode == "windows-app-windows" {
-            let count = oneScreenUX.expectedVisibleSurfaceCount
-            return count == 1 ? "One Windows app surface" : "\(count) Windows app surfaces"
-        }
-
-        return "One launcher surface"
-    }
-
-    private var oneScreenUXSymbolName: String {
-        oneScreenUX.usesSinglePrimarySurfaceFamily
-            && oneScreenUX.canRecoverFromMenuOrDock
-            && oneScreenUX.returnsToLauncherWhenNoAppWindows
-            && (!primaryNextAction.runsInApp || oneScreenUX.heroRunsPrimaryAction)
-            ? "rectangle.on.rectangle"
-            : "exclamationmark.triangle"
-    }
-
-    private var appAutomationTitle: String {
-        if launchPlan.willOpenAppAutomatically {
-            return launchPlan.canLaunchSelectedAppNow ? "App opens now" : "App opens automatically"
-        }
-
-        if launchPlan.recommendedAction == "prepare-local-runtime" {
-            return "Setup needed before app opens"
-        }
-
-        return "App open needs attention"
-    }
-
-    private var appAutomationSymbolName: String {
-        launchPlan.willOpenAppAutomatically ? "bolt.circle" : "exclamationmark.triangle"
-    }
-
-    private var primaryNextActionHelp: String {
-        [
-            primaryNextAction.reason,
-            WindowsShellCopy.primaryActionHandoffDetail(runsInApp: primaryNextAction.runsInApp),
-            primaryNextAction.command.map { "Command: \($0)" }
-        ]
-            .compactMap { $0 }
-            .joined(separator: "\n")
-    }
-
-    private var launchOnboardingHelp: String {
-        [
-            launchOnboarding.currentStepDetail,
-            launchOnboarding.reason,
-            WindowsShellCopy.launchOnboardingHandoffDetail(
-                state: launchOnboarding.state,
-                canContinueInApp: launchOnboarding.canContinueInApp
-            ),
-            launchOnboarding.primaryCommand.map { "Command: \($0)" }
-        ]
-            .compactMap { $0 }
-            .joined(separator: "\n")
-    }
-
-    private var primaryNextActionRoute: LauncherPrimaryNextActionRoute? {
-        LauncherPrimaryNextActionRoute.resolve(
-            actionId: launchOnboarding.primaryActionId ?? launchOnboarding.currentStepId,
-            command: launchOnboarding.primaryCommand,
-            runsInApp: launchOnboarding.canContinueInApp
-        )
-    }
-
-    private var appFlowSymbolName: String {
-        releaseGate.isPassing ? "checkmark.circle.fill" : "list.bullet.circle"
-    }
-
-    private var appFlowTint: Color {
-        releaseGate.isPassing ? .green : .blue
-    }
 }
 
 private struct WindowsQuickLaunchTile: View {
@@ -504,13 +231,13 @@ private struct WindowsQuickLaunchTile: View {
 
     var body: some View {
         Button(action: action) {
-            VStack(spacing: 9) {
+            VStack(spacing: 5) {
                 ZStack(alignment: .topTrailing) {
                     Image(systemName: symbolName)
-                        .font(.system(size: 24, weight: .semibold))
+                        .font(.system(size: 17, weight: .semibold))
                         .foregroundStyle(.white)
-                        .frame(width: 54, height: 54)
-                        .background(tint.gradient, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .frame(width: 34, height: 34)
+                        .background(tint.gradient, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
 
                     if openWindowCount > 0 {
                         Text("\(openWindowCount)")
@@ -518,26 +245,22 @@ private struct WindowsQuickLaunchTile: View {
                             .foregroundStyle(.white)
                             .frame(minWidth: 18, minHeight: 18)
                             .background(.green, in: Circle())
-                            .offset(x: 6, y: -6)
+                            .offset(x: 5, y: -5)
                     }
                 }
 
                 Text(app.name)
-                    .font(.callout.weight(.semibold))
+                    .font(.caption2.weight(.semibold))
                     .foregroundStyle(.primary)
                     .lineLimit(1)
-
-                Text(openWindowCount > 0 ? "Open" : "Launch")
-                    .font(.caption2)
-                    .foregroundStyle(openWindowCount > 0 ? Color.green : Color.secondary)
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
-            .frame(width: 124, height: 118)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+            .frame(minWidth: 66, minHeight: 56)
+            .background(isSelected ? tint.opacity(0.16) : Color.clear, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
             .overlay {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .strokeBorder(isSelected ? Color.accentColor : Color.secondary.opacity(0.18), lineWidth: isSelected ? 2 : 1)
+                RoundedRectangle(cornerRadius: 11, style: .continuous)
+                    .strokeBorder(isSelected ? tint.opacity(0.80) : Color.clear, lineWidth: 1)
             }
         }
         .buttonStyle(.plain)

@@ -32,6 +32,8 @@ Date: 2026-08-02
 - [x] 드롭다운 앱 선택을 앱 아이콘 타일 중심의 즉시 실행 런처로 바꾼다.
 - [x] Windows가 설치되지 않은 상태에서는 앱 실행보다 설치 동작을 우선한다.
 - [x] 설치 전에는 앱 카탈로그와 중복 CTA를 숨기고 Windows 설정 화면 하나만 표시한다.
+- [x] Windows 화면을 헤더 아래 단일 캔버스로 확장하고 별도 Windows Apps 카드와 모니터형 이중 테두리를 제거한다.
+  - 확인: 설치 화면 앱 번들에서 전체 폭 Windows 캔버스, 하단 단일 설정 바, 외부 카드 제거를 실제 확인. 설치 후 앱 목록은 캔버스 위의 작은 앱 Dock으로만 표시한다.
 - [x] 일반 실행에서 자동 데모 fallback을 제거하고 `--demo` 또는 `VEIL_DEMO_MODE=1`로만 명시적으로 허용한다.
 - [x] 커밋되지 않은 Retina scale API 참조를 제거해 `develop` 기본 Swift 빌드를 복구한다.
   - 확인: `./script/build_and_run.sh --verify-keep-running` 통과; agent가 없는 기본 화면에 데모 앱 타일이 표시되지 않음.
