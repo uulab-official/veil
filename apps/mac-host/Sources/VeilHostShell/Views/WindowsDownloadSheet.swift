@@ -804,14 +804,14 @@ private struct MicrosoftWindowsDownloadWebView: NSViewRepresentable {
     func updateNSView(_ nsView: WKWebView, context: Context) {}
 }
 
-struct WindowsDownloadSheet: View {
-    @Environment(\.dismiss) private var dismiss
+struct WindowsDownloadScreen: View {
     @StateObject private var controller = WindowsDownloadController()
     @State private var isPreparingWindows = false
     @State private var preparationFailure: String?
     @State private var showsMicrosoftPage = false
     @State private var showsLicenseConfirmation = false
 
+    let closeAction: () -> Void
     let prepareDownloadedISO: (URL) async -> Bool
     let useExistingISO: () -> Void
 
@@ -834,7 +834,7 @@ struct WindowsDownloadSheet: View {
             Divider()
             footer
         }
-        .frame(minWidth: 820, minHeight: 560)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(nsColor: .windowBackgroundColor))
         .task {
             controller.loadLandingPage()
@@ -857,6 +857,14 @@ struct WindowsDownloadSheet: View {
 
     private var header: some View {
         HStack(spacing: 12) {
+            Button(action: closeAction) {
+                Label("Back", systemImage: "chevron.left")
+            }
+            .keyboardShortcut(.cancelAction)
+
+            Divider()
+                .frame(height: 28)
+
             Image(systemName: "arrow.down.circle.fill")
                 .font(.title2)
                 .foregroundStyle(.tint)
@@ -877,14 +885,8 @@ struct WindowsDownloadSheet: View {
 
             Button("Use Existing ISO") {
                 controller.cancelDownload()
-                dismiss()
                 useExistingISO()
             }
-
-            Button("Close") {
-                dismiss()
-            }
-            .keyboardShortcut(.cancelAction)
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 14)
@@ -1076,7 +1078,7 @@ struct WindowsDownloadSheet: View {
             let isReady = await prepareDownloadedISO(url)
             isPreparingWindows = false
             if isReady {
-                dismiss()
+                closeAction()
             } else {
                 preparationFailure = "The ISO was saved, but Veil could not finish VM preparation. Review Windows Settings and try again."
             }
