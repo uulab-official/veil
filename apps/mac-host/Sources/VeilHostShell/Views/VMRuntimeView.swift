@@ -1525,13 +1525,15 @@ private struct WindowsSetupDisplayPanel: View {
                 runtimeSetupMenu
             }
 
-            Button(action: runEffectivePrimaryAction) {
-                Label(effectivePrimaryTitle, systemImage: effectivePrimarySymbol)
-                    .frame(minWidth: canStop ? 124 : 142)
-            }
+            if displaySurface != nil || canStop || snapshot.state == .starting {
+                Button(action: runEffectivePrimaryAction) {
+                    Label(effectivePrimaryTitle, systemImage: effectivePrimarySymbol)
+                        .frame(minWidth: canStop ? 124 : 142)
+                }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.large)
                 .disabled(effectivePrimaryDisabled)
+            }
 
             runtimeMoreMenu
         }

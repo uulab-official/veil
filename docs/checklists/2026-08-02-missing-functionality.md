@@ -26,6 +26,7 @@ Date: 2026-08-02
 - [x] 실행 중인 VM에 실제 display surface가 있으면 런처 대신 Windows 화면을 기본으로 연다.
 - [x] 드롭다운 앱 선택을 앱 아이콘 타일 중심의 즉시 실행 런처로 바꾼다.
 - [x] Windows가 설치되지 않은 상태에서는 앱 실행보다 설치 동작을 우선한다.
+- [x] 설치 전에는 앱 카탈로그와 중복 CTA를 숨기고 Windows 설정 화면 하나만 표시한다.
 - [ ] VM 설정을 별도 설정 시트로 분리한다.
 - [ ] Windows ISO로 VM을 준비하고 QEMU/HVF 또는 Apple Virtualization으로 실제 Windows desktop 표시를 검증한다.
 
