@@ -44,6 +44,8 @@ struct VMRuntimeView: View {
     @State private var pathPicker: PathPicker?
     @State private var presentedSheet: VMRuntimeSheetDestination?
     @State private var installSimulation = InstallSimulationState.idle
+    @State private var pendingInstallerConsent: PendingInstallerConsent?
+    @State private var showsInstallerLicenseConfirmation = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -88,8 +90,13 @@ struct VMRuntimeView: View {
                         } else if model.canStop {
                             stopVMAction()
                         } else if model.canStart {
-                            startDisplayHandoffProgress()
-                            startVMAction()
+                            if snapshot.windowsInstalled {
+                                startDisplayHandoffProgress()
+                                startVMAction()
+                            } else {
+                                pendingInstallerConsent = .prepared
+                                showsInstallerLicenseConfirmation = true
+                            }
                         } else if !snapshot.windowsInstalled && (snapshot.installerMediaPath == nil || needsInstallerPickerAccess(snapshot)) {
                             presentedSheet = .windowsDownload
                         } else {
@@ -241,6 +248,19 @@ struct VMRuntimeView: View {
                 )
             }
         }
+        .alert(WindowsLicenseConsentPolicy.title, isPresented: $showsInstallerLicenseConfirmation) {
+            Button("Not Now", role: .cancel) {
+                clearPendingInstallerConsent()
+            }
+            Button(WindowsLicenseConsentPolicy.reviewButtonTitle) {
+                reviewLicenseTermsAndReopenInstallerConfirmation()
+            }
+            Button(WindowsLicenseConsentPolicy.acceptButtonTitle) {
+                prepareAcceptedInstallation()
+            }
+        } message: {
+            Text(WindowsLicenseConsentPolicy.message)
+        }
     }
 
     private func canShowDisplay(for snapshot: VMRuntimeSnapshot) -> Bool {
@@ -391,10 +411,20 @@ struct VMRuntimeView: View {
         }
 
         let path = url.path
-        let didStartSecurityScope = url.startAccessingSecurityScopedResource()
         let currentInstaller = model.snapshot?.installerMediaPath
         let currentDriver = model.snapshot?.driverMediaPath
         let currentDisk = model.snapshot?.virtualDiskPath
+
+        if picker == .installerAndStart {
+            pendingInstallerConsent = .selected(
+                url: url,
+                didStartSecurityScope: url.startAccessingSecurityScopedResource()
+            )
+            showsInstallerLicenseConfirmation = true
+            return
+        }
+
+        let didStartSecurityScope = url.startAccessingSecurityScopedResource()
 
         Task {
             defer {
@@ -411,17 +441,7 @@ struct VMRuntimeView: View {
                     virtualDiskPath: currentDisk
                 )
             case .installerAndStart:
-                let isReadyToStart = await model.prepareWindowsInstallation(
-                    installerMediaPath: path,
-                    driverMediaPath: currentDriver,
-                    virtualDiskPath: currentDisk
-                )
-                guard isReadyToStart else {
-                    return
-                }
-
-                startDisplayHandoffProgress()
-                startVMAction()
+                break
             case .driverMedia:
                 await model.updateProfilePaths(
                     installerMediaPath: currentInstaller,
@@ -435,6 +455,62 @@ struct VMRuntimeView: View {
                     virtualDiskPath: path
                 )
             }
+        }
+    }
+
+    private func prepareAcceptedInstallation() {
+        guard let consent = pendingInstallerConsent else {
+            return
+        }
+
+        pendingInstallerConsent = nil
+        switch consent {
+        case .prepared:
+            startDisplayHandoffProgress()
+            startVMAction()
+        case .selected(let url, let didStartSecurityScope):
+            Task {
+                defer {
+                    if didStartSecurityScope {
+                        url.stopAccessingSecurityScopedResource()
+                    }
+                }
+
+                let isReadyToStart = await model.prepareWindowsInstallation(
+                    installerMediaPath: url.path,
+                    driverMediaPath: model.snapshot?.driverMediaPath,
+                    virtualDiskPath: model.snapshot?.virtualDiskPath
+                )
+                guard isReadyToStart else {
+                    return
+                }
+
+                startDisplayHandoffProgress()
+                startVMAction()
+            }
+        }
+    }
+
+    private func clearPendingInstallerConsent() {
+        guard let consent = pendingInstallerConsent else {
+            return
+        }
+
+        if case .selected(let url, let didStartSecurityScope) = consent,
+           didStartSecurityScope {
+            url.stopAccessingSecurityScopedResource()
+        }
+        pendingInstallerConsent = nil
+    }
+
+    private func reviewLicenseTermsAndReopenInstallerConfirmation() {
+        NSWorkspace.shared.open(WindowsLicenseConsentPolicy.termsURL)
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(350))
+            guard pendingInstallerConsent != nil else {
+                return
+            }
+            showsInstallerLicenseConfirmation = true
         }
     }
 
@@ -3446,7 +3522,7 @@ private struct SetupItemRow: View {
     }
 }
 
-private enum PathPicker: Identifiable {
+private enum PathPicker: Identifiable, Equatable {
     case installerMedia
     case installerAndStart
     case driverMedia
@@ -3464,6 +3540,11 @@ private enum PathPicker: Identifiable {
             "virtualDisk"
         }
     }
+}
+
+private enum PendingInstallerConsent {
+    case selected(url: URL, didStartSecurityScope: Bool)
+    case prepared
 }
 
 private struct PreflightCheckRow: View {

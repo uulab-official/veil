@@ -38,10 +38,13 @@ Veil must not upload, mirror, or serve Windows ISO files through project-owned s
 
 Veil may load Microsoft's official Windows 11 Arm64 download page, select the page's current Arm64 edition and a language derived from the Mac locale, and receive the resulting ISO response directly from Microsoft into Veil's local Application Support directory. This flow must keep the official page available as an inspectable/manual fallback, accept downloads only over HTTPS from Microsoft-owned domains, retain an existing-ISO fallback, and compare each completed file with the selected language's SHA-256 published on that same Microsoft page before using it. A missing or mismatched hash must fail closed and remove the unverified local file; Veil must not embed release hashes that become stale. Veil must not depend on Microsoft's unpublished software-download connector as a stable API, manufacture a permanent ISO URL, bypass Microsoft's page workflow, or proxy the response through project infrastructure. Downloading media does not grant a Windows license or activation rights.
 
+Veil's generated unattended answer file records Windows Setup license acceptance and hides the guest EULA page. Download completion or ISO selection must therefore never start installation automatically. Before Veil starts an uninstalled VM with that answer file, the user must be shown Microsoft's official license-terms link and make an explicit, contemporaneous choice to accept and install. Cancelling the confirmation keeps a completed download available but must not prepare or start the VM. Menu-bar and previously prepared-profile start actions must route back through the same main-window consent gate until Windows installation is recorded as complete.
+
 Official references:
 
 - Windows 11 Arm ISO overview: https://learn.microsoft.com/en-us/windows/arm/iso
 - Download Windows 11 for Arm-based PCs: https://www.microsoft.com/en-us/software-download/windows11arm64
+- Microsoft License Terms: https://www.microsoft.com/useterms
 
 ## Unattended Setup Keys
 

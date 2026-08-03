@@ -36,6 +36,14 @@ enum WindowsDownloadURLPolicy {
     }
 }
 
+enum WindowsLicenseConsentPolicy {
+    static let termsURL = URL(string: "https://www.microsoft.com/useterms")!
+    static let title = "Accept Microsoft License Terms?"
+    static let message = "Veil's unattended setup hides the Windows Setup license page and records acceptance. Review Microsoft's terms before continuing. A valid Windows license and activation may be required."
+    static let reviewButtonTitle = "Review License Terms"
+    static let acceptButtonTitle = "I Agree and Install Windows"
+}
+
 enum WindowsDownloadDestination {
     static func downloadsDirectory(fileManager: FileManager = .default) throws -> URL {
         guard let applicationSupport = fileManager.urls(
@@ -802,6 +810,7 @@ struct WindowsDownloadSheet: View {
     @State private var isPreparingWindows = false
     @State private var preparationFailure: String?
     @State private var showsMicrosoftPage = false
+    @State private var showsLicenseConfirmation = false
 
     let prepareDownloadedISO: (URL) async -> Bool
     let useExistingISO: () -> Void
@@ -830,22 +839,16 @@ struct WindowsDownloadSheet: View {
         .task {
             controller.loadLandingPage()
         }
-        .onChange(of: controller.phase) { _, phase in
-            guard case .downloaded(let url) = phase else {
-                return
+        .alert(WindowsLicenseConsentPolicy.title, isPresented: $showsLicenseConfirmation) {
+            Button("Not Now", role: .cancel) {}
+            Button(WindowsLicenseConsentPolicy.reviewButtonTitle) {
+                reviewLicenseTermsAndReopenConfirmation()
             }
-
-            Task {
-                isPreparingWindows = true
-                preparationFailure = nil
-                let isReady = await prepareDownloadedISO(url)
-                isPreparingWindows = false
-                if isReady {
-                    dismiss()
-                } else {
-                    preparationFailure = "The ISO was saved, but Veil could not finish VM preparation. Review Windows Settings and try again."
-                }
+            Button(WindowsLicenseConsentPolicy.acceptButtonTitle) {
+                prepareDownloadedWindows()
             }
+        } message: {
+            Text(WindowsLicenseConsentPolicy.message)
         }
         .onDisappear {
             controller.cancelDownload()
@@ -921,6 +924,19 @@ struct WindowsDownloadSheet: View {
                 }
             }
 
+            if case .downloaded = controller.phase, !isPreparingWindows {
+                VStack(spacing: 10) {
+                    Link(destination: WindowsLicenseConsentPolicy.termsURL) {
+                        Label(WindowsLicenseConsentPolicy.reviewButtonTitle, systemImage: "doc.text.magnifyingglass")
+                    }
+
+                    Button("Review and Prepare Windows") {
+                        showsLicenseConfirmation = true
+                    }
+                    .buttonStyle(.borderedProminent)
+                }
+            }
+
             Label("Latest Arm64 ISO directly from microsoft.com", systemImage: "lock.shield.fill")
                 .font(.caption.weight(.medium))
                 .foregroundStyle(.secondary)
@@ -959,6 +975,8 @@ struct WindowsDownloadSheet: View {
                     controller.reloadLandingPage()
                 }
             }
+
+            Link("License Terms", destination: WindowsLicenseConsentPolicy.termsURL)
 
             Label("microsoft.com", systemImage: "lock.fill")
                 .font(.caption.weight(.medium))
@@ -1041,9 +1059,38 @@ struct WindowsDownloadSheet: View {
         case .verifying:
             return "Veil is comparing the completed file with Microsoft's published SHA-256. Keep this window open."
         case .downloaded:
-            return "The ISO is complete. Veil is handing it to the local VM setup flow."
+            return "The verified ISO is saved. Review Microsoft's license terms before starting unattended setup."
         case .failed(let message):
             return message
+        }
+    }
+
+    private func prepareDownloadedWindows() {
+        guard case .downloaded(let url) = controller.phase else {
+            return
+        }
+
+        Task {
+            isPreparingWindows = true
+            preparationFailure = nil
+            let isReady = await prepareDownloadedISO(url)
+            isPreparingWindows = false
+            if isReady {
+                dismiss()
+            } else {
+                preparationFailure = "The ISO was saved, but Veil could not finish VM preparation. Review Windows Settings and try again."
+            }
+        }
+    }
+
+    private func reviewLicenseTermsAndReopenConfirmation() {
+        NSWorkspace.shared.open(WindowsLicenseConsentPolicy.termsURL)
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(350))
+            guard case .downloaded = controller.phase else {
+                return
+            }
+            showsLicenseConfirmation = true
         }
     }
 }

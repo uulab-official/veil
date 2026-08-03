@@ -3,6 +3,21 @@ import Testing
 @testable import VeilHostShell
 
 struct WindowsDownloadPolicyTests {
+    @Test("license consent points to Microsoft's official terms over HTTPS")
+    func licenseConsentUsesOfficialTerms() {
+        #expect(WindowsLicenseConsentPolicy.termsURL.scheme == "https")
+        #expect(WindowsLicenseConsentPolicy.termsURL.host == "www.microsoft.com")
+        #expect(WindowsLicenseConsentPolicy.termsURL.path == "/useterms")
+    }
+
+    @Test("license consent describes unattended acceptance explicitly")
+    func licenseConsentIsExplicit() {
+        #expect(WindowsLicenseConsentPolicy.message.contains("unattended setup"))
+        #expect(WindowsLicenseConsentPolicy.message.contains("records acceptance"))
+        #expect(WindowsLicenseConsentPolicy.acceptButtonTitle.contains("I Agree"))
+        #expect(WindowsLicenseConsentPolicy.reviewButtonTitle.contains("License Terms"))
+    }
+
     @Test("allows the official Microsoft Windows Arm download page")
     func allowsOfficialLandingPage() {
         #expect(WindowsDownloadURLPolicy.allowsNavigation(to: WindowsDownloadURLPolicy.landingPageURL))

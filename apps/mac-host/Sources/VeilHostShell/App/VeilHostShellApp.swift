@@ -1941,8 +1941,7 @@ private struct VeilMenuBarMenu: View {
         Divider()
 
         Button(openWindowsActionTitle, systemImage: "play.fill") {
-            openMainWindow()
-            startVMAction()
+            startWindowsFromMenuAction()
         }
         .disabled(!vmModel.canStart || vmModel.phase == .loading)
 
@@ -2165,9 +2164,16 @@ private struct VeilMenuBarMenu: View {
             openMainWindow()
             repairGuestAgentForAppLaunchAction()
         case .startWindows:
-            openMainWindow()
-            startVMAction()
+            startWindowsFromMenuAction()
         }
+    }
+
+    private func startWindowsFromMenuAction() {
+        openMainWindow()
+        guard vmModel.snapshot?.windowsInstalled == true else {
+            return
+        }
+        startVMAction()
     }
 
     private func runMenuBarPrimaryAction() {
