@@ -37,8 +37,8 @@ struct AppLaunchLifecycleCoordinator {
         switch runtimeState {
         case .running, .starting:
             return .waitForGuestAgent
-        case .stopped, .suspended where canStartOrResume:
-            return .startOrResumeWindows
+        case .stopped, .suspended:
+            return canStartOrResume ? .startOrResumeWindows : .blockedRuntimeSetup
         default:
             return canStartOrResume ? .startOrResumeWindows : .blockedRuntimeSetup
         }

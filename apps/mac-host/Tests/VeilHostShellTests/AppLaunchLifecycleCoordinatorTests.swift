@@ -33,6 +33,11 @@ struct AppLaunchLifecycleCoordinatorTests {
         #expect(step(state: .notConfigured, canStart: false) == .blockedRuntimeSetup)
     }
 
+    @Test("does not start a stopped runtime while setup is unavailable")
+    func blocksStoppedRuntimeWithoutStartCapability() {
+        #expect(step(state: .stopped, canStart: false) == .blockedRuntimeSetup)
+    }
+
     private func step(
         queued: Bool = true,
         canFulfill: Bool = false,
