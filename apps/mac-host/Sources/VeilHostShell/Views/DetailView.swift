@@ -66,7 +66,7 @@ struct DetailView: View {
             .padding(.horizontal, 14)
             .padding(.top, 14)
 
-            if !model.apps.isEmpty {
+            if shouldShowAppLauncher {
                 WindowsQuickLaunchPanel(
                     apps: model.apps,
                     mirrorSessions: model.mirrorSessions,
@@ -100,6 +100,21 @@ struct DetailView: View {
     private var activeMirrorSession: WindowMirrorSession? {
         model.mirrorSessions.first { $0.latestFrame != nil }
             ?? model.mirrorSessions.first
+    }
+
+    /// Demo or stale app catalogs must not make first-run setup look complete. The
+    /// launcher appears only after a local VM profile has real installation evidence.
+    private var shouldShowAppLauncher: Bool {
+        guard !model.apps.isEmpty,
+              let snapshot = vmModel.snapshot else {
+            return false
+        }
+
+        if snapshot.installEvidence.isInstalled {
+            return true
+        }
+
+        return snapshot.profileName != nil && model.guestAgentInstallEvidence?.isInstalled == true
     }
 
     private var pendingWindowsAppName: String? {
