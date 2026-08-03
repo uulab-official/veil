@@ -40,6 +40,7 @@ struct VMRuntimeView: View {
     var runMultiAppProofAction: () -> Void
     var quietWindowsWhenIdleAction: () -> Void
     var displayMessage: String?
+    @Binding var showsFullDesktop: Bool
     @State private var pathPicker: PathPicker?
     @State private var presentedSheet: VMRuntimeSheetDestination?
     @State private var installSimulation = InstallSimulationState.idle
@@ -148,7 +149,8 @@ struct VMRuntimeView: View {
                     detailsAction: {
                         presentedSheet = .settings
                     },
-                    installSimulation: installSimulation
+                    installSimulation: installSimulation,
+                    showsFullDesktop: $showsFullDesktop
                 )
             } else if let errorMessage = model.errorMessage {
                 RuntimeLandingPanel(
@@ -1449,10 +1451,8 @@ private struct WindowsSetupDisplayPanel: View {
     var consoleKeyAction: (String) -> Void
     var detailsAction: () -> Void
     var installSimulation: InstallSimulationState
+    @Binding var showsFullDesktop: Bool
     @State private var showsAgentDiagnosticPopover = false
-    // A running VM should open on its actual Windows display. The launcher is the
-    // fallback shown while setup is incomplete or the display endpoint is unavailable.
-    @State private var showsFullDesktop = true
 
     var body: some View {
         Group {
@@ -1464,17 +1464,15 @@ private struct WindowsSetupDisplayPanel: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onAppear {
-            showsFullDesktop = hasDesktopDisplay
+            showsFullDesktop = snapshot.state == .running && hasDesktopDisplay
         }
         .onChange(of: snapshot.state) { _, newState in
-            if newState == .running {
-                showsFullDesktop = hasDesktopDisplay
-            } else {
-                showsFullDesktop = false
-            }
+            showsFullDesktop = newState == .running && hasDesktopDisplay
         }
-        .onChange(of: snapshot.latestConsoleLaunch) { _, _ in
-            if snapshot.state == .running, hasDesktopDisplay {
+        .onChange(of: hasDesktopDisplay) { hadDesktopDisplay, hasDesktopDisplay in
+            if !hasDesktopDisplay {
+                showsFullDesktop = false
+            } else if !hadDesktopDisplay, snapshot.state == .running {
                 showsFullDesktop = true
             }
         }
@@ -1772,7 +1770,7 @@ private struct WindowsSetupDisplayPanel: View {
 
     private var horizontalActions: some View {
         HStack(spacing: 8) {
-            if snapshot.state == .running {
+            if snapshot.state == .running, hasDesktopDisplay {
                 Button {
                     showsFullDesktop.toggle()
                 } label: {
