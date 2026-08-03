@@ -9,7 +9,7 @@ Date: 2026-08-02
 - [x] Swift host 패키지가 컴파일된다.
   - 확인: `swift test --disable-sandbox` 빌드 단계 통과.
 - [x] Swift 테스트 전체 통과.
-  - 확인: clean feature 기준 `swift test --disable-sandbox` — 353 tests / 23 suites.
+  - 확인: clean feature 기준 `swift test --disable-sandbox` — 354 tests / 23 suites.
 - [ ] Windows agent `dotnet test` 통과.
 - [x] protocol 및 주요 harness 테스트 통과.
   - 확인: bundled Node로 protocol/harness 626 tests 통과; fake-agent 24개와 fake-host 8개 포함.
@@ -48,7 +48,7 @@ Date: 2026-08-02
   - 코드 경로는 연결됨. 실제 Windows 11 Arm ISO로 임베디드 Windows Setup 화면이 뜨는 실기 증거가 필요하다.
 - [ ] 앱 셸에서 `Windows 시작 → guest agent 연결/복구 → 선택 앱 실행 → macOS 창 표시`를 터미널 없이 완료한다.
   - [x] 앱 실행 요청을 `요청 → Windows 시작/재개 → agent 대기 → queued launch 실행 → 차단 사유 표시` 상태 결정으로 통합한다.
-    - 확인: lifecycle coordinator 단위 테스트 6개 통과. 실제 VM end-to-end 증거가 남아 있어 상위 항목은 미완료로 유지한다.
+    - 확인: lifecycle coordinator 단위 테스트 7개 통과. 실제 VM end-to-end 증거가 남아 있어 상위 항목은 미완료로 유지한다.
 - [ ] Windows 부팅 중에는 라이브 display surface와 명확한 부팅 상태를 함께 표시한다.
 - [ ] Windows 설치 후에는 설정 화면보다 앱 타일 런처가 기본 화면이 된다.
 - [ ] Developer ID 서명과 notarization으로 다른 Mac에서도 “손상됨” 없이 실행한다.
