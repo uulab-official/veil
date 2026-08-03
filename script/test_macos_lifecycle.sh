@@ -20,6 +20,8 @@ TRASH_DIR="$TEST_ROOT/Trash"
 SUPPORT_SENTINEL="$TEST_ROOT/Application Support/Veil/preserve-me.txt"
 INSTALLED_APP="$APPLICATIONS_DIR/Veil.app"
 FOREIGN_APP="$APPLICATIONS_DIR/Foreign.app"
+QUARANTINED_SOURCE_APP="$TEST_ROOT/Quarantined Source/Veil.app"
+QUARANTINE_TEST_APP="$APPLICATIONS_DIR/Quarantine Test.app"
 LAUNCH_REPORT="$TEST_ROOT/installed-launch-report.plist"
 APP_PID=""
 
@@ -50,6 +52,17 @@ fi
 
 "$ROOT_DIR/script/install_macos.sh" --destination "$INSTALLED_APP" --replace
 
+mkdir -p "$(dirname "$QUARANTINED_SOURCE_APP")"
+ditto "$ROOT_DIR/dist/Veil.app" "$QUARANTINED_SOURCE_APP"
+xattr -w com.apple.quarantine "0081;1785768000;Veil QA;first-run" "$QUARANTINED_SOURCE_APP"
+xattr -p com.apple.quarantine "$QUARANTINED_SOURCE_APP" >/dev/null
+"$ROOT_DIR/script/install_macos.sh" --source "$QUARANTINED_SOURCE_APP" --destination "$QUARANTINE_TEST_APP"
+if xattr -p com.apple.quarantine "$QUARANTINE_TEST_APP" >/dev/null 2>&1; then
+  echo "Installer left quarantine metadata on the installed app." >&2
+  exit 1
+fi
+codesign --verify --deep --strict "$QUARANTINE_TEST_APP"
+
 ditto "$INSTALLED_APP" "$FOREIGN_APP"
 plutil -replace CFBundleIdentifier -string com.example.foreign "$FOREIGN_APP/Contents/Info.plist"
 if "$ROOT_DIR/script/install_macos.sh" --destination "$FOREIGN_APP" --replace >/dev/null 2>&1; then
@@ -62,6 +75,7 @@ fi
 }
 
 "$ROOT_DIR/script/uninstall_macos.sh" --destination "$INSTALLED_APP" --trash-directory "$TRASH_DIR"
+"$ROOT_DIR/script/uninstall_macos.sh" --destination "$INSTALLED_APP" --trash-directory "$TRASH_DIR" >/dev/null
 
 [[ ! -e "$INSTALLED_APP" ]] || { echo "Uninstall left the app in place." >&2; exit 1; }
 [[ -f "$SUPPORT_SENTINEL" ]] || { echo "Uninstall removed support data." >&2; exit 1; }
@@ -99,4 +113,4 @@ kill "$APP_PID" >/dev/null 2>&1 || true
 wait "$APP_PID" 2>/dev/null || true
 APP_PID=""
 
-echo "Veil install, replace, uninstall, support-data preservation, reinstall, and first-window launch checks passed."
+echo "Veil install, quarantine cleanup, replace, idempotent uninstall, support-data preservation, reinstall, and first-window launch checks passed."

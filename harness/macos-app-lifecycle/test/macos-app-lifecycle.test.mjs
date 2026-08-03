@@ -35,6 +35,9 @@ test("lifecycle gate covers install, guarded replace, uninstall, preservation, a
   assert.match(source, /uninstall_macos\.sh/);
   assert.match(source, /SUPPORT_SENTINEL/);
   assert.match(source, /com\.example\.foreign/);
+  assert.match(source, /xattr -w com\.apple\.quarantine/);
+  assert.match(source, /Installer left quarantine metadata/);
+  assert.ok(source.match(/uninstall_macos\.sh/g)?.length >= 2);
   assert.ok(source.match(/install_macos\.sh/g)?.length >= 3);
   assert.match(source, /CFFIXED_USER_HOME/);
   assert.match(source, /meetsLauncherContract/);
