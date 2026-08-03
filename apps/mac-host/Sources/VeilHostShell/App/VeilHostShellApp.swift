@@ -571,7 +571,7 @@ struct VeilHostShellApp: App {
 
             if model.pendingLaunchAppId != nil,
                !model.hasLiveAgentConnection {
-                continuePendingLaunchHandoff()
+                advancePendingLaunchLifecycle()
                 return
             }
 
@@ -603,7 +603,7 @@ struct VeilHostShellApp: App {
 
         guard model.canFulfillPendingLaunch else {
             if model.pendingLaunchStatus().willLaunchOnAgentReconnect {
-                continuePendingLaunchHandoff()
+                advancePendingLaunchLifecycle()
             } else {
                 displayMessage = model.pendingLaunchStatus().reason
             }
@@ -620,24 +620,37 @@ struct VeilHostShellApp: App {
         syncLauncherWindowVisibility()
     }
 
-    private func continuePendingLaunchHandoff() {
+    private func advancePendingLaunchLifecycle() {
         let appName = pendingLaunchDisplayName()
-        switch vmModel.snapshot?.state {
-        case .running, .starting:
+        let nextStep = AppLaunchLifecycleCoordinator.nextStep(
+            hasQueuedLaunch: model.pendingLaunchAppId != nil,
+            canFulfillQueuedLaunch: model.canFulfillPendingLaunch,
+            hasLiveAgentConnection: model.hasLiveAgentConnection,
+            runtimeState: vmModel.snapshot?.state,
+            canStartOrResume: vmModel.canStart,
+            guestAgentEndpointAvailable: agentConnectionPlan.isAvailable
+        )
+
+        switch nextStep {
+        case .waitForGuestAgent:
             activateMainWindow()
             displayMessage = "Windows is running. Veil is preparing the app connection so \(appName) can open as a Mac window."
             scheduleAutomaticGuestAgentRecoveryIfNeeded()
             if vmRuntimeBooter.supportsNativeDisplayWindow {
                 showWindowsDisplay()
             }
-        default:
-            guard vmModel.canStart else {
-                displayMessage = "Veil queued \(appName). Start Windows when setup is available."
-                return
-            }
-
+        case .startOrResumeWindows:
             displayMessage = "Starting Windows. Veil will open \(appName) when the app connection is ready."
             startWindowsAndShowDisplay()
+        case .blockedGuestAgentEndpoint:
+            activateMainWindow()
+            displayMessage = "\(appName) is queued, but this VM provider has no configured Windows app connection. \(agentConnectionPlan.detail)"
+        case .blockedRuntimeSetup:
+            displayMessage = "Veil queued \(appName). Finish Windows setup before the app can open."
+        case .fulfillQueuedLaunch:
+            fulfillPendingWindowsAppWindow()
+        case .requestLaunch:
+            launchSelectedWindowsAppWindow()
         }
     }
 
@@ -1509,7 +1522,7 @@ struct VeilHostShellApp: App {
             activateMainWindow()
 
             guard vmModel.snapshot?.state == .running || vmModel.snapshot?.state == .starting else {
-                continuePendingLaunchHandoff()
+                advancePendingLaunchLifecycle()
                 return
             }
 
