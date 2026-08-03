@@ -3,7 +3,6 @@ import VeilHostCore
 
 enum VMRuntimeSheetDestination: String, Identifiable, Equatable {
     case settings
-    case windowsDownload
 
     var id: String { rawValue }
 }

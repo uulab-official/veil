@@ -43,11 +43,90 @@ struct VMRuntimeView: View {
     @Binding var showsFullDesktop: Bool
     @State private var pathPicker: PathPicker?
     @State private var presentedSheet: VMRuntimeSheetDestination?
+    @State private var contentRoute = VMRuntimeContentRoute.overview
     @State private var installSimulation = InstallSimulationState.idle
     @State private var pendingInstallerConsent: PendingInstallerConsent?
     @State private var showsInstallerLicenseConfirmation = false
 
     var body: some View {
+        Group {
+            switch contentRoute {
+            case .overview:
+                runtimeOverview
+                    .transition(.move(edge: .leading).combined(with: .opacity))
+            case .windowsDownload:
+                WindowsDownloadScreen(
+                    closeAction: {
+                        contentRoute = .overview
+                    },
+                    prepareDownloadedISO: prepareDownloadedISO,
+                    useExistingISO: {
+                        contentRoute = .overview
+                        Task { @MainActor in
+                            try? await Task.sleep(for: .milliseconds(150))
+                            pathPicker = .installerAndStart
+                        }
+                    }
+                )
+                .transition(.move(edge: .trailing).combined(with: .opacity))
+            }
+        }
+        .animation(.easeInOut(duration: 0.22), value: contentRoute)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .fileImporter(
+            isPresented: Binding(
+                get: { pathPicker != nil },
+                set: { isPresented in
+                    if !isPresented {
+                        pathPicker = nil
+                    }
+                }
+            ),
+            allowedContentTypes: [.data],
+            allowsMultipleSelection: false
+        ) { result in
+            handlePathImport(result)
+        }
+        .onChange(of: model.snapshot?.state) { _, state in
+            updateDisplayHandoffProgress(for: state)
+        }
+        .task(id: model.snapshot?.state) {
+            await refreshRuntimeEvidenceWhileRunning()
+        }
+        .sheet(item: $presentedSheet) { _ in
+            VMSettingsSheet(model: model) { snapshot, policy in
+                ViewThatFits(in: .horizontal) {
+                    HStack(alignment: .top, spacing: 14) {
+                        setupColumn(snapshot, canChangeResources: policy.canChangeResources)
+                            .frame(minWidth: 380)
+                        runtimeDetailColumn(snapshot)
+                            .frame(minWidth: 380)
+                    }
+
+                    VStack(alignment: .leading, spacing: 14) {
+                        setupColumn(snapshot, canChangeResources: policy.canChangeResources)
+                        runtimeDetailColumn(snapshot)
+                    }
+                }
+            }
+        }
+        .alert(WindowsLicenseConsentPolicy.title, isPresented: $showsInstallerLicenseConfirmation) {
+            Button("Not Now", role: .cancel) {
+                clearPendingInstallerConsent()
+            }
+            Button(WindowsLicenseConsentPolicy.reviewButtonTitle) {
+                reviewLicenseTermsAndReopenInstallerConfirmation()
+            }
+            Button(WindowsLicenseConsentPolicy.acceptButtonTitle) {
+                prepareAcceptedInstallation()
+            }
+        } message: {
+            Text(WindowsLicenseConsentPolicy.message)
+        }
+    }
+
+    @ViewBuilder
+    private var runtimeOverview: some View {
         VStack(alignment: .leading, spacing: 14) {
             if let snapshot = model.snapshot {
                 WindowsSetupDisplayPanel(
@@ -98,7 +177,7 @@ struct VMRuntimeView: View {
                                 showsInstallerLicenseConfirmation = true
                             }
                         } else if !snapshot.windowsInstalled && (snapshot.installerMediaPath == nil || needsInstallerPickerAccess(snapshot)) {
-                            presentedSheet = .windowsDownload
+                            contentRoute = .windowsDownload
                         } else {
                             Task {
                                 await model.prepareDefaultVM()
@@ -187,7 +266,7 @@ struct VMRuntimeView: View {
                     primarySymbol: model.phase == .loading ? "arrow.triangle.2.circlepath" : "arrow.down.circle",
                     secondaryTitle: "Refresh",
                     primaryAction: {
-                        presentedSheet = .windowsDownload
+                        contentRoute = .windowsDownload
                     },
                     secondaryAction: {
                         Task {
@@ -198,69 +277,6 @@ struct VMRuntimeView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .fileImporter(
-            isPresented: Binding(
-                get: { pathPicker != nil },
-                set: { isPresented in
-                    if !isPresented {
-                        pathPicker = nil
-                    }
-                }
-            ),
-            allowedContentTypes: [.data],
-            allowsMultipleSelection: false
-        ) { result in
-            handlePathImport(result)
-        }
-        .onChange(of: model.snapshot?.state) { _, state in
-            updateDisplayHandoffProgress(for: state)
-        }
-        .task(id: model.snapshot?.state) {
-            await refreshRuntimeEvidenceWhileRunning()
-        }
-        .sheet(item: $presentedSheet) { destination in
-            switch destination {
-            case .settings:
-                VMSettingsSheet(model: model) { snapshot, policy in
-                    ViewThatFits(in: .horizontal) {
-                        HStack(alignment: .top, spacing: 14) {
-                            setupColumn(snapshot, canChangeResources: policy.canChangeResources)
-                                .frame(minWidth: 380)
-                            runtimeDetailColumn(snapshot)
-                                .frame(minWidth: 380)
-                        }
-
-                        VStack(alignment: .leading, spacing: 14) {
-                            setupColumn(snapshot, canChangeResources: policy.canChangeResources)
-                            runtimeDetailColumn(snapshot)
-                        }
-                    }
-                }
-            case .windowsDownload:
-                WindowsDownloadSheet(
-                    prepareDownloadedISO: prepareDownloadedISO,
-                    useExistingISO: {
-                        Task { @MainActor in
-                            try? await Task.sleep(for: .milliseconds(250))
-                            pathPicker = .installerAndStart
-                        }
-                    }
-                )
-            }
-        }
-        .alert(WindowsLicenseConsentPolicy.title, isPresented: $showsInstallerLicenseConfirmation) {
-            Button("Not Now", role: .cancel) {
-                clearPendingInstallerConsent()
-            }
-            Button(WindowsLicenseConsentPolicy.reviewButtonTitle) {
-                reviewLicenseTermsAndReopenInstallerConfirmation()
-            }
-            Button(WindowsLicenseConsentPolicy.acceptButtonTitle) {
-                prepareAcceptedInstallation()
-            }
-        } message: {
-            Text(WindowsLicenseConsentPolicy.message)
-        }
     }
 
     private func canShowDisplay(for snapshot: VMRuntimeSnapshot) -> Bool {
@@ -3540,6 +3556,11 @@ private enum PathPicker: Identifiable, Equatable {
             "virtualDisk"
         }
     }
+}
+
+private enum VMRuntimeContentRoute: Equatable {
+    case overview
+    case windowsDownload
 }
 
 private enum PendingInstallerConsent {

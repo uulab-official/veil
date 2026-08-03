@@ -72,3 +72,18 @@ test("Windows setup requires explicit license consent for downloaded and selecte
   assert.match(appSource, /startWindowsFromMenuAction/);
   assert.match(appSource, /guard vmModel\.snapshot\?\.windowsInstalled == true/);
 });
+
+test("Windows download occupies the main content area instead of a nested sheet", async () => {
+  const downloadScreen = await readRootFile("apps/mac-host/Sources/VeilHostShell/Views/WindowsDownloadSheet.swift");
+  const runtimeView = await readRootFile("apps/mac-host/Sources/VeilHostShell/Views/VMRuntimeView.swift");
+  const settingsSheet = await readRootFile("apps/mac-host/Sources/VeilHostShell/Views/VMSettingsSheet.swift");
+
+  assert.match(downloadScreen, /struct WindowsDownloadScreen: View/);
+  assert.match(downloadScreen, /Label\("Back", systemImage: "chevron\.left"\)/);
+  assert.match(downloadScreen, /\.frame\(maxWidth: \.infinity, maxHeight: \.infinity\)/);
+  assert.doesNotMatch(downloadScreen, /@Environment\(\\\.dismiss\)/);
+  assert.doesNotMatch(downloadScreen, /\.frame\(minWidth: 820, minHeight: 560\)/);
+  assert.match(runtimeView, /VMRuntimeContentRoute/);
+  assert.match(runtimeView, /case \.windowsDownload:[\s\S]*WindowsDownloadScreen/);
+  assert.doesNotMatch(settingsSheet, /case windowsDownload/);
+});
