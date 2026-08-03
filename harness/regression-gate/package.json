@@ -1,0 +1,8 @@
+{
+  "name": "@veil/regression-gate-harness",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test"
+  }
+}
