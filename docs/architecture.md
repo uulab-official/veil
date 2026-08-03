@@ -45,7 +45,7 @@ Veil should not require a cloud service or remote VM backend to run Windows apps
 Current provider status:
 
 - QEMU/HVF: active local compatibility provider for the visible Windows installer console path. The macOS host prefers this provider when `qemu-system-aarch64` and Arm EDK2 firmware are installed and the profile passes readiness checks.
-- Apple Virtualization: fallback feasibility provider for profile, disk, EFI, console, and boot attempts. It remains important, but it is not currently the leading path for Windows installer visibility.
+- Apple Virtualization: automatic fallback provider when QEMU is unavailable. The host starts the existing Virtualization.framework runtime and opens a native `VZVirtualMachineView` console so a missing QEMU executable no longer produces a display-less start attempt. QEMU-only guest setup automation is still unavailable in this fallback.
 
 The provider probe is intentionally read-only. `veil-vmctl providers --json` reports candidate providers for diagnostics and harness validation, but it must not start, stop, create, or mutate a VM.
 

@@ -2141,11 +2141,17 @@ private struct WindowsSetupDisplayPanel: View {
         }
 
         if snapshot.bootReady {
-            return "Press play to start Windows in this window"
+            return snapshot.runtimeProvider?.kind == .appleVirtualization
+                ? "Windows will open in an Apple Virtualization console"
+                : "Press play to start Windows in this window"
         }
 
         if installerNeedsFilePickerAccess {
             return "Re-select the ISO to grant macOS file access"
+        }
+
+        if snapshot.runtimeProvider?.kind == .appleVirtualization {
+            return "Apple Virtualization fallback • bring your Windows 11 Arm installer"
         }
 
         return "Bring your own Windows 11 Arm installer"

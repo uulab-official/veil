@@ -3,15 +3,8 @@ import SwiftUI
 import VeilHostCore
 
 private enum AppRuntimeBooterFactory {
-    static func make() -> QEMUVMRuntimeBooter {
-        if ProcessInfo.processInfo.environment["VEIL_USE_NATIVE_QEMU_DISPLAY"] == "1" {
-            return QEMUVMRuntimeBooter.shared
-        }
-
-        return QEMUVMRuntimeBooter(
-            frontmostRunner: {},
-            displayMode: .vncLoopback
-        )
+    static func make() -> AppRuntimeBooter {
+        AppRuntimeBooter.make()
     }
 }
 
@@ -71,7 +64,7 @@ private struct ShellMultiAppLatencySummary {
 @main
 struct VeilHostShellApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
-    private let vmRuntimeBooter: QEMUVMRuntimeBooter
+    private let vmRuntimeBooter: AppRuntimeBooter
     private let windowsAppWindowPresenter = WindowsAppWindowPresenter()
     private let agentTransport: URLSessionWebSocketTransport
     private let windowsNotificationPresenter = WindowsNotificationPresenter(center: MacUserNotificationCenter())
@@ -2515,7 +2508,7 @@ private enum MainWindowChrome {
 }
 
 private struct StandaloneMainWindowRoot: View {
-    private let vmRuntimeBooter: QEMUVMRuntimeBooter
+    private let vmRuntimeBooter: AppRuntimeBooter
     @State private var model: HostDashboardModel
     @State private var vmModel: VMRuntimeModel
     @State private var displayMessage: String?
