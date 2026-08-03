@@ -41,7 +41,7 @@ struct VMRuntimeView: View {
     var quietWindowsWhenIdleAction: () -> Void
     var displayMessage: String?
     @State private var pathPicker: PathPicker?
-    @State private var showsAdvancedDetails = false
+    @State private var presentedSheet: VMRuntimeSheetDestination?
     @State private var installSimulation = InstallSimulationState.idle
 
     var body: some View {
@@ -146,9 +146,8 @@ struct VMRuntimeView: View {
                         }
                     },
                     detailsAction: {
-                        showsAdvancedDetails.toggle()
+                        presentedSheet = .settings
                     },
-                    isShowingDetails: showsAdvancedDetails,
                     installSimulation: installSimulation
                 )
             } else if let errorMessage = model.errorMessage {
@@ -210,25 +209,21 @@ struct VMRuntimeView: View {
         .task(id: model.snapshot?.state) {
             await refreshRuntimeEvidenceWhileRunning()
         }
-        .popover(isPresented: $showsAdvancedDetails, arrowEdge: .bottom) {
-            if let snapshot = model.snapshot {
-                ScrollView {
-                    ViewThatFits(in: .horizontal) {
-                        HStack(alignment: .top, spacing: 14) {
-                            setupColumn(snapshot)
-                                .frame(minWidth: 380)
-                            runtimeDetailColumn(snapshot)
-                                .frame(minWidth: 380)
-                        }
-
-                        VStack(alignment: .leading, spacing: 14) {
-                            setupColumn(snapshot)
-                            runtimeDetailColumn(snapshot)
-                        }
+        .sheet(item: $presentedSheet) { _ in
+            VMSettingsSheet(model: model) { snapshot, policy in
+                ViewThatFits(in: .horizontal) {
+                    HStack(alignment: .top, spacing: 14) {
+                        setupColumn(snapshot, canChangeResources: policy.canChangeResources)
+                            .frame(minWidth: 380)
+                        runtimeDetailColumn(snapshot)
+                            .frame(minWidth: 380)
                     }
-                    .padding(18)
+
+                    VStack(alignment: .leading, spacing: 14) {
+                        setupColumn(snapshot, canChangeResources: policy.canChangeResources)
+                        runtimeDetailColumn(snapshot)
+                    }
                 }
-                .frame(width: 860, height: 560)
             }
         }
     }
@@ -286,7 +281,10 @@ struct VMRuntimeView: View {
     }
 
     @ViewBuilder
-    private func setupColumn(_ snapshot: VMRuntimeSnapshot) -> some View {
+    private func setupColumn(
+        _ snapshot: VMRuntimeSnapshot,
+        canChangeResources: Bool
+    ) -> some View {
         VStack(alignment: .leading, spacing: 14) {
             SetupAssistantPanel(
                 snapshot: snapshot,
@@ -311,7 +309,8 @@ struct VMRuntimeView: View {
                         await model.createDefaultVirtualDisk()
                     }
                 },
-                isLoading: model.phase == .loading
+                isLoading: model.phase == .loading,
+                canChangeResources: canChangeResources
             )
 
             if !snapshot.installationSteps.isEmpty {
@@ -1425,7 +1424,6 @@ private struct WindowsSetupDisplayPanel: View {
     var consolePointerTapAction: (Double, Double) -> Void
     var consoleKeyAction: (String) -> Void
     var detailsAction: () -> Void
-    var isShowingDetails: Bool
     var installSimulation: InstallSimulationState
     @State private var showsAgentDiagnosticPopover = false
     // A running VM should open on its actual Windows display. The launcher is the
@@ -1545,9 +1543,7 @@ private struct WindowsSetupDisplayPanel: View {
 
             Spacer(minLength: 12)
 
-            if !canStop && snapshot.state != .starting {
-                runtimeSetupMenu
-            }
+            runtimeSettingsButton
 
             if hasDesktopDisplay || canStop || snapshot.state == .starting {
                 Button(action: runEffectivePrimaryAction) {
@@ -1559,7 +1555,9 @@ private struct WindowsSetupDisplayPanel: View {
                 .disabled(effectivePrimaryDisabled)
             }
 
-            runtimeMoreMenu
+            if hasRuntimeMoreActions {
+                runtimeMoreMenu
+            }
         }
         .controlSize(.regular)
         .padding(.horizontal, 14)
@@ -1782,30 +1780,25 @@ private struct WindowsSetupDisplayPanel: View {
                     .help(showsFullDesktop ? "Return to the Windows app launcher" : "Show the live Windows desktop")
             }
 
-            runtimeMoreMenu
+            Button(action: detailsAction) {
+                Label("Settings", systemImage: "gearshape.fill")
+                    .labelStyle(.iconOnly)
+            }
+            .disabled(isLoading)
+            .help("Open Windows settings")
+
+            if hasRuntimeMoreActions {
+                runtimeMoreMenu
+            }
         }
     }
 
-    @ViewBuilder
-    private var runtimeSetupMenu: some View {
-        Menu("Setup", systemImage: "gearshape.fill") {
-            Button("Choose ISO", systemImage: "opticaldisc") {
-                selectInstallerAction()
-            }
-            .disabled(isLoading || snapshot.state == .running || snapshot.state == .starting)
-
-            Button("Choose Drivers", systemImage: "externaldrive.badge.gearshape") {
-                selectDriverAction()
-            }
-            .disabled(isLoading || snapshot.state == .running || snapshot.state == .starting)
-
-            Button("Prepare Windows", systemImage: "wand.and.stars") {
-                prepareAction()
-            }
-            .disabled(isLoading || snapshot.state == .running || snapshot.state == .starting)
+    private var runtimeSettingsButton: some View {
+        Button(action: detailsAction) {
+            Label("Settings", systemImage: "gearshape.fill")
         }
-        .disabled(isLoading || snapshot.state == .running || snapshot.state == .starting)
-        .help("Show setup actions")
+        .disabled(isLoading)
+        .help("Open Windows settings")
     }
 
     @ViewBuilder
@@ -1878,33 +1871,6 @@ private struct WindowsSetupDisplayPanel: View {
                 }
             }
 
-            Button("Refresh", systemImage: "arrow.clockwise") {
-                refreshAction()
-            }
-            .disabled(isLoading)
-
-            Button(isShowingDetails ? "Hide Details" : "Show Details", systemImage: "slider.horizontal.3") {
-                detailsAction()
-            }
-            .disabled(isLoading)
-
-            if !effectiveInstallEvidence.isInstalled {
-                Button("Prepare Windows", systemImage: "wand.and.stars") {
-                    prepareAction()
-                }
-                .disabled(isLoading || snapshot.state == .running || snapshot.state == .starting)
-
-                Button("Choose ISO", systemImage: "opticaldisc") {
-                    selectInstallerAction()
-                }
-                .disabled(isLoading || snapshot.state == .running || snapshot.state == .starting)
-
-                Button("Choose Drivers", systemImage: "externaldrive.badge.gearshape") {
-                    selectDriverAction()
-                }
-                .disabled(isLoading || snapshot.state == .running || snapshot.state == .starting)
-            }
-
             if canMarkWindowsInstalled {
                 Button("Mark Installed", systemImage: "checkmark.seal") {
                     markWindowsInstalledAction()
@@ -1920,6 +1886,13 @@ private struct WindowsSetupDisplayPanel: View {
                 .help("Run the strongest available Windows app check")
             }
         }
+    }
+
+    private var hasRuntimeMoreActions: Bool {
+        canInstallGuestAgent
+            || canWaitForGuestAgent
+            || canMarkWindowsInstalled
+            || recommendedProofCommand != nil
     }
 
     private var selectedInstallerName: String? {
@@ -3216,6 +3189,7 @@ private struct SetupAssistantPanel: View {
     var selectDiskAction: () -> Void
     var createDiskAction: () -> Void
     var isLoading: Bool
+    var canChangeResources: Bool
 
     private var items: [SetupItem] {
         [
@@ -3282,31 +3256,31 @@ private struct SetupAssistantPanel: View {
                         Label("Prepare", systemImage: "wand.and.stars")
                     }
                     .buttonStyle(.borderedProminent)
-                    .disabled(isLoading)
+                    .disabled(isLoading || !canChangeResources)
 
                     Button(action: createProfileAction) {
                         Label("Profile Only", systemImage: "plus.circle")
                     }
-                    .disabled(isLoading)
+                    .disabled(isLoading || !canChangeResources)
                 }
 
                 if !snapshot.windowsInstalled {
                     Button(action: selectInstallerAction) {
                         Label("Installer", systemImage: "opticaldisc")
                     }
-                    .disabled(snapshot.profileName == nil || isLoading)
+                    .disabled(snapshot.profileName == nil || isLoading || !canChangeResources)
                 }
 
                 Button(action: selectDiskAction) {
                     Label("Disk", systemImage: "externaldrive")
                 }
-                .disabled(snapshot.profileName == nil || isLoading)
+                .disabled(snapshot.profileName == nil || isLoading || !canChangeResources)
 
                 if snapshot.profileName != nil && snapshot.virtualDiskPath == nil {
                     Button(action: createDiskAction) {
                         Label("Create Disk", systemImage: "internaldrive")
                     }
-                    .disabled(isLoading)
+                    .disabled(isLoading || !canChangeResources)
                 }
 
                 Spacer()
