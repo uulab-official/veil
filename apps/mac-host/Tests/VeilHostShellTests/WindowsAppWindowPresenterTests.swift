@@ -224,8 +224,8 @@ struct WindowsAppWindowPresenterTests {
             isAppActive: true,
             isMainWindowKey: true,
             frame: MainWindowFrameReport(NSRect(x: 10, y: 20, width: 1440, height: 900)),
-            minWidth: 1180,
-            minHeight: 760,
+            minWidth: Double(MainWindowLayout.preferredMinimumSize.width),
+            minHeight: Double(MainWindowLayout.preferredMinimumSize.height),
             titlebarAppearsTransparent: true,
             hasFullSizeContentView: true,
             appIconSource: .bundled
@@ -244,12 +244,28 @@ struct WindowsAppWindowPresenterTests {
         #expect(duplicateWindowReport.meetsLauncherContract == false)
 
         var smallWindowReport = passingReport
-        smallWindowReport.frame = MainWindowFrameReport(NSRect(x: 10, y: 20, width: 900, height: 640))
+        smallWindowReport.frame = MainWindowFrameReport(NSRect(x: 10, y: 20, width: 780, height: 520))
         #expect(smallWindowReport.meetsLauncherContract == false)
 
         var fallbackIconReport = passingReport
         fallbackIconReport.appIconSource = .fallback
         #expect(fallbackIconReport.meetsLauncherContract == false)
+    }
+
+    @Test("main window layout fits regular and compact displays")
+    func mainWindowLayoutFitsVisibleDisplay() {
+        #expect(
+            MainWindowLayout.fittedSize(for: CGSize(width: 1512, height: 982))
+                == MainWindowLayout.preferredSize
+        )
+
+        let compactMinimum = MainWindowLayout.minimumSize(for: CGSize(width: 1024, height: 640))
+        #expect(compactMinimum.width == 900)
+        #expect(abs(compactMinimum.height - 614.4) < 0.001)
+
+        let compactFitted = MainWindowLayout.fittedSize(for: CGSize(width: 1024, height: 640))
+        #expect(abs(compactFitted.width - 983.04) < 0.001)
+        #expect(abs(compactFitted.height - 614.4) < 0.001)
     }
 
     @Test("does not present an unexpected second app window")

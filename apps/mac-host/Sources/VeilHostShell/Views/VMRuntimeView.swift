@@ -1482,6 +1482,35 @@ private struct WindowsSetupDisplayPanel: View {
         ZStack(alignment: .topTrailing) {
             launcherDisplaySurface
 
+            installedRuntimeChrome
+                .padding(showsFullDesktop ? 12 : 16)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    @ViewBuilder
+    private var installedRuntimeChrome: some View {
+        if showsFullDesktop {
+            Button {
+                showsFullDesktop = false
+            } label: {
+                Label("Show Apps", systemImage: "macwindow")
+                    .labelStyle(.iconOnly)
+                    .frame(width: 32, height: 32)
+                    .contentShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .background(.black.opacity(0.16), in: Circle())
+            .background(.ultraThinMaterial, in: Circle())
+            .overlay {
+                Circle()
+                    .strokeBorder(.white.opacity(0.18), lineWidth: 1)
+            }
+            .shadow(color: .black.opacity(0.24), radius: 10, y: 4)
+            .keyboardShortcut("a", modifiers: [.command, .shift])
+            .help("Show Windows apps (⇧⌘A)")
+            .accessibilityLabel("Show Windows apps")
+        } else {
             horizontalActions
                 .padding(.horizontal, 10)
                 .padding(.vertical, 8)
@@ -1491,9 +1520,7 @@ private struct WindowsSetupDisplayPanel: View {
                     Capsule()
                         .strokeBorder(.white.opacity(0.14), lineWidth: 1)
                 }
-                .padding(16)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var installProcessStage: some View {
@@ -1780,7 +1807,9 @@ private struct WindowsSetupDisplayPanel: View {
                     )
                     .labelStyle(.iconOnly)
                 }
-                    .help(showsFullDesktop ? "Return to the Windows app launcher" : "Show the live Windows desktop")
+                .keyboardShortcut("a", modifiers: [.command, .shift])
+                .help(showsFullDesktop ? "Return to the Windows app launcher" : "Show the live Windows desktop (⇧⌘A)")
+                .accessibilityLabel(showsFullDesktop ? "Show Windows apps" : "Show Windows desktop")
             }
 
             Button(action: detailsAction) {
