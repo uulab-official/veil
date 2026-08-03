@@ -9,7 +9,7 @@ Date: 2026-08-02
 - [x] Swift host 패키지가 컴파일된다.
   - 확인: `swift test --disable-sandbox` 빌드 단계 통과.
 - [x] Swift 테스트 전체 통과.
-  - 확인: clean feature 기준 `swift test --disable-sandbox` — 354 tests / 23 suites.
+  - 확인: clean feature 기준 `swift test --disable-sandbox` — 358 tests / 24 suites.
 - [ ] Windows agent `dotnet test` 통과.
 - [x] protocol 및 주요 harness 테스트 통과.
   - 확인: bundled Node로 protocol/harness 626 tests 통과; fake-agent 24개와 fake-host 8개 포함.
@@ -39,7 +39,8 @@ Date: 2026-08-02
   - 확인: 성공/실패 모델 테스트, 앱 번들 실행 검증, macOS 파일 선택기 진입 확인. 실제 Windows ISO 부팅 증거는 아래 실기 항목으로 유지한다.
 - [x] UI가 보고하는 provider와 실제 boot runner를 일치시키고 QEMU 미설치 시 Apple Virtualization 콘솔 fallback을 연다.
   - 확인: QEMU 우선, Apple fallback, 명시적 override 정책 테스트. 이 Mac의 진단은 QEMU 미설치와 Apple Virtualization active를 확인했다.
-- [ ] VM 설정을 별도 설정 시트로 분리한다.
+- [x] VM 설정을 별도 설정 시트로 분리한다.
+  - 확인: `.sheet(item:)` 기반 Windows Settings, 실행 상태별 리소스 잠금 정책 테스트 4개, 앱 UI에서 시트 열기/닫기와 첫 화면 중복 메뉴 제거 확인.
 - [ ] Windows ISO로 VM을 준비하고 QEMU/HVF 또는 Apple Virtualization으로 실제 Windows desktop 표시를 검증한다.
 
 ## P0 — Parallels급 기본 사용 루프
