@@ -338,6 +338,10 @@ struct VMRuntimeView: View {
 
             RuntimeProvidersPanel(snapshot: snapshot)
 
+            QEMUPrerequisitePanel {
+                Task { await model.load() }
+            }
+
             ResourcePlanPanel(snapshot: snapshot)
 
             DevicePlanPanel(snapshot: snapshot)
@@ -3435,6 +3439,44 @@ private struct RuntimeProvidersPanel: View {
             .planned
         case .unavailable:
             .blocked
+        }
+    }
+}
+
+private struct QEMUPrerequisitePanel: View {
+    var recheckAction: () -> Void
+    private var report: QEMURuntimePrerequisiteReport { .probe() }
+
+    var body: some View {
+        ShellPanel(spacing: 12) {
+            ShellPanelHeader(
+                title: "QEMU Runtime",
+                subtitle: report.isReady ? "Ready for the proved Windows app path." : "Install the local runtime required for Windows app integration.",
+                symbolName: report.isReady ? "checkmark.seal.fill" : "shippingbox"
+            )
+
+            ForEach(report.checks) { check in
+                ResourcePlanRow(
+                    title: check.title,
+                    value: check.detail,
+                    symbolName: check.isReady ? "checkmark.circle.fill" : "exclamationmark.circle",
+                    state: check.isReady ? .ready : .blocked
+                )
+            }
+
+            HStack {
+                Button("Copy Install Command", systemImage: "doc.on.doc") {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(QEMURuntimePrerequisiteReport.installCommand, forType: .string)
+                }
+                .disabled(report.isReady)
+
+                Button("Check Again", systemImage: "arrow.clockwise", action: recheckAction)
+                Spacer()
+                Text(QEMURuntimePrerequisiteReport.installCommand)
+                    .font(.caption.monospaced())
+                    .foregroundStyle(.secondary)
+            }
         }
     }
 }

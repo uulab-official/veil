@@ -16,6 +16,7 @@ Date: 2026-08-02
 - [ ] 기본 셸에서 `VM 시작 → agent 연결/복구 → 앱 실행 → mirrored window 표시`를 터미널 없이 완료.
 - [ ] Windows desktop이 일반 사용 경로에 노출되지 않고 recovery 때만 표시된다.
 - [ ] Secure Boot firmware와 virtio driver가 없는 경우 사용자가 다음 조치를 알 수 있다.
+- [x] QEMU Arm runtime, UEFI firmware, swtpm 준비 상태와 공식 Homebrew 설치 명령을 앱에서 확인하고 재검사한다.
 
 ## P0 — 기본 화면 UX 정리 (2026-08-03)
 
