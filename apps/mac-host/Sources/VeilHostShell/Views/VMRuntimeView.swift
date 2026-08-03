@@ -70,15 +70,18 @@ struct VMRuntimeView: View {
                         pathPicker = .driverMedia
                     },
                     primaryAction: {
-                        if canFulfillPendingLaunch {
+                        let installEvidence = validGuestAgentEvidence(for: snapshot) ?? snapshot.installEvidence
+                        let windowsReadyForApps = installEvidence.isInstalled
+
+                        if windowsReadyForApps && canFulfillPendingLaunch {
                             fulfillPendingLaunchAction()
                         } else if canRecoverRuntimeDisplay(for: snapshot) {
                             recoverRuntimeDisplayAction()
-                        } else if canRequestWindowsAppLaunch {
+                        } else if windowsReadyForApps && canRequestWindowsAppLaunch {
                             launchWindowsAppAction()
-                        } else if pendingLaunch.willLaunchOnAgentReconnect && canShowDisplay(for: snapshot) {
+                        } else if windowsReadyForApps && pendingLaunch.willLaunchOnAgentReconnect && canShowDisplay(for: snapshot) {
                             repairGuestAgentForAppLaunchAction()
-                        } else if canInstallGuestAgent(for: snapshot) {
+                        } else if windowsReadyForApps && canInstallGuestAgent(for: snapshot) {
                             installGuestAgentAction()
                         } else if model.canStop {
                             stopVMAction()
@@ -1649,29 +1652,31 @@ private struct WindowsSetupDisplayPanel: View {
     }
 
     private var installPrimaryTitle: String {
-        if canFulfillPendingLaunch {
-            return "Open \(pendingAppDisplayName)"
-        }
-
         if canRecoverRuntimeDisplay {
             return "Refresh Display"
         }
 
-        if pendingLaunch.willLaunchOnAgentReconnect {
-            switch snapshot.state {
-            case .running, .starting:
-                return "Repair App Connection"
-            default:
-                return "Continue Opening \(pendingAppDisplayName)"
+        if effectiveInstallEvidence.isInstalled {
+            if canFulfillPendingLaunch {
+                return "Open \(pendingAppDisplayName)"
             }
-        }
 
-        if canRequestWindowsAppLaunch {
-            return selectedWindowsAppName.map { "Open \($0)" } ?? "Open Windows App"
-        }
+            if pendingLaunch.willLaunchOnAgentReconnect {
+                switch snapshot.state {
+                case .running, .starting:
+                    return "Repair App Connection"
+                default:
+                    return "Continue Opening \(pendingAppDisplayName)"
+                }
+            }
 
-        if canInstallGuestAgent {
-            return "Repair App Connection"
+            if canRequestWindowsAppLaunch {
+                return selectedWindowsAppName.map { "Open \($0)" } ?? "Open Windows App"
+            }
+
+            if canInstallGuestAgent {
+                return "Repair App Connection"
+            }
         }
 
         if canStop {
@@ -2090,32 +2095,32 @@ private struct WindowsSetupDisplayPanel: View {
     }
 
     private var machineTitle: String {
-        "Windows 11"
+        effectiveInstallEvidence.isInstalled ? "Windows 11" : "Install Windows 11"
     }
 
     private var machineSubtitle: String {
-        if let activeMirrorSession {
-            return "\(activeMirrorSession.window.title) is open as a Mac window"
-        }
-
-        if canFulfillPendingLaunch {
-            return "Open \(pendingAppDisplayName) as a Mac window"
-        }
-
-        if pendingLaunch.willLaunchOnAgentReconnect {
-            switch snapshot.state {
-            case .running, .starting:
-                return "\(pendingAppDisplayName) will open when the app connection is ready"
-            default:
-                return "\(pendingAppDisplayName) is queued. Start Windows to continue"
-            }
-        }
-
-        if canRequestWindowsAppLaunch {
-            return "Open Windows apps from macOS"
-        }
-
         if effectiveInstallEvidence.isInstalled {
+            if let activeMirrorSession {
+                return "\(activeMirrorSession.window.title) is open as a Mac window"
+            }
+
+            if canFulfillPendingLaunch {
+                return "Open \(pendingAppDisplayName) as a Mac window"
+            }
+
+            if pendingLaunch.willLaunchOnAgentReconnect {
+                switch snapshot.state {
+                case .running, .starting:
+                    return "\(pendingAppDisplayName) will open when the app connection is ready"
+                default:
+                    return "\(pendingAppDisplayName) is queued. Start Windows to continue"
+                }
+            }
+
+            if canRequestWindowsAppLaunch {
+                return "Open Windows apps from macOS"
+            }
+
             return effectiveInstallEvidence.kind == .guestAgent
                 ? "App connection ready"
                 : "Connect app integration to open Mac windows"
@@ -2156,29 +2161,31 @@ private struct WindowsSetupDisplayPanel: View {
     }
 
     private var primaryTitle: String {
-        if canFulfillPendingLaunch {
-            return "Open \(pendingAppDisplayName)"
-        }
-
         if canRecoverRuntimeDisplay {
             return "Refresh Display"
         }
 
-        if pendingLaunch.willLaunchOnAgentReconnect {
-            switch snapshot.state {
-            case .running, .starting:
-                return "Repair App Connection"
-            default:
-                return "Continue Opening \(pendingAppDisplayName)"
+        if effectiveInstallEvidence.isInstalled {
+            if canFulfillPendingLaunch {
+                return "Open \(pendingAppDisplayName)"
             }
-        }
 
-        if canRequestWindowsAppLaunch {
-            return "Open \(appDisplayName)"
-        }
+            if pendingLaunch.willLaunchOnAgentReconnect {
+                switch snapshot.state {
+                case .running, .starting:
+                    return "Repair App Connection"
+                default:
+                    return "Continue Opening \(pendingAppDisplayName)"
+                }
+            }
 
-        if canInstallGuestAgent {
-            return "Repair App Connection"
+            if canRequestWindowsAppLaunch {
+                return "Open \(appDisplayName)"
+            }
+
+            if canInstallGuestAgent {
+                return "Repair App Connection"
+            }
         }
 
         if canStop {
@@ -2205,18 +2212,20 @@ private struct WindowsSetupDisplayPanel: View {
             return "display.trianglebadge.exclamationmark"
         }
 
-        if canFulfillPendingLaunch || pendingLaunch.willLaunchOnAgentReconnect {
-            return pendingLaunch.willLaunchOnAgentReconnect && !canFulfillPendingLaunch
-                ? "bolt.horizontal.circle"
-                : "macwindow.badge.plus"
-        }
+        if effectiveInstallEvidence.isInstalled {
+            if canFulfillPendingLaunch || pendingLaunch.willLaunchOnAgentReconnect {
+                return pendingLaunch.willLaunchOnAgentReconnect && !canFulfillPendingLaunch
+                    ? "bolt.horizontal.circle"
+                    : "macwindow.badge.plus"
+            }
 
-        if canRequestWindowsAppLaunch {
-            return "macwindow.badge.plus"
-        }
+            if canRequestWindowsAppLaunch {
+                return "macwindow.badge.plus"
+            }
 
-        if canInstallGuestAgent {
-            return "person.crop.circle.badge.plus"
+            if canInstallGuestAgent {
+                return "person.crop.circle.badge.plus"
+            }
         }
 
         if canStop {
@@ -2235,21 +2244,23 @@ private struct WindowsSetupDisplayPanel: View {
     }
 
     private var primaryHint: String {
-        if canFulfillPendingLaunch {
-            return "Open the queued \(pendingAppDisplayName) launch as a Mac-managed window."
-        }
-
-        if pendingLaunch.willLaunchOnAgentReconnect {
-            switch snapshot.state {
-            case .running, .starting:
-                return "Windows is running; Veil is waiting for the app connection before opening \(pendingAppDisplayName)."
-            default:
-                return "Start Windows, wait for the app connection, then open \(pendingAppDisplayName)."
+        if effectiveInstallEvidence.isInstalled {
+            if canFulfillPendingLaunch {
+                return "Open the queued \(pendingAppDisplayName) launch as a Mac-managed window."
             }
-        }
 
-        if canRequestWindowsAppLaunch {
-            return "Launch \(appDisplayName) as a Mac-managed window."
+            if pendingLaunch.willLaunchOnAgentReconnect {
+                switch snapshot.state {
+                case .running, .starting:
+                    return "Windows is running; Veil is waiting for the app connection before opening \(pendingAppDisplayName)."
+                default:
+                    return "Start Windows, wait for the app connection, then open \(pendingAppDisplayName)."
+                }
+            }
+
+            if canRequestWindowsAppLaunch {
+                return "Launch \(appDisplayName) as a Mac-managed window."
+            }
         }
 
         if canStop {

@@ -24,8 +24,18 @@ Date: 2026-08-02
 - [x] 진단·프린터·복구·릴리스 검증 정보는 `More` 경로로 이동한다.
 - [x] 화면 단순화 후 Swift 테스트와 앱 번들 실행 검증을 다시 통과한다.
 - [x] 실행 중인 VM에 실제 display surface가 있으면 런처 대신 Windows 화면을 기본으로 연다.
-- [ ] 앱 아이콘 타일 중심의 런처 화면으로 바꾸고 VM 설정은 별도 설정 시트로 분리한다.
+- [x] 드롭다운 앱 선택을 앱 아이콘 타일 중심의 즉시 실행 런처로 바꾼다.
+- [x] Windows가 설치되지 않은 상태에서는 앱 실행보다 설치 동작을 우선한다.
+- [ ] VM 설정을 별도 설정 시트로 분리한다.
 - [ ] Windows ISO로 VM을 준비하고 QEMU/HVF 또는 Apple Virtualization으로 실제 Windows desktop 표시를 검증한다.
+
+## P0 — Parallels급 기본 사용 루프
+
+- [ ] 첫 실행에서 Windows 11 Arm ISO 선택부터 VM 생성·설치 시작까지 한 화면에서 완료한다.
+- [ ] 앱 셸에서 `Windows 시작 → guest agent 연결/복구 → 선택 앱 실행 → macOS 창 표시`를 터미널 없이 완료한다.
+- [ ] Windows 부팅 중에는 라이브 display surface와 명확한 부팅 상태를 함께 표시한다.
+- [ ] Windows 설치 후에는 설정 화면보다 앱 타일 런처가 기본 화면이 된다.
+- [ ] Developer ID 서명과 notarization으로 다른 Mac에서도 “손상됨” 없이 실행한다.
 
 ## P1 — 실기 검증이 필요한 기능
 
