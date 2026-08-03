@@ -9,7 +9,7 @@ Date: 2026-08-02
 - [x] Swift host 패키지가 컴파일된다.
   - 확인: `swift test --disable-sandbox` 빌드 단계 통과.
 - [x] Swift 테스트 전체 통과.
-  - 확인: clean `develop` 기준 `swift test --disable-sandbox` — 337 tests / 19 suites.
+  - 확인: clean `develop` 기준 `swift test --disable-sandbox` — 345 tests / 21 suites.
 - [ ] Windows agent `dotnet test` 통과.
 - [x] protocol 및 주요 harness 테스트 통과.
   - 확인: bundled Node로 protocol/harness 626 tests 통과; fake-agent 24개와 fake-host 8개 포함.
@@ -25,7 +25,9 @@ Date: 2026-08-02
 - [x] 화면 단순화 후 Swift 테스트와 앱 번들 실행 검증을 다시 통과한다.
 - [x] 실행 중인 VM에 실제 display surface가 있으면 런처 대신 Windows 화면을 기본으로 연다.
 - [x] Apple Virtualization fallback의 네이티브 VM 화면을 별도 창이 아닌 메인 Windows 카드에 임베드한다.
-  - 확인: Apple/QEMU/stopped 표시 경로 테스트 3개와 Swift 전체 테스트 340개 통과.
+  - 확인: Apple/QEMU/stopped 표시 경로 테스트 3개 통과.
+- [x] VM provider별 guest-agent endpoint를 분리하고 Apple fallback에서 QEMU loopback을 잘못 재시도하지 않는다.
+  - 확인: QEMU loopback, Apple unavailable, 명시적 WebSocket override, 잘못된 override, 무재시도 진단 테스트 5개 통과.
 - [x] 드롭다운 앱 선택을 앱 아이콘 타일 중심의 즉시 실행 런처로 바꾼다.
 - [x] Windows가 설치되지 않은 상태에서는 앱 실행보다 설치 동작을 우선한다.
 - [x] 설치 전에는 앱 카탈로그와 중복 CTA를 숨기고 Windows 설정 화면 하나만 표시한다.

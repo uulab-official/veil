@@ -1,6 +1,17 @@
 import Foundation
 import Observation
 
+public enum HostDashboardServiceError: Error, LocalizedError, Equatable, Sendable {
+    case agentEndpointUnavailable(endpoint: String, detail: String, nextActions: [String])
+
+    public var errorDescription: String? {
+        switch self {
+        case .agentEndpointUnavailable(_, let detail, _):
+            detail
+        }
+    }
+}
+
 public protocol HostDashboardService: Sendable {
     func loadOverview() async throws -> HostOverview
     func launchApp(appId: String) async throws -> WindowsAppLaunchResult
@@ -4010,10 +4021,19 @@ public final class HostDashboardModel {
             phase = .connected
         } catch {
             errorMessage = userMessage(for: error)
-            agentDiagnostic = AgentConnectionDiagnostic.unavailable(
-                endpoint: "configured Windows agent",
-                errorMessage: userMessage(for: error)
-            )
+            if case .agentEndpointUnavailable(let endpoint, let detail, let nextActions) = error as? HostDashboardServiceError {
+                agentDiagnostic = AgentConnectionDiagnostic(
+                    status: .unavailable,
+                    endpoint: endpoint,
+                    errorMessage: detail,
+                    nextActions: nextActions
+                )
+            } else {
+                agentDiagnostic = AgentConnectionDiagnostic.unavailable(
+                    endpoint: "configured Windows agent",
+                    errorMessage: userMessage(for: error)
+                )
+            }
             phase = .failed
         }
     }

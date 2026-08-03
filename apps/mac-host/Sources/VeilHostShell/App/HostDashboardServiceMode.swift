@@ -16,10 +16,17 @@ enum HostDashboardServiceMode: Equatable {
         return .live
     }
 
-    func makeService(transport: URLSessionWebSocketTransport) -> any HostDashboardService {
+    func makeService(
+        transport: URLSessionWebSocketTransport?,
+        connectionPlan: AppGuestAgentConnectionPlan
+    ) -> any HostDashboardService {
         switch self {
         case .live:
-            VeilHostClient(transport: transport)
+            if let transport, connectionPlan.isAvailable {
+                VeilHostClient(transport: transport)
+            } else {
+                UnavailableGuestAgentService(plan: connectionPlan)
+            }
         case .demo:
             DemoHostDashboardService()
         }

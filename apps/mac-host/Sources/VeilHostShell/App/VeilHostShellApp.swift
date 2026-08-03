@@ -66,7 +66,8 @@ struct VeilHostShellApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     private let vmRuntimeBooter: AppRuntimeBooter
     private let windowsAppWindowPresenter = WindowsAppWindowPresenter()
-    private let agentTransport: URLSessionWebSocketTransport
+    private let agentTransport: URLSessionWebSocketTransport?
+    private let agentConnectionPlan: AppGuestAgentConnectionPlan
     private let windowsNotificationPresenter = WindowsNotificationPresenter(center: MacUserNotificationCenter())
     @State private var model: HostDashboardModel
     @State private var vmModel: VMRuntimeModel
@@ -82,14 +83,17 @@ struct VeilHostShellApp: App {
 
     init() {
         let runtimeBooter = AppRuntimeBooterFactory.make()
-        let transport = URLSessionWebSocketTransport(
-            url: URL(string: Self.agentURLString)!
-        )
+        let connectionPlan = AppGuestAgentConnectionPlan.resolve(provider: runtimeBooter.provider)
+        let transport = connectionPlan.endpointURL.map { URLSessionWebSocketTransport(url: $0) }
         self.vmRuntimeBooter = runtimeBooter
         self.agentTransport = transport
+        self.agentConnectionPlan = connectionPlan
         _model = State(
             initialValue: HostDashboardModel(
-                service: HostDashboardServiceMode.resolve().makeService(transport: transport)
+                service: HostDashboardServiceMode.resolve().makeService(
+                    transport: transport,
+                    connectionPlan: connectionPlan
+                )
             )
         )
         _vmModel = State(
@@ -285,8 +289,8 @@ struct VeilHostShellApp: App {
         .menuBarExtraStyle(.menu)
     }
 
-    private static var agentURLString: String {
-        ProcessInfo.processInfo.environment["VEIL_AGENT_URL"] ?? "ws://127.0.0.1:18444"
+    private var agentURLString: String {
+        agentConnectionPlan.endpoint
     }
 
     private static var shouldStartVMOnLaunch: Bool {
@@ -305,7 +309,9 @@ struct VeilHostShellApp: App {
     }
 
     private func startAgentEventPumpIfNeeded() {
-        guard agentEventTask == nil else {
+        guard agentEventTask == nil,
+              agentConnectionPlan.isAvailable,
+              let agentTransport else {
             return
         }
 
@@ -364,7 +370,8 @@ struct VeilHostShellApp: App {
     }
 
     private func startAgentReconnectPollerIfNeeded() {
-        guard agentReconnectTask == nil else {
+        guard agentReconnectTask == nil,
+              agentConnectionPlan.isAvailable else {
             return
         }
 
@@ -1016,7 +1023,7 @@ struct VeilHostShellApp: App {
         appId: String,
         reviewEvidenceFolder: ReviewEvidenceFolder? = nil
     ) async throws -> URL {
-        let transport = URLSessionWebSocketTransport(url: URL(string: Self.agentURLString)!)
+        let transport = URLSessionWebSocketTransport(url: URL(string: agentURLString)!)
         let client = VeilHostClient(transport: transport)
         let directory = QEMUVMRuntimeBooter.defaultDiagnosticsDirectory()
             .appendingPathComponent("Recommended Proof", isDirectory: true)
@@ -1027,7 +1034,7 @@ struct VeilHostShellApp: App {
         case "app-window":
             var report = try await client.proveAppWindow(
                 appId: appId,
-                endpoint: Self.agentURLString,
+                endpoint: agentURLString,
                 eventSource: transport
             )
             let outputURL = directory.appendingPathComponent("app-window-proof-\(stamp).json")
@@ -1037,7 +1044,7 @@ struct VeilHostShellApp: App {
         case "coherence":
             var report = try await client.proveCoherenceAppWindow(
                 appId: appId,
-                endpoint: Self.agentURLString,
+                endpoint: agentURLString,
                 eventSource: transport
             )
             let outputURL = directory.appendingPathComponent("coherence-proof-\(stamp).json")
@@ -1047,7 +1054,7 @@ struct VeilHostShellApp: App {
         case "mvp":
             var report = try await client.proveMVPAppRuntime(
                 appId: appId,
-                endpoint: Self.agentURLString,
+                endpoint: agentURLString,
                 eventSource: transport,
                 waitSeconds: 30,
                 proofTimeoutNanoseconds: 30_000_000_000
@@ -1063,7 +1070,7 @@ struct VeilHostShellApp: App {
     }
 
     private func writeNotificationProof() async throws -> URL {
-        let transport = URLSessionWebSocketTransport(url: URL(string: Self.agentURLString)!)
+        let transport = URLSessionWebSocketTransport(url: URL(string: agentURLString)!)
         let client = VeilHostClient(transport: transport)
         let directory = QEMUVMRuntimeBooter.defaultDiagnosticsDirectory()
             .appendingPathComponent("Notification Proof", isDirectory: true)
@@ -1071,7 +1078,7 @@ struct VeilHostShellApp: App {
 
         let outputURL = directory.appendingPathComponent("notification-proof-\(Self.diagnosticTimestamp()).json")
         var report = await client.proveWindowsNotificationBridge(
-            endpoint: Self.agentURLString,
+            endpoint: agentURLString,
             eventSource: transport,
             waitSeconds: 30,
             notificationTimeoutNanoseconds: 30_000_000_000
@@ -1083,7 +1090,7 @@ struct VeilHostShellApp: App {
 
     private func writeMultiAppProof() async throws -> URL {
         let appIds = WindowsAppRuntimeProofCoverageDefaults.targetAppIds
-        let endpoint = Self.agentURLString
+        let endpoint = agentURLString
         let diagnosticsDirectory = QEMUVMRuntimeBooter.defaultDiagnosticsDirectory()
         let coherenceProofDirectory = diagnosticsDirectory
             .appendingPathComponent("Coherence Proof", isDirectory: true)
@@ -1404,7 +1411,7 @@ struct VeilHostShellApp: App {
                 await vmModel.refreshRuntimeEvidence()
 
                 let report = await model.waitForLiveAgentConnection(
-                    endpoint: Self.agentURLString,
+                    endpoint: agentURLString,
                     timeoutSeconds: 120
                 )
                 await recordGuestAgentInstallEvidenceIfNeeded()
@@ -1441,7 +1448,7 @@ struct VeilHostShellApp: App {
 
             do {
                 let client = VeilHostClient(
-                    transport: URLSessionWebSocketTransport(url: URL(string: Self.agentURLString)!)
+                    transport: URLSessionWebSocketTransport(url: URL(string: agentURLString)!)
                 )
                 let response = try await client.requestWindowsNotificationListenerConsent()
                 await model.load()
@@ -1477,7 +1484,7 @@ struct VeilHostShellApp: App {
             activateMainWindow()
             displayMessage = "Checking the Windows app connection."
             let report = await model.waitForLiveAgentConnection(
-                endpoint: Self.agentURLString,
+                endpoint: agentURLString,
                 timeoutSeconds: 5
             )
             await recordGuestAgentInstallEvidenceIfNeeded()
@@ -2509,19 +2516,23 @@ private enum MainWindowChrome {
 
 private struct StandaloneMainWindowRoot: View {
     private let vmRuntimeBooter: AppRuntimeBooter
+    private let agentConnectionPlan: AppGuestAgentConnectionPlan
     @State private var model: HostDashboardModel
     @State private var vmModel: VMRuntimeModel
     @State private var displayMessage: String?
 
     init() {
         let runtimeBooter = AppRuntimeBooterFactory.make()
-        let transport = URLSessionWebSocketTransport(
-            url: URL(string: Self.agentURLString)!
-        )
+        let connectionPlan = AppGuestAgentConnectionPlan.resolve(provider: runtimeBooter.provider)
+        let transport = connectionPlan.endpointURL.map { URLSessionWebSocketTransport(url: $0) }
         self.vmRuntimeBooter = runtimeBooter
+        self.agentConnectionPlan = connectionPlan
         _model = State(
             initialValue: HostDashboardModel(
-                service: HostDashboardServiceMode.resolve().makeService(transport: transport)
+                service: HostDashboardServiceMode.resolve().makeService(
+                    transport: transport,
+                    connectionPlan: connectionPlan
+                )
             )
         )
         _vmModel = State(
@@ -2564,8 +2575,8 @@ private struct StandaloneMainWindowRoot: View {
         }
     }
 
-    private static var agentURLString: String {
-        ProcessInfo.processInfo.environment["VEIL_AGENT_URL"] ?? "ws://127.0.0.1:18444"
+    private var agentURLString: String {
+        agentConnectionPlan.endpoint
     }
 
     private func startWindowsAndShowDisplay() {
@@ -2623,7 +2634,7 @@ private struct StandaloneMainWindowRoot: View {
                 await vmModel.refreshRuntimeEvidence()
 
                 let report = await model.waitForLiveAgentConnection(
-                    endpoint: Self.agentURLString,
+                    endpoint: agentURLString,
                     timeoutSeconds: 120
                 )
                 await recordGuestAgentInstallEvidenceIfNeeded()
@@ -2646,7 +2657,7 @@ private struct StandaloneMainWindowRoot: View {
         Task { @MainActor in
             displayMessage = "Checking the Windows app connection."
             let report = await model.waitForLiveAgentConnection(
-                endpoint: Self.agentURLString,
+                endpoint: agentURLString,
                 timeoutSeconds: 5
             )
             await recordGuestAgentInstallEvidenceIfNeeded()
