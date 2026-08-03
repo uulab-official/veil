@@ -217,63 +217,47 @@ private struct WindowsQuickLaunchPanel: View {
                 )
             }
 
-            HStack(spacing: 12) {
-                Picker("Windows App", selection: $selectedAppId) {
-                    ForEach(apps) { app in
-                        Text(app.name).tag(Optional(app.id))
+            if apps.isEmpty {
+                ContentUnavailableView(
+                    "No Windows Apps",
+                    systemImage: "square.grid.2x2",
+                    description: Text("Start Windows to load the installed app list.")
+                )
+                .frame(maxWidth: .infinity, minHeight: 118)
+            } else {
+                ScrollView(.horizontal) {
+                    HStack(spacing: 12) {
+                        ForEach(apps) { app in
+                            WindowsQuickLaunchTile(
+                                app: app,
+                                isSelected: selectedAppId == app.id,
+                                openWindowCount: mirrorSessions.filter { $0.window.appId == app.id }.count,
+                                isDisabled: phase == .loading || phase == .launching
+                            ) {
+                                selectedAppId = app.id
+                                launchWindowsAppAction()
+                            }
+                        }
                     }
+                    .padding(.vertical, 2)
                 }
-                .labelsHidden()
-                .frame(minWidth: 220, maxWidth: 320)
-                .disabled(apps.isEmpty || phase == .loading || phase == .launching)
-
-                Button {
-                    launchWindowsAppAction()
-                } label: {
-                    Text(launchButtonTitle)
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(launchDisabled)
-                .help("Open selected Windows app")
-
-                if let selected = apps.first(where: { $0.id == selectedAppId }) {
-                    Label(selected.publisher, systemImage: "person")
-                        .lineLimit(1)
-                        .foregroundStyle(.secondary)
-                        .truncationMode(.middle)
-                }
-
-                Spacer()
+                .scrollIndicators(.hidden)
             }
 
-            Text("Advanced checks, printer setup, and recovery actions are available from More.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            HStack(spacing: 8) {
+                Label(
+                    hasLiveAgentConnection ? "Windows is ready" : "Windows starts when an app opens",
+                    systemImage: hasLiveAgentConnection ? "checkmark.circle.fill" : "power"
+                )
+                .foregroundStyle(hasLiveAgentConnection ? Color.green : Color.secondary)
+
+                Spacer()
+
+                Text("Setup and recovery are in More.")
+                    .foregroundStyle(.secondary)
+            }
+            .font(.caption)
         }
-    }
-
-    private var launchButtonTitle: String {
-        if canFulfillPendingLaunch {
-            return "Open Queued App"
-        }
-
-        if !hasLiveAgentConnection {
-            return "Open When Ready"
-        }
-
-        if canRequestSelectedAppLaunch {
-            return "Open Selected App"
-        }
-
-        if !canLaunchSelectedApp {
-            return "Preparing Windows"
-        }
-
-        return "Open App"
-    }
-
-    private var launchDisabled: Bool {
-        phase == .loading || phase == .launching || (!canRequestSelectedAppLaunch && !canFulfillPendingLaunch)
     }
 
     private var runningAppStateTitle: String {
@@ -494,5 +478,83 @@ private struct WindowsQuickLaunchPanel: View {
 
     private var appFlowTint: Color {
         releaseGate.isPassing ? .green : .blue
+    }
+}
+
+private struct WindowsQuickLaunchTile: View {
+    var app: WindowsApp
+    var isSelected: Bool
+    var openWindowCount: Int
+    var isDisabled: Bool
+    var action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 9) {
+                ZStack(alignment: .topTrailing) {
+                    Image(systemName: symbolName)
+                        .font(.system(size: 24, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .frame(width: 54, height: 54)
+                        .background(tint.gradient, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+
+                    if openWindowCount > 0 {
+                        Text("\(openWindowCount)")
+                            .font(.caption2.bold())
+                            .foregroundStyle(.white)
+                            .frame(minWidth: 18, minHeight: 18)
+                            .background(.green, in: Circle())
+                            .offset(x: 6, y: -6)
+                    }
+                }
+
+                Text(app.name)
+                    .font(.callout.weight(.semibold))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+
+                Text(openWindowCount > 0 ? "Open" : "Launch")
+                    .font(.caption2)
+                    .foregroundStyle(openWindowCount > 0 ? Color.green : Color.secondary)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .frame(width: 124, height: 118)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .strokeBorder(isSelected ? Color.accentColor : Color.secondary.opacity(0.18), lineWidth: isSelected ? 2 : 1)
+            }
+        }
+        .buttonStyle(.plain)
+        .disabled(isDisabled)
+        .help("Open \(app.name) as a macOS window")
+        .accessibilityLabel("Open \(app.name)")
+    }
+
+    private var symbolName: String {
+        switch app.id {
+        case "winapp_notepad":
+            return "note.text"
+        case "winapp_calculator":
+            return "plus.forwardslash.minus"
+        case "winapp_paint":
+            return "paintpalette"
+        default:
+            return "app.window"
+        }
+    }
+
+    private var tint: Color {
+        switch app.id {
+        case "winapp_notepad":
+            return .blue
+        case "winapp_calculator":
+            return .green
+        case "winapp_paint":
+            return .orange
+        default:
+            return .teal
+        }
     }
 }
