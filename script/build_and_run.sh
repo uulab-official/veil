@@ -64,6 +64,12 @@ cat >"$INFO_PLIST" <<PLIST
 </plist>
 PLIST
 
+# A bundle copied from Downloads, AirDrop, or a quarantined workspace inherits
+# com.apple.quarantine. With an ad-hoc local signature macOS reports that bundle
+# as “damaged” instead of explaining that Gatekeeper blocked it. Clear only the
+# quarantine marker before signing; do not remove any other extended attributes.
+xattr -dr com.apple.quarantine "$APP_BUNDLE" 2>/dev/null || true
+
 codesign --force --sign - --entitlements "$ENTITLEMENTS" "$APP_BINARY" >/dev/null
 codesign --force --sign - --entitlements "$ENTITLEMENTS" "$APP_BUNDLE" >/dev/null
 
