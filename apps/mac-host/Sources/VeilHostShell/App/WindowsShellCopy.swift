@@ -15,6 +15,42 @@ struct WindowsLauncherMetadataStatus: Equatable {
     var tone: WindowsShellStatusTone
 }
 
+struct WindowsHeaderStatus: Equatable {
+    var title: String
+    var symbolName: String
+    var tone: WindowsShellStatusTone
+
+    static func resolve(
+        isRefreshing: Bool,
+        hasLiveAppConnection: Bool,
+        runtimeState: VMRuntimeState?,
+        windowsInstalled: Bool
+    ) -> Self {
+        if isRefreshing {
+            return Self(title: "Checking", symbolName: "arrow.triangle.2.circlepath", tone: .blue)
+        }
+
+        if hasLiveAppConnection {
+            return Self(title: "Apps Ready", symbolName: "checkmark.circle.fill", tone: .green)
+        }
+
+        switch runtimeState {
+        case .running:
+            return Self(title: "Running", symbolName: "play.circle.fill", tone: .green)
+        case .starting:
+            return Self(title: "Opening", symbolName: "arrow.triangle.2.circlepath", tone: .blue)
+        case .suspended:
+            return Self(title: "Paused", symbolName: "pause.circle.fill", tone: .orange)
+        case .failed, .unsupported:
+            return Self(title: "Needs Attention", symbolName: "exclamationmark.triangle.fill", tone: .orange)
+        case .stopped where windowsInstalled:
+            return Self(title: "Ready", symbolName: "checkmark.circle.fill", tone: .green)
+        default:
+            return Self(title: "Setup Required", symbolName: "wand.and.stars", tone: .blue)
+        }
+    }
+}
+
 enum WindowsShellCopy {
     static func headerSubtitle(
         hasLiveAppConnection: Bool,
@@ -30,6 +66,12 @@ enum WindowsShellCopy {
             return "Preparing Windows apps"
         case .starting:
             return "Opening Windows"
+        case .suspended:
+            return "Windows is paused"
+        case .failed:
+            return "Windows needs attention"
+        case .unsupported:
+            return "Windows is unavailable on this Mac"
         default:
             return windowsInstalled ? "Start Windows to open apps" : "Set up Windows apps on this Mac"
         }
