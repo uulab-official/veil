@@ -154,6 +154,7 @@ git commit -m "Model the focused Windows setup canvas"
 **Files:**
 - Create: `apps/mac-host/Sources/VeilHostShell/Views/WindowsSetupCanvas.swift`
 - Modify: `apps/mac-host/Sources/VeilHostShell/Views/VMRuntimeView.swift:1623-1973`
+- Modify: `harness/macos-app-lifecycle/test/macos-app-lifecycle.test.mjs`
 
 **Interfaces:**
 - Consumes: `WindowsSetupCanvasPresentation` from Task 1 and existing `WindowsLogoMark` from `VMRuntimeView.swift`.
@@ -173,7 +174,7 @@ assert.match(canvas, /struct WindowsSetupCanvas: View/);
 assert.match(canvas, /GeometryReader/);
 assert.match(canvas, /\.accessibilityAddTraits\(\.isHeader\)/);
 assert.match(canvas, /ProgressView\(value: progress\)/);
-assert.match(canvas, /Label\("Use an Existing ISO", systemImage: "folder"\)/);
+assert.match(canvas, /Label\("Use Existing ISO", systemImage: "folder"\)/);
 assert.match(canvas, /\.accessibilityLabel\("Settings"\)/);
 assert.doesNotMatch(runtime, /SetupJourneyStep\(/);
 assert.doesNotMatch(runtime, /FirstRunTrustItem\(/);
@@ -208,7 +209,7 @@ struct WindowsSetupCanvas: View {
 
 Use `GeometryReader` and `let compact = proxy.size.height < 600 || proxy.size.width < 900`. Render an edge-to-edge gradient, a `WindowsLogoMark` sized `compact ? 58 : 76`, title with `.accessibilityAddTraits(.isHeader)`, one detail paragraph with maximum width 560, and a stable 240-by-48 primary region. In progress state render `ProgressView(value: progress)` plus `Preparing Windows…`; otherwise render one prominent button and dispatch its action by `primaryRoute`.
 
-Place `Use an Existing ISO` below the primary region only when `showsExistingISOAction` is true. Put Settings and Diagnostics as quiet icon actions in the top-right corner, each with `.help(...)` and explicit accessibility labels. Use `.contentTransition(.opacity)` and a 0.2-second ease transition keyed by `presentation.phase`; do not add an infinite animation.
+Place `Use Existing ISO` below the primary region only when `showsExistingISOAction` is true. Put Settings and Diagnostics as quiet icon actions in the top-right corner, each with `.help(...)` and explicit accessibility labels. Use `.contentTransition(.opacity)` and a 0.2-second ease transition keyed by `presentation.phase`; do not add an infinite animation.
 
 - [ ] **Step 4: Connect the canvas without changing runtime operations**
 
@@ -271,7 +272,7 @@ git commit -m "Focus the Windows setup experience"
 
 - [ ] **Step 1: Create the verification checklist**
 
-Record checkboxes for six presentation phases, exactly one prominent action, existing-ISO discoverability, settings/diagnostics accessibility, `820 x 560` layout, regular layout, keyboard activation, full regression, install/replace/uninstall/data preservation/reinstall, code signing, and ISO size/mtime preservation.
+Record checkboxes for seven presentation phases, exactly one prominent action, existing-ISO discoverability, settings/diagnostics accessibility, `820 x 560` layout, regular layout, keyboard activation, full regression, install/replace/uninstall/data preservation/reinstall, code signing, and ISO size/mtime preservation.
 
 - [ ] **Step 2: Run the full regression gate**
 
@@ -298,7 +299,7 @@ Expected: bundle verification, guarded replacement, and strict code-sign verific
 
 - [ ] **Step 4: Inspect the installed app at two sizes**
 
-Launch `/Applications/Veil.app`, confirm the setup canvas fills the area below the header, and verify one primary action at the normal window size. Resize to `820 x 560` and confirm the logo, heading, detail, primary action, existing ISO action, and settings control remain visible without overlap. Use the accessibility tree to verify `Settings`, `Use an Existing ISO`, the contextual primary label, and progress status.
+Launch `/Applications/Veil.app`, confirm the setup canvas fills the area below the header, and verify one primary action at the normal window size. Resize to `820 x 560` and confirm the logo, heading, detail, primary action, existing ISO action, and settings control remain visible without overlap. Use the accessibility tree to verify `Settings`, `Use Existing ISO`, the contextual primary label, and progress status.
 
 - [ ] **Step 5: Verify the existing ISO is unchanged**
 
