@@ -23,6 +23,7 @@ public static class MessageTypes
     public const string InputMouse = "input.mouse";
     public const string InputKey = "input.key";
     public const string ClipboardTextSet = "clipboard.text.set";
+    public const string OperationResponse = "operation.response";
     public const string NotificationListenerRequest = "notification.listener.request";
     public const string NotificationListenerResponse = "notification.listener.response";
     public const string NotificationReceived = "notification.received";
