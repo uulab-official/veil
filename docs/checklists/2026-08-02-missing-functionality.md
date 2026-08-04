@@ -84,7 +84,7 @@ Date: 2026-08-02
 
 ## P1 — 프로토콜 신뢰성
 
-- [ ] fire-and-forget input/clipboard/frame-control 메시지에 bounded acknowledgement 또는 오류 수신 경로 추가.
+- [x] fire-and-forget input/clipboard/frame-control 메시지에 bounded acknowledgement 또는 오류 수신 경로 추가.
 - [x] `window_not_tracked`를 닫힌 창으로 처리하고 재실행 루프를 막는다.
 - [ ] guest의 `false` 반환이 protocol error로 변환된다.
 - [x] `type-text`가 `input.text`를 사용해 Unicode를 허용한다.
