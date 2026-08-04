@@ -1,0 +1,6 @@
+{
+  "type": "operation.response",
+  "requestId": "req_key_1",
+  "operation": "input.key",
+  "accepted": true
+}

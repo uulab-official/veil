@@ -508,6 +508,7 @@ Event from host to guest:
 ```json
 {
   "type": "input.mouse",
+  "requestId": "req_mouse_left_down",
   "windowId": "hwnd:0003029A",
   "event": "leftDown",
   "x": 240,
@@ -539,6 +540,7 @@ Event from host to guest:
 ```json
 {
   "type": "input.key",
+  "requestId": "req_key_copy",
   "windowId": "hwnd:0003029A",
   "event": "keyDown",
   "key": "c",
@@ -555,6 +557,26 @@ Rules:
 
 - `windowId` must match the HWND-shaped id from a tracked `window.created` event.
 - If the HWND is not tracked, the guest rejects the input with `window_not_tracked` and must not post key messages.
+
+## Operation Acknowledgements
+
+Successful operations may be acknowledged by the guest with:
+
+```json
+{
+  "type": "operation.response",
+  "requestId": "req_key_1",
+  "operation": "input.key",
+  "accepted": true
+}
+```
+
+Rules:
+
+- `requestId` and `operation` must be non-empty strings, and the response must use `accepted: true`.
+- An operation response is optional for backwards compatibility. Hosts must continue to accept successful input without an acknowledgement when connected to an older guest.
+- Failed operations use the existing `error` message with the input request's `requestId`; they must not send `operation.response` with `accepted: false`.
+- Hosts must not retry an operation solely because its acknowledgement has not arrived. Retries require an explicit operation-specific policy.
 
 ## Clipboard Text
 

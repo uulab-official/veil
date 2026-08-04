@@ -1,5 +1,6 @@
 {
   "type": "input.mouse",
+  "requestId": "req_mouse_left_down",
   "windowId": "hwnd:0003029A",
   "event": "leftDown",
   "x": 240,
