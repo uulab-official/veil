@@ -236,7 +236,7 @@ private var setupCanvasPresentation: WindowsSetupCanvasPresentation {
 }
 ```
 
-When no live desktop surface exists, render `WindowsSetupCanvas` directly. Pass `runEffectivePrimaryAction`, `selectInstallerAction`, `detailsAction`, and a diagnostics closure that opens `diagnosticsURL` with `NSWorkspace.shared.open`. Keep `installDisplaySurface` and `installControlBar` only for an actual embedded Windows surface. Remove `firstRunSetupContent`, `firstRunPrimaryButton`, `firstRunExistingISOButton`, `firstRunTrustItems`, `firstRunCurrentStep`, `SetupJourneyStep`, `SetupJourneyConnector`, `SetupJourneyStageState`, and `FirstRunTrustItem` after callers are gone.
+When no live desktop surface exists, render `WindowsSetupCanvas` directly. Pass `runEffectivePrimaryAction`, `selectInstallerAction`, `detailsAction`, and a diagnostics closure that opens `diagnosticsURL` with `NSWorkspace.shared.open`. Keep `installDisplaySurface` and `installControlBar` only for an actual embedded Windows surface. Remove `firstRunSetupContent`, `firstRunPrimaryButton`, `firstRunExistingISOButton`, `firstRunTrustItems`, `firstRunCurrentStep`, `SetupJourneyStep`, `SetupJourneyConnector`, and `FirstRunTrustItem` after callers are gone. Keep `SetupJourneyStageState` because the settings assistant still uses it for setup rows.
 
 - [ ] **Step 5: Run focused Swift and lifecycle tests**
 

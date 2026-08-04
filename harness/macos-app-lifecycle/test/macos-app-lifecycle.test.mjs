@@ -44,33 +44,30 @@ test("lifecycle gate covers install, guarded replace, uninstall, preservation, a
   assert.match(gate, /test_macos_lifecycle\.sh\" --skip-build/);
 });
 
-test("first-run hero presents one clear setup journey without runtime jargon", async () => {
-  const source = await readRootFile("apps/mac-host/Sources/VeilHostShell/Views/VMRuntimeView.swift");
+test("first-run setup presents one focused edge-to-edge action", async () => {
+  const runtime = await readRootFile("apps/mac-host/Sources/VeilHostShell/Views/VMRuntimeView.swift");
 
-  assert.match(source, /\.accessibilityLabel\(effectivePrimaryTitle\)/);
-  assert.match(source, /\.accessibilityHint\(effectivePrimaryHelp\)/);
-  assert.match(source, /Windows apps, right on your Mac/);
-  assert.match(source, /SetupJourneyStep\([\s\S]*number: 1,[\s\S]*title: "Get Windows"/);
-  assert.match(source, /SetupJourneyStep\([\s\S]*number: 2,[\s\S]*title: "Install"/);
-  assert.match(source, /SetupJourneyStep\([\s\S]*number: 3,[\s\S]*title: "Open Apps"/);
-  assert.match(source, /STEP \\\(firstRunCurrentStep\) OF 3/);
-  assert.match(source, /SetupJourneyStageState[\s\S]*case complete[\s\S]*case current[\s\S]*case pending/);
-  assert.match(source, /private var firstRunPrimaryButton: some View/);
-  assert.match(source, /private var firstRunExistingISOButton: some View/);
-  assert.match(source, /FirstRunTrustItem\(title: "Microsoft source"/);
-  assert.match(source, /FirstRunTrustItem\(title: "Runs locally"/);
-  assert.match(source, /FirstRunTrustItem\(title: "License required"/);
-  assert.doesNotMatch(source, /Mac app windows require QEMU or a configured endpoint/);
+  assert.match(runtime, /WindowsSetupCanvas\(/);
+
+  const canvas = await readRootFile("apps/mac-host/Sources/VeilHostShell/Views/WindowsSetupCanvas.swift");
+  assert.match(canvas, /struct WindowsSetupCanvas: View/);
+  assert.match(canvas, /GeometryReader/);
+  assert.match(canvas, /\.accessibilityAddTraits\(\.isHeader\)/);
+  assert.match(canvas, /ProgressView\(value: progress\)/);
+  assert.match(canvas, /Label\("Use Existing ISO", systemImage: "folder"\)/);
+  assert.match(canvas, /\.accessibilityLabel\("Settings"\)/);
+  assert.doesNotMatch(runtime, /SetupJourneyStep\(/);
+  assert.doesNotMatch(runtime, /FirstRunTrustItem\(/);
+  assert.doesNotMatch(runtime, /Mac app windows require QEMU or a configured endpoint/);
 });
 
-test("first-run setup removes the redundant bottom bar while keeping settings available", async () => {
+test("first-run setup reserves the bottom control bar for a live Windows display", async () => {
   const source = await readRootFile("apps/mac-host/Sources/VeilHostShell/Views/VMRuntimeView.swift");
 
-  assert.match(source, /if shouldShowInstallControlBar \{[\s\S]*installControlBar/);
-  assert.match(source, /private var shouldShowInstallControlBar: Bool/);
-  assert.match(source, /ZStack\(alignment: \.topTrailing\)[\s\S]*firstRunSettingsButton/);
-  assert.match(source, /private var firstRunSettingsButton: some View[\s\S]*Button\(action: detailsAction\)/);
-  assert.match(source, /\.accessibilityLabel\("Settings"\)/);
+  assert.match(source, /if hasDesktopDisplay \{[\s\S]*installDisplaySurface[\s\S]*installControlBar[\s\S]*\} else \{[\s\S]*WindowsSetupCanvas\(/);
+  assert.doesNotMatch(source, /private var firstRunSettingsButton/);
+  assert.doesNotMatch(source, /private var firstRunCurrentStep/);
+  assert.doesNotMatch(source, /private var firstRunTrustItems/);
 });
 
 test("window header communicates setup state and refresh progress", async () => {
