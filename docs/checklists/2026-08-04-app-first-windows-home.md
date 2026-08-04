@@ -14,9 +14,15 @@ direct evidence.
   installed-Windows state, so `/Applications/Veil.app` correctly showed the
   first-run `Windows 11 Setup Required` route instead. Next action: launch with
   a real installed Windows profile and connected guest agent.
-- [x] The available regular-size first-run route was one branded Veil window,
-  with one contextual setup action and no nested monitor frame, Windows 11
-  desktop, Windows hero, or progress-card strip.
+- [x] The available regular-size screenshot proves the branded first-run setup
+  canvas only: it shows one prominent `Download Windows 11` action plus the
+  quiet secondary `Use Existing ISO` action.
+- [ ] Direct installed-`Windows Apps`-home evidence that its app catalog has no
+  centered Windows hero or nested surface is unavailable. The captured
+  first-run setup canvas visibly contains a centered Windows logo, `Get Windows
+  11`, and a CTA, so it cannot prove this installed-home constraint. Next
+  action: launch with a real installed Windows profile and connected guest
+  agent, then capture the Windows Apps home.
 - [ ] Direct `Windows Desktop` availability, real VM surface, and `Show Apps`
   return-path checks are unavailable: no VM profile, installed Windows record,
   or live display was present. Next action: boot the prepared VM, connect the
@@ -47,8 +53,8 @@ direct evidence.
 - [x] `./script/build_and_run.sh --verify` — built, ad-hoc signed, strictly
   verified, and launch-contract verified the bundle (exit 0).
 - [x] `./script/test_macos_lifecycle.sh --skip-build` — verified guarded
-  replacement, quarantine cleanup, uninstall, support-data preservation,
-  reinstall, and first-window launch (exit 0).
+  replacement, quarantine cleanup, uninstall, temporary lifecycle-sentinel
+  preservation, reinstall, and first-window launch (exit 0).
 
 ## Installed-app and distribution safety
 
@@ -61,8 +67,10 @@ direct evidence.
   captured before the desktop locked.
 - [x] `./script/uninstall_macos.sh` moved only `/Applications/Veil.app` to
   `/Users/uulab/.Trash/Veil 4.app`; the installed path was then absent.
-- [x] Reinstall restored `/Applications/Veil.app` without touching the Windows
-  ISO.
+- [x] Reinstall restored `/Applications/Veil.app`; direct live preservation
+  evidence is limited to the Windows ISO below. The lifecycle script separately
+  verifies its temporary Application Support sentinel, not a full live
+  Application Support manifest comparison.
 - [x] ISO metadata was identical before and after lifecycle testing:
   `7951140864 1785761837` (size bytes, modification epoch).
 
