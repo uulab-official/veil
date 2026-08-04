@@ -1621,16 +1621,35 @@ private struct WindowsSetupDisplayPanel: View {
     }
 
     private var installProcessStage: some View {
-        ZStack(alignment: .bottom) {
-            installDisplaySurface
+        Group {
+            if hasDesktopDisplay {
+                ZStack(alignment: .bottom) {
+                    installDisplaySurface
 
-            if shouldShowInstallControlBar {
-                installControlBar
-                    .background(.black.opacity(0.18))
-                    .background(.ultraThinMaterial)
-                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                    .padding(10)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    if shouldShowInstallControlBar {
+                        installControlBar
+                            .background(.black.opacity(0.18))
+                            .background(.ultraThinMaterial)
+                            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                            .padding(10)
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                    }
+                }
+            } else {
+                WindowsSetupCanvas(
+                    presentation: setupCanvasPresentation,
+                    progress: progressFraction,
+                    primaryAction: runEffectivePrimaryAction,
+                    existingISOAction: selectInstallerAction,
+                    settingsAction: detailsAction,
+                    diagnosticsAction: {
+                        if let diagnosticsURL {
+                            NSWorkspace.shared.open(diagnosticsURL)
+                        } else {
+                            detailsAction()
+                        }
+                    }
+                )
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
@@ -1639,14 +1658,13 @@ private struct WindowsSetupDisplayPanel: View {
 
     private var shouldShowInstallControlBar: Bool {
         hasDesktopDisplay
-            || canStart
+            && (canStart
             || canStop
             || snapshot.state == .starting
-            || selectedInstallerName != nil
             || installSimulation.phase != .idle
             || errorMessage != nil
             || displayMessage != nil
-            || hasRuntimeMoreActions
+            || hasRuntimeMoreActions)
     }
 
     private var installDisplaySurface: some View {
@@ -1784,192 +1802,13 @@ private struct WindowsSetupDisplayPanel: View {
     }
 
     private var machineDisplay: some View {
-        ZStack(alignment: .topTrailing) {
+        ZStack {
             Rectangle()
                 .fill(machineHeroGradient)
 
-            if effectiveInstallEvidence.isInstalled {
-                installedMachineContent
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else {
-                firstRunSetupContent
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                firstRunSettingsButton
-                    .padding(20)
-            }
+            installedMachineContent
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-    }
-
-    private var firstRunSettingsButton: some View {
-        Button(action: detailsAction) {
-            Image(systemName: "gearshape.fill")
-                .font(.system(size: 14, weight: .semibold))
-                .frame(width: 36, height: 36)
-                .contentShape(Circle())
-        }
-        .buttonStyle(.plain)
-        .foregroundStyle(.white.opacity(0.82))
-        .background(.black.opacity(0.14), in: Circle())
-        .overlay {
-            Circle()
-                .strokeBorder(.white.opacity(0.14), lineWidth: 1)
-        }
-        .disabled(isLoading)
-        .help("Open Windows settings")
-        .accessibilityLabel("Settings")
-    }
-
-    private var firstRunCurrentStep: Int {
-        snapshot.installerMediaPath != nil || selectedInstallerName != nil ? 2 : 1
-    }
-
-    private var firstRunSetupContent: some View {
-        VStack(spacing: 20) {
-            Spacer(minLength: 20)
-
-            WindowsLogoMark(size: 72)
-                .shadow(color: .black.opacity(0.22), radius: 20, y: 10)
-
-            VStack(spacing: 7) {
-                Text("STEP \(firstRunCurrentStep) OF 3")
-                    .font(.caption2.weight(.bold))
-                    .tracking(1.2)
-                    .foregroundStyle(.white.opacity(0.58))
-
-                Text("Windows apps, right on your Mac")
-                    .font(.system(size: 34, weight: .semibold, design: .rounded))
-                    .multilineTextAlignment(.center)
-                    .minimumScaleFactor(0.8)
-
-                Text("Veil installs Windows 11 locally, then opens supported Windows apps in their own Mac windows.")
-                    .font(.title3)
-                    .foregroundStyle(.white.opacity(0.76))
-                    .multilineTextAlignment(.center)
-                    .frame(maxWidth: 620)
-            }
-
-            HStack(spacing: 0) {
-                SetupJourneyStep(
-                    number: 1,
-                    title: "Get Windows",
-                    detail: "Official Arm64 ISO",
-                    state: .resolve(step: 1, currentStep: firstRunCurrentStep)
-                )
-                SetupJourneyConnector(isComplete: firstRunCurrentStep > 1)
-                SetupJourneyStep(
-                    number: 2,
-                    title: "Install",
-                    detail: "Runs locally",
-                    state: .resolve(step: 2, currentStep: firstRunCurrentStep)
-                )
-                SetupJourneyConnector(isComplete: firstRunCurrentStep > 2)
-                SetupJourneyStep(
-                    number: 3,
-                    title: "Open Apps",
-                    detail: "Mac-style windows",
-                    state: .resolve(step: 3, currentStep: firstRunCurrentStep)
-                )
-            }
-            .frame(maxWidth: 680)
-            .padding(.horizontal, 22)
-            .padding(.vertical, 16)
-            .background(.black.opacity(0.14), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .strokeBorder(.white.opacity(0.12), lineWidth: 1)
-            }
-
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: 10) {
-                    firstRunPrimaryButton
-                    firstRunExistingISOButton
-                }
-
-                VStack(spacing: 10) {
-                    firstRunPrimaryButton
-                    firstRunExistingISOButton
-                }
-            }
-
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: 18) {
-                    firstRunTrustItems
-                }
-
-                VStack(alignment: .leading, spacing: 8) {
-                    firstRunTrustItems
-                }
-            }
-
-            if installSimulation.phase != .idle {
-                AssistantProgressStrip(simulation: installSimulation)
-                    .frame(maxWidth: 460)
-                    .foregroundStyle(.primary)
-            } else if progressFraction > 0 {
-                ProgressView(value: progressFraction)
-                    .tint(progressTint)
-                    .frame(maxWidth: 460)
-                    .accessibilityLabel("Windows setup progress")
-            }
-
-            Spacer(minLength: 20)
-        }
-        .foregroundStyle(.white)
-        .padding(36)
-    }
-
-    private var firstRunPrimaryButton: some View {
-        Button(action: runEffectivePrimaryAction) {
-            Label(effectivePrimaryTitle, systemImage: effectivePrimarySymbol)
-                .font(.headline)
-                .foregroundStyle(.white)
-                .frame(minWidth: 224, minHeight: 44)
-                .background(
-                    effectivePrimaryDisabled
-                        ? Color.white.opacity(0.16)
-                        : Color(red: 0.04, green: 0.48, blue: 0.98),
-                    in: RoundedRectangle(cornerRadius: 12, style: .continuous)
-                )
-                .overlay {
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .strokeBorder(.white.opacity(0.18), lineWidth: 1)
-                }
-                .shadow(
-                    color: .black.opacity(effectivePrimaryDisabled ? 0 : 0.22),
-                    radius: 14,
-                    y: 7
-                )
-        }
-        .buttonStyle(.plain)
-        .disabled(effectivePrimaryDisabled)
-        .help(effectivePrimaryHelp)
-        .accessibilityLabel(effectivePrimaryTitle)
-        .accessibilityHint(effectivePrimaryHelp)
-    }
-
-    private var firstRunExistingISOButton: some View {
-        Button(action: selectInstallerAction) {
-            Label("Use an Existing ISO", systemImage: "folder")
-                .font(.callout.weight(.semibold))
-                .foregroundStyle(.white.opacity(0.9))
-                .frame(minWidth: 168, minHeight: 44)
-                .background(.white.opacity(0.10), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .strokeBorder(.white.opacity(0.18), lineWidth: 1)
-                }
-        }
-        .buttonStyle(.plain)
-        .disabled(isLoading)
-        .help("Choose a Windows 11 Arm64 ISO already on this Mac")
-        .accessibilityLabel("Use an Existing ISO")
-    }
-
-    @ViewBuilder
-    private var firstRunTrustItems: some View {
-        FirstRunTrustItem(title: "Microsoft source", symbolName: "checkmark.shield.fill")
-        FirstRunTrustItem(title: "Runs locally", symbolName: "desktopcomputer")
-        FirstRunTrustItem(title: "License required", symbolName: "key.fill")
     }
 
     private var installedMachineContent: some View {
@@ -2190,6 +2029,25 @@ private struct WindowsSetupDisplayPanel: View {
             || canWaitForGuestAgent
             || canMarkWindowsInstalled
             || recommendedProofCommand != nil
+    }
+
+    private var setupCanvasPresentation: WindowsSetupCanvasPresentation {
+        .resolve(
+            runtimeState: snapshot.state,
+            windowsInstalled: effectiveInstallEvidence.isInstalled,
+            hasInstaller: selectedInstallerName != nil,
+            requiresInstallerAccess: installerNeedsFilePickerAccess,
+            installerName: selectedInstallerName,
+            bootReady: snapshot.bootReady,
+            isBusy: isLoading || installSimulation.phase == .running,
+            integrationReady: effectiveInstallEvidence.kind == .guestAgent,
+            errorMessage: errorMessage,
+            primaryTitle: effectivePrimaryTitle,
+            primarySymbolName: effectivePrimarySymbol,
+            primaryHelp: effectivePrimaryHelp,
+            primaryDisabled: effectivePrimaryDisabled,
+            hasDiagnostics: diagnosticsURL != nil || agentDiagnostic != nil
+        )
     }
 
     private var selectedInstallerName: String? {
@@ -2939,68 +2797,6 @@ enum SetupJourneyStageState: Equatable {
         case .pending:
             return .white.opacity(0.48)
         }
-    }
-}
-
-private struct SetupJourneyStep: View {
-    var number: Int
-    var title: String
-    var detail: String
-    var state: SetupJourneyStageState
-
-    var body: some View {
-        VStack(spacing: 7) {
-            Group {
-                if state == .complete {
-                    Image(systemName: "checkmark")
-                } else {
-                    Text("\(number)")
-                }
-            }
-            .font(.caption.weight(.bold))
-            .foregroundStyle(state == .pending ? .white.opacity(0.7) : .white)
-            .frame(width: 28, height: 28)
-            .background(state.tint.opacity(state == .current ? 0.88 : 0.28), in: Circle())
-            .overlay {
-                Circle()
-                    .strokeBorder(state.tint.opacity(0.9), lineWidth: state == .current ? 2 : 1)
-            }
-            .shadow(color: state == .current ? state.tint.opacity(0.38) : .clear, radius: 8)
-
-            Text(title)
-                .font(.callout.weight(.semibold))
-
-            Text(detail)
-                .font(.caption)
-                .foregroundStyle(.white.opacity(0.62))
-        }
-        .frame(maxWidth: .infinity)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("Step \(number), \(title), \(detail), \(state.accessibilityTitle)")
-    }
-}
-
-private struct SetupJourneyConnector: View {
-    var isComplete: Bool
-
-    var body: some View {
-        Capsule()
-            .fill(isComplete ? Color.green.opacity(0.72) : .white.opacity(0.18))
-            .frame(width: 42, height: 1)
-            .offset(y: -18)
-            .accessibilityHidden(true)
-    }
-}
-
-private struct FirstRunTrustItem: View {
-    var title: String
-    var symbolName: String
-
-    var body: some View {
-        Label(title, systemImage: symbolName)
-            .font(.caption.weight(.medium))
-            .foregroundStyle(.white.opacity(0.64))
-            .accessibilityElement(children: .combine)
     }
 }
 
