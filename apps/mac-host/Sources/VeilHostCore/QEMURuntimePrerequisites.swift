@@ -12,15 +12,26 @@ public struct QEMURuntimePrerequisiteReport: Equatable, Sendable {
     public var checks: [QEMURuntimePrerequisite]
     public var isReady: Bool { checks.allSatisfy(\.isReady) }
 
-    public static func probe(fileExists: (String) -> Bool = FileManager.default.fileExists(atPath:)) -> Self {
-        let qemu = ["/opt/homebrew/bin/qemu-system-aarch64", "/usr/local/bin/qemu-system-aarch64", "/opt/local/bin/qemu-system-aarch64"]
-        let firmware = LocalQEMUWindowsBootPlanFactory.defaultFirmwarePaths
-        let swtpm = LocalQEMUWindowsBootPlanFactory.defaultTPMEmulatorPaths
+    public static func probe(
+        environment: [String: String] = ProcessInfo.processInfo.environment,
+        fileExists: (String) -> Bool = FileManager.default.fileExists(atPath:)
+    ) -> Self {
+        let qemu = overrideCandidate(environment[VMRuntimeProviderProbe.qemuEnvironmentKey])
+            + VMRuntimeProviderProbe.defaultQEMUExecutablePaths
+        let firmware = LocalQEMUWindowsBootPlanFactory.defaultSecureFirmwarePaths()
+            + LocalQEMUWindowsBootPlanFactory.defaultFirmwarePaths
+        let swtpm = overrideCandidate(environment[LocalQEMUWindowsBootPlanFactory.tpmEmulatorEnvironmentKey])
+            + LocalQEMUWindowsBootPlanFactory.defaultTPMEmulatorPaths
         return QEMURuntimePrerequisiteReport(checks: [
             check(id: "qemu", title: "QEMU Arm runtime", candidates: qemu, missing: "Install the QEMU formula." , fileExists: fileExists),
             check(id: "uefi", title: "Arm UEFI firmware", candidates: firmware, missing: "QEMU is installed but Arm UEFI firmware was not found.", fileExists: fileExists),
             check(id: "swtpm", title: "Windows 11 TPM", candidates: swtpm, missing: "Install swtpm for Windows 11 TPM 2.0.", fileExists: fileExists)
         ])
+    }
+
+    private static func overrideCandidate(_ path: String?) -> [String] {
+        guard let path, !path.isEmpty else { return [] }
+        return [path]
     }
 
     private static func check(id: String, title: String, candidates: [String], missing: String, fileExists: (String) -> Bool) -> QEMURuntimePrerequisite {

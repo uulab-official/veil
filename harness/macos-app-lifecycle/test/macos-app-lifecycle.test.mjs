@@ -141,12 +141,15 @@ test("Windows setup assistant emphasizes one contextual action", async () => {
   assert.doesNotMatch(source, /Label\("Profile Only", systemImage: "plus\.circle"\)/);
 });
 
-test("Windows setup requires explicit license consent for downloaded and selected ISOs", async () => {
+test("Windows setup requires explicit combined consent for Windows and Guest Tools", async () => {
   const downloadSheet = await readRootFile("apps/mac-host/Sources/VeilHostShell/Views/WindowsDownloadSheet.swift");
   const runtimeView = await readRootFile("apps/mac-host/Sources/VeilHostShell/Views/VMRuntimeView.swift");
 
   assert.match(downloadSheet, /https:\/\/www\.microsoft\.com\/useterms/);
-  assert.match(downloadSheet, /I Agree and Install Windows/);
+  assert.match(downloadSheet, /https:\/\/docs\.getutm\.app\/guest-support\/windows/);
+  assert.match(downloadSheet, /Accept Windows and Guest Tools Terms\?/);
+  assert.match(downloadSheet, /I Agree and Install Everything/);
+  assert.match(downloadSheet, /UTM Guest Tools \(GPLv2 with the included Windows driver terms\)/);
   assert.match(downloadSheet, /Review and Prepare Windows/);
   assert.match(downloadSheet, /\.alert\(WindowsLicenseConsentPolicy\.title/);
   assert.doesNotMatch(downloadSheet, /\.onChange\(of: controller\.phase\)[\s\S]*prepareDownloadedISO/);

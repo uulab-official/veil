@@ -3,19 +3,65 @@ import Testing
 @testable import VeilHostShell
 
 struct WindowsDownloadPolicyTests {
+    @Test("guest tools download stays on UTM's official release path")
+    func guestToolsUsesOfficialReleasePath() {
+        #expect(UTMGuestToolsDownloadPolicy.latestISOURL.scheme == "https")
+        #expect(UTMGuestToolsDownloadPolicy.latestISOURL.host == "getutm.app")
+        #expect(UTMGuestToolsDownloadPolicy.latestISOURL.path == "/downloads/utm-guest-tools-latest.iso")
+        #expect(UTMGuestToolsDownloadPolicy.allowsResponse(
+            URL(string: "https://github.com/utmapp/qemu/releases/download/v10.0.2-utm/utm-guest-tools.iso")!
+        ))
+        #expect(UTMGuestToolsDownloadPolicy.allowsResponse(
+            URL(string: "https://release-assets.githubusercontent.com/asset")!
+        ))
+        #expect(!UTMGuestToolsDownloadPolicy.allowsResponse(
+            URL(string: "https://example.invalid/utm-guest-tools.iso")!
+        ))
+    }
+
+    @Test("guest tools validation rejects short or non-ISO responses")
+    func guestToolsRejectsInvalidDownloads() {
+        #expect(UTMGuestToolsISOValidator.failureReason(
+            filename: "guest-tools.html",
+            fileSize: UTMGuestToolsISOValidator.minimumPlausibleSize
+        ) != nil)
+        #expect(UTMGuestToolsISOValidator.failureReason(
+            filename: "guest-tools.iso",
+            fileSize: UTMGuestToolsISOValidator.minimumPlausibleSize - 1
+        ) != nil)
+        #expect(UTMGuestToolsISOValidator.failureReason(
+            filename: "guest-tools.iso",
+            fileSize: UTMGuestToolsISOValidator.minimumPlausibleSize
+        ) == nil)
+    }
+
+    @Test("guest tools validation recognizes the ISO 9660 volume signature")
+    func guestToolsRecognizesISO9660() {
+        var descriptor = Data(repeating: 0, count: UTMGuestToolsISOValidator.signatureOffset + 5)
+        descriptor.replaceSubrange(
+            UTMGuestToolsISOValidator.signatureOffset..<(UTMGuestToolsISOValidator.signatureOffset + 5),
+            with: Data("CD001".utf8)
+        )
+
+        #expect(UTMGuestToolsISOValidator.hasISO9660Signature(in: descriptor))
+        #expect(!UTMGuestToolsISOValidator.hasISO9660Signature(in: Data("not an iso".utf8)))
+    }
+
     @Test("license consent points to Microsoft's official terms over HTTPS")
     func licenseConsentUsesOfficialTerms() {
         #expect(WindowsLicenseConsentPolicy.termsURL.scheme == "https")
         #expect(WindowsLicenseConsentPolicy.termsURL.host == "www.microsoft.com")
         #expect(WindowsLicenseConsentPolicy.termsURL.path == "/useterms")
+        #expect(WindowsLicenseConsentPolicy.guestToolsInformationURL.host == "docs.getutm.app")
     }
 
     @Test("license consent describes unattended acceptance explicitly")
     func licenseConsentIsExplicit() {
         #expect(WindowsLicenseConsentPolicy.message.contains("unattended setup"))
         #expect(WindowsLicenseConsentPolicy.message.contains("records acceptance"))
+        #expect(WindowsLicenseConsentPolicy.message.contains("UTM Guest Tools"))
         #expect(WindowsLicenseConsentPolicy.acceptButtonTitle.contains("I Agree"))
-        #expect(WindowsLicenseConsentPolicy.reviewButtonTitle.contains("License Terms"))
+        #expect(WindowsLicenseConsentPolicy.reviewButtonTitle.contains("Both Terms"))
     }
 
     @Test("allows the official Microsoft Windows Arm download page")

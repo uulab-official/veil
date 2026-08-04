@@ -42,6 +42,32 @@ final class RFBEmbeddedDisplayModel {
         }
     }
 
+    var shouldShowStatusOverlay: Bool {
+        status != .receiving
+    }
+
+    func imageIdentity(endpoint: String?, fallbackRevisionID: String) -> String {
+        guard frameSequence != nil else {
+            return "snapshot:\(fallbackRevisionID)"
+        }
+
+        return "rfb:\(endpoint ?? "loopback")"
+    }
+
+    func receive(image: NSImage, sequence: Int) {
+        self.image = image
+        frameSequence = sequence
+        status = .receiving
+    }
+
+    func receiveFailure(_ message: String) {
+        if image != nil {
+            status = .receiving
+        } else {
+            status = .failed(message)
+        }
+    }
+
     func connectIfNeeded(to surface: VMConsoleDisplaySurface) {
         guard surface.kind == .vncLoopback, let endpoint = surface.endpoint else {
             stop()
@@ -68,20 +94,18 @@ final class RFBEmbeddedDisplayModel {
         worker.start(
             onFrame: { [weak self] frame in
                 guard let image = frame.makeNSImage() else {
-                    self?.status = .failed("Display frame unavailable")
+                    self?.receiveFailure("Display frame unavailable")
                     return
                 }
 
-                self?.image = image
-                self?.frameSequence = frame.sequence
-                self?.status = .receiving
+                self?.receive(image: image, sequence: frame.sequence)
             },
             onFailure: { [weak self] message in
                 guard self?.activeEndpoint == endpoint else {
                     return
                 }
 
-                self?.status = .failed(message)
+                self?.receiveFailure(message)
             }
         )
     }
@@ -102,9 +126,14 @@ enum RFBEmbeddedDisplayStatus: Equatable {
     case failed(String)
 }
 
-private struct RFBDisplayEndpoint: Equatable, Sendable {
+struct RFBDisplayEndpoint: Equatable, Sendable {
     var host: String
     var port: Int
+
+    init(host: String, port: Int) {
+        self.host = host
+        self.port = port
+    }
 
     init?(_ endpoint: String) {
         let parts = endpoint.split(separator: ":", maxSplits: 1).map(String.init)
@@ -119,15 +148,30 @@ private struct RFBDisplayEndpoint: Equatable, Sendable {
     }
 }
 
-private final class RFBEmbeddedDisplayWorker: @unchecked Sendable {
+final class RFBEmbeddedDisplayWorker: @unchecked Sendable {
+    typealias StreamFactory = @Sendable (String, Int) throws -> any RFBByteStream
+
     private let endpoint: RFBDisplayEndpoint
+    private let maximumConnectionAttempts: Int
+    private let connectionRetryDelay: TimeInterval
+    private let streamFactory: StreamFactory
     private let queue = DispatchQueue(label: "app.veil.rfb-display", qos: .userInitiated)
     private let lock = NSLock()
     private var isStopped = false
     private var stream: RFBByteStream?
 
-    init(endpoint: RFBDisplayEndpoint) {
+    init(
+        endpoint: RFBDisplayEndpoint,
+        maximumConnectionAttempts: Int = 40,
+        connectionRetryDelay: TimeInterval = 0.25,
+        streamFactory: @escaping StreamFactory = { host, port in
+            try RFBLoopbackSocket(host: host, port: port)
+        }
+    ) {
         self.endpoint = endpoint
+        self.maximumConnectionAttempts = max(maximumConnectionAttempts, 1)
+        self.connectionRetryDelay = max(connectionRetryDelay, 0)
+        self.streamFactory = streamFactory
     }
 
     func start(
@@ -151,31 +195,46 @@ private final class RFBEmbeddedDisplayWorker: @unchecked Sendable {
         onFrame: @escaping @MainActor (RFBRenderedFrame) -> Void,
         onFailure: @escaping @MainActor (String) -> Void
     ) {
-        do {
-            let socket = try RFBLoopbackSocket(host: endpoint.host, port: endpoint.port)
-            setStream(socket)
-            let client = RFBFrameStreamClient(stream: socket)
-            let serverInit = try client.startSharedSession()
-            let renderer = try RFBFramebufferRenderer(serverInit: serverInit)
-            try client.requestFramebufferUpdate(incremental: false)
+        var connectionAttempt = 0
 
-            while !isWorkerStopped {
-                let update = try client.readFramebufferUpdate()
-                let frame = try renderer.apply(update)
-                Task { @MainActor in
-                    onFrame(frame)
+        while !isWorkerStopped {
+            connectionAttempt += 1
+            do {
+                let stream = try streamFactory(endpoint.host, endpoint.port)
+                setStream(stream)
+                let client = RFBFrameStreamClient(stream: stream)
+                let serverInit = try client.startSharedSession()
+                let renderer = try RFBFramebufferRenderer(serverInit: serverInit)
+                try client.requestFramebufferUpdate(incremental: false)
+
+                while !isWorkerStopped {
+                    let update = try client.readFramebufferUpdate()
+                    let frame = try renderer.apply(update)
+                    connectionAttempt = 0
+                    Task { @MainActor in
+                        onFrame(frame)
+                    }
+
+                    try client.requestFramebufferUpdate(incremental: true)
+                }
+            } catch {
+                guard !isWorkerStopped else {
+                    return
                 }
 
-                try client.requestFramebufferUpdate(incremental: true)
-            }
-        } catch {
-            guard !isWorkerStopped else {
-                return
-            }
+                closeStreamForRetry()
+                if connectionAttempt < maximumConnectionAttempts {
+                    if connectionRetryDelay > 0 {
+                        Thread.sleep(forTimeInterval: connectionRetryDelay)
+                    }
+                    continue
+                }
 
-            let message = Self.userFacingMessage(for: error)
-            Task { @MainActor in
-                onFailure(message)
+                let message = Self.userFacingMessage(for: error)
+                Task { @MainActor in
+                    onFailure(message)
+                }
+                return
             }
         }
     }
@@ -189,6 +248,13 @@ private final class RFBEmbeddedDisplayWorker: @unchecked Sendable {
     private func setStream(_ stream: RFBByteStream) {
         lock.lock()
         self.stream = stream
+        lock.unlock()
+    }
+
+    private func closeStreamForRetry() {
+        lock.lock()
+        stream?.close()
+        stream = nil
         lock.unlock()
     }
 
