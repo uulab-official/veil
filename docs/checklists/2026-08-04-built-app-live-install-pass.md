@@ -70,4 +70,6 @@ The display blocker above is resolved for the active compatibility provider. Thi
 - [x] Confirmed the real Korean Windows 11 Arm installer reached 11%, then 25%, and entered its first restart phase.
 - [x] Confirmed the app-owned QEMU and `swtpm` processes remained alive during installation and the loopback VNC console was capturable.
 - [x] Added an embedded-display regression test proving an initial VNC connection refusal is retried instead of leaving the Windows canvas permanently stale.
+- [x] Corrected installer boot order to `once=d,order=c`, so the ISO is preferred for the first setup boot and the partially installed system disk is preferred after Windows restarts.
+- [x] Relaunched the rebuilt app against the partially installed disk and confirmed the active command uses `-boot order=c`, live VNC frames reconnect without a stale error banner, and system-disk I/O resumes.
 - [x] Passed the full macOS host regression suite: 423 tests across 28 suites.

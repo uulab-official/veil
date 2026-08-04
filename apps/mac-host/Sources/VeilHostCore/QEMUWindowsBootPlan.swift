@@ -254,7 +254,7 @@ public struct QEMUWindowsBootPlanner: Sendable {
         let guestAgentForward = "hostfwd=tcp::\(Self.guestAgentHostPort)-:\(Self.guestAgentGuestPort)"
 
         arguments.append(contentsOf: [
-            "-boot", windowsInstalled ? "order=c" : "order=d",
+            "-boot", windowsInstalled ? "order=c" : "once=d,order=c",
             "-cpu", "host",
             "-smp", "\(cpuCount)",
             "-m", "\(memoryMB)M",
