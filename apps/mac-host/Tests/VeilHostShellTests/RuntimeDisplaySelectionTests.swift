@@ -52,43 +52,37 @@ struct RuntimeDisplaySelectionTests {
     }
 }
 
-struct RuntimeWorkspacePresentationPolicyTests {
-    @Test("shows the app dock in the installed app launcher")
-    func showsInstalledAppDock() {
+struct InstalledWorkspacePresentationPolicyTests {
+    @Test("installed workspace defaults to the app home")
+    func defaultsToAppHome() {
+        #expect(!InstalledWorkspacePresentationPolicy.initiallyShowsDesktop)
+    }
+
+    @Test("desktop closes when its display is unavailable")
+    func closesUnavailableDesktop() {
         #expect(
-            RuntimeWorkspacePresentationPolicy.showsAppDock(
-                hasApps: true,
-                hasInstalledWindows: true,
-                showsFullDesktop: false
+            !InstalledWorkspacePresentationPolicy.shouldKeepDesktopVisible(
+                requested: true,
+                runtimeState: .stopped,
+                hasDesktopDisplay: true
+            )
+        )
+        #expect(
+            !InstalledWorkspacePresentationPolicy.shouldKeepDesktopVisible(
+                requested: true,
+                runtimeState: .running,
+                hasDesktopDisplay: false
             )
         )
     }
 
-    @Test("hides the app dock over the live Windows desktop")
-    func hidesAppDockOverDesktop() {
+    @Test("desktop remains visible only after a valid request")
+    func keepsValidDesktopRequest() {
         #expect(
-            !RuntimeWorkspacePresentationPolicy.showsAppDock(
-                hasApps: true,
-                hasInstalledWindows: true,
-                showsFullDesktop: true
-            )
-        )
-    }
-
-    @Test("hides the app dock until both setup and app discovery finish")
-    func hidesUnavailableAppDock() {
-        #expect(
-            !RuntimeWorkspacePresentationPolicy.showsAppDock(
-                hasApps: true,
-                hasInstalledWindows: false,
-                showsFullDesktop: false
-            )
-        )
-        #expect(
-            !RuntimeWorkspacePresentationPolicy.showsAppDock(
-                hasApps: false,
-                hasInstalledWindows: true,
-                showsFullDesktop: false
+            InstalledWorkspacePresentationPolicy.shouldKeepDesktopVisible(
+                requested: true,
+                runtimeState: .running,
+                hasDesktopDisplay: true
             )
         )
     }

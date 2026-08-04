@@ -6,6 +6,11 @@ import Virtualization
 
 struct VMRuntimeView: View {
     @Bindable var model: VMRuntimeModel
+    var apps: [WindowsApp]
+    var mirrorSessions: [WindowMirrorSession]
+    @Binding var selectedWindowsAppId: String?
+    var dashboardPhase: HostDashboardPhase
+    var hasLiveAgentConnection: Bool
     var guestAgentInstallEvidence: VMInstallEvidenceSummary?
     var agentDiagnostic: AgentConnectionDiagnostic?
     var canLaunchWindowsApp: Bool
@@ -129,6 +134,11 @@ struct VMRuntimeView: View {
             if let snapshot = model.snapshot {
                 WindowsSetupDisplayPanel(
                     snapshot: snapshot,
+                    apps: apps,
+                    mirrorSessions: mirrorSessions,
+                    selectedWindowsAppId: $selectedWindowsAppId,
+                    dashboardPhase: dashboardPhase,
+                    hasLiveAgentConnection: hasLiveAgentConnection,
                     guestAgentInstallEvidence: validGuestAgentEvidence(for: snapshot),
                     agentDiagnostic: agentDiagnostic,
                     statusText: model.statusText,
@@ -1499,6 +1509,11 @@ private struct ControlCenterHero: View {
 
 private struct WindowsSetupDisplayPanel: View {
     var snapshot: VMRuntimeSnapshot
+    var apps: [WindowsApp]
+    var mirrorSessions: [WindowMirrorSession]
+    @Binding var selectedWindowsAppId: String?
+    var dashboardPhase: HostDashboardPhase
+    var hasLiveAgentConnection: Bool
     var guestAgentInstallEvidence: VMInstallEvidenceSummary?
     var agentDiagnostic: AgentConnectionDiagnostic?
     var statusText: String
@@ -1561,63 +1576,75 @@ private struct WindowsSetupDisplayPanel: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onAppear {
-            showsFullDesktop = snapshot.state == .running && hasDesktopDisplay
+            showsFullDesktop = InstalledWorkspacePresentationPolicy.shouldKeepDesktopVisible(
+                requested: showsFullDesktop,
+                runtimeState: snapshot.state,
+                hasDesktopDisplay: hasDesktopDisplay
+            )
         }
         .onChange(of: snapshot.state) { _, newState in
-            showsFullDesktop = newState == .running && hasDesktopDisplay
+            showsFullDesktop = InstalledWorkspacePresentationPolicy.shouldKeepDesktopVisible(
+                requested: showsFullDesktop,
+                runtimeState: newState,
+                hasDesktopDisplay: hasDesktopDisplay
+            )
         }
-        .onChange(of: hasDesktopDisplay) { hadDesktopDisplay, hasDesktopDisplay in
-            if !hasDesktopDisplay {
-                showsFullDesktop = false
-            } else if !hadDesktopDisplay, snapshot.state == .running {
-                showsFullDesktop = true
-            }
+        .onChange(of: hasDesktopDisplay) { _, newValue in
+            showsFullDesktop = InstalledWorkspacePresentationPolicy.shouldKeepDesktopVisible(
+                requested: showsFullDesktop,
+                runtimeState: snapshot.state,
+                hasDesktopDisplay: newValue
+            )
         }
-    }
-
-    private var installedLauncherStage: some View {
-        ZStack(alignment: .topTrailing) {
-            launcherDisplaySurface
-
-            installedRuntimeChrome
-                .padding(showsFullDesktop ? 12 : 16)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     @ViewBuilder
-    private var installedRuntimeChrome: some View {
-        if showsFullDesktop {
-            Button {
-                showsFullDesktop = false
-            } label: {
-                Label("Show Apps", systemImage: "macwindow")
-                    .labelStyle(.iconOnly)
-                    .frame(width: 32, height: 32)
-                    .contentShape(Circle())
+    private var installedLauncherStage: some View {
+        if showsFullDesktop && hasDesktopDisplay {
+            ZStack(alignment: .topTrailing) {
+                launcherDisplaySurface
+
+                showAppsButton
+                    .padding(12)
             }
-            .buttonStyle(.plain)
-            .background(.black.opacity(0.16), in: Circle())
-            .background(.ultraThinMaterial, in: Circle())
-            .overlay {
-                Circle()
-                    .strokeBorder(.white.opacity(0.18), lineWidth: 1)
-            }
-            .shadow(color: .black.opacity(0.24), radius: 10, y: 4)
-            .keyboardShortcut("a", modifiers: [.command, .shift])
-            .help("Show Windows apps (⇧⌘A)")
-            .accessibilityLabel("Show Windows apps")
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
-            horizontalActions
-                .padding(.horizontal, 10)
-                .padding(.vertical, 8)
-                .background(.black.opacity(0.18))
-                .background(.ultraThinMaterial, in: Capsule())
-                .overlay {
-                    Capsule()
-                        .strokeBorder(.white.opacity(0.14), lineWidth: 1)
-                }
+            InstalledWindowsAppHome(
+                presentation: installedHomePresentation,
+                apps: apps,
+                selectedAppId: $selectedWindowsAppId,
+                pendingAppId: pendingLaunch.appId,
+                openWindowCounts: Dictionary(grouping: mirrorSessions, by: { $0.window.appId }).mapValues(\.count),
+                canShowDesktop: snapshot.state == .running && hasDesktopDisplay,
+                launchAction: launchWindowsAppAction,
+                showDesktopAction: { showsFullDesktop = true },
+                settingsAction: detailsAction,
+                effectiveRecoveryAction: runEffectivePrimaryAction,
+                refreshAction: refreshAction
+            )
         }
+    }
+
+    private var showAppsButton: some View {
+        Button {
+            showsFullDesktop = false
+        } label: {
+            Label("Show Apps", systemImage: "macwindow")
+                .labelStyle(.iconOnly)
+                .frame(width: 32, height: 32)
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .background(.black.opacity(0.16), in: Circle())
+        .background(.ultraThinMaterial, in: Circle())
+        .overlay {
+            Circle()
+                .strokeBorder(.white.opacity(0.18), lineWidth: 1)
+        }
+        .shadow(color: .black.opacity(0.24), radius: 10, y: 4)
+        .keyboardShortcut("a", modifiers: [.command, .shift])
+        .help("Show Windows apps (⇧⌘A)")
+        .accessibilityLabel("Show Windows apps")
     }
 
     private var installProcessStage: some View {
@@ -1682,7 +1709,7 @@ private struct WindowsSetupDisplayPanel: View {
                     keyAction: consoleKeyAction
                 )
             } else {
-                machineDisplay
+                Color.black
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -1690,11 +1717,10 @@ private struct WindowsSetupDisplayPanel: View {
 
     @ViewBuilder
     private var launcherDisplaySurface: some View {
-        if showsFullDesktop,
-           displaySelection == .appleVirtualMachine,
+        if displaySelection == .appleVirtualMachine,
            let embeddedVirtualMachine {
             EmbeddedVirtualMachineView(virtualMachine: embeddedVirtualMachine)
-        } else if showsFullDesktop, let displaySurface {
+        } else if let displaySurface {
             WindowsEmbeddedDisplayPreview(
                 image: displayScreenshotImage,
                 surface: displaySurface,
@@ -1704,7 +1730,7 @@ private struct WindowsSetupDisplayPanel: View {
                 keyAction: consoleKeyAction
             )
         } else {
-            machineDisplay
+            Color.black
         }
     }
 
@@ -1801,61 +1827,6 @@ private struct WindowsSetupDisplayPanel: View {
         return "\(path)#\(refreshedAt)"
     }
 
-    private var machineDisplay: some View {
-        ZStack {
-            Rectangle()
-                .fill(machineHeroGradient)
-
-            installedMachineContent
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-        }
-    }
-
-    private var installedMachineContent: some View {
-        VStack(spacing: 16) {
-            Spacer(minLength: 8)
-
-            WindowsLogoMark(size: 64)
-                .shadow(color: .black.opacity(0.18), radius: 16, y: 8)
-
-            VStack(spacing: 4) {
-                Text(machineTitle)
-                    .font(.system(size: 30, weight: .semibold))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-                Text(machineSubtitle)
-                    .font(.callout)
-                    .foregroundStyle(.white.opacity(0.74))
-                    .lineLimit(1)
-            }
-
-            Button(action: runEffectivePrimaryAction) {
-                Label(effectivePrimaryTitle, systemImage: effectivePrimarySymbol)
-                    .font(.headline)
-                    .frame(minWidth: 220, minHeight: 26)
-            }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
-            .disabled(effectivePrimaryDisabled)
-            .help(effectivePrimaryHelp)
-            .accessibilityLabel(effectivePrimaryTitle)
-            .accessibilityHint(effectivePrimaryHelp)
-
-            Label(launchOnboardingTitle, systemImage: launchOnboardingSymbolName)
-                .font(.callout.weight(.semibold))
-                .foregroundStyle(.white.opacity(launchOnboarding.canContinueInApp ? 0.88 : 0.68))
-                .lineLimit(1)
-                .help(launchOnboardingHelp)
-
-            AppRuntimeProgressStrip(items: appOpenFlowItems)
-                .frame(maxWidth: 760)
-
-            Spacer(minLength: 8)
-        }
-        .foregroundStyle(.white)
-        .padding(24)
-    }
-
     private var installPrimaryTitle: String {
         if canRecoverRuntimeDisplay {
             return "Refresh Display"
@@ -1899,79 +1870,12 @@ private struct WindowsSetupDisplayPanel: View {
         return snapshot.profileName == nil ? "Prepare Windows" : "Continue Setup"
     }
 
-    private var horizontalActions: some View {
-        HStack(spacing: 8) {
-            if snapshot.state == .running, hasDesktopDisplay {
-                Button {
-                    showsFullDesktop.toggle()
-                } label: {
-                    Label(
-                        showsFullDesktop ? "Show Apps" : "Show Desktop",
-                        systemImage: showsFullDesktop ? "macwindow" : "display"
-                    )
-                    .labelStyle(.iconOnly)
-                }
-                .keyboardShortcut("a", modifiers: [.command, .shift])
-                .help(showsFullDesktop ? "Return to the Windows app launcher" : "Show the live Windows desktop (⇧⌘A)")
-                .accessibilityLabel(showsFullDesktop ? "Show Windows apps" : "Show Windows desktop")
-            }
-
-            Button(action: detailsAction) {
-                Label("Settings", systemImage: "gearshape.fill")
-                    .labelStyle(.iconOnly)
-            }
-            .disabled(isLoading)
-            .help("Open Windows settings")
-
-            if hasRuntimeMoreActions {
-                runtimeMoreMenu
-            }
-        }
-    }
-
     private var runtimeSettingsButton: some View {
         Button(action: detailsAction) {
             Label("Settings", systemImage: "gearshape.fill")
         }
         .disabled(isLoading)
         .help("Open Windows settings")
-    }
-
-    @ViewBuilder
-    private var runtimeActionButton: some View {
-        if canRecoverRuntimeDisplay {
-            Button(action: recoverRuntimeDisplayAction) {
-                Label("Refresh Display", systemImage: "display")
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.regular)
-            .disabled(isLoading)
-            .help("Refresh embedded Windows display evidence")
-        } else if executablePrimaryNextActionRoute != nil {
-            Button(action: runEffectivePrimaryAction) {
-                Label(effectivePrimaryTitle, systemImage: effectivePrimarySymbol)
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.regular)
-            .disabled(effectivePrimaryDisabled)
-            .help(effectivePrimaryHelp)
-        } else if canOpenWindowsApp {
-            Button(action: primaryAction) {
-                Label(appDisplayName, systemImage: "macwindow.badge.plus")
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.regular)
-            .disabled(isLoading)
-            .help("Open Windows app")
-        } else if canRepairGuestAgentForAppLaunch {
-            Button(action: repairGuestAgentForAppLaunchAction) {
-                Label("Continue \(pendingAppDisplayName)", systemImage: "bolt.horizontal.circle")
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.regular)
-            .disabled(isLoading)
-            .help("Repair the Windows app connection and continue opening the queued app")
-        }
     }
 
     @ViewBuilder
@@ -2096,6 +2000,17 @@ private struct WindowsSetupDisplayPanel: View {
         guestAgentInstallEvidence ?? snapshot.installEvidence
     }
 
+    private var installedHomePresentation: InstalledAppHomePresentation {
+        InstalledAppHomePresentation.resolve(
+            runtimeState: snapshot.state,
+            dashboardPhase: dashboardPhase,
+            hasLiveAgentConnection: hasLiveAgentConnection,
+            appCount: apps.count,
+            pendingAppId: pendingLaunch.appId,
+            errorMessage: errorMessage
+        )
+    }
+
     private var canInstallGuestAgent: Bool {
         canShowDisplay && effectiveInstallEvidence.kind != .guestAgent
     }
@@ -2195,66 +2110,6 @@ private struct WindowsSetupDisplayPanel: View {
 
     private var pendingAppDisplayName: String {
         pendingWindowsAppName ?? "Windows App"
-    }
-
-    private var machineTitle: String {
-        effectiveInstallEvidence.isInstalled ? "Windows 11" : "Install Windows 11"
-    }
-
-    private var machineSubtitle: String {
-        if effectiveInstallEvidence.isInstalled {
-            if let activeMirrorSession {
-                return "\(activeMirrorSession.window.title) is open as a Mac window"
-            }
-
-            if canFulfillPendingLaunch {
-                return "Open \(pendingAppDisplayName) as a Mac window"
-            }
-
-            if pendingLaunch.willLaunchOnAgentReconnect {
-                switch snapshot.state {
-                case .running, .starting:
-                    return "\(pendingAppDisplayName) will open when the app connection is ready"
-                default:
-                    return "\(pendingAppDisplayName) is queued. Start Windows to continue"
-                }
-            }
-
-            if canRequestWindowsAppLaunch {
-                return "Open Windows apps from macOS"
-            }
-
-            return effectiveInstallEvidence.kind == .guestAgent
-                ? "App connection ready"
-                : "Connect app integration to open Mac windows"
-        }
-
-        if snapshot.bootReady {
-            return snapshot.runtimeProvider?.kind == .appleVirtualization
-                ? "Windows will open in an Apple Virtualization console"
-                : "Press play to start Windows in this window"
-        }
-
-        if installerNeedsFilePickerAccess {
-            return "Re-select the ISO to grant macOS file access"
-        }
-
-        if snapshot.runtimeProvider?.kind == .appleVirtualization {
-            return "Apple Virtualization compatibility mode • bring your Windows 11 Arm installer"
-        }
-
-        return "Bring your own Windows 11 Arm installer"
-    }
-
-    private var machineHeroGradient: LinearGradient {
-        switch snapshot.state {
-        case .running:
-            LinearGradient(colors: [Color(red: 0.04, green: 0.34, blue: 0.24), Color(red: 0.03, green: 0.18, blue: 0.24)], startPoint: .topLeading, endPoint: .bottomTrailing)
-        case .failed, .unsupported:
-            LinearGradient(colors: [Color(red: 0.42, green: 0.18, blue: 0.08), Color(red: 0.15, green: 0.12, blue: 0.11)], startPoint: .topLeading, endPoint: .bottomTrailing)
-        default:
-            LinearGradient(colors: [Color(red: 0.02, green: 0.32, blue: 0.62), Color(red: 0.08, green: 0.09, blue: 0.14)], startPoint: .topLeading, endPoint: .bottomTrailing)
-        }
     }
 
     private var showsUnavailableGuestAgentRoute: Bool {
@@ -2515,57 +2370,6 @@ private struct WindowsSetupDisplayPanel: View {
         }
     }
 
-    private var oneScreenUXTitle: String {
-        if primaryNextAction.runsInApp && !oneScreenUX.heroRunsPrimaryAction {
-            return "Hero action needs attention"
-        }
-
-        if !oneScreenUX.canRecoverFromMenuOrDock {
-            return "Recovery needs attention"
-        }
-
-        if !oneScreenUX.returnsToLauncherWhenNoAppWindows {
-            return "Launcher fallback needs attention"
-        }
-
-        if oneScreenUX.mode == "windows-app-windows" {
-            let count = oneScreenUX.expectedVisibleSurfaceCount
-            return count == 1 ? "One Windows app surface" : "\(count) Windows app surfaces"
-        }
-
-        return "One launcher surface"
-    }
-
-    private var oneScreenUXSymbolName: String {
-        oneScreenUX.usesSinglePrimarySurfaceFamily
-            && oneScreenUX.canRecoverFromMenuOrDock
-            && oneScreenUX.returnsToLauncherWhenNoAppWindows
-            && (!primaryNextAction.runsInApp || oneScreenUX.heroRunsPrimaryAction)
-            ? "rectangle.on.rectangle"
-            : "exclamationmark.triangle"
-    }
-
-    private var launchOnboardingTitle: String {
-        WindowsShellCopy.launchOnboardingTitle(
-            state: launchOnboarding.state,
-            canContinueInApp: launchOnboarding.canContinueInApp
-        )
-    }
-
-    private var launchOnboardingDetail: String {
-        WindowsShellCopy.launchOnboardingDetail(
-            currentStepTitle: launchOnboarding.currentStepTitle,
-            pendingLiveProof: launchOnboarding.pendingLiveProof
-        )
-    }
-
-    private var launchOnboardingSymbolName: String {
-        WindowsShellCopy.launchOnboardingSymbolName(
-            state: launchOnboarding.state,
-            canContinueInApp: launchOnboarding.canContinueInApp
-        )
-    }
-
     private var launchOnboardingHelp: String {
         [
             launchOnboarding.currentStepDetail,
@@ -2578,22 +2382,6 @@ private struct WindowsSetupDisplayPanel: View {
         ]
             .compactMap { $0 }
             .joined(separator: "\n")
-    }
-
-    private var appAutomationTitle: String {
-        if launchPlan.willOpenAppAutomatically {
-            return launchPlan.canLaunchSelectedAppNow ? "App opens now" : "App opens automatically"
-        }
-
-        if launchPlan.recommendedAction == "prepare-local-runtime" {
-            return "Setup needed before app opens"
-        }
-
-        return "App open needs attention"
-    }
-
-    private var appAutomationSymbolName: String {
-        launchPlan.willOpenAppAutomatically ? "bolt.circle" : "exclamationmark.triangle"
     }
 
     private var installerNeedsFilePickerAccess: Bool {
@@ -2613,42 +2401,8 @@ private struct WindowsSetupDisplayPanel: View {
             return installSimulation.progress
         }
 
-        if effectiveInstallEvidence.isInstalled {
-            let completed = appOpenFlowItems.filter { $0.state == .complete }.count
-            return Double(completed) / Double(appOpenFlowItems.count)
-        }
-
         let completed = flowItems.filter { $0.state == .complete }.count
         return Double(completed) / Double(flowItems.count)
-    }
-
-    private var phaseTint: Color {
-        switch snapshot.state {
-        case .running:
-            .green
-        case .starting:
-            .blue
-        case .stopped:
-            snapshot.bootReady ? .green : .orange
-        case .failed, .unsupported:
-            .orange
-        case .notConfigured, .suspended:
-            .secondary
-        }
-    }
-
-    private var progressTint: Color {
-        installSimulation.phase == .running ? .blue : phaseTint
-    }
-
-    private var canOpenWindowsApp: Bool {
-        canRequestWindowsAppLaunch || canFulfillPendingLaunch
-    }
-
-    private var canRepairGuestAgentForAppLaunch: Bool {
-        pendingLaunch.willLaunchOnAgentReconnect
-            && !canFulfillPendingLaunch
-            && (snapshot.state == .running || snapshot.state == .starting)
     }
 
     private var canRecoverRuntimeDisplay: Bool {
@@ -2660,108 +2414,6 @@ private struct WindowsSetupDisplayPanel: View {
             || snapshot.latestConsoleLaunch?.previewStatus == .unavailable
     }
 
-    private var appOpenFlowItems: [InstallFlowItem] {
-        [
-            InstallFlowItem(
-                title: "Windows",
-                detail: snapshot.state == .running || snapshot.state == .starting
-                    ? "Running locally"
-                    : "Start Windows",
-                symbolName: "play.rectangle",
-                state: snapshot.state == .running || snapshot.state == .starting ? .complete : .current
-            ),
-            InstallFlowItem(
-                title: "App Connection",
-                detail: agentFlowDetail,
-                symbolName: "bolt.horizontal.circle",
-                state: agentFlowState
-            ),
-            InstallFlowItem(
-                title: "App Window",
-                detail: activeMirrorSession?.window.title
-                    ?? (pendingLaunch.isQueued ? pendingAppDisplayName : appDisplayName),
-                symbolName: "macwindow",
-                state: appWindowFlowState
-            ),
-            InstallFlowItem(
-                title: "App Check",
-                detail: proofGateDetail,
-                symbolName: "checkmark.seal",
-                state: proofGateState
-            )
-        ]
-    }
-
-    private var agentFlowDetail: String {
-        if canLaunchWindowsApp || canFulfillPendingLaunch {
-            return "Connected"
-        }
-
-        if pendingLaunch.isQueued {
-            return "Waiting for reconnect"
-        }
-
-        if canRequestWindowsAppLaunch {
-            return snapshot.state == .running || snapshot.state == .starting
-                ? "Repair before launch"
-                : "Start before launch"
-        }
-
-        return "Waiting for app catalog"
-    }
-
-    private var agentFlowState: InstallFlowState {
-        if canLaunchWindowsApp || canFulfillPendingLaunch {
-            return .complete
-        }
-
-        if pendingLaunch.isQueued || canRequestWindowsAppLaunch {
-            return snapshot.state == .running || snapshot.state == .starting ? .current : .pending
-        }
-
-        return .pending
-    }
-
-    private var appWindowFlowState: InstallFlowState {
-        if activeMirrorSession != nil {
-            return .complete
-        }
-
-        if canLaunchWindowsApp || canFulfillPendingLaunch {
-            return .current
-        }
-
-        if pendingLaunch.isQueued || canRequestWindowsAppLaunch {
-            return .pending
-        }
-
-        return .pending
-    }
-
-    private var proofGateState: InstallFlowState {
-        guard recommendedProofCommand != nil else {
-            return activeMirrorSession != nil ? .current : .pending
-        }
-
-        return recommendedProofKind == "mvp" ? .complete : .current
-    }
-
-    private var proofGateDetail: String {
-        guard recommendedProofCommand != nil else {
-            return activeMirrorSession != nil ? "Ready to check" : "Waiting for app"
-        }
-
-        switch recommendedProofKind {
-        case "mvp":
-            return "Full app check ready"
-        case "coherence":
-            return "Input check ready"
-        case "app-window":
-            return "Window check ready"
-        default:
-            return "App check ready"
-        }
-    }
 }
 
 enum SetupJourneyStageState: Equatable {
@@ -3032,66 +2684,6 @@ private struct AssistantProgressStrip: View {
         }
         .padding(12)
         .background(.blue.opacity(0.08), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-    }
-}
-
-private struct AppRuntimeProgressStrip: View {
-    var items: [InstallFlowItem]
-
-    var body: some View {
-        HStack(spacing: 8) {
-            ForEach(items) { item in
-                HStack(spacing: 7) {
-                    Image(systemName: item.symbolName)
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(tint(for: item.state))
-                        .frame(width: 22, height: 22)
-                        .background(tint(for: item.state).opacity(0.16), in: Circle())
-
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(item.title)
-                            .font(.caption2.weight(.semibold))
-                            .foregroundStyle(.white.opacity(0.62))
-                        Text(item.detail)
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.white.opacity(0.88))
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                    }
-                    .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
-                }
-                .padding(.horizontal, 9)
-                .padding(.vertical, 8)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(.white.opacity(backgroundOpacity(for: item.state)), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .strokeBorder(.white.opacity(0.12), lineWidth: 1)
-                }
-            }
-        }
-    }
-
-    private func tint(for state: InstallFlowState) -> Color {
-        switch state {
-        case .complete:
-            return .green
-        case .current:
-            return .blue
-        case .pending:
-            return .white.opacity(0.58)
-        }
-    }
-
-    private func backgroundOpacity(for state: InstallFlowState) -> Double {
-        switch state {
-        case .complete:
-            return 0.14
-        case .current:
-            return 0.18
-        case .pending:
-            return 0.08
-        }
     }
 }
 
