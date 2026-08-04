@@ -1625,13 +1625,29 @@ private struct WindowsSetupDisplayPanel: View {
         ZStack(alignment: .bottom) {
             installDisplaySurface
 
-            installControlBar
-                .background(.black.opacity(0.18))
-                .background(.ultraThinMaterial)
-                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                .padding(10)
+            if shouldShowInstallControlBar {
+                installControlBar
+                    .background(.black.opacity(0.18))
+                    .background(.ultraThinMaterial)
+                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    .padding(10)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+        .animation(.easeInOut(duration: 0.2), value: shouldShowInstallControlBar)
+    }
+
+    private var shouldShowInstallControlBar: Bool {
+        hasDesktopDisplay
+            || canStart
+            || canStop
+            || snapshot.state == .starting
+            || selectedInstallerName != nil
+            || installSimulation.phase != .idle
+            || errorMessage != nil
+            || displayMessage != nil
+            || hasRuntimeMoreActions
     }
 
     private var installDisplaySurface: some View {
@@ -1769,16 +1785,39 @@ private struct WindowsSetupDisplayPanel: View {
     }
 
     private var machineDisplay: some View {
-        ZStack {
+        ZStack(alignment: .topTrailing) {
             Rectangle()
                 .fill(machineHeroGradient)
 
             if effectiveInstallEvidence.isInstalled {
                 installedMachineContent
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 firstRunSetupContent
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                firstRunSettingsButton
+                    .padding(20)
             }
         }
+    }
+
+    private var firstRunSettingsButton: some View {
+        Button(action: detailsAction) {
+            Image(systemName: "gearshape.fill")
+                .font(.system(size: 14, weight: .semibold))
+                .frame(width: 36, height: 36)
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(.white.opacity(0.82))
+        .background(.black.opacity(0.14), in: Circle())
+        .overlay {
+            Circle()
+                .strokeBorder(.white.opacity(0.14), lineWidth: 1)
+        }
+        .disabled(isLoading)
+        .help("Open Windows settings")
+        .accessibilityLabel("Settings")
     }
 
     private var firstRunSetupContent: some View {

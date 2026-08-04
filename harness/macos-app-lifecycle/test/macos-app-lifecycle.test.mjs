@@ -57,6 +57,16 @@ test("first-run hero presents one clear setup journey without runtime jargon", a
   assert.doesNotMatch(source, /Mac app windows require QEMU or a configured endpoint/);
 });
 
+test("first-run setup removes the redundant bottom bar while keeping settings available", async () => {
+  const source = await readRootFile("apps/mac-host/Sources/VeilHostShell/Views/VMRuntimeView.swift");
+
+  assert.match(source, /if shouldShowInstallControlBar \{[\s\S]*installControlBar/);
+  assert.match(source, /private var shouldShowInstallControlBar: Bool/);
+  assert.match(source, /ZStack\(alignment: \.topTrailing\)[\s\S]*firstRunSettingsButton/);
+  assert.match(source, /private var firstRunSettingsButton: some View[\s\S]*Button\(action: detailsAction\)/);
+  assert.match(source, /\.accessibilityLabel\("Settings"\)/);
+});
+
 test("Windows setup requires explicit license consent for downloaded and selected ISOs", async () => {
   const downloadSheet = await readRootFile("apps/mac-host/Sources/VeilHostShell/Views/WindowsDownloadSheet.swift");
   const runtimeView = await readRootFile("apps/mac-host/Sources/VeilHostShell/Views/VMRuntimeView.swift");
@@ -102,6 +112,15 @@ test("Windows download communicates its staged progress and source", async () =>
   assert.match(source, /\("Prepare", "internaldrive"\)/);
   assert.match(source, /Text\("\\\(Int\(progress \* 100\)\)%"\)/);
   assert.match(source, /Secure download from microsoft\.com • Saved only on this Mac/);
+});
+
+test("Windows download offers direct cancel and recovery actions", async () => {
+  const source = await readRootFile("apps/mac-host/Sources/VeilHostShell/Views/WindowsDownloadSheet.swift");
+
+  assert.match(source, /Button\("Cancel"\)[\s\S]*controller\.cancelDownload\(\)[\s\S]*closeAction\(\)/);
+  assert.match(source, /Button\("Try Download Again", action: retryDownload\)/);
+  assert.match(source, /Button\("Try Preparing Again"\)/);
+  assert.match(source, /private func retryDownload\(\)[\s\S]*controller\.reloadLandingPage\(\)/);
 });
 
 test("Windows setup enters native macOS full screen without toggling an existing full-screen window", async () => {
