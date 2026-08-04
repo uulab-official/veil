@@ -298,7 +298,7 @@ struct VeilHostClientTests {
             #"{"type":"app.list.response","requestId":"req_apps","apps":[{"id":"winapp_notepad","name":"Notepad","exePath":"C:\\Windows\\System32\\notepad.exe","publisher":"Microsoft","iconId":"icon_notepad"}]}"#,
             #"{"type":"app.launch.response","requestId":"req_launch_winapp_notepad","accepted":true,"processId":4912}"#,
             #"{"type":"window.created","windowId":"hwnd:0003029A","processId":4912,"appId":"winapp_notepad","title":"Untitled - Notepad","bounds":{"x":10,"y":10,"width":1280,"height":800},"state":"normal","focused":true}"#
-        ])
+        ], acknowledgeOperations: true)
         let eventSource = BufferedEventSource(messages: [
             WindowFrameEvent.notepadFirstFrameJSON
         ])
@@ -339,7 +339,7 @@ struct VeilHostClientTests {
             #"{"type":"app.list.response","requestId":"req_apps","apps":[{"id":"winapp_notepad","name":"Notepad","exePath":"C:\\Windows\\System32\\notepad.exe","publisher":"Microsoft","iconId":"icon_notepad"}]}"#,
             #"{"type":"app.launch.response","requestId":"req_launch_winapp_notepad","accepted":true,"processId":4912}"#,
             #"{"type":"window.created","windowId":"hwnd:0003029A","processId":4912,"appId":"winapp_notepad","title":"Untitled - Notepad","bounds":{"x":10,"y":10,"width":1280,"height":800},"state":"normal","focused":true}"#
-        ])
+        ], acknowledgeOperations: true)
         let eventSource = BufferedEventSource(messages: [
             WindowFrameEvent.notepadFirstFrameJSON,
             WindowFrameEvent.notepadPostInputFrameJSON
@@ -398,7 +398,7 @@ struct VeilHostClientTests {
             "input.key",
             "clipboard.text.set"
         ])
-        #expect(transport.expectedReplyCounts == [1, 1, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+        #expect(transport.expectedReplyCounts == [1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1])
     }
 
     @Test("proves Windows MVP runtime after guest agent wait")
@@ -409,7 +409,7 @@ struct VeilHostClientTests {
             #"{"type":"app.list.response","requestId":"req_apps","apps":[{"id":"winapp_notepad","name":"Notepad","exePath":"C:\\Windows\\System32\\notepad.exe","publisher":"Microsoft","iconId":"icon_notepad"}]}"#,
             #"{"type":"app.launch.response","requestId":"req_launch_winapp_notepad","accepted":true,"processId":4912}"#,
             #"{"type":"window.created","windowId":"hwnd:0003029A","processId":4912,"appId":"winapp_notepad","title":"Untitled - Notepad","bounds":{"x":10,"y":10,"width":1280,"height":800},"state":"normal","focused":true}"#
-        ])
+        ], acknowledgeOperations: true)
         let eventSource = BufferedEventSource(messages: [
             WindowFrameEvent.notepadFirstFrameJSON,
             WindowFrameEvent.notepadPostInputFrameJSON
@@ -557,9 +557,9 @@ struct VeilHostClientTests {
         #expect(response.accepted)
     }
 
-    @Test("sends mouse input without waiting for a reply")
-    func sendsMouseInputWithoutReply() async throws {
-        let transport = RecordingTransport(responses: [])
+    @Test("acknowledges click mouse input")
+    func acknowledgesClickMouseInput() async throws {
+        let transport = RecordingTransport(responses: [], acknowledgeOperations: true)
         let client = VeilHostClient(transport: transport)
 
         try await client.sendMouseInput(
@@ -567,12 +567,41 @@ struct VeilHostClientTests {
         )
 
         #expect(transport.sentTypes == ["input.mouse"])
-        #expect(transport.expectedReplyCounts == [0])
+        #expect(transport.expectedReplyCounts == [1])
+        #expect(transport.sentRequestIds.count == 1)
     }
 
-    @Test("sends key input without waiting for a reply")
-    func sendsKeyInputWithoutReply() async throws {
+    @Test("acknowledges scroll mouse input")
+    func acknowledgesScrollMouseInput() async throws {
+        let transport = RecordingTransport(responses: [], acknowledgeOperations: true)
+        let client = VeilHostClient(transport: transport)
+
+        try await client.sendMouseInput(
+            InputMouseEvent(windowId: "hwnd:0003029A", event: "scroll", x: 240, y: 130)
+        )
+
+        #expect(transport.sentTypes == ["input.mouse"])
+        #expect(transport.expectedReplyCounts == [1])
+        #expect(transport.sentRequestIds.count == 1)
+    }
+
+    @Test("sends mouse move without waiting for a reply")
+    func sendsMouseMoveWithoutReply() async throws {
         let transport = RecordingTransport(responses: [])
+        let client = VeilHostClient(transport: transport)
+
+        try await client.sendMouseInput(
+            InputMouseEvent(windowId: "hwnd:0003029A", event: "move", x: 240, y: 130)
+        )
+
+        #expect(transport.sentTypes == ["input.mouse"])
+        #expect(transport.expectedReplyCounts == [0])
+        #expect(transport.sentRequestIds.isEmpty)
+    }
+
+    @Test("acknowledges key input")
+    func acknowledgesKeyInput() async throws {
+        let transport = RecordingTransport(responses: [], acknowledgeOperations: true)
         let client = VeilHostClient(transport: transport)
 
         try await client.sendKeyInput(
@@ -586,12 +615,13 @@ struct VeilHostClientTests {
         )
 
         #expect(transport.sentTypes == ["input.key"])
-        #expect(transport.expectedReplyCounts == [0])
+        #expect(transport.expectedReplyCounts == [1])
+        #expect(transport.sentRequestIds.count == 1)
     }
 
-    @Test("sends host clipboard text without waiting for a reply")
-    func sendsHostClipboardTextWithoutReply() async throws {
-        let transport = RecordingTransport(responses: [])
+    @Test("acknowledges host clipboard text")
+    func acknowledgesHostClipboardText() async throws {
+        let transport = RecordingTransport(responses: [], acknowledgeOperations: true)
         let client = VeilHostClient(transport: transport)
 
         try await client.sendClipboardText(
@@ -599,34 +629,175 @@ struct VeilHostClientTests {
         )
 
         #expect(transport.sentTypes == ["clipboard.text.set"])
-        #expect(transport.expectedReplyCounts == [0])
+        #expect(transport.expectedReplyCounts == [1])
+        #expect(transport.sentRequestIds == ["req_clipboard_1"])
     }
 
-    @Test("sends frame stream subscribe and unsubscribe without waiting for replies")
-    func sendsFrameStreamControlWithoutReply() async throws {
-        let transport = RecordingTransport(responses: [])
+    @Test("acknowledges frame stream subscription")
+    func acknowledgesFrameStreamSubscription() async throws {
+        let transport = RecordingTransport(responses: [], acknowledgeOperations: true)
         let client = VeilHostClient(transport: transport)
 
         try await client.subscribeWindowFrames(windowId: "hwnd:0003029A")
+
+        #expect(transport.sentTypes == ["window.frame.subscribe"])
+        #expect(transport.expectedReplyCounts == [1])
+        #expect(transport.sentRequestIds == ["req_frame_subscribe_hwnd_0003029A"])
+    }
+
+    @Test("acknowledges frame stream unsubscription")
+    func acknowledgesFrameStreamUnsubscription() async throws {
+        let transport = RecordingTransport(responses: [], acknowledgeOperations: true)
+        let client = VeilHostClient(transport: transport)
+
         try await client.unsubscribeWindowFrames(windowId: "hwnd:0003029A")
 
-        #expect(transport.sentTypes == [
-            "window.frame.subscribe",
-            "window.frame.unsubscribe"
+        #expect(transport.sentTypes == ["window.frame.unsubscribe"])
+        #expect(transport.expectedReplyCounts == [1])
+        #expect(transport.sentRequestIds == ["req_frame_unsubscribe_hwnd_0003029A"])
+    }
+
+    @Test("surfaces operation acknowledgement errors")
+    func surfacesOperationAcknowledgementErrors() async throws {
+        let transport = CorrelatedOperationErrorTransport(
+            code: "input_key_rejected",
+            message: "Windows rejected key input."
+        )
+        let client = VeilHostClient(transport: transport)
+
+        await #expect(throws: VeilHostError.agentError(
+            code: "input_key_rejected",
+            message: "Windows rejected key input."
+        )) {
+            try await client.sendKeyInput(
+                InputKeyEvent(
+                    windowId: "hwnd:0003029A",
+                    event: "keyDown",
+                    key: "c",
+                    windowsVirtualKey: 67,
+                    modifiers: ["ctrl"]
+                )
+            )
+        }
+    }
+
+    @Test("rejects operation error with mismatched request ID")
+    func rejectsOperationErrorWithMismatchedRequestId() async throws {
+        let transport = RecordingTransport(responses: [
+            #"{"type":"error","requestId":"req_other","code":"input_key_rejected","message":"Windows rejected key input."}"#
         ])
-        #expect(transport.expectedReplyCounts == [0, 0])
+        let client = VeilHostClient(transport: transport)
+
+        await #expect(throws: VeilHostError.missingReply("operation acknowledgement requestId did not match")) {
+            try await client.sendKeyInput(
+                InputKeyEvent(windowId: "hwnd:0003029A", event: "keyDown", key: "c", windowsVirtualKey: 67)
+            )
+        }
+    }
+
+    @Test("rejects operation acknowledgement with mismatched request ID")
+    func rejectsOperationAcknowledgementWithMismatchedRequestId() async throws {
+        let transport = RecordingTransport(responses: [
+            #"{"type":"operation.response","requestId":"req_other","operation":"input.key","accepted":true}"#
+        ])
+        let client = VeilHostClient(transport: transport)
+
+        await #expect(throws: VeilHostError.missingReply("operation acknowledgement requestId did not match")) {
+            try await client.sendKeyInput(
+                InputKeyEvent(windowId: "hwnd:0003029A", event: "keyDown", key: "c", windowsVirtualKey: 67)
+            )
+        }
+    }
+
+    @Test("rejects operation acknowledgement with mismatched operation")
+    func rejectsOperationAcknowledgementWithMismatchedOperation() async throws {
+        let transport = RecordingTransport(responses: [
+            #"{"type":"operation.response","requestId":"req_clipboard_1","operation":"input.key","accepted":true}"#
+        ])
+        let client = VeilHostClient(transport: transport)
+
+        await #expect(throws: VeilHostError.missingReply("operation acknowledgement operation did not match")) {
+            try await client.sendClipboardText(
+                ClipboardTextSet(requestId: "req_clipboard_1", origin: "host", sequence: 1, text: "hello from macOS")
+            )
+        }
+    }
+
+    @Test("rejects operation acknowledgement with accepted false")
+    func rejectsOperationAcknowledgementWithAcceptedFalse() async throws {
+        let transport = RecordingTransport(responses: [
+            #"{"type":"operation.response","requestId":"req_clipboard_1","operation":"clipboard.text.set","accepted":false}"#
+        ])
+        let client = VeilHostClient(transport: transport)
+
+        await #expect(throws: VeilHostError.missingReply("operation acknowledgement was not accepted")) {
+            try await client.sendClipboardText(
+                ClipboardTextSet(requestId: "req_clipboard_1", origin: "host", sequence: 1, text: "hello from macOS")
+            )
+        }
+    }
+
+    @Test("rejects a missing operation acknowledgement")
+    func rejectsMissingOperationAcknowledgement() async throws {
+        let transport = RecordingTransport(responses: [])
+        let client = VeilHostClient(transport: transport)
+
+        await #expect(throws: VeilHostError.missingReply("operation acknowledgement requires operation.response")) {
+            try await client.sendClipboardText(
+                ClipboardTextSet(requestId: "req_clipboard_1", origin: "host", sequence: 1, text: "hello from macOS")
+            )
+        }
+    }
+
+    @Test("times out missing operation acknowledgement and cancels transport")
+    func timesOutMissingOperationAcknowledgementAndCancelsTransport() async throws {
+        let cancellationState = CancellationState()
+        let client = VeilHostClient(
+            transport: CancellationAwareHangingTransport(cancellationState: cancellationState),
+            acknowledgementTimeoutNanoseconds: 1_000_000
+        )
+
+        await #expect(throws: VeilHostError.missingReply("operation acknowledgement timed out")) {
+            try await client.sendClipboardText(
+                ClipboardTextSet(requestId: "req_clipboard_1", origin: "host", sequence: 1, text: "hello from macOS")
+            )
+        }
+
+        #expect(await cancellationState.wasCancelled)
+    }
+}
+
+private struct CorrelatedOperationErrorTransport: HostTransport {
+    let code: String
+    let message: String
+
+    func send(_ message: Data, expectedReplies: Int) async throws -> [Data] {
+        let request = try JSONSerialization.jsonObject(with: message) as? [String: Any]
+        guard let requestId = request?["requestId"] as? String else {
+            return []
+        }
+        let response: [String: Any] = [
+            "type": "error",
+            "requestId": requestId,
+            "code": code,
+            "message": self.message
+        ]
+        return [try JSONSerialization.data(withJSONObject: response, options: [.sortedKeys])]
     }
 }
 
 private final class RecordingTransport: HostTransport, @unchecked Sendable {
     private var responses: [String]
+    private let acknowledgeOperations: Bool
     private(set) var sentTypes: [String] = []
     private(set) var sentAppIds: [String] = []
+    private(set) var sentRequestIds: [String] = []
     private(set) var reuseExistingWindowRequests: [Bool] = []
     private(set) var expectedReplyCounts: [Int] = []
 
-    init(responses: [String]) {
+    init(responses: [String], acknowledgeOperations: Bool = false) {
         self.responses = responses
+        self.acknowledgeOperations = acknowledgeOperations
     }
 
     func send(_ message: Data, expectedReplies: Int) async throws -> [Data] {
@@ -635,10 +806,22 @@ private final class RecordingTransport: HostTransport, @unchecked Sendable {
         if let appId = object?["appId"] as? String {
             sentAppIds.append(appId)
         }
+        if let requestId = object?["requestId"] as? String {
+            sentRequestIds.append(requestId)
+        }
         if object?["type"] as? String == "app.launch.request" {
             reuseExistingWindowRequests.append(object?["reuseExistingWindow"] as? Bool ?? false)
         }
         expectedReplyCounts.append(expectedReplies)
+
+        if acknowledgeOperations,
+           expectedReplies == 1,
+           let type = object?["type"] as? String,
+           let requestId = object?["requestId"] as? String,
+           ["input.mouse", "input.key", "clipboard.text.set", "window.frame.subscribe", "window.frame.unsubscribe"].contains(type) {
+            let acknowledgement = #"{"type":"operation.response","requestId":"\#(requestId)","operation":"\#(type)","accepted":true}"#
+            return [Data(acknowledgement.utf8)]
+        }
 
         let replyStrings = Array(responses.prefix(expectedReplies))
         responses.removeFirst(replyStrings.count)
@@ -688,6 +871,28 @@ private struct HangingTransport: HostTransport {
     func send(_ message: Data, expectedReplies: Int) async throws -> [Data] {
         try await Task.sleep(nanoseconds: 5_000_000_000)
         return []
+    }
+}
+
+private actor CancellationState {
+    private(set) var wasCancelled = false
+
+    func recordCancellation() {
+        wasCancelled = true
+    }
+}
+
+private struct CancellationAwareHangingTransport: HostTransport {
+    let cancellationState: CancellationState
+
+    func send(_ message: Data, expectedReplies: Int) async throws -> [Data] {
+        do {
+            try await Task.sleep(nanoseconds: 100_000_000)
+            return []
+        } catch is CancellationError {
+            await cancellationState.recordCancellation()
+            throw CancellationError()
+        }
     }
 }
 

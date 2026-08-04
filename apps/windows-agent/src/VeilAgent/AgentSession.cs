@@ -353,7 +353,7 @@ public sealed class AgentSession
         }
 
         return new AgentReplies(
-            DirectReplies: Array.Empty<JsonObject>(),
+            DirectReplies: OperationAccepted(requestId, MessageTypes.WindowFrameSubscribe).DirectReplies,
             BroadcastEvents: Array.Empty<JsonObject>(),
             StreamWindow: window,
             NextFrameSequence: 1
@@ -369,7 +369,7 @@ public sealed class AgentSession
         }
 
         return new AgentReplies(
-            DirectReplies: Array.Empty<JsonObject>(),
+            DirectReplies: OperationAccepted(requestId, MessageTypes.WindowFrameUnsubscribe).DirectReplies,
             BroadcastEvents: Array.Empty<JsonObject>(),
             StopStreamWindowId: windowId
         );
@@ -468,11 +468,21 @@ public sealed class AgentSession
 
         try
         {
-            await desktop.SendMouseInputAsync(
+            var accepted = await desktop.SendMouseInputAsync(
                 new WindowMouseInput(windowId, eventName, x, y, modifiers),
                 cancellationToken
             );
-            return AgentReplies.Direct();
+            if (eventName == "move")
+            {
+                return AgentReplies.Direct();
+            }
+
+            if (!accepted)
+            {
+                return AgentReplies.Direct(ErrorResponse(requestId, "input_mouse_rejected", "Windows rejected mouse input."));
+            }
+
+            return OperationAccepted(requestId, MessageTypes.InputMouse);
         }
         catch (Exception error) when (error is not OperationCanceledException)
         {
@@ -508,11 +518,16 @@ public sealed class AgentSession
 
         try
         {
-            await desktop.SendKeyInputAsync(
+            var accepted = await desktop.SendKeyInputAsync(
                 new WindowKeyInput(windowId, eventName, key, windowsVirtualKey, modifiers),
                 cancellationToken
             );
-            return AgentReplies.Direct();
+            if (!accepted)
+            {
+                return AgentReplies.Direct(ErrorResponse(requestId, "input_key_rejected", "Windows rejected key input."));
+            }
+
+            return OperationAccepted(requestId, MessageTypes.InputKey);
         }
         catch (Exception error) when (error is not OperationCanceledException)
         {
@@ -541,7 +556,7 @@ public sealed class AgentSession
         try
         {
             await desktop.SetClipboardTextAsync(text, cancellationToken);
-            return AgentReplies.Direct();
+            return OperationAccepted(requestId, MessageTypes.ClipboardTextSet);
         }
         catch (Exception error) when (error is not OperationCanceledException)
         {
@@ -690,6 +705,19 @@ public sealed class AgentSession
         ["requestId"] = requestId,
         ["windowId"] = windowId,
         ["accepted"] = accepted
+    };
+
+    private static AgentReplies OperationAccepted(string? requestId, string operation)
+        => string.IsNullOrWhiteSpace(requestId)
+            ? AgentReplies.Direct()
+            : AgentReplies.Direct(OperationResponse(requestId, operation));
+
+    private static JsonObject OperationResponse(string requestId, string operation) => new()
+    {
+        ["type"] = MessageTypes.OperationResponse,
+        ["requestId"] = requestId,
+        ["operation"] = operation,
+        ["accepted"] = true
     };
 
     private static JsonObject ErrorResponse(string? requestId, string code, string message) => new()

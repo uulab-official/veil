@@ -22,6 +22,7 @@ export const MessageType = Object.freeze({
   NotificationListenerResponse: "notification.listener.response",
   InputMouse: "input.mouse",
   InputKey: "input.key",
+  OperationResponse: "operation.response",
   Error: "error"
 });
 
@@ -378,6 +379,9 @@ export function validateInputMouse(input) {
   }
 
   requireNonEmptyString(input.windowId, "windowId", "Mouse input");
+  if (input.requestId !== undefined) {
+    requireNonEmptyString(input.requestId, "requestId", "Mouse input");
+  }
   requireNonEmptyString(input.event, "event", "Mouse input");
   if (!mouseEvents.has(input.event)) {
     throw new TypeError(`Mouse input event '${input.event}' is not supported.`);
@@ -398,6 +402,9 @@ export function validateInputKey(input) {
   }
 
   requireNonEmptyString(input.windowId, "windowId", "Key input");
+  if (input.requestId !== undefined) {
+    requireNonEmptyString(input.requestId, "requestId", "Key input");
+  }
   requireNonEmptyString(input.event, "event", "Key input");
   if (!keyEvents.has(input.event)) {
     throw new TypeError(`Key input event '${input.event}' is not supported.`);
@@ -410,6 +417,18 @@ export function validateInputKey(input) {
   }
 
   return input;
+}
+
+export function validateOperationResponse(response) {
+  if (!response || response.type !== MessageType.OperationResponse) {
+    throw new TypeError("Operation response must use type operation.response.");
+  }
+  requireNonEmptyString(response.requestId, "requestId", "Operation response");
+  requireNonEmptyString(response.operation, "operation", "Operation response");
+  if (response.accepted !== true) {
+    throw new TypeError("Operation response field 'accepted' must be true; failures use error.");
+  }
+  return response;
 }
 
 export function validateClipboardTextSet(clipboard) {

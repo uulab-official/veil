@@ -151,6 +151,19 @@ struct ProtocolMessageTests {
         #expect(input.modifiers == ["ctrl"])
     }
 
+    @Test("decodes accepted operation response")
+    func decodesAcceptedOperationResponse() throws {
+        let response = try JSONDecoder.veilProtocol.decode(
+            OperationResponse.self,
+            from: Data(#"{"type":"operation.response","requestId":"req_key_1","operation":"input.key","accepted":true}"#.utf8)
+        )
+
+        #expect(response.type == .operationResponse)
+        #expect(response.requestId == "req_key_1")
+        #expect(response.operation == .inputKey)
+        #expect(response.accepted)
+    }
+
     @Test("decodes host clipboard text event")
     func decodesHostClipboardTextEvent() throws {
         let clipboard: ClipboardTextSet = try decodeFixture("clipboard.text.set.host")

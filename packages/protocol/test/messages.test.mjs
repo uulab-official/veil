@@ -16,6 +16,7 @@ import {
   validateInputMouse,
   validateNotificationListenerRequest,
   validateNotificationListenerResponse,
+  validateOperationResponse,
   validateWindowClosed,
   validateWindowCloseRequest,
   validateWindowCloseResponse,
@@ -55,6 +56,7 @@ test("parses every stable fixture", async () => {
     "window.close.response.json",
     "input.mouse.left-down.json",
     "input.key.copy.json",
+    "operation.response.input-key.json",
     "clipboard.text.set.host.json",
     "clipboard.text.set.guest.json",
     "notification.listener.request.json",
@@ -289,6 +291,53 @@ test("validates one host key input fixture", async () => {
   assert.equal(input.key, "c");
   assert.equal(input.windowsVirtualKey, 67);
   assert.deepEqual(input.modifiers, ["ctrl"]);
+});
+
+test("validates an accepted operation response fixture", async () => {
+  const response = validateOperationResponse(await readFixture("operation.response.input-key.json"));
+
+  assert.equal(response.type, MessageType.OperationResponse);
+  assert.equal(response.requestId, "req_key_1");
+  assert.equal(response.operation, "input.key");
+  assert.equal(response.accepted, true);
+});
+
+test("rejects invalid operation response fields", () => {
+  const response = {
+    type: MessageType.OperationResponse,
+    requestId: "req_key_1",
+    operation: "input.key",
+    accepted: true
+  };
+
+  assert.throws(() => validateOperationResponse({ ...response, type: "input.key" }), TypeError);
+  assert.throws(() => validateOperationResponse({ ...response, requestId: "" }), TypeError);
+  assert.throws(() => validateOperationResponse({ ...response, operation: "" }), TypeError);
+  assert.throws(() => validateOperationResponse({ ...response, accepted: false }), TypeError);
+});
+
+test("allows input requestId to be absent but rejects an empty requestId", () => {
+  for (const [validator, input] of [
+    [validateInputMouse, {
+      type: MessageType.InputMouse,
+      windowId: "hwnd:0003029A",
+      event: "leftDown",
+      x: 240,
+      y: 130,
+      modifiers: []
+    }],
+    [validateInputKey, {
+      type: MessageType.InputKey,
+      windowId: "hwnd:0003029A",
+      event: "keyDown",
+      key: "c",
+      windowsVirtualKey: 67,
+      modifiers: ["ctrl"]
+    }]
+  ]) {
+    assert.doesNotThrow(() => validator(input));
+    assert.throws(() => validator({ ...input, requestId: "" }), TypeError);
+  }
 });
 
 test("validates host clipboard text fixture", async () => {

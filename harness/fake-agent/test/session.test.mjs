@@ -217,13 +217,50 @@ test("rejects window focus requests without a HWND", async () => {
   ]);
 });
 
-test("accepts mouse input events without a reply", async () => {
+test("acknowledges mouse click input with a request ID", async () => {
+  const session = createSession();
+
+  const replies = await session.handle({
+    type: "input.mouse",
+    requestId: "req_mouse_1",
+    windowId: "hwnd:0003029A",
+    event: "leftDown",
+    x: 240,
+    y: 130,
+    modifiers: []
+  });
+
+  assert.deepEqual(replies, [{
+    type: "operation.response",
+    requestId: "req_mouse_1",
+    operation: "input.mouse",
+    accepted: true
+  }]);
+});
+
+test("keeps legacy mouse click input without a request ID silent", async () => {
   const session = createSession();
 
   const replies = await session.handle({
     type: "input.mouse",
     windowId: "hwnd:0003029A",
     event: "leftDown",
+    x: 240,
+    y: 130,
+    modifiers: []
+  });
+
+  assert.deepEqual(replies, []);
+});
+
+test("keeps mouse move input silent even with a request ID", async () => {
+  const session = createSession();
+
+  const replies = await session.handle({
+    type: "input.mouse",
+    requestId: "req_mouse_move_1",
+    windowId: "hwnd:0003029A",
+    event: "move",
     x: 240,
     y: 130,
     modifiers: []
@@ -265,7 +302,28 @@ test("rejects mouse input events for untracked HWNDs", async () => {
   assert.deepEqual(broadcastEvents, []);
 });
 
-test("accepts key input events without a reply", async () => {
+test("acknowledges key input with a request ID", async () => {
+  const session = createSession();
+
+  const replies = await session.handle({
+    type: "input.key",
+    requestId: "req_key_1",
+    windowId: "hwnd:0003029A",
+    event: "keyDown",
+    key: "c",
+    windowsVirtualKey: 67,
+    modifiers: ["ctrl"]
+  });
+
+  assert.deepEqual(replies, [{
+    type: "operation.response",
+    requestId: "req_key_1",
+    operation: "input.key",
+    accepted: true
+  }]);
+});
+
+test("keeps legacy key input without a request ID silent", async () => {
   const session = createSession();
 
   const replies = await session.handle({
@@ -313,12 +371,44 @@ test("rejects key input events for untracked HWNDs", async () => {
   assert.deepEqual(broadcastEvents, []);
 });
 
-test("accepts host clipboard text without a reply", async () => {
+test("acknowledges host clipboard text with a request ID", async () => {
   const session = createSession();
 
   const replies = await session.handle({
     type: "clipboard.text.set",
     requestId: "req_clipboard_1",
+    origin: "host",
+    sequence: 1,
+    text: "hello from macOS"
+  });
+
+  assert.deepEqual(replies, [{
+    type: "operation.response",
+    requestId: "req_clipboard_1",
+    operation: "clipboard.text.set",
+    accepted: true
+  }]);
+});
+
+test("does not acknowledge guest clipboard text with a request ID", async () => {
+  const session = createSession();
+
+  const replies = await session.handle({
+    type: "clipboard.text.set",
+    requestId: "req_clipboard_guest_1",
+    origin: "guest",
+    sequence: 1,
+    text: "hello from Windows"
+  });
+
+  assert.deepEqual(replies, []);
+});
+
+test("keeps legacy host clipboard text without a request ID silent", async () => {
+  const session = createSession();
+
+  const replies = await session.handle({
+    type: "clipboard.text.set",
     origin: "host",
     sequence: 1,
     text: "hello from macOS"
@@ -342,11 +432,28 @@ test("broadcasts a fixture frame when a capture stream is subscribed", async () 
     format: "png"
   });
 
-  assert.deepEqual(subscribeReplies, []);
+  assert.deepEqual(subscribeReplies, [{
+    type: "operation.response",
+    requestId: "req_frame_subscribe_notepad",
+    operation: "window.frame.subscribe",
+    accepted: true
+  }]);
   assert.equal(broadcastEvents.length, 1);
   assert.equal(broadcastEvents[0].type, "window.frame");
   assert.equal(broadcastEvents[0].windowId, "hwnd:0003029A");
   assert.equal(broadcastEvents[0].format, "png");
+});
+
+test("keeps legacy frame stream subscribe without a request ID silent", async () => {
+  const session = createSession();
+
+  const replies = await session.handle({
+    type: "window.frame.subscribe",
+    windowId: "hwnd:0003029A",
+    format: "png"
+  });
+
+  assert.deepEqual(replies, []);
 });
 
 test("rejects capture stream subscription for untracked HWNDs", async () => {
@@ -375,7 +482,7 @@ test("rejects capture stream subscription for untracked HWNDs", async () => {
   assert.deepEqual(broadcastEvents, []);
 });
 
-test("accepts frame stream unsubscribe without a reply", async () => {
+test("acknowledges frame stream unsubscribe with a request ID", async () => {
   const session = createSession();
 
   const unsubscribeReplies = await session.handle({
@@ -384,7 +491,23 @@ test("accepts frame stream unsubscribe without a reply", async () => {
     windowId: "hwnd:0003029A"
   });
 
-  assert.deepEqual(unsubscribeReplies, []);
+  assert.deepEqual(unsubscribeReplies, [{
+    type: "operation.response",
+    requestId: "req_frame_unsubscribe_notepad",
+    operation: "window.frame.unsubscribe",
+    accepted: true
+  }]);
+});
+
+test("keeps legacy frame stream unsubscribe without a request ID silent", async () => {
+  const session = createSession();
+
+  const replies = await session.handle({
+    type: "window.frame.unsubscribe",
+    windowId: "hwnd:0003029A"
+  });
+
+  assert.deepEqual(replies, []);
 });
 
 test("does not echo host clipboard text back as a guest event", async () => {

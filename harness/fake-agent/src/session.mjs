@@ -27,7 +27,7 @@ export function createSession(options = {}) {
         case MessageType.WindowFrameSubscribe:
           return handleWindowFrameSubscribe(message, broadcast, trackedWindowIds);
         case MessageType.WindowFrameUnsubscribe:
-          return [];
+          return operationAccepted(message);
         case MessageType.WindowFocusRequest:
           return handleWindowFocus(message, trackedWindowIds);
         case MessageType.WindowCloseRequest:
@@ -38,16 +38,16 @@ export function createSession(options = {}) {
           }
           await onInput(message);
           await broadcastInputFrame(message, broadcast, nextFrameSequence);
-          return [];
+          return operationAccepted(message);
         case MessageType.InputKey:
           if (!canTargetTrackedWindow(message, trackedWindowIds)) {
             return [windowNotTrackedError(message)];
           }
           await onInput(message);
           await broadcastInputFrame(message, broadcast, nextFrameSequence);
-          return [];
+          return operationAccepted(message);
         case MessageType.ClipboardTextSet:
-          return [];
+          return message.origin === "host" ? operationAccepted(message) : [];
         default:
           return [createError(message.requestId, "unsupported_in_fake_agent", `Fake agent cannot handle ${message.type}`)];
       }
@@ -124,7 +124,7 @@ async function handleWindowFrameSubscribe(message, broadcast, trackedWindowIds) 
     frameId: `frame_${String(1).padStart(6, "0")}`,
     sequence: 1
   });
-  return [];
+  return operationAccepted(message);
 }
 
 async function broadcastInputFrame(message, broadcast, nextFrameSequence) {
@@ -196,6 +196,22 @@ async function handleWindowFocus(message, trackedWindowIds) {
       windowId: message.windowId
     }
   ];
+}
+
+function operationAccepted(message) {
+  if (!message.requestId || (message.type === MessageType.InputMouse && message.event === "move")) {
+    return [];
+  }
+  return [createOperationResponse(message)];
+}
+
+function createOperationResponse(message) {
+  return {
+    type: MessageType.OperationResponse,
+    requestId: message.requestId,
+    operation: message.type,
+    accepted: true
+  };
 }
 
 function canTargetTrackedWindow(message, trackedWindowIds) {

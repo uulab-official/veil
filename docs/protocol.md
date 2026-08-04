@@ -508,6 +508,7 @@ Event from host to guest:
 ```json
 {
   "type": "input.mouse",
+  "requestId": "req_mouse_left_down",
   "windowId": "hwnd:0003029A",
   "event": "leftDown",
   "x": 240,
@@ -539,6 +540,7 @@ Event from host to guest:
 ```json
 {
   "type": "input.key",
+  "requestId": "req_key_copy",
   "windowId": "hwnd:0003029A",
   "event": "keyDown",
   "key": "c",
@@ -555,6 +557,27 @@ Rules:
 
 - `windowId` must match the HWND-shaped id from a tracked `window.created` event.
 - If the HWND is not tracked, the guest rejects the input with `window_not_tracked` and must not post key messages.
+
+## Operation Acknowledgements
+
+Successful operations, except `input.mouse` moves, may be acknowledged by the guest with:
+
+```json
+{
+  "type": "operation.response",
+  "requestId": "req_key_1",
+  "operation": "input.key",
+  "accepted": true
+}
+```
+
+Rules:
+
+- `requestId` and `operation` must be non-empty strings, and the response must use `accepted: true`.
+- Success replies are omitted only when the request itself has no `requestId`; a new host using request IDs against an older guest fails after its bounded acknowledgement timeout rather than claiming success.
+- `input.mouse` with `event: "move"` must never emit an operation response, even when the platform accepts the move.
+- Failed operations use existing `error` envelopes with the input request's `requestId`; guest platform `false` results must map to operation-specific error codes, and must not send `operation.response` with `accepted: false`.
+- Hosts must never automatically retry clicks, key events, clipboard writes, or stream controls, whether the operation response is absent or an error is received. An acknowledgement timeout or error is not permission to repeat the operation.
 
 ## Clipboard Text
 
