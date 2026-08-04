@@ -6,6 +6,40 @@ import VeilHostCore
 
 @MainActor
 struct AppRuntimeDockMenuTests {
+    @Test("window header status reflects actionable Windows state")
+    func windowHeaderStatus() {
+        #expect(WindowsHeaderStatus.resolve(
+            isRefreshing: true,
+            hasLiveAppConnection: false,
+            runtimeState: .stopped,
+            windowsInstalled: true
+        ) == WindowsHeaderStatus(title: "Checking", symbolName: "arrow.triangle.2.circlepath", tone: .blue))
+        #expect(WindowsHeaderStatus.resolve(
+            isRefreshing: false,
+            hasLiveAppConnection: true,
+            runtimeState: .running,
+            windowsInstalled: true
+        ) == WindowsHeaderStatus(title: "Apps Ready", symbolName: "checkmark.circle.fill", tone: .green))
+        #expect(WindowsHeaderStatus.resolve(
+            isRefreshing: false,
+            hasLiveAppConnection: false,
+            runtimeState: .suspended,
+            windowsInstalled: true
+        ).title == "Paused")
+        #expect(WindowsHeaderStatus.resolve(
+            isRefreshing: false,
+            hasLiveAppConnection: false,
+            runtimeState: .failed,
+            windowsInstalled: true
+        ).title == "Needs Attention")
+        #expect(WindowsHeaderStatus.resolve(
+            isRefreshing: false,
+            hasLiveAppConnection: false,
+            runtimeState: nil,
+            windowsInstalled: false
+        ) == WindowsHeaderStatus(title: "Setup Required", symbolName: "wand.and.stars", tone: .blue))
+    }
+
     @Test("first-run journey highlights one current stage")
     func firstRunJourneyStageResolution() {
         #expect(SetupJourneyStageState.resolve(step: 1, currentStep: 1) == .current)
@@ -39,6 +73,20 @@ struct AppRuntimeDockMenuTests {
                 runtimeState: .running,
                 windowsInstalled: true
             ) == "Windows apps open on your Mac"
+        )
+        #expect(
+            WindowsShellCopy.headerSubtitle(
+                hasLiveAppConnection: false,
+                runtimeState: .suspended,
+                windowsInstalled: true
+            ) == "Windows is paused"
+        )
+        #expect(
+            WindowsShellCopy.headerSubtitle(
+                hasLiveAppConnection: false,
+                runtimeState: .failed,
+                windowsInstalled: true
+            ) == "Windows needs attention"
         )
 
         let visibleMessages = [

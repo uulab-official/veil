@@ -73,6 +73,19 @@ test("first-run setup removes the redundant bottom bar while keeping settings av
   assert.match(source, /\.accessibilityLabel\("Settings"\)/);
 });
 
+test("window header communicates setup state and refresh progress", async () => {
+  const content = await readRootFile("apps/mac-host/Sources/VeilHostShell/Views/ContentView.swift");
+  const copy = await readRootFile("apps/mac-host/Sources/VeilHostShell/App/WindowsShellCopy.swift");
+
+  assert.match(copy, /struct WindowsHeaderStatus: Equatable/);
+  assert.match(copy, /title: "Setup Required", symbolName: "wand\.and\.stars", tone: \.blue/);
+  assert.match(copy, /title: "Apps Ready", symbolName: "checkmark\.circle\.fill", tone: \.green/);
+  assert.match(content, /private var headerStatus: WindowsHeaderStatus/);
+  assert.match(content, /if isRefreshing \{[\s\S]*ProgressView\(\)/);
+  assert.match(content, /\.accessibilityLabel\(isRefreshing \? "Refreshing Windows status" : "Refresh Windows status"\)/);
+  assert.match(content, /\.accessibilityValue\(isRefreshing \? "In progress" : "Ready"\)/);
+});
+
 test("Windows settings separates setup, runtime, and integration controls", async () => {
   const settings = await readRootFile("apps/mac-host/Sources/VeilHostShell/Views/VMSettingsSheet.swift");
   const runtime = await readRootFile("apps/mac-host/Sources/VeilHostShell/Views/VMRuntimeView.swift");

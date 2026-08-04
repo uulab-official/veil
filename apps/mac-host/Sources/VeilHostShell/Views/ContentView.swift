@@ -33,9 +33,9 @@ struct ContentView: View {
                 VeilWindowHeader(
                     title: headerTitle,
                     subtitle: headerSubtitle,
-                    statusTitle: headerStatusTitle,
-                    statusSymbol: headerStatusSymbol,
-                    statusTint: headerStatusTint,
+                    statusTitle: headerStatus.title,
+                    statusSymbol: headerStatus.symbolName,
+                    statusTint: headerStatus.tone.color,
                     isRefreshing: isRefreshing,
                     refreshAction: refreshAll
                 )
@@ -85,43 +85,13 @@ struct ContentView: View {
         )
     }
 
-    private var headerStatusTitle: String {
-        switch vmModel.snapshot?.state {
-        case .running:
-            return "Running"
-        case .starting:
-            return "Opening"
-        case .failed:
-            return "Needs Attention"
-        default:
-            return vmModel.snapshot?.windowsInstalled == true ? "Installed" : "Setup"
-        }
-    }
-
-    private var headerStatusSymbol: String {
-        switch vmModel.snapshot?.state {
-        case .running:
-            return "checkmark.circle.fill"
-        case .starting:
-            return "arrow.triangle.2.circlepath"
-        case .failed:
-            return "exclamationmark.triangle.fill"
-        default:
-            return vmModel.snapshot?.windowsInstalled == true ? "checkmark.circle.fill" : "circle.fill"
-        }
-    }
-
-    private var headerStatusTint: Color {
-        switch vmModel.snapshot?.state {
-        case .running:
-            return .green
-        case .starting:
-            return .blue
-        case .failed:
-            return .orange
-        default:
-            return vmModel.snapshot?.windowsInstalled == true ? .green : .secondary
-        }
+    private var headerStatus: WindowsHeaderStatus {
+        .resolve(
+            isRefreshing: isRefreshing,
+            hasLiveAppConnection: model.hasLiveAgentConnection,
+            runtimeState: vmModel.snapshot?.state,
+            windowsInstalled: vmModel.snapshot?.windowsInstalled == true
+        )
     }
 
     private func refreshAll() {
@@ -184,18 +154,31 @@ private struct VeilWindowHeader: View {
                     tint: statusTint
                 )
                 .padding(.leading, 6)
+                .contentTransition(.opacity)
+                .animation(.easeInOut(duration: 0.18), value: statusTitle)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
             Spacer()
 
             Button(action: refreshAction) {
-                Label("Refresh", systemImage: "arrow.clockwise")
-                    .labelStyle(.iconOnly)
+                ZStack {
+                    Image(systemName: "arrow.clockwise")
+                        .opacity(isRefreshing ? 0 : 1)
+
+                    if isRefreshing {
+                        ProgressView()
+                            .controlSize(.small)
+                    }
+                }
+                .frame(width: 18, height: 18)
             }
             .buttonStyle(TitlebarIconButtonStyle())
             .disabled(isRefreshing)
-            .help("Refresh")
+            .help(isRefreshing ? "Refreshing Windows status" : "Refresh Windows status")
+            .accessibilityLabel(isRefreshing ? "Refreshing Windows status" : "Refresh Windows status")
+            .accessibilityValue(isRefreshing ? "In progress" : "Ready")
+            .animation(.easeInOut(duration: 0.16), value: isRefreshing)
         }
         .padding(.trailing, 14)
         .frame(height: 58)
@@ -239,5 +222,20 @@ private struct TitlebarIconButtonStyle: ButtonStyle {
                     .strokeBorder(.white.opacity(0.10), lineWidth: 1)
             }
             .opacity(configuration.isPressed ? 0.82 : 1)
+    }
+}
+
+private extension WindowsShellStatusTone {
+    var color: Color {
+        switch self {
+        case .green:
+            return .green
+        case .blue:
+            return .blue
+        case .orange:
+            return .orange
+        case .secondary:
+            return .secondary
+        }
     }
 }
