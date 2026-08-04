@@ -101,19 +101,11 @@ struct VMRuntimeView: View {
         }
         .sheet(item: $presentedSheet) { _ in
             VMSettingsSheet(model: model) { snapshot, policy in
-                ViewThatFits(in: .horizontal) {
-                    HStack(alignment: .top, spacing: 14) {
-                        setupColumn(snapshot, canChangeResources: policy.canChangeResources)
-                            .frame(minWidth: 380)
-                        runtimeDetailColumn(snapshot)
-                            .frame(minWidth: 380)
-                    }
-
-                    VStack(alignment: .leading, spacing: 14) {
-                        setupColumn(snapshot, canChangeResources: policy.canChangeResources)
-                        runtimeDetailColumn(snapshot)
-                    }
-                }
+                setupColumn(snapshot, canChangeResources: policy.canChangeResources)
+            } runtimeContent: { snapshot, _ in
+                runtimeSettingsColumn(snapshot)
+            } integrationContent: { snapshot, _ in
+                integrationSettingsColumn(snapshot)
             }
         }
         .alert(WindowsLicenseConsentPolicy.title, isPresented: $showsInstallerLicenseConfirmation) {
@@ -388,7 +380,7 @@ struct VMRuntimeView: View {
     }
 
     @ViewBuilder
-    private func runtimeDetailColumn(_ snapshot: VMRuntimeSnapshot) -> some View {
+    private func runtimeSettingsColumn(_ snapshot: VMRuntimeSnapshot) -> some View {
         VStack(alignment: .leading, spacing: 14) {
             MachineSummaryPanel(snapshot: snapshot)
 
@@ -399,6 +391,13 @@ struct VMRuntimeView: View {
             }
 
             ResourcePlanPanel(snapshot: snapshot)
+        }
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+    }
+
+    @ViewBuilder
+    private func integrationSettingsColumn(_ snapshot: VMRuntimeSnapshot) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
 
             DevicePlanPanel(snapshot: snapshot)
 

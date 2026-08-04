@@ -44,17 +44,65 @@ struct VMSettingsAccessPolicy: Equatable {
     }
 }
 
-struct VMSettingsSheet<Content: View>: View {
+enum VMSettingsSection: String, CaseIterable, Identifiable {
+    case setup
+    case runtime
+    case integration
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .setup:
+            return "Setup"
+        case .runtime:
+            return "Runtime"
+        case .integration:
+            return "Integration"
+        }
+    }
+
+    var symbolName: String {
+        switch self {
+        case .setup:
+            return "wand.and.stars"
+        case .runtime:
+            return "desktopcomputer"
+        case .integration:
+            return "macwindow.on.rectangle"
+        }
+    }
+
+    var subtitle: String {
+        switch self {
+        case .setup:
+            return "Installation media and the shortest path to Windows"
+        case .runtime:
+            return "Local VM engine, machine status, and hardware plan"
+        case .integration:
+            return "Mac app windows, devices, and readiness checks"
+        }
+    }
+}
+
+struct VMSettingsSheet<SetupContent: View, RuntimeContent: View, IntegrationContent: View>: View {
     @Environment(\.dismiss) private var dismiss
     @Bindable var model: VMRuntimeModel
-    private let content: (VMRuntimeSnapshot, VMSettingsAccessPolicy) -> Content
+    @State private var selectedSection = VMSettingsSection.setup
+    private let setupContent: (VMRuntimeSnapshot, VMSettingsAccessPolicy) -> SetupContent
+    private let runtimeContent: (VMRuntimeSnapshot, VMSettingsAccessPolicy) -> RuntimeContent
+    private let integrationContent: (VMRuntimeSnapshot, VMSettingsAccessPolicy) -> IntegrationContent
 
     init(
         model: VMRuntimeModel,
-        @ViewBuilder content: @escaping (VMRuntimeSnapshot, VMSettingsAccessPolicy) -> Content
+        @ViewBuilder setupContent: @escaping (VMRuntimeSnapshot, VMSettingsAccessPolicy) -> SetupContent,
+        @ViewBuilder runtimeContent: @escaping (VMRuntimeSnapshot, VMSettingsAccessPolicy) -> RuntimeContent,
+        @ViewBuilder integrationContent: @escaping (VMRuntimeSnapshot, VMSettingsAccessPolicy) -> IntegrationContent
     ) {
         self.model = model
-        self.content = content
+        self.setupContent = setupContent
+        self.runtimeContent = runtimeContent
+        self.integrationContent = integrationContent
     }
 
     var body: some View {
@@ -68,6 +116,9 @@ struct VMSettingsSheet<Content: View>: View {
                     isLoading: model.phase == .loading
                 )
 
+                sectionPicker
+                Divider()
+
                 ScrollView {
                     VStack(alignment: .leading, spacing: 14) {
                         if let guidance = policy.guidance {
@@ -79,10 +130,12 @@ struct VMSettingsSheet<Content: View>: View {
                                 .background(.orange.opacity(0.10), in: RoundedRectangle(cornerRadius: 10))
                         }
 
-                        content(snapshot, policy)
+                        selectedContent(snapshot, policy: policy)
+                            .transition(.opacity.combined(with: .move(edge: .trailing)))
                     }
                     .padding(18)
                 }
+                .animation(.easeInOut(duration: 0.18), value: selectedSection)
             } else {
                 ContentUnavailableView(
                     "Windows Settings Unavailable",
@@ -96,6 +149,46 @@ struct VMSettingsSheet<Content: View>: View {
         .background(Color(nsColor: .windowBackgroundColor))
     }
 
+    @ViewBuilder
+    private func selectedContent(
+        _ snapshot: VMRuntimeSnapshot,
+        policy: VMSettingsAccessPolicy
+    ) -> some View {
+        switch selectedSection {
+        case .setup:
+            setupContent(snapshot, policy)
+        case .runtime:
+            runtimeContent(snapshot, policy)
+        case .integration:
+            integrationContent(snapshot, policy)
+        }
+    }
+
+    private var sectionPicker: some View {
+        HStack {
+            Picker("Settings Section", selection: $selectedSection) {
+                ForEach(VMSettingsSection.allCases) { section in
+                    Label(section.title, systemImage: section.symbolName)
+                        .tag(section)
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .accessibilityLabel("Settings Section")
+            .frame(maxWidth: 520)
+
+            Spacer()
+
+            Text(selectedSection.subtitle)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 10)
+        .accessibilityElement(children: .contain)
+    }
+
     private var header: some View {
         HStack(spacing: 12) {
             Image(systemName: "gearshape.fill")
@@ -105,7 +198,7 @@ struct VMSettingsSheet<Content: View>: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Windows Settings")
                     .font(.title2.weight(.semibold))
-                Text("Installation media, local runtime, resources, and Mac integration")
+                Text("Choose a category to keep advanced controls focused")
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }
