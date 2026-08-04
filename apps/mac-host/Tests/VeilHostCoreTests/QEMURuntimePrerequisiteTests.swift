@@ -21,4 +21,25 @@ struct QEMURuntimePrerequisiteTests {
         #expect(report.checks.allSatisfy { $0.isReady })
         #expect(QEMURuntimePrerequisiteReport.installCommand == "brew install qemu swtpm")
     }
+
+    @Test("accepts explicit local QEMU and TPM runtime overrides")
+    func explicitRuntimeOverrides() throws {
+        let qemuPath = "/Users/test/Library/Application Support/Veil/Runtime/bin/qemu-system-aarch64"
+        let swtpmPath = "/Users/test/Library/Application Support/Veil/Runtime/bin/swtpm"
+        let report = QEMURuntimePrerequisiteReport.probe(
+            environment: [
+                VMRuntimeProviderProbe.qemuEnvironmentKey: qemuPath,
+                LocalQEMUWindowsBootPlanFactory.tpmEmulatorEnvironmentKey: swtpmPath
+            ],
+            fileExists: { path in
+                path == qemuPath
+                    || path == swtpmPath
+                    || path == "/Applications/UTM.app/Contents/Resources/qemu/edk2-aarch64-secure-code.fd"
+            }
+        )
+
+        #expect(report.isReady)
+        #expect(try #require(report.checks.first { $0.id == "qemu" }).detail == qemuPath)
+        #expect(try #require(report.checks.first { $0.id == "swtpm" }).detail == swtpmPath)
+    }
 }

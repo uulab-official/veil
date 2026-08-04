@@ -369,6 +369,39 @@ struct QEMUWindowsBootPlanTests {
         #expect(plan.arguments.containsSequence(["-device", "tpm-tis-device,tpmdev=tpm0"]))
     }
 
+    @Test("local QEMU plan factory accepts an explicit TPM emulator override")
+    func localQEMUPlanFactoryAcceptsTPMOverride() throws {
+        var profile = VMProfile.defaultWindows11Arm(createdAt: Date(timeIntervalSince1970: 1_782_752_400))
+        profile.installerMediaPath = "/Users/test/Downloads/Win11_25H2_Korean_Arm64_v2.iso"
+        profile.virtualDiskPath = "/Users/test/Virtual Machines/Veil/Windows 11 Arm.img"
+        profile.sharedFolderPath = "/Users/test/Veil Shared"
+        let swtpmPath = "/Users/test/Library/Application Support/Veil/Runtime/bin/swtpm"
+
+        let plan = try LocalQEMUWindowsBootPlanFactory.makePlan(
+            for: profile,
+            architecture: "arm64",
+            minimumOSSupported: true,
+            providerProbe: VMRuntimeProviderProbe(
+                environment: [:],
+                fileExists: { $0 == "/opt/homebrew/bin/qemu-system-aarch64" },
+                executableVersion: { _ in "QEMU emulator version 11.0.2" }
+            ),
+            fileExists: { path in
+                path == "/opt/homebrew/share/qemu/edk2-aarch64-code.fd"
+                    || path == "/opt/homebrew/share/qemu/edk2-arm-vars.fd"
+                    || path == "/Users/test/Virtual Machines/Veil/uefi-vars.fd"
+                    || path == swtpmPath
+            },
+            environment: [
+                LocalQEMUWindowsBootPlanFactory.tpmEmulatorEnvironmentKey: swtpmPath
+            ]
+        )
+
+        #expect(plan.tpmEmulatorPath == swtpmPath)
+        #expect(plan.isTPMEmulatorAvailable)
+        #expect(plan.arguments.containsSequence(["-device", "tpm-tis-device,tpmdev=tpm0"]))
+    }
+
     @Test("local QEMU plan factory accepts network adapter environment override")
     func localQEMUPlanFactoryAcceptsNetworkAdapterEnvironmentOverride() throws {
         var profile = VMProfile.defaultWindows11Arm(createdAt: Date(timeIntervalSince1970: 1_782_752_400))

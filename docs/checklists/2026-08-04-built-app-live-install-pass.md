@@ -56,3 +56,18 @@ Official references:
 - https://learn.microsoft.com/en-us/windows/arm/iso
 - https://support.microsoft.com/en-us/windows/experience/platform-variants/options-for-using-windows-11-with-mac-computers-with-apple-m1-m2-and-m3-chips
 - https://developer.apple.com/documentation/virtualization
+
+## QEMU/HVF follow-up — 2026-08-04
+
+The display blocker above is resolved for the active compatibility provider. This follow-up used the official notarized UTM 4.7.5 app as an unprivileged QEMU framework source; no Windows image, UTM asset, or runtime binary was added to the repository.
+
+- [x] Verified the downloaded UTM 4.7.5 DMG signature, notarization, bundle identity, and installed app signature before use.
+- [x] Launched UTM's QEMU 10.0.2 and `swtpm` frameworks through a locally signed Veil runtime bridge under the user's Application Support folder.
+- [x] Added `VEIL_SWTPM` support so the boot plan and prerequisite report resolve the same explicit TPM runtime as the app.
+- [x] Confirmed `veil-vmctl providers --json` reports the local QEMU/HVF provider active and QEMU 10.0.2.
+- [x] Confirmed `veil-vmctl qemu-doctor --json` reports the Windows 11 Arm plan ready with QEMU, secure UEFI, writable vars, TPM 2.0, HVF, installer media, support media, and sparse disk present.
+- [x] Launched the built Veil app into one full-window Windows setup canvas with no nested setup window.
+- [x] Confirmed the real Korean Windows 11 Arm installer reached 11%, then 25%, and entered its first restart phase.
+- [x] Confirmed the app-owned QEMU and `swtpm` processes remained alive during installation and the loopback VNC console was capturable.
+- [x] Added an embedded-display regression test proving an initial VNC connection refusal is retried instead of leaving the Windows canvas permanently stale.
+- [x] Passed the full macOS host regression suite: 423 tests across 28 suites.

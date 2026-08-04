@@ -323,6 +323,7 @@ public struct QEMUWindowsBootPlanner: Sendable {
 }
 
 public enum LocalQEMUWindowsBootPlanFactory {
+    public static let tpmEmulatorEnvironmentKey = "VEIL_SWTPM"
     public static let defaultFirmwarePaths = [
         "/opt/homebrew/share/qemu/edk2-aarch64-code.fd",
         "/usr/local/share/qemu/edk2-aarch64-code.fd",
@@ -399,7 +400,13 @@ public enum LocalQEMUWindowsBootPlanFactory {
             ?? defaultFirmwareVarsTemplatePaths[0]
         let firmwareVarsPath = profile.virtualDiskPath
             .map { URL(fileURLWithPath: $0).deletingLastPathComponent().appendingPathComponent("uefi-vars.fd").path }
-        let tpmEmulatorPath = defaultTPMEmulatorPaths.first(where: fileExists)
+        let tpmEmulatorCandidates = [environment[tpmEmulatorEnvironmentKey]]
+            .compactMap { path in
+                guard let path, !path.isEmpty else { return nil }
+                return path
+            }
+            + defaultTPMEmulatorPaths
+        let tpmEmulatorPath = tpmEmulatorCandidates.first(where: fileExists)
         let tpmStateDirectoryPath = profile.virtualDiskPath
             .map { URL(fileURLWithPath: $0).deletingLastPathComponent().appendingPathComponent("tpm", isDirectory: true).path }
         let networkSelection = QEMUWindowsNetworkAdapter.selected(
