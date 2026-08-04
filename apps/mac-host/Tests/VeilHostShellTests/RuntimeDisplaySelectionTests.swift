@@ -52,43 +52,68 @@ struct RuntimeDisplaySelectionTests {
     }
 }
 
-struct RuntimeWorkspacePresentationPolicyTests {
-    @Test("shows the app dock in the installed app launcher")
-    func showsInstalledAppDock() {
+struct InstalledWorkspacePresentationPolicyTests {
+    @Test("installed workspace defaults to the app home")
+    func defaultsToAppHome() {
+        #expect(!InstalledWorkspacePresentationPolicy.initiallyShowsDesktop)
+    }
+
+    @Test("desktop closes when its display is unavailable")
+    func closesUnavailableDesktop() {
         #expect(
-            RuntimeWorkspacePresentationPolicy.showsAppDock(
-                hasApps: true,
-                hasInstalledWindows: true,
-                showsFullDesktop: false
+            !InstalledWorkspacePresentationPolicy.shouldKeepDesktopVisible(
+                requested: true,
+                runtimeState: .stopped,
+                hasDesktopDisplay: true
+            )
+        )
+        #expect(
+            !InstalledWorkspacePresentationPolicy.shouldKeepDesktopVisible(
+                requested: true,
+                runtimeState: .running,
+                hasDesktopDisplay: false
             )
         )
     }
 
-    @Test("hides the app dock over the live Windows desktop")
-    func hidesAppDockOverDesktop() {
+    @Test("desktop remains visible only after a valid request")
+    func keepsValidDesktopRequest() {
         #expect(
-            !RuntimeWorkspacePresentationPolicy.showsAppDock(
-                hasApps: true,
-                hasInstalledWindows: true,
-                showsFullDesktop: true
+            InstalledWorkspacePresentationPolicy.shouldKeepDesktopVisible(
+                requested: true,
+                runtimeState: .running,
+                hasDesktopDisplay: true
             )
         )
     }
 
-    @Test("hides the app dock until both setup and app discovery finish")
-    func hidesUnavailableAppDock() {
+    @Test("an unrequested running display stays on the app home")
+    func keepsUnrequestedRunningDisplayOnAppHome() {
         #expect(
-            !RuntimeWorkspacePresentationPolicy.showsAppDock(
-                hasApps: true,
-                hasInstalledWindows: false,
-                showsFullDesktop: false
+            !InstalledWorkspacePresentationPolicy.shouldKeepDesktopVisible(
+                requested: false,
+                runtimeState: .running,
+                hasDesktopDisplay: true
             )
         )
+    }
+
+    @Test("desktop-visible profiles with the same name but different virtual disks return to app home")
+    func closesDesktopWhenVirtualDiskIdentityChanges() {
+        let profileA = InstalledWorkspaceAvailableProfileIdentity(
+            profileName: "Windows 11",
+            virtualDiskPath: "/Virtual Machines/Profile A/Windows.img"
+        )
+        let profileB = InstalledWorkspaceAvailableProfileIdentity(
+            profileName: "Windows 11",
+            virtualDiskPath: "/Virtual Machines/Profile B/Windows.img"
+        )
+
         #expect(
-            !RuntimeWorkspacePresentationPolicy.showsAppDock(
-                hasApps: false,
-                hasInstalledWindows: true,
-                showsFullDesktop: false
+            !InstalledWorkspacePresentationPolicy.shouldKeepDesktopVisibleAfterProfileIdentityChange(
+                requested: true,
+                previousAvailableProfileIdentity: profileA,
+                availableProfileIdentity: profileB
             )
         )
     }

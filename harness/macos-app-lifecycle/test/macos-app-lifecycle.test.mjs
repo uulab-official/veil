@@ -5,6 +5,36 @@ import { test } from "node:test";
 const root = new URL("../../../", import.meta.url);
 const readRootFile = (path) => readFile(new URL(path, root), "utf8");
 
+test("installed Windows presents one responsive app-first home", async () => {
+  const home = await readRootFile(
+    "apps/mac-host/Sources/VeilHostShell/Views/InstalledWindowsAppHome.swift",
+  );
+
+  assert.match(home, /struct InstalledWindowsAppHome: View/);
+  assert.match(home, /GeometryReader/);
+  assert.match(home, /LazyVGrid/);
+  assert.match(home, /GridItem\(\.adaptive/);
+  assert.match(home, /Text\(presentation\.title\)/);
+  assert.match(home, /Label\("Windows Desktop", systemImage: "display"\)/);
+  assert.match(home, /\.accessibilityAddTraits\(\.isHeader\)/);
+  assert.match(home, /\.accessibilityValue\(tilePresentation\.accessibilityValue\)/);
+  assert.match(home, /Data\(base64Encoded:/);
+  assert.doesNotMatch(home, /exePath|HWND|QEMU|protocol/);
+});
+
+test("installed workspace does not auto-open or duplicate the Windows desktop", async () => {
+  const detail = await readRootFile("apps/mac-host/Sources/VeilHostShell/Views/DetailView.swift");
+  const runtime = await readRootFile("apps/mac-host/Sources/VeilHostShell/Views/VMRuntimeView.swift");
+
+  assert.match(detail, /showsWindowsDesktop = InstalledWorkspacePresentationPolicy\.initiallyShowsDesktop/);
+  assert.match(runtime, /InstalledWindowsAppHome\(/);
+  assert.match(runtime, /Label\("Show Apps", systemImage: "macwindow"\)/);
+  assert.doesNotMatch(detail, /WindowsQuickLaunchPanel|WindowsQuickLaunchTile/);
+  assert.doesNotMatch(runtime, /installedMachineContent|AppRuntimeProgressStrip|appOpenFlowItems/);
+  assert.doesNotMatch(runtime, /showsFullDesktop = newState == \.running/);
+  assert.doesNotMatch(runtime, /!hadDesktopDisplay[\s\S]*showsFullDesktop = true/);
+});
+
 test("installer validates identity and signature before replacing an app", async () => {
   const source = await readRootFile("script/install_macos.sh");
 
