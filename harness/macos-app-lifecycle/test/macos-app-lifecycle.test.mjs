@@ -131,7 +131,12 @@ test("Windows download communicates its staged progress and source", async () =>
   assert.match(source, /\("Verify", "checkmark\.shield"\)/);
   assert.match(source, /\("Prepare", "internaldrive"\)/);
   assert.match(source, /Text\("\\\(Int\(progress \* 100\)\)%"\)/);
-  assert.match(source, /Secure download from microsoft\.com • Saved only on this Mac/);
+  assert.match(source, /AUTOMATIC DOWNLOAD • STEP \\\(currentJourneyStepNumber\) OF/);
+  assert.match(source, /Menu \{[\s\S]*Show Microsoft Page[\s\S]*Label\("Options", systemImage: "ellipsis\.circle"\)/);
+  assert.match(source, /\.accessibilityLabel\("Download options"\)/);
+  assert.match(source, /WindowsDownloadTrustItem\(title: "Microsoft source"/);
+  assert.match(source, /WindowsDownloadTrustItem\(title: "SHA-256 verification"/);
+  assert.match(source, /WindowsDownloadTrustItem\(title: "Saved locally"/);
 });
 
 test("Windows download offers direct cancel and recovery actions", async () => {

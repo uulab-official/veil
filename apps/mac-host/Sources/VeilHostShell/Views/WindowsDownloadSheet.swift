@@ -919,6 +919,18 @@ private struct WindowsDownloadJourneyStep: View {
     }
 }
 
+private struct WindowsDownloadTrustItem: View {
+    var title: String
+    var symbolName: String
+
+    var body: some View {
+        Label(title, systemImage: symbolName)
+            .font(.caption.weight(.medium))
+            .foregroundStyle(.secondary)
+            .accessibilityElement(children: .combine)
+    }
+}
+
 struct WindowsDownloadScreen: View {
     @StateObject private var controller = WindowsDownloadController()
     @State private var isPreparingWindows = false
@@ -1003,14 +1015,20 @@ struct WindowsDownloadScreen: View {
                 useExistingISO()
             }
 
-            Button {
-                showsMicrosoftPage.toggle()
+            Menu {
+                Button {
+                    showsMicrosoftPage.toggle()
+                } label: {
+                    Label(
+                        showsMicrosoftPage ? "Show Automatic Download" : "Show Microsoft Page",
+                        systemImage: showsMicrosoftPage ? "sparkles" : "safari"
+                    )
+                }
             } label: {
-                Label(
-                    showsMicrosoftPage ? "Show Automatic Download" : "Show Microsoft Page",
-                    systemImage: showsMicrosoftPage ? "sparkles" : "safari"
-                )
+                Label("Options", systemImage: "ellipsis.circle")
             }
+            .fixedSize()
+            .accessibilityLabel("Download options")
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
@@ -1027,20 +1045,26 @@ struct WindowsDownloadScreen: View {
                 endPoint: .bottom
             )
 
-            VStack(spacing: 24) {
+            VStack(spacing: 20) {
                 Spacer(minLength: 16)
 
                 ZStack {
                     RoundedRectangle(cornerRadius: 20, style: .continuous)
                         .fill(Color.blue.gradient)
-                        .frame(width: 82, height: 82)
+                        .frame(width: 76, height: 76)
                     Image(systemName: "square.grid.2x2.fill")
-                        .font(.system(size: 39, weight: .semibold))
+                        .font(.system(size: 36, weight: .semibold))
                         .foregroundStyle(.white)
                 }
                 .shadow(color: .blue.opacity(0.24), radius: 20, y: 10)
 
                 VStack(spacing: 7) {
+                    Text("AUTOMATIC DOWNLOAD • STEP \(currentJourneyStepNumber) OF \(journeyItems.count)")
+                        .font(.caption2.weight(.bold))
+                        .tracking(1.1)
+                        .foregroundStyle(.secondary)
+                        .contentTransition(.numericText())
+
                     Text(statusTitle)
                         .font(.system(size: 26, weight: .semibold, design: .rounded))
                         .multilineTextAlignment(.center)
@@ -1095,9 +1119,15 @@ struct WindowsDownloadScreen: View {
                     }
                 }
 
-                Label("Secure download from microsoft.com • Saved only on this Mac", systemImage: "lock.shield.fill")
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(.secondary)
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 18) {
+                        downloadTrustItems
+                    }
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        downloadTrustItems
+                    }
+                }
 
                 Spacer(minLength: 16)
             }
@@ -1120,7 +1150,7 @@ struct WindowsDownloadScreen: View {
                         .lineLimit(2)
                 }
             } else {
-                Label("Automatic setup", systemImage: "sparkles")
+                Label("Automatic download", systemImage: "sparkles")
                     .font(.callout.weight(.medium))
                     .foregroundStyle(.secondary)
             }
@@ -1155,6 +1185,7 @@ struct WindowsDownloadScreen: View {
                         Text("\(Int(progress * 100))%")
                             .monospacedDigit()
                             .fontWeight(.semibold)
+                            .contentTransition(.numericText())
                     }
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -1259,6 +1290,23 @@ struct WindowsDownloadScreen: View {
                 status: status
             )
         }
+    }
+
+    private var currentJourneyStepNumber: Int {
+        guard let index = journeyItems.firstIndex(where: {
+            $0.status == .current || $0.status == .failed
+        }) else {
+            return journeyItems.count
+        }
+
+        return index + 1
+    }
+
+    @ViewBuilder
+    private var downloadTrustItems: some View {
+        WindowsDownloadTrustItem(title: "Microsoft source", symbolName: "checkmark.shield.fill")
+        WindowsDownloadTrustItem(title: "SHA-256 verification", symbolName: "checkmark.seal.fill")
+        WindowsDownloadTrustItem(title: "Saved locally", symbolName: "internaldrive.fill")
     }
 
     private var statusTitle: String {
