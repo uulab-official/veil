@@ -3,6 +3,14 @@ import VeilHostCore
 @testable import VeilHostShell
 
 struct VMSettingsAccessPolicyTests {
+    @Test("groups Windows settings into focused Mac-style categories")
+    func settingsSections() {
+        #expect(VMSettingsSection.allCases == [.setup, .runtime, .integration])
+        #expect(VMSettingsSection.setup.title == "Setup")
+        #expect(VMSettingsSection.runtime.symbolName == "desktopcomputer")
+        #expect(VMSettingsSection.integration.subtitle.contains("Mac app windows"))
+    }
+
     @Test("allows resource changes while Windows is stopped")
     func allowsStoppedResourceChanges() {
         let policy = VMSettingsAccessPolicy.resolve(runtimeState: .stopped, isLoading: false)

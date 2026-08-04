@@ -67,6 +67,20 @@ test("first-run setup removes the redundant bottom bar while keeping settings av
   assert.match(source, /\.accessibilityLabel\("Settings"\)/);
 });
 
+test("Windows settings separates setup, runtime, and integration controls", async () => {
+  const settings = await readRootFile("apps/mac-host/Sources/VeilHostShell/Views/VMSettingsSheet.swift");
+  const runtime = await readRootFile("apps/mac-host/Sources/VeilHostShell/Views/VMRuntimeView.swift");
+
+  assert.match(settings, /enum VMSettingsSection[\s\S]*case setup[\s\S]*case runtime[\s\S]*case integration/);
+  assert.match(settings, /Picker\("Settings Section", selection: \$selectedSection\)/);
+  assert.match(settings, /\.pickerStyle\(\.segmented\)/);
+  assert.match(settings, /\.labelsHidden\(\)/);
+  assert.match(settings, /\.accessibilityLabel\("Settings Section"\)/);
+  assert.match(settings, /selectedContent\(snapshot, policy: policy\)/);
+  assert.match(runtime, /runtimeContent:[\s\S]*runtimeSettingsColumn/);
+  assert.match(runtime, /integrationContent:[\s\S]*integrationSettingsColumn/);
+});
+
 test("Windows setup requires explicit license consent for downloaded and selected ISOs", async () => {
   const downloadSheet = await readRootFile("apps/mac-host/Sources/VeilHostShell/Views/WindowsDownloadSheet.swift");
   const runtimeView = await readRootFile("apps/mac-host/Sources/VeilHostShell/Views/VMRuntimeView.swift");
