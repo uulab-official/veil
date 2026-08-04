@@ -1119,38 +1119,61 @@ public struct VeilHostClient: HostDashboardService, Sendable {
     }
 
     public func sendMouseInput(_ input: InputMouseEvent) async throws {
-        _ = try await transport.send(encoder.encode(input), expectedReplies: 0)
+        guard input.event != "move" else {
+            _ = try await transport.send(encoder.encode(input), expectedReplies: 0)
+            return
+        }
+
+        var acknowledgedInput = input
+        let requestId = operationRequestId(for: .inputMouse)
+        acknowledgedInput.requestId = requestId
+        try await acknowledgedOperation(
+            acknowledgedInput,
+            operation: .inputMouse,
+            requestId: requestId
+        )
     }
 
     public func sendKeyInput(_ input: InputKeyEvent) async throws {
-        _ = try await transport.send(encoder.encode(input), expectedReplies: 0)
+        var acknowledgedInput = input
+        let requestId = operationRequestId(for: .inputKey)
+        acknowledgedInput.requestId = requestId
+        try await acknowledgedOperation(
+            acknowledgedInput,
+            operation: .inputKey,
+            requestId: requestId
+        )
     }
 
     public func sendClipboardText(_ clipboard: ClipboardTextSet) async throws {
-        _ = try await transport.send(encoder.encode(clipboard), expectedReplies: 0)
+        try await acknowledgedOperation(
+            clipboard,
+            operation: .clipboardTextSet,
+            requestId: clipboard.requestId
+        )
     }
 
     public func subscribeWindowFrames(windowId: String) async throws {
-        _ = try await transport.send(
-            encoder.encode(
-                WindowFrameSubscribeRequest(
-                    requestId: "req_frame_subscribe_\(requestIdSuffix(for: windowId))",
-                    windowId: windowId
-                )
-            ),
-            expectedReplies: 0
+        let request = WindowFrameSubscribeRequest(
+            requestId: "req_frame_subscribe_\(requestIdSuffix(for: windowId))",
+            windowId: windowId
+        )
+        try await acknowledgedOperation(
+            request,
+            operation: .windowFrameSubscribe,
+            requestId: request.requestId
         )
     }
 
     public func unsubscribeWindowFrames(windowId: String) async throws {
-        _ = try await transport.send(
-            encoder.encode(
-                WindowFrameUnsubscribeRequest(
-                    requestId: "req_frame_unsubscribe_\(requestIdSuffix(for: windowId))",
-                    windowId: windowId
-                )
-            ),
-            expectedReplies: 0
+        let request = WindowFrameUnsubscribeRequest(
+            requestId: "req_frame_unsubscribe_\(requestIdSuffix(for: windowId))",
+            windowId: windowId
+        )
+        try await acknowledgedOperation(
+            request,
+            operation: .windowFrameUnsubscribe,
+            requestId: request.requestId
         )
     }
 
@@ -1171,6 +1194,35 @@ public struct VeilHostClient: HostDashboardService, Sendable {
         }
 
         return try decoder.decode(Response.self, from: data)
+    }
+
+    private func acknowledgedOperation<Request: Encodable>(
+        _ message: Request,
+        operation: MessageType,
+        requestId: String
+    ) async throws {
+        let replies = try await transport.send(encoder.encode(message), expectedReplies: 1)
+        guard let data = replies.first else {
+            throw VeilHostError.missingReply("operation acknowledgement requires operation.response")
+        }
+
+        if let error = try? decoder.decode(ErrorResponse.self, from: data), error.type == .error {
+            throw VeilHostError.agentError(code: error.code, message: error.message)
+        }
+
+        guard let response = try? decoder.decode(OperationResponse.self, from: data),
+              response.type == .operationResponse else {
+            throw VeilHostError.missingReply("operation acknowledgement requires operation.response")
+        }
+        guard response.requestId == requestId else {
+            throw VeilHostError.missingReply("operation acknowledgement requestId did not match")
+        }
+        guard response.operation == operation else {
+            throw VeilHostError.missingReply("operation acknowledgement operation did not match")
+        }
+        guard response.accepted else {
+            throw VeilHostError.missingReply("operation acknowledgement was not accepted")
+        }
     }
 
     private func firstFrame(
@@ -1247,6 +1299,10 @@ public struct VeilHostClient: HostDashboardService, Sendable {
         }
         .map(String.init)
         .joined()
+    }
+
+    private func operationRequestId(for operation: MessageType) -> String {
+        "req_\(requestIdSuffix(for: operation.rawValue))_\(UUID().uuidString)"
     }
 
     private static func proofClickPoint(for bounds: WindowBounds) -> (x: Int, y: Int) {

@@ -25,6 +25,7 @@ public enum MessageType: String, Codable, Sendable {
     case notificationReceived = "notification.received"
     case inputMouse = "input.mouse"
     case inputKey = "input.key"
+    case operationResponse = "operation.response"
     case error
 }
 
@@ -401,6 +402,7 @@ public struct WindowCloseResponse: Codable, Equatable, Sendable {
 
 public struct InputMouseEvent: Codable, Equatable, Sendable {
     public var type: MessageType
+    public var requestId: String? = nil
     public var windowId: String
     public var event: String
     public var x: Int
@@ -413,9 +415,11 @@ public struct InputMouseEvent: Codable, Equatable, Sendable {
         event: String,
         x: Int,
         y: Int,
-        modifiers: [String] = []
+        modifiers: [String] = [],
+        requestId: String? = nil
     ) {
         self.type = type
+        self.requestId = requestId
         self.windowId = windowId
         self.event = event
         self.x = x
@@ -426,6 +430,7 @@ public struct InputMouseEvent: Codable, Equatable, Sendable {
 
 public struct InputKeyEvent: Codable, Equatable, Sendable {
     public var type: MessageType
+    public var requestId: String? = nil
     public var windowId: String
     public var event: String
     public var key: String
@@ -438,15 +443,24 @@ public struct InputKeyEvent: Codable, Equatable, Sendable {
         event: String,
         key: String,
         windowsVirtualKey: Int,
-        modifiers: [String] = []
+        modifiers: [String] = [],
+        requestId: String? = nil
     ) {
         self.type = type
+        self.requestId = requestId
         self.windowId = windowId
         self.event = event
         self.key = key
         self.windowsVirtualKey = windowsVirtualKey
         self.modifiers = modifiers
     }
+}
+
+public struct OperationResponse: Codable, Equatable, Sendable {
+    public var type: MessageType
+    public var requestId: String
+    public var operation: MessageType
+    public var accepted: Bool
 }
 
 public struct ClipboardTextSet: Codable, Equatable, Sendable {
