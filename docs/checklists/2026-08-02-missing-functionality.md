@@ -45,12 +45,13 @@ Date: 2026-08-02
 - [x] Microsoft 페이지 조작 없이 최신 Arm64 에디션과 Mac 언어를 자동 선택하고 실제 ISO 다운로드를 시작한다.
   - 확인: 한국어 Mac에서 `Win11_25H2_Korean_Arm64_v2.iso`가 사용자 선택 없이 시작되어 4%까지 진행됨. 검증 취소 후 부분 파일이 제거됨.
 - [x] 자동 다운로드를 Microsoft 게시 SHA-256으로 검증하고 손상·취소 파일을 VM에 전달하지 않는다.
-  - 확인: 2026-08-03 실제 앱에서 Microsoft 25H2 한국어 Arm64 링크와 게시 해시를 자동으로 찾고 3%까지 다운로드한 뒤 취소함. Downloads 디렉터리와 앱 프로세스에 잔여물이 없었음. HTTP 상태, 응답 크기, 저장 공간, SHA-256 스트리밍/불일치, 언어/페이지 자동화 정책을 포함한 다운로드 테스트 22개 통과.
+  - 확인: 2026-08-04 실제 빌드 앱에서 Microsoft 25H2 한국어 Arm64 ISO `7,951,140,864`바이트 전체 다운로드와 게시 SHA-256 검증 완료. 별도 취소 실행에서는 부분 파일이 남지 않았음. 상세 증거는 `docs/checklists/2026-08-04-built-app-live-install-pass.md`.
 - [x] UI가 보고하는 provider와 실제 boot runner를 일치시키고 QEMU 미설치 시 Apple Virtualization 콘솔 fallback을 연다.
   - 확인: QEMU 우선, Apple fallback, 명시적 override 정책 테스트. 이 Mac의 진단은 QEMU 미설치와 Apple Virtualization active를 확인했다.
 - [x] VM 설정을 별도 설정 시트로 분리한다.
   - 확인: `.sheet(item:)` 기반 Windows Settings, 실행 상태별 리소스 잠금 정책 테스트 4개, 앱 UI에서 시트 열기/닫기와 첫 화면 중복 메뉴 제거 확인.
 - [ ] Windows ISO로 VM을 준비하고 QEMU/HVF 또는 Apple Virtualization으로 실제 Windows desktop 표시를 검증한다.
+  - 2026-08-04 실기: Apple Virtualization VM 준비·시작·정상 종료는 성공했지만 임베디드 화면은 검은 상태였고 Windows sparse disk 할당량은 `0B`였다. QEMU/HVF 재검증은 이 Mac의 Homebrew 관리자 인증 부재로 차단됨. 상세 증거는 `docs/checklists/2026-08-04-built-app-live-install-pass.md`.
 
 ## P0 — Parallels급 기본 사용 루프
 
@@ -58,7 +59,8 @@ Date: 2026-08-02
   - [x] Microsoft 공식 페이지 → 최신 Arm64 ISO 로컬 저장 → VM 준비/시작 코드 경로와 기존 ISO fallback을 연결했다.
   - [x] 에디션·언어 선택과 임시 다운로드 링크 발급도 자동화했다.
   - [x] Microsoft 페이지의 언어별 SHA-256과 완료 파일을 대조한 뒤에만 VM 준비로 넘긴다.
-  - [ ] 실제 전체 ISO 다운로드 후 임베디드 Windows Setup 화면이 뜨는 실기 증거가 필요하다.
+  - [x] 실제 전체 ISO 다운로드와 검증, 동의, VM 준비·시작까지 빌드 앱에서 수행했다.
+  - [ ] QEMU/HVF에서 임베디드 Windows Setup 화면이 뜨는 현재 Mac 실기 증거가 필요하다. Apple fallback은 검은 화면으로 확인됐다.
 - [ ] 앱 셸에서 `Windows 시작 → guest agent 연결/복구 → 선택 앱 실행 → macOS 창 표시`를 터미널 없이 완료한다.
   - [x] 앱 실행 요청을 `요청 → Windows 시작/재개 → agent 대기 → queued launch 실행 → 차단 사유 표시` 상태 결정으로 통합한다.
     - 확인: lifecycle coordinator 단위 테스트 7개 통과. 실제 VM end-to-end 증거가 남아 있어 상위 항목은 미완료로 유지한다.

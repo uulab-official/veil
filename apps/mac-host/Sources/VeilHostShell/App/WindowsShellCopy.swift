@@ -34,6 +34,10 @@ struct WindowsHeaderStatus: Equatable {
             return Self(title: "Apps Ready", symbolName: "checkmark.circle.fill", tone: .green)
         }
 
+        if runtimeState == .running, !windowsInstalled {
+            return Self(title: "Installing", symbolName: "arrow.triangle.2.circlepath", tone: .blue)
+        }
+
         switch runtimeState {
         case .running:
             return Self(title: "Running", symbolName: "play.circle.fill", tone: .green)
@@ -59,6 +63,10 @@ enum WindowsShellCopy {
     ) -> String {
         if hasLiveAppConnection {
             return "Windows apps open on your Mac"
+        }
+
+        if runtimeState == .running, !windowsInstalled {
+            return "Windows Setup is running"
         }
 
         switch runtimeState {
