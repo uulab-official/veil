@@ -804,7 +804,7 @@ private struct MicrosoftWindowsDownloadWebView: NSViewRepresentable {
     func updateNSView(_ nsView: WKWebView, context: Context) {}
 }
 
-private enum WindowsDownloadJourneyStatus {
+private enum WindowsDownloadJourneyStatus: Equatable {
     case pending
     case current
     case complete
@@ -868,6 +868,7 @@ private struct WindowsDownloadJourneyStep: View {
         .frame(minWidth: 82)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(item.title), \(statusDescription)")
+        .animation(.easeInOut(duration: 0.2), value: item.status)
     }
 
     private var statusSymbol: String {
@@ -1056,7 +1057,31 @@ struct WindowsDownloadScreen: View {
                 downloadProgressView
                     .frame(maxWidth: 480)
 
-                if case .downloaded = controller.phase, !isPreparingWindows {
+                if preparationFailure != nil {
+                    VStack(spacing: 10) {
+                        Button("Try Preparing Again") {
+                            showsLicenseConfirmation = true
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.large)
+
+                        Button("Choose Another ISO") {
+                            controller.cancelDownload()
+                            useExistingISO()
+                        }
+                    }
+                } else if case .failed = controller.phase {
+                    VStack(spacing: 10) {
+                        Button("Try Download Again", action: retryDownload)
+                            .buttonStyle(.borderedProminent)
+                            .controlSize(.large)
+
+                        Button("Use an Existing ISO") {
+                            controller.cancelDownload()
+                            useExistingISO()
+                        }
+                    }
+                } else if case .downloaded = controller.phase, !isPreparingWindows {
                     VStack(spacing: 10) {
                         Button("Review and Prepare Windows") {
                             showsLicenseConfirmation = true
@@ -1102,10 +1127,10 @@ struct WindowsDownloadScreen: View {
 
             Spacer()
 
-            if case .failed = controller.phase {
-                Button("Reload Microsoft Page") {
-                    preparationFailure = nil
-                    controller.reloadLandingPage()
+            if isBusy, !showsMicrosoftPage {
+                Button("Cancel") {
+                    controller.cancelDownload()
+                    closeAction()
                 }
             }
 
@@ -1297,6 +1322,11 @@ struct WindowsDownloadScreen: View {
                 preparationFailure = "The ISO was saved, but Veil could not finish VM preparation. Review Windows Settings and try again."
             }
         }
+    }
+
+    private func retryDownload() {
+        preparationFailure = nil
+        controller.reloadLandingPage()
     }
 
     private func reviewLicenseTermsAndReopenConfirmation() {
