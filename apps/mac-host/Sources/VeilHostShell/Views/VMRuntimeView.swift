@@ -1596,6 +1596,21 @@ private struct WindowsSetupDisplayPanel: View {
                 hasDesktopDisplay: newValue
             )
         }
+        .onChange(of: availableInstalledProfileIdentity) { previousIdentity, availableIdentity in
+            showsFullDesktop = InstalledWorkspacePresentationPolicy.shouldKeepDesktopVisibleAfterProfileIdentityChange(
+                requested: showsFullDesktop,
+                previousAvailableProfileIdentity: previousIdentity,
+                availableProfileIdentity: availableIdentity
+            )
+        }
+    }
+
+    private var availableInstalledProfileIdentity: InstalledWorkspaceAvailableProfileIdentity? {
+        guard effectiveInstallEvidence.isInstalled else {
+            return nil
+        }
+
+        return InstalledWorkspaceAvailableProfileIdentity(snapshot: snapshot)
     }
 
     @ViewBuilder

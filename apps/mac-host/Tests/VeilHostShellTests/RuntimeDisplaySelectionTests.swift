@@ -86,4 +86,35 @@ struct InstalledWorkspacePresentationPolicyTests {
             )
         )
     }
+
+    @Test("an unrequested running display stays on the app home")
+    func keepsUnrequestedRunningDisplayOnAppHome() {
+        #expect(
+            !InstalledWorkspacePresentationPolicy.shouldKeepDesktopVisible(
+                requested: false,
+                runtimeState: .running,
+                hasDesktopDisplay: true
+            )
+        )
+    }
+
+    @Test("desktop-visible profiles with the same name but different virtual disks return to app home")
+    func closesDesktopWhenVirtualDiskIdentityChanges() {
+        let profileA = InstalledWorkspaceAvailableProfileIdentity(
+            profileName: "Windows 11",
+            virtualDiskPath: "/Virtual Machines/Profile A/Windows.img"
+        )
+        let profileB = InstalledWorkspaceAvailableProfileIdentity(
+            profileName: "Windows 11",
+            virtualDiskPath: "/Virtual Machines/Profile B/Windows.img"
+        )
+
+        #expect(
+            !InstalledWorkspacePresentationPolicy.shouldKeepDesktopVisibleAfterProfileIdentityChange(
+                requested: true,
+                previousAvailableProfileIdentity: profileA,
+                availableProfileIdentity: profileB
+            )
+        )
+    }
 }

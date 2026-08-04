@@ -8,7 +8,7 @@ direct evidence.
 
 - [x] The automated installed-workspace policy verifies that installed Windows
   presents one app-first home and does not auto-open or duplicate the Windows
-  desktop (`swift test`: 406 tests; lifecycle Node harness: 15 tests).
+  desktop (`swift test`: 408 tests; lifecycle Node harness: 15 tests).
 - [ ] Direct installed-app evidence of the default `Windows Apps` catalog state
   is unavailable. The current user data has an ISO but no VM profile or
   installed-Windows state, so `/Applications/Veil.app` correctly showed the
@@ -46,7 +46,12 @@ direct evidence.
 
 ## Automated verification
 
-- [x] `swift test --package-path apps/mac-host` — 406 tests in 27 suites
+- [x] `swift test --package-path apps/mac-host --filter RuntimeDisplaySelectionTests`
+  — 9 tests in 2 suites passed, including explicit-request and same-name,
+  different-virtual-disk profile replacement transitions.
+- [x] `swift test --package-path apps/mac-host --filter InstalledAppHomePresentationTests`
+  — 10 tests in 1 suite passed.
+- [x] `swift test --package-path apps/mac-host` — 408 tests in 27 suites
   passed.
 - [x] `node --test harness/macos-app-lifecycle/test/*.test.mjs` — 15 tests
   passed; 0 failed, cancelled, skipped, or todo.
@@ -76,5 +81,6 @@ direct evidence.
 
 ## Visual evidence
 
-- Regular-size installed first-run screenshot:
+- Locally observed regular-size installed first-run screenshot; this
+  machine-local temporary capture was not retained as a durable review artifact:
   `/var/folders/hc/ck1bcnks1kx3z5rslhm3qtg80000gn/T/com.openai.sky.CUAService/Veil Screenshot 2026-08-04 at 12.12.53 PM.jpeg`.

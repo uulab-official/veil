@@ -107,4 +107,35 @@ enum InstalledWorkspacePresentationPolicy {
     ) -> Bool {
         requested && runtimeState == .running && hasDesktopDisplay
     }
+
+    static func shouldKeepDesktopVisibleAfterProfileIdentityChange(
+        requested: Bool,
+        previousAvailableProfileIdentity: InstalledWorkspaceAvailableProfileIdentity?,
+        availableProfileIdentity: InstalledWorkspaceAvailableProfileIdentity?
+    ) -> Bool {
+        requested
+            && previousAvailableProfileIdentity != nil
+            && previousAvailableProfileIdentity == availableProfileIdentity
+    }
+}
+
+struct InstalledWorkspaceAvailableProfileIdentity: Equatable {
+    let profileName: String
+    let virtualDiskPath: String
+
+    init(profileName: String, virtualDiskPath: String) {
+        self.profileName = profileName
+        self.virtualDiskPath = virtualDiskPath
+    }
+
+    init?(snapshot: VMRuntimeSnapshot) {
+        guard let profileName = snapshot.profileName,
+              !profileName.isEmpty,
+              let virtualDiskPath = snapshot.virtualDiskPath,
+              !virtualDiskPath.isEmpty else {
+            return nil
+        }
+
+        self.init(profileName: profileName, virtualDiskPath: virtualDiskPath)
+    }
 }
