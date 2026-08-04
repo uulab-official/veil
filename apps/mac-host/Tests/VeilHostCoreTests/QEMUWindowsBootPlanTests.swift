@@ -1305,6 +1305,22 @@ struct QEMUWindowsBootPlanTests {
         #expect(QEMUGuestAgentInstallKeySequence.uacApproveKeySteps.map(\.key) == ["left", "ret"])
     }
 
+    @Test("Windows optimization sequence invokes one short idempotent media entrypoint")
+    func windowsOptimizationSequenceInvokesShortMediaEntryPoint() throws {
+        let steps = try QEMUWindowsOptimizationKeySequence.steps
+        let keys = steps.map(\.key)
+
+        #expect(Array(keys.prefix(3)) == ["esc", "meta-r", "ctrl-a"])
+        #expect(keys.last == "ret")
+        #expect(QEMUWindowsOptimizationKeySequence.commandText.hasPrefix("cmd.exe /c for %d"))
+        #expect(QEMUWindowsOptimizationKeySequence.commandText.contains("Optimize.cmd"))
+        #expect(!QEMUWindowsOptimizationKeySequence.commandText.contains("utm-guest-tools"))
+        #expect(!QEMUWindowsOptimizationKeySequence.commandText.contains("Repair Veil Agent Connectivity.cmd"))
+        #expect(keys.contains("backslash"))
+        #expect(keys.contains("shift-5"))
+        #expect(keys.count < 200)
+    }
+
     @Test("sparse package sequence opens run dialog and invokes short VEIL_AUTO entrypoint")
     func sparsePackageSequenceOpensRunDialogAndInvokesShortEntryPoint() throws {
         let steps = try QEMUSparsePackagePreparationKeySequence.steps

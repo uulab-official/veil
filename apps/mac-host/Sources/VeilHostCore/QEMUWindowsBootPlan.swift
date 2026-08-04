@@ -1621,6 +1621,51 @@ public enum QEMUGuestAgentInstallKeySequence {
     }
 }
 
+public enum QEMUWindowsOptimizationKeySequence {
+    public static let startButtonTapNormalizedX = QEMUGuestAgentInstallKeySequence.startButtonTapNormalizedX
+    public static let startButtonTapNormalizedY = QEMUGuestAgentInstallKeySequence.startButtonTapNormalizedY
+    public static let runConfirmTapNormalizedX = QEMUGuestAgentInstallKeySequence.runConfirmTapNormalizedX
+    public static let runConfirmTapNormalizedY = QEMUGuestAgentInstallKeySequence.runConfirmTapNormalizedY
+    public static let uacApproveTapNormalizedX = QEMUGuestAgentInstallKeySequence.uacApproveTapNormalizedX
+    public static let uacApproveTapNormalizedY = QEMUGuestAgentInstallKeySequence.uacApproveTapNormalizedY
+    public static let uacApproveKeySteps = QEMUGuestAgentInstallKeySequence.uacApproveKeySteps
+
+    public static let commandText =
+        #"cmd.exe /c for %d in (D E F G H I J K L M N O P Q R S T U V W X Y Z) do if exist "%d:\Veil Guest Agent\Optimize.cmd" call "%d:\Veil Guest Agent\Optimize.cmd""#
+
+    public static let openRunSteps = QEMUGuestAgentInstallKeySequence.openRunSteps
+
+    public static var commandTextSteps: [QEMUKeySequenceStep] {
+        get throws {
+            var textSteps = try QEMUQMPKeyboardCommandBuilder
+                .keySequence(forText: commandText)
+                .map { QEMUKeySequenceStep(key: $0, delayAfterSend: 0.035) }
+            if !textSteps.isEmpty {
+                textSteps[textSteps.count - 1].delayAfterSend = 1.0
+            }
+            return [
+                QEMUKeySequenceStep(key: "ctrl-a", delayAfterSend: 0.2)
+            ] + textSteps
+        }
+    }
+
+    public static var stepsAfterRunOpened: [QEMUKeySequenceStep] {
+        get throws {
+            openRunSteps + (try commandTextSteps)
+        }
+    }
+
+    public static var steps: [QEMUKeySequenceStep] {
+        get throws {
+            [
+                QEMUKeySequenceStep(key: "esc", delayAfterSend: 0.3)
+            ] + (try stepsAfterRunOpened) + [
+                QEMUKeySequenceStep(key: "ret", delayAfterSend: 1.0)
+            ]
+        }
+    }
+}
+
 public enum QEMUSparsePackagePreparationKeySequence {
     public static let startButtonTapNormalizedX = QEMUGuestAgentInstallKeySequence.startButtonTapNormalizedX
     public static let startButtonTapNormalizedY = QEMUGuestAgentInstallKeySequence.startButtonTapNormalizedY
