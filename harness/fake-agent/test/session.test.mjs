@@ -390,6 +390,20 @@ test("acknowledges host clipboard text with a request ID", async () => {
   }]);
 });
 
+test("does not acknowledge guest clipboard text with a request ID", async () => {
+  const session = createSession();
+
+  const replies = await session.handle({
+    type: "clipboard.text.set",
+    requestId: "req_clipboard_guest_1",
+    origin: "guest",
+    sequence: 1,
+    text: "hello from Windows"
+  });
+
+  assert.deepEqual(replies, []);
+});
+
 test("keeps legacy host clipboard text without a request ID silent", async () => {
   const session = createSession();
 

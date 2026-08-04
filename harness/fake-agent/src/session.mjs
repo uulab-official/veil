@@ -47,7 +47,7 @@ export function createSession(options = {}) {
           await broadcastInputFrame(message, broadcast, nextFrameSequence);
           return operationAccepted(message);
         case MessageType.ClipboardTextSet:
-          return operationAccepted(message);
+          return message.origin === "host" ? operationAccepted(message) : [];
         default:
           return [createError(message.requestId, "unsupported_in_fake_agent", `Fake agent cannot handle ${message.type}`)];
       }
