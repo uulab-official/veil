@@ -3,6 +3,22 @@ import VeilHostCore
 @testable import VeilHostShell
 
 struct VMSettingsAccessPolicyTests {
+    @Test("setup diagnostics routes each available evidence source")
+    func setupDiagnosticsRoutes() {
+        #expect(WindowsSetupDiagnosticsRoute.resolve(
+            hasExportedDiagnostics: true,
+            hasAgentDiagnostic: true
+        ) == .exportedFile)
+        #expect(WindowsSetupDiagnosticsRoute.resolve(
+            hasExportedDiagnostics: false,
+            hasAgentDiagnostic: true
+        ) == .agentConnectionDetails)
+        #expect(WindowsSetupDiagnosticsRoute.resolve(
+            hasExportedDiagnostics: false,
+            hasAgentDiagnostic: false
+        ) == .unavailable)
+    }
+
     @Test("setup assistant exposes only the next primary action")
     func setupAssistantPrimaryAction() {
         #expect(SetupAssistantPrimaryAction.resolve(
