@@ -9,10 +9,11 @@ Date: 2026-08-02
 - [x] Swift host 패키지가 컴파일된다.
   - 확인: `swift test --disable-sandbox` 빌드 단계 통과.
 - [x] Swift 테스트 전체 통과.
-  - 확인: clean feature 기준 `swift test --disable-sandbox` — 380 tests / 25 suites.
-- [ ] Windows agent `dotnet test` 통과.
+  - 확인: clean feature 기준 `swift test --package-path apps/mac-host` — 419 tests / 27 suites (`2026-08-04`).
+- [x] Windows agent `dotnet test` 통과.
+  - 확인: 공식 .NET SDK 8.0.423 Arm64로 Release 전체 72 tests 통과, 실패/건너뜀 0개 (`2026-08-04`).
 - [x] protocol 및 주요 harness 테스트 통과.
-  - 확인: bundled Node로 protocol/harness 626 tests 통과; fake-agent 24개와 fake-host 8개 포함.
+  - 확인: 현재 ACK 회귀 기준 protocol 30개, fake-agent 31개, fake-host 8개 모두 통과 (`2026-08-04`).
 - [ ] 기본 셸에서 `VM 시작 → agent 연결/복구 → 앱 실행 → mirrored window 표시`를 터미널 없이 완료.
 - [ ] Windows desktop이 일반 사용 경로에 노출되지 않고 recovery 때만 표시된다.
 - [ ] Secure Boot firmware와 virtio driver가 없는 경우 사용자가 다음 조치를 알 수 있다.
@@ -86,7 +87,8 @@ Date: 2026-08-02
 
 - [x] fire-and-forget input/clipboard/frame-control 메시지에 bounded acknowledgement 또는 오류 수신 경로 추가.
 - [x] `window_not_tracked`를 닫힌 창으로 처리하고 재실행 루프를 막는다.
-- [ ] guest의 `false` 반환이 protocol error로 변환된다.
+- [x] guest의 `false` 반환이 protocol error로 변환된다.
+  - 확인: Windows desktop의 mouse/key 입력 `false` 반환이 각각 `input_mouse_rejected`, `input_key_rejected`로 변환되는 xUnit 포함 전체 72 tests 통과. 실제 Windows VM 입력 전달은 위 실기 검증 항목으로 유지한다.
 - [x] `type-text`가 `input.text`를 사용해 Unicode를 허용한다.
 - [x] clipboard write 실패 시 `Cmd+V`를 중단하고 사용자에게 알린다.
 
@@ -113,5 +115,5 @@ Date: 2026-08-02
 
 ## 실행 환경 메모
 
-- Swift 테스트는 macOS 테스트 번들 서명 정책 때문에 기본 `swift test` 대신 `swift test --disable-sandbox`로 실행해야 한다. 이 현상은 소스 손상이 아니라 테스트 실행 정책 오류였다.
-- 현재 실행 환경에 `dotnet` SDK가 없어 Windows agent `dotnet test`는 아직 실행하지 못했다.
+- 현재 clean feature에서는 `swift test --package-path apps/mac-host`가 별도 sandbox 우회 없이 통과했다. 과거 테스트 번들 서명 정책 오류가 재발하면 소스 손상과 구분해 실행 환경부터 확인한다.
+- 공식 `dotnet-install.sh`로 .NET SDK 8.0.423 Arm64를 격리된 임시 경로에 설치해 Windows agent 전체 xUnit을 실행했다. 이 검증은 macOS의 Windows-targeting 교차 빌드와 관리 코드 동작을 증명하며, 실제 Windows API/VM 전달 증거를 대체하지 않는다.
