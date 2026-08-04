@@ -804,6 +804,120 @@ private struct MicrosoftWindowsDownloadWebView: NSViewRepresentable {
     func updateNSView(_ nsView: WKWebView, context: Context) {}
 }
 
+private enum WindowsDownloadJourneyStatus {
+    case pending
+    case current
+    case complete
+    case failed
+}
+
+private struct WindowsDownloadJourneyItem: Identifiable {
+    var id: String { title }
+    var title: String
+    var symbolName: String
+    var status: WindowsDownloadJourneyStatus
+}
+
+private struct WindowsDownloadJourney: View {
+    var items: [WindowsDownloadJourneyItem]
+
+    var body: some View {
+        HStack(spacing: 0) {
+            ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+                WindowsDownloadJourneyStep(item: item)
+
+                if index < items.count - 1 {
+                    Capsule()
+                        .fill(connectorColor(after: item))
+                        .frame(maxWidth: 54, maxHeight: 2)
+                        .accessibilityHidden(true)
+                }
+            }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Windows download progress")
+    }
+
+    private func connectorColor(after item: WindowsDownloadJourneyItem) -> Color {
+        item.status == .complete ? .blue : Color.secondary.opacity(0.22)
+    }
+}
+
+private struct WindowsDownloadJourneyStep: View {
+    var item: WindowsDownloadJourneyItem
+
+    var body: some View {
+        VStack(spacing: 7) {
+            ZStack {
+                Circle()
+                    .fill(backgroundColor)
+                Image(systemName: statusSymbol)
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(foregroundColor)
+            }
+            .frame(width: 30, height: 30)
+            .overlay {
+                Circle()
+                    .strokeBorder(borderColor, lineWidth: 1)
+            }
+
+            Text(item.title)
+                .font(.caption.weight(item.status == .current ? .semibold : .medium))
+                .foregroundStyle(item.status == .pending ? .secondary : .primary)
+        }
+        .frame(minWidth: 82)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(item.title), \(statusDescription)")
+    }
+
+    private var statusSymbol: String {
+        switch item.status {
+        case .pending:
+            return item.symbolName
+        case .current:
+            return "ellipsis"
+        case .complete:
+            return "checkmark"
+        case .failed:
+            return "exclamationmark"
+        }
+    }
+
+    private var backgroundColor: Color {
+        switch item.status {
+        case .pending:
+            return Color.secondary.opacity(0.10)
+        case .current:
+            return .blue
+        case .complete:
+            return .green
+        case .failed:
+            return .orange
+        }
+    }
+
+    private var foregroundColor: Color {
+        item.status == .pending ? .secondary : .white
+    }
+
+    private var borderColor: Color {
+        item.status == .pending ? Color.secondary.opacity(0.18) : .white.opacity(0.18)
+    }
+
+    private var statusDescription: String {
+        switch item.status {
+        case .pending:
+            return "not started"
+        case .current:
+            return "in progress"
+        case .complete:
+            return "complete"
+        case .failed:
+            return "needs attention"
+        }
+    }
+}
+
 struct WindowsDownloadScreen: View {
     @StateObject private var controller = WindowsDownloadController()
     @State private var isPreparingWindows = false
@@ -858,9 +972,13 @@ struct WindowsDownloadScreen: View {
     private var header: some View {
         HStack(spacing: 12) {
             Button(action: closeAction) {
-                Label("Back", systemImage: "chevron.left")
+                Image(systemName: "chevron.left")
+                    .frame(width: 24, height: 24)
             }
+            .buttonStyle(.plain)
             .keyboardShortcut(.cancelAction)
+            .help("Back to Windows setup")
+            .accessibilityLabel("Back")
 
             Divider()
                 .frame(height: 28)
@@ -871,83 +989,96 @@ struct WindowsDownloadScreen: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text("Get Windows 11")
-                    .font(.title2.weight(.semibold))
-                Text("Download the latest Windows 11 Arm64 ISO directly from Microsoft")
-                    .font(.callout)
+                    .font(.headline.weight(.semibold))
+                Text("Official Windows 11 Arm64 installer")
+                    .font(.caption)
                     .foregroundStyle(.secondary)
             }
 
             Spacer()
 
-            Button(showsMicrosoftPage ? "Hide Microsoft Page" : "Show Microsoft Page") {
-                showsMicrosoftPage.toggle()
-            }
-
             Button("Use Existing ISO") {
                 controller.cancelDownload()
                 useExistingISO()
             }
+
+            Button {
+                showsMicrosoftPage.toggle()
+            } label: {
+                Label(
+                    showsMicrosoftPage ? "Show Automatic Download" : "Show Microsoft Page",
+                    systemImage: showsMicrosoftPage ? "sparkles" : "safari"
+                )
+            }
         }
         .padding(.horizontal, 20)
-        .padding(.vertical, 14)
+        .padding(.vertical, 12)
     }
 
     private var automaticDownloadStage: some View {
-        VStack(spacing: 20) {
-            Spacer()
+        ZStack {
+            LinearGradient(
+                colors: [
+                    Color(nsColor: .controlBackgroundColor),
+                    Color.blue.opacity(0.055)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
 
-            ZStack {
-                RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .fill(Color.blue.gradient)
-                    .frame(width: 92, height: 92)
-                Image(systemName: "square.grid.2x2.fill")
-                    .font(.system(size: 45, weight: .semibold))
-                    .foregroundStyle(.white)
-            }
-            .shadow(color: .blue.opacity(0.28), radius: 24, y: 12)
+            VStack(spacing: 24) {
+                Spacer(minLength: 16)
 
-            VStack(spacing: 7) {
-                Text(statusTitle)
-                    .font(.title2.weight(.semibold))
-                Text(preparationFailure ?? statusDetail)
-                    .font(.callout)
-                    .foregroundStyle(preparationFailure == nil ? AnyShapeStyle(.secondary) : AnyShapeStyle(.red))
-                    .multilineTextAlignment(.center)
-                    .frame(maxWidth: 520)
-            }
+                ZStack {
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .fill(Color.blue.gradient)
+                        .frame(width: 82, height: 82)
+                    Image(systemName: "square.grid.2x2.fill")
+                        .font(.system(size: 39, weight: .semibold))
+                        .foregroundStyle(.white)
+                }
+                .shadow(color: .blue.opacity(0.24), radius: 20, y: 10)
 
-            if isPreparingWindows || isBusy {
-                if let progress = controller.downloadProgress {
-                    ProgressView(value: progress)
-                        .frame(maxWidth: 420)
-                } else {
-                    ProgressView()
+                VStack(spacing: 7) {
+                    Text(statusTitle)
+                        .font(.system(size: 26, weight: .semibold, design: .rounded))
+                        .multilineTextAlignment(.center)
+                    Text(preparationFailure ?? statusDetail)
+                        .font(.callout)
+                        .foregroundStyle(preparationFailure == nil ? AnyShapeStyle(.secondary) : AnyShapeStyle(.red))
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: 580)
+                }
+
+                WindowsDownloadJourney(items: journeyItems)
+                    .frame(maxWidth: 560)
+
+                downloadProgressView
+                    .frame(maxWidth: 480)
+
+                if case .downloaded = controller.phase, !isPreparingWindows {
+                    VStack(spacing: 10) {
+                        Button("Review and Prepare Windows") {
+                            showsLicenseConfirmation = true
+                        }
+                        .buttonStyle(.borderedProminent)
                         .controlSize(.large)
-                }
-            }
 
-            if case .downloaded = controller.phase, !isPreparingWindows {
-                VStack(spacing: 10) {
-                    Link(destination: WindowsLicenseConsentPolicy.termsURL) {
-                        Label(WindowsLicenseConsentPolicy.reviewButtonTitle, systemImage: "doc.text.magnifyingglass")
+                        Link(destination: WindowsLicenseConsentPolicy.termsURL) {
+                            Label(WindowsLicenseConsentPolicy.reviewButtonTitle, systemImage: "doc.text.magnifyingglass")
+                        }
                     }
-
-                    Button("Review and Prepare Windows") {
-                        showsLicenseConfirmation = true
-                    }
-                    .buttonStyle(.borderedProminent)
                 }
+
+                Label("Secure download from microsoft.com • Saved only on this Mac", systemImage: "lock.shield.fill")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.secondary)
+
+                Spacer(minLength: 16)
             }
-
-            Label("Latest Arm64 ISO directly from microsoft.com", systemImage: "lock.shield.fill")
-                .font(.caption.weight(.medium))
-                .foregroundStyle(.secondary)
-
-            Spacer()
+            .padding(36)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding(36)
-        .background(Color(nsColor: .controlBackgroundColor))
     }
 
     private var footer: some View {
@@ -964,7 +1095,7 @@ struct WindowsDownloadScreen: View {
                         .lineLimit(2)
                 }
             } else {
-                Label("Automatic download", systemImage: "sparkles")
+                Label("Automatic setup", systemImage: "sparkles")
                     .font(.callout.weight(.medium))
                     .foregroundStyle(.secondary)
             }
@@ -986,6 +1117,38 @@ struct WindowsDownloadScreen: View {
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
+    }
+
+    @ViewBuilder
+    private var downloadProgressView: some View {
+        if isPreparingWindows || isBusy {
+            if let progress = controller.downloadProgress {
+                VStack(spacing: 8) {
+                    HStack {
+                        Text("Download progress")
+                        Spacer()
+                        Text("\(Int(progress * 100))%")
+                            .monospacedDigit()
+                            .fontWeight(.semibold)
+                    }
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                    ProgressView(value: progress)
+                        .controlSize(.large)
+                        .accessibilityLabel("Windows ISO download")
+                        .accessibilityValue("\(Int(progress * 100)) percent")
+                }
+            } else {
+                HStack(spacing: 10) {
+                    ProgressView()
+                        .controlSize(.small)
+                    Text(isPreparingWindows ? "Preparing your Windows VM" : "Connecting securely to Microsoft")
+                        .font(.callout.weight(.medium))
+                }
+                .foregroundStyle(.secondary)
+            }
+        }
     }
 
     @ViewBuilder
@@ -1022,6 +1185,57 @@ struct WindowsDownloadScreen: View {
         }
     }
 
+    private var journeyItems: [WindowsDownloadJourneyItem] {
+        let currentIndex: Int
+        if isPreparingWindows || preparationFailure != nil {
+            currentIndex = 3
+        } else {
+            switch controller.phase {
+            case .loadingPage, .automating, .requestingDownload, .failed:
+                currentIndex = 0
+            case .downloading:
+                currentIndex = 1
+            case .verifying:
+                currentIndex = 2
+            case .downloaded:
+                currentIndex = 3
+            }
+        }
+
+        let hasFailure: Bool
+        if preparationFailure != nil {
+            hasFailure = true
+        } else if case .failed = controller.phase {
+            hasFailure = true
+        } else {
+            hasFailure = false
+        }
+
+        let definitions = [
+            ("Find", "magnifyingglass"),
+            ("Download", "arrow.down"),
+            ("Verify", "checkmark.shield"),
+            ("Prepare", "internaldrive")
+        ]
+
+        return definitions.enumerated().map { index, definition in
+            let status: WindowsDownloadJourneyStatus
+            if index < currentIndex {
+                status = .complete
+            } else if index == currentIndex {
+                status = hasFailure ? .failed : .current
+            } else {
+                status = .pending
+            }
+
+            return WindowsDownloadJourneyItem(
+                title: definition.0,
+                symbolName: definition.1,
+                status: status
+            )
+        }
+    }
+
     private var statusTitle: String {
         if isPreparingWindows {
             return "Preparing Windows VM"
@@ -1034,8 +1248,8 @@ struct WindowsDownloadScreen: View {
             return "Getting the latest Windows 11"
         case .requestingDownload:
             return "Starting the official ISO download"
-        case .downloading(let filename):
-            return "Downloading \(filename)"
+        case .downloading:
+            return "Downloading Windows 11"
         case .verifying:
             return "Verifying Windows ISO"
         case .downloaded:
@@ -1053,11 +1267,11 @@ struct WindowsDownloadScreen: View {
             return step
         case .requestingDownload(let language):
             return "Microsoft issued the latest \(language) ISO link. Download is starting now."
-        case .downloading:
+        case .downloading(let filename):
             if let progress = controller.downloadProgress {
-                return "\(Int(progress * 100))% complete. The ISO is being saved locally in Veil's Application Support folder."
+                return "\(filename)\n\(Int(progress * 100))% complete • Saved locally in Veil"
             }
-            return "The ISO is being saved locally in Veil's Application Support folder. Keep this window open."
+            return "\(filename)\nSaving locally in Veil • Keep this window open"
         case .verifying:
             return "Veil is comparing the completed file with Microsoft's published SHA-256. Keep this window open."
         case .downloaded:

@@ -44,14 +44,17 @@ test("lifecycle gate covers install, guarded replace, uninstall, preservation, a
   assert.match(gate, /test_macos_lifecycle\.sh\" --skip-build/);
 });
 
-test("first-run hero exposes a named action and unambiguous compatibility copy", async () => {
+test("first-run hero presents one clear setup journey without runtime jargon", async () => {
   const source = await readRootFile("apps/mac-host/Sources/VeilHostShell/Views/VMRuntimeView.swift");
 
   assert.match(source, /\.accessibilityLabel\(effectivePrimaryTitle\)/);
   assert.match(source, /\.accessibilityHint\(effectivePrimaryHelp\)/);
-  assert.match(source, /Apple Virtualization compatibility mode/);
-  assert.match(source, /Windows setup is available • Mac app windows require QEMU/);
-  assert.doesNotMatch(source, /Console available • Windows app integration needs QEMU/);
+  assert.match(source, /Windows apps, right on your Mac/);
+  assert.match(source, /SetupJourneyStep\(number: 1, title: "Get Windows"/);
+  assert.match(source, /SetupJourneyStep\(number: 2, title: "Install"/);
+  assert.match(source, /SetupJourneyStep\(number: 3, title: "Open Apps"/);
+  assert.match(source, /Button\("Use an Existing ISO", action: selectInstallerAction\)/);
+  assert.doesNotMatch(source, /Mac app windows require QEMU or a configured endpoint/);
 });
 
 test("Windows setup requires explicit license consent for downloaded and selected ISOs", async () => {
@@ -79,13 +82,26 @@ test("Windows download occupies the main content area instead of a nested sheet"
   const settingsSheet = await readRootFile("apps/mac-host/Sources/VeilHostShell/Views/VMSettingsSheet.swift");
 
   assert.match(downloadScreen, /struct WindowsDownloadScreen: View/);
-  assert.match(downloadScreen, /Label\("Back", systemImage: "chevron\.left"\)/);
+  assert.match(downloadScreen, /Image\(systemName: "chevron\.left"\)/);
+  assert.match(downloadScreen, /\.accessibilityLabel\("Back"\)/);
   assert.match(downloadScreen, /\.frame\(maxWidth: \.infinity, maxHeight: \.infinity\)/);
   assert.doesNotMatch(downloadScreen, /@Environment\(\\\.dismiss\)/);
   assert.doesNotMatch(downloadScreen, /\.frame\(minWidth: 820, minHeight: 560\)/);
   assert.match(runtimeView, /VMRuntimeContentRoute/);
   assert.match(runtimeView, /case \.windowsDownload:[\s\S]*WindowsDownloadScreen/);
   assert.doesNotMatch(settingsSheet, /case windowsDownload/);
+});
+
+test("Windows download communicates its staged progress and source", async () => {
+  const source = await readRootFile("apps/mac-host/Sources/VeilHostShell/Views/WindowsDownloadSheet.swift");
+
+  assert.match(source, /WindowsDownloadJourney\(items: journeyItems\)/);
+  assert.match(source, /\("Find", "magnifyingglass"\)/);
+  assert.match(source, /\("Download", "arrow\.down"\)/);
+  assert.match(source, /\("Verify", "checkmark\.shield"\)/);
+  assert.match(source, /\("Prepare", "internaldrive"\)/);
+  assert.match(source, /Text\("\\\(Int\(progress \* 100\)\)%"\)/);
+  assert.match(source, /Secure download from microsoft\.com • Saved only on this Mac/);
 });
 
 test("Windows setup enters native macOS full screen without toggling an existing full-screen window", async () => {
