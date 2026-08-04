@@ -90,6 +90,12 @@ struct VMRuntimeView: View {
         .onChange(of: model.snapshot?.state) { _, state in
             updateDisplayHandoffProgress(for: state)
         }
+        .onChange(of: contentRoute) { _, route in
+            guard route == .windowsDownload else {
+                return
+            }
+            MainWindowChrome.enterFullScreen()
+        }
         .task(id: model.snapshot?.state) {
             await refreshRuntimeEvidenceWhileRunning()
         }

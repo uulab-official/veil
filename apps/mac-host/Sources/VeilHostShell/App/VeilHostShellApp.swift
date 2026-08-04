@@ -452,7 +452,7 @@ struct VeilHostShellApp: App {
     private func startWindowsAndShowDisplay() {
         Task { @MainActor in
             cancelAutomaticQuietRuntime()
-            activateMainWindow()
+            MainWindowChrome.enterFullScreen()
             displayMessage = "Starting Windows locally. Veil stays in this main window while setup runs."
             await vmModel.start()
 
@@ -2420,8 +2420,14 @@ enum LauncherReopenPolicy {
     }
 }
 
+enum MainWindowFullscreenPolicy {
+    static func shouldRequestFullScreen(styleMask: NSWindow.StyleMask) -> Bool {
+        !styleMask.contains(.fullScreen)
+    }
+}
+
 @MainActor
-private enum MainWindowChrome {
+enum MainWindowChrome {
     static func configureAndCompactMainWindow() {
         let windows = mainWindows
         guard let window = windows.first else {
@@ -2441,6 +2447,17 @@ private enum MainWindowChrome {
         configureAndCompactMainWindow()
         mainWindow?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+    }
+
+    static func enterFullScreen() {
+        showMainWindow()
+        guard let window = mainWindow,
+              MainWindowFullscreenPolicy.shouldRequestFullScreen(styleMask: window.styleMask) else {
+            return
+        }
+
+        window.collectionBehavior.insert(.fullScreenPrimary)
+        window.toggleFullScreen(nil)
     }
 
     static func hideMainWindow() {
@@ -2604,6 +2621,7 @@ private struct StandaloneMainWindowRoot: View {
 
     private func startWindowsAndShowDisplay() {
         Task { @MainActor in
+            MainWindowChrome.enterFullScreen()
             displayMessage = "Starting Windows locally. Veil stays in this main window while setup runs."
             await vmModel.start()
 

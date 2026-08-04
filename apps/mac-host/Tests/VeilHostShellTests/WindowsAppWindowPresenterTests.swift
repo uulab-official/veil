@@ -5,6 +5,12 @@ import VeilHostCore
 
 @MainActor
 struct WindowsAppWindowPresenterTests {
+    @Test("main Windows setup requests full screen only from windowed mode")
+    func mainWindowsSetupFullScreenPolicy() {
+        #expect(MainWindowFullscreenPolicy.shouldRequestFullScreen(styleMask: [.titled]))
+        #expect(!MainWindowFullscreenPolicy.shouldRequestFullScreen(styleMask: [.titled, .fullScreen]))
+    }
+
     @Test("keeps launcher hidden while any mirrored Windows app window is visible")
     func keepsLauncherHiddenWhileMirroredWindowIsVisible() {
         #expect(
