@@ -560,7 +560,7 @@ Rules:
 
 ## Operation Acknowledgements
 
-Successful operations may be acknowledged by the guest with:
+Successful operations, except `input.mouse` moves, may be acknowledged by the guest with:
 
 ```json
 {
@@ -575,8 +575,9 @@ Rules:
 
 - `requestId` and `operation` must be non-empty strings, and the response must use `accepted: true`.
 - An operation response is optional for backwards compatibility. Hosts must continue to accept successful input without an acknowledgement when connected to an older guest.
-- Failed operations use the existing `error` message with the input request's `requestId`; they must not send `operation.response` with `accepted: false`.
-- Hosts must not retry an operation solely because its acknowledgement has not arrived. Retries require an explicit operation-specific policy.
+- `input.mouse` with `event: "move"` must never emit an operation response, even when the platform accepts the move.
+- Failed operations use existing `error` envelopes with the input request's `requestId`; guest platform `false` results must map to operation-specific error codes, and must not send `operation.response` with `accepted: false`.
+- Hosts must never automatically retry clicks, key events, clipboard writes, or stream controls, whether the operation response is absent or an error is received. An acknowledgement timeout or error is not permission to repeat the operation.
 
 ## Clipboard Text
 
