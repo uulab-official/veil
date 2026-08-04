@@ -659,9 +659,10 @@ struct VeilHostClientTests {
 
     @Test("surfaces operation acknowledgement errors")
     func surfacesOperationAcknowledgementErrors() async throws {
-        let transport = RecordingTransport(responses: [
-            #"{"type":"error","requestId":"req_key_1","code":"input_key_rejected","message":"Windows rejected key input."}"#
-        ])
+        let transport = CorrelatedOperationErrorTransport(
+            code: "input_key_rejected",
+            message: "Windows rejected key input."
+        )
         let client = VeilHostClient(transport: transport)
 
         await #expect(throws: VeilHostError.agentError(
@@ -676,6 +677,20 @@ struct VeilHostClientTests {
                     windowsVirtualKey: 67,
                     modifiers: ["ctrl"]
                 )
+            )
+        }
+    }
+
+    @Test("rejects operation error with mismatched request ID")
+    func rejectsOperationErrorWithMismatchedRequestId() async throws {
+        let transport = RecordingTransport(responses: [
+            #"{"type":"error","requestId":"req_other","code":"input_key_rejected","message":"Windows rejected key input."}"#
+        ])
+        let client = VeilHostClient(transport: transport)
+
+        await #expect(throws: VeilHostError.missingReply("operation acknowledgement requestId did not match")) {
+            try await client.sendKeyInput(
+                InputKeyEvent(windowId: "hwnd:0003029A", event: "keyDown", key: "c", windowsVirtualKey: 67)
             )
         }
     }
@@ -749,6 +764,25 @@ struct VeilHostClientTests {
         }
 
         #expect(await cancellationState.wasCancelled)
+    }
+}
+
+private struct CorrelatedOperationErrorTransport: HostTransport {
+    let code: String
+    let message: String
+
+    func send(_ message: Data, expectedReplies: Int) async throws -> [Data] {
+        let request = try JSONSerialization.jsonObject(with: message) as? [String: Any]
+        guard let requestId = request?["requestId"] as? String else {
+            return []
+        }
+        let response: [String: Any] = [
+            "type": "error",
+            "requestId": requestId,
+            "code": code,
+            "message": self.message
+        ]
+        return [try JSONSerialization.data(withJSONObject: response, options: [.sortedKeys])]
     }
 }
 

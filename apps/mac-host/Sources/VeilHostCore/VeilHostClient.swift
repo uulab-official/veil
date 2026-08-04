@@ -1217,6 +1217,9 @@ public struct VeilHostClient: HostDashboardService, Sendable {
         }
 
         if let error = try? decoder.decode(ErrorResponse.self, from: data), error.type == .error {
+            guard error.requestId == requestId else {
+                throw VeilHostError.missingReply("operation acknowledgement requestId did not match")
+            }
             throw VeilHostError.agentError(code: error.code, message: error.message)
         }
 

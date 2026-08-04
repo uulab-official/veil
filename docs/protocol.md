@@ -574,7 +574,7 @@ Successful operations, except `input.mouse` moves, may be acknowledged by the gu
 Rules:
 
 - `requestId` and `operation` must be non-empty strings, and the response must use `accepted: true`.
-- An operation response is optional for backwards compatibility. Hosts must continue to accept successful input without an acknowledgement when connected to an older guest.
+- Success replies are omitted only when the request itself has no `requestId`; a new host using request IDs against an older guest fails after its bounded acknowledgement timeout rather than claiming success.
 - `input.mouse` with `event: "move"` must never emit an operation response, even when the platform accepts the move.
 - Failed operations use existing `error` envelopes with the input request's `requestId`; guest platform `false` results must map to operation-specific error codes, and must not send `operation.response` with `accepted: false`.
 - Hosts must never automatically retry clicks, key events, clipboard writes, or stream controls, whether the operation response is absent or an error is received. An acknowledgement timeout or error is not permission to repeat the operation.
