@@ -1819,14 +1819,23 @@ private struct WindowsSetupDisplayPanel: View {
         .accessibilityLabel("Settings")
     }
 
+    private var firstRunCurrentStep: Int {
+        snapshot.installerMediaPath != nil || selectedInstallerName != nil ? 2 : 1
+    }
+
     private var firstRunSetupContent: some View {
-        VStack(spacing: 24) {
+        VStack(spacing: 20) {
             Spacer(minLength: 20)
 
             WindowsLogoMark(size: 72)
                 .shadow(color: .black.opacity(0.22), radius: 20, y: 10)
 
-            VStack(spacing: 8) {
+            VStack(spacing: 7) {
+                Text("STEP \(firstRunCurrentStep) OF 3")
+                    .font(.caption2.weight(.bold))
+                    .tracking(1.2)
+                    .foregroundStyle(.white.opacity(0.58))
+
                 Text("Windows apps, right on your Mac")
                     .font(.system(size: 34, weight: .semibold, design: .rounded))
                     .multilineTextAlignment(.center)
@@ -1840,11 +1849,26 @@ private struct WindowsSetupDisplayPanel: View {
             }
 
             HStack(spacing: 0) {
-                SetupJourneyStep(number: 1, title: "Get Windows", detail: "Official Arm64 ISO")
-                SetupJourneyConnector()
-                SetupJourneyStep(number: 2, title: "Install", detail: "Runs locally")
-                SetupJourneyConnector()
-                SetupJourneyStep(number: 3, title: "Open Apps", detail: "Mac-style windows")
+                SetupJourneyStep(
+                    number: 1,
+                    title: "Get Windows",
+                    detail: "Official Arm64 ISO",
+                    state: .resolve(step: 1, currentStep: firstRunCurrentStep)
+                )
+                SetupJourneyConnector(isComplete: firstRunCurrentStep > 1)
+                SetupJourneyStep(
+                    number: 2,
+                    title: "Install",
+                    detail: "Runs locally",
+                    state: .resolve(step: 2, currentStep: firstRunCurrentStep)
+                )
+                SetupJourneyConnector(isComplete: firstRunCurrentStep > 2)
+                SetupJourneyStep(
+                    number: 3,
+                    title: "Open Apps",
+                    detail: "Mac-style windows",
+                    state: .resolve(step: 3, currentStep: firstRunCurrentStep)
+                )
             }
             .frame(maxWidth: 680)
             .padding(.horizontal, 22)
@@ -1855,44 +1879,27 @@ private struct WindowsSetupDisplayPanel: View {
                     .strokeBorder(.white.opacity(0.12), lineWidth: 1)
             }
 
-            VStack(spacing: 10) {
-                Button(action: runEffectivePrimaryAction) {
-                    Label(effectivePrimaryTitle, systemImage: effectivePrimarySymbol)
-                        .font(.headline)
-                        .foregroundStyle(.white)
-                        .frame(width: 260, height: 46)
-                        .background(
-                            effectivePrimaryDisabled
-                                ? Color.white.opacity(0.16)
-                                : Color(red: 0.04, green: 0.48, blue: 0.98),
-                            in: RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        )
-                        .overlay {
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .strokeBorder(.white.opacity(0.18), lineWidth: 1)
-                        }
-                        .shadow(
-                            color: .black.opacity(effectivePrimaryDisabled ? 0 : 0.22),
-                            radius: 14,
-                            y: 7
-                        )
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 10) {
+                    firstRunPrimaryButton
+                    firstRunExistingISOButton
                 }
-                .buttonStyle(.plain)
-                .disabled(effectivePrimaryDisabled)
-                .help(effectivePrimaryHelp)
-                .accessibilityLabel(effectivePrimaryTitle)
-                .accessibilityHint(effectivePrimaryHelp)
 
-                Button("Use an Existing ISO", action: selectInstallerAction)
-                    .buttonStyle(.plain)
-                    .foregroundStyle(.white.opacity(0.82))
-                    .disabled(isLoading)
-                    .help("Choose a Windows 11 Arm64 ISO already on this Mac")
+                VStack(spacing: 10) {
+                    firstRunPrimaryButton
+                    firstRunExistingISOButton
+                }
             }
 
-            Label("Windows license required • Your VM and files stay on this Mac", systemImage: "lock.shield.fill")
-                .font(.caption.weight(.medium))
-                .foregroundStyle(.white.opacity(0.62))
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 18) {
+                    firstRunTrustItems
+                }
+
+                VStack(alignment: .leading, spacing: 8) {
+                    firstRunTrustItems
+                }
+            }
 
             if installSimulation.phase != .idle {
                 AssistantProgressStrip(simulation: installSimulation)
@@ -1909,6 +1916,60 @@ private struct WindowsSetupDisplayPanel: View {
         }
         .foregroundStyle(.white)
         .padding(36)
+    }
+
+    private var firstRunPrimaryButton: some View {
+        Button(action: runEffectivePrimaryAction) {
+            Label(effectivePrimaryTitle, systemImage: effectivePrimarySymbol)
+                .font(.headline)
+                .foregroundStyle(.white)
+                .frame(minWidth: 224, minHeight: 44)
+                .background(
+                    effectivePrimaryDisabled
+                        ? Color.white.opacity(0.16)
+                        : Color(red: 0.04, green: 0.48, blue: 0.98),
+                    in: RoundedRectangle(cornerRadius: 12, style: .continuous)
+                )
+                .overlay {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .strokeBorder(.white.opacity(0.18), lineWidth: 1)
+                }
+                .shadow(
+                    color: .black.opacity(effectivePrimaryDisabled ? 0 : 0.22),
+                    radius: 14,
+                    y: 7
+                )
+        }
+        .buttonStyle(.plain)
+        .disabled(effectivePrimaryDisabled)
+        .help(effectivePrimaryHelp)
+        .accessibilityLabel(effectivePrimaryTitle)
+        .accessibilityHint(effectivePrimaryHelp)
+    }
+
+    private var firstRunExistingISOButton: some View {
+        Button(action: selectInstallerAction) {
+            Label("Use an Existing ISO", systemImage: "folder")
+                .font(.callout.weight(.semibold))
+                .foregroundStyle(.white.opacity(0.9))
+                .frame(minWidth: 168, minHeight: 44)
+                .background(.white.opacity(0.10), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .strokeBorder(.white.opacity(0.18), lineWidth: 1)
+                }
+        }
+        .buttonStyle(.plain)
+        .disabled(isLoading)
+        .help("Choose a Windows 11 Arm64 ISO already on this Mac")
+        .accessibilityLabel("Use an Existing ISO")
+    }
+
+    @ViewBuilder
+    private var firstRunTrustItems: some View {
+        FirstRunTrustItem(title: "Microsoft source", symbolName: "checkmark.shield.fill")
+        FirstRunTrustItem(title: "Runs locally", symbolName: "desktopcomputer")
+        FirstRunTrustItem(title: "License required", symbolName: "key.fill")
     }
 
     private var installedMachineContent: some View {
@@ -2845,21 +2906,66 @@ private struct WindowsSetupDisplayPanel: View {
     }
 }
 
+enum SetupJourneyStageState: Equatable {
+    case complete
+    case current
+    case pending
+
+    static func resolve(step: Int, currentStep: Int) -> Self {
+        if step < currentStep {
+            return .complete
+        }
+
+        return step == currentStep ? .current : .pending
+    }
+
+    var accessibilityTitle: String {
+        switch self {
+        case .complete:
+            return "Complete"
+        case .current:
+            return "Current"
+        case .pending:
+            return "Upcoming"
+        }
+    }
+
+    var tint: Color {
+        switch self {
+        case .complete:
+            return .green
+        case .current:
+            return Color(red: 0.12, green: 0.56, blue: 1.0)
+        case .pending:
+            return .white.opacity(0.48)
+        }
+    }
+}
+
 private struct SetupJourneyStep: View {
     var number: Int
     var title: String
     var detail: String
+    var state: SetupJourneyStageState
 
     var body: some View {
         VStack(spacing: 7) {
-            Text("\(number)")
-                .font(.caption.weight(.bold))
-                .frame(width: 26, height: 26)
-                .background(.white.opacity(0.16), in: Circle())
-                .overlay {
-                    Circle()
-                        .strokeBorder(.white.opacity(0.24), lineWidth: 1)
+            Group {
+                if state == .complete {
+                    Image(systemName: "checkmark")
+                } else {
+                    Text("\(number)")
                 }
+            }
+            .font(.caption.weight(.bold))
+            .foregroundStyle(state == .pending ? .white.opacity(0.7) : .white)
+            .frame(width: 28, height: 28)
+            .background(state.tint.opacity(state == .current ? 0.88 : 0.28), in: Circle())
+            .overlay {
+                Circle()
+                    .strokeBorder(state.tint.opacity(0.9), lineWidth: state == .current ? 2 : 1)
+            }
+            .shadow(color: state == .current ? state.tint.opacity(0.38) : .clear, radius: 8)
 
             Text(title)
                 .font(.callout.weight(.semibold))
@@ -2870,17 +2976,31 @@ private struct SetupJourneyStep: View {
         }
         .frame(maxWidth: .infinity)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("Step \(number), \(title), \(detail)")
+        .accessibilityLabel("Step \(number), \(title), \(detail), \(state.accessibilityTitle)")
     }
 }
 
 private struct SetupJourneyConnector: View {
+    var isComplete: Bool
+
     var body: some View {
         Capsule()
-            .fill(.white.opacity(0.18))
+            .fill(isComplete ? Color.green.opacity(0.72) : .white.opacity(0.18))
             .frame(width: 42, height: 1)
             .offset(y: -18)
             .accessibilityHidden(true)
+    }
+}
+
+private struct FirstRunTrustItem: View {
+    var title: String
+    var symbolName: String
+
+    var body: some View {
+        Label(title, systemImage: symbolName)
+            .font(.caption.weight(.medium))
+            .foregroundStyle(.white.opacity(0.64))
+            .accessibilityElement(children: .combine)
     }
 }
 
