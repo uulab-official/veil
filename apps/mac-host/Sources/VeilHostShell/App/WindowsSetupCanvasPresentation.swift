@@ -17,6 +17,27 @@ enum WindowsSetupCanvasPrimaryRoute: Equatable {
     case settings
 }
 
+enum WindowsSetupDiagnosticsRoute: Equatable {
+    case exportedFile
+    case agentConnectionDetails
+    case unavailable
+
+    static func resolve(
+        hasExportedDiagnostics: Bool,
+        hasAgentDiagnostic: Bool
+    ) -> Self {
+        if hasExportedDiagnostics {
+            return .exportedFile
+        }
+
+        if hasAgentDiagnostic {
+            return .agentConnectionDetails
+        }
+
+        return .unavailable
+    }
+}
+
 struct WindowsSetupCanvasPresentation: Equatable {
     let phase: WindowsSetupCanvasPhase
     let title: String

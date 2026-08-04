@@ -1685,13 +1685,26 @@ private struct WindowsSetupDisplayPanel: View {
                     existingISOAction: selectInstallerAction,
                     settingsAction: detailsAction,
                     diagnosticsAction: {
-                        if let diagnosticsURL {
+                        switch setupDiagnosticsRoute {
+                        case .exportedFile:
+                            guard let diagnosticsURL else {
+                                return
+                            }
                             NSWorkspace.shared.open(diagnosticsURL)
-                        } else {
-                            detailsAction()
+                        case .agentConnectionDetails:
+                            showsAgentDiagnosticPopover = true
+                        case .unavailable:
+                            break
                         }
                     }
                 )
+                .popover(isPresented: $showsAgentDiagnosticPopover, arrowEdge: .top) {
+                    if let agentDiagnostic {
+                        AgentDiagnosticPanel(diagnostic: agentDiagnostic)
+                            .frame(width: 360)
+                            .padding(14)
+                    }
+                }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
@@ -1965,7 +1978,14 @@ private struct WindowsSetupDisplayPanel: View {
             primarySymbolName: effectivePrimarySymbol,
             primaryHelp: effectivePrimaryHelp,
             primaryDisabled: effectivePrimaryDisabled,
-            hasDiagnostics: diagnosticsURL != nil || agentDiagnostic != nil
+            hasDiagnostics: setupDiagnosticsRoute != .unavailable
+        )
+    }
+
+    private var setupDiagnosticsRoute: WindowsSetupDiagnosticsRoute {
+        .resolve(
+            hasExportedDiagnostics: diagnosticsURL != nil,
+            hasAgentDiagnostic: agentDiagnostic != nil
         )
     }
 

@@ -38,6 +38,12 @@ struct AppRuntimeDockMenuTests {
             runtimeState: nil,
             windowsInstalled: false
         ) == WindowsHeaderStatus(title: "Setup Required", symbolName: "wand.and.stars", tone: .blue))
+        #expect(WindowsHeaderStatus.resolve(
+            isRefreshing: false,
+            hasLiveAppConnection: false,
+            runtimeState: .running,
+            windowsInstalled: false
+        ) == WindowsHeaderStatus(title: "Installing", symbolName: "arrow.triangle.2.circlepath", tone: .blue))
     }
 
     @Test("first-run journey highlights one current stage")
@@ -87,6 +93,13 @@ struct AppRuntimeDockMenuTests {
                 runtimeState: .failed,
                 windowsInstalled: true
             ) == "Windows needs attention"
+        )
+        #expect(
+            WindowsShellCopy.headerSubtitle(
+                hasLiveAppConnection: false,
+                runtimeState: .running,
+                windowsInstalled: false
+            ) == "Windows Setup is running"
         )
 
         let visibleMessages = [
