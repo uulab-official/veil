@@ -487,17 +487,20 @@ public struct VeilHostClient: HostDashboardService, Sendable {
     private let encoder: JSONEncoder
     private let decoder: JSONDecoder
     private let hostForwardProbe: @Sendable (String, UInt64) async -> HostForwardProbeResult?
+    private let acknowledgementTimeoutNanoseconds: UInt64
 
     public init(
         transport: any HostTransport,
         encoder: JSONEncoder = .veilProtocol,
         decoder: JSONDecoder = .veilProtocol,
-        hostForwardProbe: @escaping @Sendable (String, UInt64) async -> HostForwardProbeResult? = Self.probeHostForward
+        hostForwardProbe: @escaping @Sendable (String, UInt64) async -> HostForwardProbeResult? = Self.probeHostForward,
+        acknowledgementTimeoutNanoseconds: UInt64 = 2_000_000_000
     ) {
         self.transport = transport
         self.encoder = encoder
         self.decoder = decoder
         self.hostForwardProbe = hostForwardProbe
+        self.acknowledgementTimeoutNanoseconds = acknowledgementTimeoutNanoseconds
     }
 
     public func launchApp(appId: String) async throws -> WindowsAppLaunchResult {
@@ -1201,7 +1204,14 @@ public struct VeilHostClient: HostDashboardService, Sendable {
         operation: MessageType,
         requestId: String
     ) async throws {
-        let replies = try await transport.send(encoder.encode(message), expectedReplies: 1)
+        let encodedMessage = try encoder.encode(message)
+        let transport = transport
+        let replies = try await Self.withTimeout(
+            timeoutNanoseconds: acknowledgementTimeoutNanoseconds,
+            timeoutError: VeilHostError.missingReply("operation acknowledgement timed out")
+        ) {
+            try await transport.send(encodedMessage, expectedReplies: 1)
+        }
         guard let data = replies.first else {
             throw VeilHostError.missingReply("operation acknowledgement requires operation.response")
         }

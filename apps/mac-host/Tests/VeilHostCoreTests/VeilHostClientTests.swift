@@ -733,6 +733,23 @@ struct VeilHostClientTests {
             )
         }
     }
+
+    @Test("times out missing operation acknowledgement and cancels transport")
+    func timesOutMissingOperationAcknowledgementAndCancelsTransport() async throws {
+        let cancellationState = CancellationState()
+        let client = VeilHostClient(
+            transport: CancellationAwareHangingTransport(cancellationState: cancellationState),
+            acknowledgementTimeoutNanoseconds: 1_000_000
+        )
+
+        await #expect(throws: VeilHostError.missingReply("operation acknowledgement timed out")) {
+            try await client.sendClipboardText(
+                ClipboardTextSet(requestId: "req_clipboard_1", origin: "host", sequence: 1, text: "hello from macOS")
+            )
+        }
+
+        #expect(await cancellationState.wasCancelled)
+    }
 }
 
 private final class RecordingTransport: HostTransport, @unchecked Sendable {
@@ -820,6 +837,28 @@ private struct HangingTransport: HostTransport {
     func send(_ message: Data, expectedReplies: Int) async throws -> [Data] {
         try await Task.sleep(nanoseconds: 5_000_000_000)
         return []
+    }
+}
+
+private actor CancellationState {
+    private(set) var wasCancelled = false
+
+    func recordCancellation() {
+        wasCancelled = true
+    }
+}
+
+private struct CancellationAwareHangingTransport: HostTransport {
+    let cancellationState: CancellationState
+
+    func send(_ message: Data, expectedReplies: Int) async throws -> [Data] {
+        do {
+            try await Task.sleep(nanoseconds: 100_000_000)
+            return []
+        } catch is CancellationError {
+            await cancellationState.recordCancellation()
+            throw CancellationError()
+        }
     }
 }
 
