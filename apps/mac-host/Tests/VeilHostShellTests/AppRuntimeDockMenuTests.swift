@@ -881,6 +881,188 @@ struct AppRuntimeDockMenuTests {
         #expect(longNameState.title == "Open Windows for Very Long...")
         #expect(longNameState.symbolName == "play.fill")
     }
+
+    @Test("setup canvas makes installer download the first action")
+    func setupCanvasNeedsInstaller() {
+        let presentation = WindowsSetupCanvasPresentation.resolve(
+            runtimeState: .stopped,
+            windowsInstalled: false,
+            hasInstaller: false,
+            requiresInstallerAccess: false,
+            installerName: nil,
+            bootReady: false,
+            isBusy: false,
+            integrationReady: false,
+            errorMessage: nil,
+            primaryTitle: "Download Windows 11",
+            primarySymbolName: "arrow.down.circle",
+            primaryHelp: "Download Windows",
+            primaryDisabled: false,
+            hasDiagnostics: false
+        )
+
+        #expect(presentation.phase == .needsInstaller)
+        #expect(presentation.title == "Get Windows 11")
+        #expect(presentation.detail == "Download Windows 11 Arm64 from Microsoft to continue.")
+        #expect(presentation.showsExistingISOAction)
+        #expect(presentation.primaryRoute == .effectiveAction)
+        #expect(presentation.primaryTitle == "Download Windows 11")
+        #expect(!presentation.showsProgress)
+    }
+
+    @Test("setup canvas distinguishes preparation, install, and progress")
+    func setupCanvasPreparationJourney() {
+        let preparation = WindowsSetupCanvasPresentation.resolve(
+            runtimeState: .notConfigured,
+            windowsInstalled: false,
+            hasInstaller: true,
+            requiresInstallerAccess: false,
+            installerName: "Win11_25H2_Arm64.iso",
+            bootReady: false,
+            isBusy: false,
+            integrationReady: false,
+            errorMessage: nil,
+            primaryTitle: "Prepare Windows",
+            primarySymbolName: "wand.and.stars",
+            primaryHelp: "Prepare Windows storage",
+            primaryDisabled: false,
+            hasDiagnostics: false
+        )
+        let install = WindowsSetupCanvasPresentation.resolve(
+            runtimeState: .stopped,
+            windowsInstalled: false,
+            hasInstaller: true,
+            requiresInstallerAccess: false,
+            installerName: "Win11_25H2_Arm64.iso",
+            bootReady: true,
+            isBusy: false,
+            integrationReady: false,
+            errorMessage: nil,
+            primaryTitle: "Install Windows",
+            primarySymbolName: "play.fill",
+            primaryHelp: "Start Windows Setup",
+            primaryDisabled: false,
+            hasDiagnostics: false
+        )
+        let progress = WindowsSetupCanvasPresentation.resolve(
+            runtimeState: .starting,
+            windowsInstalled: false,
+            hasInstaller: true,
+            requiresInstallerAccess: false,
+            installerName: "Win11_25H2_Arm64.iso",
+            bootReady: true,
+            isBusy: true,
+            integrationReady: false,
+            errorMessage: nil,
+            primaryTitle: "Opening...",
+            primarySymbolName: "play.fill",
+            primaryHelp: "Starting Windows Setup",
+            primaryDisabled: true,
+            hasDiagnostics: false
+        )
+
+        #expect(preparation.phase == .needsPreparation)
+        #expect(preparation.title == "Prepare Windows")
+        #expect(preparation.detail == "Win11_25H2_Arm64.iso is ready. Veil will create local Windows storage.")
+        #expect(install.phase == .readyToInstall)
+        #expect(install.title == "Install Windows 11")
+        #expect(install.detail == "Windows Setup will open here in Veil.")
+        #expect(progress.phase == .inProgress)
+        #expect(progress.showsProgress)
+        #expect(progress.primaryDisabled)
+    }
+
+    @Test("setup canvas routes ISO access and disabled failures to recovery")
+    func setupCanvasRecoveryRoutes() {
+        let inaccessibleISO = WindowsSetupCanvasPresentation.resolve(
+            runtimeState: .notConfigured,
+            windowsInstalled: false,
+            hasInstaller: true,
+            requiresInstallerAccess: true,
+            installerName: "Win11_25H2_Arm64.iso",
+            bootReady: false,
+            isBusy: false,
+            integrationReady: false,
+            errorMessage: nil,
+            primaryTitle: "Download Windows 11",
+            primarySymbolName: "arrow.down.circle",
+            primaryHelp: "Download Windows",
+            primaryDisabled: false,
+            hasDiagnostics: false
+        )
+        let failure = WindowsSetupCanvasPresentation.resolve(
+            runtimeState: .failed,
+            windowsInstalled: false,
+            hasInstaller: true,
+            requiresInstallerAccess: false,
+            installerName: "/Users/name/Private/Win11.iso",
+            bootReady: false,
+            isBusy: false,
+            integrationReady: false,
+            errorMessage: "QEMU VM protocol failed at /Users/name/Private/Win11.iso",
+            primaryTitle: "Continue Setup",
+            primarySymbolName: "wand.and.stars",
+            primaryHelp: "Continue setup",
+            primaryDisabled: true,
+            hasDiagnostics: true
+        )
+
+        #expect(inaccessibleISO.phase == .needsInstaller)
+        #expect(inaccessibleISO.title == "Allow access to Windows ISO")
+        #expect(inaccessibleISO.primaryRoute == .existingISO)
+        #expect(inaccessibleISO.primaryTitle == "Use Existing ISO")
+        #expect(failure.phase == .failure)
+        #expect(failure.primaryRoute == .settings)
+        #expect(failure.primaryTitle == "Open Settings")
+        #expect(failure.showsDiagnosticsAction)
+        #expect(!failure.detail.contains("QEMU"))
+        #expect(!failure.detail.contains("VM"))
+        #expect(!failure.detail.contains("protocol"))
+        #expect(!failure.detail.contains("/Users/"))
+    }
+
+    @Test("setup canvas distinguishes integration from ready Windows apps")
+    func setupCanvasIntegrationState() {
+        let needsIntegration = WindowsSetupCanvasPresentation.resolve(
+            runtimeState: .running,
+            windowsInstalled: true,
+            hasInstaller: false,
+            requiresInstallerAccess: false,
+            installerName: nil,
+            bootReady: true,
+            isBusy: false,
+            integrationReady: false,
+            errorMessage: nil,
+            primaryTitle: "Repair App Connection",
+            primarySymbolName: "person.crop.circle.badge.plus",
+            primaryHelp: "Connect Windows apps",
+            primaryDisabled: false,
+            hasDiagnostics: true
+        )
+        let ready = WindowsSetupCanvasPresentation.resolve(
+            runtimeState: .running,
+            windowsInstalled: true,
+            hasInstaller: false,
+            requiresInstallerAccess: false,
+            installerName: nil,
+            bootReady: true,
+            isBusy: false,
+            integrationReady: true,
+            errorMessage: nil,
+            primaryTitle: "Open Notepad",
+            primarySymbolName: "macwindow.badge.plus",
+            primaryHelp: "Open Notepad",
+            primaryDisabled: false,
+            hasDiagnostics: false
+        )
+
+        #expect(needsIntegration.phase == .needsIntegration)
+        #expect(needsIntegration.title == "Connect Windows apps")
+        #expect(needsIntegration.detail == "Finish Veil integration to open Windows apps as Mac windows.")
+        #expect(ready.phase == .ready)
+        #expect(ready.title == "Windows apps are ready")
+        #expect(!ready.showsExistingISOAction)
+    }
 }
 
 extension AppRuntimeDockMenuTests {
