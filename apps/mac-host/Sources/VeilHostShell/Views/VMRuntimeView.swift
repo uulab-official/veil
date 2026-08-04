@@ -1700,6 +1700,7 @@ private struct WindowsSetupDisplayPanel: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.large)
+                .tint(Color(red: 0.04, green: 0.48, blue: 0.98))
                 .disabled(effectivePrimaryDisabled)
             }
 
@@ -1772,37 +1773,71 @@ private struct WindowsSetupDisplayPanel: View {
             Rectangle()
                 .fill(machineHeroGradient)
 
-            VStack(spacing: 16) {
-                Spacer(minLength: 8)
+            if effectiveInstallEvidence.isInstalled {
+                installedMachineContent
+            } else {
+                firstRunSetupContent
+            }
+        }
+    }
 
-                WindowsLogoMark(size: 64)
-                    .shadow(color: .black.opacity(0.18), radius: 16, y: 8)
+    private var firstRunSetupContent: some View {
+        VStack(spacing: 24) {
+            Spacer(minLength: 20)
 
-                VStack(spacing: 4) {
-                    Text(machineTitle)
-                        .font(.system(size: 30, weight: .semibold))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
-                    Text(machineSubtitle)
-                        .font(.callout)
-                        .foregroundStyle(.white.opacity(0.74))
-                        .lineLimit(1)
-                }
+            WindowsLogoMark(size: 72)
+                .shadow(color: .black.opacity(0.22), radius: 20, y: 10)
 
+            VStack(spacing: 8) {
+                Text("Windows apps, right on your Mac")
+                    .font(.system(size: 34, weight: .semibold, design: .rounded))
+                    .multilineTextAlignment(.center)
+                    .minimumScaleFactor(0.8)
+
+                Text("Veil installs Windows 11 locally, then opens supported Windows apps in their own Mac windows.")
+                    .font(.title3)
+                    .foregroundStyle(.white.opacity(0.76))
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: 620)
+            }
+
+            HStack(spacing: 0) {
+                SetupJourneyStep(number: 1, title: "Get Windows", detail: "Official Arm64 ISO")
+                SetupJourneyConnector()
+                SetupJourneyStep(number: 2, title: "Install", detail: "Runs locally")
+                SetupJourneyConnector()
+                SetupJourneyStep(number: 3, title: "Open Apps", detail: "Mac-style windows")
+            }
+            .frame(maxWidth: 680)
+            .padding(.horizontal, 22)
+            .padding(.vertical, 16)
+            .background(.black.opacity(0.14), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .strokeBorder(.white.opacity(0.12), lineWidth: 1)
+            }
+
+            VStack(spacing: 10) {
                 Button(action: runEffectivePrimaryAction) {
-                    ZStack {
-                        Circle()
-                            .fill(effectivePrimaryDisabled ? Color.white.opacity(0.20) : Color.accentColor)
-                        Image(systemName: effectivePrimarySymbol)
-                            .font(.system(size: 30, weight: .bold))
-                            .foregroundStyle(.white)
-                    }
-                    .frame(width: 74, height: 74)
-                    .overlay {
-                        Circle()
-                            .strokeBorder(.white.opacity(effectivePrimaryDisabled ? 0.12 : 0.34), lineWidth: 1)
-                    }
-                    .shadow(color: .black.opacity(0.30), radius: 18, y: 10)
+                    Label(effectivePrimaryTitle, systemImage: effectivePrimarySymbol)
+                        .font(.headline)
+                        .foregroundStyle(.white)
+                        .frame(width: 260, height: 46)
+                        .background(
+                            effectivePrimaryDisabled
+                                ? Color.white.opacity(0.16)
+                                : Color(red: 0.04, green: 0.48, blue: 0.98),
+                            in: RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        )
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .strokeBorder(.white.opacity(0.18), lineWidth: 1)
+                        }
+                        .shadow(
+                            color: .black.opacity(effectivePrimaryDisabled ? 0 : 0.22),
+                            radius: 14,
+                            y: 7
+                        )
                 }
                 .buttonStyle(.plain)
                 .disabled(effectivePrimaryDisabled)
@@ -1810,46 +1845,77 @@ private struct WindowsSetupDisplayPanel: View {
                 .accessibilityLabel(effectivePrimaryTitle)
                 .accessibilityHint(effectivePrimaryHelp)
 
-                Text(effectivePrimaryTitle)
-                    .font(.headline.weight(.semibold))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.82)
-
-                if showsUnavailableGuestAgentRoute {
-                    Label("Windows setup is available • Mac app windows require QEMU or a configured endpoint", systemImage: "network.slash")
-                        .font(.callout.weight(.medium))
-                        .foregroundStyle(.orange)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
-                }
-
-                if effectiveInstallEvidence.isInstalled {
-                    Label(launchOnboardingTitle, systemImage: launchOnboardingSymbolName)
-                        .font(.callout.weight(.semibold))
-                        .foregroundStyle(.white.opacity(launchOnboarding.canContinueInApp ? 0.88 : 0.68))
-                        .lineLimit(1)
-                        .help(launchOnboardingHelp)
-
-                }
-
-                if installSimulation.phase != .idle {
-                    AssistantProgressStrip(simulation: installSimulation)
-                        .frame(maxWidth: 420)
-                        .foregroundStyle(.primary)
-                } else if effectiveInstallEvidence.isInstalled {
-                    AppRuntimeProgressStrip(items: appOpenFlowItems)
-                        .frame(maxWidth: 760)
-                } else {
-                    ProgressView(value: progressFraction)
-                        .tint(progressTint)
-                        .frame(maxWidth: 420)
-                }
-
-                Spacer(minLength: 8)
+                Button("Use an Existing ISO", action: selectInstallerAction)
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.white.opacity(0.82))
+                    .disabled(isLoading)
+                    .help("Choose a Windows 11 Arm64 ISO already on this Mac")
             }
-            .foregroundStyle(.white)
-            .padding(24)
+
+            Label("Windows license required • Your VM and files stay on this Mac", systemImage: "lock.shield.fill")
+                .font(.caption.weight(.medium))
+                .foregroundStyle(.white.opacity(0.62))
+
+            if installSimulation.phase != .idle {
+                AssistantProgressStrip(simulation: installSimulation)
+                    .frame(maxWidth: 460)
+                    .foregroundStyle(.primary)
+            } else if progressFraction > 0 {
+                ProgressView(value: progressFraction)
+                    .tint(progressTint)
+                    .frame(maxWidth: 460)
+                    .accessibilityLabel("Windows setup progress")
+            }
+
+            Spacer(minLength: 20)
         }
+        .foregroundStyle(.white)
+        .padding(36)
+    }
+
+    private var installedMachineContent: some View {
+        VStack(spacing: 16) {
+            Spacer(minLength: 8)
+
+            WindowsLogoMark(size: 64)
+                .shadow(color: .black.opacity(0.18), radius: 16, y: 8)
+
+            VStack(spacing: 4) {
+                Text(machineTitle)
+                    .font(.system(size: 30, weight: .semibold))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                Text(machineSubtitle)
+                    .font(.callout)
+                    .foregroundStyle(.white.opacity(0.74))
+                    .lineLimit(1)
+            }
+
+            Button(action: runEffectivePrimaryAction) {
+                Label(effectivePrimaryTitle, systemImage: effectivePrimarySymbol)
+                    .font(.headline)
+                    .frame(minWidth: 220, minHeight: 26)
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.large)
+            .disabled(effectivePrimaryDisabled)
+            .help(effectivePrimaryHelp)
+            .accessibilityLabel(effectivePrimaryTitle)
+            .accessibilityHint(effectivePrimaryHelp)
+
+            Label(launchOnboardingTitle, systemImage: launchOnboardingSymbolName)
+                .font(.callout.weight(.semibold))
+                .foregroundStyle(.white.opacity(launchOnboarding.canContinueInApp ? 0.88 : 0.68))
+                .lineLimit(1)
+                .help(launchOnboardingHelp)
+
+            AppRuntimeProgressStrip(items: appOpenFlowItems)
+                .frame(maxWidth: 760)
+
+            Spacer(minLength: 8)
+        }
+        .foregroundStyle(.white)
+        .padding(24)
     }
 
     private var installPrimaryTitle: String {
@@ -2738,6 +2804,45 @@ private struct WindowsSetupDisplayPanel: View {
         default:
             return "App check ready"
         }
+    }
+}
+
+private struct SetupJourneyStep: View {
+    var number: Int
+    var title: String
+    var detail: String
+
+    var body: some View {
+        VStack(spacing: 7) {
+            Text("\(number)")
+                .font(.caption.weight(.bold))
+                .frame(width: 26, height: 26)
+                .background(.white.opacity(0.16), in: Circle())
+                .overlay {
+                    Circle()
+                        .strokeBorder(.white.opacity(0.24), lineWidth: 1)
+                }
+
+            Text(title)
+                .font(.callout.weight(.semibold))
+
+            Text(detail)
+                .font(.caption)
+                .foregroundStyle(.white.opacity(0.62))
+        }
+        .frame(maxWidth: .infinity)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Step \(number), \(title), \(detail)")
+    }
+}
+
+private struct SetupJourneyConnector: View {
+    var body: some View {
+        Capsule()
+            .fill(.white.opacity(0.18))
+            .frame(width: 42, height: 1)
+            .offset(y: -18)
+            .accessibilityHidden(true)
     }
 }
 
