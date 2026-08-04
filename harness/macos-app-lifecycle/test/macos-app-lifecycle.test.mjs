@@ -50,10 +50,16 @@ test("first-run hero presents one clear setup journey without runtime jargon", a
   assert.match(source, /\.accessibilityLabel\(effectivePrimaryTitle\)/);
   assert.match(source, /\.accessibilityHint\(effectivePrimaryHelp\)/);
   assert.match(source, /Windows apps, right on your Mac/);
-  assert.match(source, /SetupJourneyStep\(number: 1, title: "Get Windows"/);
-  assert.match(source, /SetupJourneyStep\(number: 2, title: "Install"/);
-  assert.match(source, /SetupJourneyStep\(number: 3, title: "Open Apps"/);
-  assert.match(source, /Button\("Use an Existing ISO", action: selectInstallerAction\)/);
+  assert.match(source, /SetupJourneyStep\([\s\S]*number: 1,[\s\S]*title: "Get Windows"/);
+  assert.match(source, /SetupJourneyStep\([\s\S]*number: 2,[\s\S]*title: "Install"/);
+  assert.match(source, /SetupJourneyStep\([\s\S]*number: 3,[\s\S]*title: "Open Apps"/);
+  assert.match(source, /STEP \\\(firstRunCurrentStep\) OF 3/);
+  assert.match(source, /SetupJourneyStageState[\s\S]*case complete[\s\S]*case current[\s\S]*case pending/);
+  assert.match(source, /private var firstRunPrimaryButton: some View/);
+  assert.match(source, /private var firstRunExistingISOButton: some View/);
+  assert.match(source, /FirstRunTrustItem\(title: "Microsoft source"/);
+  assert.match(source, /FirstRunTrustItem\(title: "Runs locally"/);
+  assert.match(source, /FirstRunTrustItem\(title: "License required"/);
   assert.doesNotMatch(source, /Mac app windows require QEMU or a configured endpoint/);
 });
 

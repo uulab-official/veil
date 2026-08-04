@@ -6,6 +6,17 @@ import VeilHostCore
 
 @MainActor
 struct AppRuntimeDockMenuTests {
+    @Test("first-run journey highlights one current stage")
+    func firstRunJourneyStageResolution() {
+        #expect(SetupJourneyStageState.resolve(step: 1, currentStep: 1) == .current)
+        #expect(SetupJourneyStageState.resolve(step: 1, currentStep: 2) == .complete)
+        #expect(SetupJourneyStageState.resolve(step: 2, currentStep: 2) == .current)
+        #expect(SetupJourneyStageState.resolve(step: 3, currentStep: 2) == .pending)
+        #expect(SetupJourneyStageState.complete.accessibilityTitle == "Complete")
+        #expect(SetupJourneyStageState.current.accessibilityTitle == "Current")
+        #expect(SetupJourneyStageState.pending.accessibilityTitle == "Upcoming")
+    }
+
     @Test("shell copy keeps first-run and recovery messages app-first")
     func shellCopyKeepsFirstRunAndRecoveryMessagesAppFirst() {
         #expect(
