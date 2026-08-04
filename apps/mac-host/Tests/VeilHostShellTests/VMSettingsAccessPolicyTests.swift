@@ -3,6 +3,43 @@ import VeilHostCore
 @testable import VeilHostShell
 
 struct VMSettingsAccessPolicyTests {
+    @Test("setup assistant exposes only the next primary action")
+    func setupAssistantPrimaryAction() {
+        #expect(SetupAssistantPrimaryAction.resolve(
+            hasProfile: false,
+            hasInstaller: false,
+            hasDisk: false,
+            isBootReady: false
+        ) == .prepareWindows)
+        #expect(SetupAssistantPrimaryAction.resolve(
+            hasProfile: true,
+            hasInstaller: false,
+            hasDisk: true,
+            isBootReady: false
+        ) == .chooseInstaller)
+        #expect(SetupAssistantPrimaryAction.resolve(
+            hasProfile: true,
+            hasInstaller: true,
+            hasDisk: false,
+            isBootReady: false
+        ) == .createDisk)
+        #expect(SetupAssistantPrimaryAction.resolve(
+            hasProfile: true,
+            hasInstaller: true,
+            hasDisk: true,
+            isBootReady: false
+        ) == .reviewReadiness)
+        #expect(SetupAssistantPrimaryAction.resolve(
+            hasProfile: true,
+            hasInstaller: true,
+            hasDisk: true,
+            isBootReady: true
+        ) == .ready)
+        #expect(SetupAssistantPrimaryAction.prepareWindows.title == "Prepare Windows")
+        #expect(SetupAssistantPrimaryAction.chooseInstaller.title == "Choose Windows ISO")
+        #expect(SetupAssistantPrimaryAction.createDisk.title == "Create Windows Disk")
+    }
+
     @Test("groups Windows settings into focused Mac-style categories")
     func settingsSections() {
         #expect(VMSettingsSection.allCases == [.setup, .runtime, .integration])

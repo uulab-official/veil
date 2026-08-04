@@ -3454,6 +3454,62 @@ private struct ResourcePlanPanel: View {
     }
 }
 
+enum SetupAssistantPrimaryAction: Equatable {
+    case prepareWindows
+    case chooseInstaller
+    case createDisk
+    case reviewReadiness
+    case ready
+
+    static func resolve(
+        hasProfile: Bool,
+        hasInstaller: Bool,
+        hasDisk: Bool,
+        isBootReady: Bool
+    ) -> Self {
+        guard hasProfile else {
+            return .prepareWindows
+        }
+        guard hasInstaller else {
+            return .chooseInstaller
+        }
+        guard hasDisk else {
+            return .createDisk
+        }
+        return isBootReady ? .ready : .reviewReadiness
+    }
+
+    var title: String {
+        switch self {
+        case .prepareWindows:
+            return "Prepare Windows"
+        case .chooseInstaller:
+            return "Choose Windows ISO"
+        case .createDisk:
+            return "Create Windows Disk"
+        case .reviewReadiness:
+            return "Review Required"
+        case .ready:
+            return "Ready to Install"
+        }
+    }
+
+    var symbolName: String {
+        switch self {
+        case .prepareWindows:
+            return "wand.and.stars"
+        case .chooseInstaller:
+            return "opticaldisc"
+        case .createDisk:
+            return "internaldrive"
+        case .reviewReadiness:
+            return "exclamationmark.triangle.fill"
+        case .ready:
+            return "checkmark.circle.fill"
+        }
+    }
+}
+
 private struct SetupAssistantPanel: View {
     var snapshot: VMRuntimeSnapshot
     var createProfileAction: () -> Void
@@ -3465,32 +3521,45 @@ private struct SetupAssistantPanel: View {
     var canChangeResources: Bool
 
     private var items: [SetupItem] {
-        [
+        let definitions = [
             SetupItem(
-                title: "VM Profile",
-                detail: snapshot.profileName ?? "Create a default Windows 11 Arm profile.",
+                title: "Windows Profile",
+                detail: snapshot.profileName ?? "Create the local Windows workspace for this Mac.",
                 symbolName: "rectangle.stack.badge.person.crop",
                 isComplete: snapshot.profileName != nil
             ),
             SetupItem(
-                title: "Installer Media",
+                title: "Windows Installer",
                 detail: installerMediaDetail,
                 symbolName: "opticaldisc",
                 isComplete: snapshot.windowsInstalled || snapshot.installerMediaPath != nil
             ),
             SetupItem(
-                title: "Virtual Disk",
-                detail: snapshot.virtualDiskPath ?? "Select or create the virtual disk path.",
+                title: "Windows Storage",
+                detail: snapshot.virtualDiskPath ?? "Create a new Windows disk or choose an existing one.",
                 symbolName: "externaldrive",
                 isComplete: snapshot.virtualDiskPath != nil
             ),
             SetupItem(
-                title: "Preflight",
+                title: "Ready to Install",
                 detail: snapshot.bootReady ? "All local checks are passing." : snapshot.detail,
                 symbolName: "checklist",
                 isComplete: snapshot.bootReady
             )
         ]
+
+        let currentIndex = definitions.firstIndex(where: { !$0.isComplete })
+        return definitions.enumerated().map { index, item in
+            var resolved = item
+            if item.isComplete {
+                resolved.state = .complete
+            } else if index == currentIndex {
+                resolved.state = .current
+            } else {
+                resolved.state = .pending
+            }
+            return resolved
+        }
     }
 
     private var completedCount: Int {
@@ -3509,11 +3578,20 @@ private struct SetupAssistantPanel: View {
         return "Choose a Windows 11 Arm ISO. Veil will not scan Downloads automatically."
     }
 
+    private var primaryAction: SetupAssistantPrimaryAction {
+        .resolve(
+            hasProfile: snapshot.profileName != nil,
+            hasInstaller: snapshot.windowsInstalled || snapshot.installerMediaPath != nil,
+            hasDisk: snapshot.virtualDiskPath != nil,
+            isBootReady: snapshot.bootReady
+        )
+    }
+
     var body: some View {
         ShellPanel(spacing: 12) {
             ShellPanelHeader(
                 title: "Install Assistant",
-                subtitle: "A compact path from profile creation to Windows 11 Arm boot readiness.",
+                subtitle: "Follow the highlighted next step to prepare Windows 11 on this Mac.",
                 symbolName: "wand.and.stars"
             )
 
@@ -3523,41 +3601,71 @@ private struct SetupAssistantPanel: View {
                 SetupItemRow(item: item)
             }
 
-            HStack(spacing: 8) {
-                if snapshot.profileName == nil {
-                    Button(action: prepareAction) {
-                        Label("Prepare", systemImage: "wand.and.stars")
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(isLoading || !canChangeResources)
+            setupActions
+        }
+    }
 
-                    Button(action: createProfileAction) {
-                        Label("Profile Only", systemImage: "plus.circle")
-                    }
-                    .disabled(isLoading || !canChangeResources)
+    @ViewBuilder
+    private var setupActions: some View {
+        HStack(spacing: 8) {
+            switch primaryAction {
+            case .prepareWindows:
+                Button(action: prepareAction) {
+                    Label(primaryAction.title, systemImage: primaryAction.symbolName)
                 }
+                .buttonStyle(.borderedProminent)
+                .disabled(isLoading || !canChangeResources)
 
-                if !snapshot.windowsInstalled {
-                    Button(action: selectInstallerAction) {
-                        Label("Installer", systemImage: "opticaldisc")
-                    }
-                    .disabled(snapshot.profileName == nil || isLoading || !canChangeResources)
+            case .chooseInstaller:
+                Button(action: selectInstallerAction) {
+                    Label(primaryAction.title, systemImage: primaryAction.symbolName)
                 }
+                .buttonStyle(.borderedProminent)
+                .disabled(isLoading || !canChangeResources)
+
+            case .createDisk:
+                Button(action: createDiskAction) {
+                    Label(primaryAction.title, systemImage: primaryAction.symbolName)
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(isLoading || !canChangeResources)
 
                 Button(action: selectDiskAction) {
-                    Label("Disk", systemImage: "externaldrive")
+                    Label("Use Existing Disk", systemImage: "externaldrive")
                 }
-                .disabled(snapshot.profileName == nil || isLoading || !canChangeResources)
+                .disabled(isLoading || !canChangeResources)
 
-                if snapshot.profileName != nil && snapshot.virtualDiskPath == nil {
-                    Button(action: createDiskAction) {
-                        Label("Create Disk", systemImage: "internaldrive")
-                    }
-                    .disabled(isLoading || !canChangeResources)
-                }
+            case .reviewReadiness:
+                StatusPill(title: primaryAction.title, symbolName: primaryAction.symbolName, tint: .orange)
 
-                Spacer()
+            case .ready:
+                StatusPill(title: primaryAction.title, symbolName: primaryAction.symbolName, tint: .green)
             }
+
+            Menu {
+                if snapshot.profileName == nil {
+                    Button(action: createProfileAction) {
+                        Label("Create Profile Only", systemImage: "rectangle.stack.badge.plus")
+                    }
+                } else {
+                    if !snapshot.windowsInstalled {
+                        Button(action: selectInstallerAction) {
+                            Label("Choose Different ISO", systemImage: "opticaldisc")
+                        }
+                    }
+
+                    Button(action: selectDiskAction) {
+                        Label("Choose Existing Disk", systemImage: "externaldrive")
+                    }
+                }
+            } label: {
+                Label("Advanced", systemImage: "ellipsis.circle")
+            }
+            .fixedSize()
+            .disabled(isLoading || !canChangeResources)
+            .accessibilityLabel("Advanced setup options")
+
+            Spacer()
         }
     }
 }
@@ -3779,6 +3887,7 @@ private struct SetupItem: Identifiable {
     var detail: String
     var symbolName: String
     var isComplete: Bool
+    var state: SetupJourneyStageState = .pending
 }
 
 private struct SetupItemRow: View {
@@ -3786,12 +3895,12 @@ private struct SetupItemRow: View {
 
     var body: some View {
         HStack(alignment: .center, spacing: 10) {
-            Image(systemName: item.isComplete ? "checkmark.circle.fill" : "circle")
-                .foregroundStyle(item.isComplete ? .green : .secondary)
+            Image(systemName: statusSymbolName)
+                .foregroundStyle(statusTint)
                 .frame(width: 22)
 
             Image(systemName: item.symbolName)
-                .foregroundStyle(item.isComplete ? .green : .blue)
+                .foregroundStyle(item.state == .pending ? .secondary : statusTint)
                 .frame(width: 24)
 
             VStack(alignment: .leading, spacing: 2) {
@@ -3803,6 +3912,44 @@ private struct SetupItemRow: View {
                     .lineLimit(2)
                     .textSelection(.enabled)
             }
+
+            Spacer()
+
+            if item.state == .current {
+                Text("Next")
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(.blue)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(.blue.opacity(0.10), in: Capsule())
+            }
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+        .background(item.state == .current ? Color.blue.opacity(0.06) : .clear, in: RoundedRectangle(cornerRadius: 8))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(item.title), \(item.detail), \(item.state.accessibilityTitle)")
+    }
+
+    private var statusSymbolName: String {
+        switch item.state {
+        case .complete:
+            return "checkmark.circle.fill"
+        case .current:
+            return "circle.inset.filled"
+        case .pending:
+            return "circle"
+        }
+    }
+
+    private var statusTint: Color {
+        switch item.state {
+        case .complete:
+            return .green
+        case .current:
+            return .blue
+        case .pending:
+            return .secondary
         }
     }
 }

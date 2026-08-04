@@ -87,6 +87,20 @@ test("Windows settings separates setup, runtime, and integration controls", asyn
   assert.match(runtime, /integrationContent:[\s\S]*integrationSettingsColumn/);
 });
 
+test("Windows setup assistant emphasizes one contextual action", async () => {
+  const source = await readRootFile("apps/mac-host/Sources/VeilHostShell/Views/VMRuntimeView.swift");
+
+  assert.match(source, /enum SetupAssistantPrimaryAction[\s\S]*case prepareWindows[\s\S]*case chooseInstaller[\s\S]*case createDisk/);
+  assert.match(source, /Label\("Advanced", systemImage: "ellipsis\.circle"\)/);
+  assert.match(source, /\.accessibilityLabel\("Advanced setup options"\)/);
+  assert.match(source, /Label\("Create Profile Only", systemImage: "rectangle\.stack\.badge\.plus"\)/);
+  assert.match(source, /Text\("Next"\)/);
+  assert.match(source, /title: "Windows Profile"/);
+  assert.match(source, /title: "Windows Installer"/);
+  assert.match(source, /title: "Windows Storage"/);
+  assert.doesNotMatch(source, /Label\("Profile Only", systemImage: "plus\.circle"\)/);
+});
+
 test("Windows setup requires explicit license consent for downloaded and selected ISOs", async () => {
   const downloadSheet = await readRootFile("apps/mac-host/Sources/VeilHostShell/Views/WindowsDownloadSheet.swift");
   const runtimeView = await readRootFile("apps/mac-host/Sources/VeilHostShell/Views/VMRuntimeView.swift");
