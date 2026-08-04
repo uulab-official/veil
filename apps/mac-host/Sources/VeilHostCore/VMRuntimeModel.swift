@@ -2604,6 +2604,11 @@ public struct LocalVMRuntimeService: VMRuntimeService {
               <FirstLogonCommands>
                 <SynchronousCommand wcm:action="add">
                   <Order>1</Order>
+                  <Description>Install official UTM Guest Tools from attached read-only media</Description>
+                  <CommandLine>powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "$volume = Get-Volume -FileSystemLabel 'UTM Guest Tools' -ErrorAction SilentlyContinue | Select-Object -First 1; if ($volume -and $volume.DriveLetter) { $installer = Get-ChildItem -Path ($volume.DriveLetter + ':\\') -Filter 'utm-guest-tools-*.exe' -File -ErrorAction SilentlyContinue | Select-Object -First 1; if ($installer) { Start-Process -FilePath $installer.FullName -ArgumentList '/S' -Wait } }"</CommandLine>
+                </SynchronousCommand>
+                <SynchronousCommand wcm:action="add">
+                  <Order>2</Order>
                   <Description>Install and start the Veil guest agent from VEIL_AUTO media</Description>
                   <CommandLine>powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "$volume = Get-Volume -FileSystemLabel 'VEIL_AUTO' -ErrorAction SilentlyContinue | Select-Object -First 1; if ($volume -and $volume.DriveLetter) { $script = Join-Path ($volume.DriveLetter + ':\\') 'Veil Guest Agent\\scripts\\Bootstrap-VeilAgentFromMedia.ps1'; if (Test-Path $script) { powershell.exe -NoProfile -ExecutionPolicy Bypass -File $script } }"</CommandLine>
                 </SynchronousCommand>

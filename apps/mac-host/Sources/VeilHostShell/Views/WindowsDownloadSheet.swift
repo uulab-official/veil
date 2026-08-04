@@ -38,10 +38,11 @@ enum WindowsDownloadURLPolicy {
 
 enum WindowsLicenseConsentPolicy {
     static let termsURL = URL(string: "https://www.microsoft.com/useterms")!
-    static let title = "Accept Microsoft License Terms?"
-    static let message = "Veil's unattended setup hides the Windows Setup license page and records acceptance. Review Microsoft's terms before continuing. A valid Windows license and activation may be required."
-    static let reviewButtonTitle = "Review License Terms"
-    static let acceptButtonTitle = "I Agree and Install Windows"
+    static let guestToolsInformationURL = URL(string: "https://docs.getutm.app/guest-support/windows/")!
+    static let title = "Accept Windows and Guest Tools Terms?"
+    static let message = "Veil's unattended setup records acceptance of Microsoft's Windows terms and automatically installs official UTM Guest Tools (GPLv2 with the included Windows driver terms). Review both before continuing. A valid Windows license and activation may be required."
+    static let reviewButtonTitle = "Review Both Terms"
+    static let acceptButtonTitle = "I Agree and Install Everything"
 }
 
 enum WindowsDownloadDestination {
@@ -86,6 +87,137 @@ enum WindowsDownloadDestination {
         let cleaned = String(cleanedScalars)
             .trimmingCharacters(in: CharacterSet(charactersIn: " .-_"))
         return "\(cleaned.isEmpty ? "Windows-11-Arm64" : cleaned).iso"
+    }
+}
+
+enum UTMGuestToolsDownloadPolicy {
+    static let latestISOURL = URL(
+        string: "https://getutm.app/downloads/utm-guest-tools-latest.iso"
+    )!
+
+    static func allowsResponse(_ url: URL?) -> Bool {
+        guard let url,
+              url.scheme?.lowercased() == "https",
+              let host = url.host?.lowercased() else {
+            return false
+        }
+
+        return host == "getutm.app"
+            || host == "github.com"
+            || host == "release-assets.githubusercontent.com"
+    }
+}
+
+enum UTMGuestToolsISOValidator {
+    static let minimumPlausibleSize: Int64 = 50_000_000
+    static let signatureOffset = 32_769
+
+    static func failureReason(filename: String, fileSize: Int64) -> String? {
+        guard URL(fileURLWithPath: filename).pathExtension.lowercased() == "iso" else {
+            return "UTM did not return a guest tools ISO."
+        }
+
+        guard fileSize >= minimumPlausibleSize else {
+            return "The UTM Guest Tools download is incomplete."
+        }
+
+        return nil
+    }
+
+    static func hasISO9660Signature(in data: Data) -> Bool {
+        let signatureRange = signatureOffset..<(signatureOffset + 5)
+        guard data.count >= signatureRange.upperBound else {
+            return false
+        }
+
+        return data.subdata(in: signatureRange) == Data("CD001".utf8)
+    }
+
+    static func hasISO9660Signature(at url: URL) throws -> Bool {
+        let handle = try FileHandle(forReadingFrom: url)
+        defer { try? handle.close() }
+        try handle.seek(toOffset: UInt64(signatureOffset))
+        return try handle.read(upToCount: 5) == Data("CD001".utf8)
+    }
+}
+
+enum UTMGuestToolsDownloadError: Error, LocalizedError {
+    case untrustedResponse
+    case httpStatus(Int)
+    case invalidDownload(String)
+
+    var errorDescription: String? {
+        switch self {
+        case .untrustedResponse:
+            return "UTM Guest Tools redirected outside UTM's official release hosts."
+        case .httpStatus(let statusCode):
+            return "UTM Guest Tools returned HTTP \(statusCode)."
+        case .invalidDownload(let reason):
+            return reason
+        }
+    }
+}
+
+enum UTMGuestToolsDownloader {
+    static let destinationFilename = "utm-guest-tools-latest.iso"
+
+    static func downloadIfNeeded(
+        fileManager: FileManager = .default,
+        session: URLSession = .shared
+    ) async throws -> URL {
+        let directory = try WindowsDownloadDestination.downloadsDirectory(fileManager: fileManager)
+        let destination = directory.appendingPathComponent(destinationFilename, isDirectory: false)
+        if try isValidISO(at: destination, fileManager: fileManager) {
+            return destination
+        }
+
+        let (temporaryURL, response) = try await session.download(
+            from: UTMGuestToolsDownloadPolicy.latestISOURL
+        )
+        guard UTMGuestToolsDownloadPolicy.allowsResponse(response.url) else {
+            throw UTMGuestToolsDownloadError.untrustedResponse
+        }
+        if let response = response as? HTTPURLResponse,
+           !(200...299).contains(response.statusCode) {
+            throw UTMGuestToolsDownloadError.httpStatus(response.statusCode)
+        }
+
+        let values = try temporaryURL.resourceValues(forKeys: [.fileSizeKey])
+        let fileSize = Int64(values.fileSize ?? 0)
+        if let failure = UTMGuestToolsISOValidator.failureReason(
+            filename: destination.lastPathComponent,
+            fileSize: fileSize
+        ) {
+            throw UTMGuestToolsDownloadError.invalidDownload(failure)
+        }
+        guard try UTMGuestToolsISOValidator.hasISO9660Signature(at: temporaryURL) else {
+            throw UTMGuestToolsDownloadError.invalidDownload(
+                "UTM Guest Tools did not contain a valid ISO 9660 volume signature."
+            )
+        }
+
+        if fileManager.fileExists(atPath: destination.path) {
+            _ = try fileManager.replaceItemAt(destination, withItemAt: temporaryURL)
+        } else {
+            try fileManager.moveItem(at: temporaryURL, to: destination)
+        }
+        return destination
+    }
+
+    private static func isValidISO(at url: URL, fileManager: FileManager) throws -> Bool {
+        guard fileManager.fileExists(atPath: url.path) else {
+            return false
+        }
+
+        let values = try url.resourceValues(forKeys: [.fileSizeKey])
+        let fileSize = Int64(values.fileSize ?? 0)
+        guard UTMGuestToolsISOValidator.failureReason(
+            filename: url.lastPathComponent,
+            fileSize: fileSize
+        ) == nil else {
+            return false
+        }
+        return try UTMGuestToolsISOValidator.hasISO9660Signature(at: url)
     }
 }
 
@@ -1379,6 +1511,7 @@ struct WindowsDownloadScreen: View {
 
     private func reviewLicenseTermsAndReopenConfirmation() {
         NSWorkspace.shared.open(WindowsLicenseConsentPolicy.termsURL)
+        NSWorkspace.shared.open(WindowsLicenseConsentPolicy.guestToolsInformationURL)
         Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(350))
             guard case .downloaded = controller.phase else {

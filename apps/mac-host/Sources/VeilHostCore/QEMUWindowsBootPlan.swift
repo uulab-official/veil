@@ -266,7 +266,7 @@ public struct QEMUWindowsBootPlanner: Sendable {
             "-device", "virtio-rng-pci",
             "-display", "cocoa",
             "-device", "ramfb",
-            "-device", "virtio-gpu-pci",
+            "-device", "virtio-gpu-pci,xres=\(VMRuntimeDeviceDefaults.graphicsWidthInPixels),yres=\(VMRuntimeDeviceDefaults.graphicsHeightInPixels)",
             "-device", "usb-kbd",
             "-device", "usb-tablet"
         ])

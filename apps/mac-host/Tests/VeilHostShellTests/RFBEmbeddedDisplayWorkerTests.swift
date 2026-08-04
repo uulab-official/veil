@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import Testing
 import VeilHostCore
@@ -5,14 +6,66 @@ import VeilHostCore
 
 @Suite("Embedded RFB display worker")
 struct RFBEmbeddedDisplayWorkerTests {
-    @Test("retries an initial connection refusal until the live display is ready")
-    func retriesInitialConnectionRefusal() async {
+    @Test("keeps the last live frame quiet while the display reconnects")
+    @MainActor
+    func keepsLastLiveFrameDuringReconnect() {
+        let model = RFBEmbeddedDisplayModel()
+        let image = NSImage(size: NSSize(width: 1, height: 1))
+
+        model.receive(image: image, sequence: 7)
+        let initialIdentity = model.imageIdentity(
+            endpoint: "127.0.0.1:5900",
+            fallbackRevisionID: "snapshot-a"
+        )
+        model.receiveFailure("connect: Connection refused")
+
+        #expect(model.status == .receiving)
+        #expect(model.shouldShowStatusOverlay == false)
+        #expect(
+            model.imageIdentity(
+                endpoint: "127.0.0.1:5900",
+                fallbackRevisionID: "snapshot-b"
+            ) == initialIdentity
+        )
+    }
+
+    @Test("shows a terminal display error before any frame arrives")
+    @MainActor
+    func showsInitialTerminalFailure() {
+        let model = RFBEmbeddedDisplayModel()
+
+        model.receiveFailure("connect: Connection refused")
+
+        #expect(model.status == .failed("connect: Connection refused"))
+        #expect(model.shouldShowStatusOverlay)
+    }
+
+    @Test("maps pointer taps inside the fitted Windows frame instead of its letterbox")
+    func mapsPointerTapInsideAspectFitFrame() throws {
+        let point = try #require(AspectFitInputCoordinateMapper.normalizedPoint(
+            point: CGPoint(x: 900, y: 337.5),
+            bounds: CGRect(x: 0, y: 0, width: 1_200, height: 675),
+            contentSize: CGSize(width: 1_024, height: 768)
+        ))
+
+        #expect(abs(point.x - (5.0 / 6.0)) < 0.000_1)
+        #expect(abs(point.y - 0.5) < 0.000_1)
+        #expect(AspectFitInputCoordinateMapper.normalizedPoint(
+            point: CGPoint(x: 75, y: 337.5),
+            bounds: CGRect(x: 0, y: 0, width: 1_200, height: 675),
+            contentSize: CGSize(width: 1_024, height: 768)
+        ) == nil)
+    }
+
+    @Test("retries initial refusal and resets the retry budget after a live frame")
+    func retriesInitialConnectionRefusalAndLaterIdleTimeout() async {
         let attempts = LockedAttemptCounter()
-        let frameReceived = AsyncSignal()
+        let frames = LockedAttemptCounter()
+        let secondFrameReceived = AsyncSignal()
         let worker = RFBEmbeddedDisplayWorker(
             endpoint: RFBDisplayEndpoint(host: "127.0.0.1", port: 5_900),
             maximumConnectionAttempts: 2,
-            connectionRetryDelay: 0,
+            connectionRetryDelay: 0.001,
             streamFactory: { _, _ in
                 if attempts.incrementAndRead() == 1 {
                     throw RFBLoopbackSocketError.socketOperationFailed("connect: Connection refused")
@@ -22,12 +75,16 @@ struct RFBEmbeddedDisplayWorkerTests {
         )
 
         worker.start(
-            onFrame: { _ in frameReceived.signal() },
+            onFrame: { _ in
+                if frames.incrementAndRead() == 2 {
+                    secondFrameReceived.signal()
+                }
+            },
             onFailure: { _ in }
         )
 
-        #expect(await frameReceived.wait(timeoutNanoseconds: 1_000_000_000))
-        #expect(attempts.value == 2)
+        #expect(await secondFrameReceived.wait(timeoutNanoseconds: 1_000_000_000))
+        #expect(attempts.value >= 3)
         worker.stop()
     }
 

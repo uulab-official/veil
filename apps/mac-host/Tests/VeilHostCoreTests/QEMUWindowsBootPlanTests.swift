@@ -97,7 +97,7 @@ struct QEMUWindowsBootPlanTests {
         #expect(plan.arguments.containsSequence(["-device", "usb-storage,drive=autounattend"]))
         #expect(plan.arguments.containsSequence(["-device", "virtio-rng-pci"]))
         #expect(plan.arguments.contains("ramfb"))
-        #expect(plan.arguments.contains("virtio-gpu-pci"))
+        #expect(plan.arguments.contains("virtio-gpu-pci,xres=1440,yres=900"))
         #expect(plan.arguments.contains("usb-kbd"))
         #expect(plan.arguments.contains("usb-tablet"))
         #expect(plan.warnings.isEmpty)

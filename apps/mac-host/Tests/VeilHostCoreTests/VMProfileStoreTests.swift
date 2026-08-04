@@ -1482,6 +1482,9 @@ struct VMProfileStoreTests {
         #expect(answerFile.contains("<HideWirelessSetupInOOBE>true</HideWirelessSetupInOOBE>"))
         #expect(answerFile.contains("HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\OOBE /v BypassNRO"))
         #expect(answerFile.contains("<FirstLogonCommands>"))
+        #expect(answerFile.contains("Get-Volume -FileSystemLabel 'UTM Guest Tools'"))
+        #expect(answerFile.contains("utm-guest-tools-*.exe"))
+        #expect(answerFile.contains("-ArgumentList '/S' -Wait"))
         #expect(answerFile.contains("Get-Volume -FileSystemLabel 'VEIL_AUTO'"))
         #expect(answerFile.contains("Veil Guest Agent\\scripts\\Bootstrap-VeilAgentFromMedia.ps1"))
         #expect(answerFile.range(

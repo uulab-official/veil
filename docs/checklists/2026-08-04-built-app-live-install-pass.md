@@ -73,3 +73,21 @@ The display blocker above is resolved for the active compatibility provider. Thi
 - [x] Corrected installer boot order to `once=d,order=c`, so the ISO is preferred for the first setup boot and the partially installed system disk is preferred after Windows restarts.
 - [x] Relaunched the rebuilt app against the partially installed disk and confirmed the active command uses `-boot order=c`, live VNC frames reconnect without a stale error banner, and system-disk I/O resumes.
 - [x] Passed the full macOS host regression suite: 423 tests across 28 suites.
+
+## Installed-desktop and guest-tools follow-up — 2026-08-04
+
+- [x] Completed Windows OOBE with the local `Veil` account and reached the real Korean Windows 11 desktop.
+- [x] Marked the profile installed only after desktop evidence existed; subsequent boots detach the Windows installer ISO and open the app-first Windows home.
+- [x] Confirmed the installed desktop renders inside Veil's single full-window surface and the installed-state UI no longer covers the Windows taskbar with the setup control bar.
+- [x] Measured the fallback guest framebuffer at `800×600`; this explains the remaining side margins and soft scaling before the Windows guest graphics driver is installed.
+- [x] Kept `ramfb` as the safe fallback after a live boot without it correctly proved that unconfigured `virtio-gpu` reports `Display output is not active`.
+- [x] Advertised the profile's `1440×900` target on `virtio-gpu-pci` for use once the guest graphics driver is active.
+- [x] Corrected pointer mapping to use the aspect-fitted Windows image rectangle rather than the surrounding black letterbox.
+- [x] Kept the last good RFB frame during transient reconnects, reset the retry budget after every live frame, hid reconnect noise after a valid frame, and stabilized SwiftUI image identity across frame and resolution changes.
+- [x] Downloaded the official UTM Guest Tools `0.1.271` ISO from `getutm.app`, validated its ISO 9660 structure, recorded SHA-256 `65b6a69b392ee01dd314c10f3dad9ebbf9c4160be43f5f0dd6bb715944d9095b`, and attached it read-only.
+- [x] Opened the guest-tools installer through QMP input and stopped at its explicit GPL/Windows-driver license agreement without accepting it automatically.
+- [x] Added a one-confirmation future setup path: Veil automatically downloads and validates the official guest-tools ISO, mounts it from the first Windows boot, and schedules its silent first-logon installation before the Veil guest agent.
+- [x] Passed the updated macOS host suite: 429 tests across 28 suites.
+- [x] Passed `script/test_all.sh`, including the .NET 8 Windows agent, all 25 Node harness packages, signed app launch, and isolated install → guarded replace → uninstall → support-data preservation → reinstall lifecycle checks.
+- [ ] Re-run a clean install to prove the newly merged one-confirmation guest-tools path end to end.
+- [ ] Install the guest graphics tools on the current VM after explicit license acceptance, reboot, and confirm the VNC framebuffer changes from `800×600` toward the advertised `1440×900` target.

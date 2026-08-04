@@ -52,6 +52,7 @@ struct VMRuntimeView: View {
     @State private var installSimulation = InstallSimulationState.idle
     @State private var pendingInstallerConsent: PendingInstallerConsent?
     @State private var showsInstallerLicenseConfirmation = false
+    @State private var guestToolsPreparationError: String?
 
     var body: some View {
         Group {
@@ -125,6 +126,19 @@ struct VMRuntimeView: View {
             }
         } message: {
             Text(WindowsLicenseConsentPolicy.message)
+        }
+        .alert(
+            "Guest Tools Download Failed",
+            isPresented: Binding(
+                get: { guestToolsPreparationError != nil },
+                set: { if !$0 { guestToolsPreparationError = nil } }
+            )
+        ) {
+            Button("OK", role: .cancel) {
+                guestToolsPreparationError = nil
+            }
+        } message: {
+            Text(guestToolsPreparationError ?? "Veil could not prepare the Windows guest tools.")
         }
     }
 
@@ -507,9 +521,12 @@ struct VMRuntimeView: View {
                     }
                 }
 
+                guard let driverMediaPath = await automaticGuestToolsMediaPath() else {
+                    return
+                }
                 let isReadyToStart = await model.prepareWindowsInstallation(
                     installerMediaPath: url.path,
-                    driverMediaPath: model.snapshot?.driverMediaPath,
+                    driverMediaPath: driverMediaPath,
                     virtualDiskPath: model.snapshot?.virtualDiskPath
                 )
                 guard isReadyToStart else {
@@ -536,6 +553,7 @@ struct VMRuntimeView: View {
 
     private func reviewLicenseTermsAndReopenInstallerConfirmation() {
         NSWorkspace.shared.open(WindowsLicenseConsentPolicy.termsURL)
+        NSWorkspace.shared.open(WindowsLicenseConsentPolicy.guestToolsInformationURL)
         Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(350))
             guard pendingInstallerConsent != nil else {
@@ -547,9 +565,12 @@ struct VMRuntimeView: View {
 
     @MainActor
     private func prepareDownloadedISO(_ url: URL) async -> Bool {
+        guard let driverMediaPath = await automaticGuestToolsMediaPath() else {
+            return false
+        }
         let isReadyToStart = await model.prepareWindowsInstallation(
             installerMediaPath: url.path,
-            driverMediaPath: model.snapshot?.driverMediaPath,
+            driverMediaPath: driverMediaPath,
             virtualDiskPath: model.snapshot?.virtualDiskPath
         )
         guard isReadyToStart else {
@@ -559,6 +580,21 @@ struct VMRuntimeView: View {
         startDisplayHandoffProgress()
         startVMAction()
         return true
+    }
+
+    @MainActor
+    private func automaticGuestToolsMediaPath() async -> String? {
+        if let existingPath = model.snapshot?.driverMediaPath,
+           FileManager.default.fileExists(atPath: existingPath) {
+            return existingPath
+        }
+
+        do {
+            return try await UTMGuestToolsDownloader.downloadIfNeeded().path
+        } catch {
+            guestToolsPreparationError = error.localizedDescription
+            return nil
+        }
     }
 
     private func diagnosticsDirectory() -> URL {
@@ -1066,7 +1102,10 @@ private struct WindowsEmbeddedDisplayPreview: View {
                     .resizable()
                     .scaledToFit()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .id(displayRevisionID)
+                    .id(rfbDisplayModel.imageIdentity(
+                        endpoint: surface.endpoint,
+                        fallbackRevisionID: revisionID
+                    ))
             } else {
                 WindowsDisplayGrid()
                     .opacity(0.10)
@@ -1075,7 +1114,8 @@ private struct WindowsEmbeddedDisplayPreview: View {
                     .foregroundStyle(.white.opacity(0.56))
             }
 
-            if surface.kind == .vncLoopback {
+            if surface.kind == .vncLoopback,
+               rfbDisplayModel.shouldShowStatusOverlay {
                 VStack {
                     HStack {
                         Label(rfbDisplayModel.statusTitle(for: surface), systemImage: rfbDisplayModel.statusSymbolName)
@@ -1095,6 +1135,7 @@ private struct WindowsEmbeddedDisplayPreview: View {
             }
 
             ConsolePreviewInputCaptureView(
+                contentSize: renderedImage?.size,
                 pointerTapAction: pointerTapAction,
                 keyAction: keyAction
             )
@@ -1118,33 +1159,30 @@ private struct WindowsEmbeddedDisplayPreview: View {
         rfbDisplayModel.image ?? image
     }
 
-    private var displayRevisionID: String {
-        if let sequence = rfbDisplayModel.frameSequence {
-            return "\(surface.endpoint ?? "rfb")#\(sequence)"
-        }
-
-        return revisionID
-    }
 }
 
 private struct ConsolePreviewInputCaptureView: NSViewRepresentable {
+    var contentSize: CGSize?
     var pointerTapAction: (Double, Double) -> Void
     var keyAction: (String) -> Void
 
     func makeNSView(context: Context) -> ConsolePreviewInputCaptureNSView {
         let view = ConsolePreviewInputCaptureNSView()
+        view.contentSize = contentSize
         view.pointerTapAction = pointerTapAction
         view.keyAction = keyAction
         return view
     }
 
     func updateNSView(_ nsView: ConsolePreviewInputCaptureNSView, context: Context) {
+        nsView.contentSize = contentSize
         nsView.pointerTapAction = pointerTapAction
         nsView.keyAction = keyAction
     }
 }
 
 private final class ConsolePreviewInputCaptureNSView: NSView {
+    var contentSize: CGSize?
     var pointerTapAction: ((Double, Double) -> Void)?
     var keyAction: ((String) -> Void)?
     private let keyboardMapper = QEMUConsoleKeyboardInputMapper()
@@ -1173,14 +1211,20 @@ private final class ConsolePreviewInputCaptureNSView: NSView {
     }
 
     private func sendPointerTap(_ event: NSEvent) {
-        guard bounds.width > 0, bounds.height > 0 else {
+        guard let contentSize else {
             return
         }
 
         let point = convert(event.locationInWindow, from: nil)
-        let normalizedX = min(max(point.x / bounds.width, 0), 1)
-        let normalizedY = min(max(1 - (point.y / bounds.height), 0), 1)
-        pointerTapAction?(Double(normalizedX), Double(normalizedY))
+        guard let normalizedPoint = AspectFitInputCoordinateMapper.normalizedPoint(
+            point: point,
+            bounds: bounds,
+            contentSize: contentSize
+        ) else {
+            return
+        }
+
+        pointerTapAction?(Double(normalizedPoint.x), Double(normalizedPoint.y))
     }
 
     private func sendKey(_ event: NSEvent) -> Bool {
@@ -1214,6 +1258,44 @@ private final class ConsolePreviewInputCaptureNSView: NSView {
         }
 
         return modifiers
+    }
+}
+
+enum AspectFitInputCoordinateMapper {
+    static func normalizedPoint(
+        point: CGPoint,
+        bounds: CGRect,
+        contentSize: CGSize
+    ) -> CGPoint? {
+        guard bounds.width > 0,
+              bounds.height > 0,
+              contentSize.width > 0,
+              contentSize.height > 0 else {
+            return nil
+        }
+
+        let scale = min(
+            bounds.width / contentSize.width,
+            bounds.height / contentSize.height
+        )
+        let fittedSize = CGSize(
+            width: contentSize.width * scale,
+            height: contentSize.height * scale
+        )
+        let fittedFrame = CGRect(
+            x: bounds.midX - fittedSize.width / 2,
+            y: bounds.midY - fittedSize.height / 2,
+            width: fittedSize.width,
+            height: fittedSize.height
+        )
+        guard fittedFrame.contains(point) else {
+            return nil
+        }
+
+        return CGPoint(
+            x: (point.x - fittedFrame.minX) / fittedFrame.width,
+            y: 1 - ((point.y - fittedFrame.minY) / fittedFrame.height)
+        )
     }
 }
 

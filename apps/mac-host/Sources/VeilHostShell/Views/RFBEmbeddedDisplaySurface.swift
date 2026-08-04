@@ -42,6 +42,32 @@ final class RFBEmbeddedDisplayModel {
         }
     }
 
+    var shouldShowStatusOverlay: Bool {
+        status != .receiving
+    }
+
+    func imageIdentity(endpoint: String?, fallbackRevisionID: String) -> String {
+        guard frameSequence != nil else {
+            return "snapshot:\(fallbackRevisionID)"
+        }
+
+        return "rfb:\(endpoint ?? "loopback")"
+    }
+
+    func receive(image: NSImage, sequence: Int) {
+        self.image = image
+        frameSequence = sequence
+        status = .receiving
+    }
+
+    func receiveFailure(_ message: String) {
+        if image != nil {
+            status = .receiving
+        } else {
+            status = .failed(message)
+        }
+    }
+
     func connectIfNeeded(to surface: VMConsoleDisplaySurface) {
         guard surface.kind == .vncLoopback, let endpoint = surface.endpoint else {
             stop()
@@ -68,20 +94,18 @@ final class RFBEmbeddedDisplayModel {
         worker.start(
             onFrame: { [weak self] frame in
                 guard let image = frame.makeNSImage() else {
-                    self?.status = .failed("Display frame unavailable")
+                    self?.receiveFailure("Display frame unavailable")
                     return
                 }
 
-                self?.image = image
-                self?.frameSequence = frame.sequence
-                self?.status = .receiving
+                self?.receive(image: image, sequence: frame.sequence)
             },
             onFailure: { [weak self] message in
                 guard self?.activeEndpoint == endpoint else {
                     return
                 }
 
-                self?.status = .failed(message)
+                self?.receiveFailure(message)
             }
         )
     }
@@ -186,6 +210,7 @@ final class RFBEmbeddedDisplayWorker: @unchecked Sendable {
                 while !isWorkerStopped {
                     let update = try client.readFramebufferUpdate()
                     let frame = try renderer.apply(update)
+                    connectionAttempt = 0
                     Task { @MainActor in
                         onFrame(frame)
                     }
