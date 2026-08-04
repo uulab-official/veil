@@ -87,3 +87,14 @@ test("Windows download occupies the main content area instead of a nested sheet"
   assert.match(runtimeView, /case \.windowsDownload:[\s\S]*WindowsDownloadScreen/);
   assert.doesNotMatch(settingsSheet, /case windowsDownload/);
 });
+
+test("Windows setup enters native macOS full screen without toggling an existing full-screen window", async () => {
+  const runtimeView = await readRootFile("apps/mac-host/Sources/VeilHostShell/Views/VMRuntimeView.swift");
+  const appSource = await readRootFile("apps/mac-host/Sources/VeilHostShell/App/VeilHostShellApp.swift");
+
+  assert.match(runtimeView, /route == \.windowsDownload[\s\S]*MainWindowChrome\.enterFullScreen\(\)/);
+  assert.match(appSource, /MainWindowFullscreenPolicy\.shouldRequestFullScreen/);
+  assert.match(appSource, /window\.collectionBehavior\.insert\(\.fullScreenPrimary\)/);
+  assert.match(appSource, /window\.toggleFullScreen\(nil\)/);
+  assert.ok((appSource.match(/MainWindowChrome\.enterFullScreen\(\)/g) ?? []).length >= 2);
+});
