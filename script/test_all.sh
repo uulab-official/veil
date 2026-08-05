@@ -6,6 +6,7 @@ SKIP_WINDOWS_AGENT=0
 SKIP_APP_VERIFY=0
 SKIP_NODE_INSTALL=0
 LIST_ONLY=0
+DOTNET_BIN=""
 
 usage() {
   cat <<'USAGE'
@@ -19,6 +20,8 @@ Options:
   --skip-windows-agent   Skip .NET Windows agent tests with an explicit notice.
   --skip-app-verify      Skip the macOS signed app launch verification.
   --skip-node-install    Do not run npm ci for packages with lockfiles.
+  VEIL_DOTNET_BIN=/path/to/dotnet ./script/test_all.sh
+                           Use an explicit .NET 8 SDK when it is not on PATH.
   --help                 Show this help.
 USAGE
 }
@@ -93,6 +96,36 @@ require_command() {
   fi
 }
 
+resolve_dotnet() {
+  if [[ -n "${VEIL_DOTNET_BIN:-}" ]]; then
+    if [[ -x "$VEIL_DOTNET_BIN" ]]; then
+      DOTNET_BIN="$VEIL_DOTNET_BIN"
+    else
+      echo "Regression gate blocked: VEIL_DOTNET_BIN is not an executable .NET SDK path: $VEIL_DOTNET_BIN" >&2
+    fi
+    return
+  fi
+
+  if command -v dotnet >/dev/null 2>&1; then
+    DOTNET_BIN="$(command -v dotnet)"
+    return
+  fi
+
+  local veil_user_home="${HOME:-}"
+  local bundled_dotnet="$veil_user_home/Library/Application Support/Veil/Toolchains/dotnet8/dotnet"
+  if [[ -x "$bundled_dotnet" ]]; then
+    DOTNET_BIN="$bundled_dotnet"
+  fi
+}
+
+require_dotnet() {
+  resolve_dotnet
+  if [[ -z "$DOTNET_BIN" ]]; then
+    echo "Regression gate blocked: missing required command 'dotnet'. Install the .NET 8 SDK, set VEIL_DOTNET_BIN, or rerun with --skip-windows-agent." >&2
+    return 1
+  fi
+}
+
 preflight() {
   local blocked=0
   require_command swift "Install the current Xcode command-line tools." || blocked=1
@@ -100,7 +133,7 @@ preflight() {
   require_command npm "Install npm alongside Node.js." || blocked=1
 
   if [[ "$SKIP_WINDOWS_AGENT" -eq 0 ]]; then
-    require_command dotnet "Install the .NET 8 SDK or rerun with --skip-windows-agent." || blocked=1
+    require_dotnet || blocked=1
   fi
 
   if [[ "$(uname -s)" == "Darwin" && "$SKIP_APP_VERIFY" -eq 0 ]]; then
@@ -150,7 +183,7 @@ if [[ "$SKIP_WINDOWS_AGENT" -eq 1 ]]; then
   echo "==> Windows agent skipped by explicit request"
 else
   echo "==> Windows agent"
-  dotnet test "$ROOT_DIR/apps/windows-agent/tests/VeilAgent.Tests/VeilAgent.Tests.csproj"
+  "$DOTNET_BIN" test "$ROOT_DIR/apps/windows-agent/tests/VeilAgent.Tests/VeilAgent.Tests.csproj"
 fi
 
 run_node_tests

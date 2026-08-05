@@ -42,9 +42,18 @@ test("regression gate preflights before running deterministic component commands
 
   assert.ok(preflightCall >= 0);
   assert.ok(swiftTest > preflightCall);
-  assert.match(script, /dotnet test/);
+  assert.match(script, /\"\$DOTNET_BIN\" test/);
   assert.match(script, /npm --prefix "\$package_dir" ci/);
   assert.match(script, /npm --prefix "\$package_dir" test/);
   assert.match(script, /build_and_run\.sh" --verify/);
   assert.match(script, /no Node test packages were discovered/);
+});
+
+test("regression gate discovers Veil's installed .NET toolchain when dotnet is absent from PATH", async () => {
+  const script = await readFile(regressionScriptPath, "utf8");
+
+  assert.match(script, /VEIL_DOTNET_BIN/);
+  assert.match(script, /Toolchains\/dotnet8\/dotnet/);
+  assert.match(script, /DOTNET_BIN/);
+  assert.match(script, /"\$DOTNET_BIN" test/);
 });
