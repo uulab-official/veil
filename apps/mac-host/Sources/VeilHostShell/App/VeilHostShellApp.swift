@@ -2481,13 +2481,18 @@ enum MainWindowFullscreenPolicy {
 }
 
 enum MainWindowResizePolicy {
-    static func shouldFitToPreferredSize(styleMask: NSWindow.StyleMask) -> Bool {
-        !styleMask.contains(.fullScreen)
+    static func shouldFitToPreferredSize(
+        styleMask: NSWindow.StyleMask,
+        hasEstablishedFrame: Bool = false
+    ) -> Bool {
+        !styleMask.contains(.fullScreen) && !hasEstablishedFrame
     }
 }
 
 @MainActor
 enum MainWindowChrome {
+    private static var hasEstablishedMainWindowFrame = false
+
     static func configureAndCompactMainWindow() {
         let windows = mainWindows
         guard let window = windows.first else {
@@ -2581,7 +2586,10 @@ enum MainWindowChrome {
     }
 
     private static func fitToPreferredSize(_ window: NSWindow) {
-        guard MainWindowResizePolicy.shouldFitToPreferredSize(styleMask: window.styleMask) else {
+        guard MainWindowResizePolicy.shouldFitToPreferredSize(
+            styleMask: window.styleMask,
+            hasEstablishedFrame: hasEstablishedMainWindowFrame
+        ) else {
             return
         }
 
@@ -2589,6 +2597,7 @@ enum MainWindowChrome {
         let targetSize = MainWindowLayout.fittedSize(for: visibleFrame.size)
         let sizeDelta = abs(window.frame.width - targetSize.width) + abs(window.frame.height - targetSize.height)
         guard sizeDelta > 16 else {
+            hasEstablishedMainWindowFrame = true
             return
         }
 
@@ -2597,6 +2606,7 @@ enum MainWindowChrome {
             y: visibleFrame.midY - targetSize.height / 2
         )
         window.setFrame(NSRect(origin: origin, size: targetSize), display: true, animate: false)
+        hasEstablishedMainWindowFrame = true
     }
 
     private static func activationPolicyName(_ policy: NSApplication.ActivationPolicy) -> String {

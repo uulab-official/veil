@@ -15,6 +15,12 @@ struct WindowsAppWindowPresenterTests {
     func preservesMainWindowFullScreenFrame() {
         #expect(MainWindowResizePolicy.shouldFitToPreferredSize(styleMask: [.titled]))
         #expect(!MainWindowResizePolicy.shouldFitToPreferredSize(styleMask: [.titled, .fullScreen]))
+        #expect(
+            !MainWindowResizePolicy.shouldFitToPreferredSize(
+                styleMask: [.titled],
+                hasEstablishedFrame: true
+            )
+        )
     }
 
     @Test("aligns the full-screen header with the main content while clearing window controls")
