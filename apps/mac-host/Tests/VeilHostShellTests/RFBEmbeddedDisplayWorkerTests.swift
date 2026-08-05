@@ -116,6 +116,40 @@ struct RFBEmbeddedDisplayWorkerTests {
         worker.stop()
     }
 
+    @Test("keeps the last live frame until resized desktop pixels arrive")
+    func keepsLastFrameDuringDesktopResize() async {
+        let attempts = LockedAttemptCounter()
+        let sizes = LockedFrameSizeLog()
+        let finished = AsyncSignal()
+        let worker = RFBEmbeddedDisplayWorker(
+            endpoint: RFBDisplayEndpoint(host: "127.0.0.1", port: 5_900),
+            maximumConnectionAttempts: 1,
+            connectionRetryDelay: 0,
+            streamFactory: { _, _ in
+                guard attempts.incrementAndRead() == 1 else {
+                    throw RFBLoopbackSocketError.connectionClosed
+                }
+                return ScriptedRFBByteStream(inbound: Self.desktopResizeStreamData())
+            }
+        )
+
+        worker.start(
+            onFrame: { frame in
+                sizes.append(CGSize(width: frame.width, height: frame.height))
+            },
+            onFailure: { _ in
+                finished.signal()
+            }
+        )
+
+        #expect(await finished.wait(timeoutNanoseconds: 1_000_000_000))
+        #expect(sizes.values == [
+            CGSize(width: 2, height: 1),
+            CGSize(width: 3, height: 2)
+        ])
+        worker.stop()
+    }
+
     private static func serverStreamData() -> Data {
         var data = Data("RFB 003.008\n".utf8)
         data.append(contentsOf: [1, 1])
@@ -140,6 +174,45 @@ struct RFBEmbeddedDisplayWorkerTests {
         ])
         return data
     }
+
+    private static func desktopResizeStreamData() -> Data {
+        var data = Data("RFB 003.008\n".utf8)
+        data.append(contentsOf: [1, 1])
+        data.append(contentsOf: [0, 0, 0, 0])
+        data.appendBigEndian(UInt16(2))
+        data.appendBigEndian(UInt16(1))
+        data.append(contentsOf: [
+            32, 24, 0, 1,
+            0, 255, 0, 255, 0, 255,
+            16, 8, 0,
+            0, 0, 0
+        ])
+        data.appendBigEndian(UInt32(4))
+        data.append(contentsOf: Data("QEMU".utf8))
+
+        data.append(contentsOf: [
+            0, 0, 0, 1,
+            0, 0, 0, 0,
+            0, 2, 0, 1,
+            0, 0, 0, 0,
+            0, 0, 255, 0,
+            0, 255, 0, 0
+        ])
+        data.append(contentsOf: [
+            0, 0, 0, 1,
+            0, 0, 0, 0,
+            0, 3, 0, 2,
+            255, 255, 255, 33
+        ])
+        data.append(contentsOf: [
+            0, 0, 0, 1,
+            0, 0, 0, 0,
+            0, 3, 0, 2,
+            0, 0, 0, 0
+        ])
+        data.append(contentsOf: Data(repeating: 0, count: 3 * 2 * 4))
+        return data
+    }
 }
 
 private final class LockedAttemptCounter: @unchecked Sendable {
@@ -154,6 +227,21 @@ private final class LockedAttemptCounter: @unchecked Sendable {
         lock.withLock {
             count += 1
             return count
+        }
+    }
+}
+
+private final class LockedFrameSizeLog: @unchecked Sendable {
+    private let lock = NSLock()
+    private var storedValues: [CGSize] = []
+
+    var values: [CGSize] {
+        lock.withLock { storedValues }
+    }
+
+    func append(_ value: CGSize) {
+        lock.withLock {
+            storedValues.append(value)
         }
     }
 }

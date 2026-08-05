@@ -97,6 +97,8 @@ struct WindowsOptimizationCoordinatorTests {
 
         coordinator.recordDisplaySize(width: 800, height: 600)
         #expect(coordinator.phase == .complete(displayOptimized: false))
+        coordinator.recordDisplaySize(width: 1_024, height: 768)
+        #expect(coordinator.phase == .complete(displayOptimized: false))
         coordinator.recordDisplaySize(width: 1_440, height: 900)
         #expect(coordinator.phase == .complete(displayOptimized: true))
     }

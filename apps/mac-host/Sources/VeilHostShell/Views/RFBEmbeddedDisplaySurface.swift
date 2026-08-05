@@ -215,11 +215,15 @@ final class RFBEmbeddedDisplayWorker: @unchecked Sendable {
                     let update = try client.readFramebufferUpdate()
                     let frame = try renderer.apply(update)
                     connectionAttempt = 0
-                    Task { @MainActor in
-                        onFrame(frame)
+                    if !update.rectangles.isEmpty {
+                        Task { @MainActor in
+                            onFrame(frame)
+                        }
                     }
 
-                    try client.requestFramebufferUpdate(incremental: true)
+                    try client.requestFramebufferUpdate(
+                        incremental: update.framebufferSize == nil
+                    )
                 }
             } catch {
                 guard !isWorkerStopped else {

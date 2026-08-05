@@ -116,6 +116,70 @@ struct RFBFrameReceiverTests {
         }
     }
 
+    @Test("accepts QEMU desktop size updates without dropping the RFB session")
+    func acceptsDesktopSizeUpdate() throws {
+        let pixelFormat = RFBPixelFormat(
+            bitsPerPixel: 32,
+            depth: 24,
+            isBigEndian: false,
+            isTrueColor: true,
+            redMax: 255,
+            greenMax: 255,
+            blueMax: 255,
+            redShift: 16,
+            greenShift: 8,
+            blueShift: 0
+        )
+        let update = Data([
+            0, 0,
+            0, 1,
+            0, 0,
+            0, 0,
+            5, 160,
+            3, 132,
+            255, 255, 255, 33
+        ])
+
+        let parsed = try RFBFrameParser.parseFramebufferUpdate(
+            update,
+            pixelFormat: pixelFormat
+        )
+
+        #expect(parsed.rectangles.isEmpty)
+    }
+
+    @Test("rejects an oversized desktop resize before allocating its framebuffer")
+    func rejectsOversizedDesktopResize() {
+        let pixelFormat = RFBPixelFormat(
+            bitsPerPixel: 32,
+            depth: 24,
+            isBigEndian: false,
+            isTrueColor: true,
+            redMax: 255,
+            greenMax: 255,
+            blueMax: 255,
+            redShift: 16,
+            greenShift: 8,
+            blueShift: 0
+        )
+        let update = Data([
+            0, 0,
+            0, 1,
+            0, 0,
+            0, 0,
+            32, 0,
+            32, 0,
+            255, 255, 255, 33
+        ])
+
+        #expect(throws: RFBError.invalidFramebufferSize(width: 8_192, height: 8_192)) {
+            _ = try RFBFrameParser.parseFramebufferUpdate(
+                update,
+                pixelFormat: pixelFormat
+            )
+        }
+    }
+
     @Test("rejects short protocol version")
     func rejectsShortProtocolVersion() {
         #expect(throws: RFBError.messageTooShort(expected: 12, actual: 3)) {
@@ -138,7 +202,7 @@ struct RFBFrameReceiverTests {
         #expect(stream.writes[0] == RFBClientMessageBuilder.clientProtocolVersion())
         #expect(stream.writes[1] == RFBClientMessageBuilder.selectNoneSecurity())
         #expect(stream.writes[2] == RFBClientMessageBuilder.sharedClientInit())
-        #expect(stream.writes[3] == RFBClientMessageBuilder.setRawEncoding())
+        #expect(stream.writes[3] == RFBClientMessageBuilder.setEncodings([0, -223]))
         #expect(stream.writes[4] == Data([
             3, 0,
             0, 0,
@@ -150,6 +214,25 @@ struct RFBFrameReceiverTests {
         #expect(update.rectangles.first?.pixels == Data([
             0, 0, 255, 0,
             0, 255, 0, 0
+        ]))
+    }
+
+    @Test("stream client requests the resized QEMU desktop without reconnecting")
+    func streamClientRequestsResizedDesktop() throws {
+        let stream = FakeRFBByteStream(inbound: Self.desktopResizeStreamData())
+        let client = RFBFrameStreamClient(stream: stream)
+
+        _ = try client.startSharedSession()
+        let update = try client.readFramebufferUpdate()
+        try client.requestFramebufferUpdate(incremental: false)
+
+        #expect(update.framebufferSize == RFBFramebufferSize(width: 1_440, height: 900))
+        #expect(stream.writes.last == Data([
+            3, 0,
+            0, 0,
+            0, 0,
+            5, 160,
+            3, 132
         ]))
     }
 
@@ -183,6 +266,25 @@ struct RFBFrameReceiverTests {
             255, 0, 0, 255,
             0, 255, 0, 255
         ]))
+    }
+
+    @Test("framebuffer renderer adopts a live QEMU desktop resize")
+    func framebufferRendererAdoptsDesktopResize() throws {
+        let serverInit = try RFBFrameParser.parseServerInit(Self.serverInitData(
+            width: 2,
+            height: 1,
+            desktopName: "QEMU"
+        ))
+        let renderer = try RFBFramebufferRenderer(serverInit: serverInit)
+
+        let frame = try renderer.apply(RFBFramebufferUpdate(
+            rectangles: [],
+            framebufferSize: RFBFramebufferSize(width: 3, height: 2)
+        ))
+
+        #expect(frame.width == 3)
+        #expect(frame.height == 2)
+        #expect(frame.rgbaPixels.count == 3 * 2 * 4)
     }
 
     @Test("framebuffer renderer rejects rectangles outside display bounds")
@@ -269,6 +371,23 @@ struct RFBFrameReceiverTests {
             0, 0, 0, 0,
             0, 0, 255, 0,
             0, 255, 0, 0
+        ])
+        return data
+    }
+
+    private static func desktopResizeStreamData() -> Data {
+        var data = Data("RFB 003.008\n".utf8)
+        data.append(contentsOf: [1, 1])
+        data.append(contentsOf: [0, 0, 0, 0])
+        data.append(serverInitData(width: 2, height: 1, desktopName: "QEMU"))
+        data.append(contentsOf: [
+            0, 0,
+            0, 1,
+            0, 0,
+            0, 0,
+            5, 160,
+            3, 132,
+            255, 255, 255, 33
         ])
         return data
     }

@@ -133,6 +133,15 @@ struct WindowsOptimizationStatus: Equatable {
     }
 }
 
+enum WindowsDisplayOptimizationPolicy {
+    static func isOptimized(width: Int, height: Int) -> Bool {
+        guard width >= 1_280, height >= 720 else {
+            return false
+        }
+        return Double(width) / Double(height) >= 1.5
+    }
+}
+
 @MainActor
 protocol WindowsOptimizationServicing: AnyObject {
     func prepareMedia() async throws
@@ -230,7 +239,7 @@ final class WindowsOptimizationCoordinator {
             return
         }
 
-        if width > 800 || height > 600 {
+        if WindowsDisplayOptimizationPolicy.isOptimized(width: width, height: height) {
             displayOptimized = true
             if case .complete = phase {
                 phase = .complete(displayOptimized: true)

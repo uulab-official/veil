@@ -116,8 +116,27 @@ public struct RFBRawRectangle: Codable, Equatable, Sendable {
     public var pixels: Data
 }
 
+public struct RFBFramebufferSize: Codable, Equatable, Sendable {
+    public var width: Int
+    public var height: Int
+
+    public init(width: Int, height: Int) {
+        self.width = width
+        self.height = height
+    }
+}
+
 public struct RFBFramebufferUpdate: Codable, Equatable, Sendable {
     public var rectangles: [RFBRawRectangle]
+    public var framebufferSize: RFBFramebufferSize?
+
+    public init(
+        rectangles: [RFBRawRectangle],
+        framebufferSize: RFBFramebufferSize? = nil
+    ) {
+        self.rectangles = rectangles
+        self.framebufferSize = framebufferSize
+    }
 }
 
 public struct RFBRenderedFrame: Codable, Equatable, Sendable {
@@ -125,6 +144,21 @@ public struct RFBRenderedFrame: Codable, Equatable, Sendable {
     public var height: Int
     public var rgbaPixels: Data
     public var sequence: Int
+}
+
+private enum RFBFramebufferLimits {
+    static let maximumDimension = 8_192
+    static let maximumPixelCount = 33_554_432
+
+    static func validate(width: Int, height: Int) throws {
+        guard width > 0,
+              height > 0,
+              width <= maximumDimension,
+              height <= maximumDimension,
+              width * height <= maximumPixelCount else {
+            throw RFBError.invalidFramebufferSize(width: width, height: height)
+        }
+    }
 }
 
 public enum RFBClientMessageBuilder {
@@ -204,6 +238,7 @@ public enum RFBFrameParser {
         var reader = RFBReader(data: data)
         let width = Int(try reader.readUInt16())
         let height = Int(try reader.readUInt16())
+        try RFBFramebufferLimits.validate(width: width, height: height)
         let pixelFormat = try reader.readPixelFormat()
         let nameLength = Int(try reader.readUInt32())
         let desktopNameData = try reader.readData(count: nameLength)
@@ -232,6 +267,7 @@ public enum RFBFrameParser {
         let rectangleCount = Int(try reader.readUInt16())
         var rectangles: [RFBRawRectangle] = []
         rectangles.reserveCapacity(rectangleCount)
+        var framebufferSize: RFBFramebufferSize?
 
         for _ in 0..<rectangleCount {
             let x = Int(try reader.readUInt16())
@@ -239,6 +275,11 @@ public enum RFBFrameParser {
             let width = Int(try reader.readUInt16())
             let height = Int(try reader.readUInt16())
             let encoding = try reader.readInt32()
+            if encoding == -223 {
+                try RFBFramebufferLimits.validate(width: width, height: height)
+                framebufferSize = RFBFramebufferSize(width: width, height: height)
+                continue
+            }
             guard encoding == 0 else {
                 throw RFBError.unsupportedEncoding(encoding)
             }
@@ -254,7 +295,10 @@ public enum RFBFrameParser {
             ))
         }
 
-        return RFBFramebufferUpdate(rectangles: rectangles)
+        return RFBFramebufferUpdate(
+            rectangles: rectangles,
+            framebufferSize: framebufferSize
+        )
     }
 
     private static func require(_ data: Data, count: Int) throws {
@@ -406,7 +450,7 @@ public final class RFBFrameStreamClient {
         let desktopNameData = try stream.readExactly(desktopNameLength)
         let serverInit = try RFBFrameParser.parseServerInit(serverInitHeader + desktopNameData)
         self.serverInit = serverInit
-        try stream.write(RFBClientMessageBuilder.setRawEncoding())
+        try stream.write(RFBClientMessageBuilder.setEncodings([0, -223]))
         return serverInit
     }
 
@@ -450,6 +494,9 @@ public final class RFBFrameStreamClient {
             let height = Int(rectangleHeader.readUInt16BigEndian(at: 6))
             let encoding = rectangleHeader.readInt32BigEndian(at: 8)
 
+            if encoding == -223 {
+                continue
+            }
             guard encoding == 0 else {
                 return try RFBFrameParser.parseFramebufferUpdate(update, pixelFormat: serverInit.pixelFormat)
             }
@@ -458,13 +505,21 @@ public final class RFBFrameStreamClient {
             update.append(try stream.readExactly(pixelByteCount))
         }
 
-        return try RFBFrameParser.parseFramebufferUpdate(update, pixelFormat: serverInit.pixelFormat)
+        let parsedUpdate = try RFBFrameParser.parseFramebufferUpdate(
+            update,
+            pixelFormat: serverInit.pixelFormat
+        )
+        if let framebufferSize = parsedUpdate.framebufferSize {
+            self.serverInit?.width = framebufferSize.width
+            self.serverInit?.height = framebufferSize.height
+        }
+        return parsedUpdate
     }
 }
 
 public final class RFBFramebufferRenderer {
-    public let width: Int
-    public let height: Int
+    public private(set) var width: Int
+    public private(set) var height: Int
 
     private let pixelFormat: RFBPixelFormat
     private var rgbaPixels: [UInt8]
@@ -474,6 +529,7 @@ public final class RFBFramebufferRenderer {
         guard serverInit.pixelFormat.bytesPerPixel != nil else {
             throw RFBError.invalidPixelFormatBitsPerPixel(serverInit.pixelFormat.bitsPerPixel)
         }
+        try RFBFramebufferLimits.validate(width: serverInit.width, height: serverInit.height)
 
         self.width = serverInit.width
         self.height = serverInit.height
@@ -484,6 +540,16 @@ public final class RFBFramebufferRenderer {
     public func apply(_ update: RFBFramebufferUpdate) throws -> RFBRenderedFrame {
         guard let bytesPerPixel = pixelFormat.bytesPerPixel else {
             throw RFBError.invalidPixelFormatBitsPerPixel(pixelFormat.bitsPerPixel)
+        }
+
+        if let framebufferSize = update.framebufferSize {
+            try RFBFramebufferLimits.validate(
+                width: framebufferSize.width,
+                height: framebufferSize.height
+            )
+            width = framebufferSize.width
+            height = framebufferSize.height
+            rgbaPixels = [UInt8](repeating: 0, count: width * height * 4)
         }
 
         for rectangle in update.rectangles {
