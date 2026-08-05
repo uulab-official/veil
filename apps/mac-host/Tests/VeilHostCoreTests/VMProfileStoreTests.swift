@@ -1010,6 +1010,26 @@ struct VMProfileStoreTests {
         #expect(qemu?.executableVersion == "qemu-system-aarch64 version 8.2.0")
     }
 
+    @Test("runtime provider probe discovers Veil managed QEMU without shell environment")
+    func runtimeProviderProbeDiscoversManagedQEMU() {
+        let homeDirectory = URL(fileURLWithPath: "/Users/test", isDirectory: true)
+        let managedQEMUPath = "/Users/test/Library/Application Support/Veil/Runtime/bin/qemu-system-aarch64"
+        let probe = VMRuntimeProviderProbe(
+            environment: [:],
+            homeDirectory: homeDirectory,
+            fileExists: { $0 == managedQEMUPath },
+            executableVersion: { _ in "qemu-system-aarch64 version 10.0.0" }
+        )
+
+        let qemu = probe.localProviders(
+            architecture: "arm64",
+            minimumOSSupported: true
+        ).first { $0.kind == .qemuHypervisor }
+
+        #expect(qemu?.status == .active)
+        #expect(qemu?.executablePath == managedQEMUPath)
+    }
+
     @Test("runtime provider probe reports QEMU version")
     func runtimeProviderProbeReportsQEMUVersion() {
         let probe = VMRuntimeProviderProbe(

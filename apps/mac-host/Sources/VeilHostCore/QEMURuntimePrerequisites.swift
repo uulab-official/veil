@@ -14,14 +14,15 @@ public struct QEMURuntimePrerequisiteReport: Equatable, Sendable {
 
     public static func probe(
         environment: [String: String] = ProcessInfo.processInfo.environment,
+        homeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser,
         fileExists: (String) -> Bool = FileManager.default.fileExists(atPath:)
     ) -> Self {
         let qemu = overrideCandidate(environment[VMRuntimeProviderProbe.qemuEnvironmentKey])
-            + VMRuntimeProviderProbe.defaultQEMUExecutablePaths
+            + VMRuntimeProviderProbe.qemuExecutablePaths(homeDirectory: homeDirectory)
         let firmware = LocalQEMUWindowsBootPlanFactory.defaultSecureFirmwarePaths()
             + LocalQEMUWindowsBootPlanFactory.defaultFirmwarePaths
         let swtpm = overrideCandidate(environment[LocalQEMUWindowsBootPlanFactory.tpmEmulatorEnvironmentKey])
-            + LocalQEMUWindowsBootPlanFactory.defaultTPMEmulatorPaths
+            + LocalQEMUWindowsBootPlanFactory.tpmEmulatorPaths(homeDirectory: homeDirectory)
         return QEMURuntimePrerequisiteReport(checks: [
             check(id: "qemu", title: "QEMU Arm runtime", candidates: qemu, missing: "Install the QEMU formula." , fileExists: fileExists),
             check(id: "uefi", title: "Arm UEFI firmware", candidates: firmware, missing: "QEMU is installed but Arm UEFI firmware was not found.", fileExists: fileExists),

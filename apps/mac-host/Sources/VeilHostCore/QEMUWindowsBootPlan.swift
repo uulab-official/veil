@@ -369,6 +369,17 @@ public enum LocalQEMUWindowsBootPlanFactory {
         "/opt/local/bin/swtpm"
     ]
 
+    public static func tpmEmulatorPaths(
+        homeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser
+    ) -> [String] {
+        [
+            homeDirectory
+                .appendingPathComponent("Library/Application Support/Veil/Runtime/bin", isDirectory: true)
+                .appendingPathComponent("swtpm")
+                .path
+        ] + defaultTPMEmulatorPaths
+    }
+
     public static func makePlan(
         for profile: VMProfile,
         architecture: String,
@@ -387,7 +398,7 @@ public enum LocalQEMUWindowsBootPlanFactory {
             )
             .first { $0.kind == .qemuHypervisor }
         let executablePath = qemuProvider?.executablePath
-            ?? VMRuntimeProviderProbe.defaultQEMUExecutablePaths[0]
+            ?? VMRuntimeProviderProbe.qemuExecutablePaths()[0]
         let secureFirmwarePath = secureFirmwarePaths.first(where: fileExists)
         let secureFirmwareVarsTemplatePath = secureVarsTemplatePaths.first(where: fileExists)
         let isSecureBootFirmwareAvailable = secureFirmwarePath != nil && secureFirmwareVarsTemplatePath != nil
@@ -405,7 +416,7 @@ public enum LocalQEMUWindowsBootPlanFactory {
                 guard let path, !path.isEmpty else { return nil }
                 return path
             }
-            + defaultTPMEmulatorPaths
+            + tpmEmulatorPaths()
         let tpmEmulatorPath = tpmEmulatorCandidates.first(where: fileExists)
         let tpmStateDirectoryPath = profile.virtualDiskPath
             .map { URL(fileURLWithPath: $0).deletingLastPathComponent().appendingPathComponent("tpm", isDirectory: true).path }
@@ -432,7 +443,7 @@ public enum LocalQEMUWindowsBootPlanFactory {
             isFirmwareVarsTemplateAvailable: firmwareVarsTemplatePath != nil,
             firmwareVarsPath: firmwareVarsPath,
             isSecureBootFirmwareAvailable: isSecureBootFirmwareAvailable,
-            tpmEmulatorPath: tpmEmulatorPath ?? defaultTPMEmulatorPaths[0],
+            tpmEmulatorPath: tpmEmulatorPath ?? tpmEmulatorPaths()[0],
             isTPMEmulatorAvailable: tpmEmulatorPath != nil,
             tpmStateDirectoryPath: tpmStateDirectoryPath,
             networkAdapter: networkAdapter,

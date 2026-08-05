@@ -101,15 +101,18 @@ public struct VMRuntimeProviderProbe: Sendable {
     ]
 
     private let environment: [String: String]
+    private let homeDirectory: URL
     private let fileExists: @Sendable (String) -> Bool
     private let executableVersion: @Sendable (String) -> String?
 
     public init(
         environment: [String: String] = ProcessInfo.processInfo.environment,
+        homeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser,
         fileExists: @escaping @Sendable (String) -> Bool = { FileManager.default.fileExists(atPath: $0) },
         executableVersion: @escaping @Sendable (String) -> String? = Self.qemuVersionOutput(executablePath:)
     ) {
         self.environment = environment
+        self.homeDirectory = homeDirectory
         self.fileExists = fileExists
         self.executableVersion = executableVersion
     }
@@ -178,7 +181,18 @@ public struct VMRuntimeProviderProbe: Sendable {
             return overridePath
         }
 
-        return Self.defaultQEMUExecutablePaths.first(where: fileExists)
+        return Self.qemuExecutablePaths(homeDirectory: homeDirectory).first(where: fileExists)
+    }
+
+    public static func qemuExecutablePaths(
+        homeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser
+    ) -> [String] {
+        [
+            homeDirectory
+                .appendingPathComponent("Library/Application Support/Veil/Runtime/bin", isDirectory: true)
+                .appendingPathComponent("qemu-system-aarch64")
+                .path
+        ] + defaultQEMUExecutablePaths
     }
 
     private static func firstVersionLine(from output: String?) -> String? {
