@@ -71,6 +71,7 @@ struct VeilHostShellApp: App {
     private let windowsNotificationPresenter = WindowsNotificationPresenter(center: MacUserNotificationCenter())
     @State private var model: HostDashboardModel
     @State private var vmModel: VMRuntimeModel
+    @State private var windowsOptimizationCoordinator: WindowsOptimizationCoordinator
     @State private var displayMessage: String?
     @State private var agentEventTask: Task<Void, Never>?
     @State private var agentReconnectTask: Task<Void, Never>?
@@ -88,18 +89,28 @@ struct VeilHostShellApp: App {
         self.vmRuntimeBooter = runtimeBooter
         self.agentTransport = transport
         self.agentConnectionPlan = connectionPlan
-        _model = State(
-            initialValue: HostDashboardModel(
-                service: HostDashboardServiceMode.resolve().makeService(
-                    transport: transport,
-                    connectionPlan: connectionPlan
-                )
+        let hostModel = HostDashboardModel(
+            service: HostDashboardServiceMode.resolve().makeService(
+                transport: transport,
+                connectionPlan: connectionPlan
             )
         )
-        _vmModel = State(
-            initialValue: VMRuntimeModel(
-                service: LocalVMRuntimeService(bootRunner: runtimeBooter)
+        let vmModel = VMRuntimeModel(
+            service: LocalVMRuntimeService(bootRunner: runtimeBooter)
+        )
+        let optimizationService = AppWindowsOptimizationService(
+            vmModel: vmModel,
+            dependencies: .live(
+                runtimeBooter: runtimeBooter,
+                hostModel: hostModel,
+                vmModel: vmModel,
+                agentEndpoint: connectionPlan.endpoint
             )
+        )
+        _model = State(initialValue: hostModel)
+        _vmModel = State(initialValue: vmModel)
+        _windowsOptimizationCoordinator = State(
+            initialValue: WindowsOptimizationCoordinator(service: optimizationService)
         )
         _latestReviewEvidenceFolder = State(initialValue: ReviewEvidenceFolderStore.loadLatest())
     }
@@ -127,6 +138,11 @@ struct VeilHostShellApp: App {
                 runRecommendedProofAction: runRecommendedProof,
                 runMultiAppProofAction: runMultiAppProof,
                 quietWindowsWhenIdleAction: quietWindowsWhenIdle,
+                optimizationStatus: windowsOptimizationCoordinator.status,
+                optimizeWindowsAction: beginWindowsOptimization,
+                retryWindowsOptimizationAction: retryWindowsOptimization,
+                cancelWindowsOptimizationAction: cancelWindowsOptimization,
+                windowsDisplaySizeChangedAction: recordWindowsDisplaySize,
                 displayMessage: displayMessage
             )
                 .frame(
@@ -500,6 +516,44 @@ struct VeilHostShellApp: App {
                 displayMessage = "Windows could not quiet: \(errorMessage)"
             }
         }
+    }
+
+    private func beginWindowsOptimization() {
+        runWindowsOptimization(isRetry: false)
+    }
+
+    private func retryWindowsOptimization() {
+        runWindowsOptimization(isRetry: true)
+    }
+
+    private func runWindowsOptimization(isRetry: Bool) {
+        Task { @MainActor in
+            cancelAutomaticQuietRuntime()
+            automaticGuestAgentRecoveryTask?.cancel()
+            automaticGuestAgentRecoveryTask = nil
+            activateMainWindow()
+            displayMessage = "Preparing automatic Windows optimization."
+
+            if isRetry {
+                await windowsOptimizationCoordinator.retry()
+            } else {
+                await windowsOptimizationCoordinator.begin()
+            }
+
+            displayMessage = windowsOptimizationCoordinator.status.detail
+            await vmModel.refreshRuntimeEvidence()
+            await model.load()
+            await recordGuestAgentInstallEvidenceIfNeeded()
+        }
+    }
+
+    private func cancelWindowsOptimization() {
+        windowsOptimizationCoordinator.cancel()
+        displayMessage = "Stopping Windows optimization before the installer is sent."
+    }
+
+    private func recordWindowsDisplaySize(width: Int, height: Int) {
+        windowsOptimizationCoordinator.recordDisplaySize(width: width, height: height)
     }
 
     private func scheduleAutomaticQuietRuntimeIfNeeded() {
@@ -2599,6 +2653,11 @@ private struct StandaloneMainWindowRoot: View {
             runRecommendedProofAction: {},
             runMultiAppProofAction: {},
             quietWindowsWhenIdleAction: {},
+            optimizationStatus: WindowsOptimizationStatus(phase: .idle),
+            optimizeWindowsAction: {},
+            retryWindowsOptimizationAction: {},
+            cancelWindowsOptimizationAction: {},
+            windowsDisplaySizeChangedAction: { _, _ in },
             displayMessage: displayMessage
         )
         .frame(

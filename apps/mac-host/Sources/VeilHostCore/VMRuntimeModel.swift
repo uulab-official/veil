@@ -101,15 +101,18 @@ public struct VMRuntimeProviderProbe: Sendable {
     ]
 
     private let environment: [String: String]
+    private let homeDirectory: URL
     private let fileExists: @Sendable (String) -> Bool
     private let executableVersion: @Sendable (String) -> String?
 
     public init(
         environment: [String: String] = ProcessInfo.processInfo.environment,
+        homeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser,
         fileExists: @escaping @Sendable (String) -> Bool = { FileManager.default.fileExists(atPath: $0) },
         executableVersion: @escaping @Sendable (String) -> String? = Self.qemuVersionOutput(executablePath:)
     ) {
         self.environment = environment
+        self.homeDirectory = homeDirectory
         self.fileExists = fileExists
         self.executableVersion = executableVersion
     }
@@ -178,7 +181,18 @@ public struct VMRuntimeProviderProbe: Sendable {
             return overridePath
         }
 
-        return Self.defaultQEMUExecutablePaths.first(where: fileExists)
+        return Self.qemuExecutablePaths(homeDirectory: homeDirectory).first(where: fileExists)
+    }
+
+    public static func qemuExecutablePaths(
+        homeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser
+    ) -> [String] {
+        [
+            homeDirectory
+                .appendingPathComponent("Library/Application Support/Veil/Runtime/bin", isDirectory: true)
+                .appendingPathComponent("qemu-system-aarch64")
+                .path
+        ] + defaultQEMUExecutablePaths
     }
 
     private static func firstVersionLine(from output: String?) -> String? {
@@ -1598,6 +1612,30 @@ public final class VMRuntimeModel {
         return phase == .loaded && canStart
     }
 
+    @discardableResult
+    public func prepareWindowsOptimization(driverMediaPath: String) async -> Bool {
+        guard let currentSnapshot = snapshot,
+              currentSnapshot.windowsInstalled,
+              let virtualDiskPath = currentSnapshot.virtualDiskPath else {
+            errorMessage = "Install Windows before preparing display and app integration."
+            return false
+        }
+
+        await updateProfilePaths(
+            installerMediaPath: currentSnapshot.installerMediaPath,
+            driverMediaPath: driverMediaPath,
+            virtualDiskPath: virtualDiskPath
+        )
+        guard phase == .loaded else {
+            return false
+        }
+
+        await prepareDefaultVM()
+        return phase == .loaded
+            && snapshot?.windowsInstalled == true
+            && canStart
+    }
+
     public func markGuestAgentConnected(agentVersion: String) async {
         phase = .loading
         errorMessage = nil
@@ -2086,6 +2124,11 @@ public struct LocalVMRuntimeService: VMRuntimeService {
             atomically: true,
             encoding: .utf8
         )
+        try windowsOptimizationCommandText.write(
+            to: bundleURL.appendingPathComponent("Optimize.cmd"),
+            atomically: true,
+            encoding: .utf8
+        )
         try guestAgentReadmeText.write(
             to: bundleURL.appendingPathComponent("README.txt"),
             atomically: true,
@@ -2271,12 +2314,31 @@ public struct LocalVMRuntimeService: VMRuntimeService {
 
     """
 
+    private static let windowsOptimizationCommandText = """
+    @echo off
+    setlocal EnableExtensions
+    cd /d "%~dp0"
+    set "VEIL_GUEST_TOOLS="
+    for %%D in (D E F G H I J K L M N O P Q R S T U V W X Y Z) do (
+      for %%I in ("%%D:\\utm-guest-tools-*.exe") do if exist "%%~fI" set "VEIL_GUEST_TOOLS=%%~fI"
+    )
+    if not defined VEIL_GUEST_TOOLS exit /b 10
+    start /wait "" "%VEIL_GUEST_TOOLS%" /S
+    if errorlevel 1 exit /b %errorlevel%
+    call "%~dp0Repair Veil Agent Connectivity.cmd"
+    if errorlevel 1 exit /b %errorlevel%
+    shutdown.exe /r /t 5 /c "Veil finished Windows optimization"
+    exit /b 0
+
+    """
+
     private static let guestAgentReadmeText = """
     Veil Guest Agent
 
     Run Install Veil Agent.cmd after Windows 11 reaches the desktop.
     V.cmd is the short automation entrypoint used by the macOS host. It runs Repair Veil Agent Connectivity.cmd when present, falls back to Install Veil Agent.cmd for older media layouts, and keeps the console visible briefly so macOS post-attempt screenshots can capture success or failure text.
     P.cmd is the short sparse-package automation entrypoint used by veil-vmctl qemu-prepare-sparse-package. It runs Prepare Sparse Package.cmd and keeps the console visible briefly so package identity status is visible in post-attempt screenshots.
+    Optimize.cmd installs official UTM Guest Tools from attached read-only media, repairs the Veil app connection, and requests one normal Windows restart.
     The installer uses the packaged VeilAgent.exe bundle when present, registers the VeilAgent user logon task when Windows allows it, and listens inside Windows on 0.0.0.0:18444 so the macOS host can connect through QEMU at ws://127.0.0.1:18444/.
     Bootstrap and installer logs are written under %LOCALAPPDATA%\\Veil\\Agent\\logs.
     If this media does not include app\\VeilAgent.exe, build it on the Mac with apps/windows-agent/scripts/publish-veil-agent-bundle.sh before preparing the VM again.

@@ -22,6 +22,11 @@ struct DetailView: View {
     var runRecommendedProofAction: () -> Void
     var runMultiAppProofAction: () -> Void
     var quietWindowsWhenIdleAction: () -> Void
+    var optimizationStatus: WindowsOptimizationStatus
+    var optimizeWindowsAction: () -> Void
+    var retryWindowsOptimizationAction: () -> Void
+    var cancelWindowsOptimizationAction: () -> Void
+    var windowsDisplaySizeChangedAction: (Int, Int) -> Void
     var displayMessage: String?
     @State private var showsWindowsDesktop = InstalledWorkspacePresentationPolicy.initiallyShowsDesktop
 
@@ -66,6 +71,11 @@ struct DetailView: View {
             runRecommendedProofAction: runRecommendedProofAction,
             runMultiAppProofAction: runMultiAppProofAction,
             quietWindowsWhenIdleAction: quietWindowsWhenIdleAction,
+            optimizationStatus: optimizationStatus,
+            optimizeWindowsAction: optimizeWindowsAction,
+            retryWindowsOptimizationAction: retryWindowsOptimizationAction,
+            cancelWindowsOptimizationAction: cancelWindowsOptimizationAction,
+            windowsDisplaySizeChangedAction: windowsDisplaySizeChangedAction,
             displayMessage: displayMessage,
             showsFullDesktop: $showsWindowsDesktop
         )

@@ -99,6 +99,23 @@ public struct JSONQEMULaunchRecordStore: QEMULaunchRecordStore {
     }
 }
 
+public enum QEMUVMRuntimeControlError: Error, LocalizedError, Equatable, Sendable {
+    case noRunningVM
+    case qmpCommandFailed
+    case gracefulShutdownTimedOut(seconds: Int)
+
+    public var errorDescription: String? {
+        switch self {
+        case .noRunningVM:
+            "Windows is not running with QEMU control available."
+        case .qmpCommandFailed:
+            "Veil could not request a normal Windows shutdown."
+        case .gracefulShutdownTimedOut(let seconds):
+            "Windows did not finish shutting down within \(seconds) seconds."
+        }
+    }
+}
+
 public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
     public static let shared = QEMUVMRuntimeBooter()
 
@@ -110,6 +127,7 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
     private let bootKeySender: @Sendable (URL) -> Bool
     private let consoleScreenshotCapturer: @Sendable (URL, URL) -> Void
     private let vncPortAllocator: @Sendable () -> Int?
+    private let qmpControlRunner: @Sendable (String, URL) -> Int32?
     private let displayMode: QEMUWindowsBootDisplayMode
     private var process: Process?
     private var monitorSocketURL: URL?
@@ -124,6 +142,18 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
         bootKeySender: @escaping @Sendable (URL) -> Bool = QEMUVMRuntimeBooter.sendWindowsInstallerBootKey,
         consoleScreenshotCapturer: @escaping @Sendable (URL, URL) -> Void = QEMUVMRuntimeBooter.captureConsoleScreenshot,
         vncPortAllocator: @escaping @Sendable () -> Int? = QEMUVMRuntimeBooter.allocateLoopbackVNCPort,
+        qmpControlRunner: @escaping @Sendable (String, URL) -> Int32? = { command, socketURL in
+            QEMUKeySequenceSender.runProcess(
+                executablePath: "/bin/sh",
+                arguments: [
+                    "-c",
+                    "printf '%s\\n%s\\n' \"$1\" \"$2\" | /usr/bin/nc -w 1 -U \"$0\"",
+                    socketURL.path,
+                    QEMUQMPKeyboardCommandBuilder.capabilitiesCommand(),
+                    command
+                ]
+            )
+        },
         displayMode: QEMUWindowsBootDisplayMode = .nativeCocoa
     ) {
         self.diagnosticsDirectory = diagnosticsDirectory
@@ -134,6 +164,7 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
         self.bootKeySender = bootKeySender
         self.consoleScreenshotCapturer = consoleScreenshotCapturer
         self.vncPortAllocator = vncPortAllocator
+        self.qmpControlRunner = qmpControlRunner
         self.displayMode = displayMode
     }
 
@@ -266,6 +297,45 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
         )
     }
 
+    public func optimizeWindowsFromAttachedMedia() async throws -> QEMUKeySendRecord {
+        try await sendAttachedMediaCommand(
+            startButtonTapNormalizedX: QEMUWindowsOptimizationKeySequence.startButtonTapNormalizedX,
+            startButtonTapNormalizedY: QEMUWindowsOptimizationKeySequence.startButtonTapNormalizedY,
+            steps: QEMUWindowsOptimizationKeySequence.steps,
+            stepsAfterRunOpened: QEMUWindowsOptimizationKeySequence.stepsAfterRunOpened,
+            commandConfirmationSteps: QEMUWindowsOptimizationKeySequence.commandConfirmationSteps,
+            postConfirmationSteps: QEMUWindowsOptimizationKeySequence.uacApproveKeySteps
+        )
+    }
+
+    public func requestGracefulShutdown(timeoutSeconds: Int = 30) async throws {
+        guard let process, let qmpSocketURL else {
+            throw QEMUVMRuntimeControlError.noRunningVM
+        }
+
+        let command = try QEMUQMPControlCommandBuilder.powerDownCommand()
+        guard qmpControlRunner(command, qmpSocketURL) == 0 else {
+            throw QEMUVMRuntimeControlError.qmpCommandFailed
+        }
+
+        let boundedTimeout = max(timeoutSeconds, 0)
+        let deadline = Date().addingTimeInterval(TimeInterval(boundedTimeout))
+        while process.isRunning, Date() < deadline {
+            try await Task.sleep(for: .milliseconds(250))
+        }
+        guard !process.isRunning else {
+            throw QEMUVMRuntimeControlError.gracefulShutdownTimedOut(seconds: boundedTimeout)
+        }
+
+        if let monitorSocketURL {
+            try? FileManager.default.removeItem(at: monitorSocketURL)
+        }
+        try? FileManager.default.removeItem(at: qmpSocketURL)
+        self.process = nil
+        self.monitorSocketURL = nil
+        self.qmpSocketURL = nil
+    }
+
     public func prepareSparsePackageFromAttachedMedia() async throws -> QEMUKeySendRecord {
         try await sendAttachedMediaCommand(
             startButtonTapNormalizedX: QEMUSparsePackagePreparationKeySequence.startButtonTapNormalizedX,
@@ -279,7 +349,9 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
         startButtonTapNormalizedX: Double,
         startButtonTapNormalizedY: Double,
         steps: @autoclosure () throws -> [QEMUKeySequenceStep],
-        stepsAfterRunOpened: @autoclosure () throws -> [QEMUKeySequenceStep]
+        stepsAfterRunOpened: @autoclosure () throws -> [QEMUKeySequenceStep],
+        commandConfirmationSteps: [QEMUKeySequenceStep] = [],
+        postConfirmationSteps: [QEMUKeySequenceStep] = []
     ) async throws -> QEMUKeySendRecord {
         let launchRecordStore = JSONQEMULaunchRecordStore(
             directory: diagnosticsDirectory.appendingPathComponent("QEMU Launch", isDirectory: true)
@@ -293,8 +365,10 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
             )
             try? await Task.sleep(nanoseconds: 800_000_000)
             commandSteps = try stepsAfterRunOpened()
+                + commandConfirmationSteps
+                + postConfirmationSteps
         } catch {
-            commandSteps = try steps()
+            commandSteps = try steps() + postConfirmationSteps
         }
 
         let sender = QEMUKeySequenceSender(

@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 @testable import VeilHostCore
 
@@ -31,6 +32,26 @@ struct QEMURuntimePrerequisiteTests {
                 VMRuntimeProviderProbe.qemuEnvironmentKey: qemuPath,
                 LocalQEMUWindowsBootPlanFactory.tpmEmulatorEnvironmentKey: swtpmPath
             ],
+            fileExists: { path in
+                path == qemuPath
+                    || path == swtpmPath
+                    || path == "/Applications/UTM.app/Contents/Resources/qemu/edk2-aarch64-secure-code.fd"
+            }
+        )
+
+        #expect(report.isReady)
+        #expect(try #require(report.checks.first { $0.id == "qemu" }).detail == qemuPath)
+        #expect(try #require(report.checks.first { $0.id == "swtpm" }).detail == swtpmPath)
+    }
+
+    @Test("discovers Veil managed QEMU and TPM without Finder environment overrides")
+    func managedRuntime() throws {
+        let homeDirectory = URL(fileURLWithPath: "/Users/test", isDirectory: true)
+        let qemuPath = "/Users/test/Library/Application Support/Veil/Runtime/bin/qemu-system-aarch64"
+        let swtpmPath = "/Users/test/Library/Application Support/Veil/Runtime/bin/swtpm"
+        let report = QEMURuntimePrerequisiteReport.probe(
+            environment: [:],
+            homeDirectory: homeDirectory,
             fileExists: { path in
                 path == qemuPath
                     || path == swtpmPath

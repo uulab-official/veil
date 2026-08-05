@@ -91,3 +91,19 @@ The display blocker above is resolved for the active compatibility provider. Thi
 - [x] Passed `script/test_all.sh`, including the .NET 8 Windows agent, all 25 Node harness packages, signed app launch, and isolated install → guarded replace → uninstall → support-data preservation → reinstall lifecycle checks.
 - [ ] Re-run a clean install to prove the newly merged one-confirmation guest-tools path end to end.
 - [ ] Install the guest graphics tools on the current VM after explicit license acceptance, reboot, and confirm the VNC framebuffer changes from `800×600` toward the advertised `1440×900` target.
+
+## One-click installed-VM optimization follow-up — 2026-08-05
+
+The current installed Windows disk was preserved. This pass added and verified the app path that prepares integration media, performs a normal Windows restart, installs official UTM Guest Tools plus the Veil guest agent, waits for the agent to reconnect, and classifies the resulting framebuffer size.
+
+- [x] Added the generated, idempotent `Optimize.cmd` media entrypoint without disk partitioning, formatting, installer replacement, or product-key handling.
+- [x] Added bounded QMP automation for a normal ACPI shutdown, media rebuild, Windows startup, Run dialog dispatch, UAC confirmation, agent reconnect wait, and retryable failures.
+- [x] Added one installed-Windows card with `Optimize Windows`, determinate stage progress, pre-dispatch cancel, and same-card retry instead of competing repair actions.
+- [x] Added one combined confirmation describing official UTM Guest Tools, the Veil guest agent, one restart, preserved Windows files, and links to both terms/information pages.
+- [x] Added live RFB dimension feedback; dimensions above `800×600` mark display optimization complete, while agent-only success remains visibly partial.
+- [x] Corrected Finder-launched runtime discovery so the app automatically finds Veil's existing QEMU and `swtpm` bridges under `~/Library/Application Support/Veil/Runtime/bin` without shell environment variables.
+- [x] Passed the affected VM profile (57), QEMU prerequisite (4), and QEMU boot-plan (62) suites, then passed the complete updated Swift suite: 450 tests across 29 suites.
+- [x] Passed `script/test_all.sh`: Windows agent tests, all 25 Node packages, signed app launch, and isolated install → replace → uninstall → support-data preservation → reinstall lifecycle checks.
+- [x] Rebuilt, installed, and signature-verified `/Applications/Veil.app`; confirmed the installed process is live and the real profile now shows the single `Finish Windows Optimization` card.
+- [x] Opened the combined confirmation in the installed app and confirmed `Review Both Terms`, `I Agree and Optimize`, and `Not Now` are available.
+- [ ] Accept the terms in person, then observe the real current VM through media preparation, normal restart, installer dispatch, guest restart, agent reconnect, and post-reboot framebuffer dimensions. No end-to-end completion claim is made before those live observations occur.

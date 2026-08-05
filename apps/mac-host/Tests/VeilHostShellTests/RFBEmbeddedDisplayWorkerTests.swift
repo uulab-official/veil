@@ -6,6 +6,21 @@ import VeilHostCore
 
 @Suite("Embedded RFB display worker")
 struct RFBEmbeddedDisplayWorkerTests {
+    @Test("publishes the latest framebuffer dimensions for display verification")
+    @MainActor
+    func publishesLatestFramebufferDimensions() {
+        let model = RFBEmbeddedDisplayModel()
+
+        #expect(model.frameSize == nil)
+
+        model.receive(
+            image: NSImage(size: NSSize(width: 1_920, height: 1_080)),
+            sequence: 1
+        )
+
+        #expect(model.frameSize == CGSize(width: 1_920, height: 1_080))
+    }
+
     @Test("keeps the last live frame quiet while the display reconnects")
     @MainActor
     func keepsLastLiveFrameDuringReconnect() {

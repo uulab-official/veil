@@ -3,6 +3,72 @@ import VeilHostCore
 @testable import VeilHostShell
 
 struct InstalledAppHomePresentationTests {
+    @Test("installed QEMU Windows without agent evidence offers one optimization action")
+    func installedQEMUWindowsOffersOneOptimizationAction() throws {
+        let presentation = try #require(
+            InstalledWindowsOptimizationPresentation.resolve(
+                windowsInstalled: true,
+                provider: .qemuHypervisor,
+                installEvidenceKind: .profileFlag,
+                status: WindowsOptimizationStatus(phase: .idle)
+            )
+        )
+
+        #expect(presentation.title == "Finish Windows Optimization")
+        #expect(presentation.detail.contains("Windows will restart once"))
+        #expect(presentation.primaryButtonTitle == "Optimize Windows")
+        #expect(presentation.showsCancel == false)
+    }
+
+    @Test("healthy guest agent evidence hides redundant optimization")
+    func healthyGuestAgentEvidenceHidesRedundantOptimization() {
+        let presentation = InstalledWindowsOptimizationPresentation.resolve(
+            windowsInstalled: true,
+            provider: .qemuHypervisor,
+            installEvidenceKind: .guestAgent,
+            status: WindowsOptimizationStatus(phase: .idle)
+        )
+
+        #expect(presentation == nil)
+    }
+
+    @Test("connected agent keeps a display warning when optimization remains partial")
+    func connectedAgentKeepsPartialDisplayWarning() throws {
+        let presentation = try #require(
+            InstalledWindowsOptimizationPresentation.resolve(
+                windowsInstalled: true,
+                provider: .qemuHypervisor,
+                installEvidenceKind: .guestAgent,
+                status: WindowsOptimizationStatus(phase: .complete(displayOptimized: false))
+            )
+        )
+
+        #expect(presentation.title == "Windows apps are connected")
+        #expect(presentation.detail.contains("Display optimization still needs attention"))
+        #expect(presentation.showsPrimaryAction == false)
+    }
+
+    @Test("optimization remains unavailable without QEMU control")
+    func optimizationRemainsUnavailableWithoutQEMUControl() {
+        let presentation = InstalledWindowsOptimizationPresentation.resolve(
+            windowsInstalled: true,
+            provider: .appleVirtualization,
+            installEvidenceKind: .profileFlag,
+            status: WindowsOptimizationStatus(phase: .idle)
+        )
+
+        #expect(presentation == nil)
+    }
+
+    @Test("optimization consent describes one restart and both integration components")
+    func optimizationConsentDescribesOneRestartAndBothComponents() {
+        #expect(WindowsOptimizationConsentPolicy.title == "Optimize Windows Automatically?")
+        #expect(WindowsOptimizationConsentPolicy.message.contains("UTM Guest Tools"))
+        #expect(WindowsOptimizationConsentPolicy.message.contains("Veil guest agent"))
+        #expect(WindowsOptimizationConsentPolicy.message.contains("restart once"))
+        #expect(WindowsOptimizationConsentPolicy.acceptButtonTitle == "I Agree and Optimize")
+    }
+
     @Test("ready Windows shows an interactive app home")
     func readyHome() {
         let result = InstalledAppHomePresentation.resolve(

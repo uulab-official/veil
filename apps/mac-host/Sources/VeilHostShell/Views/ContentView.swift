@@ -22,6 +22,11 @@ struct ContentView: View {
     var runRecommendedProofAction: () -> Void
     var runMultiAppProofAction: () -> Void
     var quietWindowsWhenIdleAction: () -> Void
+    var optimizationStatus: WindowsOptimizationStatus
+    var optimizeWindowsAction: () -> Void
+    var retryWindowsOptimizationAction: () -> Void
+    var cancelWindowsOptimizationAction: () -> Void
+    var windowsDisplaySizeChangedAction: (Int, Int) -> Void
     var displayMessage: String?
 
     var body: some View {
@@ -61,6 +66,11 @@ struct ContentView: View {
                     runRecommendedProofAction: runRecommendedProofAction,
                     runMultiAppProofAction: runMultiAppProofAction,
                     quietWindowsWhenIdleAction: quietWindowsWhenIdleAction,
+                    optimizationStatus: optimizationStatus,
+                    optimizeWindowsAction: optimizeWindowsAction,
+                    retryWindowsOptimizationAction: retryWindowsOptimizationAction,
+                    cancelWindowsOptimizationAction: cancelWindowsOptimizationAction,
+                    windowsDisplaySizeChangedAction: windowsDisplaySizeChangedAction,
                     displayMessage: displayMessage
                 )
             }

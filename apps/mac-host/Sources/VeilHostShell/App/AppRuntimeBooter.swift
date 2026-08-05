@@ -142,6 +142,20 @@ final class AppRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
         return try await qemuBooter.installGuestAgentFromAttachedMedia()
     }
 
+    func optimizeWindowsFromAttachedMedia() async throws -> QEMUKeySendRecord {
+        guard provider == .qemu else {
+            throw AppRuntimeBooterError.qemuGuestAutomationUnavailable
+        }
+        return try await qemuBooter.optimizeWindowsFromAttachedMedia()
+    }
+
+    func requestGracefulShutdown(timeoutSeconds: Int = 30) async throws {
+        guard provider == .qemu else {
+            throw AppRuntimeBooterError.qemuGuestAutomationUnavailable
+        }
+        try await qemuBooter.requestGracefulShutdown(timeoutSeconds: timeoutSeconds)
+    }
+
     func prepareSparsePackageFromAttachedMedia() async throws -> QEMUKeySendRecord {
         guard provider == .qemu else {
             throw AppRuntimeBooterError.qemuGuestAutomationUnavailable

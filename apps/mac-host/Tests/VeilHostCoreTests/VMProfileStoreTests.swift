@@ -1010,6 +1010,26 @@ struct VMProfileStoreTests {
         #expect(qemu?.executableVersion == "qemu-system-aarch64 version 8.2.0")
     }
 
+    @Test("runtime provider probe discovers Veil managed QEMU without shell environment")
+    func runtimeProviderProbeDiscoversManagedQEMU() {
+        let homeDirectory = URL(fileURLWithPath: "/Users/test", isDirectory: true)
+        let managedQEMUPath = "/Users/test/Library/Application Support/Veil/Runtime/bin/qemu-system-aarch64"
+        let probe = VMRuntimeProviderProbe(
+            environment: [:],
+            homeDirectory: homeDirectory,
+            fileExists: { $0 == managedQEMUPath },
+            executableVersion: { _ in "qemu-system-aarch64 version 10.0.0" }
+        )
+
+        let qemu = probe.localProviders(
+            architecture: "arm64",
+            minimumOSSupported: true
+        ).first { $0.kind == .qemuHypervisor }
+
+        #expect(qemu?.status == .active)
+        #expect(qemu?.executablePath == managedQEMUPath)
+    }
+
     @Test("runtime provider probe reports QEMU version")
     func runtimeProviderProbeReportsQEMUVersion() {
         let probe = VMRuntimeProviderProbe(
@@ -1410,6 +1430,7 @@ struct VMProfileStoreTests {
         let prepareSparsePackageCommandURL = agentBundleURL.appendingPathComponent("Prepare Sparse Package.cmd")
         let sparsePackageBootstrapCommandURL = agentBundleURL.appendingPathComponent("P.cmd")
         let bootstrapCommandURL = agentBundleURL.appendingPathComponent("V.cmd")
+        let optimizeCommandURL = agentBundleURL.appendingPathComponent("Optimize.cmd")
         let agentReadmeURL = agentBundleURL.appendingPathComponent("README.txt")
         let installScriptURL = agentBundleURL.appendingPathComponent("scripts/Install-VeilAgent.ps1")
         let publishScriptURL = agentBundleURL.appendingPathComponent("scripts/Publish-VeilAgentBundle.ps1")
@@ -1427,6 +1448,7 @@ struct VMProfileStoreTests {
         let prepareSparsePackageCommand = try String(contentsOf: prepareSparsePackageCommandURL, encoding: .utf8)
         let sparsePackageBootstrapCommand = try String(contentsOf: sparsePackageBootstrapCommandURL, encoding: .utf8)
         let bootstrapCommand = try String(contentsOf: bootstrapCommandURL, encoding: .utf8)
+        let optimizeCommand = try String(contentsOf: optimizeCommandURL, encoding: .utf8)
         let installScript = try String(contentsOf: installScriptURL, encoding: .utf8)
         let agentReadme = try String(contentsOf: agentReadmeURL, encoding: .utf8)
 
@@ -1530,6 +1552,12 @@ struct VMProfileStoreTests {
         #expect(bootstrapCommand.contains("Install Veil Agent.cmd"))
         #expect(bootstrapCommand.contains("VEIL_AGENT_AUTOMATION_HOLD"))
         #expect(bootstrapCommand.contains("Veil automation status will remain visible"))
+        #expect(optimizeCommand.contains("utm-guest-tools-*.exe"))
+        #expect(optimizeCommand.contains(#"start /wait "" "%VEIL_GUEST_TOOLS%" /S"#))
+        #expect(optimizeCommand.contains("Repair Veil Agent Connectivity.cmd"))
+        #expect(optimizeCommand.contains("shutdown.exe /r /t 5"))
+        #expect(!optimizeCommand.localizedCaseInsensitiveContains("format "))
+        #expect(!optimizeCommand.localizedCaseInsensitiveContains("diskpart"))
         #expect(FileManager.default.fileExists(atPath: repairScriptURL.path))
         #expect(agentReadme.contains("Install Veil Agent.cmd"))
         #expect(agentReadme.contains("Prepare Sparse Package.cmd"))

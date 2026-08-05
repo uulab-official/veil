@@ -369,6 +369,17 @@ public enum LocalQEMUWindowsBootPlanFactory {
         "/opt/local/bin/swtpm"
     ]
 
+    public static func tpmEmulatorPaths(
+        homeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser
+    ) -> [String] {
+        [
+            homeDirectory
+                .appendingPathComponent("Library/Application Support/Veil/Runtime/bin", isDirectory: true)
+                .appendingPathComponent("swtpm")
+                .path
+        ] + defaultTPMEmulatorPaths
+    }
+
     public static func makePlan(
         for profile: VMProfile,
         architecture: String,
@@ -387,7 +398,7 @@ public enum LocalQEMUWindowsBootPlanFactory {
             )
             .first { $0.kind == .qemuHypervisor }
         let executablePath = qemuProvider?.executablePath
-            ?? VMRuntimeProviderProbe.defaultQEMUExecutablePaths[0]
+            ?? VMRuntimeProviderProbe.qemuExecutablePaths()[0]
         let secureFirmwarePath = secureFirmwarePaths.first(where: fileExists)
         let secureFirmwareVarsTemplatePath = secureVarsTemplatePaths.first(where: fileExists)
         let isSecureBootFirmwareAvailable = secureFirmwarePath != nil && secureFirmwareVarsTemplatePath != nil
@@ -405,7 +416,7 @@ public enum LocalQEMUWindowsBootPlanFactory {
                 guard let path, !path.isEmpty else { return nil }
                 return path
             }
-            + defaultTPMEmulatorPaths
+            + tpmEmulatorPaths()
         let tpmEmulatorPath = tpmEmulatorCandidates.first(where: fileExists)
         let tpmStateDirectoryPath = profile.virtualDiskPath
             .map { URL(fileURLWithPath: $0).deletingLastPathComponent().appendingPathComponent("tpm", isDirectory: true).path }
@@ -432,7 +443,7 @@ public enum LocalQEMUWindowsBootPlanFactory {
             isFirmwareVarsTemplateAvailable: firmwareVarsTemplatePath != nil,
             firmwareVarsPath: firmwareVarsPath,
             isSecureBootFirmwareAvailable: isSecureBootFirmwareAvailable,
-            tpmEmulatorPath: tpmEmulatorPath ?? defaultTPMEmulatorPaths[0],
+            tpmEmulatorPath: tpmEmulatorPath ?? tpmEmulatorPaths()[0],
             isTPMEmulatorAvailable: tpmEmulatorPath != nil,
             tpmStateDirectoryPath: tpmStateDirectoryPath,
             networkAdapter: networkAdapter,
@@ -1613,6 +1624,54 @@ public enum QEMUGuestAgentInstallKeySequence {
     public static var steps: [QEMUKeySequenceStep] {
         get throws {
             return [
+                QEMUKeySequenceStep(key: "esc", delayAfterSend: 0.3)
+            ] + (try stepsAfterRunOpened) + [
+                QEMUKeySequenceStep(key: "ret", delayAfterSend: 1.0)
+            ]
+        }
+    }
+}
+
+public enum QEMUWindowsOptimizationKeySequence {
+    public static let startButtonTapNormalizedX = QEMUGuestAgentInstallKeySequence.startButtonTapNormalizedX
+    public static let startButtonTapNormalizedY = QEMUGuestAgentInstallKeySequence.startButtonTapNormalizedY
+    public static let runConfirmTapNormalizedX = QEMUGuestAgentInstallKeySequence.runConfirmTapNormalizedX
+    public static let runConfirmTapNormalizedY = QEMUGuestAgentInstallKeySequence.runConfirmTapNormalizedY
+    public static let uacApproveTapNormalizedX = QEMUGuestAgentInstallKeySequence.uacApproveTapNormalizedX
+    public static let uacApproveTapNormalizedY = QEMUGuestAgentInstallKeySequence.uacApproveTapNormalizedY
+    public static let uacApproveKeySteps = QEMUGuestAgentInstallKeySequence.uacApproveKeySteps
+    public static let commandConfirmationSteps = [
+        QEMUKeySequenceStep(key: "ret", delayAfterSend: 3.0)
+    ]
+
+    public static let commandText =
+        #"cmd.exe /c for %d in (D E F G H I J K L M N O P Q R S T U V W X Y Z) do if exist "%d:\Veil Guest Agent\Optimize.cmd" call "%d:\Veil Guest Agent\Optimize.cmd""#
+
+    public static let openRunSteps = QEMUGuestAgentInstallKeySequence.openRunSteps
+
+    public static var commandTextSteps: [QEMUKeySequenceStep] {
+        get throws {
+            var textSteps = try QEMUQMPKeyboardCommandBuilder
+                .keySequence(forText: commandText)
+                .map { QEMUKeySequenceStep(key: $0, delayAfterSend: 0.035) }
+            if !textSteps.isEmpty {
+                textSteps[textSteps.count - 1].delayAfterSend = 1.0
+            }
+            return [
+                QEMUKeySequenceStep(key: "ctrl-a", delayAfterSend: 0.2)
+            ] + textSteps
+        }
+    }
+
+    public static var stepsAfterRunOpened: [QEMUKeySequenceStep] {
+        get throws {
+            openRunSteps + (try commandTextSteps)
+        }
+    }
+
+    public static var steps: [QEMUKeySequenceStep] {
+        get throws {
+            [
                 QEMUKeySequenceStep(key: "esc", delayAfterSend: 0.3)
             ] + (try stepsAfterRunOpened) + [
                 QEMUKeySequenceStep(key: "ret", delayAfterSend: 1.0)
