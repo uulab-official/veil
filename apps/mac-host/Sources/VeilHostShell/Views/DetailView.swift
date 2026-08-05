@@ -13,6 +13,7 @@ struct DetailView: View {
     var repairGuestAgentForAppLaunchAction: () -> Void
     var recoverRuntimeDisplayAction: () -> Void
     var launchWindowsAppAction: () -> Void
+    var openNewWindowsAppAction: (String) -> Void
     var fulfillPendingLaunchAction: () -> Void
     var restoreWindowsAppWindowsAction: () -> Void
     var closeAllWindowsAppWindowsAction: () -> Void
@@ -42,6 +43,7 @@ struct DetailView: View {
             agentDiagnostic: model.agentDiagnostic,
             canLaunchWindowsApp: model.canLaunchSelectedApp,
             canRequestWindowsAppLaunch: model.canRequestSelectedAppLaunch,
+            canOpenNewWindowsApp: model.hasLiveAgentConnection && model.health?.capabilities.appLaunch == true,
             selectedWindowsAppName: model.selectedApp?.name,
             pendingLaunch: model.pendingLaunchStatus(),
             canFulfillPendingLaunch: model.canFulfillPendingLaunch,
@@ -62,6 +64,7 @@ struct DetailView: View {
             repairGuestAgentForAppLaunchAction: repairGuestAgentForAppLaunchAction,
             recoverRuntimeDisplayAction: recoverRuntimeDisplayAction,
             launchWindowsAppAction: launchWindowsAppAction,
+            openNewWindowsAppAction: openNewWindowsAppAction,
             fulfillPendingLaunchAction: fulfillPendingLaunchAction,
             restoreWindowsAppWindowsAction: restoreWindowsAppWindowsAction,
             closeAllWindowsAppWindowsAction: closeAllWindowsAppWindowsAction,

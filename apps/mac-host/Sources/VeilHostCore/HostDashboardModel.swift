@@ -4145,7 +4145,7 @@ public final class HostDashboardModel {
                 if windowIndex == 0 {
                     result = await launchApp(appId: appId, preferExistingWindow: true)
                 } else {
-                    result = await launchNewAppWindow(appId: appId)
+                    result = await launchNewWindow(appId: appId)
                 }
 
                 guard let result else {
@@ -4197,7 +4197,8 @@ public final class HostDashboardModel {
         )
     }
 
-    private func launchNewAppWindow(appId: String) async -> WindowsAppLaunchResult? {
+    @discardableResult
+    public func launchNewWindow(appId: String) async -> WindowsAppLaunchResult? {
         await launchApp(
             appId: appId,
             preferExistingWindow: false,

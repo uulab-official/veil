@@ -9,8 +9,10 @@ struct InstalledWindowsAppHome: View {
     @Binding var selectedAppId: String?
     let pendingAppId: String?
     let openWindowCounts: [String: Int]
+    let canOpenNewWindow: Bool
     let canShowDesktop: Bool
     let launchAction: () -> Void
+    let openNewWindowAction: (String) -> Void
     let showDesktopAction: () -> Void
     let settingsAction: () -> Void
     let effectiveRecoveryAction: () -> Void
@@ -196,10 +198,12 @@ struct InstalledWindowsAppHome: View {
                         isSelected: selectedAppId == app.id,
                         pendingAppId: pendingAppId,
                         openWindowCount: openWindowCounts[app.id, default: 0],
+                        canOpenNewWindow: canOpenNewWindow,
                         dashboardPhase: tileDashboardPhase,
                         isGridEnabled: presentation.isGridEnabled,
                         selectedAppId: $selectedAppId,
-                        launchAction: launchAction
+                        launchAction: launchAction,
+                        openNewWindowAction: openNewWindowAction
                     )
                 }
             }
@@ -240,10 +244,12 @@ private struct InstalledWindowsAppTile: View {
     let isSelected: Bool
     let pendingAppId: String?
     let openWindowCount: Int
+    let canOpenNewWindow: Bool
     let dashboardPhase: HostDashboardPhase
     let isGridEnabled: Bool
     @Binding var selectedAppId: String?
     let launchAction: () -> Void
+    let openNewWindowAction: (String) -> Void
 
     var body: some View {
         let tilePresentation = InstalledAppTilePresentation.resolve(
@@ -292,6 +298,13 @@ private struct InstalledWindowsAppTile: View {
         }
         .buttonStyle(.plain)
         .disabled(!isGridEnabled)
+        .contextMenu {
+            Button("Open New Window", systemImage: "macwindow.badge.plus") {
+                selectedAppId = app.id
+                openNewWindowAction(app.id)
+            }
+            .disabled(!canOpenNewWindow || openWindowCount == 0)
+        }
         .help("Open \(app.name) as a Mac window")
         .accessibilityLabel("Open \(app.name)")
         .accessibilityValue(tilePresentation.accessibilityValue)

@@ -2569,6 +2569,22 @@ struct HostDashboardModelTests {
         #expect(report.dockIntegration.restorableWindowCount == 2)
     }
 
+    @Test("opens an additional HWND for an already mirrored Windows app")
+    @MainActor
+    func opensAdditionalWindowForMirroredWindowsApp() async throws {
+        let service = FakeDashboardService(health: .captureReady)
+        service.launchWindows = [.notepad, .secondNotepad]
+        let model = HostDashboardModel(service: service)
+
+        await model.launchApp(appId: "winapp_notepad")
+        let result = await model.launchNewWindow(appId: "winapp_notepad")
+
+        #expect(result?.window.windowId == "hwnd:00010500")
+        #expect(model.mirrorSessions.map(\.id) == ["hwnd:0003029A", "hwnd:00010500"])
+        #expect(model.restorableAppWindowCounts == ["winapp_notepad": 2])
+        #expect(service.launchedAppIds == ["winapp_notepad", "winapp_notepad"])
+    }
+
     @Test("clears a stale error message when there is nothing to restore")
     @MainActor
     func clearsStaleErrorMessageWhenThereIsNothingToRestore() async throws {

@@ -129,6 +129,7 @@ struct VeilHostShellApp: App {
                 repairGuestAgentForAppLaunchAction: repairGuestAgentForAppLaunch,
                 recoverRuntimeDisplayAction: recoverRuntimeDisplayEvidence,
                 launchWindowsAppAction: launchSelectedWindowsAppWindow,
+                openNewWindowsAppAction: launchNewWindowsAppWindow(appId:),
                 fulfillPendingLaunchAction: fulfillPendingWindowsAppWindow,
                 restoreWindowsAppWindowsAction: restoreWindowsAppWindows,
                 closeAllWindowsAppWindowsAction: closeAllWindowsAppWindows,
@@ -642,6 +643,21 @@ struct VeilHostShellApp: App {
     private func launchWindowsAppWindow(appId: String) {
         model.selectedAppId = appId
         launchSelectedWindowsAppWindow()
+    }
+
+    private func launchNewWindowsAppWindow(appId: String) {
+        model.selectedAppId = appId
+        Task { @MainActor in
+            cancelAutomaticQuietRuntime()
+            guard model.hasLiveAgentConnection,
+                  model.health?.capabilities.appLaunch == true,
+                  let result = await model.launchNewWindow(appId: appId) else {
+                return
+            }
+
+            showWindowsAppWindow(for: result)
+            syncLauncherWindowVisibility()
+        }
     }
 
     private func fulfillPendingWindowsAppWindow() {
@@ -2664,6 +2680,7 @@ private struct StandaloneMainWindowRoot: View {
             repairGuestAgentForAppLaunchAction: installGuestAgentFromDisplay,
             recoverRuntimeDisplayAction: recoverRuntimeDisplayEvidence,
             launchWindowsAppAction: launchSelectedWindowsApp,
+            openNewWindowsAppAction: { _ in },
             fulfillPendingLaunchAction: launchSelectedWindowsApp,
             restoreWindowsAppWindowsAction: {},
             closeAllWindowsAppWindowsAction: {},

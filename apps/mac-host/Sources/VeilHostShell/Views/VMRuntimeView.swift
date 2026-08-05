@@ -15,6 +15,7 @@ struct VMRuntimeView: View {
     var agentDiagnostic: AgentConnectionDiagnostic?
     var canLaunchWindowsApp: Bool
     var canRequestWindowsAppLaunch: Bool
+    var canOpenNewWindowsApp: Bool
     var selectedWindowsAppName: String?
     var pendingLaunch: WindowsAppRuntimePendingLaunchStatus
     var canFulfillPendingLaunch: Bool
@@ -35,6 +36,7 @@ struct VMRuntimeView: View {
     var repairGuestAgentForAppLaunchAction: () -> Void
     var recoverRuntimeDisplayAction: () -> Void
     var launchWindowsAppAction: () -> Void
+    var openNewWindowsAppAction: (String) -> Void
     var fulfillPendingLaunchAction: () -> Void
     var restoreWindowsAppWindowsAction: () -> Void
     var closeAllWindowsAppWindowsAction: () -> Void
@@ -240,6 +242,7 @@ struct VMRuntimeView: View {
                     repairGuestAgentForAppLaunchAction: repairGuestAgentForAppLaunchAction,
                     recoverRuntimeDisplayAction: recoverRuntimeDisplayAction,
                     launchWindowsAppAction: launchWindowsAppAction,
+                    openNewWindowsAppAction: openNewWindowsAppAction,
                     fulfillPendingLaunchAction: fulfillPendingLaunchAction,
                     restoreWindowsAppWindowsAction: restoreWindowsAppWindowsAction,
                     closeAllWindowsAppWindowsAction: closeAllWindowsAppWindowsAction,
@@ -255,6 +258,7 @@ struct VMRuntimeView: View {
                     windowsDisplaySizeChangedAction: windowsDisplaySizeChangedAction,
                     canLaunchWindowsApp: canLaunchWindowsApp,
                     canRequestWindowsAppLaunch: canRequestWindowsAppLaunch,
+                    canOpenNewWindowsApp: canOpenNewWindowsApp,
                     selectedWindowsAppName: selectedWindowsAppName,
                     pendingLaunch: pendingLaunch,
                     canFulfillPendingLaunch: canFulfillPendingLaunch,
@@ -1740,6 +1744,7 @@ private struct WindowsSetupDisplayPanel: View {
     var repairGuestAgentForAppLaunchAction: () -> Void
     var recoverRuntimeDisplayAction: () -> Void
     var launchWindowsAppAction: () -> Void
+    var openNewWindowsAppAction: (String) -> Void
     var fulfillPendingLaunchAction: () -> Void
     var restoreWindowsAppWindowsAction: () -> Void
     var closeAllWindowsAppWindowsAction: () -> Void
@@ -1753,6 +1758,7 @@ private struct WindowsSetupDisplayPanel: View {
     var windowsDisplaySizeChangedAction: (Int, Int) -> Void
     var canLaunchWindowsApp: Bool
     var canRequestWindowsAppLaunch: Bool
+    var canOpenNewWindowsApp: Bool
     var selectedWindowsAppName: String?
     var pendingLaunch: WindowsAppRuntimePendingLaunchStatus
     var canFulfillPendingLaunch: Bool
@@ -1840,8 +1846,10 @@ private struct WindowsSetupDisplayPanel: View {
                 selectedAppId: $selectedWindowsAppId,
                 pendingAppId: pendingLaunch.appId,
                 openWindowCounts: Dictionary(grouping: mirrorSessions, by: { $0.window.appId }).mapValues(\.count),
+                canOpenNewWindow: canOpenNewWindowsApp,
                 canShowDesktop: snapshot.state == .running && hasDesktopDisplay,
                 launchAction: launchWindowsAppAction,
+                openNewWindowAction: openNewWindowsAppAction,
                 showDesktopAction: { showsFullDesktop = true },
                 settingsAction: detailsAction,
                 effectiveRecoveryAction: runEffectivePrimaryAction,
