@@ -67,7 +67,7 @@ struct WindowsAppWindowPresenterTests {
         )
     }
 
-    @Test("keeps one visible macOS Windows app window")
+    @Test("keeps multiple Windows app windows visible as separate macOS windows")
     func tracksForegroundWindowsAppWindow() {
         _ = NSApplication.shared
         let presenter = WindowsAppWindowPresenter()
@@ -82,13 +82,13 @@ struct WindowsAppWindowPresenterTests {
 
         presenter.showWindow(for: session(windowId: "hwnd:0002", appId: "winapp_notepad", title: "Notes.txt - Notepad"))
 
-        #expect(presenter.visibleWindowIds == ["hwnd:0001"])
-        #expect(presenter.foregroundWindowId == "hwnd:0001")
+        #expect(presenter.visibleWindowIds == ["hwnd:0001", "hwnd:0002"])
+        #expect(presenter.foregroundWindowId == "hwnd:0002")
 
         presenter.showWindow(for: session(windowId: "hwnd:0003", appId: "winapp_calculator", title: "Calculator"))
 
-        #expect(presenter.visibleWindowIds == ["hwnd:0001"])
-        #expect(presenter.foregroundWindowId == "hwnd:0001")
+        #expect(presenter.visibleWindowIds == ["hwnd:0001", "hwnd:0002", "hwnd:0003"])
+        #expect(presenter.foregroundWindowId == "hwnd:0003")
     }
 
     @Test("clears foreground tracking when Windows app windows close")
@@ -128,7 +128,7 @@ struct WindowsAppWindowPresenterTests {
         presenter.windowDidBecomeKey(Notification(name: NSWindow.didBecomeKeyNotification, object: notepadWindow))
 
         #expect(presenter.foregroundWindowId == "hwnd:0001")
-        #expect(presenter.visibleWindowIds == ["hwnd:0001"])
+        #expect(presenter.visibleWindowIds == ["hwnd:0002", "hwnd:0001"])
     }
 
     @Test("refreshing an existing Windows app window preserves the Mac window frame")
@@ -302,8 +302,8 @@ struct WindowsAppWindowPresenterTests {
         #expect(abs(compactFitted.height - 614.4) < 0.001)
     }
 
-    @Test("does not present an unexpected second app window")
-    func doesNotPresentUnexpectedSecondAppWindow() {
+    @Test("presents a second app window without triggering a guest close")
+    func presentsSecondAppWindowWithoutTriggeringGuestClose() {
         _ = NSApplication.shared
         let presenter = WindowsAppWindowPresenter()
         defer {
@@ -318,12 +318,12 @@ struct WindowsAppWindowPresenterTests {
         presenter.showWindow(for: session(windowId: "hwnd:0001", appId: "winapp_notepad", title: "Notepad"))
         presenter.showWindow(for: session(windowId: "hwnd:0002", appId: "winapp_notepad", title: "Notepad - Edited"))
 
-        #expect(presenter.visibleWindowIds == ["hwnd:0001"])
+        #expect(presenter.visibleWindowIds == ["hwnd:0001", "hwnd:0002"])
         #expect(callbackWindowIds.isEmpty)
 
         presenter.closeWindow(windowId: "hwnd:0001")
 
-        #expect(presenter.visibleWindowIds.isEmpty)
+        #expect(presenter.visibleWindowIds == ["hwnd:0002"])
         #expect(callbackWindowIds.isEmpty)
     }
 

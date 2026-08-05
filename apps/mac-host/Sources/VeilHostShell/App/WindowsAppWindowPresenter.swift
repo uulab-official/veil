@@ -27,13 +27,6 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
             return
         }
 
-        // The pre-alpha app-first shell intentionally has a single visible Windows app surface.
-        // Guest discovery, reconnect races, or repeated menu actions must never multiply native
-        // macOS windows. A user closes the active app window before opening another app.
-        guard windowsById.isEmpty else {
-            return
-        }
-
         let window = NSWindow(
             contentRect: frame(for: session.window.bounds, existingWindowCount: windowsById.count),
             styleMask: [.titled, .closable, .miniaturizable, .resizable],
