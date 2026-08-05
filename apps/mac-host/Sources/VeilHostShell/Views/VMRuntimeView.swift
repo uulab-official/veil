@@ -44,6 +44,11 @@ struct VMRuntimeView: View {
     var runRecommendedProofAction: () -> Void
     var runMultiAppProofAction: () -> Void
     var quietWindowsWhenIdleAction: () -> Void
+    var optimizationStatus: WindowsOptimizationStatus
+    var optimizeWindowsAction: () -> Void
+    var retryWindowsOptimizationAction: () -> Void
+    var cancelWindowsOptimizationAction: () -> Void
+    var windowsDisplaySizeChangedAction: (Int, Int) -> Void
     var displayMessage: String?
     @Binding var showsFullDesktop: Bool
     @State private var pathPicker: PathPicker?
@@ -53,6 +58,7 @@ struct VMRuntimeView: View {
     @State private var pendingInstallerConsent: PendingInstallerConsent?
     @State private var showsInstallerLicenseConfirmation = false
     @State private var guestToolsPreparationError: String?
+    @State private var showsOptimizationConsent = false
 
     var body: some View {
         Group {
@@ -140,6 +146,17 @@ struct VMRuntimeView: View {
         } message: {
             Text(guestToolsPreparationError ?? "Veil could not prepare the Windows guest tools.")
         }
+        .alert(WindowsOptimizationConsentPolicy.title, isPresented: $showsOptimizationConsent) {
+            Button("Not Now", role: .cancel) {}
+            Button(WindowsOptimizationConsentPolicy.reviewButtonTitle) {
+                reviewOptimizationTermsAndReopenConfirmation()
+            }
+            Button(WindowsOptimizationConsentPolicy.acceptButtonTitle) {
+                optimizeWindowsAction()
+            }
+        } message: {
+            Text(WindowsOptimizationConsentPolicy.message)
+        }
     }
 
     @ViewBuilder
@@ -220,6 +237,13 @@ struct VMRuntimeView: View {
                     restartStaleFrameStreamsAction: restartStaleFrameStreamsAction,
                     requestNotificationConsentAction: requestNotificationConsentAction,
                     runNotificationProofAction: runNotificationProofAction,
+                    optimizationStatus: optimizationStatus,
+                    requestWindowsOptimizationAction: {
+                        showsOptimizationConsent = true
+                    },
+                    retryWindowsOptimizationAction: retryWindowsOptimizationAction,
+                    cancelWindowsOptimizationAction: cancelWindowsOptimizationAction,
+                    windowsDisplaySizeChangedAction: windowsDisplaySizeChangedAction,
                     canLaunchWindowsApp: canLaunchWindowsApp,
                     canRequestWindowsAppLaunch: canRequestWindowsAppLaunch,
                     selectedWindowsAppName: selectedWindowsAppName,
@@ -560,6 +584,15 @@ struct VMRuntimeView: View {
                 return
             }
             showsInstallerLicenseConfirmation = true
+        }
+    }
+
+    private func reviewOptimizationTermsAndReopenConfirmation() {
+        NSWorkspace.shared.open(WindowsOptimizationConsentPolicy.microsoftTermsURL)
+        NSWorkspace.shared.open(WindowsOptimizationConsentPolicy.guestToolsInformationURL)
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(350))
+            showsOptimizationConsent = true
         }
     }
 
@@ -1091,6 +1124,7 @@ private struct WindowsEmbeddedDisplayPreview: View {
     var revisionID: String
     var pointerTapAction: (Double, Double) -> Void
     var keyAction: (String) -> Void
+    var displaySizeChangedAction: (Int, Int) -> Void
     @State private var rfbDisplayModel = RFBEmbeddedDisplayModel()
 
     var body: some View {
@@ -1146,9 +1180,13 @@ private struct WindowsEmbeddedDisplayPreview: View {
         .accessibilityValue(surface.endpoint ?? path)
         .onAppear {
             rfbDisplayModel.connectIfNeeded(to: surface)
+            publishDisplaySize(renderedImage?.size)
         }
         .onChange(of: surface.endpoint) { _, _ in
             rfbDisplayModel.connectIfNeeded(to: surface)
+        }
+        .onChange(of: rfbDisplayModel.frameSize) { _, newSize in
+            publishDisplaySize(newSize)
         }
         .onDisappear {
             rfbDisplayModel.stop()
@@ -1157,6 +1195,16 @@ private struct WindowsEmbeddedDisplayPreview: View {
 
     private var renderedImage: NSImage? {
         rfbDisplayModel.image ?? image
+    }
+
+    private func publishDisplaySize(_ size: CGSize?) {
+        guard let size,
+              size.width > 0,
+              size.height > 0 else {
+            return
+        }
+
+        displaySizeChangedAction(Int(size.width), Int(size.height))
     }
 
 }
@@ -1624,6 +1672,11 @@ private struct WindowsSetupDisplayPanel: View {
     var restartStaleFrameStreamsAction: () -> Void
     var requestNotificationConsentAction: () -> Void
     var runNotificationProofAction: () -> Void
+    var optimizationStatus: WindowsOptimizationStatus
+    var requestWindowsOptimizationAction: () -> Void
+    var retryWindowsOptimizationAction: () -> Void
+    var cancelWindowsOptimizationAction: () -> Void
+    var windowsDisplaySizeChangedAction: (Int, Int) -> Void
     var canLaunchWindowsApp: Bool
     var canRequestWindowsAppLaunch: Bool
     var selectedWindowsAppName: String?
@@ -1708,6 +1761,7 @@ private struct WindowsSetupDisplayPanel: View {
         } else {
             InstalledWindowsAppHome(
                 presentation: installedHomePresentation,
+                optimizationPresentation: installedOptimizationPresentation,
                 apps: apps,
                 selectedAppId: $selectedWindowsAppId,
                 pendingAppId: pendingLaunch.appId,
@@ -1717,6 +1771,8 @@ private struct WindowsSetupDisplayPanel: View {
                 showDesktopAction: { showsFullDesktop = true },
                 settingsAction: detailsAction,
                 effectiveRecoveryAction: runEffectivePrimaryAction,
+                optimizationPrimaryAction: runOptimizationPrimaryAction,
+                cancelOptimizationAction: cancelWindowsOptimizationAction,
                 refreshAction: refreshAction
             )
         }
@@ -1816,7 +1872,8 @@ private struct WindowsSetupDisplayPanel: View {
                     path: snapshot.latestConsoleScreenshotPath ?? "",
                     revisionID: displayScreenshotRevisionID,
                     pointerTapAction: consolePointerTapAction,
-                    keyAction: consoleKeyAction
+                    keyAction: consoleKeyAction,
+                    displaySizeChangedAction: windowsDisplaySizeChangedAction
                 )
             } else {
                 Color.black
@@ -1837,7 +1894,8 @@ private struct WindowsSetupDisplayPanel: View {
                 path: snapshot.latestConsoleScreenshotPath ?? "",
                 revisionID: displayScreenshotRevisionID,
                 pointerTapAction: consolePointerTapAction,
-                keyAction: consoleKeyAction
+                keyAction: consoleKeyAction,
+                displaySizeChangedAction: windowsDisplaySizeChangedAction
             )
         } else {
             Color.black
@@ -2126,6 +2184,24 @@ private struct WindowsSetupDisplayPanel: View {
             pendingAppId: pendingLaunch.appId,
             errorMessage: errorMessage
         )
+    }
+
+    private var installedOptimizationPresentation: InstalledWindowsOptimizationPresentation? {
+        InstalledWindowsOptimizationPresentation.resolve(
+            windowsInstalled: snapshot.windowsInstalled,
+            provider: snapshot.runtimeProvider?.kind,
+            installEvidenceKind: effectiveInstallEvidence.kind,
+            status: optimizationStatus
+        )
+    }
+
+    private func runOptimizationPrimaryAction() {
+        switch optimizationStatus.phase {
+        case .failed, .cancelled:
+            retryWindowsOptimizationAction()
+        default:
+            requestWindowsOptimizationAction()
+        }
     }
 
     private var canInstallGuestAgent: Bool {

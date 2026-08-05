@@ -1,4 +1,58 @@
+import Foundation
 import VeilHostCore
+
+enum WindowsOptimizationConsentPolicy {
+    static let title = "Optimize Windows Automatically?"
+    static let message = "Veil will install official UTM Guest Tools and the Veil guest agent, then restart once. Review both terms before continuing. Your Windows disk and files are preserved."
+    static let reviewButtonTitle = "Review Both Terms"
+    static let acceptButtonTitle = "I Agree and Optimize"
+    static let microsoftTermsURL = WindowsLicenseConsentPolicy.termsURL
+    static let guestToolsInformationURL = WindowsLicenseConsentPolicy.guestToolsInformationURL
+}
+
+struct InstalledWindowsOptimizationPresentation: Equatable {
+    let title: String
+    let detail: String
+    let progress: Double
+    let isRunning: Bool
+    let primaryButtonTitle: String
+    let showsPrimaryAction: Bool
+    let showsCancel: Bool
+
+    static func resolve(
+        windowsInstalled: Bool,
+        provider: VMRuntimeProviderKind?,
+        installEvidenceKind: VMInstallEvidenceKind,
+        status: WindowsOptimizationStatus
+    ) -> Self? {
+        guard windowsInstalled,
+              provider == .qemuHypervisor,
+              status.showsOptimizationCard else {
+            return nil
+        }
+
+        let isPartialCompletion: Bool
+        if case .complete(displayOptimized: false) = status.phase {
+            isPartialCompletion = true
+        } else {
+            isPartialCompletion = false
+        }
+
+        guard installEvidenceKind != .guestAgent || isPartialCompletion else {
+            return nil
+        }
+
+        return Self(
+            title: status.title,
+            detail: status.detail,
+            progress: status.progress,
+            isRunning: status.isRunning,
+            primaryButtonTitle: status.primaryButtonTitle,
+            showsPrimaryAction: !isPartialCompletion,
+            showsCancel: status.canCancel
+        )
+    }
+}
 
 enum InstalledAppHomePhase: Equatable {
     case ready

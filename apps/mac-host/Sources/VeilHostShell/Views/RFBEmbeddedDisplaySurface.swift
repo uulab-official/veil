@@ -12,6 +12,10 @@ final class RFBEmbeddedDisplayModel {
     private(set) var activeEndpoint: String?
     @ObservationIgnored private var worker: RFBEmbeddedDisplayWorker?
 
+    var frameSize: CGSize? {
+        image?.size
+    }
+
     var statusSymbolName: String {
         switch status {
         case .idle:

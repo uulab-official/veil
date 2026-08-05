@@ -4,6 +4,7 @@ import VeilHostCore
 
 struct InstalledWindowsAppHome: View {
     let presentation: InstalledAppHomePresentation
+    let optimizationPresentation: InstalledWindowsOptimizationPresentation?
     let apps: [WindowsApp]
     @Binding var selectedAppId: String?
     let pendingAppId: String?
@@ -13,6 +14,8 @@ struct InstalledWindowsAppHome: View {
     let showDesktopAction: () -> Void
     let settingsAction: () -> Void
     let effectiveRecoveryAction: () -> Void
+    let optimizationPrimaryAction: () -> Void
+    let cancelOptimizationAction: () -> Void
     let refreshAction: () -> Void
 
     @Environment(\.accessibilityReduceMotion) private var accessibilityReduceMotion
@@ -26,6 +29,10 @@ struct InstalledWindowsAppHome: View {
 
                 VStack(alignment: .leading, spacing: compact ? 16 : 24) {
                     topRow(compact: compact)
+
+                    if let optimizationPresentation {
+                        optimizationCard(optimizationPresentation, compact: compact)
+                    }
 
                     ScrollView {
                         appRegion(compact: compact)
@@ -75,7 +82,8 @@ struct InstalledWindowsAppHome: View {
                 .help("Open the Windows desktop")
             }
 
-            if let recoveryTitle = presentation.recoveryTitle,
+            if optimizationPresentation == nil,
+               let recoveryTitle = presentation.recoveryTitle,
                let recoverySymbolName = presentation.recoverySymbolName,
                let recoveryRoute = presentation.recoveryRoute {
                 Button {
@@ -101,6 +109,57 @@ struct InstalledWindowsAppHome: View {
             .accessibilityLabel("Settings")
         }
         .controlSize(.small)
+    }
+
+    private func optimizationCard(
+        _ optimization: InstalledWindowsOptimizationPresentation,
+        compact: Bool
+    ) -> some View {
+        HStack(alignment: .center, spacing: compact ? 14 : 20) {
+            Image(systemName: optimization.isRunning ? "gearshape.2.fill" : "wand.and.stars")
+                .font(.system(size: compact ? 24 : 30, weight: .semibold))
+                .foregroundStyle(.blue)
+                .frame(width: compact ? 42 : 50, height: compact ? 42 : 50)
+                .background(.blue.opacity(0.12), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text(optimization.title)
+                    .font(.headline)
+
+                Text(optimization.detail)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(compact ? 2 : 1)
+
+                if optimization.isRunning {
+                    ProgressView(value: optimization.progress)
+                        .progressViewStyle(.linear)
+                        .accessibilityLabel("Windows optimization progress")
+                        .accessibilityValue("\(Int(optimization.progress * 100)) percent")
+                }
+            }
+
+            Spacer(minLength: 8)
+
+            if optimization.showsCancel {
+                Button("Cancel", role: .cancel, action: cancelOptimizationAction)
+                    .buttonStyle(.bordered)
+            } else if !optimization.isRunning, optimization.showsPrimaryAction {
+                Button(action: optimizationPrimaryAction) {
+                    Label(optimization.primaryButtonTitle, systemImage: "wand.and.stars")
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+            }
+        }
+        .padding(compact ? 14 : 18)
+        .foregroundStyle(.primary)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .strokeBorder(.white.opacity(0.20), lineWidth: 1)
+        }
+        .accessibilityElement(children: .contain)
     }
 
     @ViewBuilder

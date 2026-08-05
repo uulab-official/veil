@@ -22,6 +22,33 @@ test("installed Windows presents one responsive app-first home", async () => {
   assert.doesNotMatch(home, /exePath|HWND|QEMU|protocol/);
 });
 
+test("installed Windows offers one consented optimization flow", async () => {
+  const home = await readRootFile(
+    "apps/mac-host/Sources/VeilHostShell/Views/InstalledWindowsAppHome.swift",
+  );
+  const runtime = await readRootFile(
+    "apps/mac-host/Sources/VeilHostShell/Views/VMRuntimeView.swift",
+  );
+  const presentation = await readRootFile(
+    "apps/mac-host/Sources/VeilHostShell/App/InstalledAppHomePresentation.swift",
+  );
+  const coordinator = await readRootFile(
+    "apps/mac-host/Sources/VeilHostShell/App/WindowsOptimizationCoordinator.swift",
+  );
+
+  assert.match(home, /optimizationPresentation/);
+  assert.match(home, /ProgressView\(value: optimization\.progress\)/);
+  assert.match(home, /optimizationPresentation == nil,[\s\S]*presentation\.recoveryTitle/);
+  assert.doesNotMatch(home, /Repair App Connection/);
+  assert.match(coordinator, /"Finish Windows Optimization"/);
+  assert.match(coordinator, /"Optimize Windows"/);
+  assert.match(coordinator, /"Try Again"/);
+  assert.match(presentation, /UTM Guest Tools/);
+  assert.match(presentation, /Veil guest agent/);
+  assert.match(runtime, /\.alert\(WindowsOptimizationConsentPolicy\.title/);
+  assert.match(runtime, /I Agree and Optimize|WindowsOptimizationConsentPolicy\.acceptButtonTitle/);
+});
+
 test("installed workspace does not auto-open or duplicate the Windows desktop", async () => {
   const detail = await readRootFile("apps/mac-host/Sources/VeilHostShell/Views/DetailView.swift");
   const runtime = await readRootFile("apps/mac-host/Sources/VeilHostShell/Views/VMRuntimeView.swift");

@@ -138,6 +138,11 @@ struct VeilHostShellApp: App {
                 runRecommendedProofAction: runRecommendedProof,
                 runMultiAppProofAction: runMultiAppProof,
                 quietWindowsWhenIdleAction: quietWindowsWhenIdle,
+                optimizationStatus: windowsOptimizationCoordinator.status,
+                optimizeWindowsAction: beginWindowsOptimization,
+                retryWindowsOptimizationAction: retryWindowsOptimization,
+                cancelWindowsOptimizationAction: cancelWindowsOptimization,
+                windowsDisplaySizeChangedAction: recordWindowsDisplaySize,
                 displayMessage: displayMessage
             )
                 .frame(
@@ -511,6 +516,44 @@ struct VeilHostShellApp: App {
                 displayMessage = "Windows could not quiet: \(errorMessage)"
             }
         }
+    }
+
+    private func beginWindowsOptimization() {
+        runWindowsOptimization(isRetry: false)
+    }
+
+    private func retryWindowsOptimization() {
+        runWindowsOptimization(isRetry: true)
+    }
+
+    private func runWindowsOptimization(isRetry: Bool) {
+        Task { @MainActor in
+            cancelAutomaticQuietRuntime()
+            automaticGuestAgentRecoveryTask?.cancel()
+            automaticGuestAgentRecoveryTask = nil
+            activateMainWindow()
+            displayMessage = "Preparing automatic Windows optimization."
+
+            if isRetry {
+                await windowsOptimizationCoordinator.retry()
+            } else {
+                await windowsOptimizationCoordinator.begin()
+            }
+
+            displayMessage = windowsOptimizationCoordinator.status.detail
+            await vmModel.refreshRuntimeEvidence()
+            await model.load()
+            await recordGuestAgentInstallEvidenceIfNeeded()
+        }
+    }
+
+    private func cancelWindowsOptimization() {
+        windowsOptimizationCoordinator.cancel()
+        displayMessage = "Stopping Windows optimization before the installer is sent."
+    }
+
+    private func recordWindowsDisplaySize(width: Int, height: Int) {
+        windowsOptimizationCoordinator.recordDisplaySize(width: width, height: height)
     }
 
     private func scheduleAutomaticQuietRuntimeIfNeeded() {
@@ -2610,6 +2653,11 @@ private struct StandaloneMainWindowRoot: View {
             runRecommendedProofAction: {},
             runMultiAppProofAction: {},
             quietWindowsWhenIdleAction: {},
+            optimizationStatus: WindowsOptimizationStatus(phase: .idle),
+            optimizeWindowsAction: {},
+            retryWindowsOptimizationAction: {},
+            cancelWindowsOptimizationAction: {},
+            windowsDisplaySizeChangedAction: { _, _ in },
             displayMessage: displayMessage
         )
         .frame(
