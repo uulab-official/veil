@@ -110,6 +110,7 @@ The current installed Windows disk was preserved. This pass added and verified t
 - [x] Added RFB DesktopSize handling and resize-only frame retention so a live guest resolution change does not reconnect the stream or flash a black frame; the current fallback `1024×768` desktop remains stable until guest display tools are installed.
 - [x] Stopped repeated launcher activation from reapplying the preferred main-window frame; once Veil establishes the initial frame, hide/show and app recovery preserve the current window size and full-screen ownership.
 - [x] Removed the pre-alpha single-window presenter guard; multiple discovered Windows HWNDs now receive separate macOS windows, preserve foreground order, and hide the launcher while any mirrored window remains visible.
+- [x] Kept the optimization progress state on `Windows is restarting` until the guest agent actually reconnects, so the one-click flow no longer skips its most important visible stage.
 - [x] Rebuilt and reinstalled the packaged app after the automatic-offer change; the first-screen live check opened the combined confirmation without a manual card click.
 - [x] Passed the complete updated Swift suite: 463 tests across 29 suites.
 - [ ] Accept the terms in person, then observe the real current VM through media preparation, normal restart, installer dispatch, guest restart, agent reconnect, and post-reboot framebuffer dimensions. No end-to-end completion claim is made before those live observations occur.

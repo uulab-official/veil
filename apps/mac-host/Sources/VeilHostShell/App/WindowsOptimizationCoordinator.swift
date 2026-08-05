@@ -206,11 +206,11 @@ final class WindowsOptimizationCoordinator {
             try await service.dispatchOptimization()
 
             phase = .restartingWindows
-            phase = .verifying
             guard try await service.waitForAgent(timeoutSeconds: 180) else {
                 throw WindowsOptimizationCoordinatorError.agentDidNotReconnect
             }
 
+            phase = .verifying
             phase = .complete(displayOptimized: displayOptimized)
         } catch is WindowsOptimizationCancellation {
             phase = .cancelled

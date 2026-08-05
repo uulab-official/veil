@@ -57,6 +57,25 @@ struct WindowsOptimizationCoordinatorTests {
         #expect(coordinator.status.isRunning == false)
     }
 
+    @Test("keeps the restarting status while waiting for the guest agent to return")
+    func keepsRestartingStatusDuringAgentReconnect() async {
+        let service = RecordingWindowsOptimizationService(pausesAgentWait: true)
+        let coordinator = WindowsOptimizationCoordinator(service: service)
+        let task = Task { @MainActor in
+            await coordinator.begin()
+        }
+
+        while !service.calls.contains("waitForAgent") {
+            await Task.yield()
+        }
+
+        #expect(coordinator.phase == .restartingWindows)
+
+        service.pausesAgentWait = false
+        await task.value
+        #expect(coordinator.phase == .complete(displayOptimized: false))
+    }
+
     @Test("cancel works before command dispatch")
     func cancelWorksBeforeCommandDispatch() async {
         let service = RecordingWindowsOptimizationService(pausesMediaPreparation: true)
@@ -263,15 +282,18 @@ private final class RecordingWindowsOptimizationService: WindowsOptimizationServ
     var failureStep: String?
     var agentConnected: Bool
     var pausesMediaPreparation: Bool
+    var pausesAgentWait: Bool
 
     init(
         failureStep: String? = nil,
         agentConnected: Bool = true,
-        pausesMediaPreparation: Bool = false
+        pausesMediaPreparation: Bool = false,
+        pausesAgentWait: Bool = false
     ) {
         self.failureStep = failureStep
         self.agentConnected = agentConnected
         self.pausesMediaPreparation = pausesMediaPreparation
+        self.pausesAgentWait = pausesAgentWait
     }
 
     func prepareMedia() async throws {
@@ -299,6 +321,9 @@ private final class RecordingWindowsOptimizationService: WindowsOptimizationServ
 
     func waitForAgent(timeoutSeconds: Int) async throws -> Bool {
         calls.append("waitForAgent")
+        while pausesAgentWait {
+            await Task.yield()
+        }
         try failIfNeeded("waitForAgent")
         return agentConnected
     }
