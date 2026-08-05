@@ -1406,8 +1406,33 @@ struct QEMUWindowsBootPlanTests {
         #expect(record.results.allSatisfy { $0.socketPath == "/tmp/veil-qmp.sock" })
         #expect(record.results.first?.monitorCommand.contains("input-send-event") == true)
         #expect(record.results.first?.monitorCommand.contains("meta_l") == true)
-        #expect(capture.calls.count == 2)
+        #expect(capture.calls.count == 1)
         #expect(capture.calls.first?.contains(QEMUQMPKeyboardCommandBuilder.capabilitiesCommand()) == true)
+        #expect(capture.calls.first?.filter { $0.contains("input-send-event") }.count == 2)
+    }
+
+    @Test("QEMU key sequence sender fails when the batched QMP transport fails")
+    func qemuKeySequenceSenderFailsWhenBatchedQMPTransportFails() async throws {
+        let launchRecord = QEMULaunchRecord(
+            pid: 123,
+            executablePath: "/opt/homebrew/bin/qemu-system-aarch64",
+            arguments: [],
+            processLogPath: "/tmp/qemu.log",
+            monitorSocketPath: "/tmp/veil-monitor.sock",
+            qmpSocketPath: "/tmp/veil-qmp.sock",
+            startedAt: Date(timeIntervalSince1970: 1)
+        )
+        let sender = QEMUKeySequenceSender(
+            launchRecordStore: StaticQEMULaunchRecordStore(record: launchRecord),
+            fileExists: { $0 == "/tmp/veil-qmp.sock" },
+            processRunner: { _, _ in 1 }
+        )
+
+        await #expect(throws: (any Error).self) {
+            _ = try await sender.send(
+                steps: [QEMUKeySequenceStep(key: "meta-r", delayAfterSend: 0)]
+            )
+        }
     }
 
     @Test("QMP keyboard command builder rejects unsupported text")

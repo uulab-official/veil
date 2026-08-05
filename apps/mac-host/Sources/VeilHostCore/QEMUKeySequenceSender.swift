@@ -50,6 +50,7 @@ public struct QEMUKeySendRecord: Codable, Equatable, Sendable {
 public enum QEMUKeySequenceSenderError: Error, LocalizedError, Equatable, Sendable {
     case missingLaunchRecord
     case monitorUnavailable(String)
+    case qmpTransportFailed(status: Int32?)
 
     public var errorDescription: String? {
         switch self {
@@ -57,6 +58,8 @@ public enum QEMUKeySequenceSenderError: Error, LocalizedError, Equatable, Sendab
             "No QEMU launch record found. Start Windows first."
         case .monitorUnavailable(let path):
             "QEMU monitor socket is not available: \(path)"
+        case .qmpTransportFailed(let status):
+            "QEMU input transport failed with status \(status.map(String.init) ?? "not launched")."
         }
     }
 }
@@ -95,16 +98,31 @@ public struct QEMUKeySequenceSender: QEMUKeySequenceSending {
         }
 
         var results: [QEMUKeySendResult] = []
-        for step in steps {
-            let key = step.key
-            if canUseQMP, let qmpSocketPath {
-                let command = try QEMUQMPKeyboardCommandBuilder.inputEventCommand(for: key)
-                results.append(sendQMPCommand(command, qmpSocketPath: qmpSocketPath, key: key))
-            } else {
+        if canUseQMP, let qmpSocketPath {
+            let commands = try steps.map {
+                try QEMUQMPKeyboardCommandBuilder.inputEventCommand(for: $0.key)
+            }
+            let status = sendQMPCommands(commands, steps: steps, qmpSocketPath: qmpSocketPath)
+            guard status == 0 else {
+                throw QEMUKeySequenceSenderError.qmpTransportFailed(status: status)
+            }
+            results = zip(steps, commands).map { step, command in
+                QEMUKeySendResult(
+                    key: step.key,
+                    transport: "qmp",
+                    socketPath: qmpSocketPath,
+                    monitorCommand: command,
+                    terminationStatus: status,
+                    didLaunchSender: status != nil
+                )
+            }
+        } else {
+            for step in steps {
+                let key = step.key
                 let command = "sendkey \(key)"
                 results.append(sendMonitorLine(command, monitorSocketPath: launchRecord.monitorSocketPath, key: key))
+                try? await Task.sleep(nanoseconds: UInt64(step.delayAfterSend * 1_000_000_000))
             }
-            try? await Task.sleep(nanoseconds: UInt64(step.delayAfterSend * 1_000_000_000))
         }
 
         return QEMUKeySendRecord(
@@ -139,28 +157,38 @@ public struct QEMUKeySequenceSender: QEMUKeySequenceSending {
         )
     }
 
-    private func sendQMPCommand(
-        _ command: String,
+    private func sendQMPCommands(
+        _ commands: [String],
+        steps: [QEMUKeySequenceStep],
         qmpSocketPath: String,
-        key: String
-    ) -> QEMUKeySendResult {
-        let status = processRunner(
+    ) -> Int32? {
+        let script = """
+        {
+          printf '%s\\n' "$1"
+          shift
+          while [ "$#" -ge 2 ]; do
+            printf '%s\\n' "$1"
+            delay="$2"
+            shift 2
+            if [ "$delay" != "0.0" ] && [ "$delay" != "0" ]; then
+              sleep "$delay"
+            fi
+          done
+        } | /usr/bin/nc -w 2 -U "$0"
+        """
+        var arguments = [
+            "-c",
+            script,
+            qmpSocketPath,
+            QEMUQMPKeyboardCommandBuilder.capabilitiesCommand()
+        ]
+        for (command, step) in zip(commands, steps) {
+            arguments.append(command)
+            arguments.append(String(step.delayAfterSend))
+        }
+        return processRunner(
             "/bin/sh",
-            [
-                "-c",
-                "printf '%s\\n%s\\n' \"$1\" \"$2\" | /usr/bin/nc -w 1 -U \"$0\"",
-                qmpSocketPath,
-                QEMUQMPKeyboardCommandBuilder.capabilitiesCommand(),
-                command
-            ]
-        )
-        return QEMUKeySendResult(
-            key: key,
-            transport: "qmp",
-            socketPath: qmpSocketPath,
-            monitorCommand: command,
-            terminationStatus: status,
-            didLaunchSender: status != nil
+            arguments
         )
     }
 

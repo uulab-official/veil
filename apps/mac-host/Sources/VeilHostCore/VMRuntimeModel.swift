@@ -1773,7 +1773,12 @@ public struct LocalVMRuntimeService: VMRuntimeService {
         resourcePlan: VMResourcePlan? = nil,
         diagnosticDate: @escaping @Sendable () -> Date = Date.init,
         automaticInstallMediaBuilder: any AutomaticInstallMediaBuilding = HdiutilAutomaticInstallMediaBuilder(),
-        consoleScreenshotRefresher: @escaping @Sendable (URL, URL) -> Void = QEMUVMRuntimeBooter.captureConsoleScreenshot,
+        consoleScreenshotRefresher: @escaping @Sendable (URL, URL) -> Void = { monitorSocketURL, imageURL in
+            QEMUVMRuntimeBooter.captureConsoleScreenshot(
+                monitorSocketURL: monitorSocketURL,
+                imageURL: imageURL
+            )
+        },
         pointerEventSender: (any QEMUPointerEventSending)? = nil,
         keySequenceSender: (any QEMUKeySequenceSending)? = nil,
         qemuLaunchProcessIsRunning: @escaping @Sendable (Int32) -> Bool = LocalVMRuntimeService.processIsRunning,

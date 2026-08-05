@@ -349,8 +349,32 @@ final class AppWindowsOptimizationService: WindowsOptimizationServicing {
         for elapsed in 0...boundedTimeout {
             await vmModel.refreshRuntimeEvidence()
             if vmModel.snapshot?.state == .running,
-               vmModel.snapshot?.latestConsoleLaunch?.previewStatus == .fresh {
-                return
+               let console = vmModel.snapshot?.latestConsoleLaunch,
+               let screenshotPath = console.consoleScreenshotPath {
+                let screenshotURL = URL(fileURLWithPath: screenshotPath)
+                if let qmpSocketPath = console.qmpSocketPath,
+                   FileManager.default.fileExists(atPath: qmpSocketPath) {
+                    let qmpSocketURL = URL(fileURLWithPath: qmpSocketPath)
+                    await Task.detached {
+                        QEMUVMRuntimeBooter.captureConsoleScreenshot(
+                            qmpSocketURL: qmpSocketURL,
+                            imageURL: screenshotURL
+                        )
+                    }.value
+                } else {
+                    let monitorURL = URL(fileURLWithPath: console.monitorSocketPath)
+                    if FileManager.default.fileExists(atPath: monitorURL.path) {
+                        await Task.detached {
+                            QEMUVMRuntimeBooter.captureConsoleScreenshot(
+                                monitorSocketURL: monitorURL,
+                                imageURL: screenshotURL
+                            )
+                        }.value
+                    }
+                }
+                if QEMUConsoleScreenshotReadiness.isDesktopVisible(at: screenshotURL) {
+                    return
+                }
             }
             if elapsed < boundedTimeout {
                 await dependencies.sleep(1)

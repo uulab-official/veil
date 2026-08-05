@@ -140,7 +140,12 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
         processRunner: @escaping @Sendable (Process) throws -> Void = { try $0.run() },
         frontmostRunner: @escaping @Sendable () -> Void = QEMUVMRuntimeBooter.bringQEMUToFrontIfAllowed,
         bootKeySender: @escaping @Sendable (URL) -> Bool = QEMUVMRuntimeBooter.sendWindowsInstallerBootKey,
-        consoleScreenshotCapturer: @escaping @Sendable (URL, URL) -> Void = QEMUVMRuntimeBooter.captureConsoleScreenshot,
+        consoleScreenshotCapturer: @escaping @Sendable (URL, URL) -> Void = { qmpSocketURL, imageURL in
+            QEMUVMRuntimeBooter.captureConsoleScreenshot(
+                qmpSocketURL: qmpSocketURL,
+                imageURL: imageURL
+            )
+        },
         vncPortAllocator: @escaping @Sendable () -> Int? = QEMUVMRuntimeBooter.allocateLoopbackVNCPort,
         qmpControlRunner: @escaping @Sendable (String, URL) -> Int32? = { command, socketURL in
             QEMUKeySequenceSender.runProcess(
@@ -253,7 +258,7 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
         if shouldSendInstallerBootKey {
             scheduleWindowsInstallerBootKeySend(monitorSocketURL: monitorSocketURL)
         }
-        scheduleConsoleScreenshotCapture(monitorSocketURL: monitorSocketURL, imageURL: consoleScreenshotURL)
+        scheduleConsoleScreenshotCapture(qmpSocketURL: qmpSocketURL, imageURL: consoleScreenshotURL)
         return .running
     }
 
@@ -621,7 +626,7 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
         process.executableURL = URL(fileURLWithPath: "/bin/sh")
         process.arguments = [
             "-c",
-            "printf 'screendump \"%s\"\\n' \"$1\" | /usr/bin/nc -U \"$0\"",
+            "printf 'screendump \"%s\"\\n' \"$1\" | /usr/bin/nc -w 2 -U \"$0\"",
             monitorSocketURL.path,
             rawImageURL.path
         ]
@@ -635,6 +640,44 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
             return
         }
 
+        convertConsoleScreenshotToPNG(rawImageURL: rawImageURL, pngURL: imageURL)
+    }
+
+    public static func captureConsoleScreenshot(qmpSocketURL: URL, imageURL: URL) {
+        guard FileManager.default.fileExists(atPath: qmpSocketURL.path) else {
+            return
+        }
+
+        let rawImageURL = rawConsoleScreenshotURL(for: imageURL)
+        guard let commandData = try? JSONSerialization.data(
+            withJSONObject: [
+                "execute": "screendump",
+                "arguments": ["filename": rawImageURL.path]
+            ],
+            options: [.sortedKeys]
+        ),
+        let command = String(data: commandData, encoding: .utf8) else {
+            return
+        }
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/sh")
+        process.arguments = [
+            "-c",
+            "printf '%s\\n%s\\n' \"$1\" \"$2\" | /usr/bin/nc -w 2 -U \"$0\"",
+            qmpSocketURL.path,
+            QEMUQMPKeyboardCommandBuilder.capabilitiesCommand(),
+            command
+        ]
+        process.standardOutput = nil
+        process.standardError = nil
+        try? process.run()
+        process.waitUntilExit()
+
+        guard process.terminationStatus == 0,
+              imageURL.pathExtension.lowercased() == "png",
+              FileManager.default.fileExists(atPath: rawImageURL.path) else {
+            return
+        }
         convertConsoleScreenshotToPNG(rawImageURL: rawImageURL, pngURL: imageURL)
     }
 
@@ -677,12 +720,12 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
         }
     }
 
-    private func scheduleConsoleScreenshotCapture(monitorSocketURL: URL, imageURL: URL) {
+    private func scheduleConsoleScreenshotCapture(qmpSocketURL: URL, imageURL: URL) {
         let consoleScreenshotCapturer = self.consoleScreenshotCapturer
         Task.detached {
             for _ in 0..<6 {
                 try? await Task.sleep(for: .seconds(5))
-                consoleScreenshotCapturer(monitorSocketURL, imageURL)
+                consoleScreenshotCapturer(qmpSocketURL, imageURL)
                 if FileManager.default.fileExists(atPath: imageURL.path) {
                     break
                 }

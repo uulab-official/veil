@@ -1,4 +1,5 @@
 import Foundation
+import AppKit
 import Testing
 import VeilHostCore
 @testable import VeilHostShell
@@ -151,6 +152,63 @@ struct WindowsOptimizationCoordinatorTests {
         try await service.restartWithPreparedMedia()
 
         #expect(calls.values == ["download", "prepare", "start"])
+    }
+
+    @Test("fresh but black console capture does not count as a ready Windows desktop")
+    func freshButBlackConsoleCaptureDoesNotCountAsReadyDesktop() async throws {
+        let screenshotURL = try makeBlackConsoleScreenshot()
+        defer { try? FileManager.default.removeItem(at: screenshotURL) }
+        let calls = OptimizationCallLog()
+        let model = RecordingOptimizationVMModel(state: .running, calls: calls)
+        model.snapshot?.latestConsoleLaunch = VMConsoleLaunchEvidence(
+            provider: "QEMU/HVF",
+            pid: 123,
+            processLogPath: "/tmp/qemu.log",
+            monitorSocketPath: "/tmp/missing-monitor.sock",
+            consoleScreenshotPath: screenshotURL.path,
+            previewStatus: .fresh,
+            startedAt: Date()
+        )
+        let service = AppWindowsOptimizationService(
+            vmModel: model,
+            dependencies: .init(
+                downloadGuestTools: { URL(fileURLWithPath: "/tmp/utm.iso") },
+                requestGracefulShutdown: { _ in },
+                dispatchOptimization: {},
+                waitForAgent: { _ in true },
+                sleep: { _ in }
+            )
+        )
+
+        await #expect(throws: (any Error).self) {
+            try await service.waitForDesktop(timeoutSeconds: 0)
+        }
+    }
+
+    private func makeBlackConsoleScreenshot() throws -> URL {
+        let screenshotURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("veil-black-console-\(UUID().uuidString).png")
+        let representation = try #require(NSBitmapImageRep(
+            bitmapDataPlanes: nil,
+            pixelsWide: 8,
+            pixelsHigh: 8,
+            bitsPerSample: 8,
+            samplesPerPixel: 4,
+            hasAlpha: true,
+            isPlanar: false,
+            colorSpaceName: .deviceRGB,
+            bytesPerRow: 0,
+            bitsPerPixel: 0
+        ))
+        let byteCount = representation.bytesPerRow * representation.pixelsHigh
+        let bitmap = try #require(representation.bitmapData)
+        bitmap.initialize(repeating: 0, count: byteCount)
+        for offset in stride(from: 3, to: byteCount, by: 4) {
+            bitmap[offset] = 255
+        }
+        let data = try #require(representation.representation(using: .png, properties: [:]))
+        try data.write(to: screenshotURL, options: .atomic)
+        return screenshotURL
     }
 }
 
