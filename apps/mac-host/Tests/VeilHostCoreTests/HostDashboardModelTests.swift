@@ -2536,9 +2536,9 @@ struct HostDashboardModelTests {
         #expect(primary.frameSubscriptions == ["hwnd:0003029A", "hwnd:0003029A"])
     }
 
-    @Test("reconnect restores one existing HWND per app even when a prior count is persisted")
+    @Test("reconnect restores every persisted HWND for an app")
     @MainActor
-    func reconnectRestoresOneStableSameAppWindow() async throws {
+    func reconnectRestoresPersistedSameAppWindowCount() async throws {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
         let intentStore = JSONWindowRestoreIntentStore(directory: directory)
@@ -2556,17 +2556,17 @@ struct HostDashboardModelTests {
         await model.load()
         let restored = await model.restoreMirroredWindowsAfterReconnect()
 
-        #expect(restored.map(\.window.windowId) == ["hwnd:0003029A"])
-        #expect(model.mirrorSessions.map(\.id) == ["hwnd:0003029A"])
+        #expect(restored.map(\.window.windowId) == ["hwnd:0003029A", "hwnd:00010500"])
+        #expect(model.mirrorSessions.map(\.id) == ["hwnd:0003029A", "hwnd:00010500"])
         #expect(model.restorableAppIds == ["winapp_notepad"])
-        #expect(model.restorableAppWindowCounts == ["winapp_notepad": 1])
-        #expect(try await intentStore.load()?.appWindowCounts == ["winapp_notepad": 1])
-        #expect(service.launchedAppIds == ["winapp_notepad"])
-        #expect(service.frameSubscriptions == ["hwnd:0003029A"])
+        #expect(model.restorableAppWindowCounts == ["winapp_notepad": 2])
+        #expect(try await intentStore.load()?.appWindowCounts == ["winapp_notepad": 2])
+        #expect(service.launchedAppIds == ["winapp_notepad", "winapp_notepad"])
+        #expect(service.frameSubscriptions == ["hwnd:0003029A", "hwnd:00010500"])
 
         let report = model.runtimeStatusReport()
         #expect(report.dockIntegration.restorableAppCount == 1)
-        #expect(report.dockIntegration.restorableWindowCount == 1)
+        #expect(report.dockIntegration.restorableWindowCount == 2)
     }
 
     @Test("clears a stale error message when there is nothing to restore")
@@ -2663,8 +2663,8 @@ struct HostDashboardModelTests {
         await model.load()
 
         #expect(model.restorableAppIds == ["winapp_notepad"])
-        #expect(model.restorableAppWindowCounts == ["winapp_notepad": 1])
-        #expect(try await intentStore.load()?.appWindowCounts == ["winapp_notepad": 1])
+        #expect(model.restorableAppWindowCounts == ["winapp_notepad": 2])
+        #expect(try await intentStore.load()?.appWindowCounts == ["winapp_notepad": 2])
         #expect(model.canRestoreMirrorSessions)
         #expect(model.canReconnectRestoreMirrorSessions)
         #expect(model.runtimeStatusReport().actions.first { $0.id == "windowsApps.reconnectRestore" }?.isAvailable == true)
@@ -2703,14 +2703,14 @@ struct HostDashboardModelTests {
         #expect(model.hasLiveAgentConnection == false)
         #expect(model.canRestoreMirrorSessions == false)
         #expect(model.canReconnectRestoreMirrorSessions)
-        #expect(model.restorableAppWindowCounts == ["winapp_notepad": 1])
+        #expect(model.restorableAppWindowCounts == ["winapp_notepad": 2])
         #expect(report.dockIntegration.openWindowCount == 0)
         #expect(report.dockIntegration.pendingLaunchCount == 0)
         #expect(report.dockIntegration.restorableAppCount == 1)
-        #expect(report.dockIntegration.restorableWindowCount == 1)
-        #expect(report.dockIntegration.badgeLabel == "R")
-        #expect(report.menuBarIntegration.statusTitle == "Notepad Can Reconnect")
-        #expect(report.menuBarIntegration.primaryActionTitle == "Reconnect Notepad")
+        #expect(report.dockIntegration.restorableWindowCount == 2)
+        #expect(report.dockIntegration.badgeLabel == "R2")
+        #expect(report.menuBarIntegration.statusTitle == "Notepad Windows Can Reconnect")
+        #expect(report.menuBarIntegration.primaryActionTitle == "Reconnect 2 Notepad Windows")
         #expect(report.dockIntegration.canRestorePreviousApps == false)
         #expect(report.dockIntegration.canReconnectPreviousApps)
         #expect(report.menuBarIntegration.symbolName == "arrow.counterclockwise.circle.fill")

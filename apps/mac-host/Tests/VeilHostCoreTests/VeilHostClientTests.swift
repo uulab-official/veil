@@ -211,6 +211,22 @@ struct VeilHostClientTests {
         #expect(transport.reuseExistingWindowRequests == [true])
     }
 
+    @Test("launches a new Windows app window without reusing an existing HWND")
+    func launchesNewWindowsAppWindow() async throws {
+        let transport = RecordingTransport(responses: [
+            #"{"type":"agent.health.response","requestId":"req_health","protocolVersion":1,"agentVersion":"0.1.0","os":"windows-arm64","session":{"interactive":true,"user":"veil-user"},"capabilities":{"appList":true,"appLaunch":true,"windowTracking":true,"windowCapture":false,"input":false,"clipboardText":false,"packageIdentity":false}}"#,
+            #"{"type":"app.list.response","requestId":"req_apps","apps":[{"id":"winapp_notepad","name":"Notepad","exePath":"notepad.exe","publisher":"Microsoft","iconId":"icon_notepad"}]}"#,
+            #"{"type":"app.launch.response","requestId":"req_launch_winapp_notepad","accepted":true,"processId":4931}"#,
+            #"{"type":"window.created","windowId":"hwnd:00010500","processId":4931,"appId":"winapp_notepad","title":"notes.txt - Notepad","bounds":{"x":10,"y":10,"width":1280,"height":800},"state":"normal","focused":true}"#
+        ])
+        let client = VeilHostClient(transport: transport)
+
+        let result = try await client.launchNewWindow(appId: "winapp_notepad")
+
+        #expect(result.window.windowId == "hwnd:00010500")
+        #expect(transport.reuseExistingWindowRequests == [false])
+    }
+
     @Test("opens a dropped file and launches the target app with it")
     func opensADroppedFileAndLaunchesTheTargetAppWithIt() async throws {
         let transport = RecordingTransport(responses: [

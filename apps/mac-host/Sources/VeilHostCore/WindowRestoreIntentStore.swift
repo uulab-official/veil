@@ -1,6 +1,8 @@
 import Foundation
 
 public struct WindowRestoreIntent: Codable, Equatable, Sendable {
+    private static let maximumRestoredWindowsPerApp = 8
+
     public var appIds: [String]
     public var appWindowCounts: [String: Int]?
 
@@ -15,12 +17,15 @@ public struct WindowRestoreIntent: Codable, Equatable, Sendable {
     }
 
     public var normalizedAppWindowCounts: [String: Int] {
-        // Restore is intentionally app-first in the pre-alpha shell: a persisted count can be
-        // diagnostic evidence from an interrupted event stream, but it must never decide how many
-        // macOS windows come back automatically. Additional document windows need an explicit
-        // user action once multi-window restore ordering is designed.
+        // Keep legacy intents usable while preserving the actual multi-window count for newer
+        // intents. Clamp corrupt or stale files so a malformed count cannot create an unbounded
+        // launch loop during reconnect.
         Dictionary(uniqueKeysWithValues: appIds.map { appId in
-            (appId, 1)
+            let persistedCount = appWindowCounts?[appId] ?? 1
+            return (
+                appId,
+                min(max(persistedCount, 1), Self.maximumRestoredWindowsPerApp)
+            )
         })
     }
 }

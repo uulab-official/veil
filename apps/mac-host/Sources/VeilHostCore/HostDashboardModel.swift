@@ -15,6 +15,7 @@ public enum HostDashboardServiceError: Error, LocalizedError, Equatable, Sendabl
 public protocol HostDashboardService: Sendable {
     func loadOverview() async throws -> HostOverview
     func launchApp(appId: String) async throws -> WindowsAppLaunchResult
+    func launchNewWindow(appId: String) async throws -> WindowsAppLaunchResult
     func restoreApp(appId: String) async throws -> WindowsAppLaunchResult
     func launchNotepad() async throws -> NotepadLaunchResult
     func openFile(appId: String, fileName: String, contentBase64: String) async throws -> WindowsAppLaunchResult
@@ -29,6 +30,10 @@ public protocol HostDashboardService: Sendable {
 }
 
 public extension HostDashboardService {
+    func launchNewWindow(appId: String) async throws -> WindowsAppLaunchResult {
+        try await launchApp(appId: appId)
+    }
+
     func restoreApp(appId: String) async throws -> WindowsAppLaunchResult {
         try await launchApp(appId: appId)
     }
@@ -1560,9 +1565,7 @@ public final class HostDashboardModel {
     public private(set) var hasOpenedAppWindowThisSession = false
     public var selectedAppId: String?
     public var restorableWindowCount: Int {
-        // The ordinary product path restores one macOS window per app. Counts from older
-        // sessions are migration/diagnostic input, not a user-visible restore queue.
-        restorableAppIds.count
+        restorableAppWindowCounts.values.reduce(0, +)
     }
 
     private let service: any HostDashboardService
@@ -4134,8 +4137,20 @@ public final class HostDashboardModel {
         }
 
         var restored: [NotepadLaunchResult] = []
+        let restoreCounts = restorableAppWindowCounts
         for appId in restorableAppIdsForLaunches() {
-            if let result = await launchApp(appId: appId, preferExistingWindow: true) {
+            let windowCount = max(restoreCounts[appId] ?? 1, 1)
+            for windowIndex in 0..<windowCount {
+                let result: WindowsAppLaunchResult?
+                if windowIndex == 0 {
+                    result = await launchApp(appId: appId, preferExistingWindow: true)
+                } else {
+                    result = await launchNewAppWindow(appId: appId)
+                }
+
+                guard let result else {
+                    break
+                }
                 restored.append(result)
             }
         }
@@ -4175,6 +4190,26 @@ public final class HostDashboardModel {
         appId: String,
         preferExistingWindow: Bool = false
     ) async -> WindowsAppLaunchResult? {
+        await launchApp(
+            appId: appId,
+            preferExistingWindow: preferExistingWindow,
+            forceNewWindow: false
+        )
+    }
+
+    private func launchNewAppWindow(appId: String) async -> WindowsAppLaunchResult? {
+        await launchApp(
+            appId: appId,
+            preferExistingWindow: false,
+            forceNewWindow: true
+        )
+    }
+
+    private func launchApp(
+        appId: String,
+        preferExistingWindow: Bool,
+        forceNewWindow: Bool
+    ) async -> WindowsAppLaunchResult? {
         if let task = appLaunchTasks[appId] {
             return await task.value
         }
@@ -4185,7 +4220,8 @@ public final class HostDashboardModel {
             }
             return await self.performAppLaunch(
                 appId: appId,
-                preferExistingWindow: preferExistingWindow
+                preferExistingWindow: preferExistingWindow,
+                forceNewWindow: forceNewWindow
             )
         }
         appLaunchTasks[appId] = task
@@ -4196,18 +4232,24 @@ public final class HostDashboardModel {
 
     private func performAppLaunch(
         appId: String,
-        preferExistingWindow: Bool
+        preferExistingWindow: Bool,
+        forceNewWindow: Bool = false
     ) async -> WindowsAppLaunchResult? {
         phase = .launching
         errorMessage = nil
-        let shouldReuseExistingWindow = preferExistingWindow
+        let shouldReuseExistingWindow = !forceNewWindow && (preferExistingWindow
             || mirrorSessions.contains(where: { $0.window.appId == appId })
-            || activeWindows.contains(where: { $0.appId == appId })
+            || activeWindows.contains(where: { $0.appId == appId }))
 
         do {
-            let result = try await (shouldReuseExistingWindow
-                ? service.restoreApp(appId: appId)
-                : service.launchApp(appId: appId))
+            let result: WindowsAppLaunchResult
+            if shouldReuseExistingWindow {
+                result = try await service.restoreApp(appId: appId)
+            } else if forceNewWindow {
+                result = try await service.launchNewWindow(appId: appId)
+            } else {
+                result = try await service.launchApp(appId: appId)
+            }
             return try await applyWindowsAppLaunchResult(result)
         } catch {
             errorMessage = userMessage(for: error)
@@ -4818,7 +4860,10 @@ public final class HostDashboardModel {
     private func refreshRestoreIntentFromOpenWindows() async {
         let windows = mergedOpenWindows()
         restorableAppIds = orderedUniqueAppIds(from: windows)
-        restorableAppWindowCounts = Dictionary(uniqueKeysWithValues: restorableAppIds.map { ($0, 1) })
+        restorableAppWindowCounts = Dictionary(
+            grouping: windows,
+            by: \.appId
+        ).mapValues(\.count)
         await persistRestoreIntent()
     }
 
@@ -4837,10 +4882,6 @@ public final class HostDashboardModel {
     }
 
     private func restorableAppIdsForLaunches() -> [String] {
-        // A persisted count records how many windows were open for diagnostics, not how many
-        // launch requests a reconnect may issue. Replaying the count reopens duplicate Windows
-        // instances when an app already owns the restored HWND. New document windows arrive from
-        // the guest discovery stream after the first stable app window is attached.
         var seen: Set<String> = []
         return restorableAppIds.filter { seen.insert($0).inserted }
     }
