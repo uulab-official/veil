@@ -1319,6 +1319,8 @@ struct QEMUWindowsBootPlanTests {
         #expect(keys.contains("backslash"))
         #expect(keys.contains("shift-5"))
         #expect(keys.count < 200)
+        #expect(QEMUWindowsOptimizationKeySequence.commandConfirmationSteps.map(\.key) == ["ret"])
+        #expect(QEMUWindowsOptimizationKeySequence.uacApproveKeySteps.map(\.key) == ["left", "ret"])
     }
 
     @Test("sparse package sequence opens run dialog and invokes short VEIL_AUTO entrypoint")
@@ -1649,6 +1651,7 @@ struct QEMUWindowsBootPlanTests {
             var executablePath: String?
             var arguments: [String] = []
             var tpmPlan: QEMUWindowsBootPlan?
+            var qmpControlCommand: String?
         }
         let capture = Capture()
         let booter = QEMUVMRuntimeBooter(
@@ -1662,7 +1665,11 @@ struct QEMUWindowsBootPlanTests {
                 capture.arguments = process.arguments ?? []
             },
             frontmostRunner: {},
-            bootKeySender: { _ in true }
+            bootKeySender: { _ in true },
+            qmpControlRunner: { command, _ in
+                capture.qmpControlCommand = command
+                return 0
+            }
         )
 
         let state = try await booter.start(profile: profile)
@@ -1695,6 +1702,10 @@ struct QEMUWindowsBootPlanTests {
         #expect(record.arguments.contains("-qmp"))
         #expect(record.consoleScreenshotPath?.contains("qemu-console-") == true)
         #expect(record.consoleScreenshotPath?.hasSuffix(".png") == true)
+
+        try await booter.requestGracefulShutdown(timeoutSeconds: 1)
+        #expect(capture.qmpControlCommand?.contains("system_powerdown") == true)
+        #expect(await booter.runtimeState() == nil)
     }
 
     @Test("QEMU runtime booter embeds VNC display without foregrounding QEMU")

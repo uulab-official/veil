@@ -1629,6 +1629,9 @@ public enum QEMUWindowsOptimizationKeySequence {
     public static let uacApproveTapNormalizedX = QEMUGuestAgentInstallKeySequence.uacApproveTapNormalizedX
     public static let uacApproveTapNormalizedY = QEMUGuestAgentInstallKeySequence.uacApproveTapNormalizedY
     public static let uacApproveKeySteps = QEMUGuestAgentInstallKeySequence.uacApproveKeySteps
+    public static let commandConfirmationSteps = [
+        QEMUKeySequenceStep(key: "ret", delayAfterSend: 3.0)
+    ]
 
     public static let commandText =
         #"cmd.exe /c for %d in (D E F G H I J K L M N O P Q R S T U V W X Y Z) do if exist "%d:\Veil Guest Agent\Optimize.cmd" call "%d:\Veil Guest Agent\Optimize.cmd""#

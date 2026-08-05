@@ -44,6 +44,48 @@ struct AppRuntimeBooterTests {
         )
     }
 
+    @Test("rejects one-click Windows optimization without QEMU control")
+    func rejectsWindowsOptimizationWithoutQEMUControl() async {
+        let booter = AppRuntimeBooter(
+            provider: .appleVirtualization,
+            qemuBooter: QEMUVMRuntimeBooter(frontmostRunner: {}, displayMode: .vncLoopback),
+            virtualizationBooter: .shared
+        )
+
+        do {
+            _ = try await booter.optimizeWindowsFromAttachedMedia()
+            Issue.record("Expected optimization to require QEMU control")
+        } catch let error as AppRuntimeBooterError {
+            switch error {
+            case .qemuGuestAutomationUnavailable:
+                break
+            }
+        } catch {
+            Issue.record("Unexpected error: \(error)")
+        }
+    }
+
+    @Test("rejects automatic graceful shutdown without QEMU control")
+    func rejectsGracefulShutdownWithoutQEMUControl() async {
+        let booter = AppRuntimeBooter(
+            provider: .appleVirtualization,
+            qemuBooter: QEMUVMRuntimeBooter(frontmostRunner: {}, displayMode: .vncLoopback),
+            virtualizationBooter: .shared
+        )
+
+        do {
+            try await booter.requestGracefulShutdown(timeoutSeconds: 1)
+            Issue.record("Expected graceful shutdown automation to require QEMU control")
+        } catch let error as AppRuntimeBooterError {
+            switch error {
+            case .qemuGuestAutomationUnavailable:
+                break
+            }
+        } catch {
+            Issue.record("Unexpected error: \(error)")
+        }
+    }
+
     private func provider(
         kind: VMRuntimeProviderKind,
         status: VMRuntimeProviderStatus
