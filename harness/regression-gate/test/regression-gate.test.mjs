@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 
 const repositoryRoot = fileURLToPath(new URL("../../..", import.meta.url));
 const regressionScriptPath = fileURLToPath(new URL("../../../script/test_all.sh", import.meta.url));
+const productionReadinessScriptPath = fileURLToPath(new URL("../../../script/production_readiness.sh", import.meta.url));
 
 test("regression gate help documents every intentional skip", () => {
   const result = spawnSync("/bin/bash", [regressionScriptPath, "--help"], {
@@ -56,4 +57,18 @@ test("regression gate discovers Veil's installed .NET toolchain when dotnet is a
   assert.match(script, /Toolchains\/dotnet8\/dotnet/);
   assert.match(script, /DOTNET_BIN/);
   assert.match(script, /"\$DOTNET_BIN" test/);
+});
+
+test("production readiness gate blocks release while P0 checklist items remain unresolved", () => {
+  const result = spawnSync("/bin/bash", [productionReadinessScriptPath, "--checklist-only", "--json"], {
+    cwd: repositoryRoot,
+    encoding: "utf8"
+  });
+
+  assert.equal(result.status, 2, result.stderr);
+  const report = JSON.parse(result.stdout);
+  assert.equal(report.status, "blocked");
+  assert.equal(report.releaseReady, false);
+  assert.ok(report.unresolvedP0Count > 0);
+  assert.equal(report.automatedGate, "not-run");
 });

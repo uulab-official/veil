@@ -68,7 +68,7 @@
 - [ ] Release 빌드의 bundle identity·entitlements·codesign 검증이 통과한다.
 - [ ] Developer ID 서명·notarization·staple을 실제 배포 자격 증명으로 확인한다.
 - [ ] 깨끗한 macOS 사용자 계정에서 설치·첫 실행·삭제·재설치를 확인한다.
-- [ ] P0 미완료 상태에서 release-ready 표시가 나오지 않는다.
+- [x] P0 미완료 상태에서 `script/production_readiness.sh`가 `releaseReady=false`와 종료 코드 `2`를 반환한다.
 
 ## 자동 검증 명령
 
@@ -76,6 +76,7 @@
 npm --prefix harness/regression-gate test
 ./script/test_all.sh
 ./script/test_macos_lifecycle.sh --skip-build
+./script/production_readiness.sh --run-automated --json
 ```
 
 현재 환경에서 Veil 설치 도구체인을 자동 발견하지 못하는 경우에만 다음처럼 명시한다.
@@ -97,3 +98,4 @@ VEIL_DOTNET_BIN="$HOME/Library/Application Support/Veil/Toolchains/dotnet8/dotne
 - Windows Agent: Release 구성 72/72 통과, 실패 0, 건너뜀 0.
 - `git diff --check`: 통과.
 - 실제 VM 최적화/Guest Tools/해상도 변경 증거는 이 자동 검증에 포함되지 않으며 여전히 별도 P0 게이트다.
+- `./script/production_readiness.sh --run-automated --json`: 자동 게이트는 `passed`지만 P0 17개가 미완료라 `blocked`, `releaseReady=false`, 종료 코드 `2`를 반환했다.

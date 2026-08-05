@@ -84,3 +84,21 @@
 - [ ] **Step 3: Notarize and staple the artifact using release credentials.**
 - [ ] **Step 4: Install on a clean macOS user, run first launch, remove the app, reinstall, and verify support-data preservation.**
 - [ ] **Step 5: Record unresolved platform limitations; do not label the build production-ready while any P0 live gate is unchecked.**
+
+### Task 5: Add an executable production-readiness decision gate
+
+**Files:**
+- Create: `script/production_readiness.sh`
+- Modify: `harness/regression-gate/test/regression-gate.test.mjs`
+- Modify: `docs/checklists/2026-08-05-production-readiness.md`
+
+**Interfaces:**
+- Consumes: the P0 checkbox state in `docs/checklists/2026-08-05-production-readiness.md` and, when requested, the complete `script/test_all.sh` result.
+- Produces: human or JSON output with P0 pass/unresolved counts and exit code `0` only when no P0 item remains unresolved.
+
+- [x] **Step 1: Add a failing regression-gate test for JSON blocked output while the checklist has unchecked P0 items.**
+- [x] **Step 2: Run the focused regression-gate tests and observe the missing-script failure.**
+- [x] **Step 3: Implement `--checklist-only`, `--run-automated`, and `--json` without allowing automated tests to override unresolved live evidence.**
+- [x] **Step 4: Run the focused tests and confirm blocked JSON output plus a non-zero release decision.**
+- [x] **Step 5: Run the full automated gate through the new command and record the final blocked decision.**
+- [ ] **Step 6: Commit the executable gate and checklist update.**
