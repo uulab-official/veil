@@ -285,6 +285,44 @@ struct VMRuntimeModelTests {
         #expect(service.prepareCount == 1)
     }
 
+    @Test("installed Windows optimization preserves system media and rebuilds support media")
+    @MainActor
+    func installedWindowsOptimizationPreservesSystemMediaAndRebuildsSupportMedia() async {
+        let installerPath = "/Users/test/Downloads/Windows11Arm.iso"
+        let diskPath = "/Users/test/Virtual Machines/Veil/Windows 11 Arm.img"
+        let toolsPath = "/Users/test/Library/Application Support/Veil/Downloads/utm-guest-tools.iso"
+        let installedSnapshot = VMRuntimeSnapshot(
+            state: .stopped,
+            virtualizationAvailable: true,
+            architecture: "arm64",
+            minimumOSSupported: true,
+            profileName: "Windows 11 Arm",
+            installerMediaPath: installerPath,
+            virtualDiskPath: diskPath,
+            bootReady: true,
+            windowsInstalled: true,
+            detail: "Windows is installed."
+        )
+        var updatedSnapshot = installedSnapshot
+        updatedSnapshot.driverMediaPath = toolsPath
+        let service = FakeVMRuntimeService(
+            snapshot: installedSnapshot,
+            preparedSnapshot: updatedSnapshot,
+            updatedSnapshot: updatedSnapshot
+        )
+        let model = VMRuntimeModel(service: service)
+        await model.load()
+
+        let prepared = await model.prepareWindowsOptimization(driverMediaPath: toolsPath)
+
+        #expect(prepared)
+        #expect(service.updatedInstallerMediaPath == installerPath)
+        #expect(service.updatedDriverMediaPath == toolsPath)
+        #expect(service.updatedVirtualDiskPath == diskPath)
+        #expect(service.prepareCount == 1)
+        #expect(model.snapshot?.windowsInstalled == true)
+    }
+
     @Test("installer selection failure does not continue into VM preparation")
     @MainActor
     func installerSelectionFailureStopsPreparation() async {

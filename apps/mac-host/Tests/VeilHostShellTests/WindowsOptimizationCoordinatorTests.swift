@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+import VeilHostCore
 @testable import VeilHostShell
 
 @MainActor
@@ -97,6 +98,102 @@ struct WindowsOptimizationCoordinatorTests {
         #expect(coordinator.phase == .complete(displayOptimized: false))
         coordinator.recordDisplaySize(width: 1_440, height: 900)
         #expect(coordinator.phase == .complete(displayOptimized: true))
+    }
+
+    @Test("running Windows shuts down normally before rebuilding attached media")
+    func runningWindowsShutsDownNormallyBeforeRebuildingAttachedMedia() async throws {
+        let calls = OptimizationCallLog()
+        let model = RecordingOptimizationVMModel(state: .running, calls: calls)
+        let service = AppWindowsOptimizationService(
+            vmModel: model,
+            dependencies: .init(
+                downloadGuestTools: {
+                    calls.values.append("download")
+                    return URL(fileURLWithPath: "/tmp/utm.iso")
+                },
+                requestGracefulShutdown: { _ in
+                    calls.values.append("powerdown")
+                    model.snapshot?.state = .stopped
+                },
+                dispatchOptimization: {},
+                waitForAgent: { _ in true },
+                sleep: { _ in }
+            )
+        )
+
+        try await service.prepareMedia()
+        try await service.restartWithPreparedMedia()
+
+        #expect(calls.values == ["download", "powerdown", "refresh", "prepare", "start"])
+    }
+
+    @Test("stopped Windows rebuilds attached media without a redundant powerdown")
+    func stoppedWindowsRebuildsAttachedMediaWithoutPowerdown() async throws {
+        let calls = OptimizationCallLog()
+        let model = RecordingOptimizationVMModel(state: .stopped, calls: calls)
+        let service = AppWindowsOptimizationService(
+            vmModel: model,
+            dependencies: .init(
+                downloadGuestTools: {
+                    calls.values.append("download")
+                    return URL(fileURLWithPath: "/tmp/utm.iso")
+                },
+                requestGracefulShutdown: { _ in
+                    calls.values.append("powerdown")
+                },
+                dispatchOptimization: {},
+                waitForAgent: { _ in true },
+                sleep: { _ in }
+            )
+        )
+
+        try await service.prepareMedia()
+        try await service.restartWithPreparedMedia()
+
+        #expect(calls.values == ["download", "prepare", "start"])
+    }
+}
+
+@MainActor
+private final class OptimizationCallLog {
+    var values: [String] = []
+}
+
+@MainActor
+private final class RecordingOptimizationVMModel: WindowsOptimizationVMModeling {
+    var snapshot: VMRuntimeSnapshot?
+    var errorMessage: String?
+    private let calls: OptimizationCallLog
+
+    init(state: VMRuntimeState, calls: OptimizationCallLog) {
+        self.calls = calls
+        snapshot = VMRuntimeSnapshot(
+            state: state,
+            virtualizationAvailable: true,
+            architecture: "arm64",
+            minimumOSSupported: true,
+            profileName: "Windows 11 Arm",
+            driverMediaPath: nil,
+            virtualDiskPath: "/tmp/Windows.img",
+            bootReady: true,
+            windowsInstalled: true,
+            detail: "Windows test runtime"
+        )
+    }
+
+    func prepareWindowsOptimization(driverMediaPath: String) async -> Bool {
+        calls.values.append("prepare")
+        snapshot?.driverMediaPath = driverMediaPath
+        return true
+    }
+
+    func refreshRuntimeEvidence() async {
+        calls.values.append("refresh")
+    }
+
+    func start() async {
+        calls.values.append("start")
+        snapshot?.state = .running
     }
 }
 

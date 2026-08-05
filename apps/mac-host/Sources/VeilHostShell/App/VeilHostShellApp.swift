@@ -71,6 +71,7 @@ struct VeilHostShellApp: App {
     private let windowsNotificationPresenter = WindowsNotificationPresenter(center: MacUserNotificationCenter())
     @State private var model: HostDashboardModel
     @State private var vmModel: VMRuntimeModel
+    @State private var windowsOptimizationCoordinator: WindowsOptimizationCoordinator
     @State private var displayMessage: String?
     @State private var agentEventTask: Task<Void, Never>?
     @State private var agentReconnectTask: Task<Void, Never>?
@@ -88,18 +89,28 @@ struct VeilHostShellApp: App {
         self.vmRuntimeBooter = runtimeBooter
         self.agentTransport = transport
         self.agentConnectionPlan = connectionPlan
-        _model = State(
-            initialValue: HostDashboardModel(
-                service: HostDashboardServiceMode.resolve().makeService(
-                    transport: transport,
-                    connectionPlan: connectionPlan
-                )
+        let hostModel = HostDashboardModel(
+            service: HostDashboardServiceMode.resolve().makeService(
+                transport: transport,
+                connectionPlan: connectionPlan
             )
         )
-        _vmModel = State(
-            initialValue: VMRuntimeModel(
-                service: LocalVMRuntimeService(bootRunner: runtimeBooter)
+        let vmModel = VMRuntimeModel(
+            service: LocalVMRuntimeService(bootRunner: runtimeBooter)
+        )
+        let optimizationService = AppWindowsOptimizationService(
+            vmModel: vmModel,
+            dependencies: .live(
+                runtimeBooter: runtimeBooter,
+                hostModel: hostModel,
+                vmModel: vmModel,
+                agentEndpoint: connectionPlan.endpoint
             )
+        )
+        _model = State(initialValue: hostModel)
+        _vmModel = State(initialValue: vmModel)
+        _windowsOptimizationCoordinator = State(
+            initialValue: WindowsOptimizationCoordinator(service: optimizationService)
         )
         _latestReviewEvidenceFolder = State(initialValue: ReviewEvidenceFolderStore.loadLatest())
     }

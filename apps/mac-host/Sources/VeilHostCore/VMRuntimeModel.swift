@@ -1598,6 +1598,30 @@ public final class VMRuntimeModel {
         return phase == .loaded && canStart
     }
 
+    @discardableResult
+    public func prepareWindowsOptimization(driverMediaPath: String) async -> Bool {
+        guard let currentSnapshot = snapshot,
+              currentSnapshot.windowsInstalled,
+              let virtualDiskPath = currentSnapshot.virtualDiskPath else {
+            errorMessage = "Install Windows before preparing display and app integration."
+            return false
+        }
+
+        await updateProfilePaths(
+            installerMediaPath: currentSnapshot.installerMediaPath,
+            driverMediaPath: driverMediaPath,
+            virtualDiskPath: virtualDiskPath
+        )
+        guard phase == .loaded else {
+            return false
+        }
+
+        await prepareDefaultVM()
+        return phase == .loaded
+            && snapshot?.windowsInstalled == true
+            && canStart
+    }
+
     public func markGuestAgentConnected(agentVersion: String) async {
         phase = .loading
         errorMessage = nil

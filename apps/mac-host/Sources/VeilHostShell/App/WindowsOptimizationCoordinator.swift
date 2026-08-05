@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import VeilHostCore
 
 enum WindowsOptimizationPhase: Equatable {
     case idle
@@ -253,3 +254,156 @@ final class WindowsOptimizationCoordinator {
 }
 
 private struct WindowsOptimizationCancellation: Error {}
+
+@MainActor
+protocol WindowsOptimizationVMModeling: AnyObject {
+    var snapshot: VMRuntimeSnapshot? { get }
+    var errorMessage: String? { get }
+    func prepareWindowsOptimization(driverMediaPath: String) async -> Bool
+    func refreshRuntimeEvidence() async
+    func start() async
+}
+
+extension VMRuntimeModel: WindowsOptimizationVMModeling {}
+
+enum AppWindowsOptimizationServiceError: LocalizedError {
+    case mediaNotPrepared
+    case gracefulShutdownIncomplete
+    case mediaPreparationFailed(String)
+    case windowsStartFailed(String)
+    case desktopTimedOut(seconds: Int)
+
+    var errorDescription: String? {
+        switch self {
+        case .mediaNotPrepared:
+            "Guest Tools media was not prepared."
+        case .gracefulShutdownIncomplete:
+            "Windows did not finish shutting down normally."
+        case .mediaPreparationFailed(let message):
+            "Veil could not attach Windows integration media. \(message)"
+        case .windowsStartFailed(let message):
+            "Windows could not restart for optimization. \(message)"
+        case .desktopTimedOut(let seconds):
+            "The Windows desktop did not become ready within \(seconds) seconds."
+        }
+    }
+}
+
+@MainActor
+final class AppWindowsOptimizationService: WindowsOptimizationServicing {
+    struct Dependencies {
+        var downloadGuestTools: () async throws -> URL
+        var requestGracefulShutdown: (Int) async throws -> Void
+        var dispatchOptimization: () async throws -> Void
+        var waitForAgent: (Int) async throws -> Bool
+        var sleep: (Int) async -> Void
+    }
+
+    private let vmModel: any WindowsOptimizationVMModeling
+    private let dependencies: Dependencies
+    private var preparedGuestToolsURL: URL?
+
+    init(
+        vmModel: any WindowsOptimizationVMModeling,
+        dependencies: Dependencies
+    ) {
+        self.vmModel = vmModel
+        self.dependencies = dependencies
+    }
+
+    func prepareMedia() async throws {
+        preparedGuestToolsURL = try await dependencies.downloadGuestTools()
+    }
+
+    func restartWithPreparedMedia() async throws {
+        guard let preparedGuestToolsURL else {
+            throw AppWindowsOptimizationServiceError.mediaNotPrepared
+        }
+
+        if vmModel.snapshot?.state == .running || vmModel.snapshot?.state == .starting {
+            try await dependencies.requestGracefulShutdown(30)
+            await vmModel.refreshRuntimeEvidence()
+            guard vmModel.snapshot?.state == .stopped else {
+                throw AppWindowsOptimizationServiceError.gracefulShutdownIncomplete
+            }
+        }
+
+        guard await vmModel.prepareWindowsOptimization(
+            driverMediaPath: preparedGuestToolsURL.path
+        ) else {
+            throw AppWindowsOptimizationServiceError.mediaPreparationFailed(
+                vmModel.errorMessage ?? "Check Windows settings and try again."
+            )
+        }
+
+        await vmModel.start()
+        guard vmModel.snapshot?.state == .running || vmModel.snapshot?.state == .starting else {
+            throw AppWindowsOptimizationServiceError.windowsStartFailed(
+                vmModel.errorMessage ?? "Check Windows diagnostics and try again."
+            )
+        }
+    }
+
+    func waitForDesktop(timeoutSeconds: Int) async throws {
+        let boundedTimeout = max(timeoutSeconds, 0)
+        for elapsed in 0...boundedTimeout {
+            await vmModel.refreshRuntimeEvidence()
+            if vmModel.snapshot?.state == .running,
+               vmModel.snapshot?.latestConsoleLaunch?.previewStatus == .fresh {
+                return
+            }
+            if elapsed < boundedTimeout {
+                await dependencies.sleep(1)
+            }
+        }
+        throw AppWindowsOptimizationServiceError.desktopTimedOut(seconds: boundedTimeout)
+    }
+
+    func dispatchOptimization() async throws {
+        try await dependencies.dispatchOptimization()
+    }
+
+    func waitForAgent(timeoutSeconds: Int) async throws -> Bool {
+        try await dependencies.waitForAgent(timeoutSeconds)
+    }
+}
+
+extension AppWindowsOptimizationService.Dependencies {
+    @MainActor
+    static func live(
+        runtimeBooter: AppRuntimeBooter,
+        hostModel: HostDashboardModel,
+        vmModel: VMRuntimeModel,
+        agentEndpoint: String
+    ) -> Self {
+        Self(
+            downloadGuestTools: {
+                try await UTMGuestToolsDownloader.downloadIfNeeded()
+            },
+            requestGracefulShutdown: { timeoutSeconds in
+                try await runtimeBooter.requestGracefulShutdown(
+                    timeoutSeconds: timeoutSeconds
+                )
+            },
+            dispatchOptimization: {
+                _ = try await runtimeBooter.optimizeWindowsFromAttachedMedia()
+            },
+            waitForAgent: { timeoutSeconds in
+                let report = await hostModel.waitForLiveAgentConnection(
+                    endpoint: agentEndpoint,
+                    timeoutSeconds: timeoutSeconds
+                )
+                if report.status == .connected,
+                   let agentVersion = report.diagnostic.health?.agentVersion {
+                    await vmModel.markGuestAgentConnected(agentVersion: agentVersion)
+                }
+                await hostModel.load()
+                await vmModel.refreshRuntimeEvidence()
+                return report.status == .connected
+            },
+            sleep: { seconds in
+                try? await Task.sleep(for: .seconds(seconds))
+            }
+        )
+    }
+}
