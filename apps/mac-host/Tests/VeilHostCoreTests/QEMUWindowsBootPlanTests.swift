@@ -5,6 +5,26 @@ import Testing
 
 @Suite("QEMU Windows boot plan")
 struct QEMUWindowsBootPlanTests {
+    @Test("bounds runaway QEMU diagnostics while continuing to accept output")
+    func boundsRunawayQEMUProcessLog() throws {
+        let directory = try temporaryDirectory()
+        let logURL = directory.appendingPathComponent("qemu.log")
+        let capture = try QEMUProcessLogCapture(
+            fileURL: logURL,
+            maximumBytes: 64
+        )
+
+        capture.append(Data(repeating: 65, count: 48))
+        capture.append(Data(repeating: 66, count: 48))
+        capture.append(Data(repeating: 67, count: 48))
+        capture.finish()
+
+        let saved = try Data(contentsOf: logURL)
+        #expect(saved.count == 64)
+        #expect(saved.prefix(48) == Data(repeating: 65, count: 48))
+        #expect(saved.suffix(16) == Data(repeating: 66, count: 16))
+    }
+
     @Test("default diagnostics stay in application support")
     func defaultDiagnosticsStayInApplicationSupport() {
         let directory = QEMUVMRuntimeBooter.defaultDiagnosticsDirectory()
@@ -1677,6 +1697,7 @@ struct QEMUWindowsBootPlanTests {
             var arguments: [String] = []
             var tpmPlan: QEMUWindowsBootPlan?
             var qmpControlCommand: String?
+            var usesBoundedOutputPipe = false
         }
         let capture = Capture()
         let booter = QEMUVMRuntimeBooter(
@@ -1688,6 +1709,8 @@ struct QEMUWindowsBootPlanTests {
             processRunner: { process in
                 capture.executablePath = process.executableURL?.path
                 capture.arguments = process.arguments ?? []
+                capture.usesBoundedOutputPipe = process.standardOutput is Pipe
+                    && process.standardError is Pipe
             },
             frontmostRunner: {},
             bootKeySender: { _ in true },
@@ -1702,6 +1725,7 @@ struct QEMUWindowsBootPlanTests {
         #expect(state == .running)
         #expect(capture.tpmPlan?.tpmEmulatorPath == swtpmURL.path)
         #expect(capture.executablePath == qemuURL.path)
+        #expect(capture.usesBoundedOutputPipe)
         #expect(capture.arguments.containsSequence(["-display", "cocoa"]))
         #expect(capture.arguments.contains("-monitor"))
         #expect(capture.arguments.contains("-qmp"))

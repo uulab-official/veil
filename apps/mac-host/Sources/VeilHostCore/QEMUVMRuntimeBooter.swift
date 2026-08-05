@@ -75,6 +75,79 @@ public struct QEMURunningProcess: Codable, Equatable, Sendable {
     }
 }
 
+public final class QEMUProcessLogCapture: @unchecked Sendable {
+    public static let defaultMaximumBytes = 16 * 1_024 * 1_024
+
+    public let pipe = Pipe()
+
+    private let lock = NSLock()
+    private let maximumBytes: Int
+    private var fileHandle: FileHandle?
+    private var writtenBytes = 0
+    private var isFinished = false
+
+    public init(
+        fileURL: URL,
+        maximumBytes: Int = QEMUProcessLogCapture.defaultMaximumBytes
+    ) throws {
+        self.maximumBytes = max(maximumBytes, 0)
+        FileManager.default.createFile(atPath: fileURL.path, contents: nil)
+        fileHandle = try FileHandle(forWritingTo: fileURL)
+        pipe.fileHandleForReading.readabilityHandler = { [weak self] readableHandle in
+            let data = readableHandle.availableData
+            guard !data.isEmpty else {
+                self?.finish()
+                return
+            }
+            self?.append(data)
+        }
+    }
+
+    public func append(_ data: Data) {
+        lock.lock()
+        defer { lock.unlock() }
+
+        guard !isFinished,
+              let fileHandle,
+              writtenBytes < maximumBytes else {
+            return
+        }
+
+        let acceptedByteCount = min(data.count, maximumBytes - writtenBytes)
+        guard acceptedByteCount > 0 else {
+            return
+        }
+
+        do {
+            try fileHandle.write(contentsOf: data.prefix(acceptedByteCount))
+            writtenBytes += acceptedByteCount
+        } catch {
+            isFinished = true
+            try? fileHandle.close()
+            self.fileHandle = nil
+        }
+    }
+
+    public func finish() {
+        pipe.fileHandleForReading.readabilityHandler = nil
+
+        lock.lock()
+        defer { lock.unlock() }
+        guard !isFinished else {
+            return
+        }
+
+        isFinished = true
+        try? fileHandle?.synchronize()
+        try? fileHandle?.close()
+        fileHandle = nil
+    }
+
+    deinit {
+        finish()
+    }
+}
+
 public struct JSONQEMULaunchRecordStore: QEMULaunchRecordStore {
     private let directory: URL
     private let fileName: String
@@ -130,6 +203,7 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
     private let qmpControlRunner: @Sendable (String, URL) -> Int32?
     private let displayMode: QEMUWindowsBootDisplayMode
     private var process: Process?
+    private var processLogCapture: QEMUProcessLogCapture?
     private var monitorSocketURL: URL?
     private var qmpSocketURL: URL?
 
@@ -212,8 +286,7 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
         let logURL = launchDirectory.appendingPathComponent("qemu-launch-\(stamp).log")
         let serialLogURL = launchDirectory.appendingPathComponent("qemu-launch-\(stamp).serial.log")
         let consoleScreenshotURL = launchDirectory.appendingPathComponent("qemu-console-\(stamp).png")
-        FileManager.default.createFile(atPath: logURL.path, contents: nil)
-        let logHandle = try FileHandle(forWritingTo: logURL)
+        let logCapture = try QEMUProcessLogCapture(fileURL: logURL)
         let monitorSocketURL = Self.monitorSocketURL()
         let qmpSocketURL = Self.qmpSocketURL()
         let vncPort = displayMode == .vncLoopback ? vncPortAllocator() : nil
@@ -234,10 +307,19 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
             displayMode: displayMode,
             vncDisplay: vncDisplay
         )
-        process.standardOutput = logHandle
-        process.standardError = logHandle
-        try processRunner(process)
+        process.standardOutput = logCapture.pipe
+        process.standardError = logCapture.pipe
+        process.terminationHandler = { [weak logCapture] _ in
+            logCapture?.finish()
+        }
+        do {
+            try processRunner(process)
+        } catch {
+            logCapture.finish()
+            throw error
+        }
         self.process = process
+        processLogCapture = logCapture
         self.monitorSocketURL = monitorSocketURL
         self.qmpSocketURL = qmpSocketURL
         try writeLaunchRecord(
@@ -273,6 +355,8 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
         }
 
         self.process = nil
+        processLogCapture?.finish()
+        processLogCapture = nil
         if let monitorSocketURL {
             try? FileManager.default.removeItem(at: monitorSocketURL)
         }
@@ -337,6 +421,8 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
         }
         try? FileManager.default.removeItem(at: qmpSocketURL)
         self.process = nil
+        processLogCapture?.finish()
+        processLogCapture = nil
         self.monitorSocketURL = nil
         self.qmpSocketURL = nil
     }
