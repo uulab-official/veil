@@ -623,7 +623,7 @@ struct VeilHostShellApp: App {
                 return
             }
 
-            await model.launchSelectedApp()
+            let result = await model.launchSelectedApp()
 
             if model.pendingLaunchAppId != nil,
                !model.hasLiveAgentConnection {
@@ -631,7 +631,7 @@ struct VeilHostShellApp: App {
                 return
             }
 
-            guard let result = model.lastLaunch else {
+            guard let result else {
                 return
             }
 

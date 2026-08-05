@@ -4158,26 +4158,27 @@ public final class HostDashboardModel {
         return restored
     }
 
-    public func launchSelectedApp() async {
+    @discardableResult
+    public func launchSelectedApp() async -> WindowsAppLaunchResult? {
         guard selectedApp != nil else {
             errorMessage = "Select an app before launching."
             phase = .failed
-            return
+            return nil
         }
 
         guard hasLiveAgentConnection else {
             await queuePendingLaunchIntent(appId: selectedAppId)
             errorMessage = nil
-            return
+            return nil
         }
 
         guard let selectedAppId, canLaunchSelectedApp else {
             errorMessage = "The selected Windows app is not available."
             phase = .failed
-            return
+            return nil
         }
 
-        _ = await launchApp(appId: selectedAppId)
+        return await launchApp(appId: selectedAppId)
     }
 
     @discardableResult

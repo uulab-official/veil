@@ -1947,6 +1947,21 @@ struct HostDashboardModelTests {
         #expect(service.launchedAppIds == ["winapp_calculator"])
     }
 
+    @Test("does not return a previous launch after a later launch fails")
+    @MainActor
+    func doesNotReturnPreviousLaunchAfterLaterFailure() async throws {
+        let service = FakeDashboardService()
+        let model = HostDashboardModel(service: service)
+
+        await model.load()
+        let firstLaunch = await model.launchSelectedApp()
+        service.error = VeilHostError.appMissing("winapp_notepad")
+        let failedLaunch = await model.launchSelectedApp()
+
+        #expect(firstLaunch?.window.windowId == "hwnd:0003029A")
+        #expect(failedLaunch == nil)
+    }
+
     @Test("opens a dropped file in the target Windows app")
     @MainActor
     func opensADroppedFileInTheTargetApp() async throws {

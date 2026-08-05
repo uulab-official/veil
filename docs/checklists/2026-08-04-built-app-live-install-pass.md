@@ -113,6 +113,7 @@ The current installed Windows disk was preserved. This pass added and verified t
 - [x] Kept the optimization progress state on `Windows is restarting` until the guest agent actually reconnects, so the one-click flow no longer skips its most important visible stage.
 - [x] Preserved the real number of open HWNDs per Windows app, restored the first existing HWND on reconnect, launched additional saved windows with `reuseExistingWindow=false`, and exposed the restored window count in Dock/menu recovery actions.
 - [x] Added an `Open New Window` action to each mirrored app tile's context menu; it uses the same tracked-window presenter path and stays disabled until a live agent can create a new HWND.
+- [x] Prevented a failed later launch from reusing the previous successful `lastLaunch` result; the shell now presents only the current launch response and leaves the old window state untouched for diagnostics.
 - [x] Rebuilt and reinstalled the packaged app after the automatic-offer change; the first-screen live check opened the combined confirmation without a manual card click.
-- [x] Passed the complete updated Swift suite: 466 tests across 29 suites.
+- [x] Passed the complete updated Swift suite: 467 tests across 29 suites.
 - [ ] Accept the terms in person, then observe the real current VM through media preparation, normal restart, installer dispatch, guest restart, agent reconnect, and post-reboot framebuffer dimensions. No end-to-end completion claim is made before those live observations occur.
