@@ -2480,6 +2480,12 @@ enum MainWindowFullscreenPolicy {
     }
 }
 
+enum MainWindowResizePolicy {
+    static func shouldFitToPreferredSize(styleMask: NSWindow.StyleMask) -> Bool {
+        !styleMask.contains(.fullScreen)
+    }
+}
+
 @MainActor
 enum MainWindowChrome {
     static func configureAndCompactMainWindow() {
@@ -2575,6 +2581,10 @@ enum MainWindowChrome {
     }
 
     private static func fitToPreferredSize(_ window: NSWindow) {
+        guard MainWindowResizePolicy.shouldFitToPreferredSize(styleMask: window.styleMask) else {
+            return
+        }
+
         let visibleFrame = window.screen?.visibleFrame ?? NSScreen.main?.visibleFrame ?? window.frame
         let targetSize = MainWindowLayout.fittedSize(for: visibleFrame.size)
         let sizeDelta = abs(window.frame.width - targetSize.width) + abs(window.frame.height - targetSize.height)

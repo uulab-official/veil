@@ -1128,53 +1128,61 @@ private struct WindowsEmbeddedDisplayPreview: View {
     @State private var rfbDisplayModel = RFBEmbeddedDisplayModel()
 
     var body: some View {
-        ZStack {
-            Color.black
+        GeometryReader { proxy in
+            let layout = EmbeddedDisplayViewportLayout(
+                viewportSize: proxy.size,
+                framebufferSize: renderedImage?.size
+            )
 
-            if let renderedImage {
-                Image(nsImage: renderedImage)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .id(rfbDisplayModel.imageIdentity(
-                        endpoint: surface.endpoint,
-                        fallbackRevisionID: revisionID
-                    ))
-            } else {
-                WindowsDisplayGrid()
-                    .opacity(0.10)
-                Image(systemName: surface.kind == .vncLoopback ? "display.and.arrow.down" : "display")
-                    .font(.system(size: 48, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.56))
-            }
+            ZStack {
+                Color.black
 
-            if surface.kind == .vncLoopback,
-               rfbDisplayModel.shouldShowStatusOverlay {
-                VStack {
-                    HStack {
-                        Label(rfbDisplayModel.statusTitle(for: surface), systemImage: rfbDisplayModel.statusSymbolName)
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.white.opacity(0.82))
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 7)
-                            .background(.black.opacity(0.30), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                if let renderedImage {
+                    Image(nsImage: renderedImage)
+                        .resizable()
+                        .frame(width: layout.fittedFrame.width, height: layout.fittedFrame.height)
+                        .position(x: layout.fittedFrame.midX, y: layout.fittedFrame.midY)
+                        .id(rfbDisplayModel.imageIdentity(
+                            endpoint: surface.endpoint,
+                            fallbackRevisionID: revisionID
+                        ))
+                } else {
+                    WindowsDisplayGrid()
+                        .opacity(0.10)
+                    Image(systemName: surface.kind == .vncLoopback ? "display.and.arrow.down" : "display")
+                        .font(.system(size: 48, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.56))
+                }
+
+                if surface.kind == .vncLoopback,
+                   rfbDisplayModel.shouldShowStatusOverlay {
+                    VStack {
+                        HStack {
+                            Label(rfbDisplayModel.statusTitle(for: surface), systemImage: rfbDisplayModel.statusSymbolName)
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.white.opacity(0.82))
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 7)
+                                .background(.black.opacity(0.30), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                            Spacer()
+                        }
                         Spacer()
                     }
-                    Spacer()
+                    .padding(14)
+                    .allowsHitTesting(false)
                 }
-                .padding(14)
-                .allowsHitTesting(false)
-            }
 
-            ConsolePreviewInputCaptureView(
-                contentSize: renderedImage?.size,
-                pointerTapAction: pointerTapAction,
-                keyAction: keyAction
-            )
+                ConsolePreviewInputCaptureView(
+                    contentSize: renderedImage?.size,
+                    pointerTapAction: pointerTapAction,
+                    keyAction: keyAction
+                )
+            }
+            .frame(width: proxy.size.width, height: proxy.size.height)
+            .clipped()
         }
-        .aspectRatio(16 / 9, contentMode: .fit)
         .help("Latest Windows display")
         .accessibilityLabel(surface.kind == .vncLoopback ? "Embedded Windows display endpoint" : "Latest Windows display screenshot")
         .accessibilityValue(surface.endpoint ?? path)
@@ -1322,20 +1330,10 @@ enum AspectFitInputCoordinateMapper {
             return nil
         }
 
-        let scale = min(
-            bounds.width / contentSize.width,
-            bounds.height / contentSize.height
-        )
-        let fittedSize = CGSize(
-            width: contentSize.width * scale,
-            height: contentSize.height * scale
-        )
-        let fittedFrame = CGRect(
-            x: bounds.midX - fittedSize.width / 2,
-            y: bounds.midY - fittedSize.height / 2,
-            width: fittedSize.width,
-            height: fittedSize.height
-        )
+        let fittedFrame = EmbeddedDisplayViewportLayout(
+            viewportSize: bounds.size,
+            framebufferSize: contentSize
+        ).fittedFrame.offsetBy(dx: bounds.minX, dy: bounds.minY)
         guard fittedFrame.contains(point) else {
             return nil
         }
@@ -1343,6 +1341,40 @@ enum AspectFitInputCoordinateMapper {
         return CGPoint(
             x: (point.x - fittedFrame.minX) / fittedFrame.width,
             y: 1 - ((point.y - fittedFrame.minY) / fittedFrame.height)
+        )
+    }
+}
+
+struct EmbeddedDisplayViewportLayout {
+    let viewportSize: CGSize
+    let framebufferSize: CGSize?
+
+    var fittedFrame: CGRect {
+        let viewport = CGSize(
+            width: max(viewportSize.width, 0),
+            height: max(viewportSize.height, 0)
+        )
+        guard viewport.width > 0,
+              viewport.height > 0,
+              let framebufferSize,
+              framebufferSize.width > 0,
+              framebufferSize.height > 0 else {
+            return CGRect(origin: .zero, size: viewport)
+        }
+
+        let scale = min(
+            viewport.width / framebufferSize.width,
+            viewport.height / framebufferSize.height
+        )
+        let fittedSize = CGSize(
+            width: framebufferSize.width * scale,
+            height: framebufferSize.height * scale
+        )
+        return CGRect(
+            x: (viewport.width - fittedSize.width) / 2,
+            y: (viewport.height - fittedSize.height) / 2,
+            width: fittedSize.width,
+            height: fittedSize.height
         )
     }
 }

@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import VeilHostCore
 
@@ -28,6 +29,7 @@ struct ContentView: View {
     var cancelWindowsOptimizationAction: () -> Void
     var windowsDisplaySizeChangedAction: (Int, Int) -> Void
     var displayMessage: String?
+    @State private var isMainWindowFullScreen = false
 
     var body: some View {
         ZStack {
@@ -42,6 +44,7 @@ struct ContentView: View {
                     statusSymbol: headerStatus.symbolName,
                     statusTint: headerStatus.tone.color,
                     isRefreshing: isRefreshing,
+                    isFullScreen: isMainWindowFullScreen,
                     refreshAction: refreshAll
                 )
 
@@ -77,6 +80,13 @@ struct ContentView: View {
         }
         .toolbar(removing: .title)
         .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
+        .onAppear(perform: refreshMainWindowFullScreenState)
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didEnterFullScreenNotification)) {
+            updateMainWindowFullScreenState(from: $0)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didExitFullScreenNotification)) {
+            updateMainWindowFullScreenState(from: $0)
+        }
     }
 
     private var isRefreshing: Bool {
@@ -112,6 +122,24 @@ struct ContentView: View {
         }
     }
 
+    private func updateMainWindowFullScreenState(from notification: Notification) {
+        guard let window = notification.object as? NSWindow,
+              window.identifier?.rawValue == "main" else {
+            return
+        }
+
+        isMainWindowFullScreen = window.styleMask.contains(.fullScreen)
+    }
+
+    private func refreshMainWindowFullScreenState() {
+        DispatchQueue.main.async {
+            guard let window = NSApp.windows.first(where: { $0.identifier?.rawValue == "main" }) else {
+                return
+            }
+            isMainWindowFullScreen = window.styleMask.contains(.fullScreen)
+        }
+    }
+
 }
 
 private struct VeilWindowBackdrop: View {
@@ -138,12 +166,16 @@ private struct VeilWindowHeader: View {
     var statusSymbol: String
     var statusTint: Color
     var isRefreshing: Bool
+    var isFullScreen: Bool
     var refreshAction: () -> Void
 
     var body: some View {
         HStack(spacing: 0) {
             Color.clear
-                .frame(width: 74)
+                .frame(width: MainWindowHeaderLayout.leadingInset(
+                    isFullScreen: isFullScreen,
+                    contentInset: MainWindowContentLayout.expandedHorizontalInset
+                ))
 
             HStack(spacing: 10) {
                 VeilAppMark(size: 30)
@@ -214,6 +246,19 @@ private struct VeilWindowHeader: View {
         .contentShape(Rectangle())
         .allowsWindowActivationEvents()
         .simultaneousGesture(WindowDragGesture())
+    }
+}
+
+enum MainWindowContentLayout {
+    static let compactHorizontalInset: CGFloat = 22
+    static let expandedHorizontalInset: CGFloat = 42
+}
+
+enum MainWindowHeaderLayout {
+    private static let windowControlsClearance: CGFloat = 74
+
+    static func leadingInset(isFullScreen: Bool, contentInset: CGFloat) -> CGFloat {
+        isFullScreen ? contentInset : max(windowControlsClearance, contentInset)
     }
 }
 

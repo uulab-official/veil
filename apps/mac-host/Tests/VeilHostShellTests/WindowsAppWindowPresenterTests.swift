@@ -11,6 +11,28 @@ struct WindowsAppWindowPresenterTests {
         #expect(!MainWindowFullscreenPolicy.shouldRequestFullScreen(styleMask: [.titled, .fullScreen]))
     }
 
+    @Test("does not resize the main window while macOS owns its full-screen frame")
+    func preservesMainWindowFullScreenFrame() {
+        #expect(MainWindowResizePolicy.shouldFitToPreferredSize(styleMask: [.titled]))
+        #expect(!MainWindowResizePolicy.shouldFitToPreferredSize(styleMask: [.titled, .fullScreen]))
+    }
+
+    @Test("aligns the full-screen header with the main content while clearing window controls")
+    func alignsHeaderWithMainContent() {
+        #expect(
+            MainWindowHeaderLayout.leadingInset(
+                isFullScreen: true,
+                contentInset: 42
+            ) == 42
+        )
+        #expect(
+            MainWindowHeaderLayout.leadingInset(
+                isFullScreen: false,
+                contentInset: 42
+            ) == 74
+        )
+    }
+
     @Test("keeps launcher hidden while any mirrored Windows app window is visible")
     func keepsLauncherHiddenWhileMirroredWindowIsVisible() {
         #expect(

@@ -41,7 +41,12 @@ struct InstalledWindowsAppHome: View {
                             .padding(.bottom, compact ? 18 : 30)
                     }
                 }
-                .padding(.horizontal, compact ? 22 : 42)
+                .padding(
+                    .horizontal,
+                    compact
+                        ? MainWindowContentLayout.compactHorizontalInset
+                        : MainWindowContentLayout.expandedHorizontalInset
+                )
                 .padding(.vertical, compact ? 18 : 30)
             }
         }

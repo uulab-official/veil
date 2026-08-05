@@ -72,6 +72,19 @@ struct RFBEmbeddedDisplayWorkerTests {
         ) == nil)
     }
 
+    @Test("fits an 800 by 600 guest frame directly into the full host viewport")
+    func fitsLegacyGuestFrameIntoFullViewport() {
+        let layout = EmbeddedDisplayViewportLayout(
+            viewportSize: CGSize(width: 1_200, height: 800),
+            framebufferSize: CGSize(width: 800, height: 600)
+        )
+
+        #expect(abs(layout.fittedFrame.minX - (200.0 / 3.0)) < 0.001)
+        #expect(abs(layout.fittedFrame.minY) < 0.001)
+        #expect(abs(layout.fittedFrame.width - (3_200.0 / 3.0)) < 0.001)
+        #expect(abs(layout.fittedFrame.height - 800) < 0.001)
+    }
+
     @Test("retries initial refusal and resets the retry budget after a live frame")
     func retriesInitialConnectionRefusalAndLaterIdleTimeout() async {
         let attempts = LockedAttemptCounter()
