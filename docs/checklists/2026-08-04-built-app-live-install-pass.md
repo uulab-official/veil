@@ -102,7 +102,7 @@ The current installed Windows disk was preserved. This pass added and verified t
 - [x] Added one combined confirmation describing official UTM Guest Tools, the Veil guest agent, one restart, preserved Windows files, and links to both terms/information pages.
 - [x] Added live RFB dimension feedback; dimensions above `800×600` mark display optimization complete, while agent-only success remains visibly partial.
 - [x] Corrected Finder-launched runtime discovery so the app automatically finds Veil's existing QEMU and `swtpm` bridges under `~/Library/Application Support/Veil/Runtime/bin` without shell environment variables.
-- [x] Passed the affected VM profile (57), QEMU prerequisite (4), and QEMU boot-plan (62) suites, then passed the complete updated Swift suite: 450 tests across 29 suites.
+- [x] Passed the affected VM profile (57), QEMU prerequisite (4), and QEMU boot-plan (62) suites, then passed the complete updated Swift suite: 451 tests across 29 suites.
 - [x] Passed `script/test_all.sh`: Windows agent tests, all 25 Node packages, signed app launch, and isolated install → replace → uninstall → support-data preservation → reinstall lifecycle checks.
 - [x] Rebuilt, installed, and signature-verified `/Applications/Veil.app`; confirmed the installed process is live and the real profile now shows the single `Finish Windows Optimization` card.
 - [x] Opened the combined confirmation in the installed app and confirmed `Review Both Terms`, `I Agree and Optimize`, and `Not Now` are available.
