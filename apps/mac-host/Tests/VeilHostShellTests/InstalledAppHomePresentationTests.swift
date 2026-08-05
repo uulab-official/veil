@@ -3,6 +3,35 @@ import VeilHostCore
 @testable import VeilHostShell
 
 struct InstalledAppHomePresentationTests {
+    @Test("optimization replaces technical failure heading with calm setup guidance")
+    func optimizationUsesCalmHomeHeading() throws {
+        let base = InstalledAppHomePresentation.resolve(
+            runtimeState: .stopped,
+            dashboardPhase: .failed,
+            hasLiveAgentConnection: false,
+            appCount: 0,
+            pendingAppId: nil,
+            errorMessage: "connect: Connection refused"
+        )
+        let optimization = try #require(
+            InstalledWindowsOptimizationPresentation.resolve(
+                windowsInstalled: true,
+                provider: .qemuHypervisor,
+                installEvidenceKind: .profileFlag,
+                status: WindowsOptimizationStatus(phase: .idle)
+            )
+        )
+
+        let heading = InstalledWindowsAppHomeHeadingPresentation.resolve(
+            base: base,
+            optimization: optimization
+        )
+
+        #expect(heading.title == "Windows Apps")
+        #expect(heading.detail == "Complete integration once, then open Windows apps here.")
+        #expect(!heading.detail.contains("failed"))
+    }
+
     @Test("installed QEMU Windows without agent evidence offers one optimization action")
     func installedQEMUWindowsOffersOneOptimizationAction() throws {
         let presentation = try #require(

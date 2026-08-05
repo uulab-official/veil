@@ -10,6 +10,25 @@ enum WindowsOptimizationConsentPolicy {
     static let guestToolsInformationURL = WindowsLicenseConsentPolicy.guestToolsInformationURL
 }
 
+struct InstalledWindowsAppHomeHeadingPresentation: Equatable {
+    let title: String
+    let detail: String
+
+    static func resolve(
+        base: InstalledAppHomePresentation,
+        optimization: InstalledWindowsOptimizationPresentation?
+    ) -> Self {
+        guard optimization != nil else {
+            return Self(title: base.title, detail: base.detail)
+        }
+
+        return Self(
+            title: "Windows Apps",
+            detail: "Complete integration once, then open Windows apps here."
+        )
+    }
+}
+
 struct InstalledWindowsOptimizationPresentation: Equatable {
     let title: String
     let detail: String

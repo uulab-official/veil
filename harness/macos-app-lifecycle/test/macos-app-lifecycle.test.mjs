@@ -14,7 +14,8 @@ test("installed Windows presents one responsive app-first home", async () => {
   assert.match(home, /GeometryReader/);
   assert.match(home, /LazyVGrid/);
   assert.match(home, /GridItem\(\.adaptive/);
-  assert.match(home, /Text\(presentation\.title\)/);
+  assert.match(home, /InstalledWindowsAppHomeHeadingPresentation\.resolve/);
+  assert.match(home, /Text\(heading\.title\)/);
   assert.match(home, /Label\("Windows Desktop", systemImage: "display"\)/);
   assert.match(home, /\.accessibilityAddTraits\(\.isHeader\)/);
   assert.match(home, /\.accessibilityValue\(tilePresentation\.accessibilityValue\)/);

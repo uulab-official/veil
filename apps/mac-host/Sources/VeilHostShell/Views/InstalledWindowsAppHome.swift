@@ -52,14 +52,19 @@ struct InstalledWindowsAppHome: View {
     }
 
     private func topRow(compact: Bool) -> some View {
-        HStack(alignment: .top, spacing: 16) {
+        let heading = InstalledWindowsAppHomeHeadingPresentation.resolve(
+            base: presentation,
+            optimization: optimizationPresentation
+        )
+
+        return HStack(alignment: .top, spacing: 16) {
             VStack(alignment: .leading, spacing: 6) {
-                Text(presentation.title)
+                Text(heading.title)
                     .font(.system(size: compact ? 26 : 32, weight: .semibold, design: .rounded))
                     .foregroundStyle(.white)
                     .accessibilityAddTraits(.isHeader)
 
-                Text(presentation.detail)
+                Text(heading.detail)
                     .font(compact ? .callout : .title3)
                     .foregroundStyle(.white.opacity(0.72))
                     .lineLimit(compact ? 2 : 1)
