@@ -59,6 +59,7 @@ struct VMRuntimeView: View {
     @State private var showsInstallerLicenseConfirmation = false
     @State private var guestToolsPreparationError: String?
     @State private var showsOptimizationConsent = false
+    @State private var hasPresentedAutomaticOptimizationConsent = false
 
     var body: some View {
         Group {
@@ -110,6 +111,14 @@ struct VMRuntimeView: View {
         }
         .task(id: model.snapshot?.state) {
             await refreshRuntimeEvidenceWhileRunning()
+        }
+        .task(id: shouldAutomaticallyOfferOptimizationConsent) {
+            guard shouldAutomaticallyOfferOptimizationConsent else {
+                return
+            }
+
+            hasPresentedAutomaticOptimizationConsent = true
+            showsOptimizationConsent = true
         }
         .sheet(item: $presentedSheet) { _ in
             VMSettingsSheet(model: model) { snapshot, policy in
@@ -239,7 +248,7 @@ struct VMRuntimeView: View {
                     runNotificationProofAction: runNotificationProofAction,
                     optimizationStatus: optimizationStatus,
                     requestWindowsOptimizationAction: {
-                        showsOptimizationConsent = true
+                        presentWindowsOptimizationConsent()
                     },
                     retryWindowsOptimizationAction: retryWindowsOptimizationAction,
                     cancelWindowsOptimizationAction: cancelWindowsOptimizationAction,
@@ -628,6 +637,39 @@ struct VMRuntimeView: View {
             guestToolsPreparationError = error.localizedDescription
             return nil
         }
+    }
+
+    private var installedOptimizationPresentation: InstalledWindowsOptimizationPresentation? {
+        InstalledWindowsOptimizationPresentation.resolve(
+            windowsInstalled: model.snapshot?.windowsInstalled == true,
+            provider: model.snapshot?.runtimeProvider?.kind,
+            installEvidenceKind: (guestAgentInstallEvidence ?? model.snapshot?.installEvidence)?.kind ?? .notConfigured,
+            status: optimizationStatus
+        )
+    }
+
+    private var shouldAutomaticallyOfferOptimizationConsent: Bool {
+        WindowsOptimizationOfferPolicy.shouldPresentConsent(
+            optimization: installedOptimizationPresentation,
+            status: optimizationStatus,
+            hasLiveAgentConnection: hasLiveAgentConnection,
+            hasPresentedThisSession: hasPresentedAutomaticOptimizationConsent,
+            hasOtherModal: hasOtherRuntimeModal
+        )
+    }
+
+    private var hasOtherRuntimeModal: Bool {
+        presentedSheet != nil
+            || pendingInstallerConsent != nil
+            || showsInstallerLicenseConfirmation
+            || guestToolsPreparationError != nil
+            || contentRoute != .overview
+            || showsFullDesktop
+    }
+
+    private func presentWindowsOptimizationConsent() {
+        hasPresentedAutomaticOptimizationConsent = true
+        showsOptimizationConsent = true
     }
 
     private func diagnosticsDirectory() -> URL {

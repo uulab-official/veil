@@ -98,6 +98,51 @@ struct InstalledAppHomePresentationTests {
         #expect(WindowsOptimizationConsentPolicy.acceptButtonTitle == "I Agree and Optimize")
     }
 
+    @Test("installed Windows offers automatic optimization once when integration is missing")
+    func automaticOptimizationOfferRequiresMissingIntegrationAndAppearsOnce() throws {
+        let optimization = try #require(
+            InstalledWindowsOptimizationPresentation.resolve(
+                windowsInstalled: true,
+                provider: .qemuHypervisor,
+                installEvidenceKind: .profileFlag,
+                status: WindowsOptimizationStatus(phase: .idle)
+            )
+        )
+
+        #expect(
+            WindowsOptimizationOfferPolicy.shouldPresentConsent(
+                optimization: optimization,
+                hasLiveAgentConnection: false,
+                hasPresentedThisSession: false,
+                hasOtherModal: false
+            )
+        )
+        #expect(
+            !WindowsOptimizationOfferPolicy.shouldPresentConsent(
+                optimization: optimization,
+                hasLiveAgentConnection: false,
+                hasPresentedThisSession: true,
+                hasOtherModal: false
+            )
+        )
+        #expect(
+            !WindowsOptimizationOfferPolicy.shouldPresentConsent(
+                optimization: optimization,
+                hasLiveAgentConnection: true,
+                hasPresentedThisSession: false,
+                hasOtherModal: false
+            )
+        )
+        #expect(
+            !WindowsOptimizationOfferPolicy.shouldPresentConsent(
+                optimization: optimization,
+                hasLiveAgentConnection: false,
+                hasPresentedThisSession: false,
+                hasOtherModal: true
+            )
+        )
+    }
+
     @Test("ready Windows shows an interactive app home")
     func readyHome() {
         let result = InstalledAppHomePresentation.resolve(

@@ -10,6 +10,28 @@ enum WindowsOptimizationConsentPolicy {
     static let guestToolsInformationURL = WindowsLicenseConsentPolicy.guestToolsInformationURL
 }
 
+enum WindowsOptimizationOfferPolicy {
+    static func shouldPresentConsent(
+        optimization: InstalledWindowsOptimizationPresentation?,
+        status: WindowsOptimizationStatus = WindowsOptimizationStatus(phase: .idle),
+        hasLiveAgentConnection: Bool,
+        hasPresentedThisSession: Bool,
+        hasOtherModal: Bool
+    ) -> Bool {
+        guard let optimization,
+              !optimization.isRunning,
+              optimization.showsPrimaryAction,
+              case .idle = status.phase,
+              !hasLiveAgentConnection,
+              !hasPresentedThisSession,
+              !hasOtherModal else {
+            return false
+        }
+
+        return true
+    }
+}
+
 struct InstalledWindowsAppHomeHeadingPresentation: Equatable {
     let title: String
     let detail: String
