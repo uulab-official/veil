@@ -17,6 +17,7 @@ enum VMControlError: Error, LocalizedError {
     case missingQEMULaunchRecord
     case qemuMonitorUnavailable(String)
     case qemuScreenshotCaptureFailed(String)
+    case qemuLaunchFailed
     case missingQEMUDisplayEndpoint
     case qemuDisplayPortUnavailable
     case missingQEMUKeySequence
@@ -60,6 +61,8 @@ enum VMControlError: Error, LocalizedError {
             "QEMU monitor socket is not available: \(path)"
         case .qemuScreenshotCaptureFailed(let path):
             "QEMU console screenshot could not be captured: \(path)"
+        case .qemuLaunchFailed:
+            "QEMU could not be detached from the control command. Check the QEMU launch log and retry."
         case .missingQEMUDisplayEndpoint:
             "No loopback VNC display endpoint found in the latest QEMU launch record. Start the VM from Veil.app or run veil-vmctl qemu-start first."
         case .qemuDisplayPortUnavailable:
@@ -5409,8 +5412,6 @@ struct VeilVMControl {
             throw VMControlError.qemuDisplayPortUnavailable
         }
         let vncDisplay = vncPort.map { max($0 - 5_900, 0) }
-        FileManager.default.createFile(atPath: processLogURL.path, contents: nil)
-        let logHandle = try FileHandle(forWritingTo: processLogURL)
         let launchArguments = QEMUWindowsBootLaunchPlanner().makeArguments(
             from: plan,
             serialLogPath: serialLogURL.path,
@@ -5421,18 +5422,17 @@ struct VeilVMControl {
             vncDisplay: vncDisplay
         )
 
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: plan.executablePath)
-        process.arguments = launchArguments
-        process.standardOutput = logHandle
-        process.standardError = logHandle
         try QEMUVMRuntimeBooter.startTPMEmulatorIfNeeded(plan: plan)
-        try process.run()
+        let processIdentifier = try launchDetachedQEMU(
+            executablePath: plan.executablePath,
+            arguments: launchArguments,
+            logPath: processLogURL.path
+        )
         if bootDisplayMode == .nativeCocoa {
             bringQEMUToFrontIfAllowed()
         }
         driveInitialQEMULaunch(
-            process: process,
+            processIdentifier: processIdentifier,
             waitSeconds: waitSeconds,
             shouldSendInstallerBootKey: shouldSendInstallerBootKey,
             monitorSocketURL: monitorSocketURL,
@@ -5441,7 +5441,7 @@ struct VeilVMControl {
 
         let record = QEMULaunchRecord(
             provider: plan.provider,
-            pid: process.processIdentifier,
+            pid: processIdentifier,
             executablePath: plan.executablePath,
             arguments: launchArguments,
             displayMode: bootDisplayMode,
@@ -5483,6 +5483,36 @@ struct VeilVMControl {
         let data = try JSONEncoder.veilDiagnostics.encode(record)
         try data.write(to: directory.appendingPathComponent("qemu-launch-\(stamp).json"), options: .atomic)
         try data.write(to: directory.appendingPathComponent("qemu-launch-latest.json"), options: .atomic)
+    }
+
+    private static func launchDetachedQEMU(
+        executablePath: String,
+        arguments: [String],
+        logPath: String
+    ) throws -> Int32 {
+        let launcher = Process()
+        launcher.executableURL = URL(fileURLWithPath: "/bin/sh")
+        launcher.arguments = [
+            "-c",
+            QEMUDetachedLaunchCommand.shellCommand(
+                executablePath: executablePath,
+                arguments: arguments,
+                logPath: logPath
+            )
+        ]
+        let outputPipe = Pipe()
+        launcher.standardOutput = outputPipe
+        launcher.standardError = outputPipe
+        try launcher.run()
+        let output = outputPipe.fileHandleForReading.readDataToEndOfFile()
+        launcher.waitUntilExit()
+
+        guard launcher.terminationStatus == 0,
+              let pid = Int32(String(decoding: output, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)),
+              pid > 0 else {
+            throw VMControlError.qemuLaunchFailed
+        }
+        return pid
     }
 
     private static func smokeQEMUDisplay(json: Bool, waitSeconds: Int) throws {
@@ -6609,7 +6639,7 @@ struct VeilVMControl {
     }
 
     private static func driveInitialQEMULaunch(
-        process: Process,
+        processIdentifier: Int32,
         waitSeconds: Int,
         shouldSendInstallerBootKey: Bool,
         monitorSocketURL: URL,
@@ -6620,7 +6650,7 @@ struct VeilVMControl {
         let deadline = startDate.addingTimeInterval(TimeInterval(boundedSeconds))
         var bootPromptAutomation = QEMUWindowsBootPromptAutomation()
 
-        while process.isRunning, Date() < deadline {
+        while isProcessRunning(pid: processIdentifier), Date() < deadline {
             Thread.sleep(forTimeInterval: 0.25)
             if shouldSendInstallerBootKey {
                 _ = bootPromptAutomation.tick(
@@ -6631,7 +6661,7 @@ struct VeilVMControl {
             }
         }
 
-        if process.isRunning {
+        if isProcessRunning(pid: processIdentifier) {
             QEMUVMRuntimeBooter.captureConsoleScreenshot(
                 monitorSocketURL: monitorSocketURL,
                 imageURL: consoleScreenshotURL

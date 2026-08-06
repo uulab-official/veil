@@ -100,6 +100,10 @@ VEIL_DOTNET_BIN="$HOME/Library/Application Support/Veil/Toolchains/dotnet8/dotne
 - 권한 상승 및 Windows Firewall 단계: `firewallRulesReady` 확인.
 - 에이전트 최종 health/reconnect: 미통과. QEMU host-forward TCP는 열리지만 WebSocket health가 응답하지 않아 P0를 닫지 않음.
 - 반복 설치 안전성: `start-$PID.log`, `agent.stdout-$PID.log`, `agent.stderr-$PID.log`로 실행별 로그 격리. Windows 계약 테스트에 회귀 검증 추가.
+- `veil-vmctl qemu-start` CLI 수명 회귀를 실제로 확인하고 수정했다. 분리 실행 후 CLI가 반환되어도 QEMU PID가 PPID 1로 남고 VNC `127.0.0.1:5900` 및 QMP가 계속 열리는 것을 확인했다.
+- Guest Tools ISO를 네트워크 드라이버 ISO로 오인해 `virtio-net-pci`를 선택하던 계획 버그를 수정했다. UTM Guest Tools 경로는 `usb-net`을 유지하고, 파일명이 `virtio-win`인 드라이버 미디어만 VirtIO NIC 선택 근거로 사용한다.
+- 수정된 `usb-net` 구성으로 실제 Windows 바탕화면까지 부팅했지만 framebuffer는 `800×600`이었다.
+- 실제 `Optimize.cmd` 실행에서 UTM Guest Tools 한국어 UAC 승인까지 통과했다. 이후 정상 재부팅 뒤 VNC framebuffer가 완전 검은 화면이 되었고, `guest-agent-wait`는 `tcpOpen`만 확인하고 WebSocket health는 시간 초과했다. Guest Tools 설치·재연결·1440×900은 실패 증거로 유지한다.
 
 ## 최근 자동 검증 기록 — 2026-08-06
 

@@ -5,6 +5,25 @@ import Testing
 
 @Suite("QEMU Windows boot plan")
 struct QEMUWindowsBootPlanTests {
+    @Test("detached CLI launch quotes paths and returns a background PID")
+    func detachedCLILaunchCommandQuotesPathsAndReturnsBackgroundPID() {
+        let command = QEMUDetachedLaunchCommand.shellCommand(
+            executablePath: "/Users/uulab/Library/Application Support/Veil/Runtime/bin/veil-qemu-launcher",
+            arguments: [
+                "-name",
+                "Windows 11 Arm",
+                "-drive",
+                "file=/Users/uulab/Virtual Machines/Veil/Windows 11 Arm.img"
+            ],
+            logPath: "/Users/uulab/Library/Application Support/Veil/Diagnostics/QEMU Launch/qemu.log"
+        )
+
+        #expect(command.contains("/usr/bin/nohup"))
+        #expect(command.contains("'Windows 11 Arm'"))
+        #expect(command.contains("'file=/Users/uulab/Virtual Machines/Veil/Windows 11 Arm.img'"))
+        #expect(command.contains(">> '/Users/uulab/Library/Application Support/Veil/Diagnostics/QEMU Launch/qemu.log' 2>&1 < /dev/null & echo $!"))
+    }
+
     @Test("bounds runaway QEMU diagnostics while continuing to accept output")
     func boundsRunawayQEMUProcessLog() throws {
         let directory = try temporaryDirectory()
@@ -202,7 +221,37 @@ struct QEMUWindowsBootPlanTests {
         #expect(plan.networkDeviceArgument == "virtio-net-pci,netdev=net0")
         #expect(plan.arguments.containsSequence(["-device", "virtio-net-pci,netdev=net0"]))
         #expect(plan.arguments.contains("driver=raw,file.driver=file,file.locking=off,file.filename=/Users/test/Downloads/virtio-win.iso,if=none,id=drivers,media=cdrom,readonly=on"))
-        #expect(plan.warnings.contains { $0.contains("Using virtio-net-pci because driver media is configured.") })
+        #expect(plan.warnings.contains { $0.contains("Using virtio-net-pci because VirtIO network driver media is configured.") })
+    }
+
+    @Test("UTM Guest Tools media does not select a VirtIO network device")
+    func utmGuestToolsMediaDoesNotSelectAVirtIONetworkDevice() throws {
+        var profile = VMProfile.defaultWindows11Arm(createdAt: Date(timeIntervalSince1970: 1_782_752_400))
+        profile.installerMediaPath = "/Users/test/Downloads/Win11_25H2_Korean_Arm64_v2.iso"
+        profile.driverMediaPath = "/Users/test/Downloads/utm-guest-tools-latest.iso"
+        profile.virtualDiskPath = "/Users/test/Virtual Machines/Veil/Windows 11 Arm.img"
+        profile.sharedFolderPath = "/Users/test/Veil Shared"
+
+        let plan = try LocalQEMUWindowsBootPlanFactory.makePlan(
+            for: profile,
+            architecture: "arm64",
+            minimumOSSupported: true,
+            providerProbe: VMRuntimeProviderProbe(
+                environment: [:],
+                fileExists: { $0 == "/opt/homebrew/bin/qemu-system-aarch64" },
+                executableVersion: { _ in "QEMU emulator version 11.0.2" }
+            ),
+            fileExists: { path in
+                path == "/opt/homebrew/share/qemu/edk2-aarch64-code.fd"
+                    || path == "/opt/homebrew/share/qemu/edk2-arm-vars.fd"
+                    || path == "/Users/test/Virtual Machines/Veil/uefi-vars.fd"
+                    || path == "/opt/homebrew/bin/swtpm"
+            }
+        )
+
+        #expect(plan.networkAdapter == .usbNet)
+        #expect(plan.networkDeviceArgument == "usb-net,netdev=net0")
+        #expect(!QEMUWindowsNetworkAdapter.isNetworkDriverMedia(path: profile.driverMediaPath ?? ""))
     }
 
     @Test("rejects profiles without installer media")
@@ -487,7 +536,7 @@ struct QEMUWindowsBootPlanTests {
         #expect(plan.networkAdapter == .e1000e)
         #expect(plan.networkDeviceArgument == "e1000e,netdev=net0")
         #expect(plan.arguments.containsSequence(["-device", "e1000e,netdev=net0"]))
-        #expect(!plan.warnings.contains { $0.contains("Using virtio-net-pci because driver media is configured.") })
+        #expect(!plan.warnings.contains { $0.contains("Using virtio-net-pci because VirtIO network driver media is configured.") })
     }
 
     @Test("local QEMU plan factory warns and falls back for unsupported network adapter override")

@@ -189,6 +189,24 @@ public enum QEMUVMRuntimeControlError: Error, LocalizedError, Equatable, Sendabl
     }
 }
 
+public enum QEMUDetachedLaunchCommand {
+    public static func shellCommand(
+        executablePath: String,
+        arguments: [String],
+        logPath: String
+    ) -> String {
+        let invocation = ([executablePath] + arguments)
+            .map(shellQuote)
+            .joined(separator: " ")
+        return "/usr/bin/nohup \(invocation) >> \(shellQuote(logPath)) 2>&1 < /dev/null & echo $!"
+    }
+
+    private static func shellQuote(_ value: String) -> String {
+        let escapedSingleQuote = "'\"'\"'"
+        return "'" + value.replacingOccurrences(of: "'", with: escapedSingleQuote) + "'"
+    }
+}
+
 public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
     public static let shared = QEMUVMRuntimeBooter()
 

@@ -92,6 +92,13 @@ public enum QEMUWindowsNetworkAdapter: String, Codable, CaseIterable, Equatable,
 
     public static let environmentVariableName = "VEIL_QEMU_NETWORK_DEVICE"
 
+    public static func isNetworkDriverMedia(path: String) -> Bool {
+        let fileName = URL(fileURLWithPath: path)
+            .lastPathComponent
+            .lowercased()
+        return fileName.contains("virtio-win")
+    }
+
     public struct Selection: Equatable, Sendable {
         public var adapter: QEMUWindowsNetworkAdapter
         public var warning: String?
@@ -424,15 +431,26 @@ public enum LocalQEMUWindowsBootPlanFactory {
             from: environment[QEMUWindowsNetworkAdapter.environmentVariableName]
         )
         var configurationWarnings = networkSelection.warning.map { [$0] } ?? []
-        let hasDriverMedia = profile.driverMediaPath?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+        let configuredDriverMediaPath = profile.driverMediaPath?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let hasDriverMedia = configuredDriverMediaPath.map {
+            QEMUWindowsNetworkAdapter.isNetworkDriverMedia(path: $0)
+        } ?? false
         let networkAdapter: QEMUWindowsNetworkAdapter
         if hasDriverMedia && !networkSelection.isExplicit {
             networkAdapter = .virtioNetPCI
             configurationWarnings.append(
-                "Using virtio-net-pci because driver media is configured. Set \(QEMUWindowsNetworkAdapter.environmentVariableName) to override this compatibility choice."
+                "Using virtio-net-pci because VirtIO network driver media is configured. Set \(QEMUWindowsNetworkAdapter.environmentVariableName) to override this compatibility choice."
             )
         } else {
             networkAdapter = networkSelection.adapter
+            if configuredDriverMediaPath != nil,
+               !hasDriverMedia,
+               !networkSelection.isExplicit {
+                configurationWarnings.append(
+                    "Guest Tools media is not treated as a network driver ISO; keeping the Windows inbox-compatible network adapter."
+                )
+            }
         }
         let planner = QEMUWindowsBootPlanner(
             executablePath: executablePath,
