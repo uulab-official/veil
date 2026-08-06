@@ -72,6 +72,36 @@ struct QEMUConsoleVisualStateTests {
         #expect(QEMUConsoleVisualStateClassifier.classify(metrics: metrics, recognizedText: []) == .modalPrompt)
     }
 
+    @Test("prioritizes a centered security modal over shell OCR")
+    func prioritizesCenteredSecurityModalOverShellOCR() throws {
+        var pixels = [UInt8](repeating: 0, count: 100 * 60 * 4)
+        for y in 0..<60 {
+            for x in 0..<100 {
+                let isModal = x >= 20 && x < 80 && y >= 10 && y < 50
+                let value: UInt8 = isModal ? 230 : 24
+                let offset = ((y * 100) + x) * 4
+                pixels[offset] = value
+                pixels[offset + 1] = value
+                pixels[offset + 2] = value
+                pixels[offset + 3] = 255
+            }
+        }
+        let metrics = try QEMUConsoleFrameAnalyzer.analyze(
+            width: 100,
+            height: 60,
+            rgbaPixels: Data(pixels)
+        )
+
+        #expect(QEMUConsoleVisualStateClassifier.classify(
+            metrics: metrics,
+            recognizedText: ["Windows PowerShell", "사용자 계정 컨트롤"]
+        ) == .uacPrompt)
+        #expect(QEMUConsoleVisualStateClassifier.classify(
+            metrics: metrics,
+            recognizedText: ["Windows PowerShell", "J4AAF E£", "AIJAOIA?"]
+        ) == .modalPrompt)
+    }
+
     @Test("measures meaningful frame changes")
     func measuresMeaningfulFrameChanges() throws {
         let before = solidFrame(width: 100, height: 60, red: 20, green: 20, blue: 20)

@@ -227,6 +227,13 @@ public enum QEMUConsoleVisualStateClassifier {
             return .runDialog
         }
 
+        // UAC uses a dimmed secure desktop with a centered bright prompt. OCR often recognizes the
+        // elevated app name (for example, "Windows PowerShell") but misses the localized approval
+        // text. The modal shape must win over shell OCR so the caller can send the approval input.
+        if metrics.hasCenteredModalContrast {
+            return .modalPrompt
+        }
+
         if containsAny(combined, [
             "windows powershell",
             "command prompt",
@@ -237,9 +244,6 @@ public enum QEMUConsoleVisualStateClassifier {
             return .commandShell
         }
 
-        if metrics.hasCenteredModalContrast {
-            return .modalPrompt
-        }
         if metrics.isUsable {
             return .desktop
         }

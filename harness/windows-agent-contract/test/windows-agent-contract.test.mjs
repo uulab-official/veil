@@ -398,9 +398,9 @@ test("windows agent includes user-logon install and uninstall scripts", async ()
   assert.match(start, /VeilAgent\.exe/);
   assert.match(start, /0\.0\.0\.0/);
   assert.match(start, /127\.0\.0\.1/);
-  assert.match(start, /start\.log/);
-  assert.match(start, /agent\.stdout\.log/);
-  assert.match(start, /agent\.stderr\.log/);
+  assert.match(start, /start(?:-\$PID)?\.log/);
+  assert.match(start, /agent\.stdout(?:-\$PID)?\.log/);
+  assert.match(start, /agent\.stderr(?:-\$PID)?\.log/);
   assert.match(start, /Test-VeilAgentPort/);
   assert.match(start, /Test-VeilAgentHealth/);
   assert.match(start, /Get-VeilGuestIPv4Addresses/);
@@ -415,7 +415,7 @@ test("windows agent includes user-logon install and uninstall scripts", async ()
   assert.match(start, /Guest IPv4 addresses visible to Windows/);
   assert.match(start, /Get-Process\s+-Name\s+"VeilAgent"/);
   assert.match(start, /VeilAgent is already running/);
-  assert.match(start, /loopback plus guest IPv4 agent\.health\.response did not both succeed/);
+  assert.match(start, /loopback agent\.health\.response did not succeed/);
   assert.match(start, /RedirectStandardOutput\s+\$StdOutLogPath/);
   assert.match(start, /RedirectStandardError\s+\$StdErrLogPath/);
   assert.match(install, /-RequirePackageIdentity:\$RequirePackageIdentity/);
@@ -532,4 +532,37 @@ test("windows agent installer starts the installed agent immediately by default"
   assert.match(install, /if\s*\(-not\s+\$NoStart\)\s*{/);
   assert.match(install, /&\s+\$StartScript\s+-InstallRoot\s+\$InstallRoot\s+-Port\s+\$Port/);
   assert.match(install, /Write-Host "VeilAgent started inside Windows on 0\.0\.0\.0:\$Port\. The macOS host connects through QEMU at ws:\/\/127\.0\.0\.1:\$Port\/\."/);
+});
+
+test("repair elevation passes one quoted argument line to PowerShell", async () => {
+  const repair = await readFile(
+    resolve(agentRoot, "scripts/Repair-VeilAgentConnectivity.ps1"),
+    "utf8"
+  );
+
+  assert.match(repair, /\$ArgumentLine\s*=\s*@\([\s\S]+\)\s*-join\s+" "/);
+  assert.match(repair, /-ArgumentList\s+\$ArgumentLine/);
+  assert.doesNotMatch(repair, /\$Arguments\s*=\s*@\(/);
+});
+
+test("agent start uses a per-process log to avoid concurrent retry collisions", async () => {
+  const start = await readFile(resolve(agentRoot, "scripts/Start-VeilAgent.ps1"), "utf8");
+
+  assert.match(start, /\$StartLogPath\s*=\s*Join-Path\s+\$LogRoot\s+"start-\$PID\.log"/);
+  assert.doesNotMatch(start, /\$StartLogPath\s*=\s*Join-Path\s+\$LogRoot\s+"start\.log"/);
+});
+
+test("agent readiness requires loopback health and treats guest IPv4 health as optional", async () => {
+  const start = await readFile(resolve(agentRoot, "scripts/Start-VeilAgent.ps1"), "utf8");
+
+  assert.match(start, /function\s+Test-VeilAgentReady/);
+  assert.match(start, /Guest IPv4 health probe skipped because Windows reported no non-loopback address/);
+  assert.match(start, /Test-VeilAgentReady\s+-Port\s+\$Port/);
+});
+
+test("agent process output logs are isolated per start attempt", async () => {
+  const start = await readFile(resolve(agentRoot, "scripts/Start-VeilAgent.ps1"), "utf8");
+
+  assert.match(start, /\$StdOutLogPath\s*=\s*Join-Path\s+\$LogRoot\s+"agent\.stdout-\$PID\.log"/);
+  assert.match(start, /\$StdErrLogPath\s*=\s*Join-Path\s+\$LogRoot\s+"agent\.stderr-\$PID\.log"/);
 });

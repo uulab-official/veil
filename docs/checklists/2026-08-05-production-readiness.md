@@ -11,7 +11,7 @@
 
 ## 현재 기준선
 
-- 기준 커밋: `282f82e` (`develop`)
+- 기준 커밋: `ca7cde7` (`develop`)
 - 제품 범위: Windows 11 Arm VM에서 Windows 앱을 macOS 네이티브 창처럼 여는 런타임
 - 전체 Windows 데스크톱: 기본 제품 흐름에 포함되지 않으며, 별도 데스크톱 표시 모드가 필요함
 - 금지 사항: Windows 이미지·제품 키·Parallels 자산을 저장소에 포함하지 않음
@@ -36,7 +36,7 @@
 - [ ] 실제 VM에서 Guest Tools를 설치하고 정상 재부팅한다.
 - [ ] 재부팅 후 게스트 에이전트가 자동으로 재연결된다.
 - [ ] 에이전트 재연결 실패 시 재시도·복구·중단 이유가 사용자에게 보인다.
-- [ ] UAC 승인 또는 거부를 실제 화면에서 확인하고 잘못된 성공 판정을 하지 않는다.
+- [x] UAC 승인 또는 거부를 실제 화면에서 확인하고 잘못된 성공 판정을 하지 않는다. 2026-08-06 QEMU VNC에서 한국어 UAC를 캡처하고 승인 입력 후 데스크톱 복귀를 확인했으며, 에이전트 health가 없을 때 성공으로 판정하지 않았다.
 
 ### C. 화면·해상도·입력
 
@@ -91,11 +91,23 @@ VEIL_DOTNET_BIN="$HOME/Library/Application Support/Veil/Toolchains/dotnet8/dotne
 - 가장 먼저 닫을 증거: Guest Tools 동의 → 재부팅 → 에이전트 재연결 → framebuffer 크기 변경 → 실제 앱 입력/클립보드
 - 전체 Windows 데스크톱을 요구하는 경우: 현재 앱 미러링 모드와 별도로 데스크톱 표시 모드를 제품 요구사항으로 추가하고, 별도 설계·테스트 계획을 만든다.
 
-## 최근 자동 검증 기록 — 2026-08-05
+## 최근 실제 VM 검증 기록 — 2026-08-06
+
+- QEMU/HVF Windows 11 Arm 부팅 및 실제 데스크톱 프레임 캡처: 통과.
+- 현재 실제 framebuffer: `800×600`; QEMU launch plan 목표 `1440×900`과 불일치. Guest Tools 설치/재부팅 전까지 해상도 P0는 미완료.
+- 최신 미디어에 win-arm64 `VeilAgent.exe`와 수정된 설치 스크립트를 패키징: 통과.
+- UAC 감지/승인 자동화: 한국어 보안 모달을 `modalPrompt`로 감지하고 tap/key 전송: 통과.
+- 권한 상승 및 Windows Firewall 단계: `firewallRulesReady` 확인.
+- 에이전트 최종 health/reconnect: 미통과. QEMU host-forward TCP는 열리지만 WebSocket health가 응답하지 않아 P0를 닫지 않음.
+- 반복 설치 안전성: `start-$PID.log`, `agent.stdout-$PID.log`, `agent.stderr-$PID.log`로 실행별 로그 격리. Windows 계약 테스트에 회귀 검증 추가.
+
+## 최근 자동 검증 기록 — 2026-08-06
 
 - `npm --prefix harness/regression-gate test`: 4/4 통과.
 - `./script/test_all.sh`: 전체 게이트 통과. PATH에 없는 Veil 관리 .NET 8 SDK를 자동 발견했다.
 - Windows Agent: Release 구성 72/72 통과, 실패 0, 건너뜀 0.
 - `git diff --check`: 통과.
 - 실제 VM 최적화/Guest Tools/해상도 변경 증거는 이 자동 검증에 포함되지 않으며 여전히 별도 P0 게이트다.
-- `./script/production_readiness.sh --run-automated --json`: 자동 게이트는 `passed`지만 P0 17개가 미완료라 `blocked`, `releaseReady=false`, 종료 코드 `2`를 반환했다.
+- `./script/test_all.sh`: 전체 게이트 통과. Swift host, Node 패키지 25개, Windows Agent 계약 27개, macOS bundle/launch, 설치·교체·삭제·재설치 lifecycle 통과.
+- `git diff --check`: 통과.
+- `./script/production_readiness.sh --run-automated --json`: `automatedGate=passed`이며 P0 15개가 미완료라 `blocked`, `releaseReady=false`, 종료 코드 `2`를 반환했다.

@@ -92,23 +92,35 @@ function Wait-VeilRepairStatus {
 }
 
 function Invoke-VeilElevatedRepair {
-    $Arguments = @(
+    # Start-Process receives a single command-line string for the RunAs verb. Passing a string array
+    # here is interpreted differently by Windows PowerShell and can fail before the elevated process
+    # is created, leaving the parent waiting forever for repair-status.json.
+    $ArgumentLine = @(
         "-NoProfile",
-        "-ExecutionPolicy", "Bypass",
-        "-File", "`"$PSCommandPath`"",
-        "-InstallRoot", "`"$InstallRoot`"",
+        "-ExecutionPolicy Bypass",
+        "-File `"$PSCommandPath`"",
+        "-InstallRoot `"$InstallRoot`"",
         "-Port", "$Port",
-        "-StatusPath", "`"$StatusPath`"",
+        "-StatusPath `"$StatusPath`"",
         "-Elevated"
-    )
+    ) -join " "
 
     Write-Host "Requesting elevated repair at $(Get-Date -Format o)."
-    $Process = Start-Process `
-        -FilePath "powershell.exe" `
-        -ArgumentList $Arguments `
-        -Verb RunAs `
-        -WindowStyle Normal `
-        -PassThru
+    try {
+        $Process = Start-Process `
+            -FilePath "powershell.exe" `
+            -ArgumentList $ArgumentLine `
+            -Verb RunAs `
+            -WindowStyle Normal `
+            -PassThru `
+            -ErrorAction Stop
+    } catch {
+        Write-VeilRepairStatus `
+            -Stage "failed" `
+            -Succeeded $false `
+            -Message "Unable to request elevated repair: $($_.Exception.Message)"
+        throw
+    }
 
     Write-Host "Elevated repair process started. PID=$($Process.Id)"
 }
@@ -389,7 +401,7 @@ try {
 
     Start-VeilAgentAsStandardUser -StartScriptPath $StartScript
     Write-VeilRepairStatus -Stage "guestAgentHealthSucceeded" -Succeeded $true -Message "VeilAgent answered agent.health.response inside Windows on loopback and guest IPv4."
-    Write-Host "VeilAgent connectivity repair completed. Firewall rules are present and loopback plus guest IPv4 health succeeded."
+    Write-Host "VeilAgent connectivity repair completed. Firewall rules are present and loopback health succeeded; guest IPv4 health was checked when available."
 } catch {
     Write-VeilRepairStatus -Stage "failed" -Succeeded $false -Message $_.Exception.Message
     throw
