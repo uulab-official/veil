@@ -211,6 +211,7 @@ final class WindowsOptimizationCoordinator {
             }
 
             phase = .verifying
+            try await service.waitForDesktop(timeoutSeconds: 60)
             phase = .complete(displayOptimized: displayOptimized)
         } catch is WindowsOptimizationCancellation {
             phase = .cancelled

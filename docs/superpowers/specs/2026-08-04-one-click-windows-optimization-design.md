@@ -18,7 +18,7 @@ Let a user repair an already-installed Windows VM without manually downloading m
 
 Reuse Veil's existing QEMU/HVF boot, QMP keyboard/pointer input, attached read-only media, console-frame observation, and guest-agent connection checks. Add a bounded orchestration state machine around them instead of introducing a new privileged macOS helper or modifying the Windows system disk offline.
 
-The automatic media contains a short Windows command script. The host only needs to open the Windows Run dialog and invoke that script. The script finds the attached UTM Guest Tools volume, runs its installer silently, installs and starts the Veil guest agent, and requests a normal Windows restart. The host verifies completion through the live agent connection instead of trusting a command-dispatch result or a writable marker.
+The automatic media contains a short Windows command script. The host only needs to open the Windows Run dialog and invoke that script. The script finds the attached UTM Guest Tools volume, requests one administrator approval for a bounded elevated PowerShell worker, installs Guest Tools, runs the Veil connectivity repair in the same elevated process, and requests a normal Windows restart. The host verifies completion through both a live agent connection and a fresh visible Windows desktop instead of trusting a command-dispatch result or a writable marker.
 
 This approach is preferable to a clean reinstall because it preserves user data, and preferable to exposing the installer because it removes repeated in-guest interaction. It also keeps the fallback bounded: if QMP input or verification fails, Veil stops claiming progress and offers a single retry.
 
@@ -82,7 +82,7 @@ After confirmation, the card becomes a progress surface with a concise stage lab
 
 - Unit tests cover every policy transition, cancellation boundary, retry rule, and partial-success label.
 - Boot-plan tests prove both read-only Guest Tools media and rebuilt Veil automation media are attached for an installed VM.
-- Script-generation tests prove `Optimize.cmd` scans drives, silently starts Guest Tools, installs the Veil agent, and requests a normal restart without destructive disk commands.
+- Script-generation tests prove `Optimize.cmd` scans drives, delegates Guest Tools and agent repair to one bounded elevated worker, and requests a normal restart without destructive disk commands.
 - Mock orchestration tests cover stopped/running VM paths, download failure, desktop timeout, command failure, reboot timeout, agent success, and unchanged-resolution partial success.
 - macOS lifecycle contracts prove the installed home exposes one optimization action and no manual installer sequence.
 - The full repository regression gate must pass before integration.

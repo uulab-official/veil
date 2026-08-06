@@ -2328,9 +2328,7 @@ public struct LocalVMRuntimeService: VMRuntimeService {
       for %%I in ("%%D:\\utm-guest-tools-*.exe") do if exist "%%~fI" set "VEIL_GUEST_TOOLS=%%~fI"
     )
     if not defined VEIL_GUEST_TOOLS exit /b 10
-    start /wait "" "%VEIL_GUEST_TOOLS%" /S
-    if errorlevel 1 exit /b %errorlevel%
-    call "%~dp0Repair Veil Agent Connectivity.cmd"
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\\Optimize-VeilWindows.ps1" -GuestToolsPath "%VEIL_GUEST_TOOLS%" -RepairScriptPath "%~dp0scripts\\Repair-VeilAgentConnectivity.ps1"
     if errorlevel 1 exit /b %errorlevel%
     shutdown.exe /r /t 5 /c "Veil finished Windows optimization"
     exit /b 0
@@ -2343,7 +2341,7 @@ public struct LocalVMRuntimeService: VMRuntimeService {
     Run Install Veil Agent.cmd after Windows 11 reaches the desktop.
     V.cmd is the short automation entrypoint used by the macOS host. It runs Repair Veil Agent Connectivity.cmd when present, falls back to Install Veil Agent.cmd for older media layouts, and keeps the console visible briefly so macOS post-attempt screenshots can capture success or failure text.
     P.cmd is the short sparse-package automation entrypoint used by veil-vmctl qemu-prepare-sparse-package. It runs Prepare Sparse Package.cmd and keeps the console visible briefly so package identity status is visible in post-attempt screenshots.
-    Optimize.cmd installs official UTM Guest Tools from attached read-only media, repairs the Veil app connection, and requests one normal Windows restart.
+    Optimize.cmd requests one administrator approval, installs official UTM Guest Tools from attached read-only media, repairs the Veil app connection, and requests one normal Windows restart.
     The installer uses the packaged VeilAgent.exe bundle when present, registers the VeilAgent user logon task when Windows allows it, and listens inside Windows on 0.0.0.0:18444 so the macOS host can connect through QEMU at ws://127.0.0.1:18444/.
     Bootstrap and installer logs are written under %LOCALAPPDATA%\\Veil\\Agent\\logs.
     If this media does not include app\\VeilAgent.exe, build it on the Mac with apps/windows-agent/scripts/publish-veil-agent-bundle.sh before preparing the VM again.

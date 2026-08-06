@@ -11,7 +11,7 @@
 
 ## 현재 기준선
 
-- 기준 커밋: `ca7cde7` (`develop`)
+- 기준 커밋: `4a54fd2` (`develop`, 다음 변경은 이 기준에서 검증)
 - 제품 범위: Windows 11 Arm VM에서 Windows 앱을 macOS 네이티브 창처럼 여는 런타임
 - 전체 Windows 데스크톱: 기본 제품 흐름에 포함되지 않으며, 별도 데스크톱 표시 모드가 필요함
 - 금지 사항: Windows 이미지·제품 키·Parallels 자산을 저장소에 포함하지 않음
@@ -61,7 +61,7 @@
 
 ### E. 자동화·릴리스 게이트
 
-- [x] Swift host 테스트 467개/29 suites가 최근 실행에서 통과했다.
+- [x] Swift host 테스트 471개/29 suites가 최근 실행에서 통과했다.
 - [x] Node harness 및 macOS 설치 lifecycle이 최근 실행에서 통과했다.
 - [x] 회귀 게이트가 PATH 밖의 Veil 설치 .NET 8 SDK를 자동 탐색한다.
 - [x] `script/test_all.sh`를 skip 없이 실행해 Windows Agent 테스트까지 통과한다. 2026-08-05 실행: Windows Agent 72/72, Node 패키지 25개, macOS app bundle/launch, 설치·교체·삭제·재설치 lifecycle 통과.
@@ -104,6 +104,10 @@ VEIL_DOTNET_BIN="$HOME/Library/Application Support/Veil/Toolchains/dotnet8/dotne
 - Guest Tools ISO를 네트워크 드라이버 ISO로 오인해 `virtio-net-pci`를 선택하던 계획 버그를 수정했다. UTM Guest Tools 경로는 `usb-net`을 유지하고, 파일명이 `virtio-win`인 드라이버 미디어만 VirtIO NIC 선택 근거로 사용한다.
 - 수정된 `usb-net` 구성으로 실제 Windows 바탕화면까지 부팅했지만 framebuffer는 `800×600`이었다.
 - 실제 `Optimize.cmd` 실행에서 UTM Guest Tools 한국어 UAC 승인까지 통과했다. 이후 정상 재부팅 뒤 VNC framebuffer가 완전 검은 화면이 되었고, `guest-agent-wait`는 `tcpOpen`만 확인하고 WebSocket health는 시간 초과했다. Guest Tools 설치·재연결·1440×900은 실패 증거로 유지한다.
+- 최적화 완료 판정 결함을 수정했다. 재부팅 후 에이전트만 연결된 경우에도 완료하지 않고, 새 데스크톱 캡처가 다시 보일 때까지 검증한다. 검은 화면은 재시도 가능한 실패로 남는다.
+- UAC가 Guest Tools 설치와 에이전트 복구에서 두 번 발생하던 자동화 결함을 수정했다. `Optimize-VeilWindows.ps1`가 한 번의 관리자 승인 안에서 Guest Tools 설치와 `Repair-VeilAgentConnectivity.ps1 -Elevated`를 순서대로 실행하도록 자동 설치 미디어에 포함됐다.
+- 수정 미디어를 2026-08-06에 재생성했다. `VeilAutoInstall.iso`에 `Optimize-VeilWindows.ps1`, `Repair-VeilAgentConnectivity.ps1`, win-arm64 `VeilAgent.exe`가 실제 포함된 것을 read-only 마운트로 확인했다.
+- 새 미디어를 붙인 QEMU/HVF PID 25924가 `usb-net`, `virtio-gpu-pci,xres=1440,yres=900`, 최신 `VeilAutoInstall.iso`로 시작됐지만, 실제 캡처는 800×600 Windows Boot Manager/부팅 로고에 머물렀고 데스크톱·에이전트 health에 도달하지 못했다. 정상 종료는 성공했으며 Guest Tools/재연결/1440×900 P0는 여전히 미완료다.
 
 ## 최근 자동 검증 기록 — 2026-08-06
 
@@ -115,3 +119,5 @@ VEIL_DOTNET_BIN="$HOME/Library/Application Support/Veil/Toolchains/dotnet8/dotne
 - `./script/test_all.sh`: 전체 게이트 통과. Swift host, Node 패키지 25개, Windows Agent 계약 27개, macOS bundle/launch, 설치·교체·삭제·재설치 lifecycle 통과.
 - `git diff --check`: 통과.
 - `./script/production_readiness.sh --run-automated --json`: `automatedGate=passed`이며 P0 15개가 미완료라 `blocked`, `releaseReady=false`, 종료 코드 `2`를 반환했다.
+- `swift test --disable-sandbox --package-path apps/mac-host --filter 'WindowsOptimizationCoordinatorTests|QEMUWindowsBootPlanTests|VMProfileStoreTests'`: 135개 통과.
+- `./script/test_all.sh`: Swift 471개/29 suites, Windows Agent 72개, Node 패키지 25개, 설치·교체·삭제·재설치 lifecycle 통과.

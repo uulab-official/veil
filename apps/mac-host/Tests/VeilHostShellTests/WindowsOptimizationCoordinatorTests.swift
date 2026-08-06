@@ -18,9 +18,29 @@ struct WindowsOptimizationCoordinatorTests {
             "restartWithPreparedMedia",
             "waitForDesktop",
             "dispatchOptimization",
-            "waitForAgent"
+            "waitForAgent",
+            "waitForDesktop"
         ])
         #expect(coordinator.phase == .complete(displayOptimized: false))
+    }
+
+    @Test("does not complete until the post-restart Windows desktop is visible")
+    func doesNotCompleteUntilPostRestartDesktopIsVisible() async {
+        let service = RecordingWindowsOptimizationService(failureStep: "waitForDesktop#2")
+        let coordinator = WindowsOptimizationCoordinator(service: service)
+
+        await coordinator.begin()
+
+        #expect(service.calls == [
+            "prepareMedia",
+            "restartWithPreparedMedia",
+            "waitForDesktop",
+            "dispatchOptimization",
+            "waitForAgent",
+            "waitForDesktop"
+        ])
+        #expect(coordinator.status.primaryButtonTitle == "Try Again")
+        #expect(coordinator.status.isRunning == false)
     }
 
     @Test("media download failure stops before runtime mutation")
@@ -311,6 +331,8 @@ private final class RecordingWindowsOptimizationService: WindowsOptimizationServ
 
     func waitForDesktop(timeoutSeconds: Int) async throws {
         calls.append("waitForDesktop")
+        let occurrence = calls.filter { $0 == "waitForDesktop" }.count
+        try failIfNeeded("waitForDesktop#\(occurrence)")
         try failIfNeeded("waitForDesktop")
     }
 
