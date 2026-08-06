@@ -1300,6 +1300,7 @@ public protocol AutomaticInstallMediaBuilding: Sendable {
 }
 
 public struct HdiutilAutomaticInstallMediaBuilder: AutomaticInstallMediaBuilding {
+    private static let mediaFormatVersion = "2"
     private let processRunner: @Sendable (String, [String]) throws -> Int32
 
     public init(
@@ -1342,6 +1343,21 @@ public struct HdiutilAutomaticInstallMediaBuilder: AutomaticInstallMediaBuilding
                 to: stagingDirectory.appendingPathComponent("Veil Guest Agent", isDirectory: true)
             )
         }
+        try Self.writeShortEntryPoint(
+            named: "V.cmd",
+            target: "Veil Guest Agent\\V.cmd",
+            to: stagingDirectory
+        )
+        try Self.writeShortEntryPoint(
+            named: "O.cmd",
+            target: "Veil Guest Agent\\Optimize.cmd",
+            to: stagingDirectory
+        )
+        try Self.writeShortEntryPoint(
+            named: "P.cmd",
+            target: "Veil Guest Agent\\P.cmd",
+            to: stagingDirectory
+        )
 
         let temporaryOutputURL = mediaURL.deletingLastPathComponent()
             .appendingPathComponent("\(mediaURL.deletingPathExtension().lastPathComponent)-\(buildID)")
@@ -1379,6 +1395,24 @@ public struct HdiutilAutomaticInstallMediaBuilder: AutomaticInstallMediaBuilding
         } else {
             throw VMRuntimeError.automaticInstallMediaCreationFailed("hdiutil did not produce an ISO image.")
         }
+        try Self.mediaFormatVersion.write(
+            to: Self.mediaFormatVersionURL(for: mediaURL),
+            atomically: true,
+            encoding: .utf8
+        )
+    }
+
+    private static func writeShortEntryPoint(named name: String, target: String, to directory: URL) throws {
+        let command = "@echo off\r\ncall \"%~dp0\\(target)\"\r\n"
+        try command.write(
+            to: directory.appendingPathComponent(name),
+            atomically: true,
+            encoding: .utf8
+        )
+    }
+
+    private static func mediaFormatVersionURL(for mediaURL: URL) -> URL {
+        mediaURL.deletingPathExtension().appendingPathExtension("format-version")
     }
 
     private static func mediaIsCurrent(mediaURL: URL, answerFileURL: URL, agentBundleURL: URL) -> Bool {
@@ -1386,6 +1420,9 @@ public struct HdiutilAutomaticInstallMediaBuilder: AutomaticInstallMediaBuilding
         guard fileManager.fileExists(atPath: mediaURL.path),
               let mediaDate = try? fileManager.attributesOfItem(atPath: mediaURL.path)[.modificationDate] as? Date,
               let answerDate = try? fileManager.attributesOfItem(atPath: answerFileURL.path)[.modificationDate] as? Date else {
+            return false
+        }
+        guard (try? String(contentsOf: mediaFormatVersionURL(for: mediaURL), encoding: .utf8)) == mediaFormatVersion else {
             return false
         }
 
@@ -2134,11 +2171,33 @@ public struct LocalVMRuntimeService: VMRuntimeService {
             atomically: true,
             encoding: .utf8
         )
+        try shortGuestAgentEntryPointCommandText(target: "Veil Guest Agent\\V.cmd")
+            .write(
+                to: bundleURL.deletingLastPathComponent().appendingPathComponent("V.cmd"),
+                atomically: true,
+                encoding: .utf8
+            )
+        try shortGuestAgentEntryPointCommandText(target: "Veil Guest Agent\\Optimize.cmd")
+            .write(
+                to: bundleURL.deletingLastPathComponent().appendingPathComponent("O.cmd"),
+                atomically: true,
+                encoding: .utf8
+            )
+        try shortGuestAgentEntryPointCommandText(target: "Veil Guest Agent\\P.cmd")
+            .write(
+                to: bundleURL.deletingLastPathComponent().appendingPathComponent("P.cmd"),
+                atomically: true,
+                encoding: .utf8
+            )
         try guestAgentReadmeText.write(
             to: bundleURL.appendingPathComponent("README.txt"),
             atomically: true,
             encoding: .utf8
         )
+    }
+
+    private static func shortGuestAgentEntryPointCommandText(target: String) -> String {
+        "@echo off\r\ncall \"%~dp0\\(target)\"\r\n"
     }
 
     private static func copyWindowsAgentSubdirectory(named name: String, from sourceRootURL: URL, to bundleURL: URL) throws {

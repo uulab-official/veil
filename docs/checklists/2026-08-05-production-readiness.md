@@ -94,7 +94,7 @@ VEIL_DOTNET_BIN="$HOME/Library/Application Support/Veil/Toolchains/dotnet8/dotne
 ## 최근 실제 VM 검증 기록 — 2026-08-06
 
 - QEMU/HVF Windows 11 Arm 부팅 및 실제 데스크톱 프레임 캡처: 통과.
-- 현재 실제 framebuffer: `800×600`; QEMU launch plan 목표 `1440×900`과 불일치. Guest Tools 설치/재부팅 전까지 해상도 P0는 미완료.
+- 이전 실행의 framebuffer는 `800×600`이었고, 최신 실행은 `1024×768` 데스크톱까지 올라왔지만 QEMU launch plan 목표 `1440×900`과 여전히 불일치한다. Guest Tools 설치/재부팅 후 목표 해상도 전환이 실제로 확인되기 전까지 해상도 P0는 미완료다.
 - 최신 미디어에 win-arm64 `VeilAgent.exe`와 수정된 설치 스크립트를 패키징: 통과.
 - UAC 감지/승인 자동화: 한국어 보안 모달을 `modalPrompt`로 감지하고 tap/key 전송: 통과.
 - 권한 상승 및 Windows Firewall 단계: `firewallRulesReady` 확인.
@@ -108,6 +108,9 @@ VEIL_DOTNET_BIN="$HOME/Library/Application Support/Veil/Toolchains/dotnet8/dotne
 - UAC가 Guest Tools 설치와 에이전트 복구에서 두 번 발생하던 자동화 결함을 수정했다. `Optimize-VeilWindows.ps1`가 한 번의 관리자 승인 안에서 Guest Tools 설치와 `Repair-VeilAgentConnectivity.ps1 -Elevated`를 순서대로 실행하도록 자동 설치 미디어에 포함됐다.
 - 수정 미디어를 2026-08-06에 재생성했다. `VeilAutoInstall.iso`에 `Optimize-VeilWindows.ps1`, `Repair-VeilAgentConnectivity.ps1`, win-arm64 `VeilAgent.exe`가 실제 포함된 것을 read-only 마운트로 확인했다.
 - 새 미디어를 붙인 QEMU/HVF PID 25924가 `usb-net`, `virtio-gpu-pci,xres=1440,yres=900`, 최신 `VeilAutoInstall.iso`로 시작됐지만, 실제 캡처는 800×600 Windows Boot Manager/부팅 로고에 머물렀고 데스크톱·에이전트 health에 도달하지 못했다. 정상 종료는 성공했으며 Guest Tools/재연결/1440×900 P0는 여전히 미완료다.
+- `ramfb`와 `virtio-gpu-pci`를 동시에 붙이던 QEMU 계획을 제거하고 virtio 단일 디스플레이 헤드로 제한했다. TDD 회귀 테스트를 추가했고, 실제 Windows 디스크 PID 40961이 검은 화면/부팅 정지 없이 `desktop` 프레임을 반환했다. 최신 실제 framebuffer는 `1024×768`이므로 1440×900 P0는 아직 닫지 않았다.
+- 실제 Optimize 복구 경로에서 한 번의 한국어 UAC 승인 뒤 `guestAgentHealthSucceeded=True`와 loopback/게스트 IPv4 health 증거가 Windows 콘솔에 남았다. 그러나 macOS에서 직접 HTTP/WebSocket 핸드셰이크를 재검증한 결과 `18444`는 TCP 연결만 수락하고 5초 동안 응답 바이트가 없어 host-forward WebSocket P0는 미완료다. `usb-net`에서 `e1000e`로 바꾼 격리 재현도 동일해 NIC 단일 변경으로 해결됐다고 판정하지 않았다.
+- Run 대화상자에 드라이브 전체 경로를 긴 문자열로 입력하면 실제 화면에서 명령이 잘리는 결함을 재현했다. 자동 설치 미디어에 루트 `V.cmd`, `O.cmd`, `P.cmd` 짧은 진입점을 추가하고 자동화 명령을 축약했으며, QEMU/미디어 빌더 회귀 테스트가 이를 검증한다. 새 미디어 포맷 버전 마커가 없는 기존 ISO는 다음 미디어 준비 단계에서 재생성되어야 한다.
 
 ## 최근 자동 검증 기록 — 2026-08-06
 
@@ -120,4 +123,5 @@ VEIL_DOTNET_BIN="$HOME/Library/Application Support/Veil/Toolchains/dotnet8/dotne
 - `git diff --check`: 통과.
 - `./script/production_readiness.sh --run-automated --json`: `automatedGate=passed`이며 P0 15개가 미완료라 `blocked`, `releaseReady=false`, 종료 코드 `2`를 반환했다.
 - `swift test --disable-sandbox --package-path apps/mac-host --filter 'WindowsOptimizationCoordinatorTests|QEMUWindowsBootPlanTests|VMProfileStoreTests'`: 135개 통과.
+- `swift test --disable-sandbox --package-path apps/mac-host --filter 'QEMUWindowsBootPlanTests|VMProfileStoreTests'`: 123개/2 suites 통과. virtio 단일 디스플레이 헤드와 짧은 `VEIL_AUTO` 진입점 회귀를 포함한다.
 - `./script/test_all.sh`: Swift 471개/29 suites, Windows Agent 72개, Node 패키지 25개, 설치·교체·삭제·재설치 lifecycle 통과.

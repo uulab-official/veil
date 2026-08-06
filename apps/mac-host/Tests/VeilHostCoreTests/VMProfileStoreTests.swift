@@ -1681,6 +1681,9 @@ struct VMProfileStoreTests {
             var stagedSparsePackageScriptExists = false
             var stagedPackageManifestExists = false
             var stagedBootstrapCommandExists = false
+            var stagedShortBootstrapCommandExists = false
+            var stagedShortOptimizeCommandExists = false
+            var stagedShortSparseCommandExists = false
         }
         let capture = Capture()
         let builder = HdiutilAutomaticInstallMediaBuilder { _, arguments in
@@ -1720,6 +1723,15 @@ struct VMProfileStoreTests {
             capture.stagedBootstrapCommandExists = FileManager.default.fileExists(
                 atPath: stagingURL.appendingPathComponent("Veil Guest Agent/V.cmd").path
             )
+            capture.stagedShortBootstrapCommandExists = FileManager.default.fileExists(
+                atPath: stagingURL.appendingPathComponent("V.cmd").path
+            )
+            capture.stagedShortOptimizeCommandExists = FileManager.default.fileExists(
+                atPath: stagingURL.appendingPathComponent("O.cmd").path
+            )
+            capture.stagedShortSparseCommandExists = FileManager.default.fileExists(
+                atPath: stagingURL.appendingPathComponent("P.cmd").path
+            )
             let outputPath = arguments[outputIndex + 1]
             try Data("fresh media".utf8).write(to: URL(fileURLWithPath: "\(outputPath).iso"))
             return 0
@@ -1738,6 +1750,9 @@ struct VMProfileStoreTests {
         #expect(capture.stagedSparsePackageScriptExists)
         #expect(capture.stagedPackageManifestExists)
         #expect(capture.stagedBootstrapCommandExists)
+        #expect(capture.stagedShortBootstrapCommandExists)
+        #expect(capture.stagedShortOptimizeCommandExists)
+        #expect(capture.stagedShortSparseCommandExists)
     }
 
     @Test("load snapshot avoids Downloads installer discovery before profile exists")

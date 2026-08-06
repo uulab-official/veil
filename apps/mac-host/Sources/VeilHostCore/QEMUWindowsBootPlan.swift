@@ -272,7 +272,6 @@ public struct QEMUWindowsBootPlanner: Sendable {
             "-device", networkAdapter.deviceArgument,
             "-device", "virtio-rng-pci",
             "-display", "cocoa",
-            "-device", "ramfb",
             "-device", "virtio-gpu-pci,xres=\(VMRuntimeDeviceDefaults.graphicsWidthInPixels),yres=\(VMRuntimeDeviceDefaults.graphicsHeightInPixels)",
             "-device", "usb-kbd",
             "-device", "usb-tablet"
@@ -1613,7 +1612,7 @@ public enum QEMUGuestAgentInstallKeySequence {
     ]
 
     public static let commandText =
-        #"cmd.exe /c for %d in (D E F G H I J K L M N O P Q R S T U V W X Y Z) do if exist "%d:\Veil Guest Agent\V.cmd" call "%d:\Veil Guest Agent\V.cmd""#
+        #"cmd.exe /c for %d in (D E F G H I J K L M N O P Q R S T U V W X Y Z) do if exist "%d:\V.cmd" call "%d:\V.cmd""#
 
     public static let openRunSteps: [QEMUKeySequenceStep] = [
         QEMUKeySequenceStep(key: "meta-r", delayAfterSend: 1.0)
@@ -1663,7 +1662,7 @@ public enum QEMUWindowsOptimizationKeySequence {
     ]
 
     public static let commandText =
-        #"cmd.exe /c for %d in (D E F G H I J K L M N O P Q R S T U V W X Y Z) do if exist "%d:\Veil Guest Agent\Optimize.cmd" call "%d:\Veil Guest Agent\Optimize.cmd""#
+        #"cmd.exe /c for %d in (D E F G H I J K L M N O P Q R S T U V W X Y Z) do if exist "%d:\O.cmd" call "%d:\O.cmd""#
 
     public static let openRunSteps = QEMUGuestAgentInstallKeySequence.openRunSteps
 
@@ -1708,7 +1707,7 @@ public enum QEMUSparsePackagePreparationKeySequence {
     public static let uacApproveKeySteps = QEMUGuestAgentInstallKeySequence.uacApproveKeySteps
 
     public static let commandText =
-        #"cmd.exe /c for %d in (D E F G H I J K L M N O P Q R S T U V W X Y Z) do if exist "%d:\Veil Guest Agent\P.cmd" call "%d:\Veil Guest Agent\P.cmd""#
+        #"cmd.exe /c for %d in (D E F G H I J K L M N O P Q R S T U V W X Y Z) do if exist "%d:\P.cmd" call "%d:\P.cmd""#
 
     public static let openRunSteps = QEMUGuestAgentInstallKeySequence.openRunSteps
 
