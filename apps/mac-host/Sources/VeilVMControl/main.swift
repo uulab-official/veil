@@ -1360,6 +1360,9 @@ struct VeilVMControl {
         }
         print("Guest agent diagnostics: \(report.guestAgentDiagnostics.recommendedAction)")
         print("Guest agent endpoint: \(report.guestAgentDiagnostics.endpoint)")
+        if let failureKind = report.guestAgentDiagnostics.failureKind {
+            print("Guest agent failure: \(failureKind.rawValue) — \(failureKind.displayTitle)")
+        }
         print("Guest agent diagnostic command: \(report.guestAgentDiagnostics.diagnosticCommand)")
         print("Guest agent wait command: \(report.guestAgentDiagnostics.waitCommand)")
         print("Local runtime: \(report.localRuntime.recommendedAction)")

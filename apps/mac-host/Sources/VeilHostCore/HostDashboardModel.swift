@@ -315,6 +315,7 @@ public struct WindowsAppRuntimeGuestAgentDiagnosticsStatus: Codable, Equatable, 
     public var waitCommand: String
     public var recommendedAction: String
     public var reason: String
+    public var failureKind: AgentConnectionFailureKind?
 
     public init(
         endpoint: String,
@@ -322,7 +323,8 @@ public struct WindowsAppRuntimeGuestAgentDiagnosticsStatus: Codable, Equatable, 
         diagnosticCommand: String,
         waitCommand: String,
         recommendedAction: String,
-        reason: String
+        reason: String,
+        failureKind: AgentConnectionFailureKind? = nil
     ) {
         self.endpoint = endpoint
         self.isConnected = isConnected
@@ -330,6 +332,7 @@ public struct WindowsAppRuntimeGuestAgentDiagnosticsStatus: Codable, Equatable, 
         self.waitCommand = waitCommand
         self.recommendedAction = recommendedAction
         self.reason = reason
+        self.failureKind = failureKind
     }
 }
 
@@ -3848,7 +3851,8 @@ public final class HostDashboardModel {
                 diagnosticCommand: "veil-host-probe --diagnose-agent",
                 waitCommand: "veil-vmctl guest-agent-wait --json --wait-seconds 30",
                 recommendedAction: "run-app-window-proof",
-                reason: "The live Windows guest agent is connected; proceed to app launch and HWND frame proof."
+                reason: "The live Windows guest agent is connected; proceed to app launch and HWND frame proof.",
+                failureKind: nil
             )
         }
 
@@ -3858,7 +3862,8 @@ public final class HostDashboardModel {
             diagnosticCommand: "veil-host-probe --diagnose-agent",
             waitCommand: "veil-vmctl guest-agent-wait --json --wait-seconds 30",
             recommendedAction: "diagnose-agent",
-            reason: "Run the guest-agent diagnostic before and after installing the Windows agent so setup evidence is captured consistently."
+            reason: agentDiagnostic?.displayDetail ?? "Run the guest-agent diagnostic before and after installing the Windows agent so setup evidence is captured consistently.",
+            failureKind: agentDiagnostic?.failureKind
         )
     }
 
@@ -4029,6 +4034,7 @@ public final class HostDashboardModel {
                     status: .unavailable,
                     endpoint: endpoint,
                     errorMessage: detail,
+                    failureKind: endpoint.hasPrefix("unavailable://") ? .endpointUnsupported : .unknown,
                     nextActions: nextActions
                 )
             } else {

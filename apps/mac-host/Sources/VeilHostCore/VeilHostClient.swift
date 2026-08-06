@@ -305,12 +305,46 @@ public enum AgentConnectionDiagnosticStatus: String, Codable, Equatable, Sendabl
     case unavailable
 }
 
+public enum AgentConnectionFailureKind: String, Codable, Equatable, Sendable {
+    case endpointUnsupported
+    case hostForwardUnavailable
+    case guestAgentUnresponsive
+    case unknown
+
+    public var displayTitle: String {
+        switch self {
+        case .endpointUnsupported:
+            "Guest agent endpoint is unavailable"
+        case .hostForwardUnavailable:
+            "Windows guest-agent port is unavailable"
+        case .guestAgentUnresponsive:
+            "Windows guest agent is not responding"
+        case .unknown:
+            "Windows guest-agent connection needs attention"
+        }
+    }
+
+    public var displayDetail: String {
+        switch self {
+        case .endpointUnsupported:
+            "The selected VM provider can show Windows, but Veil does not have a supported app-connection endpoint for it."
+        case .hostForwardUnavailable:
+            "macOS could not open the configured host-forwarded port. Keep Windows running to the desktop, then check the QEMU network and agent startup."
+        case .guestAgentUnresponsive:
+            "macOS reached the forwarded port, but Windows did not complete the guest-agent health response. The VM is not ready for Windows app mirroring."
+        case .unknown:
+            "Veil could not determine whether the VM, host-forwarded port, or Windows agent caused the connection failure."
+        }
+    }
+}
+
 public struct AgentConnectionDiagnostic: Codable, Equatable, Sendable {
     public var status: AgentConnectionDiagnosticStatus
     public var endpoint: String
     public var health: AgentHealthResponse?
     public var errorMessage: String?
     public var hostForwardProbe: HostForwardProbeResult?
+    public var failureKind: AgentConnectionFailureKind?
     public var nextActions: [String]
 
     public init(
@@ -319,6 +353,7 @@ public struct AgentConnectionDiagnostic: Codable, Equatable, Sendable {
         health: AgentHealthResponse? = nil,
         errorMessage: String? = nil,
         hostForwardProbe: HostForwardProbeResult? = nil,
+        failureKind: AgentConnectionFailureKind? = nil,
         nextActions: [String]
     ) {
         self.status = status
@@ -326,7 +361,18 @@ public struct AgentConnectionDiagnostic: Codable, Equatable, Sendable {
         self.health = health
         self.errorMessage = errorMessage
         self.hostForwardProbe = hostForwardProbe
+        self.failureKind = failureKind
         self.nextActions = nextActions
+    }
+
+    public var displayTitle: String {
+        failureKind?.displayTitle ?? (status == .connected ? "Windows guest agent connected" : "Windows guest-agent connection needs attention")
+    }
+
+    public var displayDetail: String {
+        failureKind?.displayDetail ?? (status == .connected
+            ? "The Windows guest agent completed a health check and is ready for the next app-runtime step."
+            : "Veil could not complete a Windows guest-agent health check.")
     }
 
     public static func connected(endpoint: String, health: AgentHealthResponse) -> AgentConnectionDiagnostic {
@@ -358,11 +404,23 @@ public struct AgentConnectionDiagnostic: Codable, Equatable, Sendable {
             nextActions.append("If Windows shows a disconnected network icon, attach a driver ISO or retry with an alternate QEMU NIC before relying on hostfwd for app mirroring.")
         }
 
+        let failureKind: AgentConnectionFailureKind
+        if endpoint.hasPrefix("unavailable://") || hostForwardProbe?.status == .unsupportedEndpoint {
+            failureKind = .endpointUnsupported
+        } else if hostForwardProbe?.status == .tcpOpen {
+            failureKind = .guestAgentUnresponsive
+        } else if hostForwardProbe?.status == .tcpUnavailable {
+            failureKind = .hostForwardUnavailable
+        } else {
+            failureKind = .unknown
+        }
+
         return AgentConnectionDiagnostic(
             status: .unavailable,
             endpoint: endpoint,
             errorMessage: errorMessage,
             hostForwardProbe: hostForwardProbe,
+            failureKind: failureKind,
             nextActions: nextActions
         )
     }

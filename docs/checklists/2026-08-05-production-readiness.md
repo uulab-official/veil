@@ -176,6 +176,13 @@ VEIL_DOTNET_BIN="$HOME/Library/Application Support/Veil/Toolchains/dotnet8/dotne
 - `git diff --check`: 통과.
 - `script/production_readiness.sh --run-automated --json`: automated gate 통과, `P0 37개 중 22개 통과 / 15개 미완료`, `releaseReady=false`.
 
+## 2026-08-06 diagnostic classification verification
+
+- `swift test --disable-sandbox --package-path apps/mac-host --filter 'HostDashboardModelTests|VeilHostClientTests'`: 123개/2 suites 통과.
+- `VEIL_DOTNET_BIN=.../dotnet ./script/test_all.sh`: Swift host, Windows Agent 27개 계약 테스트, Node 패키지 25개, macOS bundle/launch, 설치·교체·삭제·재설치 lifecycle 전체 통과.
+- `git diff --check`: 통과.
+- `./script/production_readiness.sh --run-automated --json`: `automatedGate=passed`, `P0 37개 중 22개 통과 / 15개 미완료`, `releaseReady=false`, 종료 코드 `2`.
+
 ## 2026-08-06 virtio-serial probe live evidence
 
 - [x] 기본 WebSocket QEMU 계획으로 동일한 관리 Windows 디스크를 부팅해 대조 기준을 확보했다. `qemu-display-smoke`는 PID `77784`, `visualState=desktop`, `1024×768`을 기록했다.
@@ -191,3 +198,13 @@ VEIL_DOTNET_BIN="$HOME/Library/Application Support/Veil/Toolchains/dotnet8/dotne
 - [x] probe VM은 정상 powerdown이 완료되지 않아 `qemu-force-stop --i-understand-data-loss`로 프로세스만 종료했다. Windows 이미지나 디스크는 삭제하지 않았다.
 
 현재 판정: **BLOCKED — `max_ports=1`/`max_ports=2`, host socket client 유무를 확인해도 VirtIO serial 구성은 Windows Boot Manager 단계에서 멈췄다.** 따라서 `virtio-serial`을 production fallback으로 활성화하지 않는다.
+
+## 2026-08-06 guest-agent diagnostic classification
+
+- [x] WebSocket health 실패와 QEMU host-forward TCP 상태를 하나의 `AgentConnectionFailureKind`로 분류한다: endpoint 미지원, host-forward 포트 불가, 게스트 에이전트 무응답, 원인 미확정.
+- [x] 기존 진단 JSON에 `failureKind`가 없어도 읽을 수 있도록 optional Codable 필드로 유지한다.
+- [x] TCP는 열렸지만 WebSocket health가 시간 초과되는 실제 P0 증거를 `guestAgentUnresponsive`로 표시한다. 이는 연결 성공이나 release-ready 판정으로 승격하지 않는다.
+- [x] 공통 진단 패널은 분류별 제목·설명·복구 행동을 보여주고, CLI 비JSON 출력은 동일한 failure kind를 출력한다.
+- [x] `VeilHostClientTests`와 `HostDashboardModelTests` 집중 suite를 통과시켰다.
+
+현재 판정: **PARTIAL — 실패 원인과 다음 행동은 제품 표면에서 구분되지만, 실제 Windows 게스트 NIC/IP와 WebSocket health 왕복은 여전히 미해결이다.**

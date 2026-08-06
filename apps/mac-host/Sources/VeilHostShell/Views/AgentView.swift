@@ -115,10 +115,15 @@ struct AgentDiagnosticPanel: View {
                 )
             }
 
-            Text(summary)
-                .font(.callout)
-                .foregroundStyle(.secondary)
-                .textSelection(.enabled)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(diagnostic.displayTitle)
+                    .font(.headline)
+                    .foregroundStyle(.primary)
+                Text(diagnostic.displayDetail)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+            }
 
             VStack(alignment: .leading, spacing: 8) {
                 ForEach(Array(primaryActions.enumerated()), id: \.offset) { _, action in
@@ -152,15 +157,6 @@ struct AgentDiagnosticPanel: View {
         }
     }
 
-    private var summary: String {
-        switch diagnostic.status {
-        case .connected:
-            "Windows is reachable. Open a Windows app to verify the window bridge."
-        case .unavailable:
-            "Veil can start Windows, but the macOS app cannot talk to the Windows guest agent yet."
-        }
-    }
-
     private var primaryActions: [String] {
         switch diagnostic.status {
         case .connected:
@@ -169,12 +165,32 @@ struct AgentDiagnosticPanel: View {
                 "Use input and clipboard checks after the window appears."
             ]
         case .unavailable:
-            [
-                "Keep the Windows desktop open.",
-                "Run Install Veil Agent.cmd from the Veil Shared drive.",
-                "Run Repair Veil Agent Connectivity.cmd if the forwarded port opens but health still times out.",
-                "If it still does not connect, run Collect Veil Agent Diagnostics.cmd in Windows."
-            ]
+            switch diagnostic.failureKind ?? .unknown {
+            case .endpointUnsupported:
+                [
+                    "Use the QEMU/HVF runtime for the supported app-connection path.",
+                    "Use the Windows console for installation and recovery only.",
+                    "For development, configure VEIL_AGENT_URL only after providing a reachable ws:// or wss:// endpoint."
+                ]
+            case .hostForwardUnavailable:
+                [
+                    "Keep the Windows desktop open.",
+                    "Run Install Veil Agent.cmd from the Veil Shared drive.",
+                    "Check that QEMU exposes hostfwd=tcp::18444-:18444, then retry the connection."
+                ]
+            case .guestAgentUnresponsive:
+                [
+                    "Keep Windows running at the desktop.",
+                    "Run Repair Veil Agent Connectivity.cmd and approve the Windows administrator prompt.",
+                    "If it still does not connect, run Collect Veil Agent Diagnostics.cmd in Windows."
+                ]
+            case .unknown:
+                [
+                    "Keep the Windows desktop open.",
+                    "Run Install Veil Agent.cmd from the Veil Shared drive.",
+                    "Run Collect Veil Agent Diagnostics.cmd in Windows if the connection still fails."
+                ]
+            }
         }
     }
 }

@@ -49,6 +49,8 @@ struct VeilHostClientTests {
         #expect(diagnostic.endpoint == "ws://127.0.0.1:18444")
         #expect(diagnostic.health?.agentVersion == "0.1.0")
         #expect(diagnostic.errorMessage == nil)
+        #expect(diagnostic.failureKind == nil)
+        #expect(diagnostic.displayTitle == "Windows guest agent connected")
         #expect(diagnostic.nextActions.contains("Run veil-host-probe --launch-notepad-frame to verify HWND launch, tracking, and first frame capture."))
         #expect(transport.sentTypes == ["agent.health.request"])
     }
@@ -64,6 +66,8 @@ struct VeilHostClientTests {
         #expect(diagnostic.endpoint == "ws://127.0.0.1:18444")
         #expect(diagnostic.health == nil)
         #expect(diagnostic.errorMessage == "Connection refused.")
+        #expect(diagnostic.failureKind == .hostForwardUnavailable)
+        #expect(diagnostic.displayTitle == "Windows guest-agent port is unavailable")
         #expect(diagnostic.nextActions.contains("Inside Windows, run Veil Shared\\Veil Guest Agent\\Install Veil Agent.cmd."))
         #expect(diagnostic.nextActions.contains("If macOS can open the forwarded port but health still times out, run Veil Shared\\Veil Guest Agent\\Repair Veil Agent Connectivity.cmd and approve the Windows administrator prompt."))
         #expect(diagnostic.nextActions.contains("If the agent still does not connect, run Veil Shared\\Veil Guest Agent\\Collect Veil Agent Diagnostics.cmd and inspect the desktop ZIP."))
@@ -105,8 +109,33 @@ struct VeilHostClientTests {
 
         #expect(diagnostic.status == .unavailable)
         #expect(diagnostic.hostForwardProbe?.status == .tcpOpen)
+        #expect(diagnostic.failureKind == .guestAgentUnresponsive)
+        #expect(diagnostic.displayTitle == "Windows guest agent is not responding")
+        #expect(diagnostic.displayDetail.contains("did not complete the guest-agent health response"))
         #expect(diagnostic.nextActions.contains("Mac can open the QEMU hostfwd TCP port, but WebSocket health did not respond; run the Veil connectivity repair command to refresh Windows Firewall rules and restart the agent."))
         #expect(diagnostic.nextActions.contains("If Windows shows a disconnected network icon, attach a driver ISO or retry with an alternate QEMU NIC before relying on hostfwd for app mirroring."))
+    }
+
+    @Test("classifies an unsupported provider endpoint")
+    func classifiesUnsupportedProviderEndpoint() {
+        let diagnostic = AgentConnectionDiagnostic.unavailable(
+            endpoint: "unavailable://apple-virtualization/guest-agent",
+            errorMessage: "Apple Virtualization has no configured guest-agent endpoint."
+        )
+
+        #expect(diagnostic.failureKind == .endpointUnsupported)
+        #expect(diagnostic.displayTitle == "Guest agent endpoint is unavailable")
+        #expect(diagnostic.displayDetail.contains("does not have a supported app-connection endpoint"))
+    }
+
+    @Test("decodes legacy diagnostic JSON without a failure kind")
+    func decodesLegacyDiagnosticJSONWithoutFailureKind() throws {
+        let data = Data(#"{"status":"unavailable","endpoint":"ws://127.0.0.1:18444","health":null,"errorMessage":"Connection refused.","hostForwardProbe":null,"nextActions":[]}"#.utf8)
+
+        let diagnostic = try JSONDecoder().decode(AgentConnectionDiagnostic.self, from: data)
+
+        #expect(diagnostic.failureKind == nil)
+        #expect(diagnostic.displayTitle == "Windows guest-agent connection needs attention")
     }
 
     @Test("waits for connected Windows guest agent")
