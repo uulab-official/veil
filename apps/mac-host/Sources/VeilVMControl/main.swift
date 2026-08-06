@@ -5370,10 +5370,20 @@ struct VeilVMControl {
         waitSeconds: Int,
         displayMode: VMControlArguments.QEMUStartDisplayMode
     ) async throws {
-        guard let profile = try await JSONVMProfileStore().load() else {
+        let profileStore = JSONVMProfileStore()
+        guard let initialProfile = try await profileStore.load() else {
             throw VMControlError.missingProfileForQEMUPlan
         }
-        try rejectDuplicateQEMULaunchIfNeeded(for: profile)
+        try rejectDuplicateQEMULaunchIfNeeded(for: initialProfile)
+
+        // Refresh VEIL_AUTO before consuming the launch plan. This keeps a changed
+        // guest-agent bundle and the short recovery entrypoints from being stranded
+        // behind an older ISO inode on the next VM boot.
+        _ = try await LocalVMRuntimeService(profileStore: profileStore)
+            .prepareQEMUStartResources()
+        guard let profile = try await profileStore.load() else {
+            throw VMControlError.missingProfileForQEMUPlan
+        }
 
         let plan = try makeQEMUPlan(for: profile)
         let readiness = QEMUWindowsReadinessDoctor().makeReport(
@@ -6195,22 +6205,37 @@ struct VeilVMControl {
                 referenceFrame: runSnapshot?.frame,
                 recognizeText: false
             )
-            runConfirmationTap = try? await qemuGuestCommandRunConfirmationTapRecord()
-            if runConfirmationTap == nil {
-                keySendRecords.append(try await qemuKeySendRecord(steps: [
-                    QEMUKeySequenceStep(key: "ret", delayAfterSend: 1.0)
-                ]))
-            }
+            // Enter is the stable confirmation path for the Windows Run dialog. A
+            // fixed pointer coordinate can land outside the button after DPI or
+            // window-size changes, leaving the command typed but never executed.
+            // Keep the pointer tap as a bounded fallback only if the keyboard path
+            // does not produce a UAC/modal transition.
+            keySendRecords.append(try await qemuKeySendRecord(steps: [
+                QEMUKeySequenceStep(key: "ret", delayAfterSend: 1.0)
+            ]))
 
             let uacTimeout = min(max(waitSeconds / 2, 12), 30)
-            let uacResult = await waitForQEMUConsoleReadiness(
+            var uacResult = await waitForQEMUConsoleReadiness(
                 phase: "uac",
-                timeoutSeconds: uacTimeout,
+                timeoutSeconds: min(uacTimeout, 5),
                 referenceFrame: typedSnapshot?.frame ?? runSnapshot?.frame,
                 expectedStates: [.uacPrompt, .modalPrompt],
                 acceptMeaningfulChange: false,
                 wakeWhenBlank: false
             )
+            if uacResult.report.status != .ready {
+                runConfirmationTap = try? await qemuGuestCommandRunConfirmationTapRecord()
+                if runConfirmationTap != nil {
+                    uacResult = await waitForQEMUConsoleReadiness(
+                        phase: "uac-pointer-fallback",
+                        timeoutSeconds: max(uacTimeout - 5, 7),
+                        referenceFrame: typedSnapshot?.frame ?? runSnapshot?.frame,
+                        expectedStates: [.uacPrompt, .modalPrompt],
+                        acceptMeaningfulChange: false,
+                        wakeWhenBlank: false
+                    )
+                }
+            }
             uacReadiness = uacResult.report
             if uacReadiness.status == .ready {
                 uacApprovalTap = try? await qemuGuestAgentInstallUACApprovalTapRecord()

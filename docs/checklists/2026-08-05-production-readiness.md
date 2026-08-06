@@ -11,7 +11,7 @@
 
 ## 현재 기준선
 
-- 기준 커밋: `4a54fd2` (`develop`, 다음 변경은 이 기준에서 검증)
+- 기준 커밋: `d38557e` (`develop`, 다음 변경은 이 기준에서 검증)
 - 제품 범위: Windows 11 Arm VM에서 Windows 앱을 macOS 네이티브 창처럼 여는 런타임
 - 전체 Windows 데스크톱: 기본 제품 흐름에 포함되지 않으며, 별도 데스크톱 표시 모드가 필요함
 - 금지 사항: Windows 이미지·제품 키·Parallels 자산을 저장소에 포함하지 않음
@@ -111,6 +111,11 @@ VEIL_DOTNET_BIN="$HOME/Library/Application Support/Veil/Toolchains/dotnet8/dotne
 - `ramfb`와 `virtio-gpu-pci`를 동시에 붙이던 QEMU 계획을 제거하고 virtio 단일 디스플레이 헤드로 제한했다. TDD 회귀 테스트를 추가했고, 실제 Windows 디스크 PID 40961이 검은 화면/부팅 정지 없이 `desktop` 프레임을 반환했다. 최신 실제 framebuffer는 `1024×768`이므로 1440×900 P0는 아직 닫지 않았다.
 - 실제 Optimize 복구 경로에서 한 번의 한국어 UAC 승인 뒤 `guestAgentHealthSucceeded=True`와 loopback/게스트 IPv4 health 증거가 Windows 콘솔에 남았다. 그러나 macOS에서 직접 HTTP/WebSocket 핸드셰이크를 재검증한 결과 `18444`는 TCP 연결만 수락하고 5초 동안 응답 바이트가 없어 host-forward WebSocket P0는 미완료다. `usb-net`에서 `e1000e`로 바꾼 격리 재현도 동일해 NIC 단일 변경으로 해결됐다고 판정하지 않았다.
 - Run 대화상자에 드라이브 전체 경로를 긴 문자열로 입력하면 실제 화면에서 명령이 잘리는 결함을 재현했다. 자동 설치 미디어에 루트 `V.cmd`, `O.cmd`, `P.cmd` 짧은 진입점을 추가하고 자동화 명령을 축약했으며, QEMU/미디어 빌더 회귀 테스트가 이를 검증한다. 새 미디어 포맷 버전 마커가 없는 기존 ISO는 다음 미디어 준비 단계에서 재생성되어야 한다.
+- 2026-08-06에 `qemu-start`가 설치된 VM의 기존 Windows 디스크를 교체하지 않고 `VEIL_AUTO` 지원 ISO를 먼저 재생성하는 경로를 추가했다. 포맷 마커 `2`와 루트 `V.cmd`의 실제 내용(`Veil Guest Agent\\V.cmd`)을 read-only 마운트로 확인했고, 잘못된 `\\(target)` 리터럴을 TDD 회귀로 수정했다.
+- 공식 Fedora VirtIO 최신 ISO를 외부 다운로드 폴더에 받아 SHA-256 `e14cf2b94492c3e925f0070ba7fdfedeb2048c91eea9c5a5afb30232a3976331`로 기록했다. 저장소에는 포함하지 않았다. Windows 콘솔에서 수정된 `Repair-VeilAgentConnectivity.ps1`가 `networkDriverInstalled succeeded=True`와 VirtIO NetKVM Windows 11 ARM64 설치 완료를 실제 표시했다.
+- 동일한 설치 후 네트워크 장치 대조 결과: `virtio-net-pci`는 UEFI `Start boot option` 화면에 머물러 데스크톱에 도달하지 못했고, `virtio-net-device`는 `1024×768` 데스크톱까지 부팅되지만 `ipconfig`에 어댑터가 나타나지 않았다. 따라서 VirtIO 드라이버 설치 성공만으로 연결 P0를 닫지 않는다.
+- `VEIL_QEMU_NETWORK_DEVICE=usb-net`에서는 `1024×768` 실제 Windows 데스크톱까지 부팅했지만, macOS `guest-agent-wait`는 `tcpOpen` 뒤 WebSocket 응답 시간 초과를 반환했다. Windows 내부 수동 복구는 `guestAgentHealthSucceeded=True`를 남겼으므로 현재 미해결 경계는 게스트 NIC/IP 또는 QEMU host-forward 전달이다.
+- 자동 `qemu-install-agent`의 새 Enter 우선 경로를 실제 실행했다. Run 대화상자에서 `V.cmd` 실행, 한국어 UAC 감지, `left + ret` 승인, Windows 복구 콘솔 캡처까지 통과했지만 macOS WebSocket health는 여전히 미통과다.
 
 ## 최근 자동 검증 기록 — 2026-08-06
 
@@ -125,3 +130,5 @@ VEIL_DOTNET_BIN="$HOME/Library/Application Support/Veil/Toolchains/dotnet8/dotne
 - `swift test --disable-sandbox --package-path apps/mac-host --filter 'WindowsOptimizationCoordinatorTests|QEMUWindowsBootPlanTests|VMProfileStoreTests'`: 135개 통과.
 - `swift test --disable-sandbox --package-path apps/mac-host --filter 'QEMUWindowsBootPlanTests|VMProfileStoreTests'`: 123개/2 suites 통과. virtio 단일 디스플레이 헤드와 짧은 `VEIL_AUTO` 진입점 회귀를 포함한다.
 - `./script/test_all.sh`: Swift 471개/29 suites, Windows Agent 72개, Node 패키지 25개, 설치·교체·삭제·재설치 lifecycle 통과.
+- 현재 변경 기준 focused Swift 151개/3 suites(`QEMUWindowsBootPlanTests|VMProfileStoreTests|WindowsDownloadPolicyTests`)와 Windows Agent 계약 27개가 통과했다.
+- 현재 변경 기준 전체 `VEIL_DOTNET_BIN=.../dotnet ./script/test_all.sh` 회귀 게이트가 통과했다. production readiness는 `P0 37개 중 22개 통과, 15개 미완료, automatedGate=passed, releaseReady=false`를 재확인했다.

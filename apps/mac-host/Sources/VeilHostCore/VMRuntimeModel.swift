@@ -1403,7 +1403,7 @@ public struct HdiutilAutomaticInstallMediaBuilder: AutomaticInstallMediaBuilding
     }
 
     private static func writeShortEntryPoint(named name: String, target: String, to directory: URL) throws {
-        let command = "@echo off\r\ncall \"%~dp0\\(target)\"\r\n"
+        let command = "@echo off\r\ncall \"%~dp0\\" + target + "\"\r\n"
         try command.write(
             to: directory.appendingPathComponent(name),
             atomically: true,
@@ -1978,6 +1978,12 @@ public struct LocalVMRuntimeService: VMRuntimeService {
         return try await loadSnapshot()
     }
 
+    /// Refreshes read-only support media before a QEMU launch without replacing the
+    /// installed Windows disk or reattaching the Windows installer ISO.
+    public func prepareQEMUStartResources() async throws -> VMRuntimeSnapshot {
+        try await prepareDefaultVM()
+    }
+
     public func createDefaultVirtualDisk() async throws -> VMRuntimeSnapshot {
         var profile = try await profileStore.load() ?? defaultProfile()
         if profile.virtualDiskPath != nil {
@@ -2197,7 +2203,7 @@ public struct LocalVMRuntimeService: VMRuntimeService {
     }
 
     private static func shortGuestAgentEntryPointCommandText(target: String) -> String {
-        "@echo off\r\ncall \"%~dp0\\(target)\"\r\n"
+        "@echo off\r\ncall \"%~dp0\\" + target + "\"\r\n"
     }
 
     private static func copyWindowsAgentSubdirectory(named name: String, from sourceRootURL: URL, to bundleURL: URL) throws {

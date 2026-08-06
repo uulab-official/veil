@@ -1684,6 +1684,7 @@ struct VMProfileStoreTests {
             var stagedShortBootstrapCommandExists = false
             var stagedShortOptimizeCommandExists = false
             var stagedShortSparseCommandExists = false
+            var stagedShortBootstrapCommand = ""
         }
         let capture = Capture()
         let builder = HdiutilAutomaticInstallMediaBuilder { _, arguments in
@@ -1726,6 +1727,10 @@ struct VMProfileStoreTests {
             capture.stagedShortBootstrapCommandExists = FileManager.default.fileExists(
                 atPath: stagingURL.appendingPathComponent("V.cmd").path
             )
+            capture.stagedShortBootstrapCommand = try String(
+                contentsOf: stagingURL.appendingPathComponent("V.cmd"),
+                encoding: .utf8
+            )
             capture.stagedShortOptimizeCommandExists = FileManager.default.fileExists(
                 atPath: stagingURL.appendingPathComponent("O.cmd").path
             )
@@ -1753,6 +1758,8 @@ struct VMProfileStoreTests {
         #expect(capture.stagedShortBootstrapCommandExists)
         #expect(capture.stagedShortOptimizeCommandExists)
         #expect(capture.stagedShortSparseCommandExists)
+        #expect(capture.stagedShortBootstrapCommand.contains("Veil Guest Agent\\V.cmd"))
+        #expect(!capture.stagedShortBootstrapCommand.contains("(target)"))
     }
 
     @Test("load snapshot avoids Downloads installer discovery before profile exists")
@@ -1834,6 +1841,37 @@ struct VMProfileStoreTests {
         #expect(storedProfile.installerMediaPath == configuredInstallerURL.path)
         #expect(snapshot.installerMediaPath == configuredInstallerURL.path)
         #expect(snapshot.discoveredInstallerMediaPath == nil)
+    }
+
+    @Test("QEMU start preparation refreshes installed support media")
+    func qemuStartPreparationRefreshesInstalledSupportMedia() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let homeDirectory = directory.appendingPathComponent("Home", isDirectory: true)
+        let sharedDirectory = directory.appendingPathComponent("Veil Shared", isDirectory: true)
+        let diskURL = directory.appendingPathComponent("Windows.img")
+        try FileManager.default.createDirectory(at: sharedDirectory, withIntermediateDirectories: true)
+        try Data("existing disk".utf8).write(to: diskURL)
+        let store = JSONVMProfileStore(directory: directory)
+        var profile = VMProfile.defaultWindows11Arm(homeDirectory: homeDirectory)
+        profile.sharedFolderPath = sharedDirectory.path
+        profile.virtualDiskPath = diskURL.path
+        profile.windowsInstalled = true
+        try await store.save(profile)
+
+        let service = LocalVMRuntimeService(
+            profileStore: store,
+            defaultHomeDirectory: homeDirectory,
+            automaticInstallMediaBuilder: FakeAutomaticInstallMediaBuilder()
+        )
+
+        let snapshot = try await service.prepareQEMUStartResources()
+
+        #expect(snapshot.windowsInstalled == true)
+        #expect(snapshot.virtualDiskPath == diskURL.path)
+        #expect(FileManager.default.fileExists(
+            atPath: sharedDirectory.appendingPathComponent("VeilAutoInstall.iso").path
+        ))
     }
 
     @Test("prepare default VM preserves an existing configured disk")

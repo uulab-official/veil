@@ -254,16 +254,19 @@ function Install-VeilVirtIONetworkDriver {
         return $false
     }
 
+    $InstalledAnyDriver = $false
     foreach ($InfFile in $InfFiles) {
         Write-Host "Installing VirtIO network driver from $($InfFile.FullName)."
         pnputil /add-driver "$($InfFile.FullName)" /install | ForEach-Object { Write-Host $_ }
-        if ($LASTEXITCODE -ne 0) {
+        if ($LASTEXITCODE -eq 0) {
+            $InstalledAnyDriver = $true
+        } else {
             Write-Host "pnputil returned ExitCode=$LASTEXITCODE while installing $($InfFile.FullName); continuing repair so firewall and agent health can still be checked."
         }
     }
 
-    Write-Host "VirtIO NetKVM Windows 11 ARM64 driver install attempted from $DriverRoot."
-    return $true
+    Write-Host "VirtIO NetKVM Windows 11 ARM64 driver install completed from $DriverRoot. InstalledAnyDriver=$InstalledAnyDriver"
+    return $InstalledAnyDriver
 }
 
 function Start-VeilAgentAsStandardUser {
@@ -350,7 +353,7 @@ try {
     }
     Sync-VeilInstalledSupportScripts
     if (Install-VeilVirtIONetworkDriver) {
-        Write-VeilRepairStatus -Stage "networkDriverInstalled" -Succeeded $false -Message "VirtIO NetKVM Windows 11 ARM64 driver install was attempted from attached driver media."
+        Write-VeilRepairStatus -Stage "networkDriverInstalled" -Succeeded $true -Message "VirtIO NetKVM Windows 11 ARM64 driver installed from attached driver media."
         Start-Sleep -Seconds 3
     }
 
