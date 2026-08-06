@@ -135,6 +135,7 @@ VEIL_DOTNET_BIN="$HOME/Library/Application Support/Veil/Toolchains/dotnet8/dotne
 - 실제 `qemu-install-agent --wait-seconds 60` 재검증: 화면에서 `networkDriverInstalled succeeded=True` → `firewallRulesReady succeeded=False` → `standardUserAgentStartRequested succeeded=False`까지 진행했으나 `guestAgentHealthSucceeded`에 도달하지 못했고 최종 host health는 `unavailable`이었다. 중간 driver 단계에서 조기 성공으로 반환하지 않는 동작은 확인했지만, 표준 사용자 에이전트 시작/재연결은 여전히 P0 미완료다.
 - fresh 전체 회귀 게이트: `VEIL_DOTNET_BIN=.../dotnet ./script/test_all.sh`가 종료 코드 0으로 완료됐다. Swift host 472개/29 suites, Windows Agent 계약 27/27, Node 패키지 25개, macOS bundle/launch, 설치·교체·삭제·재설치 lifecycle을 포함한다.
 - fresh production readiness: `./script/production_readiness.sh --run-automated --json` → `{"status":"blocked","releaseReady":false,"p0Total":37,"passingP0Count":22,"unresolvedP0Count":15,"automatedGate":"passed"}`, 종료 코드 `2`.
+- 변경 커밋: `441bacc` (`fix(runtime): keep boot-safe NIC and repair stage state`). `develop` 푸시는 HTTPS 원격 인증 오류(`could not read Username for 'https://github.com': Device not configured`)로 완료하지 못했다.
 - `swift test --disable-sandbox --package-path apps/mac-host --filter 'WindowsOptimizationCoordinatorTests|QEMUWindowsBootPlanTests|VMProfileStoreTests'`: 135개 통과.
 - `swift test --disable-sandbox --package-path apps/mac-host --filter 'QEMUWindowsBootPlanTests|VMProfileStoreTests'`: 123개/2 suites 통과. virtio 단일 디스플레이 헤드와 짧은 `VEIL_AUTO` 진입점 회귀를 포함한다.
 - `./script/test_all.sh`: Swift 471개/29 suites, Windows Agent 72개, Node 패키지 25개, 설치·교체·삭제·재설치 lifecycle 통과.
