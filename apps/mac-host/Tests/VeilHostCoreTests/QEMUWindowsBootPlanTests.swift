@@ -182,7 +182,7 @@ struct QEMUWindowsBootPlanTests {
             "-chardev",
             "socket,id=veil-agent,path=/tmp/veil-vioserial-probe.sock,server=on,wait=off"
         ]))
-        #expect(plan.arguments.contains("virtio-serial-pci"))
+        #expect(plan.arguments.contains("virtio-serial-pci,max_ports=2"))
         #expect(plan.arguments.contains("virtserialport,chardev=veil-agent,name=org.veil.agent"))
     }
 

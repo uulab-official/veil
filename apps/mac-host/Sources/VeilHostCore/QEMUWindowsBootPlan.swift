@@ -332,7 +332,7 @@ public struct QEMUWindowsBootPlanner: Sendable {
            let virtioSerialSocketPath {
             arguments.append(contentsOf: [
                 "-chardev", "socket,id=veil-agent,path=\(virtioSerialSocketPath),server=on,wait=off",
-                "-device", "virtio-serial-pci",
+                "-device", "virtio-serial-pci,max_ports=2",
                 "-device", "virtserialport,chardev=veil-agent,name=\(QEMUWindowsGuestTransport.defaultPortName)"
             ])
         }

@@ -185,5 +185,9 @@ VEIL_DOTNET_BIN="$HOME/Library/Application Support/Veil/Toolchains/dotnet8/dotne
 - [x] probe QEMU는 정상 종료 요청이 30초 안에 완료되지 않아 `qemu-force-stop --i-understand-data-loss`로 종료했다. baseline QEMU는 QMP ACPI powerdown으로 정상 종료했다.
 - [ ] `vioser` 장치가 실제 Windows desktop에서 발견되는지 확인한다.
 - [ ] named port를 통한 health 왕복과 Notepad/input/clipboard를 확인한다.
+- [x] `max_ports=1`을 임의로 적용하지 않는다. QEMU가 `virtserialport` 포트 ID를 허용하지 않아 `Out-of-range port id specified, max. allowed: 0`으로 종료되는 것을 확인했다.
+- [x] 콘솔 포트와 agent 포트를 함께 허용하는 `max_ports=2` probe를 실제 Windows 디스크에서 대조했다. QEMU 인자와 chardev socket 생성은 확인됐지만 `qemu-display-smoke`가 동일하게 `visualState=modalPrompt`, `recognizedText=["start boot option"]`, `800×600`을 기록했다.
+- [x] `max_ports=2` probe에서도 host Unix-socket client 연결 여부가 부팅 결과를 바꾸지 않는 것으로 확인했다. 원인은 host chardev client 부재가 아니라 현재 managed Windows ARM 디스크와 VirtIO serial 장치 구성의 호환성 차이로 좁힌다.
+- [x] probe VM은 정상 powerdown이 완료되지 않아 `qemu-force-stop --i-understand-data-loss`로 프로세스만 종료했다. Windows 이미지나 디스크는 삭제하지 않았다.
 
-현재 판정: **BLOCKED — 첫 no-IP 장치 구성 자체가 Windows Boot Manager 단계에서 멈췄다.** 따라서 `virtio-serial`을 production fallback으로 활성화하지 않는다.
+현재 판정: **BLOCKED — `max_ports=1`/`max_ports=2`, host socket client 유무를 확인해도 VirtIO serial 구성은 Windows Boot Manager 단계에서 멈췄다.** 따라서 `virtio-serial`을 production fallback으로 활성화하지 않는다.
