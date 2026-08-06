@@ -452,6 +452,9 @@ test("windows agent includes user-logon install and uninstall scripts", async ()
   assert.match(repair, /NetKVM\\w11\\ARM64/);
   assert.match(repair, /pnputil\s+\/add-driver/);
   assert.match(repair, /networkDriverInstalled/);
+  assert.match(repair, /pnputil\s+\/scan-devices/);
+  assert.match(repair, /networkDeviceRescan/);
+  assert.match(repair, /\$ScanSucceeded\s*=\s*\$ScanExitCode\s*-eq\s*0\s*-and\s*\$Adapters\.Count\s*-gt\s*0/);
   assert.match(repair, /function\s+Start-VeilAgentAsStandardUser/);
   assert.match(repair, /\$InteractiveUser\s*=\s*\$env:USERNAME/);
   assert.match(repair, /New-ScheduledTaskPrincipal[\s\S]+-LogonType\s+Interactive[\s\S]+-RunLevel\s+Limited/);

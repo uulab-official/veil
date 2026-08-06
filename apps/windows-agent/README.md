@@ -128,6 +128,10 @@ loopback-only agent now fails the repair with an actionable message instead of
 reporting success. A normal interactive install may still run loopback-only for
 guest-local diagnostics, but it is not host-forward ready.
 
+The repair path also runs `pnputil /scan-devices` and records the visible
+hardware network adapters in `repair-status.json`; a successful PnP scan with
+zero adapters is treated as a failed network-device stage, not as connectivity.
+
 The same repair path refreshes installed support scripts and, when the current
 media contains a packaged `app/VeilAgent.exe` bundle, replaces the installed app
 bundle before restarting the agent. This keeps repeated `qemu-install-agent`

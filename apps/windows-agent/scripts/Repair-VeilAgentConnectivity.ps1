@@ -276,6 +276,35 @@ function Install-VeilVirtIONetworkDriver {
     return $InstalledAnyDriver
 }
 
+function Invoke-VeilNetworkDeviceRescan {
+    Write-Host "Requesting a Windows Plug and Play network-device rescan."
+    $ScanOutput = @(& pnputil /scan-devices 2>&1)
+    $ScanExitCode = $LASTEXITCODE
+    $ScanOutput | ForEach-Object { Write-Host $_ }
+
+    $Adapters = @()
+    try {
+        $Adapters = @(Get-NetAdapter -ErrorAction Stop | Where-Object { $_.HardwareInterface -eq $true })
+    } catch {
+        Write-Host "Unable to enumerate Windows network adapters after device rescan: $($_.Exception.Message)"
+    }
+
+    $AdapterSummary = if ($Adapters.Count -gt 0) {
+        ($Adapters | ForEach-Object { "$($_.Name) [$($_.Status)]" }) -join ", "
+    } else {
+        "none"
+    }
+    $ScanSucceeded = $ScanExitCode -eq 0 -and $Adapters.Count -gt 0
+    $RescanMessage = "pnputil /scan-devices exit code $ScanExitCode. Hardware network adapters visible after rescan: $AdapterSummary."
+    Write-VeilRepairStatus -Stage "networkDeviceRescan" -Succeeded $ScanSucceeded -Message $RescanMessage
+    Write-Host $RescanMessage
+
+    # Windows may need a short interval to bind a newly installed NetKVM package to the
+    # emulated device before Get-NetIPAddress can observe an address.
+    Start-Sleep -Seconds 5
+    return $ScanSucceeded
+}
+
 function Start-VeilAgentAsStandardUser {
     param(
         [string]$StartScriptPath,
@@ -378,8 +407,8 @@ try {
     Sync-VeilInstalledSupportScripts
     if (Install-VeilVirtIONetworkDriver) {
         Write-VeilRepairStatus -Stage "networkDriverInstalled" -Succeeded $true -Message "VirtIO NetKVM Windows 11 ARM64 driver installed from attached driver media."
-        Start-Sleep -Seconds 3
     }
+    Invoke-VeilNetworkDeviceRescan | Out-Null
 
     $RunningAgents = Get-Process -Name "VeilAgent" -ErrorAction SilentlyContinue
     if ($RunningAgents) {

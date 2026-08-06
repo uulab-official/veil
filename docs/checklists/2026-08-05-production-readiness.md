@@ -142,3 +142,10 @@ VEIL_DOTNET_BIN="$HOME/Library/Application Support/Veil/Toolchains/dotnet8/dotne
 - `./script/test_all.sh`: Swift 471개/29 suites, Windows Agent 72개, Node 패키지 25개, 설치·교체·삭제·재설치 lifecycle 통과.
 - 현재 변경 기준 focused Swift 151개/3 suites(`QEMUWindowsBootPlanTests|VMProfileStoreTests|WindowsDownloadPolicyTests`)와 Windows Agent 계약 27개가 통과했다.
 - 현재 변경 기준 전체 `VEIL_DOTNET_BIN=.../dotnet ./script/test_all.sh` 회귀 게이트가 통과했다. production readiness는 `P0 37개 중 22개 통과, 15개 미완료, automatedGate=passed, releaseReady=false`를 재확인했다.
+
+## 2026-08-06 network-device follow-up
+
+- 최신 `VeilAutoInstall.iso`와 republished win-arm64 agent bundle로 `qemu-install-agent --wait-seconds 90`을 다시 실행했다. Windows 복구 콘솔에 `networkDeviceRescan succeeded=False`와 `pnputil /scan-devices exit code 0. Hardware network adapters visible after rescan: none.`가 남았고, 최종 상태는 loopback `agent.health.response` 실패였다.
+- 이 결과로 “VirtIO 드라이버 설치 뒤 PnP 재검색 누락” 가설은 반증됐다. 재검색 명령은 성공했지만 Windows 장치 목록에 하드웨어 NIC가 생성되지 않았다. 복구 스크립트는 이제 PnP 명령 성공만으로 네트워크 단계를 성공 처리하지 않는다.
+- `VEIL_QEMU_NETWORK_DEVICE=vmxnet3` bounded probe도 UEFI `Start boot option`에 머물러 현재 관리 ARM 디스크의 production fallback 후보에서 제외했다. 기존 `usb-net`/`e1000e`는 데스크톱까지 부팅하지만 어댑터가 없고, `e1000`/`rtl8139`/`virtio-net-pci`도 현재 디스크에서 첫 앱 루프를 통과하지 못했다.
+- 결론: 현재 남은 P0는 설치 스크립트나 단순 PnP 재검색이 아니라, 이 Windows ARM 디스크에서 실제 게스트 NIC를 노출하는 QEMU/Windows 호환성 또는 네트워크 없는 게스트-호스트 전송 경계다. Notepad/HWND/입력/클립보드 P0는 계속 미완료다.

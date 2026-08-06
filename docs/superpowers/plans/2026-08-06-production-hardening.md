@@ -58,6 +58,8 @@ Task 3 remains blocked by the live QEMU guest-to-host WebSocket path: the Window
 
 2026-08-06 follow-up evidence: the refreshed media and repair path reached `guestAgentHealthSucceeded=true` inside Windows, including the standard-user scheduled task. Direct Windows console inspection then showed empty `ipconfig` and `Get-NetAdapter` output, proving there was no non-loopback guest IPv4. macOS still saw only `tcpOpen` and no WebSocket response through QEMU host forwarding. `usb-net` and `e1000e` reached the desktop without an adapter; `e1000`, `rtl8139`, and `virtio-net-pci` did not pass the bounded boot/display probe on the managed disk. `Start-VeilAgent.ps1 -RequireGuestIPv4` is now required by repair so this state cannot be reported as host-ready. The first real app loop therefore stays blocked on guest NIC/IP support.
 
+2026-08-06 device-rescan follow-up: the repair path now runs `pnputil /scan-devices`, enumerates `Get-NetAdapter`, and records `networkDeviceRescan` before starting the standard-user agent. A fresh live run returned exit code 0 but `Hardware network adapters visible after rescan: none`, so the stage is correctly marked unsuccessful and the loopback-only agent is rejected. This disproves a missing-PnP-rescan hypothesis; the next task must address QEMU/Windows ARM NIC exposure or choose and prove a transport that does not require a guest IP.
+
 ### Task 4: Run release gates and publish evidence
 
 **Files:**
