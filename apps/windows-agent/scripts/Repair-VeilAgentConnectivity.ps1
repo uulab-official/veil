@@ -286,11 +286,20 @@ function Start-VeilAgentAsStandardUser {
     # desktop apps on behalf of the signed-in user. Starting it directly here would make every
     # child app elevated and break normal window control. Re-register and run the interactive
     # logon task at Limited integrity instead.
+    $PowerShellPath = Join-Path $env:SystemRoot "System32\WindowsPowerShell\v1.0\powershell.exe"
+    if (-not (Test-Path $PowerShellPath)) {
+        throw "Windows PowerShell executable was not found at $PowerShellPath."
+    }
+
     $Action = New-ScheduledTaskAction `
-        -Execute "powershell.exe" `
-        -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$StartScriptPath`" -InstallRoot `"$InstallRoot`" -Port $Port"
+        -Execute $PowerShellPath `
+        -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$StartScriptPath`" -InstallRoot `"$InstallRoot`" -Port $Port -RequireGuestIPv4"
     $Trigger = New-ScheduledTaskTrigger -AtLogOn
-    $InteractiveUser = "$env:USERDOMAIN\$env:USERNAME"
+    # Match Install-VeilAgent.ps1. With an Interactive principal, Task Scheduler resolves the
+    # current session from the plain account name; forcing DOMAIN\USERNAME here can create a task
+    # that registers successfully but cannot be started in the signed-in desktop session (especially
+    # for local accounts in the managed ARM guest).
+    $InteractiveUser = $env:USERNAME
     $Principal = New-ScheduledTaskPrincipal `
         -UserId $InteractiveUser `
         -LogonType Interactive `
@@ -306,8 +315,8 @@ function Start-VeilAgentAsStandardUser {
         -Force | Out-Null
     Write-Host "Registered limited interactive VeilAgent task for $InteractiveUser."
 
+    Write-VeilRepairStatus -Stage "standardUserAgentStartRequested" -Succeeded $false -Message "Requested VeilAgent start through the limited interactive logon task for $InteractiveUser."
     Start-ScheduledTask -TaskName $TaskName
-    Write-VeilRepairStatus -Stage "standardUserAgentStartRequested" -Succeeded $false -Message "Requested VeilAgent start through the limited interactive logon task."
 
     $Deadline = (Get-Date).AddSeconds($TimeoutSeconds)
     do {
@@ -318,13 +327,21 @@ function Start-VeilAgentAsStandardUser {
             Write-Host "Limited interactive VeilAgent process appeared. PID=$($RunningAgent.Id)"
             # The process already exists, so Start-VeilAgent.ps1 only performs its bounded health
             # probes here; it cannot fall through to an elevated Start-Process call.
-            & $StartScriptPath -InstallRoot $InstallRoot -Port $Port
+            & $StartScriptPath -InstallRoot $InstallRoot -Port $Port -RequireGuestIPv4
             return
         }
         Start-Sleep -Milliseconds 500
     } while ((Get-Date) -lt $Deadline)
 
-    throw "Timed out waiting for the limited interactive VeilAgent task to start $AgentExe."
+    $TaskInfo = Get-ScheduledTaskInfo -TaskName $TaskName -ErrorAction SilentlyContinue
+    $TaskState = if ($TaskInfo) { [string]$TaskInfo.State } else { "unknown" }
+    $LastTaskResult = if ($TaskInfo) {
+        "0x{0:X8}" -f ([uint32]$TaskInfo.LastTaskResult)
+    } else {
+        "unknown"
+    }
+    $LastRunTime = if ($TaskInfo) { [string]$TaskInfo.LastRunTime } else { "unknown" }
+    throw "Timed out waiting for the limited interactive VeilAgent task to start $AgentExe. TaskState=$TaskState LastTaskResult=$LastTaskResult LastRunTime=$LastRunTime User=$InteractiveUser."
 }
 
 if (-not (Test-VeilAdministrator)) {

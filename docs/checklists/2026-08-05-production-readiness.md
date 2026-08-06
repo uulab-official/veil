@@ -132,7 +132,8 @@ VEIL_DOTNET_BIN="$HOME/Library/Application Support/Veil/Toolchains/dotnet8/dotne
 
 - `npm --prefix harness/windows-agent-contract test`: 27/27 통과. 복구 상태의 `networkDriverInstalled` 중간 성공을 최종 성공으로 오인하지 않는 계약 검증을 포함한다.
 - 실제 `qemu-start` 재검증: VirtIO ISO가 프로필에 붙어 있어도 기본 계획이 `usb-net,netdev=net0`을 선택했고, Windows 데스크톱 캡처가 `1024×768`, `visualState=desktop`으로 통과했다. 같은 실행의 `guest-agent-wait`는 `tcpOpen` 후 WebSocket health 시간 초과로 미통과했다.
-- 실제 `qemu-install-agent --wait-seconds 60` 재검증: 화면에서 `networkDriverInstalled succeeded=True` → `firewallRulesReady succeeded=False` → `standardUserAgentStartRequested succeeded=False`까지 진행했으나 `guestAgentHealthSucceeded`에 도달하지 못했고 최종 host health는 `unavailable`이었다. 중간 driver 단계에서 조기 성공으로 반환하지 않는 동작은 확인했지만, 표준 사용자 에이전트 시작/재연결은 여전히 P0 미완료다.
+- 실제 `qemu-install-agent --wait-seconds 90` 재검증: Windows 내부 `repair-status.json`을 직접 화면으로 확인한 결과 `guestAgentHealthSucceeded=true`까지 도달했고 표준 사용자 작업 시작도 완료됐다. 그러나 같은 VM에서 `ipconfig`와 `Get-NetAdapter`가 비어 있어 비루프백 IPv4가 없었고, macOS host health는 `tcpOpen` 후 WebSocket 시간 초과로 남았다.
+- 위 증거에 따라 복구 스크립트는 `Start-VeilAgent.ps1 -RequireGuestIPv4`를 사용하도록 강화했다. 이제 loopback-only 상태를 최종 성공으로 기록하지 않는다. `usb-net`과 `e1000e`는 데스크톱까지 부팅했지만 어댑터가 없었고, `e1000`, `rtl8139`, `virtio-net-pci`는 현재 관리 ARM 디스크에서 bounded compatibility probe를 통과하지 못했다. 게스트 NIC/IP 및 host WebSocket P0는 미완료다.
 - fresh 전체 회귀 게이트: `VEIL_DOTNET_BIN=.../dotnet ./script/test_all.sh`가 종료 코드 0으로 완료됐다. Swift host 472개/29 suites, Windows Agent 계약 27/27, Node 패키지 25개, macOS bundle/launch, 설치·교체·삭제·재설치 lifecycle을 포함한다.
 - fresh production readiness: `./script/production_readiness.sh --run-automated --json` → `{"status":"blocked","releaseReady":false,"p0Total":37,"passingP0Count":22,"unresolvedP0Count":15,"automatedGate":"passed"}`, 종료 코드 `2`.
 - 변경 커밋: `441bacc` (`fix(runtime): keep boot-safe NIC and repair stage state`). `develop` 푸시는 HTTPS 원격 인증 오류(`could not read Username for 'https://github.com': Device not configured`)로 완료하지 못했다.

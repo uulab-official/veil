@@ -1,7 +1,8 @@
 param(
     [string]$InstallRoot = "$env:LOCALAPPDATA\Veil\Agent",
     [int]$Port = 18444,
-    [switch]$RequirePackageIdentity
+    [switch]$RequirePackageIdentity,
+    [switch]$RequireGuestIPv4
 )
 
 $ErrorActionPreference = "Stop"
@@ -16,7 +17,7 @@ $StdErrLogPath = Join-Path $LogRoot "agent.stderr-$PID.log"
 $ListenHost = "0.0.0.0"
 $ProbeHost = "127.0.0.1"
 New-Item -ItemType Directory -Force -Path $LogRoot | Out-Null
-Add-Content -Path $StartLogPath -Value "VeilAgent start requested at $(Get-Date -Format o). InstallRoot=$InstallRoot Port=$Port RequirePackageIdentity=$RequirePackageIdentity"
+Add-Content -Path $StartLogPath -Value "VeilAgent start requested at $(Get-Date -Format o). InstallRoot=$InstallRoot Port=$Port RequirePackageIdentity=$RequirePackageIdentity RequireGuestIPv4=$RequireGuestIPv4"
 if (-not (Test-Path $AgentExe)) {
     Add-Content -Path $StartLogPath -Value "VeilAgent.exe was not found at $AgentExe."
     throw "VeilAgent.exe was not found at $AgentExe. Run Install-VeilAgent.ps1 first."
@@ -188,6 +189,11 @@ function Test-VeilAgentReady {
     }
 
     if ($GuestIPv4Addresses.Count -eq 0) {
+        if ($RequireGuestIPv4) {
+            Add-Content -Path $StartLogPath -Value "Guest IPv4 is required for host-forwarded agent health, but Windows reported no non-loopback address."
+            Write-Host "Guest IPv4 is required for host-forwarded agent health, but Windows reported no non-loopback address."
+            return $false
+        }
         Add-Content -Path $StartLogPath -Value "Guest IPv4 health probe skipped because Windows reported no non-loopback address."
         return $true
     }

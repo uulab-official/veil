@@ -409,10 +409,12 @@ test("windows agent includes user-logon install and uninstall scripts", async ()
   assert.match(start, /agent\.health\.request/);
   assert.match(start, /agent\.health\.response/);
   assert.match(start, /\[switch\]\$RequirePackageIdentity/);
+  assert.match(start, /\[switch\]\$RequireGuestIPv4/);
   assert.match(start, /capabilities\.packageIdentity/);
   assert.match(start, /package identity is not ready yet/);
   assert.match(start, /package identity was not ready/);
   assert.match(start, /Guest IPv4 addresses visible to Windows/);
+  assert.match(start, /Guest IPv4 is required for host-forwarded agent health/);
   assert.match(start, /Get-Process\s+-Name\s+"VeilAgent"/);
   assert.match(start, /VeilAgent is already running/);
   assert.match(start, /loopback agent\.health\.response did not succeed/);
@@ -451,9 +453,14 @@ test("windows agent includes user-logon install and uninstall scripts", async ()
   assert.match(repair, /pnputil\s+\/add-driver/);
   assert.match(repair, /networkDriverInstalled/);
   assert.match(repair, /function\s+Start-VeilAgentAsStandardUser/);
+  assert.match(repair, /\$InteractiveUser\s*=\s*\$env:USERNAME/);
   assert.match(repair, /New-ScheduledTaskPrincipal[\s\S]+-LogonType\s+Interactive[\s\S]+-RunLevel\s+Limited/);
+  assert.match(repair, /Join-Path\s+\$env:SystemRoot\s+"System32\\WindowsPowerShell\\v1\.0\\powershell\.exe"/);
   assert.match(repair, /Register-ScheduledTask[\s\S]+-TaskName\s+\$TaskName/);
   assert.match(repair, /Start-ScheduledTask\s+-TaskName\s+\$TaskName/);
+  assert.match(repair, /-RequireGuestIPv4/);
+  assert.match(repair, /Get-ScheduledTaskInfo\s+-TaskName\s+\$TaskName/);
+  assert.match(repair, /LastTaskResult/);
   assert.match(repair, /standardUserAgentStartRequested/);
   assert.match(repair, /Start-VeilAgentAsStandardUser\s+-StartScriptPath\s+\$StartScript/);
   assert.match(repair, /guestAgentHealthSucceeded/);

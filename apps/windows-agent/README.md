@@ -123,6 +123,11 @@ over both `ws://127.0.0.1:18444/` and a non-loopback Windows guest IPv4 address.
 This keeps a local-only agent from looking ready when QEMU host forwarding
 still cannot reach the guest.
 
+The repair task passes `-RequireGuestIPv4` to `Start-VeilAgent.ps1`, so a
+loopback-only agent now fails the repair with an actionable message instead of
+reporting success. A normal interactive install may still run loopback-only for
+guest-local diagnostics, but it is not host-forward ready.
+
 The same repair path refreshes installed support scripts and, when the current
 media contains a packaged `app/VeilAgent.exe` bundle, replaces the installed app
 bundle before restarting the agent. This keeps repeated `qemu-install-agent`
