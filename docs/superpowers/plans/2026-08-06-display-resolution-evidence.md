@@ -51,4 +51,4 @@
 - [x] **Step 1: Record that resolution evidence is now explicit but the live Guest Tools upgrade remains unproved.**
 - [x] **Step 2: Run `git diff --check` and `VEIL_DOTNET_BIN="$HOME/Library/Application Support/Veil/Toolchains/dotnet8/dotnet" ./script/test_all.sh`.**
 - [x] **Step 3: Run `./script/production_readiness.sh --run-automated --json` and preserve `releaseReady=false` while live P0 items remain unresolved.**
-- [ ] **Step 4: Commit the change and push it to `develop`.**
+- [x] **Step 4: Commit `14d981a` and push it to `develop`.**
