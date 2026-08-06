@@ -17,6 +17,11 @@ enum WindowsOptimizationPhase: Equatable {
 
 struct WindowsOptimizationStatus: Equatable {
     var phase: WindowsOptimizationPhase
+    var observedDisplaySize: WindowsObservedDisplaySize? = nil
+
+    var displayTargetDescription: String {
+        "\(VMRuntimeDeviceDefaults.graphicsWidthInPixels)×\(VMRuntimeDeviceDefaults.graphicsHeightInPixels)"
+    }
 
     var title: String {
         switch phase {
@@ -62,12 +67,20 @@ struct WindowsOptimizationStatus: Equatable {
         case .complete(let displayOptimized):
             displayOptimized
                 ? "Display integration and Windows app support are ready."
-                : "Windows apps are connected. Display optimization still needs attention."
+                : "Windows apps are connected. Display optimization still needs attention. \(displayResolutionDetail)"
         case .failed(let message):
             message
         case .cancelled:
             "No installer command was sent. You can restart optimization when ready."
         }
+    }
+
+    private var displayResolutionDetail: String {
+        guard let observedDisplaySize else {
+            return "No live framebuffer size has been observed yet; target is \(displayTargetDescription)."
+        }
+
+        return "Current framebuffer is \(observedDisplaySize.label); target is \(displayTargetDescription)."
     }
 
     var progress: Double {
@@ -133,12 +146,19 @@ struct WindowsOptimizationStatus: Equatable {
     }
 }
 
+struct WindowsObservedDisplaySize: Equatable {
+    let width: Int
+    let height: Int
+
+    var label: String {
+        "\(width)×\(height)"
+    }
+}
+
 enum WindowsDisplayOptimizationPolicy {
     static func isOptimized(width: Int, height: Int) -> Bool {
-        guard width >= 1_280, height >= 720 else {
-            return false
-        }
-        return Double(width) / Double(height) >= 1.5
+        width >= VMRuntimeDeviceDefaults.graphicsWidthInPixels
+            && height >= VMRuntimeDeviceDefaults.graphicsHeightInPixels
     }
 }
 
@@ -168,13 +188,17 @@ final class WindowsOptimizationCoordinator {
     private(set) var phase: WindowsOptimizationPhase = .idle
 
     var status: WindowsOptimizationStatus {
-        WindowsOptimizationStatus(phase: phase)
+        WindowsOptimizationStatus(
+            phase: phase,
+            observedDisplaySize: observedDisplaySize
+        )
     }
 
     private let service: any WindowsOptimizationServicing
     private var cancellationRequested = false
     private var installerDispatched = false
     private var displayOptimized = false
+    private var observedDisplaySize: WindowsObservedDisplaySize?
 
     init(service: any WindowsOptimizationServicing) {
         self.service = service
@@ -187,6 +211,8 @@ final class WindowsOptimizationCoordinator {
 
         cancellationRequested = false
         installerDispatched = false
+        displayOptimized = false
+        observedDisplaySize = nil
 
         do {
             phase = .preparingMedia
@@ -240,11 +266,10 @@ final class WindowsOptimizationCoordinator {
             return
         }
 
-        if WindowsDisplayOptimizationPolicy.isOptimized(width: width, height: height) {
-            displayOptimized = true
-            if case .complete = phase {
-                phase = .complete(displayOptimized: true)
-            }
+        observedDisplaySize = WindowsObservedDisplaySize(width: width, height: height)
+        displayOptimized = WindowsDisplayOptimizationPolicy.isOptimized(width: width, height: height)
+        if case .complete = phase {
+            phase = .complete(displayOptimized: displayOptimized)
         }
     }
 

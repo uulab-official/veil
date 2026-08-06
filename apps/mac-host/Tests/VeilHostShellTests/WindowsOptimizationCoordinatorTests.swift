@@ -136,10 +136,36 @@ struct WindowsOptimizationCoordinatorTests {
 
         coordinator.recordDisplaySize(width: 800, height: 600)
         #expect(coordinator.phase == .complete(displayOptimized: false))
+        #expect(coordinator.status.observedDisplaySize == WindowsObservedDisplaySize(width: 800, height: 600))
         coordinator.recordDisplaySize(width: 1_024, height: 768)
+        #expect(coordinator.phase == .complete(displayOptimized: false))
+        #expect(coordinator.status.observedDisplaySize == WindowsObservedDisplaySize(width: 1_024, height: 768))
+        coordinator.recordDisplaySize(width: 1_280, height: 720)
         #expect(coordinator.phase == .complete(displayOptimized: false))
         coordinator.recordDisplaySize(width: 1_440, height: 900)
         #expect(coordinator.phase == .complete(displayOptimized: true))
+    }
+
+    @Test("downgrades display optimization when a later framebuffer is below target")
+    func downgradesDisplayOptimizationWhenLaterFramebufferIsBelowTarget() async {
+        let service = RecordingWindowsOptimizationService()
+        let coordinator = WindowsOptimizationCoordinator(service: service)
+        await coordinator.begin()
+
+        coordinator.recordDisplaySize(width: 1_440, height: 900)
+        #expect(coordinator.phase == .complete(displayOptimized: true))
+
+        coordinator.recordDisplaySize(width: 1_024, height: 768)
+
+        #expect(coordinator.phase == .complete(displayOptimized: false))
+        #expect(coordinator.status.detail.contains("1024×768"))
+        #expect(coordinator.status.detail.contains("1440×900"))
+    }
+
+    @Test("requires the configured display target instead of a smaller widescreen frame")
+    func requiresConfiguredDisplayTarget() {
+        #expect(WindowsDisplayOptimizationPolicy.isOptimized(width: 1_280, height: 720) == false)
+        #expect(WindowsDisplayOptimizationPolicy.isOptimized(width: 1_440, height: 900))
     }
 
     @Test("running Windows shuts down normally before rebuilding attached media")

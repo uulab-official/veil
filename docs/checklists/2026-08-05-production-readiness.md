@@ -208,3 +208,13 @@ VEIL_DOTNET_BIN="$HOME/Library/Application Support/Veil/Toolchains/dotnet8/dotne
 - [x] `VeilHostClientTests`와 `HostDashboardModelTests` 집중 suite를 통과시켰다.
 
 현재 판정: **PARTIAL — 실패 원인과 다음 행동은 제품 표면에서 구분되지만, 실제 Windows 게스트 NIC/IP와 WebSocket health 왕복은 여전히 미해결이다.**
+
+## 2026-08-06 display resolution evidence
+
+- [x] 최적화 완료 판정이 QEMU 프로필 목표인 `1440×900` 이상을 요구하도록 조정했다. `1280×720`은 더 이상 최적화 완료로 처리하지 않는다.
+- [x] 마지막으로 관찰한 framebuffer 크기를 최적화 상태에 보존한다. 현재 `1024×768`이나 `800×600`이면 목표 `1440×900`과 함께 사용자에게 표시된다.
+- [x] 이후 더 작은 framebuffer가 도착하면 기존의 최적화 완료 상태를 자동으로 미완료로 되돌린다.
+- [x] aspect-fit 렌더링과 입력 매핑 정책은 유지해 화면을 강제로 늘리거나 자르지 않는다.
+- [x] `WindowsOptimizationCoordinatorTests` 및 `InstalledAppHomePresentationTests`: 31개/2 suites 통과.
+
+현재 판정: **PARTIAL — 해상도 불일치를 숨기지 않고 표시하지만, 실제 Guest Tools 설치 후 Windows framebuffer가 `1440×900`으로 전환되는 live 증거는 여전히 필요하다.**
