@@ -56,6 +56,8 @@
 
 Task 3 remains blocked by the live QEMU guest-to-host WebSocket path: the Windows repair console reports guest-side health success, but the macOS endpoint only accepts TCP and returns no WebSocket response.
 
+2026-08-06 follow-up evidence: after the repair-status fix, the live console no longer stopped at the successful `networkDriverInstalled` intermediate stage. It visibly progressed through `firewallRulesReady` and `standardUserAgentStartRequested`, but did not reach `guestAgentHealthSucceeded` before the bounded attempt ended. The default QEMU launch was also re-tested with the attached VirtIO ISO: the planner selected `usb-net` and the installed Windows disk reached a `1024×768` desktop; host WebSocket health remained unavailable. The first real app loop therefore stays blocked.
+
 ### Task 4: Run release gates and publish evidence
 
 **Files:**

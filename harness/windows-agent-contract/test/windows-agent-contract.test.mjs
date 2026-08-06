@@ -434,6 +434,8 @@ test("windows agent includes user-logon install and uninstall scripts", async ()
   assert.match(repair, /StatusPath/);
   assert.match(repair, /repair-status\.json/);
   assert.match(repair, /Wait-VeilRepairStatus/);
+  assert.match(repair, /\$TerminalSuccessStages\s*=\s*@\(\s*"guestAgentHealthSucceeded"\s*\)/);
+  assert.match(repair, /\$Status\.succeeded\s*-eq\s*\$true\s*-and\s*\$TerminalSuccessStages\s*-contains\s*\[string\]\$Status\.stage/);
   assert.match(repair, /Sync-VeilInstalledSupportScripts/);
   assert.match(repair, /Copy-Item[\s\S]+-Destination\s+\$InstalledScriptsRoot/);
   assert.match(repair, /"Start-VeilAgent\.ps1"/);

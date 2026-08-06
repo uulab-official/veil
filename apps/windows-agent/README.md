@@ -116,10 +116,12 @@ Veil Shared\Veil Guest Agent\Repair Veil Agent Connectivity.cmd
 The repair command requests Windows administrator approval through UAC when
 needed, refreshes the VeilAgent program rule plus a TCP port rule for 18444, and
 then starts the installed agent again. It writes
-`%LOCALAPPDATA%\Veil\Agent\logs\repair-status.json`, and the final success state
-requires in-guest `agent.health.response` over both `ws://127.0.0.1:18444/` and
-a non-loopback Windows guest IPv4 address. This keeps a local-only agent from
-looking ready when QEMU host forwarding still cannot reach the guest.
+`%LOCALAPPDATA%\Veil\Agent\logs\repair-status.json`. Driver installation and
+firewall setup are intermediate stages; the caller does not treat them as
+completion. The final success state requires in-guest `agent.health.response`
+over both `ws://127.0.0.1:18444/` and a non-loopback Windows guest IPv4 address.
+This keeps a local-only agent from looking ready when QEMU host forwarding
+still cannot reach the guest.
 
 The same repair path refreshes installed support scripts and, when the current
 media contains a packaged `app/VeilAgent.exe` bundle, replaces the installed app

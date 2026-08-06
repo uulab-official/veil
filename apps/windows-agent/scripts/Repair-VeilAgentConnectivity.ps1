@@ -65,6 +65,13 @@ function Wait-VeilRepairStatus {
         [int]$TimeoutSeconds = 90
     )
 
+    # Driver installation and firewall setup are intermediate stages. Only the final health
+    # stage is terminal; returning on networkDriverInstalled lets the non-elevated caller finish
+    # before the standard-user agent has been started and hides the real failure.
+    $TerminalSuccessStages = @(
+        "guestAgentHealthSucceeded"
+    )
+
     $Deadline = (Get-Date).AddSeconds($TimeoutSeconds)
     while ((Get-Date) -lt $Deadline) {
         if (Test-Path $StatusPath) {
@@ -78,7 +85,7 @@ function Wait-VeilRepairStatus {
 
             Write-Host "Elevated repair status: stage=$($Status.stage) succeeded=$($Status.succeeded)"
             Write-Host $Status.message
-            if ($Status.succeeded -eq $true) {
+            if ($Status.succeeded -eq $true -and $TerminalSuccessStages -contains [string]$Status.stage) {
                 return
             }
             if ($Status.stage -eq "failed") {

@@ -101,7 +101,7 @@ VEIL_DOTNET_BIN="$HOME/Library/Application Support/Veil/Toolchains/dotnet8/dotne
 - 에이전트 최종 health/reconnect: 미통과. QEMU host-forward TCP는 열리지만 WebSocket health가 응답하지 않아 P0를 닫지 않음.
 - 반복 설치 안전성: `start-$PID.log`, `agent.stdout-$PID.log`, `agent.stderr-$PID.log`로 실행별 로그 격리. Windows 계약 테스트에 회귀 검증 추가.
 - `veil-vmctl qemu-start` CLI 수명 회귀를 실제로 확인하고 수정했다. 분리 실행 후 CLI가 반환되어도 QEMU PID가 PPID 1로 남고 VNC `127.0.0.1:5900` 및 QMP가 계속 열리는 것을 확인했다.
-- Guest Tools ISO를 네트워크 드라이버 ISO로 오인해 `virtio-net-pci`를 선택하던 계획 버그를 수정했다. UTM Guest Tools 경로는 `usb-net`을 유지하고, 파일명이 `virtio-win`인 드라이버 미디어만 VirtIO NIC 선택 근거로 사용한다.
+- Guest Tools ISO를 네트워크 드라이버 ISO로 오인해 `virtio-net-pci`를 선택하던 계획 버그를 수정했다. UTM Guest Tools 경로는 `usb-net`을 유지하고, 파일명이 `virtio-win`인 드라이버 미디어만 VirtIO 설치 경로로 인식한다. 실제 Windows 디스크에서 VirtIO NIC 자동 선택이 UEFI에 멈추는 것을 재현했으므로, 드라이버 ISO가 있어도 자동 부팅 NIC는 검증된 `usb-net`으로 유지하며 VirtIO는 `VEIL_QEMU_NETWORK_DEVICE=virtio-net-pci` 명시 실험에서만 사용한다.
 - 수정된 `usb-net` 구성으로 실제 Windows 바탕화면까지 부팅했지만 framebuffer는 `800×600`이었다.
 - 실제 `Optimize.cmd` 실행에서 UTM Guest Tools 한국어 UAC 승인까지 통과했다. 이후 정상 재부팅 뒤 VNC framebuffer가 완전 검은 화면이 되었고, `guest-agent-wait`는 `tcpOpen`만 확인하고 WebSocket health는 시간 초과했다. Guest Tools 설치·재연결·1440×900은 실패 증거로 유지한다.
 - 최적화 완료 판정 결함을 수정했다. 재부팅 후 에이전트만 연결된 경우에도 완료하지 않고, 새 데스크톱 캡처가 다시 보일 때까지 검증한다. 검은 화면은 재시도 가능한 실패로 남는다.
@@ -127,6 +127,14 @@ VEIL_DOTNET_BIN="$HOME/Library/Application Support/Veil/Toolchains/dotnet8/dotne
 - `./script/test_all.sh`: 전체 게이트 통과. Swift host, Node 패키지 25개, Windows Agent 계약 27개, macOS bundle/launch, 설치·교체·삭제·재설치 lifecycle 통과.
 - `git diff --check`: 통과.
 - `./script/production_readiness.sh --run-automated --json`: `automatedGate=passed`이며 P0 15개가 미완료라 `blocked`, `releaseReady=false`, 종료 코드 `2`를 반환했다.
+
+## 2026-08-06 follow-up verification
+
+- `npm --prefix harness/windows-agent-contract test`: 27/27 통과. 복구 상태의 `networkDriverInstalled` 중간 성공을 최종 성공으로 오인하지 않는 계약 검증을 포함한다.
+- 실제 `qemu-start` 재검증: VirtIO ISO가 프로필에 붙어 있어도 기본 계획이 `usb-net,netdev=net0`을 선택했고, Windows 데스크톱 캡처가 `1024×768`, `visualState=desktop`으로 통과했다. 같은 실행의 `guest-agent-wait`는 `tcpOpen` 후 WebSocket health 시간 초과로 미통과했다.
+- 실제 `qemu-install-agent --wait-seconds 60` 재검증: 화면에서 `networkDriverInstalled succeeded=True` → `firewallRulesReady succeeded=False` → `standardUserAgentStartRequested succeeded=False`까지 진행했으나 `guestAgentHealthSucceeded`에 도달하지 못했고 최종 host health는 `unavailable`이었다. 중간 driver 단계에서 조기 성공으로 반환하지 않는 동작은 확인했지만, 표준 사용자 에이전트 시작/재연결은 여전히 P0 미완료다.
+- fresh 전체 회귀 게이트: `VEIL_DOTNET_BIN=.../dotnet ./script/test_all.sh`가 종료 코드 0으로 완료됐다. Swift host 472개/29 suites, Windows Agent 계약 27/27, Node 패키지 25개, macOS bundle/launch, 설치·교체·삭제·재설치 lifecycle을 포함한다.
+- fresh production readiness: `./script/production_readiness.sh --run-automated --json` → `{"status":"blocked","releaseReady":false,"p0Total":37,"passingP0Count":22,"unresolvedP0Count":15,"automatedGate":"passed"}`, 종료 코드 `2`.
 - `swift test --disable-sandbox --package-path apps/mac-host --filter 'WindowsOptimizationCoordinatorTests|QEMUWindowsBootPlanTests|VMProfileStoreTests'`: 135개 통과.
 - `swift test --disable-sandbox --package-path apps/mac-host --filter 'QEMUWindowsBootPlanTests|VMProfileStoreTests'`: 123개/2 suites 통과. virtio 단일 디스플레이 헤드와 짧은 `VEIL_AUTO` 진입점 회귀를 포함한다.
 - `./script/test_all.sh`: Swift 471개/29 suites, Windows Agent 72개, Node 패키지 25개, 설치·교체·삭제·재설치 lifecycle 통과.

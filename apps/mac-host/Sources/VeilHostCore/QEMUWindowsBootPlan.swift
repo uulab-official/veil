@@ -437,9 +437,14 @@ public enum LocalQEMUWindowsBootPlanFactory {
         } ?? false
         let networkAdapter: QEMUWindowsNetworkAdapter
         if hasDriverMedia && !networkSelection.isExplicit {
-            networkAdapter = .virtioNetPCI
+            // Keep the inbox-compatible USB NIC as the automatic boot default. The attached
+            // VirtIO ISO is still available to the repair flow, but selecting virtio-net-pci
+            // before a successful live driver bind can strand Windows at UEFI or boot with no
+            // usable adapter. VirtIO remains available through the explicit environment override
+            // for bounded compatibility probes.
+            networkAdapter = .usbNet
             configurationWarnings.append(
-                "Using virtio-net-pci because VirtIO network driver media is configured. Set \(QEMUWindowsNetworkAdapter.environmentVariableName) to override this compatibility choice."
+                "Keeping usb-net because it is the boot-safe default even when VirtIO network driver media is configured. Set \(QEMUWindowsNetworkAdapter.environmentVariableName) to select VirtIO for an explicit compatibility probe."
             )
         } else {
             networkAdapter = networkSelection.adapter
