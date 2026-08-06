@@ -2,6 +2,22 @@ using Veil.Agent;
 
 ProcessDpiAwareness.EnablePerMonitorV2();
 
+if (string.Equals(
+        Environment.GetEnvironmentVariable("VEIL_AGENT_VIRTIO_SERIAL_DIAGNOSTICS"),
+        "1",
+        StringComparison.Ordinal
+    ))
+{
+    foreach (var port in VirtioSerialPortProbe.Discover())
+    {
+        Console.WriteLine(
+            $"VirtIO serial port: name={port.PortName ?? "<unnamed>"}, " +
+            $"hostConnected={port.HostConnected}, guestConnected={port.GuestConnected}, " +
+            $"devicePath={port.DevicePath}"
+        );
+    }
+}
+
 var endpoint = AgentEndpoint.FromEnvironment();
 using var instanceGuard = SingleInstanceGuard.TryAcquire(endpoint);
 if (!instanceGuard.HasOwnership)

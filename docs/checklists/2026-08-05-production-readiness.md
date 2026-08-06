@@ -11,7 +11,7 @@
 
 ## 현재 기준선
 
-- 기준 커밋: `d38557e` (`develop`, 다음 변경은 이 기준에서 검증)
+- 기준 커밋: `005c0b3` (`develop`, 다음 변경은 이 기준에서 검증)
 - 제품 범위: Windows 11 Arm VM에서 Windows 앱을 macOS 네이티브 창처럼 여는 런타임
 - 전체 Windows 데스크톱: 기본 제품 흐름에 포함되지 않으며, 별도 데스크톱 표시 모드가 필요함
 - 금지 사항: Windows 이미지·제품 키·Parallels 자산을 저장소에 포함하지 않음
@@ -149,3 +149,29 @@ VEIL_DOTNET_BIN="$HOME/Library/Application Support/Veil/Toolchains/dotnet8/dotne
 - 이 결과로 “VirtIO 드라이버 설치 뒤 PnP 재검색 누락” 가설은 반증됐다. 재검색 명령은 성공했지만 Windows 장치 목록에 하드웨어 NIC가 생성되지 않았다. 복구 스크립트는 이제 PnP 명령 성공만으로 네트워크 단계를 성공 처리하지 않는다.
 - `VEIL_QEMU_NETWORK_DEVICE=vmxnet3` bounded probe도 UEFI `Start boot option`에 머물러 현재 관리 ARM 디스크의 production fallback 후보에서 제외했다. 기존 `usb-net`/`e1000e`는 데스크톱까지 부팅하지만 어댑터가 없고, `e1000`/`rtl8139`/`virtio-net-pci`도 현재 디스크에서 첫 앱 루프를 통과하지 못했다.
 - 결론: 현재 남은 P0는 설치 스크립트나 단순 PnP 재검색이 아니라, 이 Windows ARM 디스크에서 실제 게스트 NIC를 노출하는 QEMU/Windows 호환성 또는 네트워크 없는 게스트-호스트 전송 경계다. Notepad/HWND/입력/클립보드 P0는 계속 미완료다.
+
+## 2026-08-06 no-IP transport architecture gate
+
+현재 NIC 경로가 닫히지 않았으므로, 네트워크 없는 전송을 “구현된 기능”으로 표시하지 않고 별도 P0 feasibility gate로 관리한다.
+
+- [x] QEMU가 `virtio-serial-pci`와 `virtserialport` 장치를 제공하는지 호스트에서 확인한다.
+- [x] 공식 VirtIO ISO에 Windows 11 Arm64용 `vioser` 드라이버가 포함되는지 확인한다.
+- [x] `vioser`의 실제 사용자 공간 계약을 확인한다. 게스트는 포트 이름을 기준으로 장치 인터페이스를 열고 `ReadFile`/`WriteFile`을 사용해야 하며, TCP health의 대체 경로로 간주하지 않는다.
+- [x] 현재 VirtIO ISO에서 Arm64 `viosock` 드라이버가 제공되지 않는 것을 확인한다. 따라서 vsock을 이미 지원된 대체 경로처럼 문서화하지 않는다.
+- [ ] 깨끗한 Windows Arm VM에서 `virtio-serial-pci` 장치와 `vioser`를 함께 설치하고 `org.veil.agent` 포트가 실제로 열리는지 확인한다.
+- [ ] macOS host가 Unix socket으로 QEMU chardev 연결을 수락하고, 게스트 health 요청과 응답을 왕복한다.
+- [ ] 기존 protocol 메시지를 보존한 프레임 규칙, 최대 메시지 크기, partial read/write, 재연결, timeout, 종료 처리를 계약 테스트로 고정한다.
+- [ ] TCP/WebSocket 경로가 실패할 때만 no-IP 경로를 선택하며, health 왕복 전에는 Notepad/HWND/input/clipboard P0를 완료 처리하지 않는다.
+- [ ] no-IP health 왕복 후 실제 Notepad frame, 키보드 입력, clipboard를 같은 경로에서 확인한다.
+
+현재 판정: **BLOCKED — 장치와 Arm64 드라이버의 존재는 확인했지만, host socket부터 guest `vioser` 사용자 공간까지의 실제 왕복 증거가 없다.**
+
+참고한 외부 드라이버 계약은 [virtio-win Windows guest drivers](https://github.com/virtio-win/kvm-guest-drivers-windows)와 [공식 드라이버 설치 문서](https://github.com/virtio-win/kvm-guest-drivers-windows/wiki/Driver-installation)다. 저장소에는 드라이버 바이너리나 Windows 이미지가 추가되지 않는다.
+
+구현 진척: Windows Agent에 `VEIL_AGENT_VIRTIO_SERIAL_DIAGNOSTICS=1` 진단 모드를 추가했다. 이 모드는 기본 WebSocket 동작을 바꾸지 않고, vioser 인터페이스를 열거해 포트명·host/guest 연결 상태·장치 경로를 기록한다. 실제 VM에서 `org.veil.agent` 포트가 발견되는 실행 증거가 남기 전까지는 위 체크 항목을 PASS로 올리지 않는다.
+
+## 최신 변경 검증
+
+- `VeilAgent.Tests`: 75/75 통과.
+- `git diff --check`: 통과.
+- `script/production_readiness.sh --run-automated --json`: automated gate 통과, `P0 37개 중 22개 통과 / 15개 미완료`, `releaseReady=false`.

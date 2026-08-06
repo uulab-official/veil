@@ -69,6 +69,6 @@ Task 3 remains blocked by the live QEMU guest-to-host WebSocket path: the Window
 
 - [x] Run `./script/test_all.sh` with the managed .NET SDK.
 - [x] Run `./script/production_readiness.sh --run-automated --json` and record the exact P0 count.
-- [x] Run `git diff --check`, inspect the final diff, and commit the coherent change as `441bacc` (`fix(runtime): keep boot-safe NIC and repair stage state`).
-- [ ] Push `441bacc` to `develop`; the configured HTTPS remote currently fails before authentication with `could not read Username for 'https://github.com': Device not configured`.
+- [x] Run `git diff --check`, inspect the final diff, and commit the coherent runtime/agent changes through `005c0b3` (`fix(agent): record real network device readiness`).
+- [x] Push `005c0b3` to `develop`; `origin/develop` matches the verified local commit.
 - [ ] Report remaining blockers explicitly; do not claim production readiness while any P0 remains unresolved.
