@@ -32,6 +32,7 @@ public struct QEMUWindowsBootPlan: Codable, Equatable, Sendable {
     public var automaticInstallMediaPath: String?
     public var networkAdapter: QEMUWindowsNetworkAdapter
     public var networkDeviceArgument: String
+    public var guestTransport: QEMUWindowsGuestTransport?
     public var summary: String
     public var arguments: [String]
     public var warnings: [String]
@@ -54,6 +55,7 @@ public struct QEMUWindowsBootPlan: Codable, Equatable, Sendable {
         automaticInstallMediaPath: String? = nil,
         networkAdapter: QEMUWindowsNetworkAdapter = .usbNet,
         networkDeviceArgument: String = QEMUWindowsNetworkAdapter.usbNet.deviceArgument,
+        guestTransport: QEMUWindowsGuestTransport? = nil,
         summary: String,
         arguments: [String],
         warnings: [String]
@@ -75,9 +77,46 @@ public struct QEMUWindowsBootPlan: Codable, Equatable, Sendable {
         self.automaticInstallMediaPath = automaticInstallMediaPath
         self.networkAdapter = networkAdapter
         self.networkDeviceArgument = networkDeviceArgument
+        self.guestTransport = guestTransport
         self.summary = summary
         self.arguments = arguments
         self.warnings = warnings
+    }
+}
+
+public enum QEMUWindowsGuestTransport: String, Codable, CaseIterable, Equatable, Sendable {
+    case webSocket = "websocket"
+    case virtioSerialProbe = "virtio-serial-probe"
+
+    public static let environmentVariableName = "VEIL_QEMU_GUEST_TRANSPORT"
+    public static let socketEnvironmentVariableName = "VEIL_QEMU_VIRTIO_SERIAL_SOCKET"
+    public static let defaultPortName = "org.veil.agent"
+
+    public struct Selection: Equatable, Sendable {
+        public var transport: QEMUWindowsGuestTransport
+        public var warning: String?
+
+        public init(transport: QEMUWindowsGuestTransport, warning: String? = nil) {
+            self.transport = transport
+            self.warning = warning
+        }
+    }
+
+    public static func selected(from rawValue: String?) -> Selection {
+        guard let rawValue,
+              !rawValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return Selection(transport: .webSocket)
+        }
+
+        let normalizedValue = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let transport = QEMUWindowsGuestTransport(rawValue: normalizedValue) {
+            return Selection(transport: transport)
+        }
+
+        return Selection(
+            transport: .webSocket,
+            warning: "Ignoring unsupported \(environmentVariableName)=\(normalizedValue). Supported values: \(allCases.map(\.rawValue).joined(separator: ", "))."
+        )
     }
 }
 
@@ -161,6 +200,8 @@ public struct QEMUWindowsBootPlanner: Sendable {
     private let isTPMEmulatorAvailable: Bool
     private let tpmStateDirectoryPath: String?
     private let networkAdapter: QEMUWindowsNetworkAdapter
+    private let guestTransport: QEMUWindowsGuestTransport
+    private let virtioSerialSocketPath: String?
     private let configurationWarnings: [String]
 
     public init(
@@ -176,6 +217,8 @@ public struct QEMUWindowsBootPlanner: Sendable {
         isTPMEmulatorAvailable: Bool = false,
         tpmStateDirectoryPath: String? = nil,
         networkAdapter: QEMUWindowsNetworkAdapter = .usbNet,
+        guestTransport: QEMUWindowsGuestTransport = .webSocket,
+        virtioSerialSocketPath: String? = nil,
         configurationWarnings: [String] = []
     ) {
         self.executablePath = executablePath
@@ -190,6 +233,8 @@ public struct QEMUWindowsBootPlanner: Sendable {
         self.isTPMEmulatorAvailable = isTPMEmulatorAvailable
         self.tpmStateDirectoryPath = tpmStateDirectoryPath
         self.networkAdapter = networkAdapter
+        self.guestTransport = guestTransport
+        self.virtioSerialSocketPath = virtioSerialSocketPath
         self.configurationWarnings = configurationWarnings
     }
 
@@ -216,6 +261,12 @@ public struct QEMUWindowsBootPlanner: Sendable {
             .path
         let driverMediaPath = nonEmpty(profile.driverMediaPath)
         var warnings = configurationWarnings
+
+        if guestTransport == .virtioSerialProbe {
+            warnings.append(
+                "virtio-serial-probe is experimental and does not provide a guest transport. It must not be used as a production fallback until a clean Windows health round trip is proven."
+            )
+        }
 
         if !isExecutableAvailable {
             warnings.append(
@@ -277,6 +328,15 @@ public struct QEMUWindowsBootPlanner: Sendable {
             "-device", "usb-tablet"
         ])
 
+        if guestTransport == .virtioSerialProbe,
+           let virtioSerialSocketPath {
+            arguments.append(contentsOf: [
+                "-chardev", "socket,id=veil-agent,path=\(virtioSerialSocketPath),server=on,wait=off",
+                "-device", "virtio-serial-pci",
+                "-device", "virtserialport,chardev=veil-agent,name=\(QEMUWindowsGuestTransport.defaultPortName)"
+            ])
+        }
+
         if let installerMediaPath, shouldAttachInstallerMedia {
             arguments.append(contentsOf: [
                 "-drive", "driver=raw,file.driver=file,file.locking=off,file.filename=\(installerMediaPath),if=none,id=installer,media=cdrom,readonly=on",
@@ -311,6 +371,7 @@ public struct QEMUWindowsBootPlanner: Sendable {
             automaticInstallMediaPath: automaticInstallMediaPath,
             networkAdapter: networkAdapter,
             networkDeviceArgument: networkAdapter.deviceArgument,
+            guestTransport: guestTransport,
             summary: windowsInstalled
                 ? "Dry-run QEMU/HVF command plan for \(profile.name). Windows boots from the installed system disk; the Windows installer ISO is detached and read-only Veil guest support media stays attached."
                 : "Dry-run QEMU/HVF command plan for \(profile.name). Veil does not execute this plan yet.",
@@ -429,7 +490,11 @@ public enum LocalQEMUWindowsBootPlanFactory {
         let networkSelection = QEMUWindowsNetworkAdapter.selected(
             from: environment[QEMUWindowsNetworkAdapter.environmentVariableName]
         )
-        var configurationWarnings = networkSelection.warning.map { [$0] } ?? []
+        let guestTransportSelection = QEMUWindowsGuestTransport.selected(
+            from: environment[QEMUWindowsGuestTransport.environmentVariableName]
+        )
+        var configurationWarnings = [networkSelection.warning, guestTransportSelection.warning]
+            .compactMap { $0 }
         let configuredDriverMediaPath = profile.driverMediaPath?
             .trimmingCharacters(in: .whitespacesAndNewlines)
         let hasDriverMedia = configuredDriverMediaPath.map {
@@ -469,9 +534,21 @@ public enum LocalQEMUWindowsBootPlanFactory {
             isTPMEmulatorAvailable: tpmEmulatorPath != nil,
             tpmStateDirectoryPath: tpmStateDirectoryPath,
             networkAdapter: networkAdapter,
+            guestTransport: guestTransportSelection.transport,
+            virtioSerialSocketPath: environment[QEMUWindowsGuestTransport.socketEnvironmentVariableName]
+                ?? defaultVirtioSerialSocketPath(homeDirectory: FileManager.default.homeDirectoryForCurrentUser),
             configurationWarnings: configurationWarnings
         )
         return try planner.makePlan(for: profile)
+    }
+
+    public static func defaultVirtioSerialSocketPath(
+        homeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser
+    ) -> String {
+        homeDirectory
+            .appendingPathComponent("Library/Application Support/Veil/Diagnostics", isDirectory: true)
+            .appendingPathComponent("virtio-serial-agent.sock")
+            .path
     }
 }
 

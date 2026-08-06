@@ -38,7 +38,7 @@
 - Add tests: `apps/mac-host/Tests/VeilHostCoreTests/`
 - Update: `packages/protocol/` and protocol fixtures only if the frame is externally observable
 
-- [ ] Add an explicit opt-in transport setting and keep the default WebSocket plan unchanged.
+- [x] Add an explicit opt-in `virtio-serial-probe` setting and keep the default WebSocket plan unchanged.
 - [ ] Make the launch path create a private Unix socket endpoint before QEMU starts and close it on every boot failure, stop, and reconnect.
 - [ ] Add a bounded length-prefixed frame codec with maximum frame size, cancellation, timeout, and partial read/write tests.
 - [ ] Return an actionable diagnostic when QEMU connects no client or the guest does not open the named port.
@@ -70,3 +70,7 @@
 ## Exit criteria
 
 The transport is production-eligible only when the clean-VM health round trip and the Notepad/input/clipboard vertical slice pass with bounded failure recovery. Until then, the supported product state remains WebSocket with an explicit guest-network blocker, not a partially wired serial fallback.
+
+## Live probe result — 2026-08-06
+
+The first opt-in QEMU probe created the named chardev socket and booted QEMU, but the managed Windows disk stayed at `Start boot option` (`800×600`). A baseline launch without the VirtIO serial device reached the Windows desktop (`1024×768`) on the same disk. The probe is therefore useful as a bounded compatibility test, but it is not a working transport and must not be enabled for users until the boot incompatibility is resolved or a different transport architecture is proven.

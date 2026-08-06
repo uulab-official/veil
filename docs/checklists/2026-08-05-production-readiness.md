@@ -175,3 +175,15 @@ VEIL_DOTNET_BIN="$HOME/Library/Application Support/Veil/Toolchains/dotnet8/dotne
 - `VeilAgent.Tests`: 75/75 통과.
 - `git diff --check`: 통과.
 - `script/production_readiness.sh --run-automated --json`: automated gate 통과, `P0 37개 중 22개 통과 / 15개 미완료`, `releaseReady=false`.
+
+## 2026-08-06 virtio-serial probe live evidence
+
+- [x] 기본 WebSocket QEMU 계획으로 동일한 관리 Windows 디스크를 부팅해 대조 기준을 확보했다. `qemu-display-smoke`는 PID `77784`, `visualState=desktop`, `1024×768`을 기록했다.
+- [x] `VEIL_QEMU_GUEST_TRANSPORT=virtio-serial-probe`와 `VEIL_QEMU_VIRTIO_SERIAL_SOCKET=/tmp/veil-vioserial-probe-live.sock`로 실제 QEMU를 실행했다. QEMU가 Unix socket을 생성했고 실제 인자에 `virtio-serial-pci`와 `virtserialport,name=org.veil.agent`가 포함됐다.
+- [x] probe 실행은 QEMU PID `73364`까지 시작됐지만 `qemu-display-smoke`가 `visualState=modalPrompt`, `recognizedText=["start boot option"]`, `800×600`을 기록했다. Windows desktop, `vioser` 진단 출력, guest health 왕복에는 도달하지 못했다.
+- [x] 같은 디스크의 기본 WebSocket 대조 실행이 desktop에 도달했으므로, 이번 probe 실패는 일반 디스크 부팅 실패가 아니라 `virtio-serial-pci`를 추가한 구성에서 재현된 호환성 차이로 기록한다.
+- [x] probe QEMU는 정상 종료 요청이 30초 안에 완료되지 않아 `qemu-force-stop --i-understand-data-loss`로 종료했다. baseline QEMU는 QMP ACPI powerdown으로 정상 종료했다.
+- [ ] `vioser` 장치가 실제 Windows desktop에서 발견되는지 확인한다.
+- [ ] named port를 통한 health 왕복과 Notepad/input/clipboard를 확인한다.
+
+현재 판정: **BLOCKED — 첫 no-IP 장치 구성 자체가 Windows Boot Manager 단계에서 멈췄다.** 따라서 `virtio-serial`을 production fallback으로 활성화하지 않는다.

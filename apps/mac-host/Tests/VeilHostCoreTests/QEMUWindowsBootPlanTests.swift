@@ -142,6 +142,50 @@ struct QEMUWindowsBootPlanTests {
         #expect(plan.warnings.isEmpty)
     }
 
+    @Test("keeps the default guest transport on the WebSocket path")
+    func defaultGuestTransportRemainsWebSocket() throws {
+        var profile = VMProfile.defaultWindows11Arm(createdAt: Date(timeIntervalSince1970: 1_782_752_400))
+        profile.installerMediaPath = "/Users/test/Downloads/Win11_25H2_Korean_Arm64_v2.iso"
+        profile.virtualDiskPath = "/Users/test/Virtual Machines/Veil/Windows 11 Arm.img"
+        profile.sharedFolderPath = "/Users/test/Veil Shared"
+
+        let plan = try QEMUWindowsBootPlanner(
+            executablePath: "/opt/homebrew/bin/qemu-system-aarch64",
+            isExecutableAvailable: true,
+            firmwarePath: "/opt/homebrew/share/qemu/edk2-aarch64-code.fd",
+            isFirmwareAvailable: true
+        ).makePlan(for: profile)
+
+        #expect(plan.guestTransport == .webSocket)
+        #expect(!plan.arguments.contains("virtio-serial-pci"))
+        #expect(!plan.arguments.contains("virtserialport,chardev=veil-agent,name=org.veil.agent"))
+    }
+
+    @Test("adds an opt-in named VirtIO serial port probe")
+    func addsOptInVirtioSerialPortProbe() throws {
+        var profile = VMProfile.defaultWindows11Arm(createdAt: Date(timeIntervalSince1970: 1_782_752_400))
+        profile.installerMediaPath = "/Users/test/Downloads/Win11_25H2_Korean_Arm64_v2.iso"
+        profile.virtualDiskPath = "/Users/test/Virtual Machines/Veil/Windows 11 Arm.img"
+        profile.sharedFolderPath = "/Users/test/Veil Shared"
+
+        let plan = try QEMUWindowsBootPlanner(
+            executablePath: "/opt/homebrew/bin/qemu-system-aarch64",
+            isExecutableAvailable: true,
+            firmwarePath: "/opt/homebrew/share/qemu/edk2-aarch64-code.fd",
+            isFirmwareAvailable: true,
+            guestTransport: .virtioSerialProbe,
+            virtioSerialSocketPath: "/tmp/veil-vioserial-probe.sock"
+        ).makePlan(for: profile)
+
+        #expect(plan.guestTransport == .virtioSerialProbe)
+        #expect(plan.arguments.containsSequence([
+            "-chardev",
+            "socket,id=veil-agent,path=/tmp/veil-vioserial-probe.sock,server=on,wait=off"
+        ]))
+        #expect(plan.arguments.contains("virtio-serial-pci"))
+        #expect(plan.arguments.contains("virtserialport,chardev=veil-agent,name=org.veil.agent"))
+    }
+
     @Test("can select an alternate QEMU network adapter for live compatibility probes")
     func canSelectAlternateQEMUNetworkAdapter() throws {
         var profile = VMProfile.defaultWindows11Arm(createdAt: Date(timeIntervalSince1970: 1_782_752_400))
