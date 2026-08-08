@@ -171,3 +171,27 @@ Observed failure classification: `hostForwardUnavailable` with repeated TCP
 `SYN_SENT` probes to `127.0.0.1:18444`. This is a real guest boot/reconnect
 failure, not a UI success. The preserved evidence is under Veil's local
 `Diagnostics/QEMU Launch` directory and is intentionally not committed.
+
+## Production hardening after live failure — 2026-08-08
+
+The live failure exposed a media-role regression in the one-click optimization
+path: the downloaded UTM Guest Tools ISO was being written into the profile's
+VirtIO driver slot. The next QEMU boot therefore attached Guest Tools as
+`id=drivers` and omitted `virtio-win-latest.iso`; Windows could reach Boot
+Manager but never returned the Veil agent connection.
+
+- [x] Added a dedicated `guestToolsMediaPath` profile/snapshot/status field.
+- [x] Attach VirtIO driver media as `id=drivers` and Guest Tools as a separate
+  read-only `id=guest-tools` USB storage device.
+- [x] Keep the automatic Windows NIC on boot-safe `usb-net`; explicit network
+  device overrides remain bounded compatibility probes.
+- [x] Migrate legacy profiles that contain `utm-guest-tools` in the driver slot
+  before the next optimization boot.
+- [x] Added regression coverage for separate media arguments, profile
+  persistence, legacy migration, and optimization coordinator behavior.
+- [x] Passed the complete Swift suite: 485 tests across 29 suites.
+- [x] Passed `script/test_all.sh`: Windows agent, 25 Node packages, signed app
+  bundle, install/replace/uninstall/reinstall lifecycle.
+- [ ] Re-run the consented live optimization after the VM is safely stopped;
+  prove both media roles in the launched QEMU command, Windows desktop, agent
+  health, Notepad launch, HWND frame, and post-install framebuffer evidence.

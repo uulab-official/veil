@@ -306,9 +306,9 @@ private final class RecordingOptimizationVMModel: WindowsOptimizationVMModeling 
         )
     }
 
-    func prepareWindowsOptimization(driverMediaPath: String) async -> Bool {
+    func prepareWindowsOptimization(guestToolsMediaPath: String) async -> Bool {
         calls.values.append("prepare")
-        snapshot?.driverMediaPath = driverMediaPath
+        snapshot?.guestToolsMediaPath = guestToolsMediaPath
         return true
     }
 

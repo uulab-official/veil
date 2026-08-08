@@ -6,6 +6,7 @@ public protocol VMRuntimeService: Sendable {
     func createDefaultProfile() async throws -> VMRuntimeSnapshot
     func createDefaultVirtualDisk() async throws -> VMRuntimeSnapshot
     func updateProfilePaths(installerMediaPath: String?, driverMediaPath: String?, virtualDiskPath: String?) async throws -> VMRuntimeSnapshot
+    func updateGuestToolsMediaPath(_ path: String?) async throws -> VMRuntimeSnapshot
     func markWindowsInstalled() async throws -> VMRuntimeSnapshot
     func markGuestAgentConnected(agentVersion: String) async throws -> VMRuntimeSnapshot
     func start() async throws -> VMRuntimeSnapshot
@@ -249,6 +250,7 @@ public struct VMRuntimeSnapshot: Codable, Equatable, Sendable {
     public var installerMediaPath: String?
     public var discoveredInstallerMediaPath: String?
     public var driverMediaPath: String?
+    public var guestToolsMediaPath: String?
     public var virtualDiskPath: String?
     public var virtualDiskAllocatedBytes: Int64?
     public var automaticInstallAnswerFilePath: String?
@@ -279,6 +281,7 @@ public struct VMRuntimeSnapshot: Codable, Equatable, Sendable {
         installerMediaPath: String? = nil,
         discoveredInstallerMediaPath: String? = nil,
         driverMediaPath: String? = nil,
+        guestToolsMediaPath: String? = nil,
         virtualDiskPath: String? = nil,
         virtualDiskAllocatedBytes: Int64? = nil,
         automaticInstallAnswerFilePath: String? = nil,
@@ -308,6 +311,7 @@ public struct VMRuntimeSnapshot: Codable, Equatable, Sendable {
         self.installerMediaPath = installerMediaPath
         self.discoveredInstallerMediaPath = discoveredInstallerMediaPath
         self.driverMediaPath = driverMediaPath
+        self.guestToolsMediaPath = guestToolsMediaPath
         self.virtualDiskPath = virtualDiskPath
         self.virtualDiskAllocatedBytes = virtualDiskAllocatedBytes
         self.automaticInstallAnswerFilePath = automaticInstallAnswerFilePath
@@ -338,6 +342,7 @@ public struct VMWindowsInstallStatusReport: Codable, Equatable, Sendable {
     public var installEvidence: VMInstallEvidenceSummary
     public var installerMediaPath: String?
     public var driverMediaPath: String?
+    public var guestToolsMediaPath: String?
     public var virtualDiskPath: String?
     public var automaticInstallMediaPath: String?
     public var automaticInstallMediaStatus: VMAutomaticInstallMediaStatus
@@ -357,6 +362,7 @@ public struct VMWindowsInstallStatusReport: Codable, Equatable, Sendable {
         installEvidence: VMInstallEvidenceSummary,
         installerMediaPath: String?,
         driverMediaPath: String?,
+        guestToolsMediaPath: String?,
         virtualDiskPath: String?,
         automaticInstallMediaPath: String?,
         automaticInstallMediaStatus: VMAutomaticInstallMediaStatus,
@@ -375,6 +381,7 @@ public struct VMWindowsInstallStatusReport: Codable, Equatable, Sendable {
         self.installEvidence = installEvidence
         self.installerMediaPath = installerMediaPath
         self.driverMediaPath = driverMediaPath
+        self.guestToolsMediaPath = guestToolsMediaPath
         self.virtualDiskPath = virtualDiskPath
         self.automaticInstallMediaPath = automaticInstallMediaPath
         self.automaticInstallMediaStatus = automaticInstallMediaStatus
@@ -441,6 +448,7 @@ public extension VMRuntimeSnapshot {
             installEvidence: installEvidence,
             installerMediaPath: installerMediaPath,
             driverMediaPath: driverMediaPath,
+            guestToolsMediaPath: guestToolsMediaPath,
             virtualDiskPath: virtualDiskPath,
             automaticInstallMediaPath: automaticInstallMediaPath,
             automaticInstallMediaStatus: automaticInstallMediaStatusEvidence(),
@@ -1650,7 +1658,7 @@ public final class VMRuntimeModel {
     }
 
     @discardableResult
-    public func prepareWindowsOptimization(driverMediaPath: String) async -> Bool {
+    public func prepareWindowsOptimization(guestToolsMediaPath: String) async -> Bool {
         guard let currentSnapshot = snapshot,
               currentSnapshot.windowsInstalled,
               let virtualDiskPath = currentSnapshot.virtualDiskPath else {
@@ -1658,12 +1666,28 @@ public final class VMRuntimeModel {
             return false
         }
 
+        // Versions before the dedicated Guest Tools slot stored the UTM Guest Tools
+        // ISO in driverMediaPath. Migrate that legacy value instead of attaching it
+        // as a VirtIO driver disc on the next boot.
+        let driverMediaPath = Self.isLegacyGuestToolsMediaPath(currentSnapshot.driverMediaPath)
+            ? nil
+            : currentSnapshot.driverMediaPath
+
         await updateProfilePaths(
             installerMediaPath: currentSnapshot.installerMediaPath,
             driverMediaPath: driverMediaPath,
             virtualDiskPath: virtualDiskPath
         )
         guard phase == .loaded else {
+            return false
+        }
+
+        do {
+            snapshot = try await service.updateGuestToolsMediaPath(guestToolsMediaPath)
+            phase = .loaded
+        } catch {
+            errorMessage = userMessage(for: error)
+            phase = .failed
             return false
         }
 
@@ -1769,6 +1793,17 @@ public final class VMRuntimeModel {
             errorMessage = userMessage(for: error)
             phase = .failed
         }
+    }
+
+    private static func isLegacyGuestToolsMediaPath(_ path: String?) -> Bool {
+        guard let path else {
+            return false
+        }
+
+        return URL(fileURLWithPath: path)
+            .lastPathComponent
+            .lowercased()
+            .contains("utm-guest-tools")
     }
 
     private func userMessage(for error: any Error) -> String {
@@ -1916,6 +1951,7 @@ public struct LocalVMRuntimeService: VMRuntimeService {
                 diskGB: profile.diskGB,
                 installerMediaPath: profile.installerMediaPath,
                 driverMediaPath: profile.driverMediaPath,
+                guestToolsMediaPath: profile.guestToolsMediaPath,
                 virtualDiskPath: profile.virtualDiskPath,
                 virtualDiskAllocatedBytes: virtualDiskAllocatedBytes,
                 automaticInstallAnswerFilePath: Self.automaticInstallAnswerFilePathIfExists(for: profile),
@@ -2805,6 +2841,13 @@ public struct LocalVMRuntimeService: VMRuntimeService {
         return try await loadSnapshot()
     }
 
+    public func updateGuestToolsMediaPath(_ path: String?) async throws -> VMRuntimeSnapshot {
+        var profile = try await profileStore.load() ?? defaultProfile()
+        profile.guestToolsMediaPath = path
+        try await profileStore.save(profile)
+        return try await loadSnapshot()
+    }
+
     public func markGuestAgentConnected(agentVersion: String) async throws -> VMRuntimeSnapshot {
         guard var profile = try await profileStore.load() else {
             throw VMRuntimeError.bootPrerequisitesMissing
@@ -3412,6 +3455,17 @@ public struct LocalVMRuntimeService: VMRuntimeService {
                     role: "drivers",
                     attachment: "USB mass storage",
                     path: driverMediaPath,
+                    readOnly: true
+                )
+            )
+        }
+
+        if let guestToolsMediaPath = profile.guestToolsMediaPath {
+            storageDevices.append(
+                VMRuntimeStorageDeviceSummary(
+                    role: "guest-tools",
+                    attachment: "USB mass storage",
+                    path: guestToolsMediaPath,
                     readOnly: true
                 )
             )

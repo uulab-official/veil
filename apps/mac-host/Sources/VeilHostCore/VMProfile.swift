@@ -50,6 +50,7 @@ public struct VMProfile: Codable, Equatable, Identifiable, Sendable {
     public var installerMediaBookmarkData: Data?
     public var driverMediaPath: String?
     public var driverMediaBookmarkData: Data?
+    public var guestToolsMediaPath: String?
     public var virtualDiskPath: String?
     public var virtualDiskBookmarkData: Data?
     public var windowsInstalled: Bool?
@@ -71,6 +72,7 @@ public struct VMProfile: Codable, Equatable, Identifiable, Sendable {
         installerMediaBookmarkData: Data? = nil,
         driverMediaPath: String? = nil,
         driverMediaBookmarkData: Data? = nil,
+        guestToolsMediaPath: String? = nil,
         virtualDiskPath: String? = nil,
         virtualDiskBookmarkData: Data? = nil,
         windowsInstalled: Bool? = nil,
@@ -91,6 +93,7 @@ public struct VMProfile: Codable, Equatable, Identifiable, Sendable {
         self.installerMediaBookmarkData = installerMediaBookmarkData
         self.driverMediaPath = driverMediaPath
         self.driverMediaBookmarkData = driverMediaBookmarkData
+        self.guestToolsMediaPath = guestToolsMediaPath
         self.virtualDiskPath = virtualDiskPath
         self.virtualDiskBookmarkData = virtualDiskBookmarkData
         self.windowsInstalled = windowsInstalled

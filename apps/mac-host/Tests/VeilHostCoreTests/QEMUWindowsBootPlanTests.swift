@@ -236,6 +236,28 @@ struct QEMUWindowsBootPlanTests {
         #expect(plan.arguments.containsSequence(["-device", "usb-storage,drive=drivers"]))
     }
 
+    @Test("keeps VirtIO driver media when Guest Tools media is attached separately")
+    func keepsDriverMediaWhenGuestToolsMediaIsAttachedSeparately() throws {
+        var profile = VMProfile.defaultWindows11Arm(createdAt: Date(timeIntervalSince1970: 1_782_752_400))
+        profile.installerMediaPath = "/Users/test/Downloads/Win11_25H2_Korean_Arm64_v2.iso"
+        profile.driverMediaPath = "/Users/test/Downloads/virtio-win.iso"
+        profile.guestToolsMediaPath = "/Users/test/Downloads/utm-guest-tools-latest.iso"
+        profile.virtualDiskPath = "/Users/test/Virtual Machines/Veil/Windows 11 Arm.img"
+        profile.sharedFolderPath = "/Users/test/Veil Shared"
+
+        let plan = try QEMUWindowsBootPlanner(
+            executablePath: "/opt/homebrew/bin/qemu-system-aarch64",
+            isExecutableAvailable: true,
+            firmwarePath: "/opt/homebrew/share/qemu/edk2-aarch64-code.fd",
+            isFirmwareAvailable: true
+        ).makePlan(for: profile)
+
+        #expect(plan.arguments.contains("driver=raw,file.driver=file,file.locking=off,file.filename=/Users/test/Downloads/virtio-win.iso,if=none,id=drivers,media=cdrom,readonly=on"))
+        #expect(plan.arguments.containsSequence(["-device", "usb-storage,drive=drivers"]))
+        #expect(plan.arguments.contains("driver=raw,file.driver=file,file.locking=off,file.filename=/Users/test/Downloads/utm-guest-tools-latest.iso,if=none,id=guest-tools,media=cdrom,readonly=on"))
+        #expect(plan.arguments.containsSequence(["-device", "usb-storage,drive=guest-tools"]))
+    }
+
     @Test("local QEMU plan factory keeps the boot-safe NIC when driver media is configured")
     func localQEMUPlanFactoryKeepsBootSafeNICWhenDriverMediaIsConfigured() throws {
         var profile = VMProfile.defaultWindows11Arm(createdAt: Date(timeIntervalSince1970: 1_782_752_400))

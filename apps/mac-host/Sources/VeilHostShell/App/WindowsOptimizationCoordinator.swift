@@ -294,7 +294,7 @@ private struct WindowsOptimizationCancellation: Error {}
 protocol WindowsOptimizationVMModeling: AnyObject {
     var snapshot: VMRuntimeSnapshot? { get }
     var errorMessage: String? { get }
-    func prepareWindowsOptimization(driverMediaPath: String) async -> Bool
+    func prepareWindowsOptimization(guestToolsMediaPath: String) async -> Bool
     func refreshRuntimeEvidence() async
     func start() async
 }
@@ -364,7 +364,7 @@ final class AppWindowsOptimizationService: WindowsOptimizationServicing {
         }
 
         guard await vmModel.prepareWindowsOptimization(
-            driverMediaPath: preparedGuestToolsURL.path
+            guestToolsMediaPath: preparedGuestToolsURL.path
         ) else {
             throw AppWindowsOptimizationServiceError.mediaPreparationFailed(
                 vmModel.errorMessage ?? "Check Windows settings and try again."

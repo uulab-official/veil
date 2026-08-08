@@ -285,9 +285,50 @@ struct VMRuntimeModelTests {
         #expect(service.prepareCount == 1)
     }
 
-    @Test("installed Windows optimization preserves system media and rebuilds support media")
+    @Test("installed Windows optimization preserves VirtIO media and stores Guest Tools separately")
     @MainActor
     func installedWindowsOptimizationPreservesSystemMediaAndRebuildsSupportMedia() async {
+        let installerPath = "/Users/test/Downloads/Windows11Arm.iso"
+        let diskPath = "/Users/test/Virtual Machines/Veil/Windows 11 Arm.img"
+        let toolsPath = "/Users/test/Library/Application Support/Veil/Downloads/utm-guest-tools.iso"
+        let driverPath = "/Users/test/Downloads/virtio-win.iso"
+        let installedSnapshot = VMRuntimeSnapshot(
+            state: .stopped,
+            virtualizationAvailable: true,
+            architecture: "arm64",
+            minimumOSSupported: true,
+            profileName: "Windows 11 Arm",
+            installerMediaPath: installerPath,
+            driverMediaPath: driverPath,
+            virtualDiskPath: diskPath,
+            bootReady: true,
+            windowsInstalled: true,
+            detail: "Windows is installed."
+        )
+        var updatedSnapshot = installedSnapshot
+        updatedSnapshot.guestToolsMediaPath = toolsPath
+        let service = FakeVMRuntimeService(
+            snapshot: installedSnapshot,
+            preparedSnapshot: updatedSnapshot,
+            updatedSnapshot: updatedSnapshot
+        )
+        let model = VMRuntimeModel(service: service)
+        await model.load()
+
+        let prepared = await model.prepareWindowsOptimization(guestToolsMediaPath: toolsPath)
+
+        #expect(prepared)
+        #expect(service.updatedInstallerMediaPath == installerPath)
+        #expect(service.updatedDriverMediaPath == driverPath)
+        #expect(service.updatedGuestToolsMediaPath == toolsPath)
+        #expect(service.updatedVirtualDiskPath == diskPath)
+        #expect(service.prepareCount == 1)
+        #expect(model.snapshot?.windowsInstalled == true)
+    }
+
+    @Test("installed optimization migrates legacy Guest Tools from the driver slot")
+    @MainActor
+    func installedOptimizationMigratesLegacyGuestToolsFromDriverSlot() async {
         let installerPath = "/Users/test/Downloads/Windows11Arm.iso"
         let diskPath = "/Users/test/Virtual Machines/Veil/Windows 11 Arm.img"
         let toolsPath = "/Users/test/Library/Application Support/Veil/Downloads/utm-guest-tools.iso"
@@ -298,13 +339,15 @@ struct VMRuntimeModelTests {
             minimumOSSupported: true,
             profileName: "Windows 11 Arm",
             installerMediaPath: installerPath,
+            driverMediaPath: toolsPath,
             virtualDiskPath: diskPath,
             bootReady: true,
             windowsInstalled: true,
             detail: "Windows is installed."
         )
         var updatedSnapshot = installedSnapshot
-        updatedSnapshot.driverMediaPath = toolsPath
+        updatedSnapshot.driverMediaPath = nil
+        updatedSnapshot.guestToolsMediaPath = toolsPath
         let service = FakeVMRuntimeService(
             snapshot: installedSnapshot,
             preparedSnapshot: updatedSnapshot,
@@ -313,14 +356,9 @@ struct VMRuntimeModelTests {
         let model = VMRuntimeModel(service: service)
         await model.load()
 
-        let prepared = await model.prepareWindowsOptimization(driverMediaPath: toolsPath)
-
-        #expect(prepared)
-        #expect(service.updatedInstallerMediaPath == installerPath)
-        #expect(service.updatedDriverMediaPath == toolsPath)
-        #expect(service.updatedVirtualDiskPath == diskPath)
-        #expect(service.prepareCount == 1)
-        #expect(model.snapshot?.windowsInstalled == true)
+        #expect(await model.prepareWindowsOptimization(guestToolsMediaPath: toolsPath))
+        #expect(service.updatedDriverMediaPath == nil)
+        #expect(service.updatedGuestToolsMediaPath == toolsPath)
     }
 
     @Test("installer selection failure does not continue into VM preparation")
@@ -658,6 +696,7 @@ private final class FakeVMRuntimeService: VMRuntimeService {
     var startError: (any Error)?
     private(set) var updatedInstallerMediaPath: String?
     private(set) var updatedDriverMediaPath: String?
+    private(set) var updatedGuestToolsMediaPath: String?
     private(set) var updatedVirtualDiskPath: String?
     private(set) var markWindowsInstalledCount = 0
     private(set) var markedGuestAgentVersion: String?
@@ -753,6 +792,17 @@ private final class FakeVMRuntimeService: VMRuntimeService {
         updatedInstallerMediaPath = installerMediaPath
         updatedDriverMediaPath = driverMediaPath
         updatedVirtualDiskPath = virtualDiskPath
+        let updatedSnapshot = try #require(updatedSnapshot)
+        snapshot = updatedSnapshot
+        return updatedSnapshot
+    }
+
+    func updateGuestToolsMediaPath(_ path: String?) async throws -> VMRuntimeSnapshot {
+        if let error {
+            throw error
+        }
+
+        updatedGuestToolsMediaPath = path
         let updatedSnapshot = try #require(updatedSnapshot)
         snapshot = updatedSnapshot
         return updatedSnapshot

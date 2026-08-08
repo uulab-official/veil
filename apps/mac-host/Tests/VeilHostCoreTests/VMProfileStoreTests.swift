@@ -69,6 +69,7 @@ struct VMProfileStoreTests {
         var profile = VMProfile.defaultWindows11Arm(createdAt: Date(timeIntervalSince1970: 1_782_752_400))
         profile.installerMediaPath = "/Users/test/Downloads/Windows.iso"
         profile.driverMediaPath = "/Users/test/Downloads/virtio-win.iso"
+        profile.guestToolsMediaPath = "/Users/test/Library/Application Support/Veil/Downloads/utm-guest-tools.iso"
         profile.virtualDiskPath = "/Users/test/Virtual Machines/Windows.vhdx"
 
         try await store.save(profile)
@@ -76,6 +77,7 @@ struct VMProfileStoreTests {
 
         #expect(loaded?.installerMediaPath == "/Users/test/Downloads/Windows.iso")
         #expect(loaded?.driverMediaPath == "/Users/test/Downloads/virtio-win.iso")
+        #expect(loaded?.guestToolsMediaPath == "/Users/test/Library/Application Support/Veil/Downloads/utm-guest-tools.iso")
         #expect(loaded?.virtualDiskPath == "/Users/test/Virtual Machines/Windows.vhdx")
     }
 

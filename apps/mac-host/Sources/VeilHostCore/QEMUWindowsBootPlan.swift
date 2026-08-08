@@ -260,6 +260,7 @@ public struct QEMUWindowsBootPlanner: Sendable {
             .appendingPathComponent("VeilAutoInstall.iso")
             .path
         let driverMediaPath = nonEmpty(profile.driverMediaPath)
+        let guestToolsMediaPath = nonEmpty(profile.guestToolsMediaPath)
         var warnings = configurationWarnings
 
         if guestTransport == .virtioSerialProbe {
@@ -353,6 +354,13 @@ public struct QEMUWindowsBootPlanner: Sendable {
             arguments.append(contentsOf: [
                 "-drive", "driver=raw,file.driver=file,file.locking=off,file.filename=\(driverMediaPath),if=none,id=drivers,media=cdrom,readonly=on",
                 "-device", "usb-storage,drive=drivers"
+            ])
+        }
+
+        if let guestToolsMediaPath {
+            arguments.append(contentsOf: [
+                "-drive", "driver=raw,file.driver=file,file.locking=off,file.filename=\(guestToolsMediaPath),if=none,id=guest-tools,media=cdrom,readonly=on",
+                "-device", "usb-storage,drive=guest-tools"
             ])
         }
 

@@ -1116,6 +1116,7 @@ private struct StubVMRuntimeService: VMRuntimeService {
     func createDefaultProfile() async throws -> VMRuntimeSnapshot { snapshot }
     func createDefaultVirtualDisk() async throws -> VMRuntimeSnapshot { snapshot }
     func updateProfilePaths(installerMediaPath: String?, driverMediaPath: String?, virtualDiskPath: String?) async throws -> VMRuntimeSnapshot { snapshot }
+    func updateGuestToolsMediaPath(_ path: String?) async throws -> VMRuntimeSnapshot { snapshot }
     func markWindowsInstalled() async throws -> VMRuntimeSnapshot { snapshot }
     func markGuestAgentConnected(agentVersion: String) async throws -> VMRuntimeSnapshot { snapshot }
     func start() async throws -> VMRuntimeSnapshot { snapshot }
