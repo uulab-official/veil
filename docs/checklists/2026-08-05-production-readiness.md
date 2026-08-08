@@ -41,6 +41,7 @@
 ### C. 화면·해상도·입력
 
 - [x] RFB 초기 연결 거부를 재시도하고 마지막 정상 프레임을 유지한다.
+- [x] RFB connect/read/write의 `EAGAIN`·`EWOULDBLOCK`·`ETIMEDOUT`을 화면 재접속 가능한 타임아웃으로 분류하고, `Resource temporarily unavailable` 같은 모호한 오류를 사용자 진단에서 제거한다.
 - [x] DesktopSize 변경 시 검은 화면 플래시 없이 프레임을 유지한다.
 - [x] 레터박스를 제외한 aspect-fit 영역으로 포인터를 매핑한다.
 - [x] 여러 HWND를 별도 macOS 창으로 표시하고 런처를 숨긴다.

@@ -426,6 +426,21 @@ private extension Data {
         ])
     }
 
+    @Test("reports RFB socket read timeouts as a recoverable display condition")
+    func reportsSocketReadTimeoutsClearly() {
+        let error = RFBLoopbackSocketError.operationTimedOut("read")
+
+        #expect(
+            error.errorDescription ==
+                "RFB loopback socket read timed out while waiting for the display."
+        )
+        #expect(error != RFBLoopbackSocketError.socketOperationFailed("read: Resource temporarily unavailable"))
+        #expect(
+            RFBLoopbackSocketError.operationTimedOut("connect").errorDescription ==
+                "RFB loopback socket connect timed out while waiting for the display."
+        )
+    }
+
     mutating func appendBigEndian(_ value: UInt32) {
         append(contentsOf: [
             UInt8((value >> 24) & 0xff),

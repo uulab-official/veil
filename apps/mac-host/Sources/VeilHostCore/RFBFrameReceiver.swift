@@ -42,6 +42,7 @@ public enum RFBError: Error, LocalizedError, Equatable, Sendable {
 public enum RFBLoopbackSocketError: Error, LocalizedError, Equatable, Sendable {
     case invalidEndpoint(String)
     case socketOperationFailed(String)
+    case operationTimedOut(String)
     case connectionClosed
 
     public var errorDescription: String? {
@@ -50,6 +51,8 @@ public enum RFBLoopbackSocketError: Error, LocalizedError, Equatable, Sendable {
             "Invalid RFB loopback endpoint '\(endpoint)'."
         case .socketOperationFailed(let operation):
             "RFB loopback socket operation failed: \(operation)."
+        case .operationTimedOut(let operation):
+            "RFB loopback socket \(operation) timed out while waiting for the display."
         case .connectionClosed:
             "RFB loopback socket closed before the requested bytes were received."
         }
@@ -349,9 +352,15 @@ public final class RFBLoopbackSocket: RFBByteStream {
         }
 
         guard result == 0 else {
-            let reason = Self.lastErrnoDescription("connect")
+            let errorCode = errno
+            let reason: RFBLoopbackSocketError
+            if errorCode == ETIMEDOUT || errorCode == EAGAIN || errorCode == EWOULDBLOCK {
+                reason = .operationTimedOut("connect")
+            } else {
+                reason = .socketOperationFailed(Self.errnoDescription("connect", code: errorCode))
+            }
             close()
-            throw RFBLoopbackSocketError.socketOperationFailed(reason)
+            throw reason
         }
     }
 
@@ -377,7 +386,16 @@ public final class RFBLoopbackSocket: RFBByteStream {
             }
 
             if result < 0 {
-                throw RFBLoopbackSocketError.socketOperationFailed(Self.lastErrnoDescription("read"))
+                let errorCode = errno
+                if errorCode == EINTR {
+                    continue
+                }
+                if errorCode == EAGAIN || errorCode == EWOULDBLOCK {
+                    throw RFBLoopbackSocketError.operationTimedOut("read")
+                }
+                throw RFBLoopbackSocketError.socketOperationFailed(
+                    Self.errnoDescription("read", code: errorCode)
+                )
             }
 
             bytesRead += result
@@ -402,7 +420,16 @@ public final class RFBLoopbackSocket: RFBByteStream {
                 }
 
                 if result < 0 {
-                    throw RFBLoopbackSocketError.socketOperationFailed(Self.lastErrnoDescription("write"))
+                    let errorCode = errno
+                    if errorCode == EINTR {
+                        continue
+                    }
+                    if errorCode == EAGAIN || errorCode == EWOULDBLOCK {
+                        throw RFBLoopbackSocketError.operationTimedOut("write")
+                    }
+                    throw RFBLoopbackSocketError.socketOperationFailed(
+                        Self.errnoDescription("write", code: errorCode)
+                    )
                 }
 
                 bytesWritten += result
@@ -420,7 +447,11 @@ public final class RFBLoopbackSocket: RFBByteStream {
     }
 
     private static func lastErrnoDescription(_ operation: String) -> String {
-        "\(operation): \(String(cString: strerror(errno)))"
+        errnoDescription(operation, code: errno)
+    }
+
+    private static func errnoDescription(_ operation: String, code: Int32) -> String {
+        "\(operation): \(String(cString: strerror(code)))"
     }
 }
 
