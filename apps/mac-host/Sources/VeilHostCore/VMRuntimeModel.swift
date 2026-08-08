@@ -2750,6 +2750,11 @@ public struct LocalVMRuntimeService: VMRuntimeService {
                   <Path>cmd /c reg add HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\OOBE /v BypassNRO /t REG_DWORD /d 1 /f</Path>
                   <Description>Allow Windows OOBE offline setup when no inbox network driver is available</Description>
                 </RunSynchronousCommand>
+                <RunSynchronousCommand wcm:action="add">
+                  <Order>2</Order>
+                  <Path>powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "$driverRoots = Get-PSDrive -PSProvider FileSystem | ForEach-Object { Join-Path $_.Root 'NetKVM\\w11\\ARM64' }; $infFiles = $driverRoots | Where-Object { Test-Path $_ } | ForEach-Object { Get-ChildItem -Path $_ -Filter '*.inf' -File -ErrorAction SilentlyContinue }; foreach ($inf in $infFiles) { pnputil.exe /add-driver $inf.FullName /install | Out-Host }; pnputil.exe /scan-devices | Out-Host"</Path>
+                  <Description>Install the attached VirtIO ARM64 network driver before first logon</Description>
+                </RunSynchronousCommand>
               </RunSynchronous>
             </component>
           </settings>

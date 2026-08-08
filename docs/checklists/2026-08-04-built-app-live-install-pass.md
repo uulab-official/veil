@@ -192,6 +192,19 @@ Manager but never returned the Veil agent connection.
 - [x] Passed the complete Swift suite: 485 tests across 29 suites.
 - [x] Passed `script/test_all.sh`: Windows agent, 25 Node packages, signed app
   bundle, install/replace/uninstall/reinstall lifecycle.
+- [x] Rebooted the restored installed Windows disk with the default `usb-net`
+  plan and captured a real Windows desktop at 1024x768; the prior UEFI/Boot
+  Manager dead-end did not reproduce on the boot-safe plan.
+- [x] Ran a bounded `VEIL_QEMU_NETWORK_DEVICE=virtio-net-pci` compatibility
+  probe; the current installed disk stayed at the UEFI `Start boot option`
+  screen, so VirtIO NIC selection remains an explicit diagnostic path rather
+  than the production default.
+- [x] Added a setup-time elevated NetKVM installation step for fresh installs
+  and made denied UAC repair return `elevationRequired` with a concrete retry
+  instruction instead of an ambiguous timeout.
 - [ ] Re-run the consented live optimization after the VM is safely stopped;
   prove both media roles in the launched QEMU command, Windows desktop, agent
   health, Notepad launch, HWND frame, and post-install framebuffer evidence.
+- [ ] Re-run a clean Windows install with the refreshed `Autounattend.xml`,
+  then prove guest IPv4, guest-agent health, Notepad HWND/frame, input, and
+  clipboard in the same live run.

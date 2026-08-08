@@ -381,9 +381,27 @@ if (-not (Test-VeilAdministrator)) {
     Write-Host "IsAdministrator=False"
     Write-Host "Administrator rights are required to repair Windows Firewall rules. Requesting UAC elevation."
     Remove-Item -Force -ErrorAction SilentlyContinue -Path $StatusPath
-    Invoke-VeilElevatedRepair
+    try {
+        Invoke-VeilElevatedRepair
+    } catch {
+        $ElevationMessage = "Administrator approval was not granted. Run Repair Veil Agent Connectivity.cmd as an administrator, or restart Windows after installing the VirtIO network driver during setup. Original error: $($_.Exception.Message)"
+        Write-VeilRepairStatus `
+            -Stage "elevationRequired" `
+            -Succeeded $false `
+            -Message $ElevationMessage
+        Write-Host $ElevationMessage
+        return
+    }
     Write-Host "Elevated repair launched. Approve the Windows prompt; this console will wait for completion evidence."
-    Wait-VeilRepairStatus
+    try {
+        Wait-VeilRepairStatus
+    } catch {
+        Write-VeilRepairStatus `
+            -Stage "elevationRequired" `
+            -Succeeded $false `
+            -Message "Administrator repair did not complete. Approve the Windows administrator prompt and retry the repair command. Original error: $($_.Exception.Message)"
+        throw
+    }
     return
 }
 

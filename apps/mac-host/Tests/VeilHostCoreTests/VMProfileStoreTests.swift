@@ -1454,6 +1454,7 @@ struct VMProfileStoreTests {
         let optimizeCommand = try String(contentsOf: optimizeCommandURL, encoding: .utf8)
         let optimizeScript = try String(contentsOf: optimizeScriptURL, encoding: .utf8)
         let installScript = try String(contentsOf: installScriptURL, encoding: .utf8)
+        let repairScript = try String(contentsOf: repairScriptURL, encoding: .utf8)
         let agentReadme = try String(contentsOf: agentReadmeURL, encoding: .utf8)
 
         #expect(profile.name == "Windows 11 Arm")
@@ -1513,6 +1514,9 @@ struct VMProfileStoreTests {
         #expect(answerFile.contains("-ArgumentList '/S' -Wait"))
         #expect(answerFile.contains("Get-Volume -FileSystemLabel 'VEIL_AUTO'"))
         #expect(answerFile.contains("Veil Guest Agent\\scripts\\Bootstrap-VeilAgentFromMedia.ps1"))
+        #expect(answerFile.contains("Install the attached VirtIO ARM64 network driver before first logon"))
+        #expect(answerFile.contains("pnputil.exe /add-driver"))
+        #expect(answerFile.contains("NetKVM\\w11\\ARM64"))
         #expect(answerFile.range(
             of: #"<ProductKey>[\s\S]*?<Key>"#,
             options: .regularExpression
@@ -1543,6 +1547,9 @@ struct VMProfileStoreTests {
         #expect(diagnosticsCommand.contains("-ExecutionPolicy Bypass"))
         #expect(repairCommand.contains("Repair-VeilAgentConnectivity.ps1"))
         #expect(repairCommand.contains("-ExecutionPolicy Bypass"))
+        #expect(repairScript.contains(#"-Stage "elevationRequired""#))
+        #expect(repairScript.contains("Administrator approval was not granted"))
+        #expect(repairScript.contains("Install-VeilVirtIONetworkDriver"))
         #expect(prepareSparsePackageCommand.contains("Build-VeilAgentSparsePackage.ps1"))
         #expect(prepareSparsePackageCommand.contains("%LOCALAPPDATA%\\Veil\\Agent\\package"))
         #expect(prepareSparsePackageCommand.contains("-StatusPath"))
