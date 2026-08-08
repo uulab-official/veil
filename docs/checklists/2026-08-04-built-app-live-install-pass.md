@@ -117,3 +117,28 @@ The current installed Windows disk was preserved. This pass added and verified t
 - [x] Rebuilt and reinstalled the packaged app after the automatic-offer change; the first-screen live check opened the combined confirmation without a manual card click.
 - [x] Passed the complete updated Swift suite: 467 tests across 29 suites.
 - [ ] Accept the terms in person, then observe the real current VM through media preparation, normal restart, installer dispatch, guest restart, agent reconnect, and post-reboot framebuffer dimensions. No end-to-end completion claim is made before those live observations occur.
+
+## Preflight recheck — 2026-08-08
+
+The installed `/Applications/Veil.app` was opened against the preserved QEMU/HVF
+Windows profile before any destructive or consented action.
+
+- [x] Confirmed the app opens the combined `Optimize Windows Automatically?`
+  confirmation on the installed-Windows path.
+- [x] Confirmed `Review Both Terms` opens the official UTM Guest Tools
+  documentation and does not accept the terms automatically.
+- [x] Confirmed `qemu-install-status --json` reports `bootReady=true` and
+  `automaticInstallMediaStatus.state=current`.
+- [x] Confirmed the profile remains `windowsInstalled=true` with the existing
+  128 GB virtual disk path preserved.
+- [x] Confirmed the current VM state is `stopped`, so no restart or media
+  mutation has been triggered by the preflight.
+- [x] Confirmed `app-runtime-status --json` reports no live guest-agent
+  connection at `ws://127.0.0.1:18444` and does not expose demo capabilities as
+  live evidence.
+- [ ] User must explicitly accept the displayed terms before Veil may install
+  official Guest Tools and the Veil guest agent or restart Windows.
+
+Current live status remains `PARTIAL`: all safe preflight checks pass, while the
+consented installation, reconnect, real `agent.health`, and post-install
+framebuffer evidence are still outstanding.
