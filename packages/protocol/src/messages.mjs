@@ -11,6 +11,7 @@ export const MessageType = Object.freeze({
   WindowUpdated: "window.updated",
   WindowClosed: "window.closed",
   WindowFrame: "window.frame",
+  WindowFrameUnchanged: "window.frame.unchanged",
   WindowFrameSubscribe: "window.frame.subscribe",
   WindowFrameUnsubscribe: "window.frame.unsubscribe",
   WindowFocusRequest: "window.focus.request",
@@ -298,6 +299,27 @@ export function validateWindowFrame(frame) {
 
   requireNonEmptyString(frame.encodedData, "encodedData");
   return frame;
+}
+
+// Proof that a frame stream is alive with nothing new to draw. This event intentionally carries no
+// image payload: it advances liveness without making the displayed image appear newer than it is.
+export function validateWindowFrameUnchanged(event) {
+  if (!event || event.type !== MessageType.WindowFrameUnchanged) {
+    throw new TypeError("Unchanged window frame event must use type window.frame.unchanged.");
+  }
+
+  requireNonEmptyString(event.windowId, "windowId", "Unchanged window frame event");
+  requirePositiveInteger(event.sequence, "sequence", "Unchanged window frame event");
+  requireNonEmptyString(event.capturedAt, "capturedAt", "Unchanged window frame event");
+  if (Number.isNaN(Date.parse(event.capturedAt))) {
+    throw new TypeError("Unchanged window frame event field 'capturedAt' must be an ISO date.");
+  }
+
+  if (event.encodedData !== undefined) {
+    throw new TypeError("Unchanged window frame event must not carry image data.");
+  }
+
+  return event;
 }
 
 export function validateWindowFrameSubscribeRequest(request) {

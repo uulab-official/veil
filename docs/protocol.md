@@ -348,6 +348,27 @@ Rules:
   without needing to read `scale` themselves; it's exposed for future consumers that want to size
   a view precisely rather than let it stretch to fit.
 
+## Window Frame Unchanged
+
+Guest-to-host heartbeat for a tracked window whose captured pixels are unchanged:
+
+```json
+{
+  "type": "window.frame.unchanged",
+  "windowId": "hwnd:0003029A",
+  "sequence": 42,
+  "capturedAt": "2026-07-31T09:14:02Z"
+}
+```
+
+Rules:
+
+- `windowId` must match a tracked `window.created` event.
+- The event carries no `encodedData` or other image payload. It proves stream activity without replacing the displayed frame.
+- The host advances a separate activity clock and leaves the real frame-arrival clock unchanged, preserving image-age and latency evidence.
+- The host ignores this heartbeat until the stream has delivered its first real `window.frame`; liveness must not hide capture that never started.
+- The guest emits this event only after a successful pixel capture and comparison. Capture failures and timeouts emit neither a frame nor a false heartbeat.
+
 ## Window Frame Stream Control
 
 Host request to start a frame stream for one tracked HWND:

@@ -21,6 +21,7 @@ import {
   validateWindowCloseRequest,
   validateWindowCloseResponse,
   validateWindowFrame,
+  validateWindowFrameUnchanged,
   validateWindowFrameSubscribeRequest,
   validateWindowFrameUnsubscribeRequest,
   validateWindowFocusRequest,
@@ -48,6 +49,7 @@ test("parses every stable fixture", async () => {
     "window.updated.json",
     "window.closed.json",
     "window.frame.json",
+    "window.frame.unchanged.json",
     "window.frame.subscribe.json",
     "window.frame.unsubscribe.json",
     "window.focus.request.json",
@@ -214,6 +216,29 @@ test("validates one captured window frame fixture", async () => {
   assert.equal(frame.format, "png");
   assert.equal(frame.width, 1);
   assert.equal(frame.height, 1);
+});
+
+test("validates one unchanged window frame heartbeat fixture", async () => {
+  const event = validateWindowFrameUnchanged(await readFixture("window.frame.unchanged.json"));
+
+  assert.equal(event.type, MessageType.WindowFrameUnchanged);
+  assert.equal(event.windowId, "hwnd:0003029A");
+  assert.equal(event.sequence, 42);
+  assert.equal(event.capturedAt, "2026-07-31T09:14:02Z");
+});
+
+test("rejects an unchanged frame heartbeat that carries image data", async () => {
+  const event = await readFixture("window.frame.unchanged.json");
+  event.encodedData = "iVBORw0KGgo=";
+
+  assert.throws(() => validateWindowFrameUnchanged(event), /must not carry image data/);
+});
+
+test("rejects an unchanged frame heartbeat without a valid capture timestamp", async () => {
+  const event = await readFixture("window.frame.unchanged.json");
+  event.capturedAt = "not-a-date";
+
+  assert.throws(() => validateWindowFrameUnchanged(event), /capturedAt/);
 });
 
 test("validates one window closed fixture", async () => {

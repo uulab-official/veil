@@ -14,6 +14,7 @@ These JSON files mirror the stable examples in `docs/protocol.md`.
 - `window.updated.json`
 - `window.closed.json`
 - `window.frame.json`
+- `window.frame.unchanged.json`
 - `window.frame.subscribe.json`
 - `window.frame.unsubscribe.json`
 - `window.focus.request.json`
