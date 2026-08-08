@@ -42,6 +42,18 @@ public sealed record WindowFrame(
     string EncodedData
 );
 
+/// <summary>
+/// Outcome of one successful capture tick: a changed frame or unchanged pixels.
+/// </summary>
+public sealed record WindowFrameCaptureResult(WindowFrame? Frame, int Sequence)
+{
+    public bool IsUnchanged => Frame is null;
+
+    public static WindowFrameCaptureResult Changed(WindowFrame frame) => new(frame, frame.Sequence);
+
+    public static WindowFrameCaptureResult Unchanged(int sequence) => new(null, sequence);
+}
+
 public sealed record WindowMouseInput(
     string WindowId,
     string Event,

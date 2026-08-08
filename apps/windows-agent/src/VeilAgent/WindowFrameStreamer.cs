@@ -4,38 +4,70 @@ public sealed class WindowFrameStreamer
 {
     private static readonly TimeSpan CaptureTimeout = TimeSpan.FromSeconds(2);
     private readonly IWindowFrameCapture capture;
-    private readonly TimeSpan interval;
+    private readonly TimeSpan? fixedInterval;
+    private readonly Func<WindowFrameStreamCadence> cadenceFactory;
 
-    public WindowFrameStreamer(IWindowFrameCapture capture, TimeSpan? interval = null)
+    public WindowFrameStreamer(
+        IWindowFrameCapture capture,
+        TimeSpan? interval = null,
+        Func<WindowFrameStreamCadence>? cadenceFactory = null
+    )
     {
         this.capture = capture;
-        this.interval = interval ?? TimeSpan.FromMilliseconds(250);
+        fixedInterval = interval;
+        this.cadenceFactory = cadenceFactory ?? (() => new WindowFrameStreamCadence());
     }
 
     public async Task StreamAsync(
         LaunchedWindow window,
         int firstSequence,
         Func<WindowFrame, CancellationToken, Task> onFrame,
-        CancellationToken cancellationToken
+        CancellationToken cancellationToken,
+        Func<int, CancellationToken, Task>? onUnchanged = null
     )
     {
         var sequence = firstSequence;
-        using var timer = new PeriodicTimer(interval);
+        var cadence = cadenceFactory();
+        using var timer = new PeriodicTimer(fixedInterval ?? cadence.CurrentInterval);
 
         while (await timer.WaitForNextTickAsync(cancellationToken))
         {
-            var frame = await TryCaptureFrameAsync(window, sequence, cancellationToken);
-            if (frame is null)
+            var result = await TryCaptureFrameAsync(window, sequence, cancellationToken);
+            if (result is null)
             {
+                Retune(timer, cadence, changed: false);
                 continue;
             }
 
-            await onFrame(frame, cancellationToken);
+            if (result.IsUnchanged)
+            {
+                if (onUnchanged is not null)
+                {
+                    await onUnchanged(sequence, cancellationToken);
+                }
+
+                Retune(timer, cadence, changed: false);
+                continue;
+            }
+
+            await onFrame(result.Frame!, cancellationToken);
             sequence += 1;
+            Retune(timer, cadence, changed: true);
         }
     }
 
-    private async Task<WindowFrame?> TryCaptureFrameAsync(
+    public void ForgetWindow(string windowId) => capture.ForgetWindow(windowId);
+
+    private void Retune(PeriodicTimer timer, WindowFrameStreamCadence cadence, bool changed)
+    {
+        var next = cadence.Next(changed);
+        if (fixedInterval is null)
+        {
+            timer.Period = next;
+        }
+    }
+
+    private async Task<WindowFrameCaptureResult?> TryCaptureFrameAsync(
         LaunchedWindow window,
         int sequence,
         CancellationToken cancellationToken
@@ -44,10 +76,14 @@ public sealed class WindowFrameStreamer
         try
         {
             return await capture
-                .CaptureFrameAsync(window, sequence, cancellationToken)
+                .CaptureFrameResultAsync(window, sequence, cancellationToken)
                 .WaitAsync(CaptureTimeout, cancellationToken);
         }
-        catch (Exception error) when (error is not OperationCanceledException)
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception error)
         {
             Console.Error.WriteLine(
                 $"Frame stream capture failed for {window.WindowId}; waiting for the next real frame. {error.GetType().Name}: {error.Message}"
