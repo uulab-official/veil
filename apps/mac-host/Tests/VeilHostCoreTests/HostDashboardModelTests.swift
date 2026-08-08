@@ -337,6 +337,96 @@ struct HostDashboardModelTests {
         #expect(report.macWindowIntegration.frameLatencyRecommendedAction == "none")
     }
 
+    @Test("an unchanged-frame heartbeat advances liveness without disturbing the displayed frame")
+    @MainActor
+    func unchangedFrameHeartbeatAdvancesLivenessOnly() async throws {
+        let service = FakeDashboardService(health: .captureReady)
+        let model = HostDashboardModel(service: service)
+        let frameAt = Date(timeIntervalSince1970: 2_000)
+
+        await model.launchNotepad()
+        model.receiveWindowFrame(.notepadFirstFrame, receivedAt: frameAt)
+        let accepted = model.receiveWindowFrameUnchanged(
+            .notepadHeartbeat(sequence: 2),
+            receivedAt: frameAt.addingTimeInterval(9.75)
+        )
+
+        let timing = try #require(model.mirrorSessions.first?.frameTiming)
+        #expect(accepted)
+        #expect(timing.latestFrameReceivedAt == frameAt)
+        #expect(timing.latestActivityAt == frameAt.addingTimeInterval(9.75))
+        #expect(timing.receivedFrameCount == 1)
+        #expect(timing.unchangedHeartbeatCount == 1)
+        #expect(model.mirrorSessions.first?.latestFrame?.frameId == "frame_000001")
+
+        let report = model.runtimeStatusReport(generatedAt: frameAt.addingTimeInterval(10))
+        let windowStatus = try #require(report.mirrorSessions.first)
+        #expect(windowStatus.frameStreamStatus == .fresh)
+        #expect(windowStatus.latestFrameAgeMilliseconds == 10_000)
+        #expect(windowStatus.latestActivityAgeMilliseconds == 250)
+        #expect(windowStatus.unchangedHeartbeatCount == 1)
+        #expect(windowStatus.receivedFrameCount == 1)
+        #expect(windowStatus.frameStreamRecommendedAction == "none")
+    }
+
+    @Test("ignores an unchanged-frame heartbeat before the first real frame")
+    @MainActor
+    func ignoresUnchangedFrameHeartbeatBeforeFirstFrame() async throws {
+        let service = FakeDashboardService(health: .captureReady)
+        let model = HostDashboardModel(service: service)
+
+        await model.launchNotepad()
+        let accepted = model.receiveWindowFrameUnchanged(.notepadHeartbeat(sequence: 1))
+
+        #expect(!accepted)
+        #expect(model.mirrorSessions.first?.frameTiming == nil)
+    }
+
+    @Test("ignores an unchanged-frame heartbeat for windows without a mirror session")
+    @MainActor
+    func ignoresUnchangedFrameHeartbeatForUnknownWindows() {
+        let model = HostDashboardModel(service: FakeDashboardService(health: .captureReady))
+
+        #expect(!model.receiveWindowFrameUnchanged(.heartbeat(windowId: "hwnd:DEADBEEF", sequence: 1)))
+    }
+
+    @Test("routes an unchanged-frame heartbeat through the protocol message pump")
+    @MainActor
+    func routesUnchangedFrameHeartbeatThroughProtocolPump() async throws {
+        let service = FakeDashboardService(health: .captureReady)
+        let model = HostDashboardModel(service: service)
+
+        await model.load()
+        await model.launchNotepad()
+        model.receiveWindowFrame(.notepadFirstFrame, receivedAt: Date(timeIntervalSince1970: 2_000))
+
+        let result = try await model.receiveProtocolMessage(
+            Data(WindowFrameUnchangedEvent.notepadHeartbeatJSON.utf8)
+        )
+
+        #expect(result == .handledWindowFrameUnchanged(windowId: "hwnd:0003029A"))
+        #expect(model.mirrorSessions.first?.frameTiming?.unchangedHeartbeatCount == 1)
+    }
+
+    @Test("decodes frame timing saved before liveness fields existed")
+    func decodesLegacyFrameTimingWithoutLivenessKeys() throws {
+        let firstFrameAt = Date(timeIntervalSince1970: 1_000)
+        let latestFrameAt = Date(timeIntervalSince1970: 1_001)
+        let data = try JSONEncoder().encode(LegacyWindowFrameTiming(
+            firstFrameReceivedAt: firstFrameAt,
+            latestFrameReceivedAt: latestFrameAt,
+            latestFrameIntervalMilliseconds: 1_000,
+            receivedFrameCount: 2
+        ))
+
+        let timing = try JSONDecoder().decode(WindowFrameTiming.self, from: data)
+
+        #expect(timing.firstFrameReceivedAt == firstFrameAt)
+        #expect(timing.latestFrameReceivedAt == latestFrameAt)
+        #expect(timing.latestActivityAt == latestFrameAt)
+        #expect(timing.unchangedHeartbeatCount == 0)
+    }
+
     @Test("reports stale frame streams and exposes restart action")
     @MainActor
     func reportsStaleFrameStreamsAndRestartAction() async throws {
@@ -3229,6 +3319,31 @@ private extension WindowCreatedEvent {
 
     static var secondNotepadCreatedJSON: String {
         #"{"type":"window.created","windowId":"hwnd:00010500","processId":4931,"appId":"winapp_notepad","title":"Notes.txt - Notepad","bounds":{"x":20,"y":20,"width":1360,"height":820},"state":"normal","focused":true}"#
+    }
+}
+
+private struct LegacyWindowFrameTiming: Encodable {
+    var firstFrameReceivedAt: Date
+    var latestFrameReceivedAt: Date
+    var latestFrameIntervalMilliseconds: Int?
+    var receivedFrameCount: Int
+}
+
+private extension WindowFrameUnchangedEvent {
+    static func heartbeat(windowId: String, sequence: Int) -> WindowFrameUnchangedEvent {
+        WindowFrameUnchangedEvent(
+            windowId: windowId,
+            sequence: sequence,
+            capturedAt: "2026-07-31T09:14:02Z"
+        )
+    }
+
+    static func notepadHeartbeat(sequence: Int) -> WindowFrameUnchangedEvent {
+        heartbeat(windowId: "hwnd:0003029A", sequence: sequence)
+    }
+
+    static var notepadHeartbeatJSON: String {
+        #"{"type":"window.frame.unchanged","windowId":"hwnd:0003029A","sequence":2,"capturedAt":"2026-07-31T09:14:02Z"}"#
     }
 }
 

@@ -364,6 +364,9 @@ struct VeilHostShellApp: App {
                         }
 
                         windowsAppWindowPresenter.showWindow(for: session)
+                    case .handledWindowFrameUnchanged:
+                        // Liveness only: the current image and native window need no presentation update.
+                        return
                     case .handledWindowClosed(let windowId):
                         windowsAppWindowPresenter.closeWindow(windowId: windowId)
                         scheduleAutomaticQuietRuntimeIfNeeded()

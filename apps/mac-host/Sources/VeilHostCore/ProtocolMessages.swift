@@ -13,6 +13,7 @@ public enum MessageType: String, Codable, Sendable {
     case windowUpdated = "window.updated"
     case windowClosed = "window.closed"
     case windowFrame = "window.frame"
+    case windowFrameUnchanged = "window.frame.unchanged"
     case windowFrameSubscribe = "window.frame.subscribe"
     case windowFrameUnsubscribe = "window.frame.unsubscribe"
     case windowFocusRequest = "window.focus.request"
@@ -310,6 +311,29 @@ public struct WindowFrameEvent: Codable, Equatable, Sendable {
 public extension WindowFrameEvent {
     var encodedPayloadData: Data? {
         Data(base64Encoded: encodedData)
+    }
+}
+
+/// Proof that a frame stream is alive with nothing new to draw.
+///
+/// This event carries no image payload. It advances stream liveness without replacing the displayed
+/// frame or making image-age evidence appear newer than it is.
+public struct WindowFrameUnchangedEvent: Codable, Equatable, Sendable {
+    public var type: MessageType
+    public var windowId: String
+    public var sequence: Int
+    public var capturedAt: String
+
+    public init(
+        type: MessageType = .windowFrameUnchanged,
+        windowId: String,
+        sequence: Int,
+        capturedAt: String
+    ) {
+        self.type = type
+        self.windowId = windowId
+        self.sequence = sequence
+        self.capturedAt = capturedAt
     }
 }
 

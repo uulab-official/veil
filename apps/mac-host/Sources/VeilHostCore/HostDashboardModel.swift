@@ -82,20 +82,61 @@ public enum WindowFrameStreamStatus: String, Codable, Equatable, Sendable {
 
 public struct WindowFrameTiming: Codable, Equatable, Sendable {
     public var firstFrameReceivedAt: Date
+    /// Arrival time of the image currently displayed by the host.
     public var latestFrameReceivedAt: Date
+    /// Arrival time of the latest real frame or unchanged-frame heartbeat.
+    public var latestActivityAt: Date
     public var latestFrameIntervalMilliseconds: Int?
     public var receivedFrameCount: Int
+    public var unchangedHeartbeatCount: Int
 
     public init(
         firstFrameReceivedAt: Date,
         latestFrameReceivedAt: Date,
+        latestActivityAt: Date? = nil,
         latestFrameIntervalMilliseconds: Int? = nil,
-        receivedFrameCount: Int = 1
+        receivedFrameCount: Int = 1,
+        unchangedHeartbeatCount: Int = 0
     ) {
         self.firstFrameReceivedAt = firstFrameReceivedAt
         self.latestFrameReceivedAt = latestFrameReceivedAt
+        self.latestActivityAt = latestActivityAt ?? latestFrameReceivedAt
         self.latestFrameIntervalMilliseconds = latestFrameIntervalMilliseconds
         self.receivedFrameCount = receivedFrameCount
+        self.unchangedHeartbeatCount = unchangedHeartbeatCount
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case firstFrameReceivedAt
+        case latestFrameReceivedAt
+        case latestActivityAt
+        case latestFrameIntervalMilliseconds
+        case receivedFrameCount
+        case unchangedHeartbeatCount
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        firstFrameReceivedAt = try container.decode(Date.self, forKey: .firstFrameReceivedAt)
+        latestFrameReceivedAt = try container.decode(Date.self, forKey: .latestFrameReceivedAt)
+        latestActivityAt = try container.decodeIfPresent(Date.self, forKey: .latestActivityAt)
+            ?? latestFrameReceivedAt
+        latestFrameIntervalMilliseconds = try container.decodeIfPresent(
+            Int.self,
+            forKey: .latestFrameIntervalMilliseconds
+        )
+        receivedFrameCount = try container.decode(Int.self, forKey: .receivedFrameCount)
+        unchangedHeartbeatCount = try container.decodeIfPresent(Int.self, forKey: .unchangedHeartbeatCount) ?? 0
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(firstFrameReceivedAt, forKey: .firstFrameReceivedAt)
+        try container.encode(latestFrameReceivedAt, forKey: .latestFrameReceivedAt)
+        try container.encode(latestActivityAt, forKey: .latestActivityAt)
+        try container.encodeIfPresent(latestFrameIntervalMilliseconds, forKey: .latestFrameIntervalMilliseconds)
+        try container.encode(receivedFrameCount, forKey: .receivedFrameCount)
+        try container.encode(unchangedHeartbeatCount, forKey: .unchangedHeartbeatCount)
     }
 }
 
@@ -108,9 +149,11 @@ public struct WindowFrameStreamAssessment: Equatable, Sendable {
 
     public var status: WindowFrameStreamStatus
     public var latestFrameAgeMilliseconds: Int?
+    public var latestActivityAgeMilliseconds: Int?
     public var latestFrameIntervalMilliseconds: Int?
     public var waitingForFirstFrameMilliseconds: Int?
     public var receivedFrameCount: Int
+    public var unchangedHeartbeatCount: Int
     public var recommendedAction: String
     public var recoveryEscalated: Bool
     public var reopenEscalated: Bool
@@ -118,18 +161,22 @@ public struct WindowFrameStreamAssessment: Equatable, Sendable {
     public init(
         status: WindowFrameStreamStatus,
         latestFrameAgeMilliseconds: Int? = nil,
+        latestActivityAgeMilliseconds: Int? = nil,
         latestFrameIntervalMilliseconds: Int? = nil,
         waitingForFirstFrameMilliseconds: Int? = nil,
         receivedFrameCount: Int = 0,
+        unchangedHeartbeatCount: Int = 0,
         recommendedAction: String,
         recoveryEscalated: Bool = false,
         reopenEscalated: Bool = false
     ) {
         self.status = status
         self.latestFrameAgeMilliseconds = latestFrameAgeMilliseconds
+        self.latestActivityAgeMilliseconds = latestActivityAgeMilliseconds ?? latestFrameAgeMilliseconds
         self.latestFrameIntervalMilliseconds = latestFrameIntervalMilliseconds
         self.waitingForFirstFrameMilliseconds = waitingForFirstFrameMilliseconds
         self.receivedFrameCount = receivedFrameCount
+        self.unchangedHeartbeatCount = unchangedHeartbeatCount
         self.recommendedAction = recommendedAction
         self.recoveryEscalated = recoveryEscalated
         self.reopenEscalated = reopenEscalated
@@ -180,21 +227,25 @@ public struct WindowFrameStreamAssessment: Equatable, Sendable {
             )
         }
 
-        let ageMilliseconds = max(
+        let frameAgeMilliseconds = max(
             0,
             Int((generatedAt.timeIntervalSince(timing.latestFrameReceivedAt) * 1000).rounded())
+        )
+        let activityAgeMilliseconds = max(
+            0,
+            Int((generatedAt.timeIntervalSince(timing.latestActivityAt) * 1000).rounded())
         )
         let status: WindowFrameStreamStatus
         let recommendedAction: String
         let recoveryEscalated: Bool
         let reopenEscalated: Bool
 
-        if ageMilliseconds <= freshFrameAgeThresholdMilliseconds {
+        if activityAgeMilliseconds <= freshFrameAgeThresholdMilliseconds {
             status = .fresh
             recommendedAction = "none"
             recoveryEscalated = false
             reopenEscalated = false
-        } else if ageMilliseconds <= delayedFrameAgeThresholdMilliseconds {
+        } else if activityAgeMilliseconds <= delayedFrameAgeThresholdMilliseconds {
             status = .delayed
             recommendedAction = "refresh-runtime-status"
             recoveryEscalated = false
@@ -213,9 +264,11 @@ public struct WindowFrameStreamAssessment: Equatable, Sendable {
 
         return WindowFrameStreamAssessment(
             status: status,
-            latestFrameAgeMilliseconds: ageMilliseconds,
+            latestFrameAgeMilliseconds: frameAgeMilliseconds,
+            latestActivityAgeMilliseconds: activityAgeMilliseconds,
             latestFrameIntervalMilliseconds: timing.latestFrameIntervalMilliseconds,
             receivedFrameCount: timing.receivedFrameCount,
+            unchangedHeartbeatCount: timing.unchangedHeartbeatCount,
             recommendedAction: recommendedAction,
             recoveryEscalated: recoveryEscalated,
             reopenEscalated: reopenEscalated
@@ -271,6 +324,7 @@ public enum HostProtocolMessageResult: Equatable, Sendable {
     case handledWindowCreated(windowId: String)
     case handledWindowUpdated(windowId: String)
     case handledWindowFrame(windowId: String)
+    case handledWindowFrameUnchanged(windowId: String)
     case handledWindowClosed(windowId: String)
     case handledClipboardText(sequence: Int)
     case handledWindowsNotification(notificationId: String)
@@ -420,9 +474,11 @@ public struct WindowsAppRuntimeWindowStatus: Codable, Equatable, Sendable {
     public var frameStreamRequestedAt: Date?
     public var latestFrameReceivedAt: Date?
     public var latestFrameAgeMilliseconds: Int?
+    public var latestActivityAgeMilliseconds: Int?
     public var latestFrameIntervalMilliseconds: Int?
     public var frameStreamWaitingAgeMilliseconds: Int?
     public var receivedFrameCount: Int
+    public var unchangedHeartbeatCount: Int
     public var frameStreamRecommendedAction: String
     public var frameStreamRestartCount: Int
     public var latestFrameStreamRestartedAt: Date?
@@ -441,9 +497,11 @@ public struct WindowsAppRuntimeWindowStatus: Codable, Equatable, Sendable {
         frameStreamRequestedAt: Date? = nil,
         latestFrameReceivedAt: Date? = nil,
         latestFrameAgeMilliseconds: Int? = nil,
+        latestActivityAgeMilliseconds: Int? = nil,
         latestFrameIntervalMilliseconds: Int? = nil,
         frameStreamWaitingAgeMilliseconds: Int? = nil,
         receivedFrameCount: Int = 0,
+        unchangedHeartbeatCount: Int = 0,
         frameStreamRecommendedAction: String,
         frameStreamRestartCount: Int = 0,
         latestFrameStreamRestartedAt: Date? = nil,
@@ -461,9 +519,11 @@ public struct WindowsAppRuntimeWindowStatus: Codable, Equatable, Sendable {
         self.frameStreamRequestedAt = frameStreamRequestedAt
         self.latestFrameReceivedAt = latestFrameReceivedAt
         self.latestFrameAgeMilliseconds = latestFrameAgeMilliseconds
+        self.latestActivityAgeMilliseconds = latestActivityAgeMilliseconds ?? latestFrameAgeMilliseconds
         self.latestFrameIntervalMilliseconds = latestFrameIntervalMilliseconds
         self.frameStreamWaitingAgeMilliseconds = frameStreamWaitingAgeMilliseconds
         self.receivedFrameCount = receivedFrameCount
+        self.unchangedHeartbeatCount = unchangedHeartbeatCount
         self.frameStreamRecommendedAction = frameStreamRecommendedAction
         self.frameStreamRestartCount = frameStreamRestartCount
         self.latestFrameStreamRestartedAt = latestFrameStreamRestartedAt
@@ -1821,9 +1881,11 @@ public final class HostDashboardModel {
                     frameStreamRequestedAt: session.frameStreamRequestedAt,
                     latestFrameReceivedAt: session.frameTiming?.latestFrameReceivedAt,
                     latestFrameAgeMilliseconds: frameStream.latestFrameAgeMilliseconds,
+                    latestActivityAgeMilliseconds: frameStream.latestActivityAgeMilliseconds,
                     latestFrameIntervalMilliseconds: frameStream.latestFrameIntervalMilliseconds,
                     frameStreamWaitingAgeMilliseconds: frameStream.waitingForFirstFrameMilliseconds,
                     receivedFrameCount: frameStream.receivedFrameCount,
+                    unchangedHeartbeatCount: frameStream.unchangedHeartbeatCount,
                     frameStreamRecommendedAction: frameStream.recommendedAction,
                     frameStreamRestartCount: session.frameStreamRestartCount,
                     latestFrameStreamRestartedAt: session.latestFrameStreamRestartedAt,
@@ -4323,11 +4385,38 @@ public final class HostDashboardModel {
         mirrorSessions[index].frameTiming = WindowFrameTiming(
             firstFrameReceivedAt: priorTiming?.firstFrameReceivedAt ?? receivedAt,
             latestFrameReceivedAt: receivedAt,
+            latestActivityAt: receivedAt,
             latestFrameIntervalMilliseconds: priorTiming.map {
                 max(0, Int((receivedAt.timeIntervalSince($0.latestFrameReceivedAt) * 1000).rounded()))
             },
-            receivedFrameCount: (priorTiming?.receivedFrameCount ?? 0) + 1
+            receivedFrameCount: (priorTiming?.receivedFrameCount ?? 0) + 1,
+            unchangedHeartbeatCount: priorTiming?.unchangedHeartbeatCount ?? 0
         )
+    }
+
+    /// Records successful capture activity without replacing the displayed frame.
+    ///
+    /// A heartbeat is ignored until the first real frame arrives so a capture path that never produced
+    /// an image cannot present itself as healthy.
+    @discardableResult
+    public func receiveWindowFrameUnchanged(
+        _ event: WindowFrameUnchangedEvent,
+        receivedAt: Date = Date()
+    ) -> Bool {
+        guard let index = mirrorSessions.firstIndex(where: { $0.id == event.windowId }),
+              let priorTiming = mirrorSessions[index].frameTiming else {
+            return false
+        }
+
+        mirrorSessions[index].frameTiming = WindowFrameTiming(
+            firstFrameReceivedAt: priorTiming.firstFrameReceivedAt,
+            latestFrameReceivedAt: priorTiming.latestFrameReceivedAt,
+            latestActivityAt: receivedAt,
+            latestFrameIntervalMilliseconds: priorTiming.latestFrameIntervalMilliseconds,
+            receivedFrameCount: priorTiming.receivedFrameCount,
+            unchangedHeartbeatCount: priorTiming.unchangedHeartbeatCount + 1
+        )
+        return true
     }
 
     @discardableResult
@@ -4726,6 +4815,11 @@ public final class HostDashboardModel {
             receiveWindowFrame(frame)
             return mirrorSessions.contains(where: { $0.id == frame.windowId && $0.latestFrame == frame })
                 ? .handledWindowFrame(windowId: frame.windowId)
+                : .ignored
+        case .windowFrameUnchanged:
+            let event = try decoder.decode(WindowFrameUnchangedEvent.self, from: message)
+            return receiveWindowFrameUnchanged(event)
+                ? .handledWindowFrameUnchanged(windowId: event.windowId)
                 : .ignored
         case .windowClosed:
             let event = try decoder.decode(WindowClosedEvent.self, from: message)
