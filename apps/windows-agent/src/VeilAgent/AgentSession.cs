@@ -883,6 +883,26 @@ public sealed record AgentReplies(
         return Serialize(message);
     }
 
+    /// <summary>
+    /// Serializes liveness evidence for a successful capture whose pixels did not change.
+    /// </summary>
+    public static string SerializeUnchangedFrame(
+        string windowId,
+        int sequence,
+        DateTimeOffset? capturedAt = null
+    )
+    {
+        var message = new JsonObject
+        {
+            ["type"] = MessageTypes.WindowFrameUnchanged,
+            ["windowId"] = windowId,
+            ["sequence"] = sequence,
+            ["capturedAt"] = (capturedAt ?? DateTimeOffset.UtcNow).ToString("O")
+        };
+
+        return Serialize(message);
+    }
+
     private static string Serialize(JsonObject message) => message.ToJsonString(ProtocolJson.Options);
 }
 

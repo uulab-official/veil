@@ -367,8 +367,11 @@ public sealed class WebSocketAgentServer
         if (frameStreamsByWindowId.TryRemove(window.WindowId, out var existing))
         {
             existing.Cancel();
-            existing.Dispose();
         }
+
+        // A replacement stream must deliver a real first frame even when the pixels match the previous
+        // session. The old stream owns disposal of its cancellation source in its finally block.
+        frameStreamer.ForgetWindow(window.WindowId);
 
         var streamCancellation = CancellationTokenSource.CreateLinkedTokenSource(serverCancellationToken);
         frameStreamsByWindowId[window.WindowId] = streamCancellation;
@@ -381,7 +384,11 @@ public sealed class WebSocketAgentServer
                     window,
                     firstSequence,
                     async (frame, token) => await BroadcastTextAsync(AgentReplies.SerializeFrame(frame), token),
-                    streamCancellation.Token
+                    streamCancellation.Token,
+                    async (sequence, token) => await BroadcastTextAsync(
+                        AgentReplies.SerializeUnchangedFrame(window.WindowId, sequence),
+                        token
+                    )
                 );
             }
             catch (OperationCanceledException)
@@ -396,10 +403,15 @@ public sealed class WebSocketAgentServer
             }
             finally
             {
-                frameStreamsByWindowId.TryRemove(window.WindowId, out _);
+                // A replaced stream can finish after its successor has registered. Remove only this
+                // generation so the predecessor cannot silently delete the live stream registration.
+                if (RemoveFrameStream(window.WindowId, streamCancellation))
+                {
+                    frameStreamer.ForgetWindow(window.WindowId);
+                }
                 streamCancellation.Dispose();
             }
-        }, streamCancellation.Token);
+        });
     }
 
     private void StopFrameStream(string windowId)
@@ -407,9 +419,14 @@ public sealed class WebSocketAgentServer
         if (frameStreamsByWindowId.TryRemove(windowId, out var existing))
         {
             existing.Cancel();
-            existing.Dispose();
         }
+
+        frameStreamer.ForgetWindow(windowId);
     }
+
+    private bool RemoveFrameStream(string windowId, CancellationTokenSource expected) =>
+        ((ICollection<KeyValuePair<string, CancellationTokenSource>>)frameStreamsByWindowId)
+            .Remove(new KeyValuePair<string, CancellationTokenSource>(windowId, expected));
 
     private static async Task<string?> ReceiveTextAsync(WebSocket socket, CancellationToken cancellationToken)
     {

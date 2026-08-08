@@ -71,6 +71,22 @@ test("windows agent streams continuing window frames after launch", async () => 
   assert.doesNotMatch(streamer, /BootstrapPngFrameCapture/);
 });
 
+test("windows agent reports idle frame liveness and releases retained capture state", async () => {
+  const messageTypes = await readFile(resolve(agentRoot, "src/VeilAgent/MessageTypes.cs"), "utf8");
+  const session = await readFile(resolve(agentRoot, "src/VeilAgent/AgentSession.cs"), "utf8");
+  const server = await readFile(resolve(agentRoot, "src/VeilAgent/WebSocketAgentServer.cs"), "utf8");
+
+  assert.match(messageTypes, /WindowFrameUnchanged\s*=\s*"window\.frame\.unchanged"/);
+  assert.match(session, /SerializeUnchangedFrame/);
+  assert.match(server, /SerializeUnchangedFrame\(window\.WindowId,\s*sequence\)/);
+  assert.ok(
+    [...server.matchAll(/frameStreamer\.ForgetWindow\(window\.WindowId\)/g)].length >= 2,
+    "frame state must be reset before start and released after stream exit"
+  );
+  assert.match(server, /RemoveFrameStream\(window\.WindowId,\s*streamCancellation\)/);
+  assert.match(server, /frameStreamer\.ForgetWindow\(windowId\)/);
+});
+
 test("windows agent restores existing guest windows without creating duplicate Mac mirrors", async () => {
   const session = await readFile(resolve(agentRoot, "src/VeilAgent/AgentSession.cs"), "utf8");
 

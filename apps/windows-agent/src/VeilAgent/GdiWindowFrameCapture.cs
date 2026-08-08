@@ -30,6 +30,7 @@ public sealed class GdiWindowFrameCapture : IWindowFrameCapture
             var bounds = GetCaptureBounds(window);
             using var bitmap = CaptureBitmap(window, bounds);
             var pixels = CopyPixels(bitmap);
+            cancellationToken.ThrowIfCancellationRequested();
             if (!changeTracker.HasChanged(window.WindowId, pixels))
             {
                 return WindowFrameCaptureResult.Unchanged(sequence);

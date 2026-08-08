@@ -14,6 +14,7 @@ public static class MessageTypes
     public const string WindowUpdated = "window.updated";
     public const string WindowClosed = "window.closed";
     public const string WindowFrame = "window.frame";
+    public const string WindowFrameUnchanged = "window.frame.unchanged";
     public const string WindowFrameSubscribe = "window.frame.subscribe";
     public const string WindowFrameUnsubscribe = "window.frame.unsubscribe";
     public const string WindowFocusRequest = "window.focus.request";
