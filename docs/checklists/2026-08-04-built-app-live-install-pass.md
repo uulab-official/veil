@@ -142,3 +142,32 @@ Windows profile before any destructive or consented action.
 Current live status remains `PARTIAL`: all safe preflight checks pass, while the
 consented installation, reconnect, real `agent.health`, and post-install
 framebuffer evidence are still outstanding.
+
+## Consented optimization execution — 2026-08-08
+
+- [x] Accepted the combined confirmation in the installed app after reviewing
+  the official UTM Guest Tools information page.
+- [x] Observed the app transition through `Running → Checking`, then
+  `Windows is restarting` at 75% progress without opening a nested setup
+  window or shrinking the main canvas.
+- [x] Confirmed the launched QEMU command kept the Windows disk read/write
+  target unchanged and attached the current read-only `VeilAutoInstall.iso`
+  plus the validated Guest Tools ISO.
+- [x] Confirmed the host-side QEMU forward listener was bound to the expected
+  loopback port `127.0.0.1:18444`.
+- [x] Confirmed Veil waited for a real guest-agent response instead of treating
+  the running QEMU process as success.
+- [x] Confirmed the flow downgraded to `Windows optimization needs attention`
+  after the bounded reconnect wait expired.
+- [x] Captured the embedded Windows display showing Windows Boot Manager had
+  started `bootmgfw.efi`, but no Windows desktop or guest network response
+  appeared after the additional wait.
+- [ ] Real `agent.health`, `app.list`, Notepad launch, HWND frame, and
+  post-install framebuffer evidence remain unproven.
+- [ ] Graceful QEMU power-down was requested but did not complete during the
+  bounded wait; do not force-stop the VM without an explicit recovery decision.
+
+Observed failure classification: `hostForwardUnavailable` with repeated TCP
+`SYN_SENT` probes to `127.0.0.1:18444`. This is a real guest boot/reconnect
+failure, not a UI success. The preserved evidence is under Veil's local
+`Diagnostics/QEMU Launch` directory and is intentionally not committed.
