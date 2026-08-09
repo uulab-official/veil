@@ -152,8 +152,8 @@ struct QEMUWindowsBootPlanTests {
         #expect(plan.arguments.containsSequence(["-device", "usb-storage,drive=drivers"]))
     }
 
-    @Test("local QEMU plan factory prefers VirtIO networking when driver media is configured")
-    func localQEMUPlanFactoryPrefersVirtIONetworkingWhenDriverMediaIsConfigured() throws {
+    @Test("local QEMU plan factory keeps boot-safe networking when driver media is configured")
+    func localQEMUPlanFactoryKeepsBootSafeNetworkingWhenDriverMediaIsConfigured() throws {
         var profile = VMProfile.defaultWindows11Arm(createdAt: Date(timeIntervalSince1970: 1_782_752_400))
         profile.installerMediaPath = "/Users/test/Downloads/Win11_25H2_Korean_Arm64_v2.iso"
         profile.driverMediaPath = "/Users/test/Downloads/virtio-win.iso"
@@ -177,11 +177,11 @@ struct QEMUWindowsBootPlanTests {
             }
         )
 
-        #expect(plan.networkAdapter == .virtioNetPCI)
-        #expect(plan.networkDeviceArgument == "virtio-net-pci,netdev=net0")
-        #expect(plan.arguments.containsSequence(["-device", "virtio-net-pci,netdev=net0"]))
+        #expect(plan.networkAdapter == .usbNet)
+        #expect(plan.networkDeviceArgument == "usb-net,netdev=net0")
+        #expect(plan.arguments.containsSequence(["-device", "usb-net,netdev=net0"]))
         #expect(plan.arguments.contains("driver=raw,file.driver=file,file.locking=off,file.filename=/Users/test/Downloads/virtio-win.iso,if=none,id=drivers,media=cdrom,readonly=on"))
-        #expect(plan.warnings.contains { $0.contains("Using virtio-net-pci because driver media is configured.") })
+        #expect(plan.warnings.contains { $0.contains("Keeping usb-net as the boot-safe default") })
     }
 
     @Test("rejects profiles without installer media")

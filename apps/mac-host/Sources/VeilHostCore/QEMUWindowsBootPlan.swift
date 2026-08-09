@@ -407,14 +407,11 @@ public enum LocalQEMUWindowsBootPlanFactory {
         )
         var configurationWarnings = networkSelection.warning.map { [$0] } ?? []
         let hasDriverMedia = profile.driverMediaPath?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
-        let networkAdapter: QEMUWindowsNetworkAdapter
+        let networkAdapter: QEMUWindowsNetworkAdapter = networkSelection.adapter
         if hasDriverMedia && !networkSelection.isExplicit {
-            networkAdapter = .virtioNetPCI
             configurationWarnings.append(
-                "Using virtio-net-pci because driver media is configured. Set \(QEMUWindowsNetworkAdapter.environmentVariableName) to override this compatibility choice."
+                "Keeping usb-net as the boot-safe default while driver media is attached. Set \(QEMUWindowsNetworkAdapter.environmentVariableName)=virtio-net-pci only for an explicit compatibility probe."
             )
-        } else {
-            networkAdapter = networkSelection.adapter
         }
         let planner = QEMUWindowsBootPlanner(
             executablePath: executablePath,
