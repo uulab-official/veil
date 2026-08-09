@@ -45,15 +45,15 @@ public class WindowFrameStreamerTests
             true
         );
         var streamer = new WindowFrameStreamer(new FailsOnceCapture(), TimeSpan.FromMilliseconds(5));
-        var received = new List<WindowFrame>();
+        var received = new List<WindowFrameCaptureResult>();
         using var cancellation = new CancellationTokenSource();
 
         var streamTask = streamer.StreamAsync(
             window,
             firstSequence: 1,
-            (frame, _) =>
+            (result, _) =>
             {
-                received.Add(frame);
+                received.Add(result);
                 cancellation.Cancel();
                 return Task.CompletedTask;
             },
@@ -62,7 +62,9 @@ public class WindowFrameStreamerTests
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => streamTask);
 
-        var frame = Assert.Single(received);
+        var result = Assert.Single(received);
+        Assert.NotNull(result.Frame);
+        var frame = result.Frame!;
         Assert.Equal(1, frame.Sequence);
         Assert.Equal("real-frame", frame.EncodedData);
     }
