@@ -6858,7 +6858,6 @@ struct VeilVMControl {
     private static func qemuSparsePackagePreparationAttemptReport(waitSeconds: Int) async throws -> QEMUGuestAgentInstallAttemptReport {
         var report = try await qemuGuestCommandAttemptReport(
             commandText: QEMUSparsePackagePreparationKeySequence.commandText,
-            fallbackSteps: QEMUSparsePackagePreparationKeySequence.steps,
             openRunSteps: QEMUSparsePackagePreparationKeySequence.openRunSteps,
             commandTextSteps: QEMUSparsePackagePreparationKeySequence.commandTextSteps,
             waitSeconds: waitSeconds,
@@ -6880,7 +6879,6 @@ struct VeilVMControl {
     private static func qemuGuestAgentInstallAttemptReport(waitSeconds: Int) async throws -> QEMUGuestAgentInstallAttemptReport {
         try await qemuGuestCommandAttemptReport(
             commandText: QEMUGuestAgentInstallKeySequence.commandText,
-            fallbackSteps: QEMUGuestAgentInstallKeySequence.steps,
             openRunSteps: QEMUGuestAgentInstallKeySequence.openRunSteps,
             commandTextSteps: QEMUGuestAgentInstallKeySequence.commandTextSteps,
             waitSeconds: waitSeconds,
@@ -6897,7 +6895,6 @@ struct VeilVMControl {
 
     private static func qemuGuestCommandAttemptReport(
         commandText: String,
-        fallbackSteps: @autoclosure () throws -> [QEMUKeySequenceStep],
         openRunSteps: @autoclosure () throws -> [QEMUKeySequenceStep],
         commandTextSteps: @autoclosure () throws -> [QEMUKeySequenceStep],
         waitSeconds: Int,
@@ -6957,63 +6954,57 @@ struct VeilVMControl {
             )
         }
 
-        let activationTap = try? await qemuGuestAgentInstallActivationTapRecord()
+        // Win+R is global and works independently of the taskbar layout. Do not click a hard-coded
+        // Start/search coordinate first: Windows can move or center those controls as the guest
+        // resolution changes, which previously left the command in the Run field without running it.
+        let activationTap: QEMUPointerTapRecord? = nil
         var keySendRecords: [QEMUKeySendRecord] = []
         var runReadiness: QEMUConsoleReadinessReport
         var runSnapshot: QEMUConsoleVisualSnapshot?
-        if activationTap == nil {
-            keySendRecords.append(try await qemuKeySendRecord(steps: try fallbackSteps()))
-            runReadiness = qemuSkippedConsoleReadinessReport(phase: "run-keyboard-fallback")
-            runSnapshot = nil
-        } else {
-            try? await Task.sleep(nanoseconds: 500_000_000)
-            keySendRecords.append(try await qemuKeySendRecord(steps: try openRunSteps()))
-            var runResult = await waitForQEMUConsoleReadiness(
-                phase: "run",
+        try? await Task.sleep(nanoseconds: 500_000_000)
+        keySendRecords.append(try await qemuKeySendRecord(steps: try openRunSteps()))
+        var runResult = await waitForQEMUConsoleReadiness(
+            phase: "run",
+            timeoutSeconds: 6,
+            referenceFrame: desktopSnapshot.frame,
+            expectedStates: [.runDialog],
+            acceptMeaningfulChange: true,
+            wakeWhenBlank: false
+        )
+        if runResult.report.status != .ready {
+            keySendRecords.append(try await qemuKeySendRecord(steps: [
+                QEMUKeySequenceStep(key: "esc", delayAfterSend: 0.3)
+            ] + (try openRunSteps())))
+            let retryResult = await waitForQEMUConsoleReadiness(
+                phase: "run-retry",
                 timeoutSeconds: 6,
                 referenceFrame: desktopSnapshot.frame,
                 expectedStates: [.runDialog],
                 acceptMeaningfulChange: true,
                 wakeWhenBlank: false
             )
-            if runResult.report.status != .ready {
-                keySendRecords.append(try await qemuKeySendRecord(steps: [
-                    QEMUKeySequenceStep(key: "esc", delayAfterSend: 0.3)
-                ] + (try openRunSteps())))
-                let retryResult = await waitForQEMUConsoleReadiness(
-                    phase: "run-retry",
-                    timeoutSeconds: 6,
-                    referenceFrame: desktopSnapshot.frame,
-                    expectedStates: [.runDialog],
-                    acceptMeaningfulChange: true,
-                    wakeWhenBlank: false
-                )
-                runResult = mergeQEMUConsoleReadinessReports(runResult, retryResult)
-            }
-            runReadiness = runResult.report
-            runSnapshot = runResult.snapshot
-            if runReadiness.status == .ready {
-                keySendRecords.append(try await qemuKeySendRecord(steps: try commandTextSteps()))
-            }
+            runResult = mergeQEMUConsoleReadinessReports(runResult, retryResult)
+        }
+        runReadiness = runResult.report
+        runSnapshot = runResult.snapshot
+        if runReadiness.status == .ready {
+            // Enter is mandatory even when the pointer-based Run confirmation is unavailable. A
+            // visual change alone is not proof that the Run dialog received the command.
+            keySendRecords.append(try await qemuKeySendRecord(steps: try commandTextSteps()))
+            keySendRecords.append(try await qemuKeySendRecord(steps: [
+                QEMUKeySequenceStep(key: "ret", delayAfterSend: 1.0)
+            ]))
         }
 
-        var runConfirmationTap: QEMUPointerTapRecord?
         var uacReadiness = qemuSkippedConsoleReadinessReport(phase: "uac")
-        var uacApprovalTap: QEMUPointerTapRecord?
         var uacApprovalKeySend: QEMUKeySendRecord?
-        if activationTap != nil, runReadiness.status == .ready {
+        if runReadiness.status == .ready {
             let typedSnapshot = try? qemuConsoleVisualSnapshot(
                 phase: "run-command",
                 attempt: 1,
                 referenceFrame: runSnapshot?.frame,
                 recognizeText: false
             )
-            runConfirmationTap = try? await qemuGuestCommandRunConfirmationTapRecord()
-            if runConfirmationTap == nil {
-                keySendRecords.append(try await qemuKeySendRecord(steps: [
-                    QEMUKeySequenceStep(key: "ret", delayAfterSend: 1.0)
-                ]))
-            }
 
             let uacTimeout = min(max(waitSeconds / 2, 12), 30)
             let uacResult = await waitForQEMUConsoleReadiness(
@@ -7026,10 +7017,6 @@ struct VeilVMControl {
             )
             uacReadiness = uacResult.report
             if uacReadiness.status == .ready {
-                uacApprovalTap = try? await qemuGuestAgentInstallUACApprovalTapRecord()
-                if uacApprovalTap != nil {
-                    try? await Task.sleep(nanoseconds: 600_000_000)
-                }
                 uacApprovalKeySend = try? await qemuKeySendRecord(
                     steps: QEMUGuestAgentInstallKeySequence.uacApproveKeySteps
                 )
@@ -7047,8 +7034,8 @@ struct VeilVMControl {
         return QEMUGuestAgentInstallAttemptReport(
             commandText: commandText,
             activationTap: activationTap,
-            runConfirmationTap: runConfirmationTap,
-            uacApprovalTap: uacApprovalTap,
+            runConfirmationTap: nil,
+            uacApprovalTap: nil,
             uacApprovalKeySend: uacApprovalKeySend,
             keySend: keySend,
             desktopReadiness: desktopResult.report,

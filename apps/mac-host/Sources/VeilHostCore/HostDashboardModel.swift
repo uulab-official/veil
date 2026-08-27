@@ -3191,9 +3191,9 @@ public final class HostDashboardModel {
             && visibleSurfacePolicy.isEnabled
             && visibleSurfacePolicy.keepsRecoveryDisplayManual
             && (visibleSurfacePolicy.primarySurface == "launcher" || macWindowIntegration.hidesLauncherWhenMirroring)
-        let launchPassing = (launchPlan.canLaunchSelectedAppNow
-            && launchPlan.recommendedLaunchCommand != nil)
-            || macWindowIntegration.mirroredWindowCount > 0
+        // A launchable agent is a prerequisite, not proof that the product opened a usable macOS
+        // window. Keep the release gate open until the host has adopted at least one real HWND.
+        let launchPassing = macWindowIntegration.mirroredWindowCount > 0
         let launchCommand = nextLaunchGateCommand(launchPlan: launchPlan)
         let checkPassing = proofArtifacts.latestProofPath != nil
             && proofArtifacts.latestProofKind != nil
@@ -4298,6 +4298,16 @@ public final class HostDashboardModel {
         var runtime = localRuntime
         runtime.windowsInstalled = true
         runtime.installEvidence = guestAgentInstallEvidence
+        if runtime.isRunning,
+           runtime.recommendedAction == "recover-runtime-display" {
+            // The embedded VNC preview is a setup/recovery surface. Once the live guest agent is
+            // healthy, app HWND capture is the authoritative display path and a missing console
+            // preview must not send the user back to Windows Setup.
+            runtime.recommendedAction = "guest-agent-connected"
+            runtime.recommendedDisplayCommand = nil
+            runtime.recommendedRecoveryCommand = nil
+            runtime.reason = "The Windows guest agent is connected; continue to the app window flow. The VM console remains available as a manual recovery surface."
+        }
         return runtime
     }
 

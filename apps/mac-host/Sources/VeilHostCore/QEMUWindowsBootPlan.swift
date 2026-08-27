@@ -668,10 +668,17 @@ public enum LocalQEMUWindowsBootPlanFactory {
         )
         var configurationWarnings = networkSelection.warning.map { [$0] } ?? []
         let hasDriverMedia = profile.driverMediaPath?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
-        let networkAdapter: QEMUWindowsNetworkAdapter = networkSelection.adapter
+        // The inbox Windows ARM image does not reliably expose a usable IP address through
+        // usb-net. When the user has attached the VirtIO driver ISO, select the matching NIC
+        // automatically so one-click setup can install the driver and bring up the agent without
+        // requiring an environment variable. An explicit override remains authoritative for
+        // compatibility probes and alternate driver images.
+        let networkAdapter: QEMUWindowsNetworkAdapter = hasDriverMedia && !networkSelection.isExplicit
+            ? .virtioNetPCI
+            : networkSelection.adapter
         if hasDriverMedia && !networkSelection.isExplicit {
             configurationWarnings.append(
-                "Keeping usb-net as the boot-safe default while driver media is attached. Set \(QEMUWindowsNetworkAdapter.environmentVariableName)=virtio-net-pci only for an explicit compatibility probe."
+                "Using virtio-net-pci because driver media is configured; set \(QEMUWindowsNetworkAdapter.environmentVariableName) to override it for a compatibility probe."
             )
         }
         let audioSelection = QEMUWindowsAudioDevice.selected(
@@ -1574,7 +1581,10 @@ public struct QEMUWindowsBootLaunchPlanner: Sendable {
 }
 
 public enum QEMUWindowsInstallerBootPolicy {
-    public static let partialInstallDiskAllocatedBytes: Int64 = 1_024 * 1_024 * 1_024
+    // The installer can allocate a few GiB while it is still staging WinPE and has not written a
+    // bootable Windows partition. Keep booting the installer below 8 GiB; a completed Windows image
+    // is substantially larger and can safely take over on the next restart.
+    public static let partialInstallDiskAllocatedBytes: Int64 = 8 * 1_024 * 1_024 * 1_024
 
     public static func shouldSendBootKey(
         profile: VMProfile,

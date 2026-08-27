@@ -2302,6 +2302,56 @@ struct HostDashboardModelTests {
         #expect(report.primaryNextAction.command == "veil-vmctl qemu-capture --json")
     }
 
+    @Test("live guest agent bypasses stale console preview but still requires a mirrored host window")
+    @MainActor
+    func liveGuestAgentBypassesStaleConsolePreviewButStillRequiresMirroredHostWindow() async throws {
+        let model = HostDashboardModel(service: FakeDashboardService(health: .clipboardReady))
+        await model.load()
+
+        let snapshot = VMRuntimeSnapshot(
+            state: .running,
+            virtualizationAvailable: true,
+            architecture: "arm64",
+            minimumOSSupported: true,
+            profileName: "Windows 11 Arm",
+            virtualDiskPath: "/Users/test/Virtual Machines/Windows 11 Arm.img",
+            latestConsoleLaunch: VMConsoleLaunchEvidence(
+                provider: "QEMU/HVF",
+                pid: 94195,
+                processLogPath: "/tmp/qemu.log",
+                monitorSocketPath: "/tmp/qemu.sock",
+                qmpSocketPath: "/tmp/qemu.qmp.sock",
+                vncHost: "127.0.0.1",
+                vncPort: 5900,
+                consoleScreenshotPath: "/tmp/qemu-console.png",
+                previewStatus: .unavailable,
+                startedAt: Date(timeIntervalSince1970: 1_000)
+            ),
+            installEvidence: VMInstallEvidenceSummary(
+                kind: .setupReady,
+                isInstalled: false,
+                title: "Windows setup ready",
+                detail: "The local profile has not been refreshed yet."
+            ),
+            bootReady: true,
+            windowsInstalled: false,
+            detail: "Windows is running."
+        )
+
+        let localRuntime = model.localRuntimeStatus(snapshot: snapshot)
+        let report = model.runtimeStatusReport(localRuntime: localRuntime)
+
+        #expect(report.connection.hasLiveAgentConnection)
+        #expect(report.localRuntime.windowsInstalled)
+        #expect(report.localRuntime.installEvidence?.kind == .guestAgent)
+        #expect(report.localRuntime.recommendedAction == "guest-agent-connected")
+        #expect(report.localRuntime.recommendedRecoveryCommand == nil)
+        #expect(report.releaseGate.steps.first { $0.id == "windowsSetup" }?.isPassing == true)
+        #expect(report.releaseGate.steps.first { $0.id == "openWindowsApp" }?.isPassing == false)
+        #expect(report.releaseGate.recommendedAction == "openWindowsApp")
+        #expect(report.primaryNextAction.id == "openWindowsApp")
+    }
+
     @Test("local runtime blocks guest agent repair when attached guest tools media is stale")
     @MainActor
     func localRuntimeBlocksGuestAgentRepairForStaleMedia() async throws {

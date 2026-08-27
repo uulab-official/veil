@@ -443,8 +443,8 @@ struct QEMUWindowsBootPlanTests {
         #expect(plan.arguments.containsSequence(["-device", "usb-storage,drive=drivers"]))
     }
 
-    @Test("local QEMU plan factory keeps boot-safe networking when driver media is configured")
-    func localQEMUPlanFactoryKeepsBootSafeNetworkingWhenDriverMediaIsConfigured() throws {
+    @Test("local QEMU plan factory selects VirtIO networking when driver media is configured")
+    func localQEMUPlanFactorySelectsVirtIONetworkingWhenDriverMediaIsConfigured() throws {
         var profile = VMProfile.defaultWindows11Arm(createdAt: Date(timeIntervalSince1970: 1_782_752_400))
         profile.installerMediaPath = "/Users/test/Downloads/Win11_25H2_Korean_Arm64_v2.iso"
         profile.driverMediaPath = "/Users/test/Downloads/virtio-win.iso"
@@ -468,11 +468,11 @@ struct QEMUWindowsBootPlanTests {
             }
         )
 
-        #expect(plan.networkAdapter == .usbNet)
-        #expect(plan.networkDeviceArgument == "usb-net,netdev=net0")
-        #expect(plan.arguments.containsSequence(["-device", "usb-net,netdev=net0"]))
+        #expect(plan.networkAdapter == .virtioNetPCI)
+        #expect(plan.networkDeviceArgument == "virtio-net-pci,netdev=net0")
+        #expect(plan.arguments.containsSequence(["-device", "virtio-net-pci,netdev=net0"]))
         #expect(plan.arguments.contains("driver=raw,file.driver=file,file.locking=off,file.filename=/Users/test/Downloads/virtio-win.iso,if=none,id=drivers,media=cdrom,readonly=on"))
-        #expect(plan.warnings.contains { $0.contains("Keeping usb-net as the boot-safe default") })
+        #expect(plan.warnings.contains { $0.contains("Using virtio-net-pci because driver media is configured") })
     }
 
     @Test("rejects profiles without installer media")
@@ -714,6 +714,7 @@ struct QEMUWindowsBootPlanTests {
                     || path == "/Users/test/Virtual Machines/Veil/uefi-vars.fd"
                     || path == "/opt/homebrew/bin/swtpm"
             },
+            isHostPortFree: { _ in true },
             environment: [
                 QEMUWindowsNetworkAdapter.environmentVariableName: "e1000e"
             ]
@@ -748,6 +749,7 @@ struct QEMUWindowsBootPlanTests {
                     || path == "/Users/test/Virtual Machines/Veil/uefi-vars.fd"
                     || path == "/opt/homebrew/bin/swtpm"
             },
+            isHostPortFree: { _ in true },
             environment: [
                 QEMUWindowsNetworkAdapter.environmentVariableName: "e1000e"
             ]
@@ -756,7 +758,7 @@ struct QEMUWindowsBootPlanTests {
         #expect(plan.networkAdapter == .e1000e)
         #expect(plan.networkDeviceArgument == "e1000e,netdev=net0")
         #expect(plan.arguments.containsSequence(["-device", "e1000e,netdev=net0"]))
-        #expect(!plan.warnings.contains { $0.contains("Using virtio-net-pci because driver media is configured.") })
+        #expect(!plan.warnings.contains { $0.contains("Using virtio-net-pci because driver media is configured") })
     }
 
     @Test("local QEMU plan factory warns and falls back for unsupported network adapter override")
@@ -781,6 +783,7 @@ struct QEMUWindowsBootPlanTests {
                     || path == "/Users/test/Virtual Machines/Veil/uefi-vars.fd"
                     || path == "/opt/homebrew/bin/swtpm"
             },
+            isHostPortFree: { _ in true },
             environment: [
                 QEMUWindowsNetworkAdapter.environmentVariableName: "bad-nic"
             ]
@@ -1359,8 +1362,8 @@ struct QEMUWindowsBootPlanTests {
         #expect(!arguments.containsSequence(["-boot", "order=d"]))
     }
 
-    @Test("installer boot key policy skips partially installed or installed disks")
-    func installerBootKeyPolicySkipsPartiallyInstalledOrInstalledDisks() {
+    @Test("installer boot key policy keeps staged disks on installer media")
+    func installerBootKeyPolicyKeepsStagedDisksOnInstallerMedia() {
         #expect(QEMUWindowsInstallerBootPolicy.shouldSendBootKey(
             windowsInstalled: false,
             virtualDiskAllocatedBytes: nil
@@ -1369,7 +1372,15 @@ struct QEMUWindowsBootPlanTests {
             windowsInstalled: false,
             virtualDiskAllocatedBytes: 16 * 1024
         ))
+        #expect(QEMUWindowsInstallerBootPolicy.shouldSendBootKey(
+            windowsInstalled: false,
+            virtualDiskAllocatedBytes: 7 * 1_024 * 1_024 * 1_024
+        ))
         #expect(!QEMUWindowsInstallerBootPolicy.shouldSendBootKey(
+            windowsInstalled: false,
+            virtualDiskAllocatedBytes: 8 * 1_024 * 1_024 * 1_024
+        ))
+        #expect(QEMUWindowsInstallerBootPolicy.shouldSendBootKey(
             windowsInstalled: false,
             virtualDiskAllocatedBytes: 2 * 1024 * 1024 * 1024
         ))
