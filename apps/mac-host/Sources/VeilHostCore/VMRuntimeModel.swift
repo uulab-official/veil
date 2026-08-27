@@ -136,15 +136,18 @@ public struct VMRuntimeProviderProbe: Sendable {
     ]
 
     private let environment: [String: String]
+    private let homeDirectory: URL
     private let fileExists: @Sendable (String) -> Bool
     private let executableVersion: @Sendable (String) -> String?
 
     public init(
         environment: [String: String] = ProcessInfo.processInfo.environment,
+        homeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser,
         fileExists: @escaping @Sendable (String) -> Bool = { FileManager.default.fileExists(atPath: $0) },
         executableVersion: @escaping @Sendable (String) -> String? = Self.qemuVersionOutput(executablePath:)
     ) {
         self.environment = environment
+        self.homeDirectory = homeDirectory
         self.fileExists = fileExists
         self.executableVersion = executableVersion
     }
@@ -213,7 +216,29 @@ public struct VMRuntimeProviderProbe: Sendable {
             return overridePath
         }
 
+        // Finder-launched apps do not inherit a shell's PATH. Veil's optional runtime bridge is
+        // therefore checked before Homebrew/MacPorts locations, while the bridge's version probe
+        // prevents a stale or partially copied wrapper from being reported as an active provider.
+        let managedPath = Self.managedQEMUExecutablePath(homeDirectory: homeDirectory)
+        if fileExists(managedPath),
+           executableVersion(managedPath) != nil {
+            return managedPath
+        }
+
         return Self.defaultQEMUExecutablePaths.first(where: fileExists)
+    }
+
+    public static func qemuExecutablePaths(
+        homeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser
+    ) -> [String] {
+        [managedQEMUExecutablePath(homeDirectory: homeDirectory)] + defaultQEMUExecutablePaths
+    }
+
+    private static func managedQEMUExecutablePath(homeDirectory: URL) -> String {
+        homeDirectory
+            .appendingPathComponent("Library/Application Support/Veil/Runtime/bin", isDirectory: true)
+            .appendingPathComponent("qemu-system-aarch64")
+            .path
     }
 
     private static func firstVersionLine(from output: String?) -> String? {
@@ -2113,34 +2138,56 @@ public struct LocalVMRuntimeService: VMRuntimeService {
             )
         }
 
-        if let virtualDiskPath = profile.virtualDiskPath {
-            try Self.prepareTPMStateDirectory(virtualDiskPath: virtualDiskPath)
-            try Self.prepareUEFIVariablesStore(
-                virtualDiskPath: virtualDiskPath,
-                templatePaths: firmwareVarsTemplatePaths,
-                shouldUpgradeToSecureVars: profile.windowsInstalled != true
-            )
-            return profile
+        let diskURL: URL
+        if let configuredVirtualDiskPath = profile.virtualDiskPath,
+           !configuredVirtualDiskPath.isEmpty {
+            diskURL = URL(fileURLWithPath: configuredVirtualDiskPath)
+        } else {
+            diskURL = defaultVirtualDiskURL(for: profile)
         }
-
-        let diskURL = defaultVirtualDiskURL(for: profile)
         try FileManager.default.createDirectory(
             at: diskURL.deletingLastPathComponent(),
             withIntermediateDirectories: true
         )
 
-        if !FileManager.default.fileExists(atPath: diskURL.path) {
+        var isDirectory: ObjCBool = false
+        let diskAlreadyExists = FileManager.default.fileExists(
+            atPath: diskURL.path,
+            isDirectory: &isDirectory
+        )
+        guard !isDirectory.boolValue else {
+            throw CocoaError(.fileWriteInvalidFileName)
+        }
+
+        if !diskAlreadyExists {
             let didCreateDisk = FileManager.default.createFile(atPath: diskURL.path, contents: nil)
             guard didCreateDisk else {
                 throw CocoaError(.fileWriteUnknown)
             }
+
+            do {
+                let fileHandle = try FileHandle(forWritingTo: diskURL)
+                defer {
+                    try? fileHandle.close()
+                }
+                try fileHandle.truncate(atOffset: UInt64(profile.diskGB) * 1_024 * 1_024 * 1_024)
+            } catch {
+                // Do not leave a zero-byte artifact that looks like a prepared disk after a
+                // failed allocation. The profile is saved only after all resources succeed, so
+                // removing this newly-created file keeps the next retry deterministic.
+                try? FileManager.default.removeItem(at: diskURL)
+                throw error
+            }
         }
 
-        let fileHandle = try FileHandle(forWritingTo: diskURL)
-        defer {
-            try? fileHandle.close()
+        // A missing disk cannot contain an installed Windows guest. Clear stale compatibility
+        // evidence when recovery recreates that path; the guest agent can establish installed
+        // evidence again after the real Windows setup completes.
+        if !diskAlreadyExists {
+            profile.windowsInstalled = false
+            profile.guestAgentVersion = nil
+            profile.guestAgentConnectedAt = nil
         }
-        try fileHandle.truncate(atOffset: UInt64(profile.diskGB) * 1_024 * 1_024 * 1_024)
 
         profile.virtualDiskPath = diskURL.path
         try Self.prepareTPMStateDirectory(virtualDiskPath: diskURL.path)

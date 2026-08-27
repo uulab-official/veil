@@ -19,6 +19,8 @@ enum VMControlError: Error, LocalizedError {
     case qemuScreenshotCaptureFailed(String)
     case missingQEMUDisplayEndpoint
     case qemuDisplayPortUnavailable
+    case qemuDisplayBackendUnavailable(requested: String, executablePath: String, availableBackends: [String])
+    case qemuLaunchExited(pid: Int32, terminationStatus: Int32, processLogPath: String)
     case missingQEMUKeySequence
     case missingQEMUText
     case missingQEMUPointerCoordinate
@@ -75,6 +77,10 @@ enum VMControlError: Error, LocalizedError {
             "No loopback VNC display endpoint found in the latest QEMU launch record. Start the VM from Veil.app or run veil-vmctl qemu-start first."
         case .qemuDisplayPortUnavailable:
             "No loopback VNC display port is available. Close stale QEMU/VNC listeners and try again."
+        case .qemuDisplayBackendUnavailable(let requested, let executablePath, let availableBackends):
+            "QEMU cannot provide the requested \(requested) display backend at \(executablePath) (\(availableBackends.isEmpty ? "no display backends were reported" : availableBackends.joined(separator: ", "))). Run qemu-start without --native-display to use Veil's embedded VNC console."
+        case .qemuLaunchExited(let pid, let terminationStatus, let processLogPath):
+            "QEMU exited during startup (PID \(pid), status \(terminationStatus)). Inspect \(processLogPath) and retry after correcting the reported startup error."
         case .missingQEMUKeySequence:
             "Missing QEMU key sequence. Pass keys such as shift-f10, esc, tab, ret, or spc."
         case .missingQEMUText:
@@ -6182,6 +6188,18 @@ struct VeilVMControl {
         guard readiness.overallState == .ready else {
             throw VMControlError.qemuNotReady(readiness.nextActions)
         }
+        if displayMode == .nativeCocoa {
+            let availableBackends = QEMUDisplayBackendProbe.availableBackends(
+                executablePath: plan.executablePath
+            )
+            guard availableBackends.contains("cocoa") else {
+                throw VMControlError.qemuDisplayBackendUnavailable(
+                    requested: "Cocoa",
+                    executablePath: plan.executablePath,
+                    availableBackends: availableBackends
+                )
+            }
+        }
         let shouldSendInstallerBootKey = QEMUWindowsInstallerBootPolicy.shouldSendBootKey(
             profile: profile,
             virtualDiskAllocatedBytes: QEMUWindowsInstallerBootPolicy.allocatedFileSize(path: profile.virtualDiskPath)
@@ -6199,6 +6217,7 @@ struct VeilVMControl {
         let processLogURL = logDirectory.appendingPathComponent("qemu-launch-\(stamp).log")
         let serialLogURL = logDirectory.appendingPathComponent("qemu-launch-\(stamp).serial.log")
         let consoleScreenshotURL = logDirectory.appendingPathComponent("qemu-console-\(stamp).png")
+        let qemuPIDURL = logDirectory.appendingPathComponent("qemu-launch-\(stamp).pid")
         let monitorSocketURL = URL(fileURLWithPath: "/tmp")
             .appendingPathComponent("vq-\(UUID().uuidString.prefix(8)).sock")
         let qmpSocketURL = URL(fileURLWithPath: "/tmp")
@@ -6223,9 +6242,20 @@ struct VeilVMControl {
             vncDisplay: vncDisplay
         )
 
+        try? FileManager.default.removeItem(at: qemuPIDURL)
         let process = Process()
-        process.executableURL = URL(fileURLWithPath: plan.executablePath)
-        process.arguments = launchArguments
+        // UTM's QEMU launcher intentionally watches its parent and exits when that parent exits. The
+        // CLI must return after handing the VM to the host display, so keep a tiny shell supervisor as
+        // QEMU's parent instead of making the short-lived veil-vmctl process the watched parent.
+        process.executableURL = URL(fileURLWithPath: "/bin/sh")
+        process.arguments = [
+            "-c",
+            qemuLaunchSupervisorCommand(
+                executablePath: plan.executablePath,
+                arguments: launchArguments,
+                qemuPIDPath: qemuPIDURL.path
+            )
+        ]
         process.standardOutput = logHandle
         process.standardError = logHandle
         try QEMUVMRuntimeBooter.startTPMEmulatorIfNeeded(plan: plan)
@@ -6237,13 +6267,24 @@ struct VeilVMControl {
             process: process,
             waitSeconds: waitSeconds,
             shouldSendInstallerBootKey: shouldSendInstallerBootKey,
-            monitorSocketURL: monitorSocketURL,
-            consoleScreenshotURL: consoleScreenshotURL
+            monitorSocketURL: monitorSocketURL
         )
+        guard isProcessRunning(pid: process.processIdentifier),
+              let qemuPID = await waitForQEMUPID(
+                  at: qemuPIDURL,
+                  timeoutSeconds: 5
+              ),
+              isProcessRunning(pid: qemuPID) else {
+            throw VMControlError.qemuLaunchExited(
+                pid: process.processIdentifier,
+                terminationStatus: process.terminationStatus,
+                processLogPath: processLogURL.path
+            )
+        }
 
         let record = QEMULaunchRecord(
             provider: plan.provider,
-            pid: process.processIdentifier,
+            pid: qemuPID,
             executablePath: plan.executablePath,
             arguments: launchArguments,
             displayMode: bootDisplayMode,
@@ -7414,15 +7455,17 @@ struct VeilVMControl {
         process: Process,
         waitSeconds: Int,
         shouldSendInstallerBootKey: Bool,
-        monitorSocketURL: URL,
-        consoleScreenshotURL: URL
+        monitorSocketURL: URL
     ) {
         let boundedSeconds = min(max(waitSeconds, 0), 120)
         let startDate = Date()
         let deadline = startDate.addingTimeInterval(TimeInterval(boundedSeconds))
-        var bootPromptAutomation = QEMUWindowsBootPromptAutomation()
+        // VNC-backed QEMU takes longer to initialize its firmware display than the headless smoke
+        // path. Starting at second two still covers the Windows CD prompt while avoiding a key event
+        // being consumed by the EDK II startup handoff itself.
+        var bootPromptAutomation = QEMUWindowsBootPromptAutomation(firstSendSecond: 2)
 
-        while process.isRunning, Date() < deadline {
+        while isProcessRunning(pid: process.processIdentifier), Date() < deadline {
             Thread.sleep(forTimeInterval: 0.25)
             if shouldSendInstallerBootKey {
                 _ = bootPromptAutomation.tick(
@@ -7433,12 +7476,11 @@ struct VeilVMControl {
             }
         }
 
-        if process.isRunning {
-            QEMUVMRuntimeBooter.captureConsoleScreenshot(
-                monitorSocketURL: monitorSocketURL,
-                imageURL: consoleScreenshotURL
-            )
-        }
+        // Keep the launch path focused on handing the live VM to the display bridge. A monitor
+        // `screendump` during early UEFI startup is not a safe readiness probe: on some QEMU builds
+        // it races firmware initialization and can terminate the launcher even though the VM was
+        // otherwise healthy. The VNC display smoke and explicit qemu-capture command provide the
+        // screenshot after the console is live.
     }
 
     private static func bringQEMUToFrontIfAllowed() {
@@ -7532,6 +7574,40 @@ struct VeilVMControl {
         }
 
         return "'\(value.replacingOccurrences(of: "'", with: "'\\''"))'"
+    }
+
+    private static func qemuLaunchSupervisorCommand(
+        executablePath: String,
+        arguments: [String],
+        qemuPIDPath: String
+    ) -> String {
+        let launchCommand = ([executablePath] + arguments)
+            .map(shellQuoted)
+            .joined(separator: " ")
+        let pidPath = shellQuoted(qemuPIDPath)
+        return "\(launchCommand) & qemu_child_pid=$!; /usr/bin/printf '%s\\n' \"$qemu_child_pid\" > \(pidPath); wait \"$qemu_child_pid\""
+    }
+
+    private static func waitForQEMUPID(
+        at pidURL: URL,
+        timeoutSeconds: TimeInterval
+    ) async -> Int32? {
+        let deadline = Date().addingTimeInterval(max(timeoutSeconds, 0))
+        repeat {
+            if let data = try? Data(contentsOf: pidURL),
+               let pid = Int32(
+                   String(decoding: data, as: UTF8.self)
+                       .trimmingCharacters(in: .whitespacesAndNewlines)
+               ),
+               pid > 0 {
+                return pid
+            }
+
+            guard Date() < deadline else {
+                return nil
+            }
+            try? await Task.sleep(nanoseconds: 50_000_000)
+        } while true
     }
 
     private static func hostArchitecture() -> String {

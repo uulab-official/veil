@@ -1040,6 +1040,27 @@ struct VMProfileStoreTests {
         #expect(qemu?.executableVersion == "qemu-system-aarch64 version 9.2.4")
     }
 
+    @Test("runtime provider probe discovers Veil managed QEMU without a shell environment")
+    func runtimeProviderProbeDiscoversManagedQEMU() {
+        let homeDirectory = URL(fileURLWithPath: "/Users/test", isDirectory: true)
+        let managedQEMUPath = "/Users/test/Library/Application Support/Veil/Runtime/bin/qemu-system-aarch64"
+        let probe = VMRuntimeProviderProbe(
+            environment: [:],
+            homeDirectory: homeDirectory,
+            fileExists: { $0 == managedQEMUPath },
+            executableVersion: { _ in "QEMU emulator version 10.0.2" }
+        )
+
+        let qemu = probe.localProviders(
+            architecture: "arm64",
+            minimumOSSupported: true
+        ).first { $0.kind == .qemuHypervisor }
+
+        #expect(qemu?.status == .active)
+        #expect(qemu?.executablePath == managedQEMUPath)
+        #expect(qemu?.executableVersion == "QEMU emulator version 10.0.2")
+    }
+
     @Test("runtime provider probe marks QEMU planned when executable is missing")
     func runtimeProviderProbeMarksQEMUPlannedWhenMissing() {
         let probe = VMRuntimeProviderProbe(
@@ -1829,6 +1850,40 @@ struct VMProfileStoreTests {
         #expect(storedProfile.virtualDiskPath == existingDiskURL.path)
         #expect(snapshot.virtualDiskPath == existingDiskURL.path)
         #expect(fileSize == UInt64(Data("existing".utf8).count))
+    }
+
+    @Test("prepare default VM recreates a missing configured disk and clears stale install evidence")
+    func prepareDefaultVMRecreatesMissingConfiguredDiskAndClearsStaleInstallEvidence() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let homeDirectory = directory.appendingPathComponent("Home", isDirectory: true)
+        let missingDiskURL = directory.appendingPathComponent("Recovered.img")
+        let store = JSONVMProfileStore(directory: directory)
+        var profile = VMProfile.defaultWindows11Arm(homeDirectory: homeDirectory)
+        profile.virtualDiskPath = missingDiskURL.path
+        profile.windowsInstalled = true
+        profile.guestAgentVersion = "0.1.0"
+        profile.guestAgentConnectedAt = Date(timeIntervalSince1970: 1_782_752_400)
+        try await store.save(profile)
+        let service = LocalVMRuntimeService(
+            profileStore: store,
+            defaultHomeDirectory: homeDirectory,
+            automaticInstallMediaBuilder: FakeAutomaticInstallMediaBuilder()
+        )
+
+        let snapshot = try await service.prepareDefaultVM()
+        let storedProfile = try #require(await store.load())
+        let attributes = try FileManager.default.attributesOfItem(atPath: missingDiskURL.path)
+        let fileSize = try #require(attributes[.size] as? UInt64)
+
+        #expect(snapshot.virtualDiskPath == missingDiskURL.path)
+        #expect(snapshot.windowsInstalled == false)
+        #expect(snapshot.installEvidence.isInstalled == false)
+        #expect(storedProfile.virtualDiskPath == missingDiskURL.path)
+        #expect(storedProfile.windowsInstalled == false)
+        #expect(storedProfile.guestAgentVersion == nil)
+        #expect(storedProfile.guestAgentConnectedAt == nil)
+        #expect(fileSize == UInt64(profile.diskGB) * 1_024 * 1_024 * 1_024)
     }
 
     @Test("default virtual disk creation preserves an existing configured disk")

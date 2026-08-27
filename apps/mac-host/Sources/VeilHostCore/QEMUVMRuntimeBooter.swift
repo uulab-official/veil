@@ -565,7 +565,7 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
         process.executableURL = URL(fileURLWithPath: "/bin/sh")
         process.arguments = [
             "-c",
-            "/bin/ps axww -o pid=,command= | /usr/bin/grep qemu-system-aarch64 || true"
+            "/bin/ps axww -o pid=,command= | /usr/bin/grep -E 'qemu-system-aarch64|qemu-aarch64-softmmu' || true"
         ]
         let outputPipe = Pipe()
         process.standardOutput = outputPipe
@@ -600,6 +600,7 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
             return nil
         }
 
+        var fallbackProcess: QEMURunningProcess?
         for line in processListOutput.split(separator: "\n", omittingEmptySubsequences: true) {
             let trimmedLine = line.trimmingCharacters(in: .whitespacesAndNewlines)
             guard let separator = trimmedLine.firstIndex(where: { $0 == " " || $0 == "\t" }) else {
@@ -608,20 +609,28 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
             let pidText = trimmedLine[..<separator].trimmingCharacters(in: .whitespacesAndNewlines)
             let commandLine = String(trimmedLine[separator...]).trimmingCharacters(in: .whitespacesAndNewlines)
             guard let pid = Int32(pidText),
-                  commandLine.contains("qemu-system-aarch64"),
+                  commandLine.contains("qemu-system-aarch64") || commandLine.contains("qemu-aarch64-softmmu"),
                   commandLine.contains(virtualDiskPath) else {
                 continue
             }
 
-            return QEMURunningProcess(
+            let process = QEMURunningProcess(
                 pid: pid,
                 commandLine: commandLine,
                 monitorSocketPath: socketPath(after: "-monitor", in: commandLine),
                 qmpSocketPath: socketPath(after: "-qmp", in: commandLine)
             )
+
+            // Managed UTM builds expose the real QEMU as qemu-aarch64-softmmu while the shell
+            // supervisor's command line also contains Veil's qemu-system-aarch64 script path. Prefer
+            // the real backend PID so stop/status operations never target the supervisor by accident.
+            if commandLine.contains("qemu-aarch64-softmmu") {
+                return process
+            }
+            fallbackProcess = process
         }
 
-        return nil
+        return fallbackProcess
     }
 
     private static func normalizedNonEmptyPath(_ path: String?) -> String? {
@@ -692,7 +701,7 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
         process.executableURL = URL(fileURLWithPath: "/bin/sh")
         process.arguments = [
             "-c",
-            "printf 'sendkey spc\\n' | /usr/bin/nc -U \"$0\"",
+            "printf 'sendkey spc\\n' | /usr/bin/nc -w 2 -U \"$0\"",
             monitorSocketURL.path
         ]
         process.standardOutput = nil
@@ -716,7 +725,7 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
         process.executableURL = URL(fileURLWithPath: "/bin/sh")
         process.arguments = [
             "-c",
-            "printf 'screendump \"%s\"\\n' \"$1\" | /usr/bin/nc -U \"$0\"",
+            "printf 'screendump \"%s\"\\n' \"$1\" | /usr/bin/nc -w 2 -U \"$0\"",
             monitorSocketURL.path,
             rawImageURL.path
         ]

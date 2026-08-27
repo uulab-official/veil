@@ -232,6 +232,71 @@ public enum QEMUWindowsBootDisplayMode: String, Codable, Equatable, Sendable {
     case vncLoopback
 }
 
+/// Probes the display backends compiled into the selected QEMU binary.
+///
+/// QEMU distributions are not interchangeable here: the UTM-bundled Arm binary used by Veil may
+/// expose VNC and `none` while omitting the Cocoa backend. Checking `-display help` before launching
+/// prevents a misleading "started" state and avoids starting a TPM daemon for a VM that will fail
+/// before it creates a display.
+public enum QEMUDisplayBackendProbe {
+    public static func availableBackends(in helpOutput: String) -> [String] {
+        var backends: [String] = []
+        var isBackendSection = false
+
+        for rawLine in helpOutput.split(whereSeparator: \.isNewline) {
+            let line = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
+            if line == "Available display backend types:" {
+                isBackendSection = true
+                continue
+            }
+            guard isBackendSection else {
+                continue
+            }
+            if line.isEmpty {
+                break
+            }
+            if line.hasPrefix("Some display backends") || line.hasPrefix("-display") {
+                continue
+            }
+            let backend = line.split(separator: ",", maxSplits: 1).first.map(String.init) ?? line
+            guard !backend.isEmpty,
+                  !backend.contains(where: { $0.isWhitespace }) else {
+                continue
+            }
+            backends.append(backend)
+        }
+
+        return backends
+    }
+
+    public static func supportsBackend(_ backend: String, in helpOutput: String) -> Bool {
+        availableBackends(in: helpOutput).contains(backend)
+    }
+
+    public static func availableBackends(executablePath: String) -> [String] {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: executablePath)
+        process.arguments = ["-display", "help"]
+        let outputPipe = Pipe()
+        process.standardOutput = outputPipe
+        process.standardError = outputPipe
+
+        do {
+            try process.run()
+            process.waitUntilExit()
+        } catch {
+            return []
+        }
+
+        return availableBackends(
+            in: String(
+                decoding: outputPipe.fileHandleForReading.readDataToEndOfFile(),
+                as: UTF8.self
+            )
+        )
+    }
+}
+
 public struct QEMUWindowsBootPlanner: Sendable {
     public static let guestAgentHostPort = 18_444
     public static let guestAgentGuestPort = 18_444
@@ -460,6 +525,7 @@ public struct QEMUWindowsBootPlanner: Sendable {
 }
 
 public enum LocalQEMUWindowsBootPlanFactory {
+    public static let tpmEmulatorEnvironmentKey = "VEIL_SWTPM"
     public static let defaultFirmwarePaths = [
         "/opt/homebrew/share/qemu/edk2-aarch64-code.fd",
         "/usr/local/share/qemu/edk2-aarch64-code.fd",
@@ -505,6 +571,17 @@ public enum LocalQEMUWindowsBootPlanFactory {
         "/opt/local/bin/swtpm"
     ]
 
+    public static func tpmEmulatorPaths(
+        homeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser
+    ) -> [String] {
+        [
+            homeDirectory
+                .appendingPathComponent("Library/Application Support/Veil/Runtime/bin", isDirectory: true)
+                .appendingPathComponent("swtpm")
+                .path
+        ] + defaultTPMEmulatorPaths
+    }
+
     /// Whether a loopback TCP port can still be bound.
     ///
     /// A direct `bind` rather than shelling out to `lsof`, because plan building sits on status-polling
@@ -546,6 +623,7 @@ public enum LocalQEMUWindowsBootPlanFactory {
         architecture: String,
         minimumOSSupported: Bool,
         providerProbe: VMRuntimeProviderProbe = VMRuntimeProviderProbe(),
+        homeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser,
         fileExists: @escaping @Sendable (String) -> Bool = { FileManager.default.fileExists(atPath: $0) },
         secureFirmwarePaths: [String] = defaultSecureFirmwarePaths(),
         secureVarsTemplatePaths: [String] = defaultSecureFirmwareVarsTemplatePaths(),
@@ -560,7 +638,7 @@ public enum LocalQEMUWindowsBootPlanFactory {
             )
             .first { $0.kind == .qemuHypervisor }
         let executablePath = qemuProvider?.executablePath
-            ?? VMRuntimeProviderProbe.defaultQEMUExecutablePaths[0]
+            ?? VMRuntimeProviderProbe.qemuExecutablePaths(homeDirectory: homeDirectory)[0]
         let secureFirmwarePath = secureFirmwarePaths.first(where: fileExists)
         let secureFirmwareVarsTemplatePath = secureVarsTemplatePaths.first(where: fileExists)
         let isSecureBootFirmwareAvailable = secureFirmwarePath != nil && secureFirmwareVarsTemplatePath != nil
@@ -573,7 +651,16 @@ public enum LocalQEMUWindowsBootPlanFactory {
             ?? defaultFirmwareVarsTemplatePaths[0]
         let firmwareVarsPath = profile.virtualDiskPath
             .map { URL(fileURLWithPath: $0).deletingLastPathComponent().appendingPathComponent("uefi-vars.fd").path }
-        let tpmEmulatorPath = defaultTPMEmulatorPaths.first(where: fileExists)
+        let tpmEmulatorCandidates = [environment[tpmEmulatorEnvironmentKey]]
+            .compactMap { path in
+                guard let path,
+                      !path.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                    return nil
+                }
+                return path
+            }
+            + tpmEmulatorPaths(homeDirectory: homeDirectory)
+        let tpmEmulatorPath = tpmEmulatorCandidates.first(where: fileExists)
         let tpmStateDirectoryPath = profile.virtualDiskPath
             .map { URL(fileURLWithPath: $0).deletingLastPathComponent().appendingPathComponent("tpm", isDirectory: true).path }
         let networkSelection = QEMUWindowsNetworkAdapter.selected(
@@ -627,7 +714,7 @@ public enum LocalQEMUWindowsBootPlanFactory {
             isFirmwareVarsTemplateAvailable: firmwareVarsTemplatePath != nil,
             firmwareVarsPath: firmwareVarsPath,
             isSecureBootFirmwareAvailable: isSecureBootFirmwareAvailable,
-            tpmEmulatorPath: tpmEmulatorPath ?? defaultTPMEmulatorPaths[0],
+            tpmEmulatorPath: tpmEmulatorPath ?? tpmEmulatorCandidates[0],
             isTPMEmulatorAvailable: tpmEmulatorPath != nil,
             tpmStateDirectoryPath: tpmStateDirectoryPath,
             networkAdapter: networkAdapter,

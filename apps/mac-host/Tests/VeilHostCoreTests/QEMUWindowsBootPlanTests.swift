@@ -5,6 +5,46 @@ import Testing
 
 @Suite("QEMU Windows boot plan")
 struct QEMUWindowsBootPlanTests {
+    @Test("display backend probe parses QEMU help output")
+    func displayBackendProbeParsesQEMUHelpOutput() {
+        let output = """
+        Available display backend types:
+        none
+        egl-headless
+        cocoa,full-screen=on
+
+        Some display backends support suboptions, which can be set with
+           -display backend,option=value,option=value...
+        """
+
+        #expect(QEMUDisplayBackendProbe.availableBackends(in: output) == [
+            "none",
+            "egl-headless",
+            "cocoa"
+        ])
+        #expect(QEMUDisplayBackendProbe.supportsBackend("cocoa", in: output))
+        #expect(!QEMUDisplayBackendProbe.supportsBackend("sdl", in: output))
+    }
+
+    @Test("display backend probe recognizes UTM's headless backend set")
+    func displayBackendProbeRecognizesHeadlessBackendSet() {
+        let output = """
+        Available display backend types:
+        none
+        egl-headless
+        spice-app
+        dbus
+        """
+
+        #expect(!QEMUDisplayBackendProbe.supportsBackend("cocoa", in: output))
+        #expect(QEMUDisplayBackendProbe.availableBackends(in: output) == [
+            "none",
+            "egl-headless",
+            "spice-app",
+            "dbus"
+        ])
+    }
+
     @Test("default diagnostics stay in application support")
     func defaultDiagnosticsStayInApplicationSupport() {
         let directory = QEMUVMRuntimeBooter.defaultDiagnosticsDirectory()
@@ -29,6 +69,23 @@ struct QEMUWindowsBootPlanTests {
         #expect(process?.pid == 60_454)
         #expect(process?.monitorSocketPath == "/tmp/vq-81D25B2D.sock")
         #expect(process?.qmpSocketPath == "/tmp/vq-FAF748D6.qmp.sock")
+    }
+
+    @Test("running QEMU process detector prefers managed backend over shell supervisor")
+    func runningQEMUProcessDetectorPrefersManagedBackendOverShellSupervisor() {
+        let output = """
+          70100 /bin/sh -c '/Users/test/Library/Application Support/Veil/Runtime/bin/qemu-system-aarch64' -drive driver=raw,file.driver=file,file.filename=/Users/test/Virtual Machines/Veil/Windows 11 Arm.img,if=none,id=system -monitor unix:/tmp/vq-supervisor.sock,server,nowait -qmp unix:/tmp/vq-supervisor.qmp.sock,server,nowait & wait
+          70101 /Users/test/Library/Application Support/Veil/Runtime/bin/veil-qemu-launcher-utm /Applications/UTM.app/Contents/Frameworks/qemu-aarch64-softmmu.framework/Versions/A/qemu-aarch64-softmmu -drive driver=raw,file.driver=file,file.filename=/Users/test/Virtual Machines/Veil/Windows 11 Arm.img,if=none,id=system -monitor unix:/tmp/vq-backend.sock,server,nowait -qmp unix:/tmp/vq-backend.qmp.sock,server,nowait
+        """
+
+        let process = QEMUVMRuntimeBooter.runningProcess(
+            attachedToVirtualDiskPath: "/Users/test/Virtual Machines/Veil/Windows 11 Arm.img",
+            processListOutput: output
+        )
+
+        #expect(process?.pid == 70_101)
+        #expect(process?.monitorSocketPath == "/tmp/vq-backend.sock")
+        #expect(process?.qmpSocketPath == "/tmp/vq-backend.qmp.sock")
     }
 
     @Test("builds a Windows 11 Arm install plan")
@@ -601,6 +658,37 @@ struct QEMUWindowsBootPlanTests {
         #expect(plan.tpmEmulatorPath == "/opt/homebrew/bin/swtpm")
         #expect(plan.isTPMEmulatorAvailable)
         #expect(plan.tpmStateDirectoryPath == "/Users/test/Virtual Machines/Veil/tpm")
+        #expect(plan.arguments.containsSequence(["-device", "tpm-tis-device,tpmdev=tpm0"]))
+    }
+
+    @Test("local QEMU plan factory honors an explicit TPM runtime override")
+    func localQEMUPlanFactoryHonorsExplicitTPMRuntimeOverride() throws {
+        var profile = VMProfile.defaultWindows11Arm(createdAt: Date(timeIntervalSince1970: 1_782_752_400))
+        profile.installerMediaPath = "/Users/test/Downloads/Win11_25H2_Korean_Arm64_v2.iso"
+        profile.virtualDiskPath = "/Users/test/Virtual Machines/Veil/Windows 11 Arm.img"
+        profile.sharedFolderPath = "/Users/test/Veil Shared"
+        let tpmPath = "/Users/test/Veil Runtime/swtpm"
+
+        let plan = try LocalQEMUWindowsBootPlanFactory.makePlan(
+            for: profile,
+            architecture: "arm64",
+            minimumOSSupported: true,
+            providerProbe: VMRuntimeProviderProbe(
+                environment: [:],
+                fileExists: { $0 == "/opt/homebrew/bin/qemu-system-aarch64" },
+                executableVersion: { _ in "QEMU emulator version 11.0.2" }
+            ),
+            fileExists: { path in
+                path == "/opt/homebrew/share/qemu/edk2-aarch64-code.fd"
+                    || path == "/opt/homebrew/share/qemu/edk2-arm-vars.fd"
+                    || path == "/Users/test/Virtual Machines/Veil/uefi-vars.fd"
+                    || path == tpmPath
+            },
+            environment: [LocalQEMUWindowsBootPlanFactory.tpmEmulatorEnvironmentKey: tpmPath]
+        )
+
+        #expect(plan.tpmEmulatorPath == tpmPath)
+        #expect(plan.isTPMEmulatorAvailable)
         #expect(plan.arguments.containsSequence(["-device", "tpm-tis-device,tpmdev=tpm0"]))
     }
 
