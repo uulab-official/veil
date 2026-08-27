@@ -11,13 +11,14 @@ does not claim Parallels-level GPU acceleration.
 
 ## Deterministic gates
 
-- [x] Swift host: `swift test --disable-sandbox --package-path apps/mac-host` — **719 tests / 62 suites passed**.
+- [x] Swift host: `swift test --disable-sandbox --package-path apps/mac-host` — **721 tests / 62 suites passed**.
 - [x] Windows agent: `dotnet test apps/windows-agent/tests/VeilAgent.Tests/VeilAgent.Tests.csproj` with Veil's local .NET 8 toolchain — **122 tests passed**.
 - [x] Node protocol and harness packages: `./script/test_all.sh --skip-windows-agent` — **30 packages passed**.
 - [x] Swift build and macOS app bundle/sign/launch contract passed through `script/test_all.sh --skip-windows-agent`.
 - [x] Install, guarded replace, quarantine cleanup, uninstall, user-data preservation, reinstall, and first-window lifecycle checks passed.
 - [x] Focused P0 launch, display-policy, and window handoff tests passed.
 - [x] Bare `./script/test_all.sh` passed with Swift, Windows agent, Node, and macOS lifecycle gates.
+- [x] `qemu-doctor` blocks a stale installed flag when the configured Windows system disk is missing.
 
 The full no-skip gate now discovers the bundled local .NET 8 toolchain
 automatically:
@@ -46,6 +47,7 @@ blocked`:
 - Windows profile, installer/support media, UEFI, HVF plan, and shared-folder
   contracts passed.
 - The writable Windows system disk is missing.
+- The stale installed profile flag is also blocked until that system disk is restored.
 - `qemu-system-aarch64` is not installed or configured.
 - `swtpm` is not installed or configured.
 - Secure Boot is only a warning until a live setup smoke passes.
