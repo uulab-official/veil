@@ -747,6 +747,17 @@ public struct QEMUWindowsReadinessDoctor: Sendable {
 
     private func installerMediaCheck(_ profile: VMProfile?) -> QEMUWindowsReadinessCheck {
         if profile?.windowsInstalled == true {
+            guard let diskPath = nonEmpty(profile?.virtualDiskPath), fileExists(diskPath) else {
+                let diskDescription = nonEmpty(profile?.virtualDiskPath)
+                    .map { " at \($0)" } ?? ""
+                return QEMUWindowsReadinessCheck(
+                    id: "installer-media",
+                    title: "Installer media",
+                    state: .blocked,
+                    detail: "Windows is marked installed, but its system disk is missing\(diskDescription). Re-run prepare with a Windows installer ISO to recover the VM."
+                )
+            }
+
             return QEMUWindowsReadinessCheck(
                 id: "installer-media",
                 title: "Installer media",

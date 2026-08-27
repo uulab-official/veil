@@ -1367,6 +1367,23 @@ struct QEMUWindowsBootPlanTests {
         #expect(report.checks.first { $0.id == "automatic-install-media" }?.detail.contains("guest support media") == true)
     }
 
+    @Test("doctor blocks a stale installed flag when the system disk is missing")
+    func doctorBlocksStaleInstalledFlagWhenSystemDiskIsMissing() throws {
+        var profile = VMProfile.defaultWindows11Arm(createdAt: Date(timeIntervalSince1970: 1_782_752_400))
+        profile.windowsInstalled = true
+        profile.installerMediaPath = nil
+        profile.virtualDiskPath = "/Users/test/Virtual Machines/Veil/Windows 11 Arm.img"
+
+        let report = QEMUWindowsReadinessDoctor(fileExists: { _ in false })
+            .makeReport(profile: profile, plan: nil)
+        let installerCheck = try #require(report.checks.first { $0.id == "installer-media" })
+
+        #expect(report.overallState == .blocked)
+        #expect(installerCheck.state == .blocked)
+        #expect(installerCheck.detail == "Windows is marked installed, but its system disk is missing at /Users/test/Virtual Machines/Veil/Windows 11 Arm.img. Re-run prepare with a Windows installer ISO to recover the VM.")
+        #expect(report.nextActions.contains("Run veil-vmctl prepare --installer /path/to/Windows.iso to create Veil's default writable system disk."))
+    }
+
     @Test("smoke boot prompt automation retries when the monitor socket is not ready")
     func smokeBootPromptAutomationRetriesWhenMonitorSocketIsNotReady() {
         var automation = QEMUWindowsBootPromptAutomation()
