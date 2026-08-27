@@ -1,7 +1,8 @@
 # P0 One-Click Windows App Runtime Proof
 
 Date: 2026-08-27
-Tested commit: `bdef7f7` (`feat: advance production Windows app runtime`)
+Tested implementation commit: `bdef7f7` (`feat: advance production Windows app runtime`)
+Latest verification commit: `d8f9068` (`test: discover local dotnet toolchain`)
 Branch: `codex/ui-display-state`
 
 Purpose: keep the host-side implementation result separate from proof that a real
@@ -16,6 +17,7 @@ does not claim Parallels-level GPU acceleration.
 - [x] Swift build and macOS app bundle/sign/launch contract passed through `script/test_all.sh --skip-windows-agent`.
 - [x] Install, guarded replace, quarantine cleanup, uninstall, user-data preservation, reinstall, and first-window lifecycle checks passed.
 - [x] Focused P0 launch, display-policy, and window handoff tests passed.
+- [x] Bare `./script/test_all.sh` passed with Swift, Windows agent, Node, and macOS lifecycle gates.
 
 The full no-skip gate now discovers the bundled local .NET 8 toolchain
 automatically:
