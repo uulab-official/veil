@@ -1,8 +1,8 @@
 # P0 One-Click Windows App Runtime Proof
 
 Date: 2026-08-27
-Tested implementation commit: `13c8143` (`fix: distinguish app connection readiness`)
-Latest verification commit: `13c8143` (`fix: distinguish app connection readiness`)
+Tested implementation commit: `4f177d2` (`fix: detect stale Windows install records`)
+Latest verification commit: `4f177d2` (`fix: detect stale Windows install records`)
 Branch: `codex/ui-display-state`
 
 Purpose: keep the host-side implementation result separate from proof that a real
