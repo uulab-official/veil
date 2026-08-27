@@ -81,47 +81,44 @@ struct ContentView: View {
         WindowsShellCopy.headerSubtitle(
             hasLiveAppConnection: model.hasLiveAgentConnection,
             runtimeState: vmModel.snapshot?.state,
-            windowsInstalled: vmModel.snapshot?.windowsInstalled == true
+            windowsInstalled: vmModel.snapshot?.windowsInstalled == true,
+            appConnectionUnavailable: appConnectionUnavailable
         )
     }
 
     private var headerStatusTitle: String {
-        switch vmModel.snapshot?.state {
-        case .running:
-            return "Running"
-        case .starting:
-            return "Opening"
-        case .failed:
-            return "Needs Attention"
-        default:
-            return vmModel.snapshot?.windowsInstalled == true ? "Installed" : "Setup"
-        }
+        WindowsShellCopy.headerStatusTitle(
+            runtimeState: vmModel.snapshot?.state,
+            windowsInstalled: vmModel.snapshot?.windowsInstalled == true,
+            appConnectionUnavailable: appConnectionUnavailable
+        )
     }
 
     private var headerStatusSymbol: String {
-        switch vmModel.snapshot?.state {
-        case .running:
-            return "checkmark.circle.fill"
-        case .starting:
-            return "arrow.triangle.2.circlepath"
-        case .failed:
-            return "exclamationmark.triangle.fill"
-        default:
-            return vmModel.snapshot?.windowsInstalled == true ? "checkmark.circle.fill" : "circle.fill"
-        }
+        WindowsShellCopy.headerStatusSymbol(
+            runtimeState: vmModel.snapshot?.state,
+            windowsInstalled: vmModel.snapshot?.windowsInstalled == true,
+            appConnectionUnavailable: appConnectionUnavailable
+        )
     }
 
     private var headerStatusTint: Color {
+        if vmModel.snapshot?.state == .failed || appConnectionUnavailable {
+            return .orange
+        }
+
         switch vmModel.snapshot?.state {
         case .running:
             return .green
         case .starting:
             return .blue
-        case .failed:
-            return .orange
         default:
             return vmModel.snapshot?.windowsInstalled == true ? .green : .secondary
         }
+    }
+
+    private var appConnectionUnavailable: Bool {
+        !model.hasLiveAgentConnection && model.agentDiagnostic?.status == .unavailable
     }
 
     private func refreshAll() {

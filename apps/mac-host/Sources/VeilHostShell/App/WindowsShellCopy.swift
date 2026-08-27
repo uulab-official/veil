@@ -19,10 +19,15 @@ enum WindowsShellCopy {
     static func headerSubtitle(
         hasLiveAppConnection: Bool,
         runtimeState: VMRuntimeState?,
-        windowsInstalled: Bool
+        windowsInstalled: Bool,
+        appConnectionUnavailable: Bool = false
     ) -> String {
         if hasLiveAppConnection {
             return "Windows apps open on your Mac"
+        }
+
+        if appConnectionUnavailable {
+            return "Windows is installed, but the app connection is unavailable. Connect Veil Agent to open apps as Mac windows."
         }
 
         switch runtimeState {
@@ -32,6 +37,52 @@ enum WindowsShellCopy {
             return "Opening Windows"
         default:
             return windowsInstalled ? "Start Windows to open apps" : "Set up Windows apps on this Mac"
+        }
+    }
+
+    static func headerStatusTitle(
+        runtimeState: VMRuntimeState?,
+        windowsInstalled: Bool,
+        appConnectionUnavailable: Bool
+    ) -> String {
+        if runtimeState == .failed {
+            return "Needs Attention"
+        }
+
+        if appConnectionUnavailable {
+            return "App Connection Needed"
+        }
+
+        switch runtimeState {
+        case .running:
+            return "Running"
+        case .starting:
+            return "Opening"
+        default:
+            return windowsInstalled ? "Installed" : "Setup"
+        }
+    }
+
+    static func headerStatusSymbol(
+        runtimeState: VMRuntimeState?,
+        windowsInstalled: Bool,
+        appConnectionUnavailable: Bool
+    ) -> String {
+        if runtimeState == .failed {
+            return "exclamationmark.triangle.fill"
+        }
+
+        if appConnectionUnavailable {
+            return "person.crop.circle.badge.exclamationmark"
+        }
+
+        switch runtimeState {
+        case .running:
+            return "checkmark.circle.fill"
+        case .starting:
+            return "arrow.triangle.2.circlepath"
+        default:
+            return windowsInstalled ? "checkmark.circle.fill" : "circle.fill"
         }
     }
 

@@ -29,6 +29,14 @@ struct AppRuntimeDockMenuTests {
                 windowsInstalled: true
             ) == "Windows apps open on your Mac"
         )
+        #expect(
+            WindowsShellCopy.headerSubtitle(
+                hasLiveAppConnection: false,
+                runtimeState: .stopped,
+                windowsInstalled: true,
+                appConnectionUnavailable: true
+            ) == "Windows is installed, but the app connection is unavailable. Connect Veil Agent to open apps as Mac windows."
+        )
 
         let visibleMessages = [
             WindowsShellCopy.headerSubtitle(
@@ -49,6 +57,31 @@ struct AppRuntimeDockMenuTests {
         #expect(visibleMessages.allSatisfy { !$0.contains("VM") })
         #expect(visibleMessages.allSatisfy { !$0.contains("QEMU") })
         #expect(visibleMessages.allSatisfy { !$0.contains("agent") })
+    }
+
+    @Test("unavailable app connection is never shown as an installed ready state")
+    func unavailableAppConnectionIsNeverShownAsAnInstalledReadyState() {
+        #expect(
+            WindowsShellCopy.headerStatusTitle(
+                runtimeState: .stopped,
+                windowsInstalled: true,
+                appConnectionUnavailable: true
+            ) == "App Connection Needed"
+        )
+        #expect(
+            WindowsShellCopy.headerStatusSymbol(
+                runtimeState: .running,
+                windowsInstalled: true,
+                appConnectionUnavailable: true
+            ) == "person.crop.circle.badge.exclamationmark"
+        )
+        #expect(
+            WindowsShellCopy.headerStatusTitle(
+                runtimeState: .failed,
+                windowsInstalled: true,
+                appConnectionUnavailable: true
+            ) == "Needs Attention"
+        )
     }
 
     @Test("installed launcher metadata focuses on apps not setup media")
