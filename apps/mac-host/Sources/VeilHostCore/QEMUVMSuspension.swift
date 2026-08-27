@@ -111,7 +111,7 @@ public enum VMSuspensionError: Error, LocalizedError, Equatable, Sendable {
         case .runtimeNotRunning:
             "No running Windows VM was found to suspend. Start the VM first."
         case .qmpUnavailable:
-            "The running Windows VM has no reachable QMP control socket, so it cannot be suspended. Stop it instead."
+            "The running Windows VM's QMP control channel is unavailable or timed out, so its session cannot be suspended safely. Leave it running or stop it, then retry."
         case .memoryStateSaveRejected(let message):
             "QEMU rejected the Windows VM memory state save: \(message)"
         case .memoryStateSaveFailed(let status):
@@ -244,6 +244,10 @@ public enum QEMUBootArgumentsFingerprint {
 public struct QEMUVMSuspensionController: Sendable {
     public static let defaultPollAttempts = 240
     public static let defaultPollIntervalNanoseconds: UInt64 = 500_000_000
+    /// QMP commands that change VM state must tolerate a busy Windows guest. The old two-second
+    /// transport window could expire after QEMU had already processed `stop`, leaving the guest
+    /// paused while Veil incorrectly reported that QMP was unavailable.
+    static let qmpControlIdleTimeoutSeconds = 10
 
     /// Terminal QEMU migration states. Anything else means the save is still in flight.
     static let completedMigrationStatus = "completed"
@@ -282,14 +286,16 @@ public struct QEMUVMSuspensionController: Sendable {
         }
 
         // Pausing first makes the migration converge immediately: there is no dirty-page race to
-        // chase because the guest is not running while the stream is written.
+        // chase because the guest is not running while the stream is written. QEMU can process the
+        // state change just before the transport timeout, so verify the resulting state before
+        // surfacing an unavailable-channel error.
         do {
-            try await qmp.run(.stop, socketPath: qmpSocketPath)
+            try await stopGuest(qmpSocketPath: qmpSocketPath)
         } catch let error as QEMUQMPClientError {
             switch error {
-            case .socketUnavailable, .transportUnavailable:
+            case .socketUnavailable, .transportUnavailable, .noReply:
                 throw VMSuspensionError.qmpUnavailable
-            case .noReply, .commandFailed:
+            case .commandFailed:
                 throw VMSuspensionError.memoryStateSaveRejected(error.localizedDescription)
             }
         }
@@ -300,7 +306,11 @@ public struct QEMUVMSuspensionController: Sendable {
         try? FileManager.default.removeItem(atPath: stateFilePath)
 
         do {
-            try await qmp.run(.saveMemoryState(filePath: stateFilePath), socketPath: qmpSocketPath)
+            try await qmp.run(
+                .saveMemoryState(filePath: stateFilePath),
+                socketPath: qmpSocketPath,
+                idleTimeoutSeconds: Self.qmpControlIdleTimeoutSeconds
+            )
         } catch {
             throw VMSuspensionError.memoryStateSaveRejected(error.localizedDescription)
         }
@@ -376,7 +386,11 @@ public struct QEMUVMSuspensionController: Sendable {
                 await sleeper(pollIntervalNanoseconds)
             }
 
-            guard let reply = try? await qmp.run(.queryMigrate, socketPath: qmpSocketPath),
+            guard let reply = try? await qmp.run(
+                .queryMigrate,
+                socketPath: qmpSocketPath,
+                idleTimeoutSeconds: Self.qmpControlIdleTimeoutSeconds
+            ),
                   let status = reply.statusReturn else {
                 continue
             }
@@ -394,6 +408,33 @@ public struct QEMUVMSuspensionController: Sendable {
             seconds: Int((Double(attempts) * Double(pollIntervalNanoseconds) / 1_000_000_000).rounded()),
             latestStatus: latestStatus
         )
+    }
+
+    /// Sends `stop` and distinguishes a transport timeout from a command that was not applied.
+    /// QMP may acknowledge the state transition after the local `nc` process has already timed out;
+    /// querying the VM state prevents a safe, paused guest from being mistaken for a lost VM.
+    private func stopGuest(qmpSocketPath: String) async throws {
+        do {
+            try await qmp.run(
+                .stop,
+                socketPath: qmpSocketPath,
+                idleTimeoutSeconds: Self.qmpControlIdleTimeoutSeconds
+            )
+        } catch let error as QEMUQMPClientError {
+            switch error {
+            case .socketUnavailable, .transportUnavailable, .noReply:
+                if let status = try? await qmp.run(
+                    .queryStatus,
+                    socketPath: qmpSocketPath,
+                    idleTimeoutSeconds: Self.qmpControlIdleTimeoutSeconds
+                ), status.isRunning == false || status.statusReturn == "paused" {
+                    return
+                }
+            case .commandFailed:
+                break
+            }
+            throw error
+        }
     }
 
     /// Default memory-state file path: alongside the virtual disk, never inside diagnostics.
@@ -516,6 +557,7 @@ public enum VMSessionActionReportFactory {
     public static let resumeCommand = "veil-vmctl vm-resume --json"
     public static let statusCommand = "veil-vmctl vm-session-status --json"
     public static let startCommand = "veil-vmctl qemu-start --json"
+    static let nonMigratableStorageDetail = "Suspend is disabled for this QEMU machine because its active NVMe storage device is not migratable. Stop and start Windows normally. A future storage-device migration is required before suspend/resume can be enabled."
 
     public static func make(
         action: VMSessionActionKind,
@@ -569,6 +611,14 @@ public enum VMSessionActionReportFactory {
             )
         }
 
+        if hasNonMigratableStorageDevice(snapshot: snapshot) {
+            return VMSessionPersistenceSummary(
+                isSupported: false,
+                mode: VMSessionPersistenceSummary.unsupportedMode,
+                detail: nonMigratableStorageDetail
+            )
+        }
+
         if let record = snapshot.suspendedSession {
             return VMSessionPersistenceSummary(
                 isSupported: true,
@@ -589,6 +639,19 @@ public enum VMSessionActionReportFactory {
         )
     }
 
+    static func hasNonMigratableStorageDevice(snapshot: VMRuntimeSnapshot) -> Bool {
+        if let commandLine = snapshot.runningQEMUProcess?.commandLine,
+           commandLine.split(whereSeparator: { $0 == " " || $0 == "\t" }).contains(where: {
+               $0 == "nvme" || $0.hasPrefix("nvme,")
+           }) {
+            return true
+        }
+
+        return snapshot.deviceSummary?.storageDevices.contains {
+            $0.attachment.caseInsensitiveCompare("NVMe") == .orderedSame
+        } == true
+    }
+
     private static func status(
         action: VMSessionActionKind,
         snapshot: VMRuntimeSnapshot,
@@ -601,8 +664,14 @@ public enum VMSessionActionReportFactory {
 
         switch action {
         case .suspend:
+            guard persistence.isSupported else {
+                return .unavailable
+            }
             return snapshot.state == .suspended ? .suspended : .failed
         case .resume:
+            guard persistence.isSupported else {
+                return .unavailable
+            }
             return snapshot.state == .running ? .resumed : .failed
         case .status:
             switch snapshot.state {
@@ -644,6 +713,10 @@ public enum VMSessionActionReportFactory {
             actions.append(persistence.detail)
         case .suspended, .resumed, .running:
             break
+        }
+
+        if !persistence.isSupported && !actions.contains(persistence.detail) {
+            actions.append(persistence.detail)
         }
 
         if actions.isEmpty {

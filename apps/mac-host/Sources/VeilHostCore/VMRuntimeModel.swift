@@ -1619,7 +1619,11 @@ public final class VMRuntimeModel {
     /// Suspend is offered only for a running machine. A `.suspended` VM is already persisted, and a
     /// `.starting` one has no consistent guest state to stream yet.
     public var canSuspend: Bool {
-        snapshot?.state == .running
+        guard let snapshot, snapshot.state == .running else {
+            return false
+        }
+
+        return VMSessionActionReportFactory.persistenceSummary(snapshot: snapshot).isSupported
     }
 
     /// Resume is offered only when a saved memory-state file is actually on disk, so the button can
@@ -3614,7 +3618,7 @@ public struct LocalVMRuntimeService: VMRuntimeService {
         storageDevices.append(
             VMRuntimeStorageDeviceSummary(
                 role: "system-disk",
-                attachment: "Virtio block",
+                attachment: "NVMe",
                 path: profile.virtualDiskPath,
                 readOnly: false
             )
@@ -3684,8 +3688,7 @@ public struct LocalVMRuntimeService: VMRuntimeService {
     ) -> VMRuntimeConfigurationSummary {
         let audioDevice = selectedAudioDevice()
         let sharedFolderTransport = selectedSharedFolderTransport()
-        return
-        VMRuntimeConfigurationSummary(
+        return VMRuntimeConfigurationSummary(
             system: VMRuntimeSystemConfigurationSummary(
                 name: profile.name,
                 architecture: "arm64",

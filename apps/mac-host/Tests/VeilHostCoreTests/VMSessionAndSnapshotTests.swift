@@ -58,6 +58,22 @@ struct QEMUQMPClientTests {
         #expect(QEMUQMPClient.parseEventNames(from: output) == ["STOP"])
     }
 
+    @Test("parses QMP replies with CRLF line endings from the unix socket")
+    func parsesCRLFReplies() {
+        let output = [
+            #"{"QMP": {"version": {}}}"#,
+            #"{"return": {}, "id": "veil-qmp-capabilities"}"#,
+            #"{"return": {"status": "running", "running": true}, "id": "veil-qmp-0"}"#
+        ].joined(separator: "\r\n")
+
+        let replies = QEMUQMPClient.parseReplies(from: output)
+
+        #expect(replies.count == 2)
+        #expect(replies[1].id == "veil-qmp-0")
+        #expect(replies[1].statusReturn == "running")
+        #expect(replies[1].isRunning == true)
+    }
+
     @Test("correlates replies back to the command order that produced them")
     func correlatesRepliesToCommandOrder() async throws {
         let client = QEMUQMPClient(
@@ -339,6 +355,29 @@ struct QEMUVMSuspensionControllerTests {
         #expect(executed.last == "quit")
     }
 
+    @Test("accepts a stop transport timeout when QMP confirms the guest is paused")
+    func acceptsStopTransportTimeoutAfterPause() async throws {
+        let qmp = FakeQMPControl(initialError: .transportUnavailable("/tmp/veil.qmp.sock"))
+        let controller = QEMUVMSuspensionController(
+            qmp: qmp,
+            fileByteCount: { _ in 128 },
+            sleeper: { _ in }
+        )
+
+        let record = try await controller.suspend(
+            launchRecord: Self.launchRecord(),
+            planArguments: ["-m", "8192M"],
+            virtualDiskPath: "/tmp/disk.img",
+            stateFilePath: "/tmp/disk.vmsave",
+            pollAttempts: 1,
+            pollIntervalNanoseconds: 1
+        )
+
+        #expect(record.migrationStatus == "completed")
+        let executed = await qmp.executeNames
+        #expect(executed.prefix(2) == ["stop", "query-status"])
+    }
+
     @Test("keeps the guest paused and reports the terminal state when the save fails")
     func reportsFailedMemoryStateSave() async {
         let controller = QEMUVMSuspensionController(
@@ -499,6 +538,27 @@ struct VMSessionActionReportTests {
         #expect(report.nextActions.contains { $0.contains("vm-suspend") })
     }
 
+    @Test("disables suspend when the live QEMU command line uses NVMe")
+    func disablesSuspendForLiveNVMeStorage() {
+        var snapshot = VMRuntimeSnapshot.runningQEMU
+        snapshot.runningQEMUProcess = QEMURunningProcess(
+            pid: 2468,
+            commandLine: "qemu-aarch64-softmmu -drive if=none,id=system -device nvme,drive=system,serial=veil-system"
+        )
+
+        let report = VMSessionActionReportFactory.make(
+            action: .status,
+            snapshot: snapshot,
+            generatedAt: Date(timeIntervalSince1970: 1_770_000_350)
+        )
+
+        #expect(!report.persistence.isSupported)
+        #expect(report.persistence.mode == VMSessionPersistenceSummary.unsupportedMode)
+        #expect(report.persistence.detail.contains("NVMe"))
+        #expect(!report.canSuspend)
+        #expect(report.nextActions.contains { $0.contains("not migratable") })
+    }
+
     @Test("a stopped VM points at starting Windows before suspending it")
     func stoppedVMPointsAtStart() {
         let report = VMSessionActionReportFactory.make(
@@ -553,6 +613,20 @@ struct VMRuntimeModelSessionTests {
 
         #expect(model.canSuspend)
         #expect(!model.canResume)
+    }
+
+    @Test("does not offer suspend when the active storage device cannot migrate")
+    @MainActor
+    func doesNotOfferSuspendForLiveNVMeStorage() async {
+        var snapshot = VMRuntimeSnapshot.runningQEMU
+        snapshot.runningQEMUProcess = QEMURunningProcess(
+            pid: 2468,
+            commandLine: "qemu-aarch64-softmmu -device nvme,drive=system"
+        )
+        let model = VMRuntimeModel(service: SessionVMRuntimeService(snapshot: snapshot))
+        await model.load()
+
+        #expect(!model.canSuspend)
     }
 
     @Test("offers resume only when a saved memory state file exists")
@@ -808,16 +882,19 @@ private actor FakeQMPControl: QEMUQMPControlling {
     private var migrationStatuses: [String]
     private var monitorTexts: [String]
     private var failuresBeforeSuccess: Int
+    private var initialError: QEMUQMPClientError?
     private(set) var executeNames: [String] = []
 
     init(
         migrationStatuses: [String] = ["completed"],
         monitorTexts: [String] = [],
-        failuresBeforeSuccess: Int = 0
+        failuresBeforeSuccess: Int = 0,
+        initialError: QEMUQMPClientError? = nil
     ) {
         self.migrationStatuses = migrationStatuses
         self.monitorTexts = monitorTexts
         self.failuresBeforeSuccess = failuresBeforeSuccess
+        self.initialError = initialError
     }
 
     func execute(
@@ -828,6 +905,11 @@ private actor FakeQMPControl: QEMUQMPControlling {
         var replies: [QEMUQMPReply] = []
         for command in commands {
             executeNames.append(command.executeName)
+
+            if let initialError {
+                self.initialError = nil
+                throw initialError
+            }
 
             if failuresBeforeSuccess > 0 {
                 failuresBeforeSuccess -= 1

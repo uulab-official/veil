@@ -577,7 +577,13 @@ test("windows agent includes user-logon install and uninstall scripts", async ()
   assert.match(sparsePackage, /function\s+Write-VeilSparsePackageStatus/);
   assert.match(sparsePackage, /ConvertTo-Json\s+-Depth\s+6/);
   assert.match(sparsePackage, /trap\s*{/);
-  assert.match(sparsePackage, /-Stage\s+"failed"/);
+  assert.match(sparsePackage, /\$SparsePackageFailureStage\s*=\s*"failed"/);
+  assert.match(sparsePackage, /-Stage\s+\$SparsePackageFailureStage/);
+  assert.match(sparsePackage, /prerequisiteMissing/);
+  assert.match(sparsePackage, /requiredTools\s*=\s*@\("MakeAppx\.exe",\s*"SignTool\.exe"\)/);
+  assert.match(sparsePackage, /Install the Windows 10\/11 SDK/);
+  assert.match(sparsePackage, /Resolve the SDK tools before creating any development certificate/);
+  assert.match(sparsePackage, /\$MakeAppx\s*=\s*Resolve-WindowsSdkTool\s+"MakeAppx\.exe"[\s\S]+\$SignTool\s*=\s*Resolve-WindowsSdkTool\s+"SignTool\.exe"[\s\S]+if \(\$CreateDevelopmentCertificate\)/);
   assert.match(sparsePackage, /New-Item\s+-ItemType\s+Directory\s+-Force\s+-Path\s+\$OutputRoot/);
   assert.match(sparsePackage, /function\s+New-VeilPackagePngAsset/);
   assert.match(sparsePackage, /Add-Type\s+-AssemblyName\s+System\.Drawing/);

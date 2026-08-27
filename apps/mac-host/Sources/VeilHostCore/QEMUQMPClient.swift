@@ -269,7 +269,13 @@ public struct QEMUQMPClient: QEMUQMPControlling {
 
     /// Parses newline-delimited QMP JSON, skipping the greeting and asynchronous events.
     public static func parseReplies(from output: String) -> [QEMUQMPReply] {
+        // QEMU's unix-socket transport returns CRLF. On Swift's String model a CRLF pair can be
+        // represented as one extended grapheme cluster, so splitting directly on `\n` can leave the
+        // whole response as one line and make a healthy QMP socket look silent. Normalize line
+        // endings before parsing so both QEMU output and fixture output follow the same path.
         output
+            .replacingOccurrences(of: "\r\n", with: "\n")
+            .replacingOccurrences(of: "\r", with: "\n")
             .split(separator: "\n", omittingEmptySubsequences: true)
             .compactMap { line -> QEMUQMPReply? in
                 let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)

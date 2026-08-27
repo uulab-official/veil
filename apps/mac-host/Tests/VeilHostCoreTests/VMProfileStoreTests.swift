@@ -1140,7 +1140,7 @@ struct VMProfileStoreTests {
         #expect(devices.inputDevices == ["USB keyboard", "USB screen-coordinate pointer"])
         #expect(devices.entropyDevice == "Virtio entropy")
         #expect(devices.storageDevices.map(\.role) == ["installer", "auto-install", "drivers", "system-disk"])
-        #expect(devices.storageDevices.map(\.attachment) == ["USB mass storage", "USB mass storage", "USB mass storage", "Virtio block"])
+        #expect(devices.storageDevices.map(\.attachment) == ["USB mass storage", "USB mass storage", "USB mass storage", "NVMe"])
         #expect(devices.storageDevices.map(\.readOnly) == [true, true, true, false])
         #expect(devices.storageDevices.map(\.path) == [
             installerURL.path,

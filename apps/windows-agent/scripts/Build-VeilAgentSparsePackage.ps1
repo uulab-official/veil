@@ -12,6 +12,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+$SparsePackageFailureStage = "failed"
 
 $ScriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $AgentRoot = Resolve-Path (Join-Path $ScriptRoot "..")
@@ -56,14 +57,20 @@ function Write-VeilSparsePackageStatus {
 }
 
 trap {
+    $FailureDetails = @{
+        scriptLine = $_.InvocationInfo.ScriptLineNumber
+        command = $_.InvocationInfo.Line
+    }
+    if ($SparsePackageFailureStage -eq "prerequisiteMissing") {
+        $FailureDetails.prerequisite = "Windows SDK"
+        $FailureDetails.requiredTools = @("MakeAppx.exe", "SignTool.exe")
+        $FailureDetails.nextAction = "Install the Windows 10/11 SDK in the Windows guest, then retry Prepare Sparse Package."
+    }
     Write-VeilSparsePackageStatus `
-        -Stage "failed" `
+        -Stage $SparsePackageFailureStage `
         -Succeeded $false `
         -Message $_.Exception.Message `
-        -Details @{
-            scriptLine = $_.InvocationInfo.ScriptLineNumber
-            command = $_.InvocationInfo.Line
-        }
+        -Details $FailureDetails
     throw
 }
 
@@ -121,6 +128,16 @@ Write-VeilSparsePackageStatus `
     -Succeeded $false `
     -Message "Veil sparse identity package build started."
 
+# Resolve the SDK tools before creating any development certificate or package artifact. This
+# avoids leaving signing material behind when a fresh Windows guest is missing the Windows SDK.
+try {
+    $MakeAppx = Resolve-WindowsSdkTool "MakeAppx.exe"
+    $SignTool = Resolve-WindowsSdkTool "SignTool.exe"
+} catch {
+    $SparsePackageFailureStage = "prerequisiteMissing"
+    throw
+}
+
 if ($CreateDevelopmentCertificate) {
     $PasswordText = if ($CertificatePassword) { $CertificatePassword } else { "veil-development" }
     $SecurePassword = ConvertTo-SecureString -String $PasswordText -Force -AsPlainText
@@ -154,8 +171,6 @@ if (-not (Test-Path $CertificatePfxPath)) {
     throw "Certificate PFX was not found at $CertificatePfxPath."
 }
 
-$MakeAppx = Resolve-WindowsSdkTool "MakeAppx.exe"
-$SignTool = Resolve-WindowsSdkTool "SignTool.exe"
 $StagingRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("VeilAgentSparsePackage-" + [guid]::NewGuid().ToString("N"))
 New-Item -ItemType Directory -Force -Path $StagingRoot | Out-Null
 
