@@ -17,16 +17,15 @@ does not claim Parallels-level GPU acceleration.
 - [x] Install, guarded replace, quarantine cleanup, uninstall, user-data preservation, reinstall, and first-window lifecycle checks passed.
 - [x] Focused P0 launch, display-policy, and window handoff tests passed.
 
-The full no-skip gate passes when the bundled local .NET 8 toolchain is made
-explicit:
+The full no-skip gate now discovers the bundled local .NET 8 toolchain
+automatically:
 
 ```bash
-PATH="$HOME/Library/Application Support/Veil/Toolchains/dotnet8:$PATH" ./script/test_all.sh
+./script/test_all.sh
 ```
 
-The bare command is expected to stop early on machines where that local
-toolchain is not on `PATH`; that is an environment discovery issue, not a
-Windows-agent test failure.
+For another local installation, set `VEIL_DOTNET_TOOLCHAIN_DIR` to the folder
+that contains `dotnet` before running the gate.
 
 ## Live Windows gates
 

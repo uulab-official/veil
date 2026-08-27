@@ -47,4 +47,6 @@ test("regression gate preflights before running deterministic component commands
   assert.match(script, /npm --prefix "\$package_dir" test/);
   assert.match(script, /build_and_run\.sh" --verify/);
   assert.match(script, /no Node test packages were discovered/);
+  assert.match(script, /discover_local_dotnet/);
+  assert.match(script, /Toolchains\/dotnet8/);
 });

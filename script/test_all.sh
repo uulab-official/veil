@@ -13,6 +13,8 @@ usage: ./script/test_all.sh [options]
 
 Runs the complete local Veil regression gate. Required tools are checked before
 any test starts, so a partial run cannot be mistaken for a passing full gate.
+When `dotnet` is not already on `PATH`, the gate also discovers Veil's local
+macOS toolchain under `~/Library/Application Support/Veil/Toolchains/dotnet8`.
 
 Options:
   --list                 List every discovered test package without running it.
@@ -93,6 +95,18 @@ require_command() {
   fi
 }
 
+discover_local_dotnet() {
+  if [[ "$SKIP_WINDOWS_AGENT" -eq 1 ]] || command -v dotnet >/dev/null 2>&1; then
+    return
+  fi
+
+  local toolchain_dir="${VEIL_DOTNET_TOOLCHAIN_DIR:-$HOME/Library/Application Support/Veil/Toolchains/dotnet8}"
+  if [[ -x "$toolchain_dir/dotnet" ]]; then
+    export PATH="$toolchain_dir:$PATH"
+    echo "Using Veil local .NET 8 toolchain: $toolchain_dir/dotnet"
+  fi
+}
+
 preflight() {
   local blocked=0
   require_command swift "Install the current Xcode command-line tools." || blocked=1
@@ -141,6 +155,7 @@ if [[ "$LIST_ONLY" -eq 1 ]]; then
   exit 0
 fi
 
+discover_local_dotnet
 preflight
 
 echo "==> Swift host"
