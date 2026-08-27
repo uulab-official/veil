@@ -1,8 +1,8 @@
 # P0 One-Click Windows App Runtime Proof
 
 Date: 2026-08-27
-Tested implementation commit: `c7532f3` (`fix: harden managed QEMU launch and display recovery`)
-Latest verification commit: `c7532f3` (`fix: harden managed QEMU launch and display recovery`)
+Tested implementation commit: `3121642` (`fix: align Windows app readiness with live agent`)
+Latest verification commit: `3121642` (`fix: align Windows app readiness with live agent`)
 Branch: `codex/ui-display-state`
 
 Purpose: keep the host-side implementation result separate from proof that a real
@@ -11,13 +11,13 @@ does not claim Parallels-level GPU acceleration.
 
 ## Deterministic gates
 
-- [x] Swift host: `swift test --disable-sandbox --package-path apps/mac-host` — **727 tests / 62 suites passed**.
+- [x] Swift host: isolated `swift test --disable-sandbox --package-path apps/mac-host` with a temporary `CFFIXED_USER_HOME`/`HOME` and unreachable agent endpoint — **728 tests / 62 suites passed**.
 - [x] Windows agent: `dotnet test apps/windows-agent/tests/VeilAgent.Tests/VeilAgent.Tests.csproj` with Veil's local .NET 8 toolchain — **122 tests passed**.
 - [x] Node protocol and harness packages: `./script/test_all.sh --skip-windows-agent` — **30 packages passed**.
 - [x] Swift build and macOS app bundle/sign/launch contract passed through `script/test_all.sh --skip-windows-agent`.
 - [x] Install, guarded replace, quarantine cleanup, uninstall, user-data preservation, reinstall, and first-window lifecycle checks passed.
 - [x] Focused P0 launch, display-policy, and window handoff tests passed.
-- [x] Bare `./script/test_all.sh` passed with Swift, Windows agent, Node, and macOS lifecycle gates.
+- [ ] A clean post-change `./script/test_all.sh` run remains to be repeated outside the live VM state; the isolated Swift gate above is the accepted current host result.
 - [x] `qemu-doctor` blocks a stale installed flag when the configured Windows system disk is missing.
 - [x] Managed QEMU and `swtpm` runtime discovery works for Finder-launched sessions without a shell `PATH`.
 - [x] CLI QEMU launches use a parent supervisor and record the real backend PID, so the UTM parent-watchdog cannot kill the VM when `veil-vmctl` exits.
@@ -38,11 +38,14 @@ that contains `dotnet` before running the gate.
 - [x] Fresh boot-safe QEMU/HVF launch reaches the Windows 11 Arm installer.
 - [x] Embedded VNC surface returns a real **800 x 600** framebuffer and remains attached after the CLI exits.
 - [x] The visible launch path reaches the Korean Windows Setup screen after the initial Windows logo/loading phase.
-- [ ] Guest-agent health through `ws://127.0.0.1:18444`.
+- [x] Guest-agent health through `ws://127.0.0.1:18444`; `guest-agent-wait --wait-seconds 30` connected as Windows ARM64 user `Veil`, agent `0.1.0`.
+- [x] `mvp-proof --app-id winapp_notepad --require-proved` passed at `2026-08-27T08:04:59Z`: HWND `00020386`, focused, 354 x 162 frame, initial **5 ms**, post-input **677 ms**, keyboard/mouse/clipboard all recorded.
+- [x] `multi-app-proof --app-ids winapp_notepad,winapp_calculator,winapp_paint --require-complete` passed for all **3/3** apps; slowest measured frame latency **688 ms**, within the 1,000 ms budget.
 - [ ] One Notepad tile click opens exactly one independent macOS window.
-- [ ] Initial and post-input frames prove mouse, keyboard, and clipboard behavior.
+- [x] Protocol-level initial and post-input frames prove mouse, keyboard, and clipboard behavior.
 - [ ] Normal app launch never exposes a nested Windows desktop.
 - [ ] Repeated frame updates preserve window size, position, and focus.
+- [ ] Host-shell resize/focus/close cycle is proven on a real independent macOS window.
 
 ### Current live prerequisite result
 
@@ -62,29 +65,39 @@ configured Apple Silicon Mac:
 
 The real `qemu-start --wait-seconds 15` path was observed to keep its backend
 alive after `veil-vmctl` returned. The subsequent VNC smoke captured a Windows
-11 Korean Setup screen. The screenshot and logs remain in the local
-`~/Library/Application Support/Veil/Diagnostics/QEMU Launch` directory and are
-not committed to Git. This proves VM boot and display transport only; it does
-not prove unattended setup completion, guest-agent health, Notepad launch, or
-first mirrored HWND frame.
+11 Korean Setup screen, and the same installed guest later connected through
+the agent channel. The `mvp-proof` and `multi-app-proof` artifacts remain in
+the local `~/Library/Application Support/Veil/Diagnostics` directory and are
+not committed to Git. This proves the VM boot/display transport and the
+protocol-level Windows app loop; it does not yet prove that the built host shell
+renders the HWND as one independent macOS window or that resize/focus recovery
+is production-ready.
+
+The host status model now treats a healthy live guest agent as authoritative for
+continuing the app flow even when the headless VNC console preview is stale or
+unavailable. It still keeps the release gate open until a real host-side HWND
+mirror exists, so the UI cannot call the product release-ready from an agent
+connection alone.
 
 ## Next live verification sequence
 
-1. Continue the install from the embedded VNC console and complete Windows
-   Setup; the current evidence stops at the installer screen.
-2. Run `veil-vmctl qemu-install-agent --json` after the first desktop login and
-   verify `ws://127.0.0.1:18444` health plus the installed agent evidence.
-3. Run `mvp-proof --json --app-id winapp_notepad --require-proved`, then exercise
-   the one-click path from the built Veil app.
-4. Add measured first-frame, input, clipboard, focus, resize, and repeated
-   launch evidence before calling the runtime production-ready.
+1. Exercise the built host shell from the live connected state and capture one
+   independent macOS Notepad window with launcher hiding, focus, resize, and
+   close/restore behavior.
+2. Repeat the first-frame, input, clipboard, focus, resize, and repeated-launch
+   checks from that host-shell surface rather than only from CLI protocol proof.
+3. Prepare the signed sparse package identity, then run the real borderless
+   Windows Graphics Capture and notification consent proofs.
+4. Re-run the clean full script gate with the VM state isolated from test
+   Application Support before calling the runtime production-ready.
 5. Record only observed live evidence, measured frame latencies, and tool/build
    identities. Keep screenshots, Windows media, clipboard content, and local
    user paths outside Git.
 
 ## Status
 
-**VM boot/display proof passed; app-runtime proof is still open.** The host-side
-P0 one-click flow is covered by deterministic tests and release lifecycle gates,
-and the real managed QEMU path now reaches Windows Setup. Guest-agent,
-Notepad/HWND mirroring, input/clipboard, and GPU acceleration remain unproven.
+**VM boot/display and protocol-level app-runtime proof passed; host-shell proof
+is still open.** The live agent, Notepad/Calculator/Paint HWND tracking, frame
+delivery, input, and clipboard loop are verified. Independent macOS window
+presentation, resize/focus recovery, signed package identity, notifications,
+and GPU acceleration remain unproven. Veil makes no Parallels-level GPU claim.
