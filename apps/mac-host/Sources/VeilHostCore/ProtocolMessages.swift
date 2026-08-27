@@ -13,6 +13,7 @@ public enum MessageType: String, Codable, Sendable {
     case windowUpdated = "window.updated"
     case windowClosed = "window.closed"
     case windowFrame = "window.frame"
+    case windowFrameUnchanged = "window.frame.unchanged"
     case windowFrameSubscribe = "window.frame.subscribe"
     case windowFrameUnsubscribe = "window.frame.unsubscribe"
     case windowFocusRequest = "window.focus.request"
@@ -23,6 +24,9 @@ public enum MessageType: String, Codable, Sendable {
     case notificationListenerRequest = "notification.listener.request"
     case notificationListenerResponse = "notification.listener.response"
     case notificationReceived = "notification.received"
+    case sharedFolderRequest = "shared.folder.request"
+    case sharedFolderResponse = "shared.folder.response"
+    case inputText = "input.text"
     case inputMouse = "input.mouse"
     case inputKey = "input.key"
     case error
@@ -54,6 +58,7 @@ public struct AgentHealthResponse: Codable, Equatable, Sendable {
     public var capabilities: AgentCapabilities
     public var packageIdentityStatus: PackageIdentityStatus? = nil
     public var notificationListener: WindowsNotificationListenerStatus? = nil
+    public var sharedFolder: WindowsSharedFolderStatus? = nil
 }
 
 public struct AgentSession: Codable, Equatable, Sendable {
@@ -71,6 +76,16 @@ public struct AgentCapabilities: Codable, Equatable, Sendable {
     /// True when the Windows agent is running with package identity. Required before Veil can
     /// request package-gated Windows APIs such as borderless capture and notification listening.
     public var packageIdentity: Bool = false
+    /// True when the agent can serve window frames as raw binary on a dedicated connection.
+    ///
+    /// Optional rather than defaulted, so an agent that predates the frame channel decodes as `nil` and
+    /// the host keeps using the JSON frame path instead of opening an endpoint that does not exist.
+    public var binaryFrameChannel: Bool? = nil
+    /// True when the agent can report and prepare the guest-hosted shared folder.
+    ///
+    /// Optional for the same reason as `binaryFrameChannel`: an older agent decodes as `nil`, and the
+    /// host then says the share cannot be confirmed rather than reporting a share that is missing.
+    public var sharedFolder: Bool? = nil
 }
 
 public struct PackageIdentityStatus: Codable, Equatable, Sendable {
@@ -110,6 +125,95 @@ public struct WindowsNotificationListenerResponse: Codable, Equatable, Sendable 
     public var protocolVersion: Int
     public var accepted: Bool
     public var notificationListener: WindowsNotificationListenerStatus
+}
+
+/// What the Windows guest reports about the folder it shares back to macOS.
+///
+/// Deliberately carries no credentials. An SMB share needs a Windows account with a password, but the
+/// password never travels over this protocol -- `requiresCredentials` says one is needed and the user
+/// supplies it to macOS at mount time.
+public struct WindowsSharedFolderStatus: Codable, Equatable, Sendable {
+    public var isSupported: Bool
+    public var shareName: String
+    public var guestDirectoryPath: String
+    public var directoryExists: Bool
+    public var isShared: Bool
+    public var isWritable: Bool
+    /// Whether the guest is accepting SMB connections. Separate from `isShared` because a share can
+    /// exist while the firewall drops every connection to it, which looks identical from the Mac.
+    public var serverListening: Bool
+    /// Whether publishing the share still needs an administrator. Describes the remaining work, not the
+    /// agent's current token, so it stays true until the share exists.
+    public var requiresElevation: Bool
+    /// Whether an account password is needed to mount the share.
+    ///
+    /// A standing requirement rather than a detection: SMB refuses a network sign-in for a
+    /// blank-password account, and the guest does not inspect password state. The password is given to
+    /// macOS at mount time and never crosses this protocol.
+    public var requiresCredentials: Bool
+    /// Exact elevated command that creates the share, so the report never makes the user invent it.
+    public var shareCommand: String?
+    public var recommendedAction: String
+    public var message: String?
+
+    public init(
+        isSupported: Bool,
+        shareName: String,
+        guestDirectoryPath: String,
+        directoryExists: Bool,
+        isShared: Bool,
+        isWritable: Bool,
+        serverListening: Bool,
+        requiresElevation: Bool,
+        requiresCredentials: Bool,
+        shareCommand: String? = nil,
+        recommendedAction: String,
+        message: String? = nil
+    ) {
+        self.isSupported = isSupported
+        self.shareName = shareName
+        self.guestDirectoryPath = guestDirectoryPath
+        self.directoryExists = directoryExists
+        self.isShared = isShared
+        self.isWritable = isWritable
+        self.serverListening = serverListening
+        self.requiresElevation = requiresElevation
+        self.requiresCredentials = requiresCredentials
+        self.shareCommand = shareCommand
+        self.recommendedAction = recommendedAction
+        self.message = message
+    }
+}
+
+/// Asks the guest to prepare the shared folder as far as it can without elevation, then report.
+public struct WindowsSharedFolderRequest: Codable, Equatable, Sendable {
+    public var type: MessageType
+    public var requestId: String
+    public var protocolVersion: Int
+    /// Share name and guest directory the host expects. Sent rather than assumed so the two sides
+    /// cannot silently disagree about which folder is shared.
+    public var shareName: String
+    public var guestDirectoryPath: String
+
+    public init(
+        requestId: String,
+        protocolVersion: Int = 1,
+        shareName: String = QEMUWindowsSharedFolderTransport.shareName,
+        guestDirectoryPath: String = QEMUWindowsSharedFolderTransport.guestDirectoryPath
+    ) {
+        self.type = .sharedFolderRequest
+        self.requestId = requestId
+        self.protocolVersion = protocolVersion
+        self.shareName = shareName
+        self.guestDirectoryPath = guestDirectoryPath
+    }
+}
+
+public struct WindowsSharedFolderResponse: Codable, Equatable, Sendable {
+    public var type: MessageType
+    public var requestId: String
+    public var protocolVersion: Int
+    public var sharedFolder: WindowsSharedFolderStatus
 }
 
 public struct AppListRequest: Codable, Equatable, Sendable {
@@ -312,6 +416,29 @@ public extension WindowFrameEvent {
     }
 }
 
+/// Proof that a frame stream is alive with nothing new to draw.
+///
+/// Carries no image payload on purpose. It advances liveness only, never the displayed frame, so the
+/// frame-latency budget keeps measuring how old the picture actually is.
+public struct WindowFrameUnchangedEvent: Codable, Equatable, Sendable {
+    public var type: MessageType
+    public var windowId: String
+    public var sequence: Int
+    public var capturedAt: String
+
+    public init(
+        type: MessageType = .windowFrameUnchanged,
+        windowId: String,
+        sequence: Int,
+        capturedAt: String
+    ) {
+        self.type = type
+        self.windowId = windowId
+        self.sequence = sequence
+        self.capturedAt = capturedAt
+    }
+}
+
 public struct WindowFrameSubscribeRequest: Codable, Equatable, Sendable {
     public var type: MessageType
     public var requestId: String
@@ -446,6 +573,48 @@ public struct InputKeyEvent: Codable, Equatable, Sendable {
         self.key = key
         self.windowsVirtualKey = windowsVirtualKey
         self.modifiers = modifiers
+    }
+}
+
+/// Committed Unicode text for a tracked HWND.
+///
+/// `InputKeyEvent` carries a Windows virtual key, and characters outside that map -- every Hangul
+/// syllable, kana, and Han character -- cannot be expressed by it. macOS owns the IME here: the host
+/// composes and sends only finished text, so the guest never renders a candidate window over a
+/// mirrored bitmap. Navigation keys, shortcuts, Enter, and Tab stay on `InputKeyEvent`.
+public struct InputTextEvent: Codable, Equatable, Sendable {
+    /// One posted window message per UTF-16 code unit on the guest, so the payload is bounded to keep
+    /// a single message from flooding the target HWND.
+    public static let maximumUTF16Length = 4_096
+
+    public var type: MessageType
+    public var windowId: String
+    public var text: String
+
+    public init(
+        type: MessageType = .inputText,
+        windowId: String,
+        text: String
+    ) {
+        self.type = type
+        self.windowId = windowId
+        self.text = text
+    }
+
+    /// Text that is safe to send as committed input.
+    ///
+    /// Rejects empty text, oversized payloads, and control characters. Newlines and tabs are excluded
+    /// on purpose: they have virtual-key equivalents with distinct guest semantics (Enter submits, Tab
+    /// moves focus), so routing them through committed text would quietly change behavior.
+    public static func isSendable(_ text: String) -> Bool {
+        guard !text.isEmpty,
+              text.utf16.count <= maximumUTF16Length else {
+            return false
+        }
+
+        return !text.unicodeScalars.contains { scalar in
+            scalar == "\n" || scalar == "\r" || scalar == "\t" || scalar.properties.generalCategory == .control
+        }
     }
 }
 

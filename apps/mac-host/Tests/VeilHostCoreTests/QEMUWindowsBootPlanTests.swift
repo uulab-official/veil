@@ -87,7 +87,16 @@ struct QEMUWindowsBootPlanTests {
         #expect(plan.arguments.contains("if=none,id=system,format=raw,file=/Users/test/Virtual Machines/Veil/Windows 11 Arm.img"))
         #expect(plan.arguments.containsSequence(["-device", "nvme,drive=system,serial=veil-system"]))
         #expect(!plan.arguments.containsSequence(["-device", "virtio-blk-pci,drive=system"]))
-        #expect(plan.arguments.containsSequence(["-netdev", "user,id=net0,hostfwd=tcp::18444-:18444"]))
+        // One netdev carrying both host forwards: the guest keeps a single NIC, and both forwards name
+        // 127.0.0.1 so neither is reachable from the local network.
+        #expect(plan.arguments.containsSequence([
+            "-netdev",
+            "user,id=net0,hostfwd=tcp:127.0.0.1:18444-:18444,hostfwd=tcp:127.0.0.1:18445-:445"
+        ]))
+        #expect(plan.arguments.filter({ $0 == "-netdev" }).count == 1)
+        #expect(!plan.arguments.contains(where: { $0.contains("hostfwd=tcp::") }))
+        #expect(plan.sharedFolderTransport == .guestSMB)
+        #expect(plan.sharedFolderForwardClause == "hostfwd=tcp:127.0.0.1:18445-:445")
         #expect(plan.arguments.containsSequence(["-device", "usb-net,netdev=net0"]))
         #expect(!plan.arguments.containsSequence(["-device", "e1000,netdev=net0"]))
         #expect(!plan.arguments.containsSequence(["-device", "virtio-net-pci,netdev=net0"]))
@@ -119,9 +128,234 @@ struct QEMUWindowsBootPlanTests {
 
         #expect(plan.networkAdapter == .e1000e)
         #expect(plan.networkDeviceArgument == "e1000e,netdev=net0")
-        #expect(plan.arguments.containsSequence(["-netdev", "user,id=net0,hostfwd=tcp::18444-:18444"]))
+        #expect(plan.arguments.containsSequence([
+            "-netdev",
+            "user,id=net0,hostfwd=tcp:127.0.0.1:18444-:18444,hostfwd=tcp:127.0.0.1:18445-:445"
+        ]))
         #expect(plan.arguments.containsSequence(["-device", "e1000e,netdev=net0"]))
         #expect(!plan.arguments.containsSequence(["-device", "usb-net,netdev=net0"]))
+    }
+
+    @Test("shares a guest folder over a loopback port forward by default")
+    func sharesGuestFolderOverLoopbackForwardByDefault() throws {
+        let plan = try Self.sharedFolderPlan()
+
+        #expect(plan.sharedFolderTransport == .guestSMB)
+        #expect(plan.sharedFolderForwardClause == "hostfwd=tcp:127.0.0.1:18445-:445")
+        #expect(plan.arguments.containsSequence([
+            "-netdev",
+            "user,id=net0,hostfwd=tcp:127.0.0.1:18444-:18444,hostfwd=tcp:127.0.0.1:18445-:445"
+        ]))
+        #expect(plan.warnings.isEmpty)
+    }
+
+    @Test("adds no port forward when live folder sharing is turned off")
+    func addsNoForwardWhenSharingDisabled() throws {
+        let plan = try Self.sharedFolderPlan(transport: .disabled)
+
+        #expect(plan.sharedFolderTransport == .disabled)
+        #expect(plan.sharedFolderForwardClause == nil)
+        #expect(plan.arguments.containsSequence(["-netdev", "user,id=net0,hostfwd=tcp:127.0.0.1:18444-:18444"]))
+        #expect(!plan.arguments.contains(where: { $0.contains("18445") }))
+        #expect(plan.warnings.isEmpty)
+    }
+
+    @Test("adds no port forward for the host-served transport")
+    func addsNoForwardForHostServedTransport() throws {
+        let plan = try Self.sharedFolderPlan(transport: .hostSMB)
+
+        // The guest reaches a host-served share through the usermode gateway, so there is nothing to
+        // forward. A forward here would be unexplained plumbing.
+        #expect(plan.sharedFolderForwardClause == nil)
+        #expect(!plan.arguments.contains(where: { $0.contains("18445") }))
+    }
+
+    @Test("drops the shared folder rather than the VM when the host port is taken")
+    func dropsSharedFolderWhenHostPortTaken() throws {
+        let plan = try Self.sharedFolderPlan(isHostPortAvailable: false)
+
+        // QEMU exits at startup when it cannot bind a hostfwd port. A shared folder is not worth
+        // trading a bootable Windows for, so the forward is dropped and the loss is reported.
+        #expect(plan.sharedFolderTransport == .guestSMB)
+        #expect(plan.sharedFolderForwardClause == nil)
+        #expect(plan.arguments.containsSequence(["-netdev", "user,id=net0,hostfwd=tcp:127.0.0.1:18444-:18444"]))
+        #expect(plan.warnings.contains(where: { $0.contains("18445") }))
+        #expect(plan.warnings.contains(where: { $0.contains("was unavailable when this plan was built") }))
+    }
+
+    @Test("keeps the guest on one network device however many host ports are mapped")
+    func keepsGuestOnOneNetworkDevice() throws {
+        for transport in QEMUWindowsSharedFolderTransport.allCases {
+            let plan = try Self.sharedFolderPlan(transport: transport)
+
+            #expect(plan.arguments.filter({ $0 == "-netdev" }).count == 1, "\(transport.rawValue)")
+            #expect(plan.arguments.filter({ $0.hasPrefix("user,id=net") }).count == 1, "\(transport.rawValue)")
+        }
+    }
+
+    @Test("never binds a host forward to every interface")
+    func neverBindsForwardToEveryInterface() throws {
+        for transport in QEMUWindowsSharedFolderTransport.allCases {
+            for isHostPortAvailable in [true, false] {
+                let plan = try Self.sharedFolderPlan(
+                    transport: transport,
+                    isHostPortAvailable: isHostPortAvailable
+                )
+
+                // An empty host address in a hostfwd clause binds every interface, which published the
+                // guest agent's unauthenticated control channel to the local network.
+                #expect(
+                    !plan.arguments.contains(where: { $0.contains("hostfwd=tcp::") }),
+                    "\(transport.rawValue) available=\(isHostPortAvailable)"
+                )
+            }
+        }
+    }
+
+    private static func sharedFolderPlan(
+        transport: QEMUWindowsSharedFolderTransport = .guestSMB,
+        isHostPortAvailable: Bool = true
+    ) throws -> QEMUWindowsBootPlan {
+        var profile = VMProfile.defaultWindows11Arm(createdAt: Date(timeIntervalSince1970: 1_782_752_400))
+        profile.installerMediaPath = "/Users/test/Downloads/Win11_25H2_Korean_Arm64_v2.iso"
+        profile.virtualDiskPath = "/Users/test/Virtual Machines/Veil/Windows 11 Arm.img"
+        profile.sharedFolderPath = "/Users/test/Veil Shared"
+
+        return try QEMUWindowsBootPlanner(
+            executablePath: "/opt/homebrew/bin/qemu-system-aarch64",
+            isExecutableAvailable: true,
+            firmwarePath: "/opt/homebrew/share/qemu/edk2-aarch64-code.fd",
+            isFirmwareAvailable: true,
+            sharedFolderTransport: transport,
+            isSharedFolderHostPortAvailable: isHostPortAvailable
+        ).makePlan(for: profile)
+    }
+
+    @Test("attaches Intel HD Audio duplex sound by default")
+    func attachesIntelHDAudioByDefault() throws {
+        var profile = VMProfile.defaultWindows11Arm(createdAt: Date(timeIntervalSince1970: 1_782_752_400))
+        profile.installerMediaPath = "/Users/test/Downloads/Win11_25H2_Korean_Arm64_v2.iso"
+        profile.virtualDiskPath = "/Users/test/Virtual Machines/Veil/Windows 11 Arm.img"
+        profile.sharedFolderPath = "/Users/test/Veil Shared"
+
+        let plan = try QEMUWindowsBootPlanner(
+            executablePath: "/opt/homebrew/bin/qemu-system-aarch64",
+            isExecutableAvailable: true,
+            firmwarePath: "/opt/homebrew/share/qemu/edk2-aarch64-code.fd",
+            isFirmwareAvailable: true
+        ).makePlan(for: profile)
+
+        #expect(plan.audioDevice == .intelHDA)
+        #expect(plan.audioBackendArgument == "coreaudio,id=veilaudio")
+        #expect(plan.arguments.containsSequence(["-audiodev", "coreaudio,id=veilaudio"]))
+        #expect(plan.arguments.containsSequence(["-device", "intel-hda"]))
+        #expect(plan.arguments.containsSequence(["-device", "hda-duplex,audiodev=veilaudio"]))
+    }
+
+    @Test("declares the audio backend before the device that references it")
+    func declaresAudioBackendBeforeDevice() throws {
+        var profile = VMProfile.defaultWindows11Arm(createdAt: Date(timeIntervalSince1970: 1_782_752_400))
+        profile.installerMediaPath = "/Users/test/Downloads/Win11_25H2_Korean_Arm64_v2.iso"
+        profile.virtualDiskPath = "/Users/test/Virtual Machines/Veil/Windows 11 Arm.img"
+        profile.sharedFolderPath = "/Users/test/Veil Shared"
+
+        let plan = try QEMUWindowsBootPlanner(
+            executablePath: "/opt/homebrew/bin/qemu-system-aarch64",
+            isExecutableAvailable: true,
+            firmwarePath: "/opt/homebrew/share/qemu/edk2-aarch64-code.fd",
+            isFirmwareAvailable: true
+        ).makePlan(for: profile)
+
+        // QEMU refuses to start when a device references an audiodev id that has not been declared.
+        let backendIndex = try #require(plan.arguments.firstIndex(of: "-audiodev"))
+        let codecIndex = try #require(plan.arguments.firstIndex(of: "hda-duplex,audiodev=veilaudio"))
+        #expect(backendIndex < codecIndex)
+    }
+
+    @Test("can route guest audio through the existing USB controller")
+    func canRouteGuestAudioThroughUSB() throws {
+        var profile = VMProfile.defaultWindows11Arm(createdAt: Date(timeIntervalSince1970: 1_782_752_400))
+        profile.installerMediaPath = "/Users/test/Downloads/Win11_25H2_Korean_Arm64_v2.iso"
+        profile.virtualDiskPath = "/Users/test/Virtual Machines/Veil/Windows 11 Arm.img"
+        profile.sharedFolderPath = "/Users/test/Veil Shared"
+
+        let plan = try QEMUWindowsBootPlanner(
+            executablePath: "/opt/homebrew/bin/qemu-system-aarch64",
+            isExecutableAvailable: true,
+            firmwarePath: "/opt/homebrew/share/qemu/edk2-aarch64-code.fd",
+            isFirmwareAvailable: true,
+            audioDevice: .usbAudio
+        ).makePlan(for: profile)
+
+        #expect(plan.audioDevice == .usbAudio)
+        #expect(plan.arguments.containsSequence(["-device", "usb-audio,audiodev=veilaudio"]))
+        #expect(!plan.arguments.containsSequence(["-device", "intel-hda"]))
+        // usb-audio needs the xHCI controller to already exist on the bus.
+        let controllerIndex = try #require(plan.arguments.firstIndex(of: "qemu-xhci,id=usb0"))
+        let audioIndex = try #require(plan.arguments.firstIndex(of: "usb-audio,audiodev=veilaudio"))
+        #expect(controllerIndex < audioIndex)
+    }
+
+    @Test("omits every audio argument when guest sound is disabled")
+    func omitsAudioArgumentsWhenDisabled() throws {
+        var profile = VMProfile.defaultWindows11Arm(createdAt: Date(timeIntervalSince1970: 1_782_752_400))
+        profile.installerMediaPath = "/Users/test/Downloads/Win11_25H2_Korean_Arm64_v2.iso"
+        profile.virtualDiskPath = "/Users/test/Virtual Machines/Veil/Windows 11 Arm.img"
+        profile.sharedFolderPath = "/Users/test/Veil Shared"
+
+        let plan = try QEMUWindowsBootPlanner(
+            executablePath: "/opt/homebrew/bin/qemu-system-aarch64",
+            isExecutableAvailable: true,
+            firmwarePath: "/opt/homebrew/share/qemu/edk2-aarch64-code.fd",
+            isFirmwareAvailable: true,
+            audioDevice: .disabled
+        ).makePlan(for: profile)
+
+        // A QEMU build without CoreAudio fails to start if any audio backend is requested, so
+        // disabling has to remove the backend too, not just the device.
+        #expect(plan.audioDevice == .disabled)
+        #expect(plan.audioBackendArgument == nil)
+        #expect(!plan.arguments.contains("-audiodev"))
+        #expect(!plan.arguments.contains("intel-hda"))
+        #expect(!plan.arguments.contains("usb-audio,audiodev=veilaudio"))
+    }
+
+    @Test("selects guest audio from the environment and warns on unsupported values")
+    func selectsGuestAudioFromEnvironment() {
+        #expect(QEMUWindowsAudioDevice.selected(from: nil).device == .intelHDA)
+        #expect(QEMUWindowsAudioDevice.selected(from: nil).isExplicit == false)
+        #expect(QEMUWindowsAudioDevice.selected(from: "  usb-audio  ").device == .usbAudio)
+        #expect(QEMUWindowsAudioDevice.selected(from: "none").device == .disabled)
+        #expect(QEMUWindowsAudioDevice.selected(from: "none").isExplicit)
+
+        let unsupported = QEMUWindowsAudioDevice.selected(from: "sb16")
+        #expect(unsupported.device == .intelHDA)
+        #expect(unsupported.isExplicit)
+        #expect(unsupported.warning?.contains("VEIL_QEMU_AUDIO_DEVICE=sb16") == true)
+    }
+
+    @Test("warns when guest audio is explicitly disabled through the environment")
+    func warnsWhenGuestAudioDisabledThroughEnvironment() throws {
+        var profile = VMProfile.defaultWindows11Arm(createdAt: Date(timeIntervalSince1970: 1_782_752_400))
+        profile.installerMediaPath = "/Users/test/Downloads/Win11_25H2_Korean_Arm64_v2.iso"
+        profile.virtualDiskPath = "/Users/test/Virtual Machines/Veil/Windows 11 Arm.img"
+        profile.sharedFolderPath = "/Users/test/Veil Shared"
+
+        let plan = try LocalQEMUWindowsBootPlanFactory.makePlan(
+            for: profile,
+            architecture: "arm64",
+            minimumOSSupported: true,
+            fileExists: { path in
+                path == "/opt/homebrew/bin/qemu-system-aarch64"
+                    || path == "/opt/homebrew/share/qemu/edk2-aarch64-code.fd"
+            },
+            environment: [
+                QEMUWindowsAudioDevice.environmentVariableName: "none"
+            ]
+        )
+
+        #expect(plan.audioDevice == .disabled)
+        #expect(plan.warnings.contains { $0.contains("Windows guest audio is disabled") })
     }
 
     @Test("attaches optional Windows driver media")
@@ -327,7 +561,8 @@ struct QEMUWindowsBootPlanTests {
             "uefi-firmware",
             "secure-boot",
             "tpm-emulator",
-            "hvf-plan"
+            "hvf-plan",
+            "shared-folder"
         ])
         #expect(report.checks.filter { $0.id != "secure-boot" }.allSatisfy { $0.state == .passed })
         #expect(report.checks.first { $0.id == "secure-boot" }?.state == .warning)
@@ -495,7 +730,8 @@ struct QEMUWindowsBootPlanTests {
             },
             secureVarsTemplatePaths: [
                 "/Users/test/Library/Application Support/Veil/Firmware/edk2-arm-secure-vars.fd"
-            ]
+            ],
+            isHostPortFree: { _ in true }
         )
 
         #expect(plan.firmwarePath == "/opt/homebrew/share/qemu/edk2-aarch64-code.fd")

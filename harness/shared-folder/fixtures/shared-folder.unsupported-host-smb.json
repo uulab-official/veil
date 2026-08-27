@@ -1,0 +1,26 @@
+{
+  "kind": "vmSharedFolderStatus",
+  "generatedAt": "2026-08-04T09:25:31Z",
+  "provider": "QEMU/HVF",
+  "vmState": "running",
+  "readiness": "unavailable",
+  "capability": {
+    "state": "unsupportedTransport",
+    "isSupported": false,
+    "transport": "host-smb",
+    "isWiredIntoBootPlan": false,
+    "overrideEnvironmentVariable": "VEIL_QEMU_SHARED_FOLDER",
+    "detail": "Sharing a macOS folder into Windows needs an SMB server on the Mac. Veil does not turn on macOS File Sharing for you, because it publishes the share on every network interface rather than only to the guest."
+  },
+  "hostMount": {
+    "isMounted": false,
+    "detail": "This transport does not mount anything on the Mac."
+  },
+  "hostStagingFolderPath": "/Users/example/Veil Shared",
+  "nextActions": [
+    "Turn on File Sharing in System Settings > General > Sharing and share the folder you want Windows to see.",
+    "Be aware this publishes the share on every network interface, not only to the guest.",
+    "Then inside Windows run: net use Z: \\\\10.0.2.2\\<your-mac-short-username> /persistent:yes.",
+    "Or set VEIL_QEMU_SHARED_FOLDER=guest-smb to use the guest-hosted share instead, which needs no host setup."
+  ]
+}

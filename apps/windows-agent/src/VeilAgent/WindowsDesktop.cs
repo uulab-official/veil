@@ -17,6 +17,13 @@ public sealed class WindowsDesktop : IWindowsDesktop
     private const uint WM_MOUSEWHEEL = 0x020A;
     private const uint WM_KEYDOWN = 0x0100;
     private const uint WM_KEYUP = 0x0101;
+    private const uint WM_CHAR = 0x0102;
+
+    /// <summary>
+    /// Matches the host-side bound. One message becomes one posted window message, so an unbounded
+    /// payload would flood the target window's queue.
+    /// </summary>
+    internal const int MaxTextInputUtf16Length = 4096;
     private const int MK_LBUTTON = 0x0001;
     private const int MK_RBUTTON = 0x0002;
     private const int WHEEL_DELTA = 120;
@@ -390,6 +397,42 @@ public sealed class WindowsDesktop : IWindowsDesktop
             {
                 accepted &= PostMessage(hwnd, WM_KEYUP, new IntPtr(modifierVirtualKey), IntPtr.Zero);
             }
+        }
+
+        return Task.FromResult(accepted);
+    }
+
+    public Task<bool> SendTextInputAsync(WindowTextInput input, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (!OperatingSystem.IsWindows())
+        {
+            throw new PlatformNotSupportedException("The Veil Windows agent must run inside Windows.");
+        }
+
+        if (!TryParseWindowId(input.WindowId, out var hwnd) || input.Text.Length == 0)
+        {
+            return Task.FromResult(false);
+        }
+
+        if (input.Text.Length > MaxTextInputUtf16Length)
+        {
+            return Task.FromResult(false);
+        }
+
+        if (!EnsureWindowReadyForInput(hwnd))
+        {
+            return Task.FromResult(false);
+        }
+
+        var accepted = true;
+        // One WM_CHAR per UTF-16 code unit. Surrogate pairs are posted as two consecutive messages,
+        // which is what Win32 edit controls expect; posting the code point as a single wParam would
+        // truncate anything above U+FFFF.
+        foreach (var codeUnit in input.Text)
+        {
+            accepted &= PostMessage(hwnd, WM_CHAR, new IntPtr(codeUnit), IntPtr.Zero);
         }
 
         return Task.FromResult(accepted);

@@ -1,0 +1,19 @@
+{
+  "kind": "vmSessionAction",
+  "action": "status",
+  "generatedAt": "2026-07-29T09:02:00Z",
+  "status": "stopped",
+  "state": "stopped",
+  "provider": "QEMU/HVF",
+  "canSuspend": false,
+  "canResume": false,
+  "persistence": {
+    "isSupported": true,
+    "mode": "memoryStateFile",
+    "stateFilePath": "/Users/example/Virtual Machines/Veil/Windows 11 Arm.vmsave",
+    "detail": "Suspend streams guest memory and device state to a local file so the Windows session survives a QEMU exit. Veil does not use QEMU internal snapshots here because the system disk is raw."
+  },
+  "nextActions": [
+    "Run veil-vmctl qemu-start --json to boot Windows before a session can be suspended."
+  ]
+}

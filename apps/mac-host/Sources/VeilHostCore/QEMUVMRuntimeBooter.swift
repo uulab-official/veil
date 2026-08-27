@@ -111,6 +111,8 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
     private let consoleScreenshotCapturer: @Sendable (URL, URL) -> Void
     private let vncPortAllocator: @Sendable () -> Int?
     private let displayMode: QEMUWindowsBootDisplayMode
+    private let suspensionController: QEMUVMSuspensionController
+    private let suspensionRecordStore: any VMSuspensionRecordStore
     private var process: Process?
     private var monitorSocketURL: URL?
     private var qmpSocketURL: URL?
@@ -124,7 +126,9 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
         bootKeySender: @escaping @Sendable (URL) -> Bool = QEMUVMRuntimeBooter.sendWindowsInstallerBootKey,
         consoleScreenshotCapturer: @escaping @Sendable (URL, URL) -> Void = QEMUVMRuntimeBooter.captureConsoleScreenshot,
         vncPortAllocator: @escaping @Sendable () -> Int? = QEMUVMRuntimeBooter.allocateLoopbackVNCPort,
-        displayMode: QEMUWindowsBootDisplayMode = .nativeCocoa
+        displayMode: QEMUWindowsBootDisplayMode = .nativeCocoa,
+        suspensionController: QEMUVMSuspensionController = QEMUVMSuspensionController(),
+        suspensionRecordStore: (any VMSuspensionRecordStore)? = nil
     ) {
         self.diagnosticsDirectory = diagnosticsDirectory
         self.planBuilder = planBuilder
@@ -135,6 +139,11 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
         self.consoleScreenshotCapturer = consoleScreenshotCapturer
         self.vncPortAllocator = vncPortAllocator
         self.displayMode = displayMode
+        self.suspensionController = suspensionController
+        self.suspensionRecordStore = suspensionRecordStore
+            ?? JSONVMSuspensionRecordStore(
+                directory: diagnosticsDirectory.appendingPathComponent("QEMU Suspend", isDirectory: true)
+            )
     }
 
     public var supportsNativeDisplayWindow: Bool {
@@ -161,12 +170,25 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
             throw VMRuntimeError.qemuAlreadyRunning(pid: runningProcess.pid)
         }
 
+        return try await launch(profile: profile, incomingMemoryStatePath: nil)
+    }
+
+    /// Shared launch path for a cold boot and for resuming a suspended memory-state stream.
+    ///
+    /// `incomingMemoryStatePath` is the only behavioral difference: when present QEMU starts paused
+    /// and loads the stream rather than booting, and the installer boot-key helper is suppressed so
+    /// a resumed Windows session never receives spurious keystrokes.
+    private func launch(
+        profile: VMProfile,
+        incomingMemoryStatePath: String?
+    ) async throws -> VMRuntimeState {
+        let isResuming = incomingMemoryStatePath != nil
         let plan = try planBuilder(profile)
         let readiness = QEMUWindowsReadinessDoctor().makeReport(profile: profile, plan: plan)
         guard readiness.overallState == .ready else {
             throw VMRuntimeError.qemuNotReady(readiness.nextActions.joined(separator: " "))
         }
-        let shouldSendInstallerBootKey = QEMUWindowsInstallerBootPolicy.shouldSendBootKey(
+        let shouldSendInstallerBootKey = !isResuming && QEMUWindowsInstallerBootPolicy.shouldSendBootKey(
             profile: profile,
             virtualDiskAllocatedBytes: QEMUWindowsInstallerBootPolicy.allocatedFileSize(path: profile.virtualDiskPath)
         )
@@ -196,7 +218,8 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
             qmpSocketPath: qmpSocketURL.path,
             bootDiskFirst: !shouldSendInstallerBootKey,
             displayMode: displayMode,
-            vncDisplay: vncDisplay
+            vncDisplay: vncDisplay,
+            incomingMemoryStatePath: incomingMemoryStatePath
         )
         process.standardOutput = logHandle
         process.standardError = logHandle
@@ -216,6 +239,12 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
             directory: launchDirectory,
             stamp: stamp
         )
+        if !isResuming {
+            // A cold boot invalidates any saved memory-state stream: once Windows runs again the raw
+            // disk moves past the state that stream describes, so loading it later would corrupt the
+            // guest. Discard it here rather than leaving a resume action that silently destroys data.
+            await discardSuspendedSession(reason: "a cold boot replaced it")
+        }
         if displayMode == .nativeCocoa {
             frontmostRunner()
         }
@@ -224,6 +253,28 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
         }
         scheduleConsoleScreenshotCapture(monitorSocketURL: monitorSocketURL, imageURL: consoleScreenshotURL)
         return .running
+    }
+
+    /// Removes a saved memory-state stream and its record.
+    ///
+    /// Failures are logged rather than thrown: the caller has already started or is about to start a
+    /// machine, and refusing to boot because a stale sidecar file could not be deleted would be worse
+    /// than continuing. Logging keeps a leftover file diagnosable.
+    private func discardSuspendedSession(reason: String) async {
+        guard let record = try? await suspensionRecordStore.loadLatest() else {
+            return
+        }
+
+        VeilLog.runtime.notice("Discarding the saved Windows session memory state because \(reason, privacy: .public).")
+        do {
+            if FileManager.default.fileExists(atPath: record.stateFilePath) {
+                try FileManager.default.removeItem(atPath: record.stateFilePath)
+            }
+            try await suspensionRecordStore.clear()
+        } catch {
+            // Not `.public`: the description carries a path under the user's home directory.
+            VeilLog.runtime.error("Failed to discard the saved Windows session memory state: \(String(describing: error))")
+        }
     }
 
     public func stop() async throws -> VMRuntimeState {
@@ -246,6 +297,124 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
         self.monitorSocketURL = nil
         self.qmpSocketURL = nil
         return .stopped
+    }
+
+    /// Pauses Windows, streams its memory state to a local file, then exits QEMU.
+    ///
+    /// The launch record is the source of truth for the QMP socket rather than in-process state,
+    /// because the VM is frequently started by the app and suspended from the CLI (or the reverse).
+    public func suspend(profile: VMProfile) async throws -> VMRuntimeState {
+        guard let virtualDiskPath = profile.virtualDiskPath,
+              !virtualDiskPath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw VMRuntimeError.bootPrerequisitesMissing
+        }
+
+        guard let launchRecord = try await launchRecordStore().loadLatest() else {
+            throw VMSuspensionError.runtimeNotRunning
+        }
+
+        let isRunning = process?.isRunning == true
+            || Self.runningProcess(attachedToVirtualDiskPath: virtualDiskPath) != nil
+        guard isRunning else {
+            throw VMSuspensionError.runtimeNotRunning
+        }
+
+        let plan = try planBuilder(profile)
+        let record = try await suspensionController.suspend(
+            launchRecord: launchRecord,
+            planArguments: plan.arguments,
+            virtualDiskPath: virtualDiskPath,
+            stateFilePath: QEMUVMSuspensionController.defaultStateFilePath(virtualDiskPath: virtualDiskPath)
+        )
+        try await suspensionRecordStore.save(record)
+
+        // QEMU exited as part of the suspend, so drop the in-process handles the same way stop()
+        // does. Leaving them set would make runtimeState() report a live machine.
+        if let process, process.isRunning {
+            process.waitUntilExit()
+        }
+        self.process = nil
+        if let monitorSocketURL {
+            try? FileManager.default.removeItem(at: monitorSocketURL)
+        }
+        if let qmpSocketURL {
+            try? FileManager.default.removeItem(at: qmpSocketURL)
+        }
+        self.monitorSocketURL = nil
+        self.qmpSocketURL = nil
+        return .suspended
+    }
+
+    /// Relaunches QEMU against the saved memory-state stream and unpauses the guest.
+    ///
+    /// The stream is single-use: once the guest runs again the raw disk moves past the state that
+    /// stream describes, so loading it a second time would corrupt Windows. It is deleted only after
+    /// the guest is confirmed running, and preserved on failure so the user can retry.
+    public func resume(profile: VMProfile) async throws -> VMRuntimeState {
+        guard let record = try await suspensionRecordStore.loadLatest() else {
+            throw VMSuspensionError.noSuspendedState
+        }
+
+        guard FileManager.default.fileExists(atPath: record.stateFilePath) else {
+            try? await suspensionRecordStore.clear()
+            throw VMSuspensionError.suspendedStateFileMissing(record.stateFilePath)
+        }
+
+        if let runningProcess = Self.runningProcess(attachedToVirtualDiskPath: profile.virtualDiskPath) {
+            throw VMRuntimeError.qemuAlreadyRunning(pid: runningProcess.pid)
+        }
+
+        let plan = try planBuilder(profile)
+        let fingerprint = QEMUBootArgumentsFingerprint.value(for: plan.arguments)
+        // Checked before equality: a superseded scheme is not a changed machine, and reporting it as
+        // one would send the user looking for a configuration change that never happened.
+        guard !QEMUBootArgumentsFingerprint.isFromSupersededScheme(record.machineFingerprint) else {
+            throw VMSuspensionError.machineFingerprintSchemeSuperseded(stored: record.machineFingerprint)
+        }
+
+        guard fingerprint == record.machineFingerprint else {
+            throw VMSuspensionError.machineConfigurationChanged(
+                expected: record.machineFingerprint,
+                actual: fingerprint
+            )
+        }
+
+        let state = try await launch(profile: profile, incomingMemoryStatePath: record.stateFilePath)
+        guard let qmpSocketPath = qmpSocketURL?.path else {
+            throw VMSuspensionError.qmpUnavailable
+        }
+
+        do {
+            try await suspensionController.resumeLoadedMachine(qmpSocketPath: qmpSocketPath)
+        } catch {
+            // The stream was not consumed successfully, so keep it and tear down the half-started
+            // machine instead of leaving an unusable QEMU alongside a suspended record.
+            _ = try? await stop()
+            throw error
+        }
+
+        try? FileManager.default.removeItem(atPath: record.stateFilePath)
+        try await suspensionRecordStore.clear()
+        return state
+    }
+
+    /// The suspended session Veil can currently resume, or `nil` when there is none.
+    ///
+    /// A record whose state file has disappeared is reported as absent so status surfaces never
+    /// offer a resume that cannot work.
+    public func suspendedSession() async -> VMSuspensionRecord? {
+        guard let record = try? await suspensionRecordStore.loadLatest(),
+              FileManager.default.fileExists(atPath: record.stateFilePath) else {
+            return nil
+        }
+
+        return record
+    }
+
+    private func launchRecordStore() -> JSONQEMULaunchRecordStore {
+        JSONQEMULaunchRecordStore(
+            directory: diagnosticsDirectory.appendingPathComponent("QEMU Launch", isDirectory: true)
+        )
     }
 
     public func showConsoleIfRunning() -> Bool {

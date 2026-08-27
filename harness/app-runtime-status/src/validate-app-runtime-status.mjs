@@ -52,6 +52,7 @@ export function validateAppRuntimeStatus(report) {
   validateStringArray(report.restorableAppIds, "restorableAppIds");
   validateDockIntegration(report.dockIntegration, report.mirrorSessions, report);
   validateMacWindowIntegration(report.macWindowIntegration, report.mirrorSessions, report.connection);
+  validateDisplayScaling(report.displayScaling, report.mirrorSessions);
   validateLauncherVisibility(report.launcherVisibility, report);
   validateVisibleSurfacePolicy(report.visibleSurfacePolicy, report);
   validateQuietRuntime(report.quietRuntime, report.mirrorSessions);
@@ -533,6 +534,11 @@ function validateMirrorSessions(sessions) {
       throw new TypeError(`Unsupported frame stream status: ${session.frameStreamStatus}`);
     }
     requireNonNegativeInteger(session.receivedFrameCount, "session.receivedFrameCount");
+    // Optional for now so saved reports predating unchanged-frame heartbeats still validate. The host
+    // always emits it, so this becomes required once the live fixtures are regenerated.
+    if (session.unchangedHeartbeatCount !== undefined) {
+      requireNonNegativeInteger(session.unchangedHeartbeatCount, "session.unchangedHeartbeatCount");
+    }
     requireString(session.frameStreamRecommendedAction, "session.frameStreamRecommendedAction");
     requireNonNegativeInteger(session.frameStreamRestartCount, "session.frameStreamRestartCount");
     requireBoolean(session.frameStreamRecoveryEscalated, "session.frameStreamRecoveryEscalated");
@@ -551,6 +557,15 @@ function validateMirrorSessions(sessions) {
     }
     if (session.latestFrameAgeMilliseconds !== undefined) {
       requireNonNegativeInteger(session.latestFrameAgeMilliseconds, "session.latestFrameAgeMilliseconds");
+    }
+    if (session.latestActivityAgeMilliseconds !== undefined) {
+      requireNonNegativeInteger(session.latestActivityAgeMilliseconds, "session.latestActivityAgeMilliseconds");
+      // Liveness cannot be older than the picture: a frame is itself a liveness signal, and only
+      // heartbeats arriving after it can make activity newer.
+      if (session.latestFrameAgeMilliseconds !== undefined
+        && session.latestActivityAgeMilliseconds > session.latestFrameAgeMilliseconds) {
+        throw new TypeError("session.latestActivityAgeMilliseconds must not exceed latestFrameAgeMilliseconds.");
+      }
     }
     if (session.latestFrameIntervalMilliseconds !== undefined) {
       requireNonNegativeInteger(session.latestFrameIntervalMilliseconds, "session.latestFrameIntervalMilliseconds");
@@ -585,6 +600,11 @@ function validateMirrorSessions(sessions) {
     if (session.receivedFrameCount === 0) {
       if (session.latestFrameReceivedAt !== undefined || session.latestFrameAgeMilliseconds !== undefined || session.latestFrameIntervalMilliseconds !== undefined) {
         throw new TypeError("Frame timing fields require at least one received frame.");
+      }
+      // A heartbeat only proves an existing stream is idle. It must never stand in for the first frame,
+      // or capture that never started would look healthy.
+      if (session.unchangedHeartbeatCount !== undefined && session.unchangedHeartbeatCount > 0) {
+        throw new TypeError("Unchanged-frame heartbeats require at least one received frame.");
       }
       if (session.captureState !== "unavailable" && session.frameStreamRequestedAt === undefined) {
         throw new TypeError("Capture sessions waiting for frames require frameStreamRequestedAt.");
@@ -817,6 +837,11 @@ function expectedMacSlowestFrame(mirrorSessions) {
   return slowest;
 }
 
+/// Suspending keeps the user's open Windows apps; stopping shuts them down. `none` means the runtime
+/// cannot be quieted right now. Optional in the report so fixtures predating the idle-suspend slice
+/// still validate.
+const VALID_QUIET_MODES = new Set(["suspend", "stop", "none"]);
+
 function validateQuietRuntime(quietRuntime, mirrorSessions) {
   if (!quietRuntime || typeof quietRuntime !== "object" || Array.isArray(quietRuntime)) {
     throw new TypeError("quietRuntime must be an object.");
@@ -833,6 +858,48 @@ function validateQuietRuntime(quietRuntime, mirrorSessions) {
 
   if (quietRuntime.recommendedStopCommand !== undefined) {
     requireString(quietRuntime.recommendedStopCommand, "quietRuntime.recommendedStopCommand");
+  }
+
+  // Going idle either suspends Windows (open apps survive) or stops it (they do not). Those are very
+  // different outcomes for a user, so the report has to commit to one rather than describing both.
+  if (quietRuntime.quietMode !== undefined) {
+    requireString(quietRuntime.quietMode, "quietRuntime.quietMode");
+    if (!VALID_QUIET_MODES.has(quietRuntime.quietMode)) {
+      throw new TypeError(`Unsupported quietRuntime.quietMode: ${quietRuntime.quietMode}`);
+    }
+
+    if (quietRuntime.canQuietRuntime === (quietRuntime.quietMode === "none")) {
+      throw new TypeError("quietRuntime.quietMode must be none exactly when canQuietRuntime is false.");
+    }
+
+    if (quietRuntime.quietMode === "suspend" && quietRuntime.canSuspendSession !== true) {
+      throw new TypeError("quietRuntime.quietMode suspend requires quietRuntime.canSuspendSession.");
+    }
+
+    // The recommendation must name the action that will actually run. A recommendation that names both
+    // leaves a reader unable to tell whether their open apps are about to be closed.
+    if (quietRuntime.canQuietRuntime && quietRuntime.recommendedAction !== `${quietRuntime.quietMode}-runtime`) {
+      throw new TypeError("quietRuntime.recommendedAction must name the resolved quietMode.");
+    }
+  }
+
+  if (quietRuntime.canSuspendSession !== undefined) {
+    requireBoolean(quietRuntime.canSuspendSession, "quietRuntime.canSuspendSession");
+  }
+
+  if (quietRuntime.recommendedSuspendCommand !== undefined) {
+    requireString(quietRuntime.recommendedSuspendCommand, "quietRuntime.recommendedSuspendCommand");
+    if (!quietRuntime.recommendedSuspendCommand.includes("--action suspend-runtime")) {
+      throw new TypeError("quietRuntime.recommendedSuspendCommand must point at the suspend-runtime action.");
+    }
+  }
+
+  if (quietRuntime.quietMode === "suspend" && quietRuntime.recommendedSuspendCommand === undefined) {
+    throw new TypeError("a suspend quietMode requires quietRuntime.recommendedSuspendCommand.");
+  }
+
+  if (quietRuntime.canSuspendSession !== true && quietRuntime.recommendedSuspendCommand !== undefined) {
+    throw new TypeError("quietRuntime.recommendedSuspendCommand requires quietRuntime.canSuspendSession.");
   }
 
   if (quietRuntime.openWindowCount !== mirrorSessions.length) {
@@ -2896,6 +2963,189 @@ function validateStringArray(value, fieldName) {
 
   for (const item of value) {
     requireString(item, fieldName);
+  }
+}
+
+// Must match HostDashboardModel.displayScalingStatus. Windows offers 125% and 150% steps that can never
+// equal a Mac's 1x or 2x, so an exact match is the wrong contract and a tolerance is the right one.
+const DISPLAY_SCALE_MATCH_TOLERANCE = 0.05;
+
+const DISPLAY_SCALING_ACTIONS = new Set([
+  "none",
+  "raise-guest-display-scaling",
+  "lower-guest-display-scaling",
+  "inspect-host-display-scale",
+  // The guest reported a scale that cannot be divided by. A denormal passes a bare `> 0` check and yields an
+  // infinite ratio, which is not JSON-encodable — so this state has to be reportable rather than fatal.
+  "inspect-guest-display-scale",
+  "open-windows-app",
+  "wait-for-first-frame"
+]);
+
+/**
+ * Checks that the guest is rendering at the resolution this Mac shows, and that the report says so
+ * consistently.
+ *
+ * Optional, because twelve saved reports predate this section. Absent means the report was produced before
+ * the check existed, which is not the same claim as a matched scale, so absence must not be read as a pass.
+ */
+function validateDisplayScaling(displayScaling, mirrorSessions) {
+  if (displayScaling === undefined) {
+    return;
+  }
+
+  if (!displayScaling || typeof displayScaling !== "object" || Array.isArray(displayScaling)) {
+    throw new TypeError("displayScaling must be an object when present.");
+  }
+
+  requireBoolean(displayScaling.isEnabled, "displayScaling.isEnabled");
+  requireBoolean(displayScaling.isUpscaling, "displayScaling.isUpscaling");
+  requireBoolean(displayScaling.isOverRendering, "displayScaling.isOverRendering");
+  requireString(displayScaling.reason, "displayScaling.reason");
+  requireString(displayScaling.recommendedAction, "displayScaling.recommendedAction");
+
+  if (!DISPLAY_SCALING_ACTIONS.has(displayScaling.recommendedAction)) {
+    throw new TypeError(
+      `displayScaling.recommendedAction must be one of ${[...DISPLAY_SCALING_ACTIONS].join(", ")}.`
+    );
+  }
+
+  for (const field of ["hostBackingScale", "guestRenderScale", "scaleRatio"]) {
+    const value = displayScaling[field];
+    if (value === undefined) {
+      continue;
+    }
+    if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
+      throw new TypeError(`App runtime status field 'displayScaling.${field}' must be a positive number.`);
+    }
+  }
+
+  if (displayScaling.recommendedGuestScalePercent !== undefined) {
+    requireNonNegativeInteger(
+      displayScaling.recommendedGuestScalePercent,
+      "displayScaling.recommendedGuestScalePercent"
+    );
+  }
+
+  // A window cannot be upscaled and over-rendered at once. Both true would mean the comparison ran twice
+  // with different inputs.
+  if (displayScaling.isUpscaling && displayScaling.isOverRendering) {
+    throw new TypeError("displayScaling cannot report upscaling and over-rendering at the same time.");
+  }
+
+  const { hostBackingScale, guestRenderScale, scaleRatio } = displayScaling;
+  const hasComparison = hostBackingScale !== undefined && guestRenderScale !== undefined;
+
+  if (scaleRatio !== undefined) {
+    if (!hasComparison) {
+      throw new TypeError("displayScaling.scaleRatio requires both hostBackingScale and guestRenderScale.");
+    }
+    // Pins the ratio to the two scales it claims to compare, so a section cannot report a mismatch it
+    // derived from something else.
+    const expected = hostBackingScale / guestRenderScale;
+    if (Math.abs(scaleRatio - expected) > 1e-6 * Math.max(1, expected)) {
+      throw new TypeError(
+        `displayScaling.scaleRatio ${scaleRatio} must equal hostBackingScale / guestRenderScale ${expected}.`
+      );
+    }
+  } else if (displayScaling.isUpscaling || displayScaling.isOverRendering) {
+    throw new TypeError("displayScaling claims a mismatch without a scaleRatio to support it.");
+  }
+
+  if (displayScaling.recommendedGuestScalePercent !== undefined) {
+    if (hostBackingScale === undefined) {
+      throw new TypeError(
+        "displayScaling.recommendedGuestScalePercent requires hostBackingScale, since it is derived from it."
+      );
+    }
+    const expectedPercent = Math.round(hostBackingScale * 100);
+    if (displayScaling.recommendedGuestScalePercent !== expectedPercent) {
+      throw new TypeError(
+        `displayScaling.recommendedGuestScalePercent must be ${expectedPercent} for hostBackingScale ${hostBackingScale}.`
+      );
+    }
+  }
+
+  switch (displayScaling.recommendedAction) {
+    case "inspect-host-display-scale":
+      if (hostBackingScale !== undefined) {
+        throw new TypeError(
+          "displayScaling asks the host to inspect its display scale while already reporting one."
+        );
+      }
+      break;
+    case "open-windows-app":
+      if (mirrorSessions.length > 0) {
+        throw new TypeError("displayScaling asks for an app to be opened while windows are mirrored.");
+      }
+      if (guestRenderScale !== undefined) {
+        throw new TypeError("displayScaling reports a guest render scale without a mirrored window.");
+      }
+      break;
+    case "wait-for-first-frame":
+      if (mirrorSessions.length === 0) {
+        throw new TypeError("displayScaling waits for a frame while nothing is mirrored.");
+      }
+      if (guestRenderScale !== undefined) {
+        throw new TypeError("displayScaling waits for a frame while already reporting a guest scale.");
+      }
+      break;
+    case "inspect-guest-display-scale":
+      // The unusable value is deliberately not echoed: it only reached this branch because it cannot be
+      // divided by, and a non-finite one would fail JSON encoding on the way out. A `scaleRatio` is already
+      // impossible here — the generic rule above requires both scales for a ratio, and this branch has no
+      // guest scale — so it needs no separate check.
+      if (guestRenderScale !== undefined) {
+        throw new TypeError("displayScaling reports an unusable guest scale while also reporting its value.");
+      }
+      break;
+    case "none":
+      // Both flags are false here, so the earlier mismatch check cannot catch a missing ratio, and an
+      // undefined one would slip through the tolerance comparison as NaN.
+      if (!hasComparison || scaleRatio === undefined) {
+        throw new TypeError("displayScaling reports a matched scale without measuring both sides.");
+      }
+      if (Math.abs(scaleRatio - 1) > DISPLAY_SCALE_MATCH_TOLERANCE) {
+        throw new TypeError(
+          `displayScaling reports no action needed while scaleRatio ${scaleRatio} is outside the match tolerance.`
+        );
+      }
+      break;
+    case "raise-guest-display-scaling":
+      if (!displayScaling.isUpscaling) {
+        throw new TypeError("displayScaling asks the guest to scale up without reporting upscaling.");
+      }
+      if (scaleRatio <= 1) {
+        throw new TypeError("displayScaling asks the guest to scale up while it already matches or exceeds the host.");
+      }
+      requireRecommendedPercentInReason(displayScaling);
+      break;
+    case "lower-guest-display-scaling":
+      if (!displayScaling.isOverRendering) {
+        throw new TypeError("displayScaling asks the guest to scale down without reporting over-rendering.");
+      }
+      if (scaleRatio >= 1) {
+        throw new TypeError("displayScaling asks the guest to scale down while it does not exceed the host.");
+      }
+      requireRecommendedPercentInReason(displayScaling);
+      break;
+    default:
+      break;
+  }
+}
+
+/**
+ * The fix is a percentage the user types into Windows, so a mismatch report that omits it is not
+ * actionable. "Your scaling is wrong" leaves them choosing between 125, 150, and 200.
+ */
+function requireRecommendedPercentInReason(displayScaling) {
+  if (displayScaling.recommendedGuestScalePercent === undefined) {
+    throw new TypeError("displayScaling reports a mismatch without the guest scale percentage that fixes it.");
+  }
+  if (!displayScaling.reason.includes(`${displayScaling.recommendedGuestScalePercent}%`)) {
+    throw new TypeError(
+      `displayScaling.reason must name the ${displayScaling.recommendedGuestScalePercent}% setting that resolves the mismatch.`
+    );
   }
 }
 

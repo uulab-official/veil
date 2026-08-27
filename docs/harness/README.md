@@ -9,7 +9,7 @@ The harness exists so host, guest, and protocol work can move independently.
 - Keep protocol examples executable and versioned.
 - Catch clipboard loops, malformed messages, and window lifecycle edge cases early.
 
-## Planned Harness Pieces
+## Harness Pieces
 
 ```text
 harness/
@@ -33,8 +33,7 @@ harness/
 ├─ qemu-smoke/             JSON shape validation for bounded QEMU/HVF boot smoke reports
 ├─ qemu-display-smoke/     JSON shape validation for live embedded VNC frame evidence
 ├─ windows-agent-contract/ JSON and project-shape validation for the C# Windows agent
-├─ protocol-fixtures/      JSON fixtures for every stable message
-└─ scenarios/              scripted flows such as launch-notepad and clipboard-sync
+└─ protocol-fixtures/      JSON fixtures for every stable message
 ```
 
 The repository-level harness entry point is `harness/README.md`. This document explains the strategy; files under `harness/` are executable or fixture-oriented assets.
@@ -42,9 +41,9 @@ The repository-level harness entry point is `harness/README.md`. This document e
 Current executable pieces:
 
 - `harness/fake-agent`: a WebSocket simulator for the Windows guest agent.
-- `harness/fake-host`: a CLI simulator for the future macOS host flow.
+- `harness/fake-host`: a CLI simulator for the macOS host flow.
 - `harness/runtime-provider-probe`: a JSON validator for serverless local runtime provider output.
-- `harness/app-runtime-status`: a JSON validator for app runtime status, open HWND sessions, Dock integration state, and supported actions.
+- `harness/app-runtime-status`: a JSON validator for app runtime status, open HWND sessions, Dock integration state, and supported actions. It also checks the optional `displayScaling` section, which compares the Mac's backing scale factor against the DPI scale the guest rendered the latest frame at. The rules there exist so the section cannot lie: `scaleRatio` must follow from the two scales it claims to compare, a window cannot be both starved of pixels and over-supplied with them, a mismatch cannot be claimed without a ratio, and a mismatch report must name the Windows percentage that resolves it, since "your scaling is wrong" leaves the user choosing between 125, 150, and 200. The section is optional because saved reports predate it; absence means the report was produced before the check existed and must not be read as a matched scale. Supply the host side from the CLI with `veil-vmctl app-runtime-status --json --host-backing-scale 2`, since that process has no window server to read a scale from.
 - `harness/app-runtime-review`: a JSON validator for one-screen release review cards generated from app-runtime status, release-gate steps, screenshot slots, and latest app-check evidence.
 - `harness/app-runtime-action`: a JSON validator for launch, pending-launch fulfillment, bring-forward, focus, close, close-all, restore, guest-agent wait, input, clipboard, quiet-runtime, recommended proof, multi-app proof, and notification proof app-runtime actions.
 - `harness/app-window-proof`: a JSON validator for one app launch, one tracked HWND, first captured frame evidence, and first-frame latency budget evidence.
@@ -60,6 +59,33 @@ Current executable pieces:
 - `harness/qemu-install-status`: a JSON validator for the latest Windows install state, launch evidence, console screenshot, and recovery actions.
 - `harness/qemu-smoke`: a JSON validator for bounded QEMU/HVF boot smoke reports.
 - `harness/qemu-display-smoke`: a JSON validator for app-launched loopback VNC frame evidence.
+- `harness/frame-pipeline-report`: a JSON validator for frame pipeline throughput and efficiency
+  measurements. It enforces the invariants that make a report trustworthy rather than merely well-formed:
+  byte totals that add up, tile coverage bounded to 0-100%, nearest-rank percentiles ordered
+  `p50 <= p95 <= maximum`, a full-frame estimate present whenever it was computable and absent when no key
+  frame was observed, and an explicit statement that the full-frame comparison is an estimate. A report
+  with no observed frames must say so and point at `app-runtime-status`, so it can never be mistaken for a
+  measured result of zero.
+- `harness/vm-session`: a JSON validator for Windows session suspend/resume reports. It enforces that a
+  completed suspend records durable evidence, that a completed resume consumes it, that suspend and
+  resume are never offered at the same time, and that the memory-state file never lives under
+  `Diagnostics` (guest RAM is not metadata).
+- `harness/vm-snapshots`: a JSON validator for QEMU internal snapshot reports. It enforces the honest
+  capability gate: snapshots need a `qcow2` system disk, so a raw-disk report must be `unavailable`
+  and must name both the `qemu-img convert` path and the `vm-suspend` alternative that does work on
+  the shipping disk format.
+- `harness/shared-folder`: a JSON validator for live shared folder reports. It enforces that the port
+  forward is bound to loopback rather than every interface, that the readiness state follows from the
+  three things that must agree (boot plan wired, guest publishing, Mac mounted) instead of being
+  asserted, that the guest is sharing the same name and folder the host asked for, and that the macOS
+  install-media staging directory is never reported as the shared folder. It also enforces that the
+  `host-smb` direction Veil does not ship is reported as unsupported with the working alternative.
+- `harness/device-passthrough`: a JSON validator for the USB and network passthrough capability report.
+  It exists to keep a "no" honest: every unavailable capability must name its prerequisite, a QEMU built
+  without libusb must not be reported as a privilege problem (the two need different fixes), USB
+  availability must be `unknown` when QEMU was not probed rather than guessed, the shipping usermode-NAT
+  mode must never be reported unavailable, and the report must present the privileged-helper blocker as
+  an open decision while explicitly ruling out running QEMU under `sudo`.
 - `harness/windows-agent-contract`: a contract validator for the first C# Windows agent scaffold, inbox app catalog, and app launch transcript.
 - `packages/protocol`: shared protocol constants and validation helpers.
 
@@ -798,7 +824,7 @@ polls `VEIL_AGENT_URL` or `ws://127.0.0.1:18444` for `agent.health.response`
 without starting, stopping, or mutating the VM.
 
 For the QEMU/HVF path, `ws://127.0.0.1:18444` is the macOS side of
-`hostfwd=tcp::18444-:18444`. The Windows agent itself listens inside the guest
+`hostfwd=tcp:127.0.0.1:18444-:18444`. The Windows agent itself listens inside the guest
 on `0.0.0.0:18444`; a guest-local `127.0.0.1` probe only proves the process is
 running inside Windows, not that the macOS host has completed the forwarding
 proof.

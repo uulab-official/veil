@@ -33,8 +33,8 @@ struct WindowsAppWindowPresenterTests {
         )
     }
 
-    @Test("keeps one visible macOS Windows app window")
-    func tracksForegroundWindowsAppWindow() {
+    @Test("mirrors several Windows apps side by side as separate macOS windows")
+    func mirrorsSeveralWindowsAppsSideBySide() {
         _ = NSApplication.shared
         let presenter = WindowsAppWindowPresenter()
         defer {
@@ -46,15 +46,140 @@ struct WindowsAppWindowPresenterTests {
         #expect(presenter.visibleWindowIds == ["hwnd:0001"])
         #expect(presenter.foregroundWindowId == "hwnd:0001")
 
-        presenter.showWindow(for: session(windowId: "hwnd:0002", appId: "winapp_notepad", title: "Notes.txt - Notepad"))
+        presenter.showWindow(for: session(windowId: "hwnd:0002", appId: "winapp_calculator", title: "Calculator"))
+        presenter.showWindow(for: session(windowId: "hwnd:0003", appId: "winapp_paint", title: "Paint"))
+
+        // Each app keeps its own window rather than superseding the previous one. The most recently
+        // presented window is frontmost, and window order is the foreground stack.
+        #expect(presenter.visibleWindowIds == ["hwnd:0001", "hwnd:0002", "hwnd:0003"])
+        #expect(presenter.foregroundWindowId == "hwnd:0003")
+    }
+
+    @Test("re-presenting a tracked window does not create a duplicate")
+    func rePresentingTrackedWindowDoesNotDuplicate() {
+        _ = NSApplication.shared
+        let presenter = WindowsAppWindowPresenter()
+        defer {
+            presenter.closeAll()
+        }
+
+        presenter.showWindow(for: session(windowId: "hwnd:0001", appId: "winapp_notepad", title: "Untitled - Notepad"))
+        // Frame events, window updates, and reconnect races all re-present the same session many
+        // times a second. One macOS window per HWND is the invariant that survived lifting the
+        // single-window limit.
+        presenter.showWindow(for: session(windowId: "hwnd:0001", appId: "winapp_notepad", title: "Notes.txt - Notepad"))
+        presenter.showWindow(for: session(windowId: "hwnd:0001", appId: "winapp_notepad", title: "Notes.txt - Notepad"))
 
         #expect(presenter.visibleWindowIds == ["hwnd:0001"])
-        #expect(presenter.foregroundWindowId == "hwnd:0001")
+    }
 
-        presenter.showWindow(for: session(windowId: "hwnd:0003", appId: "winapp_calculator", title: "Calculator"))
+    @Test("a background window's frames never steal focus from the active window")
+    func backgroundWindowFramesNeverStealFocus() {
+        _ = NSApplication.shared
+        let presenter = WindowsAppWindowPresenter()
+        defer {
+            presenter.closeAll()
+        }
 
-        #expect(presenter.visibleWindowIds == ["hwnd:0001"])
+        presenter.showWindow(for: session(windowId: "hwnd:0001", appId: "winapp_notepad", title: "Notepad"))
+        presenter.showWindow(for: session(windowId: "hwnd:0002", appId: "winapp_calculator", title: "Calculator"))
+
+        #expect(presenter.foregroundWindowId == "hwnd:0002")
+
+        // Frames, window updates, and reconnect races all re-present a session several times a second.
+        // Before concurrent windows existed this was harmless because there was only ever one window to
+        // raise. With two, raising on every refresh would yank the background window in front of
+        // whatever the user is typing in.
+        for _ in 1...30 {
+            let backgroundSession = session(
+                windowId: "hwnd:0001",
+                appId: "winapp_notepad",
+                title: "Notepad Updated"
+            )
+            presenter.showWindow(for: backgroundSession)
+            #expect(presenter.foregroundWindowId == "hwnd:0002")
+        }
+
+        #expect(presenter.foregroundWindowId == "hwnd:0002")
+        #expect(presenter.visibleWindowIds == ["hwnd:0001", "hwnd:0002"])
+    }
+
+    @Test("repeated frame updates never resize or re-center an existing app window")
+    func repeatedFrameUpdatesPreserveWindowGeometry() throws {
+        _ = NSApplication.shared
+        let presenter = WindowsAppWindowPresenter()
+        defer {
+            presenter.closeAll()
+        }
+
+        let windowId = "hwnd:stable"
+        presenter.showWindow(
+            for: session(
+                windowId: windowId,
+                appId: "winapp_notepad",
+                title: "Notepad",
+                bounds: WindowBounds(x: 80, y: 80, width: 960, height: 640)
+            )
+        )
+        let window = try #require(mirroredWindow(withId: windowId))
+        let userFrame = NSRect(x: 96, y: 112, width: 960, height: 600)
+        window.setFrame(userFrame, display: false)
+
+        for _ in 1...30 {
+            presenter.showWindow(
+                for: session(
+                    windowId: windowId,
+                    appId: "winapp_notepad",
+                    title: "Notepad Updated",
+                    bounds: WindowBounds(x: 10, y: 10, width: 1200, height: 800)
+                )
+            )
+            #expect(NSEqualRects(window.frame, userFrame))
+        }
+    }
+
+    @Test("an explicit focus or launch does bring a window forward")
+    func explicitFocusBringsWindowForward() {
+        _ = NSApplication.shared
+        let presenter = WindowsAppWindowPresenter()
+        defer {
+            presenter.closeAll()
+        }
+
+        presenter.showWindow(for: session(windowId: "hwnd:0001", appId: "winapp_notepad", title: "Notepad"))
+        presenter.showWindow(for: session(windowId: "hwnd:0002", appId: "winapp_calculator", title: "Calculator"))
+
+        presenter.showWindow(
+            for: session(windowId: "hwnd:0001", appId: "winapp_notepad", title: "Notepad"),
+            bringToFront: true
+        )
+
         #expect(presenter.foregroundWindowId == "hwnd:0001")
+        #expect(presenter.visibleWindowIds == ["hwnd:0002", "hwnd:0001"])
+    }
+
+    @Test("cascades additional windows instead of stacking them exactly")
+    func cascadesAdditionalWindows() {
+        let visibleFrame = HostVisibleFrameGeometry(x: 0, y: 0, width: 1440, height: 900)
+        let bounds = WindowBounds(x: 0, y: 0, width: 960, height: 640)
+
+        let first = WindowsAppWindowPlacement.initialFrame(
+            for: bounds,
+            visibleFrame: visibleFrame,
+            existingWindowCount: 0
+        )
+        let second = WindowsAppWindowPlacement.initialFrame(
+            for: bounds,
+            visibleFrame: visibleFrame,
+            existingWindowCount: 1
+        )
+
+        // This cascade existed before concurrent windows did, but `existingWindowCount` was always 0
+        // because a second window was never created, so it had never actually run.
+        #expect(first.x != second.x)
+        #expect(first.y != second.y)
+        #expect(first.width == second.width)
+        #expect(first.height == second.height)
     }
 
     @Test("clears foreground tracking when Windows app windows close")
@@ -93,8 +218,10 @@ struct WindowsAppWindowPresenterTests {
         let notepadWindow = try #require(mirroredWindow(withId: "hwnd:0001"))
         presenter.windowDidBecomeKey(Notification(name: NSWindow.didBecomeKeyNotification, object: notepadWindow))
 
+        // Focusing an older window moves it to the end of the order without closing the other, so
+        // `visibleWindowIds` reads oldest-to-frontmost.
         #expect(presenter.foregroundWindowId == "hwnd:0001")
-        #expect(presenter.visibleWindowIds == ["hwnd:0001"])
+        #expect(presenter.visibleWindowIds == ["hwnd:0002", "hwnd:0001"])
     }
 
     @Test("refreshing an existing Windows app window preserves the Mac window frame")
@@ -224,8 +351,8 @@ struct WindowsAppWindowPresenterTests {
             isAppActive: true,
             isMainWindowKey: true,
             frame: MainWindowFrameReport(NSRect(x: 10, y: 20, width: 1440, height: 900)),
-            minWidth: 1180,
-            minHeight: 760,
+            minWidth: Double(MainWindowLayout.preferredMinimumSize.width),
+            minHeight: Double(MainWindowLayout.preferredMinimumSize.height),
             titlebarAppearsTransparent: true,
             hasFullSizeContentView: true,
             appIconSource: .bundled
@@ -244,7 +371,7 @@ struct WindowsAppWindowPresenterTests {
         #expect(duplicateWindowReport.meetsLauncherContract == false)
 
         var smallWindowReport = passingReport
-        smallWindowReport.frame = MainWindowFrameReport(NSRect(x: 10, y: 20, width: 900, height: 640))
+        smallWindowReport.frame = MainWindowFrameReport(NSRect(x: 10, y: 20, width: 780, height: 520))
         #expect(smallWindowReport.meetsLauncherContract == false)
 
         var fallbackIconReport = passingReport
@@ -252,8 +379,24 @@ struct WindowsAppWindowPresenterTests {
         #expect(fallbackIconReport.meetsLauncherContract == false)
     }
 
-    @Test("does not present an unexpected second app window")
-    func doesNotPresentUnexpectedSecondAppWindow() {
+    @Test("main window layout fits regular and compact displays")
+    func mainWindowLayoutFitsVisibleDisplay() {
+        #expect(
+            MainWindowLayout.fittedSize(for: CGSize(width: 1512, height: 982))
+                == MainWindowLayout.preferredSize
+        )
+
+        let compactMinimum = MainWindowLayout.minimumSize(for: CGSize(width: 1024, height: 640))
+        #expect(compactMinimum.width == 900)
+        #expect(abs(compactMinimum.height - 614.4) < 0.001)
+
+        let compactFitted = MainWindowLayout.fittedSize(for: CGSize(width: 1024, height: 640))
+        #expect(abs(compactFitted.width - 983.04) < 0.001)
+        #expect(abs(compactFitted.height - 614.4) < 0.001)
+    }
+
+    @Test("presents separate document windows for the same app")
+    func presentsSeparateDocumentWindowsForTheSameApp() {
         _ = NSApplication.shared
         let presenter = WindowsAppWindowPresenter()
         defer {
@@ -268,12 +411,12 @@ struct WindowsAppWindowPresenterTests {
         presenter.showWindow(for: session(windowId: "hwnd:0001", appId: "winapp_notepad", title: "Notepad"))
         presenter.showWindow(for: session(windowId: "hwnd:0002", appId: "winapp_notepad", title: "Notepad - Edited"))
 
-        #expect(presenter.visibleWindowIds == ["hwnd:0001"])
+        #expect(presenter.visibleWindowIds == ["hwnd:0001", "hwnd:0002"])
         #expect(callbackWindowIds.isEmpty)
 
         presenter.closeWindow(windowId: "hwnd:0001")
 
-        #expect(presenter.visibleWindowIds.isEmpty)
+        #expect(presenter.visibleWindowIds == ["hwnd:0002"])
         #expect(callbackWindowIds.isEmpty)
     }
 

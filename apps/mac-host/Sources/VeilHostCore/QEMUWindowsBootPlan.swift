@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 
 public enum QEMUWindowsBootPlanError: Error, LocalizedError, Equatable, Sendable {
@@ -32,6 +33,12 @@ public struct QEMUWindowsBootPlan: Codable, Equatable, Sendable {
     public var automaticInstallMediaPath: String?
     public var networkAdapter: QEMUWindowsNetworkAdapter
     public var networkDeviceArgument: String
+    public var audioDevice: QEMUWindowsAudioDevice
+    public var audioBackendArgument: String?
+    public var sharedFolderTransport: QEMUWindowsSharedFolderTransport
+    /// The `hostfwd=` clause the shared folder needs, or `nil` when the transport does not use one or
+    /// the host port was unavailable when this plan was built.
+    public var sharedFolderForwardClause: String?
     public var summary: String
     public var arguments: [String]
     public var warnings: [String]
@@ -54,6 +61,10 @@ public struct QEMUWindowsBootPlan: Codable, Equatable, Sendable {
         automaticInstallMediaPath: String? = nil,
         networkAdapter: QEMUWindowsNetworkAdapter = .usbNet,
         networkDeviceArgument: String = QEMUWindowsNetworkAdapter.usbNet.deviceArgument,
+        audioDevice: QEMUWindowsAudioDevice = .intelHDA,
+        audioBackendArgument: String? = QEMUWindowsAudioDevice.intelHDA.backendArgument,
+        sharedFolderTransport: QEMUWindowsSharedFolderTransport = .guestSMB,
+        sharedFolderForwardClause: String? = QEMUWindowsSharedFolderTransport.guestSMB.hostForwardClause,
         summary: String,
         arguments: [String],
         warnings: [String]
@@ -75,6 +86,10 @@ public struct QEMUWindowsBootPlan: Codable, Equatable, Sendable {
         self.automaticInstallMediaPath = automaticInstallMediaPath
         self.networkAdapter = networkAdapter
         self.networkDeviceArgument = networkDeviceArgument
+        self.audioDevice = audioDevice
+        self.audioBackendArgument = audioBackendArgument
+        self.sharedFolderTransport = sharedFolderTransport
+        self.sharedFolderForwardClause = sharedFolderForwardClause
         self.summary = summary
         self.arguments = arguments
         self.warnings = warnings
@@ -132,6 +147,85 @@ public enum QEMUWindowsNetworkAdapter: String, Codable, CaseIterable, Equatable,
     }
 }
 
+/// Sound device attached to the Windows guest.
+///
+/// Veil shipped without any audio device at all, which made a Parallels-class comparison fail on the
+/// first video call or media tab. `intelHDA` is the default because Windows on ARM includes a native
+/// HD Audio class driver and the duplex codec provides playback and capture in one device.
+///
+/// `none` exists on purpose: a QEMU build without CoreAudio support fails to start when an audio
+/// backend is requested, so a user has to be able to turn sound off without rebuilding QEMU.
+public enum QEMUWindowsAudioDevice: String, Codable, CaseIterable, Equatable, Sendable {
+    case intelHDA = "intel-hda"
+    /// Routed through the `qemu-xhci` controller the plan already creates, for hosts where the
+    /// emulated HD Audio controller misbehaves under Windows on ARM.
+    case usbAudio = "usb-audio"
+    /// Named `disabled` rather than `none` so it can never be confused with `Optional.none` at a call
+    /// site. The wire and environment value stays `none`.
+    case disabled = "none"
+
+    public static let environmentVariableName = "VEIL_QEMU_AUDIO_DEVICE"
+    public static let audioBackendId = "veilaudio"
+
+    public struct Selection: Equatable, Sendable {
+        public var device: QEMUWindowsAudioDevice
+        public var warning: String?
+        public var isExplicit: Bool
+
+        public init(device: QEMUWindowsAudioDevice, warning: String?, isExplicit: Bool) {
+            self.device = device
+            self.warning = warning
+            self.isExplicit = isExplicit
+        }
+    }
+
+    public var isEnabled: Bool {
+        self != .disabled
+    }
+
+    /// macOS host backend. CoreAudio is the only sensible choice on a Mac host; it stays a computed
+    /// property so a future Linux/CI host could return a different backend without touching callers.
+    public var backendArgument: String? {
+        isEnabled ? "coreaudio,id=\(Self.audioBackendId)" : nil
+    }
+
+    /// QEMU device arguments for this sound device, in the order they must be appended.
+    ///
+    /// `intel-hda` needs two entries: the controller and the codec that carries the audiodev binding.
+    /// `usb-audio` is a single device on the existing USB controller.
+    public var deviceArguments: [String] {
+        switch self {
+        case .intelHDA:
+            ["-device", "intel-hda", "-device", "hda-duplex,audiodev=\(Self.audioBackendId)"]
+        case .usbAudio:
+            ["-device", "usb-audio,audiodev=\(Self.audioBackendId)"]
+        case .disabled:
+            []
+        }
+    }
+
+    public static func selected(from rawValue: String?) -> Selection {
+        guard let rawValue,
+              !rawValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return Selection(device: .intelHDA, warning: nil, isExplicit: false)
+        }
+
+        let normalizedValue = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let device = QEMUWindowsAudioDevice(rawValue: normalizedValue) {
+            return Selection(device: device, warning: nil, isExplicit: true)
+        }
+
+        let supportedValues = QEMUWindowsAudioDevice.allCases
+            .map(\.rawValue)
+            .joined(separator: ", ")
+        return Selection(
+            device: .intelHDA,
+            warning: "Ignoring unsupported \(environmentVariableName)=\(normalizedValue). Supported values: \(supportedValues).",
+            isExplicit: true
+        )
+    }
+}
+
 public enum QEMUWindowsBootDisplayMode: String, Codable, Equatable, Sendable {
     case nativeCocoa
     case headless
@@ -154,6 +248,12 @@ public struct QEMUWindowsBootPlanner: Sendable {
     private let isTPMEmulatorAvailable: Bool
     private let tpmStateDirectoryPath: String?
     private let networkAdapter: QEMUWindowsNetworkAdapter
+    private let audioDevice: QEMUWindowsAudioDevice
+    private let sharedFolderTransport: QEMUWindowsSharedFolderTransport
+    /// Whether the shared folder's host port was free when the plan was built. A busy port drops the
+    /// forward instead of leaving it in the command line, because QEMU refuses to start when it cannot
+    /// bind a `hostfwd` port and a shared folder is not worth trading a bootable VM for.
+    private let isSharedFolderHostPortAvailable: Bool
     private let configurationWarnings: [String]
 
     public init(
@@ -169,6 +269,9 @@ public struct QEMUWindowsBootPlanner: Sendable {
         isTPMEmulatorAvailable: Bool = false,
         tpmStateDirectoryPath: String? = nil,
         networkAdapter: QEMUWindowsNetworkAdapter = .usbNet,
+        audioDevice: QEMUWindowsAudioDevice = .intelHDA,
+        sharedFolderTransport: QEMUWindowsSharedFolderTransport = .guestSMB,
+        isSharedFolderHostPortAvailable: Bool = true,
         configurationWarnings: [String] = []
     ) {
         self.executablePath = executablePath
@@ -183,6 +286,9 @@ public struct QEMUWindowsBootPlanner: Sendable {
         self.isTPMEmulatorAvailable = isTPMEmulatorAvailable
         self.tpmStateDirectoryPath = tpmStateDirectoryPath
         self.networkAdapter = networkAdapter
+        self.audioDevice = audioDevice
+        self.sharedFolderTransport = sharedFolderTransport
+        self.isSharedFolderHostPortAvailable = isSharedFolderHostPortAvailable
         self.configurationWarnings = configurationWarnings
     }
 
@@ -251,7 +357,25 @@ public struct QEMUWindowsBootPlanner: Sendable {
             ])
         }
 
-        let guestAgentForward = "hostfwd=tcp::\(Self.guestAgentHostPort)-:\(Self.guestAgentGuestPort)"
+        // Bound to 127.0.0.1 rather than every interface. An empty host address in a `hostfwd` clause
+        // binds all of them, which published the guest agent's control channel -- app launch,
+        // synthesized input, clipboard read/write, all unauthenticated -- to the local network. The host
+        // has always connected over ws://127.0.0.1:18444, so nothing legitimate needed the wider bind.
+        let guestAgentForward = "hostfwd=tcp:\(QEMUWindowsSharedFolderTransport.hostForwardAddress):\(Self.guestAgentHostPort)-:\(Self.guestAgentGuestPort)"
+
+        // Forwards are collected into the single existing netdev instead of adding a second one, so the
+        // guest keeps exactly one NIC no matter how many host ports are mapped into it.
+        var userNetworkForwards = [guestAgentForward]
+        if let sharedFolderForward = sharedFolderTransport.hostForwardClause,
+           isSharedFolderHostPortAvailable {
+            userNetworkForwards.append(sharedFolderForward)
+        }
+
+        if sharedFolderTransport.hostForwardClause != nil, !isSharedFolderHostPortAvailable {
+            warnings.append(
+                "Host port \(QEMUWindowsSharedFolderTransport.guestSMBHostPort) was unavailable when this plan was built, so the shared folder port forward was left out and Windows will boot without a live shared folder. A Veil VM that is already running holds this port, which is the usual reason; otherwise find the listener with `lsof -nP -iTCP:\(QEMUWindowsSharedFolderTransport.guestSMBHostPort) -sTCP:LISTEN`."
+            )
+        }
 
         arguments.append(contentsOf: [
             "-boot", windowsInstalled ? "order=c" : "order=d",
@@ -261,7 +385,7 @@ public struct QEMUWindowsBootPlanner: Sendable {
             "-device", "qemu-xhci,id=usb0",
             "-drive", "if=none,id=system,format=raw,file=\(virtualDiskPath)",
             "-device", "nvme,drive=system,serial=veil-system",
-            "-netdev", "user,id=net0,\(guestAgentForward)",
+            "-netdev", "user,id=net0,\(userNetworkForwards.joined(separator: ","))",
             "-device", networkAdapter.deviceArgument,
             "-device", "virtio-rng-pci",
             "-display", "cocoa",
@@ -270,6 +394,13 @@ public struct QEMUWindowsBootPlanner: Sendable {
             "-device", "usb-kbd",
             "-device", "usb-tablet"
         ])
+
+        // Audio is appended after the USB controller exists, because `usb-audio` attaches to it. The
+        // backend has to precede the device that references its id.
+        if let audioBackendArgument = audioDevice.backendArgument {
+            arguments.append(contentsOf: ["-audiodev", audioBackendArgument])
+            arguments.append(contentsOf: audioDevice.deviceArguments)
+        }
 
         if let installerMediaPath, shouldAttachInstallerMedia {
             arguments.append(contentsOf: [
@@ -305,6 +436,12 @@ public struct QEMUWindowsBootPlanner: Sendable {
             automaticInstallMediaPath: automaticInstallMediaPath,
             networkAdapter: networkAdapter,
             networkDeviceArgument: networkAdapter.deviceArgument,
+            audioDevice: audioDevice,
+            audioBackendArgument: audioDevice.backendArgument,
+            sharedFolderTransport: sharedFolderTransport,
+            sharedFolderForwardClause: isSharedFolderHostPortAvailable
+                ? sharedFolderTransport.hostForwardClause
+                : nil,
             summary: windowsInstalled
                 ? "Dry-run QEMU/HVF command plan for \(profile.name). Windows boots from the installed system disk; the Windows installer ISO is detached and read-only Veil guest support media stays attached."
                 : "Dry-run QEMU/HVF command plan for \(profile.name). Veil does not execute this plan yet.",
@@ -368,6 +505,42 @@ public enum LocalQEMUWindowsBootPlanFactory {
         "/opt/local/bin/swtpm"
     ]
 
+    /// Whether a loopback TCP port can still be bound.
+    ///
+    /// A direct `bind` rather than shelling out to `lsof`, because plan building sits on status-polling
+    /// paths where spawning a subprocess per call would be a needless cost. `SO_REUSEADDR` is
+    /// deliberately not set: the question being asked is exactly the one QEMU will ask at startup, and
+    /// answering it more permissively than QEMU does would defeat the point.
+    public static let isLoopbackPortFree: @Sendable (Int) -> Bool = { port in
+        guard port > 0, port <= 65_535 else {
+            return false
+        }
+
+        let descriptor = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)
+        guard descriptor >= 0 else {
+            // The probe itself failed. Reporting the port as free keeps a transient host resource
+            // problem from silently turning folder sharing off.
+            return true
+        }
+        defer {
+            close(descriptor)
+        }
+
+        var address = sockaddr_in()
+        address.sin_len = UInt8(MemoryLayout<sockaddr_in>.size)
+        address.sin_family = sa_family_t(AF_INET)
+        address.sin_port = UInt16(port).bigEndian
+        address.sin_addr.s_addr = inet_addr(QEMUWindowsSharedFolderTransport.hostForwardAddress)
+
+        let bindResult = withUnsafePointer(to: &address) { pointer in
+            pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) { addressPointer in
+                Darwin.bind(descriptor, addressPointer, socklen_t(MemoryLayout<sockaddr_in>.size))
+            }
+        }
+
+        return bindResult == 0
+    }
+
     public static func makePlan(
         for profile: VMProfile,
         architecture: String,
@@ -377,6 +550,7 @@ public enum LocalQEMUWindowsBootPlanFactory {
         secureFirmwarePaths: [String] = defaultSecureFirmwarePaths(),
         secureVarsTemplatePaths: [String] = defaultSecureFirmwareVarsTemplatePaths(),
         firmwareVarsTemplatePaths: [String] = defaultFirmwareVarsTemplatePaths,
+        isHostPortFree: @escaping @Sendable (Int) -> Bool = LocalQEMUWindowsBootPlanFactory.isLoopbackPortFree,
         environment: [String: String] = ProcessInfo.processInfo.environment
     ) throws -> QEMUWindowsBootPlan {
         let qemuProvider = providerProbe
@@ -413,6 +587,37 @@ public enum LocalQEMUWindowsBootPlanFactory {
                 "Keeping usb-net as the boot-safe default while driver media is attached. Set \(QEMUWindowsNetworkAdapter.environmentVariableName)=virtio-net-pci only for an explicit compatibility probe."
             )
         }
+        let audioSelection = QEMUWindowsAudioDevice.selected(
+            from: environment[QEMUWindowsAudioDevice.environmentVariableName]
+        )
+        if let audioWarning = audioSelection.warning {
+            configurationWarnings.append(audioWarning)
+        }
+        if audioSelection.device == .disabled {
+            configurationWarnings.append(
+                "Windows guest audio is disabled by \(QEMUWindowsAudioDevice.environmentVariableName)=none. Windows will have no sound device."
+            )
+        }
+        let sharedFolderSelection = QEMUWindowsSharedFolderTransport.selected(
+            from: environment[QEMUWindowsSharedFolderTransport.environmentVariableName]
+        )
+        if let sharedFolderWarning = sharedFolderSelection.warning {
+            configurationWarnings.append(sharedFolderWarning)
+        }
+        if sharedFolderSelection.transport == .hostSMB {
+            configurationWarnings.append(
+                "\(QEMUWindowsSharedFolderTransport.environmentVariableName)=host-smb needs File Sharing turned on in macOS System Settings, and it publishes the share on every network interface rather than only to the guest. Veil adds no port forward for this transport."
+            )
+        }
+        if sharedFolderSelection.transport == .disabled {
+            configurationWarnings.append(
+                "Live folder sharing is disabled by \(QEMUWindowsSharedFolderTransport.environmentVariableName)=none. Files reach Windows only through drag-and-drop file open, which is capped at 50 MB."
+            )
+        }
+        // Probed rather than assumed: QEMU exits at startup when it cannot bind a `hostfwd` port, so an
+        // occupied port has to drop the forward instead of the whole VM.
+        let isSharedFolderHostPortAvailable = sharedFolderSelection.transport.hostForwardClause == nil
+            || isHostPortFree(QEMUWindowsSharedFolderTransport.guestSMBHostPort)
         let planner = QEMUWindowsBootPlanner(
             executablePath: executablePath,
             isExecutableAvailable: qemuProvider?.status == .active && qemuProvider?.executablePath != nil,
@@ -426,6 +631,9 @@ public enum LocalQEMUWindowsBootPlanFactory {
             isTPMEmulatorAvailable: tpmEmulatorPath != nil,
             tpmStateDirectoryPath: tpmStateDirectoryPath,
             networkAdapter: networkAdapter,
+            audioDevice: audioSelection.device,
+            sharedFolderTransport: sharedFolderSelection.transport,
+            isSharedFolderHostPortAvailable: isSharedFolderHostPortAvailable,
             configurationWarnings: configurationWarnings
         )
         return try planner.makePlan(for: profile)
@@ -505,7 +713,8 @@ public struct QEMUWindowsReadinessDoctor: Sendable {
             uefiFirmwareCheck(plan),
             secureBootCheck(plan),
             tpmEmulatorCheck(plan),
-            hvfPlanCheck(plan)
+            hvfPlanCheck(plan),
+            sharedFolderCheck(plan)
         ]
         let overallState: QEMUWindowsReadinessState = checks.contains { $0.state == .blocked }
             ? .blocked
@@ -678,6 +887,57 @@ public struct QEMUWindowsReadinessDoctor: Sendable {
             state: .passed,
             detail: "QEMU command plan enables HVF acceleration and local devices."
         )
+    }
+
+    /// Never returns `.blocked`. A missing shared folder is a lost convenience, not a reason to refuse
+    /// to boot Windows, and `makeReport` turns any blocked check into a blocked overall state.
+    private func sharedFolderCheck(_ plan: QEMUWindowsBootPlan?) -> QEMUWindowsReadinessCheck {
+        let title = "Live shared folder"
+
+        guard let plan else {
+            return QEMUWindowsReadinessCheck(
+                id: "shared-folder",
+                title: title,
+                state: .warning,
+                detail: "QEMU command plan is unavailable, so the shared folder port forward cannot be confirmed."
+            )
+        }
+
+        switch plan.sharedFolderTransport {
+        case .disabled:
+            return QEMUWindowsReadinessCheck(
+                id: "shared-folder",
+                title: title,
+                state: .warning,
+                detail: "Live folder sharing is off via \(QEMUWindowsSharedFolderTransport.environmentVariableName)=none. Files reach Windows only through drag-and-drop file open, which is capped at 50 MB."
+            )
+
+        case .hostSMB:
+            return QEMUWindowsReadinessCheck(
+                id: "shared-folder",
+                title: title,
+                state: .warning,
+                detail: "Configured for host-served SMB, which needs File Sharing turned on in macOS System Settings and publishes the share on every network interface. Veil adds no port forward for this transport."
+            )
+
+        case .guestSMB:
+            guard let clause = plan.sharedFolderForwardClause,
+                  plan.arguments.contains(where: { $0.contains(clause) }) else {
+                return QEMUWindowsReadinessCheck(
+                    id: "shared-folder",
+                    title: title,
+                    state: .warning,
+                    detail: "Host port \(QEMUWindowsSharedFolderTransport.guestSMBHostPort) was unavailable when this plan was built, so Windows will boot without a live shared folder. A Veil VM that is already running holds this port, which is the usual reason."
+                )
+            }
+
+            return QEMUWindowsReadinessCheck(
+                id: "shared-folder",
+                title: title,
+                state: .passed,
+                detail: "Windows shares \(QEMUWindowsSharedFolderTransport.guestDirectoryPath) as \(QEMUWindowsSharedFolderTransport.shareName); mount it on this Mac from \(QEMUWindowsSharedFolderTransport.guestSMB.hostMountURL ?? "smb://") once Windows is running."
+            )
+        }
     }
 
     private func tpmEmulatorCheck(_ plan: QEMUWindowsBootPlan?) -> QEMUWindowsReadinessCheck {
@@ -899,6 +1159,14 @@ public struct QEMUWindowsReadinessDoctor: Sendable {
 
         if checks.first(where: { $0.id == "hvf-plan" })?.state == .blocked {
             actions.append("Regenerate the QEMU plan and confirm it includes -accel hvf.")
+        }
+
+        // Only the port conflict earns an action. `none` and `host-smb` are choices the user made, and
+        // nagging about a setting someone deliberately set is noise rather than guidance.
+        if let sharedFolderCheck = checks.first(where: { $0.id == "shared-folder" }),
+           sharedFolderCheck.state == .warning,
+           sharedFolderCheck.detail.contains("was unavailable when this plan was built") {
+            actions.append("Free host port \(QEMUWindowsSharedFolderTransport.guestSMBHostPort) with `lsof -nP -iTCP:\(QEMUWindowsSharedFolderTransport.guestSMBHostPort) -sTCP:LISTEN` and restart the VM to get the live shared folder back.")
         }
 
         if actions.isEmpty {
@@ -1168,7 +1436,10 @@ public struct QEMUWindowsBootLaunchPlanner: Sendable {
         qmpSocketPath: String,
         bootDiskFirst: Bool = false,
         displayMode: QEMUWindowsBootDisplayMode = .nativeCocoa,
-        vncDisplay: Int? = nil
+        vncDisplay: Int? = nil,
+        /// Path to a suspended memory-state stream. When present, QEMU starts paused and loads this
+        /// stream instead of booting, so the guest continues from where it was suspended.
+        incomingMemoryStatePath: String? = nil
     ) -> [String] {
         var arguments = plan.arguments.map(QEMUWindowsBootArgumentRewriter.lockSafeSystemDriveArgument)
         if bootDiskFirst {
@@ -1193,6 +1464,12 @@ public struct QEMUWindowsBootLaunchPlanner: Sendable {
             "-monitor", "unix:\(monitorSocketPath),server,nowait",
             "-qmp", "unix:\(qmpSocketPath),server,nowait"
         ])
+
+        if let incomingMemoryStatePath {
+            arguments.append(contentsOf: [
+                "-incoming", "exec:cat \(QEMUQMPCommand.shellSingleQuoted(incomingMemoryStatePath))"
+            ])
+        }
 
         return arguments
     }

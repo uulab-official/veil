@@ -1,0 +1,30 @@
+{
+  "kind": "vmSharedFolderStatus",
+  "generatedAt": "2026-08-04T09:24:02Z",
+  "provider": "QEMU/HVF",
+  "vmState": "running",
+  "readiness": "awaitingGuestAgent",
+  "capability": {
+    "state": "supported",
+    "isSupported": true,
+    "transport": "guest-smb",
+    "isWiredIntoBootPlan": true,
+    "shareName": "VeilShared",
+    "expectedGuestDirectoryPath": "C:\\VeilShared",
+    "hostMountURL": "smb://127.0.0.1:18445/VeilShared",
+    "expectedHostMountPath": "/Volumes/VeilShared",
+    "hostForwardClause": "hostfwd=tcp:127.0.0.1:18445-:445",
+    "overrideEnvironmentVariable": "VEIL_QEMU_SHARED_FOLDER",
+    "detail": "Windows shares C:\\VeilShared as VeilShared; macOS mounts it over a loopback port forward."
+  },
+  "hostMount": {
+    "isMounted": false,
+    "detail": "/Volumes/VeilShared is not present, so the share is not mounted on this Mac."
+  },
+  "hostStagingFolderPath": "/Users/example/Veil Shared",
+  "nextActions": [
+    "The Windows guest agent did not answer, so Veil cannot confirm the share exists.",
+    "Run veil-vmctl guest-agent-wait --json, then veil-vmctl app-runtime-action --json --action repair-agent if it stays unreachable.",
+    "An agent that predates the shared folder protocol also reports as unreachable here; reinstall it with veil-vmctl qemu-install-agent --json."
+  ]
+}

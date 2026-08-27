@@ -5,9 +5,15 @@ const REQUIRED_SEQUENCES = [
   ["-machine", "virt,highmem=on"],
   ["-accel", "hvf"],
   ["-cpu", "host"],
-  ["-netdev", "user,id=net0,hostfwd=tcp::18444-:18444"],
   ["-display", "cocoa"]
 ];
+
+/// The user network carries a variable number of host port forwards -- always the guest agent, plus the
+/// shared folder when that transport is on and its port was free -- so the netdev value is checked by
+/// its parts rather than compared to one exact string.
+const USER_NETWORK_PREFIX = "user,id=net0,";
+const GUEST_AGENT_FORWARD = "hostfwd=tcp:127.0.0.1:18444-:18444";
+const SHARED_FOLDER_FORWARD = "hostfwd=tcp:127.0.0.1:18445-:445";
 
 const SUPPORTED_NETWORK_ADAPTERS = new Map([
   ["usb-net", "usb-net,netdev=net0"],
@@ -21,6 +27,20 @@ const SUPPORTED_NETWORK_ADAPTERS = new Map([
 
 const SUPPORTED_BOOT_ORDERS = new Set(["order=c", "order=d"]);
 
+/// Live shared folder transports. Only `guest-smb` works with no host prerequisites, which is why it is
+/// the only one that contributes a port forward.
+const SUPPORTED_SHARED_FOLDER_TRANSPORTS = new Set(["guest-smb", "host-smb", "none"]);
+
+/// Guest sound devices, mapped to the QEMU device arguments each one must emit.
+/// `none` is a supported choice, not a validation failure: a QEMU build without CoreAudio cannot
+/// start with an audio backend attached, so users need a way to disable sound.
+const SUPPORTED_AUDIO_DEVICES = new Map([
+  ["intel-hda", ["intel-hda", "hda-duplex,audiodev=veilaudio"]],
+  ["usb-audio", ["usb-audio,audiodev=veilaudio"]],
+  ["none", []]
+]);
+const AUDIO_BACKEND_ARGUMENT = "coreaudio,id=veilaudio";
+
 const REQUIRED_DEVICES = [
   "qemu-xhci,id=usb0",
   "nvme,drive=system,serial=veil-system",
@@ -30,6 +50,66 @@ const REQUIRED_DEVICES = [
   "usb-kbd",
   "usb-tablet"
 ];
+
+/// Every host port mapped into the guest, checked as one group.
+///
+/// The invariant that matters most here is the host address. An empty one -- `hostfwd=tcp::18444-...` --
+/// binds every interface, which published the guest agent's unauthenticated control channel (app launch,
+/// synthesized input, clipboard read and write) to the local network. Forwards must name 127.0.0.1.
+function validateUserNetworkForwards(plan) {
+  const netdevIndex = plan.arguments.indexOf("-netdev");
+  const netdev = netdevIndex === -1 ? undefined : plan.arguments[netdevIndex + 1];
+  if (typeof netdev !== "string" || !netdev.startsWith(USER_NETWORK_PREFIX)) {
+    throw new TypeError(`QEMU plan arguments must include -netdev ${USER_NETWORK_PREFIX}...`);
+  }
+
+  const components = netdev.slice(USER_NETWORK_PREFIX.length).split(",");
+  const forwards = components.filter((component) => component.startsWith("hostfwd="));
+
+  for (const forward of forwards) {
+    if (!forward.startsWith("hostfwd=tcp:127.0.0.1:")) {
+      throw new TypeError(
+        `QEMU plan host forward '${forward}' must bind 127.0.0.1; an empty host address exposes the guest on the local network.`
+      );
+    }
+  }
+
+  if (!forwards.includes(GUEST_AGENT_FORWARD)) {
+    throw new TypeError(`QEMU plan arguments must include ${GUEST_AGENT_FORWARD} for the guest agent.`);
+  }
+
+  // One netdev, however many forwards. A second user network would give the guest a second NIC.
+  if (plan.arguments.indexOf("-netdev", netdevIndex + 1) !== -1) {
+    throw new TypeError("QEMU plan must map host ports into a single -netdev rather than adding another NIC.");
+  }
+
+  const declaredShareForward = plan.sharedFolderForwardClause;
+  if (declaredShareForward != null) {
+    requireString(declaredShareForward, "sharedFolderForwardClause");
+    if (declaredShareForward !== SHARED_FOLDER_FORWARD) {
+      throw new TypeError(`QEMU plan sharedFolderForwardClause must be ${SHARED_FOLDER_FORWARD}.`);
+    }
+    if (!forwards.includes(declaredShareForward)) {
+      throw new TypeError("QEMU plan declares a shared folder forward that its arguments do not carry.");
+    }
+  } else if (forwards.includes(SHARED_FOLDER_FORWARD)) {
+    throw new TypeError("QEMU plan carries a shared folder forward without declaring it.");
+  }
+
+  if (plan.sharedFolderTransport != null) {
+    requireString(plan.sharedFolderTransport, "sharedFolderTransport");
+    if (!SUPPORTED_SHARED_FOLDER_TRANSPORTS.has(plan.sharedFolderTransport)) {
+      throw new TypeError(
+        `QEMU plan sharedFolderTransport must be one of: ${[...SUPPORTED_SHARED_FOLDER_TRANSPORTS].join(", ")}`
+      );
+    }
+    // Only the guest-served transport adds a forward. host-smb reaches the host through the usermode
+    // gateway and `none` shares nothing, so a forward under either would be unexplained.
+    if (plan.sharedFolderTransport !== "guest-smb" && declaredShareForward != null) {
+      throw new TypeError("only the guest-smb shared folder transport may declare a host port forward.");
+    }
+  }
+}
 
 export function validateQEMUPlan(plan) {
   if (!plan || typeof plan !== "object" || Array.isArray(plan)) {
@@ -46,6 +126,7 @@ export function validateQEMUPlan(plan) {
   requireString(plan.tpmStateDirectoryPath, "tpmStateDirectoryPath");
   requireString(plan.networkAdapter, "networkAdapter");
   requireString(plan.networkDeviceArgument, "networkDeviceArgument");
+  requireString(plan.audioDevice, "audioDevice");
   requireString(plan.summary, "summary");
   if (plan.automaticInstallMediaPath != null) {
     requireString(plan.automaticInstallMediaPath, "automaticInstallMediaPath");
@@ -105,6 +186,8 @@ export function validateQEMUPlan(plan) {
     }
   }
 
+  validateUserNetworkForwards(plan);
+
   const bootIndex = plan.arguments.indexOf("-boot");
   const bootOrder = bootIndex === -1 ? undefined : plan.arguments[bootIndex + 1];
   if (!SUPPORTED_BOOT_ORDERS.has(bootOrder)) {
@@ -121,6 +204,8 @@ export function validateQEMUPlan(plan) {
   if (plan.networkDeviceArgument !== expectedNetworkDeviceArgument) {
     throw new TypeError("QEMU plan networkDeviceArgument must match the declared networkAdapter.");
   }
+
+  validateAudio(plan);
 
   if (!containsSequence(plan.arguments, ["-device", plan.networkDeviceArgument])) {
     throw new TypeError(`QEMU plan arguments must include network device: ${plan.networkDeviceArgument}`);
@@ -241,6 +326,53 @@ export function validateQEMUPlan(plan) {
   }
 
   return plan;
+}
+
+function validateAudio(plan) {
+  const expectedDevices = SUPPORTED_AUDIO_DEVICES.get(plan.audioDevice);
+  if (!expectedDevices) {
+    throw new TypeError(
+      `QEMU plan audioDevice must be one of: ${[...SUPPORTED_AUDIO_DEVICES.keys()].join(", ")}`
+    );
+  }
+
+  if (plan.audioDevice === "none") {
+    if (plan.audioBackendArgument != null) {
+      throw new TypeError("QEMU plan must not declare an audio backend when audioDevice is none.");
+    }
+    if (containsSequence(plan.arguments, ["-audiodev", AUDIO_BACKEND_ARGUMENT])) {
+      throw new TypeError("QEMU plan must not attach an audio backend when audioDevice is none.");
+    }
+    return;
+  }
+
+  requireString(plan.audioBackendArgument, "audioBackendArgument");
+  if (plan.audioBackendArgument !== AUDIO_BACKEND_ARGUMENT) {
+    throw new TypeError(`QEMU plan audioBackendArgument must be ${AUDIO_BACKEND_ARGUMENT}.`);
+  }
+  if (!containsSequence(plan.arguments, ["-audiodev", AUDIO_BACKEND_ARGUMENT])) {
+    throw new TypeError("QEMU plan arguments must attach the CoreAudio backend for guest sound.");
+  }
+
+  for (const device of expectedDevices) {
+    if (!containsSequence(plan.arguments, ["-device", device])) {
+      throw new TypeError(`QEMU plan arguments must include audio device: ${device}`);
+    }
+  }
+
+  // The backend defines the id that every audio device references, so it has to be declared first or
+  // QEMU refuses to start.
+  const backendIndex = plan.arguments.indexOf("-audiodev");
+  const firstAudioDeviceIndex = plan.arguments.indexOf(expectedDevices[0]);
+  if (backendIndex < 0 || firstAudioDeviceIndex < 0 || backendIndex > firstAudioDeviceIndex) {
+    throw new TypeError("QEMU plan must declare the audio backend before the audio device.");
+  }
+
+  // `usb-audio` hangs off the xHCI controller the plan already creates; without it the device has no
+  // bus to attach to.
+  if (plan.audioDevice === "usb-audio" && !containsSequence(plan.arguments, ["-device", "qemu-xhci,id=usb0"])) {
+    throw new TypeError("QEMU plan must attach a USB controller before usb-audio.");
+  }
 }
 
 function containsSequence(values, sequence) {

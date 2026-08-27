@@ -51,6 +51,47 @@ public class AgentSessionHealthTests
         }
     }
 
+    private sealed class FakeSharedFolderProbe : IWindowsSharedFolderProbe
+    {
+        public int EnsureCount { get; private set; }
+        public int ReadCount { get; private set; }
+        public string? LastShareName { get; private set; }
+        public string? LastGuestDirectoryPath { get; private set; }
+        public bool IsShared { get; init; }
+
+        // A fresh object per call on purpose: a JsonObject can only be attached to one parent, so
+        // returning a cached instance would throw the second time health was requested.
+        public JsonObject ReadStatus(string shareName, string guestDirectoryPath)
+        {
+            ReadCount++;
+            LastShareName = shareName;
+            LastGuestDirectoryPath = guestDirectoryPath;
+            return new JsonObject
+            {
+                ["isSupported"] = true,
+                ["shareName"] = shareName,
+                ["guestDirectoryPath"] = guestDirectoryPath,
+                ["directoryExists"] = true,
+                ["isShared"] = IsShared,
+                ["isWritable"] = IsShared,
+                ["serverListening"] = true,
+                ["requiresElevation"] = !IsShared,
+                ["requiresCredentials"] = true,
+                ["recommendedAction"] = IsShared ? "mount-on-mac" : "create-share-elevated"
+            };
+        }
+
+        public Task<JsonObject> EnsureAsync(
+            string shareName,
+            string guestDirectoryPath,
+            CancellationToken cancellationToken
+        )
+        {
+            EnsureCount++;
+            return Task.FromResult(ReadStatus(shareName, guestDirectoryPath));
+        }
+    }
+
     private sealed class NoOpWindowsDesktop : IWindowsDesktop
     {
         public Task<LaunchedWindow> LaunchAppAsync(WindowsAppDescriptor app, CancellationToken cancellationToken) =>
@@ -235,5 +276,104 @@ public class AgentSessionHealthTests
         }
 
         Assert.False(new WindowsPackageIdentityProbe().HasPackageIdentity);
+    }
+
+    [Fact]
+    public async Task HealthResponseAdvertisesAndReportsTheSharedFolder()
+    {
+        var sharedFolderProbe = new FakeSharedFolderProbe { IsShared = false };
+        var session = new AgentSession(
+            new NoOpWindowsDesktop(),
+            new NoOpFrameCapture(),
+            new FakePackageIdentityProbe(true),
+            sharedFolderProbe: sharedFolderProbe
+        );
+
+        var replies = await session.HandleAsync(new JsonObject
+        {
+            ["type"] = MessageTypes.AgentHealthRequest,
+            ["requestId"] = "req_health"
+        });
+
+        var response = Assert.Single(replies.DirectReplies);
+        Assert.True(response["capabilities"]!["sharedFolder"]!.GetValue<bool>());
+        var sharedFolder = Assert.IsType<JsonObject>(response["sharedFolder"]);
+        Assert.Equal(SharedFolderProbe.DefaultShareName, sharedFolder["shareName"]!.GetValue<string>());
+        Assert.Equal(SharedFolderProbe.DefaultGuestDirectoryPath, sharedFolder["guestDirectoryPath"]!.GetValue<string>());
+        Assert.Equal("create-share-elevated", sharedFolder["recommendedAction"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task HealthNeverPreparesTheShareAsASideEffect()
+    {
+        var sharedFolderProbe = new FakeSharedFolderProbe();
+        var session = new AgentSession(
+            new NoOpWindowsDesktop(),
+            new NoOpFrameCapture(),
+            new FakePackageIdentityProbe(true),
+            sharedFolderProbe: sharedFolderProbe
+        );
+
+        await session.HandleAsync(new JsonObject
+        {
+            ["type"] = MessageTypes.AgentHealthRequest,
+            ["requestId"] = "req_health"
+        });
+
+        // Health is polled. Creating folders or publishing shares from it would make a read turn into a
+        // write several times a minute.
+        Assert.Equal(0, sharedFolderProbe.EnsureCount);
+        Assert.Equal(1, sharedFolderProbe.ReadCount);
+    }
+
+    [Fact]
+    public async Task SharedFolderRequestPreparesTheShareUsingTheHostSuppliedNames()
+    {
+        var sharedFolderProbe = new FakeSharedFolderProbe { IsShared = true };
+        var session = new AgentSession(
+            new NoOpWindowsDesktop(),
+            new NoOpFrameCapture(),
+            new FakePackageIdentityProbe(true),
+            sharedFolderProbe: sharedFolderProbe
+        );
+
+        var replies = await session.HandleAsync(new JsonObject
+        {
+            ["type"] = MessageTypes.SharedFolderRequest,
+            ["requestId"] = "req_shared_folder",
+            ["shareName"] = "TeamShare",
+            ["guestDirectoryPath"] = @"C:\TeamShare"
+        });
+
+        var response = Assert.Single(replies.DirectReplies);
+        Assert.Equal(MessageTypes.SharedFolderResponse, response["type"]!.GetValue<string>());
+        Assert.Equal("req_shared_folder", response["requestId"]!.GetValue<string>());
+        Assert.Equal(1, sharedFolderProbe.EnsureCount);
+        // The host names the share so a mismatch between what the Mac mounts and what Windows published
+        // cannot pass unnoticed.
+        Assert.Equal("TeamShare", sharedFolderProbe.LastShareName);
+        Assert.Equal(@"C:\TeamShare", sharedFolderProbe.LastGuestDirectoryPath);
+        Assert.Equal("TeamShare", response["sharedFolder"]!["shareName"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task SharedFolderRequestFallsBackToDefaultsForAnOlderHost()
+    {
+        var sharedFolderProbe = new FakeSharedFolderProbe();
+        var session = new AgentSession(
+            new NoOpWindowsDesktop(),
+            new NoOpFrameCapture(),
+            new FakePackageIdentityProbe(true),
+            sharedFolderProbe: sharedFolderProbe
+        );
+
+        await session.HandleAsync(new JsonObject
+        {
+            ["type"] = MessageTypes.SharedFolderRequest,
+            ["requestId"] = "req_shared_folder"
+        });
+
+        Assert.Equal(SharedFolderProbe.DefaultShareName, sharedFolderProbe.LastShareName);
+        Assert.Equal(SharedFolderProbe.DefaultGuestDirectoryPath, sharedFolderProbe.LastGuestDirectoryPath);
     }
 }

@@ -35,7 +35,7 @@ Responsibilities:
 - create one macOS window per tracked guest window,
 - translate keyboard and pointer events,
 - sync clipboard data with clear user expectations,
-- expose a narrow shared folder,
+- mount the live shared folder the guest publishes,
 - store user settings and VM profiles.
 
 ## Serverless Local Runtime
@@ -50,6 +50,14 @@ Current provider status:
 The provider probe is intentionally read-only. `veil-vmctl providers --json` reports candidate providers for diagnostics and harness validation, but it must not start, stop, create, or mutate a VM.
 
 The QEMU boot plan remains inspectable before execution. `veil-vmctl qemu-plan --json` converts the stored Windows Arm VM profile into a dry-run QEMU/HVF command plan and reports whether `qemu-system-aarch64` is locally available. `veil-vmctl qemu-start` is the guarded local execution spike for that plan: it checks QEMU doctor readiness first, starts QEMU with `-display none` plus a loopback VNC endpoint, forwards the Windows guest agent port to `127.0.0.1:18444`, attaches a QEMU HMP monitor socket for compatibility screenshots plus a QMP socket for structured input/recovery control, sends boot-prompt key input during the initial wait window, and writes process/serial logs under `~/Library/Application Support/Veil/Diagnostics`. App-launched QEMU sessions share the same embedded monitor/QMP/VNC evidence shape. Screen-gated recovery reads the active VNC framebuffer, uses local OCR and pixel metrics to distinguish blank, desktop, Run, UAC, modal, and command states, and records stable latest screenshots instead of blindly sending timed input. HMP `screendump` is fallback evidence because it can target an inactive display head after Windows switches graphics devices. `veil-vmctl qemu-start --native-display` and `VEIL_USE_NATIVE_QEMU_DISPLAY=1` keep the temporary Cocoa display as explicit recovery fallbacks. The UTM-class target remains a live embedded display surface in the main Veil window, backed first by that loopback display endpoint and later by a lower-latency renderer if needed.
+
+## Session Persistence Boundary
+
+Stopping a VM and suspending a Windows session are different products. Stop shuts Windows down; suspend keeps the user's open apps. Veil implements suspend inside the local runtime provider boundary: `VMRuntimeBooting.suspend(profile:)`/`resume(profile:)` pause the guest, stream RAM and device state through QEMU's migration path to a local file next to the virtual disk, and later relaunch QEMU with `-incoming` before unpausing. Providers that cannot persist a session throw `suspendNotSupported` instead of silently falling back to stop and start, because that fallback would destroy the user's open work.
+
+That memory-state file is guest data, not diagnostics. It lives beside the virtual disk as `.vmsave`, while the metadata-only record (paths, machine fingerprint, migration status) lives with the other diagnostics records. The stream is single-use: Veil deletes it once the guest runs again, discards it on a cold boot, and refuses to load one whose recorded machine fingerprint no longer matches the rebuilt boot plan, since a migration stream is only valid against an identically configured machine and an advanced disk.
+
+Snapshots are a separate capability with a separate prerequisite. QEMU internal snapshots store guest state inside the disk image, which requires `qcow2`, while Veil's default system disk is raw. Veil reports that difference through an explicit capability rather than offering a snapshot action that cannot succeed, and points at the `qemu-img convert` path plus the suspend alternative that does work on the shipping format.
 
 ## Windows Arm Install Flow
 
@@ -99,7 +107,66 @@ Responsibilities:
 - capture window frames,
 - receive input events,
 - update and observe the Windows clipboard,
+- publish the shared folder over Windows' in-box SMB server,
 - report health and app lifecycle events.
+
+## File Sharing
+
+Two separate paths, kept separate because they answer different questions.
+
+`file.open.request` copies one file over the control channel, writes it into a temporary guest
+directory, and launches an app with that path. It is the drag-and-drop-to-open interaction, where a copy
+is what the user means, and it is capped at 50 MB.
+
+The **live shared folder** is a real, writable, uncapped share. It runs in the direction that needs
+nothing installed: Windows publishes `C:\VeilShared` over its in-box SMB server, and macOS mounts it
+through a loopback-scoped QEMU port forward appended to the existing user network.
+
+```text
+Finder  ->  smb://127.0.0.1:18445/VeilShared
+             |
+             QEMU usermode NAT, hostfwd=tcp:127.0.0.1:18445-:445
+             |
+Windows  ->  \\<guest>\VeilShared  ->  C:\VeilShared
+```
+
+The inverted direction is forced by what exists rather than chosen: virtio-9p has no Windows guest
+driver, virtio-fs has no macOS host daemon for QEMU, and QEMU's built-in `smb=` depends on a Samba build
+that will not run as the non-root user QEMU invokes it as. Sharing a *Mac* folder into Windows needs an
+SMB server on the host, so it is modelled as a distinct `host-smb` transport and reported as unavailable
+with its prerequisite instead of being quietly conflated with the one that works.
+
+Both host forwards name `127.0.0.1` explicitly. An empty host address in a `hostfwd` clause binds every
+interface, which would publish the guest agent's unauthenticated control channel — app launch,
+synthesized input, clipboard read and write — and the guest's SMB server to the local network.
+
+## The Privilege Boundary
+
+Veil runs QEMU as the logged-in user. That is a deliberate architectural choice, and it is why Veil
+needs no admin password to install or run.
+
+It is also the single reason for the two largest remaining gaps against Parallels:
+
+| Capability | Blocker |
+|---|---|
+| USB device passthrough | macOS binds most USB devices to a kernel driver; libusb cannot take exclusive access without root. QEMU upstream tracks this as unusable on Apple Silicon. |
+| Bridged / host-only networking | Both are macOS `vmnet` modes, which require root or the `com.apple.vm.networking` entitlement Apple grants case by case. |
+
+Parallels closes both by shipping a signed system extension and a privileged helper. Veil has three
+options and has not chosen one:
+
+1. A privileged helper installed with `SMAppService`, which QEMU is launched through. Costs an admin
+   prompt at install and makes Veil responsible for a root-privileged process.
+2. Apple-granted entitlements, which need a distribution relationship an open-source project does not
+   have.
+3. Running QEMU under `sudo`. **Refused outright** — it would put a user-controlled command line and a
+   network-reachable guest behind root.
+
+Until that decision is made, both capabilities are reported as unavailable with their prerequisite by
+`veil-vmctl device-passthrough-status` rather than silently missing. The live shared folder covers the
+file-transfer reason people usually want USB for, and loopback port forwards cover the private
+host-to-guest access people usually want host-only networking for. Neither substitutes for a security
+key or a licence dongle, and the report says so.
 
 Current scaffold status:
 
@@ -123,7 +190,7 @@ The protocol is a product boundary. It should be easy to test without booting a 
 MVP transport:
 
 ```text
-Host connects to ws://127.0.0.1:18444 through QEMU `hostfwd=tcp::18444-:18444`
+Host connects to ws://127.0.0.1:18444 through QEMU `hostfwd=tcp:127.0.0.1:18444-:18444`
 JSON messages
 requestId for request/response correlation
 windowId represented as hwnd:<hex>

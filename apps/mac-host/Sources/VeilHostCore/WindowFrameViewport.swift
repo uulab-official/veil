@@ -65,12 +65,28 @@ public struct WindowFrameViewport: Equatable, Sendable {
         )
     }
 
+    /// Whether the source dimensions are small enough to do arithmetic on safely.
+    ///
+    /// `guestPoint` multiplies a normalized `0...1` position by `Double(sourceWidth)` and converts the result
+    /// with `Int(_:)`, which **traps** rather than saturating when the value exceeds `Int.max`. These
+    /// dimensions come from a guest-supplied `window.frame`, so a width of `Int.max` plus a click at the right
+    /// edge was a hard crash of the host app.
+    ///
+    /// Bounded by the same ceiling the binary frame channel already enforces on a surface, so a frame the
+    /// codec would refuse cannot reach the input path either.
+    public var hasPlausibleSourceSize: Bool {
+        sourceWidth > 0
+            && sourceHeight > 0
+            && sourceWidth <= VeilFrameChannelCodec.maximumSurfaceDimension
+            && sourceHeight <= VeilFrameChannelCodec.maximumSurfaceDimension
+            && sourceWidth * sourceHeight <= VeilFrameChannelCodec.maximumSurfacePixelCount
+    }
+
     public func guestPoint(forViewX viewX: Double, viewYFromBottom: Double) -> WindowFramePoint? {
         let frame = visibleFrame
-        guard frame.width > 0,
+        guard hasPlausibleSourceSize,
+              frame.width > 0,
               frame.height > 0,
-              sourceWidth > 0,
-              sourceHeight > 0,
               viewX >= frame.x,
               viewX <= frame.x + frame.width,
               viewYFromBottom >= frame.y,

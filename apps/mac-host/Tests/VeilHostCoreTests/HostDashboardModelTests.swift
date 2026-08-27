@@ -1011,6 +1011,82 @@ struct HostDashboardModelTests {
         #expect(model.phase == .connected)
     }
 
+    @Test("an unchanged-frame heartbeat advances liveness without disturbing the displayed frame")
+    @MainActor
+    func unchangedFrameHeartbeatAdvancesLivenessOnly() async throws {
+        let service = FakeDashboardService(health: .captureReady)
+        let model = HostDashboardModel(service: service)
+        let frameAt = Date(timeIntervalSince1970: 2_000)
+
+        await model.launchNotepad()
+        model.receiveWindowFrame(.notepadFirstFrame, receivedAt: frameAt)
+        let accepted = model.receiveWindowFrameUnchanged(
+            .notepadHeartbeat(sequence: 2),
+            receivedAt: frameAt.addingTimeInterval(9.75)
+        )
+
+        let timing = try #require(model.mirrorSessions.first?.frameTiming)
+        #expect(accepted)
+        #expect(timing.latestFrameReceivedAt == frameAt)
+        #expect(timing.latestActivityAt == frameAt.addingTimeInterval(9.75))
+        #expect(timing.receivedFrameCount == 1)
+        #expect(timing.unchangedHeartbeatCount == 1)
+        // The heartbeat must never replace what is on screen.
+        #expect(model.mirrorSessions.first?.latestFrame?.frameId == "frame_000001")
+
+        // An idle window with a 10 second old picture is healthy, not stale. Before the liveness split
+        // this reported `stale` and escalated into subscription restart.
+        let report = model.runtimeStatusReport(generatedAt: frameAt.addingTimeInterval(10))
+        let windowStatus = try #require(report.mirrorSessions.first)
+        #expect(windowStatus.frameStreamStatus == .fresh)
+        #expect(windowStatus.latestFrameAgeMilliseconds == 10_000)
+        #expect(windowStatus.latestActivityAgeMilliseconds == 250)
+        #expect(windowStatus.unchangedHeartbeatCount == 1)
+        #expect(windowStatus.receivedFrameCount == 1)
+        #expect(windowStatus.frameStreamRecommendedAction == "none")
+    }
+
+    @Test("ignores an unchanged-frame heartbeat before the first real frame")
+    @MainActor
+    func ignoresUnchangedFrameHeartbeatBeforeFirstFrame() async throws {
+        let service = FakeDashboardService(health: .captureReady)
+        let model = HostDashboardModel(service: service)
+
+        await model.launchNotepad()
+        // A stream that has never produced an image is still waiting for its first frame. Letting a
+        // heartbeat satisfy that would hide capture that never started.
+        let accepted = model.receiveWindowFrameUnchanged(.notepadHeartbeat(sequence: 1))
+
+        #expect(!accepted)
+        #expect(model.mirrorSessions.first?.frameTiming == nil)
+    }
+
+    @Test("ignores an unchanged-frame heartbeat for windows without a mirror session")
+    @MainActor
+    func ignoresUnchangedFrameHeartbeatForUnknownWindows() async throws {
+        let model = HostDashboardModel(service: FakeDashboardService(health: .captureReady))
+
+        #expect(!model.receiveWindowFrameUnchanged(.heartbeat(windowId: "hwnd:DEADBEEF", sequence: 1)))
+    }
+
+    @Test("routes an unchanged-frame heartbeat through the protocol message pump")
+    @MainActor
+    func routesUnchangedFrameHeartbeatThroughProtocolPump() async throws {
+        let service = FakeDashboardService(health: .captureReady)
+        let model = HostDashboardModel(service: service)
+
+        await model.load()
+        await model.launchNotepad()
+        model.receiveWindowFrame(.notepadFirstFrame, receivedAt: Date(timeIntervalSince1970: 2_000))
+
+        let result = try await model.receiveProtocolMessage(
+            Data(WindowFrameUnchangedEvent.notepadHeartbeatJSON.utf8)
+        )
+
+        #expect(result == .handledWindowFrameUnchanged(windowId: "hwnd:0003029A"))
+        #expect(model.mirrorSessions.first?.frameTiming?.unchangedHeartbeatCount == 1)
+    }
+
     @Test("ignores key input for windows without a mirror session")
     @MainActor
     func ignoresKeyInputForUnknownWindows() async throws {
@@ -1021,6 +1097,55 @@ struct HostDashboardModelTests {
 
         #expect(service.keyInputs.isEmpty)
         #expect(model.phase == .idle)
+    }
+
+    @Test("sends committed Korean text that no Windows virtual key can express")
+    @MainActor
+    func sendsCommittedKoreanText() async throws {
+        let service = FakeDashboardService(health: .inputReady)
+        let model = HostDashboardModel(service: service)
+
+        await model.launchNotepad()
+        let accepted = await model.sendTextInput(windowId: "hwnd:0003029A", text: "안녕하세요")
+
+        #expect(accepted)
+        #expect(service.textInputs == [
+            InputTextEvent(windowId: "hwnd:0003029A", text: "안녕하세요")
+        ])
+        #expect(model.errorMessage == nil)
+        #expect(model.phase == .connected)
+    }
+
+    @Test("ignores committed text for windows without a mirror session")
+    @MainActor
+    func ignoresCommittedTextForUnknownWindows() async throws {
+        let service = FakeDashboardService(health: .inputReady)
+        let model = HostDashboardModel(service: service)
+
+        let accepted = await model.sendTextInput(windowId: "hwnd:DEADBEEF", text: "안녕")
+
+        #expect(!accepted)
+        #expect(service.textInputs.isEmpty)
+        #expect(model.phase == .idle)
+    }
+
+    @Test("refuses committed text the guest contract would reject")
+    @MainActor
+    func refusesCommittedTextTheGuestWouldReject() async throws {
+        let service = FakeDashboardService(health: .inputReady)
+        let model = HostDashboardModel(service: service)
+
+        await model.launchNotepad()
+
+        // Rejected on the host so the guest never has to fail these: empty payloads, oversized
+        // payloads, and Enter/Tab, which belong on the virtual-key path.
+        for text in ["", "line\nbreak", "tab\there", String(repeating: "가", count: InputTextEvent.maximumUTF16Length + 1)] {
+            let accepted = await model.sendTextInput(windowId: "hwnd:0003029A", text: text)
+            #expect(!accepted, "\(text.count) characters")
+        }
+
+        #expect(service.textInputs.isEmpty)
+        #expect(model.errorMessage == nil)
     }
 
     @Test("sends host clipboard text with increasing sequence")
@@ -1540,9 +1665,14 @@ struct HostDashboardModelTests {
         #expect(report.quietRuntime.canQuietRuntime)
         #expect(report.quietRuntime.willQuietAutomatically)
         #expect(report.quietRuntime.automaticQuietDelaySeconds == 8)
-        #expect(report.quietRuntime.recommendedAction == "stop-or-suspend-runtime")
+        // No snapshot was supplied, so session persistence is unknown and the honest resolution is to
+        // stop rather than promise a suspend Veil cannot deliver.
+        #expect(report.quietRuntime.quietMode == "stop")
+        #expect(report.quietRuntime.canSuspendSession == false)
+        #expect(report.quietRuntime.recommendedAction == "stop-runtime")
+        #expect(report.quietRuntime.recommendedSuspendCommand == nil)
         #expect(report.quietRuntime.recommendedStopCommand == "veil-vmctl app-runtime-action --json --action stop-runtime")
-        #expect(report.quietRuntime.reason == "All Windows app windows are closed and the Windows app connection is ready to stop cleanly.")
+        #expect(report.quietRuntime.reason.contains("open apps will not survive"))
         #expect(!report.quietRuntime.reason.contains("live agent"))
         #expect(!report.quietRuntime.reason.contains("runtime"))
         #expect(report.guestAgentDiagnostics.isConnected)
@@ -1937,13 +2067,14 @@ struct HostDashboardModelTests {
         let model = HostDashboardModel(service: service)
 
         await model.load()
-        await model.launchSelectedApp()
+        let liveResult = await model.launchSelectedApp()
 
         #expect(model.selectedAppId == "winapp_calculator")
         #expect(model.canLaunchSelectedApp)
         #expect(model.phase == .connected)
         #expect(model.lastLaunch?.window.appId == "winapp_calculator")
         #expect(model.lastLaunch?.window.title == "Calculator")
+        #expect(liveResult?.window.appId == "winapp_calculator")
         #expect(service.launchedAppIds == ["winapp_calculator"])
     }
 
@@ -1972,8 +2103,11 @@ struct HostDashboardModelTests {
         let result = await model.openFile(appId: "winapp_notepad", fileName: "notes.txt", contentBase64: "aGVsbG8=")
 
         #expect(result == nil)
-        #expect(model.phase == .failed)
-        #expect(model.errorMessage == "The Windows app winapp_notepad is not available from the Windows agent.")
+        #expect(model.phase == .idle)
+        #expect(model.errorMessage == nil)
+        let refusal = try #require(model.lastFileDropRefusal)
+        #expect(refusal.reasonId == "guestRejected")
+        #expect(refusal.fileName == "notes.txt")
     }
 
     @Test("loads demo overview when primary agent is unavailable")
@@ -2299,11 +2433,12 @@ struct HostDashboardModelTests {
         let model = HostDashboardModel(service: service, pendingLaunchIntentStore: pendingLaunchStore)
 
         await model.load()
-        await model.launchSelectedApp()
+        let queuedResult = await model.launchSelectedApp()
 
         #expect(model.phase == .connected)
         #expect(model.errorMessage == nil)
         #expect(model.lastLaunch == nil)
+        #expect(queuedResult == nil)
         #expect(model.mirrorSessions.isEmpty)
         #expect(model.pendingLaunchAppId == "winapp_notepad")
         #expect(model.connectionMode == .demo)
@@ -2374,7 +2509,7 @@ struct HostDashboardModelTests {
         #expect(runningQueuedReport.primaryNextAction.command == "veil-vmctl app-runtime-action --json --action repair-agent --wait-seconds 120")
         #expect(runningQueuedReport.launchOnboarding.currentStepTitle == "Continue Notepad")
         #expect(runningQueuedReport.launchOnboarding.currentStepDetail == "Reconnect the app connection, then open Notepad automatically.")
-        #expect(runningQueuedReport.launchOnboarding.completedStepCount == 3)
+        #expect(runningQueuedReport.launchOnboarding.completedStepCount == 2)
         #expect(runningQueuedReport.launchOnboarding.totalStepCount == 5)
         #expect(runningQueuedReport.launchOnboarding.currentStepNumber == 3)
         #expect(runningQueuedReport.launchOnboarding.progressLabel == "Step 3 of 5")
@@ -2614,9 +2749,9 @@ struct HostDashboardModelTests {
         #expect(try await intentStore.load()?.appIds == [])
     }
 
-    @Test("ignores extra same-app discovery windows in the default app-first mode")
+    @Test("tracks extra same-app discovery windows in the default app-first mode")
     @MainActor
-    func ignoresExtraSameAppDiscoveryWindowsInDefaultAppFirstMode() async throws {
+    func tracksExtraSameAppDiscoveryWindowsInDefaultAppFirstMode() async throws {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
         let intentStore = JSONWindowRestoreIntentStore(directory: directory)
@@ -2626,20 +2761,20 @@ struct HostDashboardModelTests {
         await model.launchNotepad()
         let discoveryResult = try await model.receiveProtocolMessage(Data(WindowCreatedEvent.secondNotepadCreatedJSON.utf8))
 
-        #expect(discoveryResult == .ignored)
-        #expect(model.mirrorSessions.map(\.id) == ["hwnd:0003029A"])
+        #expect(discoveryResult == .handledWindowCreated(windowId: "hwnd:00010500"))
+        #expect(model.mirrorSessions.map(\.id) == ["hwnd:0003029A", "hwnd:00010500"])
+        #expect(model.restorableAppIds == ["winapp_notepad"])
+        #expect(model.restorableAppWindowCounts == ["winapp_notepad": 2])
+        #expect(try await intentStore.load()?.appIds == ["winapp_notepad"])
+        #expect(try await intentStore.load()?.appWindowCounts == ["winapp_notepad": 2])
+
+        _ = await model.closeMirrorSession(windowId: "hwnd:0003029A")
+
+        #expect(model.mirrorSessions.map(\.id) == ["hwnd:00010500"])
         #expect(model.restorableAppIds == ["winapp_notepad"])
         #expect(model.restorableAppWindowCounts == ["winapp_notepad": 1])
         #expect(try await intentStore.load()?.appIds == ["winapp_notepad"])
         #expect(try await intentStore.load()?.appWindowCounts == ["winapp_notepad": 1])
-
-        _ = await model.closeMirrorSession(windowId: "hwnd:0003029A")
-
-        #expect(model.mirrorSessions.isEmpty)
-        #expect(model.restorableAppIds.isEmpty)
-        #expect(model.restorableAppWindowCounts.isEmpty)
-        #expect(try await intentStore.load()?.appIds == [])
-        #expect(try await intentStore.load()?.appWindowCounts == nil)
     }
 
     @Test("loads persisted mapped app intent on startup")
@@ -2763,6 +2898,301 @@ struct HostDashboardModelTests {
     }
 }
 
+/// Which windows Veil did not launch should still become macOS windows.
+///
+/// The guest enumerates every tracked process after a reconnect, so this rule is the only thing between
+/// discovery and windows nobody asked for. It has to admit a second document of an app the user opened
+/// while refusing a leftover window of an app they never opened.
+@Suite("Multi-document window adoption")
+@MainActor
+struct MultiDocumentWindowAdoptionTests {
+    private static func window(
+        windowId: String,
+        appId: String,
+        title: String = "Document - Notepad",
+        width: Int = 960,
+        height: Int = 640
+    ) -> WindowCreatedEvent {
+        WindowCreatedEvent(
+            windowId: windowId,
+            processId: 4912,
+            appId: appId,
+            title: title,
+            bounds: WindowBounds(x: 0, y: 0, width: width, height: height),
+            state: "normal",
+            focused: true
+        )
+    }
+
+    private static func modelWithNotepadOpen() async -> HostDashboardModel {
+        let model = HostDashboardModel(service: FakeDashboardService(health: .captureReady))
+        await model.launchNotepad()
+        return model
+    }
+
+    @Test("adopts a second window of an app the user already opened")
+    func adoptsSecondWindowOfOpenApp() async {
+        let model = await Self.modelWithNotepadOpen()
+
+        // The user opened Notepad; Notepad opening another document window is the app doing what they
+        // asked, so it should appear.
+        #expect(
+            model.shouldAdoptAdditionalWindow(
+                Self.window(windowId: "hwnd:0002", appId: "winapp_notepad")
+            )
+        )
+    }
+
+    @Test("refuses a window of an app never opened in this session")
+    func refusesWindowOfUnopenedApp() async {
+        let model = await Self.modelWithNotepadOpen()
+
+        // A leftover process, or something Windows started on its own. An unrequested window appearing on
+        // screen is worse than a missing one.
+        #expect(
+            !model.shouldAdoptAdditionalWindow(
+                Self.window(windowId: "hwnd:0009", appId: "winapp_calculator", title: "Calculator")
+            )
+        )
+    }
+
+    @Test("refuses adoption before any app window is open")
+    func refusesAdoptionBeforeAnyWindowIsOpen() async {
+        let model = HostDashboardModel(service: FakeDashboardService(health: .captureReady))
+        await model.load()
+
+        #expect(
+            !model.shouldAdoptAdditionalWindow(
+                Self.window(windowId: "hwnd:0002", appId: "winapp_notepad")
+            )
+        )
+    }
+
+    @Test("refuses untitled and zero-sized windows")
+    func refusesUntitledAndZeroSizedWindows() async {
+        let model = await Self.modelWithNotepadOpen()
+
+        // Far more likely a tooltip, splash, or transient shell window than a document.
+        #expect(
+            !model.shouldAdoptAdditionalWindow(
+                Self.window(windowId: "hwnd:0002", appId: "winapp_notepad", title: "")
+            )
+        )
+        #expect(
+            !model.shouldAdoptAdditionalWindow(
+                Self.window(windowId: "hwnd:0003", appId: "winapp_notepad", title: "   ")
+            )
+        )
+        #expect(
+            !model.shouldAdoptAdditionalWindow(
+                Self.window(windowId: "hwnd:0004", appId: "winapp_notepad", width: 0)
+            )
+        )
+        #expect(
+            !model.shouldAdoptAdditionalWindow(
+                Self.window(windowId: "hwnd:0005", appId: "winapp_notepad", height: 0)
+            )
+        )
+    }
+
+    @Test("adopts up to the per-app bound and then stops")
+    func stopsAdoptingAtPerAppBound() {
+        let bound = HostDashboardModel.maximumAdoptedWindowsPerApp
+        let event = Self.window(windowId: "hwnd:00ff", appId: "winapp_notepad")
+
+        for openCount in 1..<bound {
+            #expect(
+                HostDashboardModel.shouldAdoptAdditionalWindow(event, openWindowCountForApp: openCount),
+                "openCount=\(openCount)"
+            )
+        }
+
+        // Bounds guest-driven creation. A runaway enumeration loop must not open macOS windows without
+        // limit, even though every window so far looked legitimate.
+        #expect(!HostDashboardModel.shouldAdoptAdditionalWindow(event, openWindowCountForApp: bound))
+        #expect(!HostDashboardModel.shouldAdoptAdditionalWindow(event, openWindowCountForApp: bound + 1))
+    }
+
+    @Test("the bound never applies to an app with no window open")
+    func boundNeverAppliesToUnopenedApp() {
+        let event = Self.window(windowId: "hwnd:00ff", appId: "winapp_notepad")
+
+        // Zero is refused for a different reason than the bound: the app was never opened here, so no
+        // count makes the window wanted.
+        #expect(!HostDashboardModel.shouldAdoptAdditionalWindow(event, openWindowCountForApp: 0))
+    }
+
+    @Test("counts windows per app rather than in total")
+    func countsWindowsPerAppRatherThanInTotal() async {
+        let model = await Self.modelWithNotepadOpen()
+
+        #expect(model.openWindowCount(forAppId: "winapp_notepad") == 1)
+        #expect(model.openWindowCount(forAppId: "winapp_calculator") == 0)
+    }
+}
+
+/// Whether going idle suspends Windows or shuts it down.
+///
+/// This is the difference between reopening an app to find your unsaved work still there and finding
+/// Windows cold booted with everything gone. The resolution is tested directly because the two
+/// outcomes are indistinguishable to the type system and very different to a user.
+@Suite("Idle quiet policy")
+@MainActor
+struct IdleQuietPolicyTests {
+    private static func localRuntime(
+        state: VMRuntimeState?,
+        canSuspendSession: Bool,
+        isKnown: Bool = true
+    ) -> WindowsAppRuntimeLocalRuntimeStatus {
+        WindowsAppRuntimeLocalRuntimeStatus(
+            isKnown: isKnown,
+            state: state,
+            bootReady: true,
+            canStart: false,
+            isRunning: state == .running || state == .starting,
+            canSuspendSession: canSuspendSession,
+            windowsInstalled: true,
+            recommendedAction: "wait-for-guest-agent",
+            recommendedInstallStatusCommand: "veil-vmctl qemu-install-status --json",
+            reason: "test"
+        )
+    }
+
+    private static func idleModel() async -> HostDashboardModel {
+        let model = HostDashboardModel(service: FakeDashboardService(health: .captureReady))
+        await model.launchNotepad()
+        _ = await model.closeMirrorSession(windowId: "hwnd:0003029A")
+        return model
+    }
+
+    @Test("suspends a running session that can be persisted")
+    func suspendsRunningPersistableSession() async {
+        let model = await Self.idleModel()
+
+        let quietRuntime = model.quietRuntimeStatus(
+            localRuntime: Self.localRuntime(state: .running, canSuspendSession: true)
+        )
+
+        #expect(quietRuntime.canQuietRuntime)
+        #expect(quietRuntime.quietMode == WindowsAppRuntimeQuietPolicyStatus.suspendMode)
+        #expect(quietRuntime.canSuspendSession)
+        #expect(quietRuntime.recommendedAction == "suspend-runtime")
+        #expect(quietRuntime.recommendedSuspendCommand == "veil-vmctl app-runtime-action --json --action suspend-runtime")
+        // Stop stays offered as the fallback, because a suspend that fails partway needs somewhere to go.
+        #expect(quietRuntime.recommendedStopCommand == "veil-vmctl app-runtime-action --json --action stop-runtime")
+        #expect(quietRuntime.reason.contains("survive"))
+    }
+
+    @Test("stops when the session cannot be persisted, and says so")
+    func stopsWhenSessionCannotBePersisted() async {
+        let model = await Self.idleModel()
+
+        let quietRuntime = model.quietRuntimeStatus(
+            localRuntime: Self.localRuntime(state: .running, canSuspendSession: false)
+        )
+
+        #expect(quietRuntime.quietMode == WindowsAppRuntimeQuietPolicyStatus.stopMode)
+        #expect(quietRuntime.canSuspendSession == false)
+        #expect(quietRuntime.recommendedAction == "stop-runtime")
+        #expect(quietRuntime.recommendedSuspendCommand == nil)
+        // The user is told their apps are about to be lost rather than left to discover it.
+        #expect(quietRuntime.reason.contains("will not survive"))
+    }
+
+    @Test("never suspends a machine that is not running")
+    func neverSuspendsNonRunningMachine() async {
+        let model = await Self.idleModel()
+
+        // A `.suspended` VM is already quiet and a `.starting` one has no consistent guest state to
+        // stream, so neither is a suspend candidate even though persistence is supported.
+        for state in [VMRuntimeState.suspended, .starting] {
+            let quietRuntime = model.quietRuntimeStatus(
+                localRuntime: Self.localRuntime(state: state, canSuspendSession: true)
+            )
+
+            #expect(quietRuntime.canSuspendSession == false, "\(state.rawValue)")
+            #expect(quietRuntime.quietMode != WindowsAppRuntimeQuietPolicyStatus.suspendMode, "\(state.rawValue)")
+        }
+    }
+
+    @Test("resolves to stop when no snapshot was supplied")
+    func resolvesToStopWithoutASnapshot() async {
+        let model = await Self.idleModel()
+
+        // Callers that pass no local runtime cannot know whether persistence works. Defaulting to
+        // suspend would advertise a session Veil might not be able to keep.
+        let quietRuntime = model.quietRuntimeStatus()
+
+        #expect(quietRuntime.canQuietRuntime)
+        #expect(quietRuntime.quietMode == WindowsAppRuntimeQuietPolicyStatus.stopMode)
+        #expect(quietRuntime.canSuspendSession == false)
+    }
+
+    @Test("reports no quiet mode while app windows are still open")
+    func reportsNoModeWhileWindowsAreOpen() async {
+        let model = HostDashboardModel(service: FakeDashboardService(health: .captureReady))
+        await model.launchNotepad()
+
+        let quietRuntime = model.quietRuntimeStatus(
+            localRuntime: Self.localRuntime(state: .running, canSuspendSession: true)
+        )
+
+        #expect(quietRuntime.canQuietRuntime == false)
+        #expect(quietRuntime.quietMode == WindowsAppRuntimeQuietPolicyStatus.noneMode)
+        #expect(quietRuntime.recommendedAction == "keep-running")
+        #expect(quietRuntime.recommendedSuspendCommand == nil)
+        #expect(quietRuntime.recommendedStopCommand == nil)
+    }
+
+    @Test("reports no quiet mode before any app window has opened")
+    func reportsNoModeBeforeFirstWindow() {
+        let model = HostDashboardModel(service: FakeDashboardService(health: .captureReady))
+
+        let quietRuntime = model.quietRuntimeStatus(
+            localRuntime: Self.localRuntime(state: .running, canSuspendSession: true)
+        )
+
+        #expect(quietRuntime.quietMode == WindowsAppRuntimeQuietPolicyStatus.noneMode)
+        #expect(quietRuntime.recommendedAction == "none")
+    }
+
+    @Test("the recommendation always names exactly the mode that will run")
+    func recommendationNamesTheResolvedMode() async {
+        let model = await Self.idleModel()
+
+        for canSuspendSession in [true, false] {
+            let quietRuntime = model.quietRuntimeStatus(
+                localRuntime: Self.localRuntime(state: .running, canSuspendSession: canSuspendSession)
+            )
+
+            // The previous contract said "stop-or-suspend-runtime", which named both and committed to
+            // neither. A reader could not tell whether their open apps were about to be closed.
+            #expect(
+                quietRuntime.recommendedAction == "\(quietRuntime.quietMode)-runtime",
+                "canSuspendSession=\(canSuspendSession)"
+            )
+            #expect(quietRuntime.recommendedAction != "stop-or-suspend-runtime")
+        }
+    }
+
+    @Test("a suspend command is offered only alongside a suspend mode")
+    func suspendCommandOnlyWithSuspendMode() async {
+        let model = await Self.idleModel()
+
+        for canSuspendSession in [true, false] {
+            let quietRuntime = model.quietRuntimeStatus(
+                localRuntime: Self.localRuntime(state: .running, canSuspendSession: canSuspendSession)
+            )
+
+            #expect(
+                (quietRuntime.recommendedSuspendCommand != nil)
+                    == (quietRuntime.quietMode == WindowsAppRuntimeQuietPolicyStatus.suspendMode),
+                "canSuspendSession=\(canSuspendSession)"
+            )
+        }
+    }
+}
+
 @MainActor
 private final class FakeDashboardService: HostDashboardService {
     var error: (any Error)?
@@ -2781,6 +3211,7 @@ private final class FakeDashboardService: HostDashboardService {
     private(set) var closedWindowIds: [String] = []
     private(set) var mouseInputs: [InputMouseEvent] = []
     private(set) var keyInputs: [InputKeyEvent] = []
+    private(set) var textInputs: [InputTextEvent] = []
     private(set) var clipboardTexts: [ClipboardTextSet] = []
     private(set) var frameSubscriptions: [String] = []
     private(set) var frameUnsubscriptions: [String] = []
@@ -2908,6 +3339,14 @@ private final class FakeDashboardService: HostDashboardService {
         }
 
         keyInputs.append(input)
+    }
+
+    func sendTextInput(_ input: InputTextEvent) async throws {
+        if let error {
+            throw error
+        }
+
+        textInputs.append(input)
     }
 
     func sendClipboardText(_ clipboard: ClipboardTextSet) async throws {
@@ -3270,5 +3709,931 @@ private extension ClipboardTextSet {
 private extension WindowsNotificationReceivedEvent {
     static var notepadEventJSON: String {
         #"{"type":"notification.received","notificationId":"toast:winapp_notepad:0001","appId":"winapp_notepad","appName":"Notepad","title":"Notepad","body":"Autosaved Notes.txt","receivedAt":"2026-07-10T12:15:00Z","sourceAumid":"Microsoft.WindowsNotepad_8wekyb3d8bbwe!App"}"#
+    }
+}
+
+private extension WindowFrameUnchangedEvent {
+    static func heartbeat(windowId: String, sequence: Int) -> WindowFrameUnchangedEvent {
+        WindowFrameUnchangedEvent(
+            windowId: windowId,
+            sequence: sequence,
+            capturedAt: "2026-07-31T09:14:02Z"
+        )
+    }
+
+    static func notepadHeartbeat(sequence: Int) -> WindowFrameUnchangedEvent {
+        heartbeat(windowId: "hwnd:0003029A", sequence: sequence)
+    }
+
+    static var notepadHeartbeatJSON: String {
+        #"{"type":"window.frame.unchanged","windowId":"hwnd:0003029A","sequence":2,"capturedAt":"2026-07-31T09:14:02Z"}"#
+    }
+}
+
+private extension WindowFrameEvent {
+    /// A frame whose only interesting property is the DPI scale the guest rendered it at.
+    static func notepadFrame(scale: Double, sequence: Int = 1) -> WindowFrameEvent {
+        WindowFrameEvent(
+            type: .windowFrame,
+            windowId: "hwnd:0003029A",
+            frameId: "frame_scale_\(sequence)",
+            sequence: sequence,
+            format: "png",
+            width: 1,
+            height: 1,
+            scale: scale,
+            encodedData: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII="
+        )
+    }
+}
+
+/// Veil cannot set Windows' display scaling from outside the guest, so the most it can do is notice that
+/// the guest is not rendering at the resolution this Mac shows and name the percentage that would fix it.
+///
+/// Both directions matter and they fail differently. A guest below the host starves the display of pixels
+/// that do not exist, so macOS enlarges what it got and text goes soft. A guest above the host manufactures
+/// pixels the display cannot show, and every one of them is encoded, transferred, and composited before
+/// being discarded. The first is a visible quality bug, the second is an invisible cost on every frame.
+@Suite("Guest display scaling match")
+@MainActor
+struct GuestDisplayScalingTests {
+    private func modelWithNotepadFrame(guestScale: Double?) async -> HostDashboardModel {
+        let model = HostDashboardModel(service: FakeDashboardService(health: .captureReady))
+        await model.launchNotepad()
+        if let guestScale {
+            model.receiveWindowFrame(.notepadFrame(scale: guestScale))
+        }
+        return model
+    }
+
+    @Test("reports the scale as unknown when the host never supplied one")
+    func reportsUnknownWithoutHostScale() async throws {
+        let model = await modelWithNotepadFrame(guestScale: 1)
+
+        let status = model.displayScalingStatus(hostBackingScale: nil)
+
+        #expect(status.recommendedAction == "inspect-host-display-scale")
+        #expect(status.hostBackingScale == nil)
+        // The guest side was measured, so it is still reported. Only the comparison is missing.
+        #expect(status.guestRenderScale == 1)
+        #expect(status.scaleRatio == nil)
+        #expect(status.recommendedGuestScalePercent == nil)
+        // The whole point of the nil host scale: claiming neither problem beats guessing 1 and telling
+        // every Retina user to change a setting that was already correct.
+        #expect(status.isUpscaling == false)
+        #expect(status.isOverRendering == false)
+    }
+
+    @Test("treats a nonsense host scale as unknown rather than dividing by it")
+    func treatsZeroHostScaleAsUnknown() async throws {
+        let model = await modelWithNotepadFrame(guestScale: 1)
+
+        let status = model.displayScalingStatus(hostBackingScale: 0)
+
+        #expect(status.recommendedAction == "inspect-host-display-scale")
+        #expect(status.scaleRatio == nil)
+    }
+
+    @Test("asks for an app before comparing anything")
+    func asksForAnAppWhenNothingIsMirrored() async throws {
+        let model = HostDashboardModel(service: FakeDashboardService(health: .captureReady))
+
+        let status = model.displayScalingStatus(hostBackingScale: 2)
+
+        #expect(status.recommendedAction == "open-windows-app")
+        #expect(status.guestRenderScale == nil)
+        #expect(status.hostBackingScale == 2)
+    }
+
+    @Test("waits for a frame when a window is open but has not drawn yet")
+    func waitsForFirstFrame() async throws {
+        let model = await modelWithNotepadFrame(guestScale: nil)
+
+        #expect(model.mirrorSessions.isEmpty == false)
+
+        let status = model.displayScalingStatus(hostBackingScale: 2)
+
+        #expect(status.recommendedAction == "wait-for-first-frame")
+        #expect(status.guestRenderScale == nil)
+    }
+
+    @Test("reports nothing to do when the guest already matches the display")
+    func reportsMatchedScale() async throws {
+        let model = await modelWithNotepadFrame(guestScale: 2)
+
+        let status = model.displayScalingStatus(hostBackingScale: 2)
+
+        #expect(status.recommendedAction == "none")
+        #expect(status.scaleRatio == 1)
+        #expect(status.isUpscaling == false)
+        #expect(status.isOverRendering == false)
+        #expect(status.recommendedGuestScalePercent == 200)
+    }
+
+    @Test("asks the guest to scale up when it renders fewer pixels than the display shows")
+    func detectsUpscaling() async throws {
+        // The default case: a stock 100% Windows install mirrored onto a Retina Mac.
+        let model = await modelWithNotepadFrame(guestScale: 1)
+
+        let status = model.displayScalingStatus(hostBackingScale: 2)
+
+        #expect(status.recommendedAction == "raise-guest-display-scaling")
+        #expect(status.isUpscaling == true)
+        #expect(status.isOverRendering == false)
+        #expect(status.scaleRatio == 2)
+        #expect(status.recommendedGuestScalePercent == 200)
+        // The percentage has to appear in the text, because the fix is a Windows setting the user types in
+        // and a report that only says "mismatch" leaves them guessing between 125, 150, and 200.
+        #expect(status.reason.contains("200%") == true)
+    }
+
+    @Test("asks the guest to scale down when it renders pixels the display cannot show")
+    func detectsOverRendering() async throws {
+        let model = await modelWithNotepadFrame(guestScale: 2)
+
+        let status = model.displayScalingStatus(hostBackingScale: 1)
+
+        #expect(status.recommendedAction == "lower-guest-display-scaling")
+        #expect(status.isOverRendering == true)
+        #expect(status.isUpscaling == false)
+        #expect(status.scaleRatio == 0.5)
+        #expect(status.recommendedGuestScalePercent == 100)
+        #expect(status.reason.contains("100%") == true)
+    }
+
+    @Test("ignores a difference too small to see")
+    func toleratesTinyDifference() async throws {
+        let model = await modelWithNotepadFrame(guestScale: 1.04)
+
+        let status = model.displayScalingStatus(hostBackingScale: 1)
+
+        #expect(status.recommendedAction == "none")
+    }
+
+    @Test("still flags the 125 percent Windows step on a non-Retina display")
+    func flagsWindowsQuarterStep() async throws {
+        // 125% is a real Windows option, so the tolerance must not be wide enough to swallow it.
+        let model = await modelWithNotepadFrame(guestScale: 1.25)
+
+        let status = model.displayScalingStatus(hostBackingScale: 1)
+
+        #expect(status.recommendedAction == "lower-guest-display-scaling")
+        #expect(status.isOverRendering == true)
+    }
+
+    @Test("carries the comparison into the harness status report")
+    func includesSectionInStatusReport() async throws {
+        let model = await modelWithNotepadFrame(guestScale: 1)
+
+        let report = model.runtimeStatusReport(
+            generatedAt: Date(timeIntervalSince1970: 1_000),
+            hostBackingScale: 2
+        )
+
+        let displayScaling = try #require(report.displayScaling)
+        #expect(displayScaling.isEnabled == true)
+        #expect(displayScaling.recommendedAction == "raise-guest-display-scaling")
+        #expect(displayScaling.recommendedGuestScalePercent == 200)
+    }
+
+    @Test("omits the comparison when the report was built without a host scale")
+    func reportStillBuildsWithoutHostScale() async throws {
+        let model = await modelWithNotepadFrame(guestScale: 1)
+
+        let report = model.runtimeStatusReport(generatedAt: Date(timeIntervalSince1970: 1_000))
+
+        // Present but honest, rather than absent. Callers that cannot read a screen still get the guest
+        // half of the measurement and an action that says where the missing half comes from.
+        let displayScaling = try #require(report.displayScaling)
+        #expect(displayScaling.recommendedAction == "inspect-host-display-scale")
+    }
+}
+
+/// A refused drag-and-drop is not a runtime failure, and the two negative properties below are the whole
+/// point of the method. They look like omissions, so they are pinned: `errorMessage` renders as an
+/// "Agent Unavailable" panel in the Agent tab, and `phase = .failed` would claim the Windows runtime broke
+/// because one file was the wrong size.
+@Suite("File drop refusal recording")
+@MainActor
+struct FileDropRefusalRecordingTests {
+    @Test("records the refusal without reporting an agent problem or a failed runtime")
+    func recordsWithoutFailingTheRuntime() async {
+        let model = HostDashboardModel(service: FakeDashboardService(health: .captureReady))
+        await model.load()
+        let phaseBeforeDrop = model.phase
+
+        model.recordFileDropRefusal(.fileTooLarge(fileName: "huge.iso", byteCount: 99_999_999))
+
+        #expect(model.lastFileDropRefusal == .fileTooLarge(fileName: "huge.iso", byteCount: 99_999_999))
+        // The app the user dropped onto is still running. Nothing about the connection changed.
+        #expect(model.errorMessage == nil)
+        #expect(model.phase == phaseBeforeDrop)
+    }
+
+    @Test("keeps only the most recent refusal")
+    func keepsMostRecentRefusal() async {
+        let model = HostDashboardModel(service: FakeDashboardService(health: .captureReady))
+
+        model.recordFileDropRefusal(.emptyFile(fileName: "first.txt"))
+        model.recordFileDropRefusal(.unreadableItem)
+
+        #expect(model.lastFileDropRefusal == .unreadableItem)
+    }
+
+    @Test("clears a stale refusal once a drop is accepted")
+    func clearsRefusalOnAcceptedDrop() async {
+        let model = HostDashboardModel(service: FakeDashboardService(health: .captureReady))
+        await model.load()
+        model.recordFileDropRefusal(.emptyFile(fileName: "first.txt"))
+
+        // A drop that reaches openFile passed every host-side check, so the previous refusal is history and
+        // must not keep showing up in diagnostics as the current state of drag-and-drop.
+        await model.openFile(appId: "winapp_notepad", fileName: "second.txt", contentBase64: "aGk=")
+
+        #expect(model.lastFileDropRefusal == nil)
+    }
+}
+
+/// Windows returns structured reasons a drop failed — `invalid_file_name`, `file_too_large`,
+/// `file_write_failed`, `file_open_failed` — and the host used to turn every one of them into
+/// `phase = .failed` plus a message in `errorMessage`. That claimed the entire Windows runtime broke because
+/// one file did not open, and `errorMessage` has no display surface in the one-screen launcher, so the
+/// explanation was lost too.
+@Suite("Windows-side drop failure")
+@MainActor
+struct GuestDropFailureTests {
+    private enum DropTestError: Error, LocalizedError {
+        case appMissing
+
+        var errorDescription: String? { "The app is no longer installed." }
+    }
+
+    @Test("records a Windows refusal as a drop refusal, not a broken runtime")
+    func recordsGuestRejection() async throws {
+        let service = FakeDashboardService(health: .captureReady)
+        let model = HostDashboardModel(service: service)
+        await model.load()
+        let phaseBeforeDrop = model.phase
+
+        service.error = DropTestError.appMissing
+        let result = await model.openFile(appId: "winapp_notepad", fileName: "report.txt", contentBase64: "aGk=")
+
+        #expect(result == nil)
+        let refusal = try #require(model.lastFileDropRefusal)
+        #expect(refusal.reasonId == "guestRejected")
+        #expect(refusal.fileName == "report.txt")
+        // The guest's own explanation has to survive, since it is the only thing that says why.
+        #expect(refusal.message.contains("The app is no longer installed."))
+
+        // The app the user dropped onto is still running, and the phase must not be left in `.launching`
+        // either.
+        #expect(model.phase == phaseBeforeDrop)
+        #expect(model.phase != .failed)
+        #expect(model.phase != .launching)
+        // Routing this to errorMessage would render it as an "Agent Unavailable" panel: wrong place, wrong
+        // diagnosis, and in the current launcher not rendered at all.
+        #expect(model.errorMessage == nil)
+    }
+
+    @Test("replaces a host-side refusal when Windows refuses the next drop")
+    func replacesHostRefusalWithGuestRefusal() async throws {
+        let service = FakeDashboardService(health: .captureReady)
+        let model = HostDashboardModel(service: service)
+        await model.load()
+        model.recordFileDropRefusal(.emptyFile(fileName: "empty.txt"))
+
+        service.error = DropTestError.appMissing
+        await model.openFile(appId: "winapp_notepad", fileName: "report.txt", contentBase64: "aGk=")
+
+        // The stale host-side refusal is cleared on the way in, so what remains describes this drop.
+        let refusal = try #require(model.lastFileDropRefusal)
+        #expect(refusal.reasonId == "guestRejected")
+    }
+}
+
+/// ⌘V in a mirrored window is two messages: write the Mac clipboard into Windows, then post Ctrl+V. The
+/// second one cannot fail in a way anybody notices — Ctrl+V always "works", it just pastes whatever Windows
+/// had before. So if the first message does not land and the second is sent anyway, stale text goes into the
+/// user's document with nothing to indicate it.
+///
+/// The transport makes this worse than a rare race. Every host-to-guest message opens its own WebSocket
+/// (`URLSessionWebSocketTransport.send`), so the two travel on separate connections with no ordering
+/// guarantee, and the guest's clipboard write retries for up to 250 ms while a posted key message is
+/// immediate. When the clipboard is contended, the race is systematically lost.
+@Suite("Host clipboard send outcome")
+@MainActor
+struct HostClipboardSendOutcomeTests {
+    private enum ClipboardTestError: Error, LocalizedError {
+        case unreachable
+
+        var errorDescription: String? { "The Windows app connection dropped." }
+    }
+
+    @Test("reports a delivered clipboard write and advances the loop-prevention sequence")
+    func reportsSent() async {
+        let service = FakeDashboardService(health: .clipboardReady)
+        let model = HostDashboardModel(service: service)
+        await model.load()
+
+        let outcome = await model.sendHostClipboardText("hello")
+
+        #expect(outcome == .sent)
+        #expect(service.clipboardTexts.map(\.text) == ["hello"])
+    }
+
+    @Test("reports a failed clipboard write without claiming the connection failed")
+    func reportsFailureWithoutFailingTheRuntime() async {
+        let service = FakeDashboardService(health: .clipboardReady)
+        let model = HostDashboardModel(service: service)
+        await model.load()
+        let phaseBeforePaste = model.phase
+
+        service.error = ClipboardTestError.unreachable
+        let outcome = await model.sendHostClipboardText("hello")
+
+        #expect(outcome == .failed(reason: "The Windows app connection dropped."))
+        // `.failed` renders as "Connection failed" in the runtime status line and the menu bar title, so one
+        // undelivered paste would have reported Windows as disconnected while everything else worked.
+        #expect(model.phase == phaseBeforePaste)
+        #expect(model.phase != .failed)
+    }
+
+    @Test("does not advance the sequence for a write the guest never received")
+    func doesNotAdvanceSequenceOnFailure() async {
+        let service = FakeDashboardService(health: .clipboardReady)
+        let model = HostDashboardModel(service: service)
+        await model.load()
+
+        service.error = ClipboardTestError.unreachable
+        let failed = await model.sendHostClipboardText("dropped")
+        #expect(failed == .failed(reason: "The Windows app connection dropped."))
+        // Loop prevention keys off `(origin, sequence)`. Advancing here would record a host update the guest
+        // never took, so the next genuine guest clipboard change could be discarded as an echo of it.
+        #expect(model.clipboardSequence == 0)
+
+        service.error = nil
+        let sent = await model.sendHostClipboardText("delivered")
+        #expect(sent == .sent)
+        // The failed attempt did not consume a sequence number.
+        #expect(model.clipboardSequence == 1)
+    }
+
+    @Test("separates having no clipboard capability from failing to use it")
+    func separatesSkippedFromFailed() async {
+        // A connection with no clipboard capability sends nothing, and that is not a failure: the guest's own
+        // clipboard is untouched and may hold exactly what the user copied inside Windows, so the caller is
+        // still allowed to paste. Collapsing this into `.failed` would break Windows-internal copy-paste.
+        let service = FakeDashboardService(health: .inputReady)
+        let model = HostDashboardModel(service: service)
+        await model.load()
+
+        let outcome = await model.sendHostClipboardText("hello")
+
+        #expect(outcome == .skipped)
+        #expect(service.clipboardTexts.isEmpty)
+        #expect(model.clipboardSequence == 0)
+    }
+}
+
+/// A minimized mirrored window shows nothing, yet the guest kept capturing, comparing, PNG-encoding, and
+/// sending its pixels while the host decoded and composited every frame. With three apps open and two
+/// minimized, most of the frame pipeline's cost was going to windows nobody could see.
+///
+/// The unsubscribe is the easy half. The hard half is not tripping the staleness ladder: a stream with no
+/// frames arriving normally escalates `restart-frame-subscription` → `recover-window-capture` →
+/// `reopen-windows-app`, so a naive pause would offer to relaunch the user's app seconds after they minimized
+/// it.
+@Suite("Frame streaming for hidden windows")
+@MainActor
+struct HiddenWindowFrameStreamTests {
+    private func modelWithStreamingNotepad() async -> HostDashboardModel {
+        let model = HostDashboardModel(service: FakeDashboardService(health: .captureReady))
+        // `load()` first so the connection is live: pausing and resuming both require it, since both send a
+        // message to the guest.
+        await model.load()
+        await model.launchNotepad()
+        model.receiveWindowFrame(.notepadFirstFrame, receivedAt: Date(timeIntervalSince1970: 1_000))
+        return model
+    }
+
+    @Test("stops streaming a minimized window")
+    func pausesStreamWhenMinimized() async throws {
+        let model = await modelWithStreamingNotepad()
+
+        let pausedAt = Date(timeIntervalSince1970: 1_100)
+        let paused = await model.pauseFrameStream(windowId: "hwnd:0003029A", pausedAt: pausedAt)
+        #expect(paused)
+
+        #expect(model.isFrameStreamPaused(windowId: "hwnd:0003029A"))
+        let session = try #require(model.mirrorSessions.first)
+        #expect(session.latestFrame == nil)
+        #expect(session.frameTiming == nil)
+        // Kept, not cleared: `harness/app-runtime-status` requires `frameStreamRequestedAt` on any capture
+        // session with no received frames, so clearing it would make every paused window fail the report
+        // contract.
+        #expect(session.frameStreamRequestedAt == pausedAt)
+    }
+
+    @Test("never climbs the escalation ladder while paused")
+    func pausedStreamDoesNotEscalate() async throws {
+        let model = await modelWithStreamingNotepad()
+        await model.pauseFrameStream(windowId: "hwnd:0003029A", pausedAt: Date(timeIntervalSince1970: 1_100))
+
+        // Ten minutes minimized. The ladder is climbed by `frameStreamRestartCount`, and only the automatic
+        // sweeps raise it — so the sweeps have to decline to touch a window that is quiet on purpose.
+        let tenMinutesLater = Date(timeIntervalSince1970: 1_700)
+        let restarted = await model.restartStaleFrameSubscriptions(generatedAt: tenMinutesLater)
+        let recovered = await model.recoverEscalatedFrameCaptures(generatedAt: tenMinutesLater)
+
+        #expect(restarted.isEmpty)
+        #expect(recovered.isEmpty)
+
+        let session = try #require(model.mirrorSessions.first)
+        let assessment = WindowFrameStreamAssessment.assess(session: session, generatedAt: tenMinutesLater)
+        // Without the sweeps, the count stays at zero, so the report can never reach "reopen this app" for a
+        // window the user merely put in the Dock.
+        #expect(session.frameStreamRestartCount == 0)
+        #expect(assessment.recoveryEscalated == false)
+        #expect(assessment.reopenEscalated == false)
+        #expect(assessment.recommendedAction != "reopen-windows-app")
+        #expect(assessment.recommendedAction != "recover-window-capture")
+    }
+
+    @Test("still sweeps a window that is stale for a real reason")
+    func sweepsUnpausedStaleWindow() async {
+        let model = await modelWithStreamingNotepad()
+
+        // The exclusion must be scoped to paused windows only, or pausing anything would disable recovery for
+        // everything.
+        let restarted = await model.restartStaleFrameSubscriptions(
+            generatedAt: Date(timeIntervalSince1970: 1_700)
+        )
+
+        #expect(restarted == ["hwnd:0003029A"])
+    }
+
+    @Test("does not count a pause as a restart attempt")
+    func pauseIsNotARestart() async throws {
+        let model = await modelWithStreamingNotepad()
+        let restartsBefore = try #require(model.mirrorSessions.first).frameStreamRestartCount
+
+        await model.pauseFrameStream(windowId: "hwnd:0003029A")
+        await model.resumeFrameStream(windowId: "hwnd:0003029A")
+
+        // Minimizing is not a recovery attempt, and restoring is not evidence that a capture problem went
+        // away. Either would corrupt the escalation ladder's history.
+        let session = try #require(model.mirrorSessions.first)
+        #expect(session.frameStreamRestartCount == restartsBefore)
+    }
+
+    @Test("resumes streaming and restarts the first-frame timeout")
+    func resumesStreamWhenRestored() async throws {
+        let model = await modelWithStreamingNotepad()
+        await model.pauseFrameStream(windowId: "hwnd:0003029A")
+
+        let resumedAt = Date(timeIntervalSince1970: 2_000)
+        let resumed = await model.resumeFrameStream(windowId: "hwnd:0003029A", resumedAt: resumedAt)
+        #expect(resumed)
+
+        #expect(model.isFrameStreamPaused(windowId: "hwnd:0003029A") == false)
+        // Set on resume so a window that comes back and then genuinely fails to draw is still caught.
+        let session = try #require(model.mirrorSessions.first)
+        #expect(session.frameStreamRequestedAt == resumedAt)
+    }
+
+    @Test("catches a restored window that never draws again")
+    func restoredWindowStillTimesOut() async throws {
+        let model = await modelWithStreamingNotepad()
+        await model.pauseFrameStream(windowId: "hwnd:0003029A")
+        await model.resumeFrameStream(windowId: "hwnd:0003029A", resumedAt: Date(timeIntervalSince1970: 2_000))
+
+        let session = try #require(model.mirrorSessions.first)
+        let assessment = WindowFrameStreamAssessment.assess(
+            session: session,
+            generatedAt: Date(timeIntervalSince1970: 2_020)
+        )
+
+        // Pausing must not make a window permanently exempt from the health checks.
+        #expect(assessment.status == .stale)
+    }
+
+    @Test("refuses to pause twice")
+    func doesNotPauseTwice() async {
+        let model = await modelWithStreamingNotepad()
+
+        let first = await model.pauseFrameStream(windowId: "hwnd:0003029A")
+        #expect(first)
+        // A second unsubscribe would be a message the guest answers with window_not_tracked, which the host
+        // cannot even read on this path.
+        let second = await model.pauseFrameStream(windowId: "hwnd:0003029A")
+        #expect(second == false)
+    }
+
+    @Test("refuses to resume a window that was never paused")
+    func doesNotResumeUnpausedWindow() async {
+        let model = await modelWithStreamingNotepad()
+
+        let resumed = await model.resumeFrameStream(windowId: "hwnd:0003029A")
+        #expect(resumed == false)
+    }
+
+    @Test("ignores an unknown window")
+    func ignoresUnknownWindow() async {
+        let model = await modelWithStreamingNotepad()
+
+        let paused = await model.pauseFrameStream(windowId: "hwnd:DEADBEEF")
+        let resumed = await model.resumeFrameStream(windowId: "hwnd:DEADBEEF")
+        #expect(paused == false)
+        #expect(resumed == false)
+    }
+
+    @Test("forgets a paused window once it closes")
+    func forgetsPausedWindowOnClose() async throws {
+        let model = await modelWithStreamingNotepad()
+        await model.pauseFrameStream(windowId: "hwnd:0003029A")
+
+        _ = try await model.receiveProtocolMessage(Data(WindowClosedEvent.notepadClosedJSON.utf8))
+
+        // A window minimized and then closed must not stay in the paused set: a later window reusing the same
+        // HWND would be treated as already paused and never resubscribed.
+        #expect(model.isFrameStreamPaused(windowId: "hwnd:0003029A") == false)
+    }
+}
+
+/// The control event pump had its only `do/catch` outside the `for try await`, so **one** undecodable message
+/// ended the connection: phase dropped to `.reconnecting` and the caller backed off. Sent repeatedly, the host
+/// never held a stable event connection, and window updates, clipboard, and notifications stopped for as long
+/// as it continued. The binary frame channel already tolerated 8 consecutive failures; the JSON pump had no
+/// equivalent.
+@Suite("Control pump resilience")
+@MainActor
+struct ControlPumpResilienceTests {
+    private static let malformed = Data("{ not json".utf8)
+    private static var goodFrame: Data { Data(WindowFrameEvent.notepadFirstFrameJSON.utf8) }
+
+    @Test("keeps processing after one undecodable message")
+    func survivesOneMalformedMessage() async {
+        let model = HostDashboardModel(service: FakeDashboardService(health: .captureReady))
+        await model.launchNotepad()
+        let source = StaticHostEventSource(messages: [Self.malformed, Self.goodFrame])
+
+        var handled: [HostProtocolMessageResult] = []
+        await model.consumeProtocolMessages(from: source) { handled.append($0) }
+
+        // Before the fix this was empty: the malformed message threw out of the loop and the frame behind it
+        // was never read.
+        #expect(handled == [.handledWindowFrame(windowId: "hwnd:0003029A")])
+    }
+
+    @Test("gives up after the tolerance of consecutive undecodable messages")
+    func stopsAfterTolerance() async {
+        let model = HostDashboardModel(service: FakeDashboardService(health: .captureReady))
+        await model.launchNotepad()
+        var messages = Array(
+            repeating: Self.malformed,
+            count: HostDashboardModel.undecodableControlMessageTolerance
+        )
+        messages.append(Self.goodFrame)
+        let source = StaticHostEventSource(messages: messages)
+
+        var handled: [HostProtocolMessageResult] = []
+        await model.consumeProtocolMessages(from: source) { handled.append($0) }
+
+        // A persistent framing disagreement still has to surface rather than looping on garbage forever, so
+        // the frame after the tolerance is deliberately never reached.
+        #expect(handled.isEmpty)
+        #expect(model.phase == .reconnecting)
+    }
+
+    @Test("counts consecutively, so interleaved garbage never accumulates")
+    func toleranceCountsConsecutively() async {
+        let model = HostDashboardModel(service: FakeDashboardService(health: .captureReady))
+        await model.launchNotepad()
+        let goodMessageCount = HostDashboardModel.undecodableControlMessageTolerance * 2
+        var messages: [Data] = []
+        for _ in 0..<goodMessageCount {
+            messages.append(Self.malformed)
+            messages.append(Self.goodFrame)
+        }
+        let source = StaticHostEventSource(messages: messages)
+
+        var handled: [HostProtocolMessageResult] = []
+        await model.consumeProtocolMessages(from: source) { handled.append($0) }
+
+        // A guest that is merely lossy rather than broken must not be disconnected. Counting totals instead of
+        // consecutive failures would have ended this connection a third of the way through.
+        #expect(handled.count == goodMessageCount)
+    }
+
+    @Test("still ends the connection when the stream itself fails")
+    func streamFailureStillEndsConnection() async {
+        let model = HostDashboardModel(service: FakeDashboardService(health: .captureReady))
+        await model.load()
+        let source = StaticHostEventSource(messages: [], failure: URLError(.networkConnectionLost))
+
+        await model.consumeProtocolMessages(from: source) { _ in }
+
+        // Per-message tolerance must not swallow a dropped connection: that one has to reach the retry loop.
+        #expect(model.phase == .reconnecting)
+    }
+}
+
+/// Guest window bounds and titles reached AppKit unclamped. `initialFrame` was correctly clamped, but the
+/// clamping was never extended to `contentMinSize` and `contentAspectRatio`, which are re-applied from the raw
+/// values on every `window.updated` — so that is the path a guest would use to keep handing AppKit absurd
+/// numbers.
+@Suite("Guest window sanitizing")
+struct GuestWindowSanitizingTests {
+    private static func window(title: String, width: Int, height: Int) -> WindowCreatedEvent {
+        WindowCreatedEvent(
+            windowId: "hwnd:0003029A",
+            processId: 4912,
+            appId: "winapp_notepad",
+            title: title,
+            bounds: WindowBounds(x: 0, y: 0, width: width, height: height),
+            state: "normal",
+            focused: true
+        )
+    }
+
+    @Test("leaves an ordinary window untouched")
+    func leavesOrdinaryWindowAlone() {
+        let event = Self.window(title: "Untitled - Notepad", width: 1_280, height: 800)
+
+        #expect(HostDashboardModel.sanitizedGuestWindow(event) == event)
+    }
+
+    @Test("clamps an absurd extent")
+    func clampsAbsurdExtent() {
+        // Bounds of 1 x 2000000000 handed AppKit a two-billion-point content minimum and a degenerate resize
+        // ratio, because `minimumContentSize` scales by `min(1, max(320/w, 320/h))` and that does not bound the
+        // larger dimension.
+        let sanitized = HostDashboardModel.sanitizedGuestWindow(
+            Self.window(title: "x", width: 1, height: 2_000_000_000)
+        )
+
+        #expect(sanitized.bounds.width == 1)
+        #expect(sanitized.bounds.height == VeilFrameChannelCodec.maximumSurfaceDimension)
+    }
+
+    @Test("shares the frame channel's ceiling so one number describes the largest window")
+    func extentSharesCodecCeiling() {
+        let ceiling = VeilFrameChannelCodec.maximumSurfaceDimension
+
+        #expect(HostDashboardModel.clampedWindowExtent(ceiling) == ceiling)
+        #expect(HostDashboardModel.clampedWindowExtent(ceiling + 1) == ceiling)
+        #expect(HostDashboardModel.clampedWindowExtent(Int.max) == ceiling)
+    }
+
+    @Test("floors a negative extent at zero rather than inverting it")
+    func floorsNegativeExtent() {
+        // Zero is already handled downstream — `contentAspectRatio` returns nil and the window stays freely
+        // resizable — but a negative extent would flow into arithmetic that assumes it is not.
+        #expect(HostDashboardModel.clampedWindowExtent(-1) == 0)
+        #expect(HostDashboardModel.clampedWindowExtent(0) == 0)
+    }
+
+    @Test("truncates a title long enough to be a layout problem")
+    func truncatesLongTitle() {
+        let sanitized = HostDashboardModel.sanitizedGuestWindow(
+            Self.window(title: String(repeating: "a", count: 100_000), width: 800, height: 600)
+        )
+
+        #expect(sanitized.title.count == HostDashboardModel.maximumWindowTitleLength)
+    }
+
+    @Test("replaces newlines and control characters in a title")
+    func flattensTitle() {
+        // A title is drawn on one line in a titlebar and in a menu item, so an embedded newline is a rendering
+        // defect rather than content.
+        #expect(HostDashboardModel.sanitizedWindowTitle("Report\nDraft\tv2") == "Report Draft v2")
+        #expect(HostDashboardModel.sanitizedWindowTitle("plain title") == "plain title")
+    }
+
+    @Test("keeps a title that is long but not absurd")
+    func keepsReasonableTitle() {
+        let title = String(repeating: "b", count: HostDashboardModel.maximumWindowTitleLength)
+
+        #expect(HostDashboardModel.sanitizedWindowTitle(title) == title)
+    }
+
+    @Test("does not split a grapheme cluster when truncating")
+    func truncatesOnCharacterBoundaries() {
+        let title = String(repeating: "🇰🇷", count: 500)
+
+        let sanitized = HostDashboardModel.sanitizedWindowTitle(title)
+
+        #expect(sanitized.count == HostDashboardModel.maximumWindowTitleLength)
+        #expect(sanitized.allSatisfy { $0 == "🇰🇷" })
+        #expect(sanitized.contains("\u{FFFD}") == false)
+    }
+}
+
+/// The host bounded its own outbound committed text at 4096 UTF-16 units and rejected control characters, then
+/// accepted inbound guest clipboard text with no bound of any kind — and that text is both retained and written
+/// straight to `NSPasteboard`.
+@Suite("Guest clipboard bounds")
+@MainActor
+struct GuestClipboardBoundsTests {
+    private func clipboard(sequence: Int, text: String) -> ClipboardTextSet {
+        ClipboardTextSet(
+            requestId: "req_guest_\(sequence)",
+            origin: "guest",
+            sequence: sequence,
+            text: text
+        )
+    }
+
+    @Test("accepts a clipboard the size of a real document")
+    func acceptsRealisticClipboard() async {
+        let model = HostDashboardModel(service: FakeDashboardService(health: .clipboardReady))
+        await model.load()
+
+        // Nothing a person actually copies should be refused, so the bound sits far above committed-text size.
+        #expect(model.receiveClipboardText(clipboard(sequence: 1, text: String(repeating: "a", count: 200_000))))
+        #expect(model.latestGuestClipboardText?.count == 200_000)
+    }
+
+    @Test("refuses an unbounded clipboard rather than truncating it")
+    func refusesOversizedClipboard() async {
+        let model = HostDashboardModel(service: FakeDashboardService(health: .clipboardReady))
+        await model.load()
+        let oversized = String(
+            repeating: "a",
+            count: HostDashboardModel.maximumGuestClipboardUTF16Length + 1
+        )
+
+        #expect(model.receiveClipboardText(clipboard(sequence: 1, text: oversized)) == false)
+        // Truncating would be worse than refusing: the user pastes half a document into something and has no
+        // way to notice.
+        #expect(model.latestGuestClipboardText == nil)
+    }
+
+    @Test("does not consume a sequence number for a refused clipboard")
+    func refusedClipboardDoesNotConsumeSequence() async {
+        let model = HostDashboardModel(service: FakeDashboardService(health: .clipboardReady))
+        await model.load()
+        let oversized = String(
+            repeating: "a",
+            count: HostDashboardModel.maximumGuestClipboardUTF16Length + 1
+        )
+
+        #expect(model.receiveClipboardText(clipboard(sequence: 5, text: oversized)) == false)
+        // The rejection must not advance loop-prevention state, or a legitimate update at a lower sequence
+        // would be discarded as stale afterwards.
+        #expect(model.receiveClipboardText(clipboard(sequence: 1, text: "hello")))
+        #expect(model.latestGuestClipboardText == "hello")
+    }
+
+    @Test("counts UTF-16 code units, because that is what the payload costs")
+    func countsCodeUnits() async {
+        let model = HostDashboardModel(service: FakeDashboardService(health: .clipboardReady))
+        await model.load()
+        // Each emoji is one Character and two UTF-16 code units, so this is just over the bound in units while
+        // being well under it in characters.
+        let emoji = String(
+            repeating: "🎉",
+            count: HostDashboardModel.maximumGuestClipboardUTF16Length / 2 + 1
+        )
+
+        #expect(model.receiveClipboardText(clipboard(sequence: 1, text: emoji)) == false)
+    }
+}
+
+/// Bounding one message does nothing about a megabyte every ten milliseconds. Guest clipboard updates own the
+/// user's pasteboard, and notifications post under Veil's identity with guest-chosen text — so the flood case is
+/// a phishing surface rather than only a nuisance.
+@Suite("Guest event rate limiting")
+@MainActor
+struct GuestEventRateLimitingTests {
+    private static let origin = Date(timeIntervalSince1970: 1_000)
+
+    private func clipboard(sequence: Int) -> ClipboardTextSet {
+        ClipboardTextSet(
+            requestId: "req_guest_\(sequence)",
+            origin: "guest",
+            sequence: sequence,
+            text: "copied \(sequence)"
+        )
+    }
+
+    private func notification(id: String) -> WindowsNotificationReceivedEvent {
+        WindowsNotificationReceivedEvent(
+            notificationId: id,
+            appId: "winapp_notepad",
+            appName: "Notepad",
+            title: "Message",
+            body: "body",
+            receivedAt: "2026-08-16T00:00:00Z"
+        )
+    }
+
+    @Test("drops a clipboard flood down to the intended rate")
+    func dropsClipboardFlood() async {
+        let model = HostDashboardModel(service: FakeDashboardService(health: .clipboardReady))
+        await model.load()
+
+        var accepted = 0
+        for sequence in 1...500 {
+            // All inside one second: the shape of the attack, and the reason a size bound alone was not enough.
+            let at = Self.origin.addingTimeInterval(Double(sequence) * 0.002)
+            if model.receiveClipboardText(clipboard(sequence: sequence), receivedAt: at) {
+                accepted += 1
+            }
+        }
+
+        #expect(accepted == GuestEventRateLimiter.guestClipboard.maximumEvents)
+    }
+
+    @Test("leaves ordinary copying alone")
+    func allowsOrdinaryCopying() async {
+        let model = HostDashboardModel(service: FakeDashboardService(health: .clipboardReady))
+        await model.load()
+
+        // Two copies a second for a minute. A limiter that interfered here would be worse than none: it would
+        // silently discard the user's real work.
+        var accepted = 0
+        for sequence in 1...120 {
+            let at = Self.origin.addingTimeInterval(Double(sequence) * 0.5)
+            if model.receiveClipboardText(clipboard(sequence: sequence), receivedAt: at) {
+                accepted += 1
+            }
+        }
+
+        #expect(accepted == 120)
+    }
+
+    @Test("a rate-limited clipboard update does not consume its sequence")
+    func rateLimitedClipboardKeepsSequenceUsable() async {
+        let model = HostDashboardModel(service: FakeDashboardService(health: .clipboardReady))
+        await model.load()
+        let limit = GuestEventRateLimiter.guestClipboard.maximumEvents
+
+        for sequence in 1...limit {
+            _ = model.receiveClipboardText(clipboard(sequence: sequence), receivedAt: Self.origin)
+        }
+        // Refused for rate, so it must not advance loop-prevention state.
+        #expect(model.receiveClipboardText(clipboard(sequence: limit + 1), receivedAt: Self.origin) == false)
+        #expect(model.latestGuestClipboardText == "copied \(limit)")
+
+        // Once the window passes, the next update still works even though its sequence is only one higher.
+        let later = Self.origin.addingTimeInterval(GuestEventRateLimiter.guestClipboard.window + 1)
+        #expect(model.receiveClipboardText(clipboard(sequence: limit + 1), receivedAt: later))
+        #expect(model.latestGuestClipboardText == "copied \(limit + 1)")
+    }
+
+    @Test("a malformed clipboard update does not spend the allowance")
+    func rejectedClipboardDoesNotSpendBudget() async {
+        let model = HostDashboardModel(service: FakeDashboardService(health: .clipboardReady))
+        await model.load()
+
+        // Wrong origin: rejected before the limiter. Otherwise a guest could deny the user their own clipboard
+        // by sending messages that were never going to be accepted anyway.
+        for sequence in 1...500 {
+            let hostOrigin = ClipboardTextSet(
+                requestId: "req_host_\(sequence)",
+                origin: "host",
+                sequence: sequence,
+                text: "ignored"
+            )
+            #expect(model.receiveClipboardText(hostOrigin, receivedAt: Self.origin) == false)
+        }
+
+        #expect(model.receiveClipboardText(clipboard(sequence: 1_000), receivedAt: Self.origin))
+    }
+
+    @Test("drops a notification flood that rotates ids to defeat the dedupe window")
+    func dropsNotificationFlood() async {
+        let model = HostDashboardModel(service: FakeDashboardService(health: .captureReady))
+        await model.load()
+
+        var accepted = 0
+        for index in 1...500 {
+            let at = Self.origin.addingTimeInterval(Double(index) * 0.01)
+            if model.receiveWindowsNotification(notification(id: "notif_\(index)"), receivedAt: at) {
+                accepted += 1
+            }
+        }
+
+        // The five-entry dedupe history stops repeats, not floods: rotating six ids defeats it completely, which
+        // is why this needed a rate limit and not a wider dedupe window.
+        #expect(accepted == GuestEventRateLimiter.guestNotifications.maximumEvents)
+    }
+
+    @Test("leaves a busy but real notification stream alone")
+    func allowsRealNotificationStream() async {
+        let model = HostDashboardModel(service: FakeDashboardService(health: .captureReady))
+        await model.load()
+
+        // One every ten seconds for an hour: a busy mail client, not an attack.
+        var accepted = 0
+        for index in 1...360 {
+            let at = Self.origin.addingTimeInterval(Double(index) * 10)
+            if model.receiveWindowsNotification(notification(id: "notif_\(index)"), receivedAt: at) {
+                accepted += 1
+            }
+        }
+
+        #expect(accepted == 360)
     }
 }

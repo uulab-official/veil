@@ -14,6 +14,7 @@ public static class MessageTypes
     public const string WindowUpdated = "window.updated";
     public const string WindowClosed = "window.closed";
     public const string WindowFrame = "window.frame";
+    public const string WindowFrameUnchanged = "window.frame.unchanged";
     public const string WindowFrameSubscribe = "window.frame.subscribe";
     public const string WindowFrameUnsubscribe = "window.frame.unsubscribe";
     public const string WindowFocusRequest = "window.focus.request";
@@ -22,9 +23,12 @@ public static class MessageTypes
     public const string WindowCloseResponse = "window.close.response";
     public const string InputMouse = "input.mouse";
     public const string InputKey = "input.key";
+    public const string InputText = "input.text";
     public const string ClipboardTextSet = "clipboard.text.set";
     public const string NotificationListenerRequest = "notification.listener.request";
     public const string NotificationListenerResponse = "notification.listener.response";
     public const string NotificationReceived = "notification.received";
+    public const string SharedFolderRequest = "shared.folder.request";
+    public const string SharedFolderResponse = "shared.folder.response";
     public const string Error = "error";
 }

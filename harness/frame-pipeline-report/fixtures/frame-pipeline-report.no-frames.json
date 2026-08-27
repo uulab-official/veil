@@ -1,0 +1,16 @@
+{
+  "kind": "framePipelineReport",
+  "generatedAt": "2026-08-03T10:20:00Z",
+  "observedSeconds": 10,
+  "didObserveFrames": false,
+  "transport": "binaryFrameChannel",
+  "totalWireBytes": 0,
+  "totalFramesPerSecond": 0,
+  "totalWireBytesPerSecond": 0,
+  "estimationBasis": "Full-frame cost is estimated from the observed mean key-frame bytes per pixel for the same window. PNG size is not linear in area, so treat it as an estimate, not a measurement.",
+  "windows": [],
+  "nextActions": [
+    "No frames were observed. Confirm a Windows app window is open and its frame stream is subscribed, then re-run with a longer duration.",
+    "Run `veil-vmctl app-runtime-status --json` and check mirrorSessions[].frameStreamStatus."
+  ]
+}

@@ -2,6 +2,7 @@ import AppKit
 import SwiftUI
 import UniformTypeIdentifiers
 import VeilHostCore
+import Virtualization
 
 struct VMRuntimeView: View {
     @Bindable var model: VMRuntimeModel
@@ -39,8 +40,9 @@ struct VMRuntimeView: View {
     var runMultiAppProofAction: () -> Void
     var quietWindowsWhenIdleAction: () -> Void
     var displayMessage: String?
+    @Binding var showsFullDesktop: Bool
     @State private var pathPicker: PathPicker?
-    @State private var showsAdvancedDetails = false
+    @State private var presentedSheet: VMRuntimeSheetDestination?
     @State private var installSimulation = InstallSimulationState.idle
 
     var body: some View {
@@ -89,7 +91,7 @@ struct VMRuntimeView: View {
                             startDisplayHandoffProgress()
                             startVMAction()
                         } else if !snapshot.windowsInstalled && (snapshot.installerMediaPath == nil || needsInstallerPickerAccess(snapshot)) {
-                            pathPicker = .installerMedia
+                            presentedSheet = .windowsDownload
                         } else {
                             Task {
                                 await model.prepareDefaultVM()
@@ -145,10 +147,10 @@ struct VMRuntimeView: View {
                         }
                     },
                     detailsAction: {
-                        showsAdvancedDetails.toggle()
+                        presentedSheet = .settings
                     },
-                    isShowingDetails: showsAdvancedDetails,
-                    installSimulation: installSimulation
+                    installSimulation: installSimulation,
+                    showsFullDesktop: $showsFullDesktop
                 )
             } else if let errorMessage = model.errorMessage {
                 RuntimeLandingPanel(
@@ -174,11 +176,11 @@ struct VMRuntimeView: View {
                     subtitle: model.phase == .loading
                         ? "Opening Windows on this Mac."
                         : "Install and run Windows locally on this Mac.",
-                    primaryTitle: model.phase == .loading ? "Loading..." : "Choose Windows ISO",
-                    primarySymbol: model.phase == .loading ? "arrow.triangle.2.circlepath" : "opticaldisc",
+                    primaryTitle: model.phase == .loading ? "Loading..." : "Download Windows 11",
+                    primarySymbol: model.phase == .loading ? "arrow.triangle.2.circlepath" : "arrow.down.circle",
                     secondaryTitle: "Refresh",
                     primaryAction: {
-                        pathPicker = .installerMedia
+                        presentedSheet = .windowsDownload
                     },
                     secondaryAction: {
                         Task {
@@ -209,25 +211,34 @@ struct VMRuntimeView: View {
         .task(id: model.snapshot?.state) {
             await refreshRuntimeEvidenceWhileRunning()
         }
-        .popover(isPresented: $showsAdvancedDetails, arrowEdge: .bottom) {
-            if let snapshot = model.snapshot {
-                ScrollView {
+        .sheet(item: $presentedSheet) { destination in
+            switch destination {
+            case .settings:
+                VMSettingsSheet(model: model) { snapshot, policy in
                     ViewThatFits(in: .horizontal) {
                         HStack(alignment: .top, spacing: 14) {
-                            setupColumn(snapshot)
+                            setupColumn(snapshot, canChangeResources: policy.canChangeResources)
                                 .frame(minWidth: 380)
                             runtimeDetailColumn(snapshot)
                                 .frame(minWidth: 380)
                         }
 
                         VStack(alignment: .leading, spacing: 14) {
-                            setupColumn(snapshot)
+                            setupColumn(snapshot, canChangeResources: policy.canChangeResources)
                             runtimeDetailColumn(snapshot)
                         }
                     }
-                    .padding(18)
                 }
-                .frame(width: 860, height: 560)
+            case .windowsDownload:
+                WindowsDownloadSheet(
+                    prepareDownloadedISO: prepareDownloadedISO,
+                    useExistingISO: {
+                        Task { @MainActor in
+                            try? await Task.sleep(for: .milliseconds(250))
+                            pathPicker = .installerAndStart
+                        }
+                    }
+                )
             }
         }
     }
@@ -285,7 +296,10 @@ struct VMRuntimeView: View {
     }
 
     @ViewBuilder
-    private func setupColumn(_ snapshot: VMRuntimeSnapshot) -> some View {
+    private func setupColumn(
+        _ snapshot: VMRuntimeSnapshot,
+        canChangeResources: Bool
+    ) -> some View {
         VStack(alignment: .leading, spacing: 14) {
             SetupAssistantPanel(
                 snapshot: snapshot,
@@ -310,7 +324,8 @@ struct VMRuntimeView: View {
                         await model.createDefaultVirtualDisk()
                     }
                 },
-                isLoading: model.phase == .loading
+                isLoading: model.phase == .loading,
+                canChangeResources: canChangeResources
             )
 
             if !snapshot.installationSteps.isEmpty {
@@ -391,6 +406,18 @@ struct VMRuntimeView: View {
                     driverMediaPath: currentDriver,
                     virtualDiskPath: currentDisk
                 )
+            case .installerAndStart:
+                let isReadyToStart = await model.prepareWindowsInstallation(
+                    installerMediaPath: path,
+                    driverMediaPath: currentDriver,
+                    virtualDiskPath: currentDisk
+                )
+                guard isReadyToStart else {
+                    return
+                }
+
+                startDisplayHandoffProgress()
+                startVMAction()
             case .driverMedia:
                 await model.updateProfilePaths(
                     installerMediaPath: currentInstaller,
@@ -405,6 +432,22 @@ struct VMRuntimeView: View {
                 )
             }
         }
+    }
+
+    @MainActor
+    private func prepareDownloadedISO(_ url: URL) async -> Bool {
+        let isReadyToStart = await model.prepareWindowsInstallation(
+            installerMediaPath: url.path,
+            driverMediaPath: model.snapshot?.driverMediaPath,
+            virtualDiskPath: model.snapshot?.virtualDiskPath
+        )
+        guard isReadyToStart else {
+            return false
+        }
+
+        startDisplayHandoffProgress()
+        startVMAction()
+        return true
     }
 
     private func diagnosticsDirectory() -> URL {
@@ -905,8 +948,7 @@ private struct WindowsEmbeddedDisplayPreview: View {
 
     var body: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(.black)
+            Color.black
 
             if let renderedImage {
                 Image(nsImage: renderedImage)
@@ -947,10 +989,6 @@ private struct WindowsEmbeddedDisplayPreview: View {
             )
         }
         .aspectRatio(16 / 9, contentMode: .fit)
-        .overlay {
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .strokeBorder(.white.opacity(0.16), lineWidth: 1)
-        }
         .help("Latest Windows display")
         .accessibilityLabel(surface.kind == .vncLoopback ? "Embedded Windows display endpoint" : "Latest Windows display screenshot")
         .accessibilityValue(surface.endpoint ?? path)
@@ -1408,12 +1446,9 @@ private struct WindowsSetupDisplayPanel: View {
     var consolePointerTapAction: (Double, Double) -> Void
     var consoleKeyAction: (String) -> Void
     var detailsAction: () -> Void
-    var isShowingDetails: Bool
     var installSimulation: InstallSimulationState
+    @Binding var showsFullDesktop: Bool
     @State private var showsAgentDiagnosticPopover = false
-    // A running VM should open on its actual Windows display. The launcher is the
-    // fallback shown while setup is incomplete or the display endpoint is unavailable.
-    @State private var showsFullDesktop = true
 
     var body: some View {
         Group {
@@ -1424,34 +1459,51 @@ private struct WindowsSetupDisplayPanel: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .onAppear {
-            showsFullDesktop = snapshot.state == .running && displaySurface != nil
-        }
-        .onChange(of: snapshot.state) { _, newState in
-            if newState == .running {
-                showsFullDesktop = displaySurface != nil
-            } else {
-                showsFullDesktop = false
-            }
-        }
-        .onChange(of: snapshot.latestConsoleLaunch) { _, _ in
-            if snapshot.state == .running, displaySurface != nil {
-                showsFullDesktop = true
-            }
-        }
     }
 
     private var installedLauncherStage: some View {
-        ZStack(alignment: .bottom) {
+        ZStack(alignment: .topTrailing) {
             launcherDisplaySurface
 
-            launcherFooter
-                .background(.black.opacity(0.18))
-                .background(.ultraThinMaterial)
-                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                .padding(10)
+            installedRuntimeChrome
+                .padding(showsFullDesktop ? 12 : 16)
         }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    @ViewBuilder
+    private var installedRuntimeChrome: some View {
+        if showsFullDesktop {
+            Button {
+                showsFullDesktop = false
+            } label: {
+                Label("Show Apps", systemImage: "macwindow")
+                    .labelStyle(.iconOnly)
+                    .frame(width: 32, height: 32)
+                    .contentShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .background(.black.opacity(0.16), in: Circle())
+            .background(.ultraThinMaterial, in: Circle())
+            .overlay {
+                Circle()
+                    .strokeBorder(.white.opacity(0.18), lineWidth: 1)
+            }
+            .shadow(color: .black.opacity(0.24), radius: 10, y: 4)
+            .keyboardShortcut("a", modifiers: [.command, .shift])
+            .help("Show Windows apps (⇧⌘A)")
+            .accessibilityLabel("Show Windows apps")
+        } else {
+            horizontalActions
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
+                .background(.black.opacity(0.18))
+                .background(.ultraThinMaterial, in: Capsule())
+                .overlay {
+                    Capsule()
+                        .strokeBorder(.white.opacity(0.14), lineWidth: 1)
+                }
+        }
     }
 
     private var installProcessStage: some View {
@@ -1465,15 +1517,14 @@ private struct WindowsSetupDisplayPanel: View {
                 .padding(10)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
-        .overlay {
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .strokeBorder(.white.opacity(0.14), lineWidth: 1)
-        }
     }
 
     private var installDisplaySurface: some View {
         ZStack {
-            if let displaySurface {
+            if displaySelection == .appleVirtualMachine,
+               let embeddedVirtualMachine {
+                EmbeddedVirtualMachineView(virtualMachine: embeddedVirtualMachine)
+            } else if let displaySurface {
                 WindowsEmbeddedDisplayPreview(
                     image: displayScreenshotImage,
                     surface: displaySurface,
@@ -1491,7 +1542,11 @@ private struct WindowsSetupDisplayPanel: View {
 
     @ViewBuilder
     private var launcherDisplaySurface: some View {
-        if showsFullDesktop, let displaySurface {
+        if showsFullDesktop,
+           displaySelection == .appleVirtualMachine,
+           let embeddedVirtualMachine {
+            EmbeddedVirtualMachineView(virtualMachine: embeddedVirtualMachine)
+        } else if showsFullDesktop, let displaySurface {
             WindowsEmbeddedDisplayPreview(
                 image: displayScreenshotImage,
                 surface: displaySurface,
@@ -1521,11 +1576,9 @@ private struct WindowsSetupDisplayPanel: View {
 
             Spacer(minLength: 12)
 
-            if !canStop && snapshot.state != .starting {
-                runtimeSetupMenu
-            }
+            runtimeSettingsButton
 
-            if displaySurface != nil || canStop || snapshot.state == .starting {
+            if hasDesktopDisplay || canStop || snapshot.state == .starting {
                 Button(action: runEffectivePrimaryAction) {
                     Label(effectivePrimaryTitle, systemImage: effectivePrimarySymbol)
                         .frame(minWidth: canStop ? 124 : 142)
@@ -1535,7 +1588,9 @@ private struct WindowsSetupDisplayPanel: View {
                 .disabled(effectivePrimaryDisabled)
             }
 
-            runtimeMoreMenu
+            if hasRuntimeMoreActions {
+                runtimeMoreMenu
+            }
         }
         .controlSize(.regular)
         .padding(.horizontal, 14)
@@ -1568,6 +1623,29 @@ private struct WindowsSetupDisplayPanel: View {
         )
     }
 
+    @MainActor
+    private var embeddedVirtualMachine: VZVirtualMachine? {
+        guard snapshot.runtimeProvider?.kind == .appleVirtualization,
+              snapshot.state == .running || snapshot.state == .starting else {
+            return nil
+        }
+
+        return VirtualizationVMRuntimeBooter.shared.activeVirtualMachine
+    }
+
+    private var displaySelection: RuntimeDisplaySelection {
+        RuntimeDisplaySelection.resolve(
+            provider: snapshot.runtimeProvider?.kind,
+            state: snapshot.state,
+            hasAppleVirtualMachine: embeddedVirtualMachine != nil,
+            hasCapturedSurface: displaySurface != nil
+        )
+    }
+
+    private var hasDesktopDisplay: Bool {
+        displaySelection != .placeholder
+    }
+
     private var displayScreenshotRevisionID: String {
         let path = snapshot.latestConsoleScreenshotPath ?? "missing"
         let refreshedAt = snapshot.latestConsoleLaunch?.consoleScreenshotRefreshedAt?.timeIntervalSince1970 ?? 0
@@ -1576,7 +1654,7 @@ private struct WindowsSetupDisplayPanel: View {
 
     private var machineDisplay: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
+            Rectangle()
                 .fill(machineHeroGradient)
 
             VStack(spacing: 16) {
@@ -1614,11 +1692,21 @@ private struct WindowsSetupDisplayPanel: View {
                 .buttonStyle(.plain)
                 .disabled(effectivePrimaryDisabled)
                 .help(effectivePrimaryHelp)
+                .accessibilityLabel(effectivePrimaryTitle)
+                .accessibilityHint(effectivePrimaryHelp)
 
                 Text(effectivePrimaryTitle)
                     .font(.headline.weight(.semibold))
                     .lineLimit(1)
                     .minimumScaleFactor(0.82)
+
+                if showsUnavailableGuestAgentRoute {
+                    Label("Windows setup is available • Mac app windows require QEMU or a configured endpoint", systemImage: "network.slash")
+                        .font(.callout.weight(.medium))
+                        .foregroundStyle(.orange)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                }
 
                 if effectiveInstallEvidence.isInstalled {
                     Label(launchOnboardingTitle, systemImage: launchOnboardingSymbolName)
@@ -1646,10 +1734,6 @@ private struct WindowsSetupDisplayPanel: View {
             }
             .foregroundStyle(.white)
             .padding(24)
-        }
-        .overlay {
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .strokeBorder(.white.opacity(0.16), lineWidth: 1)
         }
     }
 
@@ -1690,31 +1774,15 @@ private struct WindowsSetupDisplayPanel: View {
         }
 
         if snapshot.installerMediaPath == nil || installerNeedsFilePickerAccess {
-            return "Choose ISO"
+            return "Download Windows 11"
         }
 
         return snapshot.profileName == nil ? "Prepare Windows" : "Continue Setup"
     }
 
-    private var launcherFooter: some View {
-        HStack(spacing: 10) {
-            ForEach(metadataItems) { item in
-                LauncherMetadataChip(item: item)
-            }
-
-            Spacer(minLength: 12)
-
-            horizontalActions
-                .frame(minWidth: 300, alignment: .trailing)
-        }
-        .padding(.horizontal, 22)
-        .padding(.vertical, 14)
-    }
-
     private var horizontalActions: some View {
         HStack(spacing: 8) {
-            Spacer(minLength: 4)
-            if snapshot.state == .running {
+            if snapshot.state == .running, hasDesktopDisplay {
                 Button {
                     showsFullDesktop.toggle()
                 } label: {
@@ -1724,33 +1792,30 @@ private struct WindowsSetupDisplayPanel: View {
                     )
                     .labelStyle(.iconOnly)
                 }
-                    .help(showsFullDesktop ? "Return to the Windows app launcher" : "Show the live Windows desktop")
+                .keyboardShortcut("a", modifiers: [.command, .shift])
+                .help(showsFullDesktop ? "Return to the Windows app launcher" : "Show the live Windows desktop (⇧⌘A)")
+                .accessibilityLabel(showsFullDesktop ? "Show Windows apps" : "Show Windows desktop")
             }
 
-            runtimeMoreMenu
+            Button(action: detailsAction) {
+                Label("Settings", systemImage: "gearshape.fill")
+                    .labelStyle(.iconOnly)
+            }
+            .disabled(isLoading)
+            .help("Open Windows settings")
+
+            if hasRuntimeMoreActions {
+                runtimeMoreMenu
+            }
         }
     }
 
-    @ViewBuilder
-    private var runtimeSetupMenu: some View {
-        Menu("Setup", systemImage: "gearshape.fill") {
-            Button("Choose ISO", systemImage: "opticaldisc") {
-                selectInstallerAction()
-            }
-            .disabled(isLoading || snapshot.state == .running || snapshot.state == .starting)
-
-            Button("Choose Drivers", systemImage: "externaldrive.badge.gearshape") {
-                selectDriverAction()
-            }
-            .disabled(isLoading || snapshot.state == .running || snapshot.state == .starting)
-
-            Button("Prepare Windows", systemImage: "wand.and.stars") {
-                prepareAction()
-            }
-            .disabled(isLoading || snapshot.state == .running || snapshot.state == .starting)
+    private var runtimeSettingsButton: some View {
+        Button(action: detailsAction) {
+            Label("Settings", systemImage: "gearshape.fill")
         }
-        .disabled(isLoading || snapshot.state == .running || snapshot.state == .starting)
-        .help("Show setup actions")
+        .disabled(isLoading)
+        .help("Open Windows settings")
     }
 
     @ViewBuilder
@@ -1823,33 +1888,6 @@ private struct WindowsSetupDisplayPanel: View {
                 }
             }
 
-            Button("Refresh", systemImage: "arrow.clockwise") {
-                refreshAction()
-            }
-            .disabled(isLoading)
-
-            Button(isShowingDetails ? "Hide Details" : "Show Details", systemImage: "slider.horizontal.3") {
-                detailsAction()
-            }
-            .disabled(isLoading)
-
-            if !effectiveInstallEvidence.isInstalled {
-                Button("Prepare Windows", systemImage: "wand.and.stars") {
-                    prepareAction()
-                }
-                .disabled(isLoading || snapshot.state == .running || snapshot.state == .starting)
-
-                Button("Choose ISO", systemImage: "opticaldisc") {
-                    selectInstallerAction()
-                }
-                .disabled(isLoading || snapshot.state == .running || snapshot.state == .starting)
-
-                Button("Choose Drivers", systemImage: "externaldrive.badge.gearshape") {
-                    selectDriverAction()
-                }
-                .disabled(isLoading || snapshot.state == .running || snapshot.state == .starting)
-            }
-
             if canMarkWindowsInstalled {
                 Button("Mark Installed", systemImage: "checkmark.seal") {
                     markWindowsInstalledAction()
@@ -1865,6 +1903,13 @@ private struct WindowsSetupDisplayPanel: View {
                 .help("Run the strongest available Windows app check")
             }
         }
+    }
+
+    private var hasRuntimeMoreActions: Bool {
+        canInstallGuestAgent
+            || canWaitForGuestAgent
+            || canMarkWindowsInstalled
+            || recommendedProofCommand != nil
     }
 
     private var selectedInstallerName: String? {
@@ -1906,7 +1951,7 @@ private struct WindowsSetupDisplayPanel: View {
             return selectedInstallerName
         }
 
-        return "Choose a Windows 11 Arm ISO"
+        return "Download the latest Windows 11 Arm64 ISO or use an existing ISO"
     }
 
     private var effectiveInstallEvidence: VMInstallEvidenceSummary {
@@ -2002,88 +2047,6 @@ private struct WindowsSetupDisplayPanel: View {
         ]
     }
 
-    private var metadataItems: [LauncherMetadataItem] {
-        WindowsShellCopy.installedLauncherMetadata(
-            windowsIsRunning: snapshot.state == .running || snapshot.state == .starting,
-            windowsCanStart: canStart,
-            displayNeedsRefresh: canRecoverRuntimeDisplay,
-            appValue: appMetadataValue,
-            appTone: appMetadataTone,
-            appConnectionReady: canLaunchWindowsApp || canFulfillPendingLaunch,
-            appConnectionWaiting: pendingLaunch.isQueued || canRequestWindowsAppLaunch
-        )
-        .map { status in
-            LauncherMetadataItem(
-                title: status.title,
-                value: status.value,
-                symbolName: status.symbolName,
-                tint: color(for: status.tone)
-            )
-        }
-    }
-
-    private var appMetadataValue: String {
-        guard let activeMirrorSession else {
-            if canFulfillPendingLaunch {
-                return "Ready"
-            }
-
-            if pendingLaunch.willLaunchOnAgentReconnect {
-                switch snapshot.state {
-                case .running, .starting:
-                    return "Connecting"
-                default:
-                    return "Queued"
-                }
-            }
-
-            if canLaunchWindowsApp {
-                return appDisplayName
-            }
-
-            return canRequestWindowsAppLaunch ? "Ready to queue" : "After connection"
-        }
-
-        return activeMirrorSession.latestFrame == nil ? "Opening" : "Mac Window"
-    }
-
-    private var appMetadataTint: Color {
-        color(for: appMetadataTone)
-    }
-
-    private var appMetadataTone: WindowsShellStatusTone {
-        guard let activeMirrorSession else {
-            if canFulfillPendingLaunch {
-                return .green
-            }
-
-            if pendingLaunch.isQueued {
-                return .blue
-            }
-
-            if canLaunchWindowsApp {
-                return .green
-            }
-
-            return canRequestWindowsAppLaunch ? .blue : .secondary
-        }
-
-        return activeMirrorSession.latestFrame == nil ? .orange : .green
-    }
-
-    private func color(for tone: WindowsShellStatusTone) -> Color {
-        switch tone {
-        case .green:
-            .green
-        case .blue:
-            .blue
-        case .orange:
-            .orange
-        case .secondary:
-            .secondary
-        }
-    }
-
     private var appDisplayName: String {
         if pendingLaunch.isQueued {
             return pendingAppDisplayName
@@ -2129,11 +2092,17 @@ private struct WindowsSetupDisplayPanel: View {
         }
 
         if snapshot.bootReady {
-            return "Press play to start Windows in this window"
+            return snapshot.runtimeProvider?.kind == .appleVirtualization
+                ? "Windows will open in an Apple Virtualization console"
+                : "Press play to start Windows in this window"
         }
 
         if installerNeedsFilePickerAccess {
             return "Re-select the ISO to grant macOS file access"
+        }
+
+        if snapshot.runtimeProvider?.kind == .appleVirtualization {
+            return "Apple Virtualization compatibility mode • bring your Windows 11 Arm installer"
         }
 
         return "Bring your own Windows 11 Arm installer"
@@ -2148,6 +2117,11 @@ private struct WindowsSetupDisplayPanel: View {
         default:
             LinearGradient(colors: [Color(red: 0.02, green: 0.32, blue: 0.62), Color(red: 0.08, green: 0.09, blue: 0.14)], startPoint: .topLeading, endPoint: .bottomTrailing)
         }
+    }
+
+    private var showsUnavailableGuestAgentRoute: Bool {
+        agentDiagnostic?.status == .unavailable
+            && agentDiagnostic?.endpoint.hasPrefix("unavailable://") == true
     }
 
     private func resourceName(from path: String?) -> String? {
@@ -2202,8 +2176,8 @@ private struct WindowsSetupDisplayPanel: View {
             return installSimulation.phase == .running ? "Starting..." : "Start Windows"
         }
 
-        if installerNeedsFilePickerAccess {
-            return "Choose ISO"
+        if snapshot.installerMediaPath == nil || installerNeedsFilePickerAccess {
+            return "Download Windows 11"
         }
 
         return snapshot.profileName == nil ? "Prepare Windows" : "Continue Setup"
@@ -2238,8 +2212,8 @@ private struct WindowsSetupDisplayPanel: View {
             return "play.fill"
         }
 
-        if installerNeedsFilePickerAccess {
-            return "opticaldisc"
+        if snapshot.installerMediaPath == nil || installerNeedsFilePickerAccess {
+            return "arrow.down.circle"
         }
 
         return "wand.and.stars"
@@ -2277,8 +2251,12 @@ private struct WindowsSetupDisplayPanel: View {
             return "Start Windows Setup inside Veil's embedded display."
         }
 
+        if snapshot.installerMediaPath == nil {
+            return "Download the latest Windows 11 Arm64 ISO from Microsoft. Veil will save it, prepare the VM, and open Windows Setup automatically."
+        }
+
         if installerNeedsFilePickerAccess {
-            return "Re-select the ISO so Veil can store macOS file access."
+            return "Download Windows again or use the existing ISO so Veil can restore macOS file access."
         }
 
         return "Create the profile, disk, shared folder, and install media."
@@ -2648,7 +2626,7 @@ private struct WindowsSetupDisplayPanel: View {
     }
 }
 
-private struct WindowsLogoMark: View {
+struct WindowsLogoMark: View {
     var size: CGFloat
 
     var body: some View {
@@ -2858,46 +2836,6 @@ private struct WindowsDisplayLaunchEvidenceStrip: View {
         ]
         .compactMap { $0 }
         .joined(separator: "\n")
-    }
-}
-
-private struct LauncherMetadataItem: Identifiable {
-    var id: String { title }
-    var title: String
-    var value: String
-    var symbolName: String
-    var tint: Color
-}
-
-private struct LauncherMetadataChip: View {
-    var item: LauncherMetadataItem
-
-    var body: some View {
-        HStack(spacing: 8) {
-            Image(systemName: item.symbolName)
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(item.tint)
-                .frame(width: 24, height: 24)
-                .background(item.tint.opacity(0.11), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
-
-            VStack(alignment: .leading, spacing: 1) {
-                Text(item.title)
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                Text(item.value)
-                    .font(.caption.weight(.semibold))
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-            }
-        }
-        .padding(.horizontal, 9)
-        .padding(.vertical, 7)
-        .frame(maxWidth: 138, alignment: .leading)
-        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .strokeBorder(.quaternary, lineWidth: 1)
-        }
     }
 }
 
@@ -3146,6 +3084,7 @@ private struct SetupAssistantPanel: View {
     var selectDiskAction: () -> Void
     var createDiskAction: () -> Void
     var isLoading: Bool
+    var canChangeResources: Bool
 
     private var items: [SetupItem] {
         [
@@ -3212,31 +3151,31 @@ private struct SetupAssistantPanel: View {
                         Label("Prepare", systemImage: "wand.and.stars")
                     }
                     .buttonStyle(.borderedProminent)
-                    .disabled(isLoading)
+                    .disabled(isLoading || !canChangeResources)
 
                     Button(action: createProfileAction) {
                         Label("Profile Only", systemImage: "plus.circle")
                     }
-                    .disabled(isLoading)
+                    .disabled(isLoading || !canChangeResources)
                 }
 
                 if !snapshot.windowsInstalled {
                     Button(action: selectInstallerAction) {
                         Label("Installer", systemImage: "opticaldisc")
                     }
-                    .disabled(snapshot.profileName == nil || isLoading)
+                    .disabled(snapshot.profileName == nil || isLoading || !canChangeResources)
                 }
 
                 Button(action: selectDiskAction) {
                     Label("Disk", systemImage: "externaldrive")
                 }
-                .disabled(snapshot.profileName == nil || isLoading)
+                .disabled(snapshot.profileName == nil || isLoading || !canChangeResources)
 
                 if snapshot.profileName != nil && snapshot.virtualDiskPath == nil {
                     Button(action: createDiskAction) {
                         Label("Create Disk", systemImage: "internaldrive")
                     }
-                    .disabled(isLoading)
+                    .disabled(isLoading || !canChangeResources)
                 }
 
                 Spacer()
@@ -3454,6 +3393,7 @@ private struct SetupItemRow: View {
 
 private enum PathPicker: Identifiable {
     case installerMedia
+    case installerAndStart
     case driverMedia
     case virtualDisk
 
@@ -3461,6 +3401,8 @@ private enum PathPicker: Identifiable {
         switch self {
         case .installerMedia:
             "installerMedia"
+        case .installerAndStart:
+            "installerAndStart"
         case .driverMedia:
             "driverMedia"
         case .virtualDisk:

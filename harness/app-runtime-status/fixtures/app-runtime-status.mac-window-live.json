@@ -57,6 +57,7 @@
       "canSendInput": true,
       "frameStreamStatus": "waitingForFirstFrame",
       "receivedFrameCount": 0,
+      "unchangedHeartbeatCount": 0,
       "frameStreamRecommendedAction": "wait-for-first-frame",
       "frameStreamRestartCount": 0,
       "frameStreamRecoveryEscalated": false,

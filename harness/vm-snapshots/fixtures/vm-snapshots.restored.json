@@ -1,0 +1,29 @@
+{
+  "kind": "vmSnapshotAction",
+  "action": "restore",
+  "generatedAt": "2026-07-29T11:05:00Z",
+  "status": "succeeded",
+  "vmState": "running",
+  "provider": "QEMU/HVF",
+  "capability": {
+    "state": "supported",
+    "isSupported": true,
+    "systemDiskFormat": "qcow2",
+    "requiredDiskFormat": "qcow2",
+    "systemDiskPath": "/Users/example/Virtual Machines/Veil/Windows 11 Arm.qcow2",
+    "detail": "The Windows system disk is qcow2, so QEMU internal snapshots can store guest memory and disk state together."
+  },
+  "requestedTag": "before-update",
+  "snapshots": [
+    {
+      "id": "1",
+      "tag": "before-update",
+      "vmStateSize": "4.02 GiB",
+      "createdAt": "2026-07-29 10:19:58",
+      "vmClock": "00:14:07.221"
+    }
+  ],
+  "nextActions": [
+    "Windows resumed from the snapshot. Reconnect the guest agent with veil-vmctl guest-agent-wait --json before launching Windows apps."
+  ]
+}

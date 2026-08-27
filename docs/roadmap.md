@@ -14,12 +14,13 @@ Veil does not have a cloud or server VM backend. Its VM layer is a local runtime
 - VM profile preflight checks.
 - Installer media role validation.
 - Adaptive default CPU, memory, and disk profile based on the current Mac.
-- Explicit Windows Arm ISO selection with security-scoped bookmark persistence.
+- Official Microsoft Windows 11 Arm64 download handoff with a local ISO picker fallback and security-scoped bookmark persistence.
 - Shared folder preparation.
 - Local diagnostics bundle export.
 - Last boot attempt report in diagnostics.
 - Typed local runtime provider device summary.
-- Start, stop, suspend, resume states.
+- Start, stop, suspend, and resume states, with suspend and resume as real operations rather than
+  representable-but-unreachable states.
 - Basic VM display surface for debugging.
 - Reopenable VM console action while the machine is running.
 - Documented Windows installer display risk for Apple's Virtio graphics path.
@@ -31,12 +32,15 @@ Exit criteria:
 - A contributor can see which profile settings are invalid before boot.
 - A contributor is warned when a disk image is selected where bootable installer media is expected.
 - A contributor can prepare a VM profile whose resource caps are automatically sized for the host Mac.
-- A contributor can select a Windows Arm ISO once and let Veil reuse the stored security-scoped bookmark during preparation and launch.
+- A contributor can choose the latest Windows Arm ISO on Microsoft's official page and let Veil save and prepare it locally, or select an existing ISO once and reuse the stored security-scoped bookmark during preparation and launch.
 - A contributor can export metadata-only diagnostics for boot-readiness failures.
 - A contributor can inspect the latest Start attempt result and startup error without sharing Windows media or disk contents.
 - A contributor can inspect planned boot devices before starting the VM.
 - A contributor can start a guest VM from the host app.
 - A contributor can reopen the VM console after closing it.
+- A contributor can suspend a running Windows session and resume it with the same apps still open,
+  instead of only stopping and rebooting Windows. Implemented and unit tested; live verification on
+  Windows 11 Arm with swtpm is still open (see `docs/checklists/2026-07-29-vm-session-and-snapshots.md`).
 - Failure states are visible and debuggable.
 
 ## v0.2: Guest Agent
@@ -90,9 +94,31 @@ Exit criteria:
 - Windows app launcher.
 - Coherence window bridge for common desktop apps.
 - Text clipboard.
-- Shared folder.
+- Shared folder. First slice shipped as a live, writable, uncapped share: Windows publishes
+  `C:\VeilShared` over its in-box SMB server and macOS mounts it at `smb://127.0.0.1:18445/VeilShared`
+  through a loopback-scoped QEMU port forward. The direction is inverted on purpose — virtio-9p has no
+  Windows driver, virtio-fs has no macOS host daemon, and QEMU's built-in `smb=` needs a Samba build that
+  will not run as the non-root user QEMU invokes it as, so a guest-served share is the only path with no
+  host prerequisites. Surfaced as `veil-vmctl shared-folder-status`, the `shared.folder.request`/`response`
+  protocol pair, and `harness/shared-folder`. Open: one live pass creating the share with the elevated
+  command the guest reports, then reading and writing across it in both directions; and a throughput
+  measurement, since SMB over usermode NAT is the slow path. The reverse direction (a Mac folder inside
+  Windows) is modelled as the `host-smb` transport and reported unavailable with its prerequisite.
 - Basic Dock integration for reopening, focusing, closing, restoring, and launching Windows app windows while the main Veil window is hidden.
-- Automatic VM start and suspend.
+- Automatic VM start and suspend. Both halves now exist. The primitive is `veil-vmctl vm-suspend`,
+  `vm-resume`, `vm-session-status`, and `VMRuntimeModel.suspend()`/`resume()`; the idle policy now uses
+  it. When the last mirrored Windows app window closes, Veil suspends the session instead of shutting
+  Windows down, so open apps and unsaved work survive, and reopening an app resumes rather than cold
+  boots. `quietRuntime.quietMode` reports which of suspend or stop will run — the previous
+  `stop-or-suspend-runtime` recommendation named both and committed to neither, so nobody could tell
+  whether their apps were about to be closed. Suspend failure falls back to stopping, never the
+  reverse, because a failed memory-state save leaves the guest paused and the launcher offers no
+  action for that state. Exposed to automation as the `suspend-runtime` app-runtime action, kept
+  separate from `stop-runtime` whose contract pins `runtimeStop.state` to `stopped`.
+  Open: the lossless round trip has not been verified live (open Notepad with unsaved text, let it go
+  idle, reopen, confirm the text is still there), and the 2026-07-29 TPM hazard applies here too —
+  the migration stream carries TPM device state while Veil restarts `swtpm` on every launch.
+  `VMProfile.suspendOnQuit` is still read by nothing; the mode is resolved from capability only.
 - Recovery instructions and diagnostics bundle.
 
 Exit criteria:
@@ -101,22 +127,121 @@ Exit criteria:
 
 ## v1.5: Daily Use
 
-- Retina scaling.
-- Multiple windows per app.
-- Better frame latency.
-- App icons.
-- Drag and drop.
-- Windows notifications to macOS notifications.
-- Initial printer bridge research.
+- Retina scaling. Mostly already done, and the roadmap previously overstated the gap. Two unit systems
+  travel on the wire on purpose and both ends already agree: `window.created`/`window.updated` bounds are
+  logical ~96-DPI-equivalent units so the macOS window is sized in points, while frame and tile surface
+  dimensions are real physical pixels so the Mac gets the sharpest available bitmap. The guest normalizes
+  bounds by the window's DPI scale in `WindowsDesktop.cs` specifically for the host's placement
+  heuristics. A 200% guest therefore already produces a correctly sized window rendered 1:1 on a 2x Mac.
+  **Do not divide bounds by scale on the host** — it is already logical, and doing so would open every
+  window at half size on a high-DPI guest while passing every test on a 100% one. See
+  `docs/checklists/2026-08-10-retina-scaling-finding.md`.
+  The one real remaining gap: a 100% guest on a Retina Mac supplies a bitmap macOS must upscale 2x, and
+  no host arithmetic creates those pixels. Closing it means making the guest's display DPI track the
+  Mac's backing scale factor, which is a guest display setting rather than a protocol field.
+  That gap is now at least **visible instead of silent**. `displayScaling` in the app runtime status report
+  compares the Mac's backing scale factor against the DPI scale the guest actually rendered the latest
+  frame at, and names the Windows percentage that would match. It reports both directions, because they
+  fail differently: a guest below the host starves the display of pixels and text goes soft, while a guest
+  above the host manufactures pixels the display cannot show and pays to encode, send, and composite every
+  one of them. `nil` host scale reports unknown rather than assuming 1, since guessing would tell every
+  Retina user to change a setting that was already correct. Read from `NSScreen.main` in the app shell and
+  from `--host-backing-scale` in the CLI, because VeilHostCore has no window server to ask. Still a
+  recommendation, not a fix: Veil cannot set Windows' display scaling from outside the guest. See
+  `docs/checklists/2026-08-11-dpi-mismatch-detection.md`.
+- Multiple windows per app. Shipped in two halves. Several **different** apps mirror side by side, each
+  as its own macOS window with cascaded placement; that restriction turned out to be a single guard in
+  `WindowsAppWindowPresenter.showWindow(for:)`, since the presenter already keyed windows by id, the
+  cascade placement was written but unreachable, the host model already appended sessions, the guest
+  already ran one capture loop per window, and every harness contract already required
+  `mirroredWindowCount === mirrorSessions.length` rather than 1. Removing it exposed a real defect worth
+  recording: every frame refresh called `present()`, so with two windows a background window's frames
+  would have pulled it in front of the user's active one several times a second.
+  Multiple windows of the **same** app then needed a provenance rule rather than a lifted limit. A window
+  whose app already has a tracked window is adopted from the discovery stream; a window whose app was
+  never opened in this session is still ignored, because the guest enumerates every tracked process after
+  a reconnect. Adopted windows must have a title and non-zero bounds, and the per-app count is bounded to
+  limit guest-driven creation.
+  Open: live confirmation that a second document window appears, takes its own input, and that a leftover
+  window of a never-opened app still does not; plus a frame-throughput comparison of N concurrent streams
+  against one, which is the first case where the still-unmeasured frame pipeline can plausibly fall over.
+- Resizing a mirrored window. **The protocol has no host-to-guest resize message at all**, and the presenter
+  observes no resize, so dragging a corner changed only how the guest's bitmap was presented — and since the
+  frame surface renders `scaledToFit` over black, any shape other than the guest's produced black letterbox
+  bars. The window grew and the app sat unchanged in the middle of it.
+  Mitigated, not fixed: mirrored windows are now locked to the guest window's aspect ratio, with a minimum
+  size derived from the same ratio rather than a fixed 520×360 that would fight the lock. The window still
+  resizes and the image still scales, but it can no longer letterbox or distort. Re-applied on every refresh,
+  because the guest window can be resized from inside Windows.
+  The real feature needs a `window.resize.request` message, a guest `SetWindowPos` handler, debouncing on
+  `windowDidEndLiveResize` (each message currently opens its own WebSocket), and accepting that the guest is
+  authoritative — an app may refuse or clamp the size, with the answer arriving as the next `window.updated`.
+  A host that assumed its requested size would leave the two ends permanently disagreeing about the window's
+  shape. See `docs/checklists/2026-08-14-mirrored-window-resize.md`.
+- Better frame latency. Still open, and still unmeasured — which is the actual blocker. `frame-pipeline-report`
+  exists but has never been run, so any codec or encoding change would be a guess. Measure typing, idle,
+  scrolling, and N concurrent windows first.
+  One large cost is gone regardless of codec: **minimized windows kept streaming.** The presenter implemented
+  no `windowDidMiniaturize`, so a window collapsed into the Dock still had the guest capturing, comparing,
+  encoding, and sending its pixels while the host decoded and composited them. Frame streams now pause on
+  minimize and resume on restore. The hard part was not the unsubscribe but the staleness ladder: a stream with
+  no frames escalates to "reopen this app", so paused windows are excluded from the automatic restart and
+  recovery sweeps, which are the only things that raise the restart count the ladder is built on.
+  The same work surfaced a crash: `restartFrameSubscription` and `recoverFrameCapture` both held a
+  `mirrorSessions` index across `await`s and mutated by it afterwards. Main-actor state makes that look safe,
+  but an `await` yields and a `window.closed` in that gap shrinks the array, leaving the index out of bounds.
+  Both now re-resolve after the awaits. See `docs/checklists/2026-08-15-hidden-window-frame-streaming.md`.
+- App icons. **Largely already shipped**, and this entry previously implied none of it existed. The guest
+  extracts each app's real Windows icon (`WindowsAppIconExtractor`), the protocol carries it once per
+  `app.list.response` as `iconPngBase64`, and the launcher's app list renders it with a documented fallback
+  when the guest could not resolve one.
+  What is genuinely missing is narrower than "app icons": the **mirrored window carries no icon at all**.
+  `configure(_:for:)` sets only the title, so a Windows app window has no proxy icon, and the Dock shows one
+  Veil tile rather than a tile per running Windows app. The Dock half is not a small fix — Parallels ships a
+  per-app wrapper bundle to get separate Dock entries, which is a packaging decision, not a drawing one.
+- Drag and drop. **Already shipped**, and again understated here. Dropping a file on a mirrored window sends
+  it to the guest, which writes it into a per-request directory, opens it with the target app, and deletes
+  the copy after five minutes.
+  The real defect was that **every refusal was silent**. macOS plays its accept animation the moment a drop
+  is taken, and the host's size check runs milliseconds later, so an oversized file looked exactly like a
+  file that opened and did nothing. Dropping five files silently sent one. `WindowsAppFileDropPolicy` now
+  decides refusals as pure testable rules, every refusal carries the wording that explains it, and the app
+  shell shows it as a sheet on the window the file was dropped onto.
+  Two further defects came out of checking the host against `docs/protocol.md`. The host sent
+  `lastPathComponent` unchecked, but `: * ? " < > | \` are all legal in an APFS name and all forbidden by
+  Windows — and Finder stores a name it *displays* with `/` using `:`, so any date typed with slashes was
+  refused by the guest for a reason invisible on the user's own machine. The host now rewrites the name;
+  the guest still validates independently and remains the security boundary. Separately, every structured
+  guest failure (`invalid_file_name`, `file_write_failed`, `file_open_failed`, ...) was turned into
+  `phase = .failed`, claiming the whole Windows runtime broke because one file did not open. Those are now
+  recorded as drop refusals carrying the guest's own wording, on the same sheet, with the phase restored.
+  See `docs/checklists/2026-08-12-file-drop-refusal-visibility.md`.
+  Still open: the transport. A 50 MB file becomes roughly 67 MB of base64 in a single message on the same
+  channel as input and frames, so a large drop stalls both. Now that a shared folder exists, the file should
+  travel through it with only a path on the wire — the same reason frames moved off base64 to the binary
+  channel. Not attempted here because the shared-folder path is itself unverified.
+- Windows notifications to macOS notifications. Shipped, including the `notification.received` gap.
+- Initial printer bridge research. `printer-bridge-proof` records evidence; the bridge itself is research.
 
 ## v2.0: Work App Runtime
 
-- Snapshot management.
+- Snapshot management. First slice shipped as `veil-vmctl vm-snapshot-list|vm-snapshot-create|vm-snapshot-restore|vm-snapshot-delete`
+  over QEMU internal snapshots, with an explicit capability gate: internal snapshots require a
+  `qcow2` system disk and Veil's default disk is raw, so a raw-disk VM reports `unavailable` plus the
+  `qemu-img convert` path and the `vm-suspend` alternative instead of failing inside QEMU. Live
+  verification against a converted qcow2 Windows 11 Arm disk is still open.
 - App-specific resource profiles.
 - Windows update handling guidance.
 - Recovery mode.
 - Enterprise deployment profile research.
-- USB/printer/smart-card feasibility spikes.
+- USB/printer/smart-card feasibility spikes. **USB passthrough is settled and the answer is no, for a
+  reason that is not a Veil implementation gap.** QEMU upstream tracks USB passthrough on Apple Silicon
+  as unusable without root, macOS binds most USB devices to a kernel driver that libusb cannot take
+  exclusive access from, and some Homebrew QEMU builds have no `usb-host` device at all. The same wall
+  blocks bridged and host-only networking, which need the macOS `vmnet` framework and therefore root or
+  an Apple-granted entitlement. `veil-vmctl device-passthrough-status` reports all of this with the
+  prerequisite and the working alternative, and `harness/device-passthrough` keeps the report honest.
+  See the privileged-helper decision below; until it is made, no amount of host code closes these.
 
 ## v3.0: Advanced Compatibility
 
@@ -125,6 +250,65 @@ Exit criteria:
 - Remote Windows VM mode.
 - Enterprise management.
 - Smart-card and certificate bridge if legally and technically viable.
+
+## Guest Trust Boundary
+
+The host reads everything about a mirrored window from the guest, and the guest runs Windows — which the user
+may have infected. An audit of the guest→host direction found guest-supplied numbers reaching allocations, a
+conversion that traps, and an encoder that refuses.
+
+Closed: both receive loops buffered without limit (the frame consumer is `@MainActor` and rebuilds a hosting
+view per frame, so a merely busy guest grew host memory monotonically); a surface was bounded per axis but not
+by area, so 32768×32768 — a 4 GiB bitmap from a ~130 KB message — passed every check; the compositor held
+unlimited surfaces, which `frame-pipeline-measure` reaches with no window-id gate at all; a guest frame width of
+`Int.max` plus a click at the window edge crashed the host, because `Int(_:)` traps rather than saturating; the
+JSON frame path had no dimension bound anywhere, so a declared 30000×30000 was a multi-gigabyte `NSImage`
+decode on the main thread; and a denormal `scale` produced an infinite ratio that `JSONEncoder` refuses, so one
+malformed frame made `app-runtime-status --json` fail outright.
+
+Also closed: the control event pump died on a single undecodable message, because its only `do/catch` sat outside
+the `for try await` — so one bad field cost a reconnect, and a guest sending them continuously denied the host a
+stable event connection. It now tolerates 8 consecutive failures like the binary frame channel already did, while
+still letting a genuinely dropped connection reach the retry loop. Guest window bounds and titles are clamped at
+ingest rather than at each consumer, since `contentMinSize` and `contentAspectRatio` are re-applied from raw
+values on every `window.updated`. Inbound clipboard text is bounded, and refused rather than truncated — half a
+pasted document with no way to notice is worse than none.
+
+The two items that needed a decision are now decided and closed. **A compromised guest was choosing the text of
+an elevated command Veil vouched for**: `guest.shareCommand` was interpolated into "open PowerShell as
+administrator and run: …". The host now renders only host-authored commands, built from the two values it sent in
+the request, with a shell-syntax check and a fallback to compile-time constants. And the echo comparison the
+`expectedGuestDirectoryPath` doc comment had always promised — "a mismatch between the two is visible in the
+report rather than hidden" — is now actually performed, so the host can no longer report `ready` and tell the
+user to mount a share the guest never published.
+
+Rate limits are in, with a sliding window and an injected timestamp so they are deterministically testable:
+30 clipboard updates per 5 seconds, 20 notifications per 60. Checked last, so a message rejected for any other
+reason never spends the allowance — otherwise a guest could deny the user their own clipboard with messages that
+were never going to be accepted.
+
+Still open by choice: **the privileged helper for USB passthrough and bridged networking.** It is the least
+reversible thing this project could add, and adding root-level surface to code that has never been compiled
+inverts the order those should happen in. `device-passthrough-status` already reports both as unavailable with
+the prerequisite and the alternative, so nothing is silently broken. Revisit against a verified baseline. See
+`docs/checklists/2026-08-16-guest-to-host-trust.md`.
+
+## Open Contract Debt
+
+A systematic pass over every host→guest message against `docs/protocol.md` and the guest's C# handlers
+found that **six of the nine cannot receive an error at all**. `URLSessionWebSocketTransport.send` opens a
+new WebSocket per message and closes it immediately when `expectedReplies` is `0`, which is what mouse, key,
+text, clipboard, and frame subscribe/unsubscribe all pass. Eight documented guest error codes are therefore
+unobservable, and messages have no ordering guarantee at the guest because each arrives on its own
+connection.
+
+The sharpest consequence was ⌘V: the clipboard write can fail routinely (the guest's `OpenClipboard` retry
+budget is 250 ms, which any clipboard manager beats), the host could not see the failure, and Ctrl+V was
+posted anyway — pasting whatever Windows had before into the user's document. That is now honest rather than
+silent: a failed clipboard write cancels the paste and says so. Making it *correct* needs the guest to
+acknowledge the write, which is a wire-contract change across two languages and is deliberately deferred to
+a session that can compile both. See `docs/checklists/2026-08-13-host-guest-contract-audit.md` for the full
+list, evidence, and suggested order.
 
 ## Current Next Step
 
@@ -170,3 +354,49 @@ Veil now has the local QEMU/HVF boot path, embedded display evidence, fake-agent
    - Mirrored app-window status now reports frame stream quality per HWND: `waitingForFirstFrame`, `fresh`, `delayed`, `stale`, or `unavailable`, with frame request time, first-frame waiting age, latest-frame age, interval, received-frame count, restart count, latest restart timestamp, and aggregate fresh/delayed/stale counts in `macWindowIntegration`. `macWindowIntegration` now also exposes aggregate frame latency health, a 1 second fresh-frame budget, a 5 second stale-frame timeout, the slowest app-screen window, and the next latency action so Notepad, Calculator, and Paint tuning can be compared against the same product gate. The same assessment drives the app-window overlay, launcher App Screen metric, CLI, proof artifacts, review cards, and harness; `app-window-proof` records `firstFrameLatency`, while `coherence-proof` and embedded MVP evidence record `initialFrameLatency` and `postInputFrameLatency` against the same 1 second / 5 second budget, and `proofArtifacts` promotes the slowest latest-proof latency plus per-app latest proof coverage into app-runtime status. `veil-vmctl multi-app-proof --json --require-complete` now fills that coverage automatically by running the Coherence proof for Notepad, Calculator, and Paint, saving per-app proof artifacts, and writing an aggregate `windowsMultiAppProof` report for diagnostics; `app-runtime-status.proofPlan.recommendedMultiAppProofCommand`, `actions[].id=proof.multiApp`, and `veil-vmctl app-runtime-action --json --action proof-multi-app` expose that Daily Use gate whenever the live app catalog can launch the full target set. The launcher hero, menu bar primary action, and in-app Daily Use button now route to that same multi-app proof action, and the host shell writes the aggregate diagnostics report when users run it from the app. A blank pending app window becomes stale after 8 seconds without a first frame, and stale app screens expose `windowsApps.restartFrameStream`, an in-window restart button, Dock/menu recovery, launcher primary-action routing, and `veil-vmctl app-runtime-action --json --action restart-frame-stream` so every surface resubscribes through the same frame stream recovery path. If the same HWND goes stale after two restart attempts, the per-window recommendation escalates to `recover-window-capture`; `veil-vmctl app-runtime-action --json --action recover-window-capture` now focuses the HWND and performs a fresh frame subscription cycle instead of looping on restart. If the recovered HWND stalls again, the recommendation escalates to `reopen-windows-app`; `veil-vmctl app-runtime-action --json --action reopen-window` closes the stale HWND, launches the same Windows app again, and records `reopenRequestedWindowIds` plus `reopenedWindows` so the harness can prove only the reopened app window remains. `veil-vmctl app-runtime-action --json --action maintain-frame-streams` and the host shell's automatic maintenance loop now run that same priority order without asking the user to choose a recovery level. This does not claim latency tuning is complete, but it gives the launcher, menu bar, CLI, proof commands, review evidence, and harness a shared gate for detecting blank, delayed, stale, or under-covered Windows app surfaces.
    - `dailyUseReadiness` now makes the printer bridge experiment actionable by exposing `printerBridgeRecommendedAction=manual-ipp-experiment`, the QEMU user-network IPP endpoint template `http://10.0.2.2:631/printers/<shared-printer-name>`, `printerBridgePlanCommand=veil-vmctl printer-bridge-plan --json --shared-printer <shared-printer-name>`, and a setup hint for sharing the Mac printer then adding it in Windows as an IPP network printer. `veil-vmctl printer-bridge-plan --json` now generates the macOS sharing prerequisite, the Windows PowerShell `Add-Printer -IppURL` command, verification steps, and proof limitations; `harness/printer-bridge-plan` rejects drift away from QEMU host IPP or real Windows test-page evidence. The app action surface now includes `dailyUse.planPrinterBridge` (`Printer Setup`), and the Windows Apps panel shows the endpoint plus plan command so printer setup is no longer a CLI-only lane. `veil-vmctl printer-bridge-proof --json --evidence ...` now saves metadata under `Diagnostics/Printer Proof`, `proofArtifacts.latestPrinterBridgeProof*` summarizes the latest Windows test-page evidence, `app-runtime-review.evidence.latestPrinterBridgeProof*` mirrors that summary for review cards, `app-runtime-review-verify` reads the referenced proof JSON before sharing evidence, and `harness/printer-bridge-proof` keeps the proof privacy and QEMU IPP contracts intact.
    - `dailyUseReadiness` now promotes that package-identity gate into the app-runtime status contract, with explicit preflight booleans for borderless capture and Windows notifications plus the current `manual-ipp-experiment` printer lane, so the app and harness cannot present v1.5 polish as ready while the signed sparse package is still missing.
+
+9. Session persistence and snapshots (2026-07-29): closed the long-standing gap where `VMRuntimeState.suspended` was representable but no operation could ever produce it, and added the first v2.0 snapshot slice. See `docs/checklists/2026-07-29-vm-session-and-snapshots.md`.
+   - `QEMUQMPClient` is the first QMP client in the repo that reads replies. The existing key and pointer senders write to QMP and discard the answer, which cannot support pause, resume, or snapshots where the reply is the result.
+   - Suspend uses QEMU's migration path (`stop` -> `migrate exec:cat > file` -> `query-migrate` -> `quit`) instead of `savevm`, because `savevm` requires qcow2 and Veil ships a raw system disk. Guest memory lands next to the virtual disk as `.vmsave`, never under `Diagnostics`, since a diagnostics bundle is metadata-only by contract.
+   - The saved stream is single-use and treated as such: deleted after the guest is confirmed running, preserved when resume fails, discarded on cold boot, and refused when the recorded machine fingerprint no longer matches. Replaying a stream against a disk that has moved on would corrupt Windows.
+   - `veil-vmctl vm-suspend`, `vm-resume`, `vm-session-status`, and `harness/vm-session` expose that loop to automation; `VMRuntimeModel.canSuspend`/`canResume` gate it in the app.
+   - `veil-vmctl vm-snapshot-list|create|restore|delete` plus `harness/vm-snapshots` add QEMU internal snapshots with an explicit capability gate. A raw-disk VM reports `unavailable` and hands back both the `qemu-img convert` path and the `vm-suspend` alternative, rather than failing inside QEMU with an opaque error.
+   - Open: one live suspend/resume pass on Windows 11 Arm (the migration stream carries TPM device state while Veil restarts `swtpm` on every launch, so this may need swtpm to survive suspend), automatic idle-suspend wiring in the app shell to finish v1.0, and one live snapshot loop against a converted qcow2 disk.
+
+10. Guest audio and Unicode/IME text input (2026-07-30): the two closable gaps from the Parallels-class assessment. See `docs/checklists/2026-07-30-parallels-gap-audio-and-unicode-input.md`.
+   - Veil had no audio device at all. The plan now attaches CoreAudio plus Intel HD Audio duplex by default, with `usb-audio` and `none` alternates through `VEIL_QEMU_AUDIO_DEVICE`, and the boot-plan harness enforces backend-before-device ordering.
+   - Text input was worse than "IME missing". `MacKeyboardInputMapper` only resolves letters, digits, and nine named keys, so space, every punctuation mark, and every non-Latin character were silently dropped. Hangul, kana, and Han characters have no Windows virtual key at all.
+   - Added the `input.text` message for committed Unicode text, posted on the guest as `WM_CHAR` per UTF-16 code unit. macOS owns the IME: the host composes with the user's existing input source, shows the composition in its own overlay, and sends only the committed result, so there is no per-keystroke round trip and no guest candidate window over a mirrored bitmap.
+   - Enter, Tab, arrows, and shortcut chords deliberately stay on the `input.key` path, because their guest meaning is the key rather than a character. The decision lives in `MacTextInputRouter`, free of AppKit so it is unit testable.
+   - Open: live Korean typing on Windows 11 Arm, live audio playback confirmation, and the deferred `type-unicode` automation action.
+
+11. Frame pipeline, first slice (2026-07-31): damage tracking and unchanged-frame heartbeats. See `docs/checklists/2026-07-31-frame-pipeline-damage-tracking.md`.
+   - The streamer ticked on a fixed 250 ms timer, a hard 4 frames-per-second ceiling, and re-encoded the **entire** window as PNG plus base64 on every tick regardless of whether a single pixel had changed.
+   - The reason nobody could just skip redundant frames was a contract defect, not a performance one: freshness was derived solely from when the last frame arrived, so a guest that stopped re-sending identical pixels was marked stale and escalated into subscription restart, capture recovery, and app reopen. The host could not tell "nothing changed" from "capture is broken".
+   - Split host frame timing into two clocks. `latestFrameReceivedAt` still means "how old is the picture", so the frame-latency budget and saved proof artifacts are untouched; a new `latestActivityAt` means "the stream is alive" and is what freshness now follows. It defaults to the frame time, so an agent that sends no heartbeats behaves exactly as before.
+   - Added `window.frame.unchanged`, a payload-free heartbeat, and made the guest compare raw pixel buffers with an exact byte comparison before encoding anything. Cadence is now adaptive: 33 ms while content changes, 250 ms while static, kept well inside the host's stale threshold.
+   - Open: the actual before/after measurement. Frame latency has been treated as a tuning problem in this roadmap without anyone measuring where the time goes, and this is the first change that makes such a measurement meaningful.
+
+12. Frame pipeline, second slice (2026-08-01): binary frame channel. See `docs/checklists/2026-08-01-binary-frame-channel.md`.
+   - Ordering correction: the previous entry put dirty-rectangle tiles before the binary channel. That was wrong. Tiles multiply the message count, and doing that while frames are still base64 strings inside JSON on the shared control socket makes head-of-line blocking worse. The binary channel also needs no host compositing, so it is both lower risk and a prerequisite that makes the tile change smaller.
+   - Removed the three remaining per-frame costs: base64's 33% inflation, a multi-hundred-kilobyte JSON parse per frame on the host, and large frames sitting in front of the next `input.key` on the same TCP stream. That last one is the delay a user actually perceives as sluggish.
+   - Frames now travel as raw bytes with a 27-byte-plus-window-id header on a dedicated `/frames` WebSocket. The guest routes by request path, so every existing connection keeps its behavior, and control-channel clients still receive JSON frames. Negotiated through `capabilities.binaryFrameChannel`, so an older host never receives a format it cannot decode.
+   - The channel is send-only: the guest reads from it solely to observe a close, so frames can never be mistaken for replies. Decoded frames go through the ordinary `receiveWindowFrame` path, leaving status, timing, latency budgets, proofs, and rendering untouched by which transport delivered them.
+   - Open: the measurement, again. Bytes per frame, host CPU per frame, and above all input-to-pixel latency while a large frame is in flight.
+
+13. Frame pipeline, third slice (2026-08-02): dirty-rect tiles and host compositing. See `docs/checklists/2026-08-02-frame-tiles-and-compositing.md`.
+   - The remaining waste was that every *changed* frame still re-encoded the whole window. Typing one character in a 1920x1080 window re-encoded 2 million pixels to deliver a caret and a glyph.
+   - The guest now computes the bounding rectangle of changed pixels and encodes only that region. Wire format v2 (`VFR2`) carries the rectangle plus a key-frame flag; `VFR1` still decodes as a full-surface key frame so an agent mid-upgrade degrades rather than fails.
+   - The host keeps the authoritative full-window surface in `WindowFrameCompositor` and composites tiles into it. That also removes the host's per-frame full-surface PNG decode, since only the tile is decoded.
+   - A tile is a distinct type from a frame on both sides, so a tile cannot be accidentally rendered as a whole window. Tiles arriving before a key frame, after an unkeyed resize, or with a payload whose size disagrees with its rectangle are dropped with a specific reason rather than approximated. A dropped tile is not counted as a received frame, so a stalled surface cannot report as healthy.
+   - Composited pixels deliberately live outside the observable session value; views observe a generation counter and read the image through the model, so a full-resolution bitmap is never copied through the session array or compared by SwiftUI's equality diffing.
+   - Open: periodic time-based key frames, deferred because picking an interval needs the measurement below rather than a guess.
+
+14. Frame pipeline, fourth slice (2026-08-03): measurement. See `docs/checklists/2026-08-03-frame-pipeline-measurement.md`.
+   - Not a feature. Three slices had landed on reasoning with no numbers behind any of them, which is the same pattern this roadmap criticized when frame latency was treated as a tuning problem for months while nobody measured where the time went.
+   - Added `FramePipelineMetrics` plus `veil-vmctl frame-pipeline-report --json --seconds N` and a harness validator: achieved frame rate, wire bytes and byte rate, tile coverage percentiles, frame-interval percentiles, host composite cost, heartbeat counts, and dropped tiles by reason.
+   - The report answers "did tiles help" directly by estimating what the same updates would have cost as full frames, anchored to **observed** key-frame bytes per pixel for that window rather than a constant, and withheld entirely when no key frame was seen. PNG size is not linear in area, and the report says so in a field the harness requires.
+   - Latency stays out of scope: `coherence-proof` already measures first-frame and post-input latency against a budget, and a second implementation could only disagree with it.
+   - Open: actually running it. Three runs are specified in the checklist -- typing, idle, and scrolling a large document -- along with what each one would tell us.
+
+15. Still not Parallels-class, and the remaining decisions are now blocked on data rather than design. Once the three measurement runs exist: the coverage numbers choose the periodic key-frame interval that the tile slice deliberately deferred, and the byte-rate versus composite-time numbers decide whether the pipeline is bandwidth-bound or CPU-bound, which determines whether a codec change is the next step at all. The header's format byte reserves room for a hardware or inter-frame codec without another negotiation round. A guest display driver remains the only path to true Parallels-class graphics and is a separate, much larger decision. Beyond graphics: no live shared folder (no virtio-9p or SMB; file transfer is base64 over the control channel with a 50 MB cap), no USB passthrough, and usermode NAT only.

@@ -2,6 +2,14 @@
 
 This document is not legal advice. It exists to keep product and README wording honest.
 
+## macOS Direct Distribution
+
+The local `script/build_and_run.sh` output is an ad-hoc signed development bundle and must not be published as a trusted download. Direct downloads require an Apple-issued Developer ID Application certificate, hardened runtime, Apple notarization, a stapled ticket, and successful Gatekeeper assessment. Release entitlements must not enable `com.apple.security.get-task-allow`.
+
+Signing private keys and notarization credentials must stay in the maintainer's Keychain or approved CI secret store. They must never be committed, included in archives, or written to release reports.
+
+Official references: https://developer.apple.com/developer-id/ and https://developer.apple.com/documentation/security/notarizing-macos-software-before-distribution
+
 ## Windows Distribution
 
 Veil must not bundle:
@@ -22,6 +30,13 @@ Installer media and virtual disk paths in the local profile are local references
 Starting a local virtual machine with user-provided installer media and a blank disk is a VM lifecycle feature. It must not be described as Windows distribution, Windows activation, Windows support from Microsoft, or official Apple endorsement.
 
 Veil must not upload, mirror, or serve Windows ISO files through project-owned storage, including Appwrite Storage buckets or other object-storage services. If a future Appwrite integration exists, it may store only metadata such as official download-page references, hashes supplied by the user, setup state, or user-owned private file references. It must not make Veil a Windows image distributor.
+
+Veil may load Microsoft's official Windows 11 Arm64 download page, select the page's current Arm64 edition and a language derived from the Mac locale, and receive the resulting ISO response directly from Microsoft into Veil's local Application Support directory. This flow must keep the official page available as an inspectable/manual fallback, accept downloads only over HTTPS from Microsoft-owned domains, and retain an existing-ISO fallback. Veil must not depend on Microsoft's unpublished software-download connector as a stable API, manufacture a permanent ISO URL, bypass Microsoft's page workflow, or proxy the response through project infrastructure. Downloading media does not grant a Windows license or activation rights.
+
+Official references:
+
+- Windows 11 Arm ISO overview: https://learn.microsoft.com/en-us/windows/arm/iso
+- Download Windows 11 for Arm-based PCs: https://www.microsoft.com/en-us/software-download/windows11arm64
 
 ## Unattended Setup Keys
 

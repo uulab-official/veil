@@ -1,0 +1,50 @@
+import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import { spawnSync } from "node:child_process";
+import test from "node:test";
+import { fileURLToPath } from "node:url";
+
+const repositoryRoot = fileURLToPath(new URL("../../..", import.meta.url));
+const regressionScriptPath = fileURLToPath(new URL("../../../script/test_all.sh", import.meta.url));
+
+test("regression gate help documents every intentional skip", () => {
+  const result = spawnSync("/bin/bash", [regressionScriptPath, "--help"], {
+    cwd: repositoryRoot,
+    encoding: "utf8"
+  });
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /--skip-windows-agent/);
+  assert.match(result.stdout, /--skip-app-verify/);
+  assert.match(result.stdout, /--skip-node-install/);
+  assert.match(result.stdout, /partial run cannot be mistaken for a passing full gate/);
+});
+
+test("regression gate lists every component without requiring toolchains", () => {
+  const result = spawnSync("/bin/bash", [regressionScriptPath, "--list"], {
+    cwd: repositoryRoot,
+    encoding: "utf8"
+  });
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /Swift: apps\/mac-host/);
+  assert.match(result.stdout, /Windows agent: apps\/windows-agent\/tests\/VeilAgent.Tests/);
+  assert.match(result.stdout, /packages\/protocol/);
+  assert.match(result.stdout, /harness\/fake-agent/);
+  assert.match(result.stdout, /harness\/regression-gate/);
+  assert.match(result.stdout, /build_and_run\.sh --verify/);
+});
+
+test("regression gate preflights before running deterministic component commands", async () => {
+  const script = await readFile(regressionScriptPath, "utf8");
+  const preflightCall = script.indexOf("\npreflight\n");
+  const swiftTest = script.indexOf("swift test --disable-sandbox");
+
+  assert.ok(preflightCall >= 0);
+  assert.ok(swiftTest > preflightCall);
+  assert.match(script, /dotnet test/);
+  assert.match(script, /npm --prefix "\$package_dir" ci/);
+  assert.match(script, /npm --prefix "\$package_dir" test/);
+  assert.match(script, /build_and_run\.sh" --verify/);
+  assert.match(script, /no Node test packages were discovered/);
+});

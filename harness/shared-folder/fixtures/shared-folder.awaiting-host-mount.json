@@ -1,0 +1,42 @@
+{
+  "kind": "vmSharedFolderStatus",
+  "generatedAt": "2026-08-04T09:21:40Z",
+  "provider": "QEMU/HVF",
+  "vmState": "running",
+  "readiness": "awaitingHostMount",
+  "capability": {
+    "state": "supported",
+    "isSupported": true,
+    "transport": "guest-smb",
+    "isWiredIntoBootPlan": true,
+    "shareName": "VeilShared",
+    "expectedGuestDirectoryPath": "C:\\VeilShared",
+    "hostMountURL": "smb://127.0.0.1:18445/VeilShared",
+    "expectedHostMountPath": "/Volumes/VeilShared",
+    "hostForwardClause": "hostfwd=tcp:127.0.0.1:18445-:445",
+    "overrideEnvironmentVariable": "VEIL_QEMU_SHARED_FOLDER",
+    "detail": "Windows shares C:\\VeilShared as VeilShared; macOS mounts it over a loopback port forward."
+  },
+  "guest": {
+    "isSupported": true,
+    "shareName": "VeilShared",
+    "guestDirectoryPath": "C:\\VeilShared",
+    "directoryExists": true,
+    "isShared": true,
+    "isWritable": true,
+    "serverListening": true,
+    "requiresElevation": false,
+    "requiresCredentials": true,
+    "recommendedAction": "mount-on-mac"
+  },
+  "hostMount": {
+    "isMounted": false,
+    "detail": "/Volumes/VeilShared is not present, so the share is not mounted on this Mac."
+  },
+  "hostStagingFolderPath": "/Users/example/Veil Shared",
+  "nextActions": [
+    "The guest is sharing the folder. Mount it on the Mac with: open smb://127.0.0.1:18445/VeilShared",
+    "Sign in with the Windows account name and password when macOS asks.",
+    "It mounts at /Volumes/VeilShared."
+  ]
+}

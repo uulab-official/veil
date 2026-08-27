@@ -1,0 +1,42 @@
+{
+  "kind": "vmSharedFolderStatus",
+  "generatedAt": "2026-08-04T09:20:11Z",
+  "provider": "QEMU/HVF",
+  "vmState": "running",
+  "readiness": "ready",
+  "capability": {
+    "state": "supported",
+    "isSupported": true,
+    "transport": "guest-smb",
+    "isWiredIntoBootPlan": true,
+    "shareName": "VeilShared",
+    "expectedGuestDirectoryPath": "C:\\VeilShared",
+    "hostMountURL": "smb://127.0.0.1:18445/VeilShared",
+    "expectedHostMountPath": "/Volumes/VeilShared",
+    "hostForwardClause": "hostfwd=tcp:127.0.0.1:18445-:445",
+    "overrideEnvironmentVariable": "VEIL_QEMU_SHARED_FOLDER",
+    "detail": "Windows shares C:\\VeilShared as VeilShared; macOS mounts it over a loopback port forward."
+  },
+  "guest": {
+    "isSupported": true,
+    "shareName": "VeilShared",
+    "guestDirectoryPath": "C:\\VeilShared",
+    "directoryExists": true,
+    "isShared": true,
+    "isWritable": true,
+    "serverListening": true,
+    "requiresElevation": false,
+    "requiresCredentials": true,
+    "recommendedAction": "mount-on-mac"
+  },
+  "hostMount": {
+    "isMounted": true,
+    "mountPath": "/Volumes/VeilShared",
+    "detail": "The share is mounted at /Volumes/VeilShared."
+  },
+  "hostStagingFolderPath": "/Users/example/Veil Shared",
+  "nextActions": [
+    "The shared folder is live. Files written in /Volumes/VeilShared appear immediately at C:\\VeilShared inside Windows.",
+    "Prefer this over drag-and-drop file open for anything large: the shared folder has no size cap, while file.open.request is limited to 50 MB."
+  ]
+}

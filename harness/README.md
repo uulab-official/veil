@@ -1,10 +1,12 @@
 # Veil Harness
 
-This directory will hold executable development harnesses for Veil.
+Executable development harnesses for Veil.
 
-The harness lets contributors develop the host app, Windows agent, and protocol package independently. The first executable target should be a fake Windows guest agent that speaks the protocol in `docs/protocol.md`.
+The harness lets contributors develop the host app, Windows agent, and protocol package independently: the
+fake agent speaks the protocol in `docs/protocol.md`, and every host-facing JSON surface has a validator, so
+a report shape cannot change without a test failing.
 
-## Planned Layout
+## Layout
 
 ```text
 harness/
@@ -14,6 +16,7 @@ harness/
 ├─ app-runtime-status/     Validates host app-runtime status/actions JSON
 ├─ app-runtime-review/     Validates one-screen release review card JSON
 ├─ app-runtime-action/     Validates host app-runtime launch/focus/close/input/clipboard/proof JSON
+├─ macos-release/          Validates the Developer ID and notarization release gate contract
 ├─ app-window-proof/       Validates app launch/HWND/first-frame proof JSON
 ├─ coherence-proof/        Validates launch/HWND/frame/input/clipboard proof JSON
 ├─ mvp-proof/              Validates guest wait plus Coherence proof JSON
@@ -25,20 +28,24 @@ harness/
 ├─ qemu-install-status/    Validates visible Windows install evidence JSON
 ├─ qemu-smoke/             Validates bounded QEMU/HVF boot smoke report JSON
 ├─ qemu-display-smoke/     Validates embedded display frame evidence JSON
+├─ frame-pipeline-report/  Validates frame pipeline throughput/efficiency measurement JSON
+├─ vm-session/             Validates Windows session suspend/resume report JSON
+├─ vm-snapshots/           Validates QEMU internal snapshot capability/action JSON
+├─ shared-folder/          Validates live shared folder capability/readiness JSON
+├─ device-passthrough/     Validates USB/network passthrough capability JSON
 ├─ windows-agent-contract/ Validates the first real C# Windows agent scaffold contract
-├─ protocol-fixtures/      JSON messages used by tests and docs
-└─ scenarios/              scripted end-to-end protocol flows
+└─ protocol-fixtures/      JSON messages used by tests and docs
 ```
 
-## First Fake Agent Behavior
+## Fake Agent Behavior
 
-The first fake agent should:
+The fake agent:
 
-1. listen on `127.0.0.1:18444`,
-2. respond to `agent.health.request`,
-3. respond to `app.list.request` with the first inbox app catalog,
-4. accept `app.launch.request` for Notepad, Calculator, and Paint,
-5. emit app-specific `window.created` events with stable fake HWND metadata.
+1. listens on `127.0.0.1:18444`,
+2. responds to `agent.health.request`,
+3. responds to `app.list.request` with the inbox app catalog,
+4. accepts `app.launch.request` for Notepad, Calculator, and Paint,
+5. emits app-specific `window.created` events with stable fake HWND metadata.
 
 ## Run the Fake Agent
 

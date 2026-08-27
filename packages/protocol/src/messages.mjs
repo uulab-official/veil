@@ -11,6 +11,7 @@ export const MessageType = Object.freeze({
   WindowUpdated: "window.updated",
   WindowClosed: "window.closed",
   WindowFrame: "window.frame",
+  WindowFrameUnchanged: "window.frame.unchanged",
   WindowFrameSubscribe: "window.frame.subscribe",
   WindowFrameUnsubscribe: "window.frame.unsubscribe",
   WindowFocusRequest: "window.focus.request",
@@ -20,10 +21,18 @@ export const MessageType = Object.freeze({
   ClipboardTextSet: "clipboard.text.set",
   NotificationListenerRequest: "notification.listener.request",
   NotificationListenerResponse: "notification.listener.response",
+  NotificationReceived: "notification.received",
+  SharedFolderRequest: "shared.folder.request",
+  SharedFolderResponse: "shared.folder.response",
   InputMouse: "input.mouse",
   InputKey: "input.key",
+  InputText: "input.text",
   Error: "error"
 });
+
+// One `input.text` message becomes one posted window message per UTF-16 code unit on the guest, so
+// the payload is bounded here rather than letting a single message flood the target HWND.
+export const MAX_INPUT_TEXT_UTF16_LENGTH = 4096;
 
 const knownTypes = new Set(Object.values(MessageType));
 const mouseEvents = new Set(["leftDown", "leftUp", "rightDown", "rightUp", "move", "scroll"]);
@@ -95,14 +104,128 @@ export function validateAgentHealthResponse(response) {
     }
   }
 
+  // Optional so an agent predating the binary frame channel still validates. When absent the host keeps
+  // using the JSON frame path rather than opening an endpoint that does not exist.
+  if (response.capabilities.binaryFrameChannel !== undefined
+    && typeof response.capabilities.binaryFrameChannel !== "boolean") {
+    throw new TypeError("Agent health response field 'capabilities.binaryFrameChannel' must be a boolean.");
+  }
+
+  // Optional for the same back-compat reason. When absent the host reports that the shared folder
+  // cannot be confirmed, which is different from reporting that the share is missing.
+  if (response.capabilities.sharedFolder !== undefined
+    && typeof response.capabilities.sharedFolder !== "boolean") {
+    throw new TypeError("Agent health response field 'capabilities.sharedFolder' must be a boolean.");
+  }
+
   if (response.packageIdentityStatus !== undefined) {
     validatePackageIdentityStatus(response.packageIdentityStatus);
   }
   if (response.notificationListener !== undefined) {
     validateNotificationListenerStatus(response.notificationListener);
   }
+  if (response.sharedFolder !== undefined) {
+    validateSharedFolderStatus(response.sharedFolder);
+  }
 
   return response;
+}
+
+export function validateSharedFolderRequest(request) {
+  if (!request || request.type !== MessageType.SharedFolderRequest) {
+    throw new TypeError("Shared folder request must use type shared.folder.request.");
+  }
+
+  const context = "Shared folder request";
+  requireNonEmptyString(request.requestId, "requestId", context);
+  requirePositiveInteger(request.protocolVersion, "protocolVersion", context);
+  requireNonEmptyString(request.shareName, "shareName", context);
+  requireNonEmptyString(request.guestDirectoryPath, "guestDirectoryPath", context);
+
+  // The share name lands in an SMB share name and in an elevated PowerShell command on the guest, so
+  // it is restricted here rather than trusted. Same reasoning as the snapshot tag rule.
+  if (!/^[A-Za-z0-9._-]{1,64}$/.test(request.shareName)) {
+    throw new TypeError(
+      "Shared folder request field 'shareName' must be 1-64 characters of letters, digits, dot, dash, or underscore."
+    );
+  }
+
+  // A bare drive-letter path. Anything with a separator-relative segment could redirect the share
+  // somewhere the user did not intend.
+  if (!/^[A-Za-z]:\\/.test(request.guestDirectoryPath) || request.guestDirectoryPath.includes("..")) {
+    throw new TypeError(
+      "Shared folder request field 'guestDirectoryPath' must be an absolute Windows path with no parent-directory traversal."
+    );
+  }
+
+  return request;
+}
+
+export function validateSharedFolderResponse(response) {
+  if (!response || response.type !== MessageType.SharedFolderResponse) {
+    throw new TypeError("Shared folder response must use type shared.folder.response.");
+  }
+
+  const context = "Shared folder response";
+  requireNonEmptyString(response.requestId, "requestId", context);
+  requirePositiveInteger(response.protocolVersion, "protocolVersion", context);
+  validateSharedFolderStatus(response.sharedFolder, context);
+  return response;
+}
+
+function validateSharedFolderStatus(status, context = "Agent health response") {
+  if (!status || typeof status !== "object" || Array.isArray(status)) {
+    throw new TypeError(`${context} field 'sharedFolder' must be an object when present.`);
+  }
+
+  for (const field of [
+    "isSupported",
+    "directoryExists",
+    "isShared",
+    "isWritable",
+    "serverListening",
+    "requiresElevation",
+    "requiresCredentials"
+  ]) {
+    if (typeof status[field] !== "boolean") {
+      throw new TypeError(`${context} field 'sharedFolder.${field}' must be a boolean.`);
+    }
+  }
+
+  requireNonEmptyString(status.shareName, "sharedFolder.shareName", context);
+  requireNonEmptyString(status.guestDirectoryPath, "sharedFolder.guestDirectoryPath", context);
+  requireNonEmptyString(status.recommendedAction, "sharedFolder.recommendedAction", context);
+
+  for (const field of ["shareCommand", "message"]) {
+    if (status[field] !== undefined && status[field] !== null) {
+      requireNonEmptyString(status[field], `sharedFolder.${field}`, context);
+    }
+  }
+
+  // A share cannot exist inside a directory that does not exist, and a share that does not exist
+  // cannot be writable. Catching these here stops a guest bug from being reported as a mount problem.
+  if (status.isShared && !status.directoryExists) {
+    throw new TypeError(`${context} field 'sharedFolder.isShared' cannot be true while directoryExists is false.`);
+  }
+  if (status.isWritable && !status.isShared) {
+    throw new TypeError(`${context} field 'sharedFolder.isWritable' cannot be true while isShared is false.`);
+  }
+
+  // The whole point of reporting elevation is telling the user what to run, so the command is
+  // required exactly when elevation is what is blocking the share.
+  if (status.requiresElevation && !status.isShared && !status.shareCommand) {
+    throw new TypeError(
+      `${context} field 'sharedFolder.shareCommand' is required when requiresElevation is true and the share does not exist.`
+    );
+  }
+
+  // Reporting an unsupported guest and a working share at the same time would let a stub agent look
+  // like a real one.
+  if (!status.isSupported && (status.isShared || status.serverListening)) {
+    throw new TypeError(
+      `${context} field 'sharedFolder.isSupported' must be true when the guest reports a share or a listening server.`
+    );
+  }
 }
 
 export function validateNotificationListenerRequest(request) {
@@ -130,6 +253,36 @@ export function validateNotificationListenerResponse(response) {
     throw new TypeError("Notification listener response field 'accepted' must match notificationListener.canListen.");
   }
   return response;
+}
+
+// Guest-to-host notification event. `appId`/`appName`/`body`/`sourceAumid` stay optional because
+// Windows notifications can come from apps Veil never launched, so the host cannot require an
+// appId it would recognize. Kept aligned with harness/notification-proof and the host-side
+// `notificationBridge.latestNotification` contract so a saved proof and a live event validate the
+// same way.
+export function validateNotificationReceived(notification) {
+  if (!notification || notification.type !== MessageType.NotificationReceived) {
+    throw new TypeError("Notification event must use type notification.received.");
+  }
+
+  const context = "Notification event";
+  requireNonEmptyString(notification.notificationId, "notificationId", context);
+  requireNonEmptyString(notification.title, "title", context);
+  if (notification.title.trim().length === 0) {
+    throw new TypeError("Notification event field 'title' must not be whitespace only.");
+  }
+  requireNonEmptyString(notification.receivedAt, "receivedAt", context);
+  if (Number.isNaN(Date.parse(notification.receivedAt))) {
+    throw new TypeError("Notification event field 'receivedAt' must be an ISO date.");
+  }
+
+  for (const field of ["appId", "appName", "body", "sourceAumid"]) {
+    if (notification[field] !== undefined && notification[field] !== null) {
+      requireNonEmptyString(notification[field], field, context);
+    }
+  }
+
+  return notification;
 }
 
 function validateNotificationListenerStatus(status, context = "Agent health response") {
@@ -299,6 +452,33 @@ export function validateWindowFrame(frame) {
   return frame;
 }
 
+// Proof that a frame stream is alive with nothing new to draw.
+//
+// Without this the host cannot distinguish an idle window from broken capture: freshness is derived
+// from when the last frame arrived, so a guest that stopped re-sending identical pixels would be
+// marked stale and escalated into subscription restart, capture recovery, and app reopen. That forced
+// the guest to re-encode a full-window PNG several times a second for a completely static window.
+//
+// Deliberately carries no image payload. It updates liveness, never the displayed frame.
+export function validateWindowFrameUnchanged(event) {
+  if (!event || event.type !== MessageType.WindowFrameUnchanged) {
+    throw new TypeError("Unchanged window frame event must use type window.frame.unchanged.");
+  }
+
+  requireNonEmptyString(event.windowId, "windowId", "Unchanged window frame event");
+  requirePositiveInteger(event.sequence, "sequence", "Unchanged window frame event");
+  requireNonEmptyString(event.capturedAt, "capturedAt", "Unchanged window frame event");
+  if (Number.isNaN(Date.parse(event.capturedAt))) {
+    throw new TypeError("Unchanged window frame event field 'capturedAt' must be an ISO date.");
+  }
+
+  if (event.encodedData !== undefined) {
+    throw new TypeError("Unchanged window frame event must not carry image data.");
+  }
+
+  return event;
+}
+
 export function validateWindowFrameSubscribeRequest(request) {
   if (!request || request.type !== MessageType.WindowFrameSubscribe) {
     throw new TypeError("Window frame subscribe request must use type window.frame.subscribe.");
@@ -407,6 +587,38 @@ export function validateInputKey(input) {
   requirePositiveInteger(input.windowsVirtualKey, "windowsVirtualKey", "Key input");
   if (!Array.isArray(input.modifiers) || input.modifiers.some((modifier) => typeof modifier !== "string")) {
     throw new TypeError("Key input field 'modifiers' must be an array of strings.");
+  }
+
+  return input;
+}
+
+// Committed Unicode text for a tracked HWND.
+//
+// This exists because `input.key` carries a Windows *virtual key*, and characters outside the virtual
+// key map -- every Hangul syllable, kana, and Han character -- have no representation there. macOS
+// owns the IME: it composes, and only finished text is sent here. There is deliberately no marked or
+// in-progress text on the wire, so the guest never has to render a candidate window over a mirrored
+// bitmap.
+export function validateInputText(input) {
+  if (!input || input.type !== MessageType.InputText) {
+    throw new TypeError("Text input must use type input.text.");
+  }
+
+  requireNonEmptyString(input.windowId, "windowId", "Text input");
+  if (typeof input.text !== "string" || input.text.length === 0) {
+    throw new TypeError("Text input field 'text' must be a non-empty string.");
+  }
+  if (input.text.length > MAX_INPUT_TEXT_UTF16_LENGTH) {
+    throw new TypeError(
+      `Text input field 'text' must be at most ${MAX_INPUT_TEXT_UTF16_LENGTH} UTF-16 code units.`
+    );
+  }
+
+  // Newlines and tabs are real keys with virtual-key equivalents and different guest semantics
+  // (Enter submits, Tab moves focus). Routing them through committed text would bypass that, so they
+  // stay on the `input.key` path.
+  if (/[\r\n\t]/.test(input.text)) {
+    throw new TypeError("Text input field 'text' must not contain newlines or tabs; send those as input.key.");
   }
 
   return input;

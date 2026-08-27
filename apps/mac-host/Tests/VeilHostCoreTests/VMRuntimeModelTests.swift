@@ -241,6 +241,67 @@ struct VMRuntimeModelTests {
         #expect(service.updatedVirtualDiskPath == "/Users/test/Virtual Machines/Windows.vhdx")
     }
 
+    @Test("selected installer prepares the VM for immediate Windows setup boot")
+    @MainActor
+    func selectedInstallerPreparesVMForImmediateBoot() async throws {
+        let installerPath = "/Users/test/Downloads/Windows11Arm.iso"
+        let diskPath = "/Users/test/Virtual Machines/Veil/Windows 11 Arm.img"
+        let service = FakeVMRuntimeService(
+            preparedSnapshot: VMRuntimeSnapshot(
+                state: .stopped,
+                virtualizationAvailable: true,
+                architecture: "arm64",
+                minimumOSSupported: true,
+                profileName: "Windows 11 Arm",
+                installerMediaPath: installerPath,
+                virtualDiskPath: diskPath,
+                bootReady: true,
+                detail: "Ready to start Windows Setup."
+            ),
+            updatedSnapshot: VMRuntimeSnapshot(
+                state: .stopped,
+                virtualizationAvailable: true,
+                architecture: "arm64",
+                minimumOSSupported: true,
+                profileName: "Windows 11 Arm",
+                installerMediaPath: installerPath,
+                virtualDiskPath: nil,
+                bootReady: false,
+                detail: "Create the virtual disk before boot."
+            )
+        )
+        let model = VMRuntimeModel(service: service)
+
+        let isReadyToStart = await model.prepareWindowsInstallation(
+            installerMediaPath: installerPath,
+            driverMediaPath: nil,
+            virtualDiskPath: nil
+        )
+
+        #expect(isReadyToStart)
+        #expect(model.canStart)
+        #expect(model.snapshot?.virtualDiskPath == diskPath)
+        #expect(service.updatedInstallerMediaPath == installerPath)
+        #expect(service.prepareCount == 1)
+    }
+
+    @Test("installer selection failure does not continue into VM preparation")
+    @MainActor
+    func installerSelectionFailureStopsPreparation() async {
+        let service = FakeVMRuntimeService(error: VMRuntimeError.bootPrerequisitesMissing)
+        let model = VMRuntimeModel(service: service)
+
+        let isReadyToStart = await model.prepareWindowsInstallation(
+            installerMediaPath: "/Users/test/Downloads/invalid.iso",
+            driverMediaPath: nil,
+            virtualDiskPath: nil
+        )
+
+        #expect(isReadyToStart == false)
+        #expect(model.phase == .failed)
+        #expect(service.prepareCount == 0)
+    }
+
     @Test("marks guest agent connected through the runtime model")
     @MainActor
     func marksGuestAgentConnectedThroughRuntimeModel() async throws {

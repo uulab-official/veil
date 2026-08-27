@@ -1,0 +1,24 @@
+{
+  "kind": "vmSharedFolderStatus",
+  "generatedAt": "2026-08-04T09:26:58Z",
+  "provider": "QEMU/HVF",
+  "vmState": "running",
+  "readiness": "unavailable",
+  "capability": {
+    "state": "disabled",
+    "isSupported": false,
+    "transport": "none",
+    "isWiredIntoBootPlan": false,
+    "overrideEnvironmentVariable": "VEIL_QEMU_SHARED_FOLDER",
+    "detail": "Live folder sharing is turned off by VEIL_QEMU_SHARED_FOLDER=none."
+  },
+  "hostMount": {
+    "isMounted": false,
+    "detail": "This transport does not mount anything on the Mac."
+  },
+  "hostStagingFolderPath": "/Users/example/Veil Shared",
+  "nextActions": [
+    "Unset VEIL_QEMU_SHARED_FOLDER or set it to guest-smb to turn the live shared folder back on.",
+    "Restart the VM afterwards so the boot plan picks up the port forward."
+  ]
+}

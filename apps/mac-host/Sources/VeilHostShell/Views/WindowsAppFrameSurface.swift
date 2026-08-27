@@ -6,6 +6,11 @@ struct WindowsAppFrameSurface: View {
     var session: WindowMirrorSession
     var cornerRadius: CGFloat = 0
     var restartFrameStreamAction: ((String) -> Void)? = nil
+    /// Reads the composited surface for a window from the host compositor.
+    ///
+    /// Injected rather than reached for directly so this view stays testable and so composited pixels are
+    /// never copied into the observable session value on every frame.
+    var compositedImageProvider: ((String) -> CGImage?)? = nil
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 1.0)) { timeline in
@@ -73,9 +78,29 @@ struct WindowsAppFrameSurface: View {
         }
     }
 
+    /// Displayable image for this window.
+    ///
+    /// A composited surface takes priority: when the guest is sending dirty-rect tiles, `latestFrame`
+    /// carries only metadata and the pixels live in the host compositor. Decoding `encodedData` is the
+    /// fallback for the legacy JSON path, where every frame is self-contained.
+    ///
+    /// `session.compositedFrameGeneration` is read here purely so SwiftUI re-renders when the compositor's
+    /// surface changes. Without that read the view would have no observable dependency on it.
     private var latestFrameImage: NSImage? {
-        guard let frame = session.latestFrame,
-              frame.format == "png",
+        guard let frame = session.latestFrame else {
+            return nil
+        }
+
+        if frame.isCompositedSurface {
+            _ = session.compositedFrameGeneration
+            guard let compositedImage = compositedImageProvider?(session.id) else {
+                return nil
+            }
+
+            return NSImage(cgImage: compositedImage, size: .zero)
+        }
+
+        guard frame.format == "png",
               let data = frame.encodedPayloadData else {
             return nil
         }

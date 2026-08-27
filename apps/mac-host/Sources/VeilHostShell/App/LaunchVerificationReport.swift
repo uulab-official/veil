@@ -43,10 +43,10 @@ struct MainWindowLaunchReport: Encodable, Equatable {
             && mainWindowCount == 1
             && visibleMainWindowCount == 1
             && duplicateMainWindowCount == 0
-            && frame.width >= 1180
-            && frame.height >= 760
-            && minWidth >= 1180
-            && minHeight >= 760
+            && frame.width >= Double(MainWindowLayout.minimumSupportedSize.width)
+            && frame.height >= Double(MainWindowLayout.minimumSupportedSize.height)
+            && minWidth >= Double(MainWindowLayout.minimumSupportedSize.width)
+            && minHeight >= Double(MainWindowLayout.minimumSupportedSize.height)
             && titlebarAppearsTransparent
             && hasFullSizeContentView
             && appIconSource == .bundled
@@ -85,6 +85,51 @@ struct MainWindowLaunchReport: Encodable, Equatable {
         try container.encode(hasFullSizeContentView, forKey: .hasFullSizeContentView)
         try container.encode(appIconSource, forKey: .appIconSource)
         try container.encode(meetsLauncherContract, forKey: .meetsLauncherContract)
+    }
+}
+
+enum MainWindowLayout {
+    static let minimumSupportedSize = CGSize(width: 820, height: 560)
+    static let preferredMinimumSize = CGSize(width: 900, height: 620)
+    static let preferredSize = CGSize(width: 1440, height: 900)
+    private static let visibleAreaFraction = 0.96
+
+    static func minimumSize(for visibleSize: CGSize) -> CGSize {
+        CGSize(
+            width: boundedDimension(
+                available: visibleSize.width * visibleAreaFraction,
+                minimum: minimumSupportedSize.width,
+                maximum: preferredMinimumSize.width
+            ),
+            height: boundedDimension(
+                available: visibleSize.height * visibleAreaFraction,
+                minimum: minimumSupportedSize.height,
+                maximum: preferredMinimumSize.height
+            )
+        )
+    }
+
+    static func fittedSize(for visibleSize: CGSize) -> CGSize {
+        CGSize(
+            width: boundedDimension(
+                available: visibleSize.width * visibleAreaFraction,
+                minimum: minimumSupportedSize.width,
+                maximum: preferredSize.width
+            ),
+            height: boundedDimension(
+                available: visibleSize.height * visibleAreaFraction,
+                minimum: minimumSupportedSize.height,
+                maximum: preferredSize.height
+            )
+        )
+    }
+
+    private static func boundedDimension(
+        available: CGFloat,
+        minimum: CGFloat,
+        maximum: CGFloat
+    ) -> CGFloat {
+        min(maximum, max(minimum, available))
     }
 }
 

@@ -6,8 +6,10 @@ import { validateGuestAgentWait } from "../../guest-agent-wait/src/validate-gues
 import { validateMultiAppProof } from "../../multi-app-proof/src/validate-multi-app-proof.mjs";
 import { validateNotificationProof } from "../../notification-proof/src/validate-notification-proof.mjs";
 
-const VALID_ACTIONS = new Set(["launch", "fulfill-pending", "focus", "close", "close-all", "restart-frame-stream", "recover-window-capture", "reopen-window", "maintain-frame-streams", "restore", "reconnect-restore", "bring-forward", "recover-display", "wait-agent", "repair-agent", "prepare-sparse-package", "request-notification-consent", "quiet-when-idle", "stop-runtime", "clipboard", "type-text", "click", "proof-recommended", "proof-multi-app", "proof-notifications"]);
+const VALID_ACTIONS = new Set(["launch", "fulfill-pending", "focus", "close", "close-all", "restart-frame-stream", "recover-window-capture", "reopen-window", "maintain-frame-streams", "restore", "reconnect-restore", "bring-forward", "recover-display", "wait-agent", "repair-agent", "prepare-sparse-package", "request-notification-consent", "quiet-when-idle", "stop-runtime", "suspend-runtime", "clipboard", "type-text", "click", "proof-recommended", "proof-multi-app", "proof-notifications"]);
 const VALID_CONNECTION_MODES = new Set(["agent", "demo"]);
+/// Suspending keeps the user's open Windows apps; stopping shuts them down.
+const VALID_QUIET_MODES = new Set(["suspend", "stop", "none"]);
 const VALID_CONSOLE_PREVIEW_STATES = new Set(["fresh", "stale", "unavailable"]);
 
 export function validateAppRuntimeAction(report) {
@@ -53,6 +55,13 @@ export function validateAppRuntimeAction(report) {
 
   if (report.action !== "stop-runtime" && report.runtimeStop !== undefined && report.runtimeStop !== null) {
     throw new TypeError("runtimeStop is only allowed for stop-runtime actions.");
+  }
+
+  // Kept as its own field rather than reusing runtimeStop. stop-runtime's contract pins
+  // runtimeStop.state to "stopped", and making that action suspend instead would either break this
+  // harness or force it to stop checking the thing it exists to check.
+  if (report.action !== "suspend-runtime" && report.runtimeSuspend !== undefined && report.runtimeSuspend !== null) {
+    throw new TypeError("runtimeSuspend is only allowed for suspend-runtime actions.");
   }
 
   if (report.action !== "proof-recommended" && report.proof !== undefined && report.proof !== null) {
@@ -144,6 +153,9 @@ export function validateAppRuntimeAction(report) {
       break;
     case "stop-runtime":
       validateStopRuntimeAction(report);
+      break;
+    case "suspend-runtime":
+      validateSuspendRuntimeAction(report);
       break;
     case "clipboard":
       validateClipboardAction(report);
@@ -638,6 +650,38 @@ function validateQuietWhenIdleAction(report) {
 
   if (report.accepted !== report.quietRuntime.canQuietRuntime) {
     throw new TypeError("quiet-when-idle accepted must match quietRuntime.canQuietRuntime.");
+  }
+}
+
+function validateSuspendRuntimeAction(report) {
+  validateQuietRuntime(report.quietRuntime, "quietRuntime");
+
+  // Deliberately not compared against report.status.quietRuntime. A successful suspend changes the VM
+  // state, so the status block is captured after the action while quietRuntime describes the decision
+  // that authorized it. Requiring them to be equal would be a rule real output could not satisfy.
+  if (!report.accepted) {
+    if (report.runtimeSuspend !== undefined && report.runtimeSuspend !== null) {
+      throw new TypeError("rejected suspend-runtime actions cannot include runtimeSuspend.");
+    }
+    return;
+  }
+
+  if (!report.quietRuntime.canQuietRuntime) {
+    throw new TypeError("accepted suspend-runtime actions require quietRuntime.canQuietRuntime.");
+  }
+
+  if (report.quietRuntime.canSuspendSession !== true) {
+    throw new TypeError("accepted suspend-runtime actions require quietRuntime.canSuspendSession.");
+  }
+
+  if (!report.runtimeSuspend || typeof report.runtimeSuspend !== "object" || Array.isArray(report.runtimeSuspend)) {
+    throw new TypeError("runtimeSuspend must be an object for accepted suspend-runtime actions.");
+  }
+
+  // The whole point of suspending is that the session survives. A report claiming success while the VM
+  // is not suspended would hide exactly the failure that costs the user their open apps.
+  if (report.runtimeSuspend.state !== "suspended") {
+    throw new TypeError("accepted suspend-runtime actions must report runtimeSuspend.state suspended.");
   }
 }
 
@@ -1337,6 +1381,32 @@ function validateQuietRuntime(quietRuntime, fieldName) {
 
   if (quietRuntime.recommendedStopCommand !== undefined) {
     requireString(quietRuntime.recommendedStopCommand, `${fieldName}.recommendedStopCommand`);
+  }
+
+  // Optional so reports predating the idle-suspend slice still validate. When present, the resolved mode
+  // has to commit to one outcome: suspending keeps the user's open Windows apps, stopping loses them.
+  if (quietRuntime.quietMode !== undefined) {
+    requireString(quietRuntime.quietMode, `${fieldName}.quietMode`);
+    if (!VALID_QUIET_MODES.has(quietRuntime.quietMode)) {
+      throw new TypeError(`Unsupported ${fieldName}.quietMode: ${quietRuntime.quietMode}`);
+    }
+    if (quietRuntime.canQuietRuntime === (quietRuntime.quietMode === "none")) {
+      throw new TypeError(`${fieldName}.quietMode must be none exactly when ${fieldName}.canQuietRuntime is false.`);
+    }
+    if (quietRuntime.quietMode === "suspend" && quietRuntime.canSuspendSession !== true) {
+      throw new TypeError(`${fieldName}.quietMode suspend requires ${fieldName}.canSuspendSession.`);
+    }
+  }
+
+  if (quietRuntime.canSuspendSession !== undefined) {
+    requireBoolean(quietRuntime.canSuspendSession, `${fieldName}.canSuspendSession`);
+  }
+
+  if (quietRuntime.recommendedSuspendCommand !== undefined) {
+    requireString(quietRuntime.recommendedSuspendCommand, `${fieldName}.recommendedSuspendCommand`);
+    if (!quietRuntime.recommendedSuspendCommand.includes("--action suspend-runtime")) {
+      throw new TypeError(`${fieldName}.recommendedSuspendCommand must point at the suspend-runtime action.`);
+    }
   }
 
   if (quietRuntime.willQuietAutomatically && !quietRuntime.canQuietRuntime) {

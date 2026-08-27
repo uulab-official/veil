@@ -46,6 +46,7 @@ public sealed class AgentSession
     private readonly IPackageIdentityProbe packageIdentityProbe;
     private readonly ISparsePackageStatusProbe sparsePackageStatusProbe;
     private readonly IWindowsNotificationAccessProbe notificationAccessProbe;
+    private readonly IWindowsSharedFolderProbe sharedFolderProbe;
     private readonly Dictionary<string, LaunchedWindow> trackedWindowsById = new();
     private readonly Dictionary<string, WindowsAppDescriptor> appByWindowId = new();
     private readonly ConcurrentDictionary<string, SemaphoreSlim> appLaunchGates = new();
@@ -56,7 +57,8 @@ public sealed class AgentSession
         IWindowFrameCapture capture,
         IPackageIdentityProbe? packageIdentityProbe = null,
         ISparsePackageStatusProbe? sparsePackageStatusProbe = null,
-        IWindowsNotificationAccessProbe? notificationAccessProbe = null
+        IWindowsNotificationAccessProbe? notificationAccessProbe = null,
+        IWindowsSharedFolderProbe? sharedFolderProbe = null
     )
     {
         this.desktop = desktop;
@@ -64,6 +66,7 @@ public sealed class AgentSession
         this.packageIdentityProbe = packageIdentityProbe ?? new WindowsPackageIdentityProbe();
         this.sparsePackageStatusProbe = sparsePackageStatusProbe ?? new SparsePackageStatusProbe();
         this.notificationAccessProbe = notificationAccessProbe ?? new WindowsNotificationAccessProbe();
+        this.sharedFolderProbe = sharedFolderProbe ?? new SharedFolderProbe();
     }
 
     public async Task<AgentReplies> HandleAsync(JsonObject request, CancellationToken cancellationToken = default)
@@ -85,8 +88,10 @@ public sealed class AgentSession
                 MessageTypes.WindowCloseRequest => await HandleWindowCloseAsync(request, requestId, cancellationToken),
                 MessageTypes.InputMouse => await HandleMouseInputAsync(request, requestId, cancellationToken),
                 MessageTypes.InputKey => await HandleKeyInputAsync(request, requestId, cancellationToken),
+                MessageTypes.InputText => await HandleTextInputAsync(request, requestId, cancellationToken),
                 MessageTypes.ClipboardTextSet => await HandleClipboardTextSetAsync(request, requestId, cancellationToken),
                 MessageTypes.NotificationListenerRequest => await HandleNotificationListenerRequestAsync(requestId, cancellationToken),
+                MessageTypes.SharedFolderRequest => await HandleSharedFolderRequestAsync(request, requestId, cancellationToken),
                 _ => AgentReplies.Direct(ErrorResponse(requestId, "unknown_message_type", $"Unsupported message type {type}"))
             };
         }
@@ -520,6 +525,47 @@ public sealed class AgentSession
         }
     }
 
+    private async Task<AgentReplies> HandleTextInputAsync(
+        JsonObject request,
+        string? requestId,
+        CancellationToken cancellationToken
+    )
+    {
+        var windowId = request["windowId"]?.GetValue<string>();
+        var text = request["text"]?.GetValue<string>();
+        if (string.IsNullOrWhiteSpace(windowId) || string.IsNullOrEmpty(text))
+        {
+            return AgentReplies.Direct(ErrorResponse(requestId, "invalid_message", "input.text requires windowId and non-empty text."));
+        }
+
+        if (text.Length > WindowsDesktop.MaxTextInputUtf16Length)
+        {
+            return AgentReplies.Direct(ErrorResponse(requestId, "text_too_long", $"input.text accepts at most {WindowsDesktop.MaxTextInputUtf16Length} UTF-16 code units."));
+        }
+
+        // Enter and Tab have distinct guest semantics and belong on the input.key path; accepting them
+        // here would let committed text quietly submit forms or move focus.
+        if (text.Any(character => character is '\r' or '\n' or '\t'))
+        {
+            return AgentReplies.Direct(ErrorResponse(requestId, "invalid_message", "input.text must not contain newlines or tabs; send those as input.key."));
+        }
+
+        if (!TryGetTrackedWindow(windowId, out _))
+        {
+            return AgentReplies.Direct(ErrorResponse(requestId, "window_not_tracked", $"No tracked window exists for id {windowId}."));
+        }
+
+        try
+        {
+            await desktop.SendTextInputAsync(new WindowTextInput(windowId, text), cancellationToken);
+            return AgentReplies.Direct();
+        }
+        catch (Exception error) when (error is not OperationCanceledException)
+        {
+            return AgentReplies.Direct(ErrorResponse(requestId, "input_text_failed", error.Message));
+        }
+    }
+
     private async Task<AgentReplies> HandleClipboardTextSetAsync(
         JsonObject request,
         string? requestId,
@@ -572,9 +618,21 @@ public sealed class AgentSession
                 ["windowCapture"] = true,
                 ["input"] = true,
                 ["clipboardText"] = true,
+                // Advertises the send-only binary frame endpoint. The host only opens it when this is
+                // true, so a host that cannot decode the binary format keeps receiving JSON frames.
+                ["binaryFrameChannel"] = true,
+                // Lets the host tell "no share yet" apart from "this agent cannot answer". Without it an
+                // older agent would look like a guest whose share is missing.
+                ["sharedFolder"] = true,
                 ["packageIdentity"] = hasPackageIdentity
             },
-            ["notificationListener"] = notificationAccessProbe.ReadStatus(hasPackageIdentity)
+            ["notificationListener"] = notificationAccessProbe.ReadStatus(hasPackageIdentity),
+            // Read-only here. Health is polled, so it must never create folders or publish shares as a
+            // side effect; shared.folder.request is the message that prepares anything.
+            ["sharedFolder"] = sharedFolderProbe.ReadStatus(
+                SharedFolderProbe.DefaultShareName,
+                SharedFolderProbe.DefaultGuestDirectoryPath
+            )
         };
 
         var sparsePackageStatus = sparsePackageStatusProbe.ReadStatus();
@@ -584,6 +642,30 @@ public sealed class AgentSession
         }
 
         return response;
+    }
+
+    private async Task<AgentReplies> HandleSharedFolderRequestAsync(
+        JsonObject request,
+        string? requestId,
+        CancellationToken cancellationToken
+    )
+    {
+        // The host sends the share name and folder rather than letting the guest pick, so a mismatch
+        // between what the Mac tries to mount and what Windows published cannot go unnoticed. Falling
+        // back to the defaults keeps an older host working.
+        var shareName = request["shareName"]?.GetValue<string>() ?? SharedFolderProbe.DefaultShareName;
+        var guestDirectoryPath = request["guestDirectoryPath"]?.GetValue<string>()
+            ?? SharedFolderProbe.DefaultGuestDirectoryPath;
+
+        var status = await sharedFolderProbe.EnsureAsync(shareName, guestDirectoryPath, cancellationToken);
+
+        return AgentReplies.Direct(new JsonObject
+        {
+            ["type"] = MessageTypes.SharedFolderResponse,
+            ["requestId"] = requestId,
+            ["protocolVersion"] = 1,
+            ["sharedFolder"] = status
+        });
     }
 
     private async Task<AgentReplies> HandleNotificationListenerRequestAsync(
@@ -850,6 +932,22 @@ public sealed record AgentReplies(
             ["height"] = frame.Height,
             ["scale"] = frame.Scale,
             ["encodedData"] = frame.EncodedData
+        };
+
+        return Serialize(message);
+    }
+
+    /// <summary>
+    /// Proof that a frame stream is alive with nothing new to draw. Carries no image payload.
+    /// </summary>
+    public static string SerializeUnchangedFrame(string windowId, int sequence)
+    {
+        var message = new JsonObject
+        {
+            ["type"] = MessageTypes.WindowFrameUnchanged,
+            ["windowId"] = windowId,
+            ["sequence"] = sequence,
+            ["capturedAt"] = DateTimeOffset.UtcNow.ToString("O")
         };
 
         return Serialize(message);

@@ -1,0 +1,59 @@
+{
+  "kind": "framePipelineReport",
+  "generatedAt": "2026-08-03T10:14:00Z",
+  "observedSeconds": 10,
+  "didObserveFrames": true,
+  "transport": "binaryFrameChannel",
+  "totalWireBytes": 486320,
+  "totalFramesPerSecond": 12.4,
+  "totalWireBytesPerSecond": 48632,
+  "estimationBasis": "Full-frame cost is estimated from the observed mean key-frame bytes per pixel for the same window. PNG size is not linear in area, so treat it as an estimate, not a measurement.",
+  "windows": [
+    {
+      "windowId": "hwnd:0003029A",
+      "surfaceWidth": 1280,
+      "surfaceHeight": 800,
+      "observedSeconds": 10,
+      "keyFrameCount": 2,
+      "tileCount": 122,
+      "unchangedHeartbeatCount": 43,
+      "droppedTiles": {
+        "noSurface": 0,
+        "surfaceSizeChanged": 0,
+        "undecodablePayload": 0,
+        "payloadRectMismatch": 0
+      },
+      "wireBytes": 486320,
+      "keyFrameWireBytes": 402180,
+      "tileWireBytes": 84140,
+      "framesPerSecond": 12.4,
+      "wireBytesPerSecond": 48632,
+      "frameIntervalMilliseconds": {
+        "count": 123,
+        "mean": 74.2,
+        "p50": 33,
+        "p95": 251,
+        "maximum": 268
+      },
+      "tileCoveragePercent": {
+        "count": 124,
+        "mean": 3.1,
+        "p50": 0.4,
+        "p95": 12.6,
+        "maximum": 100
+      },
+      "compositeMilliseconds": {
+        "count": 124,
+        "mean": 0.41,
+        "p50": 0.18,
+        "p95": 1.92,
+        "maximum": 2.44
+      },
+      "estimatedFullFrameWireBytes": 12467580,
+      "estimatedWireBytesSavedPercent": 96.1
+    }
+  ],
+  "nextActions": [
+    "Record this report alongside a matching run from before the tile change so the improvement is documented rather than assumed."
+  ]
+}

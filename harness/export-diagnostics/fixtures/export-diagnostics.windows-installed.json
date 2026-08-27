@@ -9,6 +9,8 @@
   "lastBootReport": {
     "completedAt": "2026-07-04T15:54:37Z",
     "deviceSummary": {
+      "audioDevice": "Intel HD Audio duplex (playback and capture)",
+      "sharedFolderDevice": "Guest-served SMB share over a loopback port forward",
       "bootLoader": "EFI",
       "entropyDevice": "Virtio entropy",
       "graphics": {
@@ -73,6 +75,12 @@
     "architecture": "arm64",
     "bootReady": true,
     "configurationSummary": {
+      "audio": {
+        "device": "Intel HD Audio duplex (playback and capture)",
+        "hostBackend": "CoreAudio",
+        "isEnabled": true,
+        "overrideEnvironmentVariable": "VEIL_QEMU_AUDIO_DEVICE"
+      },
       "display": {
         "dynamicResolution": "fixed guest framebuffer until guest agent display bridge",
         "heightInPixels": 900,
@@ -117,6 +125,8 @@
     "cpuCount": 7,
     "detail": "Windows is installed and can be started.",
     "deviceSummary": {
+      "audioDevice": "Intel HD Audio duplex (playback and capture)",
+      "sharedFolderDevice": "Guest-served SMB share over a loopback port forward",
       "bootLoader": "EFI",
       "entropyDevice": "Virtio entropy",
       "graphics": {

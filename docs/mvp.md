@@ -2,7 +2,7 @@
 
 ## Goal
 
-Prove that Veil can run one Windows desktop app as a macOS-like window without making the user interact with the Windows desktop.
+Prove that Veil can run Windows desktop apps as macOS-like windows without making the user interact with the Windows desktop. The MVP proved it for one app; several apps can now be mirrored side by side, each as its own macOS window.
 
 ## Milestone v0.1: VM Boot Spike
 
@@ -17,6 +17,11 @@ Acceptance criteria:
 - The host reports preflight checks for Windows Arm, CPU, memory, and disk settings.
 - The VM can be started from the host app through Virtualization.framework.
 - The active VM can be stopped from the host app.
+- A running Windows session can be suspended to a local memory-state file and resumed with the same
+  Windows apps still open. Suspend is refused, not silently downgraded to a stop, when the active
+  provider cannot persist a session.
+- A cold boot discards any saved memory-state file, so a stale stream can never be replayed against a
+  disk that has moved on.
 - The host opens a visible VM console for the boot spike.
 - The host can show basic VM status: stopped, starting, running, suspended, failed.
 - VM configuration is stored locally.

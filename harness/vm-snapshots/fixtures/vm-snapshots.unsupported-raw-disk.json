@@ -1,0 +1,25 @@
+{
+  "kind": "vmSnapshotAction",
+  "action": "list",
+  "generatedAt": "2026-07-29T10:02:00Z",
+  "status": "unavailable",
+  "vmState": "stopped",
+  "provider": "QEMU/HVF",
+  "capability": {
+    "state": "unsupportedDiskFormat",
+    "isSupported": false,
+    "systemDiskFormat": "raw",
+    "requiredDiskFormat": "qcow2",
+    "systemDiskPath": "/Users/example/Virtual Machines/Veil/Windows 11 Arm.img",
+    "convertedDiskPath": "/Users/example/Virtual Machines/Veil/Windows 11 Arm.qcow2",
+    "conversionCommand": "qemu-img convert -p -O qcow2 '/Users/example/Virtual Machines/Veil/Windows 11 Arm.img' '/Users/example/Virtual Machines/Veil/Windows 11 Arm.qcow2'",
+    "detail": "Veil's default system disk is raw, and QEMU internal snapshots can only be stored inside a qcow2 image. Suspend and resume still work on this disk because they stream guest memory to a separate file."
+  },
+  "snapshots": [],
+  "nextActions": [
+    "Veil's default system disk is raw, and QEMU internal snapshots can only be stored inside a qcow2 image. Suspend and resume still work on this disk because they stream guest memory to a separate file.",
+    "Convert the system disk with: qemu-img convert -p -O qcow2 '/Users/example/Virtual Machines/Veil/Windows 11 Arm.img' '/Users/example/Virtual Machines/Veil/Windows 11 Arm.qcow2'",
+    "Then point the VM profile's virtual disk at /Users/example/Virtual Machines/Veil/Windows 11 Arm.qcow2 and keep the original file until Windows boots from the converted disk.",
+    "Use veil-vmctl vm-suspend --json when you only need to keep the current Windows session, which works on the current disk format."
+  ]
+}

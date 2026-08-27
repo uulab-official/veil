@@ -1369,6 +1369,7 @@ test("rejects close-all actions that leave mirrored sessions open", () => {
   report.status.visibleSurfacePolicy.shouldHideLauncher = true;
   report.status.quietRuntime.openWindowCount = 1;
   report.status.quietRuntime.canQuietRuntime = false;
+  report.status.quietRuntime.quietMode = "none";
   report.status.quietRuntime.willQuietAutomatically = false;
   delete report.status.quietRuntime.recommendedStopCommand;
   report.status.actions.find((action) => action.id === "runtime.quietWhenIdle").isAvailable = false;
@@ -1383,7 +1384,7 @@ test("rejects close-all actions that leave mirrored sessions open", () => {
 
   assert.throws(
     () => validateAppRuntimeAction(report),
-    /must leave no mirrored/
+    /leave no mirrored/
   );
 });
 

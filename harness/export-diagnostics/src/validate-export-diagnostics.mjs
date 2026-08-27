@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
-const CONFIGURATION_SECTIONS = ["system", "display", "sharing", "storage", "network", "input", "guestAgent"];
+const CONFIGURATION_SECTIONS = ["system", "display", "sharing", "storage", "network", "input", "audio", "guestAgent"];
 const BOOKMARK_FIELDS = ["installerMediaBookmarkData", "driverMediaBookmarkData", "virtualDiskBookmarkData"];
 
 export function validateExportDiagnostics(bundle) {
@@ -90,6 +90,13 @@ function validateDeviceSummary(deviceSummary) {
 
   requireString(deviceSummary.bootLoader, "snapshot.deviceSummary.bootLoader");
   requireString(deviceSummary.networkMode, "snapshot.deviceSummary.networkMode");
+  // Veil shipped with no sound device at all and nothing in the diagnostics bundle made that visible.
+  // Required so a silent guest is always evident in exported diagnostics.
+  requireString(deviceSummary.audioDevice, "snapshot.deviceSummary.audioDevice");
+  // Same reasoning for file sharing. `sharedFolderPath` on the profile is named like the feature but is a
+  // macOS install-media staging directory, so without this field a bundle could look like it had sharing
+  // configured while the guest saw nothing.
+  requireString(deviceSummary.sharedFolderDevice, "snapshot.deviceSummary.sharedFolderDevice");
   if (!Array.isArray(deviceSummary.storageDevices)) {
     throw new TypeError("snapshot.deviceSummary.storageDevices must be an array.");
   }

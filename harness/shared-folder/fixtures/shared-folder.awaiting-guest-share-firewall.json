@@ -1,0 +1,45 @@
+{
+  "kind": "vmSharedFolderStatus",
+  "generatedAt": "2026-08-04T09:23:18Z",
+  "provider": "QEMU/HVF",
+  "vmState": "running",
+  "readiness": "awaitingGuestShare",
+  "capability": {
+    "state": "supported",
+    "isSupported": true,
+    "transport": "guest-smb",
+    "isWiredIntoBootPlan": true,
+    "shareName": "VeilShared",
+    "expectedGuestDirectoryPath": "C:\\VeilShared",
+    "hostMountURL": "smb://127.0.0.1:18445/VeilShared",
+    "expectedHostMountPath": "/Volumes/VeilShared",
+    "hostForwardClause": "hostfwd=tcp:127.0.0.1:18445-:445",
+    "overrideEnvironmentVariable": "VEIL_QEMU_SHARED_FOLDER",
+    "detail": "Windows shares C:\\VeilShared as VeilShared; macOS mounts it over a loopback port forward."
+  },
+  "guest": {
+    "isSupported": true,
+    "shareName": "VeilShared",
+    "guestDirectoryPath": "C:\\VeilShared",
+    "directoryExists": true,
+    "isShared": false,
+    "isWritable": false,
+    "serverListening": false,
+    "requiresElevation": true,
+    "requiresCredentials": true,
+    "shareCommand": "New-SmbShare -Name VeilShared -Path C:\\VeilShared -FullAccess $env:USERNAME",
+    "recommendedAction": "enable-smb-firewall"
+  },
+  "hostMount": {
+    "isMounted": false,
+    "detail": "/Volumes/VeilShared is not present, so the share is not mounted on this Mac."
+  },
+  "hostStagingFolderPath": "/Users/example/Veil Shared",
+  "nextActions": [
+    "Creating an SMB share needs an administrator. In Windows, open PowerShell as administrator and run: New-SmbShare -Name VeilShared -Path C:\\VeilShared -FullAccess $env:USERNAME",
+    "Windows is not accepting SMB connections. Enable the firewall rules with: Enable-NetFirewallRule -DisplayGroup \"File and Printer Sharing\"",
+    "This only exposes SMB on the guest's isolated usermode NAT network, which nothing but this Mac can reach.",
+    "Give the Windows account a password. Windows refuses network sign-in for blank-password accounts, so the mount fails without one.",
+    "Then mount it on the Mac with: open smb://127.0.0.1:18445/VeilShared"
+  ]
+}

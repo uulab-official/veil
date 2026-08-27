@@ -34,6 +34,20 @@ test("rejects a profile carrying security-scoped bookmark bytes", () => {
   );
 });
 
+test("rejects a bundle that hides whether the guest has a sound device", () => {
+  const bundle = loadFixture();
+  delete bundle.snapshot.deviceSummary.audioDevice;
+
+  assert.throws(() => validateExportDiagnostics(bundle), /audioDevice/);
+});
+
+test("rejects a configuration summary missing the typed audio section", () => {
+  const bundle = loadFixture();
+  delete bundle.snapshot.configurationSummary.audio;
+
+  assert.throws(() => validateExportDiagnostics(bundle), /'audio' typed section/);
+});
+
 test("rejects a configuration summary missing a typed section", () => {
   const bundle = loadFixture();
   delete bundle.snapshot.configurationSummary.network;
@@ -62,4 +76,13 @@ test("rejects a boot report profile carrying bookmark bytes", () => {
     () => validateExportDiagnostics(bundle),
     /must not include 'virtualDiskBookmarkData'/
   );
+});
+
+test("rejects a bundle that hides whether the guest has a live shared folder", () => {
+  const bundle = loadFixture();
+  delete bundle.snapshot.deviceSummary.sharedFolderDevice;
+
+  // The profile's `sharedFolderPath` is a macOS install-media staging directory despite its name, so a
+  // bundle without this field could read as having sharing configured while the guest saw nothing.
+  assert.throws(() => validateExportDiagnostics(bundle), /sharedFolderDevice/);
 });

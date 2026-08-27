@@ -799,6 +799,62 @@ test("rejects one-screen UX without launcher fallback after app windows close", 
   );
 });
 
+test("accepts an idle window whose picture is old but whose stream is alive", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.mac-window-live.json", import.meta.url), "utf8"));
+  const session = report.mirrorSessions[0];
+  session.captureState = "streaming";
+  session.frameStreamStatus = "fresh";
+  session.latestFrameReceivedAt = "2026-07-03T13:19:50Z";
+  // 30 seconds of untouched window: the picture is old, the stream is healthy. Before the liveness
+  // split this combination was impossible to express, which is why the guest had to keep re-encoding
+  // identical pixels.
+  session.latestFrameAgeMilliseconds = 30000;
+  session.latestActivityAgeMilliseconds = 250;
+  session.receivedFrameCount = 1;
+  session.unchangedHeartbeatCount = 120;
+  session.frameStreamRecommendedAction = "none";
+  report.macWindowIntegration.pendingFrameWindowCount = 0;
+  report.macWindowIntegration.streamingWindowCount = 1;
+  report.macWindowIntegration.freshFrameWindowCount = 1;
+  report.macWindowIntegration.frameLatencyHealth = "healthy";
+  report.macWindowIntegration.frameLatencyRecommendedAction = "none";
+  report.macWindowIntegration.slowestFrameWindowId = session.windowId;
+  report.macWindowIntegration.slowestFrameWindowTitle = session.title;
+  report.macWindowIntegration.slowestFrameAgeMilliseconds = session.latestFrameAgeMilliseconds;
+
+  assert.equal(validateAppRuntimeStatus(report), report);
+});
+
+test("rejects liveness that is older than the displayed picture", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.mac-window-live.json", import.meta.url), "utf8"));
+  const session = report.mirrorSessions[0];
+  session.captureState = "streaming";
+  session.frameStreamStatus = "fresh";
+  session.latestFrameReceivedAt = "2026-07-03T13:19:50Z";
+  session.latestFrameAgeMilliseconds = 250;
+  // A frame is itself a liveness signal, so activity can never be staler than the frame.
+  session.latestActivityAgeMilliseconds = 30000;
+  session.receivedFrameCount = 1;
+  session.frameStreamRecommendedAction = "none";
+
+  assert.throws(
+    () => validateAppRuntimeStatus(report),
+    /latestActivityAgeMilliseconds must not exceed/
+  );
+});
+
+test("rejects heartbeats on a stream that never produced a frame", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.mac-window-live.json", import.meta.url), "utf8"));
+  const session = report.mirrorSessions[0];
+  // Capture that never started must not be able to look healthy by sending heartbeats.
+  session.unchangedHeartbeatCount = 40;
+
+  assert.throws(
+    () => validateAppRuntimeStatus(report),
+    /Unchanged-frame heartbeats require at least one received frame/
+  );
+});
+
 test("rejects Dock integration counts that drift from mirrored sessions", () => {
   const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.demo.json", import.meta.url), "utf8"));
   report.mirrorSessions.push({
@@ -1092,12 +1148,106 @@ test("rejects quiet-ready reports without a stop command", () => {
   report.quietRuntime.hasOpenedAppWindowThisSession = true;
   report.quietRuntime.canQuietRuntime = true;
   report.quietRuntime.willQuietAutomatically = true;
-  report.quietRuntime.recommendedAction = "stop-or-suspend-runtime";
+  report.quietRuntime.recommendedAction = "stop-runtime";
 
   assert.throws(
     () => validateAppRuntimeStatus(report),
     /recommendedStopCommand/
   );
+});
+
+function quietReadyReport({ quietMode, canSuspendSession }) {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.demo.json", import.meta.url), "utf8"));
+  report.quietRuntime.hasOpenedAppWindowThisSession = true;
+  report.quietRuntime.canQuietRuntime = true;
+  report.quietRuntime.willQuietAutomatically = true;
+  report.quietRuntime.recommendedStopCommand = "veil-vmctl app-runtime-action --json --action stop-runtime";
+  report.quietRuntime.quietMode = quietMode;
+  report.quietRuntime.canSuspendSession = canSuspendSession;
+  report.quietRuntime.recommendedAction = `${quietMode}-runtime`;
+  if (quietMode === "suspend") {
+    report.quietRuntime.recommendedSuspendCommand = "veil-vmctl app-runtime-action --json --action suspend-runtime";
+  }
+  setReleaseGateStep(report, "closeOrRestore", {
+    state: "ready",
+    isPassing: true,
+    evidence: "Windows can be quieted after app windows close.",
+    nextActionCommand: "veil-vmctl app-runtime-action --json --action stop-runtime"
+  });
+  report.actions.find((action) => action.id === "runtime.quietWhenIdle").isAvailable = true;
+  report.actions.find((action) => action.id === "runtime.stopWhenIdle").isAvailable = true;
+  return report;
+}
+
+test("accepts a resolved suspend quiet mode", () => {
+  const report = quietReadyReport({ quietMode: "suspend", canSuspendSession: true });
+
+  assert.equal(validateAppRuntimeStatus(report), report);
+});
+
+test("accepts a resolved stop quiet mode", () => {
+  const report = quietReadyReport({ quietMode: "stop", canSuspendSession: false });
+
+  assert.equal(validateAppRuntimeStatus(report), report);
+});
+
+test("rejects an unrecognized quiet mode", () => {
+  const report = quietReadyReport({ quietMode: "stop", canSuspendSession: false });
+  report.quietRuntime.quietMode = "hibernate";
+
+  assert.throws(() => validateAppRuntimeStatus(report), /quietMode/);
+});
+
+test("rejects a quiet mode that disagrees with canQuietRuntime", () => {
+  const report = quietReadyReport({ quietMode: "stop", canSuspendSession: false });
+  report.quietRuntime.quietMode = "none";
+
+  assert.throws(() => validateAppRuntimeStatus(report), /must be none exactly when/);
+});
+
+test("rejects a suspend mode on a session that cannot be suspended", () => {
+  const report = quietReadyReport({ quietMode: "suspend", canSuspendSession: true });
+  report.quietRuntime.canSuspendSession = false;
+
+  // Promising a suspend that cannot happen would tell the user their apps survive, then shut them down.
+  assert.throws(() => validateAppRuntimeStatus(report), /canSuspendSession/);
+});
+
+test("rejects a recommendation that does not name the resolved quiet mode", () => {
+  const report = quietReadyReport({ quietMode: "suspend", canSuspendSession: true });
+  report.quietRuntime.recommendedAction = "stop-runtime";
+
+  // The old "stop-or-suspend-runtime" named both and committed to neither, so nobody could tell
+  // whether their open apps were about to be closed.
+  assert.throws(() => validateAppRuntimeStatus(report), /must name the resolved quietMode/);
+});
+
+test("rejects a suspend mode with no suspend command to run", () => {
+  const report = quietReadyReport({ quietMode: "suspend", canSuspendSession: true });
+  delete report.quietRuntime.recommendedSuspendCommand;
+
+  assert.throws(() => validateAppRuntimeStatus(report), /recommendedSuspendCommand/);
+});
+
+test("rejects a suspend command pointing at the wrong action", () => {
+  const report = quietReadyReport({ quietMode: "suspend", canSuspendSession: true });
+  report.quietRuntime.recommendedSuspendCommand = "veil-vmctl app-runtime-action --json --action stop-runtime";
+
+  assert.throws(() => validateAppRuntimeStatus(report), /suspend-runtime/);
+});
+
+test("rejects a suspend command on a session that cannot be suspended", () => {
+  const report = quietReadyReport({ quietMode: "stop", canSuspendSession: false });
+  report.quietRuntime.recommendedSuspendCommand = "veil-vmctl app-runtime-action --json --action suspend-runtime";
+
+  assert.throws(() => validateAppRuntimeStatus(report), /canSuspendSession/);
+});
+
+test("validates a report that predates the resolved quiet mode", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.demo.json", import.meta.url), "utf8"));
+
+  assert.equal(report.quietRuntime.quietMode, undefined);
+  assert.equal(validateAppRuntimeStatus(report), report);
 });
 
 test("rejects unavailable quiet runtime reports with a stop command", () => {
@@ -2266,4 +2416,258 @@ test("rejects demo fallback agent metadata", () => {
     () => validateAppRuntimeStatus(report),
     /connection.os is only allowed/
   );
+});
+
+// Veil cannot change Windows' display scaling from the host, so this section exists to name the mismatch
+// and the percentage that fixes it. These tests guard the part that makes it trustworthy: the report must
+// not be able to claim a mismatch it did not measure, or a match it did not verify.
+function liveReport() {
+  return JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.mac-window-live.json", import.meta.url), "utf8"));
+}
+
+function launcherReport() {
+  return JSON.parse(readFileSync(new URL("../fixtures/app-runtime-status.demo.json", import.meta.url), "utf8"));
+}
+
+function matchedDisplayScaling() {
+  return {
+    isEnabled: true,
+    hostBackingScale: 2,
+    guestRenderScale: 2,
+    scaleRatio: 1,
+    isUpscaling: false,
+    isOverRendering: false,
+    recommendedGuestScalePercent: 200,
+    recommendedAction: "none",
+    reason: "Windows is rendering app windows at the resolution this display shows."
+  };
+}
+
+function upscalingDisplayScaling() {
+  return {
+    isEnabled: true,
+    hostBackingScale: 2,
+    guestRenderScale: 1,
+    scaleRatio: 2,
+    isUpscaling: true,
+    isOverRendering: false,
+    recommendedGuestScalePercent: 200,
+    recommendedAction: "raise-guest-display-scaling",
+    reason: "Windows is rendering at a lower resolution than this display shows. Set Windows display scaling to 200% to match."
+  };
+}
+
+test("accepts a report saved before the display scaling check existed", () => {
+  const report = liveReport();
+  assert.equal(report.displayScaling, undefined);
+
+  // Absence means the report predates the section, which is a different claim from a matched scale. It
+  // has to validate, and it must not be counted as a pass for scaling.
+  assert.equal(validateAppRuntimeStatus(report), report);
+});
+
+test("accepts a guest already rendering at the display resolution", () => {
+  const report = liveReport();
+  report.displayScaling = matchedDisplayScaling();
+
+  assert.equal(validateAppRuntimeStatus(report), report);
+});
+
+test("accepts a guest rendering fewer pixels than the display shows", () => {
+  const report = liveReport();
+  report.displayScaling = upscalingDisplayScaling();
+
+  assert.equal(validateAppRuntimeStatus(report), report);
+});
+
+test("accepts a guest rendering more pixels than the display can show", () => {
+  const report = liveReport();
+  report.displayScaling = {
+    isEnabled: true,
+    hostBackingScale: 1,
+    guestRenderScale: 2,
+    scaleRatio: 0.5,
+    isUpscaling: false,
+    isOverRendering: true,
+    recommendedGuestScalePercent: 100,
+    recommendedAction: "lower-guest-display-scaling",
+    reason: "Windows is rendering more pixels than this display can show. Set Windows display scaling to 100% to stop paying for them."
+  };
+
+  assert.equal(validateAppRuntimeStatus(report), report);
+});
+
+test("rejects a mismatch report that does not name the percentage that fixes it", () => {
+  const report = liveReport();
+  report.displayScaling = upscalingDisplayScaling();
+  // "Your scaling is wrong" is not actionable: Windows offers 125, 150, and 200, and the user has to pick.
+  report.displayScaling.reason = "Windows is rendering at a lower resolution than this display shows.";
+
+  assert.throws(() => validateAppRuntimeStatus(report), /must name the 200% setting/);
+});
+
+test("rejects a scale ratio that does not follow from the two scales it compares", () => {
+  const report = liveReport();
+  report.displayScaling = upscalingDisplayScaling();
+  report.displayScaling.scaleRatio = 3;
+
+  assert.throws(() => validateAppRuntimeStatus(report), /must equal hostBackingScale \/ guestRenderScale/);
+});
+
+test("rejects a window reported as both starved of pixels and over-supplied with them", () => {
+  const report = liveReport();
+  report.displayScaling = upscalingDisplayScaling();
+  report.displayScaling.isOverRendering = true;
+
+  assert.throws(() => validateAppRuntimeStatus(report), /cannot report upscaling and over-rendering/);
+});
+
+test("rejects a mismatch claimed without a ratio to support it", () => {
+  const report = liveReport();
+  report.displayScaling = upscalingDisplayScaling();
+  delete report.displayScaling.scaleRatio;
+
+  assert.throws(() => validateAppRuntimeStatus(report), /claims a mismatch without a scaleRatio/);
+});
+
+test("rejects no-action-needed when the scales are too far apart to be a match", () => {
+  const report = liveReport();
+  report.displayScaling = matchedDisplayScaling();
+  report.displayScaling.guestRenderScale = 1;
+  report.displayScaling.scaleRatio = 2;
+
+  assert.throws(() => validateAppRuntimeStatus(report), /outside the match tolerance/);
+});
+
+test("rejects no-action-needed that never measured both sides", () => {
+  const report = liveReport();
+  report.displayScaling = matchedDisplayScaling();
+  delete report.displayScaling.scaleRatio;
+
+  assert.throws(() => validateAppRuntimeStatus(report), /matched scale without measuring both sides/);
+});
+
+test("rejects a recommended percentage that disagrees with the host scale", () => {
+  const report = liveReport();
+  report.displayScaling = upscalingDisplayScaling();
+  report.displayScaling.recommendedGuestScalePercent = 150;
+
+  assert.throws(() => validateAppRuntimeStatus(report), /recommendedGuestScalePercent must be 200/);
+});
+
+test("rejects asking the host to inspect a display scale it already reported", () => {
+  const report = liveReport();
+  report.displayScaling = {
+    isEnabled: true,
+    hostBackingScale: 2,
+    isUpscaling: false,
+    isOverRendering: false,
+    recommendedAction: "inspect-host-display-scale",
+    reason: "This Mac's display scale was not supplied."
+  };
+
+  assert.throws(() => validateAppRuntimeStatus(report), /inspect its display scale while already reporting one/);
+});
+
+test("rejects waiting for a frame while nothing is mirrored", () => {
+  const report = launcherReport();
+  assert.equal(report.mirrorSessions.length, 0);
+  report.displayScaling = {
+    isEnabled: true,
+    hostBackingScale: 2,
+    isUpscaling: false,
+    isOverRendering: false,
+    recommendedAction: "wait-for-first-frame",
+    reason: "Waiting for the first app screen frame."
+  };
+
+  assert.throws(() => validateAppRuntimeStatus(report), /waits for a frame while nothing is mirrored/);
+});
+
+test("rejects asking for an app to be opened while windows are already mirrored", () => {
+  const report = liveReport();
+  report.displayScaling = {
+    isEnabled: true,
+    hostBackingScale: 2,
+    isUpscaling: false,
+    isOverRendering: false,
+    recommendedAction: "open-windows-app",
+    reason: "Open a Windows app to compare its rendering resolution against this display."
+  };
+
+  assert.throws(() => validateAppRuntimeStatus(report), /asks for an app to be opened while windows are mirrored/);
+});
+
+test("accepts asking for an app when the launcher has nothing mirrored", () => {
+  const report = launcherReport();
+  report.displayScaling = {
+    isEnabled: true,
+    hostBackingScale: 2,
+    isUpscaling: false,
+    isOverRendering: false,
+    recommendedAction: "open-windows-app",
+    reason: "Open a Windows app to compare its rendering resolution against this display."
+  };
+
+  assert.equal(validateAppRuntimeStatus(report), report);
+});
+
+test("rejects an unrecognised display scaling action", () => {
+  const report = liveReport();
+  report.displayScaling = matchedDisplayScaling();
+  report.displayScaling.recommendedAction = "set-guest-dpi";
+
+  assert.throws(() => validateAppRuntimeStatus(report), /recommendedAction must be one of/);
+});
+
+// A guest can put any number in a frame's `scale`. A denormal such as 1e-320 is valid JSON, decodes fine, and
+// passes a bare `> 0` check — then dividing by it yields infinity, which JSONEncoder refuses to encode. One
+// malformed frame therefore took the entire status report down, not just this section. The state has to be
+// reportable rather than fatal.
+test("accepts a report that says the guest's display scale is unusable", () => {
+  const report = liveReport();
+  report.displayScaling = {
+    isEnabled: true,
+    hostBackingScale: 2,
+    isUpscaling: false,
+    isOverRendering: false,
+    recommendedAction: "inspect-guest-display-scale",
+    reason: "Windows reported a display scale Veil cannot use, so its rendering resolution cannot be compared against this display."
+  };
+
+  assert.equal(validateAppRuntimeStatus(report), report);
+});
+
+test("rejects reporting an unusable guest scale alongside its value", () => {
+  const report = liveReport();
+  report.displayScaling = {
+    isEnabled: true,
+    hostBackingScale: 2,
+    guestRenderScale: 1e-320,
+    isUpscaling: false,
+    isOverRendering: false,
+    recommendedAction: "inspect-guest-display-scale",
+    reason: "Windows reported a display scale Veil cannot use."
+  };
+
+  // Echoing the value defeats the point: it reached this branch precisely because it cannot be used, and a
+  // non-finite one would fail encoding on the way out.
+  assert.throws(() => validateAppRuntimeStatus(report), /unusable guest scale while also reporting its value/);
+});
+
+test("rejects a ratio in a report that has no guest scale to derive it from", () => {
+  const report = liveReport();
+  report.displayScaling = {
+    isEnabled: true,
+    hostBackingScale: 2,
+    scaleRatio: 2,
+    isUpscaling: false,
+    isOverRendering: false,
+    recommendedAction: "inspect-guest-display-scale",
+    reason: "Windows reported a display scale Veil cannot use."
+  };
+
+  // Caught by the general rule rather than the branch: a ratio always requires both scales, so this state
+  // cannot smuggle one in.
+  assert.throws(() => validateAppRuntimeStatus(report), /scaleRatio requires both hostBackingScale and guestRenderScale/);
 });

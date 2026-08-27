@@ -3,15 +3,8 @@ import SwiftUI
 import VeilHostCore
 
 private enum AppRuntimeBooterFactory {
-    static func make() -> QEMUVMRuntimeBooter {
-        if ProcessInfo.processInfo.environment["VEIL_USE_NATIVE_QEMU_DISPLAY"] == "1" {
-            return QEMUVMRuntimeBooter.shared
-        }
-
-        return QEMUVMRuntimeBooter(
-            frontmostRunner: {},
-            displayMode: .vncLoopback
-        )
+    static func make() -> AppRuntimeBooter {
+        AppRuntimeBooter.make()
     }
 }
 
@@ -71,37 +64,37 @@ private struct ShellMultiAppLatencySummary {
 @main
 struct VeilHostShellApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
-    private let vmRuntimeBooter: QEMUVMRuntimeBooter
+    private let vmRuntimeBooter: AppRuntimeBooter
     private let windowsAppWindowPresenter = WindowsAppWindowPresenter()
-    private let agentTransport: URLSessionWebSocketTransport
+    private let agentTransport: URLSessionWebSocketTransport?
+    private let agentConnectionPlan: AppGuestAgentConnectionPlan
     private let windowsNotificationPresenter = WindowsNotificationPresenter(center: MacUserNotificationCenter())
     @State private var model: HostDashboardModel
     @State private var vmModel: VMRuntimeModel
     @State private var displayMessage: String?
     @State private var agentEventTask: Task<Void, Never>?
+    @State private var frameChannelTask: Task<Void, Never>?
     @State private var agentReconnectTask: Task<Void, Never>?
     @State private var automaticQuietRuntimeTask: Task<Void, Never>?
     @State private var automaticGuestAgentRecoveryTask: Task<Void, Never>?
     @State private var automaticFrameStreamMaintenanceTask: Task<Void, Never>?
     @State private var automaticGuestAgentRecoveryAttemptedTokens: Set<String> = []
     @State private var latestReviewEvidenceFolder: ReviewEvidenceFolder?
+    @State private var oneClickAppLaunchGate = OneClickAppLaunchTaskGate<OneClickAppLaunchOutcome<WindowsAppLaunchResult>>()
     private let automaticRestoreMaximumAttempts = 3
 
     init() {
         let runtimeBooter = AppRuntimeBooterFactory.make()
-        let transport = URLSessionWebSocketTransport(
-            url: URL(string: Self.agentURLString)!
-        )
+        let connectionPlan = AppGuestAgentConnectionPlan.resolve(provider: runtimeBooter.provider)
+        let transport = connectionPlan.endpointURL.map { URLSessionWebSocketTransport(url: $0) }
         self.vmRuntimeBooter = runtimeBooter
         self.agentTransport = transport
+        self.agentConnectionPlan = connectionPlan
         _model = State(
             initialValue: HostDashboardModel(
-                service: FallbackHostDashboardService(
-                    primary: VeilHostClient(
-                        transport: transport
-                    ),
-                    fallback: DemoHostDashboardService(),
-                    primaryEndpointDescription: Self.agentURLString
+                service: HostDashboardServiceMode.resolve().makeService(
+                    transport: transport,
+                    connectionPlan: connectionPlan
                 )
             )
         )
@@ -126,8 +119,8 @@ struct VeilHostShellApp: App {
                 waitForGuestAgentAction: waitForGuestAgent,
                 repairGuestAgentForAppLaunchAction: repairGuestAgentForAppLaunch,
                 recoverRuntimeDisplayAction: recoverRuntimeDisplayEvidence,
-                launchWindowsAppAction: launchSelectedWindowsAppWindow,
-                fulfillPendingLaunchAction: fulfillPendingWindowsAppWindow,
+                launchWindowsAppAction: runOneClickSelectedApp,
+                fulfillPendingLaunchAction: runOneClickPendingLaunch,
                 restoreWindowsAppWindowsAction: restoreWindowsAppWindows,
                 closeAllWindowsAppWindowsAction: closeAllWindowsAppWindows,
                 restartStaleFrameStreamsAction: restartStaleFrameStreams,
@@ -138,7 +131,12 @@ struct VeilHostShellApp: App {
                 quietWindowsWhenIdleAction: quietWindowsWhenIdle,
                 displayMessage: displayMessage
             )
-                .frame(minWidth: 1180, idealWidth: 1500, minHeight: 760, idealHeight: 900)
+                .frame(
+                    minWidth: MainWindowLayout.minimumSupportedSize.width,
+                    idealWidth: 1500,
+                    minHeight: MainWindowLayout.minimumSupportedSize.height,
+                    idealHeight: 900
+                )
                 .task {
                     configureDockMenuBridge()
                     configureWindowsAppWindowCloseBridge()
@@ -153,6 +151,9 @@ struct VeilHostShellApp: App {
                     // early discovery event can create a placeholder window before the model knows
                     // that this is a capture-capable live agent.
                     startAgentEventPumpIfNeeded()
+                    // Started after the health response has landed, since the capability decides whether
+                    // the endpoint exists at all.
+                    startFrameChannelPumpIfNeeded()
                     await restorePreviousWindowsAppWindowAfterLaunchIfNeeded()
                     syncLauncherWindowVisibility()
                     await recordGuestAgentInstallEvidenceIfNeeded()
@@ -179,11 +180,7 @@ struct VeilHostShellApp: App {
         .defaultSize(width: 1440, height: 900)
         .defaultWindowPlacement { _, context in
             let visibleRect = context.defaultDisplay.visibleRect
-            let preferredSize = CGSize(width: 1440, height: 900)
-            let size = CGSize(
-                width: min(preferredSize.width, visibleRect.width * 0.96),
-                height: min(preferredSize.height, visibleRect.height * 0.96)
-            )
+            let size = MainWindowLayout.fittedSize(for: visibleRect.size)
             return WindowPlacement(size: size)
         }
         .commands {
@@ -242,7 +239,7 @@ struct VeilHostShellApp: App {
                 .disabled(!canMarkWindowsInstalled)
 
                 Button("Open Windows App") {
-                    launchSelectedWindowsAppWindow()
+                    runOneClickSelectedApp()
                 }
                 .keyboardShortcut(.return, modifiers: [.command])
                 .disabled(canRecoverRuntimeDisplay || (!model.canRequestSelectedAppLaunch && !model.canFulfillPendingLaunch))
@@ -274,9 +271,9 @@ struct VeilHostShellApp: App {
                 waitForGuestAgentAction: waitForGuestAgent,
                 repairGuestAgentForAppLaunchAction: repairGuestAgentForAppLaunch,
                 recoverRuntimeDisplayAction: recoverRuntimeDisplayEvidence,
-                launchWindowsAppAction: launchSelectedWindowsAppWindow,
-                launchWindowsAppByIdAction: launchWindowsAppWindow(appId:),
-                fulfillPendingLaunchAction: fulfillPendingWindowsAppWindow,
+                launchWindowsAppAction: runOneClickSelectedApp,
+                launchWindowsAppByIdAction: runOneClickAppLaunch(appId:),
+                fulfillPendingLaunchAction: runOneClickPendingLaunch,
                 restoreWindowsAppWindowsAction: restoreWindowsAppWindows,
                 bringAllWindowsAppWindowsToFrontAction: bringAllWindowsAppWindowsToFront,
                 focusWindowsAppWindowAction: focusWindowsAppWindow(windowId:),
@@ -298,8 +295,8 @@ struct VeilHostShellApp: App {
         .menuBarExtraStyle(.menu)
     }
 
-    private static var agentURLString: String {
-        ProcessInfo.processInfo.environment["VEIL_AGENT_URL"] ?? "ws://127.0.0.1:18444"
+    private var agentURLString: String {
+        agentConnectionPlan.endpoint
     }
 
     private static var shouldStartVMOnLaunch: Bool {
@@ -317,8 +314,66 @@ struct VeilHostShellApp: App {
         await vmModel.markGuestAgentConnected(agentVersion: agentVersion)
     }
 
+    /// Consumes window frames from the guest's dedicated binary connection.
+    ///
+    /// Only started when the connected agent advertises the capability, so an older agent keeps using the
+    /// JSON frame path on the control connection. Decoded frames go through the same
+    /// `receiveWindowFrame` entry point, so status, timing, proof artifacts, and rendering are all
+    /// unchanged by which transport delivered the frame.
+    private func startFrameChannelPumpIfNeeded() {
+        guard agentConnectionPlan.isAvailable,
+              frameChannelTask == nil,
+              model.health?.capabilities.binaryFrameChannel == true,
+              let url = URLSessionFrameChannel.frameChannelURL(
+                  agentEndpoint: agentConnectionPlan.endpoint
+              ) else {
+            return
+        }
+
+        let channel = URLSessionFrameChannel(url: url)
+        frameChannelTask = Task { @MainActor in
+            // Same bounded-backoff discipline as the control event pump: a sustained outage must not spin
+            // at the base rate forever.
+            let baseRetryDelaySeconds: Double = 2
+            let maxRetryDelaySeconds: Double = 10
+            var retryDelaySeconds = baseRetryDelaySeconds
+
+            while !Task.isCancelled {
+                do {
+                    for try await message in channel.frames() {
+                        retryDelaySeconds = baseRetryDelaySeconds
+                        // Routed through the compositor: a tile is not a displayable frame, and a tile that
+                        // cannot be composited must not present a window.
+                        guard model.receiveWindowFrameTile(
+                            message.tile,
+                            wireByteCount: message.wireByteCount
+                        ),
+                              let session = model.mirrorSessions.first(where: { $0.id == message.tile.windowId }) else {
+                            continue
+                        }
+
+                        windowsAppWindowPresenter.showWindow(for: session)
+                    }
+                } catch {
+                    VeilLog.agent.notice(
+                        "Binary frame channel stopped; retrying. \(String(describing: error))"
+                    )
+                }
+
+                if Task.isCancelled {
+                    return
+                }
+
+                try? await Task.sleep(for: .seconds(retryDelaySeconds))
+                retryDelaySeconds = min(maxRetryDelaySeconds, retryDelaySeconds * 2)
+            }
+        }
+    }
+
     private func startAgentEventPumpIfNeeded() {
-        guard agentEventTask == nil else {
+        guard agentEventTask == nil,
+              agentConnectionPlan.isAvailable,
+              let agentTransport else {
             return
         }
 
@@ -339,7 +394,10 @@ struct VeilHostShellApp: App {
                             return
                         }
 
-                        windowsAppWindowPresenter.showWindow(for: session)
+                        // A newly created window is raised by the presenter regardless; passing true
+                        // here only matters when the window already existed, which for this event means
+                        // the guest re-announced a window the user already has open.
+                        windowsAppWindowPresenter.showWindow(for: session, bringToFront: true)
                         syncLauncherWindowVisibility()
                     case .handledWindowUpdated(let windowId):
                         guard let session = model.mirrorSessions.first(where: { $0.id == windowId }) else {
@@ -353,6 +411,9 @@ struct VeilHostShellApp: App {
                         }
 
                         windowsAppWindowPresenter.showWindow(for: session)
+                    case .handledWindowFrameUnchanged:
+                        // Liveness only. Nothing new to present, and re-presenting would churn the window.
+                        break
                     case .handledWindowClosed(let windowId):
                         windowsAppWindowPresenter.closeWindow(windowId: windowId)
                         scheduleAutomaticQuietRuntimeIfNeeded()
@@ -377,7 +438,8 @@ struct VeilHostShellApp: App {
     }
 
     private func startAgentReconnectPollerIfNeeded() {
-        guard agentReconnectTask == nil else {
+        guard agentReconnectTask == nil,
+              agentConnectionPlan.isAvailable else {
             return
         }
 
@@ -433,7 +495,7 @@ struct VeilHostShellApp: App {
 
         // The first health request can succeed just before the guest completes its agent-side
         // recovery. Retry a few times, always with reuseExistingWindow, so startup reaches the
-        // normal single app window without turning a temporary connection race into a launch loop.
+        // previously open app windows without turning a temporary connection race into a launch loop.
         for attempt in 0..<automaticRestoreMaximumAttempts {
             let restoredLaunches = await model.restoreMirroredWindowsAfterReconnect()
             for launch in restoredLaunches {
@@ -458,18 +520,43 @@ struct VeilHostShellApp: App {
         Task { @MainActor in
             cancelAutomaticQuietRuntime()
             activateMainWindow()
-            displayMessage = "Starting Windows locally. Veil stays in this main window while setup runs."
-            await vmModel.start()
+            await startOrResumeWindows()
 
             if vmModel.snapshot?.state == .running || vmModel.snapshot?.state == .starting {
-                displayMessage = vmRuntimeBooter.supportsNativeDisplayWindow
-                    ? "Windows is running in recovery display mode."
-                    : "Windows is running inside the main Veil window. Setup evidence refreshes here."
+                displayMessage = vmRuntimeBooter.usesEmbeddedDisplaySurface
+                    ? "Windows is running inside the main Veil window."
+                    : "Windows is running in recovery display mode."
                 scheduleAutomaticGuestAgentRecoveryIfNeeded()
             } else if let errorMessage = vmModel.errorMessage {
                 displayMessage = "Windows display could not start: \(errorMessage)"
             }
         }
+    }
+
+    /// Resumes a suspended session when one exists, and cold boots otherwise.
+    ///
+    /// `vmModel.canStart` is true for a suspended VM, so calling `start()` here would boot Windows fresh
+    /// and throw away the session idle suspend just saved. That would make the round trip lossy in
+    /// exactly the case this is supposed to protect.
+    @MainActor
+    private func startOrResumeWindows() async {
+        if vmModel.canResume {
+            displayMessage = "Resuming your Windows session."
+            await vmModel.resume()
+            if vmModel.snapshot?.state == .running || vmModel.snapshot?.state == .starting {
+                return
+            }
+
+            // Resume keeps the saved state file on failure, so the VM is reported as still suspended and
+            // the user can retry. Cold booting here would silently discard the session instead.
+            if let errorMessage = vmModel.errorMessage {
+                displayMessage = "Your Windows session could not be resumed: \(errorMessage)"
+            }
+            return
+        }
+
+        displayMessage = "Starting Windows locally. Veil stays in this main window while setup runs."
+        await vmModel.start()
     }
 
     private func stopWindowsAndCloseDisplay() {
@@ -485,11 +572,54 @@ struct VeilHostShellApp: App {
         }
     }
 
+    /// The quiet policy resolved against the live VM snapshot.
+    ///
+    /// The snapshot has to be passed in. `quietRuntimeStatus()` with no local runtime cannot know
+    /// whether this VM can persist a session, so it conservatively resolves to stopping -- which would
+    /// silently shut Windows down on every idle timeout even where suspend works.
+    @MainActor
+    private func resolvedQuietRuntimeStatus() -> WindowsAppRuntimeQuietPolicyStatus {
+        model.quietRuntimeStatus(
+            localRuntime: model.localRuntimeStatus(snapshot: vmModel.snapshot)
+        )
+    }
+
+    /// Runs whichever quiet mode the status resolved to.
+    ///
+    /// Suspending keeps the user's open apps and unsaved work; stopping loses them. Both the manual
+    /// menu action and the automatic idle timer route through here so they can never do different
+    /// things for the same state.
+    @MainActor
+    private func performQuietRuntime(_ quietRuntime: WindowsAppRuntimeQuietPolicyStatus) async {
+        if quietRuntime.quietMode == WindowsAppRuntimeQuietPolicyStatus.suspendMode,
+           vmModel.canSuspend {
+            await vmModel.suspend()
+            if vmModel.snapshot?.state == .suspended {
+                displayMessage = "Windows is suspended. Your open apps are still there and will come back with the next launch."
+                return
+            }
+
+            // Fall through to stopping. A memory-state save that fails partway leaves the guest paused,
+            // which is the one state the launcher offers no action for. Stopping costs the user their
+            // open apps but leaves a VM they can start again. The fallback is deliberately one-way:
+            // stopping always works, so a stop failure has no safe second attempt.
+            displayMessage = "Windows could not be suspended, so it is shutting down instead."
+        }
+
+        await vmModel.stop()
+        if vmModel.snapshot?.state == .stopped {
+            displayMessage = "Windows is quiet. No Windows app windows are open."
+        } else if let errorMessage = vmModel.errorMessage {
+            displayMessage = "Windows could not quiet: \(errorMessage)"
+        }
+    }
+
     private func quietWindowsWhenIdle() {
         Task { @MainActor in
             cancelAutomaticQuietRuntime()
+            let quietRuntime = resolvedQuietRuntimeStatus()
             guard model.canQuietRuntimeWhenIdle else {
-                displayMessage = model.quietRuntimeStatus().reason
+                displayMessage = quietRuntime.reason
                 return
             }
 
@@ -498,17 +628,13 @@ struct VeilHostShellApp: App {
                 return
             }
 
-            await vmModel.stop()
-            if vmModel.snapshot?.state == .stopped {
-                displayMessage = "Windows is quiet. No Windows app windows are open."
-            } else if let errorMessage = vmModel.errorMessage {
-                displayMessage = "Windows could not quiet: \(errorMessage)"
-            }
+            await performQuietRuntime(quietRuntime)
         }
     }
 
     private func scheduleAutomaticQuietRuntimeIfNeeded() {
-        guard model.quietRuntimeStatus().willQuietAutomatically else {
+        let quietRuntime = resolvedQuietRuntimeStatus()
+        guard quietRuntime.willQuietAutomatically else {
             cancelAutomaticQuietRuntime()
             return
         }
@@ -519,7 +645,6 @@ struct VeilHostShellApp: App {
         }
 
         automaticQuietRuntimeTask?.cancel()
-        let quietRuntime = model.quietRuntimeStatus()
         automaticQuietRuntimeTask = Task { @MainActor in
             try? await Task.sleep(for: .seconds(quietRuntime.automaticQuietDelaySeconds))
             guard !Task.isCancelled,
@@ -529,19 +654,25 @@ struct VeilHostShellApp: App {
                 return
             }
 
-            displayMessage = "All Windows app windows closed. Quieting Windows."
-            await vmModel.stop()
-            if vmModel.snapshot?.state == .stopped {
-                displayMessage = "Windows is quiet. No Windows app windows are open."
-            } else if let errorMessage = vmModel.errorMessage {
-                displayMessage = "Windows could not quiet: \(errorMessage)"
-            }
+            // Re-resolved after the delay rather than reusing the mode captured when the timer was
+            // scheduled. The VM state can change during those seconds, and acting on a stale mode is how
+            // a suspend gets attempted against a machine that is no longer running.
+            let currentQuietRuntime = resolvedQuietRuntimeStatus()
+            displayMessage = currentQuietRuntime.quietMode == WindowsAppRuntimeQuietPolicyStatus.suspendMode
+                ? "All Windows app windows closed. Suspending Windows so your apps come back."
+                : "All Windows app windows closed. Quieting Windows."
+            await performQuietRuntime(currentQuietRuntime)
         }
     }
 
     private func cancelAutomaticQuietRuntime() {
         automaticQuietRuntimeTask?.cancel()
         automaticQuietRuntimeTask = nil
+    }
+
+    private func cancelAutomaticGuestAgentRecovery() {
+        automaticGuestAgentRecoveryTask?.cancel()
+        automaticGuestAgentRecoveryTask = nil
     }
 
     private func startAutomaticFrameStreamMaintenanceLoopIfNeeded() {
@@ -561,44 +692,90 @@ struct VeilHostShellApp: App {
         }
     }
 
-    private func launchSelectedWindowsAppWindow() {
+    private func runOneClickSelectedApp() {
+        guard let appId = model.selectedAppId else {
+            displayMessage = "Select a Windows app before opening it."
+            return
+        }
+
+        runOneClickAppLaunch(appId: appId)
+    }
+
+    private func runOneClickPendingLaunch() {
+        guard let appId = model.pendingLaunchAppId else {
+            displayMessage = "There is no queued Windows app to open."
+            return
+        }
+
+        runOneClickAppLaunch(appId: appId)
+    }
+
+    private func runOneClickAppLaunch(appId: String) {
+        cancelAutomaticQuietRuntime()
+        cancelAutomaticGuestAgentRecovery()
+
         Task { @MainActor in
-            cancelAutomaticQuietRuntime()
-            if model.apps.isEmpty {
-                await model.load()
+            let outcome = await oneClickAppLaunchGate.run {
+                let driver = OneClickAppLaunchDriver<WindowsAppLaunchResult>(
+                    context: { self.currentAppLaunchContext() },
+                    requestLaunch: { requestedAppId in
+                        self.model.selectedAppId = requestedAppId
+                        return await self.model.launchSelectedApp()
+                    },
+                    startOrResumeWindows: {
+                        await self.startOrResumeWindows()
+                        return self.vmModel.snapshot?.state == .running
+                            || self.vmModel.snapshot?.state == .starting
+                    },
+                    waitForGuestAgent: { seconds in
+                        let report = await self.model.waitForLiveAgentConnection(
+                            endpoint: self.agentURLString,
+                            timeoutSeconds: seconds
+                        )
+                        return report.status == .connected
+                    },
+                    repairGuestAgent: {
+                        _ = try await self.vmRuntimeBooter.installGuestAgentFromAttachedMedia()
+                        await self.vmModel.refreshRuntimeEvidence()
+                    },
+                    fulfillLaunch: {
+                        await self.model.fulfillPendingLaunch()
+                    }
+                )
+
+                return await OneClickAppLaunchCoordinator().run(
+                    appId: appId,
+                    driver: driver
+                )
             }
 
-            if model.canFulfillPendingLaunch {
-                await fulfillPendingWindowsAppWindowFromCurrentState()
-                return
+            switch outcome {
+            case .opened(let result):
+                displayMessage = "\(result.window.title) opened as a macOS window."
+                showWindowsAppWindow(for: result)
+                syncLauncherWindowVisibility()
+            case .blocked(let failure):
+                activateMainWindow()
+                displayMessage = failure.userMessage
             }
-
-            await model.launchSelectedApp()
-
-            if model.pendingLaunchAppId != nil,
-               !model.hasLiveAgentConnection {
-                continuePendingLaunchHandoff()
-                return
-            }
-
-            guard let result = model.lastLaunch else {
-                return
-            }
-
-            showWindowsAppWindow(for: result)
-            syncLauncherWindowVisibility()
         }
     }
 
-    private func launchWindowsAppWindow(appId: String) {
-        model.selectedAppId = appId
-        launchSelectedWindowsAppWindow()
+    private func currentAppLaunchContext() -> AppLaunchLifecycleContext {
+        AppLaunchLifecycleContext(
+            hasQueuedLaunch: model.pendingLaunchAppId != nil,
+            canFulfillQueuedLaunch: model.canFulfillPendingLaunch,
+            hasLiveAgentConnection: model.hasLiveAgentConnection,
+            runtimeState: vmModel.snapshot?.state,
+            canStartOrResume: vmModel.canStart || vmModel.canResume,
+            guestAgentEndpointAvailable: agentConnectionPlan.isAvailable,
+            agentWaitTimedOut: false,
+            repairAttemptCount: 0
+        )
     }
 
     private func fulfillPendingWindowsAppWindow() {
-        Task { @MainActor in
-            await fulfillPendingWindowsAppWindowFromCurrentState()
-        }
+        runOneClickPendingLaunch()
     }
 
     private func fulfillPendingWindowsAppWindowFromCurrentState() async {
@@ -609,7 +786,7 @@ struct VeilHostShellApp: App {
 
         guard model.canFulfillPendingLaunch else {
             if model.pendingLaunchStatus().willLaunchOnAgentReconnect {
-                continuePendingLaunchHandoff()
+                advancePendingLaunchLifecycle()
             } else {
                 displayMessage = model.pendingLaunchStatus().reason
             }
@@ -626,24 +803,44 @@ struct VeilHostShellApp: App {
         syncLauncherWindowVisibility()
     }
 
-    private func continuePendingLaunchHandoff() {
+    private func advancePendingLaunchLifecycle() {
         let appName = pendingLaunchDisplayName()
-        switch vmModel.snapshot?.state {
-        case .running, .starting:
+        let nextStep = AppLaunchLifecycleCoordinator.nextStep(
+            hasQueuedLaunch: model.pendingLaunchAppId != nil,
+            canFulfillQueuedLaunch: model.canFulfillPendingLaunch,
+            hasLiveAgentConnection: model.hasLiveAgentConnection,
+            runtimeState: vmModel.snapshot?.state,
+            canStartOrResume: vmModel.canStart,
+            guestAgentEndpointAvailable: agentConnectionPlan.isAvailable
+        )
+
+        switch nextStep {
+        case .waitForGuestAgent:
             activateMainWindow()
             displayMessage = "Windows is running. Veil is preparing the app connection so \(appName) can open as a Mac window."
             scheduleAutomaticGuestAgentRecoveryIfNeeded()
             if vmRuntimeBooter.supportsNativeDisplayWindow {
                 showWindowsDisplay()
             }
-        default:
-            guard vmModel.canStart else {
-                displayMessage = "Veil queued \(appName). Start Windows when setup is available."
-                return
-            }
-
+        case .repairGuestAgent:
+            activateMainWindow()
+            displayMessage = "Windows is running. Veil is repairing the app connection so \(appName) can open as a Mac window."
+            scheduleAutomaticGuestAgentRecoveryIfNeeded()
+        case .blockedGuestAgentRecovery:
+            activateMainWindow()
+            displayMessage = "Windows is running, but the app connection did not recover after two attempts. Open recovery to repair Veil Agent."
+        case .startOrResumeWindows:
             displayMessage = "Starting Windows. Veil will open \(appName) when the app connection is ready."
             startWindowsAndShowDisplay()
+        case .blockedGuestAgentEndpoint:
+            activateMainWindow()
+            displayMessage = "\(appName) is queued, but this VM provider has no configured Windows app connection. \(agentConnectionPlan.detail)"
+        case .blockedRuntimeSetup:
+            displayMessage = "Veil queued \(appName). Finish Windows setup before the app can open."
+        case .fulfillQueuedLaunch:
+            fulfillPendingWindowsAppWindow()
+        case .requestLaunch:
+            runOneClickSelectedApp()
         }
     }
 
@@ -765,8 +962,9 @@ struct VeilHostShellApp: App {
             Task { @MainActor in
                 cancelAutomaticQuietRuntime()
                 activateMainWindow()
-                displayMessage = "Starting Windows. Veil will reconnect previous apps when the app connection is ready."
-                await vmModel.start()
+                // Resumes a suspended session rather than cold booting, so previous apps come back as
+                // themselves instead of being relaunched into empty windows.
+                await startOrResumeWindows()
 
                 if vmModel.snapshot?.state == .running || vmModel.snapshot?.state == .starting {
                     displayMessage = "Windows is running. Veil is preparing the app connection to reconnect previous apps."
@@ -788,7 +986,8 @@ struct VeilHostShellApp: App {
                 return
             }
 
-            windowsAppWindowPresenter.showWindow(for: session)
+            // An explicit focus request is exactly the case that should raise a window.
+            windowsAppWindowPresenter.showWindow(for: session, bringToFront: true)
             setForegroundWindowsAppMessage(windowId: windowId)
         }
     }
@@ -897,8 +1096,8 @@ struct VeilHostShellApp: App {
                 closeAllWindowsAppWindowsAction: closeAllWindowsAppWindows,
                 restartStaleFrameStreamsAction: restartStaleFrameStreams,
                 restoreWindowsAppWindowsAction: restoreWindowsAppWindows,
-                launchWindowsAppByIdAction: launchWindowsAppWindow(appId:),
-                fulfillPendingLaunchAction: fulfillPendingWindowsAppWindow,
+                launchWindowsAppByIdAction: runOneClickAppLaunch(appId:),
+                fulfillPendingLaunchAction: runOneClickPendingLaunch,
                 repairGuestAgentForAppLaunchAction: repairGuestAgentForAppLaunch,
                 recoverRuntimeDisplayAction: recoverRuntimeDisplayEvidence,
                 startVMAction: startWindowsAndShowDisplay,
@@ -919,7 +1118,9 @@ struct VeilHostShellApp: App {
                     connectionMode: model.connectionMode,
                     captureState: .unavailable
                 )
-        windowsAppWindowPresenter.showWindow(for: session)
+        // An app the user just launched or restored should come forward. Content refreshes elsewhere
+        // deliberately do not, so a background window's frames cannot steal focus.
+        windowsAppWindowPresenter.showWindow(for: session, bringToFront: true)
         syncLauncherWindowVisibility()
     }
 
@@ -1029,7 +1230,7 @@ struct VeilHostShellApp: App {
         appId: String,
         reviewEvidenceFolder: ReviewEvidenceFolder? = nil
     ) async throws -> URL {
-        let transport = URLSessionWebSocketTransport(url: URL(string: Self.agentURLString)!)
+        let transport = URLSessionWebSocketTransport(url: URL(string: agentURLString)!)
         let client = VeilHostClient(transport: transport)
         let directory = QEMUVMRuntimeBooter.defaultDiagnosticsDirectory()
             .appendingPathComponent("Recommended Proof", isDirectory: true)
@@ -1040,7 +1241,7 @@ struct VeilHostShellApp: App {
         case "app-window":
             var report = try await client.proveAppWindow(
                 appId: appId,
-                endpoint: Self.agentURLString,
+                endpoint: agentURLString,
                 eventSource: transport
             )
             let outputURL = directory.appendingPathComponent("app-window-proof-\(stamp).json")
@@ -1050,7 +1251,7 @@ struct VeilHostShellApp: App {
         case "coherence":
             var report = try await client.proveCoherenceAppWindow(
                 appId: appId,
-                endpoint: Self.agentURLString,
+                endpoint: agentURLString,
                 eventSource: transport
             )
             let outputURL = directory.appendingPathComponent("coherence-proof-\(stamp).json")
@@ -1060,7 +1261,7 @@ struct VeilHostShellApp: App {
         case "mvp":
             var report = try await client.proveMVPAppRuntime(
                 appId: appId,
-                endpoint: Self.agentURLString,
+                endpoint: agentURLString,
                 eventSource: transport,
                 waitSeconds: 30,
                 proofTimeoutNanoseconds: 30_000_000_000
@@ -1076,7 +1277,7 @@ struct VeilHostShellApp: App {
     }
 
     private func writeNotificationProof() async throws -> URL {
-        let transport = URLSessionWebSocketTransport(url: URL(string: Self.agentURLString)!)
+        let transport = URLSessionWebSocketTransport(url: URL(string: agentURLString)!)
         let client = VeilHostClient(transport: transport)
         let directory = QEMUVMRuntimeBooter.defaultDiagnosticsDirectory()
             .appendingPathComponent("Notification Proof", isDirectory: true)
@@ -1084,7 +1285,7 @@ struct VeilHostShellApp: App {
 
         let outputURL = directory.appendingPathComponent("notification-proof-\(Self.diagnosticTimestamp()).json")
         var report = await client.proveWindowsNotificationBridge(
-            endpoint: Self.agentURLString,
+            endpoint: agentURLString,
             eventSource: transport,
             waitSeconds: 30,
             notificationTimeoutNanoseconds: 30_000_000_000
@@ -1096,7 +1297,7 @@ struct VeilHostShellApp: App {
 
     private func writeMultiAppProof() async throws -> URL {
         let appIds = WindowsAppRuntimeProofCoverageDefaults.targetAppIds
-        let endpoint = Self.agentURLString
+        let endpoint = agentURLString
         let diagnosticsDirectory = QEMUVMRuntimeBooter.defaultDiagnosticsDirectory()
         let coherenceProofDirectory = diagnosticsDirectory
             .appendingPathComponent("Coherence Proof", isDirectory: true)
@@ -1311,9 +1512,29 @@ struct VeilHostShellApp: App {
                 )
             }
         }
-        windowsAppWindowPresenter.onFileDrop = { appId, fileName, contentBase64 in
+        windowsAppWindowPresenter.onWindowVisibilityChange = { windowId, isVisible in
+            Task { @MainActor in
+                if isVisible {
+                    await model.resumeFrameStream(windowId: windowId)
+                } else {
+                    await model.pauseFrameStream(windowId: windowId)
+                }
+            }
+        }
+        windowsAppWindowPresenter.onDropRefused = { refusal in
+            Task { @MainActor in
+                model.recordFileDropRefusal(refusal)
+            }
+        }
+        windowsAppWindowPresenter.onFileDrop = { appId, windowId, fileName, contentBase64 in
             Task { @MainActor in
                 await model.openFile(appId: appId, fileName: fileName, contentBase64: contentBase64)
+                // Windows reports failures the host cannot predict: the app was uninstalled, the write
+                // failed, the launch failed. `openFile` records those as drop refusals, so they belong on
+                // the same sheet as the checks the host made itself.
+                if let refusal = model.lastFileDropRefusal {
+                    windowsAppWindowPresenter.showDropRefusal(refusal, windowId: windowId)
+                }
             }
         }
         windowsAppWindowPresenter.onRestartFrameStream = { windowId in
@@ -1349,9 +1570,28 @@ struct VeilHostShellApp: App {
                     : "Restarting \(session.window.title) screen."
             }
         }
+        windowsAppWindowPresenter.compositedImageProvider = { windowId in
+            model.compositedFrameImage(for: windowId)
+        }
+        windowsAppWindowPresenter.onTextInput = { windowId, text in
+            Task { @MainActor in
+                await model.sendTextInput(windowId: windowId, text: text)
+            }
+        }
         windowsAppWindowPresenter.onPasteShortcut = { windowId, key, windowsVirtualKey, modifiers, text in
             Task { @MainActor in
-                await model.sendHostClipboardText(text)
+                // Ctrl+V does not fail when the clipboard write did. It pastes whatever Windows had before,
+                // into the user's document, with nothing to indicate the text is stale. So a clipboard write
+                // that could not be delivered cancels the paste instead of completing it with wrong content.
+                let clipboardOutcome = await model.sendHostClipboardText(text)
+                if case .failed(let reason) = clipboardOutcome {
+                    windowsAppWindowPresenter.showWindowsAppMessage(
+                        title: "Veil could not paste into Windows",
+                        detail: "The clipboard could not be sent, so nothing was pasted rather than pasting older text. \(reason)",
+                        windowId: windowId
+                    )
+                    return
+                }
                 await model.sendKeyInput(
                     windowId: windowId,
                     event: "keyDown",
@@ -1417,7 +1657,7 @@ struct VeilHostShellApp: App {
                 await vmModel.refreshRuntimeEvidence()
 
                 let report = await model.waitForLiveAgentConnection(
-                    endpoint: Self.agentURLString,
+                    endpoint: agentURLString,
                     timeoutSeconds: 120
                 )
                 await recordGuestAgentInstallEvidenceIfNeeded()
@@ -1454,7 +1694,7 @@ struct VeilHostShellApp: App {
 
             do {
                 let client = VeilHostClient(
-                    transport: URLSessionWebSocketTransport(url: URL(string: Self.agentURLString)!)
+                    transport: URLSessionWebSocketTransport(url: URL(string: agentURLString)!)
                 )
                 let response = try await client.requestWindowsNotificationListenerConsent()
                 await model.load()
@@ -1490,7 +1730,7 @@ struct VeilHostShellApp: App {
             activateMainWindow()
             displayMessage = "Checking the Windows app connection."
             let report = await model.waitForLiveAgentConnection(
-                endpoint: Self.agentURLString,
+                endpoint: agentURLString,
                 timeoutSeconds: 5
             )
             await recordGuestAgentInstallEvidenceIfNeeded()
@@ -1515,7 +1755,7 @@ struct VeilHostShellApp: App {
             activateMainWindow()
 
             guard vmModel.snapshot?.state == .running || vmModel.snapshot?.state == .starting else {
-                continuePendingLaunchHandoff()
+                advancePendingLaunchLifecycle()
                 return
             }
 
@@ -1632,7 +1872,8 @@ struct VeilHostShellApp: App {
 
     private var appRuntimeStatusReport: WindowsAppRuntimeStatusReport {
         model.runtimeStatusReport(
-            localRuntime: model.localRuntimeStatus(snapshot: vmModel.snapshot)
+            localRuntime: model.localRuntimeStatus(snapshot: vmModel.snapshot),
+            hostBackingScale: HostDisplayScale.current
         )
     }
 
@@ -2062,7 +2303,8 @@ private struct VeilMenuBarMenu: View {
 
     private var appRuntimeStatusReport: WindowsAppRuntimeStatusReport {
         model.runtimeStatusReport(
-            localRuntime: model.localRuntimeStatus(snapshot: vmModel.snapshot)
+            localRuntime: model.localRuntimeStatus(snapshot: vmModel.snapshot),
+            hostBackingScale: HostDisplayScale.current
         )
     }
 
@@ -2477,7 +2719,9 @@ private enum MainWindowChrome {
     }
 
     private static func configure(_ window: NSWindow) {
-        window.minSize = NSSize(width: 1180, height: 760)
+        let visibleSize = window.screen?.visibleFrame.size ?? NSScreen.main?.visibleFrame.size
+            ?? MainWindowLayout.preferredSize
+        window.minSize = MainWindowLayout.minimumSize(for: visibleSize)
         window.maxSize = NSSize(width: 2048, height: 1536)
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
@@ -2489,11 +2733,7 @@ private enum MainWindowChrome {
 
     private static func fitToPreferredSize(_ window: NSWindow) {
         let visibleFrame = window.screen?.visibleFrame ?? NSScreen.main?.visibleFrame ?? window.frame
-        let preferredSize = NSSize(width: 1440, height: 900)
-        let targetSize = NSSize(
-            width: min(preferredSize.width, visibleFrame.width * 0.96),
-            height: min(preferredSize.height, visibleFrame.height * 0.96)
-        )
+        let targetSize = MainWindowLayout.fittedSize(for: visibleFrame.size)
         let sizeDelta = abs(window.frame.width - targetSize.width) + abs(window.frame.height - targetSize.height)
         guard sizeDelta > 16 else {
             return
@@ -2521,23 +2761,23 @@ private enum MainWindowChrome {
 }
 
 private struct StandaloneMainWindowRoot: View {
-    private let vmRuntimeBooter: QEMUVMRuntimeBooter
+    private let vmRuntimeBooter: AppRuntimeBooter
+    private let agentConnectionPlan: AppGuestAgentConnectionPlan
     @State private var model: HostDashboardModel
     @State private var vmModel: VMRuntimeModel
     @State private var displayMessage: String?
 
     init() {
         let runtimeBooter = AppRuntimeBooterFactory.make()
-        let transport = URLSessionWebSocketTransport(
-            url: URL(string: Self.agentURLString)!
-        )
+        let connectionPlan = AppGuestAgentConnectionPlan.resolve(provider: runtimeBooter.provider)
+        let transport = connectionPlan.endpointURL.map { URLSessionWebSocketTransport(url: $0) }
         self.vmRuntimeBooter = runtimeBooter
+        self.agentConnectionPlan = connectionPlan
         _model = State(
             initialValue: HostDashboardModel(
-                service: FallbackHostDashboardService(
-                    primary: VeilHostClient(transport: transport),
-                    fallback: DemoHostDashboardService(),
-                    primaryEndpointDescription: Self.agentURLString
+                service: HostDashboardServiceMode.resolve().makeService(
+                    transport: transport,
+                    connectionPlan: connectionPlan
                 )
             )
         )
@@ -2572,7 +2812,12 @@ private struct StandaloneMainWindowRoot: View {
             quietWindowsWhenIdleAction: {},
             displayMessage: displayMessage
         )
-        .frame(minWidth: 1120, idealWidth: 1440, minHeight: 700, idealHeight: 900)
+        .frame(
+            minWidth: MainWindowLayout.minimumSupportedSize.width,
+            idealWidth: MainWindowLayout.preferredSize.width,
+            minHeight: MainWindowLayout.minimumSupportedSize.height,
+            idealHeight: MainWindowLayout.preferredSize.height
+        )
         .task {
             async let hostLoad: Void = model.load()
             async let vmLoad: Void = vmModel.load()
@@ -2581,19 +2826,26 @@ private struct StandaloneMainWindowRoot: View {
         }
     }
 
-    private static var agentURLString: String {
-        ProcessInfo.processInfo.environment["VEIL_AGENT_URL"] ?? "ws://127.0.0.1:18444"
+    private var agentURLString: String {
+        agentConnectionPlan.endpoint
     }
 
     private func startWindowsAndShowDisplay() {
         Task { @MainActor in
-            displayMessage = "Starting Windows locally. Veil stays in this main window while setup runs."
-            await vmModel.start()
+            // Resumes rather than cold boots when a suspended session exists. `canStart` is also true for
+            // a suspended VM, so calling start() here would discard the session.
+            if vmModel.canResume {
+                displayMessage = "Resuming your Windows session."
+                await vmModel.resume()
+            } else {
+                displayMessage = "Starting Windows locally. Veil stays in this main window while setup runs."
+                await vmModel.start()
+            }
 
             if vmModel.snapshot?.state == .running || vmModel.snapshot?.state == .starting {
-                displayMessage = vmRuntimeBooter.supportsNativeDisplayWindow
-                    ? "Windows is running in recovery display mode."
-                    : "Windows is running inside the main Veil window. Setup evidence refreshes here."
+                displayMessage = vmRuntimeBooter.usesEmbeddedDisplaySurface
+                    ? "Windows is running inside the main Veil window."
+                    : "Windows is running in recovery display mode."
             } else if let errorMessage = vmModel.errorMessage {
                 displayMessage = "Windows display could not start: \(errorMessage)"
             }
@@ -2640,7 +2892,7 @@ private struct StandaloneMainWindowRoot: View {
                 await vmModel.refreshRuntimeEvidence()
 
                 let report = await model.waitForLiveAgentConnection(
-                    endpoint: Self.agentURLString,
+                    endpoint: agentURLString,
                     timeoutSeconds: 120
                 )
                 await recordGuestAgentInstallEvidenceIfNeeded()
@@ -2663,7 +2915,7 @@ private struct StandaloneMainWindowRoot: View {
         Task { @MainActor in
             displayMessage = "Checking the Windows app connection."
             let report = await model.waitForLiveAgentConnection(
-                endpoint: Self.agentURLString,
+                endpoint: agentURLString,
                 timeoutSeconds: 5
             )
             await recordGuestAgentInstallEvidenceIfNeeded()

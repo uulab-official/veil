@@ -1,0 +1,22 @@
+{
+  "kind": "vmSessionAction",
+  "action": "suspend",
+  "generatedAt": "2026-07-29T09:15:00Z",
+  "status": "suspended",
+  "state": "suspended",
+  "provider": "QEMU/HVF",
+  "canSuspend": false,
+  "canResume": true,
+  "persistence": {
+    "isSupported": true,
+    "mode": "memoryStateFile",
+    "stateFilePath": "/Users/example/Virtual Machines/Veil/Windows 11 Arm.vmsave",
+    "stateFileByteCount": 4831838208,
+    "machineFingerprint": "fnv1a64:0a1b2c3d4e5f6071",
+    "suspendedAt": "2026-07-29T09:14:52Z",
+    "detail": "A suspended Windows session is stored as a QEMU memory-state stream next to the virtual disk. The raw system disk is untouched by suspend."
+  },
+  "nextActions": [
+    "Run veil-vmctl vm-resume --json to continue the suspended Windows session with its apps still open."
+  ]
+}

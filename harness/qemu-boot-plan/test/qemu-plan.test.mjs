@@ -97,6 +97,91 @@ describe("QEMU boot plan harness", () => {
     assert.throws(() => validateQEMUPlan(plan), /network device: e1000e,netdev=net0/);
   });
 
+  // The fixture appends audio as a contiguous tail: -audiodev, backend, -device, intel-hda,
+  // -device, hda-duplex. Slicing it off is cleaner than filtering, which would leave dangling
+  // -device flags behind.
+  const argumentsWithoutAudio = () => fixture.arguments.slice(0, -6);
+
+  it("accepts USB audio routed through the existing USB controller", () => {
+    const plan = {
+      ...fixture,
+      audioDevice: "usb-audio",
+      arguments: [
+        ...argumentsWithoutAudio(),
+        "-audiodev",
+        "coreaudio,id=veilaudio",
+        "-device",
+        "usb-audio,audiodev=veilaudio"
+      ]
+    };
+
+    assert.equal(validateQEMUPlan(plan), plan);
+  });
+
+  it("accepts audio disabled for QEMU builds without CoreAudio", () => {
+    const plan = {
+      ...fixture,
+      audioDevice: "none",
+      audioBackendArgument: null,
+      arguments: argumentsWithoutAudio()
+    };
+
+    assert.equal(validateQEMUPlan(plan), plan);
+  });
+
+  it("rejects a plan with no guest sound device wired", () => {
+    const plan = {
+      ...fixture,
+      arguments: argumentsWithoutAudio()
+    };
+
+    assert.throws(() => validateQEMUPlan(plan), /CoreAudio backend/);
+  });
+
+  it("rejects an audio device declaration that does not match QEMU arguments", () => {
+    const plan = {
+      ...fixture,
+      audioDevice: "usb-audio"
+    };
+
+    assert.throws(() => validateQEMUPlan(plan), /audio device: usb-audio,audiodev=veilaudio/);
+  });
+
+  it("rejects an unsupported audio device", () => {
+    const plan = {
+      ...fixture,
+      audioDevice: "sb16"
+    };
+
+    assert.throws(() => validateQEMUPlan(plan), /audioDevice must be one of/);
+  });
+
+  it("rejects a disabled audio device that still attaches a backend", () => {
+    const plan = {
+      ...fixture,
+      audioDevice: "none"
+    };
+
+    assert.throws(() => validateQEMUPlan(plan), /must not declare an audio backend/);
+  });
+
+  it("rejects an audio device declared before its backend", () => {
+    const plan = {
+      ...fixture,
+      arguments: [
+        ...argumentsWithoutAudio(),
+        "-device",
+        "intel-hda",
+        "-device",
+        "hda-duplex,audiodev=veilaudio",
+        "-audiodev",
+        "coreaudio,id=veilaudio"
+      ]
+    };
+
+    assert.throws(() => validateQEMUPlan(plan), /before the audio device/);
+  });
+
   it("rejects writable driver media", () => {
     const plan = {
       ...fixture,
@@ -179,12 +264,85 @@ describe("QEMU boot plan harness", () => {
   it("rejects plans without guest agent port forwarding", () => {
     const plan = {
       ...fixture,
+      sharedFolderForwardClause: undefined,
       arguments: fixture.arguments.map((argument) =>
-        argument === "user,id=net0,hostfwd=tcp::18444-:18444" ? "user,id=net0" : argument
+        argument.startsWith("user,id=net0,") ? "user,id=net0," : argument
       )
     };
 
-    assert.throws(() => validateQEMUPlan(plan), /hostfwd=tcp::18444-:18444/);
+    assert.throws(() => validateQEMUPlan(plan), /guest agent/);
+  });
+
+  it("rejects a host forward bound to every interface instead of loopback", () => {
+    const plan = {
+      ...fixture,
+      sharedFolderForwardClause: undefined,
+      arguments: fixture.arguments.map((argument) =>
+        argument.startsWith("user,id=net0,") ? "user,id=net0,hostfwd=tcp::18444-:18444" : argument
+      )
+    };
+
+    // An empty host address publishes the guest agent's unauthenticated control channel to the local
+    // network, which is the reason the forwards are loopback-scoped.
+    assert.throws(() => validateQEMUPlan(plan), /must bind 127\.0\.0\.1/);
+  });
+
+  it("rejects a declared shared folder forward the arguments do not carry", () => {
+    const plan = {
+      ...fixture,
+      arguments: fixture.arguments.map((argument) =>
+        argument.startsWith("user,id=net0,") ? "user,id=net0,hostfwd=tcp:127.0.0.1:18444-:18444" : argument
+      )
+    };
+
+    assert.throws(() => validateQEMUPlan(plan), /arguments do not carry/);
+  });
+
+  it("rejects an undeclared shared folder forward in the arguments", () => {
+    const plan = { ...fixture, sharedFolderForwardClause: undefined };
+
+    assert.throws(() => validateQEMUPlan(plan), /without declaring it/);
+  });
+
+  it("rejects a shared folder forward on a transport that cannot use one", () => {
+    const plan = { ...fixture, sharedFolderTransport: "host-smb" };
+
+    assert.throws(() => validateQEMUPlan(plan), /only the guest-smb/);
+  });
+
+  it("rejects an unsupported shared folder transport", () => {
+    const plan = { ...fixture, sharedFolderTransport: "virtio-9p" };
+
+    // No Windows guest driver exists for 9p, so it must never appear as a transport.
+    assert.throws(() => validateQEMUPlan(plan), /sharedFolderTransport must be one of/);
+  });
+
+  it("rejects mapping host ports through a second network device", () => {
+    const plan = {
+      ...fixture,
+      arguments: [
+        ...fixture.arguments,
+        "-netdev",
+        "user,id=net1,hostfwd=tcp:127.0.0.1:18446-:446"
+      ]
+    };
+
+    assert.throws(() => validateQEMUPlan(plan), /single -netdev/);
+  });
+
+  it("accepts a plan with live folder sharing turned off", () => {
+    const plan = {
+      ...fixture,
+      sharedFolderTransport: "none",
+      sharedFolderForwardClause: undefined,
+      arguments: fixture.arguments.map((argument) =>
+        argument.startsWith("user,id=net0,")
+          ? "user,id=net0,hostfwd=tcp:127.0.0.1:18444-:18444"
+          : argument
+      )
+    };
+
+    assert.equal(validateQEMUPlan(plan), plan);
   });
 
   it("rejects plans without TPM 2.0 emulator devices", () => {

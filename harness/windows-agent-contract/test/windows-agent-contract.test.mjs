@@ -63,7 +63,7 @@ test("windows agent streams continuing window frames after launch", async () => 
   assert.match(session, /SerializeFrame\(WindowFrame frame\)/);
   assert.match(server, /StartFrameStream/);
   assert.match(server, /WindowFrameStreamer/);
-  assert.match(server, /SerializeFrame\(frame\)/);
+  assert.match(server, /SerializeFrame\(result\.Frame\)/);
   assert.match(streamer, /PeriodicTimer/);
   assert.match(streamer, /firstSequence/);
   assert.match(streamer, /TryCaptureFrameAsync/);
@@ -180,6 +180,107 @@ test("windows agent accepts host key input events", async () => {
   assert.match(session, /MessageTypes\.InputKey/);
   assert.match(session, /HandleKeyInputAsync/);
   assert.match(session, /window_not_tracked/);
+});
+
+test("windows agent serves frames on a dedicated binary channel", async () => {
+  const codec = await readFile(resolve(agentRoot, "src/VeilAgent/FrameChannelCodec.cs"), "utf8");
+  const server = await readFile(resolve(agentRoot, "src/VeilAgent/WebSocketAgentServer.cs"), "utf8");
+  const session = await readFile(resolve(agentRoot, "src/VeilAgent/AgentSession.cs"), "utf8");
+
+  assert.match(codec, /"VFR2"/);
+  assert.match(codec, /KeyFrameFlag/);
+  // Network byte order on every field, or the host decodes garbage on a little-endian guest.
+  assert.match(codec, /WriteUInt32BigEndian/);
+  assert.match(codec, /WriteUInt16BigEndian/);
+  // The payload must be decoded from base64 here; sending the base64 string would keep the 33% inflation
+  // this channel exists to remove.
+  assert.match(codec, /Convert\.FromBase64String/);
+
+  // Routing by path is what keeps this additive for existing control connections.
+  assert.match(server, /FrameChannelPath\s*=\s*"\/frames"/);
+  assert.match(server, /IsFrameChannelPath/);
+  assert.match(server, /frameChannelClients/);
+  assert.match(server, /WebSocketMessageType\.Binary/);
+  // A host that does not open the frame channel must keep receiving JSON frames.
+  assert.match(server, /SerializeFrame\(result\.Frame\)/);
+
+  assert.match(session, /\["binaryFrameChannel"\]\s*=\s*true/);
+});
+
+test("windows agent sends only the region of a window that changed", async () => {
+  const differ = await readFile(resolve(agentRoot, "src/VeilAgent/WindowFrameDiffer.cs"), "utf8");
+  const capture = await readFile(resolve(agentRoot, "src/VeilAgent/GdiWindowFrameCapture.cs"), "utf8");
+  const models = await readFile(resolve(agentRoot, "src/VeilAgent/WindowModels.cs"), "utf8");
+  const server = await readFile(resolve(agentRoot, "src/VeilAgent/WebSocketAgentServer.cs"), "utf8");
+
+  assert.match(differ, /ChangedRegion/);
+  assert.match(differ, /ShouldPromoteToKeyFrame/);
+  assert.match(models, /WindowFrameTileRect/);
+  assert.match(models, /IsKeyFrame/);
+
+  // Only the changed rectangle is encoded; that is the entire point of the slice.
+  assert.match(capture, /EncodeRegion/);
+  assert.match(capture, /bitmap\.Clone/);
+  // A key frame reuses the full-surface encode rather than encoding the same pixels twice.
+  assert.match(capture, /isKeyFrame/);
+
+  // The full-surface encode must be skipped when no legacy JSON subscriber exists.
+  assert.match(server, /needsFullFrame|!clients\.IsEmpty/);
+  assert.match(server, /result\.Tile is not null/);
+  assert.match(server, /result\.Frame is not null/);
+});
+
+test("windows agent skips redundant frame encodes and proves liveness instead", async () => {
+  const messageTypes = await readFile(resolve(agentRoot, "src/VeilAgent/MessageTypes.cs"), "utf8");
+  const captureInterface = await readFile(resolve(agentRoot, "src/VeilAgent/IWindowFrameCapture.cs"), "utf8");
+  const capture = await readFile(resolve(agentRoot, "src/VeilAgent/GdiWindowFrameCapture.cs"), "utf8");
+  const differ = await readFile(resolve(agentRoot, "src/VeilAgent/WindowFrameDiffer.cs"), "utf8");
+  const models = await readFile(resolve(agentRoot, "src/VeilAgent/WindowModels.cs"), "utf8");
+  const streamer = await readFile(resolve(agentRoot, "src/VeilAgent/WindowFrameStreamer.cs"), "utf8");
+  const cadence = await readFile(resolve(agentRoot, "src/VeilAgent/WindowFrameStreamCadence.cs"), "utf8");
+  const session = await readFile(resolve(agentRoot, "src/VeilAgent/AgentSession.cs"), "utf8");
+  const server = await readFile(resolve(agentRoot, "src/VeilAgent/WebSocketAgentServer.cs"), "utf8");
+
+  assert.match(messageTypes, /WindowFrameUnchanged\s*=\s*"window\.frame\.unchanged"/);
+  assert.match(models, /WindowFrameCaptureResult/);
+  assert.match(captureInterface, /CaptureFrameResultAsync/);
+  assert.match(captureInterface, /ForgetWindow/);
+
+  // The comparison has to happen on raw pixels, because the PNG encode is the cost being avoided.
+  assert.match(capture, /LockBits/);
+  assert.match(differ, /SequenceEqual/);
+  assert.match(capture, /WindowFrameCaptureResult\.Unchanged/);
+
+  // A retained full-window buffer per streamed window must be released, or a closed window leaks it for
+  // the rest of the agent process's lifetime.
+  assert.match(capture, /previousPixelsByWindowId\.Remove/);
+  assert.match(server, /frameStreamer\.ForgetWindow/);
+
+  assert.match(streamer, /onUnchanged/);
+  assert.match(cadence, /IsIdle/);
+  assert.match(session, /SerializeUnchangedFrame/);
+  assert.match(server, /SerializeUnchangedFrame/);
+});
+
+test("windows agent accepts committed Unicode text input", async () => {
+  const messageTypes = await readFile(resolve(agentRoot, "src/VeilAgent/MessageTypes.cs"), "utf8");
+  const desktopInterface = await readFile(resolve(agentRoot, "src/VeilAgent/IWindowsDesktop.cs"), "utf8");
+  const desktop = await readFile(resolve(agentRoot, "src/VeilAgent/WindowsDesktop.cs"), "utf8");
+  const models = await readFile(resolve(agentRoot, "src/VeilAgent/WindowModels.cs"), "utf8");
+  const session = await readFile(resolve(agentRoot, "src/VeilAgent/AgentSession.cs"), "utf8");
+
+  assert.match(messageTypes, /InputText\s*=\s*"input\.text"/);
+  assert.match(models, /WindowTextInput/);
+  assert.match(desktopInterface, /SendTextInputAsync\(WindowTextInput input,\s*CancellationToken cancellationToken\)/);
+
+  // WM_CHAR is what makes non-virtual-key characters possible at all; WM_KEYDOWN cannot express a
+  // Hangul syllable.
+  assert.match(desktop, /WM_CHAR/);
+  assert.match(desktop, /MaxTextInputUtf16Length/);
+  assert.match(session, /MessageTypes\.InputText/);
+  assert.match(session, /HandleTextInputAsync/);
+  assert.match(session, /text_too_long/);
+  assert.match(session, /input_text_failed/);
 });
 
 test("windows agent foregrounds the HWND before forwarding host input", async () => {

@@ -1,0 +1,19 @@
+{
+  "type": "shared.folder.response",
+  "requestId": "req_shared_folder",
+  "protocolVersion": 1,
+  "sharedFolder": {
+    "isSupported": true,
+    "shareName": "VeilShared",
+    "guestDirectoryPath": "C:\\VeilShared",
+    "directoryExists": true,
+    "isShared": false,
+    "isWritable": false,
+    "serverListening": true,
+    "requiresElevation": true,
+    "requiresCredentials": false,
+    "shareCommand": "New-SmbShare -Name VeilShared -Path C:\\VeilShared -FullAccess $env:USERNAME",
+    "recommendedAction": "create-share-elevated",
+    "message": "The agent created C:\\VeilShared but cannot publish an SMB share without administrator rights."
+  }
+}

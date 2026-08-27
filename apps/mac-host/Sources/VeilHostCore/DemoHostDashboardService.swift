@@ -65,6 +65,10 @@ public struct FallbackHostDashboardService: HostDashboardService, Sendable {
         try await primary.sendKeyInput(input)
     }
 
+    public func sendTextInput(_ input: InputTextEvent) async throws {
+        try await primary.sendTextInput(input)
+    }
+
     public func sendClipboardText(_ clipboard: ClipboardTextSet) async throws {
         try await primary.sendClipboardText(clipboard)
     }
@@ -170,6 +174,8 @@ public struct DemoHostDashboardService: HostDashboardService, Sendable {
     public func sendMouseInput(_ input: InputMouseEvent) async throws {}
 
     public func sendKeyInput(_ input: InputKeyEvent) async throws {}
+
+    public func sendTextInput(_ input: InputTextEvent) async throws {}
 
     public func sendClipboardText(_ clipboard: ClipboardTextSet) async throws {}
 

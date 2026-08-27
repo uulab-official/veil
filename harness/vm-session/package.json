@@ -1,0 +1,13 @@
+{
+  "name": "@veil/vm-session-harness",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test",
+    "validate": "node src/validate-vm-session.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

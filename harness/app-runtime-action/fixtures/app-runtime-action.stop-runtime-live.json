@@ -12,7 +12,9 @@
     "canQuietRuntime": true,
     "willQuietAutomatically": true,
     "automaticQuietDelaySeconds": 8,
-    "recommendedAction": "stop-or-suspend-runtime",
+    "quietMode": "stop",
+    "canSuspendSession": false,
+    "recommendedAction": "stop-runtime",
     "recommendedStopCommand": "veil-vmctl app-runtime-action --json --action stop-runtime",
     "reason": "All Windows app windows are closed and the live agent is connected."
   },
@@ -124,7 +126,9 @@
       "canQuietRuntime": true,
       "willQuietAutomatically": true,
       "automaticQuietDelaySeconds": 8,
-      "recommendedAction": "stop-or-suspend-runtime",
+      "quietMode": "stop",
+      "canSuspendSession": false,
+      "recommendedAction": "stop-runtime",
       "recommendedStopCommand": "veil-vmctl app-runtime-action --json --action stop-runtime",
       "reason": "All Windows app windows are closed and the live agent is connected."
     },

@@ -17,6 +17,11 @@ public sealed class WebSocketAgentServer
     private readonly WindowDiscoveryStreamer windowDiscoveryStreamer;
     private readonly WindowsNotificationStreamer notificationStreamer;
     private readonly ConcurrentDictionary<Guid, WebSocket> clients = new();
+    /// <summary>
+    /// Connections that asked for the binary frame channel. Kept separate from <see cref="clients"/> so
+    /// frames never share a connection with control messages and input.
+    /// </summary>
+    private readonly ConcurrentDictionary<Guid, WebSocket> frameChannelClients = new();
     private readonly ConcurrentDictionary<string, CancellationTokenSource> frameStreamsByWindowId = new();
     private CancellationTokenSource? clipboardStreamCancellation;
     private CancellationTokenSource? windowDiscoveryStreamCancellation;
@@ -94,13 +99,21 @@ public sealed class WebSocketAgentServer
         using (client)
         {
             var stream = client.GetStream();
-            using var socket = await AcceptWebSocketAsync(stream, cancellationToken);
-            if (socket is null)
+            var accepted = await AcceptWebSocketAsync(stream, cancellationToken);
+            if (accepted is null)
             {
                 return;
             }
 
+            using var socket = accepted.Socket;
             var clientId = Guid.NewGuid();
+
+            if (accepted.IsFrameChannel)
+            {
+                await ServeFrameChannelAsync(clientId, socket, cancellationToken);
+                return;
+            }
+
             clients[clientId] = socket;
 
             try
@@ -150,7 +163,33 @@ public sealed class WebSocketAgentServer
         }
     }
 
-    private static async Task<WebSocket?> AcceptWebSocketAsync(NetworkStream stream, CancellationToken cancellationToken)
+    /// <summary>
+    /// Request path a client uses to ask for the binary frame channel.
+    /// </summary>
+    /// <remarks>
+    /// Routing by path rather than changing behavior for every connection is what keeps this additive: a
+    /// host that never opens this path keeps receiving JSON frames exactly as before.
+    /// </remarks>
+    public const string FrameChannelPath = "/frames";
+
+    internal static string RequestPath(string requestLine)
+    {
+        var parts = requestLine.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length < 2)
+        {
+            return "/";
+        }
+
+        var target = parts[1];
+        var queryIndex = target.IndexOf('?');
+        var path = queryIndex >= 0 ? target[..queryIndex] : target;
+        return path.Length == 0 ? "/" : path;
+    }
+
+    internal static bool IsFrameChannelPath(string path) =>
+        string.Equals(path.TrimEnd('/'), FrameChannelPath.TrimEnd('/'), StringComparison.OrdinalIgnoreCase);
+
+    private static async Task<AcceptedWebSocket?> AcceptWebSocketAsync(NetworkStream stream, CancellationToken cancellationToken)
     {
         var requestText = await ReadHttpUpgradeRequestAsync(stream, cancellationToken);
         if (requestText is null)
@@ -164,6 +203,8 @@ public sealed class WebSocketAgentServer
             await WriteHttpResponseAsync(stream, "400 Bad Request", "Expected a WebSocket GET request.", cancellationToken);
             return null;
         }
+
+        var requestPath = RequestPath(lines[0]);
 
         var headers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (var line in lines.Skip(1))
@@ -195,8 +236,16 @@ public sealed class WebSocketAgentServer
             "\r\n";
         var responseBytes = Encoding.ASCII.GetBytes(response);
         await stream.WriteAsync(responseBytes, cancellationToken);
-        return WebSocket.CreateFromStream(stream, isServer: true, subProtocol: null, keepAliveInterval: TimeSpan.FromSeconds(30));
+        var socket = WebSocket.CreateFromStream(
+            stream,
+            isServer: true,
+            subProtocol: null,
+            keepAliveInterval: TimeSpan.FromSeconds(30)
+        );
+        return new AcceptedWebSocket(socket, IsFrameChannelPath(requestPath));
     }
+
+    private sealed record AcceptedWebSocket(WebSocket Socket, bool IsFrameChannel);
 
     private static async Task<string?> ReadHttpUpgradeRequestAsync(NetworkStream stream, CancellationToken cancellationToken)
     {
@@ -347,6 +396,108 @@ public sealed class WebSocketAgentServer
         }, streamCancellation.Token);
     }
 
+    /// <summary>
+    /// Holds a frame-channel connection open and lets the frame broadcaster write binary frames to it.
+    /// </summary>
+    /// <remarks>
+    /// The frame channel is send-only. It reads solely to observe a close, so a client cannot use it to
+    /// issue requests, and frames on it cannot be mistaken for replies to anything.
+    /// </remarks>
+    private async Task ServeFrameChannelAsync(Guid clientId, WebSocket socket, CancellationToken cancellationToken)
+    {
+        frameChannelClients[clientId] = socket;
+        try
+        {
+            var buffer = new byte[256];
+            while (socket.State == WebSocketState.Open && !cancellationToken.IsCancellationRequested)
+            {
+                var result = await socket.ReceiveAsync(new ArraySegment<byte>(buffer), cancellationToken);
+                if (result.MessageType == WebSocketMessageType.Close)
+                {
+                    break;
+                }
+            }
+        }
+        catch (Exception error) when (error is not OperationCanceledException)
+        {
+            Console.Error.WriteLine(
+                $"WebSocketAgentServer: frame channel client disconnected. {error.GetType().Name}: {error.Message}"
+            );
+        }
+        finally
+        {
+            frameChannelClients.TryRemove(clientId, out _);
+        }
+    }
+
+    /// <summary>
+    /// Sends one captured frame to whichever channel each client subscribed on.
+    /// </summary>
+    /// <remarks>
+    /// Frame-channel clients get raw bytes, which is the whole point: no base64 inflation, no JSON parse
+    /// on the host, and no large frame sitting in front of an input message on the control connection.
+    /// Control-channel clients keep receiving the JSON form so a host that does not open the frame
+    /// channel is unaffected.
+    ///
+    /// The JSON form is built only when a control-channel client actually exists, so the common case of a
+    /// host using the frame channel pays nothing for the legacy path.
+    /// </remarks>
+    private async Task BroadcastFrameAsync(WindowFrameCaptureResult result, CancellationToken cancellationToken)
+    {
+        if (!frameChannelClients.IsEmpty && result.Tile is not null)
+        {
+            byte[]? message = null;
+            try
+            {
+                message = FrameChannelCodec.Encode(result.Tile);
+            }
+            catch (Exception error)
+            {
+                // Encoding is pure and should not fail, but a silent drop here would look like a frozen
+                // window with no trace of why.
+                Console.Error.WriteLine(
+                    $"WebSocketAgentServer: failed to encode frame for the binary channel. {error.GetType().Name}: {error.Message}"
+                );
+            }
+
+            if (message is not null)
+            {
+                foreach (var pair in frameChannelClients)
+                {
+                    if (pair.Value.State != WebSocketState.Open)
+                    {
+                        frameChannelClients.TryRemove(pair.Key, out _);
+                        continue;
+                    }
+
+                    try
+                    {
+                        await pair.Value.SendAsync(
+                            new ArraySegment<byte>(message),
+                            WebSocketMessageType.Binary,
+                            endOfMessage: true,
+                            cancellationToken
+                        );
+                    }
+                    catch (Exception error) when (error is not OperationCanceledException)
+                    {
+                        frameChannelClients.TryRemove(pair.Key, out _);
+                        Console.Error.WriteLine(
+                            $"WebSocketAgentServer: dropping frame channel client after a send failure. {error.GetType().Name}: {error.Message}"
+                        );
+                    }
+                }
+            }
+        }
+
+        // Legacy JSON subscribers always receive a self-contained full-surface frame. Tiles are only
+        // meaningful to a client that composites them, and that client is on the binary channel.
+        if (!clients.IsEmpty && result.Frame is not null)
+        {
+            await BroadcastTextAsync(AgentReplies.SerializeFrame(result.Frame), cancellationToken);
+        }
+    }
+
     private async Task BroadcastTextAsync(string text, CancellationToken cancellationToken)
     {
         foreach (var pair in clients)
@@ -370,6 +521,10 @@ public sealed class WebSocketAgentServer
             existing.Dispose();
         }
 
+        // A restarted stream must begin with a full frame. Comparing against the previous session's
+        // pixels could suppress the very first frame the host is waiting for.
+        frameStreamer.ForgetWindow(window.WindowId);
+
         var streamCancellation = CancellationTokenSource.CreateLinkedTokenSource(serverCancellationToken);
         frameStreamsByWindowId[window.WindowId] = streamCancellation;
 
@@ -380,8 +535,18 @@ public sealed class WebSocketAgentServer
                 await frameStreamer.StreamAsync(
                     window,
                     firstSequence,
-                    async (frame, token) => await BroadcastTextAsync(AgentReplies.SerializeFrame(frame), token),
-                    streamCancellation.Token
+                    async (result, token) => await BroadcastFrameAsync(result, token),
+                    streamCancellation.Token,
+                    // Liveness only. Without this the host would read an idle window as broken capture
+                    // and escalate the stream, which is what previously forced a full-window PNG encode
+                    // several times a second for a window nobody was touching.
+                    async (sequence, token) => await BroadcastTextAsync(
+                        AgentReplies.SerializeUnchangedFrame(window.WindowId, sequence),
+                        token
+                    ),
+                    // Skips the full-surface encode entirely in the normal case, where the only subscriber
+                    // is on the binary frame channel.
+                    () => !clients.IsEmpty
                 );
             }
             catch (OperationCanceledException)
@@ -397,6 +562,9 @@ public sealed class WebSocketAgentServer
             finally
             {
                 frameStreamsByWindowId.TryRemove(window.WindowId, out _);
+                // Covers every exit path -- unsubscribe, cancellation, and unexpected failure -- so the
+                // retained full-window comparison buffer cannot outlive the stream that created it.
+                frameStreamer.ForgetWindow(window.WindowId);
                 streamCancellation.Dispose();
             }
         }, streamCancellation.Token);
@@ -409,6 +577,10 @@ public sealed class WebSocketAgentServer
             existing.Cancel();
             existing.Dispose();
         }
+
+        // Releases the retained comparison buffer. Without this a closed window's full-size pixel buffer
+        // would be held for the rest of the agent process's lifetime.
+        frameStreamer.ForgetWindow(windowId);
     }
 
     private static async Task<string?> ReceiveTextAsync(WebSocket socket, CancellationToken cancellationToken)

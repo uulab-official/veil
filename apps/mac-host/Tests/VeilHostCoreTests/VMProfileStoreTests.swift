@@ -862,7 +862,14 @@ struct VMProfileStoreTests {
         profile.windowsInstalled = true
         try await store.save(profile)
 
-        let service = LocalVMRuntimeService(profileStore: store)
+        let service = LocalVMRuntimeService(
+            profileStore: store,
+            providerProbe: VMRuntimeProviderProbe(
+                environment: ["VEIL_QEMU_SYSTEM_AARCH64": "/opt/veil/bin/qemu-system-aarch64"],
+                fileExists: { path in path == "/opt/veil/bin/qemu-system-aarch64" },
+                executableVersion: { _ in "qemu-system-aarch64 version 8.2.0" }
+            )
+        )
         let snapshot = try await service.loadSnapshot()
 
         #expect(snapshot.windowsInstalled)
@@ -967,7 +974,14 @@ struct VMProfileStoreTests {
         )
         try await store.save(profile)
 
-        let service = LocalVMRuntimeService(profileStore: store)
+        let service = LocalVMRuntimeService(
+            profileStore: store,
+            providerProbe: VMRuntimeProviderProbe(
+                environment: ["VEIL_QEMU_SYSTEM_AARCH64": "/opt/veil/bin/qemu-system-aarch64"],
+                fileExists: { path in path == "/opt/veil/bin/qemu-system-aarch64" },
+                executableVersion: { _ in "qemu-system-aarch64 version 8.2.0" }
+            )
+        )
         let snapshot = try await service.loadSnapshot()
         let provider = try #require(snapshot.runtimeProvider)
 
@@ -1123,7 +1137,18 @@ struct VMProfileStoreTests {
         #expect(configuration.display.scalingMode == "aspect-fit host window")
         #expect(configuration.display.dynamicResolution == "fixed guest framebuffer until guest agent display bridge")
         #expect(configuration.display.retinaScaling == "host-rendered Retina interpolation")
+        // The staging path keeps its old meaning: it holds VeilAutoInstall.iso and is not shared with
+        // the guest. The live share is reported separately in the same section.
         #expect(configuration.sharing.sharedFolderPath == sharedFolderURL.path)
+        #expect(devices.storageDevices.contains { $0.role == "auto-install" })
+        // Resolved through the same helper the boot plan uses, so the summary can never advertise a
+        // shared folder the plan did not wire.
+        #expect(configuration.sharing.transport == LocalVMRuntimeService.selectedSharedFolderTransport())
+        #expect(configuration.sharing.isLiveSharingEnabled == configuration.sharing.transport.isEnabled)
+        #expect(configuration.sharing.hostMountURL == configuration.sharing.transport.hostMountURL)
+        #expect(configuration.sharing.guestDirectoryPath == configuration.sharing.transport.expectedGuestDirectoryPath)
+        #expect(configuration.sharing.overrideEnvironmentVariable == "VEIL_QEMU_SHARED_FOLDER")
+        #expect(devices.sharedFolderDevice == LocalVMRuntimeService.sharedFolderDeviceDescription(configuration.sharing.transport))
         #expect(configuration.storage.devices.map(\.role) == ["installer", "auto-install", "drivers", "system-disk"])
         #expect(configuration.network.mode == "NAT")
         #expect(configuration.input.devices == ["USB keyboard", "USB screen-coordinate pointer"])
@@ -2145,16 +2170,19 @@ struct VMProfileStoreTests {
         try await store.save(profile)
         final class TerminationCapture: @unchecked Sendable {
             var pids: [Int32] = []
+            var isRunning = false
         }
         let terminationCapture = TerminationCapture()
+        terminationCapture.isRunning = true
         let bootRunner = FakeVMRuntimeBooter(startState: .running, currentState: nil)
         let service = LocalVMRuntimeService(
             profileStore: store,
             bootRunner: bootRunner,
             qemuLaunchRecordStore: JSONQEMULaunchRecordStore(directory: qemuLaunchDirectory),
-            qemuLaunchProcessIsRunning: { pid in pid == 4321 },
+            qemuLaunchProcessIsRunning: { pid in terminationCapture.isRunning && pid == 4321 },
             qemuLaunchProcessTerminator: { pid in
                 terminationCapture.pids.append(pid)
+                terminationCapture.isRunning = false
                 return true
             }
         )

@@ -74,14 +74,34 @@ public struct URLSessionWebSocketTransport: HostTransport, HostEventSource {
             return false
         }
 
+        // Every guest-initiated event that can arrive on a request/response connection has to be
+        // listed here, otherwise it gets consumed as the reply to the in-flight request and the
+        // caller decodes the wrong message. `notification.listener.response` is deliberately absent
+        // because it *is* a reply.
         return type == MessageType.windowFrame.rawValue
             || type == MessageType.windowUpdated.rawValue
             || type == MessageType.windowClosed.rawValue
             || type == MessageType.clipboardTextSet.rawValue
+            || type == MessageType.notificationReceived.rawValue
+            || type == MessageType.windowFrameUnchanged.rawValue
     }
 
+    /// How many undelivered control messages the event stream will hold.
+    ///
+    /// The default policy is `.unbounded`. Control messages are low volume in normal use — window lifecycle,
+    /// clipboard, notifications — so this bound is never reached by a working guest. It exists so a guest
+    /// flooding the connection cannot grow host memory without limit.
+    ///
+    /// Dropping is genuinely lossy here, unlike frames: a discarded `window.closed` leaves a mirrored window
+    /// the guest has already forgotten. There is no policy that avoids that under a flood, so the choice is
+    /// which failure to take, and losing events beats exhausting memory.
+    public static let eventBufferMessageCount = 1_024
+
     public func eventMessages() -> AsyncThrowingStream<Data, any Error> {
-        AsyncThrowingStream { continuation in
+        AsyncThrowingStream(
+            Data.self,
+            bufferingPolicy: .bufferingNewest(Self.eventBufferMessageCount)
+        ) { continuation in
             let task = session.webSocketTask(with: url)
             task.resume()
 

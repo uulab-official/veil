@@ -1,0 +1,7 @@
+{
+  "type": "shared.folder.request",
+  "requestId": "req_shared_folder",
+  "protocolVersion": 1,
+  "shareName": "VeilShared",
+  "guestDirectoryPath": "C:\\VeilShared"
+}

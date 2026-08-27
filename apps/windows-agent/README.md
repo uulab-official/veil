@@ -31,7 +31,7 @@ By default the executable listens inside the Windows guest at:
 ws://0.0.0.0:18444/
 ```
 
-The macOS host still connects to `ws://127.0.0.1:18444/`; QEMU maps that loopback endpoint to the guest listener with `hostfwd=tcp::18444-:18444`.
+The macOS host still connects to `ws://127.0.0.1:18444/`; QEMU maps that loopback endpoint to the guest listener with `hostfwd=tcp:127.0.0.1:18444-:18444`. The host address is explicit: leaving it empty would bind every interface and publish this control channel — app launch, synthesized input, clipboard read and write, none of it authenticated — to the local network.
 
 The agent also takes a named mutex per configured port, so duplicate launches
 for the same forwarded WebSocket endpoint exit instead of racing for the

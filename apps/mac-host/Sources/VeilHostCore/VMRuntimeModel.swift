@@ -10,15 +10,50 @@ public protocol VMRuntimeService: Sendable {
     func markGuestAgentConnected(agentVersion: String) async throws -> VMRuntimeSnapshot
     func start() async throws -> VMRuntimeSnapshot
     func stop() async throws -> VMRuntimeSnapshot
+    func suspend() async throws -> VMRuntimeSnapshot
+    func resume() async throws -> VMRuntimeSnapshot
+    func suspendedSession() async -> VMSuspensionRecord?
     func sendConsolePointerTap(normalizedX: Double, normalizedY: Double) async throws -> QEMUPointerTapRecord
     func sendConsoleKey(_ key: String) async throws -> QEMUKeySendRecord
     func exportDiagnostics(to directory: URL) async throws -> URL
+}
+
+/// Defaults so a runtime service that predates session persistence -- including test doubles -- keeps
+/// compiling and reports the honest answer instead of pretending to suspend.
+public extension VMRuntimeService {
+    func suspend() async throws -> VMRuntimeSnapshot {
+        throw VMRuntimeError.suspendNotSupported
+    }
+
+    func resume() async throws -> VMRuntimeSnapshot {
+        throw VMRuntimeError.suspendNotSupported
+    }
+
+    func suspendedSession() async -> VMSuspensionRecord? {
+        nil
+    }
 }
 
 public protocol VMRuntimeBooting: Sendable {
     func runtimeState() async -> VMRuntimeState?
     func start(profile: VMProfile) async throws -> VMRuntimeState
     func stop() async throws -> VMRuntimeState
+    /// Pauses the guest and persists its memory state so a later `resume` continues the same Windows
+    /// session instead of rebooting it.
+    func suspend(profile: VMProfile) async throws -> VMRuntimeState
+    func resume(profile: VMProfile) async throws -> VMRuntimeState
+}
+
+/// Providers that cannot persist a guest session keep the honest default: a clear "not supported"
+/// error instead of silently falling back to stop/start, which would lose the user's open apps.
+public extension VMRuntimeBooting {
+    func suspend(profile: VMProfile) async throws -> VMRuntimeState {
+        throw VMRuntimeError.suspendNotSupported
+    }
+
+    func resume(profile: VMProfile) async throws -> VMRuntimeState {
+        throw VMRuntimeError.suspendNotSupported
+    }
 }
 
 public struct UnavailableVMRuntimeBooter: VMRuntimeBooting {
@@ -242,6 +277,9 @@ public struct VMRuntimeSnapshot: Codable, Equatable, Sendable {
     public var latestConsoleScreenshotPath: String?
     public var latestConsoleLaunch: VMConsoleLaunchEvidence?
     public var runningQEMUProcess: QEMURunningProcess?
+    /// Present only when a saved memory-state file exists on disk, so a status surface can offer
+    /// resume without first probing the filesystem itself.
+    public var suspendedSession: VMSuspensionRecord?
     public var runtimeProvider: VMRuntimeProviderSummary?
     public var runtimeProviders: [VMRuntimeProviderSummary]
     public var installationSteps: [VMInstallationStep]
@@ -272,6 +310,7 @@ public struct VMRuntimeSnapshot: Codable, Equatable, Sendable {
         latestConsoleScreenshotPath: String? = nil,
         latestConsoleLaunch: VMConsoleLaunchEvidence? = nil,
         runningQEMUProcess: QEMURunningProcess? = nil,
+        suspendedSession: VMSuspensionRecord? = nil,
         runtimeProvider: VMRuntimeProviderSummary? = nil,
         runtimeProviders: [VMRuntimeProviderSummary] = [],
         installationSteps: [VMInstallationStep] = [],
@@ -301,6 +340,7 @@ public struct VMRuntimeSnapshot: Codable, Equatable, Sendable {
         self.latestConsoleScreenshotPath = latestConsoleScreenshotPath
         self.latestConsoleLaunch = latestConsoleLaunch
         self.runningQEMUProcess = runningQEMUProcess
+        self.suspendedSession = suspendedSession
         self.runtimeProvider = runtimeProvider
         self.runtimeProviders = runtimeProviders
         self.installationSteps = installationSteps
@@ -905,6 +945,8 @@ public struct VMRuntimeDeviceSummary: Codable, Equatable, Sendable {
     public var graphics: VMRuntimeGraphicsSummary
     public var inputDevices: [String]
     public var entropyDevice: String
+    public var audioDevice: String
+    public var sharedFolderDevice: String
 
     public init(
         platform: String,
@@ -913,7 +955,9 @@ public struct VMRuntimeDeviceSummary: Codable, Equatable, Sendable {
         networkMode: String,
         graphics: VMRuntimeGraphicsSummary,
         inputDevices: [String],
-        entropyDevice: String
+        entropyDevice: String,
+        audioDevice: String = VMRuntimeDeviceDefaults.audioDeviceDisabled,
+        sharedFolderDevice: String = VMRuntimeDeviceDefaults.sharedFolderDisabled
     ) {
         self.platform = platform
         self.bootLoader = bootLoader
@@ -922,6 +966,8 @@ public struct VMRuntimeDeviceSummary: Codable, Equatable, Sendable {
         self.graphics = graphics
         self.inputDevices = inputDevices
         self.entropyDevice = entropyDevice
+        self.audioDevice = audioDevice
+        self.sharedFolderDevice = sharedFolderDevice
     }
 }
 
@@ -966,11 +1012,41 @@ public struct VMRuntimeDisplayConfigurationSummary: Codable, Equatable, Sendable
     }
 }
 
+/// Host-guest file sharing.
+///
+/// Two different things live here and they are easy to confuse, so both are named explicitly:
+///
+/// - `sharedFolderPath` is a **macOS staging directory**. Despite the name it has never been shared
+///   with the guest; its real job is holding `VeilAutoInstall.iso`. The name predates live sharing and
+///   is kept because the boot plan derives the unattended-install ISO path from it.
+/// - Everything else describes the **live shared folder**, which is served by Windows and mounted on
+///   the Mac.
 public struct VMRuntimeSharingConfigurationSummary: Codable, Equatable, Sendable {
+    /// macOS staging directory for install media. Not shared with the guest.
     public var sharedFolderPath: String
+    public var isLiveSharingEnabled: Bool
+    public var transport: QEMUWindowsSharedFolderTransport
+    public var transportSummary: String
+    public var shareName: String?
+    /// Folder inside Windows that holds the shared files.
+    public var guestDirectoryPath: String?
+    /// URL that mounts the share on this Mac.
+    public var hostMountURL: String?
+    public var overrideEnvironmentVariable: String
 
-    public init(sharedFolderPath: String) {
+    public init(
+        sharedFolderPath: String,
+        transport: QEMUWindowsSharedFolderTransport = .guestSMB,
+        overrideEnvironmentVariable: String = QEMUWindowsSharedFolderTransport.environmentVariableName
+    ) {
         self.sharedFolderPath = sharedFolderPath
+        self.isLiveSharingEnabled = transport.isEnabled
+        self.transport = transport
+        self.transportSummary = transport.summary
+        self.shareName = transport.isEnabled ? QEMUWindowsSharedFolderTransport.shareName : nil
+        self.guestDirectoryPath = transport.expectedGuestDirectoryPath
+        self.hostMountURL = transport.hostMountURL
+        self.overrideEnvironmentVariable = overrideEnvironmentVariable
     }
 }
 
@@ -998,6 +1074,30 @@ public struct VMRuntimeInputConfigurationSummary: Codable, Equatable, Sendable {
     }
 }
 
+/// Guest sound configuration.
+///
+/// Reported as its own section rather than folded into `input` so a status surface can say plainly
+/// whether Windows has a sound device at all. Veil shipped with no audio device for a long time and
+/// nothing in the configuration summary made that visible.
+public struct VMRuntimeAudioConfigurationSummary: Codable, Equatable, Sendable {
+    public var isEnabled: Bool
+    public var device: String
+    public var hostBackend: String?
+    public var overrideEnvironmentVariable: String
+
+    public init(
+        isEnabled: Bool,
+        device: String,
+        hostBackend: String? = nil,
+        overrideEnvironmentVariable: String = QEMUWindowsAudioDevice.environmentVariableName
+    ) {
+        self.isEnabled = isEnabled
+        self.device = device
+        self.hostBackend = hostBackend
+        self.overrideEnvironmentVariable = overrideEnvironmentVariable
+    }
+}
+
 public struct VMRuntimeGuestAgentConfigurationSummary: Codable, Equatable, Sendable {
     public var isInstalled: Bool
     public var version: String?
@@ -1015,6 +1115,7 @@ public struct VMRuntimeConfigurationSummary: Codable, Equatable, Sendable {
     public var storage: VMRuntimeStorageConfigurationSummary
     public var network: VMRuntimeNetworkConfigurationSummary
     public var input: VMRuntimeInputConfigurationSummary
+    public var audio: VMRuntimeAudioConfigurationSummary
     public var guestAgent: VMRuntimeGuestAgentConfigurationSummary
 
     public init(
@@ -1024,6 +1125,7 @@ public struct VMRuntimeConfigurationSummary: Codable, Equatable, Sendable {
         storage: VMRuntimeStorageConfigurationSummary,
         network: VMRuntimeNetworkConfigurationSummary,
         input: VMRuntimeInputConfigurationSummary,
+        audio: VMRuntimeAudioConfigurationSummary,
         guestAgent: VMRuntimeGuestAgentConfigurationSummary
     ) {
         self.system = system
@@ -1032,6 +1134,7 @@ public struct VMRuntimeConfigurationSummary: Codable, Equatable, Sendable {
         self.storage = storage
         self.network = network
         self.input = input
+        self.audio = audio
         self.guestAgent = guestAgent
     }
 }
@@ -1044,6 +1147,12 @@ public enum VMRuntimeDeviceDefaults {
     public static let dynamicResolutionPolicy = "fixed guest framebuffer until guest agent display bridge"
     public static let retinaScalingPolicy = "host-rendered Retina interpolation"
     public static let liveDisplayValidationCommand = "veil-vmctl qemu-display-smoke --json"
+    public static let audioDeviceDisabled = "none"
+    public static let intelHDADescription = "Intel HD Audio duplex (playback and capture)"
+    public static let usbAudioDescription = "USB Audio Class duplex (playback and capture)"
+    public static let sharedFolderDisabled = "none"
+    public static let guestSMBSharedFolderDescription = "Guest-served SMB share over a loopback port forward"
+    public static let hostSMBSharedFolderDescription = "Host-served SMB share reached through the usermode gateway"
 }
 
 public enum VMInstallationStepState: String, Codable, Equatable, Sendable {
@@ -1260,6 +1369,7 @@ public enum VMRuntimeError: Error, LocalizedError, Equatable, Sendable {
     case qemuNotReady(String)
     case qemuDisplayPortUnavailable
     case qemuAlreadyRunning(pid: Int32)
+    case suspendNotSupported
 
     public var errorDescription: String? {
         switch self {
@@ -1277,6 +1387,8 @@ public enum VMRuntimeError: Error, LocalizedError, Equatable, Sendable {
             "No loopback VNC display port is available. Close stale QEMU/VNC listeners and try again."
         case let .qemuAlreadyRunning(pid):
             "QEMU is already running as PID \(pid) with the configured Windows disk attached. Shut down that VM before starting another one."
+        case .suspendNotSupported:
+            "The active local VM runtime provider cannot suspend a Windows session yet. Stop the VM instead."
         }
     }
 }
@@ -1479,6 +1591,22 @@ public final class VMRuntimeModel {
         return snapshot.state == .running || snapshot.state == .suspended
     }
 
+    /// Suspend is offered only for a running machine. A `.suspended` VM is already persisted, and a
+    /// `.starting` one has no consistent guest state to stream yet.
+    public var canSuspend: Bool {
+        snapshot?.state == .running
+    }
+
+    /// Resume is offered only when a saved memory-state file is actually on disk, so the button can
+    /// never promise a session Veil cannot restore.
+    public var canResume: Bool {
+        guard let snapshot else {
+            return false
+        }
+
+        return snapshot.state == .suspended && snapshot.suspendedSession != nil
+    }
+
     public var capabilitySummary: String {
         guard let snapshot else {
             return "VM runtime capabilities not loaded"
@@ -1574,6 +1702,30 @@ public final class VMRuntimeModel {
         }
     }
 
+    /// Stores the user-selected installer and prepares every local resource needed
+    /// for the first Windows boot. The caller starts the VM only when this returns
+    /// true, so invalid media or missing host prerequisites remain visible instead
+    /// of launching a VM that cannot reach Windows Setup.
+    @discardableResult
+    public func prepareWindowsInstallation(
+        installerMediaPath: String,
+        driverMediaPath: String?,
+        virtualDiskPath: String?
+    ) async -> Bool {
+        await updateProfilePaths(
+            installerMediaPath: installerMediaPath,
+            driverMediaPath: driverMediaPath,
+            virtualDiskPath: virtualDiskPath
+        )
+
+        guard phase == .loaded else {
+            return false
+        }
+
+        await prepareDefaultVM()
+        return phase == .loaded && canStart
+    }
+
     public func markGuestAgentConnected(agentVersion: String) async {
         phase = .loading
         errorMessage = nil
@@ -1638,6 +1790,48 @@ public final class VMRuntimeModel {
         }
     }
 
+    public func suspend() async {
+        phase = .loading
+        errorMessage = nil
+
+        do {
+            snapshot = try await service.suspend()
+            phase = .loaded
+        } catch {
+            // The guest is left paused when a memory-state save fails partway, so the surfaced state
+            // must not claim the machine is stopped.
+            errorMessage = userMessage(for: error)
+            phase = .failed
+        }
+    }
+
+    public func resume() async {
+        phase = .loading
+        errorMessage = nil
+
+        if canResume, var resumingSnapshot = snapshot {
+            resumingSnapshot.state = .starting
+            resumingSnapshot.detail = "Resuming the suspended Windows session."
+            snapshot = resumingSnapshot
+        }
+
+        do {
+            snapshot = try await service.resume()
+            phase = .loaded
+        } catch {
+            let message = userMessage(for: error)
+            // Resume failures keep the saved state file, so report the VM as still suspended rather
+            // than failed -- the user can retry or stop it.
+            if var failedSnapshot = snapshot {
+                failedSnapshot.state = failedSnapshot.suspendedSession == nil ? .failed : .suspended
+                failedSnapshot.detail = message
+                snapshot = failedSnapshot
+            }
+            errorMessage = message
+            phase = .failed
+        }
+    }
+
     public func sendConsolePointerTap(normalizedX: Double, normalizedY: Double) async {
         do {
             _ = try await service.sendConsolePointerTap(
@@ -1690,6 +1884,7 @@ public struct LocalVMRuntimeService: VMRuntimeService {
     private let bootRunner: any VMRuntimeBooting
     private let bootReportStore: any VMRuntimeBootReportStore
     private let qemuLaunchRecordStore: any QEMULaunchRecordStore
+    private let suspensionRecordStore: any VMSuspensionRecordStore
     private let providerProbe: VMRuntimeProviderProbe
     private let resourcePlan: VMResourcePlan?
     private let diagnosticDate: @Sendable () -> Date
@@ -1707,6 +1902,7 @@ public struct LocalVMRuntimeService: VMRuntimeService {
         bootRunner: any VMRuntimeBooting = UnavailableVMRuntimeBooter(),
         bootReportStore: any VMRuntimeBootReportStore = JSONVMRuntimeBootReportStore(),
         qemuLaunchRecordStore: any QEMULaunchRecordStore = JSONQEMULaunchRecordStore(),
+        suspensionRecordStore: any VMSuspensionRecordStore = JSONVMSuspensionRecordStore(),
         providerProbe: VMRuntimeProviderProbe = VMRuntimeProviderProbe(),
         resourcePlan: VMResourcePlan? = nil,
         diagnosticDate: @escaping @Sendable () -> Date = Date.init,
@@ -1723,6 +1919,7 @@ public struct LocalVMRuntimeService: VMRuntimeService {
         self.bootRunner = bootRunner
         self.bootReportStore = bootReportStore
         self.qemuLaunchRecordStore = qemuLaunchRecordStore
+        self.suspensionRecordStore = suspensionRecordStore
         self.providerProbe = providerProbe
         self.resourcePlan = resourcePlan
         self.diagnosticDate = diagnosticDate
@@ -1784,7 +1981,21 @@ public struct LocalVMRuntimeService: VMRuntimeService {
                 profile: profile,
                 processIsRunning: qemuLaunchProcessIsRunning
             )
-            let inferredRuntimeState = runtimeState
+            // A machine that is actually executing always wins over stored evidence. Only when
+            // nothing is running does a saved memory-state file make the VM `.suspended` rather than
+            // `.stopped` -- otherwise a stale suspension record would hide a live Windows session.
+            let orphanRuntimeState: VMRuntimeState? = orphanQEMUProcess == nil ? nil : .running
+            let liveRuntimeState: VMRuntimeState? = [runtimeState, recordedQEMUState, orphanRuntimeState]
+                .compactMap { $0 }
+                .first { $0 == .running || $0 == .starting }
+            let suspendedSessionRecord = await suspendedSession()
+            var suspendedRuntimeState: VMRuntimeState?
+            if liveRuntimeState == nil, suspendedSessionRecord != nil {
+                suspendedRuntimeState = .suspended
+            }
+            let inferredRuntimeState = liveRuntimeState
+                ?? suspendedRuntimeState
+                ?? runtimeState
                 ?? recordedQEMUState
                 ?? (orphanQEMUProcess == nil ? nil : .running)
             let state = inferredRuntimeState
@@ -1823,6 +2034,7 @@ public struct LocalVMRuntimeService: VMRuntimeService {
                     consoleScreenshotRefreshedAt: latestConsoleScreenshot.refreshedAt
                 ),
                 runningQEMUProcess: orphanQEMUProcess,
+                suspendedSession: suspendedSessionRecord,
                 runtimeProvider: activeProvider,
                 runtimeProviders: runtimeProviders,
                 installationSteps: installationSteps,
@@ -2775,6 +2987,100 @@ public struct LocalVMRuntimeService: VMRuntimeService {
         return try await loadSnapshot()
     }
 
+    /// Suspends the running Windows session to a local memory-state file.
+    ///
+    /// Unlike `stop()`, this keeps the user's open Windows apps: the guest is paused, its RAM and
+    /// device state are streamed to disk, and the QEMU process exits. `resume()` continues the same
+    /// session. Suspend is refused rather than silently downgraded to a stop when the active provider
+    /// cannot persist a session, so nobody loses open work to a hidden fallback.
+    public func suspend() async throws -> VMRuntimeSnapshot {
+        guard let profile = try await profileStore.load() else {
+            throw VMRuntimeError.bootPrerequisitesMissing
+        }
+
+        let securityScopedAccesses = Self.startSecurityScopedAccesses(for: profile)
+        defer {
+            securityScopedAccesses.forEach { $0.stop() }
+        }
+        let sessionProfile = Self.profileByResolvingSecurityScopedURLs(
+            profile,
+            accesses: securityScopedAccesses
+        )
+
+        let startedAt = diagnosticDate()
+        do {
+            let resultingState = try await bootRunner.suspend(profile: sessionProfile)
+            await saveBootReportLoggingFailure(Self.bootReport(
+                startedAt: startedAt,
+                completedAt: diagnosticDate(),
+                result: .succeeded,
+                resultingState: resultingState,
+                errorMessage: nil,
+                profile: sessionProfile
+            ))
+            return try await loadSnapshot()
+        } catch {
+            await saveBootReportLoggingFailure(Self.bootReport(
+                startedAt: startedAt,
+                completedAt: diagnosticDate(),
+                result: .failed,
+                resultingState: await bootRunner.runtimeState() ?? .running,
+                errorMessage: Self.errorMessage(for: error),
+                profile: sessionProfile
+            ))
+            throw error
+        }
+    }
+
+    /// Resumes a previously suspended Windows session from its saved memory-state file.
+    public func resume() async throws -> VMRuntimeSnapshot {
+        guard let profile = try await profileStore.load() else {
+            throw VMRuntimeError.bootPrerequisitesMissing
+        }
+
+        let securityScopedAccesses = Self.startSecurityScopedAccesses(for: profile)
+        defer {
+            securityScopedAccesses.forEach { $0.stop() }
+        }
+        let sessionProfile = Self.profileByResolvingSecurityScopedURLs(
+            profile,
+            accesses: securityScopedAccesses
+        )
+
+        let startedAt = diagnosticDate()
+        do {
+            let resultingState = try await bootRunner.resume(profile: sessionProfile)
+            await saveBootReportLoggingFailure(Self.bootReport(
+                startedAt: startedAt,
+                completedAt: diagnosticDate(),
+                result: .succeeded,
+                resultingState: resultingState,
+                errorMessage: nil,
+                profile: sessionProfile
+            ))
+            return try await loadSnapshot()
+        } catch {
+            await saveBootReportLoggingFailure(Self.bootReport(
+                startedAt: startedAt,
+                completedAt: diagnosticDate(),
+                result: .failed,
+                resultingState: await bootRunner.runtimeState() ?? .suspended,
+                errorMessage: Self.errorMessage(for: error),
+                profile: sessionProfile
+            ))
+            throw error
+        }
+    }
+
+    public func suspendedSession() async -> VMSuspensionRecord? {
+        guard let record = try? await suspensionRecordStore.loadLatest(),
+              FileManager.default.fileExists(atPath: record.stateFilePath) else {
+            return nil
+        }
+
+        return record
+    }
+
     public func sendConsolePointerTap(normalizedX: Double, normalizedY: Double) async throws -> QEMUPointerTapRecord {
         let sender = pointerEventSender ?? QEMUPointerEventSender(launchRecordStore: qemuLaunchRecordStore)
         return try await sender.sendTap(normalizedX: normalizedX, normalizedY: normalizedY)
@@ -3277,14 +3583,61 @@ public struct LocalVMRuntimeService: VMRuntimeService {
                 heightInPixels: VMRuntimeDeviceDefaults.graphicsHeightInPixels
             ),
             inputDevices: ["USB keyboard", "USB screen-coordinate pointer"],
-            entropyDevice: "Virtio entropy"
+            entropyDevice: "Virtio entropy",
+            audioDevice: audioDeviceDescription(selectedAudioDevice()),
+            sharedFolderDevice: sharedFolderDeviceDescription(selectedSharedFolderTransport())
         )
+    }
+
+    /// Resolved from the same environment override the boot plan reads, so the summary cannot claim
+    /// audio is wired while the plan omits it.
+    static func selectedAudioDevice(
+        environment: [String: String] = ProcessInfo.processInfo.environment
+    ) -> QEMUWindowsAudioDevice {
+        QEMUWindowsAudioDevice.selected(
+            from: environment[QEMUWindowsAudioDevice.environmentVariableName]
+        ).device
+    }
+
+    static func audioDeviceDescription(_ device: QEMUWindowsAudioDevice) -> String {
+        switch device {
+        case .intelHDA:
+            VMRuntimeDeviceDefaults.intelHDADescription
+        case .usbAudio:
+            VMRuntimeDeviceDefaults.usbAudioDescription
+        case .disabled:
+            VMRuntimeDeviceDefaults.audioDeviceDisabled
+        }
+    }
+
+    /// Resolved from the same environment override the boot plan reads, for the same reason as audio:
+    /// the summary must not claim a shared folder the plan never wired.
+    static func selectedSharedFolderTransport(
+        environment: [String: String] = ProcessInfo.processInfo.environment
+    ) -> QEMUWindowsSharedFolderTransport {
+        QEMUWindowsSharedFolderTransport.selected(
+            from: environment[QEMUWindowsSharedFolderTransport.environmentVariableName]
+        ).transport
+    }
+
+    static func sharedFolderDeviceDescription(_ transport: QEMUWindowsSharedFolderTransport) -> String {
+        switch transport {
+        case .guestSMB:
+            VMRuntimeDeviceDefaults.guestSMBSharedFolderDescription
+        case .hostSMB:
+            VMRuntimeDeviceDefaults.hostSMBSharedFolderDescription
+        case .disabled:
+            VMRuntimeDeviceDefaults.sharedFolderDisabled
+        }
     }
 
     private static func configurationSummary(
         for profile: VMProfile,
         devices: VMRuntimeDeviceSummary
     ) -> VMRuntimeConfigurationSummary {
+        let audioDevice = selectedAudioDevice()
+        let sharedFolderTransport = selectedSharedFolderTransport()
+        return
         VMRuntimeConfigurationSummary(
             system: VMRuntimeSystemConfigurationSummary(
                 name: profile.name,
@@ -3302,7 +3655,8 @@ public struct LocalVMRuntimeService: VMRuntimeService {
                 retinaScaling: VMRuntimeDeviceDefaults.retinaScalingPolicy
             ),
             sharing: VMRuntimeSharingConfigurationSummary(
-                sharedFolderPath: profile.sharedFolderPath
+                sharedFolderPath: profile.sharedFolderPath,
+                transport: sharedFolderTransport
             ),
             storage: VMRuntimeStorageConfigurationSummary(
                 devices: devices.storageDevices
@@ -3312,6 +3666,11 @@ public struct LocalVMRuntimeService: VMRuntimeService {
             ),
             input: VMRuntimeInputConfigurationSummary(
                 devices: devices.inputDevices
+            ),
+            audio: VMRuntimeAudioConfigurationSummary(
+                isEnabled: audioDevice.isEnabled,
+                device: devices.audioDevice,
+                hostBackend: audioDevice.isEnabled ? "CoreAudio" : nil
             ),
             guestAgent: VMRuntimeGuestAgentConfigurationSummary(
                 isInstalled: profile.guestAgentVersion != nil,

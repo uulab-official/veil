@@ -351,7 +351,7 @@ public struct AgentConnectionDiagnostic: Codable, Equatable, Sendable {
             "Inside Windows, run Veil Shared\\Veil Guest Agent\\Install Veil Agent.cmd.",
             "If macOS can open the forwarded port but health still times out, run Veil Shared\\Veil Guest Agent\\Repair Veil Agent Connectivity.cmd and approve the Windows administrator prompt.",
             "If the agent still does not connect, run Veil Shared\\Veil Guest Agent\\Collect Veil Agent Diagnostics.cmd and inspect the desktop ZIP.",
-            "Confirm the QEMU/HVF plan includes hostfwd=tcp::18444-:18444 and restart the VM after changing the launch plan."
+            "Confirm the QEMU/HVF plan includes hostfwd=tcp:127.0.0.1:18444-:18444 and restart the VM after changing the launch plan."
         ]
         if hostForwardProbe?.status == .tcpOpen {
             nextActions.append("Mac can open the QEMU hostfwd TCP port, but WebSocket health did not respond; run the Veil connectivity repair command to refresh Windows Firewall rules and restart the agent.")
@@ -870,6 +870,24 @@ public struct VeilHostClient: HostDashboardService, Sendable {
         )
     }
 
+    /// Asks the guest to prepare the shared folder as far as it can without elevation, then report.
+    ///
+    /// Separate from `loadHealth()` on purpose. Health is polled, so it only ever *reads* the share
+    /// state; this is the message that creates the folder and, when the agent is already elevated,
+    /// publishes the SMB share.
+    public func prepareSharedFolder(
+        shareName: String = QEMUWindowsSharedFolderTransport.shareName,
+        guestDirectoryPath: String = QEMUWindowsSharedFolderTransport.guestDirectoryPath
+    ) async throws -> WindowsSharedFolderResponse {
+        try await request(
+            WindowsSharedFolderRequest(
+                requestId: "req_shared_folder",
+                shareName: shareName,
+                guestDirectoryPath: guestDirectoryPath
+            )
+        )
+    }
+
     public func diagnoseAgentConnection(
         endpoint: String,
         timeoutNanoseconds: UInt64 = 5_000_000_000
@@ -1123,6 +1141,10 @@ public struct VeilHostClient: HostDashboardService, Sendable {
     }
 
     public func sendKeyInput(_ input: InputKeyEvent) async throws {
+        _ = try await transport.send(encoder.encode(input), expectedReplies: 0)
+    }
+
+    public func sendTextInput(_ input: InputTextEvent) async throws {
         _ = try await transport.send(encoder.encode(input), expectedReplies: 0)
     }
 

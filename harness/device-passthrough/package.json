@@ -1,0 +1,13 @@
+{
+  "name": "@veil/device-passthrough-harness",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test",
+    "validate": "node src/validate-device-passthrough.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

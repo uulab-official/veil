@@ -12,14 +12,20 @@ import {
   validateClipboardTextSet,
   validateFileOpenRequest,
   validateFileOpenResponse,
+  MAX_INPUT_TEXT_UTF16_LENGTH,
   validateInputKey,
   validateInputMouse,
+  validateInputText,
   validateNotificationListenerRequest,
   validateNotificationListenerResponse,
+  validateNotificationReceived,
+  validateSharedFolderRequest,
+  validateSharedFolderResponse,
   validateWindowClosed,
   validateWindowCloseRequest,
   validateWindowCloseResponse,
   validateWindowFrame,
+  validateWindowFrameUnchanged,
   validateWindowFrameSubscribeRequest,
   validateWindowFrameUnsubscribeRequest,
   validateWindowFocusRequest,
@@ -47,6 +53,7 @@ test("parses every stable fixture", async () => {
     "window.updated.json",
     "window.closed.json",
     "window.frame.json",
+    "window.frame.unchanged.json",
     "window.frame.subscribe.json",
     "window.frame.unsubscribe.json",
     "window.focus.request.json",
@@ -55,10 +62,14 @@ test("parses every stable fixture", async () => {
     "window.close.response.json",
     "input.mouse.left-down.json",
     "input.key.copy.json",
+    "input.text.json",
     "clipboard.text.set.host.json",
     "clipboard.text.set.guest.json",
     "notification.listener.request.json",
     "notification.listener.response.json",
+    "notification.received.json",
+    "shared.folder.request.json",
+    "shared.folder.response.json",
     "error.app_not_found.json"
   ];
 
@@ -157,6 +168,66 @@ test("rejects notification listener response accepted drift", async () => {
   );
 });
 
+test("validates one received Windows notification fixture", async () => {
+  const notification = validateNotificationReceived(await readFixture("notification.received.json"));
+
+  assert.equal(notification.type, MessageType.NotificationReceived);
+  assert.equal(notification.notificationId, "toast:winapp_notepad:0001");
+  assert.equal(notification.appId, "winapp_notepad");
+  assert.equal(notification.title, "Notepad");
+  assert.equal(notification.body, "Autosaved Notes.txt");
+  assert.equal(notification.receivedAt, "2026-07-10T12:15:00Z");
+  assert.equal(notification.sourceAumid, "Microsoft.WindowsNotepad_8wekyb3d8bbwe!App");
+});
+
+test("accepts a received notification from an app Veil never launched", () => {
+  const notification = validateNotificationReceived({
+    type: MessageType.NotificationReceived,
+    notificationId: "toast:unknown:0007",
+    title: "Windows Update",
+    receivedAt: "2026-07-10T12:20:00Z"
+  });
+
+  assert.equal(notification.appId, undefined);
+  assert.equal(notification.body, undefined);
+});
+
+test("accepts explicit nulls for optional notification metadata", () => {
+  const notification = validateNotificationReceived({
+    type: MessageType.NotificationReceived,
+    notificationId: "toast:unknown:0008",
+    appId: null,
+    appName: null,
+    body: null,
+    sourceAumid: null,
+    title: "Windows Update",
+    receivedAt: "2026-07-10T12:21:00Z"
+  });
+
+  assert.equal(notification.appName, null);
+});
+
+test("rejects a received notification with a whitespace-only title", async () => {
+  const notification = await readFixture("notification.received.json");
+  notification.title = "   ";
+
+  assert.throws(() => validateNotificationReceived(notification), /title/);
+});
+
+test("rejects a received notification without an ISO receivedAt", async () => {
+  const notification = await readFixture("notification.received.json");
+  notification.receivedAt = "not-a-date";
+
+  assert.throws(() => validateNotificationReceived(notification), /receivedAt/);
+});
+
+test("rejects a received notification missing its notificationId", async () => {
+  const notification = await readFixture("notification.received.json");
+  delete notification.notificationId;
+
+  assert.throws(() => validateNotificationReceived(notification), /notificationId/);
+});
+
 test("validates an app launch acceptance pair", async () => {
   const launch = await readFixture("app.launch.response.json");
   const window = await readFixture("window.created.json");
@@ -230,6 +301,29 @@ test("validates one window updated fixture", async () => {
   assert.equal(updated.bounds.width, 1360);
 });
 
+test("validates one unchanged window frame heartbeat fixture", async () => {
+  const event = validateWindowFrameUnchanged(await readFixture("window.frame.unchanged.json"));
+
+  assert.equal(event.type, MessageType.WindowFrameUnchanged);
+  assert.equal(event.windowId, "hwnd:0003029A");
+  assert.equal(event.sequence, 42);
+  assert.equal(event.capturedAt, "2026-07-31T09:14:02Z");
+});
+
+test("rejects an unchanged frame heartbeat that smuggles image data", async () => {
+  const event = await readFixture("window.frame.unchanged.json");
+  event.encodedData = "iVBORw0KGgo=";
+
+  assert.throws(() => validateWindowFrameUnchanged(event), /must not carry image data/);
+});
+
+test("rejects an unchanged frame heartbeat without a capture timestamp", async () => {
+  const event = await readFixture("window.frame.unchanged.json");
+  event.capturedAt = "not-a-date";
+
+  assert.throws(() => validateWindowFrameUnchanged(event), /capturedAt/);
+});
+
 test("validates window frame stream subscribe and unsubscribe fixtures", async () => {
   const subscribe = validateWindowFrameSubscribeRequest(await readFixture("window.frame.subscribe.json"));
   const unsubscribe = validateWindowFrameUnsubscribeRequest(await readFixture("window.frame.unsubscribe.json"));
@@ -289,6 +383,61 @@ test("validates one host key input fixture", async () => {
   assert.equal(input.key, "c");
   assert.equal(input.windowsVirtualKey, 67);
   assert.deepEqual(input.modifiers, ["ctrl"]);
+});
+
+test("validates committed Unicode text input fixture", async () => {
+  const input = validateInputText(await readFixture("input.text.json"));
+
+  assert.equal(input.type, MessageType.InputText);
+  assert.equal(input.windowId, "hwnd:0003029A");
+  assert.equal(input.text, "안녕하세요");
+});
+
+test("accepts text that no Windows virtual key can express", () => {
+  for (const text of ["안녕하세요", "こんにちは", "你好", "café", "emoji 😀"]) {
+    const input = validateInputText({
+      type: MessageType.InputText,
+      windowId: "hwnd:0003029A",
+      text
+    });
+
+    assert.equal(input.text, text, text);
+  }
+});
+
+test("rejects empty committed text", () => {
+  assert.throws(
+    () => validateInputText({ type: MessageType.InputText, windowId: "hwnd:0003029A", text: "" }),
+    /text/
+  );
+});
+
+test("rejects committed text beyond the posted-message bound", () => {
+  assert.throws(
+    () => validateInputText({
+      type: MessageType.InputText,
+      windowId: "hwnd:0003029A",
+      text: "a".repeat(MAX_INPUT_TEXT_UTF16_LENGTH + 1)
+    }),
+    /UTF-16 code units/
+  );
+});
+
+test("rejects newlines and tabs in committed text", () => {
+  for (const text of ["line\nbreak", "tab\there", "carriage\rreturn"]) {
+    assert.throws(
+      () => validateInputText({ type: MessageType.InputText, windowId: "hwnd:0003029A", text }),
+      /input\.key/,
+      text
+    );
+  }
+});
+
+test("rejects committed text without a tracked window id", () => {
+  assert.throws(
+    () => validateInputText({ type: MessageType.InputText, text: "안녕" }),
+    /windowId/
+  );
 });
 
 test("validates host clipboard text fixture", async () => {
@@ -360,4 +509,96 @@ test("rejects a file open response missing processId when accepted", () => {
     requestId: "req_bad",
     accepted: true
   }), TypeError);
+});
+
+test("validates shared folder request and response fixtures", async () => {
+  const request = validateSharedFolderRequest(await readFixture("shared.folder.request.json"));
+  const response = validateSharedFolderResponse(await readFixture("shared.folder.response.json"));
+
+  assert.equal(request.type, MessageType.SharedFolderRequest);
+  assert.equal(request.shareName, "VeilShared");
+  assert.equal(request.guestDirectoryPath, "C:\\VeilShared");
+  assert.equal(response.type, MessageType.SharedFolderResponse);
+  assert.equal(response.sharedFolder.directoryExists, true);
+  assert.equal(response.sharedFolder.isShared, false);
+  assert.equal(response.sharedFolder.requiresElevation, true);
+  assert.match(response.sharedFolder.shareCommand, /New-SmbShare/);
+});
+
+test("rejects a shared folder share name that could not be a share name", async () => {
+  for (const shareName of ["", "has space", "semi;colon", "quote\"mark", "a".repeat(65), "dollar$sign"]) {
+    const request = await readFixture("shared.folder.request.json");
+    request.shareName = shareName;
+
+    assert.throws(() => validateSharedFolderRequest(request), TypeError, shareName);
+  }
+});
+
+test("rejects a shared folder guest path that is relative or traverses upward", async () => {
+  for (const guestDirectoryPath of ["VeilShared", "\\VeilShared", "C:\\Veil\\..\\Windows", "/Users/me"]) {
+    const request = await readFixture("shared.folder.request.json");
+    request.guestDirectoryPath = guestDirectoryPath;
+
+    assert.throws(() => validateSharedFolderRequest(request), TypeError, guestDirectoryPath);
+  }
+});
+
+test("rejects a shared folder status claiming a share inside a missing directory", async () => {
+  const response = await readFixture("shared.folder.response.json");
+  response.sharedFolder.directoryExists = false;
+  response.sharedFolder.isShared = true;
+
+  assert.throws(() => validateSharedFolderResponse(response), /directoryExists is false/);
+});
+
+test("rejects a shared folder status that is writable without being shared", async () => {
+  const response = await readFixture("shared.folder.response.json");
+  response.sharedFolder.isWritable = true;
+
+  assert.throws(() => validateSharedFolderResponse(response), /isShared is false/);
+});
+
+test("rejects an elevation-blocked shared folder status with no command to run", async () => {
+  const response = await readFixture("shared.folder.response.json");
+  delete response.sharedFolder.shareCommand;
+
+  assert.throws(() => validateSharedFolderResponse(response), /shareCommand/);
+});
+
+test("allows an elevation-capable agent to omit the command once the share exists", async () => {
+  const response = await readFixture("shared.folder.response.json");
+  response.sharedFolder.isShared = true;
+  response.sharedFolder.isWritable = true;
+  delete response.sharedFolder.shareCommand;
+
+  assert.equal(validateSharedFolderResponse(response), response);
+});
+
+test("rejects an unsupported guest that still claims a working share", async () => {
+  const response = await readFixture("shared.folder.response.json");
+  response.sharedFolder.isSupported = false;
+
+  assert.throws(() => validateSharedFolderResponse(response), /isSupported/);
+});
+
+test("accepts an optional sharedFolder capability and status on agent health", async () => {
+  const health = await readFixture("agent.health.response.json");
+  health.capabilities.sharedFolder = true;
+  health.sharedFolder = (await readFixture("shared.folder.response.json")).sharedFolder;
+
+  assert.equal(validateAgentHealthResponse(health), health);
+});
+
+test("validates agent health from an agent predating the shared folder", async () => {
+  const health = await readFixture("agent.health.response.json");
+
+  assert.equal(health.capabilities.sharedFolder, undefined);
+  assert.equal(validateAgentHealthResponse(health), health);
+});
+
+test("rejects a non-boolean sharedFolder capability", async () => {
+  const health = await readFixture("agent.health.response.json");
+  health.capabilities.sharedFolder = "true";
+
+  assert.throws(() => validateAgentHealthResponse(health), /capabilities\.sharedFolder/);
 });

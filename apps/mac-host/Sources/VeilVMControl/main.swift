@@ -37,6 +37,17 @@ enum VMControlError: Error, LocalizedError {
     case mvpProofNotProved([String])
     case multiAppProofIncomplete([String])
     case notificationProofNotProved([String])
+    case vmSessionSuspendFailed(String, [String])
+    case vmSessionResumeFailed(String, [String])
+    case missingSnapshotName
+    case vmSnapshotActionFailed(String, [String])
+    case invalidFramePipelineDuration(Int)
+    case invalidHostBackingScale(String)
+    case framePipelineChannelUnavailable(String)
+    case framePipelineObservedNoFrames([String])
+    case sharedFolderUnavailable(String, [String])
+    case sharedFolderNotReady(String, [String])
+    case devicePassthroughUnavailable([String])
 
     var errorDescription: String? {
         switch self {
@@ -75,11 +86,11 @@ enum VMControlError: Error, LocalizedError {
         case .missingMultiAppProofAppIds:
             "Missing Windows app ids. Pass --app-ids winapp_notepad,winapp_calculator,winapp_paint or omit it to use the default multi-app proof set."
         case .missingAppRuntimeAction:
-            "Missing app runtime action. Pass --action launch, fulfill-pending, focus, close, close-all, restart-frame-stream, recover-window-capture, restore, bring-forward, prepare-sparse-package, request-notification-consent, quiet-when-idle, stop-runtime, clipboard, type-text, click, proof-recommended, proof-multi-app, or proof-notifications."
+            "Missing app runtime action. Pass --action launch, fulfill-pending, focus, close, close-all, restart-frame-stream, recover-window-capture, restore, bring-forward, prepare-sparse-package, request-notification-consent, quiet-when-idle, stop-runtime, suspend-runtime, clipboard, type-text, click, proof-recommended, proof-multi-app, or proof-notifications."
         case .missingAppRuntimeReviewEvidenceDirectory:
             "Missing review evidence directory. Pass --evidence-dir /path/to/review-folder created by app-runtime-review-init."
         case .unsupportedAppRuntimeAction(let action):
-            "Unsupported app runtime action '\(action)'. Pass --action launch, fulfill-pending, focus, close, close-all, restart-frame-stream, recover-window-capture, reopen-window, maintain-frame-streams, restore, bring-forward, prepare-sparse-package, request-notification-consent, quiet-when-idle, stop-runtime, clipboard, type-text, click, proof-recommended, proof-multi-app, or proof-notifications."
+            "Unsupported app runtime action '\(action)'. Pass --action launch, fulfill-pending, focus, close, close-all, restart-frame-stream, recover-window-capture, reopen-window, maintain-frame-streams, restore, bring-forward, prepare-sparse-package, request-notification-consent, quiet-when-idle, stop-runtime, suspend-runtime, clipboard, type-text, click, proof-recommended, proof-multi-app, or proof-notifications."
         case .missingWindowId:
             "Missing Windows window id. Pass --window-id hwnd:XXXXXXXX from app-runtime-status or app-window-proof."
         case .missingAppRuntimeText:
@@ -102,10 +113,32 @@ enum VMControlError: Error, LocalizedError {
             "Multi-app proof did not cover every target app. \(nextActions.joined(separator: " "))"
         case .notificationProofNotProved(let nextActions):
             "Windows notification proof did not receive a notification. \(nextActions.joined(separator: " "))"
+        case .vmSessionSuspendFailed(let message, let nextActions):
+            "Suspending the Windows session failed: \(message) \(nextActions.joined(separator: " "))"
+        case .vmSessionResumeFailed(let message, let nextActions):
+            "Resuming the suspended Windows session failed: \(message) \(nextActions.joined(separator: " "))"
+        case .missingSnapshotName:
+            "Missing snapshot name. Pass --name with letters, digits, dot, dash, or underscore and no spaces."
+        case .vmSnapshotActionFailed(let message, let nextActions):
+            "The Windows VM snapshot action did not complete: \(message) \(nextActions.joined(separator: " "))"
+        case .invalidFramePipelineDuration(let seconds):
+            "Frame pipeline measurement duration must be between 1 and 300 seconds, got \(seconds). A bounded window keeps this a diagnostic run rather than an open-ended profiler."
+        case .invalidHostBackingScale(let value):
+            "Display scale must be a number between 0.5 and 4, got \(value). This is a Mac backing scale factor such as 1 or 2, not a percentage. Omit the flag to report the scale as unknown rather than guessing."
+        case .framePipelineChannelUnavailable(let detail):
+            "The binary frame channel is not available for measurement: \(detail)"
+        case .framePipelineObservedNoFrames(let nextActions):
+            "Frame pipeline measurement observed no frames. \(nextActions.joined(separator: " "))"
+        case .sharedFolderUnavailable(let detail, let nextActions):
+            "A live shared folder is not available with the current configuration: \(detail) \(nextActions.joined(separator: " "))"
+        case .sharedFolderNotReady(let readiness, let nextActions):
+            "The live shared folder is not ready yet (\(readiness)). \(nextActions.joined(separator: " "))"
+        case .devicePassthroughUnavailable(let nextActions):
+            "Some device integrations are unavailable on this host. \(nextActions.joined(separator: " "))"
         }
     }
 
-    private static let usage = "Usage: veil-vmctl prepare --installer /path/to/Windows.iso [--drivers /path/to/virtio-win.iso] | veil-vmctl app-runtime-status [--json] [--demo] | veil-vmctl app-runtime-review [--json] [--demo] [--evidence-dir /path/to/screenshots] | veil-vmctl app-runtime-review-init [--json] [--demo] [--evidence-dir /path/to/screenshots] | veil-vmctl app-runtime-review-verify [--json] [--demo] --evidence-dir /path/to/screenshots | veil-vmctl app-runtime-action --action launch|fulfill-pending|focus|close|close-all|restart-frame-stream|recover-window-capture|reopen-window|maintain-frame-streams|restore|reconnect-restore|bring-forward|recover-display|wait-agent|repair-agent|prepare-sparse-package|request-notification-consent|quiet-when-idle|stop-runtime|clipboard|type-text|click|proof-recommended|proof-multi-app|proof-notifications [--json] [--demo] [--wait-seconds 5] [--app-id winapp_notepad] [--window-id hwnd:XXXXXXXX] [--text \"...\"] [--x 240 --y 130] | veil-vmctl app-window-proof [--json] [--app-id winapp_notepad] [--wait-seconds 10] [--output /path/to/proof.json] | veil-vmctl coherence-proof [--json] [--app-id winapp_notepad] [--wait-seconds 10] [--output /path/to/proof.json] | veil-vmctl mvp-proof [--json] [--app-id winapp_notepad] [--wait-seconds 30] [--output /path/to/proof.json] [--require-proved] | veil-vmctl multi-app-proof [--json] [--app-ids winapp_notepad,winapp_calculator,winapp_paint] [--wait-seconds 10] [--output-dir /path/to/Diagnostics] [--require-complete] | veil-vmctl notification-proof [--json] [--wait-seconds 30] [--output /path/to/notification-proof.json] [--require-proved] | veil-vmctl printer-bridge-plan [--json] [--shared-printer name] [--windows-printer-name name] | veil-vmctl printer-bridge-proof [--json] --evidence /path/to/test-page-proof [--shared-printer name] [--windows-printer-name name] [--output /path/to/proof.json] | veil-vmctl guest-agent-wait [--json] [--wait-seconds 30] | veil-vmctl mark-installed [--json] | veil-vmctl providers [--json] | veil-vmctl export-diagnostics [--json] [--output /path/to/diagnostics.json] | veil-vmctl qemu-plan [--json] | veil-vmctl qemu-doctor [--json] | veil-vmctl qemu-install-status [--json] | veil-vmctl qemu-smoke [--json] [--seconds 45] | veil-vmctl qemu-start [--json] [--wait-seconds 15] [--native-display] | veil-vmctl qemu-display-smoke [--json] [--wait-seconds 5] | veil-vmctl qemu-capture [--json] [--output /path/to/console.png] | veil-vmctl qemu-powerdown [--json] [--wait-seconds 30] | veil-vmctl qemu-force-stop [--json] --i-understand-data-loss [--wait-seconds 10] | veil-vmctl qemu-sendkey [--json] key [key ...] | veil-vmctl qemu-type-text [--json] --text \"...\" | veil-vmctl qemu-click [--json] --x 0...32767 --y 0...32767 | veil-vmctl qemu-oobe-bypass [--json] | veil-vmctl qemu-install-agent [--json] [--wait-seconds 30] | veil-vmctl qemu-prepare-sparse-package [--json] [--wait-seconds 120]"
+    private static let usage = "Usage: veil-vmctl prepare --installer /path/to/Windows.iso [--drivers /path/to/virtio-win.iso] | veil-vmctl app-runtime-status [--json] [--demo] [--host-backing-scale 2] | veil-vmctl app-runtime-review [--json] [--demo] [--evidence-dir /path/to/screenshots] | veil-vmctl app-runtime-review-init [--json] [--demo] [--evidence-dir /path/to/screenshots] | veil-vmctl app-runtime-review-verify [--json] [--demo] --evidence-dir /path/to/screenshots | veil-vmctl app-runtime-action --action launch|fulfill-pending|focus|close|close-all|restart-frame-stream|recover-window-capture|reopen-window|maintain-frame-streams|restore|reconnect-restore|bring-forward|recover-display|wait-agent|repair-agent|prepare-sparse-package|request-notification-consent|quiet-when-idle|stop-runtime|suspend-runtime|clipboard|type-text|click|proof-recommended|proof-multi-app|proof-notifications [--json] [--demo] [--wait-seconds 5] [--app-id winapp_notepad] [--window-id hwnd:XXXXXXXX] [--text \"...\"] [--x 240 --y 130] | veil-vmctl app-window-proof [--json] [--app-id winapp_notepad] [--wait-seconds 10] [--output /path/to/proof.json] | veil-vmctl coherence-proof [--json] [--app-id winapp_notepad] [--wait-seconds 10] [--output /path/to/proof.json] | veil-vmctl mvp-proof [--json] [--app-id winapp_notepad] [--wait-seconds 30] [--output /path/to/proof.json] [--require-proved] | veil-vmctl multi-app-proof [--json] [--app-ids winapp_notepad,winapp_calculator,winapp_paint] [--wait-seconds 10] [--output-dir /path/to/Diagnostics] [--require-complete] | veil-vmctl notification-proof [--json] [--wait-seconds 30] [--output /path/to/notification-proof.json] [--require-proved] | veil-vmctl printer-bridge-plan [--json] [--shared-printer name] [--windows-printer-name name] | veil-vmctl printer-bridge-proof [--json] --evidence /path/to/test-page-proof [--shared-printer name] [--windows-printer-name name] [--output /path/to/proof.json] | veil-vmctl guest-agent-wait [--json] [--wait-seconds 30] | veil-vmctl mark-installed [--json] | veil-vmctl providers [--json] | veil-vmctl export-diagnostics [--json] [--output /path/to/diagnostics.json] | veil-vmctl qemu-plan [--json] | veil-vmctl qemu-doctor [--json] | veil-vmctl qemu-install-status [--json] | veil-vmctl qemu-smoke [--json] [--seconds 45] | veil-vmctl qemu-start [--json] [--wait-seconds 15] [--native-display] | veil-vmctl qemu-display-smoke [--json] [--wait-seconds 5] | veil-vmctl qemu-capture [--json] [--output /path/to/console.png] | veil-vmctl qemu-powerdown [--json] [--wait-seconds 30] | veil-vmctl qemu-force-stop [--json] --i-understand-data-loss [--wait-seconds 10] | veil-vmctl qemu-sendkey [--json] key [key ...] | veil-vmctl qemu-type-text [--json] --text \"...\" | veil-vmctl qemu-click [--json] --x 0...32767 --y 0...32767 | veil-vmctl qemu-oobe-bypass [--json] | veil-vmctl qemu-install-agent [--json] [--wait-seconds 30] | veil-vmctl qemu-prepare-sparse-package [--json] [--wait-seconds 120] | veil-vmctl vm-suspend [--json] | veil-vmctl vm-resume [--json] | veil-vmctl vm-session-status [--json] | veil-vmctl vm-snapshot-list [--json] | veil-vmctl vm-snapshot-create [--json] --name before-update | veil-vmctl vm-snapshot-restore [--json] --name before-update | veil-vmctl vm-snapshot-delete [--json] --name before-update | veil-vmctl frame-pipeline-report [--json] [--seconds 10] [--output /path/to/frame-pipeline.json] | veil-vmctl shared-folder-status [--json] [--prepare] [--require-ready] | veil-vmctl device-passthrough-status [--json] [--require-available]"
 }
 
 struct VMControlArguments {
@@ -129,6 +162,7 @@ struct VMControlArguments {
         case requestNotificationConsent = "request-notification-consent"
         case quietWhenIdle = "quiet-when-idle"
         case stopRuntime = "stop-runtime"
+        case suspendRuntime = "suspend-runtime"
         case clipboard
         case typeText = "type-text"
         case click
@@ -144,7 +178,7 @@ struct VMControlArguments {
 
     enum Command: Equatable {
         case prepare(installerPath: String, driverMediaPath: String?)
-        case appRuntimeStatus(json: Bool, demo: Bool)
+        case appRuntimeStatus(json: Bool, demo: Bool, hostBackingScale: Double?)
         case appRuntimeReview(json: Bool, demo: Bool, evidenceDirectoryPath: String?)
         case appRuntimeReviewInit(json: Bool, demo: Bool, evidenceDirectoryPath: String?)
         case appRuntimeReviewVerify(json: Bool, demo: Bool, evidenceDirectoryPath: String)
@@ -174,6 +208,16 @@ struct VMControlArguments {
         case qemuOOBEBypass(json: Bool)
         case qemuInstallAgent(json: Bool, waitSeconds: Int)
         case qemuPrepareSparsePackage(json: Bool, waitSeconds: Int)
+        case vmSuspend(json: Bool)
+        case vmResume(json: Bool)
+        case vmSessionStatus(json: Bool)
+        case vmSnapshotList(json: Bool)
+        case vmSnapshotCreate(json: Bool, name: String)
+        case vmSnapshotRestore(json: Bool, name: String)
+        case vmSnapshotDelete(json: Bool, name: String)
+        case framePipelineReport(json: Bool, seconds: Int, outputPath: String?)
+        case sharedFolderStatus(json: Bool, prepare: Bool, requireReady: Bool)
+        case devicePassthroughStatus(json: Bool, requireAvailable: Bool)
         case exportDiagnostics(json: Bool, outputPath: String?)
     }
 
@@ -197,11 +241,81 @@ struct VMControlArguments {
             )
         }
 
+        if command == "vm-suspend" {
+            return VMControlArguments(command: .vmSuspend(json: arguments.contains("--json")))
+        }
+
+        if command == "vm-resume" {
+            return VMControlArguments(command: .vmResume(json: arguments.contains("--json")))
+        }
+
+        if command == "vm-session-status" {
+            return VMControlArguments(command: .vmSessionStatus(json: arguments.contains("--json")))
+        }
+
+        if command == "frame-pipeline-report" {
+            let seconds = intArgument(named: "--seconds", from: arguments) ?? 10
+            guard seconds > 0, seconds <= 300 else {
+                throw VMControlError.invalidFramePipelineDuration(seconds)
+            }
+
+            return VMControlArguments(
+                command: .framePipelineReport(
+                    json: arguments.contains("--json"),
+                    seconds: seconds,
+                    outputPath: stringArgument(named: "--output", from: arguments)
+                )
+            )
+        }
+
+        if command == "shared-folder-status" {
+            return VMControlArguments(
+                command: .sharedFolderStatus(
+                    json: arguments.contains("--json"),
+                    // Reading is the default. Preparing creates a folder in the guest and, when the
+                    // agent is elevated, publishes an SMB share, so it stays opt-in.
+                    prepare: arguments.contains("--prepare"),
+                    requireReady: arguments.contains("--require-ready")
+                )
+            )
+        }
+
+        if command == "device-passthrough-status" {
+            return VMControlArguments(
+                command: .devicePassthroughStatus(
+                    json: arguments.contains("--json"),
+                    requireAvailable: arguments.contains("--require-available")
+                )
+            )
+        }
+
+        if command == "vm-snapshot-list" {
+            return VMControlArguments(command: .vmSnapshotList(json: arguments.contains("--json")))
+        }
+
+        if command == "vm-snapshot-create" || command == "vm-snapshot-restore" || command == "vm-snapshot-delete" {
+            guard let name = stringArgument(named: "--name", from: arguments),
+                  !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                throw VMControlError.missingSnapshotName
+            }
+
+            let json = arguments.contains("--json")
+            switch command {
+            case "vm-snapshot-create":
+                return VMControlArguments(command: .vmSnapshotCreate(json: json, name: name))
+            case "vm-snapshot-restore":
+                return VMControlArguments(command: .vmSnapshotRestore(json: json, name: name))
+            default:
+                return VMControlArguments(command: .vmSnapshotDelete(json: json, name: name))
+            }
+        }
+
         if command == "app-runtime-status" {
             return VMControlArguments(
                 command: .appRuntimeStatus(
                     json: arguments.contains("--json"),
-                    demo: arguments.contains("--demo")
+                    demo: arguments.contains("--demo"),
+                    hostBackingScale: try hostBackingScaleArgument(from: arguments)
                 )
             )
         }
@@ -500,6 +614,23 @@ struct VMControlArguments {
         )
     }
 
+    /// This process has no window server connection to read a backing scale factor from, so the scale is
+    /// supplied explicitly or not at all. Absent reports the display scaling state as unknown, which beats
+    /// guessing 1 and telling every Retina user to change a setting that was already correct.
+    private static func hostBackingScaleArgument(from arguments: [String]) throws -> Double? {
+        guard let requested = stringArgument(named: "--host-backing-scale", from: arguments) else {
+            return nil
+        }
+
+        // A typo fails loudly. Silently ignoring it would report the scale as unknown while the user
+        // believes they supplied it.
+        guard let parsed = Double(requested), parsed >= 0.5, parsed <= 4 else {
+            throw VMControlError.invalidHostBackingScale(requested)
+        }
+
+        return parsed
+    }
+
     private static func secondsArgument(from arguments: [String]) -> Int? {
         guard let secondsFlagIndex = arguments.firstIndex(of: "--seconds"),
               arguments.indices.contains(secondsFlagIndex + 1) else {
@@ -788,6 +919,9 @@ struct AppRuntimeActionReport: Codable, Equatable {
     var notificationConsent: AppRuntimeNotificationConsent?
     var quietRuntime: WindowsAppRuntimeQuietPolicyStatus?
     var runtimeStop: VMRuntimeSnapshot?
+    /// Separate from `runtimeStop` on purpose: the stop-runtime contract pins `runtimeStop.state` to
+    /// `stopped`, so a suspend has to report its own outcome rather than borrowing that field.
+    var runtimeSuspend: VMRuntimeSnapshot?
     var status: WindowsAppRuntimeStatusReport
     var nextActions: [String]
 }
@@ -1240,8 +1374,8 @@ struct VeilVMControl {
         switch arguments.command {
         case .prepare(let installerPath, let driverMediaPath):
             try await prepare(installerPath: installerPath, driverMediaPath: driverMediaPath)
-        case .appRuntimeStatus(let json, let demo):
-            try await printAppRuntimeStatus(json: json, demo: demo)
+        case .appRuntimeStatus(let json, let demo, let hostBackingScale):
+            try await printAppRuntimeStatus(json: json, demo: demo, hostBackingScale: hostBackingScale)
         case .appRuntimeReview(let json, let demo, let evidenceDirectoryPath):
             try await printAppRuntimeReview(json: json, demo: demo, evidenceDirectoryPath: evidenceDirectoryPath)
         case .appRuntimeReviewInit(let json, let demo, let evidenceDirectoryPath):
@@ -1300,6 +1434,26 @@ struct VeilVMControl {
             try await sendQEMUGuestAgentInstall(json: json, waitSeconds: waitSeconds)
         case .qemuPrepareSparsePackage(let json, let waitSeconds):
             try await sendQEMUSparsePackagePreparation(json: json, waitSeconds: waitSeconds)
+        case .vmSuspend(let json):
+            try await suspendVMSession(json: json)
+        case .vmResume(let json):
+            try await resumeVMSession(json: json)
+        case .vmSessionStatus(let json):
+            try await printVMSessionStatus(json: json)
+        case .vmSnapshotList(let json):
+            try await runVMSnapshotAction(.list, json: json, name: nil)
+        case .vmSnapshotCreate(let json, let name):
+            try await runVMSnapshotAction(.create, json: json, name: name)
+        case .vmSnapshotRestore(let json, let name):
+            try await runVMSnapshotAction(.restore, json: json, name: name)
+        case .vmSnapshotDelete(let json, let name):
+            try await runVMSnapshotAction(.delete, json: json, name: name)
+        case .framePipelineReport(let json, let seconds, let outputPath):
+            try await measureFramePipeline(json: json, seconds: seconds, outputPath: outputPath)
+        case .sharedFolderStatus(let json, let prepare, let requireReady):
+            try await printSharedFolderStatus(json: json, prepare: prepare, requireReady: requireReady)
+        case .devicePassthroughStatus(let json, let requireAvailable):
+            try await printDevicePassthroughStatus(json: json, requireAvailable: requireAvailable)
         case .exportDiagnostics(let json, let outputPath):
             try await printExportDiagnostics(json: json, outputPath: outputPath)
         }
@@ -1339,8 +1493,12 @@ struct VeilVMControl {
     }
 
     @MainActor
-    private static func printAppRuntimeStatus(json: Bool, demo: Bool) async throws {
-        let report = try await appRuntimeStatusReport(demo: demo)
+    private static func printAppRuntimeStatus(
+        json: Bool,
+        demo: Bool,
+        hostBackingScale: Double? = nil
+    ) async throws {
+        let report = try await appRuntimeStatusReport(demo: demo, hostBackingScale: hostBackingScale)
         if json {
             let data = try JSONEncoder.veilDiagnostics.encode(report)
             print(String(decoding: data, as: UTF8.self))
@@ -1982,7 +2140,10 @@ struct VeilVMControl {
     }
 
     @MainActor
-    private static func appRuntimeStatusReport(demo: Bool) async throws -> WindowsAppRuntimeStatusReport {
+    private static func appRuntimeStatusReport(
+        demo: Bool,
+        hostBackingScale: Double? = nil
+    ) async throws -> WindowsAppRuntimeStatusReport {
         let model = HostDashboardModel(service: appRuntimeStatusService(demo: demo))
 
         await model.loadRestoreIntent()
@@ -1990,7 +2151,8 @@ struct VeilVMControl {
 
         let localRuntimeSnapshot = try? await LocalVMRuntimeService().loadSnapshot()
         return model.runtimeStatusReport(
-            localRuntime: model.localRuntimeStatus(snapshot: localRuntimeSnapshot)
+            localRuntime: model.localRuntimeStatus(snapshot: localRuntimeSnapshot),
+            hostBackingScale: hostBackingScale
         )
     }
 
@@ -3426,6 +3588,7 @@ struct VeilVMControl {
         var foregroundWindowTitle: String?
         var quietRuntime: WindowsAppRuntimeQuietPolicyStatus?
         var runtimeStop: VMRuntimeSnapshot?
+        var runtimeSuspend: VMRuntimeSnapshot?
         var accepted = false
         var resolvedAppId = appId
         var resolvedWindowId = windowId
@@ -3677,13 +3840,36 @@ struct VeilVMControl {
                 }
             }
         case .quietWhenIdle:
-            quietRuntime = model.quietRuntimeStatus()
+            // Resolved against the live snapshot, matching how the status report below resolves it.
+            // Without the snapshot the policy cannot know whether this VM can persist a session, so it
+            // would report stop as the only option and disagree with its own status block.
+            quietRuntime = model.quietRuntimeStatus(
+                localRuntime: model.localRuntimeStatus(
+                    snapshot: try? await LocalVMRuntimeService().loadSnapshot()
+                )
+            )
             accepted = quietRuntime?.canQuietRuntime == true
         case .stopRuntime:
-            quietRuntime = model.quietRuntimeStatus()
+            quietRuntime = model.quietRuntimeStatus(
+                localRuntime: model.localRuntimeStatus(
+                    snapshot: try? await LocalVMRuntimeService().loadSnapshot()
+                )
+            )
             if quietRuntime?.canQuietRuntime == true {
                 runtimeStop = try await LocalVMRuntimeService().stop()
                 accepted = runtimeStop?.state == .stopped
+            }
+        case .suspendRuntime:
+            let suspendService = makeSessionRuntimeService(displayMode: .vncLoopback)
+            quietRuntime = model.quietRuntimeStatus(
+                localRuntime: model.localRuntimeStatus(
+                    snapshot: try? await suspendService.loadSnapshot()
+                )
+            )
+            if quietRuntime?.canQuietRuntime == true,
+               quietRuntime?.canSuspendSession == true {
+                runtimeSuspend = try await suspendService.suspend()
+                accepted = runtimeSuspend?.state == .suspended
             }
         case .clipboard:
             guard let text,
@@ -3843,6 +4029,7 @@ struct VeilVMControl {
             notificationConsent: notificationConsent,
             quietRuntime: quietRuntime,
             runtimeStop: runtimeStop,
+            runtimeSuspend: runtimeSuspend,
             status: status,
             nextActions: nextActions(for: action, accepted: accepted, status: status)
         )
@@ -4215,6 +4402,12 @@ struct VeilVMControl {
                     "Run `veil-vmctl app-runtime-status --json` before relaunching a Windows app.",
                     "If Windows did not stop cleanly, export diagnostics before using force stop."
                 ]
+            case .suspendRuntime:
+                return [
+                    "Run `veil-vmctl vm-session-status --json` to confirm the suspended session is on disk.",
+                    "Run `veil-vmctl vm-resume --json`, or open a Windows app in Veil, to continue the same session with its apps still open.",
+                    "If suspend keeps failing, use `\(status.quietRuntime.recommendedStopCommand ?? "veil-vmctl app-runtime-action --json --action stop-runtime")` instead; stopping loses open apps but always works."
+                ]
             case .clipboard:
                 return compactActions([
                     "Use Cmd+V inside the mirrored Windows app window to paste the synced text.",
@@ -4275,6 +4468,16 @@ struct VeilVMControl {
                 "Run `veil-vmctl app-runtime-action --json --action quiet-when-idle` to confirm every mirrored Windows app window is closed.",
                 "Run `veil-vmctl app-runtime-status --json` and check quietRuntime.reason before retrying stop-runtime."
             ]
+        }
+
+        if action == .suspendRuntime {
+            return compactActions([
+                "Run `veil-vmctl app-runtime-status --json` and check quietRuntime.quietMode; only a `suspend` mode can suspend this session.",
+                status.quietRuntime.canSuspendSession
+                    ? "Run `veil-vmctl app-runtime-action --json --action quiet-when-idle` to confirm every mirrored Windows app window is closed."
+                    : "This VM cannot persist a session, so stop it instead with `veil-vmctl app-runtime-action --json --action stop-runtime`.",
+                "Run `veil-vmctl vm-session-status --json` to see why session persistence is unavailable."
+            ])
         }
 
         if action == .launch || action == .fulfillPending {
@@ -5138,6 +5341,605 @@ struct VeilVMControl {
         print("Boot ready: \(snapshot.bootReady ? "yes" : "no")")
         print("Detail: \(snapshot.detail)")
         print("Diagnostics: \(diagnosticsURL.path)")
+    }
+
+    /// Local runtime service wired to the QEMU/HVF provider.
+    ///
+    /// Suspend reads the QMP socket from the on-disk launch record rather than from in-process state,
+    /// so this works whether the VM was started by Veil.app or by `qemu-start`. Resume relaunches
+    /// QEMU as a child of this CLI process, which is the same orphan-and-continue pattern
+    /// `qemu-start` already relies on.
+    private static func makeSessionRuntimeService(
+        displayMode: QEMUWindowsBootDisplayMode
+    ) -> LocalVMRuntimeService {
+        LocalVMRuntimeService(
+            bootRunner: QEMUVMRuntimeBooter(
+                diagnosticsDirectory: diagnosticsDirectory(),
+                frontmostRunner: {},
+                displayMode: displayMode
+            )
+        )
+    }
+
+    private static func suspendVMSession(json: Bool) async throws {
+        let service = makeSessionRuntimeService(displayMode: .vncLoopback)
+        let generatedAt = Date()
+
+        do {
+            let snapshot = try await service.suspend()
+            let report = VMSessionActionReportFactory.make(
+                action: .suspend,
+                snapshot: snapshot,
+                generatedAt: generatedAt
+            )
+            try printVMSessionActionReport(report, json: json)
+        } catch {
+            let snapshot = try await service.loadSnapshot()
+            let report = VMSessionActionReportFactory.make(
+                action: .suspend,
+                snapshot: snapshot,
+                generatedAt: generatedAt,
+                errorMessage: vmSessionErrorMessage(for: error)
+            )
+            // The report is printed before throwing so automation still gets structured evidence for
+            // the failure, then a non-zero exit code.
+            try printVMSessionActionReport(report, json: json)
+            throw VMControlError.vmSessionSuspendFailed(
+                report.errorMessage ?? "unknown error",
+                report.nextActions
+            )
+        }
+    }
+
+    private static func resumeVMSession(json: Bool) async throws {
+        let suspensionStore = JSONVMSuspensionRecordStore(
+            directory: diagnosticsDirectory().appendingPathComponent("QEMU Suspend", isDirectory: true)
+        )
+        // A missing record and an unreadable one collapse to the same safe default here: resume will
+        // fail with a clear `noSuspendedState`/`suspendedStateFileMissing` error a moment later.
+        let suspendedRecord = try? await suspensionStore.loadLatest()
+        // Resume reuses the display mode the session was suspended with so the embedded display
+        // surface keeps working instead of silently switching to the native QEMU window.
+        let service = makeSessionRuntimeService(displayMode: suspendedRecord?.displayMode ?? .vncLoopback)
+        let generatedAt = Date()
+
+        do {
+            let snapshot = try await service.resume()
+            let report = VMSessionActionReportFactory.make(
+                action: .resume,
+                snapshot: snapshot,
+                generatedAt: generatedAt
+            )
+            try printVMSessionActionReport(report, json: json)
+        } catch {
+            let snapshot = try await service.loadSnapshot()
+            let report = VMSessionActionReportFactory.make(
+                action: .resume,
+                snapshot: snapshot,
+                generatedAt: generatedAt,
+                errorMessage: vmSessionErrorMessage(for: error)
+            )
+            try printVMSessionActionReport(report, json: json)
+            throw VMControlError.vmSessionResumeFailed(
+                report.errorMessage ?? "unknown error",
+                report.nextActions
+            )
+        }
+    }
+
+    private static func printVMSessionStatus(json: Bool) async throws {
+        let snapshot = try await makeSessionRuntimeService(displayMode: .vncLoopback).loadSnapshot()
+        let report = VMSessionActionReportFactory.make(
+            action: .status,
+            snapshot: snapshot,
+            generatedAt: Date()
+        )
+        try printVMSessionActionReport(report, json: json)
+    }
+
+    private static func printVMSessionActionReport(_ report: VMSessionActionReport, json: Bool) throws {
+        if json {
+            let data = try JSONEncoder.veilDiagnostics.encode(report)
+            print(String(decoding: data, as: UTF8.self))
+            return
+        }
+
+        print("Windows session \(report.action.rawValue): \(report.status.rawValue)")
+        print("VM state: \(report.state.rawValue)")
+        print("Provider: \(report.provider)")
+        print("Session persistence: \(report.persistence.mode)")
+        print("Can suspend: \(report.canSuspend ? "yes" : "no")")
+        print("Can resume: \(report.canResume ? "yes" : "no")")
+        if let stateFilePath = report.persistence.stateFilePath {
+            print("Memory state file: \(stateFilePath)")
+        }
+        if let byteCount = report.persistence.stateFileByteCount {
+            print("Memory state size: \(byteCount) bytes")
+        }
+        if let suspendedAt = report.persistence.suspendedAt {
+            print("Suspended at: \(ISO8601DateFormatter().string(from: suspendedAt))")
+        }
+        print("Detail: \(report.persistence.detail)")
+        if let errorMessage = report.errorMessage {
+            print("Error: \(errorMessage)")
+        }
+        print("Next actions:")
+        for action in report.nextActions {
+            print("  - \(action)")
+        }
+    }
+
+    private static func vmSessionErrorMessage(for error: any Error) -> String {
+        if let localized = error as? LocalizedError,
+           let description = localized.errorDescription {
+            return description
+        }
+
+        return String(describing: error)
+    }
+
+    /// Measures what the frame pipeline actually delivers over a bounded window.
+    ///
+    /// Three slices of frame-pipeline work -- idle heartbeats, the binary channel, and dirty-rect tiles --
+    /// landed on reasoning with no numbers behind them. This produces the numbers: achieved frame rate,
+    /// wire bytes, how much of a surface a typical change touches, and what compositing costs.
+    ///
+    /// Latency is deliberately not measured here; `coherence-proof` already covers first-frame and
+    /// post-input latency against a budget. The gap was throughput and efficiency.
+    @MainActor
+    private static func measureFramePipeline(json: Bool, seconds: Int, outputPath: String?) async throws {
+        let endpoint = HostDashboardModel.defaultAgentEndpoint
+        guard let url = URLSessionFrameChannel.frameChannelURL(agentEndpoint: endpoint) else {
+            throw VMControlError.framePipelineChannelUnavailable(
+                "'\(endpoint)' is not a WebSocket endpoint, so the /frames path cannot be derived."
+            )
+        }
+
+        let metrics = FramePipelineMetrics()
+        let compositor = WindowFrameCompositor()
+        let channel = URLSessionFrameChannel(url: url)
+        let startedAt = Date()
+        metrics.start(at: startedAt)
+
+        // Composites into a throwaway surface rather than reusing the app's, so a measurement run never
+        // disturbs what a running Veil.app is displaying.
+        let collector = Task { @MainActor in
+            do {
+                for try await message in channel.frames() {
+                    let compositeStartedAt = ContinuousClock.now
+                    let outcome = compositor.apply(message.tile)
+                    let compositeDuration = ContinuousClock.now - compositeStartedAt
+
+                    switch outcome {
+                    case .composited:
+                        metrics.recordApplied(
+                            tile: message.tile,
+                            wireByteCount: message.wireByteCount,
+                            compositeDuration: TimeInterval(compositeDuration.components.seconds)
+                                + TimeInterval(compositeDuration.components.attoseconds) / 1e18
+                        )
+                    case .needsKeyFrame(let reason):
+                        metrics.recordDropped(windowId: message.tile.windowId, reason: reason)
+                    }
+                }
+            } catch {
+                // A dropped channel mid-run still leaves a usable partial measurement, so this is reported
+                // through the report rather than failing the command.
+                VeilLog.agent.notice(
+                    "Frame pipeline measurement channel ended early: \(String(describing: error))"
+                )
+            }
+        }
+
+        try? await Task.sleep(for: .seconds(seconds))
+        collector.cancel()
+        compositor.forgetAll()
+
+        let report = metrics.report(generatedAt: Date())
+        if let outputPath {
+            let data = try JSONEncoder.veilDiagnostics.encode(report)
+            try data.write(to: URL(fileURLWithPath: outputPath), options: .atomic)
+        }
+
+        try printFramePipelineReport(report, json: json)
+
+        guard report.didObserveFrames else {
+            throw VMControlError.framePipelineObservedNoFrames(report.nextActions)
+        }
+    }
+
+    private static func printFramePipelineReport(_ report: FramePipelineReport, json: Bool) throws {
+        if json {
+            let data = try JSONEncoder.veilDiagnostics.encode(report)
+            print(String(decoding: data, as: UTF8.self))
+            return
+        }
+
+        print("Frame pipeline over \(String(format: "%.1f", report.observedSeconds))s via \(report.transport)")
+        print("Frames observed: \(report.didObserveFrames ? "yes" : "no")")
+        print("Total wire bytes: \(report.totalWireBytes)")
+        print("Total frames/sec: \(String(format: "%.2f", report.totalFramesPerSecond))")
+        print("Total wire bytes/sec: \(String(format: "%.0f", report.totalWireBytesPerSecond))")
+
+        for window in report.windows {
+            print("")
+            print("Window \(window.windowId) (\(window.surfaceWidth)x\(window.surfaceHeight))")
+            print("  Key frames: \(window.keyFrameCount), tiles: \(window.tileCount), heartbeats: \(window.unchangedHeartbeatCount)")
+            print("  Dropped tiles: \(window.droppedTiles.total)")
+            print("  Frames/sec: \(String(format: "%.2f", window.framesPerSecond))")
+            print("  Wire bytes: \(window.wireBytes) (key frames \(window.keyFrameWireBytes), tiles \(window.tileWireBytes))")
+            print("  Frame interval ms: p50 \(String(format: "%.1f", window.frameIntervalMilliseconds.p50)), p95 \(String(format: "%.1f", window.frameIntervalMilliseconds.p95)), max \(String(format: "%.1f", window.frameIntervalMilliseconds.maximum))")
+            print("  Tile coverage %: p50 \(String(format: "%.1f", window.tileCoveragePercent.p50)), p95 \(String(format: "%.1f", window.tileCoveragePercent.p95))")
+            print("  Composite ms: p50 \(String(format: "%.2f", window.compositeMilliseconds.p50)), p95 \(String(format: "%.2f", window.compositeMilliseconds.p95))")
+            if let estimate = window.estimatedFullFrameWireBytes,
+               let saved = window.estimatedWireBytesSavedPercent {
+                print("  Estimated full-frame bytes: \(estimate) (saved \(String(format: "%.1f", saved))%)")
+            } else {
+                print("  Estimated full-frame bytes: not available without an observed key frame")
+            }
+        }
+
+        print("")
+        print("Estimation basis: \(report.estimationBasis)")
+        print("Next actions:")
+        for action in report.nextActions {
+            print("  - \(action)")
+        }
+    }
+
+    private static func runVMSnapshotAction(
+        _ action: VMSnapshotActionKind,
+        json: Bool,
+        name: String?
+    ) async throws {
+        let generatedAt = Date()
+        let service = makeSessionRuntimeService(displayMode: .vncLoopback)
+        let snapshot = try await service.loadSnapshot()
+        let profile = try await JSONVMProfileStore().load()
+        let plan = profile.flatMap { try? makeQEMUPlan(for: $0) }
+        let capability = VMSnapshotCapabilityFactory.make(
+            snapshot: snapshot,
+            planArguments: plan?.arguments
+        )
+
+        guard capability.isSupported else {
+            // Reported as `unavailable` with a conversion path rather than attempted and failed: on a
+            // raw disk `savevm` cannot work, and pretending otherwise would produce a confusing QEMU
+            // error instead of the real prerequisite.
+            let report = VMSnapshotActionReportFactory.make(
+                action: action,
+                snapshot: snapshot,
+                capability: capability,
+                generatedAt: generatedAt,
+                requestedTag: name
+            )
+            try printVMSnapshotActionReport(report, json: json)
+            throw VMControlError.vmSnapshotActionFailed(capability.detail, report.nextActions)
+        }
+
+        let controller = QEMUSnapshotController()
+        let launchRecord = try? await JSONQEMULaunchRecordStore(
+            directory: diagnosticsDirectory().appendingPathComponent("QEMU Launch", isDirectory: true)
+        ).loadLatest()
+        let qmpSocketPath = snapshot.state == .running
+            ? launchRecord?.qmpSocketPath?.trimmingCharacters(in: .whitespacesAndNewlines)
+            : nil
+
+        do {
+            var snapshots: [VMSnapshotSummary] = []
+            switch action {
+            case .list:
+                if let qmpSocketPath, !qmpSocketPath.isEmpty {
+                    snapshots = try await controller.list(qmpSocketPath: qmpSocketPath)
+                } else if let systemDiskPath = capability.systemDiskPath, let plan {
+                    // Listing is the one action that is safe and useful while Windows is off, so it
+                    // falls back to qemu-img instead of demanding a boot.
+                    snapshots = try controller.listOffline(
+                        systemDiskPath: systemDiskPath,
+                        qemuExecutablePath: plan.executablePath
+                    )
+                } else {
+                    throw VMSnapshotError.notConfigured
+                }
+            case .create, .restore, .delete:
+                guard let qmpSocketPath, !qmpSocketPath.isEmpty else {
+                    if snapshot.state == .running {
+                        throw VMSnapshotError.qmpUnavailable
+                    }
+                    throw VMSnapshotError.vmNotRunning(action)
+                }
+
+                let tag = name ?? ""
+                switch action {
+                case .create:
+                    _ = try await controller.create(tag: tag, qmpSocketPath: qmpSocketPath)
+                case .restore:
+                    _ = try await controller.restore(tag: tag, qmpSocketPath: qmpSocketPath)
+                case .delete:
+                    _ = try await controller.delete(tag: tag, qmpSocketPath: qmpSocketPath)
+                case .list:
+                    break
+                }
+                snapshots = (try? await controller.list(qmpSocketPath: qmpSocketPath)) ?? []
+            }
+
+            // Re-read the runtime snapshot: `loadvm` changes the run state, so the report must not
+            // echo the pre-action state.
+            let updatedSnapshot = try await service.loadSnapshot()
+            let report = VMSnapshotActionReportFactory.make(
+                action: action,
+                snapshot: updatedSnapshot,
+                capability: capability,
+                generatedAt: generatedAt,
+                requestedTag: name,
+                snapshots: snapshots
+            )
+            try printVMSnapshotActionReport(report, json: json)
+        } catch {
+            let report = VMSnapshotActionReportFactory.make(
+                action: action,
+                snapshot: snapshot,
+                capability: capability,
+                generatedAt: generatedAt,
+                requestedTag: name,
+                errorMessage: vmSessionErrorMessage(for: error)
+            )
+            try printVMSnapshotActionReport(report, json: json)
+            throw VMControlError.vmSnapshotActionFailed(
+                report.errorMessage ?? "unknown error",
+                report.nextActions
+            )
+        }
+    }
+
+    /// Reports whether the live shared folder is actually usable, end to end.
+    ///
+    /// Three separate things have to agree and any one of them can be the problem, so all three are
+    /// reported rather than collapsed into one boolean: the boot plan has to carry the port forward, the
+    /// guest has to be publishing the share, and macOS has to have it mounted.
+    private static func printSharedFolderStatus(
+        json: Bool,
+        prepare: Bool,
+        requireReady: Bool
+    ) async throws {
+        let generatedAt = Date()
+        let service = makeSessionRuntimeService(displayMode: .vncLoopback)
+        let snapshot = try await service.loadSnapshot()
+        let profile = try await JSONVMProfileStore().load()
+
+        // Resolved from the same environment override the boot plan reads, so this cannot report a
+        // transport the plan never wired.
+        let transport = QEMUWindowsSharedFolderTransport.selected(
+            from: ProcessInfo.processInfo.environment[QEMUWindowsSharedFolderTransport.environmentVariableName]
+        ).transport
+
+        // The running VM's own arguments are the truth about what is wired. A freshly built plan would
+        // describe the *next* boot, which is a different question, and it would also see its own running
+        // VM holding the forward port and wrongly call it a conflict.
+        let launchRecord = try? await JSONQEMULaunchRecordStore(
+            directory: diagnosticsDirectory().appendingPathComponent("QEMU Launch", isDirectory: true)
+        ).loadLatest()
+        let planArguments = snapshot.state == .running
+            ? launchRecord?.arguments
+            : profile.flatMap { try? makeQEMUPlan(for: $0) }?.arguments
+
+        // Left unprobed while the VM runs: the running VM holds the forward port itself, so a probe
+        // would report a conflict against Veil's own listener and blame the wrong thing.
+        var isHostPortAvailable: Bool?
+        if snapshot.state != .running {
+            isHostPortAvailable = LocalQEMUWindowsBootPlanFactory.isLoopbackPortFree(
+                QEMUWindowsSharedFolderTransport.guestSMBHostPort
+            )
+        }
+
+        let capability = VMSharedFolderCapabilityFactory.make(
+            transport: transport,
+            planArguments: planArguments,
+            isHostPortAvailable: isHostPortAvailable
+        )
+
+        var guest: WindowsSharedFolderStatus?
+        var guestError: String?
+        if capability.isSupported, snapshot.state == .running {
+            let endpoint = HostDashboardModel.defaultAgentEndpoint
+            let url = URL(string: endpoint) ?? URL(string: "ws://127.0.0.1:18444")!
+            let client = VeilHostClient(transport: URLSessionWebSocketTransport(url: url))
+            do {
+                if prepare {
+                    guest = try await client.prepareSharedFolder(
+                        shareName: capability.shareName ?? QEMUWindowsSharedFolderTransport.shareName,
+                        guestDirectoryPath: capability.expectedGuestDirectoryPath
+                            ?? QEMUWindowsSharedFolderTransport.guestDirectoryPath
+                    ).sharedFolder
+                } else {
+                    // Health is read-only, which is what a status command should be.
+                    guest = try await client.loadHealth().sharedFolder
+                }
+            } catch {
+                guestError = vmSessionErrorMessage(for: error)
+            }
+        }
+
+        let report = VMSharedFolderReportFactory.make(
+            generatedAt: generatedAt,
+            vmState: snapshot.state,
+            capability: capability,
+            guest: guest,
+            hostMount: VMSharedFolderHostMountProbe.read(transport: transport),
+            hostStagingFolderPath: profile?.sharedFolderPath
+        )
+
+        try printSharedFolderReport(report, guestError: guestError, json: json)
+
+        guard capability.isSupported else {
+            throw VMControlError.sharedFolderUnavailable(capability.detail, report.nextActions)
+        }
+
+        // Only a hard gate on request. A folder that is merely not set up yet is a normal state for a
+        // status command to report, not a command failure.
+        if requireReady, report.readiness != .ready {
+            throw VMControlError.sharedFolderNotReady(report.readiness.rawValue, report.nextActions)
+        }
+    }
+
+    /// Reports which device-level integrations work on this host, and for the ones that do not, why.
+    ///
+    /// Exists because "does Veil do USB passthrough" deserves a precise answer. Both USB passthrough and
+    /// the bridged network modes need root on macOS, and Veil runs QEMU as the logged-in user, so the
+    /// blocker is a product decision rather than missing code. Saying that plainly is more useful than
+    /// silence, and it stops the next person rediscovering it.
+    private static func printDevicePassthroughStatus(json: Bool, requireAvailable: Bool) async throws {
+        let generatedAt = Date()
+        let profile = try await JSONVMProfileStore().load()
+        let plan = profile.flatMap { try? makeQEMUPlan(for: $0) }
+        // Asks the local QEMU what it actually has rather than assuming. A build without libusb has no
+        // usb-host device at all, which is a different answer from a build that has it and cannot get
+        // access. This shells out, which is why it lives here and not in polled status.
+        let deviceNames = QEMUDeviceModelProbe.deviceNames(
+            qemuExecutablePath: plan?.isExecutableAvailable == true ? plan?.executablePath : nil
+        )
+
+        let report = VMDevicePassthroughReportFactory.make(
+            generatedAt: generatedAt,
+            qemuExecutablePath: plan?.executablePath,
+            qemuDeviceNames: deviceNames
+        )
+
+        if json {
+            let data = try JSONEncoder.veilDiagnostics.encode(report)
+            print(String(decoding: data, as: UTF8.self))
+        } else {
+            print("Device integrations via \(report.provider)")
+            print("QEMU: \(report.qemuExecutablePath ?? "not resolved")")
+            print("Probed QEMU devices: \(report.didProbeQEMU ? "yes" : "no")")
+            print("")
+            for capability in report.capabilities {
+                print("\(capability.title): \(capability.state.rawValue)")
+                if capability.requiresPrivilegedHelper {
+                    print("  Needs a root-privileged helper Veil does not ship.")
+                }
+                if let prerequisite = capability.prerequisite {
+                    print("  Prerequisite: \(prerequisite)")
+                }
+                if let alternative = capability.alternative {
+                    print("  Instead: \(alternative)")
+                }
+                print("  Detail: \(capability.detail)")
+                if let reference = capability.reference {
+                    print("  Reference: \(reference)")
+                }
+                print("")
+            }
+            print("Open decision: \(report.privilegedHelperDecision)")
+            print("Next actions:")
+            for action in report.nextActions {
+                print("  - \(action)")
+            }
+        }
+
+        // Only a hard gate on request. An honest "unavailable" is the normal, expected output of this
+        // command, so it must not fail by default.
+        if requireAvailable, report.capabilities.contains(where: { !$0.isAvailable }) {
+            throw VMControlError.devicePassthroughUnavailable(report.nextActions)
+        }
+    }
+
+    private static func printSharedFolderReport(
+        _ report: VMSharedFolderReport,
+        guestError: String?,
+        json: Bool
+    ) throws {
+        if json {
+            let data = try JSONEncoder.veilDiagnostics.encode(report)
+            print(String(decoding: data, as: UTF8.self))
+            return
+        }
+
+        print("Live shared folder: \(report.readiness.rawValue)")
+        print("VM state: \(report.vmState.rawValue)")
+        print("Provider: \(report.provider)")
+        print("Transport: \(report.capability.transport.rawValue) (\(report.capability.state.rawValue))")
+        print("Wired into boot plan: \(report.capability.isWiredIntoBootPlan ? "yes" : "no")")
+        if let clause = report.capability.hostForwardClause {
+            print("Port forward: \(clause)")
+        }
+        if let shareName = report.capability.shareName {
+            print("Share name: \(shareName)")
+        }
+        if let guestDirectoryPath = report.capability.expectedGuestDirectoryPath {
+            print("Guest folder: \(guestDirectoryPath)")
+        }
+        if let hostMountURL = report.capability.hostMountURL {
+            print("Mount from Mac: \(hostMountURL)")
+        }
+
+        if let guest = report.guest {
+            print("Guest report:")
+            print("  Folder exists: \(guest.directoryExists ? "yes" : "no")")
+            print("  Shared: \(guest.isShared ? "yes" : "no")")
+            print("  Writable: \(guest.isWritable ? "yes" : "no")")
+            print("  SMB server reachable: \(guest.serverListening ? "yes" : "no")")
+            print("  Needs administrator: \(guest.requiresElevation ? "yes" : "no")")
+            print("  Recommended action: \(guest.recommendedAction)")
+            if let shareCommand = guest.shareCommand {
+                print("  Elevated command: \(shareCommand)")
+            }
+            if let message = guest.message {
+                print("  Detail: \(message)")
+            }
+        } else {
+            print("Guest report: unavailable")
+        }
+
+        print("Mounted on this Mac: \(report.hostMount.isMounted ? "yes" : "no")")
+        if let mountPath = report.hostMount.mountPath {
+            print("Mount path: \(mountPath)")
+        }
+        // Named separately because the field is called sharedFolderPath but is not shared with Windows.
+        if let hostStagingFolderPath = report.hostStagingFolderPath {
+            print("Host install-media staging folder (not shared): \(hostStagingFolderPath)")
+        }
+        print("Detail: \(report.capability.detail)")
+        if let guestError {
+            print("Guest agent error: \(guestError)")
+        }
+        print("Next actions:")
+        for action in report.nextActions {
+            print("  - \(action)")
+        }
+    }
+
+    private static func printVMSnapshotActionReport(_ report: VMSnapshotActionReport, json: Bool) throws {
+        if json {
+            let data = try JSONEncoder.veilDiagnostics.encode(report)
+            print(String(decoding: data, as: UTF8.self))
+            return
+        }
+
+        print("Windows snapshot \(report.action.rawValue): \(report.status.rawValue)")
+        print("VM state: \(report.vmState.rawValue)")
+        print("Provider: \(report.provider)")
+        print("Snapshot support: \(report.capability.state.rawValue)")
+        print("System disk format: \(report.capability.systemDiskFormat ?? "unknown")")
+        if let requestedTag = report.requestedTag {
+            print("Requested snapshot: \(requestedTag)")
+        }
+        if report.snapshots.isEmpty {
+            print("Snapshots: none")
+        } else {
+            print("Snapshots:")
+            for snapshot in report.snapshots {
+                print("  \(snapshot.tag) (id \(snapshot.id), \(snapshot.vmStateSize), \(snapshot.createdAt), clock \(snapshot.vmClock))")
+            }
+        }
+        print("Detail: \(report.capability.detail)")
+        if let errorMessage = report.errorMessage {
+            print("Error: \(errorMessage)")
+        }
+        print("Next actions:")
+        for action in report.nextActions {
+            print("  - \(action)")
+        }
     }
 
     private static func printProviders(json: Bool) throws {

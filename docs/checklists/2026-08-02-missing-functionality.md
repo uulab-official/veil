@@ -27,16 +27,27 @@ Date: 2026-08-02
 - [x] 드롭다운 앱 선택을 앱 아이콘 타일 중심의 즉시 실행 런처로 바꾼다.
 - [x] Windows가 설치되지 않은 상태에서는 앱 실행보다 설치 동작을 우선한다.
 - [x] 설치 전에는 앱 카탈로그와 중복 CTA를 숨기고 Windows 설정 화면 하나만 표시한다.
-- [ ] VM 설정을 별도 설정 시트로 분리한다.
+- [x] VM 설정을 별도 설정 시트로 분리한다.
+  - 확인: `.sheet(item:)` 기반 Windows Settings, 실행 상태별 리소스 잠금 정책 테스트 4개, 앱 UI에서 시트 열기/닫기와 첫 화면 중복 메뉴 제거 확인.
+- [x] 첫 화면에서 Microsoft 공식 최신 Windows 11 Arm64 다운로드를 시작하고 완료된 ISO를 설치 준비 경로로 자동 전달한다.
+  - 확인: 공식 `microsoft.com` 페이지의 25H2 선택 화면을 실제 앱 WebView에서 확인. HTTPS Microsoft 도메인/ISO 응답 제한, 위장 도메인 차단, 파일명 정리, 1GB 미만 부분 파일 차단 정책 테스트 8개 통과. 실제 다중 GB ISO 전체 다운로드와 부팅은 아래 실기 항목으로 유지한다.
+- [x] Microsoft 페이지 조작 없이 최신 Arm64 에디션과 Mac 언어를 자동 선택하고 실제 ISO 다운로드를 시작한다.
+  - 확인: 한국어 Mac에서 `Win11_25H2_Korean_Arm64_v2.iso`가 사용자 선택 없이 시작되어 4%까지 진행됨. 검증 취소 후 부분 파일이 제거됨. 언어/페이지 자동화 정책을 포함한 다운로드 테스트 13개 통과.
 - [ ] Windows ISO로 VM을 준비하고 QEMU/HVF 또는 Apple Virtualization으로 실제 Windows desktop 표시를 검증한다.
 
 ## P0 — Parallels급 기본 사용 루프
 
 - [ ] 첫 실행에서 Windows 11 Arm ISO 선택부터 VM 생성·설치 시작까지 한 화면에서 완료한다.
+  - [x] Microsoft 공식 페이지 → 최신 Arm64 ISO 로컬 저장 → VM 준비/시작 코드 경로와 기존 ISO fallback을 연결했다.
+  - [x] 에디션·언어 선택과 임시 다운로드 링크 발급도 자동화했다.
+  - [ ] 실제 전체 ISO 다운로드 후 임베디드 Windows Setup 화면이 뜨는 실기 증거가 필요하다.
 - [ ] 앱 셸에서 `Windows 시작 → guest agent 연결/복구 → 선택 앱 실행 → macOS 창 표시`를 터미널 없이 완료한다.
 - [ ] Windows 부팅 중에는 라이브 display surface와 명확한 부팅 상태를 함께 표시한다.
 - [ ] Windows 설치 후에는 설정 화면보다 앱 타일 런처가 기본 화면이 된다.
 - [ ] Developer ID 서명과 notarization으로 다른 Mac에서도 “손상됨” 없이 실행한다.
+  - [x] ad-hoc 개발 빌드와 배포 빌드를 분리하고 Developer ID/hardened runtime/notarytool/stapling/Gatekeeper 릴리스 게이트를 추가한다.
+    - 확인: macOS release harness 5개 통과, 인증서가 없는 환경에서 컴파일 전에 명확한 차단 안내 확인.
+  - [ ] 실제 Developer ID 인증서로 Apple notarization `Accepted`와 별도 Mac 다운로드 실행을 검증한다.
 
 ## P1 — 실기 검증이 필요한 기능
 

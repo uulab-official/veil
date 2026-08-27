@@ -1,5 +1,20 @@
+import CoreGraphics
 import Foundation
 import Observation
+
+public enum HostDashboardServiceError: Error, LocalizedError, Equatable, Sendable {
+    case textInputUnsupported
+    case agentEndpointUnavailable(endpoint: String, detail: String, nextActions: [String])
+
+    public var errorDescription: String? {
+        switch self {
+        case .textInputUnsupported:
+            "This Windows agent connection cannot accept committed text input."
+        case .agentEndpointUnavailable(_, let detail, _):
+            detail
+        }
+    }
+}
 
 public protocol HostDashboardService: Sendable {
     func loadOverview() async throws -> HostOverview
@@ -11,6 +26,7 @@ public protocol HostDashboardService: Sendable {
     func closeWindow(windowId: String) async throws -> WindowCloseResponse
     func sendMouseInput(_ input: InputMouseEvent) async throws
     func sendKeyInput(_ input: InputKeyEvent) async throws
+    func sendTextInput(_ input: InputTextEvent) async throws
     func sendClipboardText(_ clipboard: ClipboardTextSet) async throws
     func subscribeWindowFrames(windowId: String) async throws
     func unsubscribeWindowFrames(windowId: String) async throws
@@ -18,6 +34,13 @@ public protocol HostDashboardService: Sendable {
 }
 
 public extension HostDashboardService {
+    /// Default for services that predate committed text input. Throwing rather than silently
+    /// succeeding keeps this out of the "silent failure" class the agent audit already covered: a
+    /// swallowed no-op would look like typed Korean simply vanishing.
+    func sendTextInput(_ input: InputTextEvent) async throws {
+        throw HostDashboardServiceError.textInputUnsupported
+    }
+
     func restoreApp(appId: String) async throws -> WindowsAppLaunchResult {
         try await launchApp(appId: appId)
     }
@@ -66,20 +89,39 @@ public enum WindowFrameStreamStatus: String, Codable, Equatable, Sendable {
 
 public struct WindowFrameTiming: Codable, Equatable, Sendable {
     public var firstFrameReceivedAt: Date
+    /// When the currently displayed image arrived.
+    ///
+    /// Deliberately *not* advanced by an unchanged-frame heartbeat: the proof artifacts and the
+    /// frame-latency budget both mean "how old is the picture on screen", and a liveness ping does not
+    /// make the picture newer.
     public var latestFrameReceivedAt: Date
+    /// When the guest last proved this stream is alive, whether or not it had anything new to draw.
+    ///
+    /// Freshness is derived from this instead of `latestFrameReceivedAt`, which is what lets the guest
+    /// stop re-encoding identical pixels. Without the split, an idle window would be marked stale and
+    /// escalated into subscription restart, capture recovery, and app reopen.
+    public var latestActivityAt: Date
     public var latestFrameIntervalMilliseconds: Int?
     public var receivedFrameCount: Int
+    /// Heartbeats received since this stream started. A high count next to a low `receivedFrameCount`
+    /// is a healthy idle window, not a degraded one.
+    public var unchangedHeartbeatCount: Int
 
     public init(
         firstFrameReceivedAt: Date,
         latestFrameReceivedAt: Date,
+        latestActivityAt: Date? = nil,
         latestFrameIntervalMilliseconds: Int? = nil,
-        receivedFrameCount: Int = 1
+        receivedFrameCount: Int = 1,
+        unchangedHeartbeatCount: Int = 0
     ) {
         self.firstFrameReceivedAt = firstFrameReceivedAt
         self.latestFrameReceivedAt = latestFrameReceivedAt
+        // Defaults to the frame time so a guest that never sends heartbeats behaves exactly as before.
+        self.latestActivityAt = latestActivityAt ?? latestFrameReceivedAt
         self.latestFrameIntervalMilliseconds = latestFrameIntervalMilliseconds
         self.receivedFrameCount = receivedFrameCount
+        self.unchangedHeartbeatCount = unchangedHeartbeatCount
     }
 }
 
@@ -92,9 +134,12 @@ public struct WindowFrameStreamAssessment: Equatable, Sendable {
 
     public var status: WindowFrameStreamStatus
     public var latestFrameAgeMilliseconds: Int?
+    /// Age of the last liveness signal, frame or heartbeat. This is what `status` is derived from.
+    public var latestActivityAgeMilliseconds: Int?
     public var latestFrameIntervalMilliseconds: Int?
     public var waitingForFirstFrameMilliseconds: Int?
     public var receivedFrameCount: Int
+    public var unchangedHeartbeatCount: Int
     public var recommendedAction: String
     public var recoveryEscalated: Bool
     public var reopenEscalated: Bool
@@ -102,18 +147,22 @@ public struct WindowFrameStreamAssessment: Equatable, Sendable {
     public init(
         status: WindowFrameStreamStatus,
         latestFrameAgeMilliseconds: Int? = nil,
+        latestActivityAgeMilliseconds: Int? = nil,
         latestFrameIntervalMilliseconds: Int? = nil,
         waitingForFirstFrameMilliseconds: Int? = nil,
         receivedFrameCount: Int = 0,
+        unchangedHeartbeatCount: Int = 0,
         recommendedAction: String,
         recoveryEscalated: Bool = false,
         reopenEscalated: Bool = false
     ) {
         self.status = status
         self.latestFrameAgeMilliseconds = latestFrameAgeMilliseconds
+        self.latestActivityAgeMilliseconds = latestActivityAgeMilliseconds ?? latestFrameAgeMilliseconds
         self.latestFrameIntervalMilliseconds = latestFrameIntervalMilliseconds
         self.waitingForFirstFrameMilliseconds = waitingForFirstFrameMilliseconds
         self.receivedFrameCount = receivedFrameCount
+        self.unchangedHeartbeatCount = unchangedHeartbeatCount
         self.recommendedAction = recommendedAction
         self.recoveryEscalated = recoveryEscalated
         self.reopenEscalated = reopenEscalated
@@ -168,17 +217,24 @@ public struct WindowFrameStreamAssessment: Equatable, Sendable {
             0,
             Int((generatedAt.timeIntervalSince(timing.latestFrameReceivedAt) * 1000).rounded())
         )
+        // Freshness follows liveness, not the age of the picture. A window nobody is touching has an
+        // old image and a healthy stream at the same time, and conflating those forced the guest to
+        // re-encode identical pixels forever just to look alive.
+        let activityAgeMilliseconds = max(
+            0,
+            Int((generatedAt.timeIntervalSince(timing.latestActivityAt) * 1000).rounded())
+        )
         let status: WindowFrameStreamStatus
         let recommendedAction: String
         let recoveryEscalated: Bool
         let reopenEscalated: Bool
 
-        if ageMilliseconds <= freshFrameAgeThresholdMilliseconds {
+        if activityAgeMilliseconds <= freshFrameAgeThresholdMilliseconds {
             status = .fresh
             recommendedAction = "none"
             recoveryEscalated = false
             reopenEscalated = false
-        } else if ageMilliseconds <= delayedFrameAgeThresholdMilliseconds {
+        } else if activityAgeMilliseconds <= delayedFrameAgeThresholdMilliseconds {
             status = .delayed
             recommendedAction = "refresh-runtime-status"
             recoveryEscalated = false
@@ -198,8 +254,10 @@ public struct WindowFrameStreamAssessment: Equatable, Sendable {
         return WindowFrameStreamAssessment(
             status: status,
             latestFrameAgeMilliseconds: ageMilliseconds,
+            latestActivityAgeMilliseconds: activityAgeMilliseconds,
             latestFrameIntervalMilliseconds: timing.latestFrameIntervalMilliseconds,
             receivedFrameCount: timing.receivedFrameCount,
+            unchangedHeartbeatCount: timing.unchangedHeartbeatCount,
             recommendedAction: recommendedAction,
             recoveryEscalated: recoveryEscalated,
             reopenEscalated: reopenEscalated
@@ -217,6 +275,14 @@ public struct WindowMirrorSession: Codable, Equatable, Identifiable, Sendable {
     public var frameStreamRequestedAt: Date?
     public var frameStreamRestartCount: Int
     public var latestFrameStreamRestartedAt: Date?
+    /// Increments whenever the compositor's surface for this window changes.
+    ///
+    /// Exists so a SwiftUI view can re-render from the compositor without the composited pixels being
+    /// copied into this value type on every frame. `latestFrame` carries only metadata for composited
+    /// windows; the displayable image lives in `WindowFrameCompositor`.
+    public var compositedFrameGeneration: Int
+    /// Set when a tile arrived that could not be composited, so the surface is waiting for a key frame.
+    public var awaitingKeyFrameReason: String?
 
     public init(
         window: WindowCreatedEvent,
@@ -226,7 +292,9 @@ public struct WindowMirrorSession: Codable, Equatable, Identifiable, Sendable {
         frameTiming: WindowFrameTiming? = nil,
         frameStreamRequestedAt: Date? = nil,
         frameStreamRestartCount: Int = 0,
-        latestFrameStreamRestartedAt: Date? = nil
+        latestFrameStreamRestartedAt: Date? = nil,
+        compositedFrameGeneration: Int = 0,
+        awaitingKeyFrameReason: String? = nil
     ) {
         self.window = window
         self.connectionMode = connectionMode
@@ -236,6 +304,8 @@ public struct WindowMirrorSession: Codable, Equatable, Identifiable, Sendable {
         self.frameStreamRequestedAt = frameStreamRequestedAt
         self.frameStreamRestartCount = frameStreamRestartCount
         self.latestFrameStreamRestartedAt = latestFrameStreamRestartedAt
+        self.compositedFrameGeneration = compositedFrameGeneration
+        self.awaitingKeyFrameReason = awaitingKeyFrameReason
     }
 }
 
@@ -251,10 +321,26 @@ public enum HostDashboardPhase: String, Codable, Equatable, Sendable {
     case reconnecting
 }
 
+/// What happened to a host-to-guest clipboard write.
+///
+/// Exists because the caller has to decide whether to follow it with a paste shortcut. Sending Ctrl+V after
+/// a clipboard write that never arrived does not fail — it pastes whatever Windows had before, into the
+/// user's document, with no indication anything went wrong.
+public enum HostClipboardSendOutcome: Equatable, Sendable {
+    case sent
+    /// Nothing was sent and nothing was expected to be, because this connection has no clipboard capability.
+    /// A paste may still proceed: the guest's clipboard is untouched and may hold exactly what the user
+    /// copied inside Windows.
+    case skipped
+    /// The clipboard write could not be delivered. A paste now would use stale content.
+    case failed(reason: String)
+}
+
 public enum HostProtocolMessageResult: Equatable, Sendable {
     case handledWindowCreated(windowId: String)
     case handledWindowUpdated(windowId: String)
     case handledWindowFrame(windowId: String)
+    case handledWindowFrameUnchanged(windowId: String)
     case handledWindowClosed(windowId: String)
     case handledClipboardText(sequence: Int)
     case handledWindowsNotification(notificationId: String)
@@ -323,6 +409,10 @@ public struct WindowsAppRuntimeLocalRuntimeStatus: Codable, Equatable, Sendable 
     public var bootReady: Bool
     public var canStart: Bool
     public var isRunning: Bool
+    /// Whether this VM can persist a running Windows session, so going idle can suspend instead of
+    /// shutting Windows down and losing every open app. Defaults to `false` so a caller that has no
+    /// snapshot reports the conservative answer rather than promising a session it cannot keep.
+    public var canSuspendSession: Bool
     public var windowsInstalled: Bool
     public var installEvidence: VMInstallEvidenceSummary?
     public var automaticInstallMediaStatus: VMAutomaticInstallMediaStatus?
@@ -343,6 +433,7 @@ public struct WindowsAppRuntimeLocalRuntimeStatus: Codable, Equatable, Sendable 
         bootReady: Bool,
         canStart: Bool,
         isRunning: Bool,
+        canSuspendSession: Bool = false,
         windowsInstalled: Bool,
         installEvidence: VMInstallEvidenceSummary? = nil,
         automaticInstallMediaStatus: VMAutomaticInstallMediaStatus? = nil,
@@ -362,6 +453,7 @@ public struct WindowsAppRuntimeLocalRuntimeStatus: Codable, Equatable, Sendable 
         self.bootReady = bootReady
         self.canStart = canStart
         self.isRunning = isRunning
+        self.canSuspendSession = canSuspendSession
         self.windowsInstalled = windowsInstalled
         self.installEvidence = installEvidence
         self.automaticInstallMediaStatus = automaticInstallMediaStatus
@@ -401,9 +493,16 @@ public struct WindowsAppRuntimeWindowStatus: Codable, Equatable, Sendable {
     public var frameStreamRequestedAt: Date?
     public var latestFrameReceivedAt: Date?
     public var latestFrameAgeMilliseconds: Int?
+    /// Age of the last liveness signal, frame or unchanged-frame heartbeat. `frameStreamStatus` is
+    /// derived from this, not from `latestFrameAgeMilliseconds`, so an idle window reads as healthy
+    /// with an old picture instead of being escalated into recovery.
+    public var latestActivityAgeMilliseconds: Int?
     public var latestFrameIntervalMilliseconds: Int?
     public var frameStreamWaitingAgeMilliseconds: Int?
     public var receivedFrameCount: Int
+    /// Heartbeats received on this stream. A high count beside a low `receivedFrameCount` means the
+    /// guest is skipping redundant encodes for a static window, which is the healthy case.
+    public var unchangedHeartbeatCount: Int
     public var frameStreamRecommendedAction: String
     public var frameStreamRestartCount: Int
     public var latestFrameStreamRestartedAt: Date?
@@ -422,9 +521,11 @@ public struct WindowsAppRuntimeWindowStatus: Codable, Equatable, Sendable {
         frameStreamRequestedAt: Date? = nil,
         latestFrameReceivedAt: Date? = nil,
         latestFrameAgeMilliseconds: Int? = nil,
+        latestActivityAgeMilliseconds: Int? = nil,
         latestFrameIntervalMilliseconds: Int? = nil,
         frameStreamWaitingAgeMilliseconds: Int? = nil,
         receivedFrameCount: Int = 0,
+        unchangedHeartbeatCount: Int = 0,
         frameStreamRecommendedAction: String,
         frameStreamRestartCount: Int = 0,
         latestFrameStreamRestartedAt: Date? = nil,
@@ -442,9 +543,11 @@ public struct WindowsAppRuntimeWindowStatus: Codable, Equatable, Sendable {
         self.frameStreamRequestedAt = frameStreamRequestedAt
         self.latestFrameReceivedAt = latestFrameReceivedAt
         self.latestFrameAgeMilliseconds = latestFrameAgeMilliseconds
+        self.latestActivityAgeMilliseconds = latestActivityAgeMilliseconds ?? latestFrameAgeMilliseconds
         self.latestFrameIntervalMilliseconds = latestFrameIntervalMilliseconds
         self.frameStreamWaitingAgeMilliseconds = frameStreamWaitingAgeMilliseconds
         self.receivedFrameCount = receivedFrameCount
+        self.unchangedHeartbeatCount = unchangedHeartbeatCount
         self.frameStreamRecommendedAction = frameStreamRecommendedAction
         self.frameStreamRestartCount = frameStreamRestartCount
         self.latestFrameStreamRestartedAt = latestFrameStreamRestartedAt
@@ -659,6 +762,63 @@ public struct WindowsAppRuntimeMacWindowIntegrationStatus: Codable, Equatable, S
     }
 }
 
+/// Whether the guest is rendering mirrored windows at the resolution this Mac can actually show.
+///
+/// Two units already travel on the wire and both ends agree on them: window bounds are logical
+/// ~96-DPI-equivalent units so a macOS window is sized in points, and frame dimensions are real physical
+/// pixels so the Mac gets the sharpest bitmap available. That part is correct and needs no host
+/// arithmetic. What the host *cannot* fix by calculation is a resolution mismatch:
+///
+/// - Guest below host: a 100% Windows guest on a 2x Mac supplies half the pixels the display will draw,
+///   so macOS upscales and text looks soft. Those pixels do not exist; only raising the guest's own
+///   display scaling creates them.
+/// - Guest above host: a 200% guest on a 1x Mac renders four times the pixels the display can show. They
+///   are encoded, sent, and composited before being thrown away, which is wasted bandwidth and CPU on
+///   every frame.
+///
+/// Veil cannot set Windows' display scaling from outside, so this reports the mismatch and the exact
+/// percentage to choose instead of silently living with it.
+public struct WindowsAppRuntimeDisplayScalingStatus: Codable, Equatable, Sendable {
+    public var isEnabled: Bool
+    /// This Mac's backing scale factor. `nil` when the caller did not supply it, in which case no
+    /// mismatch is claimed rather than assuming 1.
+    public var hostBackingScale: Double?
+    /// The DPI scale the guest is rendering at, taken from the foreground window's most recent frame.
+    /// Guest display scaling is a single Windows setting, so one window is representative.
+    public var guestRenderScale: Double?
+    /// `hostBackingScale / guestRenderScale`. Above 1 means macOS is upscaling; below 1 means the guest
+    /// is rendering pixels the display cannot show.
+    public var scaleRatio: Double?
+    public var isUpscaling: Bool
+    public var isOverRendering: Bool
+    /// The Windows display-scaling percentage that would match this Mac.
+    public var recommendedGuestScalePercent: Int?
+    public var recommendedAction: String
+    public var reason: String
+
+    public init(
+        isEnabled: Bool = true,
+        hostBackingScale: Double? = nil,
+        guestRenderScale: Double? = nil,
+        scaleRatio: Double? = nil,
+        isUpscaling: Bool = false,
+        isOverRendering: Bool = false,
+        recommendedGuestScalePercent: Int? = nil,
+        recommendedAction: String,
+        reason: String
+    ) {
+        self.isEnabled = isEnabled
+        self.hostBackingScale = hostBackingScale
+        self.guestRenderScale = guestRenderScale
+        self.scaleRatio = scaleRatio
+        self.isUpscaling = isUpscaling
+        self.isOverRendering = isOverRendering
+        self.recommendedGuestScalePercent = recommendedGuestScalePercent
+        self.recommendedAction = recommendedAction
+        self.reason = reason
+    }
+}
+
 public struct WindowsAppRuntimeLauncherVisibilityStatus: Codable, Equatable, Sendable {
     public var isEnabled: Bool
     public var canOpenMainWindow: Bool
@@ -755,14 +915,33 @@ public struct WindowsAppRuntimeOneScreenUXStatus: Codable, Equatable, Sendable {
     }
 }
 
+/// What Veil will do when every mirrored Windows app window is closed.
+///
+/// `quietMode` exists because "quiet" covers two outcomes a user experiences very differently:
+/// suspending keeps their open apps and unsaved work, stopping shuts Windows down and loses them.
+/// A single boolean could not express that, and the previous `stop-or-suspend-runtime` recommendation
+/// named both without committing to either, so nobody could tell which was about to happen.
 public struct WindowsAppRuntimeQuietPolicyStatus: Codable, Equatable, Sendable {
+    /// Windows is suspended and its apps survive.
+    public static let suspendMode = "suspend"
+    /// Windows shuts down. Open apps and unsaved work are lost.
+    public static let stopMode = "stop"
+    /// Nothing will happen, because the runtime cannot be quieted right now.
+    public static let noneMode = "none"
+
     public var isEnabled: Bool
     public var hasOpenedAppWindowThisSession: Bool
     public var openWindowCount: Int
     public var canQuietRuntime: Bool
     public var willQuietAutomatically: Bool
     public var automaticQuietDelaySeconds: Int
+    /// Which of ``suspendMode``, ``stopMode``, or ``noneMode`` will actually run.
+    public var quietMode: String
+    /// Whether this VM can persist a running session at all. Derived from the same persistence summary
+    /// `vm-session-status` uses, so the app and the CLI cannot disagree.
+    public var canSuspendSession: Bool
     public var recommendedAction: String
+    public var recommendedSuspendCommand: String?
     public var recommendedStopCommand: String?
     public var reason: String
 
@@ -773,7 +952,10 @@ public struct WindowsAppRuntimeQuietPolicyStatus: Codable, Equatable, Sendable {
         canQuietRuntime: Bool,
         willQuietAutomatically: Bool,
         automaticQuietDelaySeconds: Int,
+        quietMode: String = WindowsAppRuntimeQuietPolicyStatus.noneMode,
+        canSuspendSession: Bool = false,
         recommendedAction: String,
+        recommendedSuspendCommand: String? = nil,
         recommendedStopCommand: String? = nil,
         reason: String
     ) {
@@ -783,7 +965,10 @@ public struct WindowsAppRuntimeQuietPolicyStatus: Codable, Equatable, Sendable {
         self.canQuietRuntime = canQuietRuntime
         self.willQuietAutomatically = willQuietAutomatically
         self.automaticQuietDelaySeconds = automaticQuietDelaySeconds
+        self.quietMode = quietMode
+        self.canSuspendSession = canSuspendSession
         self.recommendedAction = recommendedAction
+        self.recommendedSuspendCommand = recommendedSuspendCommand
         self.recommendedStopCommand = recommendedStopCommand
         self.reason = reason
     }
@@ -1365,6 +1550,9 @@ public struct WindowsAppRuntimeStatusReport: Codable, Equatable, Sendable {
     public var oneScreenUX: WindowsAppRuntimeOneScreenUXStatus
     public var launchOnboarding: WindowsAppRuntimeLaunchOnboardingStatus
     public var macWindowIntegration: WindowsAppRuntimeMacWindowIntegrationStatus
+    /// Optional so reports written before this section existed still decode and validate. Absent means
+    /// the report predates the check, which is different from a matched scale.
+    public var displayScaling: WindowsAppRuntimeDisplayScalingStatus?
     public var quietRuntime: WindowsAppRuntimeQuietPolicyStatus
     public var launchPlan: WindowsAppRuntimeLaunchPlanStatus
     public var proofPlan: WindowsAppRuntimeProofPlanStatus
@@ -1395,6 +1583,7 @@ public struct WindowsAppRuntimeStatusReport: Codable, Equatable, Sendable {
         oneScreenUX: WindowsAppRuntimeOneScreenUXStatus,
         launchOnboarding: WindowsAppRuntimeLaunchOnboardingStatus,
         macWindowIntegration: WindowsAppRuntimeMacWindowIntegrationStatus,
+        displayScaling: WindowsAppRuntimeDisplayScalingStatus? = nil,
         quietRuntime: WindowsAppRuntimeQuietPolicyStatus,
         launchPlan: WindowsAppRuntimeLaunchPlanStatus,
         proofPlan: WindowsAppRuntimeProofPlanStatus,
@@ -1424,6 +1613,7 @@ public struct WindowsAppRuntimeStatusReport: Codable, Equatable, Sendable {
         self.oneScreenUX = oneScreenUX
         self.launchOnboarding = launchOnboarding
         self.macWindowIntegration = macWindowIntegration
+        self.displayScaling = displayScaling
         self.quietRuntime = quietRuntime
         self.launchPlan = launchPlan
         self.proofPlan = proofPlan
@@ -1524,7 +1714,7 @@ private struct PrinterBridgeProofPlanEnvelope: Decodable {
 @MainActor
 @Observable
 public final class HostDashboardModel {
-    public static var defaultAgentEndpoint: String {
+    nonisolated public static var defaultAgentEndpoint: String {
         ProcessInfo.processInfo.environment["VEIL_AGENT_URL"] ?? "ws://127.0.0.1:18444"
     }
 
@@ -1535,6 +1725,19 @@ public final class HostDashboardModel {
     public private(set) var activeWindows: [WindowCreatedEvent] = []
     public private(set) var mirrorSessions: [WindowMirrorSession] = []
     public private(set) var errorMessage: String?
+    /// The most recent refused drag-and-drop, so a surface can react to the kind of refusal without
+    /// matching on the prose in ``errorMessage``.
+    public private(set) var lastFileDropRefusal: WindowsAppFileDropRefusal?
+    /// Windows whose frame stream is paused because nothing on screen can show it, currently minimized ones.
+    ///
+    /// Held here rather than as a field on `WindowMirrorSession` because that type is `Codable`, and a
+    /// non-optional property added to it would make previously encoded JSON fail to decode.
+    private var pausedFrameStreamWindowIds: Set<String> = []
+    /// Guest events cross into things the user owns — the pasteboard and Notification Center — and the guest
+    /// controls both their content and their timing. Bounding one message does nothing about a megabyte every
+    /// ten milliseconds.
+    private var guestClipboardRateLimiter = GuestEventRateLimiter.guestClipboard
+    private var guestNotificationRateLimiter = GuestEventRateLimiter.guestNotifications
     public private(set) var connectionMode: HostConnectionMode = .agent
     public private(set) var connectionDetail: String?
     public private(set) var agentDiagnostic: AgentConnectionDiagnostic?
@@ -1557,17 +1760,36 @@ public final class HostDashboardModel {
     private let service: any HostDashboardService
     private let restoreIntentStore: any WindowRestoreIntentStore
     private let pendingLaunchIntentStore: any PendingLaunchIntentStore
+    /// Holds the authoritative full-window image per mirrored window.
+    ///
+    /// `@ObservationIgnored` on purpose: the pixels must not be part of observable value-type state, or
+    /// every frame would copy a full-resolution bitmap through the session array. Views observe
+    /// `WindowMirrorSession.compositedFrameGeneration` instead and read the image through
+    /// `compositedFrameImage(for:)`.
+    @ObservationIgnored private let frameCompositor: WindowFrameCompositor
+    /// Optional throughput/efficiency instrumentation. Absent in normal app runs; supplied by the
+    /// measurement command so a bounded diagnostic run can report what the pipeline actually did.
+    @ObservationIgnored private let framePipelineMetrics: FramePipelineMetrics?
     @ObservationIgnored private var appLaunchTasks: [String: Task<WindowsAppLaunchResult?, Never>] = [:]
     private let automaticQuietDelaySeconds = 8
+    /// How many windows Veil will adopt for one app from the guest's discovery stream.
+    ///
+    /// Bounds guest-driven window creation rather than expressing a preference. See
+    /// ``shouldAdoptAdditionalWindow(_:)`` for why a bound belongs here but not on the total.
+    static let maximumAdoptedWindowsPerApp = 8
 
     public init(
         service: any HostDashboardService,
         restoreIntentStore: any WindowRestoreIntentStore = JSONWindowRestoreIntentStore(),
-        pendingLaunchIntentStore: any PendingLaunchIntentStore = JSONPendingLaunchIntentStore()
+        pendingLaunchIntentStore: any PendingLaunchIntentStore = JSONPendingLaunchIntentStore(),
+        frameCompositor: WindowFrameCompositor = WindowFrameCompositor(),
+        framePipelineMetrics: FramePipelineMetrics? = nil
     ) {
         self.service = service
         self.restoreIntentStore = restoreIntentStore
         self.pendingLaunchIntentStore = pendingLaunchIntentStore
+        self.frameCompositor = frameCompositor
+        self.framePipelineMetrics = framePipelineMetrics
     }
 
     public var statusText: String {
@@ -1713,10 +1935,14 @@ public final class HostDashboardModel {
             && health?.capabilities.input == true
     }
 
+    /// - Parameter hostBackingScale: This Mac's backing scale factor, supplied by the app shell because
+    ///   VeilHostCore does not import AppKit. `nil` reports display scaling as unknown rather than
+    ///   assuming 1, which would claim a mismatch on every Retina Mac whose scale was never read.
     public func runtimeStatusReport(
         generatedAt: Date = Date(),
         agentEndpoint: String = HostDashboardModel.defaultAgentEndpoint,
-        localRuntime: WindowsAppRuntimeLocalRuntimeStatus? = nil
+        localRuntime: WindowsAppRuntimeLocalRuntimeStatus? = nil,
+        hostBackingScale: Double? = nil
     ) -> WindowsAppRuntimeStatusReport {
         let localRuntime = localRuntimeWithGuestAgentEvidence(localRuntime ?? localRuntimeStatus(snapshot: nil))
         let quietRuntime = quietRuntimeStatus(localRuntime: localRuntime)
@@ -1804,9 +2030,11 @@ public final class HostDashboardModel {
                     frameStreamRequestedAt: session.frameStreamRequestedAt,
                     latestFrameReceivedAt: session.frameTiming?.latestFrameReceivedAt,
                     latestFrameAgeMilliseconds: frameStream.latestFrameAgeMilliseconds,
+                    latestActivityAgeMilliseconds: frameStream.latestActivityAgeMilliseconds,
                     latestFrameIntervalMilliseconds: frameStream.latestFrameIntervalMilliseconds,
                     frameStreamWaitingAgeMilliseconds: frameStream.waitingForFirstFrameMilliseconds,
                     receivedFrameCount: frameStream.receivedFrameCount,
+                    unchangedHeartbeatCount: frameStream.unchangedHeartbeatCount,
                     frameStreamRecommendedAction: frameStream.recommendedAction,
                     frameStreamRestartCount: session.frameStreamRestartCount,
                     latestFrameStreamRestartedAt: session.latestFrameStreamRestartedAt,
@@ -1837,6 +2065,7 @@ public final class HostDashboardModel {
             oneScreenUX: oneScreenUX,
             launchOnboarding: launchOnboarding,
             macWindowIntegration: macWindowIntegration,
+            displayScaling: displayScalingStatus(hostBackingScale: hostBackingScale),
             quietRuntime: quietRuntime,
             launchPlan: launchPlan,
             proofPlan: proofPlan,
@@ -3439,6 +3668,18 @@ public final class HostDashboardModel {
         let reason: String
         let canStopLocalRuntime = canStopLocalRuntime(localRuntime)
         let canQuietRuntime = canQuietRuntimeWhenIdle && canStopLocalRuntime
+        // Suspend needs a *running* machine to stream. A `.suspended` VM is already quiet and a
+        // `.starting` one has no consistent guest state yet, so neither is a suspend candidate.
+        let canSuspendSession = localRuntime?.canSuspendSession == true && localRuntime?.state == .running
+        let quietMode: String
+
+        if !canQuietRuntime {
+            quietMode = WindowsAppRuntimeQuietPolicyStatus.noneMode
+        } else if canSuspendSession {
+            quietMode = WindowsAppRuntimeQuietPolicyStatus.suspendMode
+        } else {
+            quietMode = WindowsAppRuntimeQuietPolicyStatus.stopMode
+        }
 
         if !hasOpenedAppWindowThisSession {
             recommendedAction = "none"
@@ -3447,8 +3688,13 @@ public final class HostDashboardModel {
             recommendedAction = "keep-running"
             reason = "Windows app windows are still open."
         } else if canQuietRuntime {
-            recommendedAction = "stop-or-suspend-runtime"
-            reason = "All Windows app windows are closed and the Windows app connection is ready to stop cleanly."
+            // Names the one action that will run. The previous `stop-or-suspend-runtime` named both
+            // without committing, so a reader could not tell whether their open apps were about to be
+            // closed -- which is the only part of this they actually care about.
+            recommendedAction = canSuspendSession ? "suspend-runtime" : "stop-runtime"
+            reason = canSuspendSession
+                ? "All Windows app windows are closed. Windows will be suspended, so open apps and unsaved work survive until the next launch."
+                : "All Windows app windows are closed and Windows is ready to shut down cleanly. This session cannot be suspended, so open apps will not survive."
         } else if localRuntime?.isKnown == true && !canStopLocalRuntime {
             recommendedAction = "already-quiet"
             reason = "All Windows app windows are closed and Windows is already quiet."
@@ -3464,7 +3710,14 @@ public final class HostDashboardModel {
             canQuietRuntime: canQuietRuntime,
             willQuietAutomatically: canQuietRuntime,
             automaticQuietDelaySeconds: automaticQuietDelaySeconds,
+            quietMode: quietMode,
+            canSuspendSession: canSuspendSession,
             recommendedAction: recommendedAction,
+            recommendedSuspendCommand: canQuietRuntime && canSuspendSession
+                ? "veil-vmctl app-runtime-action --json --action suspend-runtime"
+                : nil,
+            // Stop stays available as the fallback even when suspend is the plan, because a suspend that
+            // fails partway has to have somewhere to go.
             recommendedStopCommand: canQuietRuntime ? "veil-vmctl app-runtime-action --json --action stop-runtime" : nil,
             reason: reason
         )
@@ -3574,6 +3827,86 @@ public final class HostDashboardModel {
                 generatedAt: generatedAt
             ).reopenEscalated
         }
+    }
+
+    /// - Parameter hostBackingScale: This Mac's backing scale factor. `nil` when the caller cannot supply
+    ///   it — VeilHostCore does not import AppKit, so the app shell passes `NSScreen.backingScaleFactor`.
+    ///   A `nil` reports the scaling state as unknown rather than assuming 1, which would claim a
+    ///   mismatch on every Retina Mac whose scale was simply never read.
+    public func displayScalingStatus(
+        hostBackingScale: Double? = nil
+    ) -> WindowsAppRuntimeDisplayScalingStatus {
+        // The foreground window, matching how macWindowIntegration picks one. Guest display scaling is a
+        // single Windows setting, so any mirrored window is representative of it.
+        let reportedGuestScale = mirrorSessions.last?.latestFrame?.scale
+        // Filtered where it is read, so an unusable value is never echoed into the report. It is only ever a
+        // divisor or a number shown to the user, and it is good for neither.
+        let guestRenderScale = reportedGuestScale.flatMap {
+            Self.isPlausibleDisplayScale($0) ? $0 : nil
+        }
+
+        guard let hostBackingScale, hostBackingScale > 0 else {
+            return WindowsAppRuntimeDisplayScalingStatus(
+                guestRenderScale: guestRenderScale,
+                recommendedAction: "inspect-host-display-scale",
+                reason: "This Mac's display scale was not supplied, so Veil cannot tell whether Windows is rendering at the resolution this display shows."
+            )
+        }
+
+        // A guest can put any `Double` in a frame's `scale`. A denormal such as 1e-320 passes a bare `> 0`
+        // check and makes `hostBackingScale / guestRenderScale` infinite, which `JSONEncoder` refuses to
+        // encode — so one malformed frame would have made `veil-vmctl app-runtime-status --json` fail
+        // outright, taking every unrelated section of the report down with it.
+        if reportedGuestScale != nil, guestRenderScale == nil {
+            return WindowsAppRuntimeDisplayScalingStatus(
+                hostBackingScale: hostBackingScale,
+                recommendedAction: "inspect-guest-display-scale",
+                reason: "Windows reported a display scale Veil cannot use, so its rendering resolution cannot be compared against this display."
+            )
+        }
+
+        guard let guestRenderScale, guestRenderScale > 0 else {
+            return WindowsAppRuntimeDisplayScalingStatus(
+                hostBackingScale: hostBackingScale,
+                recommendedAction: mirrorSessions.isEmpty ? "open-windows-app" : "wait-for-first-frame",
+                reason: mirrorSessions.isEmpty
+                    ? "Open a Windows app to compare its rendering resolution against this display."
+                    : "Waiting for the first app screen frame before comparing rendering resolution against this display."
+            )
+        }
+
+        let scaleRatio = hostBackingScale / guestRenderScale
+        // A tolerance rather than exact equality: Windows offers 125% and 150% steps that will never equal
+        // a Mac's 1x or 2x, and nagging about a 4% difference nobody can see would be noise.
+        let isMatched = abs(scaleRatio - 1) <= 0.05
+        let recommendedGuestScalePercent = Int((hostBackingScale * 100).rounded())
+
+        if isMatched {
+            return WindowsAppRuntimeDisplayScalingStatus(
+                hostBackingScale: hostBackingScale,
+                guestRenderScale: guestRenderScale,
+                scaleRatio: scaleRatio,
+                recommendedGuestScalePercent: recommendedGuestScalePercent,
+                recommendedAction: "none",
+                reason: "Windows is rendering app windows at the resolution this display shows, so mirrored windows are as sharp as the display allows."
+            )
+        }
+
+        let isUpscaling = scaleRatio > 1
+        return WindowsAppRuntimeDisplayScalingStatus(
+            hostBackingScale: hostBackingScale,
+            guestRenderScale: guestRenderScale,
+            scaleRatio: scaleRatio,
+            isUpscaling: isUpscaling,
+            isOverRendering: !isUpscaling,
+            recommendedGuestScalePercent: recommendedGuestScalePercent,
+            // Named as a guest setting rather than a Veil action, because Veil cannot change Windows'
+            // display scaling from outside the guest.
+            recommendedAction: isUpscaling ? "raise-guest-display-scaling" : "lower-guest-display-scaling",
+            reason: isUpscaling
+                ? "Windows is rendering app windows at a lower resolution than this display shows, so macOS is enlarging them and text looks soft. Set Windows display scaling to \(recommendedGuestScalePercent)% to match."
+                : "Windows is rendering more pixels than this display can show. Those pixels are encoded, sent, and composited before being discarded on every frame. Set Windows display scaling to \(recommendedGuestScalePercent)% to stop paying for them."
+        )
     }
 
     public func launcherVisibilityStatus(
@@ -3934,6 +4267,11 @@ public final class HostDashboardModel {
             bootReady: snapshot.bootReady,
             canStart: canStart,
             isRunning: isRunning,
+            // Derived from the same persistence summary `vm-session-status` reports, so the app screen
+            // and the CLI can never disagree about whether an idle VM can be suspended.
+            canSuspendSession: VMSessionActionReportFactory
+                .persistenceSummary(snapshot: snapshot)
+                .isSupported,
             windowsInstalled: snapshot.windowsInstalled,
             installEvidence: guestAgentInstallEvidence ?? snapshot.installEvidence,
             automaticInstallMediaStatus: automaticInstallMediaStatus,
@@ -4010,10 +4348,20 @@ public final class HostDashboardModel {
             phase = .connected
         } catch {
             errorMessage = userMessage(for: error)
-            agentDiagnostic = AgentConnectionDiagnostic.unavailable(
-                endpoint: "configured Windows agent",
-                errorMessage: userMessage(for: error)
-            )
+            if let serviceError = error as? HostDashboardServiceError,
+               case .agentEndpointUnavailable(let endpoint, let detail, let nextActions) = serviceError {
+                agentDiagnostic = AgentConnectionDiagnostic(
+                    status: .unavailable,
+                    endpoint: endpoint,
+                    errorMessage: detail,
+                    nextActions: nextActions
+                )
+            } else {
+                agentDiagnostic = AgentConnectionDiagnostic.unavailable(
+                    endpoint: "configured Windows agent",
+                    errorMessage: userMessage(for: error)
+                )
+            }
             phase = .failed
         }
     }
@@ -4123,26 +4471,27 @@ public final class HostDashboardModel {
         return restored
     }
 
-    public func launchSelectedApp() async {
+    @discardableResult
+    public func launchSelectedApp() async -> WindowsAppLaunchResult? {
         guard selectedApp != nil else {
             errorMessage = "Select an app before launching."
             phase = .failed
-            return
+            return nil
         }
 
         guard hasLiveAgentConnection else {
             await queuePendingLaunchIntent(appId: selectedAppId)
             errorMessage = nil
-            return
+            return nil
         }
 
         guard let selectedAppId, canLaunchSelectedApp else {
             errorMessage = "The selected Windows app is not available."
             phase = .failed
-            return
+            return nil
         }
 
-        _ = await launchApp(appId: selectedAppId)
+        return await launchApp(appId: selectedAppId)
     }
 
     @discardableResult
@@ -4199,17 +4548,46 @@ public final class HostDashboardModel {
     /// Opens a host file in the given app on the Windows guest -- the drag-and-drop entry point.
     /// Applies the exact same side effects as `launchApp` since the wire response has the same
     /// launch-acceptance-plus-`window.created` shape; the only difference is what triggered it.
+    /// Records a drag-and-drop refusal decided on the host.
+    ///
+    /// Refusals happen before the guest is contacted, so they never pass through ``openFile``'s error path.
+    /// That is what made them silent: macOS plays its accept animation the moment the drop is taken, so a
+    /// file refused a few milliseconds later looked exactly like a file that opened and did nothing.
+    ///
+    /// This is the record, not the message. The app shell shows the refusal as a sheet on the window the
+    /// file was dropped onto, because that is where the gesture happened.
+    ///
+    /// Deliberately does **not** set ``errorMessage`` or move ``phase`` to `.failed`. Nothing about the
+    /// Windows runtime broke — one file was not accepted and the app is still running. `errorMessage` is
+    /// rendered as an "Agent Unavailable" panel in the Agent tab, so putting a drop refusal there would
+    /// report the wrong problem in the wrong place.
+    public func recordFileDropRefusal(_ refusal: WindowsAppFileDropRefusal) {
+        lastFileDropRefusal = refusal
+    }
+
     @discardableResult
     public func openFile(appId: String, fileName: String, contentBase64: String) async -> WindowsAppLaunchResult? {
+        // Restored on failure. A drop that Windows refuses must not leave the launcher parked in
+        // `.launching` forever, and must not claim `.failed` either — see the catch below.
+        let phaseBeforeOpen = phase
         phase = .launching
         errorMessage = nil
+        // A drop that got this far passed every host-side check, so the previous refusal is history and must
+        // not keep showing up as the current state of drag-and-drop.
+        lastFileDropRefusal = nil
 
         do {
             let result = try await service.openFile(appId: appId, fileName: fileName, contentBase64: contentBase64)
             return try await applyWindowsAppLaunchResult(result)
         } catch {
-            errorMessage = userMessage(for: error)
-            phase = .failed
+            // Recorded as a drop refusal, not a runtime failure. The guest returns structured reasons here
+            // (`invalid_file_name`, `file_too_large`, `file_write_failed`, `file_open_failed`, ...), and the
+            // previous code turned every one of them into `phase = .failed` plus a message in
+            // `errorMessage`. That claimed the whole Windows runtime broke because one file did not open,
+            // and `errorMessage` has no display surface in the one-screen launcher, so the explanation was
+            // lost as well. The app the user dropped onto is still running.
+            lastFileDropRefusal = .guestRejected(fileName: fileName, detail: userMessage(for: error))
+            phase = phaseBeforeOpen
             return nil
         }
     }
@@ -4247,17 +4625,111 @@ public final class HostDashboardModel {
             return
         }
 
+        // The binary frame channel bounds surface dimensions in its codec; the JSON path had no bound
+        // anywhere. A `window.frame` declaring 30000x30000 is a ~110 KB message on the wire and a
+        // multi-gigabyte `NSImage` decode on the main thread when the view renders it. Rejected here so the
+        // implausible frame is never stored, rather than at each place that might draw it.
+        guard Self.isPlausibleFrameSize(width: frame.width, height: frame.height) else {
+            VeilLog.agent.notice(
+                "Rejected a window.frame for \(frame.windowId, privacy: .public) declaring an implausible \(frame.width, privacy: .public)x\(frame.height, privacy: .public) size."
+            )
+            return
+        }
+
         let priorTiming = mirrorSessions[index].frameTiming
         mirrorSessions[index].latestFrame = frame
         mirrorSessions[index].captureState = .streaming
         mirrorSessions[index].frameTiming = WindowFrameTiming(
             firstFrameReceivedAt: priorTiming?.firstFrameReceivedAt ?? receivedAt,
             latestFrameReceivedAt: receivedAt,
+            latestActivityAt: receivedAt,
             latestFrameIntervalMilliseconds: priorTiming.map {
                 max(0, Int((receivedAt.timeIntervalSince($0.latestFrameReceivedAt) * 1000).rounded()))
             },
-            receivedFrameCount: (priorTiming?.receivedFrameCount ?? 0) + 1
+            receivedFrameCount: (priorTiming?.receivedFrameCount ?? 0) + 1,
+            unchangedHeartbeatCount: priorTiming?.unchangedHeartbeatCount ?? 0
         )
+    }
+
+    /// Composited surface for a mirrored window, or `nil` until a key frame establishes one.
+    public func compositedFrameImage(for windowId: String) -> CGImage? {
+        frameCompositor.image(for: windowId)
+    }
+
+    /// Applies a frame update that may be a dirty-rect tile rather than a whole frame.
+    ///
+    /// Timing, staleness, latency budgets, and proof artifacts all read exactly as they do for a
+    /// JSON-delivered frame: a successfully composited tile is a received frame. A tile that cannot be
+    /// composited is deliberately *not* counted, because the window did not actually update, and letting
+    /// it refresh the frame clock would make a stalled surface look healthy.
+    @discardableResult
+    public func receiveWindowFrameTile(
+        _ tile: WindowFrameTile,
+        wireByteCount: Int? = nil,
+        receivedAt: Date = Date()
+    ) -> Bool {
+        guard let index = mirrorSessions.firstIndex(where: { $0.id == tile.windowId }) else {
+            return false
+        }
+
+        let compositeStartedAt = ContinuousClock.now
+        let outcome = frameCompositor.apply(tile)
+        let compositeDuration = ContinuousClock.now - compositeStartedAt
+
+        switch outcome {
+        case .composited(let generation):
+            mirrorSessions[index].compositedFrameGeneration = generation
+            mirrorSessions[index].awaitingKeyFrameReason = nil
+            receiveWindowFrame(tile.surfaceMetadataFrameEvent(), receivedAt: receivedAt)
+            framePipelineMetrics?.recordApplied(
+                tile: tile,
+                // Falls back to the payload size when the caller did not measure the wire size, so a
+                // JSON-delivered or synthesized tile still contributes a defensible byte count.
+                wireByteCount: wireByteCount ?? tile.payload.count,
+                compositeDuration: TimeInterval(compositeDuration.components.seconds)
+                    + TimeInterval(compositeDuration.components.attoseconds) / 1e18,
+                receivedAt: receivedAt
+            )
+            return true
+        case .needsKeyFrame(let reason):
+            mirrorSessions[index].awaitingKeyFrameReason = reason.rawValue
+            framePipelineMetrics?.recordDropped(windowId: tile.windowId, reason: reason, at: receivedAt)
+            VeilLog.agent.notice(
+                "Dropped a frame tile for \(tile.windowId, privacy: .public); waiting for a key frame because \(reason.rawValue, privacy: .public)."
+            )
+            return false
+        }
+    }
+
+    /// Records that a frame stream is alive with nothing new to draw.
+    ///
+    /// Advances liveness only. `latestFrameReceivedAt` is left alone on purpose so the frame-latency
+    /// budget and saved proof artifacts keep measuring how old the displayed picture really is; a
+    /// heartbeat does not make the picture newer.
+    ///
+    /// Ignored before the first real frame: a stream that has never produced an image is still
+    /// `waitingForFirstFrame`, and letting a heartbeat satisfy that would hide capture that never
+    /// started.
+    @discardableResult
+    public func receiveWindowFrameUnchanged(
+        _ event: WindowFrameUnchangedEvent,
+        receivedAt: Date = Date()
+    ) -> Bool {
+        guard let index = mirrorSessions.firstIndex(where: { $0.id == event.windowId }),
+              let priorTiming = mirrorSessions[index].frameTiming else {
+            return false
+        }
+
+        mirrorSessions[index].frameTiming = WindowFrameTiming(
+            firstFrameReceivedAt: priorTiming.firstFrameReceivedAt,
+            latestFrameReceivedAt: priorTiming.latestFrameReceivedAt,
+            latestActivityAt: receivedAt,
+            latestFrameIntervalMilliseconds: priorTiming.latestFrameIntervalMilliseconds,
+            receivedFrameCount: priorTiming.receivedFrameCount,
+            unchangedHeartbeatCount: priorTiming.unchangedHeartbeatCount + 1
+        )
+        framePipelineMetrics?.recordUnchangedHeartbeat(windowId: event.windowId, at: receivedAt)
+        return true
     }
 
     @discardableResult
@@ -4315,8 +4787,8 @@ public final class HostDashboardModel {
 
     @discardableResult
     public func restartFrameSubscription(windowId: String, restartedAt: Date = Date()) async -> Bool {
-        guard let index = mirrorSessions.firstIndex(where: { $0.id == windowId }),
-              mirrorSessions[index].captureState != .unavailable,
+        guard let startingIndex = mirrorSessions.firstIndex(where: { $0.id == windowId }),
+              mirrorSessions[startingIndex].captureState != .unavailable,
               hasLiveAgentConnection else {
             return false
         }
@@ -4324,28 +4796,238 @@ public final class HostDashboardModel {
         do {
             try await service.unsubscribeWindowFrames(windowId: windowId)
             try await service.subscribeWindowFrames(windowId: windowId)
-            mirrorSessions[index].captureState = .pending
-            mirrorSessions[index].frameTiming = nil
-            mirrorSessions[index].latestFrame = nil
-            mirrorSessions[index].frameStreamRequestedAt = restartedAt
-            mirrorSessions[index].frameStreamRestartCount += 1
-            mirrorSessions[index].latestFrameStreamRestartedAt = restartedAt
-            return true
         } catch {
+            // Background frame-stream maintenance, not a user action. `.failed` is documented as reserved
+            // for "a user-triggered action that failed outright" and renders as "Connection failed", so a
+            // retry loop that could not resubscribe must not put the whole model there. Returning `false`
+            // already tells the caller to try again.
             errorMessage = userMessage(for: error)
-            phase = .failed
             return false
         }
+
+        guard let index = resolvedMirrorSessionIndex(for: windowId) else {
+            return false
+        }
+
+        mirrorSessions[index].captureState = .pending
+        mirrorSessions[index].frameTiming = nil
+        mirrorSessions[index].latestFrame = nil
+        mirrorSessions[index].frameStreamRequestedAt = restartedAt
+        mirrorSessions[index].frameStreamRestartCount += 1
+        mirrorSessions[index].latestFrameStreamRestartedAt = restartedAt
+        return true
+    }
+
+    /// Stops paying for a window nobody can see.
+    ///
+    /// A minimized mirrored window still had the guest capturing its pixels, comparing them, PNG-encoding
+    /// them, and sending them, and the host still decoded and composited every one — for a window collapsed
+    /// into the Dock. This unsubscribes instead.
+    ///
+    /// The subtle part is not the unsubscribe, it is not tripping the staleness ladder. A stream with no frames
+    /// arriving normally escalates `restart-frame-subscription` → `recover-window-capture` →
+    /// `reopen-windows-app`, so a naive pause would offer to relaunch the user's app seconds after they
+    /// minimized it. That ladder is climbed by `frameStreamRestartCount`, which only the automatic sweeps
+    /// increment — so paused windows are excluded from those sweeps and the count never rises.
+    ///
+    /// `frameStreamRestartCount` is deliberately neither incremented nor reset: minimizing is not a restart
+    /// attempt, and restoring is not evidence that an underlying capture problem went away.
+    @discardableResult
+    public func pauseFrameStream(windowId: String, pausedAt: Date = Date()) async -> Bool {
+        guard let startingIndex = mirrorSessions.firstIndex(where: { $0.id == windowId }),
+              mirrorSessions[startingIndex].captureState != .unavailable,
+              !pausedFrameStreamWindowIds.contains(windowId),
+              hasLiveAgentConnection else {
+            return false
+        }
+
+        do {
+            try await service.unsubscribeWindowFrames(windowId: windowId)
+        } catch {
+            return false
+        }
+
+        guard let index = resolvedMirrorSessionIndex(for: windowId) else {
+            return false
+        }
+
+        pausedFrameStreamWindowIds.insert(windowId)
+        mirrorSessions[index].captureState = .pending
+        mirrorSessions[index].frameTiming = nil
+        mirrorSessions[index].latestFrame = nil
+        // Kept, not cleared. `harness/app-runtime-status` requires `frameStreamRequestedAt` on any capture
+        // session with no received frames, so clearing it would make every paused window fail the report
+        // contract. Escalation is prevented by excluding paused windows from the automatic sweeps instead,
+        // which is what actually drives `frameStreamRestartCount` upward.
+        mirrorSessions[index].frameStreamRequestedAt = pausedAt
+        return true
+    }
+
+    /// Resubscribes a window whose stream was paused because it was not visible.
+    ///
+    /// Setting `frameStreamRequestedAt` here is what restarts the normal first-frame timeout, so a window that
+    /// comes back and then genuinely fails to draw is still caught.
+    @discardableResult
+    public func resumeFrameStream(windowId: String, resumedAt: Date = Date()) async -> Bool {
+        guard pausedFrameStreamWindowIds.contains(windowId),
+              mirrorSessions.contains(where: { $0.id == windowId }),
+              hasLiveAgentConnection else {
+            return false
+        }
+
+        do {
+            try await service.subscribeWindowFrames(windowId: windowId)
+        } catch {
+            // Left in the paused set so a later resume can try again, rather than being remembered as live
+            // while no frames are coming.
+            return false
+        }
+
+        guard let index = resolvedMirrorSessionIndex(for: windowId) else {
+            return false
+        }
+
+        pausedFrameStreamWindowIds.remove(windowId)
+        mirrorSessions[index].captureState = .pending
+        mirrorSessions[index].frameStreamRequestedAt = resumedAt
+        return true
+    }
+
+    /// Whether this window's frame stream is paused because nothing on screen can show it.
+    public func isFrameStreamPaused(windowId: String) -> Bool {
+        pausedFrameStreamWindowIds.contains(windowId)
+    }
+
+    /// Consecutive undecodable control messages tolerated before the connection is ended.
+    ///
+    /// Mirrors `HostFrameChannel.malformedFrameTolerance`. One bad message should not cost a reconnect; a
+    /// guest that only ever sends garbage still has to be given up on.
+    nonisolated static let undecodableControlMessageTolerance = 8
+
+    /// Longest guest clipboard update the host will accept, in UTF-16 code units.
+    ///
+    /// Deliberately far above the 4096-unit bound on the host's own committed *text input*: people legitimately
+    /// copy whole documents, and a clipboard is not a keystroke. 4 million units is roughly 800 pages of prose,
+    /// so nothing real is refused, while a single message can no longer be unbounded.
+    ///
+    /// This bounds one message. It does **not** bound the rate — see
+    /// `docs/checklists/2026-08-16-guest-to-host-trust.md`.
+    nonisolated static let maximumGuestClipboardUTF16Length = 4 * 1_024 * 1_024
+
+    /// Longest window title the host will carry.
+    ///
+    /// The title flows into an `NSWindow`, dock menu items, menu bar items, and status reports, none of which
+    /// bounded it. A megabyte title, re-sent on every `window.updated`, is a layout cost in several places at
+    /// once. No real window title is close to this.
+    /// `nonisolated` so `sanitizedWindowTitle` can read it: that function is a pure rule about guest data, and
+    /// tying it to the main actor would be a property of the enclosing model rather than of the rule.
+    nonisolated static let maximumWindowTitleLength = 256
+
+    /// Clamps a guest-reported window so its numbers and strings are safe to hand to AppKit.
+    ///
+    /// `WindowsAppWindowPlacement.initialFrame` already clamps bounds to the visible screen, but the clamping
+    /// was never extended to `contentMinSize` and `contentAspectRatio`, which are set from the raw values on
+    /// every `window.updated`. Bounds of `1 x 2000000000` handed AppKit a two-billion-point minimum size and a
+    /// degenerate resize ratio.
+    ///
+    /// Clamped at ingest rather than at each consumer, so a future consumer cannot reintroduce the problem by
+    /// reading `bounds` directly.
+    nonisolated static func sanitizedGuestWindow(_ event: WindowCreatedEvent) -> WindowCreatedEvent {
+        var sanitized = event
+        sanitized.bounds = WindowBounds(
+            x: event.bounds.x,
+            y: event.bounds.y,
+            width: clampedWindowExtent(event.bounds.width),
+            height: clampedWindowExtent(event.bounds.height)
+        )
+        sanitized.title = sanitizedWindowTitle(event.title)
+        return sanitized
+    }
+
+    /// Bounds a logical window extent to something a display can express.
+    ///
+    /// Shares the frame channel's per-axis ceiling so one number describes "the largest window Veil will deal
+    /// with" rather than two that can drift.
+    nonisolated static func clampedWindowExtent(_ extent: Int) -> Int {
+        min(max(extent, 0), VeilFrameChannelCodec.maximumSurfaceDimension)
+    }
+
+    /// Truncates a window title and removes characters that break the surfaces it is displayed on.
+    ///
+    /// Newlines in particular: a title is drawn on one line in a titlebar and a menu item, so an embedded
+    /// newline is a rendering defect rather than content.
+    nonisolated static func sanitizedWindowTitle(_ title: String) -> String {
+        let singleLine = String(
+            title.map { character -> Character in
+                if character.isNewline {
+                    return " "
+                }
+                // Checked by scalar value with an explicit single-scalar guard, so a flag or skin-tone
+                // sequence is never mistaken for a control character.
+                if character.unicodeScalars.count == 1,
+                   let scalar = character.unicodeScalars.first,
+                   scalar.value < 32 {
+                    return " "
+                }
+                return character
+            }
+        )
+        guard singleLine.count > maximumWindowTitleLength else {
+            return singleLine
+        }
+        // Truncated by Character so a grapheme cluster is never split, matching how dropped file names are
+        // shortened.
+        return String(singleLine.prefix(maximumWindowTitleLength))
+    }
+
+    /// Whether a guest-reported DPI scale is usable as a divisor.
+    ///
+    /// Windows display scaling runs from 100% to 500%, so anything outside `0.5...8` is not a scale the guest
+    /// could legitimately be rendering at. The bound matters less for plausibility than for arithmetic: a
+    /// denormal divisor produces an infinite ratio, and a non-finite `Double` cannot be JSON-encoded.
+    /// `nonisolated` because it is pure arithmetic on its argument. Without it, a rule about guest data would
+    /// be reachable only from the main actor, which is a property of the enclosing model rather than of the
+    /// rule.
+    nonisolated static func isPlausibleDisplayScale(_ scale: Double) -> Bool {
+        scale.isFinite && scale >= 0.5 && scale <= 8
+    }
+
+    /// Whether a guest-declared frame size is small enough to store and eventually draw.
+    ///
+    /// Shares the binary frame channel's ceilings so the two delivery paths cannot disagree about what is
+    /// acceptable. Bounding each axis alone is not enough: 32768 on both axes is a 4 GiB bitmap, and a 1-bit
+    /// PNG of those dimensions deflates small enough to fit in one WebSocket message.
+    nonisolated static func isPlausibleFrameSize(width: Int, height: Int) -> Bool {
+        width > 0
+            && height > 0
+            && width <= VeilFrameChannelCodec.maximumSurfaceDimension
+            && height <= VeilFrameChannelCodec.maximumSurfaceDimension
+            && width * height <= VeilFrameChannelCodec.maximumSurfacePixelCount
+    }
+
+    /// Re-resolves a mirror session index after an `await`.
+    ///
+    /// `mirrorSessions` is main-actor state, which makes it tempting to capture an index once and reuse it
+    /// across suspension points. An `await` still yields, though, and a `window.closed` arriving in that gap
+    /// removes the session — so an index captured beforehand can be out of bounds by the time it is used,
+    /// which crashes rather than producing a wrong value. A reorder is quieter and worse: it would apply the
+    /// mutation to a different window.
+    private func resolvedMirrorSessionIndex(for windowId: String) -> Int? {
+        mirrorSessions.firstIndex(where: { $0.id == windowId })
     }
 
     @discardableResult
     public func restartStaleFrameSubscriptions(generatedAt: Date = Date()) async -> [String] {
         let staleWindowIds = mirrorSessions
             .filter {
-                WindowFrameStreamAssessment.assess(
-                    session: $0,
-                    generatedAt: generatedAt
-                ).status == .stale
+                // A paused window has no frames arriving because Veil asked for none. Restarting it would
+                // resubscribe a window the user minimized, and each attempt raises `frameStreamRestartCount`
+                // until the ladder offers to reopen an app that was never broken.
+                !pausedFrameStreamWindowIds.contains($0.id)
+                    && WindowFrameStreamAssessment.assess(
+                        session: $0,
+                        generatedAt: generatedAt
+                    ).status == .stale
             }
             .map(\.id)
         var restartedWindowIds: [String] = []
@@ -4361,8 +5043,8 @@ public final class HostDashboardModel {
 
     @discardableResult
     public func recoverFrameCapture(windowId: String, recoveredAt: Date = Date()) async -> Bool {
-        guard let index = mirrorSessions.firstIndex(where: { $0.id == windowId }),
-              mirrorSessions[index].captureState != .unavailable,
+        guard let startingIndex = mirrorSessions.firstIndex(where: { $0.id == windowId }),
+              mirrorSessions[startingIndex].captureState != .unavailable,
               hasLiveAgentConnection else {
             return false
         }
@@ -4376,28 +5058,38 @@ public final class HostDashboardModel {
 
             try await service.unsubscribeWindowFrames(windowId: windowId)
             try await service.subscribeWindowFrames(windowId: windowId)
-            mirrorSessions[index].captureState = .pending
-            mirrorSessions[index].frameTiming = nil
-            mirrorSessions[index].latestFrame = nil
-            mirrorSessions[index].frameStreamRequestedAt = recoveredAt
-            mirrorSessions[index].frameStreamRestartCount += 1
-            mirrorSessions[index].latestFrameStreamRestartedAt = recoveredAt
-            return true
         } catch {
+            // Also reached from `recoverEscalatedFrameCaptures`, which runs automatically. `.failed` renders
+            // as "Connection failed", so a recovery attempt that did not take must not report the Windows
+            // connection as down — the caller retries on the next pass.
             errorMessage = userMessage(for: error)
-            phase = .failed
             return false
         }
+
+        guard let index = resolvedMirrorSessionIndex(for: windowId) else {
+            return false
+        }
+
+        mirrorSessions[index].captureState = .pending
+        mirrorSessions[index].frameTiming = nil
+        mirrorSessions[index].latestFrame = nil
+        mirrorSessions[index].frameStreamRequestedAt = recoveredAt
+        mirrorSessions[index].frameStreamRestartCount += 1
+        mirrorSessions[index].latestFrameStreamRestartedAt = recoveredAt
+        return true
     }
 
     @discardableResult
     public func recoverEscalatedFrameCaptures(generatedAt: Date = Date()) async -> [String] {
         let escalatedWindowIds = mirrorSessions
             .filter {
-                WindowFrameStreamAssessment.assess(
-                    session: $0,
-                    generatedAt: generatedAt
-                ).recoveryEscalated
+                // Same reason as `restartStaleFrameSubscriptions`: a paused window is quiet on purpose, and
+                // recovering it would focus and resubscribe a window the user deliberately minimized.
+                !pausedFrameStreamWindowIds.contains($0.id)
+                    && WindowFrameStreamAssessment.assess(
+                        session: $0,
+                        generatedAt: generatedAt
+                    ).recoveryEscalated
             }
             .map(\.id)
         var recoveredWindowIds: [String] = []
@@ -4537,6 +5229,28 @@ public final class HostDashboardModel {
         }
     }
 
+    /// Sends committed Unicode text to a mirrored Windows window.
+    ///
+    /// This is the path for anything the Windows virtual-key map cannot express, which includes every
+    /// Hangul, kana, and Han character. macOS finishes the IME composition first; only the committed
+    /// result reaches the guest.
+    @discardableResult
+    public func sendTextInput(windowId: String, text: String) async -> Bool {
+        guard canSendInput(to: windowId),
+              InputTextEvent.isSendable(text) else {
+            return false
+        }
+
+        do {
+            try await service.sendTextInput(InputTextEvent(windowId: windowId, text: text))
+            return true
+        } catch {
+            errorMessage = userMessage(for: error)
+            phase = .failed
+            return false
+        }
+    }
+
     public func sendKeyInput(
         windowId: String,
         event: String,
@@ -4564,9 +5278,13 @@ public final class HostDashboardModel {
         }
     }
 
-    public func sendHostClipboardText(_ text: String) async {
+    /// - Returns: Whether the clipboard write reached the guest. Callers that follow this with a paste
+    ///   shortcut must not send it on `.failed`: Ctrl+V does not fail, it pastes whatever Windows had
+    ///   before, into the user's document, silently.
+    @discardableResult
+    public func sendHostClipboardText(_ text: String) async -> HostClipboardSendOutcome {
         guard canSendHostClipboardText else {
-            return
+            return .skipped
         }
 
         let nextSequence = clipboardSequence + 1
@@ -4580,15 +5298,37 @@ public final class HostDashboardModel {
                 )
             )
             clipboardSequence = nextSequence
+            return .sent
         } catch {
-            errorMessage = userMessage(for: error)
-            phase = .failed
+            // Not `phase = .failed`. That phase renders as "Connection failed" in the runtime status line
+            // and the menu bar title, so one undelivered ⌘V would have reported the Windows connection as
+            // down while every other action still worked. The sequence deliberately does not advance, so
+            // loop prevention does not record a host update the guest never received.
+            return .failed(reason: userMessage(for: error))
         }
     }
 
-    public func receiveClipboardText(_ clipboard: ClipboardTextSet) -> Bool {
+    public func receiveClipboardText(_ clipboard: ClipboardTextSet, receivedAt: Date = Date()) -> Bool {
         guard clipboard.origin == "guest",
               clipboard.sequence > lastGuestClipboardSequence else {
+            return false
+        }
+
+        // Rejected rather than truncated. A truncated clipboard is worse than a missing one: the user pastes
+        // half a document into something and has no way to notice. The host bounded its own *outbound* text at
+        // 4096 units and accepted inbound text with no bound at all, and this value is both stored and written
+        // straight to `NSPasteboard`.
+        guard clipboard.text.utf16.count <= Self.maximumGuestClipboardUTF16Length else {
+            VeilLog.agent.notice(
+                "Rejected a guest clipboard update of \(clipboard.text.utf16.count, privacy: .public) UTF-16 units, above the accepted maximum."
+            )
+            return false
+        }
+
+        // Checked last, so a message rejected above never spends the allowance. Otherwise a guest could deny
+        // the user their own clipboard by sending malformed updates.
+        guard guestClipboardRateLimiter.allows(at: receivedAt) else {
+            VeilLog.agent.notice("Rate limited a guest clipboard update.")
             return false
         }
 
@@ -4597,10 +5337,21 @@ public final class HostDashboardModel {
         return true
     }
 
-    public func receiveWindowsNotification(_ notification: WindowsNotificationReceivedEvent) -> Bool {
+    public func receiveWindowsNotification(
+        _ notification: WindowsNotificationReceivedEvent,
+        receivedAt: Date = Date()
+    ) -> Bool {
         guard !notification.notificationId.isEmpty,
               !notification.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
               !latestWindowsNotifications.contains(where: { $0.notificationId == notification.notificationId }) else {
+            return false
+        }
+
+        // The five-entry dedupe above stops repeats, not floods: rotating six ids defeats it completely. These
+        // become real macOS notifications carrying guest-chosen text under Veil's identity, so an unbounded
+        // stream is a phishing surface rather than only a nuisance.
+        guard guestNotificationRateLimiter.allows(at: receivedAt) else {
+            VeilLog.agent.notice("Rate limited a Windows notification.")
             return false
         }
 
@@ -4619,7 +5370,8 @@ public final class HostDashboardModel {
 
         switch envelope.type {
         case .windowCreated:
-            let event = try decoder.decode(WindowCreatedEvent.self, from: message)
+            // Clamped immediately after decode, before anything stores it or hands it to AppKit.
+            let event = Self.sanitizedGuestWindow(try decoder.decode(WindowCreatedEvent.self, from: message))
             // Discovery is guest-owned and can enumerate every tracked process after reconnect.
             // The normal app-first path only opens macOS windows from an explicit host launch or
             // restore response. A later event may refresh an already-owned HWND, but it cannot
@@ -4645,7 +5397,10 @@ public final class HostDashboardModel {
             return .handledWindowCreated(windowId: event.windowId)
         case .windowUpdated:
             let event = try decoder.decode(WindowUpdatedEvent.self, from: message)
-            let window = WindowCreatedEvent(updated: event)
+            // `window.updated` matters more than `window.created` here: it is re-applied to a live NSWindow's
+            // constraints on every arrival, so this is the path a guest would use to keep handing AppKit
+            // absurd values.
+            let window = Self.sanitizedGuestWindow(WindowCreatedEvent(updated: event))
             guard updateWindowState(window) else {
                 return .ignored
             }
@@ -4671,6 +5426,11 @@ public final class HostDashboardModel {
             return receiveClipboardText(clipboard)
                 ? .handledClipboardText(sequence: clipboard.sequence)
                 : .ignored
+        case .windowFrameUnchanged:
+            let event = try decoder.decode(WindowFrameUnchangedEvent.self, from: message)
+            return receiveWindowFrameUnchanged(event)
+                ? .handledWindowFrameUnchanged(windowId: event.windowId)
+                : .ignored
         case .notificationReceived:
             let notification = try decoder.decode(WindowsNotificationReceivedEvent.self, from: message)
             return receiveWindowsNotification(notification)
@@ -4685,6 +5445,7 @@ public final class HostDashboardModel {
         from source: any HostEventSource,
         onMessageHandled: @MainActor (HostProtocolMessageResult) -> Void = { _ in }
     ) async {
+        var consecutiveUndecodableMessages = 0
         do {
             for try await message in source.eventMessages() {
                 // Only ever transitions .reconnecting -> .connected here, never touching .loading/
@@ -4693,8 +5454,34 @@ public final class HostDashboardModel {
                 if phase == .reconnecting {
                     phase = .connected
                 }
-                let result = try await receiveProtocolMessage(message)
-                onMessageHandled(result)
+
+                // Per-message, so one undecodable message no longer ends the connection. Before this, the
+                // only `do/catch` was outside the loop: a single `sequence` that overflowed `Int`, or any
+                // missing field, dropped the host to `.reconnecting` and cost a backoff. Sent repeatedly, the
+                // host never held a stable event connection and lost window updates, clipboard, and
+                // notifications for as long as it continued.
+                //
+                // Everything `receiveProtocolMessage` can throw is a decode failure -- the handlers
+                // themselves do not throw -- so tolerating these is tolerating malformed guest input, not
+                // swallowing host errors.
+                do {
+                    let result = try await receiveProtocolMessage(message)
+                    consecutiveUndecodableMessages = 0
+                    onMessageHandled(result)
+                } catch {
+                    consecutiveUndecodableMessages += 1
+                    VeilLog.agent.error(
+                        "Discarding an undecodable control message: \(String(describing: error))"
+                    )
+                    // A persistent framing disagreement still has to surface rather than looping forever on
+                    // garbage. Same tolerance and same reasoning as the binary frame channel.
+                    if consecutiveUndecodableMessages >= Self.undecodableControlMessageTolerance {
+                        VeilLog.agent.error(
+                            "Ending the control connection after \(consecutiveUndecodableMessages, privacy: .public) consecutive undecodable messages."
+                        )
+                        break
+                    }
+                }
             }
         } catch {
             // Callers run this in a `while !Task.isCancelled` retry loop, so a dropped connection
@@ -4727,8 +5514,63 @@ public final class HostDashboardModel {
     }
 
     private func shouldAcceptTrackedWindowEvent(_ event: WindowCreatedEvent) -> Bool {
-        activeWindows.contains(where: { $0.windowId == event.windowId })
-            || mirrorSessions.contains(where: { $0.id == event.windowId })
+        if activeWindows.contains(where: { $0.windowId == event.windowId })
+            || mirrorSessions.contains(where: { $0.id == event.windowId }) {
+            return true
+        }
+
+        return shouldAdoptAdditionalWindow(event)
+    }
+
+    /// Whether a window Veil never launched should still become a macOS window.
+    ///
+    /// There are two kinds of window Veil did not launch and they are not the same. A window of an app
+    /// the user **already has open here** is the app doing what they asked — they opened Word, Word
+    /// opened a second document — and their act of opening the app is the consent. A window of an app
+    /// never opened in this session is a leftover process or something Windows started on its own, and an
+    /// unrequested window appearing on screen is worse than a missing one.
+    ///
+    /// The guest enumerates every tracked process after a reconnect, so this distinction is what keeps
+    /// discovery from materializing windows nobody asked for.
+    func shouldAdoptAdditionalWindow(_ event: WindowCreatedEvent) -> Bool {
+        Self.shouldAdoptAdditionalWindow(
+            event,
+            openWindowCountForApp: openWindowCount(forAppId: event.appId)
+        )
+    }
+
+    /// The adoption decision as a pure function of the event and how many windows the app already has.
+    ///
+    /// Separated from the model so every branch — including the per-app bound, which is otherwise only
+    /// reachable after opening eight windows — is testable without driving the guest protocol.
+    static func shouldAdoptAdditionalWindow(
+        _ event: WindowCreatedEvent,
+        openWindowCountForApp: Int
+    ) -> Bool {
+        // A zero-sized or untitled top-level window is far more likely a tooltip, splash, or transient
+        // shell window than a document.
+        guard !event.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              event.bounds.width > 0,
+              event.bounds.height > 0 else {
+            return false
+        }
+
+        // Zero means this app has no window here, so the window belongs to something the user never
+        // opened in this session.
+        guard openWindowCountForApp > 0 else {
+            return false
+        }
+
+        // Bounds guest-driven creation, which the host does not control. Not a judgement about how many
+        // windows a user should have: deliberate document windows will not reach it, while a misdetected
+        // transient window or a runaway enumeration loop would otherwise open macOS windows without
+        // limit. Distinct from a cap on *total* windows, which Veil refuses, because every window from an
+        // explicit launch is one the host asked for.
+        return openWindowCountForApp < maximumAdoptedWindowsPerApp
+    }
+
+    func openWindowCount(forAppId appId: String) -> Int {
+        mergedOpenWindows().filter { $0.appId == appId }.count
     }
 
     private func storeMirrorSession(
@@ -4787,6 +5629,12 @@ public final class HostDashboardModel {
     private func removeWindowState(windowId: String) async {
         activeWindows.removeAll { $0.windowId == windowId }
         mirrorSessions.removeAll { $0.id == windowId }
+        // Otherwise a window minimized and then closed stays in the paused set forever, and a later window
+        // that reused the same HWND would be treated as already paused and never resubscribed.
+        pausedFrameStreamWindowIds.remove(windowId)
+        // Each composited surface is a full-resolution bitmap. A closed window that kept one would hold
+        // megabytes for the rest of the process's lifetime.
+        frameCompositor.forget(windowId: windowId)
 
         if lastLaunch?.window.windowId == windowId {
             lastLaunch = nil
@@ -4798,7 +5646,15 @@ public final class HostDashboardModel {
     private func refreshRestoreIntentFromOpenWindows() async {
         let windows = mergedOpenWindows()
         restorableAppIds = orderedUniqueAppIds(from: windows)
-        restorableAppWindowCounts = Dictionary(uniqueKeysWithValues: restorableAppIds.map { ($0, 1) })
+        // The real count per app. This previously wrote 1 for every app regardless of how many windows
+        // it had open, which made a field documented as "how many windows were open" a constant.
+        //
+        // It stays diagnostic input, not a restore queue: `restorableAppIdsForLaunches()` still issues
+        // one launch per app, because a second launch of an app that already owns a window reuses that
+        // HWND rather than opening another.
+        restorableAppWindowCounts = windows.reduce(into: [:]) { counts, window in
+            counts[window.appId, default: 0] += 1
+        }
         await persistRestoreIntent()
     }
 
