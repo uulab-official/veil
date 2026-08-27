@@ -11,18 +11,22 @@ does not claim Parallels-level GPU acceleration.
 ## Deterministic gates
 
 - [x] Swift host: `swift test --disable-sandbox --package-path apps/mac-host` — **719 tests / 62 suites passed**.
-- [ ] Windows agent: `dotnet test apps/windows-agent/tests/VeilAgent.Tests` — not run; the current Mac has no `.NET 8 SDK`.
+- [x] Windows agent: `dotnet test apps/windows-agent/tests/VeilAgent.Tests/VeilAgent.Tests.csproj` with Veil's local .NET 8 toolchain — **122 tests passed**.
 - [x] Node protocol and harness packages: `./script/test_all.sh --skip-windows-agent` — **30 packages passed**.
 - [x] Swift build and macOS app bundle/sign/launch contract passed through `script/test_all.sh --skip-windows-agent`.
 - [x] Install, guarded replace, quarantine cleanup, uninstall, user-data preservation, reinstall, and first-window lifecycle checks passed.
 - [x] Focused P0 launch, display-policy, and window handoff tests passed.
 
-The option-less full gate remains open until a machine with the Windows-agent
-toolchain can run:
+The full no-skip gate passes when the bundled local .NET 8 toolchain is made
+explicit:
 
 ```bash
-./script/test_all.sh
+PATH="$HOME/Library/Application Support/Veil/Toolchains/dotnet8:$PATH" ./script/test_all.sh
 ```
+
+The bare command is expected to stop early on machines where that local
+toolchain is not on `PATH`; that is an environment discovery issue, not a
+Windows-agent test failure.
 
 ## Live Windows gates
 
