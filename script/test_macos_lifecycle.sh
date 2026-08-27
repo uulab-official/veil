@@ -25,6 +25,17 @@ QUARANTINE_TEST_APP="$APPLICATIONS_DIR/Quarantine Test.app"
 LAUNCH_REPORT="$TEST_ROOT/installed-launch-report.plist"
 APP_PID=""
 
+find_launched_app_pid() {
+  local candidate
+  while IFS= read -r candidate; do
+    if ps -p "$candidate" -o command= | rg -F -- "$LAUNCH_REPORT" >/dev/null 2>&1; then
+      printf '%s\n' "$candidate"
+      return 0
+    fi
+  done < <(pgrep -x veil-host-shell || true)
+  return 1
+}
+
 cleanup() {
   if [[ -n "$APP_PID" ]] && kill -0 "$APP_PID" >/dev/null 2>&1; then
     kill "$APP_PID" >/dev/null 2>&1 || true
@@ -85,15 +96,12 @@ fi
 codesign --verify --deep --strict "$INSTALLED_APP"
 [[ -f "$SUPPORT_SENTINEL" ]] || { echo "Reinstall did not preserve support data." >&2; exit 1; }
 
-mkdir -p "$TEST_ROOT/Home"
-CFFIXED_USER_HOME="$TEST_ROOT/Home" HOME="$TEST_ROOT/Home" \
-  "$INSTALLED_APP/Contents/MacOS/veil-host-shell" --launch-verification-report "$LAUNCH_REPORT" \
-  >/dev/null 2>&1 &
-APP_PID=$!
+/usr/bin/open -n "$INSTALLED_APP" --args --launch-verification-report "$LAUNCH_REPORT"
 
 for ((attempt = 1; attempt <= 40; attempt++)); do
   [[ -s "$LAUNCH_REPORT" ]] && break
-  kill -0 "$APP_PID" >/dev/null 2>&1 || {
+  APP_PID="$(find_launched_app_pid || true)"
+  [[ -n "$APP_PID" ]] || {
     echo "Reinstalled Veil exited before writing its launch report." >&2
     exit 1
   }
@@ -101,6 +109,8 @@ for ((attempt = 1; attempt <= 40; attempt++)); do
 done
 
 [[ -s "$LAUNCH_REPORT" ]] || { echo "Reinstalled Veil did not write a launch report." >&2; exit 1; }
+APP_PID="$(find_launched_app_pid || true)"
+[[ -n "$APP_PID" ]] || { echo "Reinstalled Veil process could not be identified after launch." >&2; exit 1; }
 plutil -lint "$LAUNCH_REPORT" >/dev/null
 [[ "$(plutil -extract bundleIdentifier raw -o - "$LAUNCH_REPORT")" == "org.uulab.veil.host-shell" ]]
 LAUNCH_CONTRACT="$(plutil -extract meetsLauncherContract raw -o - "$LAUNCH_REPORT")"

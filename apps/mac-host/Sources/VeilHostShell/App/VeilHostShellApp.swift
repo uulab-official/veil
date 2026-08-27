@@ -242,7 +242,10 @@ struct VeilHostShellApp: App {
                     runOneClickSelectedApp()
                 }
                 .keyboardShortcut(.return, modifiers: [.command])
-                .disabled(canRecoverRuntimeDisplay || (!model.canRequestSelectedAppLaunch && !model.canFulfillPendingLaunch))
+                .disabled(
+                    (canRecoverRuntimeDisplay && !model.hasLiveAgentConnection)
+                        || (!model.canRequestSelectedAppLaunch && !model.canFulfillPendingLaunch)
+                )
 
                 Button("Check Windows App") {
                     runRecommendedProof()
@@ -2135,7 +2138,10 @@ private struct VeilMenuBarMenu: View {
                         }
                         launchWindowsAppByIdAction(app.id)
                     }
-                    .disabled(canRecoverRuntimeDisplay || !model.canRequestAppLaunch(appId: app.id))
+                    .disabled(
+                        (canRecoverRuntimeDisplay && !model.hasLiveAgentConnection)
+                            || !model.canRequestAppLaunch(appId: app.id)
+                    )
                 }
             }
         }

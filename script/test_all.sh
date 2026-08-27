@@ -150,6 +150,21 @@ run_node_tests() {
   echo "Node test packages passed: $package_count"
 }
 
+run_swift_tests() {
+  # Swift tests exercise the persisted runtime model. Keep their Application Support
+  # state isolated from a real VM session, but leave the later bundle/lifecycle gates
+  # in the user's normal launch environment so AppKit's SwiftUI scene activation is
+  # tested through the same path as a Finder/Dock launch.
+  local test_home
+  local status=0
+  test_home="$(mktemp -d "${TMPDIR:-/tmp}/veil-test-all.XXXXXX")"
+  CFFIXED_USER_HOME="$test_home" HOME="$test_home" \
+    VEIL_AGENT_URL="${VEIL_TEST_AGENT_URL:-ws://127.0.0.1:59999}" \
+    swift test --disable-sandbox --package-path "$ROOT_DIR/apps/mac-host" || status=$?
+  rm -rf "$test_home"
+  return "$status"
+}
+
 if [[ "$LIST_ONLY" -eq 1 ]]; then
   list_gate
   exit 0
@@ -159,7 +174,7 @@ discover_local_dotnet
 preflight
 
 echo "==> Swift host"
-swift test --disable-sandbox --package-path "$ROOT_DIR/apps/mac-host"
+run_swift_tests
 
 if [[ "$SKIP_WINDOWS_AGENT" -eq 1 ]]; then
   echo "==> Windows agent skipped by explicit request"

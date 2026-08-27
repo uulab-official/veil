@@ -38,10 +38,11 @@ test("regression gate lists every component without requiring toolchains", () =>
 test("regression gate preflights before running deterministic component commands", async () => {
   const script = await readFile(regressionScriptPath, "utf8");
   const preflightCall = script.indexOf("\npreflight\n");
-  const swiftTest = script.indexOf("swift test --disable-sandbox");
+  const swiftTest = script.lastIndexOf("\nrun_swift_tests\n");
 
   assert.ok(preflightCall >= 0);
   assert.ok(swiftTest > preflightCall);
+  assert.match(script, /swift test --disable-sandbox --package-path/);
   assert.match(script, /dotnet test/);
   assert.match(script, /npm --prefix "\$package_dir" ci/);
   assert.match(script, /npm --prefix "\$package_dir" test/);

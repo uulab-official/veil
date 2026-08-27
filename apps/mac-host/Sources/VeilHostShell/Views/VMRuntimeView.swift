@@ -75,16 +75,21 @@ struct VMRuntimeView: View {
                         let installEvidence = validGuestAgentEvidence(for: snapshot) ?? snapshot.installEvidence
                         let windowsReadyForApps = installEvidence.isInstalled
 
+                        // A live guest agent is sufficient for the app path. The embedded
+                        // console preview may be stale while HWND capture is healthy, so
+                        // display recovery must never block a native app window launch.
                         if windowsReadyForApps && canFulfillPendingLaunch {
                             fulfillPendingLaunchAction()
-                        } else if canRecoverRuntimeDisplay(for: snapshot) {
-                            recoverRuntimeDisplayAction()
-                        } else if windowsReadyForApps && canRequestWindowsAppLaunch {
+                        } else if windowsReadyForApps
+                            && canRequestWindowsAppLaunch
+                            && (canLaunchWindowsApp || !canRecoverRuntimeDisplay(for: snapshot)) {
                             launchWindowsAppAction()
                         } else if windowsReadyForApps && pendingLaunch.willLaunchOnAgentReconnect && canShowDisplay(for: snapshot) {
                             repairGuestAgentForAppLaunchAction()
                         } else if windowsReadyForApps && canInstallGuestAgent(for: snapshot) {
                             installGuestAgentAction()
+                        } else if canRecoverRuntimeDisplay(for: snapshot) {
+                            recoverRuntimeDisplayAction()
                         } else if model.canStop {
                             stopVMAction()
                         } else if model.canStart {
@@ -1738,7 +1743,7 @@ private struct WindowsSetupDisplayPanel: View {
     }
 
     private var installPrimaryTitle: String {
-        if canRecoverRuntimeDisplay {
+        if canRecoverRuntimeDisplay && !canLaunchWindowsApp {
             return "Refresh Display"
         }
 
@@ -1763,6 +1768,10 @@ private struct WindowsSetupDisplayPanel: View {
             if canInstallGuestAgent {
                 return "Repair App Connection"
             }
+        }
+
+        if canRecoverRuntimeDisplay {
+            return "Refresh Display"
         }
 
         if canStop {
@@ -1820,15 +1829,8 @@ private struct WindowsSetupDisplayPanel: View {
 
     @ViewBuilder
     private var runtimeActionButton: some View {
-        if canRecoverRuntimeDisplay {
-            Button(action: recoverRuntimeDisplayAction) {
-                Label("Refresh Display", systemImage: "display")
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.regular)
-            .disabled(isLoading)
-            .help("Refresh embedded Windows display evidence")
-        } else if executablePrimaryNextActionRoute != nil {
+        if executablePrimaryNextActionRoute != nil
+            && (!canRecoverRuntimeDisplay || canLaunchWindowsApp) {
             Button(action: runEffectivePrimaryAction) {
                 Label(effectivePrimaryTitle, systemImage: effectivePrimarySymbol)
             }
@@ -1836,7 +1838,7 @@ private struct WindowsSetupDisplayPanel: View {
             .controlSize(.regular)
             .disabled(effectivePrimaryDisabled)
             .help(effectivePrimaryHelp)
-        } else if canOpenWindowsApp {
+        } else if canOpenWindowsApp && (!canRecoverRuntimeDisplay || canLaunchWindowsApp) {
             Button(action: primaryAction) {
                 Label(appDisplayName, systemImage: "macwindow.badge.plus")
             }
@@ -1844,7 +1846,7 @@ private struct WindowsSetupDisplayPanel: View {
             .controlSize(.regular)
             .disabled(isLoading)
             .help("Open Windows app")
-        } else if canRepairGuestAgentForAppLaunch {
+        } else if canRepairGuestAgentForAppLaunch && (!canRecoverRuntimeDisplay || canLaunchWindowsApp) {
             Button(action: repairGuestAgentForAppLaunchAction) {
                 Label("Continue \(pendingAppDisplayName)", systemImage: "bolt.horizontal.circle")
             }
@@ -1852,6 +1854,14 @@ private struct WindowsSetupDisplayPanel: View {
             .controlSize(.regular)
             .disabled(isLoading)
             .help("Repair the Windows app connection and continue opening the queued app")
+        } else if canRecoverRuntimeDisplay {
+            Button(action: recoverRuntimeDisplayAction) {
+                Label("Refresh Display", systemImage: "display")
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.regular)
+            .disabled(isLoading)
+            .help("Refresh embedded Windows display evidence")
         }
     }
 
@@ -2137,7 +2147,7 @@ private struct WindowsSetupDisplayPanel: View {
     }
 
     private var primaryTitle: String {
-        if canRecoverRuntimeDisplay {
+        if canRecoverRuntimeDisplay && !canLaunchWindowsApp {
             return "Refresh Display"
         }
 
@@ -2164,6 +2174,10 @@ private struct WindowsSetupDisplayPanel: View {
             }
         }
 
+        if canRecoverRuntimeDisplay {
+            return "Refresh Display"
+        }
+
         if canStop {
             return "Stop Windows"
         }
@@ -2184,7 +2198,7 @@ private struct WindowsSetupDisplayPanel: View {
     }
 
     private var primarySymbol: String {
-        if canRecoverRuntimeDisplay {
+        if canRecoverRuntimeDisplay && !canLaunchWindowsApp {
             return "display.trianglebadge.exclamationmark"
         }
 
@@ -2202,6 +2216,10 @@ private struct WindowsSetupDisplayPanel: View {
             if canInstallGuestAgent {
                 return "person.crop.circle.badge.plus"
             }
+        }
+
+        if canRecoverRuntimeDisplay {
+            return "display.trianglebadge.exclamationmark"
         }
 
         if canStop {

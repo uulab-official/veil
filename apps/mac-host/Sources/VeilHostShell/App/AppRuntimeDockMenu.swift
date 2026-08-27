@@ -271,7 +271,7 @@ enum AppRuntimeDockMenuFactory {
                         action: #selector(AppRuntimeDockMenuTarget.launchWindowsApp(_:)),
                         target: target,
                         representedObject: app.id,
-                        isEnabled: !canRecoverRuntimeDisplay(vmModel: vmModel)
+                        isEnabled: (!canRecoverRuntimeDisplay(vmModel: vmModel) || model.hasLiveAgentConnection)
                             && model.canRequestAppLaunch(appId: app.id)
                     )
                 )
@@ -416,6 +416,7 @@ enum AppRuntimeDockMenuFactory {
 
     private static func shouldPromoteDisplayRecovery(model: HostDashboardModel, vmModel: VMRuntimeModel) -> Bool {
         canRecoverRuntimeDisplay(vmModel: vmModel)
+            && !model.hasLiveAgentConnection
             && model.mirrorSessions.isEmpty
             && !shouldPromotePreviousAppsRestore(model: model)
             && model.pendingLaunchAppId == nil
@@ -492,18 +493,18 @@ struct AppQueuedLaunchMenuState: Equatable {
         canStartWindows: Bool,
         runtimeIsLoading: Bool
     ) -> AppQueuedLaunchMenuState {
-        if canRecoverRuntimeDisplay {
-            return AppQueuedLaunchMenuState(
-                title: "Refresh Display",
-                kind: .recoverRuntimeDisplay,
-                isEnabled: true
-            )
-        }
-
         if canFulfillPendingLaunch {
             return AppQueuedLaunchMenuState(
                 title: title(prefix: "Open Queued", appName: appName),
                 kind: .fulfillPendingLaunch,
+                isEnabled: true
+            )
+        }
+
+        if canRecoverRuntimeDisplay {
+            return AppQueuedLaunchMenuState(
+                title: "Refresh Display",
+                kind: .recoverRuntimeDisplay,
                 isEnabled: true
             )
         }
