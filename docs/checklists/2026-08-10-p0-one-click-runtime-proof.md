@@ -1,8 +1,8 @@
 # P0 One-Click Windows App Runtime Proof
 
 Date: 2026-08-27
-Tested implementation commit: `bdef7f7` (`feat: advance production Windows app runtime`)
-Latest verification commit: `d8f9068` (`test: discover local dotnet toolchain`)
+Tested implementation commit: `13c8143` (`fix: distinguish app connection readiness`)
+Latest verification commit: `13c8143` (`fix: distinguish app connection readiness`)
 Branch: `codex/ui-display-state`
 
 Purpose: keep the host-side implementation result separate from proof that a real
