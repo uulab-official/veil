@@ -1,8 +1,8 @@
 # P0 One-Click Windows App Runtime Proof
 
 Date: 2026-08-27
-Tested implementation: working tree for the next QEMU/display hardening commit.
-Latest baseline verification commit: `2c5eb11` (`docs: record current readiness gate counts`)
+Tested implementation commit: `c7532f3` (`fix: harden managed QEMU launch and display recovery`)
+Latest verification commit: `c7532f3` (`fix: harden managed QEMU launch and display recovery`)
 Branch: `codex/ui-display-state`
 
 Purpose: keep the host-side implementation result separate from proof that a real
