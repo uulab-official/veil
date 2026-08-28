@@ -1,8 +1,8 @@
 # P0 One-Click Windows App Runtime Proof
 
 Date: 2026-08-28
-Tested implementation commit: `96bd368` (`fix: make launcher window restoration deterministic`)
-Latest verification commit: `96bd368` (`fix: make launcher window restoration deterministic`)
+Tested implementation commit: `ab23efd` (`fix: widen launcher verification startup window`)
+Latest verification commit: `ab23efd` (`fix: widen launcher verification startup window`)
 Branch: `codex/ui-display-state`
 
 Purpose: keep the host-side implementation result separate from proof that a real
@@ -26,6 +26,8 @@ does not claim Parallels-level GPU acceleration.
 - [x] The host disables suspend/resume when the live QEMU command line uses the non-migratable NVMe system device instead of offering a control that QEMU will reject.
 - [x] Sparse-package preparation resolves `MakeAppx.exe` and `SignTool.exe` before creating a development certificate, and records a structured `prerequisiteMissing` result when the Windows SDK is absent.
 - [x] The main launcher ignores an empty AppKit-restored window state and presents deterministically; the signed app launch contract passed five consecutive post-fix runs.
+- [x] QEMU runtime recovery pauses and resumes only a machine first confirmed as running, verifies both transitions, and never resumes an intentionally paused VM; five focused recovery tests pass.
+- [x] The embedded RFB display retries a dropped loopback connection with bounded backoff while rejecting stale worker callbacks from older connections.
 
 The full no-skip gate now discovers the bundled local .NET 8 toolchain
 automatically:
@@ -109,7 +111,10 @@ forward while QMP still answered `query-status`. Its CPU usage was observed near
 119%, and `system_powerdown` did not complete within 30 seconds. A reversible QMP
 `stop` followed by `cont` restored the RFB and agent paths; the subsequent display,
 agent, and app proofs passed. This is recovery evidence, not a production
-reliability claim. Automatic stale-session detection and recovery remain open.
+reliability claim. Commit `05b8d5f` now adds automatic stale-session detection and
+a reversible QMP pause/resume recovery path after a previously live guest-agent
+connection drops. Live fault-injection and long-duration recovery measurement
+remain open.
 
 ### Sparse package prerequisite gate
 
@@ -137,8 +142,8 @@ passed, followed by five consecutive standalone launch-contract runs.
 
 1. Repeat the first-frame, input, clipboard, focus, resize, repeated-launch,
    restart-recovery, and long-lived liveness checks from the host-shell surface
-   after a fresh VM restart. Add automatic recovery only after the failure signal
-   is distinguishable from a slow Windows boot.
+   after a fresh VM restart. Inject a controlled RFB/agent interruption and
+   measure the automatic QMP recovery and reconnect latency.
 2. Install the Windows 10/11 SDK in the guest, retry sparse package preparation,
    and verify `packageIdentity=true` before running borderless Windows Graphics
    Capture and notification-consent proofs.
@@ -156,9 +161,9 @@ passed, followed by five consecutive standalone launch-contract runs.
 **VM boot/display, protocol-level app-runtime proof, and the first host-shell
 independent-window proof passed.** The live agent, Notepad/Calculator/Paint HWND
 tracking, frame delivery, input, clipboard, native window presentation, and the
-initial resize/focus/close flow are verified. QMP parsing and unsupported NVMe
-suspend gating are now hardened, but a saved-session round trip is not enabled
-for the current machine. Independent package identity, notification consent,
-repeated restart recovery, migratable suspend/resume, and GPU acceleration
-remain unproven. Long-lived QEMU liveness recovery also remains open. Veil makes
-no Parallels-level GPU claim.
+initial resize/focus/close flow are verified. QMP parsing, unsupported NVMe
+suspend gating, and guarded automatic QEMU connection recovery are now hardened,
+but a saved-session round trip is not enabled for the current machine. Independent
+package identity, notification consent, repeated restart recovery, live
+long-duration recovery, migratable suspend/resume, and GPU acceleration remain
+unproven. Veil makes no Parallels-level GPU claim.

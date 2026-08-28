@@ -120,6 +120,11 @@ Exit criteria:
   the migration stream carries TPM device state while Veil restarts `swtpm` on every launch.
   `VMProfile.suspendOnQuit` is still read by nothing; the mode is resolved from capability only.
 - Recovery instructions and diagnostics bundle.
+- Automatic recovery for a previously live QEMU app session when the RFB/guest-agent paths stall:
+  Veil confirms the QMP run state, performs a reversible pause/resume cycle, verifies the machine is
+  running again, and lets the existing agent/window restore loop reconnect. The embedded RFB surface
+  also retries dropped loopback connections with bounded backoff. Open: controlled live fault injection,
+  long-duration recovery measurements, and recovery behavior when QMP itself is unavailable.
 
 Exit criteria:
 
