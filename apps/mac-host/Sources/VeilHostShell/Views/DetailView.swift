@@ -12,6 +12,7 @@ struct DetailView: View {
     var waitForGuestAgentAction: () -> Void
     var repairGuestAgentForAppLaunchAction: () -> Void
     var recoverRuntimeDisplayAction: () -> Void
+    var showWindowsDisplayAction: () -> Void
     var launchWindowsAppAction: () -> Void
     var fulfillPendingLaunchAction: () -> Void
     var restoreWindowsAppWindowsAction: () -> Void
@@ -52,6 +53,7 @@ struct DetailView: View {
                 waitForGuestAgentAction: waitForGuestAgentAction,
                 repairGuestAgentForAppLaunchAction: repairGuestAgentForAppLaunchAction,
                 recoverRuntimeDisplayAction: recoverRuntimeDisplayAction,
+                showWindowsDisplayAction: showWindowsDisplayAction,
                 launchWindowsAppAction: launchWindowsAppAction,
                 fulfillPendingLaunchAction: fulfillPendingLaunchAction,
                 restoreWindowsAppWindowsAction: restoreWindowsAppWindowsAction,
@@ -177,6 +179,20 @@ enum RuntimeWorkspacePresentationPolicy {
         showsFullDesktop: Bool
     ) -> Bool {
         hasApps && hasInstalledWindows && !showsFullDesktop
+    }
+}
+
+enum WindowsDisplayAvailabilityPolicy {
+    static func canShowDesktop(
+        runtimeState: VMRuntimeState?,
+        supportsNativeDisplayWindow: Bool,
+        hasCapturedSurface: Bool
+    ) -> Bool {
+        guard runtimeState == .running || runtimeState == .starting else {
+            return false
+        }
+
+        return supportsNativeDisplayWindow || hasCapturedSurface
     }
 }
 

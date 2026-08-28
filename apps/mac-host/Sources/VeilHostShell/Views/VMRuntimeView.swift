@@ -29,6 +29,7 @@ struct VMRuntimeView: View {
     var waitForGuestAgentAction: () -> Void
     var repairGuestAgentForAppLaunchAction: () -> Void
     var recoverRuntimeDisplayAction: () -> Void
+    var showWindowsDisplayAction: () -> Void
     var launchWindowsAppAction: () -> Void
     var fulfillPendingLaunchAction: () -> Void
     var restoreWindowsAppWindowsAction: () -> Void
@@ -114,6 +115,7 @@ struct VMRuntimeView: View {
                     waitForGuestAgentAction: waitForGuestAgentAction,
                     repairGuestAgentForAppLaunchAction: repairGuestAgentForAppLaunchAction,
                     recoverRuntimeDisplayAction: recoverRuntimeDisplayAction,
+                    showWindowsDisplayAction: showWindowsDisplayAction,
                     launchWindowsAppAction: launchWindowsAppAction,
                     fulfillPendingLaunchAction: fulfillPendingLaunchAction,
                     restoreWindowsAppWindowsAction: restoreWindowsAppWindowsAction,
@@ -707,7 +709,7 @@ private struct SimpleRuntimePanel: View {
 
             return snapshot.bootReady ? "Start Windows setup from this main window." : statusText
         case .starting:
-            return "Starting local Windows in the main Veil window."
+            return "Starting Windows and opening its desktop window."
         case .running:
             return "Windows is running locally. Open a Windows app once the app connection is ready."
         case .suspended:
@@ -946,7 +948,7 @@ private struct RuntimeLandingPanel: View {
     }
 }
 
-private struct WindowsEmbeddedDisplayPreview: View {
+struct WindowsEmbeddedDisplayPreview: View {
     var image: NSImage?
     var surface: VMConsoleDisplaySurface
     var path: String
@@ -997,7 +999,7 @@ private struct WindowsEmbeddedDisplayPreview: View {
                 keyAction: keyAction
             )
         }
-        .aspectRatio(16 / 9, contentMode: .fit)
+        .aspectRatio(displayAspectRatio, contentMode: .fit)
         .help("Latest Windows display")
         .accessibilityLabel(surface.kind == .vncLoopback ? "Embedded Windows display endpoint" : "Latest Windows display screenshot")
         .accessibilityValue(surface.endpoint ?? path)
@@ -1016,12 +1018,31 @@ private struct WindowsEmbeddedDisplayPreview: View {
         rfbDisplayModel.image ?? image
     }
 
+    private var displayAspectRatio: CGFloat {
+        CGFloat(
+            WindowsDisplayAspectRatioPolicy.resolve(
+                pixelWidth: Double(renderedImage?.size.width ?? 0),
+                pixelHeight: Double(renderedImage?.size.height ?? 0)
+            )
+        )
+    }
+
     private var displayRevisionID: String {
         if let sequence = rfbDisplayModel.frameSequence {
             return "\(surface.endpoint ?? "rfb")#\(sequence)"
         }
 
         return revisionID
+    }
+}
+
+enum WindowsDisplayAspectRatioPolicy {
+    static func resolve(pixelWidth: Double, pixelHeight: Double) -> Double {
+        guard pixelWidth > 0, pixelHeight > 0 else {
+            return 16.0 / 9.0
+        }
+
+        return pixelWidth / pixelHeight
     }
 }
 
@@ -1428,6 +1449,7 @@ private struct WindowsSetupDisplayPanel: View {
     var waitForGuestAgentAction: () -> Void
     var repairGuestAgentForAppLaunchAction: () -> Void
     var recoverRuntimeDisplayAction: () -> Void
+    var showWindowsDisplayAction: () -> Void
     var launchWindowsAppAction: () -> Void
     var fulfillPendingLaunchAction: () -> Void
     var restoreWindowsAppWindowsAction: () -> Void
@@ -1796,18 +1818,13 @@ private struct WindowsSetupDisplayPanel: View {
     private var horizontalActions: some View {
         HStack(spacing: 8) {
             if snapshot.state == .running, hasDesktopDisplay {
-                Button {
-                    showsFullDesktop.toggle()
-                } label: {
-                    Label(
-                        showsFullDesktop ? "Show Apps" : "Show Desktop",
-                        systemImage: showsFullDesktop ? "macwindow" : "display"
-                    )
+                Button(action: showWindowsDisplayAction) {
+                    Label("Show Desktop", systemImage: "display")
                     .labelStyle(.iconOnly)
                 }
                 .keyboardShortcut("a", modifiers: [.command, .shift])
-                .help(showsFullDesktop ? "Return to the Windows app launcher" : "Show the live Windows desktop (⇧⌘A)")
-                .accessibilityLabel(showsFullDesktop ? "Show Windows apps" : "Show Windows desktop")
+                .help("Open the live Windows desktop in its own window (⇧⌘A)")
+                .accessibilityLabel("Show Windows desktop")
             }
 
             Button(action: detailsAction) {
@@ -2273,11 +2290,11 @@ private struct WindowsSetupDisplayPanel: View {
         }
 
         if effectiveInstallEvidence.isInstalled {
-            return "Start Windows inside the main Veil window."
+            return "Start Windows and open its desktop in a separate window."
         }
 
         if canStart {
-            return "Start Windows Setup inside Veil's embedded display."
+            return "Start Windows Setup in a separate desktop window."
         }
 
         if snapshot.installerMediaPath == nil {

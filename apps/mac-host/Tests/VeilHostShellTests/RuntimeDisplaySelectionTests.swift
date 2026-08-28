@@ -52,6 +52,44 @@ struct RuntimeDisplaySelectionTests {
     }
 }
 
+struct WindowsDisplayAvailabilityPolicyTests {
+    @Test("offers a QEMU desktop window when a captured display is live")
+    func offersCapturedQEMUDesktop() {
+        #expect(
+            WindowsDisplayAvailabilityPolicy.canShowDesktop(
+                runtimeState: .running,
+                supportsNativeDisplayWindow: false,
+                hasCapturedSurface: true
+            )
+        )
+        #expect(
+            WindowsDisplayAvailabilityPolicy.canShowDesktop(
+                runtimeState: .stopped,
+                supportsNativeDisplayWindow: false,
+                hasCapturedSurface: true
+            ) == false
+        )
+    }
+}
+
+struct WindowsDisplayAspectRatioPolicyTests {
+    @Test("preserves the live guest framebuffer aspect ratio")
+    func preservesGuestFramebufferAspectRatio() {
+        #expect(
+            WindowsDisplayAspectRatioPolicy.resolve(
+                pixelWidth: 600,
+                pixelHeight: 393
+            ) == 600.0 / 393.0
+        )
+        #expect(
+            WindowsDisplayAspectRatioPolicy.resolve(
+                pixelWidth: 0,
+                pixelHeight: 0
+            ) == 16.0 / 9.0
+        )
+    }
+}
+
 struct RuntimeWorkspacePresentationPolicyTests {
     @Test("installed Windows defaults to the app launcher even when a desktop display exists")
     func installedWindowsDefaultsToLauncher() {

@@ -65,6 +65,7 @@ private struct ShellMultiAppLatencySummary {
 struct VeilHostShellApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     private let vmRuntimeBooter: AppRuntimeBooter
+    private let qemuConsoleWindowPresenter = QEMUConsoleWindowPresenter()
     private let windowsAppWindowPresenter = WindowsAppWindowPresenter()
     private let agentTransport: URLSessionWebSocketTransport?
     private let agentConnectionPlan: AppGuestAgentConnectionPlan
@@ -122,6 +123,7 @@ struct VeilHostShellApp: App {
             waitForGuestAgentAction: waitForGuestAgent,
             repairGuestAgentForAppLaunchAction: repairGuestAgentForAppLaunch,
             recoverRuntimeDisplayAction: recoverRuntimeDisplayEvidence,
+            showWindowsDisplayAction: showWindowsDisplay,
             launchWindowsAppAction: runOneClickSelectedApp,
             fulfillPendingLaunchAction: runOneClickPendingLaunch,
             restoreWindowsAppWindowsAction: restoreWindowsAppWindows,
@@ -311,7 +313,7 @@ struct VeilHostShellApp: App {
                 quietWindowsWhenIdleAction: quietWindowsWhenIdle,
                 refreshAppsAction: refreshApps,
                 refreshRuntimeAction: refreshRuntime,
-                supportsNativeDisplayWindow: vmRuntimeBooter.supportsNativeDisplayWindow
+                supportsNativeDisplayWindow: canShowWindowsDisplay
             )
         }
         .defaultLaunchBehavior(.suppressed)
@@ -551,9 +553,9 @@ struct VeilHostShellApp: App {
             await startOrResumeWindows()
 
             if vmModel.snapshot?.state == .running || vmModel.snapshot?.state == .starting {
-                displayMessage = vmRuntimeBooter.usesEmbeddedDisplaySurface
-                    ? "Windows is running inside the main Veil window."
-                    : "Windows is running in recovery display mode."
+                displayMessage = presentWindowsDesktopIfAvailable()
+                    ? "Windows desktop opened in its own window."
+                    : "Windows is running. The desktop display is still connecting."
                 scheduleAutomaticGuestAgentRecoveryIfNeeded()
             } else if let errorMessage = vmModel.errorMessage {
                 displayMessage = "Windows display could not start: \(errorMessage)"
@@ -594,6 +596,7 @@ struct VeilHostShellApp: App {
             hasObservedLiveAgentConnection = false
             activateMainWindow()
             await vmModel.stop()
+            qemuConsoleWindowPresenter.closeConsole()
 
             if vmModel.snapshot?.state == .stopped {
                 windowsAppWindowPresenter.closeAll()
@@ -1749,12 +1752,44 @@ struct VeilHostShellApp: App {
     }
 
     private func showWindowsDisplay() {
-        activateMainWindow()
-        if vmRuntimeBooter.showConsoleIfRunning() {
-            displayMessage = "Recovery display brought forward."
+        if presentWindowsDesktopIfAvailable() {
+            displayMessage = "Windows desktop brought forward."
         } else {
-            displayMessage = "No recovery display is attached. Windows normally runs inside the main Veil window."
+            activateMainWindow()
+            displayMessage = "The Windows desktop is not ready yet. Start Windows or refresh the display."
         }
+    }
+
+    @MainActor
+    private func presentWindowsDesktopIfAvailable() -> Bool {
+        if vmRuntimeBooter.provider == .appleVirtualization {
+            return vmRuntimeBooter.showConsoleIfRunning()
+        }
+
+        guard let snapshot = vmModel.snapshot,
+              snapshot.state == .running || snapshot.state == .starting,
+              let surface = snapshot.latestConsoleLaunch?.displaySurface,
+              surface.kind != .unavailable else {
+            return false
+        }
+
+        return qemuConsoleWindowPresenter.showConsole(
+            surface: surface,
+            screenshotPath: snapshot.latestConsoleScreenshotPath,
+            pointerTapAction: { normalizedX, normalizedY in
+                Task {
+                    await vmModel.sendConsolePointerTap(
+                        normalizedX: normalizedX,
+                        normalizedY: normalizedY
+                    )
+                }
+            },
+            keyAction: { key in
+                Task {
+                    await vmModel.sendConsoleKey(key)
+                }
+            }
+        )
     }
 
     private func installGuestAgentFromDisplay() {
@@ -1974,8 +2009,12 @@ struct VeilHostShellApp: App {
     }
 
     private var canShowWindowsDisplay: Bool {
-        vmRuntimeBooter.supportsNativeDisplayWindow
-            && (vmModel.snapshot?.state == .running || vmModel.snapshot?.state == .starting)
+        WindowsDisplayAvailabilityPolicy.canShowDesktop(
+            runtimeState: vmModel.snapshot?.state,
+            supportsNativeDisplayWindow: vmRuntimeBooter.supportsNativeDisplayWindow,
+            hasCapturedSurface: vmModel.snapshot?.latestConsoleLaunch?.displaySurface.kind != nil
+                && vmModel.snapshot?.latestConsoleLaunch?.displaySurface.kind != .unavailable
+        )
     }
 
     private var canInstallGuestAgent: Bool {
@@ -2332,7 +2371,6 @@ private struct VeilMenuBarMenu: View {
 
         if canShowWindowsDisplay {
             Button("Show Windows Display", systemImage: "display") {
-                openMainWindow()
                 showWindowsDisplayAction()
             }
         }
@@ -2963,6 +3001,7 @@ enum MainWindowChrome {
 
 private struct StandaloneMainWindowRoot: View {
     private let vmRuntimeBooter: AppRuntimeBooter
+    private let qemuConsoleWindowPresenter = QEMUConsoleWindowPresenter()
     private let agentConnectionPlan: AppGuestAgentConnectionPlan
     @State private var model: HostDashboardModel
     @State private var vmModel: VMRuntimeModel
@@ -3002,6 +3041,7 @@ private struct StandaloneMainWindowRoot: View {
             waitForGuestAgentAction: waitForGuestAgent,
             repairGuestAgentForAppLaunchAction: installGuestAgentFromDisplay,
             recoverRuntimeDisplayAction: recoverRuntimeDisplayEvidence,
+            showWindowsDisplayAction: showWindowsDisplay,
             launchWindowsAppAction: launchSelectedWindowsApp,
             fulfillPendingLaunchAction: launchSelectedWindowsApp,
             restoreWindowsAppWindowsAction: {},
@@ -3045,9 +3085,9 @@ private struct StandaloneMainWindowRoot: View {
             }
 
             if vmModel.snapshot?.state == .running || vmModel.snapshot?.state == .starting {
-                displayMessage = vmRuntimeBooter.usesEmbeddedDisplaySurface
-                    ? "Windows is running inside the main Veil window."
-                    : "Windows is running in recovery display mode."
+                displayMessage = presentWindowsDesktopIfAvailable()
+                    ? "Windows desktop opened in its own window."
+                    : "Windows is running. The desktop display is still connecting."
             } else if let errorMessage = vmModel.errorMessage {
                 displayMessage = "Windows display could not start: \(errorMessage)"
             }
@@ -3057,6 +3097,7 @@ private struct StandaloneMainWindowRoot: View {
     private func stopWindowsAndCloseDisplay() {
         Task { @MainActor in
             await vmModel.stop()
+            qemuConsoleWindowPresenter.closeConsole()
             if vmModel.snapshot?.state == .stopped {
                 displayMessage = "Windows display closed."
             }
@@ -3064,11 +3105,43 @@ private struct StandaloneMainWindowRoot: View {
     }
 
     private func showWindowsDisplay() {
-        if vmRuntimeBooter.showConsoleIfRunning() {
-            displayMessage = "Recovery display brought forward."
+        if presentWindowsDesktopIfAvailable() {
+            displayMessage = "Windows desktop brought forward."
         } else {
-            displayMessage = "No recovery display is attached. Windows normally runs inside the main Veil window."
+            displayMessage = "The Windows desktop is not ready yet. Start Windows or refresh the display."
         }
+    }
+
+    @MainActor
+    private func presentWindowsDesktopIfAvailable() -> Bool {
+        if vmRuntimeBooter.provider == .appleVirtualization {
+            return vmRuntimeBooter.showConsoleIfRunning()
+        }
+
+        guard let snapshot = vmModel.snapshot,
+              snapshot.state == .running || snapshot.state == .starting,
+              let surface = snapshot.latestConsoleLaunch?.displaySurface,
+              surface.kind != .unavailable else {
+            return false
+        }
+
+        return qemuConsoleWindowPresenter.showConsole(
+            surface: surface,
+            screenshotPath: snapshot.latestConsoleScreenshotPath,
+            pointerTapAction: { normalizedX, normalizedY in
+                Task {
+                    await vmModel.sendConsolePointerTap(
+                        normalizedX: normalizedX,
+                        normalizedY: normalizedY
+                    )
+                }
+            },
+            keyAction: { key in
+                Task {
+                    await vmModel.sendConsoleKey(key)
+                }
+            }
+        )
     }
 
     private func installGuestAgentFromDisplay() {

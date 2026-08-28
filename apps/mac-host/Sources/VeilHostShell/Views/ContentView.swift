@@ -12,6 +12,7 @@ struct ContentView: View {
     var waitForGuestAgentAction: () -> Void
     var repairGuestAgentForAppLaunchAction: () -> Void
     var recoverRuntimeDisplayAction: () -> Void
+    var showWindowsDisplayAction: () -> Void
     var launchWindowsAppAction: () -> Void
     var fulfillPendingLaunchAction: () -> Void
     var restoreWindowsAppWindowsAction: () -> Void
@@ -51,6 +52,7 @@ struct ContentView: View {
                     waitForGuestAgentAction: waitForGuestAgentAction,
                     repairGuestAgentForAppLaunchAction: repairGuestAgentForAppLaunchAction,
                     recoverRuntimeDisplayAction: recoverRuntimeDisplayAction,
+                    showWindowsDisplayAction: showWindowsDisplayAction,
                     launchWindowsAppAction: launchWindowsAppAction,
                     fulfillPendingLaunchAction: fulfillPendingLaunchAction,
                     restoreWindowsAppWindowsAction: restoreWindowsAppWindowsAction,

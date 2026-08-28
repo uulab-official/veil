@@ -4088,7 +4088,9 @@ public final class HostDashboardModel {
             reason = "The one-screen Windows app launch flow needs setup or recovery before it can continue."
         }
         let requiredSteps = releaseGate.steps.filter(\.isRequired)
-        let completedStepCount = releaseGate.passingStepCount
+        // Progress is sequential: a later optional integration proof must not make the launcher say
+        // three steps are complete while the user is still being asked to perform step three.
+        let completedStepCount = requiredSteps.prefix(while: \.isPassing).count
         let totalStepCount = releaseGate.requiredStepCount
         let currentStepNumber: Int
         if releaseGate.isPassing {
