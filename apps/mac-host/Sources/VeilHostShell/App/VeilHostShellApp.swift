@@ -77,8 +77,11 @@ struct VeilHostShellApp: App {
     @State private var agentReconnectTask: Task<Void, Never>?
     @State private var automaticQuietRuntimeTask: Task<Void, Never>?
     @State private var automaticGuestAgentRecoveryTask: Task<Void, Never>?
+    @State private var automaticRuntimeConnectionRecoveryTask: Task<Void, Never>?
     @State private var automaticFrameStreamMaintenanceTask: Task<Void, Never>?
     @State private var automaticGuestAgentRecoveryAttemptedTokens: Set<String> = []
+    @State private var automaticRuntimeConnectionRecoveryCooldownUntil: [String: Date] = [:]
+    @State private var hasObservedLiveAgentConnection = false
     @State private var latestReviewEvidenceFolder: ReviewEvidenceFolder?
     @State private var oneClickAppLaunchGate = OneClickAppLaunchTaskGate<OneClickAppLaunchOutcome<WindowsAppLaunchResult>>()
     private let automaticRestoreMaximumAttempts = 3
@@ -147,6 +150,7 @@ struct VeilHostShellApp: App {
                     async let hostLoad: Void = model.load()
                     async let vmLoad: Void = vmModel.load()
                     _ = await (hostLoad, vmLoad)
+                    noteLiveAgentConnectionIfPresent()
                     // The event channel is intentionally started after the overview. Otherwise an
                     // early discovery event can create a placeholder window before the model knows
                     // that this is a capture-capable live agent.
@@ -307,6 +311,7 @@ struct VeilHostShellApp: App {
     }
 
     private func recordGuestAgentInstallEvidenceIfNeeded() async {
+        noteLiveAgentConnectionIfPresent()
         guard model.hasLiveAgentConnection,
               let agentVersion = model.health?.agentVersion,
               vmModel.snapshot?.profileName != nil,
@@ -430,6 +435,8 @@ struct VeilHostShellApp: App {
                     }
                 }
 
+                noteLiveAgentConnectionIfPresent()
+
                 if model.phase == .reconnecting {
                     retryDelaySeconds = min(retryDelaySeconds * 2, maxRetryDelaySeconds)
                 } else {
@@ -455,9 +462,11 @@ struct VeilHostShellApp: App {
             var retryDelaySeconds = baseRetryDelaySeconds
 
             while !Task.isCancelled {
+                noteLiveAgentConnectionIfPresent()
                 let vmState = vmModel.snapshot?.state
                 let shouldPoll = (vmState == .running || vmState == .starting) && !model.hasLiveAgentConnection
                 if shouldPoll {
+                    scheduleAutomaticRuntimeConnectionRecoveryIfNeeded()
                     scheduleAutomaticGuestAgentRecoveryIfNeeded()
 
                     let restoredLaunches = await model.restoreMirroredWindowsAfterReconnect()
@@ -565,6 +574,8 @@ struct VeilHostShellApp: App {
     private func stopWindowsAndCloseDisplay() {
         Task { @MainActor in
             cancelAutomaticQuietRuntime()
+            cancelAutomaticRuntimeConnectionRecovery()
+            hasObservedLiveAgentConnection = false
             activateMainWindow()
             await vmModel.stop()
 
@@ -594,6 +605,7 @@ struct VeilHostShellApp: App {
     /// things for the same state.
     @MainActor
     private func performQuietRuntime(_ quietRuntime: WindowsAppRuntimeQuietPolicyStatus) async {
+        cancelAutomaticRuntimeConnectionRecovery()
         if quietRuntime.quietMode == WindowsAppRuntimeQuietPolicyStatus.suspendMode,
            vmModel.canSuspend {
             await vmModel.suspend()
@@ -678,6 +690,17 @@ struct VeilHostShellApp: App {
         automaticGuestAgentRecoveryTask = nil
     }
 
+    private func cancelAutomaticRuntimeConnectionRecovery() {
+        automaticRuntimeConnectionRecoveryTask?.cancel()
+        automaticRuntimeConnectionRecoveryTask = nil
+    }
+
+    private func noteLiveAgentConnectionIfPresent() {
+        if model.hasLiveAgentConnection {
+            hasObservedLiveAgentConnection = true
+        }
+    }
+
     private func startAutomaticFrameStreamMaintenanceLoopIfNeeded() {
         guard automaticFrameStreamMaintenanceTask == nil else {
             return
@@ -716,6 +739,7 @@ struct VeilHostShellApp: App {
     private func runOneClickAppLaunch(appId: String) {
         cancelAutomaticQuietRuntime()
         cancelAutomaticGuestAgentRecovery()
+        cancelAutomaticRuntimeConnectionRecovery()
 
         Task { @MainActor in
             let outcome = await oneClickAppLaunchGate.run {
@@ -850,6 +874,7 @@ struct VeilHostShellApp: App {
     private func scheduleAutomaticGuestAgentRecoveryIfNeeded() {
         guard automaticGuestAgentRecoveryTask == nil,
               !model.hasLiveAgentConnection,
+              !hasObservedLiveAgentConnection,
               model.phase != .launching,
               shouldRecoverGuestAgentForPendingApp,
               let recoveryToken = currentGuestAgentRecoveryToken,
@@ -879,6 +904,64 @@ struct VeilHostShellApp: App {
             }
 
             automaticGuestAgentRecoveryTask = nil
+        }
+    }
+
+    /// Repairs a long-lived QEMU process whose QMP socket answers while RFB and the Windows agent
+    /// have stopped responding. This is independent of guest-agent installation: a healthy agent
+    /// that temporarily lost its transport should not require a second installation.
+    private func scheduleAutomaticRuntimeConnectionRecoveryIfNeeded() {
+        guard automaticRuntimeConnectionRecoveryTask == nil,
+              vmRuntimeBooter.provider == .qemu,
+              hasObservedLiveAgentConnection,
+              !model.hasLiveAgentConnection,
+              model.phase != .launching,
+              model.hasOpenedAppWindowThisSession,
+              (!model.mirrorSessions.isEmpty || !model.restorableAppIds.isEmpty),
+              vmModel.snapshot?.state == .running,
+              let recoveryToken = currentGuestAgentRecoveryToken else {
+            return
+        }
+
+        let now = Date()
+        if let cooldownUntil = automaticRuntimeConnectionRecoveryCooldownUntil[recoveryToken],
+           cooldownUntil > now {
+            return
+        }
+
+        automaticRuntimeConnectionRecoveryCooldownUntil[recoveryToken] = now.addingTimeInterval(120)
+        automaticRuntimeConnectionRecoveryTask = Task { @MainActor in
+            // Give a transient WebSocket/RFB reconnect a chance before touching QEMU state.
+            try? await Task.sleep(for: .seconds(3))
+            guard !Task.isCancelled,
+                  !model.hasLiveAgentConnection,
+                  hasObservedLiveAgentConnection,
+                  vmModel.snapshot?.state == .running else {
+                automaticRuntimeConnectionRecoveryTask = nil
+                return
+            }
+
+            displayMessage = "Windows app connection interrupted. Reconnecting automatically."
+            let result = await vmRuntimeBooter.recoverStalledRuntime()
+            await vmModel.refreshRuntimeEvidence()
+
+            switch result {
+            case .recovered:
+                displayMessage = "Windows connection recovered. Reconnecting app windows."
+                let restoredLaunches = await model.restoreMirroredWindowsAfterReconnect()
+                for launch in restoredLaunches {
+                    showWindowsAppWindow(for: launch)
+                }
+                syncLauncherWindowVisibility()
+            case .notNeeded:
+                VeilLog.agent.notice("Automatic runtime recovery skipped because QEMU was not running.")
+            case .unsupported:
+                VeilLog.agent.notice("Automatic runtime recovery is unavailable for the active VM provider.")
+            case .unavailable(let detail), .failed(let detail):
+                VeilLog.agent.notice("Automatic QEMU runtime recovery did not complete: \(detail, privacy: .public)")
+            }
+
+            automaticRuntimeConnectionRecoveryTask = nil
         }
     }
 

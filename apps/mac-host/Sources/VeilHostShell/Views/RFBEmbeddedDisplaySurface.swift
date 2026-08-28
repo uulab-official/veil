@@ -11,6 +11,9 @@ final class RFBEmbeddedDisplayModel {
     private(set) var status = RFBEmbeddedDisplayStatus.idle
     private(set) var activeEndpoint: String?
     @ObservationIgnored private var worker: RFBEmbeddedDisplayWorker?
+    @ObservationIgnored private var retryTask: Task<Void, Never>?
+    @ObservationIgnored private var connectionGeneration = 0
+    @ObservationIgnored private var retryDelaySeconds: Double = 1
 
     var statusSymbolName: String {
         switch status {
@@ -54,8 +57,18 @@ final class RFBEmbeddedDisplayModel {
 
         stop()
         activeEndpoint = endpoint
-        image = nil
-        frameSequence = nil
+        startWorker(endpoint: endpoint, generation: connectionGeneration, resetFrames: true)
+    }
+
+    private func startWorker(endpoint: String, generation: Int, resetFrames: Bool) {
+        guard activeEndpoint == endpoint else {
+            return
+        }
+
+        if resetFrames {
+            image = nil
+            frameSequence = nil
+        }
         status = .connecting
 
         guard let parsedEndpoint = RFBDisplayEndpoint(endpoint) else {
@@ -67,26 +80,75 @@ final class RFBEmbeddedDisplayModel {
         self.worker = worker
         worker.start(
             onFrame: { [weak self] frame in
-                guard let image = frame.makeNSImage() else {
-                    self?.status = .failed("Display frame unavailable")
+                guard let self,
+                      self.activeEndpoint == endpoint,
+                      self.connectionGeneration == generation else {
                     return
                 }
 
-                self?.image = image
-                self?.frameSequence = frame.sequence
-                self?.status = .receiving
+                guard let image = frame.makeNSImage() else {
+                    self.handleDisplayFailure(
+                        "Display frame unavailable",
+                        endpoint: endpoint,
+                        generation: generation
+                    )
+                    return
+                }
+
+                self.retryTask?.cancel()
+                self.retryTask = nil
+                self.retryDelaySeconds = 1
+                self.image = image
+                self.frameSequence = frame.sequence
+                self.status = .receiving
             },
             onFailure: { [weak self] message in
-                guard self?.activeEndpoint == endpoint else {
-                    return
-                }
-
-                self?.status = .failed(message)
+                self?.handleDisplayFailure(
+                    message,
+                    endpoint: endpoint,
+                    generation: generation
+                )
             }
         )
     }
 
+    private func handleDisplayFailure(
+        _ message: String,
+        endpoint: String,
+        generation: Int
+    ) {
+        guard activeEndpoint == endpoint,
+              connectionGeneration == generation else {
+            return
+        }
+
+        VeilLog.runtime.notice("RFB display connection interrupted; retrying automatically. \(message, privacy: .public)")
+        worker?.stop()
+        worker = nil
+        status = .connecting
+
+        let delay = retryDelaySeconds
+        retryDelaySeconds = min(retryDelaySeconds * 2, 8)
+        retryTask?.cancel()
+        retryTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(delay))
+            guard !Task.isCancelled,
+                  let self,
+                  self.activeEndpoint == endpoint,
+                  self.connectionGeneration == generation else {
+                return
+            }
+
+            self.retryTask = nil
+            self.startWorker(endpoint: endpoint, generation: generation, resetFrames: false)
+        }
+    }
+
     func stop() {
+        retryTask?.cancel()
+        retryTask = nil
+        retryDelaySeconds = 1
+        connectionGeneration += 1
         worker?.stop()
         worker = nil
         activeEndpoint = nil

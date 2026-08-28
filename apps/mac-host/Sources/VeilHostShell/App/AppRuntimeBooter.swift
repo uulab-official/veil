@@ -125,6 +125,15 @@ final class AppRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
         }
     }
 
+    func recoverStalledRuntime() async -> QEMURuntimeRecoveryResult {
+        switch provider {
+        case .qemu:
+            await qemuBooter.recoverStalledRuntime()
+        case .appleVirtualization:
+            .unsupported
+        }
+    }
+
     func suspend(profile: VMProfile) async throws -> VMRuntimeState {
         switch provider {
         case .qemu:

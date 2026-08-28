@@ -38,6 +38,8 @@ public protocol VMRuntimeBooting: Sendable {
     func runtimeState() async -> VMRuntimeState?
     func start(profile: VMProfile) async throws -> VMRuntimeState
     func stop() async throws -> VMRuntimeState
+    /// Attempts a reversible control-path recovery without restarting a live guest.
+    func recoverStalledRuntime() async -> QEMURuntimeRecoveryResult
     /// Pauses the guest and persists its memory state so a later `resume` continues the same Windows
     /// session instead of rebooting it.
     func suspend(profile: VMProfile) async throws -> VMRuntimeState
@@ -47,6 +49,10 @@ public protocol VMRuntimeBooting: Sendable {
 /// Providers that cannot persist a guest session keep the honest default: a clear "not supported"
 /// error instead of silently falling back to stop/start, which would lose the user's open apps.
 public extension VMRuntimeBooting {
+    func recoverStalledRuntime() async -> QEMURuntimeRecoveryResult {
+        .unsupported
+    }
+
     func suspend(profile: VMProfile) async throws -> VMRuntimeState {
         throw VMRuntimeError.suspendNotSupported
     }

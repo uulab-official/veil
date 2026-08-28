@@ -113,6 +113,7 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
     private let displayMode: QEMUWindowsBootDisplayMode
     private let suspensionController: QEMUVMSuspensionController
     private let suspensionRecordStore: any VMSuspensionRecordStore
+    private let qmpControl: any QEMUQMPControlling
     private var process: Process?
     private var monitorSocketURL: URL?
     private var qmpSocketURL: URL?
@@ -128,7 +129,8 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
         vncPortAllocator: @escaping @Sendable () -> Int? = QEMUVMRuntimeBooter.allocateLoopbackVNCPort,
         displayMode: QEMUWindowsBootDisplayMode = .nativeCocoa,
         suspensionController: QEMUVMSuspensionController = QEMUVMSuspensionController(),
-        suspensionRecordStore: (any VMSuspensionRecordStore)? = nil
+        suspensionRecordStore: (any VMSuspensionRecordStore)? = nil,
+        qmpControl: any QEMUQMPControlling = QEMUQMPClient()
     ) {
         self.diagnosticsDirectory = diagnosticsDirectory
         self.planBuilder = planBuilder
@@ -140,6 +142,7 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
         self.vncPortAllocator = vncPortAllocator
         self.displayMode = displayMode
         self.suspensionController = suspensionController
+        self.qmpControl = qmpControl
         self.suspensionRecordStore = suspensionRecordStore
             ?? JSONVMSuspensionRecordStore(
                 directory: diagnosticsDirectory.appendingPathComponent("QEMU Suspend", isDirectory: true)
@@ -156,6 +159,13 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
         }
 
         return process.isRunning ? .running : .stopped
+    }
+
+    public func recoverStalledRuntime() async -> QEMURuntimeRecoveryResult {
+        await QEMURuntimeRecoveryController(
+            qmp: qmpControl,
+            launchRecordStore: launchRecordStore()
+        ).recoverStalledRuntime()
     }
 
     public func start(profile: VMProfile) async throws -> VMRuntimeState {
