@@ -29,6 +29,9 @@ manager workflow.
 - [x] Confirmed Veil Agent 0.1.0 reconnected on the first post-recovery probe.
 - [x] Confirmed Notepad opened automatically as HWND `000200C6` in a macOS window.
 - [x] Confirmed live frame streaming at 600×393 in the host window.
+- [x] Installed commit `36f6319` at `/Applications/Veil.app` and confirmed the
+  installed build restored the same Notepad HWND directly with fresh 600×393
+  frames while keeping the launcher hidden.
 - [x] Passed `mvp-proof --require-proved`: initial frame 3ms and post-input frame
   710ms, both inside the 1,000ms fresh-frame budget; mouse, keyboard, text, and
   clipboard paths were exercised.
@@ -44,3 +47,9 @@ manager workflow.
   suspend/resume support.
 - [ ] Add longer soak coverage for repeated sleep/wake, network interruption,
   resolution changes, and multiple concurrent Windows app windows.
+
+The 800×600 RFB framebuffer observed during recovery is the explicit setup and
+recovery desktop, not the normal app-window render size. Veil must not upscale
+that surface and call it Retina support. True automatic Retina matching requires
+guest DPI/graphics-driver work; Parallels-class GPU acceleration remains a
+separate unproved capability.

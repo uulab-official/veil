@@ -1,8 +1,8 @@
 # P0 One-Click Windows App Runtime Proof
 
 Date: 2026-08-28
-Tested implementation base commit: `ab23efd` (`fix: widen launcher verification startup window`)
-Latest verification: `codex/ui-display-state` working tree on `2026-08-28`
+Tested implementation commit: `36f6319` (`feat: recover stalled Windows app launches automatically`)
+Latest verification: installed `/Applications/Veil.app` build on `2026-08-28`
 Branch: `codex/ui-display-state`
 
 Purpose: keep the host-side implementation result separate from proof that a real
@@ -55,6 +55,9 @@ that contains `dotnet` before running the gate.
 - [x] Repeated frame updates preserve the independent window while fresh capture frames advance; the resized window continued to show a complete 600 x 393 guest frame.
 - [x] Host-shell zoom/restore, resize, focus, and close cycle is proven on a real independent macOS window; closing returned to the launcher and quieted QEMU.
 - [x] Mirrored-window resize negotiates `capabilities.windowResize`, sends one bounded `window.resize.request` after the macOS gesture, applies the size to the Windows HWND, and waits for the authoritative `window.updated`/key-frame path.
+- [x] A deliberately stale long-lived session with QMP alive, RFB unavailable, and the guest-agent forward unavailable recovered from the one-click app lifecycle without a force stop; Notepad then appeared as the only normal surface.
+- [x] Commit `36f6319` was installed at `/Applications/Veil.app`; relaunch restored the existing Notepad HWND directly as an independent 600 x 393 macOS window with fresh frames (36 frames observed, latest interval 308 ms) while the launcher stayed hidden.
+- [x] The installed app's one-click command reused HWND `000200C6` instead of creating a duplicate and restarted a fresh frame subscription (frame 276 observed at 600 x 393, latest interval 347 ms).
 
 ### Current live prerequisite result
 
@@ -118,6 +121,25 @@ a reversible QMP pause/resume recovery path after a previously live guest-agent
 connection drops. Live fault-injection and long-duration recovery measurement
 remain open.
 
+The same failure was then exercised through the signed Veil app on commit
+`36f6319`. Before the app action, QMP reported `running` while both RFB and
+`ws://127.0.0.1:18444` timed out and the QEMU backend was observed near 127% CPU.
+One **Open Notepad** command queued the app, waited for the agent, ran the bounded
+QMP pause/resume recovery, waited again, and opened HWND `000200C6` automatically.
+After recovery:
+
+- QEMU remained `running` and was observed near 32% CPU.
+- `qemu-display-smoke` returned a non-blank 800 x 600 recovery desktop.
+- `guest-agent-wait` connected on its first post-recovery attempt as agent 0.1.0.
+- The host presented the Korean Notepad surface as a fresh 600 x 393 independent
+  macOS window; the embedded Windows desktop was not the normal app surface.
+- A fresh `mvp-proof --require-proved` passed with a 3 ms initial frame and 710 ms
+  post-input frame, including mouse, keyboard, text, and clipboard evidence.
+
+This closes the controlled live stale-transport recovery item for the P0
+one-click path. Repeated fault injection, longer soak durations, and behavior
+when QMP itself is unavailable remain reliability work rather than P0 proof.
+
 ### Sparse package prerequisite gate
 
 The real Windows guest remained connected during the `2026-08-27` sparse package
@@ -146,10 +168,9 @@ scene materialization and the fallback path.
 
 ## Next live verification sequence
 
-1. Repeat the first-frame, input, clipboard, focus, resize, repeated-launch,
-   restart-recovery, and long-lived liveness checks from the host-shell surface
-   after a fresh VM restart. Inject a controlled RFB/agent interruption and
-   measure the automatic QMP recovery and reconnect latency.
+1. Run repeated RFB/agent fault injection and multi-hour soak measurements,
+   including the separate case where QMP itself is unavailable. The single
+   controlled stale-transport recovery is now live-proved.
 2. Install the Windows 10/11 SDK in the guest, retry sparse package preparation,
    and verify `packageIdentity=true` before running borderless Windows Graphics
    Capture and notification-consent proofs.

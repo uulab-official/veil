@@ -50,7 +50,7 @@
 - Consumes: `VMRuntimeState`, `VMRuntimeSnapshot.installEvidence`, `WindowMirrorSession.latestFrame`.
 - Produces: `RuntimeWorkspacePresentationPolicy.defaultShowsFullDesktop(windowsInstalled:runtimeState:hasDesktopDisplay:) -> Bool` and `RuntimeWorkspacePresentationPolicy.shouldReturnToApps(windowsInstalled:hasFirstAppFrame:) -> Bool`.
 
-- [ ] **Step 1: Add failing workspace-policy tests**
+- [x] **Step 1: Add failing workspace-policy tests**
 
 ```swift
 @Test("installed Windows defaults to the app launcher even when a desktop display exists")
@@ -86,7 +86,7 @@ func firstFrameReturnsToApps() {
 }
 ```
 
-- [ ] **Step 2: Run the focused tests and verify the new API is missing**
+- [x] **Step 2: Run the focused tests and verify the new API is missing**
 
 Run:
 
@@ -96,7 +96,7 @@ swift test --disable-sandbox --package-path apps/mac-host --filter RuntimeWorksp
 
 Expected: FAIL because `defaultShowsFullDesktop` and `shouldReturnToApps` do not exist.
 
-- [ ] **Step 3: Implement the pure presentation policy**
+- [x] **Step 3: Implement the pure presentation policy**
 
 Add to `RuntimeWorkspacePresentationPolicy` in `DetailView.swift`:
 
@@ -121,7 +121,7 @@ In `DetailView`, derive `windowsInstalled` from the same profile/guest evidence 
 
 Remove the three automatic assignments in `WindowsSetupDisplayPanel.body` that currently set `showsFullDesktop = true` whenever the VM becomes running or a desktop surface appears. Preserve the explicit “Show Desktop” button as the recovery/user-requested path.
 
-- [ ] **Step 4: Run display and shell tests**
+- [x] **Step 4: Run display and shell tests**
 
 Run:
 
@@ -132,7 +132,7 @@ swift test --disable-sandbox --package-path apps/mac-host --filter RuntimeWorksp
 
 Expected: PASS; installed Windows starts on the app launcher while uninstalled Windows Setup keeps the display visible.
 
-- [ ] **Step 5: Commit only this task's hunks**
+- [x] **Step 5: Commit only this task's hunks**
 
 ```bash
 git add -p apps/mac-host/Sources/VeilHostShell/Views/DetailView.swift
@@ -152,7 +152,7 @@ git commit -m "fix(ui): keep Windows desktop recovery-only"
 - Consumes: current VM, agent, queue, and recovery state.
 - Produces: `AppLaunchLifecycleContext`, `AppLaunchLifecycleFailure`, and `AppLaunchLifecycleCoordinator.nextStep(context:)`.
 
-- [ ] **Step 1: Add failing tests for repair exhaustion and terminal blockers**
+- [x] **Step 1: Add failing tests for repair exhaustion and terminal blockers**
 
 ```swift
 @Test("a timed out running guest requests bounded agent repair")
@@ -203,7 +203,7 @@ private func context(
 }
 ```
 
-- [ ] **Step 2: Run the focused test and verify failure**
+- [x] **Step 2: Run the focused test and verify failure**
 
 Run:
 
@@ -213,7 +213,7 @@ swift test --disable-sandbox --package-path apps/mac-host --filter AppLaunchLife
 
 Expected: FAIL because the context API and repair steps do not exist.
 
-- [ ] **Step 3: Add the context and terminal failures**
+- [x] **Step 3: Add the context and terminal failures**
 
 ```swift
 struct AppLaunchLifecycleContext: Equatable {
@@ -262,7 +262,7 @@ var userMessage: String {
 }
 ```
 
-- [ ] **Step 4: Run transition tests**
+- [x] **Step 4: Run transition tests**
 
 Run:
 
@@ -272,7 +272,7 @@ swift test --disable-sandbox --package-path apps/mac-host --filter AppLaunchLife
 
 Expected: PASS for request, start/resume, wait, repair, fulfillment, endpoint blocker, setup blocker, and repair exhaustion.
 
-- [ ] **Step 5: Commit the transition contract**
+- [x] **Step 5: Commit the transition contract**
 
 ```bash
 git add -p apps/mac-host/Sources/VeilHostShell/App/AppLaunchLifecycleCoordinator.swift
@@ -291,7 +291,7 @@ git commit -m "feat(shell): define bounded app launch lifecycle"
 - Consumes: `AppLaunchLifecycleContext` and generic closures that the shell later backs with `HostDashboardModel`, `VMRuntimeModel`, and `AppRuntimeBooter`.
 - Produces: `OneClickAppLaunchDriver`, `OneClickAppLaunchOutcome`, and `OneClickAppLaunchCoordinator.run(appId:driver:)`.
 
-- [ ] **Step 1: Write a failing stopped-VM sequence test**
+- [x] **Step 1: Write a failing stopped-VM sequence test**
 
 ```swift
 @Test("one click queues, starts, connects, and opens the selected app")
@@ -361,7 +361,7 @@ func opensFromStoppedVM() async throws {
 
 Add tests for: already-connected direct fulfillment, one wait timeout followed by repair and success, two failed repairs producing `.guestAgentRecoveryExhausted`, unavailable endpoint producing no start attempt, and twelve transitions producing `.transitionBudgetExceeded`.
 
-- [ ] **Step 2: Run the new test and verify missing types**
+- [x] **Step 2: Run the new test and verify missing types**
 
 Run:
 
@@ -371,7 +371,7 @@ swift test --disable-sandbox --package-path apps/mac-host --filter OneClickAppLa
 
 Expected: FAIL because the coordinator file does not exist.
 
-- [ ] **Step 3: Implement the injected driver and bounded runner**
+- [x] **Step 3: Implement the injected driver and bounded runner**
 
 ```swift
 @MainActor
@@ -448,7 +448,7 @@ struct OneClickAppLaunchCoordinator {
 
 The remaining tests use the same closure pattern and mutate only local queue, runtime, connection, and repair-count state; they do not open sockets or launch QEMU.
 
-- [ ] **Step 4: Run coordinator tests**
+- [x] **Step 4: Run coordinator tests**
 
 Run:
 
@@ -458,7 +458,7 @@ swift test --disable-sandbox --package-path apps/mac-host --filter OneClickAppLa
 
 Expected: PASS with no sleeps, network access, or VM process.
 
-- [ ] **Step 5: Commit the coordinator**
+- [x] **Step 5: Commit the coordinator**
 
 ```bash
 git add apps/mac-host/Sources/VeilHostShell/App/OneClickAppLaunchCoordinator.swift
@@ -479,7 +479,7 @@ git commit -m "feat(shell): orchestrate one-click Windows app launch"
 - Consumes: `OneClickAppLaunchCoordinator.run(appId:driver:)`.
 - Produces: one in-flight `oneClickAppLaunchTask` for tile, main button, Dock/menu, and queued-launch fulfillment.
 
-- [ ] **Step 1: Make selected-app requests return an immediate live result**
+- [x] **Step 1: Make selected-app requests return an immediate live result**
 
 Extend the existing `launchesSelectedWindowsApp` and `queuesNotepadLaunchUntilLiveAgentConnects` tests:
 
@@ -494,7 +494,7 @@ let queuedResult = await offlineModel.launchSelectedApp()
 
 Change `HostDashboardModel.launchSelectedApp()` to `@discardableResult public func launchSelectedApp() async -> WindowsAppLaunchResult?`. Return `nil` for selection, offline queue, and availability failures; return `await launchApp(appId:)` for a live launch. Existing callers may ignore the result.
 
-- [ ] **Step 2: Add a failing duplicate-request test**
+- [x] **Step 2: Add a failing duplicate-request test**
 
 Add a small `OneClickAppLaunchTaskGate` to the coordinator file and test it directly:
 
@@ -536,7 +536,7 @@ func coalescesDuplicateClicks() async {
 }
 ```
 
-- [ ] **Step 3: Run the focused tests and verify failure**
+- [x] **Step 3: Run the focused tests and verify failure**
 
 Run:
 
@@ -547,7 +547,7 @@ swift test --disable-sandbox --package-path apps/mac-host --filter HostDashboard
 
 Expected: FAIL because `OneClickAppLaunchTaskGate` is missing.
 
-- [ ] **Step 4: Implement one task gate and shell driver**
+- [x] **Step 4: Implement one task gate and shell driver**
 
 Add the gate:
 
@@ -616,7 +616,7 @@ let driver = OneClickAppLaunchDriver(
 
 On `.opened`, call `showWindowsAppWindow(for:)`, set product-facing success copy, and synchronize launcher visibility. On `.blocked(let failure)`, set `displayMessage = failure.userMessage`. Do not also schedule the old automatic recovery task for the same pending launch; retain the reconnect poller for passive reconnection and restore only.
 
-- [ ] **Step 5: Run all lifecycle and shell tests**
+- [x] **Step 5: Run all lifecycle and shell tests**
 
 Run:
 
@@ -629,7 +629,7 @@ swift test --disable-sandbox --package-path apps/mac-host --filter AppRuntimeBoo
 
 Expected: PASS; duplicate clicks share one task and agent repair never exceeds two attempts.
 
-- [ ] **Step 6: Commit shell wiring only**
+- [x] **Step 6: Commit shell wiring only**
 
 ```bash
 git add -p apps/mac-host/Sources/VeilHostShell/App/VeilHostShellApp.swift
@@ -651,7 +651,7 @@ git commit -m "feat(app): route launches through one-click lifecycle"
 - Consumes: `WindowsAppWindowPresenter.showWindow(for:bringToFront:)`.
 - Produces: the invariant that frame/window-update refreshes preserve host frame and foreground order.
 
-- [ ] **Step 1: Add a repeated-update regression test**
+- [x] **Step 1: Add a repeated-update regression test**
 
 ```swift
 @Test("repeated frame updates never resize or re-center an existing app window")
@@ -678,7 +678,7 @@ func repeatedFrameUpdatesPreserveWindowGeometry() throws {
 
 Extend the existing background-focus test to alternate 30 updates between two HWNDs and assert the foreground window never changes.
 
-- [ ] **Step 2: Run presenter tests**
+- [x] **Step 2: Run presenter tests**
 
 Run:
 
@@ -688,11 +688,11 @@ swift test --disable-sandbox --package-path apps/mac-host --filter WindowsAppWin
 
 Expected: PASS with the current preservation path. If it fails, the failure reproduces the reported center-small-to-large oscillation.
 
-- [ ] **Step 3: Apply the minimal fix only if Step 2 fails**
+- [x] **Step 3: Apply the minimal fix only if Step 2 fails**
 
 Keep `updateExistingWindow` content replacement in place, but prevent `configure` from applying a new initial frame to an existing HWND. Restore `preservedFrame` after constraints and content replacement, and never call `present` unless `bringToFront` is true. Do not weaken the guest aspect-ratio constraint.
 
-- [ ] **Step 4: Re-run placement and presenter tests**
+- [x] **Step 4: Re-run placement and presenter tests**
 
 Run:
 
@@ -703,7 +703,7 @@ swift test --disable-sandbox --package-path apps/mac-host --filter WindowsAppWin
 
 Expected: PASS with stable geometry, preserved aspect ratio, and no background focus stealing.
 
-- [ ] **Step 5: Commit the regression evidence**
+- [x] **Step 5: Commit the regression evidence**
 
 ```bash
 git add -p apps/mac-host/Tests/VeilHostShellTests/WindowsAppWindowPresenterTests.swift
@@ -723,7 +723,7 @@ If no source fix was necessary, omit the source file from staging.
 - Consumes: the completed P0 implementation and existing `script/test_all.sh`.
 - Produces: a dated deterministic verification record with exact command results.
 
-- [ ] **Step 1: Run Swift host tests**
+- [x] **Step 1: Run Swift host tests**
 
 ```bash
 swift test --disable-sandbox --package-path apps/mac-host
@@ -731,7 +731,7 @@ swift test --disable-sandbox --package-path apps/mac-host
 
 Expected: all Swift suites pass.
 
-- [ ] **Step 2: Run Windows agent tests with the managed SDK**
+- [x] **Step 2: Run Windows agent tests with the managed SDK**
 
 ```bash
 "/Users/uulab/Library/Application Support/Veil/Toolchains/dotnet8/dotnet" test \
@@ -740,7 +740,7 @@ Expected: all Swift suites pass.
 
 Expected: all Windows agent tests pass.
 
-- [ ] **Step 3: Run the complete repository gate**
+- [x] **Step 3: Run the complete repository gate**
 
 ```bash
 PATH="/Users/uulab/Library/Application Support/Veil/Toolchains/dotnet8:$PATH" ./script/test_all.sh
@@ -748,7 +748,7 @@ PATH="/Users/uulab/Library/Application Support/Veil/Toolchains/dotnet8:$PATH" ./
 
 Expected: Swift host, Windows agent, all Node packages, app bundle contract, and install/uninstall lifecycle pass.
 
-- [ ] **Step 4: Record exact deterministic results**
+- [x] **Step 4: Record exact deterministic results**
 
 Create `docs/checklists/2026-08-10-p0-one-click-runtime-proof.md` with:
 
@@ -765,16 +765,16 @@ Create `docs/checklists/2026-08-10-p0-one-click-runtime-proof.md` with:
 
 ## Live Windows gates
 
-- [ ] Fresh boot-safe QEMU launch.
-- [ ] Guest-agent health through `ws://127.0.0.1:18444`.
-- [ ] One Notepad tile click opens one macOS window.
-- [ ] Initial and post-input frames prove mouse, keyboard, and clipboard.
-- [ ] Normal app path never shows the nested Windows desktop.
+- [x] Fresh boot-safe QEMU launch.
+- [x] Guest-agent health through `ws://127.0.0.1:18444`.
+- [x] One Notepad tile click opens one macOS window.
+- [x] Initial and post-input frames prove mouse, keyboard, and clipboard.
+- [x] Normal app path never shows the nested Windows desktop.
 ```
 
 Replace each “record the exact” instruction with the observed numeric output before committing; an unobserved count is a plan failure.
 
-- [ ] **Step 5: Commit deterministic evidence**
+- [x] **Step 5: Commit deterministic evidence**
 
 ```bash
 git add docs/checklists/2026-08-10-p0-one-click-runtime-proof.md
@@ -792,7 +792,7 @@ git commit -m "docs: record P0 deterministic gates"
 - Consumes: `veil-vmctl qemu-install-status`, `qemu-powerdown`, `qemu-plan`, `qemu-start`, `qemu-capture`, `guest-agent-wait`, and `mvp-proof`.
 - Produces: a real Windows proof tied to `git rev-parse HEAD` and fixed screenshot/report names.
 
-- [ ] **Step 1: Record the tested identity and inspect the running VM**
+- [x] **Step 1: Record the tested identity and inspect the running VM**
 
 ```bash
 git rev-parse HEAD
@@ -802,7 +802,7 @@ apps/mac-host/.build/debug/veil-vmctl qemu-capture --json
 
 Expected: commit identity is recorded; current VM state and console evidence are captured before mutation.
 
-- [ ] **Step 2: Request graceful shutdown**
+- [x] **Step 2: Request graceful shutdown**
 
 ```bash
 apps/mac-host/.build/debug/veil-vmctl qemu-powerdown --json --wait-seconds 30
@@ -810,7 +810,7 @@ apps/mac-host/.build/debug/veil-vmctl qemu-powerdown --json --wait-seconds 30
 
 Expected: QEMU exits. If it does not, stop here and request explicit user approval before any `qemu-force-stop --i-understand-data-loss` command.
 
-- [ ] **Step 3: Verify and start the boot-safe plan**
+- [x] **Step 3: Verify and start the boot-safe plan**
 
 ```bash
 apps/mac-host/.build/debug/veil-vmctl qemu-plan --json
@@ -819,7 +819,7 @@ apps/mac-host/.build/debug/veil-vmctl qemu-start --json
 
 Expected: `networkAdapter` is `usb-net`, the process starts under QEMU/HVF, and the display endpoint is loopback-only.
 
-- [ ] **Step 4: Capture Windows and prove the agent**
+- [x] **Step 4: Capture Windows and prove the agent**
 
 ```bash
 apps/mac-host/.build/debug/veil-vmctl qemu-capture --json
@@ -830,7 +830,7 @@ Expected: the screenshot is Windows Setup or the Windows desktop rather than UEF
 
 If the screenshot remains UEFI or the agent remains unavailable, retain logs and screenshots, do not mark the gate complete, and switch to `superpowers:systematic-debugging` before changing boot or agent code.
 
-- [ ] **Step 5: Exercise the installed app path**
+- [x] **Step 5: Exercise the installed app path**
 
 ```bash
 ./script/build_and_run.sh --build-only
@@ -843,7 +843,7 @@ If the screenshot remains UEFI or the agent remains unavailable, retain logs and
 
 Click the Notepad tile once. Confirm one Notepad macOS window appears, the launcher hides, no nested desktop remains visible, and repeated frames do not resize or re-center the window.
 
-- [ ] **Step 6: Save real input and clipboard proof**
+- [x] **Step 6: Save real input and clipboard proof**
 
 ```bash
 mkdir -p "/Users/uulab/Library/Application Support/Veil/Diagnostics/P0 Proof"
@@ -857,7 +857,7 @@ apps/mac-host/.build/debug/veil-vmctl mvp-proof \
 
 Expected: `status=proved`, connected wait evidence, matching HWND/process identity, initial frame, mouse and keyboard input, clipboard evidence, and a newer post-input frame.
 
-- [ ] **Step 7: Update and commit live evidence metadata**
+- [x] **Step 7: Update and commit live evidence metadata**
 
 Mark only observed live gates complete in the checklist. Record the tested commit, macOS version, Mac model, Windows build, QEMU version, evidence directory name, and measured first/post-input frame latency. Do not commit screenshots, Windows media, clipboard content, or absolute user-document paths.
 
@@ -877,7 +877,7 @@ git push origin HEAD
 - Consumes: deterministic and live evidence.
 - Produces: an honest P0 completion decision.
 
-- [ ] **Step 1: Inspect commit separation and remaining dirty state**
+- [x] **Step 1: Inspect commit separation and remaining dirty state**
 
 ```bash
 git log --oneline -8
@@ -887,7 +887,7 @@ git diff --check
 
 Expected: P0 commits are coherent and pushed; unrelated user changes remain preserved and unstaged.
 
-- [ ] **Step 2: Re-run the full gate at the final commit**
+- [x] **Step 2: Re-run the full gate at the final commit**
 
 ```bash
 PATH="/Users/uulab/Library/Application Support/Veil/Toolchains/dotnet8:$PATH" ./script/test_all.sh
@@ -895,11 +895,11 @@ PATH="/Users/uulab/Library/Application Support/Veil/Toolchains/dotnet8:$PATH" ./
 
 Expected: `All requested Veil regression gates passed.`
 
-- [ ] **Step 3: Apply completion vocabulary**
+- [x] **Step 3: Apply completion vocabulary**
 
 Mark P0 `implemented` if deterministic gates pass but any live gate is open. Mark it `verified` only when the live evidence checklist is complete. Do not mark Veil `production-ready`; P1–P4 and the notarized clean-Mac release gate remain separate plans.
 
-- [ ] **Step 4: Commit any evidence-only correction and push**
+- [x] **Step 4: Commit any evidence-only correction and push**
 
 ```bash
 git add -p docs/checklists/2026-08-10-p0-one-click-runtime-proof.md
