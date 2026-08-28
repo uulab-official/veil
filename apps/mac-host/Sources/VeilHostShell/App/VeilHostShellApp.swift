@@ -1979,6 +1979,7 @@ struct VeilHostShellApp: App {
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    private static let launchVerificationMaximumAttempts = 60
     var dockMenuProvider: (() -> NSMenu?)?
     var reopenHandler: (() -> Void)?
     private let launchVerificationReportURL = LaunchVerificationArguments.reportURL(
@@ -2047,7 +2048,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
             MainWindowChrome.showMainWindow()
             let report = MainWindowChrome.launchReport(appIconSource: self.appIconSource)
-            if report.meetsLauncherContract || attempt >= 24 {
+            if report.meetsLauncherContract || attempt >= Self.launchVerificationMaximumAttempts {
                 self.writeLaunchVerificationReport(report)
             } else {
                 self.scheduleLaunchVerificationReportIfNeeded(attempt: attempt + 1)
