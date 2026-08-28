@@ -80,9 +80,13 @@ struct VMRuntimeView: View {
                         // display recovery must never block a native app window launch.
                         if windowsReadyForApps && canFulfillPendingLaunch {
                             fulfillPendingLaunchAction()
+                        } else if WindowsAppLaunchCommandPolicy.prefersLaunchAsHero(
+                            windowsInstalled: windowsReadyForApps,
+                            hasSelectedApp: selectedWindowsAppName != nil
+                        ) {
+                            launchWindowsAppAction()
                         } else if windowsReadyForApps
-                            && canRequestWindowsAppLaunch
-                            && (canLaunchWindowsApp || !canRecoverRuntimeDisplay(for: snapshot)) {
+                            && canRequestWindowsAppLaunch {
                             launchWindowsAppAction()
                         } else if windowsReadyForApps && pendingLaunch.willLaunchOnAgentReconnect && canShowDisplay(for: snapshot) {
                             repairGuestAgentForAppLaunchAction()
@@ -1743,10 +1747,6 @@ private struct WindowsSetupDisplayPanel: View {
     }
 
     private var installPrimaryTitle: String {
-        if canRecoverRuntimeDisplay && !canLaunchWindowsApp {
-            return "Refresh Display"
-        }
-
         if effectiveInstallEvidence.isInstalled {
             if canFulfillPendingLaunch {
                 return "Open \(pendingAppDisplayName)"
@@ -1759,6 +1759,10 @@ private struct WindowsSetupDisplayPanel: View {
                 default:
                     return "Continue Opening \(pendingAppDisplayName)"
                 }
+            }
+
+            if prefersOneClickAppLaunch {
+                return selectedWindowsAppName.map { "Open \($0)" } ?? "Open Windows App"
             }
 
             if canRequestWindowsAppLaunch {
@@ -1829,8 +1833,7 @@ private struct WindowsSetupDisplayPanel: View {
 
     @ViewBuilder
     private var runtimeActionButton: some View {
-        if executablePrimaryNextActionRoute != nil
-            && (!canRecoverRuntimeDisplay || canLaunchWindowsApp) {
+        if executablePrimaryNextActionRoute != nil {
             Button(action: runEffectivePrimaryAction) {
                 Label(effectivePrimaryTitle, systemImage: effectivePrimarySymbol)
             }
@@ -1838,7 +1841,7 @@ private struct WindowsSetupDisplayPanel: View {
             .controlSize(.regular)
             .disabled(effectivePrimaryDisabled)
             .help(effectivePrimaryHelp)
-        } else if canOpenWindowsApp && (!canRecoverRuntimeDisplay || canLaunchWindowsApp) {
+        } else if canOpenWindowsApp {
             Button(action: primaryAction) {
                 Label(appDisplayName, systemImage: "macwindow.badge.plus")
             }
@@ -1846,7 +1849,7 @@ private struct WindowsSetupDisplayPanel: View {
             .controlSize(.regular)
             .disabled(isLoading)
             .help("Open Windows app")
-        } else if canRepairGuestAgentForAppLaunch && (!canRecoverRuntimeDisplay || canLaunchWindowsApp) {
+        } else if canRepairGuestAgentForAppLaunch {
             Button(action: repairGuestAgentForAppLaunchAction) {
                 Label("Continue \(pendingAppDisplayName)", systemImage: "bolt.horizontal.circle")
             }
@@ -2092,6 +2095,10 @@ private struct WindowsSetupDisplayPanel: View {
                 }
             }
 
+            if prefersOneClickAppLaunch {
+                return "Open \(appDisplayName)"
+            }
+
             if canRequestWindowsAppLaunch {
                 return "Open Windows apps from macOS"
             }
@@ -2147,10 +2154,6 @@ private struct WindowsSetupDisplayPanel: View {
     }
 
     private var primaryTitle: String {
-        if canRecoverRuntimeDisplay && !canLaunchWindowsApp {
-            return "Refresh Display"
-        }
-
         if effectiveInstallEvidence.isInstalled {
             if canFulfillPendingLaunch {
                 return "Open \(pendingAppDisplayName)"
@@ -2163,6 +2166,10 @@ private struct WindowsSetupDisplayPanel: View {
                 default:
                     return "Continue Opening \(pendingAppDisplayName)"
                 }
+            }
+
+            if prefersOneClickAppLaunch {
+                return "Open \(appDisplayName)"
             }
 
             if canRequestWindowsAppLaunch {
@@ -2198,15 +2205,15 @@ private struct WindowsSetupDisplayPanel: View {
     }
 
     private var primarySymbol: String {
-        if canRecoverRuntimeDisplay && !canLaunchWindowsApp {
-            return "display.trianglebadge.exclamationmark"
-        }
-
         if effectiveInstallEvidence.isInstalled {
             if canFulfillPendingLaunch || pendingLaunch.willLaunchOnAgentReconnect {
                 return pendingLaunch.willLaunchOnAgentReconnect && !canFulfillPendingLaunch
                     ? "bolt.horizontal.circle"
                     : "macwindow.badge.plus"
+            }
+
+            if prefersOneClickAppLaunch {
+                return "macwindow.badge.plus"
             }
 
             if canRequestWindowsAppLaunch {
@@ -2250,6 +2257,10 @@ private struct WindowsSetupDisplayPanel: View {
                 default:
                     return "Start Windows, wait for the app connection, then open \(pendingAppDisplayName)."
                 }
+            }
+
+            if prefersOneClickAppLaunch {
+                return "Open \(appDisplayName); Veil will recover the Windows app connection automatically if needed."
             }
 
             if canRequestWindowsAppLaunch {
@@ -2317,7 +2328,7 @@ private struct WindowsSetupDisplayPanel: View {
         case .fulfillPendingLaunch:
             return "Open \(pendingAppDisplayName)"
         case .repairAppConnection:
-            return "Continue \(pendingWindowsAppName ?? selectedWindowsAppName ?? "App")"
+            return "Open \(pendingWindowsAppName ?? selectedWindowsAppName ?? "Windows App")"
         case .startWindowsForApp:
             return selectedWindowsAppName.map { "Open \($0)" }
                 ?? pendingWindowsAppName.map { "Open \($0)" }
@@ -2359,7 +2370,7 @@ private struct WindowsSetupDisplayPanel: View {
         case .waitForAgent:
             waitForGuestAgentAction()
         case .repairAppConnection:
-            repairGuestAgentForAppLaunchAction()
+            launchWindowsAppAction()
         case .startWindows:
             primaryAction()
         case .startWindowsForApp:
@@ -2523,6 +2534,13 @@ private struct WindowsSetupDisplayPanel: View {
 
     private var canOpenWindowsApp: Bool {
         canRequestWindowsAppLaunch || canFulfillPendingLaunch
+    }
+
+    private var prefersOneClickAppLaunch: Bool {
+        WindowsAppLaunchCommandPolicy.prefersLaunchAsHero(
+            windowsInstalled: effectiveInstallEvidence.isInstalled,
+            hasSelectedApp: selectedWindowsAppName != nil
+        )
     }
 
     private var canRepairGuestAgentForAppLaunch: Bool {

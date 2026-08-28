@@ -6,6 +6,7 @@ struct OneClickAppLaunchDriver<LaunchResult: Sendable> {
     var requestLaunch: (String) async -> LaunchResult?
     var startOrResumeWindows: () async -> Bool
     var waitForGuestAgent: (Int) async -> Bool
+    var recoverStalledRuntime: () async -> Bool = { false }
     var repairGuestAgent: () async throws -> Void
     var fulfillLaunch: () async -> LaunchResult?
 }
@@ -45,11 +46,13 @@ struct OneClickAppLaunchCoordinator {
     ) async -> OneClickAppLaunchOutcome<LaunchResult> {
         var repairAttemptCount = 0
         var agentWaitTimedOut = false
+        var hasAttemptedRuntimeRecovery = false
 
         for _ in 0..<Self.maximumTransitions {
             var context = driver.context()
             context.repairAttemptCount = repairAttemptCount
             context.agentWaitTimedOut = agentWaitTimedOut
+            context.hasAttemptedRuntimeRecovery = hasAttemptedRuntimeRecovery
 
             switch AppLaunchLifecycleCoordinator.nextStep(context: context) {
             case .requestLaunch:
@@ -63,6 +66,9 @@ struct OneClickAppLaunchCoordinator {
                 agentWaitTimedOut = false
             case .waitForGuestAgent:
                 agentWaitTimedOut = !(await driver.waitForGuestAgent(Self.agentWaitSeconds))
+            case .recoverStalledRuntime:
+                hasAttemptedRuntimeRecovery = true
+                agentWaitTimedOut = !(await driver.recoverStalledRuntime())
             case .repairGuestAgent:
                 do {
                     try await driver.repairGuestAgent()

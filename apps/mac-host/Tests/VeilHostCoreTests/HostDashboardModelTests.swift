@@ -5,6 +5,28 @@ import Testing
 
 @Suite("Host dashboard model")
 struct HostDashboardModelTests {
+    @Test("retains the bootstrap app catalog when the live agent is unavailable")
+    @MainActor
+    func retainsBootstrapCatalogAcrossConnectionFailure() async {
+        let service = FakeDashboardService(
+            error: HostDashboardServiceError.agentEndpointUnavailable(
+                endpoint: "ws://127.0.0.1:18444",
+                detail: "Connection refused",
+                nextActions: []
+            )
+        )
+        let model = HostDashboardModel(
+            service: service,
+            initialApps: [.notepad]
+        )
+
+        await model.load()
+
+        #expect(model.apps.map(\.id) == ["winapp_notepad"])
+        #expect(model.selectedAppId == "winapp_notepad")
+        #expect(model.canRequestSelectedAppLaunch)
+    }
+
     @Test("loads agent overview into dashboard state")
     @MainActor
     func loadsAgentOverview() async throws {

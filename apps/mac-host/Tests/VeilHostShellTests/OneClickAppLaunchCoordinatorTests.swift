@@ -143,6 +143,63 @@ struct OneClickAppLaunchCoordinatorTests {
         #expect(repairCount == 1)
     }
 
+    @Test("a known QEMU session recovers its transport before reinstalling the agent")
+    @MainActor
+    func recoversStalledRuntimeBeforeAgentRepair() async {
+        var connected = false
+        var runtimeRecoveryAttempted = false
+        var waitCount = 0
+        var events: [String] = []
+
+        let driver = OneClickAppLaunchDriver<String>(
+            context: {
+                AppLaunchLifecycleContext(
+                    hasQueuedLaunch: true,
+                    canFulfillQueuedLaunch: connected,
+                    hasLiveAgentConnection: connected,
+                    runtimeState: .running,
+                    canStartOrResume: true,
+                    guestAgentEndpointAvailable: true,
+                    agentWaitTimedOut: false,
+                    repairAttemptCount: 0,
+                    canRecoverStalledRuntime: true,
+                    hasAttemptedRuntimeRecovery: runtimeRecoveryAttempted
+                )
+            },
+            requestLaunch: { _ in nil },
+            startOrResumeWindows: { true },
+            waitForGuestAgent: { seconds in
+                events.append("wait-agent:\(seconds)")
+                waitCount += 1
+                if waitCount == 2 {
+                    connected = true
+                }
+                return connected
+            },
+            recoverStalledRuntime: {
+                events.append("recover-runtime")
+                runtimeRecoveryAttempted = true
+                return true
+            },
+            repairGuestAgent: {
+                events.append("repair-agent")
+            },
+            fulfillLaunch: {
+                events.append("fulfill")
+                return "hwnd:0004"
+            }
+        )
+
+        let outcome = await OneClickAppLaunchCoordinator().run(appId: "winapp_notepad", driver: driver)
+
+        #expect(events == ["wait-agent:30", "recover-runtime", "wait-agent:30", "fulfill"])
+        guard case .opened(let windowId) = outcome else {
+            Issue.record("Expected the recovered runtime to open the queued app")
+            return
+        }
+        #expect(windowId == "hwnd:0004")
+    }
+
     @Test("two failed repairs produce a bounded recovery failure")
     @MainActor
     func stopsAfterTwoFailedRepairs() async {

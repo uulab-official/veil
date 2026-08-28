@@ -5,6 +5,7 @@ enum AppLaunchLifecycleStep: Equatable {
     case fulfillQueuedLaunch
     case startOrResumeWindows
     case waitForGuestAgent
+    case recoverStalledRuntime
     case repairGuestAgent
     case blockedGuestAgentEndpoint
     case blockedRuntimeSetup
@@ -20,6 +21,8 @@ struct AppLaunchLifecycleContext: Equatable, Sendable {
     var guestAgentEndpointAvailable: Bool
     var agentWaitTimedOut: Bool
     var repairAttemptCount: Int
+    var canRecoverStalledRuntime = false
+    var hasAttemptedRuntimeRecovery = false
 }
 
 enum AppLaunchLifecycleFailure: Error, Equatable, Sendable {
@@ -71,6 +74,9 @@ struct AppLaunchLifecycleCoordinator {
         switch context.runtimeState {
         case .running, .starting:
             if context.agentWaitTimedOut {
+                if context.canRecoverStalledRuntime && !context.hasAttemptedRuntimeRecovery {
+                    return .recoverStalledRuntime
+                }
                 return context.repairAttemptCount < maximumRepairAttempts
                     ? .repairGuestAgent
                     : .blockedGuestAgentRecovery

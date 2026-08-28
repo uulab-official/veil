@@ -1789,12 +1789,15 @@ public final class HostDashboardModel {
 
     public init(
         service: any HostDashboardService,
+        initialApps: [WindowsApp] = [],
         restoreIntentStore: any WindowRestoreIntentStore = JSONWindowRestoreIntentStore(),
         pendingLaunchIntentStore: any PendingLaunchIntentStore = JSONPendingLaunchIntentStore(),
         frameCompositor: WindowFrameCompositor = WindowFrameCompositor(),
         framePipelineMetrics: FramePipelineMetrics? = nil
     ) {
         self.service = service
+        self.apps = initialApps
+        self.selectedAppId = initialApps.first?.id
         self.restoreIntentStore = restoreIntentStore
         self.pendingLaunchIntentStore = pendingLaunchIntentStore
         self.frameCompositor = frameCompositor

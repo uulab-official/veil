@@ -251,6 +251,22 @@ public struct WindowsApp: Codable, Equatable, Identifiable, Sendable {
     /// icons are static (`WindowsAppIconExtractor` on the guest). `nil` in demo mode or if the guest
     /// could not resolve/extract the icon -- callers should fall back to a generic icon in that case.
     public var iconPngBase64: String? = nil
+
+    public init(
+        id: String,
+        name: String,
+        exePath: String,
+        publisher: String,
+        iconId: String,
+        iconPngBase64: String? = nil
+    ) {
+        self.id = id
+        self.name = name
+        self.exePath = exePath
+        self.publisher = publisher
+        self.iconId = iconId
+        self.iconPngBase64 = iconPngBase64
+    }
 }
 
 public struct AppLaunchRequest: Codable, Equatable, Sendable {

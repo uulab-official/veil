@@ -98,7 +98,8 @@ struct VeilHostShellApp: App {
                 service: HostDashboardServiceMode.resolve().makeService(
                     transport: transport,
                     connectionPlan: connectionPlan
-                )
+                ),
+                initialApps: KnownWindowsAppCatalog.apps
             )
         )
         _vmModel = State(
@@ -254,8 +255,12 @@ struct VeilHostShellApp: App {
                 }
                 .keyboardShortcut(.return, modifiers: [.command])
                 .disabled(
-                    (canRecoverRuntimeDisplay && !model.hasLiveAgentConnection)
-                        || (!model.canRequestSelectedAppLaunch && !model.canFulfillPendingLaunch)
+                    !WindowsAppLaunchCommandPolicy.isEnabled(
+                        canRequestLaunch: model.canRequestSelectedAppLaunch,
+                        canFulfillPendingLaunch: model.canFulfillPendingLaunch,
+                        hasRecoverableRuntimeDisplay: canRecoverRuntimeDisplay,
+                        hasLiveAgentConnection: model.hasLiveAgentConnection
+                    )
                 )
 
                 Button("Check Windows App") {
@@ -772,6 +777,22 @@ struct VeilHostShellApp: App {
                         )
                         return report.status == .connected
                     },
+                    recoverStalledRuntime: {
+                        self.displayMessage = "Windows app connection stalled. Reconnecting Windows automatically."
+                        let result = await self.vmRuntimeBooter.recoverStalledRuntime()
+                        await self.vmModel.refreshRuntimeEvidence()
+                        switch result {
+                        case .recovered:
+                            return true
+                        case .notNeeded, .unsupported:
+                            return false
+                        case .unavailable(let detail), .failed(let detail):
+                            VeilLog.agent.notice(
+                                "One-click QEMU runtime recovery did not complete: \(detail, privacy: .public)"
+                            )
+                            return false
+                        }
+                    },
                     repairGuestAgent: {
                         _ = try await self.vmRuntimeBooter.installGuestAgentFromAttachedMedia()
                         await self.vmModel.refreshRuntimeEvidence()
@@ -808,7 +829,9 @@ struct VeilHostShellApp: App {
             canStartOrResume: vmModel.canStart || vmModel.canResume,
             guestAgentEndpointAvailable: agentConnectionPlan.isAvailable,
             agentWaitTimedOut: false,
-            repairAttemptCount: 0
+            repairAttemptCount: 0,
+            canRecoverStalledRuntime: vmRuntimeBooter.provider == .qemu
+                && (hasObservedLiveAgentConnection || vmModel.snapshot?.installEvidence.kind == .guestAgent)
         )
     }
 
@@ -860,6 +883,8 @@ struct VeilHostShellApp: App {
             if vmRuntimeBooter.supportsNativeDisplayWindow {
                 showWindowsDisplay()
             }
+        case .recoverStalledRuntime:
+            runOneClickPendingLaunch()
         case .repairGuestAgent:
             activateMainWindow()
             displayMessage = "Windows is running. Veil is repairing the app connection so \(appName) can open as a Mac window."
@@ -2255,8 +2280,12 @@ private struct VeilMenuBarMenu: View {
                         launchWindowsAppByIdAction(app.id)
                     }
                     .disabled(
-                        (canRecoverRuntimeDisplay && !model.hasLiveAgentConnection)
-                            || !model.canRequestAppLaunch(appId: app.id)
+                        !WindowsAppLaunchCommandPolicy.isEnabled(
+                            canRequestLaunch: model.canRequestAppLaunch(appId: app.id),
+                            canFulfillPendingLaunch: false,
+                            hasRecoverableRuntimeDisplay: canRecoverRuntimeDisplay,
+                            hasLiveAgentConnection: model.hasLiveAgentConnection
+                        )
                     )
                 }
             }
@@ -2599,6 +2628,26 @@ private struct VeilMenuBarMenu: View {
     }
 }
 
+enum WindowsAppLaunchCommandPolicy {
+    static func prefersLaunchAsHero(
+        windowsInstalled: Bool,
+        hasSelectedApp: Bool
+    ) -> Bool {
+        windowsInstalled && hasSelectedApp
+    }
+
+    static func isEnabled(
+        canRequestLaunch: Bool,
+        canFulfillPendingLaunch: Bool,
+        hasRecoverableRuntimeDisplay _: Bool,
+        hasLiveAgentConnection _: Bool
+    ) -> Bool {
+        // Display and agent recovery are part of the one-click launch lifecycle.
+        // A recoverable transport failure must not make that lifecycle unreachable.
+        canRequestLaunch || canFulfillPendingLaunch
+    }
+}
+
 enum MenuBarPrimaryActionRoute: Equatable {
     case openMainWindow
     case bringWindowsAppsForward
@@ -2930,7 +2979,8 @@ private struct StandaloneMainWindowRoot: View {
                 service: HostDashboardServiceMode.resolve().makeService(
                     transport: transport,
                     connectionPlan: connectionPlan
-                )
+                ),
+                initialApps: KnownWindowsAppCatalog.apps
             )
         )
         _vmModel = State(
