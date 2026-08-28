@@ -317,6 +317,14 @@ struct WindowsAppWindowPresenterTests {
         #expect(shouldContinueDefaultReopen == false)
     }
 
+    @Test("app delegate does not restore an empty launcher state")
+    func appDelegateDoesNotRestoreEmptyLauncherState() {
+        let delegate = AppDelegate()
+
+        #expect(delegate.applicationShouldRestoreState(NSApplication.shared) == false)
+        #expect(delegate.applicationShouldSaveState(NSApplication.shared) == false)
+    }
+
     @Test("launch verification arguments accept separated and inline report paths")
     func launchVerificationArgumentsAcceptReportPaths() throws {
         let separated = try #require(

@@ -1927,6 +1927,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return false
     }
 
+    // The launcher owns its own layout and the host persists mirrored Windows app windows through
+    // WindowRestoreIntentStore. Letting AppKit restore the SwiftUI Window scene can therefore restore
+    // an empty state after the user previously closed or hid the launcher: applicationDidFinishLaunching
+    // runs before the scene exists, MainWindowChrome has nothing to show, and the app remains windowless.
+    // Always presenting the main scene gives a Finder/Dock launch the same deterministic entry point.
+    func applicationShouldRestoreState(_ app: NSApplication) -> Bool {
+        false
+    }
+
     func applicationDockMenu(_ sender: NSApplication) -> NSMenu? {
         dockMenuProvider?()
     }
@@ -2026,6 +2035,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return image
     }
 
+}
+
+// This selector is not surfaced consistently by the macOS SDK overlay, so keep it in an extension
+// to avoid Swift's optional-protocol near-match warning while still disabling empty AppKit restoration.
+extension AppDelegate {
+    @objc(applicationShouldSaveState:)
+    func applicationShouldSaveState(_ app: NSApplication) -> Bool {
+        false
+    }
 }
 
 private struct VeilMenuBarMenu: View {
