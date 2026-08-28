@@ -28,6 +28,9 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
     /// `(windowId, isVisible)`. Fires when a mirrored window is minimized or restored, so frame streaming can
     /// stop for a window that cannot show anything.
     var onWindowVisibilityChange: ((String, Bool) -> Void)?
+    /// `(windowId, contentWidth, contentHeight)`. Fires once after the user finishes resizing a mirrored
+    /// window so the real Windows HWND can follow without sending one request per drag event.
+    var onWindowResize: ((String, Int, Int) -> Void)?
 
     var visibleWindowIds: [String] {
         windowOrder.filter { windowsById[$0] != nil }
@@ -158,6 +161,27 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
         }
 
         onWindowVisibilityChange?(windowId, true)
+    }
+
+    func windowDidEndLiveResize(_ notification: Notification) {
+        guard let window = notification.object as? NSWindow,
+              let windowId = window.identifier?.rawValue,
+              windowsById[windowId] != nil,
+              let contentView = window.contentView else {
+            return
+        }
+
+        // AppKit reports content dimensions in points. They intentionally map to the logical dimensions
+        // used by window.created/window.updated; the Windows agent applies its own per-monitor DPI when
+        // converting the request to physical pixels.
+        let size = contentView.bounds.size
+        let width = Int(size.width.rounded())
+        let height = Int(size.height.rounded())
+        guard width > 0, height > 0 else {
+            return
+        }
+
+        onWindowResize?(windowId, width, height)
     }
 
     private func present(_ window: NSWindow, windowId: String) {

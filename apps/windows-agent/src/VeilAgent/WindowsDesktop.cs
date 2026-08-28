@@ -28,6 +28,9 @@ public sealed class WindowsDesktop : IWindowsDesktop
     private const int MK_RBUTTON = 0x0002;
     private const int WHEEL_DELTA = 120;
     private const int SW_RESTORE = 9;
+    private const uint SWP_NOZORDER = 0x0004;
+    private const uint SWP_NOACTIVATE = 0x0010;
+    private const uint SWP_NOOWNERZORDER = 0x0200;
     private const int VK_CONTROL = 0x11;
     private const int VK_SHIFT = 0x10;
     private const int VK_MENU = 0x12;
@@ -337,6 +340,47 @@ public sealed class WindowsDesktop : IWindowsDesktop
         return Task.FromResult(EnsureWindowReadyForInput(hwnd));
     }
 
+    public Task<WindowRect?> ResizeWindowAsync(WindowResizeInput input, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (!OperatingSystem.IsWindows())
+        {
+            throw new PlatformNotSupportedException("The Veil Windows agent must run inside Windows.");
+        }
+
+        if (input.Width < 320
+            || input.Width > 8_192
+            || input.Height < 320
+            || input.Height > 8_192
+            || (long)input.Width * input.Height > 32_000_000)
+        {
+            return Task.FromResult<WindowRect?>(null);
+        }
+
+        if (!TryParseWindowId(input.WindowId, out var hwnd)
+            || !IsWindow(hwnd)
+            || !GetWindowRect(hwnd, out var currentRect))
+        {
+            return Task.FromResult<WindowRect?>(null);
+        }
+
+        var scale = GdiWindowFrameCapture.GetWindowScale(hwnd);
+        var physicalWidth = Math.Max(1, (int)Math.Round(input.Width * scale, MidpointRounding.AwayFromZero));
+        var physicalHeight = Math.Max(1, (int)Math.Round(input.Height * scale, MidpointRounding.AwayFromZero));
+        var accepted = SetWindowPos(
+            hwnd,
+            IntPtr.Zero,
+            currentRect.Left,
+            currentRect.Top,
+            physicalWidth,
+            physicalHeight,
+            SWP_NOZORDER | SWP_NOACTIVATE | SWP_NOOWNERZORDER
+        );
+
+        return Task.FromResult<WindowRect?>(accepted ? GetWindowBounds(hwnd) : null);
+    }
+
     public Task<bool> SendMouseInputAsync(WindowMouseInput input, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -622,6 +666,17 @@ public sealed class WindowsDesktop : IWindowsDesktop
 
     [DllImport("user32.dll", SetLastError = true)]
     private static extern bool GetWindowRect(IntPtr hWnd, out NativeRect lpRect);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool SetWindowPos(
+        IntPtr hWnd,
+        IntPtr hWndInsertAfter,
+        int x,
+        int y,
+        int cx,
+        int cy,
+        uint flags
+    );
 
     private static void SetClipboardUnicodeText(string text)
     {

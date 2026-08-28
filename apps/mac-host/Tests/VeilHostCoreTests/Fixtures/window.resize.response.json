@@ -1,0 +1,12 @@
+{
+  "accepted": true,
+  "bounds": {
+    "height": 900,
+    "width": 1440,
+    "x": 10,
+    "y": 10
+  },
+  "requestId": "req_resize_notepad",
+  "type": "window.resize.response",
+  "windowId": "hwnd:0003029A"
+}

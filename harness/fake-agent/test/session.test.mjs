@@ -4,7 +4,8 @@ import {
   validateAppLaunchAcceptance,
   validateWindowClosed,
   validateWindowCloseResponse,
-  validateWindowFocusResponse
+  validateWindowFocusResponse,
+  validateWindowResizeResponse
 } from "@veil/protocol";
 
 import { createSession } from "../src/session.mjs";
@@ -23,6 +24,7 @@ test("responds to agent health requests with fixture capability data", async () 
   assert.equal(replies[0].requestId, "req_001");
   assert.equal(replies[0].capabilities.appLaunch, true);
   assert.equal(replies[0].capabilities.windowCapture, true);
+  assert.equal(replies[0].capabilities.windowResize, true);
   assert.equal(replies[0].capabilities.packageIdentity, false);
 });
 
@@ -181,6 +183,39 @@ test("accepts a window focus request for a tracked HWND", async () => {
   assert.equal(response.requestId, "req_focus_notepad");
   assert.equal(response.windowId, "hwnd:0003029A");
   assert.equal(response.accepted, true);
+});
+
+test("accepts a window resize request and returns the applied bounds", async () => {
+  const session = createSession();
+
+  const replies = await session.handle({
+    type: "window.resize.request",
+    requestId: "req_resize_notepad",
+    windowId: "hwnd:0003029A",
+    width: 1440,
+    height: 900
+  });
+
+  const response = validateWindowResizeResponse(replies[0]);
+  assert.equal(response.requestId, "req_resize_notepad");
+  assert.equal(response.accepted, true);
+  assert.deepEqual(response.bounds, { x: 10, y: 10, width: 1440, height: 900 });
+});
+
+test("declines a window resize request for an untracked HWND", async () => {
+  const session = createSession();
+
+  const replies = await session.handle({
+    type: "window.resize.request",
+    requestId: "req_resize_missing",
+    windowId: "hwnd:DEADBEEF",
+    width: 1440,
+    height: 900
+  });
+
+  const response = validateWindowResizeResponse(replies[0]);
+  assert.equal(response.accepted, false);
+  assert.equal(response.bounds, undefined);
 });
 
 test("declines window focus requests for untracked HWNDs", async () => {

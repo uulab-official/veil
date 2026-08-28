@@ -1,8 +1,8 @@
 # P0 One-Click Windows App Runtime Proof
 
 Date: 2026-08-28
-Tested implementation commit: `ab23efd` (`fix: widen launcher verification startup window`)
-Latest verification commit: `ab23efd` (`fix: widen launcher verification startup window`)
+Tested implementation base commit: `ab23efd` (`fix: widen launcher verification startup window`)
+Latest verification: `codex/ui-display-state` working tree on `2026-08-28`
 Branch: `codex/ui-display-state`
 
 Purpose: keep the host-side implementation result separate from proof that a real
@@ -26,6 +26,7 @@ does not claim Parallels-level GPU acceleration.
 - [x] The host disables suspend/resume when the live QEMU command line uses the non-migratable NVMe system device instead of offering a control that QEMU will reject.
 - [x] Sparse-package preparation resolves `MakeAppx.exe` and `SignTool.exe` before creating a development certificate, and records a structured `prerequisiteMissing` result when the Windows SDK is absent.
 - [x] The main launcher ignores an empty AppKit-restored window state and presents deterministically; the signed app launch contract passed five consecutive post-fix runs.
+- [x] If SwiftUI does not materialize the main scene during a Finder/Dock launch, an AppKit fallback creates the same branded launcher content with one stable window, production minimum bounds, and a deterministic reopen path.
 - [x] QEMU runtime recovery pauses and resumes only a machine first confirmed as running, verifies both transitions, and never resumes an intentionally paused VM; five focused recovery tests pass.
 - [x] The embedded RFB display retries a dropped loopback connection with bounded backoff while rejecting stale worker callbacks from older connections.
 
@@ -53,6 +54,7 @@ that contains `dotnet` before running the gate.
 - [x] Normal app launch never exposes a nested Windows desktop; the native window showed the Korean Notepad surface directly.
 - [x] Repeated frame updates preserve the independent window while fresh capture frames advance; the resized window continued to show a complete 600 x 393 guest frame.
 - [x] Host-shell zoom/restore, resize, focus, and close cycle is proven on a real independent macOS window; closing returned to the launcher and quieted QEMU.
+- [x] Mirrored-window resize negotiates `capabilities.windowResize`, sends one bounded `window.resize.request` after the macOS gesture, applies the size to the Windows HWND, and waits for the authoritative `window.updated`/key-frame path.
 
 ### Current live prerequisite result
 
@@ -127,16 +129,20 @@ leaving signing artifacts behind. The Windows 10/11 SDK still has to be
 installed in the guest before package identity, borderless capture, and
 notification-consent proofs can be completed.
 
-### Launcher restoration safety gate
+### Launcher restoration and scene-materialization safety gate
 
 The failed launch-contract report on `2026-08-28` showed a regular active app
 with zero main windows. AppKit's log simultaneously reported persistent state
 to restore, while `MainWindowChrome.showMainWindow()` ran before the SwiftUI
 scene existed and therefore had no window to show. Commit `96bd368` disables
-AppKit's empty launcher restoration; the main Veil scene now always follows its
+AppKit's empty launcher restoration; the main Veil scene now follows its
 deterministic presented launch behavior, while mirrored Windows app restoration
-continues through Veil's own `WindowRestoreIntentStore`. The complete gate then
-passed, followed by five consecutive standalone launch-contract runs.
+continues through Veil's own `WindowRestoreIntentStore`. A later reproduction
+showed that the SwiftUI scene can still be absent on a clean signed launch, so
+`MainWindowChrome` now creates an AppKit fallback with the same `ContentView`
+root, identifier, size constraints, transparent titlebar, and single-window
+deduplication. The complete gate and install/reinstall lifecycle now cover both
+scene materialization and the fallback path.
 
 ## Next live verification sequence
 

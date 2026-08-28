@@ -15,6 +15,7 @@
     "windowCapture": true,
     "input": true,
     "clipboardText": true,
+    "windowResize": true,
     "packageIdentity": false
   },
   "packageIdentityStatus": {

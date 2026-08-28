@@ -273,6 +273,41 @@ struct HostDashboardModelTests {
         #expect(service.frameSubscriptions == ["hwnd:0003029A"])
     }
 
+    @Test("only offers mirrored resize when the live agent advertises support")
+    @MainActor
+    func onlyOffersMirroredResizeWhenAgentAdvertisesSupport() async throws {
+        let legacyModel = HostDashboardModel(service: FakeDashboardService(health: .captureReady))
+        await legacyModel.launchNotepad()
+        #expect(legacyModel.canResizeMirrorSession(windowId: "hwnd:0003029A") == false)
+
+        var currentHealth = AgentHealthResponse.captureReady
+        currentHealth.capabilities.windowResize = true
+        let currentModel = HostDashboardModel(service: FakeDashboardService(health: currentHealth))
+        await currentModel.launchNotepad()
+        #expect(currentModel.canResizeMirrorSession(windowId: "hwnd:0003029A"))
+    }
+
+    @Test("routes a mirrored resize through the negotiated agent service")
+    @MainActor
+    func routesMirroredResizeThroughNegotiatedAgentService() async throws {
+        var health = AgentHealthResponse.captureReady
+        health.capabilities.windowResize = true
+        let service = FakeDashboardService(health: health)
+        let model = HostDashboardModel(service: service)
+
+        await model.launchNotepad()
+        let response = await model.resizeMirrorSession(
+            windowId: "hwnd:0003029A",
+            width: 1440,
+            height: 900
+        )
+
+        #expect(response?.accepted == true)
+        #expect(service.resizedWindowRequests.map { $0.windowId } == ["hwnd:0003029A"])
+        #expect(service.resizedWindowRequests.map { $0.width } == [1440])
+        #expect(service.resizedWindowRequests.map { $0.height } == [900])
+    }
+
     @Test("stores the latest frame on the matching mirror session")
     @MainActor
     func storesLatestFrameOnMatchingMirrorSession() async throws {
@@ -3259,6 +3294,7 @@ private final class FakeDashboardService: HostDashboardService {
     private(set) var openedFiles: [(appId: String, fileName: String, contentBase64: String)] = []
     private(set) var focusedWindowIds: [String] = []
     private(set) var closedWindowIds: [String] = []
+    private(set) var resizedWindowRequests: [(windowId: String, width: Int, height: Int)] = []
     private(set) var mouseInputs: [InputMouseEvent] = []
     private(set) var keyInputs: [InputKeyEvent] = []
     private(set) var textInputs: [InputTextEvent] = []
@@ -3372,6 +3408,20 @@ private final class FakeDashboardService: HostDashboardService {
             requestId: "req_close_notepad",
             windowId: windowId,
             accepted: closeAccepted
+        )
+    }
+
+    func resizeWindow(windowId: String, width: Int, height: Int) async throws -> WindowResizeResponse {
+        if let error {
+            throw error
+        }
+
+        resizedWindowRequests.append((windowId, width, height))
+        return WindowResizeResponse(
+            requestId: "req_resize_notepad",
+            windowId: windowId,
+            accepted: true,
+            bounds: WindowBounds(x: 10, y: 10, width: width, height: height)
         )
     }
 

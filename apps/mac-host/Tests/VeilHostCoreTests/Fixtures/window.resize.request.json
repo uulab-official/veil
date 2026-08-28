@@ -1,0 +1,7 @@
+{
+  "height": 900,
+  "requestId": "req_resize_notepad",
+  "type": "window.resize.request",
+  "width": 1440,
+  "windowId": "hwnd:0003029A"
+}

@@ -21,6 +21,8 @@ These JSON files mirror the stable examples in `docs/protocol.md`.
 - `window.focus.response.json`
 - `window.close.request.json`
 - `window.close.response.json`
+- `window.resize.request.json`
+- `window.resize.response.json`
 - `file.open.request.json`
 - `file.open.response.json`
 - `input.mouse.left-down.json`

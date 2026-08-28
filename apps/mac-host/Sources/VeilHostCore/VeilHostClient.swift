@@ -12,6 +12,7 @@ public protocol HostEventSource: Sendable {
 public enum VeilHostError: Error, Equatable, LocalizedError, Sendable {
     case appMissing(String)
     case appWindowMismatch(String)
+    case invalidWindowSize(width: Int, height: Int)
     case agentError(code: String, message: String)
     case missingReply(String)
 
@@ -21,6 +22,8 @@ public enum VeilHostError: Error, Equatable, LocalizedError, Sendable {
             "The Windows app \(appId) is not available from the Windows agent."
         case .appWindowMismatch(let appId):
             "The Windows agent launched \(appId), but the tracked HWND did not match the launch response."
+        case .invalidWindowSize(let width, let height):
+            "The requested Windows app size is not supported: \(width) x \(height)."
         case .agentError(let code, let message):
             "The Windows agent returned \(code): \(message)"
         case .missingReply(let context):
@@ -1134,6 +1137,31 @@ public struct VeilHostClient: HostDashboardService, Sendable {
         try await request(
             WindowFocusRequest(requestId: "req_focus_\(requestIdSuffix(for: windowId))", windowId: windowId)
         )
+    }
+
+    public func resizeWindow(windowId: String, width: Int, height: Int) async throws -> WindowResizeResponse {
+        let input = WindowResizeRequest(
+            requestId: "req_resize_\(requestIdSuffix(for: windowId))",
+            windowId: windowId,
+            width: width,
+            height: height
+        )
+        guard input.isPlausible else {
+            throw VeilHostError.invalidWindowSize(width: width, height: height)
+        }
+
+        let replies = try await transport.send(encoder.encode(input), expectedReplies: 1)
+        if let error = replies
+            .compactMap({ try? decoder.decode(ErrorResponse.self, from: $0) })
+            .first(where: { $0.type == .error }) {
+            throw VeilHostError.agentError(code: error.code, message: error.message)
+        }
+
+        guard let data = replies.first else {
+            throw VeilHostError.missingReply("window resize requires one response")
+        }
+
+        return try decoder.decode(WindowResizeResponse.self, from: data)
     }
 
     public func sendMouseInput(_ input: InputMouseEvent) async throws {

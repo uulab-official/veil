@@ -24,6 +24,7 @@ public protocol HostDashboardService: Sendable {
     func openFile(appId: String, fileName: String, contentBase64: String) async throws -> WindowsAppLaunchResult
     func focusWindow(windowId: String) async throws -> WindowFocusResponse
     func closeWindow(windowId: String) async throws -> WindowCloseResponse
+    func resizeWindow(windowId: String, width: Int, height: Int) async throws -> WindowResizeResponse
     func sendMouseInput(_ input: InputMouseEvent) async throws
     func sendKeyInput(_ input: InputKeyEvent) async throws
     func sendTextInput(_ input: InputTextEvent) async throws
@@ -43,6 +44,14 @@ public extension HostDashboardService {
 
     func restoreApp(appId: String) async throws -> WindowsAppLaunchResult {
         try await launchApp(appId: appId)
+    }
+
+    func resizeWindow(windowId: String, width: Int, height: Int) async throws -> WindowResizeResponse {
+        WindowResizeResponse(
+            requestId: "unsupported_resize",
+            windowId: windowId,
+            accepted: false
+        )
     }
 }
 
@@ -1933,6 +1942,12 @@ public final class HostDashboardModel {
         mirrorSessions.contains { $0.id == windowId }
             && hasLiveAgentConnection
             && health?.capabilities.input == true
+    }
+
+    public func canResizeMirrorSession(windowId: String) -> Bool {
+        mirrorSessions.contains { $0.id == windowId }
+            && hasLiveAgentConnection
+            && health?.capabilities.windowResize == true
     }
 
     /// - Parameter hostBackingScale: This Mac's backing scale factor, supplied by the app shell because
@@ -5236,6 +5251,27 @@ public final class HostDashboardModel {
         } catch {
             errorMessage = userMessage(for: error)
             phase = .failed
+        }
+    }
+
+    /// Propagates a user resize from the macOS mirror to the real Windows HWND.
+    ///
+    /// The request is deliberately sent only after AppKit finishes the live resize gesture. During a
+    /// drag the mirror remains responsive and aspect-correct; one bounded request at gesture end avoids
+    /// flooding the guest agent with a network message for every intermediate pixel.
+    @discardableResult
+    public func resizeMirrorSession(windowId: String, width: Int, height: Int) async -> WindowResizeResponse? {
+        guard canResizeMirrorSession(windowId: windowId),
+              WindowResizeRequest.isPlausible(width: width, height: height) else {
+            return nil
+        }
+
+        do {
+            return try await service.resizeWindow(windowId: windowId, width: width, height: height)
+        } catch {
+            errorMessage = userMessage(for: error)
+            phase = .failed
+            return nil
         }
     }
 

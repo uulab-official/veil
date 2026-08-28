@@ -557,6 +557,47 @@ struct VeilHostClientTests {
         #expect(response.accepted)
     }
 
+    @Test("sends a bounded window resize request and reads the applied bounds")
+    func sendsWindowResizeRequest() async throws {
+        let transport = RecordingTransport(responses: [
+            #"{"type":"window.resize.response","requestId":"req_resize_hwnd_0003029A","windowId":"hwnd:0003029A","accepted":true,"bounds":{"x":10,"y":10,"width":1440,"height":900}}"#
+        ])
+        let client = VeilHostClient(transport: transport)
+
+        let response = try await client.resizeWindow(
+            windowId: "hwnd:0003029A",
+            width: 1440,
+            height: 900
+        )
+
+        #expect(transport.sentTypes == ["window.resize.request"])
+        #expect(transport.expectedReplyCounts == [1])
+        #expect(response.type == .windowResizeResponse)
+        #expect(response.accepted)
+        #expect(response.bounds?.width == 1440)
+        #expect(response.bounds?.height == 900)
+    }
+
+    @Test("fallback dashboard service forwards window resize to its primary agent")
+    func fallbackDashboardServiceForwardsWindowResize() async throws {
+        let transport = RecordingTransport(responses: [
+            #"{"type":"window.resize.response","requestId":"req_resize_hwnd_0003029A","windowId":"hwnd:0003029A","accepted":true,"bounds":{"x":10,"y":10,"width":1440,"height":900}}"#
+        ])
+        let service = FallbackHostDashboardService(
+            primary: VeilHostClient(transport: transport),
+            fallback: DemoHostDashboardService()
+        )
+
+        let response = try await service.resizeWindow(
+            windowId: "hwnd:0003029A",
+            width: 1440,
+            height: 900
+        )
+
+        #expect(response.accepted)
+        #expect(transport.sentTypes == ["window.resize.request"])
+    }
+
     @Test("sends mouse input without waiting for a reply")
     func sendsMouseInputWithoutReply() async throws {
         let transport = RecordingTransport(responses: [])

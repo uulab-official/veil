@@ -12,6 +12,7 @@
         "input": true,
         "windowCapture": true,
         "windowTracking": true,
+        "windowResize": true,
         "packageIdentity": false
       },
       "os": "windows-arm64",

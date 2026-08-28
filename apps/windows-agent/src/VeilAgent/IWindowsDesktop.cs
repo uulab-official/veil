@@ -16,6 +16,13 @@ public interface IWindowsDesktop
 
     Task<bool> CloseWindowAsync(string windowId, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Resizes a tracked HWND using logical dimensions. The Windows implementation converts them to
+    /// physical pixels using the window's current per-monitor DPI and returns the bounds actually applied.
+    /// </summary>
+    Task<WindowRect?> ResizeWindowAsync(WindowResizeInput input, CancellationToken cancellationToken) =>
+        Task.FromResult<WindowRect?>(null);
+
     Task<bool> SendMouseInputAsync(WindowMouseInput input, CancellationToken cancellationToken);
 
     Task<bool> SendKeyInputAsync(WindowKeyInput input, CancellationToken cancellationToken);

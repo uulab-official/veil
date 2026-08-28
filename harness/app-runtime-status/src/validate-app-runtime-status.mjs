@@ -158,6 +158,9 @@ function validateCapabilities(capabilities) {
   ]) {
     requireBoolean(capabilities[field], `connection.capabilities.${field}`);
   }
+  if (capabilities.windowResize !== undefined) {
+    requireBoolean(capabilities.windowResize, "connection.capabilities.windowResize");
+  }
 }
 
 function validateNotificationListenerStatus(status, prefix) {

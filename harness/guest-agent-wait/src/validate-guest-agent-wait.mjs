@@ -108,6 +108,9 @@ function validateHealth(health) {
   ]) {
     requireBoolean(health.capabilities[field], `diagnostic.health.capabilities.${field}`);
   }
+  if (health.capabilities.windowResize !== undefined) {
+    requireBoolean(health.capabilities.windowResize, "diagnostic.health.capabilities.windowResize");
+  }
 }
 
 function validateHostForwardProbe(probe) {

@@ -18,6 +18,8 @@ export const MessageType = Object.freeze({
   WindowFocusResponse: "window.focus.response",
   WindowCloseRequest: "window.close.request",
   WindowCloseResponse: "window.close.response",
+  WindowResizeRequest: "window.resize.request",
+  WindowResizeResponse: "window.resize.response",
   ClipboardTextSet: "clipboard.text.set",
   NotificationListenerRequest: "notification.listener.request",
   NotificationListenerResponse: "notification.listener.response",
@@ -116,6 +118,13 @@ export function validateAgentHealthResponse(response) {
   if (response.capabilities.sharedFolder !== undefined
     && typeof response.capabilities.sharedFolder !== "boolean") {
     throw new TypeError("Agent health response field 'capabilities.sharedFolder' must be a boolean.");
+  }
+
+  // Optional so a host connected to an older agent can disable the resize affordance instead of
+  // sending a message that the agent cannot route.
+  if (response.capabilities.windowResize !== undefined
+    && typeof response.capabilities.windowResize !== "boolean") {
+    throw new TypeError("Agent health response field 'capabilities.windowResize' must be a boolean.");
   }
 
   if (response.packageIdentityStatus !== undefined) {
@@ -550,6 +559,48 @@ export function validateWindowCloseResponse(response) {
   }
 
   return response;
+}
+
+export function validateWindowResizeRequest(request) {
+  if (!request || request.type !== MessageType.WindowResizeRequest) {
+    throw new TypeError("Window resize request must use type window.resize.request.");
+  }
+
+  requireNonEmptyString(request.requestId, "requestId", "Window resize request");
+  requireNonEmptyString(request.windowId, "windowId", "Window resize request");
+  requireResizeDimension(request.width, "width");
+  requireResizeDimension(request.height, "height");
+  if (request.width > 32_000_000 / request.height) {
+    throw new TypeError("Window resize request dimensions must contain at most 32000000 pixels.");
+  }
+
+  return request;
+}
+
+export function validateWindowResizeResponse(response) {
+  if (!response || response.type !== MessageType.WindowResizeResponse) {
+    throw new TypeError("Window resize response must use type window.resize.response.");
+  }
+
+  requireNonEmptyString(response.requestId, "requestId", "Window resize response");
+  requireNonEmptyString(response.windowId, "windowId", "Window resize response");
+  if (typeof response.accepted !== "boolean") {
+    throw new TypeError("Window resize response field 'accepted' must be a boolean.");
+  }
+
+  if (response.accepted) {
+    requireWindowBounds(response.bounds, "Window resize response");
+  } else if (response.bounds !== undefined && response.bounds !== null) {
+    throw new TypeError("Window resize response must not include bounds when accepted is false.");
+  }
+
+  return response;
+}
+
+function requireResizeDimension(value, fieldName) {
+  if (!Number.isInteger(value) || value < 320 || value > 8_192) {
+    throw new TypeError(`Window resize request field '${fieldName}' must be between 320 and 8192.`);
+  }
 }
 
 export function validateInputMouse(input) {

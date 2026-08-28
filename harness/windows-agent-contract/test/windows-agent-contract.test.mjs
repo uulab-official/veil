@@ -143,6 +143,26 @@ test("windows agent accepts host window focus requests", async () => {
   assert.match(session, /MessageTypes\.WindowFocusResponse/);
 });
 
+test("windows agent propagates mirrored window resize to the real HWND", async () => {
+  const messageTypes = await readFile(resolve(agentRoot, "src/VeilAgent/MessageTypes.cs"), "utf8");
+  const desktopInterface = await readFile(resolve(agentRoot, "src/VeilAgent/IWindowsDesktop.cs"), "utf8");
+  const desktop = await readFile(resolve(agentRoot, "src/VeilAgent/WindowsDesktop.cs"), "utf8");
+  const models = await readFile(resolve(agentRoot, "src/VeilAgent/WindowModels.cs"), "utf8");
+  const session = await readFile(resolve(agentRoot, "src/VeilAgent/AgentSession.cs"), "utf8");
+
+  assert.match(messageTypes, /WindowResizeRequest\s*=\s*"window\.resize\.request"/);
+  assert.match(messageTypes, /WindowResizeResponse\s*=\s*"window\.resize\.response"/);
+  assert.match(models, /WindowResizeInput/);
+  assert.match(desktopInterface, /ResizeWindowAsync\(WindowResizeInput input,/);
+  assert.match(desktop, /SetWindowPos/);
+  assert.match(desktop, /GetWindowScale/);
+  assert.match(desktop, /SWP_NOACTIVATE/);
+  assert.match(session, /MessageTypes\.WindowResizeRequest/);
+  assert.match(session, /HandleWindowResizeAsync/);
+  assert.match(session, /IsPlausibleResize/);
+  assert.match(session, /MessageTypes\.WindowResizeResponse/);
+});
+
 test("windows agent accepts host mouse input events", async () => {
   const messageTypes = await readFile(resolve(agentRoot, "src/VeilAgent/MessageTypes.cs"), "utf8");
   const desktopInterface = await readFile(resolve(agentRoot, "src/VeilAgent/IWindowsDesktop.cs"), "utf8");
@@ -205,6 +225,7 @@ test("windows agent serves frames on a dedicated binary channel", async () => {
   assert.match(server, /SerializeFrame\(result\.Frame\)/);
 
   assert.match(session, /\["binaryFrameChannel"\]\s*=\s*true/);
+  assert.match(session, /\["windowResize"\]\s*=\s*true/);
 });
 
 test("windows agent sends only the region of a window that changed", async () => {

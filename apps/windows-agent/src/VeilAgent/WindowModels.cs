@@ -71,6 +71,12 @@ public sealed record WindowTextInput(
     string Text
 );
 
+public sealed record WindowResizeInput(
+    string WindowId,
+    int Width,
+    int Height
+);
+
 /// <summary>
 /// Outcome of one capture tick: either a frame to send, or proof that nothing changed.
 /// </summary>

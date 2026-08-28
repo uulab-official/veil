@@ -170,19 +170,13 @@ Exit criteria:
   Open: live confirmation that a second document window appears, takes its own input, and that a leftover
   window of a never-opened app still does not; plus a frame-throughput comparison of N concurrent streams
   against one, which is the first case where the still-unmeasured frame pipeline can plausibly fall over.
-- Resizing a mirrored window. **The protocol has no host-to-guest resize message at all**, and the presenter
-  observes no resize, so dragging a corner changed only how the guest's bitmap was presented — and since the
-  frame surface renders `scaledToFit` over black, any shape other than the guest's produced black letterbox
-  bars. The window grew and the app sat unchanged in the middle of it.
-  Mitigated, not fixed: mirrored windows are now locked to the guest window's aspect ratio, with a minimum
-  size derived from the same ratio rather than a fixed 520×360 that would fight the lock. The window still
-  resizes and the image still scales, but it can no longer letterbox or distort. Re-applied on every refresh,
-  because the guest window can be resized from inside Windows.
-  The real feature needs a `window.resize.request` message, a guest `SetWindowPos` handler, debouncing on
-  `windowDidEndLiveResize` (each message currently opens its own WebSocket), and accepting that the guest is
-  authoritative — an app may refuse or clamp the size, with the answer arriving as the next `window.updated`.
-  A host that assumed its requested size would leave the two ends permanently disagreeing about the window's
-  shape. See `docs/checklists/2026-08-14-mirrored-window-resize.md`.
+- Resizing a mirrored window. Shipped end-to-end. Mirrored windows stay locked to the guest window's aspect
+  ratio while the user drags, then the host sends one bounded `window.resize.request` at
+  `windowDidEndLiveResize`. The Windows agent validates the logical size, converts it through the HWND's
+  per-monitor DPI, calls `SetWindowPos` without activation, and returns the actual applied bounds. The next
+  `window.updated` event and capture key frame remain authoritative because an app may clamp or reject a
+  size. A live guest resize latency measurement is still open. See
+  `docs/checklists/2026-08-14-mirrored-window-resize.md`.
 - Better frame latency. Still open, and still unmeasured — which is the actual blocker. `frame-pipeline-report`
   exists but has never been run, so any codec or encoding change would be a guess. Measure typing, idle,
   scrolling, and N concurrent windows first.

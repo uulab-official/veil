@@ -20,6 +20,8 @@ public enum MessageType: String, Codable, Sendable {
     case windowFocusResponse = "window.focus.response"
     case windowCloseRequest = "window.close.request"
     case windowCloseResponse = "window.close.response"
+    case windowResizeRequest = "window.resize.request"
+    case windowResizeResponse = "window.resize.response"
     case clipboardTextSet = "clipboard.text.set"
     case notificationListenerRequest = "notification.listener.request"
     case notificationListenerResponse = "notification.listener.response"
@@ -76,6 +78,11 @@ public struct AgentCapabilities: Codable, Equatable, Sendable {
     /// True when the Windows agent is running with package identity. Required before Veil can
     /// request package-gated Windows APIs such as borderless capture and notification listening.
     public var packageIdentity: Bool = false
+    /// True when the agent can apply a host-requested logical size to a tracked Windows HWND.
+    ///
+    /// Optional so a host connected to an older agent keeps the resize affordance disabled instead of
+    /// sending a message that the agent cannot route.
+    public var windowResize: Bool? = nil
     /// True when the agent can serve window frames as raw binary on a dedicated connection.
     ///
     /// Optional rather than defaulted, so an agent that predates the frame channel decodes as `nil` and
@@ -523,6 +530,71 @@ public struct WindowCloseResponse: Codable, Equatable, Sendable {
         self.requestId = requestId
         self.windowId = windowId
         self.accepted = accepted
+    }
+}
+
+/// Requests that the guest resize the real HWND to the size of its macOS mirror.
+///
+/// The wire size is in the same logical units used by `window.created` and `window.updated`. The guest
+/// converts those units to physical pixels using the HWND's current per-monitor DPI before calling
+/// `SetWindowPos`, so a Retina macOS display does not accidentally double the Windows window size.
+public struct WindowResizeRequest: Codable, Equatable, Sendable {
+    public static let minimumDimension = 320
+    public static let maximumDimension = 8_192
+    public static let maximumPixelCount = 32_000_000
+
+    public var type: MessageType
+    public var requestId: String
+    public var windowId: String
+    public var width: Int
+    public var height: Int
+
+    public init(
+        type: MessageType = .windowResizeRequest,
+        requestId: String,
+        windowId: String,
+        width: Int,
+        height: Int
+    ) {
+        self.type = type
+        self.requestId = requestId
+        self.windowId = windowId
+        self.width = width
+        self.height = height
+    }
+
+    public var isPlausible: Bool {
+        Self.isPlausible(width: width, height: height)
+    }
+
+    public static func isPlausible(width: Int, height: Int) -> Bool {
+        width >= minimumDimension
+            && width <= maximumDimension
+            && height >= minimumDimension
+            && height <= maximumDimension
+            && width <= maximumPixelCount / max(height, 1)
+    }
+}
+
+public struct WindowResizeResponse: Codable, Equatable, Sendable {
+    public var type: MessageType
+    public var requestId: String
+    public var windowId: String
+    public var accepted: Bool
+    public var bounds: WindowBounds?
+
+    public init(
+        type: MessageType = .windowResizeResponse,
+        requestId: String,
+        windowId: String,
+        accepted: Bool,
+        bounds: WindowBounds? = nil
+    ) {
+        self.type = type
+        self.requestId = requestId
+        self.windowId = windowId
+        self.accepted = accepted
+        self.bounds = bounds
     }
 }
 

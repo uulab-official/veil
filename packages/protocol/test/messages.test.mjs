@@ -30,6 +30,8 @@ import {
   validateWindowFrameUnsubscribeRequest,
   validateWindowFocusRequest,
   validateWindowFocusResponse,
+  validateWindowResizeRequest,
+  validateWindowResizeResponse,
   validateWindowUpdated
 } from "../src/messages.mjs";
 
@@ -60,6 +62,8 @@ test("parses every stable fixture", async () => {
     "window.focus.response.json",
     "window.close.request.json",
     "window.close.response.json",
+    "window.resize.request.json",
+    "window.resize.response.json",
     "input.mouse.left-down.json",
     "input.key.copy.json",
     "input.text.json",
@@ -120,6 +124,7 @@ test("validates agent health capability readiness", async () => {
   const health = validateAgentHealthResponse(await readFixture("agent.health.response.json"));
 
   assert.equal(health.capabilities.windowCapture, true);
+  assert.equal(health.capabilities.windowResize, true);
   assert.equal(health.capabilities.packageIdentity, false);
   assert.equal(health.packageIdentityStatus.stage, "packageSigned");
   assert.equal(health.packageIdentityStatus.succeeded, false);
@@ -148,6 +153,16 @@ test("rejects agent health without package identity readiness", async () => {
   );
 });
 
+test("rejects a malformed optional window resize capability", async () => {
+  const health = await readFixture("agent.health.response.json");
+  health.capabilities.windowResize = "true";
+
+  assert.throws(
+    () => validateAgentHealthResponse(health),
+    /capabilities\.windowResize/
+  );
+});
+
 test("validates notification listener consent request and response", async () => {
   const request = validateNotificationListenerRequest(await readFixture("notification.listener.request.json"));
   const response = validateNotificationListenerResponse(await readFixture("notification.listener.response.json"));
@@ -156,6 +171,30 @@ test("validates notification listener consent request and response", async () =>
   assert.equal(response.accepted, false);
   assert.equal(response.notificationListener.accessStatus, "unspecified");
   assert.equal(response.notificationListener.recommendedAction, "request-notification-listener-consent");
+});
+
+test("validates a bounded window resize request and applied response", async () => {
+  const request = validateWindowResizeRequest(await readFixture("window.resize.request.json"));
+  const response = validateWindowResizeResponse(await readFixture("window.resize.response.json"));
+
+  assert.equal(request.windowId, "hwnd:0003029A");
+  assert.equal(request.width, 1440);
+  assert.equal(request.height, 900);
+  assert.equal(response.accepted, true);
+  assert.deepEqual(response.bounds, { x: 10, y: 10, width: 1440, height: 900 });
+});
+
+test("rejects an unsafe window resize request", () => {
+  assert.throws(
+    () => validateWindowResizeRequest({
+      type: MessageType.WindowResizeRequest,
+      requestId: "req_resize_invalid",
+      windowId: "hwnd:0003029A",
+      width: 8_193,
+      height: 900
+    }),
+    /width.*between 320 and 8192/
+  );
 });
 
 test("rejects notification listener response accepted drift", async () => {

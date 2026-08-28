@@ -1,4 +1,9 @@
-import { MessageType, createError, parseMessage } from "@veil/protocol";
+import {
+  MessageType,
+  createError,
+  parseMessage,
+  validateWindowResizeRequest
+} from "@veil/protocol";
 
 import { readFixture } from "./fixtures.mjs";
 
@@ -32,6 +37,8 @@ export function createSession(options = {}) {
           return handleWindowFocus(message, trackedWindowIds);
         case MessageType.WindowCloseRequest:
           return handleWindowClose(message, broadcast, trackedWindowIds);
+        case MessageType.WindowResizeRequest:
+          return handleWindowResize(message, trackedWindowIds);
         case MessageType.InputMouse:
           if (!canTargetTrackedWindow(message, trackedWindowIds)) {
             return [windowNotTrackedError(message)];
@@ -196,6 +203,30 @@ async function handleWindowFocus(message, trackedWindowIds) {
       windowId: message.windowId
     }
   ];
+}
+
+async function handleWindowResize(message, trackedWindowIds) {
+  try {
+    validateWindowResizeRequest(message);
+  } catch (error) {
+    return [createError(message.requestId, "invalid_message", error.message)];
+  }
+
+  const response = await readFixture("window.resize.response.json");
+  response.requestId = message.requestId;
+  response.windowId = message.windowId;
+  if (!trackedWindowIds.has(message.windowId)) {
+    response.accepted = false;
+    delete response.bounds;
+    return [response];
+  }
+
+  response.bounds = {
+    ...response.bounds,
+    width: message.width,
+    height: message.height
+  };
+  return [response];
 }
 
 function canTargetTrackedWindow(message, trackedWindowIds) {

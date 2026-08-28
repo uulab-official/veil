@@ -15,6 +15,7 @@ struct ProtocolMessageTests {
         #expect(response.session.interactive)
         #expect(response.capabilities.appLaunch)
         #expect(response.capabilities.windowCapture == false)
+        #expect(response.capabilities.windowResize == nil)
         #expect(response.capabilities.packageIdentity == false)
         #expect(response.packageIdentityStatus?.stage == "packageSigned")
         #expect(response.packageIdentityStatus?.succeeded == false)
@@ -125,6 +126,24 @@ struct ProtocolMessageTests {
         #expect(response.requestId == request.requestId)
         #expect(response.windowId == request.windowId)
         #expect(response.accepted)
+    }
+
+    @Test("decodes window resize request and response")
+    func decodesWindowResizeRequestAndResponse() throws {
+        let request: WindowResizeRequest = try decodeFixture("window.resize.request")
+        let response: WindowResizeResponse = try decodeFixture("window.resize.response")
+
+        #expect(request.type == .windowResizeRequest)
+        #expect(request.requestId == "req_resize_notepad")
+        #expect(request.windowId == "hwnd:0003029A")
+        #expect(request.width == 1440)
+        #expect(request.height == 900)
+        #expect(response.type == .windowResizeResponse)
+        #expect(response.requestId == request.requestId)
+        #expect(response.windowId == request.windowId)
+        #expect(response.accepted)
+        #expect(response.bounds?.width == 1440)
+        #expect(response.bounds?.height == 900)
     }
 
     @Test("decodes mouse input event")

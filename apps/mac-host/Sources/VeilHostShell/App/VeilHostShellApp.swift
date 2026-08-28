@@ -109,76 +109,83 @@ struct VeilHostShellApp: App {
         _latestReviewEvidenceFolder = State(initialValue: ReviewEvidenceFolderStore.loadLatest())
     }
 
-    var body: some Scene {
-        Window("Veil", id: "main") {
-            ContentView(
-                model: model,
-                vmModel: vmModel,
-                startVMAction: startWindowsAndShowDisplay,
-                stopVMAction: stopWindowsAndCloseDisplay,
-                markWindowsInstalledAction: markWindowsInstalledFromSetup,
-                installGuestAgentAction: installGuestAgentFromDisplay,
-                prepareSparsePackageAction: prepareSparsePackageFromDisplay,
-                waitForGuestAgentAction: waitForGuestAgent,
-                repairGuestAgentForAppLaunchAction: repairGuestAgentForAppLaunch,
-                recoverRuntimeDisplayAction: recoverRuntimeDisplayEvidence,
-                launchWindowsAppAction: runOneClickSelectedApp,
-                fulfillPendingLaunchAction: runOneClickPendingLaunch,
-                restoreWindowsAppWindowsAction: restoreWindowsAppWindows,
-                closeAllWindowsAppWindowsAction: closeAllWindowsAppWindows,
-                restartStaleFrameStreamsAction: restartStaleFrameStreams,
-                requestNotificationConsentAction: requestWindowsNotificationConsent,
-                runNotificationProofAction: runNotificationProof,
-                runRecommendedProofAction: runRecommendedProof,
-                runMultiAppProofAction: runMultiAppProof,
-                quietWindowsWhenIdleAction: quietWindowsWhenIdle,
-                displayMessage: displayMessage
+    private var mainWindowContent: some View {
+        ContentView(
+            model: model,
+            vmModel: vmModel,
+            startVMAction: startWindowsAndShowDisplay,
+            stopVMAction: stopWindowsAndCloseDisplay,
+            markWindowsInstalledAction: markWindowsInstalledFromSetup,
+            installGuestAgentAction: installGuestAgentFromDisplay,
+            prepareSparsePackageAction: prepareSparsePackageFromDisplay,
+            waitForGuestAgentAction: waitForGuestAgent,
+            repairGuestAgentForAppLaunchAction: repairGuestAgentForAppLaunch,
+            recoverRuntimeDisplayAction: recoverRuntimeDisplayEvidence,
+            launchWindowsAppAction: runOneClickSelectedApp,
+            fulfillPendingLaunchAction: runOneClickPendingLaunch,
+            restoreWindowsAppWindowsAction: restoreWindowsAppWindows,
+            closeAllWindowsAppWindowsAction: closeAllWindowsAppWindows,
+            restartStaleFrameStreamsAction: restartStaleFrameStreams,
+            requestNotificationConsentAction: requestWindowsNotificationConsent,
+            runNotificationProofAction: runNotificationProof,
+            runRecommendedProofAction: runRecommendedProof,
+            runMultiAppProofAction: runMultiAppProof,
+            quietWindowsWhenIdleAction: quietWindowsWhenIdle,
+            displayMessage: displayMessage
+        )
+            .frame(
+                minWidth: MainWindowLayout.minimumSupportedSize.width,
+                idealWidth: 1500,
+                minHeight: MainWindowLayout.minimumSupportedSize.height,
+                idealHeight: 900
             )
-                .frame(
-                    minWidth: MainWindowLayout.minimumSupportedSize.width,
-                    idealWidth: 1500,
-                    minHeight: MainWindowLayout.minimumSupportedSize.height,
-                    idealHeight: 900
-                )
-                .task {
-                    configureDockMenuBridge()
-                    configureWindowsAppWindowCloseBridge()
-                    startAgentReconnectPollerIfNeeded()
-                    startAutomaticFrameStreamMaintenanceLoopIfNeeded()
+            .task {
+                configureDockMenuBridge()
+                configureWindowsAppWindowCloseBridge()
+                startAgentReconnectPollerIfNeeded()
+                startAutomaticFrameStreamMaintenanceLoopIfNeeded()
 
-                    await model.loadRestoreIntent()
-                    async let hostLoad: Void = model.load()
-                    async let vmLoad: Void = vmModel.load()
-                    _ = await (hostLoad, vmLoad)
-                    noteLiveAgentConnectionIfPresent()
-                    // The event channel is intentionally started after the overview. Otherwise an
-                    // early discovery event can create a placeholder window before the model knows
-                    // that this is a capture-capable live agent.
-                    startAgentEventPumpIfNeeded()
-                    // Started after the health response has landed, since the capability decides whether
-                    // the endpoint exists at all.
-                    startFrameChannelPumpIfNeeded()
-                    await restorePreviousWindowsAppWindowAfterLaunchIfNeeded()
-                    syncLauncherWindowVisibility()
-                    await recordGuestAgentInstallEvidenceIfNeeded()
+                await model.loadRestoreIntent()
+                async let hostLoad: Void = model.load()
+                async let vmLoad: Void = vmModel.load()
+                _ = await (hostLoad, vmLoad)
+                noteLiveAgentConnectionIfPresent()
+                // The event channel is intentionally started after the overview. Otherwise an
+                // early discovery event can create a placeholder window before the model knows
+                // that this is a capture-capable live agent.
+                startAgentEventPumpIfNeeded()
+                // Started after the health response has landed, since the capability decides whether
+                // the endpoint exists at all.
+                startFrameChannelPumpIfNeeded()
+                await restorePreviousWindowsAppWindowAfterLaunchIfNeeded()
+                syncLauncherWindowVisibility()
+                await recordGuestAgentInstallEvidenceIfNeeded()
 
-                    if Self.shouldStartVMOnLaunch {
-                        startWindowsAndShowDisplay()
-                    }
-                    syncDockTileRuntimeStatus()
+                if Self.shouldStartVMOnLaunch {
+                    startWindowsAndShowDisplay()
                 }
-                .onChange(of: model.mirrorSessions.count) {
-                    syncDockTileRuntimeStatus()
-                    scheduleAutomaticQuietRuntimeIfNeeded()
-                    syncLauncherWindowVisibility()
-                }
-                .onChange(of: vmModel.snapshot?.state) {
-                    syncDockTileRuntimeStatus()
-                    scheduleAutomaticQuietRuntimeIfNeeded()
-                }
-                .onChange(of: vmModel.phase) {
-                    scheduleAutomaticQuietRuntimeIfNeeded()
-                }
+                syncDockTileRuntimeStatus()
+            }
+            .onChange(of: model.mirrorSessions.count) {
+                syncDockTileRuntimeStatus()
+                scheduleAutomaticQuietRuntimeIfNeeded()
+                syncLauncherWindowVisibility()
+            }
+            .onChange(of: vmModel.snapshot?.state) {
+                syncDockTileRuntimeStatus()
+                scheduleAutomaticQuietRuntimeIfNeeded()
+            }
+            .onChange(of: vmModel.phase) {
+                scheduleAutomaticQuietRuntimeIfNeeded()
+            }
+    }
+
+    private var mainWindowScene: some Scene {
+        let content = mainWindowContent
+        MainWindowChrome.registerMainWindowContent(AnyView(content))
+
+        return Window("Veil", id: "main") {
+            content
         }
         .defaultLaunchBehavior(.presented)
         .defaultSize(width: 1440, height: 900)
@@ -263,6 +270,10 @@ struct VeilHostShellApp: App {
                 .keyboardShortcut("e", modifiers: [.command, .shift])
             }
         }
+    }
+
+    var body: some Scene {
+        mainWindowScene
 
         MenuBarExtra("Veil", systemImage: menuBarSymbolName) {
             VeilMenuBarMenu(
@@ -1607,6 +1618,11 @@ struct VeilHostShellApp: App {
                 }
             }
         }
+        windowsAppWindowPresenter.onWindowResize = { windowId, width, height in
+            Task { @MainActor in
+                _ = await model.resizeMirrorSession(windowId: windowId, width: width, height: height)
+            }
+        }
         windowsAppWindowPresenter.onDropRefused = { refusal in
             Task { @MainActor in
                 model.recordFileDropRefusal(refusal)
@@ -2131,8 +2147,6 @@ extension AppDelegate {
 }
 
 private struct VeilMenuBarMenu: View {
-    @Environment(\.openWindow) private var openWindow
-
     var model: HostDashboardModel
     var vmModel: VMRuntimeModel
     var activateMainWindowAction: () -> Void
@@ -2568,16 +2582,7 @@ private struct VeilMenuBarMenu: View {
     }
 
     private func openMainWindow() {
-        if !MainWindowChrome.hasMainWindow {
-            openWindow(id: "main")
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
-                MainWindowChrome.showMainWindow()
-            }
-        } else {
-            DispatchQueue.main.async {
-                MainWindowChrome.showMainWindow()
-            }
-        }
+        MainWindowChrome.showMainWindow()
     }
 
     private func symbolName(for app: WindowsApp) -> String {
@@ -2757,10 +2762,17 @@ enum LauncherReopenPolicy {
 }
 
 @MainActor
-private enum MainWindowChrome {
+enum MainWindowChrome {
+    private static var fallbackWindowController: NSWindowController?
+    private static var registeredMainWindowContent: AnyView?
+
+    static func registerMainWindowContent(_ content: AnyView) {
+        registeredMainWindowContent = content
+    }
+
     static func configureAndCompactMainWindow() {
         let windows = mainWindows
-        guard let window = windows.first else {
+        guard let window = windows.first ?? createFallbackMainWindow() else {
             return
         }
 
@@ -2824,6 +2836,38 @@ private enum MainWindowChrome {
         NSApp.windows.filter { window in
             window.identifier?.rawValue == "main"
         }
+    }
+
+    private static func createFallbackMainWindow() -> NSWindow? {
+        if let controller = fallbackWindowController,
+           let window = controller.window {
+            if !window.isVisible {
+                controller.showWindow(nil)
+            }
+            return window
+        }
+
+        let window = NSWindow(
+            contentRect: NSRect(
+                origin: .zero,
+                size: NSSize(
+                    width: MainWindowLayout.preferredSize.width,
+                    height: MainWindowLayout.preferredSize.height
+                )
+            ),
+            styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
+            backing: .buffered,
+            defer: false
+        )
+        window.identifier = NSUserInterfaceItemIdentifier("main")
+        window.title = "Veil"
+        let rootView = registeredMainWindowContent ?? AnyView(StandaloneMainWindowRoot())
+        window.contentViewController = NSHostingController(rootView: rootView)
+
+        let controller = NSWindowController(window: window)
+        fallbackWindowController = controller
+        controller.showWindow(nil)
+        return window
     }
 
     private static func configure(_ window: NSWindow) {

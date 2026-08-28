@@ -65,14 +65,10 @@ public enum WindowsAppWindowPlacement {
 
     /// The aspect ratio a mirrored window should be locked to while the user resizes it.
     ///
-    /// Veil cannot resize the Windows window. There is no host-to-guest resize message in the protocol, so
-    /// dragging a mirrored window's corner changes only how the guest's bitmap is presented. The frame
-    /// surface renders with `scaledToFit` over black, which means any shape other than the guest's produced
-    /// **black letterbox bars** — the window grew and the app did not.
-    ///
-    /// Locking the ratio makes that coherent: the window still resizes, the app image still scales, and it
-    /// never letterboxes or distorts. It is not the same as propagating the resize, and it is not pretending
-    /// to. See `docs/checklists/2026-08-14-mirrored-window-resize.md`.
+    /// The host keeps the mirror aspect-correct while a user resize is in progress, then sends the final
+    /// content size through `window.resize.request`. The guest resizes the real HWND and emits updated
+    /// bounds, which causes the next capture surface to match the host window instead of leaving black bars.
+    /// See `docs/checklists/2026-08-14-mirrored-window-resize.md`.
     ///
     /// - Returns: `nil` when the guest reported a degenerate size, in which case the window should stay
     ///   freely resizable rather than being locked to a ratio derived from nothing.

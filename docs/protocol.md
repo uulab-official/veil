@@ -62,6 +62,7 @@ Response:
     "windowCapture": true,
     "input": true,
     "clipboardText": true,
+    "windowResize": true,
     "binaryFrameChannel": true,
     "sharedFolder": true,
     "packageIdentity": false
@@ -97,6 +98,10 @@ Response:
   }
 }
 ```
+
+`capabilities.windowResize` is optional for backwards compatibility. The host only enables the
+mirrored-window resize affordance when it is explicitly `true`; an absent value means the connected
+agent predates `window.resize.request`.
 
 `capabilities.packageIdentity` is `true` only when the Windows agent is running
 with Windows package identity. The agent reads this from Windows' app model
@@ -674,6 +679,54 @@ Rules:
 - `accepted: false` means the HWND is no longer tracked or the OS rejected the close request; the host must not emit a synthetic `window.closed` event.
 - `window.closed` tells the host to remove the tracked HWND, close the macOS mirror window without sending another close request, and forget the persisted restore intent for that app.
 
+## Window Resize
+
+Host request:
+
+```json
+{
+  "type": "window.resize.request",
+  "requestId": "req_resize_notepad",
+  "windowId": "hwnd:0003029A",
+  "width": 1440,
+  "height": 900
+}
+```
+
+Guest response:
+
+```json
+{
+  "type": "window.resize.response",
+  "requestId": "req_resize_notepad",
+  "windowId": "hwnd:0003029A",
+  "accepted": true,
+  "bounds": {
+    "x": 10,
+    "y": 10,
+    "width": 1440,
+    "height": 900
+  }
+}
+```
+
+Rules:
+
+- `width` and `height` are logical 96-DPI-equivalent units, matching the bounds in
+  `window.created` and `window.updated`. Both must be between 320 and 8192, and their product must not
+  exceed 32000000 pixels.
+- The guest converts the logical size to physical pixels using the tracked HWND's current per-monitor DPI,
+  then calls `SetWindowPos` without moving, activating, or reordering the window. This keeps a Retina Mac
+  from requesting twice the intended Windows size.
+- `accepted: true` includes the bounds that Windows actually applied. An app or Windows may clamp the size,
+  so the host treats the following `window.updated` event as authoritative rather than assuming the request
+  was exact.
+- `accepted: false` means the HWND was no longer tracked or the platform rejected the resize; the response
+  omits `bounds` and the host keeps the existing mirror geometry.
+- The macOS host sends one request after `windowDidEndLiveResize`, not one per intermediate drag event.
+  During the gesture the mirror remains aspect-correct; after the guest applies the size, its capture buffer
+  changes and the next key frame resynchronizes the host compositor.
+
 ## Input Mouse
 
 Event from host to guest:
@@ -872,7 +925,7 @@ Rules:
 
 Codes documented alongside the message that produces them: `app_not_found`, `invalid_file_name`,
 `file_decode_failed`, `file_too_large`, `file_write_failed`, `file_open_failed`, `window_not_tracked`,
-`text_too_long`, `invalid_message`, `input_text_failed`.
+`text_too_long`, `invalid_message`, `input_text_failed`, `window_resize_failed`.
 
 The guest also emits the following. They were undocumented, which meant a host could neither explain them
 to a user nor pre-empt them:
@@ -883,6 +936,7 @@ to a user nor pre-empt them:
 | `app_launch_failed` | `app.launch.request` reached the guest but starting the process failed. |
 | `window_focus_failed` | `window.focus.request` threw. Distinct from an accepted-but-refused focus, which returns `accepted: false` rather than an error. |
 | `window_close_failed` | `window.close.request` threw, same distinction. |
+| `window_resize_failed` | `window.resize.request` threw while applying the size to the tracked HWND. |
 | `input_mouse_failed` | Posting a mouse message threw. |
 | `input_key_failed` | Posting a key message threw. |
 | `clipboard_text_failed` | The guest could not take the Windows clipboard. Routine rather than exotic: the guest retries `OpenClipboard` for 250 ms and any clipboard manager or Office instance can hold it longer. |

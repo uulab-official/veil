@@ -86,6 +86,7 @@ public sealed class AgentSession
                 MessageTypes.WindowFrameUnsubscribe => HandleWindowFrameUnsubscribeAsync(request, requestId),
                 MessageTypes.WindowFocusRequest => await HandleWindowFocusAsync(request, requestId, cancellationToken),
                 MessageTypes.WindowCloseRequest => await HandleWindowCloseAsync(request, requestId, cancellationToken),
+                MessageTypes.WindowResizeRequest => await HandleWindowResizeAsync(request, requestId, cancellationToken),
                 MessageTypes.InputMouse => await HandleMouseInputAsync(request, requestId, cancellationToken),
                 MessageTypes.InputKey => await HandleKeyInputAsync(request, requestId, cancellationToken),
                 MessageTypes.InputText => await HandleTextInputAsync(request, requestId, cancellationToken),
@@ -446,6 +447,44 @@ public sealed class AgentSession
         }
     }
 
+    private async Task<AgentReplies> HandleWindowResizeAsync(
+        JsonObject request,
+        string? requestId,
+        CancellationToken cancellationToken
+    )
+    {
+        var windowId = request["windowId"]?.GetValue<string>();
+        if (string.IsNullOrWhiteSpace(windowId)
+            || !TryReadInt(request, "width", out var width)
+            || !TryReadInt(request, "height", out var height)
+            || !IsPlausibleResize(width, height))
+        {
+            return AgentReplies.Direct(ErrorResponse(
+                requestId,
+                "invalid_message",
+                "window.resize.request requires a tracked window and a size between 320 and 8192 pixels with at most 32000000 pixels."
+            ));
+        }
+
+        if (!TryGetTrackedWindow(windowId, out _))
+        {
+            return AgentReplies.Direct(WindowResizeResponse(requestId, windowId, bounds: null));
+        }
+
+        try
+        {
+            var bounds = await desktop.ResizeWindowAsync(
+                new WindowResizeInput(windowId, width, height),
+                cancellationToken
+            );
+            return AgentReplies.Direct(WindowResizeResponse(requestId, windowId, bounds));
+        }
+        catch (Exception error) when (error is not OperationCanceledException)
+        {
+            return AgentReplies.Direct(ErrorResponse(requestId, "window_resize_failed", error.Message));
+        }
+    }
+
     private async Task<AgentReplies> HandleMouseInputAsync(
         JsonObject request,
         string? requestId,
@@ -624,6 +663,9 @@ public sealed class AgentSession
                 // Lets the host tell "no share yet" apart from "this agent cannot answer". Without it an
                 // older agent would look like a guest whose share is missing.
                 ["sharedFolder"] = true,
+                // Lets the host enable the resize affordance only when this agent understands the
+                // additive window.resize.request message.
+                ["windowResize"] = true,
                 ["packageIdentity"] = hasPackageIdentity
             },
             ["notificationListener"] = notificationAccessProbe.ReadStatus(hasPackageIdentity),
@@ -774,6 +816,30 @@ public sealed class AgentSession
         ["accepted"] = accepted
     };
 
+    private static JsonObject WindowResizeResponse(string? requestId, string windowId, WindowRect? bounds)
+    {
+        var response = new JsonObject
+        {
+            ["type"] = MessageTypes.WindowResizeResponse,
+            ["requestId"] = requestId,
+            ["windowId"] = windowId,
+            ["accepted"] = bounds is not null
+        };
+
+        if (bounds is not null)
+        {
+            response["bounds"] = new JsonObject
+            {
+                ["x"] = bounds.X,
+                ["y"] = bounds.Y,
+                ["width"] = bounds.Width,
+                ["height"] = bounds.Height
+            };
+        }
+
+        return response;
+    }
+
     private static JsonObject ErrorResponse(string? requestId, string code, string message) => new()
     {
         ["type"] = MessageTypes.Error,
@@ -781,6 +847,13 @@ public sealed class AgentSession
         ["code"] = code,
         ["message"] = message
     };
+
+    private static bool IsPlausibleResize(int width, int height) =>
+        width >= 320
+            && width <= 8_192
+            && height >= 320
+            && height <= 8_192
+            && (long)width * height <= 32_000_000;
 
     private void TrackWindow(WindowsAppDescriptor app, LaunchedWindow window)
     {

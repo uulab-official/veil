@@ -258,6 +258,41 @@ struct WindowsAppWindowPresenterTests {
         #expect(presenter.visibleWindowIds == ["hwnd:frame-preserve"])
     }
 
+    @Test("reports one final content size after a mirrored window live resize ends")
+    func reportsFinalContentSizeAfterLiveResizeEnds() throws {
+        _ = NSApplication.shared
+        let presenter = WindowsAppWindowPresenter()
+        defer {
+            presenter.closeAll()
+        }
+
+        var resizeEvents: [(String, Int, Int)] = []
+        presenter.onWindowResize = { windowId, width, height in
+            resizeEvents.append((windowId, width, height))
+        }
+
+        let windowId = "hwnd:resize"
+        presenter.showWindow(
+            for: session(
+                windowId: windowId,
+                appId: "winapp_notepad",
+                title: "Notepad",
+                bounds: WindowBounds(x: 80, y: 80, width: 960, height: 640)
+            )
+        )
+        let window = try #require(mirroredWindow(withId: windowId))
+        window.setContentSize(NSSize(width: 1_440, height: 960))
+
+        presenter.windowDidEndLiveResize(
+            Notification(name: NSWindow.didEndLiveResizeNotification, object: window)
+        )
+
+        #expect(resizeEvents.count == 1)
+        #expect(resizeEvents.first?.0 == windowId)
+        #expect(resizeEvents.first?.1 == 1_440)
+        #expect(resizeEvents.first?.2 == 960)
+    }
+
     @Test("restore policy deminiaturizes minimized Windows app windows")
     func restorePolicyDeminiaturizesMinimizedWindowsAppWindows() {
         let window = RestorePolicyTestWindow(isMiniaturizedForTest: true)
@@ -323,6 +358,28 @@ struct WindowsAppWindowPresenterTests {
 
         #expect(delegate.applicationShouldRestoreState(NSApplication.shared) == false)
         #expect(delegate.applicationShouldSaveState(NSApplication.shared) == false)
+    }
+
+    @Test("creates a recoverable launcher when SwiftUI has not materialized its scene")
+    func createsRecoverableLauncherWhenSwiftUISceneIsMissing() {
+        _ = NSApplication.shared
+
+        MainWindowChrome.showMainWindow()
+        defer {
+            MainWindowChrome.hideMainWindow()
+            NSApp.windows
+                .filter { $0.identifier?.rawValue == "main" }
+                .forEach { $0.close() }
+        }
+
+        let launcherWindows = NSApp.windows.filter { $0.identifier?.rawValue == "main" }
+        let launcher = launcherWindows.first
+        #expect(launcherWindows.count == 1)
+        #expect(launcher?.isVisible == true)
+        #expect(launcher?.titlebarAppearsTransparent == true)
+        #expect(launcher?.styleMask.contains(.fullSizeContentView) == true)
+        #expect(launcher?.minSize.width ?? 0 >= MainWindowLayout.minimumSupportedSize.width)
+        #expect(launcher?.minSize.height ?? 0 >= MainWindowLayout.minimumSupportedSize.height)
     }
 
     @Test("launch verification arguments accept separated and inline report paths")
