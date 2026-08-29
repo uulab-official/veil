@@ -283,16 +283,17 @@ public enum QEMUDisplayBackendProbe {
 
         do {
             try process.run()
-            process.waitUntilExit()
         } catch {
             return []
         }
 
+        // Drain before waiting so a long help output cannot deadlock the wait on a
+        // full pipe buffer.
+        let output = outputPipe.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+
         return availableBackends(
-            in: String(
-                decoding: outputPipe.fileHandleForReading.readDataToEndOfFile(),
-                as: UTF8.self
-            )
+            in: String(decoding: output, as: UTF8.self)
         )
     }
 }

@@ -6465,8 +6465,16 @@ struct VeilVMControl {
         let serverInit = try client.startSharedSession()
         let renderer = try RFBFramebufferRenderer(serverInit: serverInit)
         try client.requestFramebufferUpdate(incremental: false)
-        let update = try client.readFramebufferUpdate()
-        let frame = try renderer.apply(update)
+        var update = try client.readUpdateEvent()
+        // A server that supports dynamic resolution answers the first full refresh
+        // with an ExtendedDesktopSize rectangle; keep reading for the pixel data.
+        if case .desktopSize = update {
+            update = try client.readUpdateEvent()
+        }
+        guard case .framebuffer(let framebufferUpdate) = update else {
+            throw VMControlError.missingQEMUDisplayEndpoint
+        }
+        let frame = try renderer.apply(framebufferUpdate)
         let metrics = try QEMUConsoleFrameAnalyzer.analyze(
             width: frame.width,
             height: frame.height,
@@ -7506,6 +7514,17 @@ struct VeilVMControl {
 
         try process.run()
 
+        // Drain QEMU output while it runs. A full 16 KB pipe buffer would otherwise
+        // block QEMU mid-boot and truncate the captured log to whatever fit.
+        let outputDrainQueue = DispatchQueue(label: "veil.qemu-boot-log-drain")
+        var drainedOutput = Data()
+        let drainFinished = DispatchGroup()
+        drainFinished.enter()
+        outputDrainQueue.async {
+            drainedOutput = outputPipe.fileHandleForReading.readDataToEndOfFile()
+            drainFinished.leave()
+        }
+
         let deadline = Date().addingTimeInterval(TimeInterval(seconds))
         let startDate = Date()
         var bootPromptAutomation = QEMUWindowsBootPromptAutomation()
@@ -7535,11 +7554,11 @@ struct VeilVMControl {
             process.terminate()
         }
         process.waitUntilExit()
+        drainFinished.wait()
 
-        let data = outputPipe.fileHandleForReading.readDataToEndOfFile()
-        try data.write(to: processLogURL, options: [.atomic])
+        try drainedOutput.write(to: processLogURL, options: [.atomic])
         return (
-            String(data: data, encoding: .utf8) ?? "",
+            String(data: drainedOutput, encoding: .utf8) ?? "",
             didRemainRunningUntilTimeout,
             bootPromptKeySendCount
         )

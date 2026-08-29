@@ -2582,8 +2582,8 @@ public struct LocalVMRuntimeService: VMRuntimeService {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/bin/ps")
         process.arguments = ["-p", String(pid)]
-        process.standardOutput = Pipe()
-        process.standardError = Pipe()
+        process.standardOutput = FileHandle.nullDevice
+        process.standardError = FileHandle.nullDevice
 
         do {
             try process.run()
@@ -2598,8 +2598,8 @@ public struct LocalVMRuntimeService: VMRuntimeService {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/bin/kill")
         process.arguments = ["-TERM", String(pid)]
-        process.standardOutput = Pipe()
-        process.standardError = Pipe()
+        process.standardOutput = FileHandle.nullDevice
+        process.standardError = FileHandle.nullDevice
 
         do {
             try process.run()

@@ -579,23 +579,26 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
         ]
         let outputPipe = Pipe()
         process.standardOutput = outputPipe
-        process.standardError = Pipe()
+        process.standardError = FileHandle.nullDevice
 
         do {
             try process.run()
-            process.waitUntilExit()
         } catch {
             return nil
         }
+
+        // Drain before waiting: the ps|grep pipeline can exceed the 16 KB pipe
+        // buffer, and a blocked writer would deadlock waitUntilExit forever.
+        let output = String(
+            decoding: outputPipe.fileHandleForReading.readDataToEndOfFile(),
+            as: UTF8.self
+        )
+        process.waitUntilExit()
 
         guard process.terminationStatus == 0 else {
             return nil
         }
 
-        let output = String(
-            decoding: outputPipe.fileHandleForReading.readDataToEndOfFile(),
-            as: UTF8.self
-        )
         return runningProcess(
             attachedToVirtualDiskPath: virtualDiskPath,
             processListOutput: output
