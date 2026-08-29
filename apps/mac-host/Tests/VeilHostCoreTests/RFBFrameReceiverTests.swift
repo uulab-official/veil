@@ -130,7 +130,7 @@ struct RFBFrameReceiverTests {
 
         let serverInit = try client.startSharedSession()
         try client.requestFramebufferUpdate(incremental: false)
-        let update = try client.readFramebufferUpdate()
+        let event = try client.readUpdateEvent()
 
         #expect(serverInit.width == 2)
         #expect(serverInit.height == 1)
@@ -138,7 +138,7 @@ struct RFBFrameReceiverTests {
         #expect(stream.writes[0] == RFBClientMessageBuilder.clientProtocolVersion())
         #expect(stream.writes[1] == RFBClientMessageBuilder.selectNoneSecurity())
         #expect(stream.writes[2] == RFBClientMessageBuilder.sharedClientInit())
-        #expect(stream.writes[3] == RFBClientMessageBuilder.setRawEncoding())
+        #expect(stream.writes[3] == RFBClientMessageBuilder.setRawAndDesktopResizeEncodings())
         #expect(stream.writes[4] == Data([
             3, 0,
             0, 0,
@@ -146,6 +146,10 @@ struct RFBFrameReceiverTests {
             0, 2,
             0, 1
         ]))
+        guard case .framebuffer(let update) = event else {
+            Issue.record("Expected a framebuffer event")
+            return
+        }
         #expect(update.rectangles.count == 1)
         #expect(update.rectangles.first?.pixels == Data([
             0, 0, 255, 0,

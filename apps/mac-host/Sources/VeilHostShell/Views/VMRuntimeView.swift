@@ -953,6 +953,7 @@ struct WindowsEmbeddedDisplayPreview: View {
     var surface: VMConsoleDisplaySurface
     var path: String
     var revisionID: String
+    var resizeBus: DesktopResizeCommandBus?
     var pointerTapAction: (Double, Double) -> Void
     var keyAction: (String) -> Void
     @State private var rfbDisplayModel = RFBEmbeddedDisplayModel()
@@ -989,12 +990,25 @@ struct WindowsEmbeddedDisplayPreview: View {
                         Spacer()
                     }
                     Spacer()
+                    HStack {
+                        Spacer()
+                        if let resizeStatusText {
+                            Text(resizeStatusText)
+                                .font(.caption2.weight(.medium))
+                                .foregroundStyle(.white.opacity(0.72))
+                                .lineLimit(1)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 6)
+                                .background(.black.opacity(0.30), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                        }
+                    }
                 }
                 .padding(14)
                 .allowsHitTesting(false)
             }
 
             ConsolePreviewInputCaptureView(
+                framebufferSize: renderedFramebufferSize,
                 pointerTapAction: pointerTapAction,
                 keyAction: keyAction
             )
@@ -1005,17 +1019,32 @@ struct WindowsEmbeddedDisplayPreview: View {
         .accessibilityValue(surface.endpoint ?? path)
         .onAppear {
             rfbDisplayModel.connectIfNeeded(to: surface)
+            if let resizeBus {
+                let model = rfbDisplayModel
+                resizeBus.setPerformer { [weak model] width, height in
+                    model?.requestDesktopResize(width: width, height: height)
+                }
+            }
         }
         .onChange(of: surface.endpoint) { _, _ in
             rfbDisplayModel.connectIfNeeded(to: surface)
         }
         .onDisappear {
+            resizeBus?.setPerformer(nil)
             rfbDisplayModel.stop()
         }
     }
 
     private var renderedImage: NSImage? {
         rfbDisplayModel.image ?? image
+    }
+
+    private var renderedFramebufferSize: CGSize {
+        guard let renderedImage else {
+            return .zero
+        }
+
+        return CGSize(width: renderedImage.size.width, height: renderedImage.size.height)
     }
 
     private var displayAspectRatio: CGFloat {
@@ -1034,6 +1063,25 @@ struct WindowsEmbeddedDisplayPreview: View {
 
         return revisionID
     }
+
+    private var resizeStatusText: String? {
+        guard rfbDisplayModel.status == .receiving else {
+            return nil
+        }
+
+        switch rfbDisplayModel.resizePresentation {
+        case .available:
+            return "Dynamic resolution available"
+        case .scaled:
+            return "Aspect-fit: guest resize unavailable"
+        case .rejected:
+            return "Guest refused resize: aspect-fit"
+        case .recovering:
+            return "Probing guest resize support…"
+        case .unavailable:
+            return nil
+        }
+    }
 }
 
 enum WindowsDisplayAspectRatioPolicy {
@@ -1047,23 +1095,27 @@ enum WindowsDisplayAspectRatioPolicy {
 }
 
 private struct ConsolePreviewInputCaptureView: NSViewRepresentable {
+    var framebufferSize: CGSize
     var pointerTapAction: (Double, Double) -> Void
     var keyAction: (String) -> Void
 
     func makeNSView(context: Context) -> ConsolePreviewInputCaptureNSView {
         let view = ConsolePreviewInputCaptureNSView()
+        view.framebufferSize = framebufferSize
         view.pointerTapAction = pointerTapAction
         view.keyAction = keyAction
         return view
     }
 
     func updateNSView(_ nsView: ConsolePreviewInputCaptureNSView, context: Context) {
+        nsView.framebufferSize = framebufferSize
         nsView.pointerTapAction = pointerTapAction
         nsView.keyAction = keyAction
     }
 }
 
 private final class ConsolePreviewInputCaptureNSView: NSView {
+    var framebufferSize: CGSize = .zero
     var pointerTapAction: ((Double, Double) -> Void)?
     var keyAction: ((String) -> Void)?
     private let keyboardMapper = QEMUConsoleKeyboardInputMapper()
@@ -1091,15 +1143,30 @@ private final class ConsolePreviewInputCaptureNSView: NSView {
         return true
     }
 
+    /// Maps clicks through the aspect-fit viewport so letterbox bars and window
+    /// chrome never inject coordinates into the guest. While a resize request is in
+    /// flight the framebuffer size stays at the last applied geometry.
     private func sendPointerTap(_ event: NSEvent) {
         guard bounds.width > 0, bounds.height > 0 else {
             return
         }
 
         let point = convert(event.locationInWindow, from: nil)
-        let normalizedX = min(max(point.x / bounds.width, 0), 1)
-        let normalizedY = min(max(1 - (point.y / bounds.height), 0), 1)
-        pointerTapAction?(Double(normalizedX), Double(normalizedY))
+        let viewport = RFBViewportMapper.viewport(
+            framebufferWidth: framebufferSize.width,
+            framebufferHeight: framebufferSize.height,
+            containerWidth: bounds.width,
+            containerHeight: bounds.height
+        )
+
+        guard let normalized = RFBViewportMapper.normalizedGuestPoint(
+            pointInContainer: point,
+            viewport: viewport
+        ) else {
+            return
+        }
+
+        pointerTapAction?(Double(normalized.x), Double(1 - normalized.y))
     }
 
     private func sendKey(_ event: NSEvent) -> Bool {

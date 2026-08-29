@@ -12,6 +12,7 @@ public enum RFBError: Error, LocalizedError, Equatable, Sendable {
     case sessionNotStarted
     case invalidRectangleBounds
     case invalidFramebufferSize(width: Int, height: Int)
+    case malformedDesktopSizeResponse
 
     public var errorDescription: String? {
         switch self {
@@ -35,6 +36,8 @@ public enum RFBError: Error, LocalizedError, Equatable, Sendable {
             "RFB framebuffer update contains a rectangle outside the display bounds."
         case .invalidFramebufferSize(let width, let height):
             "RFB framebuffer size \(width)x\(height) cannot be requested by the client."
+        case .malformedDesktopSizeResponse:
+            "RFB ExtendedDesktopSize rectangle is malformed."
         }
     }
 }
@@ -127,6 +130,68 @@ public struct RFBRenderedFrame: Codable, Equatable, Sendable {
     public var sequence: Int
 }
 
+/// The RFB pseudo-encoding number for ExtendedDesktopSize resize negotiation.
+public let rfbExtendedDesktopSizeEncoding: Int32 = -223
+
+/// One screen entry from an ExtendedDesktopSize rectangle or SetDesktopSize message.
+public struct RFBScreenLayoutEntry: Equatable, Sendable {
+    public var id: Int
+    public var x: Int
+    public var y: Int
+    public var width: Int
+    public var height: Int
+    public var flags: Int
+
+    public init(id: Int, x: Int, y: Int, width: Int, height: Int, flags: Int) {
+        self.id = id
+        self.x = x
+        self.y = y
+        self.width = width
+        self.height = height
+        self.flags = flags
+    }
+}
+
+/// A parsed ExtendedDesktopSize rectangle: the new framebuffer size plus the
+/// reason/result codes the RFB spec carries in the rectangle header.
+public struct RFBDesktopSizeResponse: Equatable, Sendable {
+    public var width: Int
+    public var height: Int
+    public var reasonCode: Int
+    public var resultCode: Int
+    public var screens: [RFBScreenLayoutEntry]
+
+    public init(
+        width: Int,
+        height: Int,
+        reasonCode: Int,
+        resultCode: Int,
+        screens: [RFBScreenLayoutEntry]
+    ) {
+        self.width = width
+        self.height = height
+        self.reasonCode = reasonCode
+        self.resultCode = resultCode
+        self.screens = screens
+    }
+
+    public var isSuccess: Bool {
+        resultCode == 0
+    }
+
+    /// A failure only answers a request when the echoed framebuffer size matches it.
+    public func matches(_ target: RFBDesktopResizeTarget) -> Bool {
+        width == target.widthInPixels && height == target.heightInPixels
+    }
+}
+
+/// One update read off the RFB socket: either pixel rectangles or a desktop-size
+/// response. Callers must not treat resize rectangles as pixels.
+public enum RFBUpdateEvent: Equatable, Sendable {
+    case framebuffer(RFBFramebufferUpdate)
+    case desktopSize(RFBDesktopSizeResponse)
+}
+
 public enum RFBClientMessageBuilder {
     public static func clientProtocolVersion() -> Data {
         Data("RFB 003.008\n".utf8)
@@ -142,6 +207,45 @@ public enum RFBClientMessageBuilder {
 
     public static func setRawEncoding() -> Data {
         setEncodings([0])
+    }
+
+    /// Raw pixels plus ExtendedDesktopSize, the minimum set for dynamic resolution.
+    public static func setRawAndDesktopResizeEncodings() -> Data {
+        setEncodings([0, rfbExtendedDesktopSizeEncoding])
+    }
+
+    public static func setDesktopSize(width: Int, height: Int) -> Data {
+        var data = Data([251, 0])
+        data.appendBigEndian(UInt16(width))
+        data.appendBigEndian(UInt16(height))
+        data.append(contentsOf: [1, 0])
+        data.append(screenLayoutEntry(
+            id: 0,
+            x: 0,
+            y: 0,
+            width: width,
+            height: height,
+            flags: 0
+        ))
+        return data
+    }
+
+    public static func screenLayoutEntry(
+        id: Int,
+        x: Int,
+        y: Int,
+        width: Int,
+        height: Int,
+        flags: Int
+    ) -> Data {
+        var data = Data()
+        data.appendBigEndian(UInt32(id))
+        data.appendBigEndian(UInt16(x))
+        data.appendBigEndian(UInt16(y))
+        data.appendBigEndian(UInt16(width))
+        data.appendBigEndian(UInt16(height))
+        data.appendBigEndian(UInt32(flags))
+        return data
     }
 
     public static func setEncodings(_ encodings: [Int32]) -> Data {
@@ -255,6 +359,62 @@ public enum RFBFrameParser {
         }
 
         return RFBFramebufferUpdate(rectangles: rectangles)
+    }
+
+    /// Parses one ExtendedDesktopSize rectangle. `rectangleHeader` is the 12-byte
+    /// rect header (x, y, width, height, encoding); `payload` is everything after it.
+    public static func parseDesktopSizeResponse(
+        rectangleHeader: Data,
+        payload: Data
+    ) throws -> RFBDesktopSizeResponse {
+        try require(rectangleHeader, count: 12)
+        let x = Int(rectangleHeader.readUInt16BigEndian(at: 0))
+        let y = Int(rectangleHeader.readUInt16BigEndian(at: 2))
+        let width = Int(rectangleHeader.readUInt16BigEndian(at: 4))
+        let height = Int(rectangleHeader.readUInt16BigEndian(at: 6))
+
+        guard payload.count >= 4 else {
+            throw RFBError.malformedDesktopSizeResponse
+        }
+
+        let screenCount = Int(payload[0])
+        guard screenCount >= 0,
+              payload.count == 4 + screenCount * 16 else {
+            throw RFBError.malformedDesktopSizeResponse
+        }
+
+        var screens: [RFBScreenLayoutEntry] = []
+        screens.reserveCapacity(screenCount)
+        for screenIndex in 0..<screenCount {
+            let offset = 4 + screenIndex * 16
+            screens.append(RFBScreenLayoutEntry(
+                id: Int(payload.readUInt32BigEndian(at: offset)),
+                x: Int(payload.readUInt16BigEndian(at: offset + 4)),
+                y: Int(payload.readUInt16BigEndian(at: offset + 6)),
+                width: Int(payload.readUInt16BigEndian(at: offset + 8)),
+                height: Int(payload.readUInt16BigEndian(at: offset + 10)),
+                flags: Int(payload.readUInt32BigEndian(at: offset + 12))
+            ))
+        }
+
+        return RFBDesktopSizeResponse(
+            width: width,
+            height: height,
+            reasonCode: x,
+            resultCode: y,
+            screens: screens
+        )
+    }
+
+    /// The exact byte length of an ExtendedDesktopSize payload read from a stream.
+    public static func desktopSizePayloadLength(firstBytes: Data) throws -> Int {
+        try require(firstBytes, count: 1)
+        let screenCount = Int(firstBytes[0])
+        guard screenCount >= 0 else {
+            throw RFBError.malformedDesktopSizeResponse
+        }
+
+        return 4 + screenCount * 16
     }
 
     private static func require(_ data: Data, count: Int) throws {
@@ -406,7 +566,7 @@ public final class RFBFrameStreamClient {
         let desktopNameData = try stream.readExactly(desktopNameLength)
         let serverInit = try RFBFrameParser.parseServerInit(serverInitHeader + desktopNameData)
         self.serverInit = serverInit
-        try stream.write(RFBClientMessageBuilder.setRawEncoding())
+        try stream.write(RFBClientMessageBuilder.setRawAndDesktopResizeEncodings())
         return serverInit
     }
 
@@ -430,7 +590,39 @@ public final class RFBFrameStreamClient {
         ))
     }
 
-    public func readFramebufferUpdate() throws -> RFBFramebufferUpdate {
+    /// Sends a SetDesktopSize request with one screen covering the whole framebuffer.
+    public func sendSetDesktopSize(width: Int, height: Int) throws {
+        guard serverInit != nil else {
+            throw RFBError.sessionNotStarted
+        }
+        guard width > 0, width <= Int(UInt16.max),
+              height > 0, height <= Int(UInt16.max) else {
+            throw RFBError.invalidFramebufferSize(width: width, height: height)
+        }
+
+        try stream.write(RFBClientMessageBuilder.setDesktopSize(width: width, height: height))
+    }
+
+    /// Adopts a server-confirmed framebuffer size so subsequent framebuffer update
+    /// requests address the new surface instead of the old one.
+    public func applyDesktopSize(width: Int, height: Int) throws {
+        guard var updated = serverInit else {
+            throw RFBError.sessionNotStarted
+        }
+        guard width > 0, width <= Int(UInt16.max),
+              height > 0, height <= Int(UInt16.max) else {
+            throw RFBError.invalidFramebufferSize(width: width, height: height)
+        }
+
+        updated.width = width
+        updated.height = height
+        serverInit = updated
+    }
+
+    /// Reads one update: pixel rectangles or an ExtendedDesktopSize response. Pixel
+    /// rectangles that share an update with a resize response are dropped because
+    /// they describe the pre-resize framebuffer; the caller refreshes at the new size.
+    public func readUpdateEvent() throws -> RFBUpdateEvent {
         guard let serverInit else {
             throw RFBError.sessionNotStarted
         }
@@ -441,24 +633,43 @@ public final class RFBFrameStreamClient {
         let messageHeader = try stream.readExactly(4)
         let rectangleCount = Int(messageHeader.readUInt16BigEndian(at: 2))
         var update = messageHeader
+        var desktopSizeResponse: RFBDesktopSizeResponse?
 
         for _ in 0..<rectangleCount {
             let rectangleHeader = try stream.readExactly(12)
-            update.append(rectangleHeader)
-
             let width = Int(rectangleHeader.readUInt16BigEndian(at: 4))
             let height = Int(rectangleHeader.readUInt16BigEndian(at: 6))
             let encoding = rectangleHeader.readInt32BigEndian(at: 8)
 
+            if encoding == rfbExtendedDesktopSizeEncoding {
+                let screenCountByte = try stream.readExactly(1)
+                let payloadLength = try RFBFrameParser.desktopSizePayloadLength(firstBytes: screenCountByte)
+                let payloadRest = try stream.readExactly(payloadLength - 1)
+                if desktopSizeResponse == nil {
+                    desktopSizeResponse = try RFBFrameParser.parseDesktopSizeResponse(
+                        rectangleHeader: rectangleHeader,
+                        payload: screenCountByte + payloadRest
+                    )
+                }
+                continue
+            }
+
             guard encoding == 0 else {
-                return try RFBFrameParser.parseFramebufferUpdate(update, pixelFormat: serverInit.pixelFormat)
+                throw RFBError.unsupportedEncoding(encoding)
             }
 
             let pixelByteCount = width * height * bytesPerPixel
+            update.append(rectangleHeader)
             update.append(try stream.readExactly(pixelByteCount))
         }
 
-        return try RFBFrameParser.parseFramebufferUpdate(update, pixelFormat: serverInit.pixelFormat)
+        if let desktopSizeResponse {
+            return .desktopSize(desktopSizeResponse)
+        }
+
+        return .framebuffer(
+            try RFBFrameParser.parseFramebufferUpdate(update, pixelFormat: serverInit.pixelFormat)
+        )
     }
 }
 

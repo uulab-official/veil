@@ -402,3 +402,31 @@ Veil now has the local QEMU/HVF boot path, embedded display evidence, fake-agent
    - Open: actually running it. Three runs are specified in the checklist -- typing, idle, and scrolling a large document -- along with what each one would tell us.
 
 15. Still not Parallels-class, and the remaining decisions are now blocked on data rather than design. Once the three measurement runs exist: the coverage numbers choose the periodic key-frame interval that the tile slice deliberately deferred, and the byte-rate versus composite-time numbers decide whether the pipeline is bandwidth-bound or CPU-bound, which determines whether a codec change is the next step at all. The header's format byte reserves room for a hardware or inter-frame codec without another negotiation round. A guest display driver remains the only path to true Parallels-class graphics and is a separate, much larger decision. Beyond graphics: no live shared folder (no virtio-9p or SMB; file transfer is base64 over the control channel with a 50 MB cap), no USB passthrough, and usermode NAT only.
+
+16. Desktop dynamic resolution, first slice (2026-08-29): implemented the RFB half of the
+    `2026-08-28-desktop-resize-stability-design.md` against the full Windows desktop window. See
+    `docs/checklists/2026-08-29-rfb-dynamic-desktop-resolution.md`.
+    - The RFB handshake now advertises ExtendedDesktopSize, `readUpdateEvent()` surfaces resize
+      responses as typed events instead of failing as an unsupported encoding, and
+      `sendSetDesktopSize`/`applyDesktopSize` send the request and adopt the confirmed size so
+      framebuffer update requests follow the new surface.
+    - The pure `RFBDesktopSizePolicy` (point→pixel with backing scale, 640...3840 axis clamps, a
+      4K-UHD area cap that keeps the aspect ratio, 8-pixel alignment, 16-pixel suppression),
+      `RFBViewportMapper` (aspect-fit viewport; letterbox clicks map to nil), and
+      `RFBDesktopResizeStateMachine` (probing/applied/unsupported/rejected/timed-out with one
+      in-flight request, a queued newest target, and an injected clock) are unit tested end to end,
+      including wire bytes against a fake RFB stream.
+    - The desktop window presenter debounces geometry changes and emits one bounded target per
+      settled resize; requests sent before the capability probe finishes are flushed when the
+      connection reports available. Pointer input maps through the viewport against the last
+      applied framebuffer geometry, and the desktop status overlay reports
+      available/scaled/rejected/recovering truthfully.
+    - The same session fixed a real process-pipe deadlock, not a test-only annoyance:
+      `QEMUVMRuntimeBooter.runningProcess` waited on `ps axww | grep qemu` before draining a 16 KB
+      pipe while a real Windows VM's process line was flowing through it — the host hung forever
+      detecting a running VM, and each stuck `ps|grep` matched the next probe, piling up. The drain
+      order is fixed there, in `QEMUWindowsBootPlan.availableBackends`, and the QEMU boot-log
+      runner now drains concurrently instead of silently truncating the log at the pipe buffer.
+    - Open: the live Windows evidence pass (windowed → larger → full screen → windowed, requested
+      vs applied sizes, four-corner pointer proof, and whether the tested virtio display driver
+      accepts SetDesktopSize — a rejection is honest evidence for the guest-agent fallback slice).
