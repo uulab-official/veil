@@ -84,13 +84,22 @@ struct WindowsSetupDisplayPanel: View {
         ZStack(alignment: .bottom) {
             installDisplaySurface
 
-            installControlBar
-                .background(.black.opacity(0.18))
-                .background(.ultraThinMaterial)
-                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                .padding(10)
+            if showsInstallControlBar {
+                installControlBar
+                    .background(.black.opacity(0.18))
+                    .background(.ultraThinMaterial)
+                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    .padding(10)
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+    }
+
+    /// Like a Parallels VM window, a live Windows Setup gets the whole surface: power and
+    /// configuration are in the toolbar and the bar's extra actions are in the Actions menu. The bar
+    /// returns only when there is no live display or the boot stalled and needs a recovery action.
+    private var showsInstallControlBar: Bool {
+        !(isMachineLive && hasDesktopDisplay) || bootIsStalled
     }
 
     private var installDisplaySurface: some View {
@@ -166,6 +175,7 @@ struct WindowsSetupDisplayPanel: View {
 
             if hasRuntimeMoreActions {
                 runtimeMoreMenu
+                    .fixedSize()
             }
         }
         .controlSize(.regular)
