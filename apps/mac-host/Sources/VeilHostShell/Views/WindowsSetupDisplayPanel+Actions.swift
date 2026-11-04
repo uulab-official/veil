@@ -106,31 +106,6 @@ extension WindowsSetupDisplayPanel {
         return snapshot.profileName == nil ? "Prepare Windows" : "Continue Setup"
     }
 
-    var horizontalActions: some View {
-        HStack(spacing: 8) {
-            if snapshot.state == .running, hasDesktopDisplay {
-                Button(action: showWindowsDisplayAction) {
-                    Label("Show Desktop", systemImage: "display")
-                    .labelStyle(.iconOnly)
-                }
-                .keyboardShortcut("a", modifiers: [.command, .shift])
-                .help("Open the live Windows desktop in its own window (⇧⌘A)")
-                .accessibilityLabel("Show Windows desktop")
-            }
-
-            Button(action: detailsAction) {
-                Label("Settings", systemImage: "gearshape.fill")
-                    .labelStyle(.iconOnly)
-            }
-            .disabled(isLoading)
-            .help("Open Windows settings")
-
-            if hasRuntimeMoreActions {
-                runtimeMoreMenu
-            }
-        }
-    }
-
     var runtimeSettingsButton: some View {
         Button(action: detailsAction) {
             Label("Settings", systemImage: "gearshape.fill")

@@ -73,49 +73,11 @@ struct WindowsSetupDisplayPanel: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
+    /// Power, view mode, and configuration live in the window toolbar and the Actions menu, so the
+    /// installed stage is only the Windows surface itself.
     private var installedLauncherStage: some View {
-        ZStack(alignment: .topTrailing) {
-            launcherDisplaySurface
-
-            installedRuntimeChrome
-                .padding(showsFullDesktop ? 12 : 16)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-
-    @ViewBuilder
-    private var installedRuntimeChrome: some View {
-        if showsFullDesktop {
-            Button {
-                showsFullDesktop = false
-            } label: {
-                Label("Show Apps", systemImage: "macwindow")
-                    .labelStyle(.iconOnly)
-                    .frame(width: 32, height: 32)
-                    .contentShape(Circle())
-            }
-            .buttonStyle(.plain)
-            .background(.black.opacity(0.16), in: Circle())
-            .background(.ultraThinMaterial, in: Circle())
-            .overlay {
-                Circle()
-                    .strokeBorder(.white.opacity(0.18), lineWidth: 1)
-            }
-            .shadow(color: .black.opacity(0.24), radius: 10, y: 4)
-            .keyboardShortcut("a", modifiers: [.command, .shift])
-            .help("Show Windows apps (⇧⌘A)")
-            .accessibilityLabel("Show Windows apps")
-        } else {
-            horizontalActions
-                .padding(.horizontal, 10)
-                .padding(.vertical, 8)
-                .background(.black.opacity(0.18))
-                .background(.ultraThinMaterial, in: Capsule())
-                .overlay {
-                    Capsule()
-                        .strokeBorder(.white.opacity(0.14), lineWidth: 1)
-                }
-        }
+        launcherDisplaySurface
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var installProcessStage: some View {
@@ -256,6 +218,10 @@ struct WindowsSetupDisplayPanel: View {
         )
     }
 
+    private var isMachineLive: Bool {
+        snapshot.state == .running || snapshot.state == .starting
+    }
+
     var hasDesktopDisplay: Bool {
         displaySelection != .placeholder
     }
@@ -271,6 +237,18 @@ struct WindowsSetupDisplayPanel: View {
         ZStack {
             Rectangle()
                 .fill(machineHeroGradient)
+
+            // Like Parallels, a machine that is not live shows its last screen dimmed behind the
+            // play button instead of an empty gradient.
+            if effectiveInstallEvidence.isInstalled, !isMachineLive, let displayScreenshotImage {
+                Image(nsImage: displayScreenshotImage)
+                    .resizable()
+                    .scaledToFill()
+                    .blur(radius: 18)
+                    .opacity(0.32)
+                    .clipped()
+                    .accessibilityHidden(true)
+            }
 
             if showsUnavailableGuestAgentRoute {
                 appConnectionRecoveryHero
@@ -364,8 +342,11 @@ struct WindowsSetupDisplayPanel: View {
 
                 }
 
-                RuntimeReadinessTimeline(steps: runtimeReadinessSteps)
-                    .frame(maxWidth: 860)
+                // Readiness only matters while Windows is coming up; a stopped machine just needs play.
+                if isMachineLive {
+                    RuntimeReadinessTimeline(steps: runtimeReadinessSteps)
+                        .frame(maxWidth: 860)
+                }
 
                 if snapshot.state == .starting {
                     WindowsRuntimeWaitBanner(
@@ -382,10 +363,10 @@ struct WindowsSetupDisplayPanel: View {
                     AssistantProgressStrip(simulation: installSimulation)
                         .frame(maxWidth: 420)
                         .foregroundStyle(.primary)
-                } else if effectiveInstallEvidence.isInstalled {
+                } else if effectiveInstallEvidence.isInstalled, isMachineLive {
                     AppRuntimeProgressStrip(items: appOpenFlowItems)
                         .frame(maxWidth: 760)
-                } else {
+                } else if !effectiveInstallEvidence.isInstalled {
                     ProgressView(value: progressFraction)
                         .tint(progressTint)
                         .frame(maxWidth: 420)

@@ -43,8 +43,8 @@ struct VMRuntimeView: View {
     var displayResizeAction: ((Int, Int) -> Void)?
     var displayMessage: String?
     @Binding var showsFullDesktop: Bool
+    @Environment(ShellNavigation.self) private var navigation
     @State private var pathPicker: PathPicker?
-    @State private var presentedSheet: VMRuntimeSheetDestination?
     @State private var installSimulation = InstallSimulationState.idle
     @State private var showsStopConfirmation = false
     /// Timestamp owned by this host launch attempt, not the persisted console record.
@@ -52,8 +52,37 @@ struct VMRuntimeView: View {
     @State private var runtimeStartAt: Date?
 
     var body: some View {
+        @Bindable var navigation = navigation
         VStack(alignment: .leading, spacing: 14) {
-            if let snapshot = model.snapshot {
+            if let snapshot = model.snapshot, showsInstallationAssistant(for: snapshot) {
+                InstallationAssistantView(
+                    snapshot: snapshot,
+                    isLoading: model.phase == .loading,
+                    errorMessage: model.errorMessage,
+                    diagnosticsURL: model.diagnosticsURL,
+                    installerNeedsPickerAccess: needsInstallerPickerAccess(snapshot),
+                    downloadAction: {
+                        navigation.openWindowsDownload()
+                    },
+                    chooseInstallerAction: {
+                        pathPicker = .installerAndStart
+                    },
+                    prepareAction: {
+                        Task {
+                            await model.prepareDefaultVM()
+                        }
+                    },
+                    installAction: beginStartAction,
+                    configureAction: { tab in
+                        navigation.openConfiguration(tab)
+                    },
+                    refreshAction: {
+                        Task {
+                            await model.load()
+                        }
+                    }
+                )
+            } else if let snapshot = model.snapshot {
                 WindowsSetupDisplayPanel(
                     snapshot: snapshot,
                     runtimeStartAt: runtimeStartAt,
@@ -112,7 +141,7 @@ struct VMRuntimeView: View {
                         } else if model.canStart {
                             beginStartAction()
                         } else if !snapshot.windowsInstalled && (snapshot.installerMediaPath == nil || needsInstallerPickerAccess(snapshot)) {
-                            presentedSheet = .windowsDownload
+                            navigation.openWindowsDownload()
                         } else {
                             Task {
                                 await model.prepareDefaultVM()
@@ -170,7 +199,7 @@ struct VMRuntimeView: View {
                         }
                     },
                     detailsAction: {
-                        presentedSheet = .settings
+                        navigation.openConfiguration()
                     },
                     installSimulation: installSimulation,
                     showsFullDesktop: $showsFullDesktop
@@ -203,7 +232,7 @@ struct VMRuntimeView: View {
                     primarySymbol: model.phase == .loading ? "arrow.triangle.2.circlepath" : "arrow.down.circle",
                     secondaryTitle: "Refresh",
                     primaryAction: {
-                        presentedSheet = .windowsDownload
+                        navigation.openWindowsDownload()
                     },
                     secondaryAction: {
                         Task {
@@ -237,23 +266,11 @@ struct VMRuntimeView: View {
         .task(id: model.snapshot?.state) {
             await refreshRuntimeEvidenceWhileRunning()
         }
-        .sheet(item: $presentedSheet) { destination in
+        .sheet(item: $navigation.presentedSheet) { destination in
             switch destination {
             case .settings:
-                VMSettingsSheet(model: model) { snapshot, policy in
-                    ViewThatFits(in: .horizontal) {
-                        HStack(alignment: .top, spacing: 14) {
-                            setupColumn(snapshot, canChangeResources: policy.canChangeResources)
-                                .frame(minWidth: 380)
-                            runtimeDetailColumn(snapshot)
-                                .frame(minWidth: 380)
-                        }
-
-                        VStack(alignment: .leading, spacing: 14) {
-                            setupColumn(snapshot, canChangeResources: policy.canChangeResources)
-                            runtimeDetailColumn(snapshot)
-                        }
-                    }
+                VMSettingsSheet(model: model, selectedTab: $navigation.configurationTab) { snapshot, policy, tab in
+                    configurationContent(snapshot, tab: tab, canChangeResources: policy.canChangeResources)
                 }
             case .windowsDownload:
                 WindowsDownloadSheet(
@@ -356,49 +373,97 @@ struct VMRuntimeView: View {
         }
     }
 
+    /// The assistant owns every step before Windows Setup first boots. Once the machine is live,
+    /// even mid-setup, the Windows display takes over.
+    private func showsInstallationAssistant(for snapshot: VMRuntimeSnapshot) -> Bool {
+        let installEvidence = validGuestAgentEvidence(for: snapshot) ?? snapshot.installEvidence
+        guard !installEvidence.isInstalled else {
+            return false
+        }
+
+        switch snapshot.state {
+        case .notConfigured, .stopped, .failed, .unsupported:
+            return true
+        case .starting, .running, .suspended:
+            return false
+        }
+    }
+
     @ViewBuilder
-    private func setupColumn(
+    private func configurationContent(
         _ snapshot: VMRuntimeSnapshot,
+        tab: MachineConfigurationTab,
         canChangeResources: Bool
     ) -> some View {
         VStack(alignment: .leading, spacing: 14) {
-            SetupAssistantPanel(
-                snapshot: snapshot,
-                createProfileAction: {
-                    Task {
-                        await model.createDefaultProfile()
-                    }
-                },
-                prepareAction: {
-                    Task {
-                        await model.prepareDefaultVM()
-                    }
-                },
-                selectInstallerAction: {
-                    pathPicker = .installerMedia
-                },
-                selectDiskAction: {
-                    pathPicker = .virtualDisk
-                },
-                createDiskAction: {
-                    Task {
-                        await model.createDefaultVirtualDisk()
-                    }
-                },
-                isLoading: model.phase == .loading,
-                canChangeResources: canChangeResources
-            )
+            switch tab {
+            case .general:
+                MachineSummaryPanel(snapshot: snapshot)
+                RuntimeProvidersPanel(snapshot: snapshot)
+            case .hardware:
+                ResourcePlanPanel(snapshot: snapshot)
+                DevicePlanPanel(snapshot: snapshot)
+            case .installation:
+                SetupAssistantPanel(
+                    snapshot: snapshot,
+                    createProfileAction: {
+                        Task {
+                            await model.createDefaultProfile()
+                        }
+                    },
+                    prepareAction: {
+                        Task {
+                            await model.prepareDefaultVM()
+                        }
+                    },
+                    selectInstallerAction: {
+                        pathPicker = .installerMedia
+                    },
+                    selectDiskAction: {
+                        pathPicker = .virtualDisk
+                    },
+                    createDiskAction: {
+                        Task {
+                            await model.createDefaultVirtualDisk()
+                        }
+                    },
+                    isLoading: model.phase == .loading,
+                    canChangeResources: canChangeResources
+                )
 
-            if !snapshot.installationSteps.isEmpty {
-                ShellPanel(spacing: 10) {
-                    ShellPanelHeader(
-                        title: "Windows Setup",
-                        subtitle: "Profile readiness steps for Arm Windows installation.",
-                        symbolName: "checklist"
+                if !snapshot.installationSteps.isEmpty {
+                    ShellPanel(spacing: 10) {
+                        ShellPanelHeader(
+                            title: "Windows Setup",
+                            subtitle: "Profile readiness steps for Arm Windows installation.",
+                            symbolName: "checklist"
+                        )
+
+                        ForEach(snapshot.installationSteps) { step in
+                            InstallationStepRow(step: step)
+                        }
+                    }
+                }
+            case .integration:
+                MacIntegrationPanel(snapshot: snapshot)
+            case .diagnostics:
+                if snapshot.preflightChecks.isEmpty {
+                    ContentUnavailableView(
+                        "No Preflight Checks",
+                        systemImage: "stethoscope",
+                        description: Text("Checks appear once a Windows profile exists.")
                     )
+                } else {
+                    ShellPanel(spacing: 10) {
+                        ShellPanelHeader(
+                            title: "Preflight",
+                            subtitle: "Local checks that must pass before VM start.",
+                            symbolName: "stethoscope"
+                        )
 
-                    ForEach(snapshot.installationSteps) { step in
-                        InstallationStepRow(step: step)
+                        ForEach(snapshot.preflightChecks) { check in
+                            PreflightCheckRow(check: check)
+                        }
                     }
                 }
             }
@@ -406,35 +471,6 @@ struct VMRuntimeView: View {
         .frame(maxWidth: .infinity, alignment: .topLeading)
     }
 
-    @ViewBuilder
-    private func runtimeDetailColumn(_ snapshot: VMRuntimeSnapshot) -> some View {
-        VStack(alignment: .leading, spacing: 14) {
-            MachineSummaryPanel(snapshot: snapshot)
-
-            RuntimeProvidersPanel(snapshot: snapshot)
-
-            ResourcePlanPanel(snapshot: snapshot)
-
-            DevicePlanPanel(snapshot: snapshot)
-
-            MacIntegrationPanel(snapshot: snapshot)
-
-            if !snapshot.preflightChecks.isEmpty {
-                ShellPanel(spacing: 10) {
-                    ShellPanelHeader(
-                        title: "Preflight",
-                        subtitle: "Local checks that must pass before VM start.",
-                        symbolName: "stethoscope"
-                    )
-
-                    ForEach(snapshot.preflightChecks) { check in
-                        PreflightCheckRow(check: check)
-                    }
-                }
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .topLeading)
-    }
     private func handlePathImport(_ result: Result<[URL], any Error>) {
         guard let picker = pathPicker else {
             return

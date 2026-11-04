@@ -24,9 +24,10 @@ struct DetailView: View {
     var runMultiAppProofAction: () -> Void
     var quietWindowsWhenIdleAction: () -> Void
     var displayMessage: String?
-    @State private var showsWindowsDesktop = false
+    @Environment(ShellNavigation.self) private var navigation
 
     var body: some View {
+        @Bindable var navigation = navigation
         VMRuntimeView(
                 model: vmModel,
                 guestAgentInstallEvidence: model.guestAgentInstallEvidence,
@@ -69,7 +70,7 @@ struct DetailView: View {
                     }
                 },
                 displayMessage: displayMessage,
-                showsFullDesktop: $showsWindowsDesktop
+                showsFullDesktop: $navigation.showsWindowsDesktop
             )
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onAppear {
@@ -83,7 +84,7 @@ struct DetailView: View {
                 windowsInstalled: hasInstalledWindows,
                 hasFirstAppFrame: hasFirstAppFrame
             ) {
-                showsWindowsDesktop = false
+                navigation.showsWindowsDesktop = false
             }
         }
     }
@@ -104,7 +105,7 @@ struct DetailView: View {
 
     private func synchronizeWorkspacePresentation() {
         let hasDesktopDisplay = vmModel.snapshot?.state == .running || vmModel.snapshot?.state == .starting
-        showsWindowsDesktop = RuntimeWorkspacePresentationPolicy.defaultShowsFullDesktop(
+        navigation.showsWindowsDesktop = RuntimeWorkspacePresentationPolicy.defaultShowsFullDesktop(
             windowsInstalled: hasInstalledWindows,
             runtimeState: vmModel.snapshot?.state,
             hasDesktopDisplay: hasDesktopDisplay

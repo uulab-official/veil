@@ -56,6 +56,25 @@ extension VeilHostShellApp {
         await vmModel.start()
     }
 
+    /// Toolbar and Actions-menu suspend. Unlike the idle quiet policy this never falls back to a shut
+    /// down: the user asked to keep the session, so a failed suspend reports the error instead.
+    func suspendWindows() {
+        Task { @MainActor in
+            guard vmModel.canSuspend, vmModel.phase != .loading else {
+                return
+            }
+
+            cancelAutomaticQuietRuntime()
+            cancelAutomaticRuntimeConnectionRecovery()
+            await vmModel.suspend()
+            if vmModel.snapshot?.state == .suspended {
+                displayMessage = "Windows is suspended. Resume it to continue where you left off."
+            } else if let errorMessage = vmModel.errorMessage {
+                displayMessage = "Windows could not be suspended: \(errorMessage)"
+            }
+        }
+    }
+
     func stopWindowsAndCloseDisplay() {
         oneClickAppLaunchGate.cancel()
         Task { @MainActor in

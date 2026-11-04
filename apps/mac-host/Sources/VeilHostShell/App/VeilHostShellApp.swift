@@ -20,6 +20,7 @@ struct VeilHostShellApp: App {
     @State var model: HostDashboardModel
     @State var vmModel: VMRuntimeModel
     @State var displayMessage: String?
+    @State var shellNavigation = ShellNavigation()
     @State var agentEventTask: Task<Void, Never>?
     @State var frameChannelTask: Task<Void, Never>?
     @State var agentReconnectTask: Task<Void, Never>?
@@ -66,6 +67,7 @@ struct VeilHostShellApp: App {
             vmModel: vmModel,
             startVMAction: startWindowsAndShowDisplay,
             stopVMAction: stopWindowsAndCloseDisplay,
+            suspendVMAction: suspendWindows,
             markWindowsInstalledAction: markWindowsInstalledFromSetup,
             installGuestAgentAction: installGuestAgentFromDisplay,
             prepareSparsePackageAction: prepareSparsePackageFromDisplay,
@@ -74,6 +76,7 @@ struct VeilHostShellApp: App {
             recoverRuntimeDisplayAction: recoverRuntimeDisplayEvidence,
             showWindowsDisplayAction: showWindowsDisplay,
             launchWindowsAppAction: runOneClickSelectedApp,
+            launchWindowsAppByIdAction: runOneClickAppLaunch(appId:),
             fulfillPendingLaunchAction: runOneClickPendingLaunch,
             restoreWindowsAppWindowsAction: restoreWindowsAppWindows,
             closeAllWindowsAppWindowsAction: closeAllWindowsAppWindows,
@@ -131,6 +134,7 @@ struct VeilHostShellApp: App {
                 scheduleAutomaticQuietRuntimeIfNeeded()
             }
             .environment(\.appRuntimeProvider, vmRuntimeBooter.provider)
+            .environment(shellNavigation)
     }
 
     private var mainWindowScene: some Scene {
@@ -148,7 +152,36 @@ struct VeilHostShellApp: App {
             return WindowPlacement(size: size)
         }
         .commands {
-            CommandGroup(after: .appInfo) {
+            SidebarCommands()
+            ToolbarCommands()
+
+            CommandGroup(before: .sidebar) {
+                Button("Windows Apps as Mac Windows") {
+                    shellNavigation.viewMode = .apps
+                }
+                .keyboardShortcut("1", modifiers: [.command])
+
+                Button("Windows Desktop") {
+                    shellNavigation.viewMode = .desktop
+                }
+                .keyboardShortcut("2", modifiers: [.command])
+                .disabled(vmModel.snapshot?.installEvidence.isInstalled != true)
+
+                if canShowWindowsDisplay {
+                    Button("Open Desktop in Separate Window") {
+                        showWindowsDisplay()
+                    }
+                    .keyboardShortcut("b", modifiers: [.command, .shift])
+                }
+
+                Button("Refresh Display") {
+                    recoverRuntimeDisplayEvidence()
+                }
+                .keyboardShortcut("d", modifiers: [.command, .shift])
+                .disabled(!canRecoverRuntimeDisplay)
+
+                Divider()
+
                 Button("Refresh All") {
                     Task {
                         async let hostLoad: Void = model.load()
@@ -166,30 +199,36 @@ struct VeilHostShellApp: App {
                 }
                 .keyboardShortcut("r", modifiers: [.command, .shift])
 
-                Button("Start Windows") {
+                Divider()
+            }
+
+            CommandMenu("Actions") {
+                Button(vmModel.canResume ? "Resume Windows" : "Start Windows") {
                     startWindowsAndShowDisplay()
                 }
                 .keyboardShortcut("b", modifiers: [.command])
                 .disabled(!vmModel.canStart || vmModel.phase == .loading)
 
-                Button("Stop Windows") {
+                Button("Suspend Windows") {
+                    suspendWindows()
+                }
+                .disabled(!vmModel.canSuspend || vmModel.phase == .loading)
+
+                Button("Shut Down Windows") {
                     stopWindowsAndCloseDisplay()
                 }
                 .keyboardShortcut(".", modifiers: [.command])
                 .disabled(!vmModel.canStop || vmModel.phase == .loading)
 
-                if canShowWindowsDisplay {
-                    Button("Show Windows Display") {
-                        showWindowsDisplay()
-                    }
-                    .keyboardShortcut("b", modifiers: [.command, .shift])
-                }
+                Divider()
 
-                Button("Refresh Display") {
-                    recoverRuntimeDisplayEvidence()
+                Button("Configure…") {
+                    shellNavigation.openConfiguration()
                 }
-                .keyboardShortcut("d", modifiers: [.command, .shift])
-                .disabled(!canRecoverRuntimeDisplay)
+                .keyboardShortcut(",", modifiers: [.command, .shift])
+                .disabled(vmModel.snapshot == nil)
+
+                Divider()
 
                 Button("Repair App Connection") {
                     installGuestAgentFromDisplay()
@@ -202,7 +241,20 @@ struct VeilHostShellApp: App {
                 }
                 .disabled(!canMarkWindowsInstalled)
 
-                Button("Open Windows App") {
+                Button("Check Windows App") {
+                    runRecommendedProof()
+                }
+                .keyboardShortcut("p", modifiers: [.command, .shift])
+                .disabled(model.runtimeStatusReport().proofPlan.recommendedProofCommand == nil)
+
+                Button("Prepare Review Evidence") {
+                    prepareReviewEvidenceFolder()
+                }
+                .keyboardShortcut("e", modifiers: [.command, .shift])
+            }
+
+            CommandMenu("Apps") {
+                Button(model.selectedApp.map { "Open \($0.name)" } ?? "Open Windows App") {
                     runOneClickSelectedApp()
                 }
                 .keyboardShortcut(.return, modifiers: [.command])
@@ -215,16 +267,26 @@ struct VeilHostShellApp: App {
                     )
                 )
 
-                Button("Check Windows App") {
-                    runRecommendedProof()
-                }
-                .keyboardShortcut("p", modifiers: [.command, .shift])
-                .disabled(model.runtimeStatusReport().proofPlan.recommendedProofCommand == nil)
+                Divider()
 
-                Button("Prepare Review Evidence") {
-                    prepareReviewEvidenceFolder()
+                ForEach(model.apps) { app in
+                    Button(app.name) {
+                        runOneClickAppLaunch(appId: app.id)
+                    }
+                    .disabled(vmModel.snapshot?.installEvidence.isInstalled != true)
                 }
-                .keyboardShortcut("e", modifiers: [.command, .shift])
+
+                Divider()
+
+                Button("Bring All Windows App Windows to Front") {
+                    bringAllWindowsAppWindowsToFront()
+                }
+                .disabled(model.mirrorSessions.isEmpty)
+
+                Button("Close All Windows App Windows") {
+                    closeAllWindowsAppWindows()
+                }
+                .disabled(model.mirrorSessions.isEmpty)
             }
         }
     }

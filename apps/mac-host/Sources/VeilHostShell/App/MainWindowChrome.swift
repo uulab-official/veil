@@ -120,10 +120,11 @@ enum MainWindowChrome {
             ?? MainWindowLayout.preferredSize
         window.minSize = MainWindowLayout.minimumSize(for: visibleSize)
         window.maxSize = NSSize(width: 2048, height: 1536)
-        window.titleVisibility = .hidden
+        // The SwiftUI toolbar and navigation title are the Parallels-style machine toolbar, so the
+        // window keeps both; only the titlebar background is blended into the content.
         window.titlebarAppearsTransparent = true
         window.styleMask.insert(.fullSizeContentView)
-        window.toolbar = nil
+        window.toolbarStyle = .unified
         window.isOpaque = true
         window.backgroundColor = NSColor(calibratedRed: 0.04, green: 0.05, blue: 0.07, alpha: 1)
     }
@@ -169,6 +170,7 @@ struct StandaloneMainWindowRoot: View {
     @State var model: HostDashboardModel
     @State var vmModel: VMRuntimeModel
     @State var displayMessage: String?
+    @State var shellNavigation = ShellNavigation()
 
     init() {
         let runtimeBooter = AppRuntimeBooterFactory.make()
@@ -198,6 +200,7 @@ struct StandaloneMainWindowRoot: View {
             vmModel: vmModel,
             startVMAction: startWindowsAndShowDisplay,
             stopVMAction: stopWindowsAndCloseDisplay,
+            suspendVMAction: suspendWindows,
             markWindowsInstalledAction: markWindowsInstalledFromSetup,
             installGuestAgentAction: installGuestAgentFromDisplay,
             prepareSparsePackageAction: prepareSparsePackageFromDisplay,
@@ -206,6 +209,10 @@ struct StandaloneMainWindowRoot: View {
             recoverRuntimeDisplayAction: recoverRuntimeDisplayEvidence,
             showWindowsDisplayAction: showWindowsDisplay,
             launchWindowsAppAction: launchSelectedWindowsApp,
+            launchWindowsAppByIdAction: { appId in
+                model.selectedAppId = appId
+                launchSelectedWindowsApp()
+            },
             fulfillPendingLaunchAction: launchSelectedWindowsApp,
             restoreWindowsAppWindowsAction: {},
             closeAllWindowsAppWindowsAction: {},
@@ -224,6 +231,7 @@ struct StandaloneMainWindowRoot: View {
             idealHeight: MainWindowLayout.preferredSize.height
         )
         .environment(\.appRuntimeProvider, vmRuntimeBooter.provider)
+        .environment(shellNavigation)
         .task {
             async let hostLoad: Void = model.load()
             async let vmLoad: Void = vmModel.load()
@@ -259,6 +267,12 @@ struct StandaloneMainWindowRoot: View {
             } else if let errorMessage = vmModel.errorMessage {
                 displayMessage = "Windows display could not start: \(errorMessage)"
             }
+        }
+    }
+
+    func suspendWindows() {
+        Task { @MainActor in
+            await vmModel.suspend()
         }
     }
 

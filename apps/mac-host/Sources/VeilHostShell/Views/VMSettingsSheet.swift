@@ -45,16 +45,20 @@ struct VMSettingsAccessPolicy: Equatable {
     }
 }
 
+/// Parallels-style machine configuration: one tab per area instead of one long settings page.
 struct VMSettingsSheet<Content: View>: View {
     @Environment(\.dismiss) private var dismiss
     @Bindable var model: VMRuntimeModel
-    private let content: (VMRuntimeSnapshot, VMSettingsAccessPolicy) -> Content
+    @Binding var selectedTab: MachineConfigurationTab
+    private let content: (VMRuntimeSnapshot, VMSettingsAccessPolicy, MachineConfigurationTab) -> Content
 
     init(
         model: VMRuntimeModel,
-        @ViewBuilder content: @escaping (VMRuntimeSnapshot, VMSettingsAccessPolicy) -> Content
+        selectedTab: Binding<MachineConfigurationTab>,
+        @ViewBuilder content: @escaping (VMRuntimeSnapshot, VMSettingsAccessPolicy, MachineConfigurationTab) -> Content
     ) {
         self.model = model
+        self._selectedTab = selectedTab
         self.content = content
     }
 
@@ -71,7 +75,8 @@ struct VMSettingsSheet<Content: View>: View {
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: 14) {
-                        if let guidance = policy.guidance {
+                        if let guidance = policy.guidance,
+                           selectedTab == .hardware || selectedTab == .installation {
                             Label(guidance, systemImage: "lock.fill")
                                 .font(.callout.weight(.medium))
                                 .foregroundStyle(.orange)
@@ -80,45 +85,77 @@ struct VMSettingsSheet<Content: View>: View {
                                 .background(.orange.opacity(0.10), in: RoundedRectangle(cornerRadius: 10))
                         }
 
-                        content(snapshot, policy)
+                        content(snapshot, policy, selectedTab)
                     }
-                    .padding(18)
+                    .padding(20)
                 }
             } else {
                 ContentUnavailableView(
-                    "Windows Settings Unavailable",
+                    "Configuration Unavailable",
                     systemImage: "gearshape",
-                    description: Text("Refresh Windows status and open settings again.")
+                    description: Text("Refresh Windows status and open Configuration again.")
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
-        .frame(minWidth: 900, minHeight: 620)
+        .frame(minWidth: 760, idealWidth: 820, minHeight: 560, idealHeight: 640)
         .background(Color(nsColor: .windowBackgroundColor))
     }
 
     private var header: some View {
-        HStack(spacing: 12) {
-            Image(systemName: "gearshape.fill")
-                .font(.title2)
-                .foregroundStyle(.tint)
+        VStack(spacing: 12) {
+            HStack {
+                Text("\(model.snapshot?.profileName ?? "Windows 11") – Configuration")
+                    .font(.headline)
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Windows Settings")
-                    .font(.title2.weight(.semibold))
-                Text("Installation media, local runtime, resources, and Mac integration")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
+                Spacer()
+
+                Button("Done") {
+                    dismiss()
+                }
+                .keyboardShortcut(.cancelAction)
             }
 
-            Spacer()
-
-            Button("Done") {
-                dismiss()
+            HStack(spacing: 4) {
+                ForEach(MachineConfigurationTab.allCases) { tab in
+                    ConfigurationTabButton(tab: tab, isSelected: selectedTab == tab) {
+                        selectedTab = tab
+                    }
+                }
             }
-            .keyboardShortcut(.cancelAction)
         }
         .padding(.horizontal, 20)
-        .padding(.vertical, 14)
+        .padding(.top, 14)
+        .padding(.bottom, 10)
+    }
+}
+
+/// An icon-over-title tab like the toolbar tabs of a macOS preferences window.
+private struct ConfigurationTabButton: View {
+    var tab: MachineConfigurationTab
+    var isSelected: Bool
+    var action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 4) {
+                Image(systemName: tab.symbolName)
+                    .font(.system(size: 18, weight: .regular))
+                    .frame(height: 22)
+                Text(tab.title)
+                    .font(.caption)
+                    .lineLimit(1)
+            }
+            .foregroundStyle(isSelected ? Color.accentColor : .secondary)
+            .frame(width: 104, height: 52)
+            .background(
+                isSelected ? Color.primary.opacity(0.08) : Color.clear,
+                in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(tab.title)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }
