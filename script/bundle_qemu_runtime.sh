@@ -7,21 +7,16 @@
 # Layout (QEMU resolves its data directory as <bin>/../share/qemu):
 #   bin/qemu-system-aarch64, bin/swtpm
 #   lib/*.dylib                     rewritten to @loader_path, never the build Mac's Homebrew prefix
-#   share/qemu/                     keymaps, option ROMs, and UEFI firmware
+#   share/qemu/                     keymaps, the virtio option ROM, and QEMU's Arm UEFI firmware
 #   licenses/                       upstream license texts and the source pointers in NOTICE.md
 #
-# The binaries come from this Mac's Homebrew `qemu` and `swtpm`. The Secure Boot firmware comes
-# from Debian's `qemu-efi-aarch64` package and is pinned by SHA-256 below.
+# The binaries and firmware come from this Mac's Homebrew `qemu` and `swtpm`.
 set -euo pipefail
 
 RUNTIME_DIR="${1:?usage: bundle_qemu_runtime.sh <Runtime directory> [signing identity]}"
 SIGNING_IDENTITY="${2:--}"
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-EDK2_DEB_VERSION="2025.02-8+deb13u1"
-EDK2_DEB_URL="https://deb.debian.org/debian/pool/main/e/edk2/qemu-efi-aarch64_${EDK2_DEB_VERSION}_all.deb"
-EDK2_DEB_SHA256="a00b2411a79c8aeafd95a7c868ac3cd1aab592f1af9fff965f02d81a625276ed"
-FIRMWARE_CACHE="${VEIL_FIRMWARE_CACHE:-$HOME/Library/Caches/Veil/firmware}"
 
 BREW_PREFIX="$(brew --prefix 2>/dev/null || true)"
 QEMU_BIN="${VEIL_BUNDLE_QEMU:-${BREW_PREFIX:+$BREW_PREFIX/bin/qemu-system-aarch64}}"
@@ -118,31 +113,17 @@ for file in "$RUNTIME_DIR"/bin/* "$RUNTIME_DIR"/lib/*; do
   fi
 done
 
-# QEMU data Veil's Arm plan uses. Only the Secure Boot firmware below is bundled: each 64 MiB
-# image would double the engine's size, and Windows 11 Setup needs Secure Boot anyway.
+# QEMU data Veil's Arm plan uses, with QEMU's own Arm UEFI firmware.
+#
+# No Secure Boot firmware is bundled yet. Debian's qemu-efi-aarch64 builds (2025.02 and 2026.08,
+# with and without Secure Boot, and with the Memory Attribute Protocol uninstalled) all stop at
+# "Start boot option" before the Windows 11 Arm boot loader shows anything, while QEMU's firmware
+# and UTM's Secure Boot build reach Windows Setup on the same engine. Secure Boot firmware is still
+# picked up from ~/Library/Application Support/Veil/Firmware or an installed UTM.
 cp -R "$QEMU_SHARE/keymaps" "$RUNTIME_DIR/share/qemu/keymaps"
-cp "$QEMU_SHARE/efi-virtio.rom" "$RUNTIME_DIR/share/qemu/efi-virtio.rom"
-
-# Secure Boot firmware with Microsoft's keys enrolled, which Windows 11 Setup checks for.
-mkdir -p "$FIRMWARE_CACHE"
-deb="$FIRMWARE_CACHE/qemu-efi-aarch64_${EDK2_DEB_VERSION}_all.deb"
-if [[ ! -f "$deb" ]] || [[ "$(shasum -a 256 "$deb" | awk '{print $1}')" != "$EDK2_DEB_SHA256" ]]; then
-  curl --fail --silent --show-error --location --proto '=https' --output "$deb.partial" "$EDK2_DEB_URL"
-  mv "$deb.partial" "$deb"
-fi
-if [[ "$(shasum -a 256 "$deb" | awk '{print $1}')" != "$EDK2_DEB_SHA256" ]]; then
-  rm -f "$deb"
-  echo "bundle_qemu_runtime: $EDK2_DEB_URL did not match the pinned SHA-256." >&2
-  exit 1
-fi
-extract="$(mktemp -d)"
-trap 'rm -rf "$extract"' EXIT
-tar -xf "$deb" -C "$extract"
-mkdir -p "$extract/data"
-tar -xf "$extract"/data.tar.* -C "$extract/data"
-cp "$extract/data/usr/share/AAVMF/AAVMF_CODE.secboot.fd" "$RUNTIME_DIR/share/qemu/edk2-aarch64-secure-code.fd"
-cp "$extract/data/usr/share/AAVMF/AAVMF_VARS.ms.fd" "$RUNTIME_DIR/share/qemu/edk2-arm-secure-vars.fd"
-cp "$extract/data/usr/share/doc/qemu-efi-aarch64/copyright" "$RUNTIME_DIR/licenses/edk2-debian-copyright.txt"
+for file in efi-virtio.rom edk2-aarch64-code.fd edk2-arm-vars.fd; do
+  cp "$QEMU_SHARE/$file" "$RUNTIME_DIR/share/qemu/$file"
+done
 
 # License texts shipped with the binaries, plus where each exact source lives.
 for formula in qemu swtpm libtpms glib; do
@@ -159,7 +140,7 @@ done
   echo
   echo "- QEMU: $("$QEMU_BIN" --version | head -1). Source: https://download.qemu.org/ (GPL-2.0)."
   echo "- swtpm: $("$SWTPM_BIN" --version | head -1). Source: https://github.com/stefanberger/swtpm (BSD-3-Clause)."
-  echo "- Arm UEFI firmware: Debian qemu-efi-aarch64 $EDK2_DEB_VERSION, SHA-256 $EDK2_DEB_SHA256. Source: https://sources.debian.org/src/edk2/ (BSD-2-Clause-Patent)."
+  echo "- Arm UEFI firmware: QEMU's edk2-aarch64-code.fd. Source: https://github.com/tianocore/edk2 (BSD-2-Clause-Patent); see edk2-licenses.txt."
   echo "- Libraries:"
   for name in "${copied[@]}"; do
     echo "  - $name"

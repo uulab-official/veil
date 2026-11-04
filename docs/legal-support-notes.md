@@ -16,9 +16,9 @@ Veil.app ships an open-source local VM engine under `Contents/Resources/Runtime`
 
 - QEMU (`qemu-system-aarch64`, GPL-2.0) and the libraries it links (LGPL/GPL/BSD/MIT; each listed in `Runtime/licenses/NOTICE.md`),
 - swtpm and libtpms (BSD-3-Clause) for the TPM 2.0 device Windows 11 Setup checks,
-- Arm UEFI firmware with Secure Boot and Microsoft's keys enrolled, taken unmodified from Debian's `qemu-efi-aarch64` package and pinned by SHA-256 (EDK2, BSD-2-Clause-Patent).
+- QEMU's own Arm UEFI firmware (EDK2, BSD-2-Clause-Patent). No Secure Boot firmware is bundled yet; Debian's `qemu-efi-aarch64` builds were tried and do not boot the Windows 11 Arm installer.
 
-Each bundled binary is a separate executable launched by the host app, not linked into it. The bundle carries the upstream license texts and `NOTICE.md` with the exact versions and source locations. A published release must also satisfy GPL-2.0 section 3 for QEMU, for example by publishing the corresponding source tarball and Homebrew formula patches next to the release download. Nothing in the engine is Windows, a Windows image, or a component of another virtualization product; Veil no longer needs UTM or Homebrew installed, and only falls back to them when the bundled engine is missing.
+Each bundled binary is a separate executable launched by the host app, not linked into it. The bundle carries the upstream license texts and `NOTICE.md` with the exact versions and source locations. A published release must also satisfy GPL-2.0 section 3 for QEMU, for example by publishing the corresponding source tarball and Homebrew formula patches next to the release download. Nothing in the engine is Windows, a Windows image, or a component of another virtualization product; Veil no longer needs Homebrew installed. Until Veil ships its own Secure Boot firmware, it still looks for one in `~/Library/Application Support/Veil/Firmware` and then in an installed UTM.
 
 Official references: https://www.qemu.org/license/ and https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
 
