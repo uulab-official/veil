@@ -14,6 +14,11 @@ extension WindowsSetupDisplayPanel {
     }
 
     var controlBarTitle: String {
+        // The bar over a live display only appears for a stalled boot, so it must not read as fine.
+        if bootIsStalled {
+            return "Windows hasn't finished starting"
+        }
+
         if canStop {
             return "Windows is open"
         }

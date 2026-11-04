@@ -9,10 +9,10 @@ extension VeilHostShellApp {
             activateMainWindow()
             await startOrResumeWindows()
 
+            // Like a Parallels VM, Windows shows up in the main window. The separate desktop window
+            // opens only from View > Open Desktop in Separate Window, never as a side effect of Start.
             if vmModel.snapshot?.state == .running || vmModel.snapshot?.state == .starting {
-                displayMessage = await presentWindowsDesktopWhenReady()
-                    ? "Windows desktop opened in its own window."
-                    : "Windows is running. The desktop display is still connecting."
+                displayMessage = "Windows is running in this window."
                 scheduleAutomaticGuestAgentRecoveryIfNeeded()
             } else if let errorMessage = vmModel.errorMessage {
                 displayMessage = "Windows display could not start: \(errorMessage)"

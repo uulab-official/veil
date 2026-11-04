@@ -35,16 +35,20 @@ struct WindowsEmbeddedDisplayPreview: View {
 
             if surface.kind == .vncLoopback {
                 VStack {
-                    HStack {
-                        Label(rfbDisplayModel.statusTitle(for: surface), systemImage: rfbDisplayModel.statusSymbolName)
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.white.opacity(0.82))
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 7)
-                            .background(.black.opacity(0.30), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                        Spacer()
+                    // A display that is receiving frames is just Windows, like a Parallels VM window;
+                    // the badge only explains a display that is still connecting or has failed.
+                    if !rfbDisplayModel.isReceiving {
+                        HStack {
+                            Label(rfbDisplayModel.statusTitle(for: surface), systemImage: rfbDisplayModel.statusSymbolName)
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.white.opacity(0.82))
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 7)
+                                .background(.black.opacity(0.30), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                            Spacer()
+                        }
                     }
                     Spacer()
                     HStack {

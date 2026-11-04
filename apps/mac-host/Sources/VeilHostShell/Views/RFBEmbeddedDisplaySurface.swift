@@ -33,6 +33,13 @@ final class RFBEmbeddedDisplayModel {
         }
     }
 
+    var isReceiving: Bool {
+        if case .receiving = status {
+            return true
+        }
+        return false
+    }
+
     func statusTitle(for surface: VMConsoleDisplaySurface) -> String {
         switch status {
         case .idle:

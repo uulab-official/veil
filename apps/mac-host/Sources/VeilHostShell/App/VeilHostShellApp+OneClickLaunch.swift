@@ -208,9 +208,6 @@ extension VeilHostShellApp {
             activateMainWindow()
             displayMessage = "Windows is running. Veil is preparing the app connection so \(appName) can open as a Mac window."
             scheduleAutomaticGuestAgentRecoveryIfNeeded()
-            if vmRuntimeBooter.supportsNativeDisplayWindow {
-                showWindowsDisplay()
-            }
         case .recoverStalledRuntime:
             runOneClickPendingLaunch()
         case .repairGuestAgent:

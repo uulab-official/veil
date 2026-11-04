@@ -260,10 +260,9 @@ struct StandaloneMainWindowRoot: View {
                 await vmModel.start()
             }
 
+            // Windows shows up in the main window; the separate desktop window is opt-in.
             if vmModel.snapshot?.state == .running || vmModel.snapshot?.state == .starting {
-                displayMessage = await presentWindowsDesktopWhenReady()
-                    ? "Windows desktop opened in its own window."
-                    : "Windows is running. The desktop display is still connecting."
+                displayMessage = "Windows is running in this window."
             } else if let errorMessage = vmModel.errorMessage {
                 displayMessage = "Windows display could not start: \(errorMessage)"
             }
