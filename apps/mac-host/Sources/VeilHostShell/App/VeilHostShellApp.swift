@@ -68,6 +68,7 @@ struct VeilHostShellApp: App {
             startVMAction: startWindowsAndShowDisplay,
             stopVMAction: stopWindowsAndCloseDisplay,
             suspendVMAction: suspendWindows,
+            restartInstallationAction: restartWindowsInstallation,
             markWindowsInstalledAction: markWindowsInstalledFromSetup,
             installGuestAgentAction: installGuestAgentFromDisplay,
             prepareSparsePackageAction: prepareSparsePackageFromDisplay,
@@ -222,6 +223,14 @@ struct VeilHostShellApp: App {
                 }
                 .keyboardShortcut(".", modifiers: [.command])
                 .disabled(!vmModel.canStop || vmModel.phase == .loading)
+
+                Button("Restart Windows Installation…") {
+                    shellNavigation.requestRestartInstallation()
+                }
+                .disabled(!RestartInstallationAvailability.isAvailable(
+                    snapshot: vmModel.snapshot,
+                    isBusy: vmModel.phase == .loading
+                ))
 
                 Divider()
 

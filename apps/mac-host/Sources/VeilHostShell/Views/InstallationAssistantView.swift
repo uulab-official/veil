@@ -53,6 +53,7 @@ enum InstallationAssistantStep: Int, CaseIterable, Identifiable {
 /// only covers the steps before the first boot.
 struct InstallationAssistantView: View {
     @Environment(\.appRuntimeProvider) private var appRuntimeProvider
+    @Environment(ShellNavigation.self) private var navigation
     var snapshot: VMRuntimeSnapshot
     var isLoading: Bool
     var errorMessage: String?
@@ -296,6 +297,21 @@ struct InstallationAssistantView: View {
                 }
                 .controlSize(.large)
                 .help("Change CPU, memory, and disk before installing")
+            }
+
+            if RestartInstallationAvailability.hasPreviousAttempt(snapshot: snapshot) {
+                HStack(spacing: 6) {
+                    Image(systemName: "arrow.counterclockwise.circle")
+                        .foregroundStyle(.orange)
+                    Text("An earlier installation didn't finish.")
+                        .foregroundStyle(.secondary)
+                    Button("Start Over…") {
+                        navigation.requestRestartInstallation()
+                    }
+                    .buttonStyle(.link)
+                    .disabled(isLoading)
+                }
+                .font(.callout)
             }
         }
     }

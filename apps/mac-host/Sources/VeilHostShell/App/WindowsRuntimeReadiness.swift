@@ -179,3 +179,32 @@ enum WindowsRuntimeReadiness {
         snapshot.latestConsoleLaunch?.isBootStalled(asOf: asOf) == true
     }
 }
+
+/// Whether the guest has been writing to its system disk recently.
+///
+/// The stall check only knows whether a console screenshot was classified, so a Windows Setup that
+/// is copying files at 11% read as "hasn't finished starting" and offered to erase it. A disk that
+/// keeps growing is the strongest local sign that the install is alive.
+struct DiskWriteActivity: Equatable {
+    static let activeWindowSeconds: TimeInterval = 120
+
+    private(set) var lastAllocatedBytes: Int64?
+    private(set) var lastGrowthAt: Date?
+
+    mutating func observe(allocatedBytes: Int64?, at date: Date) {
+        guard let allocatedBytes else {
+            return
+        }
+        if let lastAllocatedBytes, allocatedBytes > lastAllocatedBytes {
+            lastGrowthAt = date
+        }
+        lastAllocatedBytes = allocatedBytes
+    }
+
+    func isActive(asOf date: Date) -> Bool {
+        guard let lastGrowthAt else {
+            return false
+        }
+        return date.timeIntervalSince(lastGrowthAt) <= Self.activeWindowSeconds
+    }
+}

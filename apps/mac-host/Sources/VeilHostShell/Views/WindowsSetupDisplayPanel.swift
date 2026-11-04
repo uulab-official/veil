@@ -6,6 +6,7 @@ import Virtualization
 
 struct WindowsSetupDisplayPanel: View {
     @Environment(\.appRuntimeProvider) private var appRuntimeProvider
+    @Environment(ShellNavigation.self) var navigation
     var snapshot: VMRuntimeSnapshot
     var runtimeStartAt: Date?
     var guestAgentInstallEvidence: VMInstallEvidenceSummary?
@@ -61,6 +62,7 @@ struct WindowsSetupDisplayPanel: View {
     var installSimulation: InstallSimulationState
     @Binding var showsFullDesktop: Bool
     @State var showsAgentDiagnosticPopover = false
+    @State var diskWriteActivity = DiskWriteActivity()
 
     var body: some View {
         Group {
@@ -71,6 +73,9 @@ struct WindowsSetupDisplayPanel: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .onChange(of: snapshot.virtualDiskAllocatedBytes, initial: true) { _, bytes in
+            diskWriteActivity.observe(allocatedBytes: bytes, at: Date())
+        }
     }
 
     /// Power, view mode, and configuration live in the window toolbar and the Actions menu, so the
@@ -162,6 +167,15 @@ struct WindowsSetupDisplayPanel: View {
             Spacer(minLength: 12)
 
             runtimeSettingsButton
+
+            // A stalled install is usually a disk or boot entries left by an earlier attempt.
+            if bootIsStalled, !effectiveInstallEvidence.isInstalled {
+                Button("Start Over…", systemImage: "arrow.counterclockwise") {
+                    navigation.requestRestartInstallation()
+                }
+                .disabled(isLoading)
+                .help("Erase this unfinished installation and run Windows Setup again")
+            }
 
             if hasDesktopDisplay || canStop || snapshot.state == .starting {
                 Button(action: runEffectivePrimaryAction) {

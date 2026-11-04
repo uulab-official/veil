@@ -20,6 +20,29 @@ extension VeilHostShellApp {
         }
     }
 
+    /// Erases an unfinished installation and boots Windows Setup again from the installer.
+    func restartWindowsInstallation() {
+        Task { @MainActor in
+            cancelAutomaticQuietRuntime()
+            activateMainWindow()
+            if vmModel.canStop {
+                await vmModel.stop()
+            }
+            guard await vmModel.restartWindowsInstallation() else {
+                displayMessage = vmModel.errorMessage.map { "Veil could not restart the installation: \($0)" }
+                return
+            }
+
+            displayMessage = "Windows Setup is starting over."
+            if AppWindowEngineStatus.resolve(
+                bootProvider: vmRuntimeBooter.provider,
+                providers: vmModel.snapshot?.runtimeProviders ?? []
+            ).canRunWindows {
+                startWindowsAndShowDisplay()
+            }
+        }
+    }
+
     /// Resumes a suspended session when one exists, and cold boots otherwise.
     ///
     /// `vmModel.canStart` is true for a suspended VM, so calling `start()` here would boot Windows fresh

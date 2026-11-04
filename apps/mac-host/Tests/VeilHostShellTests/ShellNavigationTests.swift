@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 import VeilHostCore
 
@@ -66,5 +67,70 @@ struct ShellNavigationTests {
         #expect(navigation.viewMode == .desktop)
         navigation.viewMode = .apps
         #expect(!navigation.showsWindowsDesktop)
+    }
+
+    private func machine(installed: Bool, diskPath: String? = "/vm/disk.img", allocated: Int64? = nil) -> VMRuntimeSnapshot {
+        VMRuntimeSnapshot(
+            state: .stopped,
+            virtualizationAvailable: true,
+            architecture: "arm64",
+            minimumOSSupported: true,
+            profileName: "Windows 11 Arm",
+            virtualDiskPath: diskPath,
+            virtualDiskAllocatedBytes: allocated,
+            installEvidence: VMInstallEvidenceSummary(
+                kind: installed ? .guestAgent : .setupReady,
+                isInstalled: installed,
+                title: "test",
+                detail: "test"
+            ),
+            bootReady: true,
+            windowsInstalled: installed,
+            detail: "test"
+        )
+    }
+
+    @Test("restarting the installation is offered only for an unfinished install with a disk")
+    func restartInstallationAvailability() {
+        #expect(RestartInstallationAvailability.isAvailable(snapshot: machine(installed: false), isBusy: false))
+        #expect(!RestartInstallationAvailability.isAvailable(snapshot: machine(installed: true), isBusy: false))
+        #expect(!RestartInstallationAvailability.isAvailable(snapshot: machine(installed: false, diskPath: nil), isBusy: false))
+        #expect(!RestartInstallationAvailability.isAvailable(snapshot: machine(installed: false), isBusy: true))
+        #expect(!RestartInstallationAvailability.isAvailable(snapshot: nil, isBusy: false))
+    }
+
+    @Test("the assistant points out an earlier attempt only once Setup wrote to the disk")
+    func previousAttemptDetection() {
+        #expect(!RestartInstallationAvailability.hasPreviousAttempt(snapshot: machine(installed: false, allocated: 0)))
+        #expect(RestartInstallationAvailability.hasPreviousAttempt(snapshot: machine(installed: false, allocated: 10 * 1_024 * 1_024 * 1_024)))
+        #expect(!RestartInstallationAvailability.hasPreviousAttempt(snapshot: machine(installed: true, allocated: 10 * 1_024 * 1_024 * 1_024)))
+    }
+
+    @Test("asking to restart the installation raises the main window's confirmation")
+    func restartRequestRaisesConfirmation() {
+        let navigation = ShellNavigation()
+        navigation.requestRestartInstallation()
+        #expect(navigation.showsRestartInstallationConfirmation)
+    }
+}
+
+@Suite("Disk write activity")
+struct DiskWriteActivityTests {
+    @Test("a growing disk counts as active for two minutes, a static one never does")
+    func growthMarksActivity() {
+        let start = Date(timeIntervalSince1970: 1_000)
+        var activity = DiskWriteActivity()
+        activity.observe(allocatedBytes: 1_000, at: start)
+        #expect(!activity.isActive(asOf: start))
+
+        activity.observe(allocatedBytes: 1_000, at: start.addingTimeInterval(5))
+        #expect(!activity.isActive(asOf: start.addingTimeInterval(5)))
+
+        activity.observe(allocatedBytes: 5_000, at: start.addingTimeInterval(10))
+        #expect(activity.isActive(asOf: start.addingTimeInterval(100)))
+        #expect(!activity.isActive(asOf: start.addingTimeInterval(131)))
+
+        activity.observe(allocatedBytes: nil, at: start.addingTimeInterval(140))
+        #expect(activity.lastAllocatedBytes == 5_000)
     }
 }

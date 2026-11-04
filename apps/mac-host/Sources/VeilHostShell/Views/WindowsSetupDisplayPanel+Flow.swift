@@ -145,8 +145,10 @@ extension WindowsSetupDisplayPanel {
         )
     }
 
+    /// A guest that is still writing to its disk is working, whatever the console classifier says.
     var bootIsStalled: Bool {
         WindowsRuntimeReadiness.shouldBlockAgentRepair(snapshot: snapshot)
+            && !diskWriteActivity.isActive(asOf: Date())
     }
 
     var runtimeFailurePresentation: WindowsRuntimeFailurePresentation? {

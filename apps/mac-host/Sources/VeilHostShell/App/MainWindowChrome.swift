@@ -201,6 +201,7 @@ struct StandaloneMainWindowRoot: View {
             startVMAction: startWindowsAndShowDisplay,
             stopVMAction: stopWindowsAndCloseDisplay,
             suspendVMAction: suspendWindows,
+            restartInstallationAction: restartWindowsInstallation,
             markWindowsInstalledAction: markWindowsInstalledFromSetup,
             installGuestAgentAction: installGuestAgentFromDisplay,
             prepareSparsePackageAction: prepareSparsePackageFromDisplay,
@@ -265,6 +266,25 @@ struct StandaloneMainWindowRoot: View {
                 displayMessage = "Windows is running in this window."
             } else if let errorMessage = vmModel.errorMessage {
                 displayMessage = "Windows display could not start: \(errorMessage)"
+            }
+        }
+    }
+
+    func restartWindowsInstallation() {
+        Task { @MainActor in
+            if vmModel.canStop {
+                await vmModel.stop()
+            }
+            guard await vmModel.restartWindowsInstallation() else {
+                displayMessage = vmModel.errorMessage.map { "Veil could not restart the installation: \($0)" }
+                return
+            }
+            displayMessage = "Windows Setup is starting over."
+            if AppWindowEngineStatus.resolve(
+                bootProvider: vmRuntimeBooter.provider,
+                providers: vmModel.snapshot?.runtimeProviders ?? []
+            ).canRunWindows {
+                startWindowsAndShowDisplay()
             }
         }
     }

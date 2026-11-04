@@ -69,6 +69,8 @@ final class ShellNavigation {
     var presentedSheet: VMRuntimeSheetDestination?
     var configurationTab: MachineConfigurationTab = .general
     var viewMode: MachineViewMode = .apps
+    /// Set by the Actions menu, the assistant, and the stalled-boot bar; the main window asks once.
+    var showsRestartInstallationConfirmation = false
 
     var showsWindowsDesktop: Bool {
         get { viewMode == .desktop }
@@ -82,6 +84,32 @@ final class ShellNavigation {
 
     func openWindowsDownload() {
         presentedSheet = .windowsDownload
+    }
+
+    func requestRestartInstallation() {
+        showsRestartInstallationConfirmation = true
+    }
+}
+
+/// Whether an unfinished Windows installation can be erased and started over. A machine with
+/// Windows installed is never offered this, and there must be a disk to reset.
+enum RestartInstallationAvailability {
+    static func isAvailable(snapshot: VMRuntimeSnapshot?, isBusy: Bool) -> Bool {
+        guard let snapshot, !isBusy, snapshot.virtualDiskPath != nil else {
+            return false
+        }
+        return !snapshot.installEvidence.isInstalled
+    }
+
+    /// A blank sparse disk allocates nothing; Windows Setup writes partitions within seconds. Past
+    /// this mark an earlier attempt left something behind that the next boot would trust.
+    static let previousAttemptAllocatedBytes: Int64 = 64 * 1_024 * 1_024
+
+    static func hasPreviousAttempt(snapshot: VMRuntimeSnapshot?) -> Bool {
+        guard let snapshot, !snapshot.installEvidence.isInstalled else {
+            return false
+        }
+        return (snapshot.virtualDiskAllocatedBytes ?? 0) >= previousAttemptAllocatedBytes
     }
 }
 

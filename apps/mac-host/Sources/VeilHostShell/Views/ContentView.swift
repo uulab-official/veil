@@ -13,6 +13,7 @@ struct ContentView: View {
     var startVMAction: () -> Void
     var stopVMAction: () -> Void
     var suspendVMAction: () -> Void
+    var restartInstallationAction: () -> Void
     var markWindowsInstalledAction: () -> Void
     var installGuestAgentAction: () -> Void
     var prepareSparsePackageAction: () -> Void
@@ -92,6 +93,16 @@ struct ContentView: View {
                 hasMirroredWindowsApp: !model.mirrorSessions.isEmpty,
                 hasQueuedLaunch: model.pendingLaunchStatus().isQueued
             ))
+        }
+        .confirmationDialog(
+            "Restart the Windows installation?",
+            isPresented: Bindable(navigation).showsRestartInstallationConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Restart Installation", role: .destructive, action: restartInstallationAction)
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text(WindowsShellCopy.restartInstallationMessage(isRunning: vmModel.canStop))
         }
         .preferredColorScheme(.dark)
     }
