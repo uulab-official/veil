@@ -7,6 +7,7 @@ import VeilHostCore
 /// machine, or the live Windows display), and the toolbar carries power, view, and configuration.
 struct ContentView: View {
     @Environment(ShellNavigation.self) private var navigation
+    @Environment(\.appRuntimeProvider) private var appRuntimeProvider
     @Bindable var model: HostDashboardModel
     @Bindable var vmModel: VMRuntimeModel
     var startVMAction: () -> Void
@@ -102,8 +103,10 @@ struct ContentView: View {
                 Button(action: startVMAction) {
                     Label(powerControls.startTitle, systemImage: "play.fill")
                 }
-                .disabled(!(vmModel.canStart || vmModel.canResume) || isBusy)
-                .help(vmModel.canResume ? "Resume Windows" : "Start Windows")
+                .disabled(!(vmModel.canStart || vmModel.canResume) || isBusy || !engineCanRunWindows)
+                .help(engineCanRunWindows
+                    ? (vmModel.canResume ? "Resume Windows" : "Start Windows")
+                    : "Install QEMU to run Windows on this Mac")
             }
 
             if powerControls.showsSuspend {
@@ -198,6 +201,13 @@ struct ContentView: View {
             canSuspend: vmModel.canSuspend,
             canResume: vmModel.canResume
         )
+    }
+
+    private var engineCanRunWindows: Bool {
+        AppWindowEngineStatus.resolve(
+            bootProvider: appRuntimeProvider,
+            providers: vmModel.snapshot?.runtimeProviders ?? []
+        ).canRunWindows
     }
 
     private var isBusy: Bool {

@@ -5,6 +5,7 @@ import VeilHostCore
 import Virtualization
 
 struct VMRuntimeView: View {
+    @Environment(\.appRuntimeProvider) private var appRuntimeProvider
     @Bindable var model: VMRuntimeModel
     var guestAgentInstallEvidence: VMInstallEvidenceSummary?
     var agentDiagnostic: AgentConnectionDiagnostic?
@@ -515,7 +516,7 @@ struct VMRuntimeView: View {
                     return
                 }
 
-                beginStartAction()
+                beginWindowsSetupIfEngineCanRunIt()
             case .driverMedia:
                 await model.updateProfilePaths(
                     installerMediaPath: currentInstaller,
@@ -543,8 +544,26 @@ struct VMRuntimeView: View {
             return false
         }
 
-        beginStartAction()
+        beginWindowsSetupIfEngineCanRunIt()
         return true
+    }
+
+    /// The prepared VM is a success either way; without an engine that runs Windows the assistant
+    /// stays on its Install page, which explains what to install instead of booting a black display.
+    @MainActor
+    private func beginWindowsSetupIfEngineCanRunIt() {
+        guard windowsEngineStatus.canRunWindows else {
+            return
+        }
+
+        beginStartAction()
+    }
+
+    private var windowsEngineStatus: AppWindowEngineStatus {
+        AppWindowEngineStatus.resolve(
+            bootProvider: appRuntimeProvider,
+            providers: model.snapshot?.runtimeProviders ?? []
+        )
     }
 
     private func diagnosticsDirectory() -> URL {

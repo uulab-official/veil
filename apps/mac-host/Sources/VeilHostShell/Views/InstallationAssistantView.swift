@@ -285,9 +285,11 @@ struct InstallationAssistantView: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.large)
-                .disabled(isLoading || snapshot.state == .unsupported)
+                .disabled(isLoading || snapshot.state == .unsupported || !engineStatus.canRunWindows)
                 .keyboardShortcut(.defaultAction)
-                .accessibilityHint("Starts Windows Setup in this window")
+                .accessibilityHint(engineStatus.canRunWindows
+                    ? "Starts Windows Setup in this window"
+                    : "Install QEMU first; Apple Virtualization can't run Windows")
 
                 Button("Configure…") {
                     configureAction(.hardware)
@@ -298,12 +300,16 @@ struct InstallationAssistantView: View {
         }
     }
 
+    private var engineStatus: AppWindowEngineStatus {
+        AppWindowEngineStatus.resolve(
+            bootProvider: appRuntimeProvider,
+            providers: snapshot.runtimeProviders
+        )
+    }
+
     private var engineNotice: some View {
         AppWindowEngineNotice(
-            status: AppWindowEngineStatus.resolve(
-                bootProvider: appRuntimeProvider,
-                providers: snapshot.runtimeProviders
-            ),
+            status: engineStatus,
             isWindowsRunning: false,
             checkAgainAction: refreshAction
         )

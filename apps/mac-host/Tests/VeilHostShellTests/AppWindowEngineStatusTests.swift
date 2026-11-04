@@ -42,4 +42,11 @@ struct AppWindowEngineStatusTests {
     func unknownProviderIsReady() {
         #expect(AppWindowEngineStatus.resolve(bootProvider: nil, providers: [], environment: [:]) == .ready)
     }
+
+    @Test("only a provider that runs Windows may start Windows Setup")
+    func onlyReadyEngineRunsWindows() {
+        #expect(AppWindowEngineStatus.ready.canRunWindows)
+        #expect(!AppWindowEngineStatus.needsInstall.canRunWindows)
+        #expect(!AppWindowEngineStatus.needsRelaunch.canRunWindows)
+    }
 }

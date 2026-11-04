@@ -2,9 +2,11 @@ import AppKit
 import SwiftUI
 import VeilHostCore
 
-/// Whether the provider Veil booted with can open Windows apps as Mac windows.
+/// Whether the provider Veil booted with can run Windows at all.
 ///
-/// Only the QEMU provider exposes the guest-agent network path that app windows need. The
+/// Apple's Virtualization.framework runs macOS and Linux guests, not Windows, so Windows Setup
+/// and Windows apps need the QEMU provider; starting Windows on Apple Virtualization only shows a
+/// black display. The
 /// provider is chosen once at launch, while snapshots re-probe on every refresh, so a QEMU
 /// installed after launch shows up in the snapshot without changing how Windows will boot.
 enum AppWindowEngineStatus: Equatable {
@@ -13,6 +15,11 @@ enum AppWindowEngineStatus: Equatable {
     case needsRelaunch
 
     static let installCommand = "brew install qemu swtpm"
+
+    /// Starting Windows on any other status boots a provider that cannot run it.
+    var canRunWindows: Bool {
+        self == .ready
+    }
 
     static func resolve(
         bootProvider: AppRuntimeProviderSelection?,
@@ -80,7 +87,7 @@ struct AppWindowEngineNotice: View {
                             .disabled(isWindowsRunning || !VeilRelauncher.canRelaunch)
                             .help(isWindowsRunning
                                 ? "Stop Windows before restarting Veil"
-                                : "Reopen Veil so Windows starts with QEMU")
+                                : "Reopen Veil so Windows runs with QEMU")
                     case .ready:
                         EmptyView()
                     }
@@ -102,9 +109,9 @@ struct AppWindowEngineNotice: View {
     private var title: String {
         switch status {
         case .needsRelaunch:
-            return "QEMU is installed • restart Veil to open Windows apps as Mac windows"
+            return "QEMU is installed • restart Veil to run Windows"
         default:
-            return "Windows apps open as Mac windows with QEMU"
+            return "Windows runs on this Mac with QEMU"
         }
     }
 
@@ -115,7 +122,7 @@ struct AppWindowEngineNotice: View {
                 ? "Windows is still running with Apple Virtualization. Stop Windows, then restart Veil."
                 : "Veil chose its Windows engine when it opened. Restarting switches it to QEMU."
         default:
-            return "Without QEMU, Veil can install and run the full Windows desktop, but individual apps can't open as Mac windows. Install it with Homebrew, then check again."
+            return "Apple Virtualization can't run Windows, so Veil installs and runs Windows 11 with QEMU. Install it with Homebrew, then check again."
         }
     }
 

@@ -207,7 +207,10 @@ struct VeilHostShellApp: App {
                     startWindowsAndShowDisplay()
                 }
                 .keyboardShortcut("b", modifiers: [.command])
-                .disabled(!vmModel.canStart || vmModel.phase == .loading)
+                .disabled(!vmModel.canStart || vmModel.phase == .loading || !AppWindowEngineStatus.resolve(
+                    bootProvider: vmRuntimeBooter.provider,
+                    providers: vmModel.snapshot?.runtimeProviders ?? []
+                ).canRunWindows)
 
                 Button("Suspend Windows") {
                     suspendWindows()
