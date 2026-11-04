@@ -17,7 +17,9 @@ input mapping.
 ## What Changed
 
 - [x] `RFBClientMessageBuilder.setRawAndDesktopResizeEncodings()` — the handshake now
-      advertises raw pixels plus ExtendedDesktopSize (-223) instead of raw only.
+      advertises raw pixels plus both the standardized ExtendedDesktopSize (-223) and
+      QEMU's historical equivalent (-308). QEMU emits -308 on the live Windows VNC
+      endpoint, so parsing only -223 would tear down the display connection.
 - [x] `RFBClientMessageBuilder.setDesktopSize(width:height:)` — the 24-byte SetDesktopSize
       message with one screen covering the whole framebuffer.
 - [x] `RFBFrameParser.parseDesktopSizeResponse(rectangleHeader:payload:)` and
@@ -39,11 +41,14 @@ input mapping.
 - [x] `RFBViewportMapper` (pure) — the aspect-fit viewport rectangle and normalized
       guest coordinates; points on letterbox bars map to `nil` and never reach the guest.
 - [x] `RFBDesktopResizeStateMachine` (pure, injected clock) — unknown → probing →
-      applied/unsupported, requestPending → applied/rejected/timedOut. One request in
+      applied/unsupported, requestPending → applied/rejected/timedOut. The first
+      settled host target is sent optimistically while probing because QEMU commonly
+      advertises the extension only in response to that request. One request in
       flight; a newer host target replaces the queued one and is sent only after the
-      in-flight request succeeds. A matching rejection or a timeout disables automatic
-      resize for the connection; reconnect re-probes. Unsolicited success responses
-      record guest-initiated resizes.
+      in-flight request succeeds. A matching rejection, QEMU's explicit `reason=1`
+      rejection (which reports the current framebuffer size), or a timeout disables
+      automatic resize for the connection; reconnect re-probes. Unsolicited success
+      responses record guest-initiated resizes.
 - [x] `RFBEmbeddedDisplayWorker` — drives the state machine on the real socket. Resize
       requests are sent from the caller's thread under a write lock so they do not wait
       behind a blocking read; reads and writes stay full-duplex safe. A stale-size
@@ -52,9 +57,9 @@ input mapping.
       frame stays visible until the first complete frame at the new size arrives.
 - [x] `RFBEmbeddedDisplayModel` — exposes `resizePresentation`
       (available/scaled/rejected/recovering/unavailable). Targets that arrive before
-      the capability probe completes are held and flushed when the connection reports
-      available, so opening the desktop at the restored window frame immediately asks
-      the guest for matching pixels.
+      the connection is ready are held and flushed during probing, so opening the
+      desktop at the restored window frame immediately asks the guest for matching
+      pixels.
 - [x] `QEMUConsoleWindowPresenter` — geometry controller: `windowDidResize`,
       `windowDidEndLiveResize`, and full-screen enter/exit feed a 150 ms debounce that
       emits at most one bounded target per settled change via
@@ -72,15 +77,20 @@ input mapping.
       stream-client round trips against a fake RFB byte stream that advertises the
       capability and one that does not.
 
+## Live Evidence
+
+- [x] On 2026-09-15 the live QEMU/Windows 11 Arm endpoint accepted the RFB handshake
+      and returned a QEMU `-308` ExtendedDesktopSize rejection for a settled `1024x768`
+      host target (`reason=1`, `result=3`). Veil keeps the confirmed `800x600` guest
+      framebuffer aspect-fit and shows `Guest refused resize: aspect-fit`; it does not
+      stretch the Windows pixels or retry in a loop. A subsequent window resize is
+      debounced and forwarded once, and the RFB receive loop remains idle between frames.
+
 ## What Is NOT Claimed
 
-- No live Windows evidence yet. Whether the installed Windows 11 Arm guest's virtio
-  display driver accepts `SetDesktopSize` through QEMU is exactly what the design
-  requires recording — a rejection is honest evidence for the guest-agent fallback,
-  not a passing dynamic-resolution result. Run windowed → larger window → macOS full
-  screen → windowed against the live guest, capture requested/applied sizes, and
-  pointer proof near all four corners.
-- No new guest-agent protocol message; `docs/protocol.md` is unchanged because the
-  resize path is RFB/QEMU wire surface, not the Veil host↔guest contract.
+- The installed Windows 11 Arm guest's virtio display driver does not currently accept
+  the tested `SetDesktopSize` request through QEMU. The typed guest-agent display-mode
+  fallback is now implemented, but still requires a rebuilt agent bundle and live Windows
+  proof before it can be called production-proven.
 - The VMConsoleDisplaySurface `dynamicResolution` boot-plan evidence string still
   describes the pre-slice behavior; it should follow the live result.

@@ -65,15 +65,21 @@ Date: 2026-08-02
 
 ## P1 — 프로토콜 신뢰성
 
-- [ ] fire-and-forget input/clipboard/frame-control 메시지에 bounded acknowledgement 또는 오류 수신 경로 추가.
+- [x] negotiated `operationAcks`를 광고하는 agent의 input/clipboard/frame-control 메시지에
+      bounded acknowledgement와 구조화된 오류 수신 경로를 추가한다. capability가 없는
+      legacy agent는 기존 fire-and-forget 호환 경로를 유지한다.
 - [x] `window_not_tracked`를 닫힌 창으로 처리하고 재실행 루프를 막는다.
-- [ ] guest의 `false` 반환이 protocol error로 변환된다.
-- [x] `type-text`가 `input.text`를 사용해 Unicode를 허용한다.
+- [x] guest의 input `false` 반환이 negotiated 경로에서 `input_*_failed` protocol error로 변환된다.
+- [x] `type-unicode`가 bounded `input.text`를 사용해 Unicode를 허용하고, 기존
+      `input.key` 계약(Enter/Tab/탐색키/ASCII)을 유지한다.
 - [x] clipboard write 실패 시 `Cmd+V`를 중단하고 사용자에게 알린다.
 
 ## P2 — 제품 완성도와 제한사항
 
-- [ ] mirrored window에 Windows app icon/proxy icon을 표시한다.
+- [x] mirrored window과 Dock 메뉴에 Windows app icon/proxy icon을 연결한다.
+  - [x] 현재 guest app catalog의 PNG를 안정적인 app identity로 해석하고, 아이콘 누락/손상 시 generic fallback을 사용한다.
+  - [x] mirrored window chrome과 Focus/Close/Open Dock 항목에 아이콘을 연결했다.
+  - [ ] 실제 Windows 아이콘이 들어온 AppKit 창에서 proxy icon과 다중 창 표시를 실기 확인한다.
 - [ ] 파일 drop을 Shared Folder 경로로 전환해 50MB base64 병목을 제거한다.
 - [ ] guest event rate limit 및 sequence 검증을 live 확인한다.
 - [ ] USB passthrough/bridged networking은 unavailable 상태와 대안을 계속 명시한다.
