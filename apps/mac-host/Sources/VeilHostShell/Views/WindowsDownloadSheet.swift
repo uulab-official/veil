@@ -864,16 +864,19 @@ struct WindowsDownloadSheet: View {
 
     private var header: some View {
         HStack(spacing: 12) {
-            Image(systemName: "arrow.down.circle.fill")
-                .font(.title2)
-                .foregroundStyle(.tint)
+            // Embedded in the assistant, the page header above already names this step.
+            if !isEmbedded {
+                Image(systemName: "arrow.down.circle.fill")
+                    .font(.title2)
+                    .foregroundStyle(.tint)
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Get Windows 11")
-                    .font(.title2.weight(.semibold))
-                Text("Download the latest Windows 11 Arm64 ISO directly from Microsoft")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Get Windows 11")
+                        .font(.title2.weight(.semibold))
+                    Text("Download the latest Windows 11 Arm64 ISO directly from Microsoft")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
             }
 
             Spacer()
