@@ -43,7 +43,9 @@ Date: 2026-11-04
 - [ ] `820×560` 최소 창에서 사이드바와 툴바 항목이 잘리지 않는지 확인한다.
 - [ ] 라이트 모드 시스템에서 메인 창이 어두운 화면으로 일관되게 보이는지 확인한다(`preferredColorScheme(.dark)`).
 - [x] Start(⌘B), `--start-vm`, 앱 one-click 실행이 Windows 데스크톱을 별도 창으로도 열어 같은 화면이 두 번 보이던 문제를 고쳤다. 별도 창은 View > Open Desktop in Separate Window에서만 연다. 라이브 화면의 "Live Windows display #N" 배지는 연결 중·실패일 때만 보인다.
-- [ ] 중단된 설치에서 다시 시작하면 디스크에 8 GiB 넘게 쓰여 있다는 이유로 `QEMUWindowsInstallerBootPolicy`가 설치가 끝난 것으로 보고 디스크로 부팅해 UEFI Shell에 떨어진다. Windows 부트 로더가 실제로 있는지로 판단하거나, 마법사에 "설치 다시 시작"(디스크와 UEFI 변수 초기화)을 둔다.
-- [ ] 이전 설치의 부트 항목이 남은 `uefi-vars.fd`로는 설치 프로그램이 부트 로더 화면에서 멈췄다. 템플릿으로 초기화하자 2분 안에 "Windows 11 설치 중"으로 진행했다. 설치 재시작 시 UEFI 변수도 함께 초기화한다.
+- [x] 중단된 설치에서 다시 시작하면 디스크에 8 GiB 넘게 쓰여 있다는 이유로 디스크로 부팅해 UEFI Shell에 떨어지던 문제: Actions > Restart Windows Installation…, 마법사 Install 페이지의 "Start Over…"(이전 시도가 디스크에 64 MiB 이상 남았을 때), 멈춘 부팅 막대의 "Start Over…"가 확인 후 Windows를 끄고 디스크·UEFI 변수·TPM을 휴지통으로 옮긴 뒤 Setup을 다시 시작한다. Windows가 설치된 머신은 거부한다.
+- [x] 설치가 디스크에 계속 쓰고 있으면(최근 2분) 멈춘 부팅으로 보지 않는다. 11% 진행 중인 Setup에 "Windows hasn't finished starting"과 Start Over가 뜨던 문제를 실제 앱에서 확인하고 고쳤다.
+- [ ] Restart Windows Installation을 실제 앱에서 끝까지 눌러 보기(이번에는 진행 중인 설치를 지우지 않으려고 코어 테스트로만 확인했다).
+- [x] 이전 설치의 부트 항목이 남은 `uefi-vars.fd`로는 설치 프로그램이 부트 로더 화면에서 멈췄다. 템플릿으로 초기화하자 2분 안에 "Windows 11 설치 중"으로 진행했다. Restart Windows Installation이 UEFI 변수도 함께 초기화한다.
 - [ ] UTM의 Secure Boot 펌웨어를 쓰는 동안 부팅 화면에 UTM 로고가 나온다. Veil 자체 Secure Boot EDK2 빌드가 이 문제도 해결한다.
 - [ ] 설치 프로그램이 부팅 미디어를 읽는 몇 분 동안 "Windows hasn't finished starting" 막대와 Capture Boot Diagnostics가 뜬다. 정상적인 느린 부팅과 실제 멈춤을 구분한다.
