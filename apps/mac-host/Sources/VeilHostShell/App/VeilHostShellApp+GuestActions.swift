@@ -1,0 +1,448 @@
+import AppKit
+import SwiftUI
+import VeilHostCore
+
+extension VeilHostShellApp {
+    func configureWindowsAppWindowCloseBridge() {
+        windowsAppWindowPresenter.onUserWindowClose = { windowId in
+            Task { @MainActor in
+                _ = await model.closeMirrorSession(windowId: windowId)
+                scheduleAutomaticQuietRuntimeIfNeeded()
+                syncLauncherWindowVisibility()
+            }
+        }
+        windowsAppWindowPresenter.onMouseInput = { windowId, event, x, y in
+            Task { @MainActor in
+                await model.sendMouseInput(windowId: windowId, event: event, x: x, y: y)
+            }
+        }
+        windowsAppWindowPresenter.onKeyInput = { windowId, event, key, windowsVirtualKey, modifiers in
+            Task { @MainActor in
+                await model.sendKeyInput(
+                    windowId: windowId,
+                    event: event,
+                    key: key,
+                    windowsVirtualKey: windowsVirtualKey,
+                    modifiers: modifiers
+                )
+            }
+        }
+        windowsAppWindowPresenter.onWindowVisibilityChange = { windowId, isVisible in
+            Task { @MainActor in
+                if isVisible {
+                    await model.resumeFrameStream(windowId: windowId)
+                } else {
+                    await model.pauseFrameStream(windowId: windowId)
+                }
+            }
+        }
+        windowsAppWindowPresenter.onWindowResize = { windowId, width, height in
+            Task { @MainActor in
+                _ = await model.resizeMirrorSession(windowId: windowId, width: width, height: height)
+            }
+        }
+        windowsAppWindowPresenter.onDropRefused = { refusal in
+            Task { @MainActor in
+                model.recordFileDropRefusal(refusal)
+            }
+        }
+        windowsAppWindowPresenter.onFileDrop = { appId, windowId, fileName, contentBase64 in
+            Task { @MainActor in
+                await model.openFile(appId: appId, fileName: fileName, contentBase64: contentBase64)
+                // Windows reports failures the host cannot predict: the app was uninstalled, the write
+                // failed, the launch failed. `openFile` records those as drop refusals, so they belong on
+                // the same sheet as the checks the host made itself.
+                if let refusal = model.lastFileDropRefusal {
+                    windowsAppWindowPresenter.showDropRefusal(refusal, windowId: windowId)
+                }
+            }
+        }
+        windowsAppWindowPresenter.onRestartFrameStream = { windowId in
+            Task { @MainActor in
+                let sessionBeforeRecovery = model.mirrorSessions.first(where: { $0.id == windowId })
+                let assessment = sessionBeforeRecovery.map { WindowFrameStreamAssessment.assess(session: $0) }
+                if assessment?.reopenEscalated == true,
+                   let result = await model.reopenAppWindow(windowId: windowId) {
+                    windowsAppWindowPresenter.closeWindow(windowId: result.requestedWindowId)
+                    if let session = model.mirrorSessions.first(where: { $0.id == result.launch.window.windowId }) {
+                        windowsAppWindowPresenter.showWindow(for: session)
+                    }
+                    displayMessage = "Reopening \(result.launch.window.title)."
+                    syncLauncherWindowVisibility()
+                    return
+                }
+
+                let shouldRecover = assessment?.recoveryEscalated == true
+                let didRecover: Bool
+                if shouldRecover {
+                    didRecover = await model.recoverFrameCapture(windowId: windowId)
+                } else {
+                    didRecover = await model.restartFrameSubscription(windowId: windowId)
+                }
+                guard didRecover,
+                      let session = model.mirrorSessions.first(where: { $0.id == windowId }) else {
+                    return
+                }
+
+                windowsAppWindowPresenter.showWindow(for: session)
+                displayMessage = shouldRecover
+                    ? "Recovering \(session.window.title) screen."
+                    : "Restarting \(session.window.title) screen."
+            }
+        }
+        windowsAppWindowPresenter.compositedImageProvider = { windowId in
+            model.compositedFrameImage(for: windowId)
+        }
+        windowsAppWindowPresenter.onTextInput = { windowId, text in
+            Task { @MainActor in
+                await model.sendTextInput(windowId: windowId, text: text)
+            }
+        }
+        windowsAppWindowPresenter.onPasteShortcut = { windowId, key, windowsVirtualKey, modifiers, text in
+            Task { @MainActor in
+                // Ctrl+V does not fail when the clipboard write did. It pastes whatever Windows had before,
+                // into the user's document, with nothing to indicate the text is stale. So a clipboard write
+                // that could not be delivered cancels the paste instead of completing it with wrong content.
+                let clipboardOutcome = await model.sendHostClipboardText(text)
+                if case .failed(let reason) = clipboardOutcome {
+                    windowsAppWindowPresenter.showWindowsAppMessage(
+                        title: "Veil could not paste into Windows",
+                        detail: "The clipboard could not be sent, so nothing was pasted rather than pasting older text. \(reason)",
+                        windowId: windowId
+                    )
+                    return
+                }
+                await model.sendKeyInput(
+                    windowId: windowId,
+                    event: "keyDown",
+                    key: key,
+                    windowsVirtualKey: windowsVirtualKey,
+                    modifiers: modifiers
+                )
+                await model.sendKeyInput(
+                    windowId: windowId,
+                    event: "keyUp",
+                    key: key,
+                    windowsVirtualKey: windowsVirtualKey,
+                    modifiers: modifiers
+                )
+            }
+        }
+    }
+
+    @MainActor
+    func syncGuestClipboardToPasteboard() {
+        guard let text = model.latestGuestClipboardText else {
+            return
+        }
+
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(text, forType: .string)
+    }
+
+    func showWindowsDisplay() {
+        if presentWindowsDesktopIfAvailable() {
+            displayMessage = "Windows desktop brought forward."
+        } else {
+            activateMainWindow()
+            displayMessage = "The Windows desktop is not ready yet. Start Windows or refresh the display."
+        }
+    }
+
+    @MainActor
+    func presentWindowsDesktopIfAvailable() -> Bool {
+        if vmRuntimeBooter.provider == .appleVirtualization {
+            return vmRuntimeBooter.showConsoleIfRunning()
+        }
+
+        guard let snapshot = vmModel.snapshot,
+              snapshot.state == .running || snapshot.state == .starting,
+              let surface = snapshot.latestConsoleLaunch?.displaySurface,
+              surface.kind != .unavailable else {
+            return false
+        }
+
+        return qemuConsoleWindowPresenter.showConsole(
+            surface: surface,
+            screenshotPath: snapshot.latestConsoleScreenshotPath,
+            pointerTapAction: { normalizedX, normalizedY in
+                Task {
+                    await vmModel.sendConsolePointerTap(
+                        normalizedX: normalizedX,
+                        normalizedY: normalizedY
+                    )
+                }
+            },
+            keyAction: { key in
+                Task {
+                    await vmModel.sendConsoleKey(key)
+                }
+            }
+        )
+    }
+
+    func installGuestAgentFromDisplay() {
+        Task { @MainActor in
+            activateMainWindow()
+            displayMessage = "Sending the Veil app connection installer to Windows."
+            do {
+                _ = try await vmRuntimeBooter.installGuestAgentFromAttachedMedia()
+                displayMessage = "App connection installer sent. Veil will connect when Windows is ready."
+                await vmModel.refreshRuntimeEvidence()
+                await recordGuestAgentInstallEvidenceIfNeeded()
+            } catch {
+                displayMessage = "App connection install could not start: \(userMessage(for: error))"
+            }
+        }
+    }
+
+    func prepareSparsePackageFromDisplay() {
+        Task { @MainActor in
+            cancelAutomaticQuietRuntime()
+            activateMainWindow()
+            displayMessage = "Preparing Windows package identity. Keep the Windows setup display open for prompts."
+
+            do {
+                _ = try await vmRuntimeBooter.prepareSparsePackageFromAttachedMedia()
+                displayMessage = "Package identity preparation sent. Waiting for the Windows app connection to return."
+                await vmModel.refreshRuntimeEvidence()
+
+                let report = await model.waitForLiveAgentConnection(
+                    endpoint: agentURLString,
+                    timeoutSeconds: 120
+                )
+                await recordGuestAgentInstallEvidenceIfNeeded()
+                await model.load()
+
+                if report.diagnostic.health?.capabilities.packageIdentity == true {
+                    displayMessage = "Windows package identity is ready."
+                } else if report.status == .connected {
+                    displayMessage = "Windows reconnected, but package identity is not ready yet. Check sparse package evidence."
+                } else {
+                    displayMessage = "Package identity preparation was sent. Windows has not reconnected yet."
+                }
+            } catch {
+                displayMessage = "Package identity preparation could not start: \(userMessage(for: error))"
+            }
+        }
+    }
+
+    func requestWindowsNotificationConsent() {
+        Task { @MainActor in
+            activateMainWindow()
+
+            guard model.hasLiveAgentConnection else {
+                displayMessage = "Connect the Windows app connection before allowing Windows notifications."
+                return
+            }
+
+            guard model.health?.capabilities.packageIdentity == true else {
+                displayMessage = "Prepare Windows package identity before allowing Windows notifications."
+                return
+            }
+
+            displayMessage = "Asking Windows to allow Veil notifications."
+
+            do {
+                let client = VeilHostClient(
+                    transport: URLSessionWebSocketTransport(url: URL(string: agentURLString)!)
+                )
+                let response = try await client.requestWindowsNotificationListenerConsent()
+                await model.load()
+
+                if response.accepted {
+                    displayMessage = "Windows notifications are allowed. Run the notification check after a Windows notification appears."
+                } else {
+                    displayMessage = notificationConsentMessage(for: response.notificationListener)
+                }
+            } catch {
+                displayMessage = "Windows notification access could not be requested: \(userMessage(for: error))"
+            }
+        }
+    }
+
+    private func notificationConsentMessage(for status: WindowsNotificationListenerStatus) -> String {
+        switch status.recommendedAction {
+        case "request-notification-listener-consent":
+            return "Windows has not allowed Veil notifications yet. Try Allow Notifications again from Veil."
+        case "enable-notification-listener-settings":
+            return "Allow Veil in Windows notification access settings, then run the notification check."
+        case "prepare-sparse-package":
+            return "Prepare Windows package identity before allowing Windows notifications."
+        case "connect-agent":
+            return "Connect the Windows app connection before allowing Windows notifications."
+        default:
+            return status.message ?? "Windows notification access is not ready yet."
+        }
+    }
+
+    func waitForGuestAgent() {
+        Task { @MainActor in
+            activateMainWindow()
+            displayMessage = "Checking the Windows app connection."
+            let report = await model.waitForLiveAgentConnection(
+                endpoint: agentURLString,
+                timeoutSeconds: 5
+            )
+            await recordGuestAgentInstallEvidenceIfNeeded()
+
+            if report.status == .connected {
+                displayMessage = "Windows app connection is ready."
+                if let fulfilledLaunch = await model.refreshLiveAgentIfNeeded() {
+                    showWindowsAppWindow(for: fulfilledLaunch)
+                    syncLauncherWindowVisibility()
+                }
+            } else if let hostForwardProbe = report.diagnostic.hostForwardProbe {
+                displayMessage = "Windows app connection is not ready yet (\(hostForwardProbe.status.rawValue))."
+            } else {
+                displayMessage = "Windows app connection is not ready yet."
+            }
+        }
+    }
+
+    func repairGuestAgentForAppLaunch() {
+        Task { @MainActor in
+            cancelAutomaticQuietRuntime()
+            activateMainWindow()
+
+            guard vmModel.snapshot?.state == .running || vmModel.snapshot?.state == .starting else {
+                advancePendingLaunchLifecycle()
+                return
+            }
+
+            let appName = pendingLaunchDisplayName()
+            displayMessage = "Repairing the Windows app connection so \(appName) can open as a Mac window."
+
+            do {
+                _ = try await vmRuntimeBooter.installGuestAgentFromAttachedMedia()
+                displayMessage = "App connection repair sent. Veil will open \(appName) when Windows responds."
+                await vmModel.refreshRuntimeEvidence()
+                await recordGuestAgentInstallEvidenceIfNeeded()
+
+                if let fulfilledLaunch = await model.refreshLiveAgentIfNeeded() {
+                    showWindowsAppWindow(for: fulfilledLaunch)
+                    syncLauncherWindowVisibility()
+                }
+            } catch {
+                displayMessage = "App connection repair could not start: \(userMessage(for: error))"
+            }
+        }
+    }
+
+    func markWindowsInstalledFromSetup() {
+        Task { @MainActor in
+            activateMainWindow()
+            await vmModel.markWindowsInstalled()
+            if vmModel.snapshot?.windowsInstalled == true {
+                displayMessage = "Windows is marked installed. Veil will boot from the local disk and leave the installer ISO detached."
+            } else if let errorMessage = vmModel.errorMessage {
+                displayMessage = "Windows install state could not be updated: \(errorMessage)"
+            }
+        }
+    }
+
+    func refreshRuntime() {
+        Task {
+            await vmModel.load()
+        }
+    }
+
+    func recoverRuntimeDisplayEvidence() {
+        Task { @MainActor in
+            activateMainWindow()
+            let beforeStatus = vmModel.snapshot?.latestConsoleLaunch?.previewStatus
+            displayMessage = "Refreshing the embedded Windows display."
+            await vmModel.refreshRuntimeEvidence()
+
+            let afterStatus = vmModel.snapshot?.latestConsoleLaunch?.previewStatus
+            if afterStatus == .fresh {
+                displayMessage = "Windows display evidence refreshed."
+            } else {
+                let statusText = afterStatus?.rawValue ?? beforeStatus?.rawValue ?? "unavailable"
+                displayMessage = WindowsShellCopy.displayRecoveryStillStaleMessage(statusText: statusText)
+            }
+        }
+    }
+
+    func refreshApps() {
+        Task { @MainActor in
+            await model.load()
+            await recordGuestAgentInstallEvidenceIfNeeded()
+        }
+    }
+
+    func activateMainWindow() {
+        Task { @MainActor in
+            MainWindowChrome.showMainWindow()
+        }
+    }
+
+    func presentWindowsNotification(notificationId: String) {
+        guard let notification = model.latestWindowsNotifications.first(where: { $0.notificationId == notificationId }) else {
+            return
+        }
+
+        Task { @MainActor in
+            let result = await windowsNotificationPresenter.present(notification)
+            switch result {
+            case .scheduled:
+                displayMessage = "Windows notification shown on macOS: \(notification.title)"
+            case .permissionDenied:
+                displayMessage = "Windows notification received, but macOS notifications are not allowed for Veil."
+            case .authorizationRequestDeclined:
+                displayMessage = "Windows notification received, but notification permission was not granted."
+            case .invalidNotification:
+                displayMessage = "Windows notification received, but it was missing a title."
+            }
+        }
+    }
+
+    var canShowWindowsDisplay: Bool {
+        WindowsDisplayAvailabilityPolicy.canShowDesktop(
+            runtimeState: vmModel.snapshot?.state,
+            supportsNativeDisplayWindow: vmRuntimeBooter.supportsNativeDisplayWindow,
+            hasCapturedSurface: vmModel.snapshot?.latestConsoleLaunch?.displaySurface.kind != nil
+                && vmModel.snapshot?.latestConsoleLaunch?.displaySurface.kind != .unavailable
+        )
+    }
+
+    var canInstallGuestAgent: Bool {
+        (vmModel.snapshot?.state == .running || vmModel.snapshot?.state == .starting)
+            && (vmModel.snapshot?.installEvidence.kind != .guestAgent || !model.hasLiveAgentConnection)
+    }
+
+    var canRecoverRuntimeDisplay: Bool {
+        guard vmModel.snapshot?.state == .running || vmModel.snapshot?.state == .starting else {
+            return false
+        }
+
+        return vmModel.snapshot?.latestConsoleLaunch?.previewStatus == .stale
+            || vmModel.snapshot?.latestConsoleLaunch?.previewStatus == .unavailable
+    }
+
+    var canMarkWindowsInstalled: Bool {
+        (vmModel.snapshot?.state == .running || vmModel.snapshot?.state == .starting)
+            && vmModel.snapshot?.installEvidence.isInstalled != true
+    }
+
+    var appRuntimeStatusReport: WindowsAppRuntimeStatusReport {
+        model.runtimeStatusReport(
+            localRuntime: model.localRuntimeStatus(snapshot: vmModel.snapshot),
+            hostBackingScale: HostDisplayScale.current
+        )
+    }
+
+    var menuBarSymbolName: String {
+        appRuntimeStatusReport.menuBarIntegration.symbolName
+    }
+
+    func userMessage(for error: any Error) -> String {
+        if let localized = error as? LocalizedError,
+           let description = localized.errorDescription {
+            return description
+        }
+
+        return error.localizedDescription
+    }
+}
