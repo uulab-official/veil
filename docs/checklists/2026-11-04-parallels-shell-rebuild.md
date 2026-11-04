@@ -35,7 +35,8 @@ Date: 2026-11-04
 - [x] 위 항목 처리: 다운로드 후 자동 시작, 마법사 Install, 툴바 Start, Actions 메뉴 Start는 QEMU가 준비됐을 때만 Windows를 시작한다. 엔진 안내는 "Apple Virtualization can't run Windows"로 고쳤다.
 - [x] 라이브 Windows Setup 위의 이전 상태 줄(`Windows is open` · Settings · Stop Windows · More)은 부팅이 멈춘 경우에만 보인다. 별도 디스플레이 창은 Apple Virtualization 콘솔 경로였고, 이제 그 경로로 Windows를 시작하지 않는다.
 - [ ] 설치 속도: 같은 ISO의 파일 복사가 3시간에 46%였다. QEMU CPU는 6.8%로 게스트가 I/O를 기다리고 있었고, 설치 ISO는 `usb-storage`로 붙어 있다. `usb-uas` 같은 더 빠른 설치 미디어 경로를 실측해서 바꾼다.
-- [ ] Secure Boot 펌웨어: 이 Mac은 `/Applications/UTM.app`의 `edk2-aarch64-secure-code.fd`로 부팅했다. UTM이 없는 Mac에서는 Secure Boot 없는 Homebrew 펌웨어로 떨어지므로, Veil이 자체 Secure Boot EDK2와 QEMU를 앱에 넣어 배포할지 결정이 필요하다(라이선스 검토 포함).
+- [x] Secure Boot 펌웨어와 엔진 번들: `script/bundle_qemu_runtime.sh`가 QEMU 11.1.3, swtpm, 라이브러리 31개, Debian `qemu-efi-aarch64` 2025.02-8+deb13u1의 Secure Boot 펌웨어(SHA-256 고정)를 `Veil.app/Contents/Resources/Runtime`에 넣는다. Homebrew PATH 없이 번들 QEMU + swtpm + Secure Boot 펌웨어로 HVF UEFI 부팅을 확인했다. QEMU·TPM·펌웨어 탐색은 번들을 먼저 본다.
+- [ ] 앱에서 Windows를 시작했을 때 실제 `qemu-system-aarch64` 프로세스 경로가 `Veil.app/Contents/Resources/Runtime/bin`인지, Homebrew가 없는 Mac에서 설치가 끝까지 가는지 확인한다.
 - [ ] 실제 Windows 11 Arm 설치 완료 상태에서 사이드바 앱 실행, 툴바 일시 중단/재개, 종료 확인 대화상자를 확인한다.
 - [ ] QEMU/VNC 라이브 화면에서 툴바 아래 Windows 화면의 입력 좌표가 어긋나지 않는지 확인한다.
 - [ ] `820×560` 최소 창에서 사이드바와 툴바 항목이 잘리지 않는지 확인한다.
