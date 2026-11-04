@@ -182,6 +182,27 @@ public final class VMRuntimeModel {
         operationInFlight = false
     }
 
+    /// Erases an unfinished Windows installation (disk, UEFI variables, TPM) so Setup starts over.
+    @discardableResult
+    public func restartWindowsInstallation() async -> Bool {
+        guard beginOperation() else {
+            return false
+        }
+
+        defer {
+            operationInFlight = false
+        }
+        do {
+            snapshot = try await service.restartWindowsInstallation()
+            phase = .loaded
+            return true
+        } catch {
+            errorMessage = userMessage(for: error)
+            phase = .failed
+            return false
+        }
+    }
+
     public func createDefaultVirtualDisk() async {
         guard beginOperation() else {
             return

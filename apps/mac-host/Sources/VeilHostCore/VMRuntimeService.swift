@@ -7,6 +7,7 @@ public protocol VMRuntimeService: Sendable {
     func createDefaultVirtualDisk() async throws -> VMRuntimeSnapshot
     func updateProfilePaths(installerMediaPath: String?, driverMediaPath: String?, virtualDiskPath: String?) async throws -> VMRuntimeSnapshot
     func markWindowsInstalled() async throws -> VMRuntimeSnapshot
+    func restartWindowsInstallation() async throws -> VMRuntimeSnapshot
     func markGuestAgentConnected(agentVersion: String) async throws -> VMRuntimeSnapshot
     func start() async throws -> VMRuntimeSnapshot
     func stop() async throws -> VMRuntimeSnapshot
@@ -31,6 +32,10 @@ public extension VMRuntimeService {
 
     func suspendedSession() async -> VMSuspensionRecord? {
         nil
+    }
+
+    func restartWindowsInstallation() async throws -> VMRuntimeSnapshot {
+        throw VMRuntimeError.bootNotImplemented
     }
 }
 
@@ -143,6 +148,7 @@ public enum VMRuntimeError: Error, LocalizedError, Equatable, Sendable {
     case qemuAlreadyRunning(pid: Int32)
     case resourceMutationRequiresStoppedRuntime
     case suspendNotSupported
+    case restartInstallationRequiresUninstalledWindows
 
     public var errorDescription: String? {
         switch self {
@@ -164,6 +170,8 @@ public enum VMRuntimeError: Error, LocalizedError, Equatable, Sendable {
             "Stop Windows before changing VM resources. Running, starting, or suspended sessions keep their disk and installer attachments locked."
         case .suspendNotSupported:
             "The active local VM runtime provider cannot suspend a Windows session yet. Stop the VM instead."
+        case .restartInstallationRequiresUninstalledWindows:
+            "Windows is already installed on this disk, so Veil won't erase it to restart the installation."
         }
     }
 }

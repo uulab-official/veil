@@ -19,6 +19,7 @@ public struct LocalVMRuntimeService: VMRuntimeService {
     let qemuLaunchProcessIsRunning: @Sendable (Int32) -> Bool
     let qemuLaunchProcessTerminator: @Sendable (Int32) -> Bool
     let firmwareVarsTemplatePaths: [String]
+    let installationDiscarder: @Sendable (URL) throws -> Void
 
     public init(
         profileStore: any VMProfileStore = JSONVMProfileStore(),
@@ -36,7 +37,8 @@ public struct LocalVMRuntimeService: VMRuntimeService {
         keySequenceSender: (any QEMUKeySequenceSending)? = nil,
         qemuLaunchProcessIsRunning: @escaping @Sendable (Int32) -> Bool = LocalVMRuntimeService.processIsRunning,
         qemuLaunchProcessTerminator: @escaping @Sendable (Int32) -> Bool = LocalVMRuntimeService.terminateProcess,
-        firmwareVarsTemplatePaths: [String]? = nil
+        firmwareVarsTemplatePaths: [String]? = nil,
+        installationDiscarder: @escaping @Sendable (URL) throws -> Void = LocalVMRuntimeService.moveToTrash
     ) {
         self.profileStore = profileStore
         self.defaultHomeDirectory = defaultHomeDirectory
@@ -53,6 +55,7 @@ public struct LocalVMRuntimeService: VMRuntimeService {
         self.keySequenceSender = keySequenceSender
         self.qemuLaunchProcessIsRunning = qemuLaunchProcessIsRunning
         self.qemuLaunchProcessTerminator = qemuLaunchProcessTerminator
+        self.installationDiscarder = installationDiscarder
         self.firmwareVarsTemplatePaths = firmwareVarsTemplatePaths
             ?? (
                 LocalQEMUWindowsBootPlanFactory.defaultSecureFirmwareVarsTemplatePaths(homeDirectory: defaultHomeDirectory)
