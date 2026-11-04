@@ -5,6 +5,7 @@ import VeilHostCore
 import Virtualization
 
 struct WindowsSetupDisplayPanel: View {
+    @Environment(\.appRuntimeProvider) private var appRuntimeProvider
     var snapshot: VMRuntimeSnapshot
     var guestAgentInstallEvidence: VMInstallEvidenceSummary?
     var agentDiagnostic: AgentConnectionDiagnostic?
@@ -316,6 +317,15 @@ struct WindowsSetupDisplayPanel: View {
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
                 }
+
+                AppWindowEngineNotice(
+                    status: AppWindowEngineStatus.resolve(
+                        bootProvider: appRuntimeProvider,
+                        providers: snapshot.runtimeProviders
+                    ),
+                    isWindowsRunning: snapshot.state == .running || snapshot.state == .starting,
+                    checkAgainAction: refreshAction
+                )
 
                 if effectiveInstallEvidence.isInstalled {
                     Label(launchOnboardingTitle, systemImage: launchOnboardingSymbolName)

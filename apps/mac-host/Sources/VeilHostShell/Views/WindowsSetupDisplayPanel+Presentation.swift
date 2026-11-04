@@ -198,10 +198,7 @@ extension WindowsSetupDisplayPanel {
             return "Re-select the ISO to grant macOS file access"
         }
 
-        if snapshot.runtimeProvider?.kind == .appleVirtualization {
-            return "Apple Virtualization compatibility mode • bring your Windows 11 Arm installer"
-        }
-
+        // Which engine runs Windows is explained by `AppWindowEngineNotice`, not the headline.
         return "Bring your own Windows 11 Arm installer"
     }
 

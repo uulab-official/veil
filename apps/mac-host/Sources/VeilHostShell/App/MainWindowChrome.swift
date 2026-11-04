@@ -214,6 +214,7 @@ struct StandaloneMainWindowRoot: View {
             minHeight: MainWindowLayout.minimumSupportedSize.height,
             idealHeight: MainWindowLayout.preferredSize.height
         )
+        .environment(\.appRuntimeProvider, vmRuntimeBooter.provider)
         .task {
             async let hostLoad: Void = model.load()
             async let vmLoad: Void = vmModel.load()

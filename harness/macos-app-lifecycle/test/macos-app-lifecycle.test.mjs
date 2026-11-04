@@ -61,7 +61,6 @@ test("first-run hero exposes a named action and unambiguous compatibility copy",
 
   assert.match(source, /\.accessibilityLabel\(effectivePrimaryTitle\)/);
   assert.match(source, /\.accessibilityHint\(effectivePrimaryHelp\)/);
-  assert.match(source, /Apple Virtualization compatibility mode/);
   assert.match(source, /Windows setup is available • Mac app windows require QEMU/);
   assert.doesNotMatch(source, /Console available • Windows app integration needs QEMU/);
 });

@@ -128,6 +128,7 @@ struct VeilHostShellApp: App {
             .onChange(of: vmModel.phase) {
                 scheduleAutomaticQuietRuntimeIfNeeded()
             }
+            .environment(\.appRuntimeProvider, vmRuntimeBooter.provider)
     }
 
     private var mainWindowScene: some Scene {
