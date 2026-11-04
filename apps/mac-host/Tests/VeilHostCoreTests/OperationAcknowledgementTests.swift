@@ -88,7 +88,10 @@ struct OperationAcknowledgementTests {
 
     @Test("keeps acknowledged input lanes independent across mirrored windows")
     func allowsIndependentWindowOperations() async throws {
-        let transport = AckTransport(reply: "echo", operationDelayNanoseconds: 50_000_000)
+        // The first send is held open until the second one arrives (or a bounded timeout), so the
+        // overlap does not depend on scheduling under a loaded test run. If the lanes were wrongly
+        // serialized, the second send could not start while the first is held and the max stays 1.
+        let transport = AckTransport(reply: "echo", holdsFirstOperationUntilCount: 2)
         let client = VeilHostClient(transport: transport)
         _ = try await client.loadHealth()
 
@@ -119,16 +122,23 @@ private actor AckTransport: HostTransport {
     let reply: String
     let advertised: Bool
     let operationDelayNanoseconds: UInt64
+    let holdsFirstOperationUntilCount: Int?
     private(set) var operationReplyCount: Int?
     private(set) var operationRequestIds: [String] = []
     private(set) var operationEvents: [String] = []
     private(set) var maxConcurrentOperationSends = 0
     private var concurrentOperationSends = 0
 
-    init(reply: String, advertised: Bool = true, operationDelayNanoseconds: UInt64 = 0) {
+    init(
+        reply: String,
+        advertised: Bool = true,
+        operationDelayNanoseconds: UInt64 = 0,
+        holdsFirstOperationUntilCount: Int? = nil
+    ) {
         self.reply = reply
         self.advertised = advertised
         self.operationDelayNanoseconds = operationDelayNanoseconds
+        self.holdsFirstOperationUntilCount = holdsFirstOperationUntilCount
     }
 
     func waitForOperationCount(_ count: Int) async {
@@ -154,6 +164,12 @@ private actor AckTransport: HostTransport {
             maxConcurrentOperationSends = max(maxConcurrentOperationSends, concurrentOperationSends)
             if operationDelayNanoseconds > 0 {
                 try? await Task.sleep(nanoseconds: operationDelayNanoseconds)
+            }
+            if let holdCount = holdsFirstOperationUntilCount, operationEvents.count == 1 {
+                let deadline = ContinuousClock.now + .seconds(2)
+                while operationEvents.count < holdCount, ContinuousClock.now < deadline {
+                    try? await Task.sleep(nanoseconds: 1_000_000)
+                }
             }
             concurrentOperationSends -= 1
             if reply == "echo" {
