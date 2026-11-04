@@ -16,6 +16,8 @@
     "input": true,
     "clipboardText": true,
     "windowResize": true,
+    "displayResize": true,
+    "operationAcks": true,
     "packageIdentity": false
   },
   "packageIdentityStatus": {

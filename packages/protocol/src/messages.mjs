@@ -6,6 +6,7 @@ export const MessageType = Object.freeze({
   AppLaunchRequest: "app.launch.request",
   AppLaunchResponse: "app.launch.response",
   FileOpenRequest: "file.open.request",
+  SharedFileOpenRequest: "file.open.shared.request",
   FileOpenResponse: "file.open.response",
   WindowCreated: "window.created",
   WindowUpdated: "window.updated",
@@ -20,6 +21,8 @@ export const MessageType = Object.freeze({
   WindowCloseResponse: "window.close.response",
   WindowResizeRequest: "window.resize.request",
   WindowResizeResponse: "window.resize.response",
+  DisplayResizeRequest: "display.resize.request",
+  DisplayResizeResponse: "display.resize.response",
   ClipboardTextSet: "clipboard.text.set",
   NotificationListenerRequest: "notification.listener.request",
   NotificationListenerResponse: "notification.listener.response",
@@ -29,6 +32,7 @@ export const MessageType = Object.freeze({
   InputMouse: "input.mouse",
   InputKey: "input.key",
   InputText: "input.text",
+  OperationAck: "operation.ack",
   Error: "error"
 });
 
@@ -125,6 +129,18 @@ export function validateAgentHealthResponse(response) {
   if (response.capabilities.windowResize !== undefined
     && typeof response.capabilities.windowResize !== "boolean") {
     throw new TypeError("Agent health response field 'capabilities.windowResize' must be a boolean.");
+  }
+
+  if (response.capabilities.displayResize !== undefined
+    && typeof response.capabilities.displayResize !== "boolean") {
+    throw new TypeError("Agent health response field 'capabilities.displayResize' must be a boolean.");
+  }
+
+  // Optional so a host connected to an agent without acknowledgements keeps the fire-and-forget
+  // semantics instead of waiting on a reply that never comes.
+  if (response.capabilities.operationAcks !== undefined
+    && typeof response.capabilities.operationAcks !== "boolean") {
+    throw new TypeError("Agent health response field 'capabilities.operationAcks' must be a boolean.");
   }
 
   if (response.packageIdentityStatus !== undefined) {
@@ -411,6 +427,47 @@ export function validateFileOpenRequest(request) {
   return request;
 }
 
+export function validateSharedFileOpenRequest(request) {
+  if (!request || request.type !== MessageType.SharedFileOpenRequest) {
+    throw new TypeError("Shared file open request must use type file.open.shared.request.");
+  }
+
+  requireNonEmptyString(request.requestId, "requestId", "Shared file open request");
+  requireNonEmptyString(request.appId, "appId", "Shared file open request");
+  requireNonEmptyString(request.fileName, "fileName", "Shared file open request");
+  requireNonEmptyString(request.guestPath, "guestPath", "Shared file open request");
+
+  const fileName = request.fileName.trim();
+  const nameWithoutExtension = fileName.includes(".")
+    ? fileName.slice(0, fileName.lastIndexOf("."))
+    : fileName;
+  if (
+    fileName.length === 0
+    || /[\\/]/.test(fileName)
+    || fileName === "."
+    || fileName === ".."
+    || reservedWindowsDeviceNames.has(nameWithoutExtension.toUpperCase())
+  ) {
+    throw new TypeError(
+      "Shared file open request field 'fileName' must be a bare, non-reserved file name with no path separators."
+    );
+  }
+
+  const guestPath = request.guestPath.trim();
+  if (
+    !/^C:\\VeilShared\\/.test(guestPath)
+    || guestPath.includes("..")
+    || guestPath.endsWith("\\")
+    || guestPath.slice(guestPath.lastIndexOf("\\") + 1) !== fileName
+  ) {
+    throw new TypeError(
+      "Shared file open request field 'guestPath' must stay under C:\\VeilShared and match fileName."
+    );
+  }
+
+  return request;
+}
+
 export function validateFileOpenResponse(response) {
   if (!response || response.type !== MessageType.FileOpenResponse) {
     throw new TypeError("File open response must use type file.open.response.");
@@ -597,9 +654,68 @@ export function validateWindowResizeResponse(response) {
   return response;
 }
 
+export function validateDisplayResizeRequest(request) {
+  if (!request || request.type !== MessageType.DisplayResizeRequest) {
+    throw new TypeError("Display resize request must use type display.resize.request.");
+  }
+
+  requireNonEmptyString(request.requestId, "requestId", "Display resize request");
+  requireDisplayResizeDimension(request.width, "width");
+  requireDisplayResizeDimension(request.height, "height");
+  if (request.width > 8_294_400 / request.height) {
+    throw new TypeError("Display resize request dimensions must contain at most 8294400 pixels.");
+  }
+
+  return request;
+}
+
+export function validateDisplayResizeResponse(response) {
+  if (!response || response.type !== MessageType.DisplayResizeResponse) {
+    throw new TypeError("Display resize response must use type display.resize.response.");
+  }
+
+  requireNonEmptyString(response.requestId, "requestId", "Display resize response");
+  if (typeof response.accepted !== "boolean") {
+    throw new TypeError("Display resize response field 'accepted' must be a boolean.");
+  }
+
+  if (response.accepted) {
+    requireDisplayResizeDimension(response.width, "width");
+    requireDisplayResizeDimension(response.height, "height");
+  } else if (response.reason !== undefined && response.reason !== null && typeof response.reason !== "string") {
+    throw new TypeError("Display resize response field 'reason' must be a string when present.");
+  }
+
+  return response;
+}
+
+/// The success reply for messages the host used to send fire-and-forget (`input.mouse`,
+/// `input.key`, `input.text`, `clipboard.text.set`, `window.frame.subscribe`,
+/// `window.frame.unsubscribe`). Failures keep using the `error` shape, so one host read of
+/// "one reply frame" covers both. Carries no payload beyond the echoed request id so an
+/// agent that predates acknowledgements stays wire-compatible after a bounded host wait.
+export function validateOperationAck(ack) {
+  if (!ack || ack.type !== MessageType.OperationAck) {
+    throw new TypeError("Operation ack must use type operation.ack.");
+  }
+
+  requireNonEmptyString(ack.requestId, "requestId", "Operation ack");
+  if (typeof ack.accepted !== "boolean") {
+    throw new TypeError("Operation ack field 'accepted' must be a boolean.");
+  }
+
+  return ack;
+}
+
 function requireResizeDimension(value, fieldName) {
   if (!Number.isInteger(value) || value < 320 || value > 8_192) {
     throw new TypeError(`Window resize request field '${fieldName}' must be between 320 and 8192.`);
+  }
+}
+
+function requireDisplayResizeDimension(value, fieldName) {
+  if (!Number.isInteger(value) || value < 640 || value > 3_840) {
+    throw new TypeError(`Display resize request field '${fieldName}' must be between 640 and 3840.`);
   }
 }
 

@@ -11,6 +11,7 @@ import {
   validateAppLaunchAcceptance,
   validateClipboardTextSet,
   validateFileOpenRequest,
+  validateSharedFileOpenRequest,
   validateFileOpenResponse,
   MAX_INPUT_TEXT_UTF16_LENGTH,
   validateInputKey,
@@ -19,6 +20,7 @@ import {
   validateNotificationListenerRequest,
   validateNotificationListenerResponse,
   validateNotificationReceived,
+  validateOperationAck,
   validateSharedFolderRequest,
   validateSharedFolderResponse,
   validateWindowClosed,
@@ -32,6 +34,8 @@ import {
   validateWindowFocusResponse,
   validateWindowResizeRequest,
   validateWindowResizeResponse,
+  validateDisplayResizeRequest,
+  validateDisplayResizeResponse,
   validateWindowUpdated
 } from "../src/messages.mjs";
 
@@ -50,6 +54,7 @@ test("parses every stable fixture", async () => {
     "app.launch.request.json",
     "app.launch.response.json",
     "file.open.request.json",
+    "file.open.shared.request.json",
     "file.open.response.json",
     "window.created.json",
     "window.updated.json",
@@ -64,9 +69,13 @@ test("parses every stable fixture", async () => {
     "window.close.response.json",
     "window.resize.request.json",
     "window.resize.response.json",
+    "display.resize.request.json",
+    "display.resize.response.json",
     "input.mouse.left-down.json",
     "input.key.copy.json",
     "input.text.json",
+    "input.text.acknowledged.json",
+    "operation.ack.json",
     "clipboard.text.set.host.json",
     "clipboard.text.set.guest.json",
     "notification.listener.request.json",
@@ -194,6 +203,29 @@ test("rejects an unsafe window resize request", () => {
       height: 900
     }),
     /width.*between 320 and 8192/
+  );
+});
+
+test("validates a desktop display resize request and applied response", async () => {
+  const request = validateDisplayResizeRequest(await readFixture("display.resize.request.json"));
+  const response = validateDisplayResizeResponse(await readFixture("display.resize.response.json"));
+
+  assert.equal(request.width, 1920);
+  assert.equal(request.height, 1080);
+  assert.equal(response.accepted, true);
+  assert.equal(response.width, 1920);
+  assert.equal(response.height, 1080);
+});
+
+test("rejects an unsafe desktop display resize request", () => {
+  assert.throws(
+    () => validateDisplayResizeRequest({
+      type: MessageType.DisplayResizeRequest,
+      requestId: "req_display_resize_invalid",
+      width: 3_841,
+      height: 900
+    }),
+    /width.*between 640 and 3840/
   );
 });
 
@@ -510,6 +542,23 @@ test("validates file open request and response fixtures", async () => {
   assert.equal(response.processId, 4931);
 });
 
+test("validates shared-folder file open requests without carrying file bytes", async () => {
+  const request = validateSharedFileOpenRequest(await readFixture("file.open.shared.request.json"));
+  assert.equal(request.appId, "winapp_notepad");
+  assert.equal(request.fileName, "large-report.txt");
+  assert.equal(request.guestPath, "C:\\VeilShared\\large-report.txt");
+});
+
+test("rejects shared-folder file paths that escape the fixed guest root", () => {
+  assert.throws(() => validateSharedFileOpenRequest({
+    type: MessageType.SharedFileOpenRequest,
+    requestId: "req_bad_shared",
+    appId: "winapp_notepad",
+    fileName: "report.txt",
+    guestPath: "C:\\VeilShared\\..\\Windows\\System32\\report.txt"
+  }), TypeError);
+});
+
 test("rejects a file open request whose fileName carries a path", () => {
   assert.throws(() => validateFileOpenRequest({
     type: MessageType.FileOpenRequest,
@@ -640,4 +689,36 @@ test("rejects a non-boolean sharedFolder capability", async () => {
   health.capabilities.sharedFolder = "true";
 
   assert.throws(() => validateAgentHealthResponse(health), /capabilities\.sharedFolder/);
+});
+
+test("validates the operation.ack fixture", async () => {
+  const ack = await readFixture("operation.ack.json");
+
+  assert.equal(validateOperationAck(ack), ack);
+  assert.equal(validateOperationAck(ack).type, MessageType.OperationAck);
+});
+
+test("rejects an operation.ack without a request id or accepted flag", async () => {
+  assert.throws(() => validateOperationAck({ type: "operation.ack", accepted: true }), /requestId/);
+  assert.throws(
+    () => validateOperationAck({ type: "operation.ack", requestId: "req_clipboard_42" }),
+    /accepted/
+  );
+});
+
+test("accepts an optional operationAcks capability on agent health", async () => {
+  const health = await readFixture("agent.health.response.json");
+  assert.equal(health.capabilities.operationAcks, true);
+
+  assert.equal(validateAgentHealthResponse(health), health);
+
+  const legacyHealth = { ...health, capabilities: { ...health.capabilities, operationAcks: undefined } };
+  assert.equal(validateAgentHealthResponse(legacyHealth), legacyHealth);
+});
+
+test("rejects a non-boolean operationAcks capability", async () => {
+  const health = await readFixture("agent.health.response.json");
+  health.capabilities.operationAcks = "true";
+
+  assert.throws(() => validateAgentHealthResponse(health), /capabilities\.operationAcks/);
 });

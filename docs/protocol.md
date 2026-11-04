@@ -30,6 +30,16 @@ Rules:
 - Events do not require `requestId`.
 - Unknown message types must return a structured error.
 
+Control-event stream:
+
+- The host keeps a separate long-lived WebSocket for guest lifecycle, clipboard, notification, and JSON
+  frame events. Request/response sockets remain short-lived so a large frame cannot become the reply to an
+  input operation.
+- The host bounds the undelivered control-event queue at 1,024 messages. If that queue overflows, the host
+  ends the event stream with a reconnectable transport error instead of silently dropping a `window.closed`,
+  clipboard, or notification event. Reconnection lets the normal liveness and discovery paths repair the
+  remaining state; the binary frame channel has its own per-HWND overflow recovery.
+
 ## Health
 
 Request:
@@ -63,6 +73,7 @@ Response:
     "input": true,
     "clipboardText": true,
     "windowResize": true,
+    "displayResize": true,
     "binaryFrameChannel": true,
     "sharedFolder": true,
     "packageIdentity": false
@@ -102,6 +113,11 @@ Response:
 `capabilities.windowResize` is optional for backwards compatibility. The host only enables the
 mirrored-window resize affordance when it is explicitly `true`; an absent value means the connected
 agent predates `window.resize.request`.
+
+`capabilities.displayResize` is also optional. When `true`, the agent can apply a requested Windows
+desktop monitor mode through the Win32 display API. Veil uses it only as a fallback after QEMU's
+RFB `ExtendedDesktopSize` request is rejected; an absent or false value keeps the confirmed guest
+framebuffer aspect-fit without stretching.
 
 `capabilities.packageIdentity` is `true` only when the Windows agent is running
 with Windows package identity. The agent reads this from Windows' app model
@@ -304,6 +320,27 @@ Rules:
   name it *displays* with `/` using `:` on disk, so an everyday name like `2026/08/12 report.txt` would
   otherwise be rejected for a reason invisible on the user's own machine.
 
+### Shared-folder file open
+
+`file.open.shared.request` opens a file that the host has already copied into the live guest-served share:
+
+```json
+{
+  "type": "file.open.shared.request",
+  "requestId": "req_open_shared_007",
+  "appId": "winapp_notepad",
+  "fileName": "large-report.txt",
+  "guestPath": "C:\\VeilShared\\large-report.txt"
+}
+```
+
+This is the large-file companion to `file.open.request`. It carries no file bytes on the control channel,
+so the 50 MB drag-and-drop limit does not apply. The guest independently requires an absolute path below
+the fixed `C:\\VeilShared` root and requires its final component to equal `fileName`; traversal, a different
+share, and a mismatched name return `invalid_shared_file_path`. A missing file returns
+`shared_file_missing`. Successful requests use the same `file.open.response` followed by `window.created`
+contract as an ordinary drop.
+
 ## Window Created
 
 Event:
@@ -459,8 +496,27 @@ Rules:
 - A tile that arrives before a key frame, or after a surface size change that has not been re-keyed, must
   be dropped and a key frame awaited. Compositing onto a mismatched or absent surface produces a
   plausible-looking but wrong window, which is much harder to diagnose than a window that visibly waits.
+- A delta must have the next sequence number for that window. If a sequence is skipped or repeated, the
+  host must discard that window's compositor base and wait for a key frame; applying a later delta would
+  preserve the missing pixels as if they were current. Key frames reset the sequence base and may use any
+  monotonically increasing stream sequence. A binary-channel host should restart only that window's
+  subscription immediately, because a guest that keeps producing small dirty regions may never naturally
+  emit the key frame needed to repair a missing delta.
 - A dropped tile is **not** a received frame. Frame timing and the latency budget must not advance for an
   update that did not reach the screen, or a stalled surface would look healthy.
+- Rejecting a decoded tile's image payload invalidates that window's compositor base. Further deltas
+  cannot repair unknown missing pixels; a valid full-surface key frame is required. While awaiting that
+  key frame, unchanged heartbeats do not advance host liveness, allowing stale-stream recovery to run.
+  Other windows retain their independent surfaces and liveness.
+- A valid JSON full-surface image can also restore a rejected binary stream's base. Its payload must
+  decode and match the declared dimensions before clearing the recovery reason or advancing liveness;
+  metadata alone is not recovery evidence.
+- If a host cannot keep up with the binary channel and its bounded receive buffer overflows, it must not
+  silently continue with a missing incremental tile. The host should reset that window's subscription so
+  the guest's next stream begins with a fresh key frame; other mirrored windows remain independent.
+- A host must coalesce concurrent recovery requests for the same window. An unsubscribe/subscribe pair has
+  one owner per HWND; a second recovery request should wait for or yield to that owner rather than allowing
+  an older completion to retire a newer stream.
 - Legacy JSON `window.frame` subscribers always receive a self-contained full-surface frame. Tiles are
   only meaningful to a client that composites them. The guest pays for that extra full-surface encode only
   while a control-channel subscriber actually exists.
@@ -553,8 +609,15 @@ Rules:
 
 - `windowId` must reference a tracked `window.created` event.
 - `format` is `png` for the first stream control implementation.
-- These requests do not require a success response. Invalid requests may still return structured errors.
+- Legacy agents do not require a success response. Agents advertising
+  `operationAcks` return a matching positive acknowledgement after applying the
+  stream-control operation, or a structured error (see Operation Acknowledgements).
 - The macOS host subscribes after launching a capture-capable app window and unsubscribes before closing the mirrored window.
+- Frames travel independently from request replies and may reach the host before
+  it observes the subscription acknowledgement. The host resets frame readiness
+  and discards the previous compositor surface **before** sending a new subscribe.
+  A reply must never clear a newer frame. Binary delivery needs a fresh key frame;
+  it cannot use a previous subscription's retained pixels as the base for a delta.
 - Host-side app-runtime status records frame stream recovery evidence per HWND:
   `frameStreamRequestedAt`, `frameStreamWaitingAgeMilliseconds`,
   `frameStreamRestartCount`, `latestFrameStreamRestartedAt`, and
@@ -726,6 +789,76 @@ Rules:
 - The macOS host sends one request after `windowDidEndLiveResize`, not one per intermediate drag event.
   During the gesture the mirror remains aspect-correct; after the guest applies the size, its capture buffer
   changes and the next key frame resynchronizes the host compositor.
+
+## Desktop Display Resize Fallback
+
+Host request:
+
+```json
+{
+  "type": "display.resize.request",
+  "requestId": "req_display_resize_1920x1080",
+  "width": 1920,
+  "height": 1080
+}
+```
+
+Guest response:
+
+```json
+{
+  "type": "display.resize.response",
+  "requestId": "req_display_resize_1920x1080",
+  "accepted": true,
+  "width": 1920,
+  "height": 1080
+}
+```
+
+Rules:
+
+- Dimensions are physical desktop pixels, bounded to 640...3840 per axis and 8,294,400 total pixels.
+- The guest calls `ChangeDisplaySettingsEx` for the active Windows desktop mode. A false response includes
+  a short `reason` and does not change the host's current framebuffer geometry.
+- The RFB display path invokes this fallback only after a QEMU `ExtendedDesktopSize` rejection. A later
+  successful RFB desktop-size response becomes authoritative and returns the display to normal dynamic mode.
+
+## Operation Acknowledgements
+
+For negotiated input delivery, the host adds a fresh `requestId` to each mouse,
+key, or committed-text envelope. The guest echoes it in the acknowledgement.
+Legacy input events may still omit it; see
+`harness/protocol-fixtures/input.text.acknowledged.json` for the negotiated form.
+
+An agent may advertise `capabilities.operationAcks: true` in its health response.
+After this negotiation, `input.mouse`, `input.key`, `input.text`,
+`clipboard.text.set`, `window.frame.subscribe`, and `window.frame.unsubscribe`
+receive one success acknowledgement or a structured `error` reply:
+
+```json
+{
+  "type": "operation.ack",
+  "requestId": "req_clipboard_42",
+  "accepted": true
+}
+```
+
+The host must match `requestId`, require `accepted: true`, and bound its reply
+wait. A timeout, malformed reply, unrelated request ID, or negative acknowledgement
+does not prove delivery. In particular, the host must not send a paste shortcut
+after an unconfirmed clipboard write, since that could paste stale guest text.
+It must not automatically retry an uncertain input operation, which could apply
+the operation twice. The host serializes negotiated operations per window on its short-lived
+control sockets so a key-down/key-up pair cannot overtake itself, while a slow acknowledgement
+in one mirrored app does not stall input to another. Clipboard and other operations without a
+window identity use their own global ordering lane. A guest `error` retains its original code
+and message.
+
+Agents that omit the capability or advertise `false` retain the existing
+fire-and-forget path without an acknowledgement wait. This compatibility path
+is selected from health, not inferred from a negotiated agent's silence.
+
+Fixture: `harness/protocol-fixtures/operation.ack.json`.
 
 ## Input Mouse
 
@@ -924,7 +1057,7 @@ Rules:
 ### Codes
 
 Codes documented alongside the message that produces them: `app_not_found`, `invalid_file_name`,
-`file_decode_failed`, `file_too_large`, `file_write_failed`, `file_open_failed`, `window_not_tracked`,
+`invalid_shared_file_path`, `shared_file_missing`, `file_decode_failed`, `file_too_large`, `file_write_failed`, `file_open_failed`, `window_not_tracked`,
 `text_too_long`, `invalid_message`, `input_text_failed`, `window_resize_failed`.
 
 The guest also emits the following. They were undocumented, which meant a host could neither explain them
@@ -937,25 +1070,22 @@ to a user nor pre-empt them:
 | `window_focus_failed` | `window.focus.request` threw. Distinct from an accepted-but-refused focus, which returns `accepted: false` rather than an error. |
 | `window_close_failed` | `window.close.request` threw, same distinction. |
 | `window_resize_failed` | `window.resize.request` threw while applying the size to the tracked HWND. |
-| `input_mouse_failed` | Posting a mouse message threw. |
-| `input_key_failed` | Posting a key message threw. |
+| `input_mouse_failed` | Posting a mouse message threw or Windows declined to apply it. |
+| `input_key_failed` | Posting a key message threw or Windows declined to apply it. |
+| `input_text_failed` | Posting committed text threw or Windows declined to apply it. |
 | `clipboard_text_failed` | The guest could not take the Windows clipboard. Routine rather than exotic: the guest retries `OpenClipboard` for 250 ms and any clipboard manager or Office instance can hold it longer. |
 
-Two gaps worth knowing about, both tracked in
-`docs/checklists/2026-08-13-host-guest-contract-audit.md`:
-
-- **Most of these cannot currently be observed by the macOS host.** `input.mouse`, `input.key`,
-  `input.text`, `clipboard.text.set`, and frame subscribe/unsubscribe are sent fire-and-forget, and the
-  host's transport closes the socket without reading. The sentence above permitting errors on those
-  requests describes surface no host reads today.
-- **`input_mouse_failed`, `input_key_failed`, and `input_text_failed` are only raised for thrown
-  exceptions.** The guest's desktop layer returns `false` — not an exception — for an unparseable HWND, an
-  unknown event name, and a dead window, and that path produces no reply at all.
+The fire-and-forget observation and silent `false`-return gaps recorded in
+`docs/checklists/2026-08-13-host-guest-contract-audit.md` are addressed for negotiated
+agents: the host reads the acknowledgement/error and the agent converts declined
+input to a structured failure. Legacy agents retain unacknowledged delivery, so
+socket submission alone cannot prove that Windows consumed their input.
 
 ## Shared Folder
 
-A live, writable folder both macOS and Windows can read and write continuously. This replaces
-`file.open.request` for anything that is not literally "open this dropped file", and it has no size cap.
+A live, writable folder both macOS and Windows can read and write continuously. The
+`file.open.shared.request` companion uses this folder for opening large files without copying their
+bytes through the control channel, and the folder itself has no size cap.
 
 Host request:
 
