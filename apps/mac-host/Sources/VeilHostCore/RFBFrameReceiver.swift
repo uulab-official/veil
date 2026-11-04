@@ -133,6 +133,11 @@ public struct RFBRenderedFrame: Codable, Equatable, Sendable {
 /// The RFB pseudo-encoding number for ExtendedDesktopSize resize negotiation.
 public let rfbExtendedDesktopSizeEncoding: Int32 = -223
 
+/// QEMU's historical Pierre Ossman ExtendedDesktopSize encoding. QEMU emits
+/// this value for the resize response even when the client also understands the
+/// standardized -223 value, so production clients must advertise and parse both.
+public let rfbQEMUExtendedDesktopSizeEncoding: Int32 = -308
+
 /// One screen entry from an ExtendedDesktopSize rectangle or SetDesktopSize message.
 public struct RFBScreenLayoutEntry: Equatable, Sendable {
     public var id: Int
@@ -209,9 +214,10 @@ public enum RFBClientMessageBuilder {
         setEncodings([0])
     }
 
-    /// Raw pixels plus ExtendedDesktopSize, the minimum set for dynamic resolution.
+    /// Raw pixels plus both standardized and QEMU ExtendedDesktopSize encodings,
+    /// the minimum set for dynamic resolution against the QEMU VNC server.
     public static func setRawAndDesktopResizeEncodings() -> Data {
-        setEncodings([0, rfbExtendedDesktopSizeEncoding])
+        setEncodings([0, rfbQEMUExtendedDesktopSizeEncoding, rfbExtendedDesktopSizeEncoding])
     }
 
     public static func setDesktopSize(width: Int, height: Int) -> Data {
@@ -271,6 +277,21 @@ public enum RFBClientMessageBuilder {
         data.appendBigEndian(y)
         data.appendBigEndian(width)
         data.appendBigEndian(height)
+        return data
+    }
+
+    /// RFB key event: one keysym press or release on the existing display session.
+    public static func keyEvent(keysym: UInt32, isDown: Bool) -> Data {
+        var data = Data([4, isDown ? 1 : 0, 0, 0])
+        data.appendBigEndian(keysym)
+        return data
+    }
+
+    /// RFB pointer event using the guest framebuffer's absolute pixel coordinates.
+    public static func pointerEvent(buttonMask: UInt8, x: UInt16, y: UInt16) -> Data {
+        var data = Data([5, buttonMask, 0, 0])
+        data.appendBigEndian(x)
+        data.appendBigEndian(y)
         return data
     }
 }
@@ -493,6 +514,14 @@ public final class RFBLoopbackSocket: RFBByteStream {
             }
 
             if result < 0 {
+                // A framebuffer can legitimately remain unchanged longer than the
+                // socket read timeout. Treat EAGAIN/EWOULDBLOCK as an idle wait,
+                // not a broken display, so the live session and its input channel
+                // stay connected instead of entering a reconnect loop every few
+                // seconds.
+                if errno == EAGAIN || errno == EWOULDBLOCK {
+                    continue
+                }
                 throw RFBLoopbackSocketError.socketOperationFailed(Self.lastErrnoDescription("read"))
             }
 
@@ -603,6 +632,33 @@ public final class RFBFrameStreamClient {
         try stream.write(RFBClientMessageBuilder.setDesktopSize(width: width, height: height))
     }
 
+    /// Sends a key event over the already authenticated RFB connection. This avoids
+    /// spawning a shell/netcat process for each keystroke.
+    public func sendKeyEvent(keysym: UInt32, isDown: Bool) throws {
+        guard serverInit != nil else {
+            throw RFBError.sessionNotStarted
+        }
+
+        try stream.write(RFBClientMessageBuilder.keyEvent(keysym: keysym, isDown: isDown))
+    }
+
+    /// Sends a pointer event over the already authenticated RFB connection.
+    public func sendPointerEvent(buttonMask: UInt8, x: Int, y: Int) throws {
+        guard let serverInit else {
+            throw RFBError.sessionNotStarted
+        }
+        guard x >= 0, y >= 0, x < serverInit.width, y < serverInit.height,
+              x <= Int(UInt16.max), y <= Int(UInt16.max) else {
+            throw RFBError.invalidFramebufferSize(width: x, height: y)
+        }
+
+        try stream.write(RFBClientMessageBuilder.pointerEvent(
+            buttonMask: buttonMask,
+            x: UInt16(x),
+            y: UInt16(y)
+        ))
+    }
+
     /// Adopts a server-confirmed framebuffer size so subsequent framebuffer update
     /// requests address the new surface instead of the old one.
     public func applyDesktopSize(width: Int, height: Int) throws {
@@ -641,7 +697,8 @@ public final class RFBFrameStreamClient {
             let height = Int(rectangleHeader.readUInt16BigEndian(at: 6))
             let encoding = rectangleHeader.readInt32BigEndian(at: 8)
 
-            if encoding == rfbExtendedDesktopSizeEncoding {
+            if encoding == rfbExtendedDesktopSizeEncoding ||
+                encoding == rfbQEMUExtendedDesktopSizeEncoding {
                 let screenCountByte = try stream.readExactly(1)
                 let payloadLength = try RFBFrameParser.desktopSizePayloadLength(firstBytes: screenCountByte)
                 let payloadRest = try stream.readExactly(payloadLength - 1)

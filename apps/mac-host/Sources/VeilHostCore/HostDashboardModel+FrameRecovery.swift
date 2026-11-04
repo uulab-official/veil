@@ -130,33 +130,27 @@ extension HostDashboardModel {
         }
 
         do {
+            try Task.checkCancellation()
             let focus = try await service.focusWindow(windowId: windowId)
-            guard focus.accepted else {
+            try Task.checkCancellation()
+            guard focus.accepted, resolvedMirrorSessionIndex(for: windowId) != nil else {
                 return false
             }
             markFocusedWindow(windowId: windowId)
 
-            try await service.unsubscribeWindowFrames(windowId: windowId)
-            try await service.subscribeWindowFrames(windowId: windowId)
+            // Strong recovery differs only by guest focus. Share the cancellation,
+            // close handling, and pre-subscribe reset with an ordinary restart.
+            return await restartFrameSubscription(windowId: windowId, restartedAt: recoveredAt)
         } catch {
+            if await dropMirrorSessionIfUntracked(windowId: windowId, error: error) {
+                return false
+            }
             // Also reached from `recoverEscalatedFrameCaptures`, which runs automatically. `.failed` renders
             // as "Connection failed", so a recovery attempt that did not take must not report the Windows
             // connection as down — the caller retries on the next pass.
             errorMessage = userMessage(for: error)
             return false
         }
-
-        guard let index = resolvedMirrorSessionIndex(for: windowId) else {
-            return false
-        }
-
-        mirrorSessions[index].captureState = .pending
-        mirrorSessions[index].frameTiming = nil
-        mirrorSessions[index].latestFrame = nil
-        mirrorSessions[index].frameStreamRequestedAt = recoveredAt
-        mirrorSessions[index].frameStreamRestartCount += 1
-        mirrorSessions[index].latestFrameStreamRestartedAt = recoveredAt
-        return true
     }
 
     @discardableResult

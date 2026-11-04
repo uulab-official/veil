@@ -118,7 +118,7 @@ extension HostDashboardModel {
         }
     }
 
-    func menuBarSymbolName(
+    private func menuBarSymbolName(
         localRuntime: WindowsAppRuntimeLocalRuntimeStatus,
         pendingLaunch: WindowsAppRuntimePendingLaunchStatus,
         dailyUseReadiness: WindowsAppRuntimeDailyUseReadinessStatus

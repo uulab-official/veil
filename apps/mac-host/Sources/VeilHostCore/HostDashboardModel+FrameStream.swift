@@ -19,6 +19,17 @@ extension HostDashboardModel {
             return
         }
 
+        if mirrorSessions[index].awaitingKeyFrameReason != nil, !frame.isCompositedSurface {
+            // JSON and binary delivery can coexist. A real JSON full image can restore the missing
+            // base, but merely plausible metadata (or another broken PNG) cannot prove recovery.
+            guard let tile = frame.asKeyFrameTile(),
+                  case .composited(let generation) = frameCompositor.apply(tile) else {
+                return
+            }
+            mirrorSessions[index].compositedFrameGeneration = generation
+            mirrorSessions[index].awaitingKeyFrameReason = nil
+        }
+
         let priorTiming = mirrorSessions[index].frameTiming
         mirrorSessions[index].latestFrame = frame
         mirrorSessions[index].captureState = .streaming
@@ -37,6 +48,17 @@ extension HostDashboardModel {
     /// Composited surface for a mirrored window, or `nil` until a key frame establishes one.
     public func compositedFrameImage(for windowId: String) -> CGImage? {
         frameCompositor.image(for: windowId)
+    }
+
+    /// Whether a dropped tile means the guest stream itself must be restarted.
+    ///
+    /// A malformed payload or an unkeyed resize can recover when the guest eventually emits its next
+    /// key frame. A sequence gap is different: the guest may continue sending small deltas forever, and
+    /// none of them can repair the missing base. The binary-channel pump uses this narrow signal to reset
+    /// only this window's subscription immediately.
+    public func requiresFrameStreamRestartAfterTileDrop(windowId: String) -> Bool {
+        mirrorSessions.first(where: { $0.id == windowId })?.awaitingKeyFrameReason
+            == WindowFrameCompositor.RejectionReason.sequenceGap.rawValue
     }
 
     /// Applies a frame update that may be a dirty-rect tile rather than a whole frame.
@@ -99,6 +121,9 @@ extension HostDashboardModel {
         receivedAt: Date = Date()
     ) -> Bool {
         guard let index = mirrorSessions.firstIndex(where: { $0.id == event.windowId }),
+              // A heartbeat proves the guest is alive, not that the host has every changed pixel.
+              // Keep the last successful frame's clock so ordinary stale-stream recovery can run.
+              mirrorSessions[index].awaitingKeyFrameReason == nil,
               let priorTiming = mirrorSessions[index].frameTiming else {
             return false
         }
@@ -175,11 +200,30 @@ extension HostDashboardModel {
               hasLiveAgentConnection else {
             return false
         }
+        guard frameStreamRestartInFlightWindowIds.insert(windowId).inserted else {
+            return false
+        }
+        defer { frameStreamRestartInFlightWindowIds.remove(windowId) }
 
         do {
+            try Task.checkCancellation()
             try await service.unsubscribeWindowFrames(windowId: windowId)
+            try Task.checkCancellation()
+            guard prepareFrameSubscription(windowId: windowId, requestedAt: restartedAt) else {
+                return false
+            }
             try await service.subscribeWindowFrames(windowId: windowId)
+            try Task.checkCancellation()
         } catch {
+            // The guest untracks an HWND the moment its window closes inside Windows, while the
+            // host only learns about it through a `window.closed` event on the separate event
+            // connection. An agent with acknowledgements can now say so directly: `window_not_tracked`
+            // means the window is gone, so dropping the mirror session stops the staleness ladder
+            // from escalating into offering to relaunch an app that no longer exists.
+            if await dropMirrorSessionIfUntracked(windowId: windowId, error: error) {
+                return false
+            }
+
             // Background frame-stream maintenance, not a user action. `.failed` is documented as reserved
             // for "a user-triggered action that failed outright" and renders as "Connection failed", so a
             // retry loop that could not resubscribe must not put the whole model there. Returning `false`
@@ -192,12 +236,25 @@ extension HostDashboardModel {
             return false
         }
 
-        mirrorSessions[index].captureState = .pending
-        mirrorSessions[index].frameTiming = nil
-        mirrorSessions[index].latestFrame = nil
-        mirrorSessions[index].frameStreamRequestedAt = restartedAt
+        // The independent event/frame channel may already have delivered the new image
+        // while subscribe awaited its acknowledgement. Never reset that image here.
         mirrorSessions[index].frameStreamRestartCount += 1
         mirrorSessions[index].latestFrameStreamRestartedAt = restartedAt
+        return true
+    }
+
+    /// Starts a new frame epoch locally before the guest can deliver its first frame.
+    /// Re-resolving here also prevents a close received during unsubscribe from being
+    /// followed by a subscribe for the removed window.
+    private func prepareFrameSubscription(windowId: String, requestedAt: Date) -> Bool {
+        guard let index = resolvedMirrorSessionIndex(for: windowId) else { return false }
+        frameCompositor.forget(windowId: windowId)
+        mirrorSessions[index].captureState = .pending
+        mirrorSessions[index].latestFrame = nil
+        mirrorSessions[index].frameTiming = nil
+        mirrorSessions[index].compositedFrameGeneration = 0
+        mirrorSessions[index].awaitingKeyFrameReason = nil
+        mirrorSessions[index].frameStreamRequestedAt = requestedAt
         return true
     }
 
@@ -220,30 +277,17 @@ extension HostDashboardModel {
         guard let startingIndex = mirrorSessions.firstIndex(where: { $0.id == windowId }),
               mirrorSessions[startingIndex].captureState != .unavailable,
               !pausedFrameStreamWindowIds.contains(windowId),
+              pendingFrameStreamVisibility[windowId] != true,
               hasLiveAgentConnection else {
             return false
         }
 
-        do {
-            try await service.unsubscribeWindowFrames(windowId: windowId)
-        } catch {
-            return false
-        }
-
-        guard let index = resolvedMirrorSessionIndex(for: windowId) else {
-            return false
-        }
-
-        pausedFrameStreamWindowIds.insert(windowId)
-        mirrorSessions[index].captureState = .pending
-        mirrorSessions[index].frameTiming = nil
-        mirrorSessions[index].latestFrame = nil
-        // Kept, not cleared. `harness/app-runtime-status` requires `frameStreamRequestedAt` on any capture
-        // session with no received frames, so clearing it would make every paused window fail the report
-        // contract. Escalation is prevented by excluding paused windows from the automatic sweeps instead,
-        // which is what actually drives `frameStreamRestartCount` upward.
-        mirrorSessions[index].frameStreamRequestedAt = pausedAt
-        return true
+        pendingFrameStreamVisibility[windowId] = true
+        return await enqueueFrameStreamVisibility(
+            windowId: windowId,
+            shouldPause: true,
+            requestedAt: pausedAt
+        )
     }
 
     /// Resubscribes a window whose stream was paused because it was not visible.
@@ -252,27 +296,122 @@ extension HostDashboardModel {
     /// comes back and then genuinely fails to draw is still caught.
     @discardableResult
     public func resumeFrameStream(windowId: String, resumedAt: Date = Date()) async -> Bool {
-        guard pausedFrameStreamWindowIds.contains(windowId),
+        guard pausedFrameStreamWindowIds.contains(windowId)
+                || pendingFrameStreamVisibility[windowId] == true,
+              pendingFrameStreamVisibility[windowId] != false,
               mirrorSessions.contains(where: { $0.id == windowId }),
               hasLiveAgentConnection else {
             return false
         }
 
+        pendingFrameStreamVisibility[windowId] = false
+        return await enqueueFrameStreamVisibility(
+            windowId: windowId,
+            shouldPause: false,
+            requestedAt: resumedAt
+        )
+    }
+
+    /// Adds a visibility transition to the per-window tail. AppKit can deliver a restore before the guest has
+    /// acknowledged the preceding unsubscribe; serializing the tail keeps stream ownership in the same order
+    /// as the user's final window state.
+    private func enqueueFrameStreamVisibility(
+        windowId: String,
+        shouldPause: Bool,
+        requestedAt: Date
+    ) async -> Bool {
+        let operationID = UUID()
+        let predecessor = frameStreamVisibilityTasks[windowId]
+        frameStreamVisibilityOperationIDs[windowId] = operationID
+        let task = Task { @MainActor [weak self] in
+            if let predecessor {
+                _ = await predecessor.value
+            }
+            guard let self, !Task.isCancelled else {
+                return false
+            }
+
+            return await self.applyFrameStreamVisibility(
+                windowId: windowId,
+                shouldPause: shouldPause,
+                requestedAt: requestedAt
+            )
+        }
+        frameStreamVisibilityTasks[windowId] = task
+
+        let result = await task.value
+        if frameStreamVisibilityOperationIDs[windowId] == operationID {
+            frameStreamVisibilityTasks.removeValue(forKey: windowId)
+            frameStreamVisibilityOperationIDs.removeValue(forKey: windowId)
+            pendingFrameStreamVisibility.removeValue(forKey: windowId)
+        }
+        return result
+    }
+
+    private func applyFrameStreamVisibility(
+        windowId: String,
+        shouldPause: Bool,
+        requestedAt: Date
+    ) async -> Bool {
+        guard hasLiveAgentConnection else {
+            return false
+        }
+
+        if shouldPause {
+            guard let startingIndex = mirrorSessions.firstIndex(where: { $0.id == windowId }),
+                  mirrorSessions[startingIndex].captureState != .unavailable,
+                  !pausedFrameStreamWindowIds.contains(windowId) else {
+                return false
+            }
+
+            do {
+                try Task.checkCancellation()
+                try await service.unsubscribeWindowFrames(windowId: windowId)
+                try Task.checkCancellation()
+            } catch {
+                return false
+            }
+
+            guard let index = resolvedMirrorSessionIndex(for: windowId) else {
+                return false
+            }
+
+            pausedFrameStreamWindowIds.insert(windowId)
+            mirrorSessions[index].captureState = .pending
+            mirrorSessions[index].frameTiming = nil
+            mirrorSessions[index].latestFrame = nil
+            // Kept, not cleared. `harness/app-runtime-status` requires `frameStreamRequestedAt` on any capture
+            // session with no received frames, so clearing it would make every paused window fail the report
+            // contract. Escalation is prevented by excluding paused windows from the automatic sweeps instead,
+            // which is what actually drives `frameStreamRestartCount` upward.
+            mirrorSessions[index].frameStreamRequestedAt = requestedAt
+            return true
+        }
+
+        guard pausedFrameStreamWindowIds.contains(windowId) else {
+            // The window may have been restored before the queued pause actually started. It never lost its
+            // subscription, so treating this as a successful no-op leaves the final visible state correct.
+            return true
+        }
+
         do {
+            try Task.checkCancellation()
+            guard prepareFrameSubscription(windowId: windowId, requestedAt: requestedAt) else {
+                return false
+            }
             try await service.subscribeWindowFrames(windowId: windowId)
+            try Task.checkCancellation()
         } catch {
             // Left in the paused set so a later resume can try again, rather than being remembered as live
             // while no frames are coming.
             return false
         }
 
-        guard let index = resolvedMirrorSessionIndex(for: windowId) else {
+        guard resolvedMirrorSessionIndex(for: windowId) != nil else {
             return false
         }
 
         pausedFrameStreamWindowIds.remove(windowId)
-        mirrorSessions[index].captureState = .pending
-        mirrorSessions[index].frameStreamRequestedAt = resumedAt
         return true
     }
 

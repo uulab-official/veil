@@ -32,6 +32,8 @@ struct VeilHostShellApp: App {
     @State var hasObservedLiveAgentConnection = false
     @State var latestReviewEvidenceFolder: ReviewEvidenceFolder?
     @State var oneClickAppLaunchGate = OneClickAppLaunchTaskGate<OneClickAppLaunchOutcome<WindowsAppLaunchResult>>()
+    @State var oneClickAppWindowPresentationGate = OneClickAppWindowPresentationGate()
+    @State var oneClickAppFrameMutationGate = OneClickAppFrameMutationGate()
     let automaticRestoreMaximumAttempts = 3
 
     init() {
@@ -276,14 +278,5 @@ struct VeilHostShellApp: App {
         ProcessInfo.processInfo.arguments.contains("--start-vm")
     }
 
-}
-
-// This selector is not surfaced consistently by the macOS SDK overlay, so keep it in an extension
-// to avoid Swift's optional-protocol near-match warning while still disabling empty AppKit restoration.
-extension AppDelegate {
-    @objc(applicationShouldSaveState:)
-    func applicationShouldSaveState(_ app: NSApplication) -> Bool {
-        false
-    }
 }
 

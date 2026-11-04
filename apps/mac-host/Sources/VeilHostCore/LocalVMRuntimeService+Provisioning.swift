@@ -2,6 +2,7 @@ import Foundation
 
 extension LocalVMRuntimeService {
     public func createDefaultProfile() async throws -> VMRuntimeSnapshot {
+        try await requireResourceMutationAllowed()
         let profile = defaultProfile()
         try FileManager.default.createDirectory(
             atPath: profile.sharedFolderPath,
@@ -13,6 +14,7 @@ extension LocalVMRuntimeService {
     }
 
     public func prepareDefaultVM() async throws -> VMRuntimeSnapshot {
+        try await requireResourceMutationAllowed()
         var profile = try await profileStore.load() ?? defaultProfile()
         profile = try prepareDefaultResources(for: profile)
         try await profileStore.save(profile)
@@ -20,6 +22,7 @@ extension LocalVMRuntimeService {
     }
 
     public func createDefaultVirtualDisk() async throws -> VMRuntimeSnapshot {
+        try await requireResourceMutationAllowed()
         var profile = try await profileStore.load() ?? defaultProfile()
         if profile.virtualDiskPath != nil {
             return try await loadSnapshot()

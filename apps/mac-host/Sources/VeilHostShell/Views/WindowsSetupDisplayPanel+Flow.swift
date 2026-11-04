@@ -135,6 +135,28 @@ extension WindowsSetupDisplayPanel {
         canRequestWindowsAppLaunch || canFulfillPendingLaunch
     }
 
+    var runtimeReadinessSteps: [WindowsRuntimeReadinessStep] {
+        WindowsRuntimeReadiness.resolve(
+            snapshot: snapshot,
+            installEvidence: effectiveInstallEvidence,
+            agentDiagnostic: agentDiagnostic,
+            hasDisplay: hasDesktopDisplay,
+            asOf: Date()
+        )
+    }
+
+    var bootIsStalled: Bool {
+        WindowsRuntimeReadiness.shouldBlockAgentRepair(snapshot: snapshot)
+    }
+
+    var runtimeFailurePresentation: WindowsRuntimeFailurePresentation? {
+        WindowsRuntimeFailurePresentation.resolve(
+            state: snapshot.state,
+            errorMessage: errorMessage,
+            snapshotDetail: snapshot.detail
+        )
+    }
+
     var prefersOneClickAppLaunch: Bool {
         WindowsAppLaunchCommandPolicy.prefersLaunchAsHero(
             windowsInstalled: effectiveInstallEvidence.isInstalled,
@@ -145,12 +167,17 @@ extension WindowsSetupDisplayPanel {
     var canRepairGuestAgentForAppLaunch: Bool {
         pendingLaunch.willLaunchOnAgentReconnect
             && !canFulfillPendingLaunch
+            && !bootIsStalled
             && (snapshot.state == .running || snapshot.state == .starting)
     }
 
     var canRecoverRuntimeDisplay: Bool {
         guard canShowDisplay else {
             return false
+        }
+
+        if bootIsStalled {
+            return hasDesktopDisplay
         }
 
         return snapshot.latestConsoleLaunch?.previewStatus == .stale

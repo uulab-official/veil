@@ -2,6 +2,7 @@ import Foundation
 
 extension LocalVMRuntimeService {
     public func updateProfilePaths(installerMediaPath: String?, driverMediaPath: String?, virtualDiskPath: String?) async throws -> VMRuntimeSnapshot {
+        try await requireResourceMutationAllowed()
         var profile = try await profileStore.load() ?? defaultProfile()
         let existingProfile = profile
         profile.installerMediaPath = installerMediaPath
@@ -24,6 +25,18 @@ extension LocalVMRuntimeService {
         )
         try await profileStore.save(profile)
         return try await loadSnapshot()
+    }
+
+    /// Resource changes are intentionally enforced at the service boundary as well as in the
+    /// SwiftUI settings policy. A stale callback, CLI caller, or future surface must not replace
+    /// the disk/media attachments underneath a live or suspended guest.
+    func requireResourceMutationAllowed() async throws {
+        switch try await loadSnapshot().state {
+        case .running, .starting, .suspended:
+            throw VMRuntimeError.resourceMutationRequiresStoppedRuntime
+        case .unsupported, .notConfigured, .stopped, .failed:
+            return
+        }
     }
 
     public func markGuestAgentConnected(agentVersion: String) async throws -> VMRuntimeSnapshot {

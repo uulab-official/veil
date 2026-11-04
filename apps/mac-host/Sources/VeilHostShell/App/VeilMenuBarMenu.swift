@@ -234,7 +234,7 @@ struct VeilMenuBarMenu: View {
             && (vmModel.snapshot?.installEvidence.kind != .guestAgent || !model.hasLiveAgentConnection)
     }
 
-    var canWaitForGuestAgent: Bool {
+    private var canWaitForGuestAgent: Bool {
         (vmModel.snapshot?.state == .running || vmModel.snapshot?.state == .starting)
             && !model.hasLiveAgentConnection
     }
@@ -282,7 +282,7 @@ struct VeilMenuBarMenu: View {
             && vmModel.snapshot?.installEvidence.isInstalled != true
     }
 
-    var appRuntimeStatusReport: WindowsAppRuntimeStatusReport {
+    private var appRuntimeStatusReport: WindowsAppRuntimeStatusReport {
         model.runtimeStatusReport(
             localRuntime: model.localRuntimeStatus(snapshot: vmModel.snapshot),
             hostBackingScale: HostDisplayScale.current

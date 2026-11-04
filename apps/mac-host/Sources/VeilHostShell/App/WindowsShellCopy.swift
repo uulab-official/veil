@@ -16,6 +16,21 @@ struct WindowsLauncherMetadataStatus: Equatable {
 }
 
 enum WindowsShellCopy {
+    /// The guest agent is only expected to answer once Windows is installed and running.
+    /// Before that it is unreachable by definition; treating that as a broken connection
+    /// sends a first-run user into a repair flow for a Windows install that does not exist.
+    static func appConnectionNeedsRepair(
+        hasLiveAppConnection: Bool,
+        agentUnavailable: Bool,
+        windowsInstalled: Bool,
+        runtimeState: VMRuntimeState?
+    ) -> Bool {
+        !hasLiveAppConnection
+            && agentUnavailable
+            && windowsInstalled
+            && runtimeState == .running
+    }
+
     static func headerSubtitle(
         hasLiveAppConnection: Bool,
         runtimeState: VMRuntimeState?,

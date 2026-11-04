@@ -428,7 +428,7 @@ extension VeilVMControl {
         return actions
     }
 
-    static func errorMessage(for error: Error) -> String {
+    private static func errorMessage(for error: Error) -> String {
         if let localizedError = error as? LocalizedError,
            let description = localizedError.errorDescription {
             return description

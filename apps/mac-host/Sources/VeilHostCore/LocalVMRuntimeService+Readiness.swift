@@ -157,8 +157,8 @@ extension LocalVMRuntimeService {
             return VMInstallEvidenceSummary(
                 kind: .guestAgent,
                 isInstalled: true,
-                title: "Guest agent connected",
-                detail: "Windows is running the Veil guest agent \(guestAgentVersion) over the local runtime channel."
+                title: "Guest agent installed",
+                detail: "The Veil guest agent \(guestAgentVersion) is installed in Windows. Veil verifies the live connection separately before opening apps."
             )
         }
 
@@ -290,7 +290,7 @@ extension LocalVMRuntimeService {
                 title: "Veil guest agent",
                 detail: profile.guestAgentVersion == nil
                     ? "Install the guest agent inside Windows after setup."
-                    : "Guest agent \(profile.guestAgentVersion ?? "") is connected.",
+                    : "Guest agent \(profile.guestAgentVersion ?? "") is installed; live connection is checked when Windows is running.",
                 state: profile.guestAgentVersion == nil ? .pending : .complete
             )
         ]

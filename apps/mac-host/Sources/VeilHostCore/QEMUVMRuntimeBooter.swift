@@ -15,6 +15,11 @@ public struct QEMULaunchRecord: Codable, Equatable, Sendable {
     public var vncPort: Int?
     public var consoleScreenshotPath: String?
     public var consoleScreenshotRefreshedAt: Date?
+    /// The most recent live VNC observation, when `qemu-display-smoke` has validated the running
+    /// console. A screenshot timestamp alone is not enough: a successfully captured all-black frame
+    /// is still a broken console for the purposes of app launch recovery.
+    public var consoleVisualState: QEMUConsoleVisualState?
+    public var consoleVisualStateAt: Date?
     public var startedAt: Date
 
     public init(
@@ -32,6 +37,8 @@ public struct QEMULaunchRecord: Codable, Equatable, Sendable {
         vncPort: Int? = nil,
         consoleScreenshotPath: String? = nil,
         consoleScreenshotRefreshedAt: Date? = nil,
+        consoleVisualState: QEMUConsoleVisualState? = nil,
+        consoleVisualStateAt: Date? = nil,
         startedAt: Date
     ) {
         self.kind = kind
@@ -48,6 +55,8 @@ public struct QEMULaunchRecord: Codable, Equatable, Sendable {
         self.vncPort = vncPort
         self.consoleScreenshotPath = consoleScreenshotPath
         self.consoleScreenshotRefreshedAt = consoleScreenshotRefreshedAt
+        self.consoleVisualState = consoleVisualState
+        self.consoleVisualStateAt = consoleVisualStateAt
         self.startedAt = startedAt
     }
 }
@@ -537,14 +546,7 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
     }
 
     public static func defaultDiagnosticsDirectory() -> URL {
-        let applicationSupport = FileManager.default.urls(
-            for: .applicationSupportDirectory,
-            in: .userDomainMask
-        ).first
-            ?? FileManager.default.homeDirectoryForCurrentUser
-                .appendingPathComponent("Library/Application Support", isDirectory: true)
-        return applicationSupport
-            .appendingPathComponent("Veil", isDirectory: true)
+        VeilApplicationSupport.directory
             .appendingPathComponent("Diagnostics", isDirectory: true)
     }
 

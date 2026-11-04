@@ -35,6 +35,9 @@ extension HostDashboardModel {
                 InputMouseEvent(windowId: windowId, event: event, x: x, y: y, modifiers: modifiers)
             )
         } catch {
+            if await dropMirrorSessionIfUntracked(windowId: windowId, error: error) {
+                return
+            }
             errorMessage = userMessage(for: error)
             phase = .failed
         }
@@ -77,6 +80,9 @@ extension HostDashboardModel {
             try await service.sendTextInput(InputTextEvent(windowId: windowId, text: text))
             return true
         } catch {
+            if await dropMirrorSessionIfUntracked(windowId: windowId, error: error) {
+                return false
+            }
             errorMessage = userMessage(for: error)
             phase = .failed
             return false
@@ -105,9 +111,27 @@ extension HostDashboardModel {
                 )
             )
         } catch {
+            if await dropMirrorSessionIfUntracked(windowId: windowId, error: error) {
+                return
+            }
             errorMessage = userMessage(for: error)
             phase = .failed
         }
+    }
+
+    /// Drops a mirror session the guest has already reported as gone.
+    ///
+    /// Returns whether the error was `window_not_tracked`, so callers can skip the
+    /// "Connection failed" phase: the connection is fine, the window simply no longer exists.
+    func dropMirrorSessionIfUntracked(windowId: String, error: any Error) async -> Bool {
+        guard let agentError = error as? VeilHostError,
+              case .agentError(let code, _) = agentError,
+              code == "window_not_tracked" else {
+            return false
+        }
+
+        await removeWindowState(windowId: windowId)
+        return true
     }
 
     /// - Returns: Whether the clipboard write reached the guest. Callers that follow this with a paste

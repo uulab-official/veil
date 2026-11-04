@@ -28,12 +28,16 @@ public final class WindowFrameCompositor: @unchecked Sendable {
         case undecodablePayload
         /// The decoded image dimensions disagree with the declared rectangle.
         case payloadRectMismatch
+        /// A delta skipped or repeated a sequence number, so the retained surface is no longer a
+        /// trustworthy base for this update.
+        case sequenceGap
     }
 
     private struct Surface {
         var context: CGContext
         var width: Int
         var height: Int
+        var sequence: Int
         var generation: Int
     }
 
@@ -64,12 +68,16 @@ public final class WindowFrameCompositor: @unchecked Sendable {
     @discardableResult
     public func apply(_ tile: WindowFrameTile) -> ApplyResult {
         guard let image = decodeImage(tile.payload) else {
+            // Later deltas depend on every earlier update. Once one is lost, retaining the old base
+            // would let unrelated updates make an incomplete picture appear healthy indefinitely.
+            forget(windowId: tile.windowId)
             return .needsKeyFrame(reason: .undecodablePayload)
         }
 
         // The rectangle is what tells the compositor where to draw. If the payload's real size disagrees,
         // one of the two is wrong and scaling to fit would silently distort the window.
         guard image.width == tile.rect.width, image.height == tile.rect.height else {
+            forget(windowId: tile.windowId)
             return .needsKeyFrame(reason: .payloadRectMismatch)
         }
 
@@ -80,6 +88,8 @@ public final class WindowFrameCompositor: @unchecked Sendable {
 
         if tile.isKeyFrame {
             guard let context = Self.makeContext(width: tile.surfaceWidth, height: tile.surfaceHeight) else {
+                surfacesByWindowId.removeValue(forKey: tile.windowId)
+                surfaceOrder.removeAll { $0 == tile.windowId }
                 return .needsKeyFrame(reason: .noSurface)
             }
             // Evicted before allocating, so the peak is the bound rather than the bound plus one.
@@ -90,6 +100,7 @@ public final class WindowFrameCompositor: @unchecked Sendable {
                 context: context,
                 width: tile.surfaceWidth,
                 height: tile.surfaceHeight,
+                sequence: tile.sequence,
                 generation: (surface?.generation ?? 0)
             )
         }
@@ -106,6 +117,17 @@ public final class WindowFrameCompositor: @unchecked Sendable {
             return .needsKeyFrame(reason: .surfaceSizeChanged)
         }
 
+        if !tile.isKeyFrame {
+            // Deltas are patches against the immediately preceding surface. If one was lost, applying a
+            // later patch would leave a plausible-looking but permanently wrong window. Key frames reset
+            // the sequence base above; only deltas need this strict adjacency check.
+            guard tile.sequence == existing.sequence + 1 else {
+                surfacesByWindowId.removeValue(forKey: tile.windowId)
+                surfaceOrder.removeAll { $0 == tile.windowId }
+                return .needsKeyFrame(reason: .sequenceGap)
+            }
+        }
+
         // CoreGraphics origin is bottom-left; guest rectangles are top-left. Flipping here keeps the tile
         // coordinate space identical to what Windows reported.
         let drawRect = CGRect(
@@ -118,6 +140,7 @@ public final class WindowFrameCompositor: @unchecked Sendable {
         // a partially transparent capture leave the previous content showing through.
         existing.context.setBlendMode(.copy)
         existing.context.draw(image, in: drawRect)
+        existing.sequence = tile.sequence
         existing.generation += 1
         surfacesByWindowId[tile.windowId] = existing
         touchSurfaceOrder(tile.windowId)

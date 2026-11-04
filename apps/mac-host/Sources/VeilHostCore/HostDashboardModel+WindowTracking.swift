@@ -27,7 +27,12 @@ extension HostDashboardModel {
                 supportsCapture: hasLiveAgentConnection && health?.capabilities.windowCapture == true
             )
             await refreshRestoreIntentFromOpenWindows()
-            if hasLiveAgentConnection, health?.capabilities.windowCapture == true {
+            // A reconnect can enumerate a HWND that is already mirrored. Keep a minimized window
+            // paused across that discovery pass: re-subscribing here would make the guest capture a
+            // surface the user deliberately hid and would race the next restore transition.
+            if hasLiveAgentConnection,
+               health?.capabilities.windowCapture == true,
+               !pausedFrameStreamWindowIds.contains(event.windowId) {
                 do {
                     try await service.subscribeWindowFrames(windowId: event.windowId)
                 } catch {
@@ -229,7 +234,20 @@ extension HostDashboardModel {
         )
 
         if let index = mirrorSessions.firstIndex(where: { $0.id == session.id }) {
-            mirrorSessions[index] = session
+            // `window.created` is both a launch response and the guest's reconnect enumeration
+            // event. It is therefore normal to see it more than once for one HWND. Replacing the
+            // value object here used to erase the last frame, timing evidence, compositor generation,
+            // and recovery count before the new subscription acknowledgement arrived. Preserve the
+            // live stream state and only refresh guest-owned metadata; a session that was unavailable
+            // may still be promoted when a later event proves capture is available.
+            var existing = mirrorSessions[index]
+            existing.window = window
+            existing.connectionMode = connectionMode
+            if existing.captureState == .unavailable, captureState != .unavailable {
+                existing.captureState = captureState
+                existing.frameStreamRequestedAt = session.frameStreamRequestedAt
+            }
+            mirrorSessions[index] = existing
             return
         }
 
@@ -273,6 +291,9 @@ extension HostDashboardModel {
         // Otherwise a window minimized and then closed stays in the paused set forever, and a later window
         // that reused the same HWND would be treated as already paused and never resubscribed.
         pausedFrameStreamWindowIds.remove(windowId)
+        pendingFrameStreamVisibility.removeValue(forKey: windowId)
+        frameStreamVisibilityOperationIDs.removeValue(forKey: windowId)
+        frameStreamVisibilityTasks.removeValue(forKey: windowId)?.cancel()
         // Each composited surface is a full-resolution bitmap. A closed window that kept one would hold
         // megabytes for the rest of the process's lifetime.
         frameCompositor.forget(windowId: windowId)

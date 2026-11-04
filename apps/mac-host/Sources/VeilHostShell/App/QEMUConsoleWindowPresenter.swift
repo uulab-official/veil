@@ -8,16 +8,28 @@ import VeilHostCore
 final class DesktopResizeCommandBus: @unchecked Sendable {
     private let lock = NSLock()
     private var performer: ((Int, Int) -> Void)?
+    private var pendingTarget: (width: Int, height: Int)?
 
     func setPerformer(_ performer: ((Int, Int) -> Void)?) {
         lock.lock()
         self.performer = performer
+        let pendingTarget = performer == nil ? nil : self.pendingTarget
+        if performer != nil {
+            self.pendingTarget = nil
+        }
         lock.unlock()
+
+        if let pendingTarget, let performer {
+            performer(pendingTarget.width, pendingTarget.height)
+        }
     }
 
     func request(width: Int, height: Int) {
         lock.lock()
         let performer = self.performer
+        if performer == nil {
+            pendingTarget = (width, height)
+        }
         lock.unlock()
         performer?(width, height)
     }
@@ -35,7 +47,8 @@ final class QEMUConsoleWindowPresenter: NSObject, NSWindowDelegate {
         surface: VMConsoleDisplaySurface,
         screenshotPath: String?,
         pointerTapAction: @escaping (Double, Double) -> Void,
-        keyAction: @escaping (String) -> Void
+        keyAction: @escaping (String) -> Void,
+        displayResizeAction: ((Int, Int) -> Void)? = nil
     ) -> Bool {
         let screenshot = screenshotPath.flatMap(NSImage.init(contentsOfFile:))
         let rootView = WindowsEmbeddedDisplayPreview(
@@ -44,6 +57,7 @@ final class QEMUConsoleWindowPresenter: NSObject, NSWindowDelegate {
             path: screenshotPath ?? "",
             revisionID: screenshotPath ?? surface.endpoint ?? "windows-desktop",
             resizeBus: resizeBus,
+            displayResizeAction: displayResizeAction,
             pointerTapAction: pointerTapAction,
             keyAction: keyAction
         )
@@ -52,6 +66,7 @@ final class QEMUConsoleWindowPresenter: NSObject, NSWindowDelegate {
         if let window {
             window.contentViewController = NSHostingController(rootView: rootView)
             window.contentMinSize = NSSize(width: 800, height: 500)
+            normalizeWindowFrame(window)
             window.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
             scheduleResizeRequest()
@@ -73,6 +88,7 @@ final class QEMUConsoleWindowPresenter: NSObject, NSWindowDelegate {
         window.contentViewController = NSHostingController(rootView: rootView)
         window.contentMinSize = NSSize(width: 800, height: 500)
         window.setFrameAutosaveName("WindowsDesktopConsole")
+        normalizeWindowFrame(window)
         window.center()
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
@@ -169,6 +185,22 @@ final class QEMUConsoleWindowPresenter: NSObject, NSWindowDelegate {
         }
 
         lastResizeTarget = target
+        VeilLog.runtime.debug(
+            "Console window resize settled at \(Int(contentSize.width))x\(Int(contentSize.height))pt -> guest \(target.widthInPixels)x\(target.heightInPixels)"
+        )
         resizeBus.request(width: target.widthInPixels, height: target.heightInPixels)
+    }
+
+    /// Autosaved AppKit frames can outlive an older preview layout and restore a
+    /// practically invisible window (for example 80×120). Never let that turn the
+    /// live Windows desktop into a thumbnail; restore a usable console frame while
+    /// preserving a normal user-resized frame.
+    private func normalizeWindowFrame(_ window: NSWindow) {
+        let minimumFrame = NSSize(width: 800, height: 500)
+        guard window.frame.width < minimumFrame.width || window.frame.height < minimumFrame.height else {
+            return
+        }
+
+        window.setContentSize(NSSize(width: 1280, height: 800))
     }
 }

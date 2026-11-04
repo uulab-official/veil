@@ -71,7 +71,7 @@ struct VeilVMControl {
         case .qemuStart(let json, let waitSeconds, let displayMode):
             try await startQEMU(json: json, waitSeconds: waitSeconds, displayMode: displayMode)
         case .qemuDisplaySmoke(let json, let waitSeconds):
-            try smokeQEMUDisplay(json: json, waitSeconds: waitSeconds)
+            try await smokeQEMUDisplay(json: json, waitSeconds: waitSeconds)
         case .qemuCapture(let json, let outputPath):
             try await captureQEMUConsole(json: json, outputPath: outputPath)
         case .qemuPowerDown(let json, let waitSeconds):

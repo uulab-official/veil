@@ -172,6 +172,7 @@ enum AppRuntimeDockMenuFactory {
                         action: #selector(AppRuntimeDockMenuTarget.focusWindowsAppWindow(_:)),
                         target: target,
                         representedObject: session.id,
+                        image: appIcon(for: session.window.appId, model: model),
                         isEnabled: model.canFocusMirrorSession(windowId: session.id)
                     )
                 )
@@ -187,6 +188,7 @@ enum AppRuntimeDockMenuFactory {
                         action: #selector(AppRuntimeDockMenuTarget.closeWindowsAppWindow(_:)),
                         target: target,
                         representedObject: session.id,
+                        image: appIcon(for: session.window.appId, model: model),
                         isEnabled: model.canCloseMirrorSession(windowId: session.id)
                     )
                 )
@@ -271,6 +273,7 @@ enum AppRuntimeDockMenuFactory {
                         action: #selector(AppRuntimeDockMenuTarget.launchWindowsApp(_:)),
                         target: target,
                         representedObject: app.id,
+                        image: appIcon(for: app.id, model: model),
                         isEnabled: (!canRecoverRuntimeDisplay(vmModel: vmModel) || model.hasLiveAgentConnection)
                             && model.canRequestAppLaunch(appId: app.id)
                     )
@@ -339,13 +342,37 @@ enum AppRuntimeDockMenuFactory {
         action: Selector,
         target: AppRuntimeDockMenuTarget,
         representedObject: Any? = nil,
+        image: NSImage? = nil,
         isEnabled: Bool = true
     ) -> NSMenuItem {
         let item = NSMenuItem(title: title, action: action, keyEquivalent: "")
         item.target = target
         item.representedObject = representedObject
+        item.image = image
         item.isEnabled = isEnabled
         return item
+    }
+
+    private static func appIcon(for appId: String, model: HostDashboardModel) -> NSImage? {
+        let identity = WindowsAppWindowIdentity.resolve(appId: appId, apps: model.apps)
+        let image = identity.iconData.flatMap(NSImage.init(data:))
+            ?? NSImage(systemSymbolName: "app.window", accessibilityDescription: identity.appName)
+        guard let image else {
+            return nil
+        }
+
+        let nativeSize = image.size
+        guard nativeSize.width > 0, nativeSize.height > 0 else {
+            image.size = NSSize(width: 16, height: 16)
+            return image
+        }
+
+        let scale = min(16 / nativeSize.width, 16 / nativeSize.height)
+        image.size = NSSize(
+            width: max(1, nativeSize.width * scale),
+            height: max(1, nativeSize.height * scale)
+        )
+        return image
     }
 
     private static func selector(for kind: AppQueuedLaunchMenuState.Kind) -> Selector {

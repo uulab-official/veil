@@ -234,6 +234,30 @@ struct VeilHostClientTests {
         #expect(result.window.title == "notes.txt - Notepad")
     }
 
+    @Test("opens a file already copied into the shared folder without sending bytes")
+    func opensSharedFolderFileWithoutSendingBytes() async throws {
+        let transport = RecordingTransport(responses: [
+            #"{"type":"agent.health.response","requestId":"req_health","protocolVersion":1,"agentVersion":"0.1.0","os":"windows-arm64","session":{"interactive":true,"user":"veil-user"},"capabilities":{"appList":true,"appLaunch":true,"windowTracking":true,"windowCapture":false,"input":false,"clipboardText":false,"packageIdentity":false}}"#,
+            #"{"type":"app.list.response","requestId":"req_apps","apps":[{"id":"winapp_notepad","name":"Notepad","exePath":"C:\\Windows\\System32\\notepad.exe","publisher":"Microsoft","iconId":"icon_notepad"}]}"#,
+            #"{"type":"file.open.response","requestId":"req_open_shared_winapp_notepad","accepted":true,"processId":4931}"#,
+            #"{"type":"window.created","windowId":"hwnd:00010501","processId":4931,"appId":"winapp_notepad","title":"large-report.txt - Notepad","bounds":{"x":10,"y":10,"width":1280,"height":800},"state":"normal","focused":true}"#
+        ])
+        let client = VeilHostClient(transport: transport)
+
+        let result = try await client.openSharedFile(
+            appId: "winapp_notepad",
+            fileName: "large-report.txt",
+            guestPath: #"C:\VeilShared\large-report.txt"#
+        )
+
+        #expect(transport.sentTypes == [
+            "agent.health.request",
+            "app.list.request",
+            "file.open.shared.request"
+        ])
+        #expect(result.window.windowId == "hwnd:00010501")
+    }
+
     @Test("surfaces agent errors when opening a dropped file fails")
     func surfacesAgentErrorsWhenOpeningADroppedFileFails() async throws {
         let transport = RecordingTransport(responses: [
@@ -576,6 +600,22 @@ struct VeilHostClientTests {
         #expect(response.accepted)
         #expect(response.bounds?.width == 1440)
         #expect(response.bounds?.height == 900)
+    }
+
+    @Test("sends a guest desktop display resize request")
+    func sendsDisplayResizeRequest() async throws {
+        let transport = RecordingTransport(responses: [
+            #"{"type":"display.resize.response","requestId":"req_display_resize_1920x1080","accepted":true,"width":1920,"height":1080}"#
+        ])
+        let client = VeilHostClient(transport: transport)
+
+        let response = try await client.resizeDisplay(width: 1920, height: 1080)
+
+        #expect(transport.sentTypes == ["display.resize.request"])
+        #expect(transport.expectedReplyCounts == [1])
+        #expect(response.accepted)
+        #expect(response.width == 1920)
+        #expect(response.height == 1080)
     }
 
     @Test("fallback dashboard service forwards window resize to its primary agent")

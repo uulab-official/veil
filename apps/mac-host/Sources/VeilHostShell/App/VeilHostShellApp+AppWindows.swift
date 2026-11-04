@@ -66,22 +66,43 @@ extension VeilHostShellApp {
     func focusWindowsAppWindow(windowId: String) {
         Task { @MainActor in
             let response = await model.focusMirrorSession(windowId: windowId)
-            guard response?.accepted == true,
-                  let session = model.mirrorSessions.first(where: { $0.id == windowId }) else {
+            guard response?.accepted == true else {
+                activateMainWindow()
+                displayMessage = model.errorMessage
+                    ?? WindowsAppWindowPresentationFailure.mirrorSessionMissing.userMessage(
+                        appName: "Windows app"
+                    )
                 return
             }
 
-            // An explicit focus request is exactly the case that should raise a window.
-            windowsAppWindowPresenter.showWindow(for: session, bringToFront: true)
-            setForegroundWindowsAppMessage(windowId: windowId)
+            presentWindowsAppWindowWhenReady(
+                windowId: windowId,
+                intent: .userRequested,
+                bringToFront: true,
+                successMessage: nil
+            )
         }
     }
 
     func bringAllWindowsAppWindowsToFront() {
-        windowsAppWindowPresenter.bringAllToFront()
-        if let focusedSession = model.mirrorSessions.last {
-            setForegroundWindowsAppMessage(windowId: focusedSession.id)
+        let knownWindowIds = Set(windowsAppWindowPresenter.visibleWindowIds)
+        let sessions = model.mirrorSessions.filter { knownWindowIds.contains($0.id) }
+        for session in sessions {
+            _ = presentWindowsAppWindowWhenReady(
+                windowId: session.id,
+                expectedAppId: session.window.appId,
+                intent: .userRequested,
+                bringToFront: true,
+                successMessage: nil
+            )
+        }
+        if let focusedSession = sessions.last {
             focusWindowsAppWindow(windowId: focusedSession.id)
+        } else {
+            activateMainWindow()
+            displayMessage = WindowsAppWindowPresentationFailure.mirrorSessionMissing.userMessage(
+                appName: "Windows app"
+            )
         }
     }
 
@@ -117,6 +138,26 @@ extension VeilHostShellApp {
 
     @MainActor
     func performFrameStreamMaintenance(automatic: Bool) async {
+        if automatic {
+            _ = await oneClickAppFrameMutationGate.runAutomaticMaintenance {
+                await performFrameStreamMaintenanceWork(automatic: true)
+            }
+            return
+        }
+
+        let started = await oneClickAppFrameMutationGate.runManualRecovery {
+            await performFrameStreamMaintenanceWork(automatic: false)
+        }
+        if !started {
+            displayMessage = "An app screen is already opening or refreshing. Please wait for it to finish."
+        }
+    }
+
+    @MainActor
+    private func performFrameStreamMaintenanceWork(automatic: Bool) async {
+        let appIdsByWindowId = Dictionary(
+            uniqueKeysWithValues: model.mirrorSessions.map { ($0.id, $0.window.appId) }
+        )
         let result = await model.maintainStaleFrameStreams()
         guard result.didPerformMaintenance else {
             if !automatic {
@@ -125,31 +166,53 @@ extension VeilHostShellApp {
             return
         }
 
+        var manualPresentationBlocked = false
         for reopened in result.reopenedWindows {
             windowsAppWindowPresenter.closeWindow(windowId: reopened.requestedWindowId)
-            if let session = model.mirrorSessions.first(where: { $0.id == reopened.launch.window.windowId }) {
-                windowsAppWindowPresenter.showWindow(for: session)
+            let windowId = reopened.launch.window.windowId
+            if automatic {
+                if let session = model.mirrorSessions.first(where: { $0.id == windowId }) {
+                    presentWindowsAppWindowForEvent(session)
+                }
+            } else {
+                let presented = await waitAndPresentRecoveredWindowsAppWindow(
+                    windowId: windowId,
+                    expectedAppId: reopened.launch.window.appId,
+                    successMessage: "Reopened \(reopened.launch.window.title)."
+                )
+                manualPresentationBlocked = !presented || manualPresentationBlocked
             }
         }
 
         for windowId in result.recoveredFrameWindowIds + result.restartedFrameWindowIds {
-            if let session = model.mirrorSessions.first(where: { $0.id == windowId }) {
-                windowsAppWindowPresenter.showWindow(for: session)
+            if automatic {
+                if let session = model.mirrorSessions.first(where: { $0.id == windowId }) {
+                    presentWindowsAppWindowForEvent(session)
+                }
+            } else {
+                let presented = await waitAndPresentRecoveredWindowsAppWindow(
+                    windowId: windowId,
+                    expectedAppId: appIdsByWindowId[windowId],
+                    successMessage: "Refreshed Windows app screen."
+                )
+                manualPresentationBlocked = !presented || manualPresentationBlocked
             }
         }
 
-        if !result.reopenedWindows.isEmpty {
-            displayMessage = result.reopenedWindows.count == 1
-                ? "Reopening \(result.reopenedWindows[0].launch.window.title)."
-                : "Reopening \(result.reopenedWindows.count) app windows."
-        } else if !result.recoveredFrameWindowIds.isEmpty {
-            displayMessage = result.recoveredFrameWindowIds.count == 1
-                ? "Recovering app screen."
-                : "Recovering \(result.recoveredFrameWindowIds.count) app screens."
-        } else if !automatic {
-            displayMessage = result.restartedFrameWindowIds.count == 1
-                ? "Restarting app screen."
-                : "Restarting \(result.restartedFrameWindowIds.count) app screens."
+        if automatic && !manualPresentationBlocked {
+            if !result.reopenedWindows.isEmpty {
+                displayMessage = result.reopenedWindows.count == 1
+                    ? "Reopening \(result.reopenedWindows[0].launch.window.title)."
+                    : "Reopening \(result.reopenedWindows.count) app windows."
+            } else if !result.recoveredFrameWindowIds.isEmpty {
+                displayMessage = result.recoveredFrameWindowIds.count == 1
+                    ? "Recovering app screen."
+                    : "Recovering \(result.recoveredFrameWindowIds.count) app screens."
+            } else if !automatic {
+                displayMessage = result.restartedFrameWindowIds.count == 1
+                    ? "Restarting app screen."
+                    : "Restarting \(result.restartedFrameWindowIds.count) app screens."
+            }
         }
 
         syncDockTileRuntimeStatus()
@@ -196,17 +259,145 @@ extension VeilHostShellApp {
         DockTileRuntimePresenter.update(model.runtimeStatusReport().dockIntegration)
     }
 
+    enum WindowsAppPresentationIntent {
+        case launchCompletion
+        case userRequested
+    }
+
+    @discardableResult
+    func waitAndPresentRecoveredWindowsAppWindow(
+        windowId: String,
+        expectedAppId: String?,
+        successMessage: String
+    ) async -> Bool {
+        let appName = model.mirrorSessions.first { $0.id == windowId }?.window.title ?? "Windows app"
+        displayMessage = "Refreshing \(appName) screen."
+        do {
+            let decision = try await WindowsAppWindowPresentationReadiness.wait(
+                timeoutSeconds: OneClickAppLaunchCoordinator.firstFrameWaitSeconds,
+                sessionProvider: {
+                    model.mirrorSessions.first {
+                        $0.id == windowId && (expectedAppId == nil || $0.window.appId == expectedAppId)
+                    }
+                },
+                compositedImageProvider: { model.compositedFrameImage(for: $0) }
+            )
+            if case .blocked(let failure) = decision {
+                activateMainWindow()
+                displayMessage = failure.userMessage(appName: appName)
+                return false
+            }
+            try Task.checkCancellation()
+            return presentWindowsAppWindowWhenReady(
+                windowId: windowId, expectedAppId: expectedAppId,
+                intent: .userRequested, bringToFront: true, successMessage: successMessage
+            )
+        } catch {
+            displayMessage = "App screen refresh was cancelled. You can try again when you are ready."
+            return false
+        }
+    }
+
     func showWindowsAppWindow(for result: NotepadLaunchResult) {
-        let session = model.mirrorSessions.first { $0.id == result.window.windowId }
-                ?? WindowMirrorSession(
-                    window: result.window,
-                    connectionMode: model.connectionMode,
-                    captureState: .unavailable
+        guard let session = model.mirrorSessions.first(where: {
+            $0.id == result.window.windowId && $0.window.appId == result.window.appId
+        }) else {
+            MainWindowChrome.showMainWindow()
+            return
+        }
+
+        _ = presentWindowsAppWindowForEvent(session, bringToFront: true)
+    }
+
+    @discardableResult
+    func presentWindowsAppWindowWhenReady(
+        windowId: String,
+        expectedAppId: String? = nil,
+        intent: WindowsAppPresentationIntent,
+        bringToFront: Bool,
+        successMessage: String?
+    ) -> Bool {
+        let session = model.mirrorSessions.first { session in
+            session.id == windowId && (expectedAppId == nil || session.window.appId == expectedAppId)
+        }
+        let appId = session?.window.appId ?? expectedAppId
+        let appName = session?.window.title
+            ?? appId.flatMap { expectedId in model.apps.first { $0.id == expectedId }?.name }
+            ?? "Windows app"
+        let decision = WindowsAppWindowPresentationReadiness.resolve(
+            session: session,
+            compositedImage: session.map { model.compositedFrameImage(for: $0.id) } ?? nil
+        )
+        let authorized: Bool
+        if let session {
+            switch intent {
+            case .launchCompletion:
+                authorized = oneClickAppWindowPresentationGate.authorizeLaunchPresentation(
+                    appId: session.window.appId,
+                    windowId: session.id,
+                    decision: decision
                 )
-        // An app the user just launched or restored should come forward. Content refreshes elsewhere
-        // deliberately do not, so a background window's frames cannot steal focus.
-        windowsAppWindowPresenter.showWindow(for: session, bringToFront: true)
+            case .userRequested:
+                authorized = oneClickAppWindowPresentationGate.authorizeUserPresentation(
+                    appId: session.window.appId,
+                    windowId: session.id,
+                    decision: decision
+                )
+            }
+        } else {
+            authorized = false
+        }
+
+        guard authorized, let session else {
+            if case .launchCompletion = intent {
+                oneClickAppWindowPresentationGate.finishBlockedLaunch()
+            }
+            let failure: WindowsAppWindowPresentationFailure
+            if case .blocked(let resolvedFailure) = decision {
+                failure = resolvedFailure
+            } else {
+                failure = .firstFramePending
+            }
+            activateMainWindow()
+            displayMessage = failure.userMessage(appName: appName)
+            return false
+        }
+
+        windowsAppWindowPresenter.showWindow(for: session, bringToFront: bringToFront)
+        if let successMessage {
+            displayMessage = successMessage
+        } else if bringToFront {
+            setForegroundWindowsAppMessage(windowId: session.id)
+        }
         syncLauncherWindowVisibility()
+        return true
+    }
+
+    @discardableResult
+    func presentWindowsAppWindowForEvent(
+        _ session: WindowMirrorSession,
+        bringToFront: Bool = false
+    ) -> Bool {
+        let isAlreadyVisible = windowsAppWindowPresenter.visibleWindowIds.contains(session.id)
+        if !isAlreadyVisible,
+           WindowsAppWindowPresentationReadiness.resolve(
+               session: session,
+               compositedImage: model.compositedFrameImage(for: session.id)
+           ) != .ready {
+            MainWindowChrome.showMainWindow()
+            return false
+        }
+        guard oneClickAppWindowPresentationGate.allowsEventDrivenPresentation(
+            appId: session.window.appId,
+            windowId: session.id,
+            isAlreadyVisible: isAlreadyVisible
+        ) else {
+            MainWindowChrome.showMainWindow()
+            return false
+        }
+
+        windowsAppWindowPresenter.showWindow(for: session, bringToFront: bringToFront)
+        return true
     }
 
     private func setForegroundWindowsAppMessage(windowId: String) {
@@ -226,7 +417,12 @@ extension VeilHostShellApp {
     }
 
     private func shouldHideLauncherWindowForCoherence() -> Bool {
-        LauncherWindowVisibilityPolicy.shouldHideLauncher(
+        if oneClickAppWindowPresentationGate.keepsLauncherVisible,
+           windowsAppWindowPresenter.visibleWindowIds.isEmpty {
+            return false
+        }
+
+        return LauncherWindowVisibilityPolicy.shouldHideLauncher(
             visibleMirroredWindowCount: windowsAppWindowPresenter.visibleWindowIds.count,
             modelRequestsHide: model.runtimeStatusReport().launcherVisibility.shouldHideMainWindow
         )

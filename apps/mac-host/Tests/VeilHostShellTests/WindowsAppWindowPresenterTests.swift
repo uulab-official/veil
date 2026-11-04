@@ -428,7 +428,11 @@ struct WindowsAppWindowPresenterTests {
         var backgroundFocusReport = passingReport
         backgroundFocusReport.isAppActive = false
         backgroundFocusReport.isMainWindowKey = false
-        #expect(backgroundFocusReport.meetsLauncherContract)
+        #expect(backgroundFocusReport.meetsLauncherContract == false)
+
+        var nonKeyActiveReport = passingReport
+        nonKeyActiveReport.isMainWindowKey = false
+        #expect(nonKeyActiveReport.meetsLauncherContract == false)
 
         var duplicateWindowReport = passingReport
         duplicateWindowReport.mainWindowCount = 2
@@ -483,6 +487,34 @@ struct WindowsAppWindowPresenterTests {
 
         #expect(presenter.visibleWindowIds == ["hwnd:0002"])
         #expect(callbackWindowIds.isEmpty)
+    }
+
+    @Test("adds app identity chrome to the mirrored window titlebar")
+    func addsAppIdentityChromeToMirroredWindowTitlebar() throws {
+        _ = NSApplication.shared
+        let presenter = WindowsAppWindowPresenter()
+        defer {
+            presenter.closeAll()
+        }
+
+        presenter.appIdentityProvider = { appId in
+            WindowsAppWindowIdentity(
+                appId: appId,
+                appName: "Notepad",
+                iconData: nil
+            )
+        }
+        presenter.showWindow(
+            for: session(windowId: "hwnd:identity", appId: "winapp_notepad", title: "Notes.txt")
+        )
+
+        let window = try #require(mirroredWindow(withId: "hwnd:identity"))
+        #expect(window.titleVisibility == .visible)
+        #expect(window.titlebarAccessoryViewControllers.count == 1)
+        #expect(window.titlebarAccessoryViewControllers.first?.layoutAttribute == .left)
+        let accessoryView = try #require(window.titlebarAccessoryViewControllers.first?.view)
+        #expect(accessoryView.frame.width > 0)
+        #expect(accessoryView.frame.width <= 240)
     }
 
     private func session(

@@ -145,3 +145,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
 }
+
+// This selector is not surfaced consistently by the macOS SDK overlay, so keep it in an extension
+// to avoid Swift's optional-protocol near-match warning while still disabling empty AppKit restoration.
+extension AppDelegate {
+    @objc(applicationShouldSaveState:)
+    func applicationShouldSaveState(_ app: NSApplication) -> Bool {
+        false
+    }
+}

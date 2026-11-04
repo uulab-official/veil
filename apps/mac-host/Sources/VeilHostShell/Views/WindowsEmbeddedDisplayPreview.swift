@@ -10,6 +10,7 @@ struct WindowsEmbeddedDisplayPreview: View {
     var path: String
     var revisionID: String
     var resizeBus: DesktopResizeCommandBus?
+    var displayResizeAction: ((Int, Int) -> Void)?
     var pointerTapAction: (Double, Double) -> Void
     var keyAction: (String) -> Void
     @State private var rfbDisplayModel = RFBEmbeddedDisplayModel()
@@ -65,8 +66,23 @@ struct WindowsEmbeddedDisplayPreview: View {
 
             ConsolePreviewInputCaptureView(
                 framebufferSize: renderedFramebufferSize,
-                pointerTapAction: pointerTapAction,
-                keyAction: keyAction
+                pointerTapAction: { normalizedX, normalizedY in
+                    if surface.kind == .vncLoopback {
+                        rfbDisplayModel.sendPointerTap(
+                            normalizedX: normalizedX,
+                            normalizedY: normalizedY
+                        )
+                    } else {
+                        pointerTapAction(normalizedX, normalizedY)
+                    }
+                },
+                keyAction: { key in
+                    if surface.kind == .vncLoopback {
+                        rfbDisplayModel.sendKey(key)
+                    } else {
+                        keyAction(key)
+                    }
+                }
             )
         }
         .aspectRatio(displayAspectRatio, contentMode: .fit)
@@ -74,19 +90,24 @@ struct WindowsEmbeddedDisplayPreview: View {
         .accessibilityLabel(surface.kind == .vncLoopback ? "Embedded Windows display endpoint" : "Latest Windows display screenshot")
         .accessibilityValue(surface.endpoint ?? path)
         .onAppear {
-            rfbDisplayModel.connectIfNeeded(to: surface)
+            // Install the fallback before opening the socket. A local QEMU endpoint can answer the
+            // first SetDesktopSize request immediately; registering after connect would lose the
+            // one-shot agent fallback and leave the first enlargement in aspect-fit mode.
+            rfbDisplayModel.setDisplayResizeFallback(displayResizeAction)
             if let resizeBus {
                 let model = rfbDisplayModel
                 resizeBus.setPerformer { [weak model] width, height in
                     model?.requestDesktopResize(width: width, height: height)
                 }
             }
+            rfbDisplayModel.connectIfNeeded(to: surface)
         }
         .onChange(of: surface.endpoint) { _, _ in
             rfbDisplayModel.connectIfNeeded(to: surface)
         }
         .onDisappear {
             resizeBus?.setPerformer(nil)
+            rfbDisplayModel.setDisplayResizeFallback(nil)
             rfbDisplayModel.stop()
         }
     }

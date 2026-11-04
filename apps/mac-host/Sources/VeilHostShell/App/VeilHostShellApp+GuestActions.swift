@@ -3,7 +3,46 @@ import SwiftUI
 import VeilHostCore
 
 extension VeilHostShellApp {
+    private func recoverWindowsAppScreen(windowId: String) async {
+        let sessionBeforeRecovery = model.mirrorSessions.first(where: { $0.id == windowId })
+        let assessment = sessionBeforeRecovery.map { WindowFrameStreamAssessment.assess(session: $0) }
+        if assessment?.reopenEscalated == true,
+           let result = await model.reopenAppWindow(windowId: windowId) {
+            windowsAppWindowPresenter.closeWindow(windowId: result.requestedWindowId)
+            await waitAndPresentRecoveredWindowsAppWindow(
+                windowId: result.launch.window.windowId,
+                expectedAppId: result.launch.window.appId,
+                successMessage: "Reopened \(result.launch.window.title)."
+            )
+            syncLauncherWindowVisibility()
+            return
+        }
+
+        let shouldRecover = assessment?.recoveryEscalated == true
+        let didRecover: Bool
+        if shouldRecover {
+            didRecover = await model.recoverFrameCapture(windowId: windowId)
+        } else {
+            didRecover = await model.restartFrameSubscription(windowId: windowId)
+        }
+        guard didRecover else {
+            activateMainWindow()
+            displayMessage = model.errorMessage
+                ?? "Veil could not refresh this Windows app screen. Try the recovery action again."
+            return
+        }
+
+        await waitAndPresentRecoveredWindowsAppWindow(
+            windowId: windowId,
+            expectedAppId: sessionBeforeRecovery?.window.appId,
+            successMessage: shouldRecover ? "Recovered app screen." : "Restarted app screen."
+        )
+    }
+
     func configureWindowsAppWindowCloseBridge() {
+        windowsAppWindowPresenter.appIdentityProvider = { appId in
+            WindowsAppWindowIdentity.resolve(appId: appId, apps: model.apps)
+        }
         windowsAppWindowPresenter.onUserWindowClose = { windowId in
             Task { @MainActor in
                 _ = await model.closeMirrorSession(windowId: windowId)
@@ -59,35 +98,12 @@ extension VeilHostShellApp {
         }
         windowsAppWindowPresenter.onRestartFrameStream = { windowId in
             Task { @MainActor in
-                let sessionBeforeRecovery = model.mirrorSessions.first(where: { $0.id == windowId })
-                let assessment = sessionBeforeRecovery.map { WindowFrameStreamAssessment.assess(session: $0) }
-                if assessment?.reopenEscalated == true,
-                   let result = await model.reopenAppWindow(windowId: windowId) {
-                    windowsAppWindowPresenter.closeWindow(windowId: result.requestedWindowId)
-                    if let session = model.mirrorSessions.first(where: { $0.id == result.launch.window.windowId }) {
-                        windowsAppWindowPresenter.showWindow(for: session)
-                    }
-                    displayMessage = "Reopening \(result.launch.window.title)."
-                    syncLauncherWindowVisibility()
-                    return
+                let started = await oneClickAppFrameMutationGate.runManualRecovery {
+                    await recoverWindowsAppScreen(windowId: windowId)
                 }
-
-                let shouldRecover = assessment?.recoveryEscalated == true
-                let didRecover: Bool
-                if shouldRecover {
-                    didRecover = await model.recoverFrameCapture(windowId: windowId)
-                } else {
-                    didRecover = await model.restartFrameSubscription(windowId: windowId)
+                if !started {
+                    displayMessage = "An app screen is already opening or refreshing. Please wait for it to finish."
                 }
-                guard didRecover,
-                      let session = model.mirrorSessions.first(where: { $0.id == windowId }) else {
-                    return
-                }
-
-                windowsAppWindowPresenter.showWindow(for: session)
-                displayMessage = shouldRecover
-                    ? "Recovering \(session.window.title) screen."
-                    : "Restarting \(session.window.title) screen."
             }
         }
         windowsAppWindowPresenter.compositedImageProvider = { windowId in
@@ -142,16 +158,45 @@ extension VeilHostShellApp {
     }
 
     func showWindowsDisplay() {
-        if presentWindowsDesktopIfAvailable() {
-            displayMessage = "Windows desktop brought forward."
-        } else {
-            activateMainWindow()
-            displayMessage = "The Windows desktop is not ready yet. Start Windows or refresh the display."
+        Task { @MainActor in
+            let didShow = await presentWindowsDesktopWhenReady()
+            if didShow {
+                displayMessage = "Windows desktop brought forward."
+            } else {
+                activateMainWindow()
+                displayMessage = "The Windows desktop is not ready yet. Start Windows or refresh the display."
+            }
         }
     }
 
+    /// A QEMU process can be running before its VNC endpoint has produced the first
+    /// usable framebuffer. A single presentation attempt races that normal boot gap
+    /// and leaves the user staring at the launcher. Keep refreshing the evidence and
+    /// retrying the presenter for a short, bounded window so the desktop actually
+    /// appears after Start/Show Desktop.
     @MainActor
-    func presentWindowsDesktopIfAvailable() -> Bool {
+    func presentWindowsDesktopWhenReady(timeoutSeconds: Double = 20) async -> Bool {
+        let deadline = Date().addingTimeInterval(timeoutSeconds)
+
+        while Date() < deadline, !Task.isCancelled {
+            await vmModel.refreshRuntimeEvidence()
+
+            if presentWindowsDesktopIfAvailable() {
+                return true
+            }
+
+            guard vmModel.snapshot?.state == .running || vmModel.snapshot?.state == .starting else {
+                return false
+            }
+
+            try? await Task.sleep(for: .milliseconds(500))
+        }
+
+        return false
+    }
+
+    @MainActor
+    private func presentWindowsDesktopIfAvailable() -> Bool {
         if vmRuntimeBooter.provider == .appleVirtualization {
             return vmRuntimeBooter.showConsoleIfRunning()
         }
@@ -177,6 +222,11 @@ extension VeilHostShellApp {
             keyAction: { key in
                 Task {
                     await vmModel.sendConsoleKey(key)
+                }
+            },
+            displayResizeAction: { width, height in
+                Task { @MainActor in
+                    _ = await model.resizeDisplay(width: width, height: height)
                 }
             }
         )
@@ -426,7 +476,7 @@ extension VeilHostShellApp {
             && vmModel.snapshot?.installEvidence.isInstalled != true
     }
 
-    var appRuntimeStatusReport: WindowsAppRuntimeStatusReport {
+    private var appRuntimeStatusReport: WindowsAppRuntimeStatusReport {
         model.runtimeStatusReport(
             localRuntime: model.localRuntimeStatus(snapshot: vmModel.snapshot),
             hostBackingScale: HostDisplayScale.current

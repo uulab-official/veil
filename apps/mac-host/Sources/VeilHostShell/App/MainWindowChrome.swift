@@ -28,8 +28,12 @@ enum MainWindowChrome {
     static func showMainWindow() {
         NSApp.setActivationPolicy(.regular)
         configureAndCompactMainWindow()
+        activateApplication()
         mainWindow?.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
+        // AppKit can accept the activation request before the scene's window has become key.
+        // Repeat it after ordering the window so a Finder/Dock launch reliably lands in the
+        // Veil window instead of leaving a visible but background launcher.
+        activateApplication()
     }
 
     static func hideMainWindow() {
@@ -122,6 +126,11 @@ enum MainWindowChrome {
         window.toolbar = nil
         window.isOpaque = true
         window.backgroundColor = NSColor(calibratedRed: 0.04, green: 0.05, blue: 0.07, alpha: 1)
+    }
+
+    private static func activateApplication() {
+        NSApp.activate(ignoringOtherApps: true)
+        NSRunningApplication.current.activate(options: [.activateAllWindows])
     }
 
     private static func fitToPreferredSize(_ window: NSWindow) {
@@ -229,9 +238,13 @@ struct StandaloneMainWindowRoot: View {
 
     func startWindowsAndShowDisplay() {
         Task { @MainActor in
+            await vmModel.refreshRuntimeEvidence()
+
             // Resumes rather than cold boots when a suspended session exists. `canStart` is also true for
             // a suspended VM, so calling start() here would discard the session.
-            if vmModel.canResume {
+            if vmModel.snapshot?.state == .running || vmModel.snapshot?.state == .starting {
+                displayMessage = "Windows is already running. Connecting to its desktop."
+            } else if vmModel.canResume {
                 displayMessage = "Resuming your Windows session."
                 await vmModel.resume()
             } else {
@@ -240,7 +253,7 @@ struct StandaloneMainWindowRoot: View {
             }
 
             if vmModel.snapshot?.state == .running || vmModel.snapshot?.state == .starting {
-                displayMessage = presentWindowsDesktopIfAvailable()
+                displayMessage = await presentWindowsDesktopWhenReady()
                     ? "Windows desktop opened in its own window."
                     : "Windows is running. The desktop display is still connecting."
             } else if let errorMessage = vmModel.errorMessage {
@@ -260,15 +273,39 @@ struct StandaloneMainWindowRoot: View {
     }
 
     func showWindowsDisplay() {
-        if presentWindowsDesktopIfAvailable() {
-            displayMessage = "Windows desktop brought forward."
-        } else {
-            displayMessage = "The Windows desktop is not ready yet. Start Windows or refresh the display."
+        Task { @MainActor in
+            let didShow = await presentWindowsDesktopWhenReady()
+            if didShow {
+                displayMessage = "Windows desktop brought forward."
+            } else {
+                displayMessage = "The Windows desktop is not ready yet. Start Windows or refresh the display."
+            }
         }
     }
 
     @MainActor
-    func presentWindowsDesktopIfAvailable() -> Bool {
+    func presentWindowsDesktopWhenReady(timeoutSeconds: Double = 20) async -> Bool {
+        let deadline = Date().addingTimeInterval(timeoutSeconds)
+
+        while Date() < deadline, !Task.isCancelled {
+            await vmModel.refreshRuntimeEvidence()
+
+            if presentWindowsDesktopIfAvailable() {
+                return true
+            }
+
+            guard vmModel.snapshot?.state == .running || vmModel.snapshot?.state == .starting else {
+                return false
+            }
+
+            try? await Task.sleep(for: .milliseconds(500))
+        }
+
+        return false
+    }
+
+    @MainActor
+    private func presentWindowsDesktopIfAvailable() -> Bool {
         if vmRuntimeBooter.provider == .appleVirtualization {
             return vmRuntimeBooter.showConsoleIfRunning()
         }
@@ -294,6 +331,11 @@ struct StandaloneMainWindowRoot: View {
             keyAction: { key in
                 Task {
                     await vmModel.sendConsoleKey(key)
+                }
+            },
+            displayResizeAction: { width, height in
+                Task { @MainActor in
+                    _ = await model.resizeDisplay(width: width, height: height)
                 }
             }
         )

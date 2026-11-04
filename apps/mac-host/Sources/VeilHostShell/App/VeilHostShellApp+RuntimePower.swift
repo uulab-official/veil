@@ -10,7 +10,7 @@ extension VeilHostShellApp {
             await startOrResumeWindows()
 
             if vmModel.snapshot?.state == .running || vmModel.snapshot?.state == .starting {
-                displayMessage = presentWindowsDesktopIfAvailable()
+                displayMessage = await presentWindowsDesktopWhenReady()
                     ? "Windows desktop opened in its own window."
                     : "Windows is running. The desktop display is still connecting."
                 scheduleAutomaticGuestAgentRecoveryIfNeeded()
@@ -27,6 +27,16 @@ extension VeilHostShellApp {
     /// exactly the case this is supposed to protect.
     @MainActor
     func startOrResumeWindows() async {
+        // The app can be launched while QEMU is already booting (or while a previous
+        // Veil instance is being replaced). Refresh the authoritative runtime evidence
+        // before deciding to start; otherwise we race the existing process and surface
+        // a misleading "already running" failure instead of attaching its desktop.
+        await vmModel.refreshRuntimeEvidence()
+        if vmModel.snapshot?.state == .running || vmModel.snapshot?.state == .starting {
+            displayMessage = "Windows is already running. Connecting to its desktop."
+            return
+        }
+
         if vmModel.canResume {
             displayMessage = "Resuming your Windows session."
             await vmModel.resume()
@@ -47,8 +57,10 @@ extension VeilHostShellApp {
     }
 
     func stopWindowsAndCloseDisplay() {
+        oneClickAppLaunchGate.cancel()
         Task { @MainActor in
             cancelAutomaticQuietRuntime()
+            cancelAutomaticGuestAgentRecovery()
             cancelAutomaticRuntimeConnectionRecovery()
             hasObservedLiveAgentConnection = false
             activateMainWindow()

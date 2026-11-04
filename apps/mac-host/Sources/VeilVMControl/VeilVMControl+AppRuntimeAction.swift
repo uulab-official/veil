@@ -35,6 +35,7 @@ extension VeilVMControl {
         var clipboard: ClipboardTextSet?
         var mouseInputs: [InputMouseEvent] = []
         var keyInputs: [InputKeyEvent] = []
+        var textInputs: [InputTextEvent] = []
         var typedTextCharacterCount: Int?
         var restoredWindows: [WindowCreatedEvent] = []
         var restoreRequestedAppIds: [String] = []
@@ -373,6 +374,28 @@ extension VeilVMControl {
                 }
                 accepted = true
             }
+        case .typeUnicode:
+            guard let inputWindowId = windowId,
+                  !inputWindowId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                throw VMControlError.missingWindowId
+            }
+            guard let text,
+                  !text.isEmpty else {
+                throw VMControlError.missingAppRuntimeText
+            }
+            guard InputTextEvent.isSendable(text) else {
+                throw VMControlError.invalidAppRuntimeText
+            }
+            textInputs = [InputTextEvent(windowId: inputWindowId, text: text)]
+            typedTextCharacterCount = text.count
+            resolvedWindowId = inputWindowId
+            if model.hasLiveAgentConnection,
+               model.health?.capabilities.input == true {
+                for input in textInputs {
+                    try await service.sendTextInput(input)
+                }
+                accepted = true
+            }
         case .click:
             guard let inputWindowId = windowId,
                   !inputWindowId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
@@ -478,6 +501,7 @@ extension VeilVMControl {
             clipboard: clipboard,
             mouseInputs: mouseInputs,
             keyInputs: keyInputs,
+            textInputs: textInputs.isEmpty ? nil : textInputs,
             typedTextCharacterCount: typedTextCharacterCount,
             restoredWindows: restoredWindows,
             restoreRequestedAppIds: restoreRequestedAppIds,
@@ -629,6 +653,10 @@ extension VeilVMControl {
         if !report.keyInputs.isEmpty {
             print("Key events: \(report.keyInputs.count)")
         }
+        if let textInputs = report.textInputs, !textInputs.isEmpty {
+            print("Committed text inputs: \(textInputs.count)")
+            print("Committed text UTF-16 units: \(textInputs.reduce(0) { $0 + $1.text.utf16.count })")
+        }
         if !report.broughtForwardWindowIds.isEmpty {
             print("Brought forward windows: \(report.broughtForwardWindowIds.joined(separator: ", "))")
         }
@@ -672,7 +700,7 @@ extension VeilVMControl {
         }
     }
 
-    static func runRecommendedProof(
+    private static func runRecommendedProof(
         proofKind: String,
         command: String,
         appId: String,
@@ -885,6 +913,11 @@ extension VeilVMControl {
                     "Confirm the text appears in the focused Windows app.",
                     "Run `veil-vmctl app-runtime-action --json --action clipboard --text \"...\"` to validate clipboard transfer as well."
                 ]
+            case .typeUnicode:
+                return [
+                    "Confirm the committed Unicode text appears in the focused Windows app.",
+                    "Use the mirrored window's interactive keyboard input for Enter, Tab, and navigation keys; use `clipboard` for larger text."
+                ]
             case .click:
                 return [
                     "Confirm the clicked control or text area is focused inside the Windows app.",
@@ -985,6 +1018,13 @@ extension VeilVMControl {
                 "Run `\(status.guestAgentDiagnostics.diagnosticCommand)` if the reconnect restore action still cannot reach the agent.",
                 "Run `veil-vmctl app-runtime-status --json` and check restorableAppIds before retrying reconnect-restore."
             ])
+        }
+
+        if action == .typeUnicode {
+            return [
+                "Confirm the Windows app window is connected and the target HWND is still tracked.",
+                "Retry with printable text of at most 4096 UTF-16 code units; use the mirrored window's interactive keyboard input for navigation keys."
+            ]
         }
 
         if action == .waitAgent {

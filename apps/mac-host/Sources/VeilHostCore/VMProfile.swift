@@ -178,10 +178,7 @@ public struct JSONVMProfileStore: VMProfileStore {
     }
 
     public static var defaultDirectory: URL {
-        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
-            ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support")
-        return base
-            .appendingPathComponent("Veil", isDirectory: true)
+        VeilApplicationSupport.directory
             .appendingPathComponent("Profiles", isDirectory: true)
     }
 }

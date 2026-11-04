@@ -52,15 +52,15 @@ extension WindowsSetupDisplayPanel {
     }
 
     var canInstallGuestAgent: Bool {
-        canShowDisplay && effectiveInstallEvidence.kind != .guestAgent
+        canShowDisplay && !bootIsStalled && effectiveInstallEvidence.kind != .guestAgent
     }
 
     var canWaitForGuestAgent: Bool {
-        canShowDisplay && guestAgentInstallEvidence == nil
+        canShowDisplay && !bootIsStalled && guestAgentInstallEvidence == nil
     }
 
     var canMarkWindowsInstalled: Bool {
-        canShowDisplay && !effectiveInstallEvidence.isInstalled
+        canShowDisplay && !bootIsStalled && !effectiveInstallEvidence.isInstalled
     }
 
     var installActionTitle: String {
@@ -158,6 +158,10 @@ extension WindowsSetupDisplayPanel {
 
     var machineSubtitle: String {
         if effectiveInstallEvidence.isInstalled {
+            if bootIsStalled {
+                return "Capture diagnostics, stop Windows, and retry before reconnecting apps"
+            }
+
             if let activeMirrorSession {
                 return "\(activeMirrorSession.window.title) is open as a Mac window"
             }
@@ -203,19 +207,33 @@ extension WindowsSetupDisplayPanel {
     }
 
     var machineHeroGradient: LinearGradient {
+        if bootIsStalled {
+            return LinearGradient(colors: [Color(red: 0.42, green: 0.18, blue: 0.08), Color(red: 0.15, green: 0.12, blue: 0.11)], startPoint: .topLeading, endPoint: .bottomTrailing)
+        }
+
         switch snapshot.state {
         case .running:
-            LinearGradient(colors: [Color(red: 0.04, green: 0.34, blue: 0.24), Color(red: 0.03, green: 0.18, blue: 0.24)], startPoint: .topLeading, endPoint: .bottomTrailing)
+            return LinearGradient(colors: [Color(red: 0.04, green: 0.34, blue: 0.24), Color(red: 0.03, green: 0.18, blue: 0.24)], startPoint: .topLeading, endPoint: .bottomTrailing)
         case .failed, .unsupported:
-            LinearGradient(colors: [Color(red: 0.42, green: 0.18, blue: 0.08), Color(red: 0.15, green: 0.12, blue: 0.11)], startPoint: .topLeading, endPoint: .bottomTrailing)
+            return LinearGradient(colors: [Color(red: 0.42, green: 0.18, blue: 0.08), Color(red: 0.15, green: 0.12, blue: 0.11)], startPoint: .topLeading, endPoint: .bottomTrailing)
         default:
-            LinearGradient(colors: [Color(red: 0.02, green: 0.32, blue: 0.62), Color(red: 0.08, green: 0.09, blue: 0.14)], startPoint: .topLeading, endPoint: .bottomTrailing)
+            return LinearGradient(colors: [Color(red: 0.02, green: 0.32, blue: 0.62), Color(red: 0.08, green: 0.09, blue: 0.14)], startPoint: .topLeading, endPoint: .bottomTrailing)
         }
     }
 
     var showsUnavailableGuestAgentRoute: Bool {
-        agentDiagnostic?.status == .unavailable
-            && agentDiagnostic?.endpoint.hasPrefix("unavailable://") == true
+        // The endpoint may still be a real WebSocket URL when the guest has stopped
+        // answering. The diagnostic status is the source of truth; requiring the
+        // synthetic `unavailable://` prefix made the recovery surface disappear in
+        // exactly the live-VM failure state users needed it. It is still only a
+        // failure once Windows is installed and running; before that the setup
+        // route owns the screen.
+        WindowsShellCopy.appConnectionNeedsRepair(
+            hasLiveAppConnection: guestAgentInstallEvidence != nil,
+            agentUnavailable: agentDiagnostic?.status == .unavailable,
+            windowsInstalled: effectiveInstallEvidence.isInstalled,
+            runtimeState: snapshot.state
+        )
     }
 
     private func resourceName(from path: String?) -> String? {
@@ -231,6 +249,10 @@ extension WindowsSetupDisplayPanel {
     }
 
     var primaryTitle: String {
+        if bootIsStalled {
+            return hasDesktopDisplay ? "Capture Boot Diagnostics" : "Stop & Retry Windows"
+        }
+
         if effectiveInstallEvidence.isInstalled {
             if canFulfillPendingLaunch {
                 return "Open \(pendingAppDisplayName)"
@@ -282,6 +304,10 @@ extension WindowsSetupDisplayPanel {
     }
 
     var primarySymbol: String {
+        if bootIsStalled {
+            return "display.trianglebadge.exclamationmark"
+        }
+
         if effectiveInstallEvidence.isInstalled {
             if canFulfillPendingLaunch || pendingLaunch.willLaunchOnAgentReconnect {
                 return pendingLaunch.willLaunchOnAgentReconnect && !canFulfillPendingLaunch
@@ -321,7 +347,13 @@ extension WindowsSetupDisplayPanel {
         return "wand.and.stars"
     }
 
-    private var primaryHint: String {
+    var primaryHint: String {
+        if bootIsStalled {
+            return hasDesktopDisplay
+                ? "Capture the current Windows display, then stop and retry the boot before repairing the app connection."
+                : "Stop Windows and retry the boot before repairing the app connection."
+        }
+
         if effectiveInstallEvidence.isInstalled {
             if canFulfillPendingLaunch {
                 return "Open the queued \(pendingAppDisplayName) launch as a Mac-managed window."

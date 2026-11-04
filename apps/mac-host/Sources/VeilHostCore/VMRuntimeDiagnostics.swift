@@ -142,15 +142,7 @@ public protocol VMRuntimeBootReportStore: Sendable {
 
 public struct JSONVMRuntimeBootReportStore: VMRuntimeBootReportStore {
     public static var defaultDirectory: URL {
-        let baseDirectory = FileManager.default.urls(
-            for: .applicationSupportDirectory,
-            in: .userDomainMask
-        ).first ?? FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent("Library", isDirectory: true)
-            .appendingPathComponent("Application Support", isDirectory: true)
-
-        return baseDirectory
-            .appendingPathComponent("Veil", isDirectory: true)
+        VeilApplicationSupport.directory
             .appendingPathComponent("Diagnostics", isDirectory: true)
     }
 
@@ -186,5 +178,22 @@ public struct JSONVMRuntimeBootReportStore: VMRuntimeBootReportStore {
 
     private var reportURL: URL {
         directory.appendingPathComponent(fileName)
+    }
+}
+
+public extension JSONEncoder {
+    static var veilDiagnostics: JSONEncoder {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        encoder.dateEncodingStrategy = .iso8601
+        return encoder
+    }
+}
+
+public extension JSONDecoder {
+    static var veilDiagnostics: JSONDecoder {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return decoder
     }
 }

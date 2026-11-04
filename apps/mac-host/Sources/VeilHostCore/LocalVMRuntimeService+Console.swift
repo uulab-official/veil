@@ -105,11 +105,23 @@ extension LocalVMRuntimeService {
     }
 
     func refreshedConsoleScreenshot(from launchRecord: QEMULaunchRecord?) -> ConsoleScreenshotRefresh {
-        guard let path = Self.existingConsoleScreenshotPath(from: launchRecord),
+        let existingPath = Self.existingConsoleScreenshotPath(from: launchRecord)
+        if launchRecord?.vncHost?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false,
+           launchRecord?.vncPort != nil {
+            // VNC is the authoritative live surface. A monitor screendump is unclassified and can
+            // overwrite a verified frame with black pixels while leaving the old visual state in
+            // place, so only the VNC validation path may refresh this evidence.
+            return ConsoleScreenshotRefresh(
+                path: existingPath,
+                refreshedAt: launchRecord?.consoleScreenshotRefreshedAt
+            )
+        }
+
+        guard let path = existingPath,
               let monitorSocketPath = launchRecord?.monitorSocketPath,
               FileManager.default.fileExists(atPath: monitorSocketPath) else {
             return ConsoleScreenshotRefresh(
-                path: Self.existingConsoleScreenshotPath(from: launchRecord),
+                path: existingPath,
                 refreshedAt: nil
             )
         }
@@ -181,7 +193,11 @@ extension LocalVMRuntimeService {
             vncPort: launchRecord.vncPort,
             consoleScreenshotPath: consoleScreenshotPath ?? existingConsoleScreenshotPath(from: launchRecord),
             consoleScreenshotRefreshedAt: consoleScreenshotRefreshedAt ?? launchRecord.consoleScreenshotRefreshedAt,
+            consoleVisualState: launchRecord.consoleVisualState,
+            consoleVisualStateAt: launchRecord.consoleVisualStateAt,
             previewStatus: consolePreviewStatus(
+                consoleVisualState: launchRecord.consoleVisualState,
+                consoleVisualStateAt: launchRecord.consoleVisualStateAt,
                 consoleScreenshotPath: consoleScreenshotPath ?? existingConsoleScreenshotPath(from: launchRecord),
                 consoleScreenshotRefreshedAt: consoleScreenshotRefreshedAt ?? launchRecord.consoleScreenshotRefreshedAt
             ),
@@ -190,11 +206,29 @@ extension LocalVMRuntimeService {
     }
 
     private static func consolePreviewStatus(
+        consoleVisualState: QEMUConsoleVisualState? = nil,
+        consoleVisualStateAt: Date? = nil,
         consoleScreenshotPath: String?,
         consoleScreenshotRefreshedAt: Date?
     ) -> VMConsolePreviewStatus {
         guard consoleScreenshotPath != nil else {
             return .unavailable
+        }
+
+        // A live display smoke can successfully capture a frame while the guest has switched to a
+        // blank graphics head. Treat that observation as stale so launch/recovery surfaces do not
+        // tell the user that the console is healthy merely because a PNG exists on disk.
+        if consoleVisualState == .blank {
+            return .stale
+        }
+
+        // A monitor screendump can replace the PNG without classifying the new frame. Never pair
+        // that newer image with an older successful VNC observation: the old state says nothing
+        // about the pixels currently shown to the user.
+        if let consoleVisualStateAt,
+           let consoleScreenshotRefreshedAt,
+           consoleVisualStateAt < consoleScreenshotRefreshedAt {
+            return .stale
         }
 
         return consoleScreenshotRefreshedAt == nil ? .stale : .fresh

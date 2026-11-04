@@ -40,17 +40,23 @@ struct VMRuntimeView: View {
     var runRecommendedProofAction: () -> Void
     var runMultiAppProofAction: () -> Void
     var quietWindowsWhenIdleAction: () -> Void
+    var displayResizeAction: ((Int, Int) -> Void)?
     var displayMessage: String?
     @Binding var showsFullDesktop: Bool
     @State private var pathPicker: PathPicker?
     @State private var presentedSheet: VMRuntimeSheetDestination?
     @State private var installSimulation = InstallSimulationState.idle
+    @State private var showsStopConfirmation = false
+    /// Timestamp owned by this host launch attempt, not the persisted console record.
+    /// A nil value intentionally hides elapsed time when the app opens on an already-starting VM.
+    @State private var runtimeStartAt: Date?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             if let snapshot = model.snapshot {
                 WindowsSetupDisplayPanel(
                     snapshot: snapshot,
+                    runtimeStartAt: runtimeStartAt,
                     guestAgentInstallEvidence: validGuestAgentEvidence(for: snapshot),
                     agentDiagnostic: agentDiagnostic,
                     statusText: model.statusText,
@@ -76,10 +82,16 @@ struct VMRuntimeView: View {
                         let installEvidence = validGuestAgentEvidence(for: snapshot) ?? snapshot.installEvidence
                         let windowsReadyForApps = installEvidence.isInstalled
 
-                        // A live guest agent is sufficient for the app path. The embedded
-                        // console preview may be stale while HWND capture is healthy, so
-                        // display recovery must never block a native app window launch.
-                        if windowsReadyForApps && canFulfillPendingLaunch {
+                        if WindowsRuntimeReadiness.shouldBlockAgentRepair(snapshot: snapshot) {
+                            if canRecoverRuntimeDisplay(for: snapshot) {
+                                recoverRuntimeDisplayAction()
+                            } else {
+                                requestStopAction()
+                            }
+                        } else if windowsReadyForApps && canFulfillPendingLaunch {
+                            // A live guest agent is sufficient for the app path. The embedded
+                            // console preview may be stale while HWND capture is healthy, so
+                            // display recovery must never block a native app window launch.
                             fulfillPendingLaunchAction()
                         } else if WindowsAppLaunchCommandPolicy.prefersLaunchAsHero(
                             windowsInstalled: windowsReadyForApps,
@@ -96,10 +108,9 @@ struct VMRuntimeView: View {
                         } else if canRecoverRuntimeDisplay(for: snapshot) {
                             recoverRuntimeDisplayAction()
                         } else if model.canStop {
-                            stopVMAction()
+                            requestStopAction()
                         } else if model.canStart {
-                            startDisplayHandoffProgress()
-                            startVMAction()
+                            beginStartAction()
                         } else if !snapshot.windowsInstalled && (snapshot.installerMediaPath == nil || needsInstallerPickerAccess(snapshot)) {
                             presentedSheet = .windowsDownload
                         } else {
@@ -108,7 +119,7 @@ struct VMRuntimeView: View {
                             }
                         }
                     },
-                    stopAction: stopVMAction,
+                    stopAction: requestStopAction,
                     markWindowsInstalledAction: markWindowsInstalledAction,
                     installGuestAgentAction: installGuestAgentAction,
                     prepareSparsePackageAction: prepareSparsePackageAction,
@@ -139,6 +150,7 @@ struct VMRuntimeView: View {
                     runRecommendedProofAction: runRecommendedProofAction,
                     runMultiAppProofAction: runMultiAppProofAction,
                     quietWindowsWhenIdleAction: quietWindowsWhenIdleAction,
+                    displayResizeAction: displayResizeAction,
                     refreshAction: {
                         Task {
                             await model.load()
@@ -218,6 +230,9 @@ struct VMRuntimeView: View {
         }
         .onChange(of: model.snapshot?.state) { _, state in
             updateDisplayHandoffProgress(for: state)
+            if state != .starting {
+                runtimeStartAt = nil
+            }
         }
         .task(id: model.snapshot?.state) {
             await refreshRuntimeEvidenceWhileRunning()
@@ -252,6 +267,36 @@ struct VMRuntimeView: View {
                 )
             }
         }
+        .confirmationDialog(
+            "Stop Windows?",
+            isPresented: $showsStopConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Stop Windows", role: .destructive) {
+                stopVMAction()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text(stopConfirmationMessage)
+        }
+    }
+
+    private func requestStopAction() {
+        if WindowsRuntimeStopConfirmation.needsConfirmation(
+            hasMirroredWindowsApp: activeMirrorSession != nil,
+            hasQueuedLaunch: pendingLaunch.isQueued
+        ) {
+            showsStopConfirmation = true
+        } else {
+            stopVMAction()
+        }
+    }
+
+    private var stopConfirmationMessage: String {
+        WindowsRuntimeStopConfirmation.message(
+            hasMirroredWindowsApp: activeMirrorSession != nil,
+            hasQueuedLaunch: pendingLaunch.isQueued
+        )
     }
 
     private func canShowDisplay(for snapshot: VMRuntimeSnapshot) -> Bool {
@@ -260,6 +305,7 @@ struct VMRuntimeView: View {
 
     func canInstallGuestAgent(for snapshot: VMRuntimeSnapshot) -> Bool {
         canShowDisplay(for: snapshot)
+            && !WindowsRuntimeReadiness.shouldBlockAgentRepair(snapshot: snapshot)
             && (validGuestAgentEvidence(for: snapshot) ?? snapshot.installEvidence).kind != .guestAgent
     }
 
@@ -277,6 +323,10 @@ struct VMRuntimeView: View {
     func canRecoverRuntimeDisplay(for snapshot: VMRuntimeSnapshot) -> Bool {
         guard canShowDisplay(for: snapshot) else {
             return false
+        }
+
+        if WindowsRuntimeReadiness.shouldBlockAgentRepair(snapshot: snapshot) {
+            return true
         }
 
         return snapshot.latestConsoleLaunch?.previewStatus == .stale
@@ -427,8 +477,7 @@ struct VMRuntimeView: View {
                     return
                 }
 
-                startDisplayHandoffProgress()
-                startVMAction()
+                beginStartAction()
             case .driverMedia:
                 await model.updateProfilePaths(
                     installerMediaPath: currentInstaller,
@@ -456,12 +505,11 @@ struct VMRuntimeView: View {
             return false
         }
 
-        startDisplayHandoffProgress()
-        startVMAction()
+        beginStartAction()
         return true
     }
 
-    func diagnosticsDirectory() -> URL {
+    private func diagnosticsDirectory() -> URL {
         QEMUVMRuntimeBooter.defaultDiagnosticsDirectory()
     }
 
@@ -472,6 +520,13 @@ struct VMRuntimeView: View {
         }
 
         installSimulation = .running(stepIndex: 2, progress: 0.42)
+    }
+
+    @MainActor
+    private func beginStartAction() {
+        runtimeStartAt = Date()
+        startDisplayHandoffProgress()
+        startVMAction()
     }
 
     @MainActor

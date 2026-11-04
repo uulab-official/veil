@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import VeilHostCore
 
@@ -41,6 +42,25 @@ struct ContentView: View {
                     refreshAction: refreshAll
                 )
 
+                WindowsAppLauncherBar(
+                    apps: model.apps,
+                    selectedAppId: $model.selectedAppId,
+                    mirrorSessions: model.mirrorSessions,
+                    phase: model.phase,
+                    runtimeState: vmModel.snapshot?.state,
+                    windowsInstalled: windowsInstalled,
+                    hasLiveAgentConnection: model.hasLiveAgentConnection,
+                    appConnectionUnavailable: appConnectionUnavailable,
+                    canRequestLaunch: model.canRequestSelectedAppLaunch,
+                    canFulfillPendingLaunch: model.canFulfillPendingLaunch,
+                    pendingAppName: pendingAppName,
+                    launchAction: launchWindowsAppAction,
+                    repairConnectionAction: repairGuestAgentForAppLaunchAction
+                )
+                .padding(.horizontal, 18)
+                .padding(.vertical, 14)
+                .frame(height: 104)
+
                 DetailView(
                     model: model,
                     vmModel: vmModel,
@@ -83,7 +103,7 @@ struct ContentView: View {
         WindowsShellCopy.headerSubtitle(
             hasLiveAppConnection: model.hasLiveAgentConnection,
             runtimeState: vmModel.snapshot?.state,
-            windowsInstalled: vmModel.snapshot?.windowsInstalled == true,
+            windowsInstalled: windowsInstalled,
             appConnectionUnavailable: appConnectionUnavailable
         )
     }
@@ -91,7 +111,7 @@ struct ContentView: View {
     private var headerStatusTitle: String {
         WindowsShellCopy.headerStatusTitle(
             runtimeState: vmModel.snapshot?.state,
-            windowsInstalled: vmModel.snapshot?.windowsInstalled == true,
+            windowsInstalled: windowsInstalled,
             appConnectionUnavailable: appConnectionUnavailable
         )
     }
@@ -99,7 +119,7 @@ struct ContentView: View {
     private var headerStatusSymbol: String {
         WindowsShellCopy.headerStatusSymbol(
             runtimeState: vmModel.snapshot?.state,
-            windowsInstalled: vmModel.snapshot?.windowsInstalled == true,
+            windowsInstalled: windowsInstalled,
             appConnectionUnavailable: appConnectionUnavailable
         )
     }
@@ -115,12 +135,21 @@ struct ContentView: View {
         case .starting:
             return .blue
         default:
-            return vmModel.snapshot?.windowsInstalled == true ? .green : .secondary
+            return windowsInstalled ? .green : .secondary
         }
     }
 
     private var appConnectionUnavailable: Bool {
-        !model.hasLiveAgentConnection && model.agentDiagnostic?.status == .unavailable
+        WindowsShellCopy.appConnectionNeedsRepair(
+            hasLiveAppConnection: model.hasLiveAgentConnection,
+            agentUnavailable: model.agentDiagnostic?.status == .unavailable,
+            windowsInstalled: windowsInstalled,
+            runtimeState: vmModel.snapshot?.state
+        )
+    }
+
+    private var windowsInstalled: Bool {
+        vmModel.snapshot?.installEvidence.isInstalled == true
     }
 
     private func refreshAll() {
@@ -129,6 +158,14 @@ struct ContentView: View {
             async let vmLoad: Void = vmModel.load()
             _ = await (hostLoad, vmLoad)
         }
+    }
+
+    private var pendingAppName: String? {
+        guard let pendingAppId = model.pendingLaunchAppId else {
+            return nil
+        }
+
+        return model.apps.first { $0.id == pendingAppId }?.name
     }
 
 }

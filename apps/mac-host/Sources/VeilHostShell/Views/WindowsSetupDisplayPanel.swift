@@ -7,6 +7,7 @@ import Virtualization
 struct WindowsSetupDisplayPanel: View {
     @Environment(\.appRuntimeProvider) private var appRuntimeProvider
     var snapshot: VMRuntimeSnapshot
+    var runtimeStartAt: Date?
     var guestAgentInstallEvidence: VMInstallEvidenceSummary?
     var agentDiagnostic: AgentConnectionDiagnostic?
     var statusText: String
@@ -52,6 +53,7 @@ struct WindowsSetupDisplayPanel: View {
     var runRecommendedProofAction: () -> Void
     var runMultiAppProofAction: () -> Void
     var quietWindowsWhenIdleAction: () -> Void
+    var displayResizeAction: ((Int, Int) -> Void)?
     var refreshAction: () -> Void
     var consolePointerTapAction: (Double, Double) -> Void
     var consoleKeyAction: (String) -> Void
@@ -140,6 +142,7 @@ struct WindowsSetupDisplayPanel: View {
                     surface: displaySurface,
                     path: snapshot.latestConsoleScreenshotPath ?? "",
                     revisionID: displayScreenshotRevisionID,
+                    displayResizeAction: displayResizeAction,
                     pointerTapAction: consolePointerTapAction,
                     keyAction: consoleKeyAction
                 )
@@ -162,6 +165,7 @@ struct WindowsSetupDisplayPanel: View {
                 surface: displaySurface,
                 path: snapshot.latestConsoleScreenshotPath ?? "",
                 revisionID: displayScreenshotRevisionID,
+                displayResizeAction: displayResizeAction,
                 pointerTapAction: consolePointerTapAction,
                 keyAction: consoleKeyAction
             )
@@ -262,12 +266,16 @@ struct WindowsSetupDisplayPanel: View {
         return "\(path)#\(refreshedAt)"
     }
 
+    @ViewBuilder
     private var machineDisplay: some View {
         ZStack {
             Rectangle()
                 .fill(machineHeroGradient)
 
-            VStack(spacing: 16) {
+            if showsUnavailableGuestAgentRoute {
+                appConnectionRecoveryHero
+            } else {
+                VStack(spacing: 16) {
                 Spacer(minLength: 8)
 
                 WindowsLogoMark(size: 64)
@@ -282,6 +290,26 @@ struct WindowsSetupDisplayPanel: View {
                         .font(.callout)
                         .foregroundStyle(.white.opacity(0.74))
                         .lineLimit(1)
+                }
+
+                if let displayMessage, !displayMessage.isEmpty {
+                    Label(displayMessage, systemImage: "info.circle.fill")
+                        .font(.callout.weight(.medium))
+                        .foregroundStyle(.white.opacity(0.84))
+                        .lineLimit(2)
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: 620)
+                        .accessibilityLabel(displayMessage)
+                }
+
+                if let runtimeFailurePresentation {
+                    RuntimeFailureBanner(
+                        presentation: runtimeFailurePresentation,
+                        refreshAction: refreshAction,
+                        detailsAction: detailsAction,
+                        diagnosticsURL: diagnosticsURL
+                    )
+                    .frame(maxWidth: 620)
                 }
 
                 Button(action: runEffectivePrimaryAction) {
@@ -311,7 +339,7 @@ struct WindowsSetupDisplayPanel: View {
                     .minimumScaleFactor(0.82)
 
                 if showsUnavailableGuestAgentRoute {
-                    Label("Windows setup is available • Mac app windows require QEMU or a configured endpoint", systemImage: "network.slash")
+                    Label("Windows setup is available • Connect Windows apps to open them as Mac windows", systemImage: "network.slash")
                         .font(.callout.weight(.medium))
                         .foregroundStyle(.orange)
                         .lineLimit(1)
@@ -336,6 +364,20 @@ struct WindowsSetupDisplayPanel: View {
 
                 }
 
+                RuntimeReadinessTimeline(steps: runtimeReadinessSteps)
+                    .frame(maxWidth: 860)
+
+                if snapshot.state == .starting {
+                    WindowsRuntimeWaitBanner(
+                        context: WindowsRuntimeWaitContext(
+                            attemptStartedAt: runtimeStartAt,
+                            persistedLaunchStartedAt: snapshot.latestConsoleLaunch?.startedAt
+                        ),
+                        refreshAction: refreshAction
+                    )
+                    .frame(maxWidth: 620)
+                }
+
                 if installSimulation.phase != .idle {
                     AssistantProgressStrip(simulation: installSimulation)
                         .frame(maxWidth: 420)
@@ -349,10 +391,11 @@ struct WindowsSetupDisplayPanel: View {
                         .frame(maxWidth: 420)
                 }
 
-                Spacer(minLength: 8)
+                    Spacer(minLength: 8)
+                }
+                .foregroundStyle(.white)
+                .padding(24)
             }
-            .foregroundStyle(.white)
-            .padding(24)
         }
     }
 

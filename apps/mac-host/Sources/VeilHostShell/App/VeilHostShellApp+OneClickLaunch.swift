@@ -22,69 +22,127 @@ extension VeilHostShellApp {
     }
 
     func runOneClickAppLaunch(appId: String) {
-        cancelAutomaticQuietRuntime()
-        cancelAutomaticGuestAgentRecovery()
-        cancelAutomaticRuntimeConnectionRecovery()
-
         Task { @MainActor in
-            let outcome = await oneClickAppLaunchGate.run {
-                let driver = OneClickAppLaunchDriver<WindowsAppLaunchResult>(
-                    context: { self.currentAppLaunchContext() },
-                    requestLaunch: { requestedAppId in
-                        self.model.selectedAppId = requestedAppId
-                        return await self.model.launchSelectedApp()
-                    },
-                    startOrResumeWindows: {
-                        await self.startOrResumeWindows()
-                        return self.vmModel.snapshot?.state == .running
-                            || self.vmModel.snapshot?.state == .starting
-                    },
-                    waitForGuestAgent: { seconds in
-                        let report = await self.model.waitForLiveAgentConnection(
-                            endpoint: self.agentURLString,
-                            timeoutSeconds: seconds
+            _ = await oneClickAppLaunchGate.run {
+                self.cancelAutomaticQuietRuntime()
+                self.cancelAutomaticGuestAgentRecovery()
+                self.cancelAutomaticRuntimeConnectionRecovery()
+                let pendingAppId = self.model.pendingLaunchAppId
+                let effectiveAppId = pendingAppId ?? appId
+                let appName = self.model.apps.first { $0.id == effectiveAppId }?.name
+                    ?? "Windows app"
+
+                let outcome = await OneClickAppLaunchOwnership.run(
+                    requestedAppId: appId,
+                    pendingAppId: pendingAppId,
+                    presentationGate: self.oneClickAppWindowPresentationGate,
+                    mutationGate: self.oneClickAppFrameMutationGate,
+                    operation: {
+                        let driver = OneClickAppLaunchDriver<WindowsAppLaunchResult>(
+                            context: { self.currentAppLaunchContext() },
+                            requestLaunch: { requestedAppId in
+                                self.model.selectedAppId = requestedAppId
+                                let result = await self.model.launchSelectedApp()
+                                if let result {
+                                    self.oneClickAppWindowPresentationGate.bindLaunchResult(
+                                        appId: result.window.appId,
+                                        windowId: result.window.windowId
+                                    )
+                                }
+                                return result
+                            },
+                            startOrResumeWindows: {
+                                await self.startOrResumeWindows()
+                                return self.vmModel.snapshot?.state == .running
+                                    || self.vmModel.snapshot?.state == .starting
+                            },
+                            waitForGuestAgent: { seconds in
+                                let report = await self.model.waitForLiveAgentConnection(
+                                    endpoint: self.agentURLString,
+                                    timeoutSeconds: seconds
+                                )
+                                return report.status == .connected
+                            },
+                            refreshRuntimeEvidence: {
+                                await self.vmModel.refreshRuntimeEvidence()
+                            },
+                            recoverStalledRuntime: {
+                                self.displayMessage = "Windows app connection stalled. Reconnecting Windows automatically."
+                                let result = await self.vmRuntimeBooter.recoverStalledRuntime()
+                                await self.vmModel.refreshRuntimeEvidence()
+                                switch result {
+                                case .recovered:
+                                    return true
+                                case .notNeeded, .unsupported, .unavailable, .failed:
+                                    return false
+                                }
+                            },
+                            repairGuestAgent: {
+                                _ = try await self.vmRuntimeBooter.installGuestAgentFromAttachedMedia()
+                                await self.vmModel.refreshRuntimeEvidence()
+                            },
+                            fulfillLaunch: {
+                                let result = await self.model.fulfillPendingLaunch()
+                                if let result {
+                                    self.oneClickAppWindowPresentationGate.bindLaunchResult(
+                                        appId: result.window.appId,
+                                        windowId: result.window.windowId
+                                    )
+                                }
+                                return result
+                            },
+                            frameReadiness: { result in
+                                let windowId = result.window.windowId
+                                let session = self.model.mirrorSessions.first { $0.id == windowId }
+                                return WindowsAppFirstFrameReadiness.resolve(
+                                    session: session,
+                                    compositedImage: self.model.compositedFrameImage(for: windowId)
+                                )
+                            },
+                            waitForFirstFrame: { result, seconds in
+                                let windowId = result.window.windowId
+                                return await WindowsAppFirstFrameReadiness.wait(
+                                    timeoutSeconds: seconds,
+                                    sessionProvider: { self.model.mirrorSessions.first { $0.id == windowId } },
+                                    compositedImageProvider: { self.model.compositedFrameImage(for: $0) }
+                                )
+                            },
+                            restartFrameStream: { result in
+                                await self.model.restartFrameSubscription(windowId: result.window.windowId)
+                            },
+                            reportStage: { stage in
+                                self.displayMessage = stage.userMessage(appName: appName)
+                            }
                         )
-                        return report.status == .connected
+
+                        return await OneClickAppLaunchCoordinator().run(
+                            appId: appId,
+                            driver: driver
+                        )
                     },
-                    recoverStalledRuntime: {
-                        self.displayMessage = "Windows app connection stalled. Reconnecting Windows automatically."
-                        let result = await self.vmRuntimeBooter.recoverStalledRuntime()
-                        await self.vmModel.refreshRuntimeEvidence()
-                        switch result {
-                        case .recovered:
-                            return true
-                        case .notNeeded, .unsupported:
-                            return false
-                        case .unavailable(let detail), .failed(let detail):
-                            VeilLog.agent.notice(
-                                "One-click QEMU runtime recovery did not complete: \(detail, privacy: .public)"
+                    finalize: { serializedOutcome in
+                        switch serializedOutcome {
+                        case .opened(let result):
+                            self.presentWindowsAppWindowWhenReady(
+                                windowId: result.window.windowId,
+                                expectedAppId: result.window.appId,
+                                intent: .launchCompletion,
+                                bringToFront: true,
+                                successMessage: "\(result.window.title) opened as a macOS window."
                             )
-                            return false
+                        case .blocked(let failure):
+                            self.oneClickAppWindowPresentationGate.finishBlockedLaunch()
+                            self.activateMainWindow()
+                            self.displayMessage = failure.userMessage
                         }
-                    },
-                    repairGuestAgent: {
-                        _ = try await self.vmRuntimeBooter.installGuestAgentFromAttachedMedia()
-                        await self.vmModel.refreshRuntimeEvidence()
-                    },
-                    fulfillLaunch: {
-                        await self.model.fulfillPendingLaunch()
                     }
                 )
-
-                return await OneClickAppLaunchCoordinator().run(
-                    appId: appId,
-                    driver: driver
-                )
-            }
-
-            switch outcome {
-            case .opened(let result):
-                displayMessage = "\(result.window.title) opened as a macOS window."
-                showWindowsAppWindow(for: result)
-                syncLauncherWindowVisibility()
-            case .blocked(let failure):
-                activateMainWindow()
-                displayMessage = failure.userMessage
+                guard let outcome else {
+                    self.activateMainWindow()
+                    self.displayMessage = AppLaunchLifecycleFailure.transitionBudgetExceeded.userMessage
+                    return .blocked(.transitionBudgetExceeded)
+                }
+                return outcome
             }
         }
     }
@@ -100,7 +158,8 @@ extension VeilHostShellApp {
             agentWaitTimedOut: false,
             repairAttemptCount: 0,
             canRecoverStalledRuntime: vmRuntimeBooter.provider == .qemu
-                && (hasObservedLiveAgentConnection || vmModel.snapshot?.installEvidence.kind == .guestAgent)
+                && (hasObservedLiveAgentConnection || vmModel.snapshot?.installEvidence.kind == .guestAgent),
+            isConsoleStillBooting: vmModel.snapshot?.latestConsoleLaunch?.isRecentlyBooting(asOf: Date()) == true
         )
     }
 

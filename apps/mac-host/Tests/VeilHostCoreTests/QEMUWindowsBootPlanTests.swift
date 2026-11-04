@@ -47,10 +47,13 @@ struct QEMUWindowsBootPlanTests {
 
     @Test("default diagnostics stay in application support")
     func defaultDiagnosticsStayInApplicationSupport() {
+        // Under tests the root is isolated; `VeilApplicationSupportTests` covers the
+        // production root resolving to Application Support/Veil.
         let directory = QEMUVMRuntimeBooter.defaultDiagnosticsDirectory()
         let components = directory.pathComponents
 
-        #expect(components.suffix(3).elementsEqual(["Application Support", "Veil", "Diagnostics"]))
+        #expect(directory.deletingLastPathComponent() == VeilApplicationSupport.directory)
+        #expect(components.suffix(2).elementsEqual(["Veil", "Diagnostics"]))
         #expect(!components.contains("Downloads"))
     }
 

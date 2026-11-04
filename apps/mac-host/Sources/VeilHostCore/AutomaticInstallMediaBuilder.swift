@@ -1,5 +1,9 @@
 import Foundation
 
+public protocol AutomaticInstallMediaBuilding: Sendable {
+    func prepareMedia(answerFileURL: URL, mediaURL: URL) throws
+}
+
 public struct HdiutilAutomaticInstallMediaBuilder: AutomaticInstallMediaBuilding {
     private let processRunner: @Sendable (String, [String]) throws -> Int32
 

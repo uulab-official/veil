@@ -10,6 +10,11 @@ public struct VMConsoleLaunchEvidence: Codable, Equatable, Sendable {
     public var vncPort: Int?
     public var consoleScreenshotPath: String?
     public var consoleScreenshotRefreshedAt: Date?
+    /// The most recent live VNC classification. A recent blank frame means Windows is still
+    /// booting (or its graphics head is unavailable); it must not be presented as a healthy console
+    /// merely because a screenshot file exists.
+    public var consoleVisualState: QEMUConsoleVisualState?
+    public var consoleVisualStateAt: Date?
     public var previewStatus: VMConsolePreviewStatus
     public var startedAt: Date
 
@@ -47,6 +52,8 @@ public struct VMConsoleLaunchEvidence: Codable, Equatable, Sendable {
         vncPort: Int? = nil,
         consoleScreenshotPath: String?,
         consoleScreenshotRefreshedAt: Date? = nil,
+        consoleVisualState: QEMUConsoleVisualState? = nil,
+        consoleVisualStateAt: Date? = nil,
         previewStatus: VMConsolePreviewStatus = .unavailable,
         startedAt: Date
     ) {
@@ -59,8 +66,49 @@ public struct VMConsoleLaunchEvidence: Codable, Equatable, Sendable {
         self.vncPort = vncPort
         self.consoleScreenshotPath = consoleScreenshotPath
         self.consoleScreenshotRefreshedAt = consoleScreenshotRefreshedAt
+        self.consoleVisualState = consoleVisualState
+        self.consoleVisualStateAt = consoleVisualStateAt
         self.previewStatus = previewStatus
         self.startedAt = startedAt
+    }
+}
+
+extension VMConsoleLaunchEvidence {
+    private static let blankConsoleBootGraceSeconds: TimeInterval = 180
+
+    /// Treat a just-started VM with no classified live console as boot progress. The app can start
+    /// waiting before `qemu-display-smoke` has persisted its first VNC classification, so requiring
+    /// `.blank` here would still let a slow first boot fall through to agent repair after 90 seconds.
+    public func isRecentlyBooting(asOf date: Date) -> Bool {
+        guard date >= startedAt,
+              date.timeIntervalSince(startedAt) <= Self.blankConsoleBootGraceSeconds else {
+            return false
+        }
+
+        return consoleVisualState == nil || consoleVisualState == .blank
+    }
+
+    /// A launch that has exceeded the boot grace without a classified usable console is no longer
+    /// safe to describe as ordinary waiting. Keep this separate from guest-agent health so recovery
+    /// can stop/retry the boot path instead of repeatedly reinstalling the agent.
+    public func isBootStalled(asOf date: Date) -> Bool {
+        guard date >= startedAt,
+              date.timeIntervalSince(startedAt) > Self.blankConsoleBootGraceSeconds else {
+            return false
+        }
+
+        return consoleVisualState == nil || consoleVisualState == .blank
+    }
+
+    public func isRecentlyBlankDuringBoot(asOf date: Date) -> Bool {
+        guard consoleVisualState == .blank,
+              let consoleVisualStateAt,
+              date >= consoleVisualStateAt,
+              date.timeIntervalSince(consoleVisualStateAt) <= Self.blankConsoleBootGraceSeconds else {
+            return false
+        }
+
+        return isRecentlyBooting(asOf: date)
     }
 }
 

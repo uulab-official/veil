@@ -174,8 +174,10 @@ extension HostDashboardModel {
         appId: String,
         preferExistingWindow: Bool = false
     ) async -> WindowsAppLaunchResult? {
+        guard !Task.isCancelled else { return nil }
         if let task = appLaunchTasks[appId] {
-            return await task.value
+            let result = await task.value
+            return Task.isCancelled ? nil : result
         }
 
         let task = Task<WindowsAppLaunchResult?, Never> { @MainActor [weak self] in
@@ -188,7 +190,13 @@ extension HostDashboardModel {
             )
         }
         appLaunchTasks[appId] = task
-        let result = await task.value
+        // The first caller owns this coalesced launch. Forward its cancellation to the
+        // actual service work; cancelling a duplicate waiter must not cancel the owner.
+        let result = await withTaskCancellationHandler {
+            await task.value
+        } onCancel: {
+            task.cancel()
+        }
         appLaunchTasks[appId] = nil
         return result
     }
@@ -197,6 +205,7 @@ extension HostDashboardModel {
         appId: String,
         preferExistingWindow: Bool
     ) async -> WindowsAppLaunchResult? {
+        guard !Task.isCancelled else { return nil }
         phase = .launching
         errorMessage = nil
         let shouldReuseExistingWindow = preferExistingWindow
@@ -207,6 +216,7 @@ extension HostDashboardModel {
             let result = try await (shouldReuseExistingWindow
                 ? service.restoreApp(appId: appId)
                 : service.launchApp(appId: appId))
+            try Task.checkCancellation()
             return try await applyWindowsAppLaunchResult(result)
         } catch {
             errorMessage = userMessage(for: error)
@@ -262,6 +272,28 @@ extension HostDashboardModel {
         }
     }
 
+    /// Opens a file that has already been copied into the fixed guest-served shared folder.
+    ///
+    /// This follows the same window adoption path as a regular drag-and-drop open, but it keeps large
+    /// files off the control channel. The caller owns the host-side copy/mount step and passes the
+    /// guest path that the agent will independently validate.
+    @discardableResult
+    public func openSharedFile(appId: String, fileName: String, guestPath: String) async -> WindowsAppLaunchResult? {
+        let phaseBeforeOpen = phase
+        phase = .launching
+        errorMessage = nil
+        lastFileDropRefusal = nil
+
+        do {
+            let result = try await service.openSharedFile(appId: appId, fileName: fileName, guestPath: guestPath)
+            return try await applyWindowsAppLaunchResult(result)
+        } catch {
+            lastFileDropRefusal = .guestRejected(fileName: fileName, detail: userMessage(for: error))
+            phase = phaseBeforeOpen
+            return nil
+        }
+    }
+
     private func applyWindowsAppLaunchResult(_ result: WindowsAppLaunchResult) async throws -> WindowsAppLaunchResult {
         health = result.health
         apps = result.apps
@@ -282,10 +314,12 @@ extension HostDashboardModel {
             supportsCapture: result.health.capabilities.windowCapture
         )
         await refreshRestoreIntentFromOpenWindows()
+        try Task.checkCancellation()
         if result.connectionMode == .agent,
            result.health.capabilities.windowCapture {
             try await service.subscribeWindowFrames(windowId: result.window.windowId)
         }
+        try Task.checkCancellation()
         phase = .connected
         return result
     }

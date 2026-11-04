@@ -45,20 +45,32 @@ extension VeilHostShellApp {
                         retryDelaySeconds = baseRetryDelaySeconds
                         // Routed through the compositor: a tile is not a displayable frame, and a tile that
                         // cannot be composited must not present a window.
-                        guard model.receiveWindowFrameTile(
+                        let accepted = model.receiveWindowFrameTile(
                             message.tile,
                             wireByteCount: message.wireByteCount
-                        ),
+                        )
+                        if !accepted,
+                           model.requiresFrameStreamRestartAfterTileDrop(windowId: message.tile.windowId) {
+                            // A missing delta cannot be repaired by later small tiles. Restart only this
+                            // HWND so the guest begins a fresh stream with a key frame.
+                            _ = await model.restartFrameSubscription(windowId: message.tile.windowId)
+                        }
+                        guard accepted,
                               let session = model.mirrorSessions.first(where: { $0.id == message.tile.windowId }) else {
                             continue
                         }
 
-                        windowsAppWindowPresenter.showWindow(for: session)
+                        presentWindowsAppWindowForEvent(session)
                     }
                 } catch {
                     VeilLog.agent.notice(
                         "Binary frame channel stopped; retrying. \(String(describing: error))"
                     )
+                    if case HostFrameChannelError.bufferOverflow(let windowId) = error {
+                        // A dropped incremental tile leaves an unknown rectangle in the compositor. Reset
+                        // only that HWND so unrelated mirrored apps keep their surfaces and input alive.
+                        _ = await model.restartFrameSubscription(windowId: windowId)
+                    }
                 }
 
                 if Task.isCancelled {
@@ -98,20 +110,21 @@ extension VeilHostShellApp {
                         // A newly created window is raised by the presenter regardless; passing true
                         // here only matters when the window already existed, which for this event means
                         // the guest re-announced a window the user already has open.
-                        windowsAppWindowPresenter.showWindow(for: session, bringToFront: true)
-                        syncLauncherWindowVisibility()
+                        if presentWindowsAppWindowForEvent(session, bringToFront: true) {
+                            syncLauncherWindowVisibility()
+                        }
                     case .handledWindowUpdated(let windowId):
                         guard let session = model.mirrorSessions.first(where: { $0.id == windowId }) else {
                             return
                         }
 
-                        windowsAppWindowPresenter.showWindow(for: session)
+                        presentWindowsAppWindowForEvent(session)
                     case .handledWindowFrame(let windowId):
                         guard let session = model.mirrorSessions.first(where: { $0.id == windowId }) else {
                             return
                         }
 
-                        windowsAppWindowPresenter.showWindow(for: session)
+                        presentWindowsAppWindowForEvent(session)
                     case .handledWindowFrameUnchanged:
                         // Liveness only. Nothing new to present, and re-presenting would churn the window.
                         break
@@ -177,6 +190,11 @@ extension VeilHostShellApp {
                         }
                     }
                     await recordGuestAgentInstallEvidenceIfNeeded()
+                    // The first overview may have raced the guest agent and started without the
+                    // binary-frame capability. Once this reconnect attempt obtains fresh health,
+                    // start the dedicated frame channel as well; otherwise a recovered agent would
+                    // silently remain on the JSON path for the rest of the app session.
+                    startFrameChannelPumpIfNeeded()
 
                     let madeProgress = !restoredLaunches.isEmpty || fulfilledLaunch != nil || model.hasLiveAgentConnection
                     retryDelaySeconds = madeProgress

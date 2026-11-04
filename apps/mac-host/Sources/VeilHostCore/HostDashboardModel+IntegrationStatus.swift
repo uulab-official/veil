@@ -561,11 +561,13 @@ extension HostDashboardModel {
         let recommendedMediaRebuildCommand = requiresGuestToolsMediaRebuild
             ? (automaticInstallMediaStatus.rebuildCommand ?? prepareCommand(for: snapshot))
             : nil
-        let recommendedPowerDownCommand = requiresGuestToolsMediaRebuild && isRunning
+        let consolePreviewStatus = snapshot.latestConsoleLaunch?.previewStatus
+        let consoleIsStillBooting = snapshot.latestConsoleLaunch?.isRecentlyBooting(asOf: Date()) == true
+        let consoleBootStalled = snapshot.latestConsoleLaunch?.isBootStalled(asOf: Date()) == true
+        let recommendedPowerDownCommand = isRunning && (requiresGuestToolsMediaRebuild || consoleBootStalled)
             ? "veil-vmctl app-runtime-action --json --action stop-runtime"
             : nil
         let reason: String
-        let consolePreviewStatus = snapshot.latestConsoleLaunch?.previewStatus
 
         if isRunning, requiresGuestToolsMediaRebuild {
             recommendedAction = "rebuild-guest-tools-media"
@@ -573,17 +575,36 @@ extension HostDashboardModel {
             recommendedDisplayCommand = nil
             recommendedRecoveryCommand = nil
             reason = "The local Windows runtime is running with stale guest tools media attached; power down Windows, rebuild VeilAutoInstall.iso, then restart before repairing the app connection."
+        } else if isRunning, consoleIsStillBooting {
+            recommendedAction = "wait-for-guest-agent"
+            recommendedPrepareCommand = nil
+            recommendedDisplayCommand = snapshot.latestConsoleLaunch?.displaySurface.isLiveCapable == true
+                ? "veil-vmctl qemu-display-smoke --json --wait-seconds 30"
+                : nil
+            recommendedRecoveryCommand = nil
+            reason = "Windows is still booting; Veil has not observed a usable embedded console yet. Veil will wait for the guest agent instead of starting repair while the desktop is unavailable."
+        } else if isRunning, consoleBootStalled {
+            recommendedAction = "recover-runtime-display"
+            recommendedPrepareCommand = nil
+            recommendedDisplayCommand = snapshot.latestConsoleLaunch?.displaySurface.isLiveCapable == true
+                ? "veil-vmctl qemu-display-smoke --json --wait-seconds 30"
+                : nil
+            recommendedRecoveryCommand = "veil-vmctl qemu-capture --json"
+            reason = "Windows has been running for more than 180 seconds without a usable embedded console. Capture the current display evidence, stop Windows, and retry the boot before repairing the guest agent."
         } else if isRunning {
             let displayNeedsRecovery = consolePreviewStatus == .stale
                 || consolePreviewStatus == .unavailable
-            recommendedAction = displayNeedsRecovery ? "recover-runtime-display" : "wait-for-guest-agent"
-            recommendedPrepareCommand = nil
-            recommendedDisplayCommand = snapshot.latestConsoleLaunch?.displaySurface.isLiveCapable == true
+            let liveDisplayValidationCommand = snapshot.latestConsoleLaunch?.displaySurface.isLiveCapable == true
                 ? "veil-vmctl qemu-display-smoke --json"
                 : nil
-            recommendedRecoveryCommand = displayNeedsRecovery ? "veil-vmctl qemu-capture --json" : nil
+            recommendedAction = displayNeedsRecovery ? "recover-runtime-display" : "wait-for-guest-agent"
+            recommendedPrepareCommand = nil
+            recommendedDisplayCommand = liveDisplayValidationCommand
+            recommendedRecoveryCommand = displayNeedsRecovery
+                ? (liveDisplayValidationCommand ?? "veil-vmctl qemu-capture --json")
+                : nil
             reason = displayNeedsRecovery
-                ? "The local Windows runtime is running, but the embedded console preview is \(consolePreviewStatus?.rawValue ?? "unavailable"); refresh or validate display evidence before relying on app launch recovery."
+                ? "The local Windows runtime is running, but the embedded console preview is \(consolePreviewStatus?.rawValue ?? "unavailable"); validate the live display before relying on app launch recovery."
                 : "The local Windows runtime is already running; wait for the guest agent before opening Windows apps."
         } else if requiresGuestToolsMediaRebuild {
             recommendedAction = "rebuild-guest-tools-media"

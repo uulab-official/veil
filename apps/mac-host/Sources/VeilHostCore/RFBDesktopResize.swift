@@ -192,15 +192,13 @@ public struct RFBDesktopResizeStateMachine: Equatable, Sendable {
         self.requestTimeoutSeconds = requestTimeoutSeconds
     }
 
-    /// A framebuffer update arrived without an ExtendedDesktopSize rectangle. After
-    /// the initial non-incremental request this proves the server never advertised
-    /// the capability, so automatic resize stays disabled for the connection.
+    /// A framebuffer update without an ExtendedDesktopSize rectangle is normal
+    /// before the first SetDesktopSize request. RFB servers generally report the
+    /// capability only in response to that request, so keep probing instead of
+    /// permanently disabling dynamic resolution on the first ordinary frame.
     public mutating func handleFramebufferUpdateWithoutResizeResponse() {
-        guard phase == .probing else {
-            return
-        }
-
-        phase = .unsupported
+        // Intentionally a no-op while the connection is probing. A later resize
+        // request will resolve this state as applied, rejected, or timed out.
     }
 
     /// An ExtendedDesktopSize rectangle arrived. Success marks the capability as
@@ -209,7 +207,10 @@ public struct RFBDesktopResizeStateMachine: Equatable, Sendable {
     public mutating func handleDesktopSizeResponse(_ response: RFBDesktopSizeResponse) {
         guard response.isSuccess else {
             guard case .requestPending(let requested) = phase,
-                  response.matches(requested) else {
+                  // QEMU reports the currently applied framebuffer dimensions
+                  // in a rejection rectangle rather than echoing the requested
+                  // dimensions. Its reason field is the explicit reject marker.
+                  (response.matches(requested) || response.reasonCode == 1) else {
                 return
             }
 
@@ -235,19 +236,20 @@ public struct RFBDesktopResizeStateMachine: Equatable, Sendable {
         phase = .applied(applied)
     }
 
-    /// Registers a host-window target. Returns the target to send now, or nil when
-    /// the capability is unknown, unsupported, already disabled by a failure, or a
-    /// request is in flight (the target then replaces any queued one).
+    /// Registers a host-window target. The first target is sent optimistically while
+    /// probing because many RFB servers advertise ExtendedDesktopSize only in their
+    /// response. Returns nil only when a request is already in flight (the target
+    /// then replaces any queued one) or a prior failure disabled resize.
     @discardableResult
     public mutating func request(_ target: RFBDesktopResizeTarget) -> RFBDesktopResizeTarget? {
         switch phase {
-        case .supported, .applied:
+        case .supported, .applied, .probing, .unknown:
             phase = .requestPending(target)
             return target
         case .requestPending:
             queuedTarget = target
             return nil
-        case .probing, .unknown, .unsupported, .rejected, .timedOut:
+        case .unsupported, .rejected, .timedOut:
             return nil
         }
     }

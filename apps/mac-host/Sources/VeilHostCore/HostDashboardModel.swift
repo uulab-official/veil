@@ -2,27 +2,6 @@ import CoreGraphics
 import Foundation
 import Observation
 
-public extension HostDashboardService {
-    /// Default for services that predate committed text input. Throwing rather than silently
-    /// succeeding keeps this out of the "silent failure" class the agent audit already covered: a
-    /// swallowed no-op would look like typed Korean simply vanishing.
-    func sendTextInput(_ input: InputTextEvent) async throws {
-        throw HostDashboardServiceError.textInputUnsupported
-    }
-
-    func restoreApp(appId: String) async throws -> WindowsAppLaunchResult {
-        try await launchApp(appId: appId)
-    }
-
-    func resizeWindow(windowId: String, width: Int, height: Int) async throws -> WindowResizeResponse {
-        WindowResizeResponse(
-            requestId: "unsupported_resize",
-            windowId: windowId,
-            accepted: false
-        )
-    }
-}
-
 @MainActor
 @Observable
 public final class HostDashboardModel {
@@ -45,6 +24,16 @@ public final class HostDashboardModel {
     /// Held here rather than as a field on `WindowMirrorSession` because that type is `Codable`, and a
     /// non-optional property added to it would make previously encoded JSON fail to decode.
     var pausedFrameStreamWindowIds: Set<String> = []
+    /// Serializes minimize/restore transitions per HWND. AppKit can deliver a restore before the guest has
+    /// acknowledged the preceding unsubscribe; keeping the tail here preserves unsubscribe -> subscribe order
+    /// and prevents a fast visibility toggle from leaving a visible window paused forever.
+    @ObservationIgnored var frameStreamVisibilityTasks: [String: Task<Bool, Never>] = [:]
+    @ObservationIgnored var frameStreamVisibilityOperationIDs: [String: UUID] = [:]
+    @ObservationIgnored var pendingFrameStreamVisibility: [String: Bool] = [:]
+    /// Prevents a binary-channel recovery signal and the periodic stale sweep from restarting one HWND
+    /// concurrently. The guest stream has one owner per window; overlapping unsubscribe/subscribe pairs
+    /// can otherwise let an older completion retire the newer stream.
+    var frameStreamRestartInFlightWindowIds: Set<String> = []
     /// Guest events cross into things the user owns — the pasteboard and Notification Center — and the guest
     /// controls both their content and their timing. Bounding one message does nothing about a megabyte every
     /// ten milliseconds.
@@ -254,6 +243,28 @@ public final class HostDashboardModel {
         mirrorSessions.contains { $0.id == windowId }
             && hasLiveAgentConnection
             && health?.capabilities.windowResize == true
+    }
+
+    public var canResizeDisplay: Bool {
+        hasLiveAgentConnection && health?.capabilities.displayResize == true
+    }
+
+    /// Asks the Windows agent to change the active desktop monitor mode. This is the fallback for
+    /// guests whose QEMU RFB server rejects ExtendedDesktopSize.
+    @discardableResult
+    public func resizeDisplay(width: Int, height: Int) async -> DisplayResizeResponse? {
+        guard canResizeDisplay,
+              DisplayResizeRequest.isPlausible(width: width, height: height) else {
+            return nil
+        }
+
+        do {
+            return try await service.resizeDisplay(width: width, height: height)
+        } catch {
+            // Display fallback is best effort. The RFB surface already has a truthful aspect-fit
+            // fallback, so a guest API refusal must not tear down the host dashboard connection.
+            return nil
+        }
     }
 
 }

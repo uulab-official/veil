@@ -233,6 +233,7 @@ struct AppRuntimeActionReport: Codable, Equatable {
     var clipboard: ClipboardTextSet?
     var mouseInputs: [InputMouseEvent]
     var keyInputs: [InputKeyEvent]
+    var textInputs: [InputTextEvent]?
     var typedTextCharacterCount: Int?
     var restoredWindows: [WindowCreatedEvent]
     var restoreRequestedAppIds: [String]

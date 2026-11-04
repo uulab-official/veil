@@ -341,7 +341,7 @@ extension VeilVMControl {
         try data.write(to: directory.appendingPathComponent("qemu-launch-latest.json"), options: .atomic)
     }
 
-    static func smokeQEMUDisplay(json: Bool, waitSeconds: Int) throws {
+    static func smokeQEMUDisplay(json: Bool, waitSeconds: Int) async throws {
         let launchRecord = try latestQEMULaunchRecord()
         guard let host = launchRecord.vncHost?.trimmingCharacters(in: .whitespacesAndNewlines),
               !host.isEmpty,
@@ -350,11 +350,40 @@ extension VeilVMControl {
         }
 
         let boundedWaitSeconds = min(max(waitSeconds, 1), 30)
-        let snapshot = try qemuConsoleVisualSnapshot(
-            phase: "display-smoke",
-            attempt: 1,
-            referenceFrame: nil
-        )
+        let deadline = Date().addingTimeInterval(TimeInterval(boundedWaitSeconds))
+        var attempt = 0
+        var snapshot: QEMUConsoleVisualSnapshot?
+        var lastError: Error?
+
+        // VNC can expose a valid framebuffer before the guest has painted its first
+        // usable frame. Keep sampling blank/transiently unavailable observations for
+        // the requested bound so boot timing does not become a false display failure.
+        repeat {
+            attempt += 1
+            do {
+                let candidate = try qemuConsoleVisualSnapshot(
+                    phase: "display-smoke",
+                    attempt: attempt,
+                    referenceFrame: nil
+                )
+                snapshot = candidate
+                if candidate.observation.state != .blank {
+                    break
+                }
+            } catch {
+                lastError = error
+            }
+
+            let remainingSeconds = min(1, deadline.timeIntervalSinceNow)
+            if remainingSeconds > 0 {
+                let remainingNanoseconds = UInt64(remainingSeconds * 1_000_000_000)
+                try? await Task.sleep(nanoseconds: remainingNanoseconds)
+            }
+        } while Date() < deadline
+
+        guard let snapshot else {
+            throw lastError ?? VMControlError.missingQEMUDisplayEndpoint
+        }
         let frame = snapshot.frame
         guard let metrics = snapshot.observation.metrics else {
             throw VMControlError.qemuScreenshotCaptureFailed(
@@ -376,6 +405,20 @@ extension VeilVMControl {
             waitedSeconds: boundedWaitSeconds,
             capturedAt: Date()
         )
+
+        // Keep the latest launch record aligned with the live display observation. Without this,
+        // VMRuntimeModel sees only the existence of a recently written PNG and reports `fresh` even
+        // when VNC returned a completely blank graphics head.
+        var observedLaunchRecord = launchRecord
+        observedLaunchRecord.consoleScreenshotPath = snapshot.observation.screenshotPath
+        observedLaunchRecord.consoleScreenshotRefreshedAt = snapshot.observation.capturedAt
+        observedLaunchRecord.consoleVisualState = snapshot.observation.state
+        observedLaunchRecord.consoleVisualStateAt = snapshot.observation.capturedAt
+        let launchDirectory = diagnosticsDirectory()
+            .appendingPathComponent("QEMU Launch", isDirectory: true)
+        let latestLaunchURL = launchDirectory.appendingPathComponent("qemu-launch-latest.json")
+        let launchData = try JSONEncoder.veilDiagnostics.encode(observedLaunchRecord)
+        try launchData.write(to: latestLaunchURL, options: .atomic)
 
         if json {
             let data = try JSONEncoder.veilDiagnostics.encode(record)

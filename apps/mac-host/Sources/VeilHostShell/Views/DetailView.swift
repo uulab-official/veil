@@ -27,8 +27,7 @@ struct DetailView: View {
     @State private var showsWindowsDesktop = false
 
     var body: some View {
-        ZStack(alignment: .bottom) {
-            VMRuntimeView(
+        VMRuntimeView(
                 model: vmModel,
                 guestAgentInstallEvidence: model.guestAgentInstallEvidence,
                 agentDiagnostic: model.agentDiagnostic,
@@ -64,24 +63,14 @@ struct DetailView: View {
                 runRecommendedProofAction: runRecommendedProofAction,
                 runMultiAppProofAction: runMultiAppProofAction,
                 quietWindowsWhenIdleAction: quietWindowsWhenIdleAction,
+                displayResizeAction: { width, height in
+                    Task { @MainActor in
+                        _ = await model.resizeDisplay(width: width, height: height)
+                    }
+                },
                 displayMessage: displayMessage,
                 showsFullDesktop: $showsWindowsDesktop
             )
-
-            if shouldShowAppDock {
-                WindowsQuickLaunchPanel(
-                    apps: model.apps,
-                    mirrorSessions: model.mirrorSessions,
-                    selectedAppId: $model.selectedAppId,
-                    canFulfillPendingLaunch: model.canFulfillPendingLaunch,
-                    hasLiveAgentConnection: model.hasLiveAgentConnection,
-                    phase: model.phase,
-                    launchWindowsAppAction: launchWindowsAppAction
-                )
-                .padding(.horizontal, 22)
-                .padding(.bottom, 18)
-            }
-        }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onAppear {
             synchronizeWorkspacePresentation()
@@ -102,20 +91,6 @@ struct DetailView: View {
     private var activeMirrorSession: WindowMirrorSession? {
         model.mirrorSessions.first { $0.latestFrame != nil }
             ?? model.mirrorSessions.first
-    }
-
-    /// Demo or stale app catalogs must not make first-run setup look complete. The
-    /// launcher appears only after a local VM profile has real installation evidence.
-    private var shouldShowAppDock: Bool {
-        guard vmModel.snapshot != nil else {
-            return false
-        }
-
-        return RuntimeWorkspacePresentationPolicy.showsAppDock(
-            hasApps: !model.apps.isEmpty,
-            hasInstalledWindows: hasInstalledWindows,
-            showsFullDesktop: showsWindowsDesktop
-        )
     }
 
     private var hasInstalledWindows: Bool {

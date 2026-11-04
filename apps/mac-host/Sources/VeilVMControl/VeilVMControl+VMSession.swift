@@ -289,7 +289,13 @@ extension VeilVMControl {
             print("")
             print("Window \(window.windowId) (\(window.surfaceWidth)x\(window.surfaceHeight))")
             print("  Key frames: \(window.keyFrameCount), tiles: \(window.tileCount), heartbeats: \(window.unchangedHeartbeatCount)")
-            print("  Dropped tiles: \(window.droppedTiles.total)")
+            let dropped = window.droppedTiles
+            print(
+                "  Dropped tiles: \(dropped.total) "
+                    + "(no surface \(dropped.noSurface), size changed \(dropped.surfaceSizeChanged), "
+                    + "undecodable \(dropped.undecodablePayload), rect mismatch \(dropped.payloadRectMismatch), "
+                    + "sequence gap \(dropped.sequenceGap))"
+            )
             print("  Frames/sec: \(String(format: "%.2f", window.framesPerSecond))")
             print("  Wire bytes: \(window.wireBytes) (key frames \(window.keyFrameWireBytes), tiles \(window.tileWireBytes))")
             print("  Frame interval ms: p50 \(String(format: "%.1f", window.frameIntervalMilliseconds.p50)), p95 \(String(format: "%.1f", window.frameIntervalMilliseconds.p95)), max \(String(format: "%.1f", window.frameIntervalMilliseconds.maximum))")

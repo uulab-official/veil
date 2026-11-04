@@ -177,18 +177,18 @@ struct RFBViewportMapperTests {
 struct RFBDesktopResizeStateMachineTests {
     private static let target = RFBDesktopResizeTarget(widthInPixels: 1_600, heightInPixels: 900)
 
-    @Test("a framebuffer update without ExtendedDesktopSize during probe marks the connection unsupported")
-    func probeWithoutSupportMarksUnsupported() {
+    @Test("a framebuffer update during probe keeps resize eligible for the first host request")
+    func probeWithoutResponseKeepsResizeEligible() {
         var machine = RFBDesktopResizeStateMachine()
         machine.resetForReconnect()
         #expect(machine.presentation == .recovering)
 
         machine.handleFramebufferUpdateWithoutResizeResponse()
-        #expect(machine.phase == .unsupported)
-        #expect(machine.presentation == .scaled)
+        #expect(machine.phase == .probing)
+        #expect(machine.presentation == .recovering)
 
         let sent = machine.request(Self.target)
-        #expect(sent == nil)
+        #expect(sent == Self.target)
     }
 
     @Test("an ExtendedDesktopSize success response during probe applies the current size")
@@ -260,6 +260,30 @@ struct RFBDesktopResizeStateMachineTests {
             height: 900,
             reasonCode: 0,
             resultCode: 2,
+            screens: []
+        ))
+
+        #expect(machine.presentation == .rejected)
+        #expect(machine.queuedTarget == nil)
+        #expect(machine.request(Self.target) == nil)
+    }
+
+    @Test("accepts a QEMU rejection that reports the current framebuffer size")
+    func qemuRejectionUsesCurrentFramebufferSize() {
+        var machine = RFBDesktopResizeStateMachine()
+        machine.resetForReconnect()
+        machine.handleDesktopSizeResponse(Self.successResponse(800, 600))
+
+        #expect(machine.request(Self.target) != nil)
+        machine.markRequestSent(Self.target, now: 100)
+
+        // QEMU's ExtendedDesktopSize rejection reports the current framebuffer
+        // dimensions (800x600), not the rejected target (1600x900).
+        machine.handleDesktopSizeResponse(RFBDesktopSizeResponse(
+            width: 800,
+            height: 600,
+            reasonCode: 1,
+            resultCode: 3,
             screens: []
         ))
 
@@ -353,15 +377,45 @@ struct RFBDesktopResizeWireTests {
         ))
     }
 
-    @Test("advertises raw pixels plus ExtendedDesktopSize")
+    @Test("advertises raw pixels plus standardized and QEMU ExtendedDesktopSize")
     func advertisesExtendedDesktopSize() {
         let encodings = RFBClientMessageBuilder.setRawAndDesktopResizeEncodings()
         #expect(encodings == Data([
             2, 0,
-            0, 2,
+            0, 3,
             0, 0, 0, 0,
+            0xFF, 0xFF, 0xFE, 0xCC,
             0xFF, 0xFF, 0xFF, 0x21
         ]))
+    }
+
+    @Test("parses QEMU's -308 ExtendedDesktopSize response")
+    func parsesQEMUDesktopSizeResponse() throws {
+        var header = Data()
+        header.appendBigEndian(UInt16(0))
+        header.appendBigEndian(UInt16(0))
+        header.appendBigEndian(UInt16(1_280))
+        header.appendBigEndian(UInt16(800))
+        header.appendBigEndian(Int32(rfbQEMUExtendedDesktopSizeEncoding))
+
+        var payload = Data([1, 0, 0, 0])
+        payload.append(RFBClientMessageBuilder.screenLayoutEntry(
+            id: 0,
+            x: 0,
+            y: 0,
+            width: 1_280,
+            height: 800,
+            flags: 0
+        ))
+
+        let response = try RFBFrameParser.parseDesktopSizeResponse(
+            rectangleHeader: header,
+            payload: payload
+        )
+
+        #expect(response.width == 1_280)
+        #expect(response.height == 800)
+        #expect(response.isSuccess)
     }
 
     @Test("parses an ExtendedDesktopSize rectangle with screens")

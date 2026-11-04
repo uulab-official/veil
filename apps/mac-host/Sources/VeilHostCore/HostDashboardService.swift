@@ -22,9 +22,11 @@ public protocol HostDashboardService: Sendable {
     func restoreApp(appId: String) async throws -> WindowsAppLaunchResult
     func launchNotepad() async throws -> NotepadLaunchResult
     func openFile(appId: String, fileName: String, contentBase64: String) async throws -> WindowsAppLaunchResult
+    func openSharedFile(appId: String, fileName: String, guestPath: String) async throws -> WindowsAppLaunchResult
     func focusWindow(windowId: String) async throws -> WindowFocusResponse
     func closeWindow(windowId: String) async throws -> WindowCloseResponse
     func resizeWindow(windowId: String, width: Int, height: Int) async throws -> WindowResizeResponse
+    func resizeDisplay(width: Int, height: Int) async throws -> DisplayResizeResponse
     func sendMouseInput(_ input: InputMouseEvent) async throws
     func sendKeyInput(_ input: InputKeyEvent) async throws
     func sendTextInput(_ input: InputTextEvent) async throws
@@ -32,6 +34,35 @@ public protocol HostDashboardService: Sendable {
     func subscribeWindowFrames(windowId: String) async throws
     func unsubscribeWindowFrames(windowId: String) async throws
     func waitForAgentConnection(endpoint: String, timeoutSeconds: Int) async -> AgentConnectionWaitReport
+}
+
+public extension HostDashboardService {
+    /// Default for services that predate committed text input. Throwing rather than silently
+    /// succeeding keeps this out of the "silent failure" class the agent audit already covered: a
+    /// swallowed no-op would look like typed Korean simply vanishing.
+    func sendTextInput(_ input: InputTextEvent) async throws {
+        throw HostDashboardServiceError.textInputUnsupported
+    }
+
+    func restoreApp(appId: String) async throws -> WindowsAppLaunchResult {
+        try await launchApp(appId: appId)
+    }
+
+    func resizeWindow(windowId: String, width: Int, height: Int) async throws -> WindowResizeResponse {
+        WindowResizeResponse(
+            requestId: "unsupported_resize",
+            windowId: windowId,
+            accepted: false
+        )
+    }
+
+    func resizeDisplay(width: Int, height: Int) async throws -> DisplayResizeResponse {
+        DisplayResizeResponse(
+            requestId: "unsupported_display_resize",
+            accepted: false,
+            reason: "display_resize_unsupported"
+        )
+    }
 }
 
 public struct HostOverview: Codable, Equatable, Sendable {

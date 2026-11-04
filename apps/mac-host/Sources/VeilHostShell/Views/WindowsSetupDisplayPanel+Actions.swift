@@ -5,6 +5,60 @@ import VeilHostCore
 import Virtualization
 
 extension WindowsSetupDisplayPanel {
+    var appConnectionRecoveryHero: some View {
+        VStack(spacing: 18) {
+            Image(systemName: "network.slash")
+                .font(.system(size: 38, weight: .semibold))
+                .foregroundStyle(.orange)
+                .frame(width: 76, height: 76)
+                .background(.orange.opacity(0.14), in: Circle())
+                .overlay {
+                    Circle()
+                        .strokeBorder(.orange.opacity(0.35), lineWidth: 1)
+                }
+
+            VStack(spacing: 7) {
+                Text("Windows apps need a connection")
+                    .font(.system(size: 28, weight: .semibold))
+                    .multilineTextAlignment(.center)
+
+                Text("Windows is installed, but Veil Agent is not responding. Repair the connection in Windows and your apps will be ready to open as Mac windows.")
+                    .font(.callout)
+                    .foregroundStyle(.white.opacity(0.74))
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: 560)
+            }
+
+            HStack(spacing: 10) {
+                Button(action: repairGuestAgentForAppLaunchAction) {
+                    Label("Repair connection", systemImage: "wrench.and.screwdriver")
+                        .frame(minWidth: 176)
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+
+                Button(action: detailsAction) {
+                    Label("Connection details", systemImage: "info.circle")
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.large)
+            }
+
+            Label("Your Windows installation and app data are unchanged.", systemImage: "checkmark.shield")
+                .font(.caption.weight(.medium))
+                .foregroundStyle(.white.opacity(0.64))
+        }
+        .foregroundStyle(.white)
+        .padding(36)
+        .frame(maxWidth: 700)
+        .background(.black.opacity(0.14), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .strokeBorder(.white.opacity(0.13), lineWidth: 1)
+        }
+        .shadow(color: .black.opacity(0.16), radius: 24, y: 12)
+    }
+
     private var installPrimaryTitle: String {
         if effectiveInstallEvidence.isInstalled {
             if canFulfillPendingLaunch {
@@ -206,6 +260,10 @@ extension WindowsSetupDisplayPanel {
     }
 
     var effectivePrimaryTitle: String {
+        if bootIsStalled {
+            return primaryTitle
+        }
+
         guard let route = executablePrimaryNextActionRoute else {
             return primaryTitle
         }
@@ -227,7 +285,11 @@ extension WindowsSetupDisplayPanel {
     }
 
     var effectivePrimarySymbol: String {
-        executablePrimaryNextActionRoute?.symbolName ?? primarySymbol
+        if bootIsStalled {
+            return primarySymbol
+        }
+
+        return executablePrimaryNextActionRoute?.symbolName ?? primarySymbol
     }
 
     var effectivePrimaryDisabled: Bool {
@@ -239,10 +301,23 @@ extension WindowsSetupDisplayPanel {
     }
 
     var effectivePrimaryHelp: String {
-        executablePrimaryNextActionRoute == nil ? primaryTitle : launchOnboardingHelp
+        if bootIsStalled {
+            return primaryHint
+        }
+
+        return executablePrimaryNextActionRoute == nil ? primaryTitle : launchOnboardingHelp
     }
 
     func runEffectivePrimaryAction() {
+        if bootIsStalled {
+            if canRecoverRuntimeDisplay {
+                recoverRuntimeDisplayAction()
+            } else {
+                stopAction()
+            }
+            return
+        }
+
         guard let route = executablePrimaryNextActionRoute else {
             primaryAction()
             return
