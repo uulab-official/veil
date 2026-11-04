@@ -30,9 +30,12 @@ Date: 2026-11-04
 ## 남은 실기 게이트
 
 - [x] 마법사 안에서 실제 Microsoft 자동 다운로드 → SHA-256 검증 → VM 준비 → VM 시작까지 클릭 한 번으로 이어진다(2026-11-04, `Windows11_Client_arm64_ko-kr_26300_9457.iso`, 8,482,547,712바이트, 약 3시간).
-- [ ] QEMU가 없는 Mac에서는 VM이 Apple Virtualization으로 시작되지만 화면이 검은색에서 넘어가지 않는다. `2026-08-04-live-shared-folder.md`의 기록대로 Virtualization.framework는 Windows 게스트를 실행하지 않으므로, 마법사가 Install 전에 QEMU를 요구하거나 준비하도록 바꾸고 엔진 안내의 "Without QEMU, Veil can install and run the full Windows desktop" 문구를 고친다.
+- [x] QEMU가 없는 Mac에서는 VM이 Apple Virtualization으로 시작되지만 화면이 검은색에서 넘어가지 않는다. `2026-08-04-live-shared-folder.md`의 기록대로 Virtualization.framework는 Windows 게스트를 실행하지 않으므로, 마법사가 Install 전에 QEMU를 요구하거나 준비하도록 바꾸고 엔진 안내의 "Without QEMU, Veil can install and run the full Windows desktop" 문구를 고친다.
 - [x] Homebrew QEMU 11.1.3 + swtpm에서 `qemu-start`가 `-device tpm-tis-device,tpmdev=tpm0: Error: ret = HV_BAD_ARGUMENT (hvf-all.c:123)`로 중단되던 문제를 고쳤다. 원인은 TPM PPI(0x400바이트 RAM 영역)를 Hypervisor.framework가 16 KiB 호스트 페이지로 매핑하지 못하는 것이다. QEMU 계획을 `tpm-tis-device,tpmdev=tpm0,ppi=off`로 바꾼 뒤 같은 ISO가 요구 사항 검사를 통과하고 "Windows 11 설치 중" 화면까지 진행했다(2026-11-04).
-- [ ] 라이브 화면 하단의 이전 상태 줄(`Windows is open` · Settings · Stop Windows · More)과 VM 시작 시 자동으로 뜨는 별도 디스플레이 창을 툴바 구조에 맞게 정리한다.
+- [x] 위 항목 처리: 다운로드 후 자동 시작, 마법사 Install, 툴바 Start, Actions 메뉴 Start는 QEMU가 준비됐을 때만 Windows를 시작한다. 엔진 안내는 "Apple Virtualization can't run Windows"로 고쳤다.
+- [x] 라이브 Windows Setup 위의 이전 상태 줄(`Windows is open` · Settings · Stop Windows · More)은 부팅이 멈춘 경우에만 보인다. 별도 디스플레이 창은 Apple Virtualization 콘솔 경로였고, 이제 그 경로로 Windows를 시작하지 않는다.
+- [ ] 설치 속도: 같은 ISO의 파일 복사가 3시간에 46%였다. QEMU CPU는 6.8%로 게스트가 I/O를 기다리고 있었고, 설치 ISO는 `usb-storage`로 붙어 있다. `usb-uas` 같은 더 빠른 설치 미디어 경로를 실측해서 바꾼다.
+- [ ] Secure Boot 펌웨어: 이 Mac은 `/Applications/UTM.app`의 `edk2-aarch64-secure-code.fd`로 부팅했다. UTM이 없는 Mac에서는 Secure Boot 없는 Homebrew 펌웨어로 떨어지므로, Veil이 자체 Secure Boot EDK2와 QEMU를 앱에 넣어 배포할지 결정이 필요하다(라이선스 검토 포함).
 - [ ] 실제 Windows 11 Arm 설치 완료 상태에서 사이드바 앱 실행, 툴바 일시 중단/재개, 종료 확인 대화상자를 확인한다.
 - [ ] QEMU/VNC 라이브 화면에서 툴바 아래 Windows 화면의 입력 좌표가 어긋나지 않는지 확인한다.
 - [ ] `820×560` 최소 창에서 사이드바와 툴바 항목이 잘리지 않는지 확인한다.
