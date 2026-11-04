@@ -796,7 +796,16 @@ private struct MicrosoftWindowsDownloadWebView: NSViewRepresentable {
     func updateNSView(_ nsView: WKWebView, context: Context) {}
 }
 
+/// The automatic Microsoft download, presented either as a sheet or embedded in the
+/// Installation Assistant. Both start downloading as soon as they appear and hand the verified ISO
+/// to `prepareDownloadedISO`, which prepares the VM and starts Windows Setup.
 struct WindowsDownloadSheet: View {
+    enum Presentation {
+        case sheet
+        /// Lives inside the assistant: no dismiss, and `cancelAction` returns to the assistant page.
+        case embedded(cancelAction: () -> Void)
+    }
+
     @Environment(\.dismiss) private var dismiss
     @StateObject private var controller = WindowsDownloadController()
     @State private var isPreparingWindows = false
@@ -805,6 +814,7 @@ struct WindowsDownloadSheet: View {
 
     let prepareDownloadedISO: (URL) async -> Bool
     let useExistingISO: () -> Void
+    var presentation: Presentation = .sheet
 
     var body: some View {
         VStack(spacing: 0) {
@@ -820,12 +830,12 @@ struct WindowsDownloadSheet: View {
                     automaticDownloadStage
                 }
             }
-            .frame(minWidth: 760, minHeight: 420)
+            .frame(minWidth: isEmbedded ? 0 : 760, minHeight: isEmbedded ? 0 : 420)
 
             Divider()
             footer
         }
-        .frame(minWidth: 820, minHeight: 560)
+        .frame(minWidth: isEmbedded ? 0 : 820, minHeight: isEmbedded ? 0 : 560)
         .background(Color(nsColor: .windowBackgroundColor))
         .task {
             controller.loadLandingPage()
@@ -841,7 +851,7 @@ struct WindowsDownloadSheet: View {
                 let isReady = await prepareDownloadedISO(url)
                 isPreparingWindows = false
                 if isReady {
-                    dismiss()
+                    finish()
                 } else {
                     preparationFailure = "The ISO was saved, but Veil could not finish VM preparation. Review Windows Settings and try again."
                 }
@@ -874,17 +884,34 @@ struct WindowsDownloadSheet: View {
 
             Button("Use Existing ISO") {
                 controller.cancelDownload()
-                dismiss()
+                finish()
                 useExistingISO()
             }
 
-            Button("Close") {
-                dismiss()
+            Button(isEmbedded ? "Cancel" : "Close") {
+                controller.cancelDownload()
+                finish()
             }
             .keyboardShortcut(.cancelAction)
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 14)
+    }
+
+    private var isEmbedded: Bool {
+        if case .embedded = presentation {
+            return true
+        }
+        return false
+    }
+
+    private func finish() {
+        switch presentation {
+        case .sheet:
+            dismiss()
+        case .embedded(let cancelAction):
+            cancelAction()
+        }
     }
 
     private var automaticDownloadStage: some View {

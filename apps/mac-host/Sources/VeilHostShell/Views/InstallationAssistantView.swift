@@ -58,12 +58,14 @@ struct InstallationAssistantView: View {
     var errorMessage: String?
     var diagnosticsURL: URL?
     var installerNeedsPickerAccess: Bool
-    var downloadAction: () -> Void
+    /// Prepares the VM from a verified, downloaded ISO and starts Windows Setup.
+    var prepareDownloadedISO: (URL) async -> Bool
     var chooseInstallerAction: () -> Void
     var prepareAction: () -> Void
     var installAction: () -> Void
     var configureAction: (MachineConfigurationTab) -> Void
     var refreshAction: () -> Void
+    @State private var isDownloading = false
 
     var body: some View {
         HStack(spacing: 0) {
@@ -91,6 +93,13 @@ struct InstallationAssistantView: View {
         )
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Installation Assistant")
+        .onChange(of: currentStep) { _, step in
+            // Once the ISO is in place the download page is done; returning to this step later
+            // (for example after file access is lost) must not silently restart a download.
+            if step != .getWindows {
+                isDownloading = false
+            }
+        }
     }
 
     private var currentStep: InstallationAssistantStep {
@@ -126,7 +135,7 @@ struct InstallationAssistantView: View {
 
             Spacer()
 
-            Text("You provide the Windows license and installer. Veil never ships Windows.")
+            Text("Windows comes from Microsoft and needs your own license. Veil never ships Windows.")
                 .font(.caption2)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -151,6 +160,8 @@ struct InstallationAssistantView: View {
         }
 
         switch currentStep {
+        case .getWindows where isDownloading:
+            downloadPage
         case .getWindows:
             getWindowsPage
         case .prepare:
@@ -160,32 +171,51 @@ struct InstallationAssistantView: View {
         }
     }
 
+    /// One click gets Windows: Veil downloads the latest Arm64 ISO from Microsoft, verifies it,
+    /// prepares the VM, and starts Windows Setup. Bringing an ISO is the fallback, not a peer choice.
     private var getWindowsPage: some View {
         VStack(alignment: .leading, spacing: 18) {
             pageHeader(
-                title: installerNeedsPickerAccess ? "Choose the Windows installer again" : "Get Windows 11",
+                title: installerNeedsPickerAccess ? "Get Windows 11 again" : "Get Windows 11",
                 detail: installerNeedsPickerAccess
-                    ? "macOS no longer lets Veil read the installer you chose. Download it again or choose the same ISO file."
-                    : "Veil installs Windows 11 for Arm on this Mac. Download it from Microsoft or use an ISO you already have."
+                    ? "macOS no longer lets Veil read the installer chosen earlier. Veil can download it again from Microsoft."
+                    : "Veil downloads the latest Windows 11 for Arm from Microsoft, verifies it, and starts Windows Setup. You don't need an ISO file."
             )
 
             AssistantChoiceCard(
-                title: "Download Windows 11 from Microsoft",
-                detail: "Opens Microsoft's official Windows 11 Arm64 download. Veil saves the ISO and continues automatically.",
+                title: "Download and Install Windows 11",
+                detail: "From microsoft.com, checked against Microsoft's published SHA-256. Setup starts automatically when the download finishes.",
                 symbolName: "arrow.down.circle.fill",
                 isPrimary: true,
                 isDisabled: isLoading,
-                action: downloadAction
+                action: { isDownloading = true }
+            )
+            .keyboardShortcut(.defaultAction)
+
+            Button("Use an ISO file I already have…", action: chooseInstallerAction)
+                .buttonStyle(.link)
+                .disabled(isLoading)
+        }
+    }
+
+    private var downloadPage: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            pageHeader(
+                title: "Getting Windows 11",
+                detail: "Keep Veil open. Windows Setup starts in this window as soon as the download is verified."
             )
 
-            AssistantChoiceCard(
-                title: "Choose an ISO File…",
-                detail: "Use a Windows 11 Arm64 installer image you have already downloaded.",
-                symbolName: "opticaldisc",
-                isPrimary: false,
-                isDisabled: isLoading,
-                action: chooseInstallerAction
+            WindowsDownloadSheet(
+                prepareDownloadedISO: prepareDownloadedISO,
+                useExistingISO: chooseInstallerAction,
+                presentation: .embedded(cancelAction: { isDownloading = false })
             )
+            .frame(minHeight: 420)
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .strokeBorder(.white.opacity(0.10), lineWidth: 1)
+            }
         }
     }
 

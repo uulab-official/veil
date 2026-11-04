@@ -61,11 +61,13 @@ struct VMRuntimeView: View {
                     errorMessage: model.errorMessage,
                     diagnosticsURL: model.diagnosticsURL,
                     installerNeedsPickerAccess: needsInstallerPickerAccess(snapshot),
-                    downloadAction: {
-                        navigation.openWindowsDownload()
-                    },
+                    prepareDownloadedISO: prepareDownloadedISO,
                     chooseInstallerAction: {
-                        pathPicker = .installerAndStart
+                        // The download view may still be tearing down; let it finish before the picker.
+                        Task { @MainActor in
+                            try? await Task.sleep(for: .milliseconds(250))
+                            pathPicker = .installerAndStart
+                        }
                     },
                     prepareAction: {
                         Task {

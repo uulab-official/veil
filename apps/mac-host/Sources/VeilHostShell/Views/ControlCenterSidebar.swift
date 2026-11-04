@@ -27,7 +27,7 @@ struct ControlCenterSidebar: View {
 
             Section {
                 if !windowsInstalled {
-                    Label("Apps appear here after Windows is installed", systemImage: "info.circle")
+                    Label("Available after Windows setup", systemImage: "info.circle")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
