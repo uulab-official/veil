@@ -19,6 +19,10 @@ $InstallScript = Join-Path $ScriptRoot "Install-VeilAgent.ps1"
 $StartScript = Join-Path $InstallRoot "scripts\Start-VeilAgent.ps1"
 $InstalledScriptsRoot = Join-Path $InstallRoot "scripts"
 $InstallRootApp = Join-Path $InstallRoot "app"
+$RepairBackupRoot = Join-Path $InstallRoot "app.previous"
+$BundleLockPath = Join-Path $InstallRoot ".veil-agent-bundle.lock"
+$RepairStagingRoot = Join-Path $InstallRoot ".repair-staging-$([Guid]::NewGuid().ToString('N'))"
+$RepairStagedAppRoot = Join-Path $RepairStagingRoot "app"
 $AgentExe = Join-Path $InstallRootApp "VeilAgent.exe"
 $TaskName = "VeilAgent"
 $LogRoot = Join-Path $InstallRoot "logs"
@@ -200,27 +204,102 @@ function Sync-VeilInstalledAppBundle {
         return $false
     }
 
-    New-Item -ItemType Directory -Force -Path $InstallRootApp | Out-Null
-    if ((Resolve-Path $BundledAppRoot).Path -eq (Resolve-Path $InstallRootApp).Path) {
+    $BundledResolvedPath = (Resolve-Path $BundledAppRoot).Path
+    if ((Test-Path -LiteralPath $InstallRootApp -PathType Container) -and
+        $BundledResolvedPath -eq (Resolve-Path $InstallRootApp).Path) {
         Write-Host "Resolved bundle source is the installed app folder itself; keeping installed app files."
         return $false
     }
 
-    $RunningAgents = Get-Process -Name "VeilAgent" -ErrorAction SilentlyContinue
-    if ($RunningAgents) {
-        Write-Host "Stopping existing VeilAgent process before refreshing installed app bundle."
-        $RunningAgents | Stop-Process -Force
-        Start-Sleep -Milliseconds 500
-    }
+    $RepairRetiredCurrent = $false
+    $RepairPromoted = $false
+    $BundleLockStream = $null
+    $bundleLockAcquired = $false
+    try {
+        try {
+            $BundleLockStream = [System.IO.File]::Open(
+                $BundleLockPath,
+                [System.IO.FileMode]::CreateNew,
+                [System.IO.FileAccess]::Write,
+                [System.IO.FileShare]::None
+            )
+            $bundleLockAcquired = $true
+            $LockText = "pid=$PID`nstartedAt=$(Get-Date -Format o)"
+            $LockBytes = [System.Text.Encoding]::UTF8.GetBytes($LockText)
+            $BundleLockStream.Write($LockBytes, 0, $LockBytes.Length)
+            $BundleLockStream.Flush()
+        } catch {
+            throw "Another VeilAgent bundle operation is active or needs recovery at $BundleLockPath. Inspect the lock owner before removing it."
+        }
 
-    Get-ChildItem -Path $InstallRootApp -Force -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force
-    Copy-Item `
-        -Path (Join-Path $BundledAppRoot "*") `
-        -Destination $InstallRootApp `
-        -Recurse `
-        -Force
-    Write-Host "Refreshed installed VeilAgent app bundle from $BundledAppRoot."
-    return $true
+        # Copy and validate beside the live app. Connectivity repair must not erase a
+        # working agent before a media copy has completed.
+        New-Item -ItemType Directory -Force -Path $RepairStagedAppRoot | Out-Null
+        Copy-Item `
+            -Path (Join-Path $BundledAppRoot "*") `
+            -Destination $RepairStagedAppRoot `
+            -Recurse `
+            -Force
+
+        foreach ($Artifact in @(
+            "VeilAgent.exe",
+            "VeilAgent.dll",
+            "VeilAgent.deps.json",
+            "VeilAgent.runtimeconfig.json"
+        )) {
+            $ArtifactPath = Join-Path $RepairStagedAppRoot $Artifact
+            if (-not (Test-Path -LiteralPath $ArtifactPath -PathType Leaf) -or (Get-Item -LiteralPath $ArtifactPath).Length -eq 0) {
+                throw "The staged VeilAgent bundle is incomplete: missing or empty $ArtifactPath."
+            }
+        }
+
+        $RunningAgents = Get-Process -Name "VeilAgent" -ErrorAction SilentlyContinue
+        if ($RunningAgents) {
+            Write-Host "Stopping existing VeilAgent process before promoting the repaired app bundle."
+            $RunningAgents | Stop-Process -Force
+            Start-Sleep -Milliseconds 500
+        }
+
+        if (Test-Path -LiteralPath $InstallRootApp) {
+            if (Test-Path -LiteralPath $RepairBackupRoot) {
+                Remove-Item -LiteralPath $RepairBackupRoot -Recurse -Force
+            }
+            Move-Item -LiteralPath $InstallRootApp -Destination $RepairBackupRoot
+            $RepairRetiredCurrent = $true
+        }
+        Move-Item -LiteralPath $RepairStagedAppRoot -Destination $InstallRootApp
+        $RepairPromoted = $true
+        Write-Host "Refreshed installed VeilAgent app bundle from $BundledAppRoot. Previous files are retained at $RepairBackupRoot."
+        return $true
+    } catch {
+        if ($RepairRetiredCurrent -and -not $RepairPromoted -and
+            -not (Test-Path -LiteralPath $InstallRootApp) -and
+            (Test-Path -LiteralPath $RepairBackupRoot)) {
+            try {
+                Move-Item -LiteralPath $RepairBackupRoot -Destination $InstallRootApp
+                Write-Warning "App refresh failed; the previous VeilAgent bundle was restored."
+            } catch {
+                Write-Warning "App refresh failed and rollback could not complete. Recover the previous bundle from $RepairBackupRoot."
+            }
+        }
+        throw
+    } finally {
+        try {
+            if (Test-Path -LiteralPath $RepairStagingRoot) {
+                Remove-Item -LiteralPath $RepairStagingRoot -Recurse -Force -ErrorAction SilentlyContinue
+            }
+        } finally {
+            try {
+                if ($BundleLockStream) {
+                    $BundleLockStream.Dispose()
+                }
+            } finally {
+                if ($bundleLockAcquired -and (Test-Path -LiteralPath $BundleLockPath)) {
+                    Remove-Item -LiteralPath $BundleLockPath -Force -ErrorAction SilentlyContinue
+                }
+            }
+        }
+    }
 }
 
 function Install-VeilVirtIONetworkDriver {
@@ -296,7 +375,7 @@ function Start-VeilAgentAsStandardUser {
             Write-Host "Limited interactive VeilAgent process appeared. PID=$($RunningAgent.Id)"
             # The process already exists, so Start-VeilAgent.ps1 only performs its bounded health
             # probes here; it cannot fall through to an elevated Start-Process call.
-            & $StartScriptPath -InstallRoot $InstallRoot -Port $Port
+            & $StartScriptPath -InstallRoot $InstallRoot -Port $Port -RequireGuestAddress
             return
         }
         Start-Sleep -Milliseconds 500

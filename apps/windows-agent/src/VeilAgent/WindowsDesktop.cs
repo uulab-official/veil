@@ -28,6 +28,11 @@ public sealed class WindowsDesktop : IWindowsDesktop
     private const int MK_RBUTTON = 0x0002;
     private const int WHEEL_DELTA = 120;
     private const int SW_RESTORE = 9;
+    private const uint CDS_FULLSCREEN = 0x00000004;
+    private const int DISP_CHANGE_SUCCESSFUL = 0;
+    private const int ENUM_CURRENT_SETTINGS = -1;
+    private const uint DM_PELSWIDTH = 0x00080000;
+    private const uint DM_PELSHEIGHT = 0x00100000;
     private const uint SWP_NOZORDER = 0x0004;
     private const uint SWP_NOACTIVATE = 0x0010;
     private const uint SWP_NOOWNERZORDER = 0x0200;
@@ -381,6 +386,54 @@ public sealed class WindowsDesktop : IWindowsDesktop
         return Task.FromResult<WindowRect?>(accepted ? GetWindowBounds(hwnd) : null);
     }
 
+    public Task<DisplayResizeResult?> ResizeDisplayAsync(DisplayResizeInput input, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (!OperatingSystem.IsWindows())
+        {
+            throw new PlatformNotSupportedException("The Veil Windows agent must run inside Windows.");
+        }
+
+        if (input.Width < 640
+            || input.Width > 3_840
+            || input.Height < 640
+            || input.Height > 3_840
+            || (long)input.Width * input.Height > 8_294_400)
+        {
+            return Task.FromResult<DisplayResizeResult?>(null);
+        }
+
+        var mode = new NativeDevMode
+        {
+            dmSize = (ushort)Marshal.SizeOf<NativeDevMode>(),
+            dmDeviceName = string.Empty,
+            dmFormName = string.Empty
+        };
+        if (!EnumDisplaySettings(null, ENUM_CURRENT_SETTINGS, ref mode))
+        {
+            return Task.FromResult<DisplayResizeResult?>(null);
+        }
+
+        mode.dmPelsWidth = (uint)input.Width;
+        mode.dmPelsHeight = (uint)input.Height;
+        mode.dmFields = DM_PELSWIDTH | DM_PELSHEIGHT;
+
+        var result = ChangeDisplaySettingsEx(
+            null,
+            ref mode,
+            IntPtr.Zero,
+            CDS_FULLSCREEN,
+            IntPtr.Zero
+        );
+        if (result != DISP_CHANGE_SUCCESSFUL)
+        {
+            return Task.FromResult<DisplayResizeResult?>(null);
+        }
+
+        return Task.FromResult<DisplayResizeResult?>(new DisplayResizeResult(input.Width, input.Height));
+    }
+
     public Task<bool> SendMouseInputAsync(WindowMouseInput input, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -677,6 +730,59 @@ public sealed class WindowsDesktop : IWindowsDesktop
         int cy,
         uint flags
     );
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern bool EnumDisplaySettings(
+        string? lpszDeviceName,
+        int modeNum,
+        ref NativeDevMode devMode
+    );
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern int ChangeDisplaySettingsEx(
+        string? lpszDeviceName,
+        ref NativeDevMode devMode,
+        IntPtr hwnd,
+        uint dwflags,
+        IntPtr lParam
+    );
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    private struct NativeDevMode
+    {
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)]
+        public string dmDeviceName;
+        public ushort dmSpecVersion;
+        public ushort dmDriverVersion;
+        public ushort dmSize;
+        public ushort dmDriverExtra;
+        public uint dmFields;
+        public int dmPositionX;
+        public int dmPositionY;
+        public uint dmDisplayOrientation;
+        public uint dmDisplayFixedOutput;
+        public short dmColor;
+        public short dmDuplex;
+        public short dmYResolution;
+        public short dmTTOption;
+        public short dmCollate;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)]
+        public string dmFormName;
+        public ushort dmLogPixels;
+        public uint dmBitsPerPel;
+        public uint dmPelsWidth;
+        public uint dmPelsHeight;
+        public uint dmDisplayFlags;
+        public uint dmDisplayFrequency;
+        public uint dmICMMethod;
+        public uint dmICMIntent;
+        public uint dmMediaType;
+        public uint dmDitherType;
+        public uint dmReserved1;
+        public uint dmReserved2;
+        public uint dmPanningWidth;
+        public uint dmPanningHeight;
+    }
 
     private static void SetClipboardUnicodeText(string text)
     {

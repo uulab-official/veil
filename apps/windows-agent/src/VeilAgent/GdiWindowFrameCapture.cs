@@ -47,7 +47,7 @@ public sealed class GdiWindowFrameCapture : IWindowFrameCapture
             var bounds = GetCaptureBounds(window);
             using var bitmap = CaptureBitmap(window, bounds);
             var pixels = CopyPixels(bitmap);
-            var changed = TakeChangedRegion(window.WindowId, pixels, bounds.Width, bounds.Height);
+            var changed = TakeChangedRegion(window.WindowId, pixels, bounds.Width, bounds.Height, cancellationToken);
 
             if (changed is null)
             {
@@ -96,10 +96,16 @@ public sealed class GdiWindowFrameCapture : IWindowFrameCapture
     /// Forces a full-surface region on the first capture of a stream and after a resize: the host has
     /// nothing to composite onto in the first case, and a stale buffer of a different size in the second.
     /// </remarks>
-    private WindowFrameTileRect? TakeChangedRegion(string windowId, byte[] pixels, int width, int height)
+    internal WindowFrameTileRect? TakeChangedRegion(
+        string windowId, byte[] pixels, int width, int height, CancellationToken cancellationToken = default)
     {
         lock (pixelGate)
         {
+            // PrintWindow itself cannot be interrupted. A retired capture may finish after its
+            // stream has been replaced, but must never repopulate that stream's comparison buffer.
+            // Check while holding the same lock as ForgetWindow so cancellation and reset cannot
+            // be followed by a stale write that suppresses the replacement's first key frame.
+            cancellationToken.ThrowIfCancellationRequested();
             if (!previousPixelsByWindowId.TryGetValue(windowId, out var previous))
             {
                 previousPixelsByWindowId[windowId] = pixels;

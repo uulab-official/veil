@@ -9,6 +9,7 @@ public static class MessageTypes
     public const string AppLaunchRequest = "app.launch.request";
     public const string AppLaunchResponse = "app.launch.response";
     public const string FileOpenRequest = "file.open.request";
+    public const string SharedFileOpenRequest = "file.open.shared.request";
     public const string FileOpenResponse = "file.open.response";
     public const string WindowCreated = "window.created";
     public const string WindowUpdated = "window.updated";
@@ -23,10 +24,13 @@ public static class MessageTypes
     public const string WindowCloseResponse = "window.close.response";
     public const string WindowResizeRequest = "window.resize.request";
     public const string WindowResizeResponse = "window.resize.response";
+    public const string DisplayResizeRequest = "display.resize.request";
+    public const string DisplayResizeResponse = "display.resize.response";
     public const string InputMouse = "input.mouse";
     public const string InputKey = "input.key";
     public const string InputText = "input.text";
     public const string ClipboardTextSet = "clipboard.text.set";
+    public const string OperationAck = "operation.ack";
     public const string NotificationListenerRequest = "notification.listener.request";
     public const string NotificationListenerResponse = "notification.listener.response";
     public const string NotificationReceived = "notification.received";

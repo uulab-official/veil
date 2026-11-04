@@ -23,6 +23,13 @@ public interface IWindowsDesktop
     Task<WindowRect?> ResizeWindowAsync(WindowResizeInput input, CancellationToken cancellationToken) =>
         Task.FromResult<WindowRect?>(null);
 
+    /// <summary>
+    /// Changes the active Windows desktop display mode. Older test doubles and agents can keep the
+    /// default refusal, allowing the host to retain its aspect-fit RFB fallback.
+    /// </summary>
+    Task<DisplayResizeResult?> ResizeDisplayAsync(DisplayResizeInput input, CancellationToken cancellationToken) =>
+        Task.FromResult<DisplayResizeResult?>(null);
+
     Task<bool> SendMouseInputAsync(WindowMouseInput input, CancellationToken cancellationToken);
 
     Task<bool> SendKeyInputAsync(WindowKeyInput input, CancellationToken cancellationToken);
