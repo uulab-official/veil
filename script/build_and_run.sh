@@ -39,7 +39,7 @@ swift "$ROOT_DIR/script/generate_app_icon.swift" "$APP_ICON"
 if [[ "${VEIL_SKIP_ENGINE_BUNDLE:-0}" != "1" ]]; then
   ENGINE_CACHE="$DIST_DIR/.engine-runtime"
   brew_prefix="$(brew --prefix 2>/dev/null || true)"
-  engine_stamp="$(shasum "$ROOT_DIR/script/bundle_qemu_runtime.sh" | cut -c1-16) $(readlink -f "$brew_prefix/bin/qemu-system-aarch64" 2>/dev/null || true) $(readlink -f "$brew_prefix/bin/swtpm" 2>/dev/null || true)"
+  engine_stamp="$(shasum "$ROOT_DIR/script/bundle_qemu_runtime.sh" "$ROOT_DIR/script/build_secure_firmware.sh" | cut -c1-16 | tr '\n' ' ')$(readlink -f "$brew_prefix/bin/qemu-system-aarch64" 2>/dev/null || true) $(readlink -f "$brew_prefix/bin/swtpm" 2>/dev/null || true)"
   if [[ "$(cat "$ENGINE_CACHE/.stamp" 2>/dev/null || true)" != "$engine_stamp" ]]; then
     if "$ROOT_DIR/script/bundle_qemu_runtime.sh" "$ENGINE_CACHE" >/dev/null; then
       echo "$engine_stamp" >"$ENGINE_CACHE/.stamp"

@@ -7,7 +7,8 @@
 # Layout (QEMU resolves its data directory as <bin>/../share/qemu):
 #   bin/qemu-system-aarch64, bin/swtpm
 #   lib/*.dylib                     rewritten to @loader_path, never the build Mac's Homebrew prefix
-#   share/qemu/                     keymaps, the virtio option ROM, and QEMU's Arm UEFI firmware
+#   share/qemu/                     keymaps, the virtio option ROM, QEMU's Arm UEFI firmware, and
+#                                   Veil's Secure Boot build (script/build_secure_firmware.sh)
 #   licenses/                       upstream license texts and the source pointers in NOTICE.md
 #
 # The binaries and firmware come from this Mac's Homebrew `qemu` and `swtpm`.
@@ -114,16 +115,25 @@ for file in "$RUNTIME_DIR"/bin/* "$RUNTIME_DIR"/lib/*; do
 done
 
 # QEMU data Veil's Arm plan uses, with QEMU's own Arm UEFI firmware.
-#
-# No Secure Boot firmware is bundled yet. Debian's qemu-efi-aarch64 builds (2025.02 and 2026.08,
-# with and without Secure Boot, and with the Memory Attribute Protocol uninstalled) all stop at
-# "Start boot option" before the Windows 11 Arm boot loader shows anything, while QEMU's firmware
-# and UTM's Secure Boot build reach Windows Setup on the same engine. Secure Boot firmware is still
-# picked up from ~/Library/Application Support/Veil/Firmware or an installed UTM.
 cp -R "$QEMU_SHARE/keymaps" "$RUNTIME_DIR/share/qemu/keymaps"
 for file in efi-virtio.rom edk2-aarch64-code.fd edk2-arm-vars.fd; do
   cp "$QEMU_SHARE/$file" "$RUNTIME_DIR/share/qemu/$file"
 done
+
+# Veil's own Secure Boot firmware, built from EDK2 by script/build_secure_firmware.sh (cached).
+# Debian's qemu-efi-aarch64 builds stop at "Start boot option" with the Windows 11 Arm ISO, so no
+# distribution firmware is used. Without it, Veil falls back to ~/Library/Application
+# Support/Veil/Firmware or an installed UTM. VEIL_SKIP_SECURE_FIRMWARE=1 skips the build.
+SECURE_FIRMWARE_DIR="${VEIL_SECURE_FIRMWARE_DIR:-$ROOT_DIR/dist/.secure-firmware}"
+secure_firmware_bundled=0
+if [[ "${VEIL_SKIP_SECURE_FIRMWARE:-0}" != "1" ]] && "$ROOT_DIR/script/build_secure_firmware.sh" "$SECURE_FIRMWARE_DIR"; then
+  cp "$SECURE_FIRMWARE_DIR/edk2-aarch64-secure-code.fd" "$SECURE_FIRMWARE_DIR/edk2-arm-secure-vars.fd" "$RUNTIME_DIR/share/qemu/"
+  cp "$SECURE_FIRMWARE_DIR/PROVENANCE.md" "$RUNTIME_DIR/licenses/edk2-secure-PROVENANCE.md"
+  cp "$SECURE_FIRMWARE_DIR/edk2-License.txt" "$RUNTIME_DIR/licenses/edk2-License.txt"
+  secure_firmware_bundled=1
+else
+  echo "bundle_qemu_runtime: bundling without Secure Boot firmware." >&2
+fi
 
 # License texts shipped with the binaries, plus where each exact source lives.
 for formula in qemu swtpm libtpms glib; do
@@ -141,6 +151,9 @@ done
   echo "- QEMU: $("$QEMU_BIN" --version | head -1). Source: https://download.qemu.org/ (GPL-2.0)."
   echo "- swtpm: $("$SWTPM_BIN" --version | head -1). Source: https://github.com/stefanberger/swtpm (BSD-3-Clause)."
   echo "- Arm UEFI firmware: QEMU's edk2-aarch64-code.fd. Source: https://github.com/tianocore/edk2 (BSD-2-Clause-Patent); see edk2-licenses.txt."
+  if ((secure_firmware_bundled)); then
+    echo "- Secure Boot Arm UEFI firmware: built from EDK2 by Veil; see edk2-secure-PROVENANCE.md and edk2-License.txt."
+  fi
   echo "- Libraries:"
   for name in "${copied[@]}"; do
     echo "  - $name"
