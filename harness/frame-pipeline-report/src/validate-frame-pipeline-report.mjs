@@ -6,7 +6,8 @@ const DROPPED_TILE_REASONS = [
   "noSurface",
   "surfaceSizeChanged",
   "undecodablePayload",
-  "payloadRectMismatch"
+  "payloadRectMismatch",
+  "sequenceGap"
 ];
 const SAMPLE_SERIES = ["frameIntervalMilliseconds", "tileCoveragePercent", "compositeMilliseconds"];
 

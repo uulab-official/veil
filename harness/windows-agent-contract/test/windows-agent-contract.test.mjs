@@ -531,13 +531,16 @@ test("windows agent includes user-logon install and uninstall scripts", async ()
   assert.match(start, /agent\.health\.request/);
   assert.match(start, /agent\.health\.response/);
   assert.match(start, /\[switch\]\$RequirePackageIdentity/);
+  assert.match(start, /\[switch\]\$RequireGuestAddress/);
+  assert.match(start, /RequireGuestAddress/);
+  assert.match(start, /if \(\$RequireGuestAddress -and \$GuestIPv4Addresses\.Count -gt 0\)/);
   assert.match(start, /capabilities\.packageIdentity/);
   assert.match(start, /package identity is not ready yet/);
   assert.match(start, /package identity was not ready/);
   assert.match(start, /Guest IPv4 addresses visible to Windows/);
   assert.match(start, /Get-Process\s+-Name\s+"VeilAgent"/);
   assert.match(start, /VeilAgent is already running/);
-  assert.match(start, /loopback plus guest IPv4 agent\.health\.response did not both succeed/);
+  assert.match(start, /loopback health/);
   assert.match(start, /RedirectStandardOutput\s+\$StdOutLogPath/);
   assert.match(start, /RedirectStandardError\s+\$StdErrLogPath/);
   assert.match(install, /-RequirePackageIdentity:\$RequirePackageIdentity/);
@@ -577,6 +580,7 @@ test("windows agent includes user-logon install and uninstall scripts", async ()
   assert.match(repair, /standardUserAgentStartRequested/);
   assert.match(repair, /Start-VeilAgentAsStandardUser\s+-StartScriptPath\s+\$StartScript/);
   assert.match(repair, /guestAgentHealthSucceeded/);
+  assert.match(repair, /-RequireGuestAddress/);
   assert.match(bootstrap, /Bootstrap-VeilAgentFromMedia/);
   assert.match(bootstrap, /Install Veil Agent\.cmd/);
   assert.match(bootstrap, /bootstrap\.log/);
@@ -660,4 +664,40 @@ test("windows agent installer starts the installed agent immediately by default"
   assert.match(install, /if\s*\(-not\s+\$NoStart\)\s*{/);
   assert.match(install, /&\s+\$StartScript\s+-InstallRoot\s+\$InstallRoot\s+-Port\s+\$Port/);
   assert.match(install, /Write-Host "VeilAgent started inside Windows on 0\.0\.0\.0:\$Port\. The macOS host connects through QEMU at ws:\/\/127\.0\.0\.1:\$Port\/\."/);
+});
+
+test("PowerShell publish and install preserve the last usable bundle until promotion succeeds", async () => {
+  const publish = await readFile(resolve(agentRoot, "scripts/Publish-VeilAgentBundle.ps1"), "utf8");
+  const install = await readFile(resolve(agentRoot, "scripts/Install-VeilAgent.ps1"), "utf8");
+  const repair = await readFile(resolve(agentRoot, "scripts/Repair-VeilAgentConnectivity.ps1"), "utf8");
+
+  assert.match(publish, /PublishStagingRoot|\.publish-staging/);
+  assert.match(publish, /BundleLockPath/);
+  assert.match(publish, /CreateNew/);
+  assert.match(publish, /VeilAgent\.deps\.json/);
+  assert.match(publish, /VeilAgent\.runtimeconfig\.json/);
+  assert.match(publish, /--output \$PublishNextRoot\s+if \(\$LASTEXITCODE\s*-ne\s*0\)/);
+  assert.match(publish, /Move-Item[\s\S]+BundleRoot/);
+  assert.match(publish, /BundleLockStream\.Dispose/);
+  assert.doesNotMatch(publish, /if \(Test-Path \$BundleRoot\) \{\s*Remove-Item \$BundleRoot/);
+
+  assert.match(install, /InstallStagingRoot|\.install-staging/);
+  assert.match(install, /BundleLockPath/);
+  assert.match(install, /CreateNew/);
+  assert.match(install, /InstallBackupRoot|\.install-backup/);
+  assert.match(install, /VeilAgent\.deps\.json/);
+  assert.match(install, /VeilAgent\.runtimeconfig\.json/);
+  assert.match(install, /--output \$InstallStagedAppRoot\s+if \(\$LASTEXITCODE\s*-ne\s*0\)/);
+  assert.match(install, /Move-Item[\s\S]+PublishRoot/);
+  assert.match(install, /BundleLockStream\.Dispose/);
+  assert.doesNotMatch(install, /Get-ChildItem -Path \$PublishRoot[\s\S]+Remove-Item/);
+
+  assert.match(repair, /RepairStagingRoot|\.repair-staging/);
+  assert.match(repair, /BundleLockPath/);
+  assert.match(repair, /CreateNew/);
+  assert.match(repair, /VeilAgent\.deps\.json/);
+  assert.match(repair, /VeilAgent\.runtimeconfig\.json/);
+  assert.match(repair, /Move-Item[\s\S]+InstallRootApp/);
+  assert.match(repair, /BundleLockStream\.Dispose/);
+  assert.doesNotMatch(repair, /Get-ChildItem -Path \$InstallRootApp[\s\S]+Remove-Item/);
 });
