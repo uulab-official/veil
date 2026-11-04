@@ -68,21 +68,28 @@ struct InstallationAssistantView: View {
     @State private var isDownloading = false
 
     var body: some View {
-        HStack(spacing: 0) {
-            stepList
-                .frame(width: 240)
+        ScrollView {
+            VStack(spacing: 28) {
+                assistantHeader
 
-            Divider()
-                .opacity(0.4)
-
-            ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
                     page
                 }
-                .padding(36)
-                .frame(maxWidth: 720, alignment: .leading)
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .frame(maxWidth: 640, alignment: .leading)
             }
+            .padding(.horizontal, 40)
+            .padding(.top, 28)
+            .padding(.bottom, 20)
+            .frame(maxWidth: .infinity)
+        }
+        .scrollBounceBehavior(.basedOnSize)
+        .safeAreaInset(edge: .bottom) {
+            Text("Windows comes from Microsoft and needs your own license. Veil never ships Windows.")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 40)
+                .padding(.bottom, 14)
         }
         .background(
             LinearGradient(
@@ -110,38 +117,37 @@ struct InstallationAssistantView: View {
         )
     }
 
-    private var stepList: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 10) {
-                WindowsLogoMark(size: 28)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text("Installation Assistant")
-                        .font(.headline)
-                    Text("Windows 11 on this Mac")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+    /// The assistant's name and a horizontal stepper, centered above the page like a macOS setup
+    /// assistant, so the window keeps a single sidebar.
+    private var assistantHeader: some View {
+        VStack(spacing: 16) {
+            HStack(spacing: 8) {
+                WindowsLogoMark(size: 16)
+                Text("Installation Assistant")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+
+            HStack(spacing: 0) {
+                ForEach(InstallationAssistantStep.allCases) { step in
+                    if step != .getWindows {
+                        Capsule()
+                            .fill(step.rawValue <= currentStep.rawValue ? Color.accentColor.opacity(0.7) : .white.opacity(0.12))
+                            .frame(height: 2)
+                            .frame(minWidth: 24, maxWidth: 72)
+                            .padding(.horizontal, 10)
+                    }
+
+                    AssistantStepRow(
+                        step: step,
+                        state: step.rawValue < currentStep.rawValue
+                            ? .complete
+                            : (step == currentStep ? .current : .pending)
+                    )
                 }
             }
-            .padding(.bottom, 18)
-
-            ForEach(InstallationAssistantStep.allCases) { step in
-                AssistantStepRow(
-                    step: step,
-                    state: step.rawValue < currentStep.rawValue
-                        ? .complete
-                        : (step == currentStep ? .current : .pending)
-                )
-            }
-
-            Spacer()
-
-            Text("Windows comes from Microsoft and needs your own license. Veil never ships Windows.")
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: 640)
         }
-        .padding(20)
-        .frame(maxHeight: .infinity, alignment: .top)
     }
 
     @ViewBuilder
@@ -199,12 +205,8 @@ struct InstallationAssistantView: View {
     }
 
     private var downloadPage: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            pageHeader(
-                title: "Getting Windows 11",
-                detail: "Keep Veil open. Windows Setup starts in this window as soon as the download is verified."
-            )
-
+        // The download stage carries its own title, so the page adds no header above it.
+        VStack(alignment: .leading, spacing: 12) {
             WindowsDownloadSheet(
                 prepareDownloadedISO: prepareDownloadedISO,
                 useExistingISO: chooseInstallerAction,
@@ -216,6 +218,10 @@ struct InstallationAssistantView: View {
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
                     .strokeBorder(.white.opacity(0.10), lineWidth: 1)
             }
+
+            Label("Keep Veil open. Windows Setup starts in this window as soon as the ISO is verified.", systemImage: "info.circle")
+                .font(.caption)
+                .foregroundStyle(.secondary)
         }
     }
 
@@ -330,7 +336,14 @@ private struct AssistantStepRow: View {
             ZStack {
                 Circle()
                     .fill(fill)
-                    .frame(width: 26, height: 26)
+                    .frame(width: 24, height: 24)
+                    .overlay {
+                        if state == .current {
+                            Circle()
+                                .strokeBorder(Color.accentColor.opacity(0.35), lineWidth: 3)
+                                .padding(-4)
+                        }
+                    }
                 if state == .complete {
                     Image(systemName: "checkmark")
                         .font(.caption.bold())
@@ -351,13 +364,7 @@ private struct AssistantStepRow: View {
                     .foregroundStyle(.secondary)
             }
         }
-        .padding(.vertical, 6)
-        .padding(.horizontal, 8)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            state == .current ? Color.white.opacity(0.08) : Color.clear,
-            in: RoundedRectangle(cornerRadius: 8, style: .continuous)
-        )
+        .fixedSize()
         .accessibilityElement(children: .combine)
         .accessibilityValue(accessibilityValue)
     }
