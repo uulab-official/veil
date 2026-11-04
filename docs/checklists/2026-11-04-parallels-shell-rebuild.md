@@ -36,7 +36,7 @@ Date: 2026-11-04
 - [x] 라이브 Windows Setup 위의 이전 상태 줄(`Windows is open` · Settings · Stop Windows · More)은 부팅이 멈춘 경우에만 보인다. 별도 디스플레이 창은 Apple Virtualization 콘솔 경로였고, 이제 그 경로로 Windows를 시작하지 않는다.
 - [ ] 설치 속도: 같은 ISO의 파일 복사가 3시간에 46%였다. QEMU CPU는 6.8%로 게스트가 I/O를 기다리고 있었고, 설치 ISO는 `usb-storage`로 붙어 있다. `usb-uas` 같은 더 빠른 설치 미디어 경로를 실측해서 바꾼다.
 - [x] 엔진 번들: `script/bundle_qemu_runtime.sh`가 QEMU 11.1.3, swtpm, 라이브러리 31개, QEMU 자체 Arm UEFI 펌웨어를 `Veil.app/Contents/Resources/Runtime`에 넣는다. 앱에서 `--start-vm`으로 시작했을 때 `qemu-system-aarch64`와 `swtpm` 프로세스가 번들 경로에서 실행되는 것을 확인했다.
-- [ ] Secure Boot 펌웨어 번들: Debian `qemu-efi-aarch64` 2025.02-8+deb13u1과 2026.08+ds-2는 Secure Boot on/off, `opt/org.tianocore/UninstallMemAttrProtocol=y` 모두에서 Windows 11 Arm ISO가 "Start boot option"에 멈춘다. 같은 엔진에서 QEMU 자체 펌웨어(Secure Boot 없음)와 UTM의 Secure Boot 빌드는 45초 안에 Windows 설치 화면에 도달한다. 업스트림 EDK2를 Secure Boot로 직접 빌드하고 Microsoft 키를 등록해 번들한다.
+- [x] Secure Boot 펌웨어 번들: Debian `qemu-efi-aarch64` 2025.02-8+deb13u1과 2026.08+ds-2는 Secure Boot on/off, `opt/org.tianocore/UninstallMemAttrProtocol=y` 모두에서 Windows 11 Arm ISO가 "Start boot option"에 멈춘다. 같은 엔진에서 QEMU 자체 펌웨어(Secure Boot 없음)와 UTM의 Secure Boot 빌드는 45초 안에 Windows 설치 화면에 도달한다. 업스트림 EDK2를 Secure Boot로 직접 빌드하고 Microsoft 키를 등록해 번들한다. → `script/build_secure_firmware.sh`가 EDK2 `4dfdca6`을 CLANGDWARF로 빌드하고(약 4분, 캐시됨) virt-firmware로 Microsoft PK/KEK/db를 등록한다. 번들 엔진 + TPM + `usb-storage` ISO로 새 vars와 기존 설치의 vars 사본 모두에서 Windows 설치 화면 도달 확인. dbx는 자리표시 항목만 있다.
 - [ ] 앱에서 Windows를 시작했을 때 실제 `qemu-system-aarch64` 프로세스 경로가 `Veil.app/Contents/Resources/Runtime/bin`인지, Homebrew가 없는 Mac에서 설치가 끝까지 가는지 확인한다.
 - [ ] 실제 Windows 11 Arm 설치 완료 상태에서 사이드바 앱 실행, 툴바 일시 중단/재개, 종료 확인 대화상자를 확인한다.
 - [ ] QEMU/VNC 라이브 화면에서 툴바 아래 Windows 화면의 입력 좌표가 어긋나지 않는지 확인한다.
@@ -47,5 +47,6 @@ Date: 2026-11-04
 - [x] 설치가 디스크에 계속 쓰고 있으면(최근 2분) 멈춘 부팅으로 보지 않는다. 11% 진행 중인 Setup에 "Windows hasn't finished starting"과 Start Over가 뜨던 문제를 실제 앱에서 확인하고 고쳤다.
 - [ ] Restart Windows Installation을 실제 앱에서 끝까지 눌러 보기(이번에는 진행 중인 설치를 지우지 않으려고 코어 테스트로만 확인했다).
 - [x] 이전 설치의 부트 항목이 남은 `uefi-vars.fd`로는 설치 프로그램이 부트 로더 화면에서 멈췄다. 템플릿으로 초기화하자 2분 안에 "Windows 11 설치 중"으로 진행했다. Restart Windows Installation이 UEFI 변수도 함께 초기화한다.
-- [ ] UTM의 Secure Boot 펌웨어를 쓰는 동안 부팅 화면에 UTM 로고가 나온다. Veil 자체 Secure Boot EDK2 빌드가 이 문제도 해결한다.
+- [x] UTM의 Secure Boot 펌웨어를 쓰는 동안 부팅 화면에 UTM 로고가 나온다. Veil 자체 Secure Boot EDK2 빌드가 이 문제도 해결한다. → 번들 펌웨어는 TianoCore 기본 화면이다. 앱 재빌드 후 다음 부팅부터 적용.
+- [ ] 설치가 끝나지 않은 동안 `prepareDefaultVM`이 매번 `uefi-vars.fd`를 Secure Boot 템플릿으로 교체한다. 설치 중 Stop/Start 시 부팅 항목이 사라진다. 템플릿이 아닌 vars(이미 Secure Boot 키가 등록된 vars)는 유지하도록 좁힌다.
 - [ ] 설치 프로그램이 부팅 미디어를 읽는 몇 분 동안 "Windows hasn't finished starting" 막대와 Capture Boot Diagnostics가 뜬다. 정상적인 느린 부팅과 실제 멈춤을 구분한다.
