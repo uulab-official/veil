@@ -31,7 +31,7 @@ Date: 2026-11-04
 
 - [x] 마법사 안에서 실제 Microsoft 자동 다운로드 → SHA-256 검증 → VM 준비 → VM 시작까지 클릭 한 번으로 이어진다(2026-11-04, `Windows11_Client_arm64_ko-kr_26300_9457.iso`, 8,482,547,712바이트, 약 3시간).
 - [ ] QEMU가 없는 Mac에서는 VM이 Apple Virtualization으로 시작되지만 화면이 검은색에서 넘어가지 않는다. `2026-08-04-live-shared-folder.md`의 기록대로 Virtualization.framework는 Windows 게스트를 실행하지 않으므로, 마법사가 Install 전에 QEMU를 요구하거나 준비하도록 바꾸고 엔진 안내의 "Without QEMU, Veil can install and run the full Windows desktop" 문구를 고친다.
-- [ ] Homebrew QEMU 11.1.3 + swtpm을 설치한 뒤 `veil-vmctl qemu-doctor`는 ready지만, `qemu-start`는 시작 직후 `-device tpm-tis-device,tpmdev=tpm0: Error: ret = HV_BAD_ARGUMENT (hvf-all.c:123)`로 중단된다(status 134). TPM 없이 같은 HVF 최소 구성은 정상 기동하므로 원인은 HVF에서의 `tpm-tis-device` 매핑이다. 이 빌드의 `-device help`에는 `tpm-tis-device`와 `tpm-tis-i2c`만 있다. Windows 11 TPM 2.0 요구를 어떻게 충족할지(다른 TPM 장치를 제공하는 QEMU 빌드, 또는 다른 경로) 결정이 필요하다.
+- [x] Homebrew QEMU 11.1.3 + swtpm에서 `qemu-start`가 `-device tpm-tis-device,tpmdev=tpm0: Error: ret = HV_BAD_ARGUMENT (hvf-all.c:123)`로 중단되던 문제를 고쳤다. 원인은 TPM PPI(0x400바이트 RAM 영역)를 Hypervisor.framework가 16 KiB 호스트 페이지로 매핑하지 못하는 것이다. QEMU 계획을 `tpm-tis-device,tpmdev=tpm0,ppi=off`로 바꾼 뒤 같은 ISO가 요구 사항 검사를 통과하고 "Windows 11 설치 중" 화면까지 진행했다(2026-11-04).
 - [ ] 라이브 화면 하단의 이전 상태 줄(`Windows is open` · Settings · Stop Windows · More)과 VM 시작 시 자동으로 뜨는 별도 디스플레이 창을 툴바 구조에 맞게 정리한다.
 - [ ] 실제 Windows 11 Arm 설치 완료 상태에서 사이드바 앱 실행, 툴바 일시 중단/재개, 종료 확인 대화상자를 확인한다.
 - [ ] QEMU/VNC 라이브 화면에서 툴바 아래 Windows 화면의 입력 좌표가 어긋나지 않는지 확인한다.
