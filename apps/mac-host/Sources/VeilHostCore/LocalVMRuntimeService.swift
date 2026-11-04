@@ -56,7 +56,7 @@ public struct LocalVMRuntimeService: VMRuntimeService {
         self.firmwareVarsTemplatePaths = firmwareVarsTemplatePaths
             ?? (
                 LocalQEMUWindowsBootPlanFactory.defaultSecureFirmwareVarsTemplatePaths(homeDirectory: defaultHomeDirectory)
-                    + LocalQEMUWindowsBootPlanFactory.defaultFirmwareVarsTemplatePaths
+                    + LocalQEMUWindowsBootPlanFactory.firmwareVarsTemplatePaths(homeDirectory: defaultHomeDirectory)
             )
     }
 

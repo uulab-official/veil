@@ -99,12 +99,42 @@ public struct VMRuntimeProviderProbe: Sendable {
         }
 
         return Self.defaultQEMUExecutablePaths.first(where: fileExists)
+            ?? Self.userPrefixQEMUExecutablePaths(environment: environment, homeDirectory: homeDirectory)
+                .first(where: fileExists)
     }
 
     public static func qemuExecutablePaths(
+        environment: [String: String] = ProcessInfo.processInfo.environment,
         homeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser
     ) -> [String] {
-        [managedQEMUExecutablePath(homeDirectory: homeDirectory)] + defaultQEMUExecutablePaths
+        [managedQEMUExecutablePath(homeDirectory: homeDirectory)]
+            + defaultQEMUExecutablePaths
+            + userPrefixQEMUExecutablePaths(environment: environment, homeDirectory: homeDirectory)
+    }
+
+    /// Homebrew prefixes outside `/opt/homebrew` and `/usr/local`, such as `~/homebrew` on Macs where
+    /// the system prefix is not writable. Finder-launched apps never inherit the shell's PATH, so a
+    /// QEMU installed there was invisible and Veil silently fell back to the console-only provider.
+    /// These prefixes are probed only after the standard locations.
+    public static func userPackagePrefixes(
+        environment: [String: String] = ProcessInfo.processInfo.environment,
+        homeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser
+    ) -> [String] {
+        let standardPrefixes: Set<String> = ["/opt/homebrew", "/usr/local", "/opt/local"]
+        let candidates = [environment["HOMEBREW_PREFIX"]].compactMap { $0 }
+            + ["homebrew", ".homebrew"].map { homeDirectory.appendingPathComponent($0, isDirectory: true).path }
+        var seen = Set<String>()
+        return candidates
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty && !standardPrefixes.contains($0) && seen.insert($0).inserted }
+    }
+
+    static func userPrefixQEMUExecutablePaths(
+        environment: [String: String],
+        homeDirectory: URL
+    ) -> [String] {
+        userPackagePrefixes(environment: environment, homeDirectory: homeDirectory)
+            .map { URL(fileURLWithPath: $0, isDirectory: true).appendingPathComponent("bin/qemu-system-aarch64").path }
     }
 
     private static func managedQEMUExecutablePath(homeDirectory: URL) -> String {

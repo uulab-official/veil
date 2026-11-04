@@ -573,6 +573,7 @@ public enum LocalQEMUWindowsBootPlanFactory {
     ]
 
     public static func tpmEmulatorPaths(
+        environment: [String: String] = ProcessInfo.processInfo.environment,
         homeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser
     ) -> [String] {
         [
@@ -581,6 +582,29 @@ public enum LocalQEMUWindowsBootPlanFactory {
                 .appendingPathComponent("swtpm")
                 .path
         ] + defaultTPMEmulatorPaths
+            + VMRuntimeProviderProbe.userPackagePrefixes(environment: environment, homeDirectory: homeDirectory)
+                .map { URL(fileURLWithPath: $0, isDirectory: true).appendingPathComponent("bin/swtpm").path }
+    }
+
+    /// `<prefix>/share/qemu/<fileName>` for the QEMU at `<prefix>/bin/qemu-system-aarch64`, so a QEMU
+    /// installed under a custom Homebrew prefix still finds the UEFI files it shipped with.
+    static func qemuDataPath(_ fileName: String, besideExecutable executablePath: String) -> String {
+        URL(fileURLWithPath: executablePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("share/qemu", isDirectory: true)
+            .appendingPathComponent(fileName)
+            .path
+    }
+
+    /// Plain (non-secure) UEFI variable templates, including the ones under custom Homebrew prefixes.
+    public static func firmwareVarsTemplatePaths(
+        environment: [String: String] = ProcessInfo.processInfo.environment,
+        homeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser
+    ) -> [String] {
+        defaultFirmwareVarsTemplatePaths
+            + VMRuntimeProviderProbe.userPackagePrefixes(environment: environment, homeDirectory: homeDirectory)
+                .map { URL(fileURLWithPath: $0, isDirectory: true).appendingPathComponent("share/qemu/edk2-arm-vars.fd").path }
     }
 
     /// Whether a loopback TCP port can still be bound.
@@ -639,14 +663,16 @@ public enum LocalQEMUWindowsBootPlanFactory {
             )
             .first { $0.kind == .qemuHypervisor }
         let executablePath = qemuProvider?.executablePath
-            ?? VMRuntimeProviderProbe.qemuExecutablePaths(homeDirectory: homeDirectory)[0]
+            ?? VMRuntimeProviderProbe.qemuExecutablePaths(environment: environment, homeDirectory: homeDirectory)[0]
         let secureFirmwarePath = secureFirmwarePaths.first(where: fileExists)
         let secureFirmwareVarsTemplatePath = secureVarsTemplatePaths.first(where: fileExists)
         let isSecureBootFirmwareAvailable = secureFirmwarePath != nil && secureFirmwareVarsTemplatePath != nil
         let firmwarePath = (secureFirmwareVarsTemplatePath != nil ? secureFirmwarePath : nil)
             ?? defaultFirmwarePaths.first(where: fileExists)
+            ?? [qemuDataPath("edk2-aarch64-code.fd", besideExecutable: executablePath)].first(where: fileExists)
         let firmwareVarsTemplatePath = secureFirmwareVarsTemplatePath
             ?? firmwareVarsTemplatePaths.first(where: fileExists)
+            ?? [qemuDataPath("edk2-arm-vars.fd", besideExecutable: executablePath)].first(where: fileExists)
         let fallbackFirmwareVarsTemplatePath = secureVarsTemplatePaths.first
             ?? firmwareVarsTemplatePaths.first
             ?? defaultFirmwareVarsTemplatePaths[0]
@@ -660,7 +686,7 @@ public enum LocalQEMUWindowsBootPlanFactory {
                 }
                 return path
             }
-            + tpmEmulatorPaths(homeDirectory: homeDirectory)
+            + tpmEmulatorPaths(environment: environment, homeDirectory: homeDirectory)
         let tpmEmulatorPath = tpmEmulatorCandidates.first(where: fileExists)
         let tpmStateDirectoryPath = profile.virtualDiskPath
             .map { URL(fileURLWithPath: $0).deletingLastPathComponent().appendingPathComponent("tpm", isDirectory: true).path }
