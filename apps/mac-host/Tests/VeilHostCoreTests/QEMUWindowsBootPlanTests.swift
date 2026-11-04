@@ -1393,9 +1393,14 @@ struct QEMUWindowsBootPlanTests {
         ))
     }
 
+    @Test("boot prompt automation keeps pressing long enough for a slow installer prompt")
+    func bootPromptAutomationCoversSlowPrompt() {
+        #expect(QEMUWindowsBootPromptAutomation().maxSendCount == 30)
+    }
+
     @Test("smoke boot prompt automation sends bounded key attempts")
     func smokeBootPromptAutomationSendsBoundedKeyAttempts() {
-        var automation = QEMUWindowsBootPromptAutomation()
+        var automation = QEMUWindowsBootPromptAutomation(maxSendCount: 12)
         let monitorSocketURL = URL(fileURLWithPath: "/tmp/veil-qemu-smoke.sock")
         var sentPaths: [String] = []
         var sendResults: [Bool] = []

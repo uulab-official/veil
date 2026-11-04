@@ -1695,11 +1695,16 @@ private enum QEMUWindowsBootArgumentRewriter {
 }
 
 public struct QEMUWindowsBootPromptAutomation: Sendable {
+    /// Seconds of boot-key presses. The installer's "Press any key to boot from CD or DVD" prompt
+    /// waits only a few seconds and can appear well after 12 s on a busy Mac; missing it drops a
+    /// half-installed disk into the UEFI shell. Extra presses after it are harmless.
+    public static let defaultSendCount = 30
+
     public var firstSendSecond: Int
     public var maxSendCount: Int
     private var sentSeconds: Set<Int>
 
-    public init(firstSendSecond: Int = 1, maxSendCount: Int = 12) {
+    public init(firstSendSecond: Int = 1, maxSendCount: Int = QEMUWindowsBootPromptAutomation.defaultSendCount) {
         self.firstSendSecond = firstSendSecond
         self.maxSendCount = maxSendCount
         self.sentSeconds = []

@@ -789,7 +789,7 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
     private func scheduleWindowsInstallerBootKeySend(monitorSocketURL: URL) {
         let bootKeySender = self.bootKeySender
         Task.detached {
-            for _ in 0..<12 {
+            for _ in 0..<QEMUWindowsBootPromptAutomation.defaultSendCount {
                 try? await Task.sleep(for: .seconds(1))
                 _ = bootKeySender(monitorSocketURL)
             }
