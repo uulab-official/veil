@@ -136,7 +136,7 @@ struct QEMUWindowsBootPlanTests {
         #expect(!plan.arguments.contains("-bios"))
         #expect(plan.arguments.containsSequence(["-chardev", "socket,id=chrtpm,path=/Users/test/Virtual Machines/Veil/tpm/swtpm.sock"]))
         #expect(plan.arguments.containsSequence(["-tpmdev", "emulator,id=tpm0,chardev=chrtpm"]))
-        #expect(plan.arguments.containsSequence(["-device", "tpm-tis-device,tpmdev=tpm0"]))
+        #expect(plan.arguments.containsSequence(["-device", "tpm-tis-device,tpmdev=tpm0,ppi=off"]))
         #expect(plan.arguments.containsSequence(["-boot", "order=d"]))
         #expect(plan.arguments.containsSequence(["-cpu", "host"]))
         #expect(plan.arguments.containsSequence(["-smp", "8"]))
@@ -661,7 +661,7 @@ struct QEMUWindowsBootPlanTests {
         #expect(plan.tpmEmulatorPath == "/opt/homebrew/bin/swtpm")
         #expect(plan.isTPMEmulatorAvailable)
         #expect(plan.tpmStateDirectoryPath == "/Users/test/Virtual Machines/Veil/tpm")
-        #expect(plan.arguments.containsSequence(["-device", "tpm-tis-device,tpmdev=tpm0"]))
+        #expect(plan.arguments.containsSequence(["-device", "tpm-tis-device,tpmdev=tpm0,ppi=off"]))
     }
 
     @Test("local QEMU plan factory honors an explicit TPM runtime override")
@@ -692,7 +692,7 @@ struct QEMUWindowsBootPlanTests {
 
         #expect(plan.tpmEmulatorPath == tpmPath)
         #expect(plan.isTPMEmulatorAvailable)
-        #expect(plan.arguments.containsSequence(["-device", "tpm-tis-device,tpmdev=tpm0"]))
+        #expect(plan.arguments.containsSequence(["-device", "tpm-tis-device,tpmdev=tpm0,ppi=off"]))
     }
 
     @Test("local QEMU plan factory accepts network adapter environment override")

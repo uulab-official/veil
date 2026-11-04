@@ -419,7 +419,10 @@ public struct QEMUWindowsBootPlanner: Sendable {
             arguments.append(contentsOf: [
                 "-chardev", "socket,id=chrtpm,path=\(tpmStateDirectoryPath)/swtpm.sock",
                 "-tpmdev", "emulator,id=tpm0,chardev=chrtpm",
-                "-device", "tpm-tis-device,tpmdev=tpm0"
+                // The Physical Presence Interface is a 0x400-byte RAM region; Hypervisor.framework
+                // maps guest memory in 16 KiB host pages and aborts QEMU at startup with
+                // HV_BAD_ARGUMENT when the TPM device carries it. Windows 11 only needs the TPM.
+                "-device", "tpm-tis-device,tpmdev=tpm0,ppi=off"
             ])
         }
 
@@ -1112,7 +1115,7 @@ public struct QEMUWindowsReadinessDoctor: Sendable {
         }
 
         guard plan.arguments.containsSequence(["-tpmdev", "emulator,id=tpm0,chardev=chrtpm"]),
-              plan.arguments.containsSequence(["-device", "tpm-tis-device,tpmdev=tpm0"]) else {
+              plan.arguments.containsSequence(["-device", "tpm-tis-device,tpmdev=tpm0,ppi=off"]) else {
             return QEMUWindowsReadinessCheck(
                 id: "tpm-emulator",
                 title: "TPM 2.0 emulator",
