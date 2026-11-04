@@ -33,6 +33,27 @@ cp "$BUILD_BINARY" "$APP_BINARY"
 chmod +x "$APP_BINARY"
 swift "$ROOT_DIR/script/generate_app_icon.swift" "$APP_ICON"
 
+# Ship the Windows engine (QEMU, swtpm, Secure Boot firmware) inside the app. Bundling relinks and
+# re-signs ~30 libraries, so the result is cached until the script or the source binaries change.
+# Set VEIL_SKIP_ENGINE_BUNDLE=1 to build without it; Veil then looks for Homebrew's QEMU.
+if [[ "${VEIL_SKIP_ENGINE_BUNDLE:-0}" != "1" ]]; then
+  ENGINE_CACHE="$DIST_DIR/.engine-runtime"
+  brew_prefix="$(brew --prefix 2>/dev/null || true)"
+  engine_stamp="$(shasum "$ROOT_DIR/script/bundle_qemu_runtime.sh" | cut -c1-16) $(readlink -f "$brew_prefix/bin/qemu-system-aarch64" 2>/dev/null || true) $(readlink -f "$brew_prefix/bin/swtpm" 2>/dev/null || true)"
+  if [[ "$(cat "$ENGINE_CACHE/.stamp" 2>/dev/null || true)" != "$engine_stamp" ]]; then
+    if "$ROOT_DIR/script/bundle_qemu_runtime.sh" "$ENGINE_CACHE" >/dev/null; then
+      echo "$engine_stamp" >"$ENGINE_CACHE/.stamp"
+    else
+      rm -rf "$ENGINE_CACHE"
+      echo "warning: Veil was built without its Windows engine; it will look for Homebrew's QEMU instead." >&2
+    fi
+  fi
+  if [[ -f "$ENGINE_CACHE/.stamp" ]]; then
+    ditto "$ENGINE_CACHE" "$APP_RESOURCES/Runtime"
+    rm -f "$APP_RESOURCES/Runtime/.stamp"
+  fi
+fi
+
 cat >"$INFO_PLIST" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">

@@ -10,17 +10,20 @@ public struct VMRuntimeProviderProbe: Sendable {
 
     private let environment: [String: String]
     private let homeDirectory: URL
+    private let bundledRuntimeDirectory: URL?
     private let fileExists: @Sendable (String) -> Bool
     private let executableVersion: @Sendable (String) -> String?
 
     public init(
         environment: [String: String] = ProcessInfo.processInfo.environment,
         homeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser,
+        bundledRuntimeDirectory: URL? = VeilBundledRuntime.directory(),
         fileExists: @escaping @Sendable (String) -> Bool = { FileManager.default.fileExists(atPath: $0) },
         executableVersion: @escaping @Sendable (String) -> String? = Self.qemuVersionOutput(executablePath:)
     ) {
         self.environment = environment
         self.homeDirectory = homeDirectory
+        self.bundledRuntimeDirectory = bundledRuntimeDirectory
         self.fileExists = fileExists
         self.executableVersion = executableVersion
     }
@@ -89,6 +92,13 @@ public struct VMRuntimeProviderProbe: Sendable {
             return overridePath
         }
 
+        // The engine shipped inside Veil.app comes first, so Windows does not depend on Homebrew.
+        if let bundledPath = VeilBundledRuntime.path(VeilBundledRuntime.qemuExecutable, in: bundledRuntimeDirectory),
+           fileExists(bundledPath),
+           executableVersion(bundledPath) != nil {
+            return bundledPath
+        }
+
         // Finder-launched apps do not inherit a shell's PATH. Veil's optional runtime bridge is
         // therefore checked before Homebrew/MacPorts locations, while the bridge's version probe
         // prevents a stale or partially copied wrapper from being reported as an active provider.
@@ -105,9 +115,11 @@ public struct VMRuntimeProviderProbe: Sendable {
 
     public static func qemuExecutablePaths(
         environment: [String: String] = ProcessInfo.processInfo.environment,
-        homeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser
+        homeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser,
+        bundledRuntimeDirectory: URL? = VeilBundledRuntime.directory()
     ) -> [String] {
-        [managedQEMUExecutablePath(homeDirectory: homeDirectory)]
+        [VeilBundledRuntime.path(VeilBundledRuntime.qemuExecutable, in: bundledRuntimeDirectory)].compactMap { $0 }
+            + [managedQEMUExecutablePath(homeDirectory: homeDirectory)]
             + defaultQEMUExecutablePaths
             + userPrefixQEMUExecutablePaths(environment: environment, homeDirectory: homeDirectory)
     }

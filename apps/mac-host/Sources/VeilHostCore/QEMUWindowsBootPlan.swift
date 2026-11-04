@@ -536,9 +536,10 @@ public enum LocalQEMUWindowsBootPlanFactory {
         "/opt/local/share/qemu/edk2-aarch64-code.fd"
     ]
     public static func defaultSecureFirmwarePaths(
-        homeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser
+        homeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser,
+        bundledRuntimeDirectory: URL? = VeilBundledRuntime.directory()
     ) -> [String] {
-        [
+        [VeilBundledRuntime.path(VeilBundledRuntime.secureFirmware, in: bundledRuntimeDirectory)].compactMap { $0 } + [
             homeDirectory
                 .appendingPathComponent("Library/Application Support/Veil/Firmware", isDirectory: true)
                 .appendingPathComponent("edk2-aarch64-secure-code.fd")
@@ -557,9 +558,10 @@ public enum LocalQEMUWindowsBootPlanFactory {
         "/opt/local/share/qemu/edk2-arm-vars.fd"
     ]
     public static func defaultSecureFirmwareVarsTemplatePaths(
-        homeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser
+        homeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser,
+        bundledRuntimeDirectory: URL? = VeilBundledRuntime.directory()
     ) -> [String] {
-        [
+        [VeilBundledRuntime.path(VeilBundledRuntime.secureFirmwareVarsTemplate, in: bundledRuntimeDirectory)].compactMap { $0 } + [
             homeDirectory
                 .appendingPathComponent("Library/Application Support/Veil/Firmware", isDirectory: true)
                 .appendingPathComponent("edk2-arm-secure-vars.fd")
@@ -577,9 +579,10 @@ public enum LocalQEMUWindowsBootPlanFactory {
 
     public static func tpmEmulatorPaths(
         environment: [String: String] = ProcessInfo.processInfo.environment,
-        homeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser
+        homeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser,
+        bundledRuntimeDirectory: URL? = VeilBundledRuntime.directory()
     ) -> [String] {
-        [
+        [VeilBundledRuntime.path(VeilBundledRuntime.tpmEmulator, in: bundledRuntimeDirectory)].compactMap { $0 } + [
             homeDirectory
                 .appendingPathComponent("Library/Application Support/Veil/Runtime/bin", isDirectory: true)
                 .appendingPathComponent("swtpm")
