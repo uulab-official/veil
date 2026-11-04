@@ -7,6 +7,7 @@ import VeilHostCore
 struct ControlCenterSidebar: View {
     var snapshot: VMRuntimeSnapshot?
     var status: MachineStatusPresentation
+    var liveThumbnail: NSImage?
     var apps: [WindowsApp]
     @Binding var selectedAppId: String?
     var mirrorSessions: [WindowMirrorSession]
@@ -19,7 +20,7 @@ struct ControlCenterSidebar: View {
     var body: some View {
         List {
             Section("Virtual Machines") {
-                MachineSidebarRow(snapshot: snapshot, status: status)
+                MachineSidebarRow(snapshot: snapshot, status: status, liveThumbnail: liveThumbnail)
                     .contextMenu {
                         Button("Configure…", systemImage: "gearshape", action: configureAction)
                     }
@@ -56,10 +57,11 @@ struct ControlCenterSidebar: View {
 private struct MachineSidebarRow: View {
     var snapshot: VMRuntimeSnapshot?
     var status: MachineStatusPresentation
+    var liveThumbnail: NSImage?
 
     var body: some View {
         HStack(spacing: 10) {
-            MachineThumbnail(snapshot: snapshot)
+            MachineThumbnail(snapshot: snapshot, liveImage: liveThumbnail)
                 .frame(width: 64, height: 40)
 
             VStack(alignment: .leading, spacing: 2) {
@@ -81,6 +83,8 @@ private struct MachineSidebarRow: View {
 /// The latest console capture, or the Windows mark when Windows has never shown a frame.
 struct MachineThumbnail: View {
     var snapshot: VMRuntimeSnapshot?
+    /// A recent live frame, preferred over the boot-time console capture while Windows runs.
+    var liveImage: NSImage?
 
     var body: some View {
         ZStack {
@@ -112,6 +116,9 @@ struct MachineThumbnail: View {
     }
 
     private var image: NSImage? {
+        if isLive, let liveImage {
+            return liveImage
+        }
         guard let path = snapshot?.latestConsoleScreenshotPath else {
             return nil
         }

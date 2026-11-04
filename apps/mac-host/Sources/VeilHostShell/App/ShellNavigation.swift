@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import Observation
 import SwiftUI
@@ -71,6 +72,8 @@ final class ShellNavigation {
     var viewMode: MachineViewMode = .apps
     /// Set by the Actions menu, the assistant, and the stalled-boot bar; the main window asks once.
     var showsRestartInstallationConfirmation = false
+    /// The latest live Windows frame for the sidebar thumbnail; cleared when Windows stops.
+    var liveThumbnail: NSImage?
 
     var showsWindowsDesktop: Bool {
         get { viewMode == .desktop }
@@ -133,6 +136,11 @@ struct MachineStatusPresentation: Equatable {
         appConnectionNeedsRepair: Bool
     ) -> MachineStatusPresentation {
         switch state {
+        case .running where !windowsInstalled:
+            // Windows Setup runs for a long while; "Running" would read as a ready machine.
+            return MachineStatusPresentation(title: "Installing Windows", symbolName: "arrow.down.circle.dotted", tone: .progress)
+        case .starting where !windowsInstalled:
+            return MachineStatusPresentation(title: "Starting Windows Setup…", symbolName: "circle.dotted", tone: .progress)
         case .running:
             if appConnectionNeedsRepair {
                 return MachineStatusPresentation(title: "Running • App connection lost", symbolName: "exclamationmark.triangle.fill", tone: .warning)

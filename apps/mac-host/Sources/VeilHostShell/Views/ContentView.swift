@@ -41,6 +41,7 @@ struct ContentView: View {
             ControlCenterSidebar(
                 snapshot: vmModel.snapshot,
                 status: machineStatus,
+                liveThumbnail: navigation.liveThumbnail,
                 apps: model.apps,
                 selectedAppId: $model.selectedAppId,
                 mirrorSessions: model.mirrorSessions,
@@ -77,6 +78,9 @@ struct ContentView: View {
                 displayMessage: displayMessage
             )
             .background(Color(red: 0.055, green: 0.061, blue: 0.071))
+            .environment(\.liveDisplayThumbnailSink) { frame in
+                navigation.liveThumbnail = frame
+            }
         }
         .navigationTitle(vmModel.snapshot?.profileName ?? "Windows 11")
         .navigationSubtitle(machineStatus.title)
@@ -103,6 +107,11 @@ struct ContentView: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text(WindowsShellCopy.restartInstallationMessage(isRunning: vmModel.canStop))
+        }
+        .onChange(of: isLive) { _, isLive in
+            if !isLive {
+                navigation.liveThumbnail = nil
+            }
         }
         .preferredColorScheme(.dark)
     }

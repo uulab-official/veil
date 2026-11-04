@@ -26,6 +26,14 @@ struct ShellNavigationTests {
         #expect(MachineStatusPresentation.resolve(state: nil, windowsInstalled: false, appConnectionNeedsRepair: false).title == "Not set up")
     }
 
+    @Test("a machine running Windows Setup reads as installing, not as a ready machine")
+    func setupReadsAsInstalling() {
+        let installing = MachineStatusPresentation.resolve(state: .running, windowsInstalled: false, appConnectionNeedsRepair: false)
+        #expect(installing.title == "Installing Windows" && installing.tone == .progress)
+        #expect(MachineStatusPresentation.resolve(state: .starting, windowsInstalled: false, appConnectionNeedsRepair: false).title == "Starting Windows Setup…")
+        #expect(MachineStatusPresentation.resolve(state: .running, windowsInstalled: true, appConnectionNeedsRepair: false).title == "Running")
+    }
+
     @Test("a running machine with a lost app connection is a warning, not a plain running state")
     func runningWithLostConnectionWarns() {
         let status = MachineStatusPresentation.resolve(state: .running, windowsInstalled: true, appConnectionNeedsRepair: true)

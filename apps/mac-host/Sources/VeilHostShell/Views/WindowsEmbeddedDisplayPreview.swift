@@ -14,6 +14,8 @@ struct WindowsEmbeddedDisplayPreview: View {
     var pointerTapAction: (Double, Double) -> Void
     var keyAction: (String) -> Void
     @State private var rfbDisplayModel = RFBEmbeddedDisplayModel()
+    @State private var lastThumbnailAt = Date.distantPast
+    @Environment(\.liveDisplayThumbnailSink) private var liveDisplayThumbnailSink
 
     var body: some View {
         ZStack {
@@ -109,6 +111,18 @@ struct WindowsEmbeddedDisplayPreview: View {
         .onChange(of: surface.endpoint) { _, _ in
             rfbDisplayModel.connectIfNeeded(to: surface)
         }
+        .onChange(of: rfbDisplayModel.frameSequence) { _, _ in
+            // The sidebar shows what Windows is doing now, not the first boot frame; a frame every
+            // couple of seconds is plenty for a 64-point thumbnail.
+            let now = Date()
+            guard let liveDisplayThumbnailSink,
+                  let frame = rfbDisplayModel.image,
+                  now.timeIntervalSince(lastThumbnailAt) >= 2 else {
+                return
+            }
+            lastThumbnailAt = now
+            liveDisplayThumbnailSink(frame)
+        }
         .onDisappear {
             resizeBus?.setPerformer(nil)
             rfbDisplayModel.setDisplayResizeFallback(nil)
@@ -150,11 +164,11 @@ struct WindowsEmbeddedDisplayPreview: View {
             return nil
         }
 
+        // Resizing that works, or plain aspect-fit, is the normal case and needs no badge on top of
+        // Windows; only a refused or in-progress resize is worth a word.
         switch rfbDisplayModel.resizePresentation {
-        case .available:
-            return "Dynamic resolution available"
-        case .scaled:
-            return "Aspect-fit: guest resize unavailable"
+        case .available, .scaled:
+            return nil
         case .rejected:
             return "Guest refused resize: aspect-fit"
         case .recovering:
@@ -282,4 +296,10 @@ final class ConsolePreviewInputCaptureNSView: NSView {
 
         return modifiers
     }
+}
+
+extension EnvironmentValues {
+    /// Receives occasional live frames for the Control Center thumbnail. Unset in windows that have
+    /// no sidebar, such as the separate desktop window.
+    @Entry var liveDisplayThumbnailSink: ((NSImage) -> Void)?
 }
