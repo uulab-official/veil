@@ -35,9 +35,15 @@ Date: 2026-11-04
 - [x] 위 항목 처리: 다운로드 후 자동 시작, 마법사 Install, 툴바 Start, Actions 메뉴 Start는 QEMU가 준비됐을 때만 Windows를 시작한다. 엔진 안내는 "Apple Virtualization can't run Windows"로 고쳤다.
 - [x] 라이브 Windows Setup 위의 이전 상태 줄(`Windows is open` · Settings · Stop Windows · More)은 부팅이 멈춘 경우에만 보인다. 별도 디스플레이 창은 Apple Virtualization 콘솔 경로였고, 이제 그 경로로 Windows를 시작하지 않는다.
 - [ ] 설치 속도: 같은 ISO의 파일 복사가 3시간에 46%였다. QEMU CPU는 6.8%로 게스트가 I/O를 기다리고 있었고, 설치 ISO는 `usb-storage`로 붙어 있다. `usb-uas` 같은 더 빠른 설치 미디어 경로를 실측해서 바꾼다.
-- [x] Secure Boot 펌웨어와 엔진 번들: `script/bundle_qemu_runtime.sh`가 QEMU 11.1.3, swtpm, 라이브러리 31개, Debian `qemu-efi-aarch64` 2025.02-8+deb13u1의 Secure Boot 펌웨어(SHA-256 고정)를 `Veil.app/Contents/Resources/Runtime`에 넣는다. Homebrew PATH 없이 번들 QEMU + swtpm + Secure Boot 펌웨어로 HVF UEFI 부팅을 확인했다. QEMU·TPM·펌웨어 탐색은 번들을 먼저 본다.
+- [x] 엔진 번들: `script/bundle_qemu_runtime.sh`가 QEMU 11.1.3, swtpm, 라이브러리 31개, QEMU 자체 Arm UEFI 펌웨어를 `Veil.app/Contents/Resources/Runtime`에 넣는다. 앱에서 `--start-vm`으로 시작했을 때 `qemu-system-aarch64`와 `swtpm` 프로세스가 번들 경로에서 실행되는 것을 확인했다.
+- [ ] Secure Boot 펌웨어 번들: Debian `qemu-efi-aarch64` 2025.02-8+deb13u1과 2026.08+ds-2는 Secure Boot on/off, `opt/org.tianocore/UninstallMemAttrProtocol=y` 모두에서 Windows 11 Arm ISO가 "Start boot option"에 멈춘다. 같은 엔진에서 QEMU 자체 펌웨어(Secure Boot 없음)와 UTM의 Secure Boot 빌드는 45초 안에 Windows 설치 화면에 도달한다. 업스트림 EDK2를 Secure Boot로 직접 빌드하고 Microsoft 키를 등록해 번들한다.
 - [ ] 앱에서 Windows를 시작했을 때 실제 `qemu-system-aarch64` 프로세스 경로가 `Veil.app/Contents/Resources/Runtime/bin`인지, Homebrew가 없는 Mac에서 설치가 끝까지 가는지 확인한다.
 - [ ] 실제 Windows 11 Arm 설치 완료 상태에서 사이드바 앱 실행, 툴바 일시 중단/재개, 종료 확인 대화상자를 확인한다.
 - [ ] QEMU/VNC 라이브 화면에서 툴바 아래 Windows 화면의 입력 좌표가 어긋나지 않는지 확인한다.
 - [ ] `820×560` 최소 창에서 사이드바와 툴바 항목이 잘리지 않는지 확인한다.
 - [ ] 라이트 모드 시스템에서 메인 창이 어두운 화면으로 일관되게 보이는지 확인한다(`preferredColorScheme(.dark)`).
+- [x] Start(⌘B), `--start-vm`, 앱 one-click 실행이 Windows 데스크톱을 별도 창으로도 열어 같은 화면이 두 번 보이던 문제를 고쳤다. 별도 창은 View > Open Desktop in Separate Window에서만 연다. 라이브 화면의 "Live Windows display #N" 배지는 연결 중·실패일 때만 보인다.
+- [ ] 중단된 설치에서 다시 시작하면 디스크에 8 GiB 넘게 쓰여 있다는 이유로 `QEMUWindowsInstallerBootPolicy`가 설치가 끝난 것으로 보고 디스크로 부팅해 UEFI Shell에 떨어진다. Windows 부트 로더가 실제로 있는지로 판단하거나, 마법사에 "설치 다시 시작"(디스크와 UEFI 변수 초기화)을 둔다.
+- [ ] 이전 설치의 부트 항목이 남은 `uefi-vars.fd`로는 설치 프로그램이 부트 로더 화면에서 멈췄다. 템플릿으로 초기화하자 2분 안에 "Windows 11 설치 중"으로 진행했다. 설치 재시작 시 UEFI 변수도 함께 초기화한다.
+- [ ] UTM의 Secure Boot 펌웨어를 쓰는 동안 부팅 화면에 UTM 로고가 나온다. Veil 자체 Secure Boot EDK2 빌드가 이 문제도 해결한다.
+- [ ] 설치 프로그램이 부팅 미디어를 읽는 몇 분 동안 "Windows hasn't finished starting" 막대와 Capture Boot Diagnostics가 뜬다. 정상적인 느린 부팅과 실제 멈춤을 구분한다.
