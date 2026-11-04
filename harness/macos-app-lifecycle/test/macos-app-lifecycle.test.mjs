@@ -1,9 +1,19 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import { test } from "node:test";
 
 const root = new URL("../../../", import.meta.url);
 const readRootFile = (path) => readFile(new URL(path, root), "utf8");
+// The setup panel is split across `WindowsSetupDisplayPanel*.swift` extensions, so the
+// accessibility contract is checked against all of them rather than one file name.
+const readSetupPanelSources = async () => {
+  const dir = "apps/mac-host/Sources/VeilHostShell/Views/";
+  const names = (await readdir(new URL(dir, root)))
+    .filter((name) => name.startsWith("WindowsSetupDisplayPanel") && name.endsWith(".swift"))
+    .sort();
+  const sources = await Promise.all(names.map((name) => readRootFile(dir + name)));
+  return sources.join("\n");
+};
 
 test("installer validates identity and signature before replacing an app", async () => {
   const source = await readRootFile("script/install_macos.sh");
@@ -47,7 +57,7 @@ test("lifecycle gate covers install, guarded replace, uninstall, preservation, a
 });
 
 test("first-run hero exposes a named action and unambiguous compatibility copy", async () => {
-  const source = await readRootFile("apps/mac-host/Sources/VeilHostShell/Views/VMRuntimeView.swift");
+  const source = await readSetupPanelSources();
 
   assert.match(source, /\.accessibilityLabel\(effectivePrimaryTitle\)/);
   assert.match(source, /\.accessibilityHint\(effectivePrimaryHelp\)/);
