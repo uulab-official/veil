@@ -23,13 +23,18 @@ try {
     }
 
     Write-Host "Running $Installer"
+    # The installer leaves VeilAgent.exe running. Start-Process -Wait waits for every descendant,
+    # so it would never return and the first-logon command would hang; wait for the installer only.
+    $env:VEIL_UNATTENDED = "1"
     $Process = Start-Process `
         -FilePath $Installer `
         -ArgumentList @("-InstallRoot", "`"$InstallRoot`"", "-Port", "$Port") `
         -WorkingDirectory $AgentRoot `
         -WindowStyle Minimized `
-        -Wait `
         -PassThru
+    # Reading Handle keeps it open so ExitCode is still available after the process exits.
+    $null = $Process.Handle
+    $Process.WaitForExit()
 
     Write-Host "Installer exited with code $($Process.ExitCode)."
     if ($Process.ExitCode -ne 0) {
