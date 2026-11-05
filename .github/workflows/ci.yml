@@ -26,6 +26,17 @@ jobs:
       - name: Test gate
         # The signed launch check needs a GUI login session; the Windows agent runs on Windows below.
         run: ./script/test_all.sh --skip-app-verify --skip-windows-agent
+      - name: Crash reports
+        # A test process that dies on a signal leaves only its exit code in the log; macOS writes the
+        # crashing thread's stack to DiagnosticReports.
+        if: failure()
+        run: |
+          for report in "$HOME"/Library/Logs/DiagnosticReports/*PackageTests*.ips; do
+            [ -f "$report" ] || continue
+            echo "::group::$report"
+            head -c 60000 "$report"
+            echo "::endgroup::"
+          done
 
   windows-agent:
     name: Windows guest agent

@@ -226,7 +226,7 @@ struct KeyboardMappingPanel: View {
 
             Picker("Command key", selection: Binding(
                 get: { snapshot.commandKeyMapping ?? .default },
-                set: applyAction
+                set: { applyAction($0) }
             )) {
                 Text("Control (Command-C copies)").tag(VMCommandKeyMapping.control)
                 Text("Windows key (Command-E opens File Explorer)").tag(VMCommandKeyMapping.windows)
