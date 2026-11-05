@@ -24,7 +24,7 @@ UTM(https://github.com/utmapp/UTM)의 기능을 Veil 코드 기준으로 대조�
 | 17 | 입력 캡처·Cmd↔Ctrl 매핑 옵션 | 일부 | Cmd와 Ctrl 모두 ctrl 고정 | 매핑 선택 |
 | 18 | 헤드리스·CLI·AppleScript/단축어 | 일부 | `veil-vmctl` | App Intents |
 | 19 | VM 갤러리·ISO 다운로드 | 일부 | Windows 11 ISO 다운로드 | — (Windows 전용이라 갤러리 불필요) |
-| 20 | 다른 게스트 OS, x86 에뮬레이션 | 없음 | aarch64 `virt` + HVF 전용 | 범위 결정 필요(v1 제외 항목) |
+| 20 | 다른 게스트 OS, x86 에뮬레이션 | 있음 | `VMGuestOS.swift`, `QEMUGuestBootPlan.swift`, `GuestVMLauncher.swift`, 파일 > 새 가상 머신 | Linux Arm64·x86_64(TCG) 설치 화면까지 실측, `docs/architecture.md` |
 | 21 | 디스플레이 장치 선택·GPU 가속 | 일부 | ramfb + virtio-gpu 고정 | 장치 선택; virgl은 Windows 드라이버 없음 |
 | 22 | 자동 시작·종료 시 동작 | 일부 | `autoStart`/`suspendOnQuit`을 읽는 코드 없음 | 설정 연결 |
 
@@ -36,4 +36,5 @@ UTM(https://github.com/utmapp/UTM)의 기능을 Veil 코드 기준으로 대조�
 - [ ] 1, 2: VM 라이브러리, 가져오기/내보내기
 - [ ] 11: 포트 포워딩 UI, vmnet
 - [ ] 8, 13, 16, 17, 18, 21
-- [ ] 12, 20: 범위 결정 후
+- [x] 20: 범위에 넣음(2026-11-05, `docs/project-brief.md`). Linux Arm64(HVF)와 x86_64(TCG) 게스트 생성·부팅, x86_64 에뮬레이터 번들(+29.4 MB)
+- [ ] 12: 범위 결정 후
