@@ -161,7 +161,15 @@ run_swift_tests() {
   CFFIXED_USER_HOME="$test_home" HOME="$test_home" \
     VEIL_AGENT_URL="${VEIL_TEST_AGENT_URL:-ws://127.0.0.1:59999}" \
     swift test --disable-sandbox --package-path "$ROOT_DIR/apps/mac-host" || status=$?
-  rm -rf "$test_home"
+  # A fresh HOME makes Xcode download and mount its Metal toolchain under the test home (seen on
+  # GitHub's macos-26 runner). Detach those images first; a leftover temp directory must never
+  # turn a passing test run into a failure.
+  local mount_point real_home
+  real_home="$(cd "$test_home" && pwd -P)"
+  while read -r mount_point; do
+    hdiutil detach -force "$mount_point" >/dev/null 2>&1 || true
+  done < <(mount | awk -v home="$real_home" 'index($3, home) == 1 {print $3}')
+  rm -rf "$test_home" 2>/dev/null || echo "note: left the Swift test home at $test_home" >&2
   return "$status"
 }
 
