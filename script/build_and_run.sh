@@ -90,6 +90,8 @@ cat >"$INFO_PLIST" <<PLIST
   <string>$MIN_SYSTEM_VERSION</string>
   <key>NSPrincipalClass</key>
   <string>NSApplication</string>
+  <key>NSMicrophoneUsageDescription</key>
+  <string>Windows apps in Veil can use your microphone, for example in calls or voice recording.</string>
 </dict>
 </plist>
 PLIST

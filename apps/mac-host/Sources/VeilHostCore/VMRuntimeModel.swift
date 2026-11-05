@@ -14,6 +14,8 @@ public final class VMRuntimeModel {
     public private(set) var snapshot: VMRuntimeSnapshot?
     public private(set) var errorMessage: String?
     public private(set) var diagnosticsURL: URL?
+    /// The running Windows' removable CD drive, as QEMU last reported it.
+    public private(set) var removableMedia: VMRemovableMediaStatus?
 
     private let service: any VMRuntimeService
     /// Runtime mutations are surfaced as button actions, but each action crosses an async
@@ -205,6 +207,52 @@ public final class VMRuntimeModel {
             snapshot = try await service.updateStartupBehavior(autoStart: autoStart, suspendOnQuit: suspendOnQuit)
         } catch {
             errorMessage = userMessage(for: error)
+        }
+    }
+
+    /// Saves what Command becomes in the Windows desktop. Runs beside other operations like the
+    /// startup behavior, since it changes no VM hardware.
+    public func updateCommandKeyMapping(_ mapping: VMCommandKeyMapping) async {
+        do {
+            snapshot = try await service.updateCommandKeyMapping(mapping)
+        } catch {
+            errorMessage = userMessage(for: error)
+        }
+    }
+
+    /// Saves the user port forwards for the next start. Returns the refusal for the editor to show.
+    @discardableResult
+    public func updatePortForwards(_ rules: [VMPortForwardRule]) async -> String? {
+        do {
+            snapshot = try await service.updatePortForwards(rules)
+            return nil
+        } catch {
+            return userMessage(for: error)
+        }
+    }
+
+    public func refreshRemovableMedia() async {
+        removableMedia = await service.removableMediaStatus()
+    }
+
+    /// Inserts an ISO into the running Windows. Returns the refusal for the panel to show.
+    @discardableResult
+    public func insertRemovableMedia(path: String) async -> String? {
+        do {
+            removableMedia = try await service.insertRemovableMedia(path: path)
+            return nil
+        } catch {
+            return userMessage(for: error)
+        }
+    }
+
+    @discardableResult
+    public func ejectRemovableMedia() async -> String? {
+        do {
+            removableMedia = try await service.ejectRemovableMedia()
+            return nil
+        } catch {
+            return userMessage(for: error)
         }
     }
 

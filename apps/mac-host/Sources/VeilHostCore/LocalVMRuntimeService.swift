@@ -21,6 +21,7 @@ public struct LocalVMRuntimeService: VMRuntimeService {
     let qemuLaunchProcessTerminator: @Sendable (Int32) -> Bool
     let firmwareVarsTemplatePaths: [String]
     let installationDiscarder: @Sendable (URL) throws -> Void
+    let qmpController: any QEMUQMPControlling
 
     public init(
         profileStore: any VMProfileStore = JSONVMProfileStore(),
@@ -40,7 +41,8 @@ public struct LocalVMRuntimeService: VMRuntimeService {
         qemuLaunchProcessIsRunning: @escaping @Sendable (Int32) -> Bool = LocalVMRuntimeService.processIsRunning,
         qemuLaunchProcessTerminator: @escaping @Sendable (Int32) -> Bool = LocalVMRuntimeService.terminateProcess,
         firmwareVarsTemplatePaths: [String]? = nil,
-        installationDiscarder: @escaping @Sendable (URL) throws -> Void = LocalVMRuntimeService.moveToTrash
+        installationDiscarder: @escaping @Sendable (URL) throws -> Void = LocalVMRuntimeService.moveToTrash,
+        qmpController: any QEMUQMPControlling = QEMUQMPClient()
     ) {
         self.profileStore = profileStore
         self.defaultHomeDirectory = defaultHomeDirectory
@@ -59,6 +61,7 @@ public struct LocalVMRuntimeService: VMRuntimeService {
         self.qemuLaunchProcessIsRunning = qemuLaunchProcessIsRunning
         self.qemuLaunchProcessTerminator = qemuLaunchProcessTerminator
         self.installationDiscarder = installationDiscarder
+        self.qmpController = qmpController
         self.firmwareVarsTemplatePaths = firmwareVarsTemplatePaths
             ?? (
                 LocalQEMUWindowsBootPlanFactory.defaultSecureFirmwareVarsTemplatePaths(homeDirectory: defaultHomeDirectory)
@@ -182,6 +185,8 @@ public struct LocalVMRuntimeService: VMRuntimeService {
                 windowsAccountName: WindowsAccountName.resolve(preferred: profile.windowsAccountName),
                 autoStart: profile.autoStart,
                 suspendOnQuit: profile.suspendOnQuit,
+                commandKeyMapping: profile.commandKeyMapping ?? .default,
+                portForwards: profile.portForwards ?? [],
                 detail: inferredRuntimeState.map(Self.runtimeDetail(for:)) ?? (
                     Self.stoppedDetail(
                         bootPathReadiness: bootPathReadiness,

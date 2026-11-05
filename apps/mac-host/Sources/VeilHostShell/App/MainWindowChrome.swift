@@ -370,7 +370,8 @@ struct StandaloneMainWindowRoot: View {
                 Task { @MainActor in
                     _ = await model.resizeDisplay(width: width, height: height)
                 }
-            }
+            },
+            commandKeyMapping: snapshot.commandKeyMapping ?? .default
         )
     }
 

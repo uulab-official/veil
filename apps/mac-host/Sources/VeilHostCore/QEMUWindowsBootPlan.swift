@@ -320,6 +320,9 @@ public struct QEMUWindowsBootPlanner: Sendable {
     /// forward instead of leaving it in the command line, because QEMU refuses to start when it cannot
     /// bind a `hostfwd` port and a shared folder is not worth trading a bootable VM for.
     private let isSharedFolderHostPortAvailable: Bool
+    /// User port forwards whose host port was taken when the plan was built; left out for the same
+    /// reason as a busy shared folder port.
+    private let unavailablePortForwardRuleIDs: Set<String>
     private let configurationWarnings: [String]
 
     public init(
@@ -338,6 +341,7 @@ public struct QEMUWindowsBootPlanner: Sendable {
         audioDevice: QEMUWindowsAudioDevice = .intelHDA,
         sharedFolderTransport: QEMUWindowsSharedFolderTransport = .guestSMB,
         isSharedFolderHostPortAvailable: Bool = true,
+        unavailablePortForwardRuleIDs: Set<String> = [],
         configurationWarnings: [String] = []
     ) {
         self.executablePath = executablePath
@@ -355,6 +359,7 @@ public struct QEMUWindowsBootPlanner: Sendable {
         self.audioDevice = audioDevice
         self.sharedFolderTransport = sharedFolderTransport
         self.isSharedFolderHostPortAvailable = isSharedFolderHostPortAvailable
+        self.unavailablePortForwardRuleIDs = unavailablePortForwardRuleIDs
         self.configurationWarnings = configurationWarnings
     }
 
@@ -440,6 +445,8 @@ public struct QEMUWindowsBootPlanner: Sendable {
             userNetworkForwards.append(sharedFolderForward)
         }
 
+        userNetworkForwards.append(contentsOf: userPortForwardClauses(for: profile, warnings: &warnings))
+
         if sharedFolderTransport.hostForwardClause != nil, !isSharedFolderHostPortAvailable {
             warnings.append(
                 "Host port \(QEMUWindowsSharedFolderTransport.guestSMBHostPort) was unavailable when this plan was built, so the shared folder port forward was left out and Windows will boot without a live shared folder. A Veil VM that is already running holds this port, which is the usual reason; otherwise find the listener with `lsof -nP -iTCP:\(QEMUWindowsSharedFolderTransport.guestSMBHostPort) -sTCP:LISTEN`."
@@ -489,6 +496,8 @@ public struct QEMUWindowsBootPlanner: Sendable {
             "-drive", "driver=raw,file.driver=file,file.locking=off,file.filename=\(automaticInstallMediaPath),if=none,id=autounattend,media=cdrom,readonly=on",
             "-device", "usb-storage,drive=autounattend"
         ])
+        // Starts empty; Configuration > Hardware inserts and ejects ISOs through QMP while Windows runs.
+        arguments.append(contentsOf: VMRemovableOpticalDrive.arguments)
 
         if let driverMediaPath {
             arguments.append(contentsOf: [
@@ -532,6 +541,38 @@ public struct QEMUWindowsBootPlanner: Sendable {
             return nil
         }
         return path
+    }
+
+    /// The profile's port forwards as `hostfwd` clauses. A profile edited by hand is validated again
+    /// here, so a rule that would shadow Veil's own forwards never reaches QEMU.
+    private func userPortForwardClauses(for profile: VMProfile, warnings: inout [String]) -> [String] {
+        let rules = profile.portForwards ?? []
+        guard !rules.isEmpty else {
+            return []
+        }
+        do {
+            try VMPortForwardRuleValidator.validate(rules)
+        } catch {
+            warnings.append("Port forwarding rules were left out: \(error.localizedDescription)")
+            return []
+        }
+
+        var clauses: [String] = []
+        for rule in rules {
+            if unavailablePortForwardRuleIDs.contains(rule.id) {
+                warnings.append(
+                    "Host port \(rule.hostPort) was in use when this plan was built, so its forward to Windows port \(rule.guestPort) was left out."
+                )
+                continue
+            }
+            if rule.hostBinding == .allInterfaces {
+                warnings.append(
+                    "Host port \(rule.hostPort) is forwarded on every network interface, so other devices on the network can reach Windows port \(rule.guestPort)."
+                )
+            }
+            clauses.append(rule.hostForwardClause)
+        }
+        return clauses
     }
 }
 
@@ -768,6 +809,9 @@ public enum LocalQEMUWindowsBootPlanFactory {
             audioDevice: audioSelection.device,
             sharedFolderTransport: sharedFolderSelection.transport,
             isSharedFolderHostPortAvailable: isSharedFolderHostPortAvailable,
+            unavailablePortForwardRuleIDs: Set(
+                (profile.portForwards ?? []).filter { !isHostPortFree($0.hostPort) }.map(\.id)
+            ),
             configurationWarnings: configurationWarnings
         )
         return try planner.makePlan(for: profile)
