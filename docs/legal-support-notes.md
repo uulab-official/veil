@@ -14,7 +14,7 @@ Official references: https://developer.apple.com/developer-id/ and https://devel
 
 Veil.app ships an open-source local VM engine under `Contents/Resources/Runtime`, assembled by `script/bundle_qemu_runtime.sh`:
 
-- QEMU (`qemu-system-aarch64`, GPL-2.0) and the libraries it links (LGPL/GPL/BSD/MIT; each listed in `Runtime/licenses/NOTICE.md`),
+- QEMU (`qemu-system-aarch64` and `qemu-img`, GPL-2.0) and the libraries they link (LGPL/GPL/BSD/MIT; each listed in `Runtime/licenses/NOTICE.md`),
 - swtpm and libtpms (BSD-3-Clause) for the TPM 2.0 device Windows 11 Setup checks,
 - QEMU's own Arm UEFI firmware (EDK2, BSD-2-Clause-Patent).
 - Veil's Secure Boot Arm UEFI firmware, built by `script/build_secure_firmware.sh` from upstream [TianoCore EDK2](https://github.com/tianocore/edk2) at the commit QEMU 11.1 pins, with QEMU's ArmVirtQemu recipe plus `SECURE_BOOT_ENABLE`. Its variable store enrolls Microsoft's published Secure Boot certificates (PK "Windows OEM Devices PK", the 2011 and 2023 KEK and db certificates) with [virt-firmware](https://gitlab.com/kraxel/virt-firmware); no private key is generated or shipped. The bundle carries `edk2-secure-PROVENANCE.md` and the EDK2 license. Debian's `qemu-efi-aarch64` builds were tried and do not boot the Windows 11 Arm installer, so no distribution firmware is used. dbx holds only a placeholder entry, so revocations come from Windows servicing; see Microsoft's [Windows Secure Boot key creation and management guidance](https://learn.microsoft.com/windows-hardware/manufacture/desktop/windows-secure-boot-key-creation-and-management-guidance).

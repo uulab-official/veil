@@ -7,8 +7,8 @@ UTM(https://github.com/utmapp/UTM)의 기능을 Veil 코드 기준으로 대조�
 |---|---|---|---|---|
 | 1 | 여러 VM 관리(생성·복제·삭제·이름 변경) | 없음 | `VeilHostCore/VMProfile.swift` 단일 `default-vm-profile.json` | 프로필 저장소를 VM 라이브러리로 확장 |
 | 2 | VM 가져오기/내보내기, vhdx·vmdk·qcow2 변환 | 없음 | `QEMUVMSnapshots.swift` 안내 문자열뿐 | 번들 형식과 `qemu-img convert` 가져오기 |
-| 3 | 디스크 추가·크기 조정·qcow2·압축 | 일부 | raw sparse 디스크 1개 | qcow2 기본값, 크기 조정, 압축 |
-| 4 | 스냅샷 | 일부 | `QEMUVMSnapshots.swift`는 CLI 전용, qcow2 필요 | 3번 후 설정 창 UI |
+| 3 | 디스크 추가·크기 조정·qcow2·압축 | 일부 | 새 디스크 qcow2(`QEMUDiskImage.swift`), 설정 창 디스크 탭에서 크기 늘리기·raw→qcow2 변환 | 디스크 추가, 압축 |
+| 4 | 스냅샷 | 있음 | 설정 창 디스크 탭(`DiskSettingsPanels.swift`): 실행 중은 QMP 스냅샷 작업, 종료 상태는 `qemu-img snapshot` | — |
 | 5 | 일시 중단/재개 | 있음 | `QEMUVMSuspension.swift` | — |
 | 6 | 실행 중 ISO 교체 | 없음 | ISO는 부팅 시에만 연결 | QMP `blockdev-change-medium` |
 | 7 | 공유 폴더 | 있음 | `QEMUWindowsSharedFolder.swift`(SMB) | — |
@@ -32,7 +32,7 @@ UTM(https://github.com/utmapp/UTM)의 기능을 Veil 코드 기준으로 대조�
 
 - [x] 15, 22: 설정 창에서 CPU·메모리 편집, 앱 실행 시 자동 시작, 종료 시 일시 중단 연결
 - [ ] 6: 실행 중 ISO 교체
-- [ ] 3, 4: qcow2 디스크와 스냅샷 UI
+- [x] 3, 4: qcow2 디스크와 스냅샷 UI (디스크 추가·압축은 남음)
 - [ ] 1, 2: VM 라이브러리, 가져오기/내보내기
 - [ ] 11: 포트 포워딩 UI, vmnet
 - [ ] 8, 13, 16, 17, 18, 21
