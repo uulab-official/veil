@@ -106,8 +106,19 @@ extension LocalVMRuntimeService {
             virtualDiskPath: diskURL.path,
             templatePaths: firmwareVarsTemplatePaths,
             shouldUpgradeToSecureVars: profile.windowsInstalled != true
+                && !Self.windowsSetupHasWrittenToDisk(diskURL: diskURL, bookmarkData: profile.virtualDiskBookmarkData)
         )
         return profile
+    }
+
+    /// Allocated bytes beyond which a disk holds Windows Setup's work rather than a blank image.
+    static let windowsSetupStartedAllocatedBytes: Int64 = 64 * 1_024 * 1_024
+
+    /// Once Windows Setup has written to the disk, the UEFI variables hold its "Windows Boot
+    /// Manager" entry and boot order, so they belong to that disk and must not be swapped for a
+    /// fresh template. Restart Windows Installation discards both together instead.
+    static func windowsSetupHasWrittenToDisk(diskURL: URL, bookmarkData: Data?) -> Bool {
+        (allocatedFileSize(path: diskURL.path, bookmarkData: bookmarkData) ?? 0) >= windowsSetupStartedAllocatedBytes
     }
 
     private static func prepareTPMStateDirectory(virtualDiskPath: String) throws {
