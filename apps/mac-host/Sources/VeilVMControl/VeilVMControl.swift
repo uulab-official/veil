@@ -10,6 +10,10 @@ import VeilHostCore
 struct VeilVMControl {
     static func main() async {
         do {
+            if let guestCommand = try GuestCommand.parse(Array(CommandLine.arguments.dropFirst())) {
+                try runGuestCommand(guestCommand)
+                return
+            }
             let arguments = try VMControlArguments.parse(Array(CommandLine.arguments.dropFirst()))
             try await run(arguments)
         } catch {

@@ -24,7 +24,7 @@ UTM(https://github.com/utmapp/UTM)의 기능을 Veil 코드 기준으로 대조�
 | 17 | 입력 캡처·Cmd↔Ctrl 매핑 옵션 | 있음 | Mac 통합 탭 키보드: Cmd를 Ctrl 또는 Windows 키로(데스크톱 화면만, 앱 창은 Ctrl 유지) | Cmd 단독 누름(시작 메뉴)은 아직 안 보냄 |
 | 18 | 헤드리스·CLI·AppleScript/단축어 | 일부 | `veil-vmctl` | App Intents |
 | 19 | VM 갤러리·ISO 다운로드 | 일부 | Windows 11 ISO 다운로드 | — (Windows 전용이라 갤러리 불필요) |
-| 20 | 다른 게스트 OS, x86 에뮬레이션 | 없음 | aarch64 `virt` + HVF 전용 | 범위 결정 필요(v1 제외 항목) |
+| 20 | 다른 게스트 OS, x86 에뮬레이션 | 있음 | `VMGuestOS.swift`, `QEMUGuestBootPlan.swift`, `GuestVMLauncher.swift`, 파일 > 새 가상 머신 | Linux Arm64·x86_64(TCG) 설치 화면까지 실측, `docs/architecture.md` |
 | 21 | 디스플레이 장치 선택·GPU 가속 | 일부 | ramfb + virtio-gpu 고정 | 미착수: 장치 선택. GPU 가속은 아래 근거로 보류 |
 | 22 | 자동 시작·종료 시 동작 | 일부 | `autoStart`/`suspendOnQuit`을 읽는 코드 없음 | 설정 연결 |
 
@@ -40,7 +40,7 @@ UTM(https://github.com/utmapp/UTM)의 기능을 Veil 코드 기준으로 대조�
 - [x] 13: 마이크 권한 키와 QEMU entitlement(실측 전)
 - [ ] 8, 16, 18, 21
 - [x] 12: USB 장치 연결·분리(QMP `device_add usb-host`/`device_del`), 종료·일시 중단 전 자동 분리. 드라이버 없는 장치만 권한 없이 동작
-- [ ] 20: 범위 결정 후
+- [x] 20: 범위에 넣음(2026-11-05, `docs/project-brief.md`). Linux Arm64(HVF)와 x86_64(TCG) 게스트 생성·부팅, x86_64 에뮬레이터 번들(+29.4 MB)
 
 ## 장치·입력 설정 메모 (6, 11, 13, 17, 21)
 

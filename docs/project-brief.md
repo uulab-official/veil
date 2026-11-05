@@ -29,8 +29,11 @@ Host:
 
 Guest:
 
-- Windows 11 Arm
+- Windows 11 Arm (the product path: guest agent, app windows, clipboard, files)
 - Bring-your-own license and installer media
+- Secondary, plain-VM guests: Linux Arm64 on Hypervisor.framework, and x86_64 operating systems under
+  QEMU's TCG emulator. These boot their installer and show a console like UTM does; they get no
+  guest agent, app windows, or Windows-specific setup automation.
 
 App types:
 
@@ -42,7 +45,8 @@ Out of scope for v1:
 
 - high-performance 3D games,
 - advanced DirectX acceleration,
-- x86 Windows OS emulation,
+- app-window integration (coherence) for any guest other than Windows 11 Arm,
+- performance targets for x86_64 guests (emulation is offered for compatibility, not speed),
 - Intel Mac support,
 - printer/scanner/smart-card bridges.
 
@@ -52,6 +56,21 @@ device on this Mac and give it back, from Configuration > USB Devices. It stays 
 Veil: a device a macOS driver already owns (keyboards, mice, disks, most audio devices) can only be
 captured with Apple's `com.apple.vm.device-access` entitlement or root, which Veil does not have. See
 [The Privilege Boundary](architecture.md#the-privilege-boundary).
+
+### Scope change: other guests and x86_64 emulation (2026-11-05)
+
+v1 originally listed x86 OS emulation as out of scope. On 2026-11-05 the project owner asked for UTM's
+feature set ("UTM 기능은 다 가져오라"), so Linux Arm64 guests and x86_64 emulation moved into scope as
+secondary features. Reasons:
+
+- The engine is already QEMU, which runs these guests with no new dependency; the cost is a second
+  boot plan and one more emulator binary (about 30 MB uncompressed, see docs/architecture.md).
+- Users comparing Veil with UTM and Parallels expect to keep a Linux VM or an old x86 tool next to Windows.
+- The Windows path stays unchanged: other guests use a separate plan type and their own folders, so
+  they cannot regress the coherence loop.
+
+The product principle below still describes the Windows path; other guests are an explicit,
+VM-shaped feature reached from File > New Virtual Machine.
 
 ## Product Principle
 

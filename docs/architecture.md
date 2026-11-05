@@ -51,6 +51,73 @@ The provider probe is intentionally read-only. `veil-vmctl providers --json` rep
 
 The QEMU boot plan remains inspectable before execution. `veil-vmctl qemu-plan --json` converts the stored Windows Arm VM profile into a dry-run QEMU/HVF command plan and reports whether `qemu-system-aarch64` is locally available. `veil-vmctl qemu-start` is the guarded local execution spike for that plan: it checks QEMU doctor readiness first, starts QEMU with `-display none` plus a loopback VNC endpoint, forwards the Windows guest agent port to `127.0.0.1:18444`, attaches a QEMU HMP monitor socket for compatibility screenshots plus a QMP socket for structured input/recovery control, sends boot-prompt key input during the initial wait window, and writes process/serial logs under `~/Library/Application Support/Veil/Diagnostics`. App-launched QEMU sessions share the same monitor/QMP/VNC evidence shape. The host renders that RFB surface in one reusable, resizable, full-screen-capable macOS desktop window; the app launcher and per-HWND app windows remain separate surfaces. Screen-gated recovery reads the active VNC framebuffer, uses local OCR and pixel metrics to distinguish blank, desktop, Run, UAC, modal, and command states, and records stable latest screenshots instead of blindly sending timed input. HMP `screendump` is fallback evidence because it can target an inactive display head after Windows switches graphics devices. `veil-vmctl qemu-start --native-display` and `VEIL_USE_NATIVE_QEMU_DISPLAY=1` keep the temporary Cocoa display as explicit recovery fallbacks. A lower-latency accelerated renderer and dynamic guest-resolution renegotiation remain roadmap work.
 
+## Other Guest Operating Systems
+
+Decided 2026-11-05 (see docs/project-brief.md, "Scope change"). `VMProfile.os` now names a `VMGuestOS`:
+`windows-arm64` (the existing value, and the fallback for anything unknown), `linux-arm64`, and `x86_64`.
+Only Windows uses `QEMUWindowsBootPlanner`, the readiness doctor, the answer-file ISO, the agent port
+forward, and the SMB share. The other kinds go through `QEMUGuestBootPlanner`:
+
+- Linux Arm64: `virt,highmem=on`, `-accel hvf`, `-cpu host`, QEMU's `edk2-aarch64-code.fd` with a per-VM
+  copy of `edk2-arm-vars.fd`, `virtio-blk-pci` disk, `virtio-net-pci` on user NAT with no port
+  forwards, `virtio-gpu-pci`, `virtio-rng-pci`, USB keyboard and tablet, and the ISO as a
+  `virtio-scsi` CD. TPM 2.0 (swtpm) and Secure Boot are opt-in; Secure Boot reuses Veil's Secure Boot
+  build, whose `--microsoft-db all` store includes the Microsoft third-party UEFI CA that signs
+  distribution shims (Debian 13 booted with it below).
+- x86_64: `q35`, `-accel tcg,thread=multi,tb-size=512`, `-cpu max`, OVMF (`edk2-x86_64-code.fd` with
+  `edk2-i386-vars.fd`), the same virtio disk/NIC/CD, and standard `VGA`. Secure Boot is not offered
+  because Veil ships no x86 variable store with enrolled keys; the plan warns instead. Every x86 plan
+  carries a performance warning.
+- Boot order is disk first, ISO second: an empty disk has no EFI system partition, so firmware falls
+  through to the installer, and once a bootloader is installed the disk wins with the ISO still attached.
+
+Guests live in `~/Virtual Machines/Veil Guests/<id>/` (`guest.json`, `disk.img` raw sparse,
+`uefi-vars.fd`, optional `tpm/`), never in the Windows profile store or the Windows VM folder, and
+`GuestVMLauncher` shows them in QEMU's own Cocoa window. Entry points: File > New Virtual Machine…
+(⌥⌘N) in the app, and `veil-vmctl guest-create|guest-list|guest-plan|guest-start|guest-capture|guest-stop`.
+Guest ids are 12 hex characters so `tpm/swtpm.sock` stays under the 104-byte Unix socket limit.
+
+### x86_64 emulator in the bundle
+
+Decision: `script/bundle_qemu_runtime.sh` bundles `qemu-system-x86_64` (with `edk2-x86_64-code.fd`,
+`edk2-i386-vars.fd`, `vgabios-stdvga.bin`, `kvmvapic.bin`) by default; `VEIL_BUNDLE_X86=0` leaves it
+out. It links the same libraries as `qemu-system-aarch64`, so no new dylibs are added. Under the
+hardened runtime it is signed with `script/qemu-tcg-runtime.entitlements` (`allow-jit`) because TCG
+writes translated code to `MAP_JIT` memory.
+
+Measured 2026-11-05 with Homebrew QEMU 11.1.3, Secure Boot firmware skipped in both runs:
+
+| Runtime directory | Uncompressed | `tar | gzip -6` |
+|---|---|---|
+| without x86_64 | 190.9 MB | 16.0 MB |
+| with x86_64 | 220.3 MB | 21.4 MB |
+
+That is +29.4 MB (+15%) on disk and +5.5 MB compressed, against a 212 MB app, so it is bundled rather
+than downloaded on demand.
+
+### Boot measurements
+
+Debian 13.7.0 netinst ISOs from `cdimage.debian.org`, SHA256 checked against the published
+`SHA256SUMS`, headless (`guest-start --headless`), timed with 2-second `screendump` polls on an
+Apple Silicon Mac (so ±2 s):
+
+| Guest | Power-on to GRUB | GRUB "Install" to installer language screen |
+|---|---|---|
+| Linux Arm64 (HVF, 4 vCPU, 4 GB) | 10 s | 4 s |
+| Linux Arm64, Secure Boot + TPM | reached GRUB and the installer language screen | not timed |
+| x86_64 (TCG, 2 vCPU, 2 GB) | 8 s (second boot) | 14 s |
+
+The Secure Boot run used Veil's Secure Boot firmware and its enrolled variable store, padded to the
+64 MiB flash bank as the Windows path does; the guest's own `mokutil --sb-state` was not checked.
+The first x86_64 boot with a fresh variable store was still in OVMF's CD boot at 67 s; later boots
+reach GRUB in about 8 s. The kernel-to-installer step is about 3.5 times slower under TCG; desktop
+workloads will be slower still, which is why the plan warns. The app bundle's own
+`qemu-system-x86_64` booted the same ISO to GRUB using only its bundled data directory.
+
+Known issue: QEMU's HMP monitor socket stopped answering after two monitor connections were opened
+back to back during an x86_64 kernel boot; spacing connections a second apart avoided it. The guest
+CLI opens one connection per command.
+
 ## Session Persistence Boundary
 
 Stopping a VM and suspending a Windows session are different products. Stop shuts Windows down; suspend keeps the user's open apps. Veil implements suspend inside the local runtime provider boundary: `VMRuntimeBooting.suspend(profile:)`/`resume(profile:)` pause the guest, stream RAM and device state through QEMU's migration path to a local file next to the virtual disk, and later relaunch QEMU with `-incoming` before unpausing. Providers that cannot persist a session throw `suspendNotSupported` instead of silently falling back to stop and start, because that fallback would destroy the user's open work.

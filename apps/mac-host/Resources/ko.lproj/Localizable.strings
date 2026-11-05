@@ -429,3 +429,17 @@
 "macOS is using %@, and Veil cannot take it from macOS without Apple's USB device capture entitlement." = "macOS가 %@ 장치를 사용 중이며, Veil은 Apple의 USB 장치 캡처 권한 없이는 macOS에서 이 장치를 가져올 수 없습니다.";
 "QEMU could not open %@. Unplug it, plug it back in, and try again." = "QEMU가 %@ 장치를 열지 못했습니다. 장치를 뽑았다가 다시 꽂은 후 다시 시도하세요.";
 "QEMU refused the USB device: %@" = "QEMU가 USB 장치를 거부했습니다: %@";
+/* New virtual machine (Linux Arm64, emulated x86_64) */
+"New Virtual Machine…" = "새 가상 머신…";
+"New Virtual Machine" = "새 가상 머신";
+"Operating System" = "운영 체제";
+"Installer ISO" = "설치 ISO";
+"Choose…" = "선택…";
+"TPM 2.0" = "TPM 2.0";
+"Secure Boot" = "보안 부팅";
+"Linux (Arm64)" = "Linux (Arm64)";
+"x86_64 (emulated)" = "x86_64 (에뮬레이션)";
+"x86_64 runs under emulation and is much slower than an Arm guest." = "x86_64는 에뮬레이션으로 실행되어 Arm 게스트보다 훨씬 느립니다.";
+"Create and Start" = "만들고 시작";
+"Other Virtual Machines" = "다른 가상 머신";
+"Started %@ (QEMU PID %d)." = "%@을(를) 시작했습니다(QEMU PID %d).";
