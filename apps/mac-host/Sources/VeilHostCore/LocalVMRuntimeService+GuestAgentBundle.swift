@@ -159,12 +159,16 @@ extension LocalVMRuntimeService {
             .appendingPathComponent("windows-agent", isDirectory: true)
     }
 
+    /// The first-logon bootstrap sets VEIL_UNATTENDED, so a failure returns its exit code instead of
+    /// waiting at `pause` in a minimized window nobody sees.
     private static let installAgentCommandText = """
     @echo off
     setlocal
     cd /d "%~dp0"
     powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\\Install-VeilAgent.ps1" %*
-    if errorlevel 1 pause
+    set VEIL_EXIT_CODE=%errorlevel%
+    if not "%VEIL_EXIT_CODE%"=="0" if not defined VEIL_UNATTENDED pause
+    exit /b %VEIL_EXIT_CODE%
 
     """
 

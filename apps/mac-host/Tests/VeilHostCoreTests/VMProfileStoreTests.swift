@@ -1732,6 +1732,9 @@ struct VMProfileStoreTests {
         #expect(startScript.contains(#"$ListenHost = "0.0.0.0""#))
         #expect(startScript.contains(#"$ProbeHost = "127.0.0.1""#))
         #expect(startCommand.contains("Start-VeilAgent.ps1"))
+        // Unattended first logon must get the installer's exit code, never a hidden `pause`.
+        #expect(installCommand.contains("if not defined VEIL_UNATTENDED pause"))
+        #expect(installCommand.contains("exit /b %VEIL_EXIT_CODE%"))
         #expect(diagnosticsCommand.contains("Collect-VeilAgentDiagnostics.ps1"))
         #expect(diagnosticsCommand.contains("-ExecutionPolicy Bypass"))
         #expect(repairCommand.contains("Repair-VeilAgentConnectivity.ps1"))
