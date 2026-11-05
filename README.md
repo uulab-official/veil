@@ -57,7 +57,8 @@ Prerequisites, all user-provided:
 - **Secure Boot firmware**: a matching `edk2-aarch64-secure-code.fd` and `edk2-arm-secure-vars.fd` pair in
   Veil's local firmware cache. Windows 11 Setup refuses to proceed without Secure Boot, and Homebrew QEMU
   ships only the non-secure half. `qemu-doctor` names exactly which half is missing.
-- Optionally a `virtio-win.iso` driver ISO, which is what gets networking working during Windows setup.
+- Optionally a `virtio-win.iso` driver ISO, which is what gets networking working during Windows setup. The
+  app downloads Fedora's virtio-win ISO itself during one-click setup; `veil-vmctl prepare` still takes `--drivers`.
 
 ```bash
 cd apps/mac-host
