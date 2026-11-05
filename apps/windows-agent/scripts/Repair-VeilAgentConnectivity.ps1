@@ -420,6 +420,13 @@ try {
         Write-VeilRepairStatus -Stage "networkDriverInstalled" -Succeeded $false -Message "VirtIO NetKVM Windows 11 ARM64 driver install was attempted from attached driver media."
         Start-Sleep -Seconds 3
     }
+    # VMs installed before Veil added viogpudo get it here; the host boots on virtio-gpu alone from
+    # the next cold start once the agent reports it. Until then QEMU still attaches ramfb, so keep
+    # Windows on the one display Veil shows.
+    $VirtIODriversScript = Join-Path $ScriptRoot "Install-VeilVirtIODrivers.ps1"
+    if (Test-Path $VirtIODriversScript) {
+        & $VirtIODriversScript -DriverFolders @("viogpudo", "viorng", "Balloon", "vioserial") -SingleBootDisplay -DisplayWaitSeconds 15
+    }
 
     $RunningAgents = Get-Process -Name "VeilAgent" -ErrorAction SilentlyContinue
     if ($RunningAgents) {

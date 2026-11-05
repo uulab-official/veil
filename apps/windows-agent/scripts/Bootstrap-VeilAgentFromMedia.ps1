@@ -16,6 +16,13 @@ try {
     Write-Host "InstallRoot=$InstallRoot"
     Write-Host "Port=$Port"
 
+    # The specialize pass installed viogpudo while QEMU still attaches ramfb for setup, so this first
+    # session has two monitors; keep the one Veil shows. Best effort: it never stops the agent install.
+    $DriversScript = Join-Path $PSScriptRoot "Install-VeilVirtIODrivers.ps1"
+    if (Test-Path $DriversScript) {
+        & $DriversScript -DriverFolders @() -SingleBootDisplay
+    }
+
     $AgentRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
     $Installer = Join-Path $AgentRoot "Install Veil Agent.cmd"
     if (-not (Test-Path $Installer)) {
