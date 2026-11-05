@@ -31,6 +31,8 @@ public struct VMRuntimeSnapshot: Codable, Equatable, Sendable {
     public var installEvidence: VMInstallEvidenceSummary
     public var bootReady: Bool
     public var windowsInstalled: Bool
+    /// The local account the next Windows install creates.
+    public var windowsAccountName: String?
     public var detail: String
 
     public init(
@@ -62,6 +64,7 @@ public struct VMRuntimeSnapshot: Codable, Equatable, Sendable {
         installEvidence: VMInstallEvidenceSummary = .notConfigured,
         bootReady: Bool = false,
         windowsInstalled: Bool = false,
+        windowsAccountName: String? = nil,
         detail: String
     ) {
         self.state = state
@@ -92,6 +95,7 @@ public struct VMRuntimeSnapshot: Codable, Equatable, Sendable {
         self.installEvidence = installEvidence
         self.bootReady = bootReady
         self.windowsInstalled = windowsInstalled
+        self.windowsAccountName = windowsAccountName
         self.detail = detail
     }
 }

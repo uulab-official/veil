@@ -66,7 +66,10 @@ struct InstallationAssistantView: View {
     var installAction: () -> Void
     var configureAction: (MachineConfigurationTab) -> Void
     var refreshAction: () -> Void
+    /// Saves the local Windows account name before the answer file is built.
+    var saveAccountName: (String) async -> Void = { _ in }
     @State private var isDownloading = false
+    @State private var accountName = ""
 
     var body: some View {
         ScrollView {
@@ -189,19 +192,54 @@ struct InstallationAssistantView: View {
                     : "Veil downloads the latest Windows 11 for Arm from Microsoft, verifies it, and starts Windows Setup. You don't need an ISO file."
             )
 
+            accountField
+
             AssistantChoiceCard(
                 title: "Download and Install Windows 11",
                 detail: "From microsoft.com, checked against Microsoft's published SHA-256. Setup starts automatically when the download finishes.",
                 symbolName: "arrow.down.circle.fill",
                 isPrimary: true,
                 isDisabled: isLoading,
-                action: { isDownloading = true }
+                action: {
+                    Task {
+                        await saveAccountName(accountName)
+                        isDownloading = true
+                    }
+                }
             )
             .keyboardShortcut(.defaultAction)
 
-            Button("Use an ISO file I already have…", action: chooseInstallerAction)
-                .buttonStyle(.link)
+            Button("Use an ISO file I already have…") {
+                Task {
+                    await saveAccountName(accountName)
+                    chooseInstallerAction()
+                }
+            }
+            .buttonStyle(.link)
+            .disabled(isLoading)
+        }
+        .onAppear {
+            accountName = snapshot.windowsAccountName ?? ""
+        }
+    }
+
+    /// Setup creates this local account and signs in to it, so Windows never stops to ask who
+    /// will use the device. Leaving it empty uses this Mac's user name.
+    private var accountField: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Windows account")
+                .font(.subheadline.weight(.medium))
+            TextField(WindowsAccountName.resolve(preferred: nil), text: $accountName)
+                .textFieldStyle(.roundedBorder)
+                .frame(maxWidth: 280)
                 .disabled(isLoading)
+                .onSubmit {
+                    Task { await saveAccountName(accountName) }
+                }
+            Text("Windows signs in to this local account automatically. Add a password later in Windows Settings.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 

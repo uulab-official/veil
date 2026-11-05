@@ -55,6 +55,8 @@ public struct VMProfile: Codable, Equatable, Identifiable, Sendable {
     public var windowsInstalled: Bool?
     public var guestAgentVersion: String?
     public var guestAgentConnectedAt: Date?
+    /// The local Windows account the next install creates; nil follows this Mac's user name.
+    public var windowsAccountName: String?
     public var createdAt: Date
 
     public init(
@@ -76,6 +78,7 @@ public struct VMProfile: Codable, Equatable, Identifiable, Sendable {
         windowsInstalled: Bool? = nil,
         guestAgentVersion: String? = nil,
         guestAgentConnectedAt: Date? = nil,
+        windowsAccountName: String? = nil,
         createdAt: Date
     ) {
         self.id = id
@@ -96,6 +99,7 @@ public struct VMProfile: Codable, Equatable, Identifiable, Sendable {
         self.windowsInstalled = windowsInstalled
         self.guestAgentVersion = guestAgentVersion
         self.guestAgentConnectedAt = guestAgentConnectedAt
+        self.windowsAccountName = windowsAccountName
         self.createdAt = createdAt
     }
 

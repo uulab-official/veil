@@ -171,6 +171,7 @@ public struct LocalVMRuntimeService: VMRuntimeService {
                 installEvidence: installEvidence,
                 bootReady: bootPathReadiness.isReady,
                 windowsInstalled: windowsInstalled,
+                windowsAccountName: WindowsAccountName.resolve(preferred: profile.windowsAccountName),
                 detail: inferredRuntimeState.map(Self.runtimeDetail(for:)) ?? (
                     Self.stoppedDetail(
                         bootPathReadiness: bootPathReadiness,
@@ -189,6 +190,7 @@ public struct LocalVMRuntimeService: VMRuntimeService {
             profileName: nil,
             runtimeProvider: activeProvider,
             runtimeProviders: runtimeProviders,
+            windowsAccountName: WindowsAccountName.resolve(preferred: nil),
             detail: virtualizationAvailable
                 ? "No Windows VM profile has been created."
                 : "Veil requires macOS 15+ on Apple Silicon."

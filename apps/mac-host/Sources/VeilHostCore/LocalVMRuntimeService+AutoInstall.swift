@@ -3,7 +3,9 @@ import Foundation
 extension LocalVMRuntimeService {
     static func prepareAutomaticInstallAnswerFile(for profile: VMProfile) throws {
         let answerFileURL = automaticInstallAnswerFileURL(for: profile)
-        let answerFile = automaticInstallAnswerFile()
+        let answerFile = automaticInstallAnswerFile(
+            accountName: WindowsAccountName.resolve(preferred: profile.windowsAccountName)
+        )
         if FileManager.default.fileExists(atPath: answerFileURL.path),
            (try? String(contentsOf: answerFileURL, encoding: .utf8)) == answerFile {
             return
@@ -12,8 +14,12 @@ extension LocalVMRuntimeService {
         try answerFile.write(to: answerFileURL, atomically: true, encoding: .utf8)
     }
 
-    private static func automaticInstallAnswerFile() -> String {
-        """
+    /// The local account has no password, so Windows signs in to it without a prompt and the
+    /// first-logon command installs the Veil agent unattended. The user can add a password in
+    /// Windows Settings afterward.
+    static func automaticInstallAnswerFile(accountName: String) -> String {
+        let account = xmlEscaped(accountName)
+        return """
         <?xml version="1.0" encoding="utf-8"?>
         <unattend xmlns="urn:schemas-microsoft-com:unattend" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
           <settings pass="windowsPE">
@@ -110,10 +116,33 @@ extension LocalVMRuntimeService {
             <component name="Microsoft-Windows-Shell-Setup" processorArchitecture="arm64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
               <OOBE>
                 <HideEULAPage>true</HideEULAPage>
+                <HideLocalAccountScreen>true</HideLocalAccountScreen>
                 <HideOnlineAccountScreens>true</HideOnlineAccountScreens>
                 <HideWirelessSetupInOOBE>true</HideWirelessSetupInOOBE>
                 <ProtectYourPC>3</ProtectYourPC>
               </OOBE>
+              <UserAccounts>
+                <LocalAccounts>
+                  <LocalAccount wcm:action="add">
+                    <Name>\(account)</Name>
+                    <DisplayName>\(account)</DisplayName>
+                    <Group>Administrators</Group>
+                    <Password>
+                      <Value></Value>
+                      <PlainText>true</PlainText>
+                    </Password>
+                  </LocalAccount>
+                </LocalAccounts>
+              </UserAccounts>
+              <AutoLogon>
+                <Enabled>true</Enabled>
+                <LogonCount>1</LogonCount>
+                <Username>\(account)</Username>
+                <Password>
+                  <Value></Value>
+                  <PlainText>true</PlainText>
+                </Password>
+              </AutoLogon>
               <FirstLogonCommands>
                 <SynchronousCommand wcm:action="add">
                   <Order>1</Order>
@@ -126,6 +155,15 @@ extension LocalVMRuntimeService {
         </unattend>
 
         """
+    }
+
+    private static func xmlEscaped(_ text: String) -> String {
+        text
+            .replacingOccurrences(of: "&", with: "&amp;")
+            .replacingOccurrences(of: "<", with: "&lt;")
+            .replacingOccurrences(of: ">", with: "&gt;")
+            .replacingOccurrences(of: "\"", with: "&quot;")
+            .replacingOccurrences(of: "'", with: "&apos;")
     }
 
     static func allocatedFileSize(path: String?, bookmarkData: Data? = nil) -> Int64? {

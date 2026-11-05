@@ -27,6 +27,19 @@ extension LocalVMRuntimeService {
         return try await loadSnapshot()
     }
 
+    /// Names the local Windows account the next install creates. An empty or unusable name falls
+    /// back to this Mac's user name. An installed Windows keeps its existing accounts.
+    public func updateWindowsAccountName(_ name: String?) async throws -> VMRuntimeSnapshot {
+        var profile = try await profileStore.load() ?? defaultProfile()
+        let cleaned = name.flatMap(WindowsAccountName.sanitized)
+        guard profile.windowsAccountName != cleaned else {
+            return try await loadSnapshot()
+        }
+        profile.windowsAccountName = cleaned
+        try await profileStore.save(profile)
+        return try await loadSnapshot()
+    }
+
     /// Resource changes are intentionally enforced at the service boundary as well as in the
     /// SwiftUI settings policy. A stale callback, CLI caller, or future surface must not replace
     /// the disk/media attachments underneath a live or suspended guest.

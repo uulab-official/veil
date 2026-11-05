@@ -83,6 +83,9 @@ struct VMRuntimeView: View {
                         Task {
                             await model.load()
                         }
+                    },
+                    saveAccountName: { name in
+                        await model.updateWindowsAccountName(name)
                     }
                 )
             } else if let snapshot = model.snapshot {

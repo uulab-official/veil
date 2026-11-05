@@ -182,6 +182,16 @@ public final class VMRuntimeModel {
         operationInFlight = false
     }
 
+    /// Saves the local Windows account name before the answer file is built. It runs between other
+    /// operations' turns, so it never blocks starting the download that follows it.
+    public func updateWindowsAccountName(_ name: String?) async {
+        do {
+            snapshot = try await service.updateWindowsAccountName(name)
+        } catch {
+            errorMessage = userMessage(for: error)
+        }
+    }
+
     /// Erases an unfinished Windows installation (disk, UEFI variables, TPM) so Setup starts over.
     @discardableResult
     public func restartWindowsInstallation() async -> Bool {
