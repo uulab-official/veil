@@ -142,7 +142,7 @@ private struct ConfigurationTabButton: View {
                 Image(systemName: tab.symbolName)
                     .font(.system(size: 18, weight: .regular))
                     .frame(height: 22)
-                Text(tab.title)
+                Text(localized: tab.title)
                     .font(.caption)
                     .lineLimit(1)
             }

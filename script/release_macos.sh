@@ -153,6 +153,7 @@ stage_release_app() {
   cp "$build_binary" "$APP_BINARY"
   chmod +x "$APP_BINARY"
   swift "$ROOT_DIR/script/generate_app_icon.swift" "$APP_ICON"
+  cp -R "$PACKAGE_DIR/Resources/"*.lproj "$APP_RESOURCES/"
   # The Windows engine is signed with the release identity and hardened runtime like the app.
   "$ROOT_DIR/script/bundle_qemu_runtime.sh" "$APP_RESOURCES/Runtime" "$SIGNING_IDENTITY" >/dev/null \
     || fail "could not bundle the Windows engine; install qemu and swtpm on the release Mac."
@@ -168,6 +169,13 @@ stage_release_app() {
   <string>$BUNDLE_ID</string>
   <key>CFBundleName</key>
   <string>$BUNDLE_NAME</string>
+  <key>CFBundleDevelopmentRegion</key>
+  <string>en</string>
+  <key>CFBundleLocalizations</key>
+  <array>
+    <string>en</string>
+    <string>ko</string>
+  </array>
   <key>CFBundleIconFile</key>
   <string>VeilAppIcon</string>
   <key>CFBundleShortVersionString</key>

@@ -32,6 +32,8 @@ mkdir -p "$APP_MACOS" "$APP_RESOURCES"
 cp "$BUILD_BINARY" "$APP_BINARY"
 chmod +x "$APP_BINARY"
 swift "$ROOT_DIR/script/generate_app_icon.swift" "$APP_ICON"
+# UI translations; SwiftUI looks string literals up in these Localizable.strings tables.
+cp -R "$ROOT_DIR/apps/mac-host/Resources/"*.lproj "$APP_RESOURCES/"
 
 # Ship the Windows engine (QEMU, swtpm, Secure Boot firmware) inside the app. Bundling relinks and
 # re-signs ~30 libraries, so the result is cached until the script or the source binaries change.
@@ -65,6 +67,13 @@ cat >"$INFO_PLIST" <<PLIST
   <string>$BUNDLE_ID</string>
   <key>CFBundleName</key>
   <string>$BUNDLE_NAME</string>
+  <key>CFBundleDevelopmentRegion</key>
+  <string>en</string>
+  <key>CFBundleLocalizations</key>
+  <array>
+    <string>en</string>
+    <string>ko</string>
+  </array>
   <key>CFBundleIconFile</key>
   <string>VeilAppIcon</string>
   <key>CFBundleShortVersionString</key>

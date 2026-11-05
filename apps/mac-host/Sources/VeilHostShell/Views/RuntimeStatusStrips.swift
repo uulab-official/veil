@@ -253,10 +253,10 @@ struct AppRuntimeProgressStrip: View {
                         .background(tint(for: item.state).opacity(0.16), in: Circle())
 
                     VStack(alignment: .leading, spacing: 1) {
-                        Text(item.title)
+                        Text(localized: item.title)
                             .font(.caption2.weight(.semibold))
                             .foregroundStyle(.white.opacity(0.62))
-                        Text(item.detail)
+                        Text(localized: item.detail)
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(.white.opacity(0.88))
                             // Two lines instead of middle truncation: "Create a lo…VM profile"
@@ -320,10 +320,10 @@ struct RuntimeReadinessTimeline: View {
                         .background(tint(for: step.state).opacity(0.16), in: Circle())
 
                     VStack(alignment: .leading, spacing: 1) {
-                        Text(step.title)
+                        Text(localized: step.title)
                             .font(.caption2.weight(.semibold))
                             .foregroundStyle(.white.opacity(0.62))
-                        Text(step.detail)
+                        Text(localized: step.detail)
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(.white.opacity(0.88))
                             .lineLimit(2)

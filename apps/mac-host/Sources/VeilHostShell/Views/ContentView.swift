@@ -83,7 +83,7 @@ struct ContentView: View {
             }
         }
         .navigationTitle(vmModel.snapshot?.profileName ?? "Windows 11")
-        .navigationSubtitle(machineStatus.title)
+        .navigationSubtitle(Text(localized: machineStatus.title))
         .toolbar { machineToolbar }
         .confirmationDialog(
             "Shut down Windows?",

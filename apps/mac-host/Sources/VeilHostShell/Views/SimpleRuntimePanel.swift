@@ -35,7 +35,7 @@ struct SimpleRuntimePanel: View {
                             Text("Windows 11 Arm")
                                 .font(.largeTitle.weight(.semibold))
                                 .lineLimit(1)
-                            Text(summaryText)
+                            Text(localized: summaryText)
                                 .font(.callout)
                                 .foregroundStyle(.secondary)
                                 .lineLimit(2)
@@ -56,7 +56,7 @@ struct SimpleRuntimePanel: View {
                     }
 
                     if let displayMessage {
-                        Label(displayMessage, systemImage: "info.circle")
+                        Label(LocalizedStringKey(displayMessage), systemImage: "info.circle")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .textSelection(.enabled)
@@ -65,7 +65,7 @@ struct SimpleRuntimePanel: View {
 
                     HStack(spacing: 9) {
                         Button(action: primaryAction) {
-                            Label(primaryTitle, systemImage: primarySymbol)
+                            Label(LocalizedStringKey(primaryTitle), systemImage: primarySymbol)
                                 .frame(minWidth: 176)
                         }
                         .buttonStyle(.borderedProminent)
@@ -253,7 +253,7 @@ struct InstallSimulationProgressView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .firstTextBaseline) {
-                Label(title, systemImage: symbolName)
+                Label(LocalizedStringKey(title), systemImage: symbolName)
                     .font(.headline.weight(.semibold))
                     .foregroundStyle(tint)
 
@@ -271,7 +271,7 @@ struct InstallSimulationProgressView: View {
             stepTimeline
 
             HStack(alignment: .firstTextBaseline, spacing: 10) {
-                Text(simulation.currentStep)
+                Text(localized: simulation.currentStep)
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
@@ -389,9 +389,9 @@ struct RuntimeLandingPanel: View {
                     .shadow(color: .black.opacity(0.22), radius: 18, y: 10)
 
                 VStack(spacing: 6) {
-                    Text(title)
+                    Text(localized: title)
                         .font(.system(size: 38, weight: .semibold))
-                    Text(subtitle)
+                    Text(localized: subtitle)
                         .font(.callout)
                         .foregroundStyle(.white.opacity(0.75))
                         .multilineTextAlignment(.center)
@@ -400,14 +400,14 @@ struct RuntimeLandingPanel: View {
 
                 HStack(spacing: 10) {
                     Button(action: primaryAction) {
-                        Label(primaryTitle, systemImage: primarySymbol)
+                        Label(LocalizedStringKey(primaryTitle), systemImage: primarySymbol)
                             .frame(minWidth: 150)
                     }
                     .buttonStyle(.borderedProminent)
                     .controlSize(.large)
 
                     Button(action: secondaryAction) {
-                        Label(secondaryTitle, systemImage: secondaryTitle == "Refresh" ? "arrow.clockwise" : "wand.and.stars")
+                        Label(LocalizedStringKey(secondaryTitle), systemImage: secondaryTitle == "Refresh" ? "arrow.clockwise" : "wand.and.stars")
                     }
                     .controlSize(.large)
                 }

@@ -372,9 +372,9 @@ struct InstallationAssistantView: View {
 
     private func pageHeader(title: String, detail: String) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(title)
+            Text(localized: title)
                 .font(.system(size: 26, weight: .semibold))
-            Text(detail)
+            Text(localized: detail)
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -417,10 +417,10 @@ private struct AssistantStepRow: View {
             }
 
             VStack(alignment: .leading, spacing: 1) {
-                Text(step.title)
+                Text(localized: step.title)
                     .font(.callout.weight(state == .current ? .semibold : .regular))
                     .foregroundStyle(state == .pending ? .secondary : .primary)
-                Text(step.subtitle)
+                Text(localized: step.subtitle)
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             }
@@ -464,9 +464,9 @@ private struct AssistantChoiceCard: View {
                     .frame(width: 40)
 
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(title)
+                    Text(localized: title)
                         .font(.headline)
-                    Text(detail)
+                    Text(localized: detail)
                         .font(.callout)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)

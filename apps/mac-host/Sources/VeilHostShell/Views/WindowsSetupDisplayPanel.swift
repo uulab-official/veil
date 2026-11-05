@@ -153,10 +153,10 @@ struct WindowsSetupDisplayPanel: View {
     private var installControlBar: some View {
         HStack(spacing: 10) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(controlBarTitle)
+                Text(localized: controlBarTitle)
                     .font(.callout.weight(.semibold))
                     .lineLimit(1)
-                Text(controlBarSubtitle)
+                Text(localized: controlBarSubtitle)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
@@ -179,7 +179,7 @@ struct WindowsSetupDisplayPanel: View {
 
             if hasDesktopDisplay || canStop || snapshot.state == .starting {
                 Button(action: runEffectivePrimaryAction) {
-                    Label(effectivePrimaryTitle, systemImage: effectivePrimarySymbol)
+                    Label(LocalizedStringKey(effectivePrimaryTitle), systemImage: effectivePrimarySymbol)
                         .frame(minWidth: canStop ? 124 : 142)
                 }
                 .buttonStyle(.borderedProminent)
@@ -284,18 +284,18 @@ struct WindowsSetupDisplayPanel: View {
                     .shadow(color: .black.opacity(0.18), radius: 16, y: 8)
 
                 VStack(spacing: 4) {
-                    Text(machineTitle)
+                    Text(localized: machineTitle)
                         .font(.system(size: 30, weight: .semibold))
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
-                    Text(machineSubtitle)
+                    Text(localized: machineSubtitle)
                         .font(.callout)
                         .foregroundStyle(.white.opacity(0.74))
                         .lineLimit(1)
                 }
 
                 if let displayMessage, !displayMessage.isEmpty {
-                    Label(displayMessage, systemImage: "info.circle.fill")
+                    Label(LocalizedStringKey(displayMessage), systemImage: "info.circle.fill")
                         .font(.callout.weight(.medium))
                         .foregroundStyle(.white.opacity(0.84))
                         .lineLimit(2)
@@ -335,7 +335,7 @@ struct WindowsSetupDisplayPanel: View {
                 .accessibilityLabel(effectivePrimaryTitle)
                 .accessibilityHint(effectivePrimaryHelp)
 
-                Text(effectivePrimaryTitle)
+                Text(localized: effectivePrimaryTitle)
                     .font(.headline.weight(.semibold))
                     .lineLimit(1)
                     .minimumScaleFactor(0.82)
@@ -358,7 +358,7 @@ struct WindowsSetupDisplayPanel: View {
                 )
 
                 if effectiveInstallEvidence.isInstalled {
-                    Label(launchOnboardingTitle, systemImage: launchOnboardingSymbolName)
+                    Label(LocalizedStringKey(launchOnboardingTitle), systemImage: launchOnboardingSymbolName)
                         .font(.callout.weight(.semibold))
                         .foregroundStyle(.white.opacity(launchOnboarding.canContinueInApp ? 0.88 : 0.68))
                         .lineLimit(1)

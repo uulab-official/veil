@@ -68,7 +68,7 @@ private struct MachineSidebarRow: View {
                 Text(snapshot?.profileName ?? "Windows 11")
                     .font(.callout.weight(.semibold))
                     .lineLimit(1)
-                Label(status.title, systemImage: status.symbolName)
+                Label(LocalizedStringKey(status.title), systemImage: status.symbolName)
                     .font(.caption)
                     .foregroundStyle(status.tint)
                     .labelStyle(.titleAndIcon)
