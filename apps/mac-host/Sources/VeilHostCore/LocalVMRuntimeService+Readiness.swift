@@ -29,11 +29,15 @@ extension LocalVMRuntimeService {
         return "veil-vm-diagnostics-\(timestamp).json"
     }
 
+    /// The original machine keeps `~/Virtual Machines/Veil/<name>.img`; library machines get their
+    /// own folder so their `uefi-vars.fd` and `tpm/` (found beside the disk) never collide.
     func defaultVirtualDiskURL(for profile: VMProfile) -> URL {
-        defaultHomeDirectory
-            .appendingPathComponent("Virtual Machines", isDirectory: true)
-            .appendingPathComponent("Veil", isDirectory: true)
-            .appendingPathComponent("\(profile.name).img")
+        if profile.id == VMLibrary.legacyMachineID {
+            return VMLibrary.defaultMachineDirectory(for: profile.id, homeDirectory: defaultHomeDirectory)
+                .appendingPathComponent("\(profile.name).img")
+        }
+        return VMLibrary.defaultMachineDirectory(for: profile.id, homeDirectory: defaultHomeDirectory)
+            .appendingPathComponent(VMLibrary.defaultDiskFileName)
     }
 
     func defaultProfile() -> VMProfile {

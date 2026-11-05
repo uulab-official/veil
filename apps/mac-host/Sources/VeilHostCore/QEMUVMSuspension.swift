@@ -52,16 +52,21 @@ public protocol VMSuspensionRecordStore: Sendable {
 }
 
 public struct JSONVMSuspensionRecordStore: VMSuspensionRecordStore {
-    private let directory: URL
+    private let fixedDirectory: URL?
     private let fileName: String
 
+    /// A nil directory follows the selected library machine's diagnostics folder.
     public init(
-        directory: URL = QEMUVMRuntimeBooter.defaultDiagnosticsDirectory()
-            .appendingPathComponent("QEMU Suspend", isDirectory: true),
+        directory: URL? = nil,
         fileName: String = "qemu-suspend-latest.json"
     ) {
-        self.directory = directory
+        self.fixedDirectory = directory
         self.fileName = fileName
+    }
+
+    private var directory: URL {
+        fixedDirectory ?? QEMUVMRuntimeBooter.defaultDiagnosticsDirectory()
+            .appendingPathComponent("QEMU Suspend", isDirectory: true)
     }
 
     private var recordURL: URL {

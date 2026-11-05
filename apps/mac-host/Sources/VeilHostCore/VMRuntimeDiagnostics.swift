@@ -141,20 +141,24 @@ public protocol VMRuntimeBootReportStore: Sendable {
 }
 
 public struct JSONVMRuntimeBootReportStore: VMRuntimeBootReportStore {
+    /// The selected library machine's diagnostics folder.
     public static var defaultDirectory: URL {
-        VeilApplicationSupport.directory
-            .appendingPathComponent("Diagnostics", isDirectory: true)
+        QEMUVMRuntimeBooter.defaultDiagnosticsDirectory()
     }
 
-    private let directory: URL
+    private let fixedDirectory: URL?
     private let fileName: String
 
     public init(
-        directory: URL = Self.defaultDirectory,
+        directory: URL? = nil,
         fileName: String = "last-boot-report.json"
     ) {
-        self.directory = directory
+        self.fixedDirectory = directory
         self.fileName = fileName
+    }
+
+    private var directory: URL {
+        fixedDirectory ?? Self.defaultDirectory
     }
 
     public func load() async throws -> VMRuntimeBootReport? {

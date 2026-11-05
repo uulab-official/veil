@@ -85,16 +85,21 @@ public struct QEMURunningProcess: Codable, Equatable, Sendable {
 }
 
 public struct JSONQEMULaunchRecordStore: QEMULaunchRecordStore {
-    private let directory: URL
+    private let fixedDirectory: URL?
     private let fileName: String
 
+    /// A nil directory follows the selected library machine's diagnostics folder.
     public init(
-        directory: URL = QEMUVMRuntimeBooter.defaultDiagnosticsDirectory()
-            .appendingPathComponent("QEMU Launch", isDirectory: true),
+        directory: URL? = nil,
         fileName: String = "qemu-launch-latest.json"
     ) {
-        self.directory = directory
+        self.fixedDirectory = directory
         self.fileName = fileName
+    }
+
+    private var directory: URL {
+        fixedDirectory ?? QEMUVMRuntimeBooter.defaultDiagnosticsDirectory()
+            .appendingPathComponent("QEMU Launch", isDirectory: true)
     }
 
     public func loadLatest() async throws -> QEMULaunchRecord? {
@@ -111,7 +116,7 @@ public struct JSONQEMULaunchRecordStore: QEMULaunchRecordStore {
 public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
     public static let shared = QEMUVMRuntimeBooter()
 
-    private let diagnosticsDirectory: URL
+    private let fixedDiagnosticsDirectory: URL?
     private let planBuilder: @Sendable (VMProfile) throws -> QEMUWindowsBootPlan
     private let tpmEmulatorRunner: @Sendable (QEMUWindowsBootPlan) throws -> Void
     private let processRunner: @Sendable (Process) throws -> Void
@@ -128,7 +133,7 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
     private var qmpSocketURL: URL?
 
     public init(
-        diagnosticsDirectory: URL = QEMUVMRuntimeBooter.defaultDiagnosticsDirectory(),
+        diagnosticsDirectory: URL? = nil,
         planBuilder: @escaping @Sendable (VMProfile) throws -> QEMUWindowsBootPlan = QEMUVMRuntimeBooter.makePlan(for:),
         tpmEmulatorRunner: @escaping @Sendable (QEMUWindowsBootPlan) throws -> Void = QEMUVMRuntimeBooter.startTPMEmulatorIfNeeded,
         processRunner: @escaping @Sendable (Process) throws -> Void = { try $0.run() },
@@ -141,7 +146,7 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
         suspensionRecordStore: (any VMSuspensionRecordStore)? = nil,
         qmpControl: any QEMUQMPControlling = QEMUQMPClient()
     ) {
-        self.diagnosticsDirectory = diagnosticsDirectory
+        self.fixedDiagnosticsDirectory = diagnosticsDirectory
         self.planBuilder = planBuilder
         self.tpmEmulatorRunner = tpmEmulatorRunner
         self.processRunner = processRunner
@@ -154,8 +159,15 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
         self.qmpControl = qmpControl
         self.suspensionRecordStore = suspensionRecordStore
             ?? JSONVMSuspensionRecordStore(
-                directory: diagnosticsDirectory.appendingPathComponent("QEMU Suspend", isDirectory: true)
+                directory: diagnosticsDirectory?.appendingPathComponent("QEMU Suspend", isDirectory: true)
             )
+    }
+
+    /// Without an explicit directory, records go to the selected library machine's folder. Veil
+    /// runs one machine at a time and refuses to switch while one runs, so this cannot change
+    /// under a live process.
+    private var diagnosticsDirectory: URL {
+        fixedDiagnosticsDirectory ?? Self.defaultDiagnosticsDirectory()
     }
 
     public var supportsNativeDisplayWindow: Bool {
@@ -545,9 +557,10 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
             .replacingOccurrences(of: ":", with: "-")
     }
 
+    /// The selected library machine's diagnostics folder: `Diagnostics/` for the original machine.
     public static func defaultDiagnosticsDirectory() -> URL {
-        VeilApplicationSupport.directory
-            .appendingPathComponent("Diagnostics", isDirectory: true)
+        let library = VMLibrary()
+        return library.diagnosticsDirectory(for: library.activeMachineID())
     }
 
     public static func bringQEMUToFrontIfAllowed() {
