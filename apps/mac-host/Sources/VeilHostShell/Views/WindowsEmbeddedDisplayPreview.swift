@@ -133,7 +133,23 @@ struct WindowsEmbeddedDisplayPreview: View {
     }
 
     private var renderedImage: NSImage? {
-        rfbDisplayModel.image ?? image
+        rfbDisplayModel.image ?? fallbackScreenshot
+    }
+
+    /// The saved console screenshot stands in only while it is recent. For a live display it was
+    /// taken when QEMU started, so hours later it showed a firmware boot screen over a Windows that
+    /// was sitting at its desktop.
+    static let liveFallbackScreenshotMaximumAge: TimeInterval = 120
+
+    private var fallbackScreenshot: NSImage? {
+        guard surface.isLiveCapable else {
+            return image
+        }
+        guard let modified = (try? FileManager.default.attributesOfItem(atPath: path))?[.modificationDate] as? Date,
+              Date().timeIntervalSince(modified) <= Self.liveFallbackScreenshotMaximumAge else {
+            return nil
+        }
+        return image
     }
 
     private var renderedFramebufferSize: CGSize {

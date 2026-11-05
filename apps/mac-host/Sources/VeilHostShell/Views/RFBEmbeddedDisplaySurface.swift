@@ -121,6 +121,10 @@ final class RFBEmbeddedDisplayModel {
                 self.retryDelaySeconds = 1
                 self.image = image
                 self.frameSequence = frame.sequence
+                if self.status != .receiving {
+                    // First frame of this session: Windows may have turned its display off.
+                    self.worker?.wakeDisplay()
+                }
                 self.status = .receiving
             },
             onFailure: { [weak self] message in
@@ -413,6 +417,29 @@ private final class RFBEmbeddedDisplayWorker: @unchecked Sendable {
         } catch {
             // The read loop owns reconnect/recovery. A transient input write should
             // not block the UI while that loop repairs the stream.
+        }
+    }
+
+    /// Two button-less pointer moves: input that wakes a display Windows turned off while idle,
+    /// without clicking anything. Sent once the session is delivering frames, never during the
+    /// handshake, where QEMU closed the connection.
+    func wakeDisplay() {
+        lock.lock()
+        let activeClient = client
+        lock.unlock()
+        guard let activeClient, let serverInit = activeClient.serverInit else {
+            return
+        }
+
+        let x = max(0, serverInit.width / 2)
+        let y = max(0, serverInit.height / 2)
+        writeLock.lock()
+        defer { writeLock.unlock() }
+        do {
+            try activeClient.sendPointerEvent(buttonMask: 0, x: x, y: y)
+            try activeClient.sendPointerEvent(buttonMask: 0, x: min(x + 1, max(0, serverInit.width - 1)), y: y)
+        } catch {
+            // The read loop owns reconnects.
         }
     }
 

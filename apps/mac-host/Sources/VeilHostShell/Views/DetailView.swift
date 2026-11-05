@@ -79,6 +79,14 @@ struct DetailView: View {
         .onChange(of: vmModel.snapshot?.state) { _, _ in
             synchronizeWorkspacePresentation()
         }
+        .onChange(of: model.hasLiveAgentConnection) { _, isConnected in
+            // Losing the app connection leaves the launcher with nothing it can open, so fall back
+            // to the desktop. Regaining it waits for the first app frame (below) instead of
+            // pulling the user out of the desktop they are using.
+            if !isConnected {
+                synchronizeWorkspacePresentation()
+            }
+        }
         .onChange(of: model.mirrorSessions.contains { $0.latestFrame != nil }) { _, hasFirstAppFrame in
             if RuntimeWorkspacePresentationPolicy.shouldReturnToApps(
                 windowsInstalled: hasInstalledWindows,
@@ -108,7 +116,8 @@ struct DetailView: View {
         navigation.showsWindowsDesktop = RuntimeWorkspacePresentationPolicy.defaultShowsFullDesktop(
             windowsInstalled: hasInstalledWindows,
             runtimeState: vmModel.snapshot?.state,
-            hasDesktopDisplay: hasDesktopDisplay
+            hasDesktopDisplay: hasDesktopDisplay,
+            hasLiveAppConnection: model.hasLiveAgentConnection
         )
     }
 
@@ -134,12 +143,19 @@ struct DetailView: View {
 }
 
 enum RuntimeWorkspacePresentationPolicy {
+    /// Like a Parallels VM window, a running Windows shows its desktop. The app launcher replaces it
+    /// only when Windows apps can actually open as Mac windows, which needs the Veil agent's
+    /// connection; without it the launcher offers buttons that cannot work.
     static func defaultShowsFullDesktop(
         windowsInstalled: Bool,
         runtimeState: VMRuntimeState?,
-        hasDesktopDisplay: Bool
+        hasDesktopDisplay: Bool,
+        hasLiveAppConnection: Bool = false
     ) -> Bool {
-        !windowsInstalled && runtimeState == .running && hasDesktopDisplay
+        guard runtimeState == .running, hasDesktopDisplay else {
+            return false
+        }
+        return !windowsInstalled || !hasLiveAppConnection
     }
 
     static func shouldReturnToApps(
