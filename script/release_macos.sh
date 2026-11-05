@@ -154,6 +154,9 @@ stage_release_app() {
   chmod +x "$APP_BINARY"
   swift "$ROOT_DIR/script/generate_app_icon.swift" "$APP_ICON"
   cp -R "$PACKAGE_DIR/Resources/"*.lproj "$APP_RESOURCES/"
+  # Without Metadata.appintents a released Veil would carry its App Intents but show none in Shortcuts.
+  "$ROOT_DIR/script/extract_app_intents_metadata.sh" release "$build_binary" "$APP_RESOURCES" \
+    || fail "could not extract App Intents metadata; install Xcode on the release Mac."
   # The Windows engine is signed with the release identity and hardened runtime like the app.
   "$ROOT_DIR/script/bundle_qemu_runtime.sh" "$APP_RESOURCES/Runtime" "$SIGNING_IDENTITY" >/dev/null \
     || fail "could not bundle the Windows engine; install qemu and swtpm on the release Mac."

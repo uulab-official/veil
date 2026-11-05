@@ -34,6 +34,10 @@ chmod +x "$APP_BINARY"
 swift "$ROOT_DIR/script/generate_app_icon.swift" "$APP_ICON"
 # UI translations; SwiftUI looks string literals up in these Localizable.strings tables.
 cp -R "$ROOT_DIR/apps/mac-host/Resources/"*.lproj "$APP_RESOURCES/"
+# Shortcuts and Siri list Veil's App Intents only when the bundle carries Metadata.appintents, which
+# `swift build` does not produce on its own. A development build still runs without it, so warn rather than stop.
+"$ROOT_DIR/script/extract_app_intents_metadata.sh" debug "$BUILD_BINARY" "$APP_RESOURCES" \
+  || echo "warning: Veil was built without App Intents metadata; its actions will not appear in Shortcuts." >&2
 
 # Ship the Windows engine (QEMU, swtpm, Secure Boot firmware) inside the app. Bundling relinks and
 # re-signs ~30 libraries, so the result is cached until the script or the source binaries change.
