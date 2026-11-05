@@ -321,6 +321,8 @@ public struct QEMUWindowsBootPlanner: Sendable {
     /// bind a `hostfwd` port and a shared folder is not worth trading a bootable VM for.
     private let isSharedFolderHostPortAvailable: Bool
     private let configurationWarnings: [String]
+    /// Reads the system disk's format from its header, so a qcow2 disk and an older raw one both boot.
+    private let systemDiskFormat: @Sendable (String) -> QEMUDiskImageFormat
 
     public init(
         executablePath: String,
@@ -338,7 +340,8 @@ public struct QEMUWindowsBootPlanner: Sendable {
         audioDevice: QEMUWindowsAudioDevice = .intelHDA,
         sharedFolderTransport: QEMUWindowsSharedFolderTransport = .guestSMB,
         isSharedFolderHostPortAvailable: Bool = true,
-        configurationWarnings: [String] = []
+        configurationWarnings: [String] = [],
+        systemDiskFormat: @escaping @Sendable (String) -> QEMUDiskImageFormat = { QEMUDiskImageFormat.detect(atPath: $0) }
     ) {
         self.executablePath = executablePath
         self.isExecutableAvailable = isExecutableAvailable
@@ -356,6 +359,7 @@ public struct QEMUWindowsBootPlanner: Sendable {
         self.sharedFolderTransport = sharedFolderTransport
         self.isSharedFolderHostPortAvailable = isSharedFolderHostPortAvailable
         self.configurationWarnings = configurationWarnings
+        self.systemDiskFormat = systemDiskFormat
     }
 
     public func makePlan(for profile: VMProfile) throws -> QEMUWindowsBootPlan {
@@ -452,7 +456,7 @@ public struct QEMUWindowsBootPlanner: Sendable {
             "-smp", "\(cpuCount)",
             "-m", "\(memoryMB)M",
             "-device", QEMUWindowsBootPlan.usbControllerArgument,
-            "-drive", "if=none,id=system,format=raw,file=\(virtualDiskPath)",
+            "-drive", QEMUWindowsBootPlan.systemDriveArgument(path: virtualDiskPath, format: systemDiskFormat(virtualDiskPath)),
             "-device", "nvme,drive=system,serial=veil-system",
             "-netdev", "user,id=net0,\(userNetworkForwards.joined(separator: ","))",
             "-device", networkAdapter.deviceArgument,
@@ -1685,7 +1689,7 @@ private enum QEMUWindowsBootArgumentRewriter {
 
     static func lockSafeSystemDriveArgument(_ argument: String) -> String {
         guard argument.contains("id=system"),
-              argument.contains("format=raw"),
+              let format = [QEMUDiskImageFormat.raw, .qcow2].first(where: { argument.contains("format=\($0.rawValue),") }),
               let fileRange = argument.range(of: "file=") else {
             return argument
         }
@@ -1697,12 +1701,33 @@ private enum QEMUWindowsBootArgumentRewriter {
             return argument
         }
 
-        return "driver=raw,file.driver=file,file.locking=off,file.filename=\(pathString),if=none,id=system"
+        // Options other than the ones rebuilt here (the qcow2 node name) carry over unchanged.
+        let rebuilt: Set<String> = ["if=none", "id=system", "format=\(format.rawValue)"]
+        let carried = prefix
+            .split(separator: ",", omittingEmptySubsequences: true)
+            .map(String.init)
+            .filter { !rebuilt.contains($0) }
+            .map { "\($0)," }
+            .joined()
+        return "driver=\(format.rawValue),\(carried)file.driver=file,file.locking=off,file.filename=\(pathString),if=none,id=system"
     }
 }
 
 extension QEMUWindowsBootPlan {
     public static let installerAHCIControllerID = "ahci0"
+
+    /// The block node name of a qcow2 system disk. Snapshot jobs name this node so they leave the
+    /// raw UEFI variable store out; a raw disk cannot hold snapshots and keeps its old argument.
+    public static let systemDiskNodeName = "veil-system"
+
+    static func systemDriveArgument(path: String, format: QEMUDiskImageFormat) -> String {
+        switch format {
+        case .raw:
+            "if=none,id=system,format=raw,file=\(path)"
+        case .qcow2:
+            "if=none,id=system,format=qcow2,node-name=\(systemDiskNodeName),file=\(path)"
+        }
+    }
 
     /// The xHCI controller with eight USB 2 and eight USB 3 ports. QEMU's default has four of each,
     /// and the network adapter, keyboard, and tablet take three, so the installer and answer media

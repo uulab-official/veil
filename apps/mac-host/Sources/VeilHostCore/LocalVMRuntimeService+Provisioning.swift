@@ -70,7 +70,18 @@ extension LocalVMRuntimeService {
             throw CocoaError(.fileWriteInvalidFileName)
         }
 
-        if !diskAlreadyExists {
+        // A configured path keeps the format its extension names, so recreating an older `.img`
+        // disk keeps it raw; the default path is qcow2 when qemu-img is available.
+        if !diskAlreadyExists,
+           QEMUDiskImageFormat.detect(atPath: diskURL.path) == .qcow2,
+           let diskImageTool {
+            do {
+                try diskImageTool.createQCOW2(path: diskURL.path, sizeBytes: Int64(profile.diskGB) * 1_024 * 1_024 * 1_024)
+            } catch {
+                try? FileManager.default.removeItem(at: diskURL)
+                throw error
+            }
+        } else if !diskAlreadyExists {
             let didCreateDisk = FileManager.default.createFile(atPath: diskURL.path, contents: nil)
             guard didCreateDisk else {
                 throw CocoaError(.fileWriteUnknown)

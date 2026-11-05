@@ -29,11 +29,16 @@ extension LocalVMRuntimeService {
         return "veil-vm-diagnostics-\(timestamp).json"
     }
 
+    /// qcow2 like UTM whenever qemu-img is there to create it.
+    var newDiskFormat: QEMUDiskImageFormat {
+        diskImageTool == nil ? .raw : .qcow2
+    }
+
     func defaultVirtualDiskURL(for profile: VMProfile) -> URL {
         defaultHomeDirectory
             .appendingPathComponent("Virtual Machines", isDirectory: true)
             .appendingPathComponent("Veil", isDirectory: true)
-            .appendingPathComponent("\(profile.name).img")
+            .appendingPathComponent("\(profile.name).\(newDiskFormat.fileExtension)")
     }
 
     func defaultProfile() -> VMProfile {

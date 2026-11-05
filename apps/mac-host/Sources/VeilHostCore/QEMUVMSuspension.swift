@@ -237,10 +237,10 @@ public enum QEMUBootArgumentsFingerprint {
 
 /// Suspends a running QEMU/HVF Windows VM to a local memory-state file.
 ///
-/// QEMU's internal `savevm` snapshots need a qcow2 image, and Veil's default system disk is raw
-/// (`if=none,id=system,format=raw`), so suspend uses the migration path instead: pause the guest,
-/// stream RAM plus device state through `migrate` to a file, then quit the process. The raw disk is
-/// never rewritten, which is why this works on the shipping disk format.
+/// QEMU's internal `savevm` snapshots need a qcow2 image, and disks made by older Veil builds are raw,
+/// so suspend uses the migration path instead: pause the guest, stream RAM plus device state through
+/// `migrate` to a file, then quit the process. The disk is never rewritten, which is why this works on
+/// raw and qcow2 disks alike.
 public struct QEMUVMSuspensionController: Sendable {
     public static let defaultPollAttempts = 240
     public static let defaultPollIntervalNanoseconds: UInt64 = 500_000_000

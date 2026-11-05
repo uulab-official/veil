@@ -37,6 +37,16 @@ public enum QEMUQMPCommand: Equatable, Sendable {
     /// Escape hatch for monitor-only features that have no stable QMP equivalent, notably the
     /// `savevm`/`loadvm`/`delvm`/`info snapshots` internal-snapshot family.
     case humanMonitor(String)
+    /// Internal snapshot jobs limited to the system disk's format node. HMP `savevm` snapshots every
+    /// writable drive and refuses the raw UEFI variable store ("pflash1 ... does not support
+    /// snapshots"), so Veil names the one qcow2 node instead. Guest memory goes to the same node.
+    case snapshotSave(jobID: String, tag: String, node: String)
+    case snapshotLoad(jobID: String, tag: String, node: String)
+    case snapshotDelete(jobID: String, tag: String, node: String)
+    /// Progress of the snapshot jobs above; they report errors only here, not in their own reply.
+    case queryJobs
+    /// Removes a concluded job so its id can be reused.
+    case jobDismiss(jobID: String)
     case quit
 
     public var executeName: String {
@@ -55,6 +65,16 @@ public enum QEMUQMPCommand: Equatable, Sendable {
             "query-migrate"
         case .humanMonitor:
             "human-monitor-command"
+        case .snapshotSave:
+            "snapshot-save"
+        case .snapshotLoad:
+            "snapshot-load"
+        case .snapshotDelete:
+            "snapshot-delete"
+        case .queryJobs:
+            "query-jobs"
+        case .jobDismiss:
+            "job-dismiss"
         case .quit:
             "quit"
         }
@@ -77,6 +97,16 @@ public enum QEMUQMPCommand: Equatable, Sendable {
             "VM memory state save progress query"
         case .humanMonitor(let command):
             "QEMU monitor command '\(command)'"
+        case .snapshotSave(_, let tag, _):
+            "snapshot '\(tag)' save"
+        case .snapshotLoad(_, let tag, _):
+            "snapshot '\(tag)' restore"
+        case .snapshotDelete(_, let tag, _):
+            "snapshot '\(tag)' delete"
+        case .queryJobs:
+            "QEMU job progress query"
+        case .jobDismiss(let jobID):
+            "QEMU job '\(jobID)' dismissal"
         case .quit:
             "QEMU process quit"
         }
@@ -90,6 +120,12 @@ public enum QEMUQMPCommand: Equatable, Sendable {
             return ["uri": "exec:cat > \(Self.shellSingleQuoted(filePath))"]
         case .humanMonitor(let command):
             return ["command-line": command]
+        case .snapshotSave(let jobID, let tag, let node), .snapshotLoad(let jobID, let tag, let node):
+            return ["job-id": jobID, "tag": tag, "vmstate": node, "devices": [node]]
+        case .snapshotDelete(let jobID, let tag, let node):
+            return ["job-id": jobID, "tag": tag, "devices": [node]]
+        case .jobDismiss(let jobID):
+            return ["id": jobID]
         default:
             return nil
         }
@@ -126,6 +162,8 @@ public struct QEMUQMPReply: Equatable, Sendable {
     public var textReturn: String?
     public var statusReturn: String?
     public var isRunning: Bool?
+    /// `query-jobs` entries.
+    public var jobsReturn: [QEMUQMPJob]?
 
     public init(
         id: String?,
@@ -134,7 +172,8 @@ public struct QEMUQMPReply: Equatable, Sendable {
         errorMessage: String? = nil,
         textReturn: String? = nil,
         statusReturn: String? = nil,
-        isRunning: Bool? = nil
+        isRunning: Bool? = nil,
+        jobsReturn: [QEMUQMPJob]? = nil
     ) {
         self.id = id
         self.isSuccess = isSuccess
@@ -143,6 +182,25 @@ public struct QEMUQMPReply: Equatable, Sendable {
         self.textReturn = textReturn
         self.statusReturn = statusReturn
         self.isRunning = isRunning
+        self.jobsReturn = jobsReturn
+    }
+}
+
+/// One background job from `query-jobs`.
+public struct QEMUQMPJob: Equatable, Sendable {
+    public var id: String
+    public var status: String
+    /// Set when a concluded job failed.
+    public var error: String?
+
+    public init(id: String, status: String, error: String? = nil) {
+        self.id = id
+        self.status = status
+        self.error = error
+    }
+
+    public var isConcluded: Bool {
+        status == "concluded" || status == "null"
     }
 }
 
@@ -311,7 +369,13 @@ public struct QEMUQMPClient: QEMUQMPControlling {
                     isSuccess: true,
                     textReturn: returnValue as? String,
                     statusReturn: returnObject?["status"] as? String,
-                    isRunning: returnObject?["running"] as? Bool
+                    isRunning: returnObject?["running"] as? Bool,
+                    jobsReturn: (returnValue as? [[String: Any]])?.compactMap { job in
+                        guard let id = job["id"] as? String, let status = job["status"] as? String else {
+                            return nil
+                        }
+                        return QEMUQMPJob(id: id, status: status, error: job["error"] as? String)
+                    }
                 )
             }
     }

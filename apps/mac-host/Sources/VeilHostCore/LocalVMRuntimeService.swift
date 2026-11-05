@@ -21,6 +21,9 @@ public struct LocalVMRuntimeService: VMRuntimeService {
     let qemuLaunchProcessTerminator: @Sendable (Int32) -> Bool
     let firmwareVarsTemplatePaths: [String]
     let installationDiscarder: @Sendable (URL) throws -> Void
+    /// `nil` when no qemu-img is installed; new disks are then raw, as before qcow2.
+    let diskImageTool: QEMUDiskImageTool?
+    let snapshotController: QEMUSnapshotController
 
     public init(
         profileStore: any VMProfileStore = JSONVMProfileStore(),
@@ -40,7 +43,9 @@ public struct LocalVMRuntimeService: VMRuntimeService {
         qemuLaunchProcessIsRunning: @escaping @Sendable (Int32) -> Bool = LocalVMRuntimeService.processIsRunning,
         qemuLaunchProcessTerminator: @escaping @Sendable (Int32) -> Bool = LocalVMRuntimeService.terminateProcess,
         firmwareVarsTemplatePaths: [String]? = nil,
-        installationDiscarder: @escaping @Sendable (URL) throws -> Void = LocalVMRuntimeService.moveToTrash
+        installationDiscarder: @escaping @Sendable (URL) throws -> Void = LocalVMRuntimeService.moveToTrash,
+        diskImageTool: QEMUDiskImageTool? = QEMUDiskImageTool.located(),
+        snapshotController: QEMUSnapshotController = QEMUSnapshotController()
     ) {
         self.profileStore = profileStore
         self.defaultHomeDirectory = defaultHomeDirectory
@@ -59,6 +64,8 @@ public struct LocalVMRuntimeService: VMRuntimeService {
         self.qemuLaunchProcessIsRunning = qemuLaunchProcessIsRunning
         self.qemuLaunchProcessTerminator = qemuLaunchProcessTerminator
         self.installationDiscarder = installationDiscarder
+        self.diskImageTool = diskImageTool
+        self.snapshotController = snapshotController
         self.firmwareVarsTemplatePaths = firmwareVarsTemplatePaths
             ?? (
                 LocalQEMUWindowsBootPlanFactory.defaultSecureFirmwareVarsTemplatePaths(homeDirectory: defaultHomeDirectory)
