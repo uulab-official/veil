@@ -93,6 +93,8 @@ public sealed class AgentSession
                 MessageTypes.InputKey => await HandleKeyInputAsync(request, requestId, cancellationToken),
                 MessageTypes.InputText => await HandleTextInputAsync(request, requestId, cancellationToken),
                 MessageTypes.ClipboardTextSet => await HandleClipboardTextSetAsync(request, requestId, cancellationToken),
+                MessageTypes.ClipboardImageSet => await HandleClipboardImageSetAsync(request, requestId, cancellationToken),
+                MessageTypes.ClipboardFilesSet => await HandleClipboardFilesSetAsync(request, requestId, cancellationToken),
                 MessageTypes.NotificationListenerRequest => await HandleNotificationListenerRequestAsync(requestId, cancellationToken),
                 MessageTypes.SharedFolderRequest => await HandleSharedFolderRequestAsync(request, requestId, cancellationToken),
                 _ => AgentReplies.Direct(ErrorResponse(requestId, "unknown_message_type", $"Unsupported message type {type}"))
@@ -797,6 +799,100 @@ public sealed class AgentSession
         }
     }
 
+    private async Task<AgentReplies> HandleClipboardImageSetAsync(
+        JsonObject request,
+        string? requestId,
+        CancellationToken cancellationToken
+    )
+    {
+        var origin = request["origin"]?.GetValue<string>();
+        if (origin == "guest")
+        {
+            // Same rule as text: an echo of a guest-originated image has no request to acknowledge.
+            return AgentReplies.Direct();
+        }
+
+        if (origin != "host")
+        {
+            return AgentReplies.Direct(ErrorResponse(requestId, "invalid_message", "clipboard.image.set requires origin host or guest."));
+        }
+
+        var (image, rejection) = ClipboardImageMessage.Parse(request);
+        if (image is null)
+        {
+            return AgentReplies.Direct(ErrorResponse(
+                requestId,
+                rejection?.Code ?? "invalid_message",
+                rejection?.Message ?? "clipboard.image.set was rejected."
+            ));
+        }
+
+        try
+        {
+            await desktop.SetClipboardImagePngAsync(image.Png, image.Sha256, cancellationToken);
+            return AgentReplies.Direct(OperationAck(requestId));
+        }
+        catch (Exception error) when (error is not OperationCanceledException)
+        {
+            return AgentReplies.Direct(ErrorResponse(requestId, "clipboard_image_failed", error.Message));
+        }
+    }
+
+    /// <summary>
+    /// Places files the host already copied into the shared folder on the clipboard. Every entry is
+    /// checked before any is used, so one bad path rejects the paste instead of pasting part of it.
+    /// </summary>
+    private async Task<AgentReplies> HandleClipboardFilesSetAsync(
+        JsonObject request,
+        string? requestId,
+        CancellationToken cancellationToken
+    )
+    {
+        if (request["origin"]?.GetValue<string>() != "host")
+        {
+            return AgentReplies.Direct(ErrorResponse(requestId, "invalid_message", "clipboard.files.set only travels from the host."));
+        }
+
+        if (request["shareName"]?.GetValue<string>() != SharedFolderProbe.DefaultShareName
+            || request["relativePaths"] is not JsonArray relativePaths
+            || relativePaths.Count < 1
+            || relativePaths.Count > ClipboardFilePaths.MaxFileCount)
+        {
+            return AgentReplies.Direct(ErrorResponse(
+                requestId,
+                "invalid_shared_file_path",
+                $"clipboard.files.set requires shareName {SharedFolderProbe.DefaultShareName} and 1 to {ClipboardFilePaths.MaxFileCount} relativePaths."
+            ));
+        }
+
+        var fullPaths = new List<string>(relativePaths.Count);
+        foreach (var node in relativePaths)
+        {
+            var relativePath = node is JsonValue value && value.TryGetValue<string>(out var text) ? text : null;
+            if (!ClipboardFilePaths.TryResolve(relativePath, SharedFolderProbe.DefaultGuestDirectoryPath, out var fullPath)
+                || !desktop.IsRegularSharedFile(fullPath))
+            {
+                return AgentReplies.Direct(ErrorResponse(
+                    requestId,
+                    "invalid_shared_file_path",
+                    $"Every clipboard file must be a regular file inside {SharedFolderProbe.DefaultGuestDirectoryPath}\\{ClipboardFilePaths.DirectoryName}."
+                ));
+            }
+
+            fullPaths.Add(fullPath);
+        }
+
+        try
+        {
+            await desktop.SetClipboardFilesAsync(fullPaths, cancellationToken);
+            return AgentReplies.Direct(OperationAck(requestId));
+        }
+        catch (Exception error) when (error is not OperationCanceledException)
+        {
+            return AgentReplies.Direct(ErrorResponse(requestId, "clipboard_files_failed", error.Message));
+        }
+    }
+
     private JsonObject HealthResponse(string? requestId)
     {
         var hasPackageIdentity = packageIdentityProbe.HasPackageIdentity;
@@ -820,6 +916,10 @@ public sealed class AgentSession
                 ["windowCapture"] = true,
                 ["input"] = true,
                 ["clipboardText"] = true,
+                // Optional on the wire: an older agent omits them and the host keeps images and files on
+                // the Mac instead of sending messages this agent would reject as unknown.
+                ["clipboardImage"] = true,
+                ["clipboardFiles"] = true,
                 // Advertises the send-only binary frame endpoint. The host only opens it when this is
                 // true, so a host that cannot decode the binary format keeps receiving JSON frames.
                 ["binaryFrameChannel"] = true,

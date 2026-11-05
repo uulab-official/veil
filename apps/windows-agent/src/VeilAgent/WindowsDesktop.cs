@@ -44,6 +44,7 @@ public sealed class WindowsDesktop : IWindowsDesktop
     private readonly object clipboardGate = new();
     private string? lastHostClipboardText;
     private int lastHostClipboardSequence;
+    private string? lastHostClipboardImageSha256;
 
     public Task<LaunchedWindow> LaunchNotepadAsync(CancellationToken cancellationToken)
     {
@@ -579,6 +580,81 @@ public sealed class WindowsDesktop : IWindowsDesktop
             lastHostClipboardText = null;
             return true;
         }
+    }
+
+    public uint GetClipboardSequenceNumber() =>
+        OperatingSystem.IsWindows() ? WindowsClipboardFormats.SequenceNumber() : 0;
+
+    public Task<byte[]?> GetClipboardImagePngAsync(CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (!OperatingSystem.IsWindows())
+        {
+            throw new PlatformNotSupportedException("The Veil Windows agent must run inside Windows.");
+        }
+
+        return Task.Run(WindowsClipboardFormats.ReadImagePng, cancellationToken);
+    }
+
+    public Task SetClipboardImagePngAsync(byte[] png, string sha256, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (!OperatingSystem.IsWindows())
+        {
+            throw new PlatformNotSupportedException("The Veil Windows agent must run inside Windows.");
+        }
+
+        return Task.Run(() =>
+        {
+            // Recorded before the write: the clipboard watcher runs concurrently and could otherwise read the
+            // new image before its hash is known and broadcast it back to the host as a guest copy.
+            lock (clipboardGate)
+            {
+                lastHostClipboardImageSha256 = sha256;
+            }
+
+            try
+            {
+                WindowsClipboardFormats.WriteImage(png);
+            }
+            catch
+            {
+                lock (clipboardGate)
+                {
+                    lastHostClipboardImageSha256 = null;
+                }
+
+                throw;
+            }
+        }, cancellationToken);
+    }
+
+    public bool TryConsumeHostClipboardImageEcho(string sha256)
+    {
+        lock (clipboardGate)
+        {
+            if (lastHostClipboardImageSha256 != sha256)
+            {
+                return false;
+            }
+
+            lastHostClipboardImageSha256 = null;
+            return true;
+        }
+    }
+
+    public Task SetClipboardFilesAsync(IReadOnlyList<string> fullPaths, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (!OperatingSystem.IsWindows())
+        {
+            throw new PlatformNotSupportedException("The Veil Windows agent must run inside Windows.");
+        }
+
+        return Task.Run(() => WindowsClipboardFormats.WriteFileDrop(fullPaths), cancellationToken);
     }
 
     private static bool TryParseWindowId(string windowId, out IntPtr hwnd)
