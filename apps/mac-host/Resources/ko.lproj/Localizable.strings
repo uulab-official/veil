@@ -298,3 +298,9 @@
 "Windows is running, but the app connection did not recover after two attempts. Open recovery to repair Veil Agent." = "Windows는 실행 중이지만 두 번 시도해도 앱 연결이 복구되지 않았습니다. 복구를 열어 Veil 에이전트를 고치세요.";
 "Veil is setting up its tools in Windows. Approve the Windows prompt if one appears." = "Veil이 Windows에 도구를 설치하고 있습니다. Windows 확인 창이 뜨면 허용하세요.";
 "Veil tools setup sent. Windows apps appear here once Windows answers." = "Veil 도구 설치를 보냈습니다. Windows가 응답하면 여기에 Windows 앱이 나타납니다.";
+
+/* Clipboard sharing */
+"Share Clipboard with Windows" = "Windows와 클립보드 공유";
+"Copy Files into Windows on Paste" = "붙여넣을 때 파일을 Windows로 복사";
+"Veil could not paste into Windows" = "Veil이 Windows에 붙여넣지 못했습니다";
+"The clipboard could not be sent, so nothing was pasted rather than pasting older content." = "클립보드를 보내지 못해 이전 내용을 붙여넣는 대신 아무것도 붙여넣지 않았습니다.";

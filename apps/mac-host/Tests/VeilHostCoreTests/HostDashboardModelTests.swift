@@ -3839,6 +3839,8 @@ private final class FakeDashboardService: HostDashboardService {
     private(set) var keyInputs: [InputKeyEvent] = []
     private(set) var textInputs: [InputTextEvent] = []
     private(set) var clipboardTexts: [ClipboardTextSet] = []
+    private(set) var clipboardImages: [ClipboardImageSet] = []
+    private(set) var clipboardFiles: [ClipboardFilesSet] = []
     private(set) var frameSubscriptions: [String] = []
     private(set) var frameUnsubscriptions: [String] = []
 
@@ -4024,6 +4026,22 @@ private final class FakeDashboardService: HostDashboardService {
         clipboardTexts.append(clipboard)
     }
 
+    func sendClipboardImage(_ clipboard: ClipboardImageSet) async throws {
+        if let error {
+            throw error
+        }
+
+        clipboardImages.append(clipboard)
+    }
+
+    func sendClipboardFiles(_ clipboard: ClipboardFilesSet) async throws {
+        if let error {
+            throw error
+        }
+
+        clipboardFiles.append(clipboard)
+    }
+
     func subscribeWindowFrames(windowId: String) async throws {
         try await beforeFrameSubscription?()
         if let frameSubscriptionError {
@@ -4159,6 +4177,13 @@ private extension AgentHealthResponse {
                 clipboardText: true
             )
         )
+    }
+
+    static var imageClipboardReady: AgentHealthResponse {
+        var response = clipboardReady
+        response.capabilities.clipboardImage = true
+        response.capabilities.clipboardFiles = true
+        return response
     }
 
     static var clipboardReadyWithSparsePackageStatus: AgentHealthResponse {
@@ -5340,3 +5365,124 @@ struct GuestEventRateLimitingTests {
         #expect(accepted == 360)
     }
 }
+
+@Suite("Clipboard images and files")
+@MainActor
+struct ClipboardImageAndFilesModelTests {
+    /// The 2×2 PNG in `harness/protocol-fixtures/clipboard.image.set.*.json`.
+    private static let png = Data(
+        base64Encoded: "iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAEUlEQVR4nGP4z8DwH4QZYAwAR8oH+WdZbrcAAAAASUVORK5CYII="
+    )!
+
+    private func guestImage(sequence: Int) throws -> ClipboardImageSet {
+        try ClipboardImagePayload(png: Self.png).message(
+            requestId: "evt_clipboard_\(sequence)",
+            origin: "guest",
+            sequence: sequence
+        )
+    }
+
+    @Test("sends a host image with the shared clipboard sequence")
+    func sendsHostImage() async throws {
+        let service = FakeDashboardService(health: .imageClipboardReady)
+        let model = HostDashboardModel(service: service)
+        await model.load()
+
+        #expect(await model.sendHostClipboardText("first") == .sent)
+        #expect(await model.sendHostClipboardImage(png: Self.png) == .sent)
+
+        let image = try #require(service.clipboardImages.first)
+        #expect(image.sequence == 2)
+        #expect(image.origin == "host")
+        #expect(image.width == 2 && image.height == 2)
+        #expect(try ClipboardImagePayload(message: image).png == Self.png)
+    }
+
+    @Test("refuses to paste an image an older agent cannot receive")
+    func refusesImageWithoutCapability() async {
+        let service = FakeDashboardService(health: .clipboardReady)
+        let model = HostDashboardModel(service: service)
+        await model.load()
+
+        // `.skipped` would let the paste shortcut through and paste Windows' own stale clipboard.
+        guard case .failed = await model.sendHostClipboardImage(png: Self.png) else {
+            Issue.record("Expected an image paste without the capability to fail.")
+            return
+        }
+        #expect(service.clipboardImages.isEmpty)
+    }
+
+    @Test("refuses an image above the byte bound without sending it")
+    func refusesOversizedImage() async {
+        let service = FakeDashboardService(health: .imageClipboardReady)
+        let model = HostDashboardModel(service: service)
+        await model.load()
+
+        var oversized = Self.png
+        oversized.append(Data(count: ClipboardImagePayload.maximumByteCount))
+        guard case .failed = await model.sendHostClipboardImage(png: oversized) else {
+            Issue.record("Expected an oversized image to fail.")
+            return
+        }
+        #expect(service.clipboardImages.isEmpty)
+        #expect(model.clipboardSequence == 0)
+    }
+
+    @Test("text and image share one guest sequence space")
+    func sharesGuestSequence() async throws {
+        let model = HostDashboardModel(service: FakeDashboardService(health: .imageClipboardReady))
+        await model.load()
+
+        #expect(model.receiveClipboardImage(try guestImage(sequence: 9)))
+        #expect(model.latestGuestClipboardImage?.png == Self.png)
+        #expect(!model.receiveClipboardText(
+            ClipboardTextSet(requestId: "evt_clipboard_8", origin: "guest", sequence: 8, text: "older")
+        ))
+        #expect(!model.receiveClipboardImage(try guestImage(sequence: 9)))
+    }
+
+    @Test("rejects a guest image whose hash does not match its bytes")
+    func rejectsTamperedImage() async throws {
+        let model = HostDashboardModel(service: FakeDashboardService(health: .imageClipboardReady))
+        await model.load()
+
+        var image = try guestImage(sequence: 1)
+        image.sha256 = String(repeating: "0", count: 64)
+        #expect(!model.receiveClipboardImage(image))
+        #expect(model.latestGuestClipboardImage == nil)
+        // A rejected message must not advance the sequence, or a guest could block later real updates.
+        #expect(model.lastGuestClipboardSequence == 0)
+    }
+
+    @Test("consumes a guest image event from the event stream")
+    func consumesGuestImageEvent() async throws {
+        let model = HostDashboardModel(service: FakeDashboardService(health: .imageClipboardReady))
+        await model.load()
+        let message = try JSONEncoder.veilProtocol.encode(guestImage(sequence: 3))
+        var results: [HostProtocolMessageResult] = []
+
+        await model.consumeProtocolMessages(from: StaticHostEventSource(messages: [message, message])) { result in
+            results.append(result)
+        }
+
+        #expect(results == [.handledClipboardImage(sequence: 3), .ignored])
+    }
+
+    @Test("names shared-folder files to an agent that can place them")
+    func sendsClipboardFiles() async throws {
+        let service = FakeDashboardService(health: .imageClipboardReady)
+        let model = HostDashboardModel(service: service)
+        await model.load()
+
+        let outcome = await model.sendHostClipboardFiles(
+            shareName: "VeilShared",
+            relativePaths: [#"Veil Clipboard\20261105-140102-1A2B3C\report.pdf"#]
+        )
+
+        #expect(outcome == .sent)
+        let files = try #require(service.clipboardFiles.first)
+        #expect(files.origin == "host")
+        #expect(files.relativePaths == [#"Veil Clipboard\20261105-140102-1A2B3C\report.pdf"#])
+    }
+}
+

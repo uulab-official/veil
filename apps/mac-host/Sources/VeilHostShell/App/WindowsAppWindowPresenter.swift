@@ -15,7 +15,7 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
     var onMouseInput: ((String, String, Int, Int) -> Void)?
     var onKeyInput: ((String, String, String, Int, [String]) -> Void)?
     var onTextInput: ((String, String) -> Void)?
-    var onPasteShortcut: ((String, String, Int, [String], String) -> Void)?
+    var onPasteShortcut: ((String, String, Int, [String], HostPasteboardContent) -> Void)?
     /// `(appId, windowId, fileName, contentBase64)`. Carries the window id so a failure that only Windows
     /// can report can still be shown on the window the file was dropped onto.
     var onFileDrop: ((String, String, String, String) -> Void)?
@@ -377,8 +377,8 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
                 onTextInput: { [weak self] windowId, text in
                     self?.onTextInput?(windowId, text)
                 },
-                onPasteShortcut: { [weak self] windowId, key, windowsVirtualKey, modifiers, text in
-                    self?.onPasteShortcut?(windowId, key, windowsVirtualKey, modifiers, text)
+                onPasteShortcut: { [weak self] windowId, key, windowsVirtualKey, modifiers, content in
+                    self?.onPasteShortcut?(windowId, key, windowsVirtualKey, modifiers, content)
                 },
                 onDropProviders: { [weak self] providers in
                     self?.loadDroppedFiles(
@@ -571,7 +571,7 @@ private struct WindowsAppMirrorView: View {
     var onMouseInput: (String, String, Int, Int) -> Void
     var onKeyInput: (String, String, String, Int, [String]) -> Void
     var onTextInput: (String, String) -> Void
-    var onPasteShortcut: (String, String, Int, [String], String) -> Void
+    var onPasteShortcut: (String, String, Int, [String], HostPasteboardContent) -> Void
     /// Called synchronously on the main actor with the accepted providers. Loading them is the presenter's job.
     var onDropProviders: ([NSItemProvider]) -> Void
     var onDropRefused: (WindowsAppFileDropRefusal) -> Void
@@ -640,7 +640,7 @@ private struct InputCaptureView: NSViewRepresentable {
     var onMouseInput: (String, String, Int, Int) -> Void
     var onKeyInput: (String, String, String, Int, [String]) -> Void
     var onTextInput: (String, String) -> Void
-    var onPasteShortcut: (String, String, Int, [String], String) -> Void
+    var onPasteShortcut: (String, String, Int, [String], HostPasteboardContent) -> Void
 
     func makeNSView(context: Context) -> InputCaptureNSView {
         InputCaptureNSView()
@@ -660,7 +660,7 @@ private final class InputCaptureNSView: NSView {
     var onMouseInput: ((String, String, Int, Int) -> Void)?
     var onKeyInput: ((String, String, String, Int, [String]) -> Void)?
     var onTextInput: ((String, String) -> Void)?
-    var onPasteShortcut: ((String, String, Int, [String], String) -> Void)?
+    var onPasteShortcut: ((String, String, Int, [String], HostPasteboardContent) -> Void)?
     private let keyboardMapper = MacKeyboardInputMapper()
     private let textInputRouter = MacTextInputRouter()
 
@@ -776,7 +776,10 @@ private final class InputCaptureNSView: NSView {
             return super.performKeyEquivalent(with: event)
         }
 
+        // With sharing off the shortcut falls through to a plain Ctrl+V, so Windows pastes its own clipboard
+        // and nothing on the Mac pasteboard is read.
         if isPasteShortcut(event),
+           ClipboardSharingPreferences.isSharingEnabled(),
            let session,
            session.connectionMode == .agent,
            let input = keyboardMapper.input(
@@ -784,8 +787,11 @@ private final class InputCaptureNSView: NSView {
                 keyCode: event.keyCode,
                 modifiers: macKeyboardModifiers(from: event)
            ),
-           let pasteboardText = NSPasteboard.general.string(forType: .string) {
-            onPasteShortcut?(session.id, input.key, input.windowsVirtualKey, input.modifiers, pasteboardText)
+           let content = HostPasteboardContent.read(
+                from: .general,
+                includeFiles: ClipboardSharingPreferences.isFilePasteEnabled()
+           ) {
+            onPasteShortcut?(session.id, input.key, input.windowsVirtualKey, input.modifiers, content)
             return true
         }
 

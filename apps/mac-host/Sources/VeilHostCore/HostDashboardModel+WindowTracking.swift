@@ -72,6 +72,11 @@ extension HostDashboardModel {
             return receiveClipboardText(clipboard)
                 ? .handledClipboardText(sequence: clipboard.sequence)
                 : .ignored
+        case .clipboardImageSet:
+            let clipboard = try decoder.decode(ClipboardImageSet.self, from: message)
+            return receiveClipboardImage(clipboard)
+                ? .handledClipboardImage(sequence: clipboard.sequence)
+                : .ignored
         case .windowFrameUnchanged:
             let event = try decoder.decode(WindowFrameUnchangedEvent.self, from: message)
             return receiveWindowFrameUnchanged(event)

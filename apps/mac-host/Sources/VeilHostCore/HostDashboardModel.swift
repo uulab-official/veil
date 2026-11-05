@@ -46,6 +46,9 @@ public final class HostDashboardModel {
     public internal(set) var pendingLaunchAppId: String?
     public internal(set) var clipboardSequence = 0
     public internal(set) var latestGuestClipboardText: String?
+    /// The latest verified guest image. Its hash is what lets a later ⌘V of the same picture be
+    /// recognised as Windows' own content rather than a new copy.
+    public internal(set) var latestGuestClipboardImage: ClipboardImagePayload?
     public internal(set) var lastGuestClipboardSequence = 0
     public internal(set) var latestWindowsNotifications: [WindowsNotificationReceivedEvent] = []
     public internal(set) var restorableAppIds: [String] = []
@@ -165,6 +168,14 @@ public final class HostDashboardModel {
 
     public var canSendHostClipboardText: Bool {
         hasLiveAgentConnection && health?.capabilities.clipboardText == true
+    }
+
+    public var canSendHostClipboardImage: Bool {
+        hasLiveAgentConnection && health?.capabilities.clipboardImage == true
+    }
+
+    public var canSendHostClipboardFiles: Bool {
+        hasLiveAgentConnection && health?.capabilities.clipboardFiles == true
     }
 
     public var canRunAppWindowProof: Bool {

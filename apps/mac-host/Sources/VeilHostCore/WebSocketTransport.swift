@@ -48,6 +48,7 @@ public struct URLSessionWebSocketTransport: HostTransport, HostEventSource {
             throw VeilHostError.missingReply("reply timeout must be finite and nonnegative")
         }
         let task = session.webSocketTask(with: url)
+        task.maximumMessageSize = Self.maximumMessageByteCount
         return try await withTaskCancellationHandler {
             try Task.checkCancellation()
             task.resume()
@@ -162,6 +163,7 @@ public struct URLSessionWebSocketTransport: HostTransport, HostEventSource {
             || type == MessageType.windowUpdated.rawValue
             || type == MessageType.windowClosed.rawValue
             || type == MessageType.clipboardTextSet.rawValue
+            || type == MessageType.clipboardImageSet.rawValue
             || type == MessageType.notificationReceived.rawValue
             || type == MessageType.windowFrameUnchanged.rawValue
     }
@@ -176,6 +178,11 @@ public struct URLSessionWebSocketTransport: HostTransport, HostEventSource {
     /// the guest has already forgotten. There is no policy that avoids that under a flood, so the choice is
     /// which failure to take, and losing events beats exhausting memory.
     public static let eventBufferMessageCount = 1_024
+
+    /// Largest single message either socket will receive. URLSession's default is 1 MiB, and a guest
+    /// clipboard image of up to 8 MiB arrives as about 11.2 MB of base64 JSON; at the default the receive
+    /// fails and the event stream would reconnect on every large copy instead of delivering it.
+    public static let maximumMessageByteCount = 32 * 1_024 * 1_024
 
     /// Enqueues one control event and turns a lossy buffer eviction into a reconnectable stream error.
     /// The event stream carries lifecycle messages, so silently dropping one is worse than reconnecting:
@@ -205,6 +212,7 @@ public struct URLSessionWebSocketTransport: HostTransport, HostEventSource {
             bufferingPolicy: .bufferingNewest(Self.eventBufferMessageCount)
         ) { continuation in
             let task = session.webSocketTask(with: url)
+            task.maximumMessageSize = Self.maximumMessageByteCount
             task.resume()
 
             continuation.onTermination = { @Sendable _ in

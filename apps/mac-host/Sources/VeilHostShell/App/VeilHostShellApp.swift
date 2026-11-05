@@ -36,6 +36,10 @@ struct VeilHostShellApp: App {
     @State var oneClickAppWindowPresentationGate = OneClickAppWindowPresentationGate()
     @State var oneClickAppFrameMutationGate = OneClickAppFrameMutationGate()
     let automaticRestoreMaximumAttempts = 3
+    /// Read directly by the paste path and the guest pump through ``ClipboardSharingPreferences``; these only
+    /// drive the Apps menu switches. See `docs/protocol.md` "Host controls".
+    @AppStorage(ClipboardSharingPreferences.sharingEnabledKey) var clipboardSharingEnabled = true
+    @AppStorage(ClipboardSharingPreferences.filePasteEnabledKey) var clipboardFilePasteEnabled = true
 
     init() {
         let runtimeBooter = AppRuntimeBooterFactory.make()
@@ -306,6 +310,12 @@ struct VeilHostShellApp: App {
                     closeAllWindowsAppWindows()
                 }
                 .disabled(model.mirrorSessions.isEmpty)
+
+                Divider()
+
+                Toggle("Share Clipboard with Windows", isOn: $clipboardSharingEnabled)
+                Toggle("Copy Files into Windows on Paste", isOn: $clipboardFilePasteEnabled)
+                    .disabled(!clipboardSharingEnabled)
             }
         }
     }

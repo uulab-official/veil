@@ -587,6 +587,10 @@ public struct VeilHostClient: HostDashboardService, Sendable {
     /// unconfirmed delivery. Comfortably above the guest's 250 ms clipboard retry budget,
     /// short enough that a stalled guest cannot make typing feel broken.
     public static let operationAckTimeoutSeconds: TimeInterval = 2
+    /// A clipboard image is up to 11 MB of JSON that the guest decodes and converts to a bitmap before it
+    /// can acknowledge, so it gets longer than a keystroke. Still bounded: a paste that never confirms is
+    /// reported rather than waited on.
+    public static let clipboardImageAckTimeoutSeconds: TimeInterval = 10
 
     public init(
         transport: any HostTransport,
@@ -1357,6 +1361,14 @@ public struct VeilHostClient: HostDashboardService, Sendable {
         try await sendAcknowledged(encoder.encode(clipboard))
     }
 
+    public func sendClipboardImage(_ clipboard: ClipboardImageSet) async throws {
+        try await sendAcknowledged(encoder.encode(clipboard), replyTimeout: Self.clipboardImageAckTimeoutSeconds)
+    }
+
+    public func sendClipboardFiles(_ clipboard: ClipboardFilesSet) async throws {
+        try await sendAcknowledged(encoder.encode(clipboard))
+    }
+
     public func subscribeWindowFrames(windowId: String) async throws {
         try await sendAcknowledged(
             encoder.encode(
@@ -1384,7 +1396,10 @@ public struct VeilHostClient: HostDashboardService, Sendable {
     /// own code, and a matching positive `operation.ack` confirms it. Only agents that have not
     /// advertised acknowledgements use legacy delivery. Silence from a negotiated agent is
     /// unconfirmed delivery, especially for clipboard writes that precede a paste shortcut.
-    private func sendAcknowledged(_ message: Data) async throws {
+    private func sendAcknowledged(
+        _ message: Data,
+        replyTimeout: TimeInterval = VeilHostClient.operationAckTimeoutSeconds
+    ) async throws {
         try Task.checkCancellation()
         let dispatchKey = operationDispatchKey(for: message)
         await operationDispatchGate.acquire(key: dispatchKey)
@@ -1409,7 +1424,7 @@ public struct VeilHostClient: HostDashboardService, Sendable {
             let replies = try await transport.send(
                 acknowledgedMessage,
                 expectedReplies: 1,
-                replyTimeout: Self.operationAckTimeoutSeconds
+                replyTimeout: replyTimeout
             )
             try Task.checkCancellation()
 
