@@ -134,6 +134,8 @@ extension VeilHostShellApp {
                         syncLauncherWindowVisibility()
                     case .handledClipboardText:
                         syncGuestClipboardToPasteboard()
+                    case .handledClipboardImage:
+                        syncGuestClipboardImageToPasteboard()
                     case .handledWindowsNotification(let notificationId):
                         presentWindowsNotification(notificationId: notificationId)
                     case .ignored:

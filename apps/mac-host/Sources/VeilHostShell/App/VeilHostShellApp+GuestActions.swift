@@ -114,16 +114,24 @@ extension VeilHostShellApp {
                 await model.sendTextInput(windowId: windowId, text: text)
             }
         }
-        windowsAppWindowPresenter.onPasteShortcut = { windowId, key, windowsVirtualKey, modifiers, text in
+        windowsAppWindowPresenter.onPasteShortcut = { windowId, key, windowsVirtualKey, modifiers, content in
             Task { @MainActor in
                 // Ctrl+V does not fail when the clipboard write did. It pastes whatever Windows had before,
-                // into the user's document, with nothing to indicate the text is stale. So a clipboard write
+                // into the user's document, with nothing to indicate the content is stale. So a clipboard write
                 // that could not be delivered cancels the paste instead of completing it with wrong content.
-                let clipboardOutcome = await model.sendHostClipboardText(text)
+                let clipboardOutcome: HostClipboardSendOutcome
+                switch content {
+                case .text(let text):
+                    clipboardOutcome = await model.sendHostClipboardText(text)
+                case .image(let png):
+                    clipboardOutcome = await model.sendHostClipboardImage(png: png)
+                case .files(let urls):
+                    clipboardOutcome = await sendHostClipboardFiles(urls)
+                }
                 if case .failed(let reason) = clipboardOutcome {
                     windowsAppWindowPresenter.showWindowsAppMessage(
-                        title: "Veil could not paste into Windows",
-                        detail: "The clipboard could not be sent, so nothing was pasted rather than pasting older text. \(reason)",
+                        title: String(localized: "Veil could not paste into Windows"),
+                        detail: String(localized: "The clipboard could not be sent, so nothing was pasted rather than pasting older content.") + " \(reason)",
                         windowId: windowId
                     )
                     return
@@ -146,15 +154,74 @@ extension VeilHostShellApp {
         }
     }
 
+    /// Copies the Finder selection into the shared folder, then names it to the guest. The copy happens here,
+    /// at paste time, so only files the user chose to paste ever reach Windows.
+    @MainActor
+    func sendHostClipboardFiles(_ urls: [URL]) async -> HostClipboardSendOutcome {
+        let transport = QEMUWindowsSharedFolderTransport.guestSMB
+        let mount = VMSharedFolderHostMountProbe.read(transport: transport)
+        guard mount.isMounted, let mountPath = mount.mountPath else {
+            return .failed(reason: ClipboardFilePasteRefusal.sharedFolderUnavailable.localizedDescription)
+        }
+        guard model.canSendHostClipboardFiles else {
+            return .failed(reason: HostDashboardServiceError.clipboardFormatUnsupported.localizedDescription)
+        }
+
+        let plan: ClipboardFilePastePlan
+        do {
+            plan = try ClipboardFilePaste.plan(fileURLs: urls)
+        } catch {
+            return .failed(reason: error.localizedDescription)
+        }
+
+        // Up to 512 MiB over SMB; off the main actor so the window keeps drawing while it copies.
+        let shareRoot = URL(filePath: mountPath, directoryHint: .isDirectory)
+        let copyFailure = await Task.detached(priority: .userInitiated) { () -> String? in
+            do {
+                try ClipboardFilePaste.copy(plan, intoShareAt: shareRoot)
+                return nil
+            } catch {
+                return error.localizedDescription
+            }
+        }.value
+        if let copyFailure {
+            return .failed(reason: copyFailure)
+        }
+
+        return await model.sendHostClipboardFiles(
+            shareName: QEMUWindowsSharedFolderTransport.shareName,
+            relativePaths: plan.relativePaths
+        )
+    }
+
+    /// Guest updates reach the Mac pasteboard only while Veil is the active app. A Windows app that sets the
+    /// clipboard in the background would otherwise replace what the user just copied in a Mac app. A
+    /// background update is dropped rather than queued, so switching back to Veil never surprises either.
+    @MainActor
+    private var acceptsGuestClipboardUpdate: Bool {
+        ClipboardSharingPreferences.isSharingEnabled() && NSApp.isActive
+    }
+
     @MainActor
     func syncGuestClipboardToPasteboard() {
-        guard let text = model.latestGuestClipboardText else {
+        guard acceptsGuestClipboardUpdate,
+              let text = model.latestGuestClipboardText else {
             return
         }
 
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
         pasteboard.setString(text, forType: .string)
+    }
+
+    @MainActor
+    func syncGuestClipboardImageToPasteboard() {
+        guard acceptsGuestClipboardUpdate,
+              let image = model.latestGuestClipboardImage else {
+            return
+        }
+
+        HostPasteboardContent.writeImage(image, to: .general)
     }
 
     func showWindowsDisplay() {

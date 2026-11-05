@@ -272,6 +272,7 @@ public enum HostProtocolMessageResult: Equatable, Sendable {
     case handledWindowFrameUnchanged(windowId: String)
     case handledWindowClosed(windowId: String)
     case handledClipboardText(sequence: Int)
+    case handledClipboardImage(sequence: Int)
     case handledWindowsNotification(notificationId: String)
     case ignored
 }

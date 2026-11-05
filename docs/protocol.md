@@ -76,6 +76,8 @@ Response:
     "displayResize": true,
     "binaryFrameChannel": true,
     "sharedFolder": true,
+    "clipboardImage": true,
+    "clipboardFiles": true,
     "packageIdentity": false
   },
   "sharedFolder": {
@@ -832,8 +834,8 @@ Legacy input events may still omit it; see
 
 An agent may advertise `capabilities.operationAcks: true` in its health response.
 After this negotiation, `input.mouse`, `input.key`, `input.text`,
-`clipboard.text.set`, `window.frame.subscribe`, and `window.frame.unsubscribe`
-receive one success acknowledgement or a structured `error` reply:
+`clipboard.text.set`, `clipboard.image.set`, `clipboard.files.set`, `window.frame.subscribe`, and
+`window.frame.unsubscribe` receive one success acknowledgement or a structured `error` reply:
 
 ```json
 {
@@ -980,6 +982,134 @@ Loop prevention rule:
 
 Implementation note: the host syncs macOS text to the Windows guest before forwarded paste shortcuts. The Windows agent also observes text clipboard changes and broadcasts `clipboard.text.set` with `origin=guest`. The macOS host accepts only increasing guest sequences and writes them to the macOS pasteboard. Host-origin updates are consumed by the agent once so they are not echoed back as guest updates.
 
+## Clipboard Image
+
+Host to guest, and guest to host with `"origin": "guest"`:
+
+```json
+{
+  "type": "clipboard.image.set",
+  "requestId": "req_clipboard_7",
+  "origin": "host",
+  "sequence": 7,
+  "format": "png",
+  "width": 2,
+  "height": 2,
+  "byteLength": 74,
+  "sha256": "d28c139bba718d60154960eaca75535a5cc5b59fe2153e998a29251e8e5f4667",
+  "pngBase64": "iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAEUlEQVR4nGP4z8DwH4QZYAwAR8oH+WdZbrcAAAAASUVORK5CYII="
+}
+```
+
+An agent advertises `capabilities.clipboardImage: true`. The field is optional: an older agent decodes as
+absent and the host keeps image clipboards on the Mac instead of sending a message the agent cannot route.
+
+Rules:
+
+- `format` is always `png`. PNG is the one lossless format both pasteboards carry natively (macOS
+  `public.png`, the Windows registered `PNG` format), so neither side has to guess a colour space or quality.
+  The bytes must start with the PNG signature; anything else is rejected rather than handed to an image decoder.
+- `byteLength` is the decoded PNG size, 1...8,388,608 bytes (8 MiB), and must equal the decoded length of
+  `pngBase64`. Base64 makes the frame about 11.2 MB, so the host raises its WebSocket receive limit to
+  32 MiB; the URLSession default of 1 MiB would otherwise end the event stream on the first large copy.
+- `width` and `height` are 1...16,384 pixels and `width * height` is at most 33,554,432. A small PNG can
+  decode to an enormous bitmap, so the receiver checks the dimensions in the IHDR chunk against these fields
+  and against the bound before decoding.
+- `sha256` is the lowercase hex SHA-256 of the decoded PNG bytes. A mismatch is rejected. The hash is what
+  stops repeats: a receiver that applies a remote image remembers its hash, and its own clipboard watcher
+  treats an image with that hash as already seen instead of echoing it back. The guest also skips a
+  broadcast whose hash equals the last one it sent, because Windows bumps the clipboard sequence number
+  when an app re-sets identical content.
+- Text and image updates share one `sequence` space per origin. They are two kinds of one clipboard, so a
+  receiver that accepted guest image 9 must reject a later guest text 8.
+- When the Windows clipboard holds both text and an image (a spreadsheet range, a rich-text selection), the
+  guest sends only the text. That matches what the user most often means and keeps one copy from replacing
+  the Mac clipboard with a picture of a table. The host instead follows the order the source app listed its
+  pasteboard types in, because macOS apps list their richest representation first: Finder puts file URLs
+  before the names it also writes as text, and a browser's Copy Image puts the bitmap before the address.
+- On the guest, a host image is placed as both `PNG` and `CF_DIB`, so apps that only understand device
+  independent bitmaps (Paint, most Win32 apps) can paste it. The guest reads `PNG` first and converts
+  `CF_DIBV5`/`CF_DIB` to PNG otherwise.
+- Host-origin writes receive `operation.ack` under negotiated acknowledgements, exactly like
+  `clipboard.text.set`, and the host must not send the paste shortcut after an unconfirmed write.
+- Failures are `clipboard_image_failed` (the Windows clipboard could not be taken or written) and
+  `clipboard_image_too_large` (a bound above was exceeded). A malformed field is `invalid_message`.
+
+Fixtures: `harness/protocol-fixtures/clipboard.image.set.host.json`,
+`harness/protocol-fixtures/clipboard.image.set.guest.json`.
+
+## Clipboard Files
+
+Host to guest only:
+
+```json
+{
+  "type": "clipboard.files.set",
+  "requestId": "req_clipboard_8",
+  "origin": "host",
+  "sequence": 8,
+  "shareName": "VeilShared",
+  "relativePaths": [
+    "Veil Clipboard\\20261105-140102-1A2B3C\\report.pdf"
+  ]
+}
+```
+
+An agent advertises `capabilities.clipboardFiles: true`.
+
+### Why files travel through the shared folder
+
+File bytes never ride this message. When the user copies files in Finder and presses ⌘V in a mirrored
+Windows window, the host copies exactly those files into a fresh batch folder inside the guest-served shared
+folder (`/Volumes/VeilShared/Veil Clipboard/<batch>/` on the Mac, `C:\VeilShared\Veil Clipboard\<batch>\` in
+Windows), then names them here. The guest places them on its clipboard as `CF_HDROP` with a copy drop effect
+and the host sends Ctrl+V, so Explorer or the target app copies them out like any local paste.
+
+The alternatives were rejected on trust-boundary grounds:
+
+- **Bytes over the control channel**, like `file.open.request`, would put gigabytes through a JSON socket
+  and the host's 50 MB drop bound exists precisely to avoid that.
+- **Sending host paths** and letting the guest read them needs a Mac folder visible to Windows. The only way
+  to get one is macOS File Sharing, which publishes on every interface (see Shared Folder), and it would
+  expose more than the copied files.
+- **Guest-to-host files** (Explorer copy, Finder paste) are deliberately not synchronised. The guest would
+  choose which paths the Mac pasteboard points at, and a guest-chosen file URL is the one clipboard payload
+  that can make Finder act on host files. A user moves guest files to the Mac through the shared folder,
+  which they can see and choose from.
+
+### Rules
+
+- Only `origin: "host"` exists. A guest-origin `clipboard.files.set` is rejected with `invalid_message`.
+- `shareName` must equal the share the guest publishes. The guest resolves paths against its own
+  `guestDirectoryPath`; the host never sends an absolute guest path.
+- `relativePaths` holds 1...64 entries. Each is at most 240 characters, uses `\` separators, starts
+  with `Veil Clipboard\`, and contains no empty, `.` or `..` component, no drive letter or root, no `:`
+  (alternate data streams), and no characters Windows forbids in file names. After resolution the full path
+  must still be inside `<guestDirectoryPath>\Veil Clipboard\`, must exist, must be a regular file and must
+  not be a reparse point. One bad entry rejects the whole message, so a partial paste never happens.
+- The host copies regular files only: no folders, no symbolic links, at most 64 files and 512 MiB in total.
+  It refuses the paste with a message rather than copying part of the selection. Folder copy is left out of
+  v1 because a recursive copy is where symlinks and package bundles would carry more than the user picked.
+- Each paste gets a new batch folder named `yyyyMMdd-HHmmss-<6 hex>`. The host keeps the three newest batches
+  and deletes older ones it created, and only folders matching that pattern inside `Veil Clipboard`.
+- Requires the shared folder to be mounted on the Mac. Without it the host shows why and sends no paste
+  shortcut, rather than pasting the file names as text.
+- Failures are `clipboard_files_failed` (the clipboard could not be written) and
+  `invalid_shared_file_path` (an entry failed the checks above).
+
+Fixture: `harness/protocol-fixtures/clipboard.files.set.host.json`.
+
+### Host controls
+
+Clipboard sharing is on by default, matching the text behaviour Veil already shipped, and can be turned off
+from the Apps menu (**Share Clipboard with Windows**). Off means no clipboard message is sent or accepted in
+either direction; ⌘V still forwards Ctrl+V, so Windows pastes its own clipboard. **Copy Files into Windows on
+Paste** is a separate switch, also on by default, because it writes into the shared folder.
+
+Guest-to-host updates are applied to the Mac pasteboard only while Veil is the active app. A Windows app
+that sets the clipboard in the background would otherwise replace what the user just copied in a Mac app
+with no warning. A background update is dropped, not queued.
+
 ## Windows Notifications
 
 Host request:
@@ -1073,6 +1203,9 @@ to a user nor pre-empt them:
 | `input_mouse_failed` | Posting a mouse message threw or Windows declined to apply it. |
 | `input_key_failed` | Posting a key message threw or Windows declined to apply it. |
 | `input_text_failed` | Posting committed text threw or Windows declined to apply it. |
+| `clipboard_image_failed` | The guest could not read, convert, or write an image on the Windows clipboard. |
+| `clipboard_image_too_large` | A `clipboard.image.set` exceeded the byte or pixel bounds in Clipboard Image. |
+| `clipboard_files_failed` | The guest could not place the shared-folder files on the Windows clipboard. |
 | `clipboard_text_failed` | The guest could not take the Windows clipboard. Routine rather than exotic: the guest retries `OpenClipboard` for 250 ms and any clipboard manager or Office instance can hold it longer. |
 
 The fire-and-forget observation and silent `false`-return gaps recorded in

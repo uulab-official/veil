@@ -85,6 +85,14 @@ public struct FallbackHostDashboardService: HostDashboardService, Sendable {
         try await primary.sendClipboardText(clipboard)
     }
 
+    public func sendClipboardImage(_ clipboard: ClipboardImageSet) async throws {
+        try await primary.sendClipboardImage(clipboard)
+    }
+
+    public func sendClipboardFiles(_ clipboard: ClipboardFilesSet) async throws {
+        try await primary.sendClipboardFiles(clipboard)
+    }
+
     public func subscribeWindowFrames(windowId: String) async throws {
         try await primary.subscribeWindowFrames(windowId: windowId)
     }

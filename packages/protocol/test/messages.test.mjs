@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import test from "node:test";
@@ -10,6 +11,9 @@ import {
   validateAgentHealthResponse,
   validateAppLaunchAcceptance,
   validateClipboardTextSet,
+  validateClipboardImageSet,
+  validateClipboardFilesSet,
+  MAX_CLIPBOARD_IMAGE_BYTES,
   validateFileOpenRequest,
   validateSharedFileOpenRequest,
   validateFileOpenResponse,
@@ -78,6 +82,9 @@ test("parses every stable fixture", async () => {
     "operation.ack.json",
     "clipboard.text.set.host.json",
     "clipboard.text.set.guest.json",
+    "clipboard.image.set.host.json",
+    "clipboard.image.set.guest.json",
+    "clipboard.files.set.host.json",
     "notification.listener.request.json",
     "notification.listener.response.json",
     "notification.received.json",
@@ -529,6 +536,51 @@ test("validates guest clipboard text fixture", async () => {
   assert.equal(clipboard.origin, "guest");
   assert.equal(clipboard.sequence, 43);
   assert.equal(clipboard.text, "hello from Windows");
+});
+
+test("validates host and guest clipboard image fixtures against their PNG bytes", async () => {
+  for (const name of ["clipboard.image.set.host.json", "clipboard.image.set.guest.json"]) {
+    const clipboard = validateClipboardImageSet(await readFixture(name));
+    const bytes = Buffer.from(clipboard.pngBase64, "base64");
+
+    assert.equal(bytes.length, clipboard.byteLength);
+    assert.equal(createHash("sha256").update(bytes).digest("hex"), clipboard.sha256);
+    assert.deepEqual([...bytes.subarray(0, 8)], [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    assert.equal(bytes.readUInt32BE(16), clipboard.width);
+    assert.equal(bytes.readUInt32BE(20), clipboard.height);
+  }
+});
+
+test("rejects clipboard images above the byte and pixel bounds", async () => {
+  const clipboard = await readFixture("clipboard.image.set.host.json");
+
+  assert.throws(
+    () => validateClipboardImageSet({ ...clipboard, byteLength: MAX_CLIPBOARD_IMAGE_BYTES + 1 }),
+    /byteLength/
+  );
+  assert.throws(() => validateClipboardImageSet({ ...clipboard, width: 16_384, height: 16_384 }), /pixel/);
+  assert.throws(() => validateClipboardImageSet({ ...clipboard, format: "jpeg" }), /format/);
+  assert.throws(() => validateClipboardImageSet({ ...clipboard, sha256: "ABC" }), /sha256/);
+});
+
+test("validates the clipboard files fixture and rejects paths that escape the batch folder", async () => {
+  const clipboard = validateClipboardFilesSet(await readFixture("clipboard.files.set.host.json"));
+  assert.equal(clipboard.relativePaths.length, 1);
+
+  for (const relativePath of [
+    "Veil Clipboard\\..\\..\\Windows\\win.ini",
+    "C:\\Windows\\win.ini",
+    "Veil Clipboard\\batch\\file.txt:secret",
+    "Other\\file.txt",
+    "Veil Clipboard\\\\file.txt"
+  ]) {
+    assert.throws(
+      () => validateClipboardFilesSet({ ...clipboard, relativePaths: [relativePath] }),
+      /Clipboard file path/,
+      relativePath
+    );
+  }
+  assert.throws(() => validateClipboardFilesSet({ ...clipboard, origin: "guest" }), /only travel from the host/);
 });
 
 test("validates file open request and response fixtures", async () => {

@@ -24,6 +24,8 @@ export const MessageType = Object.freeze({
   DisplayResizeRequest: "display.resize.request",
   DisplayResizeResponse: "display.resize.response",
   ClipboardTextSet: "clipboard.text.set",
+  ClipboardImageSet: "clipboard.image.set",
+  ClipboardFilesSet: "clipboard.files.set",
   NotificationListenerRequest: "notification.listener.request",
   NotificationListenerResponse: "notification.listener.response",
   NotificationReceived: "notification.received",
@@ -39,6 +41,15 @@ export const MessageType = Object.freeze({
 // One `input.text` message becomes one posted window message per UTF-16 code unit on the guest, so
 // the payload is bounded here rather than letting a single message flood the target HWND.
 export const MAX_INPUT_TEXT_UTF16_LENGTH = 4096;
+
+// Clipboard image bounds. The byte bound keeps one copy from monopolising the control socket; the pixel
+// bound exists because a small PNG can decode to an enormous bitmap.
+export const MAX_CLIPBOARD_IMAGE_BYTES = 8 * 1024 * 1024;
+export const MAX_CLIPBOARD_IMAGE_DIMENSION = 16_384;
+export const MAX_CLIPBOARD_IMAGE_PIXELS = 33_554_432;
+export const MAX_CLIPBOARD_FILE_COUNT = 64;
+export const MAX_CLIPBOARD_FILE_RELATIVE_PATH_LENGTH = 240;
+export const CLIPBOARD_FILES_DIRECTORY = "Veil Clipboard";
 
 const knownTypes = new Set(Object.values(MessageType));
 const mouseEvents = new Set(["leftDown", "leftUp", "rightDown", "rightUp", "move", "scroll"]);
@@ -122,6 +133,14 @@ export function validateAgentHealthResponse(response) {
   if (response.capabilities.sharedFolder !== undefined
     && typeof response.capabilities.sharedFolder !== "boolean") {
     throw new TypeError("Agent health response field 'capabilities.sharedFolder' must be a boolean.");
+  }
+
+  // Optional so an older agent keeps image and file clipboards on the Mac instead of receiving a message
+  // it cannot route.
+  for (const field of ["clipboardImage", "clipboardFiles"]) {
+    if (response.capabilities[field] !== undefined && typeof response.capabilities[field] !== "boolean") {
+      throw new TypeError(`Agent health response field 'capabilities.${field}' must be a boolean.`);
+    }
   }
 
   // Optional so a host connected to an older agent can disable the resize affordance instead of
@@ -705,6 +724,90 @@ export function validateOperationAck(ack) {
   }
 
   return ack;
+}
+
+/// One image clipboard update. See `docs/protocol.md` "Clipboard Image". Validates the envelope only;
+/// receivers still check the decoded bytes against `byteLength`, `sha256`, and the PNG IHDR dimensions.
+export function validateClipboardImageSet(clipboard) {
+  if (!clipboard || clipboard.type !== MessageType.ClipboardImageSet) {
+    throw new TypeError("Clipboard image must use type clipboard.image.set.");
+  }
+
+  requireNonEmptyString(clipboard.requestId, "requestId", "Clipboard image");
+  if (!clipboardOrigins.has(clipboard.origin)) {
+    throw new TypeError(`Clipboard image origin '${clipboard.origin}' is not supported.`);
+  }
+  requirePositiveInteger(clipboard.sequence, "sequence", "Clipboard image");
+  if (clipboard.format !== "png") {
+    throw new TypeError("Clipboard image field 'format' must be 'png'.");
+  }
+  for (const field of ["width", "height"]) {
+    const value = clipboard[field];
+    if (!Number.isInteger(value) || value < 1 || value > MAX_CLIPBOARD_IMAGE_DIMENSION) {
+      throw new TypeError(`Clipboard image field '${field}' must be between 1 and ${MAX_CLIPBOARD_IMAGE_DIMENSION}.`);
+    }
+  }
+  if (clipboard.width * clipboard.height > MAX_CLIPBOARD_IMAGE_PIXELS) {
+    throw new TypeError("Clipboard image exceeds the maximum pixel count.");
+  }
+  if (!Number.isInteger(clipboard.byteLength)
+    || clipboard.byteLength < 1
+    || clipboard.byteLength > MAX_CLIPBOARD_IMAGE_BYTES) {
+    throw new TypeError(`Clipboard image field 'byteLength' must be between 1 and ${MAX_CLIPBOARD_IMAGE_BYTES}.`);
+  }
+  if (typeof clipboard.sha256 !== "string" || !/^[0-9a-f]{64}$/.test(clipboard.sha256)) {
+    throw new TypeError("Clipboard image field 'sha256' must be 64 lowercase hex characters.");
+  }
+  requireNonEmptyString(clipboard.pngBase64, "pngBase64", "Clipboard image");
+
+  return clipboard;
+}
+
+const forbiddenWindowsFileNameCharacters = /[<>:"/|?*\u0000-\u001f]/;
+
+/// Host-to-guest file paste through the shared folder. See `docs/protocol.md` "Clipboard Files".
+export function validateClipboardFilesSet(clipboard) {
+  if (!clipboard || clipboard.type !== MessageType.ClipboardFilesSet) {
+    throw new TypeError("Clipboard files must use type clipboard.files.set.");
+  }
+
+  requireNonEmptyString(clipboard.requestId, "requestId", "Clipboard files");
+  if (clipboard.origin !== "host") {
+    throw new TypeError("Clipboard files only travel from the host.");
+  }
+  requirePositiveInteger(clipboard.sequence, "sequence", "Clipboard files");
+  requireNonEmptyString(clipboard.shareName, "shareName", "Clipboard files");
+  if (!Array.isArray(clipboard.relativePaths)
+    || clipboard.relativePaths.length < 1
+    || clipboard.relativePaths.length > MAX_CLIPBOARD_FILE_COUNT) {
+    throw new TypeError(`Clipboard files field 'relativePaths' must hold 1 to ${MAX_CLIPBOARD_FILE_COUNT} entries.`);
+  }
+  for (const path of clipboard.relativePaths) {
+    requireClipboardFileRelativePath(path);
+  }
+
+  return clipboard;
+}
+
+function requireClipboardFileRelativePath(path) {
+  if (typeof path !== "string"
+    || path.length === 0
+    || path.length > MAX_CLIPBOARD_FILE_RELATIVE_PATH_LENGTH) {
+    throw new TypeError(`Clipboard file path must be 1 to ${MAX_CLIPBOARD_FILE_RELATIVE_PATH_LENGTH} characters.`);
+  }
+
+  const components = path.split("\\");
+  if (components.length < 2 || components[0] !== CLIPBOARD_FILES_DIRECTORY) {
+    throw new TypeError(`Clipboard file path '${path}' must start with '${CLIPBOARD_FILES_DIRECTORY}\\'.`);
+  }
+  for (const component of components) {
+    if (component.length === 0
+      || component === "."
+      || component === ".."
+      || forbiddenWindowsFileNameCharacters.test(component)) {
+      throw new TypeError(`Clipboard file path '${path}' has an unsafe component.`);
+    }
+  }
 }
 
 function requireResizeDimension(value, fieldName) {

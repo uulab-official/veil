@@ -18,6 +18,8 @@
     "windowResize": true,
     "displayResize": true,
     "operationAcks": true,
+    "clipboardImage": true,
+    "clipboardFiles": true,
     "packageIdentity": false
   },
   "packageIdentityStatus": {

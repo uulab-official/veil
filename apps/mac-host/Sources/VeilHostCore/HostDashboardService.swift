@@ -4,12 +4,15 @@ import Observation
 
 public enum HostDashboardServiceError: Error, LocalizedError, Equatable, Sendable {
     case textInputUnsupported
+    case clipboardFormatUnsupported
     case agentEndpointUnavailable(endpoint: String, detail: String, nextActions: [String])
 
     public var errorDescription: String? {
         switch self {
         case .textInputUnsupported:
             "This Windows agent connection cannot accept committed text input."
+        case .clipboardFormatUnsupported:
+            "This Windows agent connection cannot accept images or files on the clipboard. Repair the app connection to update Veil's Windows tools."
         case .agentEndpointUnavailable(_, let detail, _):
             detail
         }
@@ -31,6 +34,8 @@ public protocol HostDashboardService: Sendable {
     func sendKeyInput(_ input: InputKeyEvent) async throws
     func sendTextInput(_ input: InputTextEvent) async throws
     func sendClipboardText(_ clipboard: ClipboardTextSet) async throws
+    func sendClipboardImage(_ clipboard: ClipboardImageSet) async throws
+    func sendClipboardFiles(_ clipboard: ClipboardFilesSet) async throws
     func subscribeWindowFrames(windowId: String) async throws
     func unsubscribeWindowFrames(windowId: String) async throws
     func waitForAgentConnection(endpoint: String, timeoutSeconds: Int) async -> AgentConnectionWaitReport
@@ -42,6 +47,16 @@ public extension HostDashboardService {
     /// swallowed no-op would look like typed Korean simply vanishing.
     func sendTextInput(_ input: InputTextEvent) async throws {
         throw HostDashboardServiceError.textInputUnsupported
+    }
+
+    /// Default for services that predate image and file clipboards. Throws for the same reason as
+    /// `sendTextInput`: a paste shortcut after a silent no-op would paste stale Windows content.
+    func sendClipboardImage(_ clipboard: ClipboardImageSet) async throws {
+        throw HostDashboardServiceError.clipboardFormatUnsupported
+    }
+
+    func sendClipboardFiles(_ clipboard: ClipboardFilesSet) async throws {
+        throw HostDashboardServiceError.clipboardFormatUnsupported
     }
 
     func restoreApp(appId: String) async throws -> WindowsAppLaunchResult {

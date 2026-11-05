@@ -443,3 +443,37 @@
 "Create and Start" = "만들고 시작";
 "Other Virtual Machines" = "다른 가상 머신";
 "Started %@ (QEMU PID %d)." = "%@을(를) 시작했습니다(QEMU PID %d).";
+/* Clipboard sharing */
+"Share Clipboard with Windows" = "Windows와 클립보드 공유";
+"Copy Files into Windows on Paste" = "붙여넣을 때 파일을 Windows로 복사";
+"Veil could not paste into Windows" = "Veil이 Windows에 붙여넣지 못했습니다";
+"The clipboard could not be sent, so nothing was pasted rather than pasting older content." = "클립보드를 보내지 못해 이전 내용을 붙여넣는 대신 아무것도 붙여넣지 않았습니다.";
+
+/* Shortcuts (App Intents). Titles shared with the menus are listed above. */
+"Resume Windows" = "Windows 재개";
+"App" = "앱";
+"Open ${app}" = "${app} 열기";
+"Starts Windows in Veil, or resumes the suspended session." = "Veil에서 Windows를 시작하거나 일시 중단된 세션을 재개합니다.";
+"Shuts down Windows in Veil." = "Veil에서 Windows를 종료합니다.";
+"Saves the running Windows session so it can resume where it left off." = "실행 중인 Windows 세션을 저장해 멈춘 곳에서 재개할 수 있게 합니다.";
+"Resumes a suspended Windows session." = "일시 중단된 Windows 세션을 재개합니다.";
+"Opens a Windows app as a Mac window, starting Windows first if needed." = "Windows 앱을 Mac 창으로 엽니다. 필요하면 Windows를 먼저 시작합니다.";
+"Shutting down Windows closes the Windows app windows that are open. Continue?" = "Windows를 종료하면 열려 있는 Windows 앱 창이 닫힙니다. 계속할까요?";
+"Veil is still opening. Try the shortcut again in a moment." = "Veil이 아직 열리는 중입니다. 잠시 후 단축어를 다시 실행하십시오.";
+"Veil cannot run Windows on this Mac yet. Open Veil to finish setup." = "이 Mac에서 아직 Windows를 실행할 수 없습니다. Veil을 열어 설정을 마치십시오.";
+"Windows could not start." = "Windows를 시작하지 못했습니다.";
+"Windows is running." = "Windows가 실행 중입니다.";
+"Windows is already shut down." = "Windows가 이미 종료되어 있습니다.";
+"Windows did not shut down." = "Windows가 종료되지 않았습니다.";
+"Windows is shut down." = "Windows를 종료했습니다.";
+"Windows is already suspended." = "Windows가 이미 일시 중단되어 있습니다.";
+"Windows is not running, so there is nothing to suspend." = "Windows가 실행 중이 아니어서 일시 중단할 것이 없습니다.";
+"Windows could not be suspended." = "Windows를 일시 중단하지 못했습니다.";
+"Windows is suspended." = "Windows를 일시 중단했습니다.";
+"Windows is already running." = "Windows가 이미 실행 중입니다.";
+"There is no suspended Windows session to resume." = "재개할 일시 중단된 Windows 세션이 없습니다.";
+"Windows could not be resumed." = "Windows를 재개하지 못했습니다.";
+"That Windows app is no longer available." = "해당 Windows 앱을 더 이상 사용할 수 없습니다.";
+"Windows is not installed yet. Open Veil to finish setup." = "Windows가 아직 설치되지 않았습니다. Veil을 열어 설정을 마치십시오.";
+"Opening %@ in Windows." = "Windows에서 %@ 여는 중입니다.";
+"%@ %@" = "%1$@ %2$@";

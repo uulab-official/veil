@@ -26,6 +26,8 @@ public enum MessageType: String, Codable, Sendable {
     case displayResizeRequest = "display.resize.request"
     case displayResizeResponse = "display.resize.response"
     case clipboardTextSet = "clipboard.text.set"
+    case clipboardImageSet = "clipboard.image.set"
+    case clipboardFilesSet = "clipboard.files.set"
     case notificationListenerRequest = "notification.listener.request"
     case notificationListenerResponse = "notification.listener.response"
     case notificationReceived = "notification.received"
@@ -106,6 +108,13 @@ public struct AgentCapabilities: Codable, Equatable, Sendable {
     /// Optional so an agent that predates acknowledgements decodes as `nil` and the host keeps the
     /// fire-and-forget semantics it was built on instead of waiting on a reply that never comes.
     public var operationAcks: Bool? = nil
+    /// True when the agent accepts and broadcasts `clipboard.image.set`.
+    ///
+    /// Optional so an older agent decodes as `nil` and image clipboards stay on the Mac instead of being
+    /// sent as a message the agent would answer with `unknown_message_type`.
+    public var clipboardImage: Bool? = nil
+    /// True when the agent can place shared-folder files on the Windows clipboard (`clipboard.files.set`).
+    public var clipboardFiles: Bool? = nil
 }
 
 public struct PackageIdentityStatus: Codable, Equatable, Sendable {
@@ -829,6 +838,72 @@ public struct ClipboardTextSet: Codable, Equatable, Sendable {
         self.origin = origin
         self.sequence = sequence
         self.text = text
+    }
+}
+
+/// One PNG clipboard image. See `docs/protocol.md` "Clipboard Image"; ``ClipboardImagePayload`` builds and
+/// verifies these, so code outside it should not read `pngBase64` directly.
+public struct ClipboardImageSet: Codable, Equatable, Sendable {
+    public var type: MessageType
+    public var requestId: String
+    public var origin: String
+    public var sequence: Int
+    public var format: String
+    public var width: Int
+    public var height: Int
+    public var byteLength: Int
+    public var sha256: String
+    public var pngBase64: String
+
+    public init(
+        type: MessageType = .clipboardImageSet,
+        requestId: String,
+        origin: String,
+        sequence: Int,
+        format: String = "png",
+        width: Int,
+        height: Int,
+        byteLength: Int,
+        sha256: String,
+        pngBase64: String
+    ) {
+        self.type = type
+        self.requestId = requestId
+        self.origin = origin
+        self.sequence = sequence
+        self.format = format
+        self.width = width
+        self.height = height
+        self.byteLength = byteLength
+        self.sha256 = sha256
+        self.pngBase64 = pngBase64
+    }
+}
+
+/// Host-to-guest file paste. The files are already in the shared folder; this only names them, relative to
+/// the share, so no host path ever crosses the protocol. See `docs/protocol.md` "Clipboard Files".
+public struct ClipboardFilesSet: Codable, Equatable, Sendable {
+    public var type: MessageType
+    public var requestId: String
+    public var origin: String
+    public var sequence: Int
+    public var shareName: String
+    public var relativePaths: [String]
+
+    public init(
+        type: MessageType = .clipboardFilesSet,
+        requestId: String,
+        origin: String = "host",
+        sequence: Int,
+        shareName: String,
+        relativePaths: [String]
+    ) {
+        self.type = type
+        self.requestId = requestId
+        self.origin = origin
+        self.sequence = sequence
+        self.shareName = shareName
+        self.relativePaths = relativePaths
     }
 }
 

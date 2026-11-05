@@ -164,6 +164,84 @@ extension HostDashboardModel {
         }
     }
 
+    /// Sends a Mac pasteboard image. Same delivery contract as ``sendHostClipboardText(_:)``, except that an
+    /// agent without the capability is `.failed` rather than `.skipped`: pasting Windows' own clipboard when
+    /// the user copied a picture on the Mac is the stale paste that outcome exists to prevent.
+    public func sendHostClipboardImage(png: Data) async -> HostClipboardSendOutcome {
+        guard canSendHostClipboardImage else {
+            return .failed(reason: HostDashboardServiceError.clipboardFormatUnsupported.localizedDescription)
+        }
+
+        let payload: ClipboardImagePayload
+        do {
+            payload = try ClipboardImagePayload(png: png)
+        } catch {
+            return .failed(reason: error.localizedDescription)
+        }
+
+        let nextSequence = clipboardSequence + 1
+        do {
+            try await service.sendClipboardImage(
+                payload.message(requestId: "req_clipboard_\(nextSequence)", origin: "host", sequence: nextSequence)
+            )
+            clipboardSequence = nextSequence
+            return .sent
+        } catch {
+            return .failed(reason: userMessage(for: error))
+        }
+    }
+
+    /// Names files the shell has already copied into the shared folder. See ``ClipboardFilePaste``.
+    public func sendHostClipboardFiles(shareName: String, relativePaths: [String]) async -> HostClipboardSendOutcome {
+        guard canSendHostClipboardFiles else {
+            return .failed(reason: HostDashboardServiceError.clipboardFormatUnsupported.localizedDescription)
+        }
+
+        let nextSequence = clipboardSequence + 1
+        do {
+            try await service.sendClipboardFiles(
+                ClipboardFilesSet(
+                    requestId: "req_clipboard_\(nextSequence)",
+                    sequence: nextSequence,
+                    shareName: shareName,
+                    relativePaths: relativePaths
+                )
+            )
+            clipboardSequence = nextSequence
+            return .sent
+        } catch {
+            return .failed(reason: userMessage(for: error))
+        }
+    }
+
+    /// Accepts a guest image only after ``ClipboardImagePayload`` has verified it. Text and image share one
+    /// guest sequence space, so an image cannot be overtaken by an older text update or the reverse.
+    public func receiveClipboardImage(_ clipboard: ClipboardImageSet, receivedAt: Date = Date()) -> Bool {
+        guard clipboard.origin == "guest",
+              clipboard.sequence > lastGuestClipboardSequence else {
+            return false
+        }
+
+        let payload: ClipboardImagePayload
+        do {
+            payload = try ClipboardImagePayload(message: clipboard)
+        } catch {
+            VeilLog.agent.notice(
+                "Rejected a guest clipboard image: \(error.localizedDescription, privacy: .public)"
+            )
+            return false
+        }
+
+        guard guestClipboardRateLimiter.allows(at: receivedAt) else {
+            VeilLog.agent.notice("Rate limited a guest clipboard image.")
+            return false
+        }
+
+        latestGuestClipboardImage = payload
+        lastGuestClipboardSequence = clipboard.sequence
+        return true
+    }
+
     public func receiveClipboardText(_ clipboard: ClipboardTextSet, receivedAt: Date = Date()) -> Bool {
         guard clipboard.origin == "guest",
               clipboard.sequence > lastGuestClipboardSequence else {

@@ -30,6 +30,8 @@ public static class MessageTypes
     public const string InputKey = "input.key";
     public const string InputText = "input.text";
     public const string ClipboardTextSet = "clipboard.text.set";
+    public const string ClipboardImageSet = "clipboard.image.set";
+    public const string ClipboardFilesSet = "clipboard.files.set";
     public const string OperationAck = "operation.ack";
     public const string NotificationListenerRequest = "notification.listener.request";
     public const string NotificationListenerResponse = "notification.listener.response";
