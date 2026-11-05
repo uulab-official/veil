@@ -446,6 +446,39 @@ struct QEMUWindowsBootPlanTests {
         #expect(plan.arguments.containsSequence(["-device", "usb-storage,drive=drivers"]))
     }
 
+    @Test("attaches the downloaded virtio-win ISO from Application Support as driver media")
+    func attachesDownloadedVirtioWinMedia() throws {
+        let mediaPath = "/Users/test/Library/Application Support/Veil/Downloads/\(VirtioWinDriverMedia.fileName)"
+        var profile = VMProfile.defaultWindows11Arm(createdAt: Date(timeIntervalSince1970: 1_782_752_400))
+        profile.installerMediaPath = "/Users/test/Library/Application Support/Veil/Downloads/Win11_Arm64.iso"
+        profile.driverMediaPath = mediaPath
+        profile.virtualDiskPath = "/Users/test/Virtual Machines/Veil/Windows 11 Arm.img"
+        profile.sharedFolderPath = "/Users/test/Veil Shared"
+
+        let plan = try LocalQEMUWindowsBootPlanFactory.makePlan(
+            for: profile,
+            architecture: "arm64",
+            minimumOSSupported: true,
+            providerProbe: VMRuntimeProviderProbe(
+                environment: [:],
+                fileExists: { $0 == "/opt/homebrew/bin/qemu-system-aarch64" },
+                executableVersion: { _ in "QEMU emulator version 11.0.2" }
+            ),
+            fileExists: { path in
+                path == "/opt/homebrew/share/qemu/edk2-aarch64-code.fd"
+                    || path == "/opt/homebrew/share/qemu/edk2-arm-vars.fd"
+                    || path == "/Users/test/Virtual Machines/Veil/uefi-vars.fd"
+                    || path == "/opt/homebrew/bin/swtpm"
+            }
+        )
+
+        #expect(plan.networkAdapter == .virtioNetPCI)
+        #expect(plan.arguments.containsSequence(["-device", "virtio-net-pci,netdev=net0"]))
+        #expect(!plan.arguments.containsSequence(["-device", "usb-net,netdev=net0"]))
+        #expect(plan.arguments.contains("driver=raw,file.driver=file,file.locking=off,file.filename=\(mediaPath),if=none,id=drivers,media=cdrom,readonly=on"))
+        #expect(plan.arguments.containsSequence(["-device", "usb-storage,drive=drivers"]))
+    }
+
     @Test("local QEMU plan factory selects VirtIO networking when driver media is configured")
     func localQEMUPlanFactorySelectsVirtIONetworkingWhenDriverMediaIsConfigured() throws {
         var profile = VMProfile.defaultWindows11Arm(createdAt: Date(timeIntervalSince1970: 1_782_752_400))

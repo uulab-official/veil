@@ -249,7 +249,8 @@ struct InstallationAssistantView: View {
             WindowsDownloadSheet(
                 prepareDownloadedISO: prepareDownloadedISO,
                 useExistingISO: chooseInstallerAction,
-                presentation: .embedded(cancelAction: { isDownloading = false })
+                presentation: .embedded(cancelAction: { isDownloading = false }),
+                prefetchesDriverMedia: snapshot.driverMediaPath == nil
             )
             .frame(minHeight: 420)
             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))

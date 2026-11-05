@@ -286,7 +286,8 @@ struct VMRuntimeView: View {
                             try? await Task.sleep(for: .milliseconds(250))
                             pathPicker = .installerAndStart
                         }
-                    }
+                    },
+                    prefetchesDriverMedia: model.snapshot?.driverMediaPath == nil
                 )
             }
         }
@@ -522,7 +523,7 @@ struct VMRuntimeView: View {
             case .installerAndStart:
                 let isReadyToStart = await model.prepareWindowsInstallation(
                     installerMediaPath: path,
-                    driverMediaPath: currentDriver,
+                    driverMediaPath: await driverMediaPathForInstall(current: currentDriver),
                     virtualDiskPath: currentDisk
                 )
                 guard isReadyToStart else {
@@ -550,7 +551,7 @@ struct VMRuntimeView: View {
     private func prepareDownloadedISO(_ url: URL) async -> Bool {
         let isReadyToStart = await model.prepareWindowsInstallation(
             installerMediaPath: url.path,
-            driverMediaPath: model.snapshot?.driverMediaPath,
+            driverMediaPath: await driverMediaPathForInstall(current: model.snapshot?.driverMediaPath),
             virtualDiskPath: model.snapshot?.virtualDiskPath
         )
         guard isReadyToStart else {
@@ -559,6 +560,24 @@ struct VMRuntimeView: View {
 
         beginWindowsSetupIfEngineCanRunIt()
         return true
+    }
+
+    /// A driver ISO the user chose stays; otherwise the install gets Fedora's virtio-win ISO, which
+    /// the download sheet has usually fetched already. Without it Windows still installs, on
+    /// `usb-net` and with no guest network, so a failed driver download is logged, not fatal.
+    private func driverMediaPathForInstall(current: String?) async -> String? {
+        if let current, !current.isEmpty {
+            return current
+        }
+
+        do {
+            return try await VirtioWinDriverMediaProvider.shared.ensureMedia().path
+        } catch {
+            VeilLog.runtime.error(
+                "VirtIO driver media unavailable; installing without guest network drivers: \(error.localizedDescription, privacy: .public)"
+            )
+            return nil
+        }
     }
 
     /// The prepared VM is a success either way; without an engine that runs Windows the assistant

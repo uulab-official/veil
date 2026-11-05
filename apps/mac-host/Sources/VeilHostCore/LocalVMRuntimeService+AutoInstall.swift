@@ -17,6 +17,14 @@ extension LocalVMRuntimeService {
     /// The local account has no password, so Windows signs in to it without a prompt and the
     /// first-logon command installs the Veil agent unattended. The user can add a password in
     /// Windows Settings afterward.
+    ///
+    /// The VirtIO drivers install in the specialize pass because its RunSynchronous commands run in
+    /// order as SYSTEM, before OOBE and first sign-in; FirstLogonCommands now all start at once, so
+    /// the agent bootstrap there could not wait on them. Without the virtio-win media attached the
+    /// command finds no volume and does nothing.
+    /// https://learn.microsoft.com/windows-hardware/customize/desktop/unattend/microsoft-windows-deployment-runsynchronous
+    /// https://learn.microsoft.com/windows-hardware/customize/desktop/unattend/microsoft-windows-shell-setup-firstlogoncommands
+    /// https://learn.microsoft.com/windows-hardware/drivers/devtest/pnputil-command-syntax
     static func automaticInstallAnswerFile(accountName: String) -> String {
         let account = xmlEscaped(accountName)
         return """
@@ -103,6 +111,11 @@ extension LocalVMRuntimeService {
                   <Path>cmd /c reg add HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\OOBE /v BypassNRO /t REG_DWORD /d 1 /f</Path>
                   <Description>Allow Windows OOBE offline setup when no inbox network driver is available</Description>
                 </RunSynchronousCommand>
+                <RunSynchronousCommand wcm:action="add">
+                  <Order>2</Order>
+                  <Path>\(xmlEscaped(virtioDriverInstallCommand))</Path>
+                  <Description>Install VirtIO drivers from the virtio-win media so Windows gets an IPv4 address</Description>
+                </RunSynchronousCommand>
               </RunSynchronous>
             </component>
           </settings>
@@ -157,7 +170,22 @@ extension LocalVMRuntimeService {
         """
     }
 
-    private static func xmlEscaped(_ text: String) -> String {
+    /// Finds the virtio-win volume by label (drive letters differ between installs), adds NetKVM's
+    /// Windows 11 Arm64 package with `pnputil /add-driver /install`, and appends pnputil's output
+    /// to `%windir%\Temp\veil-virtio.log`. It always exits 0 so a driver problem cannot stop
+    /// Windows Setup. RunSynchronous `Path` holds at most 259 characters, which is why the command
+    /// is terse and installs one driver folder.
+    /// https://learn.microsoft.com/windows-hardware/customize/desktop/unattend/microsoft-windows-deployment-runsynchronous-runsynchronouscommand-path
+    static var virtioDriverInstallCommand: String {
+        "powershell -NoProfile -Command \""
+            + "$d=([IO.DriveInfo]::GetDrives()|?{$_.IsReady -and $_.VolumeLabel -like '\(VirtioWinDriverMedia.volumeLabelPrefix)*'})[0];"
+            + "if($d){pnputil /add-driver ($d.Name+'\(VirtioWinDriverMedia.networkDriverFolder)\\w11\\ARM64\\*.inf') /install *>>$env:windir\\Temp\\veil-virtio.log};"
+            + "exit 0\""
+    }
+
+    static let runSynchronousPathMaximumLength = 259
+
+    static func xmlEscaped(_ text: String) -> String {
         text
             .replacingOccurrences(of: "&", with: "&amp;")
             .replacingOccurrences(of: "<", with: "&lt;")

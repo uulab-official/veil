@@ -2,6 +2,7 @@ import AppKit
 import Combine
 import CryptoKit
 import SwiftUI
+import VeilHostCore
 import WebKit
 
 enum WindowsDownloadURLPolicy {
@@ -937,6 +938,9 @@ struct WindowsDownloadSheet: View {
     let prepareDownloadedISO: (URL) async -> Bool
     let useExistingISO: () -> Void
     var presentation: Presentation = .sheet
+    /// Fetches Fedora's VirtIO driver ISO next to the Windows download, so it is usually verified
+    /// by the time Setup starts. False when the profile already has driver media the user chose.
+    var prefetchesDriverMedia = true
 
     var body: some View {
         VStack(spacing: 0) {
@@ -964,6 +968,9 @@ struct WindowsDownloadSheet: View {
         .background(isEmbedded ? AnyShapeStyle(.white.opacity(0.04)) : AnyShapeStyle(Color(nsColor: .windowBackgroundColor)))
         .task {
             controller.loadLandingPage()
+            if prefetchesDriverMedia {
+                await VirtioWinDriverMediaProvider.shared.prefetch()
+            }
         }
         .onChange(of: controller.phase) { _, phase in
             guard case .downloaded(let url) = phase else {
