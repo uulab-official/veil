@@ -33,6 +33,7 @@ enum MachineViewMode: String, CaseIterable, Identifiable {
 enum MachineConfigurationTab: String, CaseIterable, Identifiable {
     case general
     case hardware
+    case disk
     case installation
     case integration
     case diagnostics
@@ -43,6 +44,7 @@ enum MachineConfigurationTab: String, CaseIterable, Identifiable {
         switch self {
         case .general: "General"
         case .hardware: "Hardware"
+        case .disk: "Disk"
         case .installation: "Installation"
         case .integration: "Mac Integration"
         case .diagnostics: "Diagnostics"
@@ -53,6 +55,7 @@ enum MachineConfigurationTab: String, CaseIterable, Identifiable {
         switch self {
         case .general: "info.circle"
         case .hardware: "cpu"
+        case .disk: "internaldrive"
         case .installation: "opticaldisc"
         case .integration: "macwindow.on.rectangle"
         case .diagnostics: "stethoscope"

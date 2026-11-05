@@ -29,6 +29,11 @@ public final class VMRuntimeModel {
         self.service = service
     }
 
+    /// Disk and snapshot management, when the runtime provides it.
+    public var diskManager: (any VMDiskManaging)? {
+        service as? any VMDiskManaging
+    }
+
     public var statusText: String {
         guard let snapshot else {
             return phase == .failed ? (errorMessage ?? "VM runtime unavailable") : "VM runtime not loaded"

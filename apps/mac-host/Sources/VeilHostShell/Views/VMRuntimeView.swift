@@ -420,6 +420,14 @@ struct VMRuntimeView: View {
                 }
                 ResourcePlanPanel(snapshot: snapshot)
                 DevicePlanPanel(snapshot: snapshot)
+            case .disk:
+                if let diskManager = model.diskManager {
+                    DiskSettingsView(runtimeState: snapshot.state, model: VMDiskModel(manager: diskManager)) {
+                        Task {
+                            await model.load()
+                        }
+                    }
+                }
             case .installation:
                 SetupAssistantPanel(
                     snapshot: snapshot,
