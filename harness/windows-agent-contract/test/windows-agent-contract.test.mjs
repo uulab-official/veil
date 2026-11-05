@@ -584,6 +584,10 @@ test("windows agent includes user-logon install and uninstall scripts", async ()
   assert.match(bootstrap, /Bootstrap-VeilAgentFromMedia/);
   assert.match(bootstrap, /Install Veil Agent\.cmd/);
   assert.match(bootstrap, /bootstrap\.log/);
+  // Start-Process -Wait waits for the agent the installer leaves running, so first logon would hang.
+  assert.doesNotMatch(bootstrap, /^\s*-Wait\b/m);
+  assert.match(bootstrap, /\$Process\.WaitForExit\(\)/);
+  assert.match(bootstrap, /VEIL_UNATTENDED/);
   assert.match(uninstall, /Unregister-ScheduledTask/);
   assert.match(uninstall, /Get-AppxPackage\s+-Name\s+\$SparsePackageName/);
   assert.match(uninstall, /Remove-AppxPackage/);
