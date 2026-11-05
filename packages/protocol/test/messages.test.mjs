@@ -179,6 +179,20 @@ test("rejects a malformed optional window resize capability", async () => {
   );
 });
 
+test("validates the optional VirtIO GPU display capability", async () => {
+  const health = validateAgentHealthResponse(await readFixture("agent.health.response.json"));
+  assert.equal(health.capabilities.virtioGpuDisplay, true);
+
+  delete health.capabilities.virtioGpuDisplay;
+  assert.equal(validateAgentHealthResponse(health).capabilities.virtioGpuDisplay, undefined);
+
+  health.capabilities.virtioGpuDisplay = "true";
+  assert.throws(
+    () => validateAgentHealthResponse(health),
+    /capabilities\.virtioGpuDisplay/
+  );
+});
+
 test("validates notification listener consent request and response", async () => {
   const request = validateNotificationListenerRequest(await readFixture("notification.listener.request.json"));
   const response = validateNotificationListenerResponse(await readFixture("notification.listener.response.json"));

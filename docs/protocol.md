@@ -74,6 +74,7 @@ Response:
     "clipboardText": true,
     "windowResize": true,
     "displayResize": true,
+    "virtioGpuDisplay": true,
     "binaryFrameChannel": true,
     "sharedFolder": true,
     "clipboardImage": true,
@@ -118,8 +119,16 @@ agent predates `window.resize.request`.
 
 `capabilities.displayResize` is also optional. When `true`, the agent can apply a requested Windows
 desktop monitor mode through the Win32 display API. Veil uses it only as a fallback after QEMU's
-RFB `ExtendedDesktopSize` request is rejected; an absent or false value keeps the confirmed guest
-framebuffer aspect-fit without stretching.
+RFB `ExtendedDesktopSize` request is rejected or forwarded to the guest (QEMU result code 4); an absent
+or false value keeps the confirmed guest framebuffer aspect-fit without stretching.
+
+`capabilities.virtioGpuDisplay` is optional. `true` means Windows has the virtio-win VirtIO GPU DOD
+display driver (`viogpudo`) installed for the VM's `virtio-gpu-pci` device, so the next cold boot can
+attach `virtio-gpu-pci` alone instead of `ramfb` plus `virtio-gpu-pci`. `false` means it is not
+installed, and an absent value means the agent predates the field; both keep the `ramfb` display.
+The host applies a changed value only at the next cold boot, never to a suspended session, because
+the device list is part of the machine a saved memory state belongs to. See
+[docs/install-flow.md](install-flow.md) for why the two displays cannot stay attached together.
 
 `capabilities.packageIdentity` is `true` only when the Windows agent is running
 with Windows package identity. The agent reads this from Windows' app model
@@ -822,8 +831,14 @@ Rules:
 - Dimensions are physical desktop pixels, bounded to 640...3840 per axis and 8,294,400 total pixels.
 - The guest calls `ChangeDisplaySettingsEx` for the active Windows desktop mode. A false response includes
   a short `reason` and does not change the host's current framebuffer geometry.
-- The RFB display path invokes this fallback only after a QEMU `ExtendedDesktopSize` rejection. A later
-  successful RFB desktop-size response becomes authoritative and returns the display to normal dynamic mode.
+- When the active display adapter is the VirtIO GPU DOD driver and the size is not one of its listed modes,
+  the guest first sets the driver's custom mode through the driver's own `D3DKMTEscape` request (the one
+  virtio-win's `viogpures.exe` uses) and then calls `ChangeDisplaySettingsEx`. The driver pads the scanout
+  width up to a multiple of 16, so the host requests 16-aligned widths.
+- The RFB display path invokes this fallback after a QEMU `ExtendedDesktopSize` rejection, and after QEMU
+  answers result code 4 ("request forwarded"): QEMU passed the size to `virtio-gpu`, but the VirtIO GPU
+  driver does not apply it on its own. A later successful RFB desktop-size response becomes authoritative
+  and returns the display to normal dynamic mode.
 
 ## Operation Acknowledgements
 

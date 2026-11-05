@@ -91,6 +91,10 @@ public struct AgentCapabilities: Codable, Equatable, Sendable {
     /// True when the guest agent can ask Windows to change the active desktop display mode.
     /// Optional so older agents keep the RFB aspect-fit fallback.
     public var displayResize: Bool? = nil
+    /// True when Windows has the virtio-win VirtIO GPU display driver (`viogpudo`) installed, so the
+    /// VM can boot on `virtio-gpu-pci` alone. Optional so an older agent decodes as `nil` and the VM keeps
+    /// the `ramfb` display it boots with today.
+    public var virtioGpuDisplay: Bool? = nil
     /// True when the agent can serve window frames as raw binary on a dedicated connection.
     ///
     /// Optional rather than defaulted, so an agent that predates the frame channel decodes as `nil` and
