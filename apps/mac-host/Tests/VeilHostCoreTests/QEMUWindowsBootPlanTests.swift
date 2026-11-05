@@ -1614,6 +1614,19 @@ struct QEMUWindowsBootPlanTests {
         #expect(mapper.key(charactersIgnoringModifiers: nil, keyCode: 109) == "f10")
     }
 
+    @Test("a Korean input source still types through the physical key position")
+    func qemuConsoleKeyboardInputMapperUsesPhysicalKeysForNonLatinInput() {
+        let mapper = QEMUConsoleKeyboardInputMapper()
+
+        #expect(mapper.key(charactersIgnoringModifiers: "ㅁ", keyCode: 0) == "a")
+        #expect(mapper.key(charactersIgnoringModifiers: "ㅁ", keyCode: 0, modifiers: [.shift]) == "shift-a")
+        #expect(mapper.key(charactersIgnoringModifiers: "ㅅ", keyCode: 1) == "s")
+        #expect(mapper.key(charactersIgnoringModifiers: "ㅓ", keyCode: 40) == "k")
+        #expect(mapper.key(charactersIgnoringModifiers: "₩", keyCode: 42) == "backslash")
+        #expect(mapper.key(charactersIgnoringModifiers: "", keyCode: 18) == "1")
+        #expect(mapper.key(charactersIgnoringModifiers: "ㅁ", keyCode: 200) == nil)
+    }
+
     @Test("guest agent install sequence opens run dialog and invokes short VEIL_AUTO entrypoint")
     func guestAgentInstallSequenceOpensRunDialogAndInvokesVEILAUTOInstaller() throws {
         let steps = try QEMUGuestAgentInstallKeySequence.steps

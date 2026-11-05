@@ -254,6 +254,7 @@ private enum RFBKeySymMapper {
         switch key {
         case "ret", "return", "enter": return 0xff0d
         case "spc", "space": return 0x20
+        case "tab": return 0xff09
         case "esc", "escape": return 0xff1b
         case "backspace": return 0xff08
         case "delete": return 0xffff
