@@ -579,7 +579,8 @@ public struct VeilHostClient: HostDashboardService, Sendable {
     private let transport: any HostTransport
     private let encoder: JSONEncoder
     private let decoder: JSONDecoder
-    private let hostForwardProbe: @Sendable (String, UInt64) async -> HostForwardProbeResult?
+    /// Blocking: it opens a TCP socket. `diagnoseAgentConnection` runs it on a utility queue.
+    private let hostForwardProbe: @Sendable (String, UInt64) -> HostForwardProbeResult?
     private let operationAckCapability = OperationAckCapabilityBox()
     private let operationDispatchGate = OperationDispatchGate()
 
@@ -596,8 +597,8 @@ public struct VeilHostClient: HostDashboardService, Sendable {
         transport: any HostTransport,
         encoder: JSONEncoder = .veilProtocol,
         decoder: JSONDecoder = .veilProtocol,
-        hostForwardProbe: @escaping @Sendable (String, UInt64) async -> HostForwardProbeResult? = { endpoint, timeout in
-            await VeilHostClient.probeHostForward(endpoint: endpoint, timeoutNanoseconds: timeout)
+        hostForwardProbe: @escaping @Sendable (String, UInt64) -> HostForwardProbeResult? = { endpoint, timeout in
+            VeilHostClient.probeHostForward(endpoint: endpoint, timeoutNanoseconds: timeout)
         }
     ) {
         self.transport = transport
@@ -1058,7 +1059,7 @@ public struct VeilHostClient: HostDashboardService, Sendable {
             let health = try await loadHealth(timeoutNanoseconds: timeoutNanoseconds)
             return .connected(endpoint: endpoint, health: health)
         } catch {
-            let probe = await hostForwardProbe(endpoint, min(timeoutNanoseconds, 750_000_000))
+            let probe = await Self.runBlocking(hostForwardProbe, endpoint, min(timeoutNanoseconds, 750_000_000))
             return .unavailable(
                 endpoint: endpoint,
                 errorMessage: Self.errorMessage(for: error),
@@ -1171,10 +1172,28 @@ public struct VeilHostClient: HostDashboardService, Sendable {
         }
     }
 
+    /// Runs the blocking probe off the cooperative pool and resumes with its result.
+    ///
+    /// The probe used to be an async function awaiting `Task.detached`. Built with Swift 6.2
+    /// (Xcode 26) on the macos-26 runner, the test process crashed on entry to it with
+    /// EXC_BAD_ACCESS in the task allocator, so the probe is synchronous and only this hop is async.
+    private static func runBlocking(
+        _ probe: @escaping @Sendable (String, UInt64) -> HostForwardProbeResult?,
+        _ endpoint: String,
+        _ timeoutNanoseconds: UInt64
+    ) async -> HostForwardProbeResult? {
+        await withCheckedContinuation { continuation in
+            DispatchQueue.global(qos: .utility).async {
+                continuation.resume(returning: probe(endpoint, timeoutNanoseconds))
+            }
+        }
+    }
+
+    /// Checks whether the host-forwarded TCP port accepts a connection. Blocks for up to the timeout.
     public static func probeHostForward(
         endpoint: String,
         timeoutNanoseconds: UInt64 = 750_000_000
-    ) async -> HostForwardProbeResult? {
+    ) -> HostForwardProbeResult? {
         guard let url = URL(string: endpoint),
               let host = url.host,
               let port = url.port else {
@@ -1185,16 +1204,7 @@ public struct VeilHostClient: HostDashboardService, Sendable {
             )
         }
 
-        // The blocking socket probe runs on a utility queue and resumes a continuation. Built with
-        // Swift 6.2 (Xcode 26), the earlier `Task.detached { ... }.value` form crashed the process on
-        // entry to this function, in the task allocator (EXC_BAD_ACCESS), on the macos-26 runner.
-        return await withCheckedContinuation { continuation in
-            DispatchQueue.global(qos: .utility).async {
-                continuation.resume(
-                    returning: probeTCP(endpoint: endpoint, host: host, port: port, timeoutNanoseconds: timeoutNanoseconds)
-                )
-            }
-        }
+        return probeTCP(endpoint: endpoint, host: host, port: port, timeoutNanoseconds: timeoutNanoseconds)
     }
 
     private static func probeTCP(
