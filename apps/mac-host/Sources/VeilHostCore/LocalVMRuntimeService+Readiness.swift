@@ -34,11 +34,16 @@ extension LocalVMRuntimeService {
         diskImageTool == nil ? .raw : .qcow2
     }
 
+    /// The original machine keeps `~/Virtual Machines/Veil/<name>.<ext>`; library machines get their
+    /// own folder so their `uefi-vars.fd` and `tpm/` (found beside the disk) never collide. The
+    /// extension follows the format a new disk is created in; an existing disk's format is read from
+    /// its header, so older `.img` names keep working.
     func defaultVirtualDiskURL(for profile: VMProfile) -> URL {
-        defaultHomeDirectory
-            .appendingPathComponent("Virtual Machines", isDirectory: true)
-            .appendingPathComponent("Veil", isDirectory: true)
-            .appendingPathComponent("\(profile.name).\(newDiskFormat.fileExtension)")
+        let directory = VMLibrary.defaultMachineDirectory(for: profile.id, homeDirectory: defaultHomeDirectory)
+        if profile.id == VMLibrary.legacyMachineID {
+            return directory.appendingPathComponent("\(profile.name).\(newDiskFormat.fileExtension)")
+        }
+        return directory.appendingPathComponent("Windows.\(newDiskFormat.fileExtension)")
     }
 
     func defaultProfile() -> VMProfile {

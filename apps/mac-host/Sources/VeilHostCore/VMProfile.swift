@@ -171,18 +171,23 @@ public protocol VMProfileStore: Sendable {
     func save(_ profile: VMProfile) async throws
 }
 
+/// Reads and writes one machine's profile. With no arguments it follows the machine selected in
+/// ``VMLibrary``, which is `default-vm-profile.json` until a second machine exists.
 public struct JSONVMProfileStore: VMProfileStore {
-    private let directory: URL
-    private let fileName: String
+    private let fixedURL: URL?
     private let encoder: JSONEncoder
     private let decoder: JSONDecoder
 
     public init(
-        directory: URL = Self.defaultDirectory,
-        fileName: String = "default-vm-profile.json"
+        directory: URL? = nil,
+        fileName: String? = nil
     ) {
-        self.directory = directory
-        self.fileName = fileName
+        if directory == nil, fileName == nil {
+            fixedURL = nil
+        } else {
+            fixedURL = (directory ?? Self.defaultDirectory)
+                .appendingPathComponent(fileName ?? VMLibrary.legacyProfileFileName)
+        }
 
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
@@ -205,16 +210,21 @@ public struct JSONVMProfileStore: VMProfileStore {
     }
 
     public func save(_ profile: VMProfile) async throws {
+        let url = profileURL
         try FileManager.default.createDirectory(
-            at: directory,
+            at: url.deletingLastPathComponent(),
             withIntermediateDirectories: true
         )
         let data = try encoder.encode(profile)
-        try data.write(to: profileURL, options: [.atomic])
+        try data.write(to: url, options: [.atomic])
     }
 
     private var profileURL: URL {
-        directory.appendingPathComponent(fileName)
+        if let fixedURL {
+            return fixedURL
+        }
+        let library = VMLibrary()
+        return library.profileURL(for: library.activeMachineID())
     }
 
     public static var defaultDirectory: URL {

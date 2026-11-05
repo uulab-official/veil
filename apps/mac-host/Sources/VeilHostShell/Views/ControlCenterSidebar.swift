@@ -16,14 +16,60 @@ struct ControlCenterSidebar: View {
     var isLaunching: Bool
     var openAppAction: (String) -> Void
     var configureAction: () -> Void
+    /// False while the selected machine runs or an operation is in flight: Veil runs one machine at
+    /// a time, so switching away from a live one is refused.
+    var canChangeMachines: Bool = true
+    /// Reloads the runtime snapshot after the selected machine changed; `true` also prepares its
+    /// UEFI variables and TPM folder, which an imported disk arrives without.
+    var machineDidChange: (Bool) -> Void = { _ in }
+
+    @State private var library = VMLibraryController()
+    @State private var renameTarget: VMLibraryMachine?
+    @State private var deleteTarget: VMLibraryMachine?
+    @State private var showsNewMachinePrompt = false
+    @State private var nameDraft = ""
 
     var body: some View {
         List {
-            Section("Virtual Machines") {
-                MachineSidebarRow(snapshot: snapshot, status: status, liveThumbnail: liveThumbnail)
-                    .contextMenu {
-                        Button("Configure…", systemImage: "gearshape", action: configureAction)
+            Section {
+                ForEach(listedMachines) { machine in
+                    machineRow(machine)
+                }
+                if let errorMessage = library.errorMessage {
+                    Label(errorMessage, systemImage: "exclamationmark.triangle")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .onTapGesture { library.errorMessage = nil }
+                }
+            } header: {
+                HStack {
+                    Text("Virtual Machines")
+                    Spacer()
+                    if library.isWorking {
+                        ProgressView().controlSize(.mini)
                     }
+                    Menu {
+                        Button("New Windows Machine…", systemImage: "plus") {
+                            nameDraft = String(localized: "Windows 11 Arm")
+                            showsNewMachinePrompt = true
+                        }
+                        Divider()
+                        Button("Import Machine Bundle…", systemImage: "square.and.arrow.down") {
+                            library.importBundle(then: machineDidChange)
+                        }
+                        Button("Import Disk Image…", systemImage: "externaldrive.badge.plus") {
+                            library.importDisk(then: machineDidChange)
+                        }
+                    } label: {
+                        Image(systemName: "plus")
+                    }
+                    .menuStyle(.borderlessButton)
+                    .menuIndicator(.hidden)
+                    .fixedSize()
+                    .disabled(!canChangeMachines || library.isWorking)
+                    .help("Add a Windows machine")
+                }
             }
 
             Section {
@@ -51,6 +97,137 @@ struct ControlCenterSidebar: View {
         }
         .listStyle(.sidebar)
         .accessibilityLabel("Control Center")
+        .onAppear { library.reload() }
+        .onChange(of: snapshot?.profileName) { _, _ in library.reload() }
+        .onChange(of: snapshot?.state) { _, _ in library.reload() }
+        .alert("New Windows Machine", isPresented: $showsNewMachinePrompt) {
+            TextField("Name", text: $nameDraft)
+            Button("Create") {
+                library.createMachine(named: nameDraft, then: machineDidChange)
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("The Installation Assistant sets up Windows on the new machine.")
+        }
+        .alert("Rename Machine", isPresented: isPresented($renameTarget)) {
+            TextField("Name", text: $nameDraft)
+            Button("Rename") {
+                if let target = renameTarget {
+                    library.rename(target.id, to: nameDraft, then: machineDidChange)
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        }
+        .confirmationDialog(
+            "Move this machine to the Trash?",
+            isPresented: isPresented($deleteTarget),
+            titleVisibility: .visible,
+            presenting: deleteTarget
+        ) { target in
+            Button("Move to Trash", role: .destructive) {
+                library.delete(target.id, then: machineDidChange)
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: { target in
+            Text("\(target.profile.name)'s disk, UEFI variables, TPM state, and saved session go to the Trash. The shared folder and installer files are kept.")
+        }
+    }
+
+    /// The library's list, or the single machine the snapshot shows before the library has loaded.
+    private var listedMachines: [VMLibraryMachine] {
+        library.machines
+    }
+
+    @ViewBuilder
+    private func machineRow(_ machine: VMLibraryMachine) -> some View {
+        let isActive = machine.id == library.activeMachineID
+        let canChangeThis = canChangeMachines && !library.isWorking
+        Button {
+            library.select(machine.id, then: machineDidChange)
+        } label: {
+            if isActive {
+                MachineSidebarRow(snapshot: snapshot, status: status, liveThumbnail: liveThumbnail)
+            } else {
+                LibraryMachineRow(machine: machine, isSuspended: library.suspendedMachineIDs.contains(machine.id))
+            }
+        }
+        .buttonStyle(.plain)
+        .disabled(!isActive && !canChangeThis)
+        .listRowBackground(isActive ? RoundedRectangle(cornerRadius: 6).fill(Color.accentColor.opacity(0.22)) : nil)
+        .help(isActive || canChangeThis ? "" : "Shut down the running machine to switch")
+        .contextMenu {
+            if isActive {
+                Button("Configure…", systemImage: "gearshape", action: configureAction)
+                Divider()
+            }
+            Button("Rename…", systemImage: "pencil") {
+                nameDraft = machine.profile.name
+                renameTarget = machine
+            }
+            .disabled(library.isWorking)
+            Button("Clone", systemImage: "plus.square.on.square") {
+                library.clone(machine.id, then: machineDidChange)
+            }
+            .disabled(!canChangeThis)
+            Button("Export…", systemImage: "square.and.arrow.up") {
+                library.export(machine)
+            }
+            .disabled(!canChangeThis)
+            Divider()
+            Button("Move to Trash…", systemImage: "trash", role: .destructive) {
+                deleteTarget = machine
+            }
+            .disabled(!canChangeThis)
+        }
+    }
+
+    private func isPresented(_ target: Binding<VMLibraryMachine?>) -> Binding<Bool> {
+        Binding(
+            get: { target.wrappedValue != nil },
+            set: { if !$0 { target.wrappedValue = nil } }
+        )
+    }
+}
+
+/// A machine other than the selected one: its name and whether it is set up or suspended.
+private struct LibraryMachineRow: View {
+    var machine: VMLibraryMachine
+    var isSuspended: Bool
+
+    var body: some View {
+        HStack(spacing: 10) {
+            MachineThumbnail(snapshot: nil, liveImage: nil)
+                .frame(width: 64, height: 40)
+                .opacity(0.8)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(machine.profile.name)
+                    .font(.callout.weight(.semibold))
+                    .lineLimit(1)
+                Label(LocalizedStringKey(statusTitle), systemImage: statusSymbol)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.vertical, 4)
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+    }
+
+    private var statusTitle: String {
+        if isSuspended {
+            return "Suspended"
+        }
+        return machine.profile.virtualDiskPath == nil ? "Not set up" : "Stopped"
+    }
+
+    private var statusSymbol: String {
+        if isSuspended {
+            return "pause.circle"
+        }
+        return machine.profile.virtualDiskPath == nil ? "sparkles" : "stop.circle"
     }
 }
 
