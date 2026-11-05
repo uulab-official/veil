@@ -73,3 +73,15 @@ struct WindowsAccountNameTests {
         #expect(answerFile.contains("<Name>Jamie</Name>"))
     }
 }
+
+@Suite("Answer file power plan")
+struct AnswerFilePowerPlanTests {
+    @Test("Setup keeps the display on and never sleeps Windows")
+    func keepsDisplayOn() {
+        let answerFile = LocalVMRuntimeService.automaticInstallAnswerFile(accountName: "Jamie")
+
+        #expect(answerFile.contains("powercfg /change monitor-timeout-ac 0"))
+        #expect(answerFile.contains("powercfg /change standby-timeout-ac 0"))
+        #expect(LocalVMRuntimeService.powerPlanCommand.count <= LocalVMRuntimeService.runSynchronousPathMaximumLength)
+    }
+}

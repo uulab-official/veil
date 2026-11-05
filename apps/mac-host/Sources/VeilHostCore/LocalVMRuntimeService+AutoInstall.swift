@@ -124,6 +124,11 @@ extension LocalVMRuntimeService {
                   <Path>\(xmlEscaped(virtioDriverInstallCommand))</Path>
                   <Description>Install VirtIO drivers from the virtio-win media so Windows gets an IPv4 address</Description>
                 </RunSynchronousCommand>
+                <RunSynchronousCommand wcm:action="add">
+                  <Order>3</Order>
+                  <Path>\(xmlEscaped(powerPlanCommand))</Path>
+                  <Description>Keep the display on and never sleep; the Mac decides when Veil suspends Windows</Description>
+                </RunSynchronousCommand>
               </RunSynchronous>
             </component>
           </settings>
@@ -190,6 +195,12 @@ extension LocalVMRuntimeService {
             + "if($d){pnputil /add-driver ($d.Name+'\(VirtioWinDriverMedia.networkDriverFolder)\\w11\\ARM64\\*.inf') /install *>>$env:windir\\Temp\\veil-virtio.log};"
             + "exit 0\""
     }
+
+    /// A VM's display and sleep timers only get in the way: a dark screen looks broken in the Veil
+    /// window, and Veil already suspends idle Windows itself. Sets the active plan's AC timeouts to
+    /// never, as `powercfg /change` documents.
+    /// https://learn.microsoft.com/windows-hardware/design/device-experiences/powercfg-command-line-options
+    static let powerPlanCommand = "cmd /c powercfg /change monitor-timeout-ac 0 & powercfg /change standby-timeout-ac 0 & powercfg /change hibernate-timeout-ac 0"
 
     static let runSynchronousPathMaximumLength = 259
 
