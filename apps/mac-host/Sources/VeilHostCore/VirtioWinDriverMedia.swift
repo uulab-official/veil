@@ -109,6 +109,25 @@ public actor VirtioWinDriverMediaProvider {
         _ = task()
     }
 
+    /// The ISO when it is already on this Mac and still matches the pin. It never downloads, so a
+    /// start can use it without waiting on the network.
+    public func cachedMedia() async -> URL? {
+        if let verifiedURL, FileManager.default.fileExists(atPath: verifiedURL.path) {
+            return verifiedURL
+        }
+        guard inFlight == nil else {
+            return nil
+        }
+
+        let destination = directory().appendingPathComponent(VirtioWinDriverMedia.fileName)
+        guard FileManager.default.fileExists(atPath: destination.path),
+              (try? await Self.hash(destination, hasher: hasher)) == VirtioWinDriverMedia.sha256 else {
+            return nil
+        }
+        verifiedURL = destination
+        return destination
+    }
+
     public func ensureMedia() async throws -> URL {
         if let verifiedURL, FileManager.default.fileExists(atPath: verifiedURL.path) {
             return verifiedURL

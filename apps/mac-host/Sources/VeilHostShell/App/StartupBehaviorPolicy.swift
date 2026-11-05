@@ -31,3 +31,18 @@ enum StartupBehaviorPolicy {
         return snapshot.state == .running
     }
 }
+
+/// When a cold start may add the VirtIO driver ISO to a profile that has none.
+enum DriverMediaAttachPolicy {
+    static func attachesOnColdStart(snapshot: VMRuntimeSnapshot) -> Bool {
+        guard snapshot.driverMediaPath?.isEmpty ?? true, snapshot.suspendedSession == nil else {
+            return false
+        }
+        switch snapshot.state {
+        case .stopped, .failed:
+            return true
+        case .notConfigured, .starting, .running, .suspended, .unsupported:
+            return false
+        }
+    }
+}

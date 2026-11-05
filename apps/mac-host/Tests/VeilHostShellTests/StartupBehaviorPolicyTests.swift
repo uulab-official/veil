@@ -48,3 +48,31 @@ struct StartupBehaviorPolicyTests {
         #expect(!StartupBehaviorPolicy.suspendsWindowsOnQuit(snapshot: snapshot(state: .running), canSuspend: true, isBusy: true))
     }
 }
+
+@Suite("Driver media attach policy")
+struct DriverMediaAttachPolicyTests {
+    private func snapshot(state: VMRuntimeState, driverMediaPath: String? = nil) -> VMRuntimeSnapshot {
+        VMRuntimeSnapshot(
+            state: state,
+            virtualizationAvailable: true,
+            architecture: "arm64",
+            minimumOSSupported: true,
+            profileName: "Windows 11 Arm",
+            driverMediaPath: driverMediaPath,
+            detail: ""
+        )
+    }
+
+    @Test("a stopped Windows without drivers gets the virtio-win ISO on its next cold start")
+    func attachesToStoppedWindows() {
+        #expect(DriverMediaAttachPolicy.attachesOnColdStart(snapshot: snapshot(state: .stopped)))
+        #expect(DriverMediaAttachPolicy.attachesOnColdStart(snapshot: snapshot(state: .failed)))
+    }
+
+    @Test("a chosen driver ISO, a running Windows, and a saved session stay untouched")
+    func leavesOtherStatesAlone() {
+        #expect(!DriverMediaAttachPolicy.attachesOnColdStart(snapshot: snapshot(state: .stopped, driverMediaPath: "/Users/test/virtio.iso")))
+        #expect(!DriverMediaAttachPolicy.attachesOnColdStart(snapshot: snapshot(state: .running)))
+        #expect(!DriverMediaAttachPolicy.attachesOnColdStart(snapshot: snapshot(state: .suspended)))
+    }
+}

@@ -75,8 +75,34 @@ extension VeilHostShellApp {
             return
         }
 
+        await attachDriverMediaForColdStartIfNeeded()
         displayMessage = "Starting Windows locally. Veil stays in this main window while setup runs."
         await vmModel.start()
+    }
+
+    /// A Windows installed before Veil fetched VirtIO drivers has no guest network: its boot plan
+    /// falls back to usb-net, which Windows binds as a serial port. A cold start attaches the
+    /// virtio-win ISO when it is already on this Mac, which switches the plan to virtio-net-pci; the
+    /// agent repair then installs NetKVM from it. Otherwise the ISO downloads in the background for
+    /// the next start, so starting Windows never waits on an 877 MB download. Resume is never
+    /// changed here, since a saved session needs the same devices.
+    @MainActor
+    func attachDriverMediaForColdStartIfNeeded() async {
+        guard let snapshot = vmModel.snapshot,
+              DriverMediaAttachPolicy.attachesOnColdStart(snapshot: snapshot) else {
+            return
+        }
+
+        guard let media = await VirtioWinDriverMediaProvider.shared.cachedMedia() else {
+            await VirtioWinDriverMediaProvider.shared.prefetch()
+            return
+        }
+
+        await vmModel.updateProfilePaths(
+            installerMediaPath: snapshot.installerMediaPath,
+            driverMediaPath: media.path,
+            virtualDiskPath: snapshot.virtualDiskPath
+        )
     }
 
     /// Toolbar and Actions-menu suspend. Unlike the idle quiet policy this never falls back to a shut

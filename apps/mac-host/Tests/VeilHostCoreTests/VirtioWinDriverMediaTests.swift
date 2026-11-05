@@ -91,6 +91,27 @@ struct VirtioWinDriverMediaTests {
         #expect(recorder.count == 1)
     }
 
+    @Test("cached media is offered only when already on disk and matching the pin, without downloading")
+    func cachedMediaNeverDownloads() async throws {
+        let directory = try temporaryDirectory()
+        let recorder = TransferRecorder()
+        let provider = VirtioWinDriverMediaProvider(
+            directory: { directory },
+            transfer: { source, _ in recorder.record(source) },
+            hasher: Self.fakeHasher
+        )
+
+        #expect(await provider.cachedMedia() == nil)
+
+        let destination = directory.appendingPathComponent(VirtioWinDriverMedia.fileName)
+        try Data("tampered".utf8).write(to: destination)
+        #expect(await provider.cachedMedia() == nil)
+
+        try Data("good".utf8).write(to: destination)
+        #expect(await provider.cachedMedia() == destination)
+        #expect(recorder.count == 0)
+    }
+
     @Test("a download that misses the pinned SHA-256 is removed and can be retried")
     func rejectsMismatchedDownload() async throws {
         let directory = try temporaryDirectory()
