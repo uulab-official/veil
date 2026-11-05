@@ -12,7 +12,7 @@ UTM(https://github.com/utmapp/UTM)의 기능을 Veil 코드 기준으로 대조�
 | 5 | 일시 중단/재개 | 있음 | `QEMUVMSuspension.swift` | — |
 | 6 | 실행 중 ISO 교체 | 없음 | ISO는 부팅 시에만 연결 | QMP `blockdev-change-medium` |
 | 7 | 공유 폴더 | 있음 | `QEMUWindowsSharedFolder.swift`(SMB) | — |
-| 8 | 클립보드 공유 | 일부 | 텍스트만 | 이미지·파일 |
+| 8 | 클립보드 공유 | 있음 | 텍스트·PNG 이미지 양방향, Finder 파일 → Windows(공유 폴더 경유) | 실제 게스트 실측; Windows → Mac 파일은 의도적으로 제외 |
 | 9 | 동적 해상도·HiDPI·전체 화면 | 있음 | `RFBDesktopResize.swift` | — |
 | 10 | 게스트 드라이버 자동 설치 | 있음 | `VirtioWinDriverMedia.swift` | 실측 진행 중 |
 | 11 | 네트워크 모드·포트 포워딩 UI | 일부 | user NAT만, NIC는 환경 변수 | vmnet bridged/host-only, 포워딩 UI |
@@ -22,7 +22,7 @@ UTM(https://github.com/utmapp/UTM)의 기능을 Veil 코드 기준으로 대조�
 | 15 | VM 설정 UI(CPU·메모리·장치 편집) | 일부 | 설정 창은 표시만 | CPU·메모리 편집 |
 | 16 | 시리얼 콘솔·QEMU 모니터·사용자 인자 | 일부 | 내부 소켓만 | 진단 탭의 콘솔, 고급 인자 |
 | 17 | 입력 캡처·Cmd↔Ctrl 매핑 옵션 | 일부 | Cmd와 Ctrl 모두 ctrl 고정 | 매핑 선택 |
-| 18 | 헤드리스·CLI·AppleScript/단축어 | 일부 | `veil-vmctl` | App Intents |
+| 18 | 헤드리스·CLI·AppleScript/단축어 | 있음 | `veil-vmctl`, App Intents(`VeilHostShell/App/VeilAppIntents.swift`) | 단축어 앱 실측; AppleScript 사전은 없음 |
 | 19 | VM 갤러리·ISO 다운로드 | 일부 | Windows 11 ISO 다운로드 | — (Windows 전용이라 갤러리 불필요) |
 | 20 | 다른 게스트 OS, x86 에뮬레이션 | 없음 | aarch64 `virt` + HVF 전용 | 범위 결정 필요(v1 제외 항목) |
 | 21 | 디스플레이 장치 선택·GPU 가속 | 일부 | ramfb + virtio-gpu 고정 | 장치 선택; virgl은 Windows 드라이버 없음 |
@@ -35,5 +35,6 @@ UTM(https://github.com/utmapp/UTM)의 기능을 Veil 코드 기준으로 대조�
 - [ ] 3, 4: qcow2 디스크와 스냅샷 UI
 - [ ] 1, 2: VM 라이브러리, 가져오기/내보내기
 - [ ] 11: 포트 포워딩 UI, vmnet
-- [ ] 8, 13, 16, 17, 18, 21
+- [x] 8, 18: 클립보드 이미지·파일 붙여넣기, App Intents(`docs/checklists/2026-11-05-clipboard-images-and-shortcuts.md`)
+- [ ] 13, 16, 17, 21
 - [ ] 12, 20: 범위 결정 후

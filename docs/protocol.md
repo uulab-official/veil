@@ -1022,9 +1022,11 @@ Rules:
   when an app re-sets identical content.
 - Text and image updates share one `sequence` space per origin. They are two kinds of one clipboard, so a
   receiver that accepted guest image 9 must reject a later guest text 8.
-- When a clipboard holds both text and an image (a spreadsheet range, a rich-text selection), only the text
-  travels. That matches what the user most often means and keeps one copy from replacing the other side's
-  clipboard with a picture of a table.
+- When the Windows clipboard holds both text and an image (a spreadsheet range, a rich-text selection), the
+  guest sends only the text. That matches what the user most often means and keeps one copy from replacing
+  the Mac clipboard with a picture of a table. The host instead follows the order the source app listed its
+  pasteboard types in, because macOS apps list their richest representation first: Finder puts file URLs
+  before the names it also writes as text, and a browser's Copy Image puts the bitmap before the address.
 - On the guest, a host image is placed as both `PNG` and `CF_DIB`, so apps that only understand device
   independent bitmaps (Paint, most Win32 apps) can paste it. The guest reads `PNG` first and converts
   `CF_DIBV5`/`CF_DIB` to PNG otherwise.
