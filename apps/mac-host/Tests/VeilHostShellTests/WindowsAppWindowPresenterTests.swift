@@ -281,7 +281,10 @@ struct WindowsAppWindowPresenterTests {
             )
         )
         let window = try #require(mirroredWindow(withId: windowId))
-        window.setContentSize(NSSize(width: 1_440, height: 960))
+        // Shrink rather than grow: AppKit clamps a window to the screen, and CI's virtual display
+        // is smaller than a typical Mac's.
+        window.setContentSize(NSSize(width: 800, height: 520))
+        let finalSize = window.contentRect(forFrameRect: window.frame).size
 
         presenter.windowDidEndLiveResize(
             Notification(name: NSWindow.didEndLiveResizeNotification, object: window)
@@ -289,8 +292,9 @@ struct WindowsAppWindowPresenterTests {
 
         #expect(resizeEvents.count == 1)
         #expect(resizeEvents.first?.0 == windowId)
-        #expect(resizeEvents.first?.1 == 1_440)
-        #expect(resizeEvents.first?.2 == 960)
+        #expect(resizeEvents.first?.1 == Int(finalSize.width))
+        #expect(resizeEvents.first?.2 == Int(finalSize.height))
+        #expect(finalSize.width < 960)
     }
 
     @Test("restore policy deminiaturizes minimized Windows app windows")
