@@ -26,20 +26,14 @@ jobs:
       - name: Test gate
         # The signed launch check needs a GUI login session; the Windows agent runs on Windows below.
         run: ./script/test_all.sh --skip-app-verify --skip-windows-agent
-      - name: Crash reports
-        # A test process that dies on a signal leaves only its exit code in the log; macOS writes the
-        # crashing thread's stack to DiagnosticReports, under a name that depends on the process.
+      - name: Locate a crashing test
+        # The runner writes no crash report, and a parallel run that dies on a signal does not say
+        # which test was running. Serially, the last test that starts without finishing is the one.
         if: failure()
         run: |
-          # shellcheck disable=SC2012  # report names are macOS-generated; newest first matters here
-          ls -lt "$HOME/Library/Logs/DiagnosticReports" /Library/Logs/DiagnosticReports 2>/dev/null | head -20
-          # shellcheck disable=SC2012
-          for report in $(ls -t "$HOME"/Library/Logs/DiagnosticReports/*.ips /Library/Logs/DiagnosticReports/*.ips 2>/dev/null | head -3); do
-            echo "::group::$report"
-            head -c 80000 "$report"
-            echo
-            echo "::endgroup::"
-          done
+          home="$(mktemp -d)"
+          HOME="$home" CFFIXED_USER_HOME="$home" swift test --disable-sandbox --no-parallel \
+            --package-path apps/mac-host 2>&1 | tail -60 || true
 
   windows-agent:
     name: Windows guest agent
