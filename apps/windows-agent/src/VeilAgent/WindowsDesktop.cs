@@ -428,8 +428,9 @@ public sealed class WindowsDesktop : IWindowsDesktop
             CDS_FULLSCREEN,
             IntPtr.Zero
         );
-        // The VirtIO GPU driver lists only the sizes it booted with, so a new window size is a bad
-        // mode until the driver's custom mode is replaced. Other adapters keep the first answer.
+        // The VirtIO GPU driver lists one custom size beside its fixed modes. QEMU normally sets it to
+        // this size first; when it did not, replace it through the driver. Other adapters keep the
+        // first answer.
         if (result == DISP_CHANGE_BADMODE && VirtioGpuDisplay.TrySetCustomMode(input.Width, input.Height))
         {
             result = ChangeDisplaySettingsEx(

@@ -10,11 +10,13 @@ namespace Veil.Agent;
 /// display whose size can follow the Veil window. Two driver behaviors shape this class, both measured on
 /// a Windows 11 Arm guest with virtio-win 0.1.302 (docs/install-flow.md):
 ///
-/// - The driver lists the size the host last asked for as one custom mode, but on QEMU/HVF it never
-///   picks up a new host size while Windows runs, so <c>ChangeDisplaySettingsEx</c> answers
-///   <c>DISP_CHANGE_BADMODE</c> for any other size. The driver's private escape
-///   <c>VIOGPU_SET_CUSTOM_RESOLUTION</c>, the one virtio-win's <c>viogpures.exe</c> sends, replaces that
-///   custom mode; after it the normal mode change succeeds. It works from a standard user token.
+/// - QEMU hands a host desktop size (RFB SetDesktopSize) to the driver, which lists it as its one custom
+///   mode but does not switch to it; virtio-win's resolution helper (vgpusrv) did not switch either, so
+///   the agent's <c>ChangeDisplaySettingsEx</c> does. A size that never went through QEMU, or one QEMU
+///   sent while the monitor was powered off, leaves the custom mode stale and the mode change answers
+///   <c>DISP_CHANGE_BADMODE</c>. The driver's private escape <c>VIOGPU_SET_CUSTOM_RESOLUTION</c>, the one
+///   virtio-win's <c>viogpures.exe</c> sends, replaces the custom mode. It works from a standard user
+///   token.
 /// - The escape is private driver data, so it is only ever sent to an adapter whose PCI ID is the
 ///   virtio-gpu device; another driver could read the same bytes as something else.
 ///
