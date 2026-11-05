@@ -49,7 +49,17 @@ struct ContentView: View {
                 canOpenApps: canOpenApps,
                 isLaunching: model.phase == .launching,
                 openAppAction: launchWindowsAppByIdAction,
-                configureAction: { navigation.openConfiguration() }
+                configureAction: { navigation.openConfiguration() },
+                canChangeMachines: canChangeMachines,
+                machineDidChange: { needsPreparation in
+                    Task {
+                        if needsPreparation {
+                            await vmModel.prepareDefaultVM()
+                        } else {
+                            await vmModel.load()
+                        }
+                    }
+                }
             )
             .navigationSplitViewColumnWidth(min: 210, ideal: 240, max: 320)
         } detail: {
@@ -239,6 +249,11 @@ struct ContentView: View {
 
     private var isLive: Bool {
         vmModel.snapshot?.state == .running || vmModel.snapshot?.state == .starting
+    }
+
+    /// Veil runs one machine at a time; a live or launching machine pins the selection.
+    private var canChangeMachines: Bool {
+        !isLive && !isBusy && model.phase != .launching
     }
 
     /// One-click launch starts or resumes Windows and reconnects the guest agent itself, so an
