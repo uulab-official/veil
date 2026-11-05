@@ -298,3 +298,19 @@
 "Windows is running, but the app connection did not recover after two attempts. Open recovery to repair Veil Agent." = "Windows는 실행 중이지만 두 번 시도해도 앱 연결이 복구되지 않았습니다. 복구를 열어 Veil 에이전트를 고치세요.";
 "Veil is setting up its tools in Windows. Approve the Windows prompt if one appears." = "Veil이 Windows에 도구를 설치하고 있습니다. Windows 확인 창이 뜨면 허용하세요.";
 "Veil tools setup sent. Windows apps appear here once Windows answers." = "Veil 도구 설치를 보냈습니다. Windows가 응답하면 여기에 Windows 앱이 나타납니다.";
+
+/* New virtual machine (Linux Arm64, emulated x86_64) */
+"New Virtual Machine…" = "새 가상 머신…";
+"New Virtual Machine" = "새 가상 머신";
+"Operating System" = "운영 체제";
+"Name" = "이름";
+"Installer ISO" = "설치 ISO";
+"Choose…" = "선택…";
+"TPM 2.0" = "TPM 2.0";
+"Secure Boot" = "보안 부팅";
+"Linux (Arm64)" = "Linux (Arm64)";
+"x86_64 (emulated)" = "x86_64 (에뮬레이션)";
+"x86_64 runs under emulation and is much slower than an Arm guest." = "x86_64는 에뮬레이션으로 실행되어 Arm 게스트보다 훨씬 느립니다.";
+"Create and Start" = "만들고 시작";
+"Other Virtual Machines" = "다른 가상 머신";
+"Started %@ (QEMU PID %d)." = "%@을(를) 시작했습니다(QEMU PID %d).";

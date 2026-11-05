@@ -162,6 +162,7 @@ struct VeilHostShellApp: App {
         .commands {
             SidebarCommands()
             ToolbarCommands()
+            NewGuestVMCommands()
 
             CommandGroup(before: .sidebar) {
                 Button("Windows Apps as Mac Windows") {
@@ -312,6 +313,11 @@ struct VeilHostShellApp: App {
 
     var body: some Scene {
         mainWindowScene
+
+        Window("New Virtual Machine", id: NewGuestVMView.windowID) {
+            NewGuestVMView()
+        }
+        .windowResizability(.contentSize)
 
         MenuBarExtra("Veil", systemImage: menuBarSymbolName) {
             VeilMenuBarMenu(
