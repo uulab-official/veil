@@ -36,7 +36,10 @@ jobs:
           toolchain="$(dirname "$(dirname "$(xcrun --find swift)")")"
           helper="$toolchain/libexec/swift/pm/swiftpm-testing-helper"
           bundle="$PWD/.build/arm64-apple-macosx/debug/VeilMacHostPackageTests.xctest/Contents/MacOS/VeilMacHostPackageTests"
+          frameworks="$(xcode-select -p)/Platforms/MacOSX.platform/Developer/Library/Frameworks"
+          libraries="$(xcode-select -p)/Platforms/MacOSX.platform/Developer/usr/lib"
           HOME="$home" CFFIXED_USER_HOME="$home" lldb --batch \
+            -o "settings set target.env-vars DYLD_FRAMEWORK_PATH=$frameworks DYLD_LIBRARY_PATH=$libraries HOME=$home CFFIXED_USER_HOME=$home" \
             -o run \
             -k "thread backtrace all -c 40" \
             -k quit \
