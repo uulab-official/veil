@@ -5,7 +5,7 @@ import Testing
 
 @Suite("RFB desktop resize policy")
 struct RFBDesktopResizePolicyTests {
-    @Test("converts points to pixels with backing scale and 8-pixel alignment")
+    @Test("converts points to pixels with backing scale and 16-pixel alignment")
     func convertsPointsToPixels() {
         let oneX = RFBDesktopSizePolicy.target(
             contentSizeInPoints: CGSize(width: 1_280, height: 800),
@@ -24,6 +24,13 @@ struct RFBDesktopResizePolicyTests {
             backingScaleFactor: 1
         )
         #expect(unaligned == RFBDesktopResizeTarget(widthInPixels: 1_280, heightInPixels: 800))
+
+        // viogpudo pads the scanout to a multiple of 16; an 8-aligned 1512 would show as 1520.
+        let retinaWidth = RFBDesktopSizePolicy.target(
+            contentSizeInPoints: CGSize(width: 756, height: 472),
+            backingScaleFactor: 2
+        )
+        #expect(retinaWidth == RFBDesktopResizeTarget(widthInPixels: 1_504, heightInPixels: 944))
     }
 
     @Test("clamps each axis to the supported pixel bounds")
@@ -58,8 +65,8 @@ struct RFBDesktopResizePolicyTests {
         )
         let width = overCap?.widthInPixels ?? 0
         let height = overCap?.heightInPixels ?? 0
-        #expect(width == 3_320)
-        #expect(height == 2_488)
+        #expect(width == 3_312)
+        #expect(height == 2_480)
         #expect(width * height <= RFBDesktopSizePolicy.maximumAreaPixels)
         #expect(width * height > 0)
     }
@@ -341,6 +348,58 @@ struct RFBDesktopResizeStateMachineTests {
 
         machine.handleDesktopSizeResponse(Self.successResponse(2_048, 1_152))
         #expect(machine.phase == .applied(RFBDesktopResizeTarget(widthInPixels: 2_048, heightInPixels: 1_152)))
+    }
+
+    @Test("a size QEMU forwards to the guest waits for the guest's own resize")
+    func forwardedRequestWaitsForGuest() {
+        var machine = RFBDesktopResizeStateMachine()
+        machine.resetForReconnect()
+        machine.handleDesktopSizeResponse(Self.successResponse(1_280, 800))
+        #expect(machine.request(Self.target) != nil)
+        machine.markRequestSent(Self.target, now: 100)
+
+        // QEMU with virtio-gpu answers result 4 with the current size.
+        machine.handleDesktopSizeResponse(RFBDesktopSizeResponse(
+            width: 1_280,
+            height: 800,
+            reasonCode: 1,
+            resultCode: 4,
+            screens: []
+        ))
+        #expect(machine.phase == .forwarded(Self.target))
+        #expect(machine.presentation == .forwardedToGuest)
+
+        let newer = RFBDesktopResizeTarget(widthInPixels: 1_920, heightInPixels: 1_200)
+        #expect(machine.request(newer) == nil)
+        #expect(machine.queuedTarget == newer)
+        #expect(machine.checkTimeout(now: 103) == nil)
+
+        // The agent changes the Windows mode and QEMU announces it.
+        machine.handleDesktopSizeResponse(Self.successResponse(1_600, 900))
+        #expect(machine.phase == .applied(Self.target))
+        #expect(machine.presentation == .available)
+        #expect(machine.takeQueuedTarget() == newer)
+    }
+
+    @Test("a forwarded size that the guest never applies times out on its own budget")
+    func forwardedRequestTimesOut() {
+        var machine = RFBDesktopResizeStateMachine(requestTimeoutSeconds: 3, forwardedTimeoutSeconds: 10)
+        machine.resetForReconnect()
+        machine.handleDesktopSizeResponse(Self.successResponse(1_280, 800))
+        #expect(machine.request(Self.target) != nil)
+        machine.markRequestSent(Self.target, now: 100)
+        machine.handleDesktopSizeResponse(RFBDesktopSizeResponse(
+            width: 1_280,
+            height: 800,
+            reasonCode: 1,
+            resultCode: 4,
+            screens: []
+        ))
+
+        #expect(machine.checkTimeout(now: 109.9) == nil)
+        #expect(machine.checkTimeout(now: 110) == Self.target)
+        #expect(machine.phase == .timedOut(requested: Self.target))
+        #expect(machine.presentation == .rejected)
     }
 
     private static func successResponse(_ width: Int, _ height: Int) -> RFBDesktopSizeResponse {

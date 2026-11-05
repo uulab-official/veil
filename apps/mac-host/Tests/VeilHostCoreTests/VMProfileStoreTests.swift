@@ -2205,6 +2205,58 @@ struct VMProfileStoreTests {
         #expect(bootRunner.startedProfile?.virtualDiskPath == diskURL.path)
     }
 
+    @Test("a cold start moves an installed Windows with viogpudo onto virtio-gpu alone")
+    func coldStartBootsOnVirtioGPUAfterDriverReport() async throws {
+        let (service, store, bootRunner) = try await Self.installedRuntime(currentState: nil)
+
+        try await service.recordVirtioGPUDriverInstalled(true)
+        #expect(try await store.load()?.bootsOnVirtioGPU == nil)
+
+        _ = try await service.start()
+
+        #expect(bootRunner.startedProfile?.bootsOnVirtioGPU == true)
+        #expect(try await store.load()?.bootsOnVirtioGPU == true)
+
+        // A later report that the driver is gone takes effect at the following cold start.
+        try await service.recordVirtioGPUDriverInstalled(false)
+        #expect(try await store.load()?.bootsOnVirtioGPU == true)
+        bootRunner.currentState = .stopped
+        _ = try await service.start()
+        #expect(bootRunner.startedProfile?.bootsOnVirtioGPU == false)
+    }
+
+    @Test("a start that finds Windows running keeps the display devices QEMU already has")
+    func runningStartKeepsDisplayDevices() async throws {
+        let (service, store, _) = try await Self.installedRuntime(currentState: .running)
+
+        try await service.recordVirtioGPUDriverInstalled(true)
+        _ = try await service.start()
+
+        #expect(try await store.load()?.bootsOnVirtioGPU == nil)
+    }
+
+    private static func installedRuntime(
+        currentState: VMRuntimeState?
+    ) async throws -> (LocalVMRuntimeService, JSONVMProfileStore, FakeVMRuntimeBooter) {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let diskURL = directory.appendingPathComponent("Windows.img")
+        let sharedFolderURL = directory.appendingPathComponent("Veil Shared", isDirectory: true)
+        try Data("installed disk".utf8).write(to: diskURL)
+        try FileManager.default.createDirectory(at: sharedFolderURL, withIntermediateDirectories: true)
+        let store = JSONVMProfileStore(directory: directory)
+        var profile = VMProfile.defaultWindows11Arm(createdAt: Date(timeIntervalSince1970: 1_782_752_400))
+        profile.windowsInstalled = true
+        profile.guestAgentVersion = "0.1.0"
+        profile.installerMediaPath = nil
+        profile.virtualDiskPath = diskURL.path
+        profile.sharedFolderPath = sharedFolderURL.path
+        try await store.save(profile)
+        let bootRunner = FakeVMRuntimeBooter(startState: .running, currentState: currentState)
+        return (LocalVMRuntimeService(profileStore: store, bootRunner: bootRunner), store, bootRunner)
+    }
+
     @Test("local runtime starts with paths resolved from security scoped bookmarks")
     func localRuntimeStartsWithPathsResolvedFromSecurityScopedBookmarks() async throws {
         let directory = FileManager.default.temporaryDirectory

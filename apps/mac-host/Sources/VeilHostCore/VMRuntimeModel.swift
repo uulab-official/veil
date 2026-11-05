@@ -22,6 +22,7 @@ public final class VMRuntimeModel {
     /// service boundary. Keep the model itself single-flight so a double click or a stale
     /// callback cannot let a later operation overwrite the snapshot produced by an earlier one.
     private var operationInFlight = false
+    @ObservationIgnored private var recordedVirtioGPUDriverInstalled: Bool?
     /// Monotonically identifies the latest state read/write. Background refreshes capture this
     /// value and discard their result if a newer mutation or refresh started while they awaited
     /// the service, preventing an old snapshot from landing after a successful operation.
@@ -368,6 +369,22 @@ public final class VMRuntimeModel {
             phase = .failed
         }
         operationInFlight = false
+    }
+
+    /// Stores the agent's `capabilities.virtioGpuDisplay` report, which decides the display devices of
+    /// the next cold start. Health is polled, so only a changed value reaches the profile store, and a
+    /// failed write is retried on the next report rather than shown: the VM keeps working on ramfb.
+    public func recordVirtioGPUDriverInstalled(_ installed: Bool) async {
+        guard recordedVirtioGPUDriverInstalled != installed else {
+            return
+        }
+
+        do {
+            try await service.recordVirtioGPUDriverInstalled(installed)
+            recordedVirtioGPUDriverInstalled = installed
+        } catch {
+            recordedVirtioGPUDriverInstalled = nil
+        }
     }
 
     public func markWindowsInstalled() async {

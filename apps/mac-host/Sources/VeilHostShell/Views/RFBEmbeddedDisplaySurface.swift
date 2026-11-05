@@ -142,7 +142,9 @@ final class RFBEmbeddedDisplayModel {
                 }
 
                 self.resizePresentation = presentation
-                if presentation == .rejected,
+                // A forwarded size reaches Windows only through the agent: the VirtIO GPU driver lists
+                // it as a mode but does not switch to it on its own (docs/install-flow.md).
+                if presentation == .rejected || presentation == .forwardedToGuest,
                    let target = self.lastRequestedResizeTarget {
                     self.lastRequestedResizeTarget = nil
                     self.displayResizeFallback?(target.width, target.height)

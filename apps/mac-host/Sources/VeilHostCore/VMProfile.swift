@@ -97,6 +97,13 @@ public struct VMProfile: Codable, Equatable, Identifiable, Sendable {
     public var commandKeyMapping: VMCommandKeyMapping?
     /// User port forwards on the NAT network, added beside Veil's own at the next start.
     public var portForwards: [VMPortForwardRule]?
+    /// What the guest agent last reported about the virtio-win VirtIO GPU display driver (`viogpudo`).
+    /// Read at the next cold start only; see `bootsOnVirtioGPU`.
+    public var virtioGPUDriverInstalled: Bool?
+    /// True when the latest cold start attached `virtio-gpu-pci` alone instead of `ramfb` plus
+    /// `virtio-gpu-pci`. Set only when a cold start begins, so a suspended session resumes on the device
+    /// list its memory state was saved with.
+    public var bootsOnVirtioGPU: Bool?
     public var createdAt: Date
 
     public init(
@@ -121,6 +128,8 @@ public struct VMProfile: Codable, Equatable, Identifiable, Sendable {
         windowsAccountName: String? = nil,
         commandKeyMapping: VMCommandKeyMapping? = nil,
         portForwards: [VMPortForwardRule]? = nil,
+        virtioGPUDriverInstalled: Bool? = nil,
+        bootsOnVirtioGPU: Bool? = nil,
         createdAt: Date
     ) {
         self.id = id
@@ -144,6 +153,8 @@ public struct VMProfile: Codable, Equatable, Identifiable, Sendable {
         self.windowsAccountName = windowsAccountName
         self.commandKeyMapping = commandKeyMapping
         self.portForwards = portForwards
+        self.virtioGPUDriverInstalled = virtioGPUDriverInstalled
+        self.bootsOnVirtioGPU = bootsOnVirtioGPU
         self.createdAt = createdAt
     }
 

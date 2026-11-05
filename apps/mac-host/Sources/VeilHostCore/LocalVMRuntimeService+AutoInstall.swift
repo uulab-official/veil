@@ -126,6 +126,11 @@ extension LocalVMRuntimeService {
                 </RunSynchronousCommand>
                 <RunSynchronousCommand wcm:action="add">
                   <Order>3</Order>
+                  <Path>\(xmlEscaped(virtioDriverScriptCommand))</Path>
+                  <Description>Install the VirtIO GPU display driver and the other virtio-win drivers listed in the VEIL_AUTO script</Description>
+                </RunSynchronousCommand>
+                <RunSynchronousCommand wcm:action="add">
+                  <Order>4</Order>
                   <Path>\(xmlEscaped(powerPlanCommand))</Path>
                   <Description>Keep the display on and never sleep; the Mac decides when Veil suspends Windows</Description>
                 </RunSynchronousCommand>
@@ -193,6 +198,17 @@ extension LocalVMRuntimeService {
         "powershell -NoProfile -Command \""
             + "$d=([IO.DriveInfo]::GetDrives()|?{$_.IsReady -and $_.VolumeLabel -like '\(VirtioWinDriverMedia.volumeLabelPrefix)*'})[0];"
             + "if($d){pnputil /add-driver ($d.Name+'\(VirtioWinDriverMedia.networkDriverFolder)\\w11\\ARM64\\*.inf') /install *>>$env:windir\\Temp\\veil-virtio.log};"
+            + "exit 0\""
+    }
+
+    /// Runs `Install-VeilVirtIODrivers.ps1` from the VEIL_AUTO media, which installs viogpudo and the
+    /// other virtio-win driver folders; a second driver does not fit in one 259-character `Path`.
+    /// NetKVM keeps its own inline command above, so the network still comes up from media that has
+    /// no agent bundle. The script always exits 0, and without VEIL_AUTO this does nothing.
+    static var virtioDriverScriptCommand: String {
+        "powershell -NoProfile -ExecutionPolicy Bypass -Command \""
+            + "$d=([IO.DriveInfo]::GetDrives()|?{$_.IsReady -and $_.VolumeLabel -eq 'VEIL_AUTO'})[0];"
+            + "if($d){& ($d.Name+'Veil Guest Agent\\scripts\\Install-VeilVirtIODrivers.ps1')};"
             + "exit 0\""
     }
 

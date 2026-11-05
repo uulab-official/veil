@@ -5,6 +5,10 @@ import VeilHostCore
 extension VeilHostShellApp {
     func recordGuestAgentInstallEvidenceIfNeeded() async {
         noteLiveAgentConnectionIfPresent()
+        if model.hasLiveAgentConnection,
+           let virtioGPUDriverInstalled = model.health?.capabilities.virtioGpuDisplay {
+            await vmModel.recordVirtioGPUDriverInstalled(virtioGPUDriverInstalled)
+        }
         guard model.hasLiveAgentConnection,
               let agentVersion = model.health?.agentVersion,
               vmModel.snapshot?.profileName != nil,

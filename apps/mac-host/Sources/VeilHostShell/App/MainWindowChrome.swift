@@ -466,6 +466,10 @@ struct StandaloneMainWindowRoot: View {
     }
 
     func recordGuestAgentInstallEvidenceIfNeeded() async {
+        if model.hasLiveAgentConnection,
+           let virtioGPUDriverInstalled = model.health?.capabilities.virtioGpuDisplay {
+            await vmModel.recordVirtioGPUDriverInstalled(virtioGPUDriverInstalled)
+        }
         guard model.hasLiveAgentConnection,
               let agentVersion = model.health?.agentVersion,
               vmModel.snapshot?.profileName != nil,

@@ -4,13 +4,15 @@ import Foundation
 /// Converts a settled macOS content size into a bounded guest framebuffer request.
 ///
 /// All decisions come from the desktop resize design: clamp each axis, cap the total
-/// area, round down to an 8-pixel boundary, and suppress sub-threshold or duplicate
+/// area, round down to a 16-pixel boundary, and suppress sub-threshold or duplicate
 /// targets so repeated geometry callbacks cannot produce a resize feedback loop.
 public enum RFBDesktopSizePolicy {
     public static let minimumAxisPixels = 640
     public static let maximumAxisPixels = 3_840
     public static let maximumAreaPixels = 8_294_400
-    public static let pixelAlignment = 8
+    /// The VirtIO GPU display driver pads the scanout width up to a multiple of 16 (measured on
+    /// virtio-win 0.1.302), so an 8-aligned width would leave a stale strip at the right edge.
+    public static let pixelAlignment = 16
     public static let minimumChangePixels = 16
 
     /// Returns the guest pixel target for a content size measured in macOS points,
@@ -169,6 +171,9 @@ public struct RFBDesktopResizeStateMachine: Equatable, Sendable {
         case probing
         case supported
         case requestPending(RFBDesktopResizeTarget)
+        /// QEMU accepted the size and passed it to the guest display device (RFB result 4). The
+        /// guest applies it, through the Veil agent today, and QEMU then announces the new size.
+        case forwarded(RFBDesktopResizeTarget)
         case applied(RFBDesktopResizeTarget)
         case unsupported
         case rejected(rejection: RFBDesktopResizeRejection, requested: RFBDesktopResizeTarget)
@@ -177,6 +182,9 @@ public struct RFBDesktopResizeStateMachine: Equatable, Sendable {
 
     public var phase: Phase
     public var requestTimeoutSeconds: TimeInterval
+    /// How long a forwarded request may wait for the guest, counted from when it was sent. The agent
+    /// applies a size with up to two mode changes, which takes longer than QEMU's own answer.
+    public var forwardedTimeoutSeconds: TimeInterval
 
     /// The newest host target that could not go out while a request was in flight.
     /// It is sent after the in-flight request resolves successfully and is dropped
@@ -186,10 +194,12 @@ public struct RFBDesktopResizeStateMachine: Equatable, Sendable {
 
     public init(
         phase: Phase = .unknown,
-        requestTimeoutSeconds: TimeInterval = 3
+        requestTimeoutSeconds: TimeInterval = 3,
+        forwardedTimeoutSeconds: TimeInterval = 10
     ) {
         self.phase = phase
         self.requestTimeoutSeconds = requestTimeoutSeconds
+        self.forwardedTimeoutSeconds = forwardedTimeoutSeconds
     }
 
     /// A framebuffer update without an ExtendedDesktopSize rectangle is normal
@@ -214,6 +224,13 @@ public struct RFBDesktopResizeStateMachine: Equatable, Sendable {
                 return
             }
 
+            // Not a refusal: the request clock keeps running, and the guest's own resize arrives
+            // later as an ordinary successful response.
+            if response.isForwardedToGuest {
+                phase = .forwarded(requested)
+                return
+            }
+
             phase = .rejected(
                 rejection: RFBDesktopResizeRejection(
                     reasonCode: response.reasonCode,
@@ -230,8 +247,11 @@ public struct RFBDesktopResizeStateMachine: Equatable, Sendable {
             widthInPixels: response.width,
             heightInPixels: response.height
         )
-        if case .requestPending = phase {
+        switch phase {
+        case .requestPending, .forwarded:
             requestStartedAt = nil
+        default:
+            break
         }
         phase = .applied(applied)
     }
@@ -246,7 +266,7 @@ public struct RFBDesktopResizeStateMachine: Equatable, Sendable {
         case .supported, .applied, .probing, .unknown:
             phase = .requestPending(target)
             return target
-        case .requestPending:
+        case .requestPending, .forwarded:
             queuedTarget = target
             return nil
         case .unsupported, .rejected, .timedOut:
@@ -258,9 +278,19 @@ public struct RFBDesktopResizeStateMachine: Equatable, Sendable {
     /// request that timed out, or nil while nothing is pending or still in budget.
     @discardableResult
     public mutating func checkTimeout(now: TimeInterval) -> RFBDesktopResizeTarget? {
-        guard case .requestPending(let requested) = phase,
-              let startedAt = requestStartedAt,
-              now - startedAt >= requestTimeoutSeconds else {
+        let requested: RFBDesktopResizeTarget
+        let budget: TimeInterval
+        switch phase {
+        case .requestPending(let target):
+            requested = target
+            budget = requestTimeoutSeconds
+        case .forwarded(let target):
+            requested = target
+            budget = forwardedTimeoutSeconds
+        default:
+            return nil
+        }
+        guard let startedAt = requestStartedAt, now - startedAt >= budget else {
             return nil
         }
 
@@ -303,6 +333,8 @@ public struct RFBDesktopResizeStateMachine: Equatable, Sendable {
             return .available
         case .requestPending:
             return .available
+        case .forwarded:
+            return .forwardedToGuest
         case .unsupported:
             return .scaled
         case .rejected, .timedOut:
@@ -313,6 +345,8 @@ public struct RFBDesktopResizeStateMachine: Equatable, Sendable {
 
 public enum RFBDesktopResizePresentation: Equatable, Sendable {
     case available
+    /// The guest has to apply the requested size itself; the caller asks the Veil agent to.
+    case forwardedToGuest
     case scaled
     case rejected
     case recovering

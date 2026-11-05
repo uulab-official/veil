@@ -173,4 +173,24 @@ struct VirtioWinDriverMediaTests {
         // The output redirection is escaped in the XML and reaches Windows Setup as `*>>`.
         #expect(answerFile.contains("/install *&gt;&gt;$env:windir"))
     }
+
+    @Test("the answer file runs the VEIL_AUTO driver script after NetKVM in the specialize pass")
+    func answerFileRunsDriverScript() throws {
+        let answerFile = LocalVMRuntimeService.automaticInstallAnswerFile(accountName: "Jamie")
+        let command = LocalVMRuntimeService.virtioDriverScriptCommand
+        let netKVM = try #require(answerFile.range(
+            of: "<Path>\(LocalVMRuntimeService.xmlEscaped(LocalVMRuntimeService.virtioDriverInstallCommand))</Path>"
+        ))
+        let script = try #require(answerFile.range(of: "<Path>\(LocalVMRuntimeService.xmlEscaped(command))</Path>"))
+        let oobe = try #require(answerFile.range(of: "<settings pass=\"oobeSystem\">"))
+
+        #expect(netKVM.upperBound < script.lowerBound)
+        #expect(script.upperBound < oobe.lowerBound)
+        #expect(answerFile.contains("<Order>3</Order>\n          <Path>\(LocalVMRuntimeService.xmlEscaped(command))"))
+        #expect(answerFile.contains("<Order>4</Order>\n          <Path>cmd /c powercfg"))
+        #expect(command.count <= LocalVMRuntimeService.runSynchronousPathMaximumLength)
+        #expect(command.contains("$_.VolumeLabel -eq 'VEIL_AUTO'"))
+        #expect(command.contains("'Veil Guest Agent\\scripts\\Install-VeilVirtIODrivers.ps1'"))
+        #expect(command.hasSuffix("exit 0\""))
+    }
 }

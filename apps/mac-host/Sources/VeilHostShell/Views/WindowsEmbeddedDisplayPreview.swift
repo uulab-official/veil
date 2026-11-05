@@ -185,7 +185,7 @@ struct WindowsEmbeddedDisplayPreview: View {
         // Resizing that works, or plain aspect-fit, is the normal case and needs no badge on top of
         // Windows; only a refused or in-progress resize is worth a word.
         switch rfbDisplayModel.resizePresentation {
-        case .available, .scaled:
+        case .available, .scaled, .forwardedToGuest:
             return nil
         case .rejected:
             return "Guest refused resize: aspect-fit"
