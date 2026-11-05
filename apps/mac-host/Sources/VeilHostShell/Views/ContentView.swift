@@ -106,7 +106,10 @@ struct ContentView: View {
             Button("Restart Installation", role: .destructive, action: restartInstallationAction)
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text(WindowsShellCopy.restartInstallationMessage(isRunning: vmModel.canStop))
+            Text(WindowsShellCopy.restartInstallationMessage(
+                isRunning: vmModel.canStop,
+                windowsOnDisk: vmModel.snapshot?.installEvidence.kind == .windowsBootManager
+            ))
         }
         .onChange(of: isLive) { _, isLive in
             if !isLive {

@@ -624,7 +624,9 @@ struct VMRuntimeView: View {
         case .starting:
             installSimulation = .running(stepIndex: 3, progress: 0.66)
         case .running:
-            installSimulation = .complete
+            // The handoff is over once Windows runs; a bar left at 100% "Checking Windows Setup
+            // boot" read as a setup that never finished on a machine that is already installed.
+            installSimulation = .idle
         case .failed, .stopped:
             installSimulation = .idle
         default:

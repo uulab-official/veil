@@ -175,5 +175,8 @@ public enum VMInstallEvidenceKind: String, Codable, Equatable, Sendable {
     case sparseDisk
     case setupReady
     case profileFlag
+    /// Windows Setup registered "Windows Boot Manager" in the VM's UEFI variables, so a bootable
+    /// Windows is on the disk even before the guest agent has ever connected.
+    case windowsBootManager
     case guestAgent
 }

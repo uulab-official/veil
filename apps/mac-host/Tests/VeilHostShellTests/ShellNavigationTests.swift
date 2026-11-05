@@ -105,6 +105,12 @@ struct ShellNavigationTests {
         #expect(!RestartInstallationAvailability.isAvailable(snapshot: machine(installed: false, diskPath: nil), isBusy: false))
         #expect(!RestartInstallationAvailability.isAvailable(snapshot: machine(installed: false), isBusy: true))
         #expect(!RestartInstallationAvailability.isAvailable(snapshot: nil, isBusy: false))
+
+        // Setup's boot entry alone keeps the menu command, since Windows may be stuck before the desktop.
+        var bootable = machine(installed: true)
+        bootable.installEvidence.kind = .windowsBootManager
+        #expect(RestartInstallationAvailability.isAvailable(snapshot: bootable, isBusy: false))
+        #expect(WindowsShellCopy.restartInstallationMessage(isRunning: false, windowsOnDisk: true).contains("already finished copying Windows"))
     }
 
     @Test("the assistant points out an earlier attempt only once Setup wrote to the disk")

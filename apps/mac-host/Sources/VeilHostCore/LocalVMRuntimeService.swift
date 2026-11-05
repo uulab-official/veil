@@ -140,7 +140,12 @@ public struct LocalVMRuntimeService: VMRuntimeService {
                 bootPathReadiness: bootPathReadiness,
                 windowsInstalled: windowsInstalled,
                 guestAgentVersion: profile.guestAgentVersion,
-                virtualDiskAllocatedBytes: virtualDiskAllocatedBytes
+                virtualDiskAllocatedBytes: virtualDiskAllocatedBytes,
+                windowsBootManagerRegistered: profile.virtualDiskPath.map {
+                    UEFIBootEntries.registersWindowsBootManager(
+                        varsURL: URL(fileURLWithPath: $0).deletingLastPathComponent().appendingPathComponent("uefi-vars.fd")
+                    )
+                } ?? false
             )
             return VMRuntimeSnapshot(
                 state: state,

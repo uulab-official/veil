@@ -16,9 +16,10 @@ struct WindowsLauncherMetadataStatus: Equatable {
 }
 
 enum WindowsShellCopy {
-    static func restartInstallationMessage(isRunning: Bool) -> String {
+    static func restartInstallationMessage(isRunning: Bool, windowsOnDisk: Bool = false) -> String {
         let stop = isRunning ? "Veil shuts Windows down, then moves" : "Veil moves"
-        return "\(stop) the unfinished Windows disk, its UEFI settings, and its TPM to the Trash and starts Windows Setup again. The installer ISO, shared folder, and hardware settings are kept."
+        let disk = windowsOnDisk ? "the Windows disk (Windows Setup already finished copying Windows to it)" : "the unfinished Windows disk"
+        return "\(stop) \(disk), its UEFI settings, and its TPM to the Trash and starts Windows Setup again. The installer ISO, shared folder, and hardware settings are kept."
     }
 
     /// The guest agent is only expected to answer once Windows is installed and running.

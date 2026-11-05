@@ -29,7 +29,7 @@ enum WindowsRuntimeReadiness {
         let isActive = snapshot.state == .running || snapshot.state == .starting
         let isWindowsInstalled = (installEvidence ?? snapshot.installEvidence).isInstalled
         let consoleIsStillBooting = snapshot.latestConsoleLaunch?.isRecentlyBooting(asOf: asOf) == true
-        let consoleBootStalled = snapshot.latestConsoleLaunch?.isBootStalled(asOf: asOf) == true
+        let consoleBootStalled = shouldBlockAgentRepair(snapshot: snapshot, asOf: asOf)
 
         let profile = WindowsRuntimeReadinessStep(
             id: "profile",
@@ -176,7 +176,12 @@ enum WindowsRuntimeReadiness {
         snapshot: VMRuntimeSnapshot,
         asOf: Date = Date()
     ) -> Bool {
-        snapshot.latestConsoleLaunch?.isBootStalled(asOf: asOf) == true
+        // Setup's boot entry means the firmware already handed off to Windows; a dark console then
+        // is Windows turning its display off, and the agent repair is exactly what it needs.
+        guard snapshot.installEvidence.kind != .windowsBootManager else {
+            return false
+        }
+        return snapshot.latestConsoleLaunch?.isBootStalled(asOf: asOf) == true
     }
 }
 

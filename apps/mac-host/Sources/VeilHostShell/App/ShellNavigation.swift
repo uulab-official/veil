@@ -94,14 +94,16 @@ final class ShellNavigation {
     }
 }
 
-/// Whether an unfinished Windows installation can be erased and started over. A machine with
-/// Windows installed is never offered this, and there must be a disk to reset.
+/// Whether an unfinished Windows installation can be erased and started over. A Windows the guest
+/// agent or the profile marks installed is never offered this, and there must be a disk to reset.
+/// A disk that only has Setup's boot entry may still be stuck before the desktop, so the menu keeps
+/// the command there, behind a confirmation that says Windows is on the disk.
 enum RestartInstallationAvailability {
     static func isAvailable(snapshot: VMRuntimeSnapshot?, isBusy: Bool) -> Bool {
         guard let snapshot, !isBusy, snapshot.virtualDiskPath != nil else {
             return false
         }
-        return !snapshot.installEvidence.isInstalled
+        return !snapshot.installEvidence.isInstalled || snapshot.installEvidence.kind == .windowsBootManager
     }
 
     /// A blank sparse disk allocates nothing; Windows Setup writes partitions within seconds. Past

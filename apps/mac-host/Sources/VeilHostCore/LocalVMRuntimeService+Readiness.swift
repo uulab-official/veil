@@ -151,7 +151,8 @@ extension LocalVMRuntimeService {
         bootPathReadiness: (isReady: Bool, detail: String),
         windowsInstalled: Bool,
         guestAgentVersion: String?,
-        virtualDiskAllocatedBytes: Int64?
+        virtualDiskAllocatedBytes: Int64?,
+        windowsBootManagerRegistered: Bool = false
     ) -> VMInstallEvidenceSummary {
         if let guestAgentVersion {
             return VMInstallEvidenceSummary(
@@ -168,6 +169,17 @@ extension LocalVMRuntimeService {
                 isInstalled: true,
                 title: "Windows installed",
                 detail: "The local profile is marked installed. Guest-agent evidence should replace this before developer preview."
+            )
+        }
+
+        // Without a network the agent never connects, but Setup's boot entry already proves the
+        // disk holds Windows; treating it as an unfinished install would offer to erase it.
+        if windowsBootManagerRegistered {
+            return VMInstallEvidenceSummary(
+                kind: .windowsBootManager,
+                isInstalled: true,
+                title: "Windows installed",
+                detail: "Windows Setup registered Windows Boot Manager on this disk. Veil Tools connect once Windows has a network."
             )
         }
 
