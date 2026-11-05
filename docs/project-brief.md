@@ -44,8 +44,14 @@ Out of scope for v1:
 - advanced DirectX acceleration,
 - x86 Windows OS emulation,
 - Intel Mac support,
-- USB passthrough,
 - printer/scanner/smart-card bridges.
+
+USB passthrough was on this list until 2026-11-05, when the product goal became UTM feature parity
+("UTM 기능은 다 가져오라"). It is now in scope as UTM ships it: a running Windows can be handed a USB
+device on this Mac and give it back, from Configuration > USB Devices. It stays bounded by macOS, not by
+Veil: a device a macOS driver already owns (keyboards, mice, disks, most audio devices) can only be
+captured with Apple's `com.apple.vm.device-access` entitlement or root, which Veil does not have. See
+[The Privilege Boundary](architecture.md#the-privilege-boundary).
 
 ## Product Principle
 
