@@ -34,7 +34,19 @@ Date: 2026-11-04
 - [x] Homebrew QEMU 11.1.3 + swtpm에서 `qemu-start`가 `-device tpm-tis-device,tpmdev=tpm0: Error: ret = HV_BAD_ARGUMENT (hvf-all.c:123)`로 중단되던 문제를 고쳤다. 원인은 TPM PPI(0x400바이트 RAM 영역)를 Hypervisor.framework가 16 KiB 호스트 페이지로 매핑하지 못하는 것이다. QEMU 계획을 `tpm-tis-device,tpmdev=tpm0,ppi=off`로 바꾼 뒤 같은 ISO가 요구 사항 검사를 통과하고 "Windows 11 설치 중" 화면까지 진행했다(2026-11-04).
 - [x] 위 항목 처리: 다운로드 후 자동 시작, 마법사 Install, 툴바 Start, Actions 메뉴 Start는 QEMU가 준비됐을 때만 Windows를 시작한다. 엔진 안내는 "Apple Virtualization can't run Windows"로 고쳤다.
 - [x] 라이브 Windows Setup 위의 이전 상태 줄(`Windows is open` · Settings · Stop Windows · More)은 부팅이 멈춘 경우에만 보인다. 별도 디스플레이 창은 Apple Virtualization 콘솔 경로였고, 이제 그 경로로 Windows를 시작하지 않는다.
-- [ ] 설치 속도: 같은 ISO의 파일 복사가 3시간에 46%였다. QEMU CPU는 6.8%로 게스트가 I/O를 기다리고 있었고, 설치 ISO는 `usb-storage`로 붙어 있다. `usb-uas` 같은 더 빠른 설치 미디어 경로를 실측해서 바꾼다.
+- [x] 설치 속도: 같은 ISO의 파일 복사가 3시간에 46%였다. QEMU CPU는 6.8%로 게스트가 I/O를 기다리고 있었고, 설치 ISO는 `usb-storage`로 붙어 있다. `usb-uas` 같은 더 빠른 설치 미디어 경로를 실측해서 바꾼다. → 원인은 USB 대용량 저장장치(BOT)가 요청을 하나씩만 처리하는 것이다. 호스트 I/O 시간은 설치 전체에서 약 7분뿐이었다. 설치 ISO를 `ich9-ahci` + `ide-cd`로도 붙여 Setup이 AHCI 사본에서 `install.wim`을 적용하게 했다(펌웨어에 SATA 드라이버가 없어 부팅은 USB 사본으로 한다). 임시 VM(8 vCPU, 16 GB, TPM, Veil Secure Boot 펌웨어, 무인 설치)에서 부팅 시작부터 데스크톱까지 약 12분이었다(기존 약 2시간). 측정값:
+
+  | 구성 | 측정 | 결과 |
+  | --- | --- | --- |
+  | 기존(허브 경유 12 Mb/s `usb-storage`) | 설치 중 ISO 읽기 | 약 1.6 MB/s, 부팅 후 377초에 시스템 디스크 1.8 GB 기록 |
+  | `qemu-xhci,p2=8,p3=8`(허브 없음, 5 Gb/s) | 설치 중 ISO 읽기 | 약 1.2~1.5 MB/s로 사실상 같음 |
+  | WinPE `copy`(boot.wim 660 MB, `usb-storage`) | 순차 읽기 | 4.6~329 MB/s로 Setup 화면 상태에 따라 크게 흔들림 |
+  | WinPE `dism /apply-image`, 원본 USB | 적용 | 9분에 27%(약 33분 예상) |
+  | WinPE `dism /apply-image`, 원본 NVMe 복사본 | 적용 | 9분 안에 100% |
+  | USB 부팅 + AHCI 사본(채택) | 무인 설치 전체 | 245초에 10.6 GB 기록, 약 12분에 데스크톱 |
+  | AHCI 단독 | 펌웨어 부팅 | 실패(ArmVirtQemu에 SATA 드라이버 없음, UEFI 셸) |
+
+  같이 고친 것: xhci 포트를 늘려 12 Mb/s 허브를 없앴다. 이 구성에서는 "Press any key to boot from CD" 프롬프트가 30초 뒤에 떠 UEFI 셸로 떨어졌으므로, 부팅 키를 최대 120초 동안 누르되 설치 미디어 읽기가 32 MiB를 넘으면 멈춘다(실측 42~45회). 응답 파일에서 Dynamic Update를 껐다([Microsoft 문서](https://learn.microsoft.com/windows-hardware/customize/desktop/unattend/microsoft-windows-setup-dynamicupdate)).
 - [x] 엔진 번들: `script/bundle_qemu_runtime.sh`가 QEMU 11.1.3, swtpm, 라이브러리 31개, QEMU 자체 Arm UEFI 펌웨어를 `Veil.app/Contents/Resources/Runtime`에 넣는다. 앱에서 `--start-vm`으로 시작했을 때 `qemu-system-aarch64`와 `swtpm` 프로세스가 번들 경로에서 실행되는 것을 확인했다.
 - [x] Secure Boot 펌웨어 번들: Debian `qemu-efi-aarch64` 2025.02-8+deb13u1과 2026.08+ds-2는 Secure Boot on/off, `opt/org.tianocore/UninstallMemAttrProtocol=y` 모두에서 Windows 11 Arm ISO가 "Start boot option"에 멈춘다. 같은 엔진에서 QEMU 자체 펌웨어(Secure Boot 없음)와 UTM의 Secure Boot 빌드는 45초 안에 Windows 설치 화면에 도달한다. 업스트림 EDK2를 Secure Boot로 직접 빌드하고 Microsoft 키를 등록해 번들한다. → `script/build_secure_firmware.sh`가 EDK2 `4dfdca6`을 CLANGDWARF로 빌드하고(약 4분, 캐시됨) virt-firmware로 Microsoft PK/KEK/db를 등록한다. 번들 엔진 + TPM + `usb-storage` ISO로 새 vars와 기존 설치의 vars 사본 모두에서 Windows 설치 화면 도달 확인. dbx는 자리표시 항목만 있다.
 - [ ] 앱에서 Windows를 시작했을 때 실제 `qemu-system-aarch64` 프로세스 경로가 `Veil.app/Contents/Resources/Runtime/bin`인지, Homebrew가 없는 Mac에서 설치가 끝까지 가는지 확인한다.
@@ -51,3 +63,4 @@ Date: 2026-11-04
 - [x] 설치가 끝나지 않은 동안 `prepareDefaultVM`이 매번 `uefi-vars.fd`를 Secure Boot 템플릿으로 교체한다. 설치 중 Stop/Start 시 부팅 항목이 사라진다. → 디스크에 64 MiB 이상 기록되면(Windows 설치가 시작되면) vars를 유지한다. 키 등록 여부로는 판단할 수 없다: UTM 템플릿으로 만든 현재 설치의 vars는 PK/KEK/db가 비어 있고(Secure Boot Setup Mode) "Windows Boot Manager" 항목만 있다. 처음부터 다시 시작은 Restart Windows Installation이 디스크와 vars를 함께 버린다.
 - [ ] UTM 템플릿으로 시작한 기존 설치는 Secure Boot Setup Mode라 Secure Boot가 실제로 강제되지 않는다. 설치 완료 후 vars에 Microsoft 키를 등록하는 마이그레이션을 검토한다.
 - [ ] 설치 프로그램이 부팅 미디어를 읽는 몇 분 동안 "Windows hasn't finished starting" 막대와 Capture Boot Diagnostics가 뜬다. 정상적인 느린 부팅과 실제 멈춤을 구분한다.
+- [ ] 앱에서 실제로 새 설치를 끝까지 돌려 AHCI 사본 경로와 120초 부팅 키가 같은 시간(약 12분)을 내는지 확인한다(이번 측정은 앱과 같은 인자를 쓴 임시 VM이다).
