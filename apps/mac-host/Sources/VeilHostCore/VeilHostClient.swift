@@ -596,7 +596,12 @@ public struct VeilHostClient: HostDashboardService, Sendable {
         transport: any HostTransport,
         encoder: JSONEncoder = .veilProtocol,
         decoder: JSONDecoder = .veilProtocol,
-        hostForwardProbe: @escaping @Sendable (String, UInt64) async -> HostForwardProbeResult? = Self.probeHostForward
+        // An explicit closure, not `Self.probeHostForward`: with Swift 6.2 (Xcode 26) the test
+        // process crashed on entry to that async static method when called through the method
+        // reference, allocating its async frame (EXC_BAD_ACCESS in the task allocator).
+        hostForwardProbe: @escaping @Sendable (String, UInt64) async -> HostForwardProbeResult? = { endpoint, timeout in
+            await VeilHostClient.probeHostForward(endpoint: endpoint, timeoutNanoseconds: timeout)
+        }
     ) {
         self.transport = transport
         self.encoder = encoder
