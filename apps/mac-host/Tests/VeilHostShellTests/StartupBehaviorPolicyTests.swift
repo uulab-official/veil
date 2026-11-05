@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 import VeilHostCore
 
@@ -74,5 +75,53 @@ struct DriverMediaAttachPolicyTests {
         #expect(!DriverMediaAttachPolicy.attachesOnColdStart(snapshot: snapshot(state: .stopped, driverMediaPath: "/Users/test/virtio.iso")))
         #expect(!DriverMediaAttachPolicy.attachesOnColdStart(snapshot: snapshot(state: .running)))
         #expect(!DriverMediaAttachPolicy.attachesOnColdStart(snapshot: snapshot(state: .suspended)))
+    }
+}
+
+@Suite("Automatic tools setup policy")
+struct AutomaticToolsSetupPolicyTests {
+    private let bootedAt = Date(timeIntervalSince1970: 1_782_752_400)
+
+    private func snapshot(
+        kind: VMInstallEvidenceKind = .windowsBootManager,
+        driverMediaPath: String? = "/Users/test/virtio-win.iso",
+        state: VMRuntimeState = .running
+    ) -> VMRuntimeSnapshot {
+        VMRuntimeSnapshot(
+            state: state,
+            virtualizationAvailable: true,
+            architecture: "arm64",
+            minimumOSSupported: true,
+            profileName: "Windows 11 Arm",
+            driverMediaPath: driverMediaPath,
+            latestConsoleLaunch: VMConsoleLaunchEvidence(
+                provider: "QEMU/HVF",
+                pid: 4242,
+                processLogPath: "/tmp/qemu.log",
+                monitorSocketPath: "/tmp/qemu.sock",
+                qmpSocketPath: "/tmp/qemu.qmp.sock",
+                vncHost: "127.0.0.1",
+                vncPort: 5900,
+                consoleScreenshotPath: nil,
+                startedAt: bootedAt
+            ),
+            installEvidence: VMInstallEvidenceSummary(kind: kind, isInstalled: true, title: "", detail: ""),
+            detail: ""
+        )
+    }
+
+    @Test("a Windows on disk with driver media and no agent gets the tools once it had time to reach the desktop")
+    func installsToolsAfterGrace() {
+        #expect(AutomaticToolsSetupPolicy.installsTools(snapshot: snapshot(), hasLiveAgent: false, now: bootedAt.addingTimeInterval(200)))
+        #expect(!AutomaticToolsSetupPolicy.installsTools(snapshot: snapshot(), hasLiveAgent: false, now: bootedAt.addingTimeInterval(60)))
+    }
+
+    @Test("Veil never types into Windows when the agent answers, the drivers are missing, or the agent was proven")
+    func leavesWindowsAlone() {
+        let later = bootedAt.addingTimeInterval(600)
+        #expect(!AutomaticToolsSetupPolicy.installsTools(snapshot: snapshot(), hasLiveAgent: true, now: later))
+        #expect(!AutomaticToolsSetupPolicy.installsTools(snapshot: snapshot(driverMediaPath: nil), hasLiveAgent: false, now: later))
+        #expect(!AutomaticToolsSetupPolicy.installsTools(snapshot: snapshot(kind: .guestAgent), hasLiveAgent: false, now: later))
+        #expect(!AutomaticToolsSetupPolicy.installsTools(snapshot: snapshot(state: .starting), hasLiveAgent: false, now: later))
     }
 }

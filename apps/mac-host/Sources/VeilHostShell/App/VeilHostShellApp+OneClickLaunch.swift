@@ -254,11 +254,16 @@ extension VeilHostShellApp {
                 return
             }
 
-            displayMessage = "Windows is running. Veil is repairing the app connection for \(pendingLaunchDisplayName())."
+            let isToolsSetup = model.pendingLaunchAppId == nil && needsToolsSetup
+            displayMessage = isToolsSetup
+                ? "Veil is setting up its tools in Windows. Approve the Windows prompt if one appears."
+                : "Windows is running. Veil is repairing the app connection for \(pendingLaunchDisplayName())."
 
             do {
                 _ = try await vmRuntimeBooter.installGuestAgentFromAttachedMedia()
-                displayMessage = "App connection repair sent. Veil will open \(pendingLaunchDisplayName()) when Windows responds."
+                displayMessage = isToolsSetup
+                    ? "Veil tools setup sent. Windows apps appear here once Windows answers."
+                    : "App connection repair sent. Veil will open \(pendingLaunchDisplayName()) when Windows responds."
                 await vmModel.refreshRuntimeEvidence()
             } catch {
                 displayMessage = "App connection repair could not start: \(userMessage(for: error))"
@@ -333,7 +338,14 @@ extension VeilHostShellApp {
         let runtimeIsRunning = vmModel.snapshot?.state == .running
             || vmModel.snapshot?.state == .starting
 
-        return runtimeIsRunning && (hasQueuedLaunch || hasRestoreIntent)
+        return runtimeIsRunning && (hasQueuedLaunch || hasRestoreIntent || needsToolsSetup)
+    }
+
+    private var needsToolsSetup: Bool {
+        AutomaticToolsSetupPolicy.installsTools(
+            snapshot: vmModel.snapshot,
+            hasLiveAgent: model.hasLiveAgentConnection
+        )
     }
 
     private var currentGuestAgentRecoveryToken: String? {
