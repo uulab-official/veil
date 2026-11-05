@@ -32,6 +32,9 @@ struct DiskSettingsPolicyTests {
 
     @Test("the Disk tab sits between Hardware and Installation")
     func diskTabOrder() {
-        #expect(MachineConfigurationTab.allCases.map(\.rawValue) == ["general", "hardware", "disk", "installation", "integration", "diagnostics"])
+        let tabs = MachineConfigurationTab.allCases.map(\.rawValue)
+        // Other tabs (such as USB Devices) may be added; only the Disk tab's place is pinned here.
+        #expect(Array(tabs.prefix(4)) == ["general", "hardware", "disk", "installation"])
+        #expect(tabs.last == "diagnostics")
     }
 }

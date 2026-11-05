@@ -486,6 +486,8 @@ struct VMRuntimeView: View {
                     }
                 }
                 MacIntegrationPanel(snapshot: snapshot)
+            case .usb:
+                USBDevicesPanel(service: model.runtimeService)
             case .diagnostics:
                 if snapshot.preflightChecks.isEmpty {
                     ContentUnavailableView(

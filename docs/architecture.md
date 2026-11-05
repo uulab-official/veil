@@ -147,11 +147,11 @@ synthesized input, clipboard read and write — and the guest's SMB server to th
 Veil runs QEMU as the logged-in user. That is a deliberate architectural choice, and it is why Veil
 needs no admin password to install or run.
 
-It is also the single reason for the two largest remaining gaps against Parallels:
+It is also the single reason for the largest remaining gaps against Parallels:
 
 | Capability | Blocker |
 |---|---|
-| USB device passthrough | macOS binds most USB devices to a kernel driver; libusb cannot take exclusive access without root. QEMU upstream tracks this as unusable on Apple Silicon. |
+| USB devices a macOS driver owns | libusb takes a device from its macOS driver only with the [`com.apple.vm.device-access`](https://developer.apple.com/documentation/bundleresources/entitlements/com.apple.vm.device-access) entitlement or root; without them it refuses the capture ("USB device capture requires either an entitlement … or root privilege", `libusb/os/darwin_usb.c`). Devices with no macOS driver are not blocked; see [USB Device Passthrough](#usb-device-passthrough). |
 | Bridged / host-only networking | Both are macOS `vmnet` modes, which require root or the `com.apple.vm.networking` entitlement Apple grants case by case. |
 
 Parallels closes both by shipping a signed system extension and a privileged helper. Veil has three
@@ -164,11 +164,64 @@ options and has not chosen one:
 3. Running QEMU under `sudo`. **Refused outright** — it would put a user-controlled command line and a
    network-reachable guest behind root.
 
-Until that decision is made, both capabilities are reported as unavailable with their prerequisite by
-`veil-vmctl device-passthrough-status` rather than silently missing. The live shared folder covers the
-file-transfer reason people usually want USB for, and loopback port forwards cover the private
-host-to-guest access people usually want host-only networking for. Neither substitutes for a security
-key or a licence dongle, and the report says so.
+Until that decision is made, the network modes are reported as unavailable with their prerequisite
+by `veil-vmctl device-passthrough-status` rather than silently missing, and the USB menu explains why a
+driver-owned device was not handed over. Loopback port forwards cover the private host-to-guest access
+people usually want host-only networking for, and the live shared folder covers moving files without
+handing Windows a whole disk.
+
+## USB Device Passthrough
+
+Added 2026-11-05 for UTM parity. Configuration > USB Devices lists every USB device on this Mac (read
+from the IORegistry's `IOUSBHostDevice` entries, which needs no privilege) with a switch per device.
+
+```text
+switch on   -> QMP device_add usb-host,id=veil-usb-<bus><addr>-<vid>-<pid>,bus=usb0.0,
+                              hostbus=…,hostaddr=…,vendorid=…,productid=…
+            -> qom-get /machine/peripheral/<id> attached   (repeat up to 3 times)
+            -> false: device_del, and say why
+switch off  -> QMP device_del <id>
+stop/suspend-> device_del every veil-usb-* device first
+```
+
+- Devices are never in the boot plan. A `usb-host` that cannot claim its device would otherwise sit in
+  every boot, and a saved suspend state that contains one cannot be loaded by a boot plan that does not
+  create it, which is why stop and suspend return every device first.
+- `device_add usb-host` succeeds even when libusb cannot open the device: QEMU keeps it pending and
+  retries. Veil therefore reads QEMU's `attached` property and removes a device that never attached, so
+  the switch never shows "connected" for something Windows cannot see.
+- Bus and address pin the exact device; vendor and product are matched too, so a re-used address
+  cannot hand Windows a different device. libusb on macOS numbers the bus as the top byte of the
+  location ID and takes the address from `GetDeviceAddress`, which is what `hostbus`/`hostaddr` match.
+- Only ids with the `veil-usb-` prefix are ever removed, so the boot plan's keyboard, tablet, network
+  adapter, and install media cannot be detached from the menu. Ids encode the device, so the menu
+  recovers the state of a running VM after Veil restarts, and a Veil device whose Mac device has gone
+  (unplugged or re-enumerated) is removed on the next refresh instead of waiting forever.
+- The controller is the boot plan's `qemu-xhci,id=usb0,p2=8,p3=8`: 16 ports, of which the boot plan
+  uses at most seven (keyboard, tablet, `usb-net`, installer, answer file, driver media, `usb-audio`).
+  A full bus comes back as QEMU's own error.
+
+What works without any entitlement is a device no macOS driver has matched, such as many development
+boards, programmers, and vendor-class dongles. A keyboard, mouse, disk, or audio device is held by a
+macOS driver; attaching it fails with an explanation naming the missing entitlement. The UI still warns
+before handing over an input device (the Mac stops receiving its input) or a disk (its volumes leave the
+Mac; eject first), because a Veil signed with `com.apple.vm.device-access` would capture them.
+
+Entitlements, checked against Apple's documentation on 2026-11-05:
+
+- [`com.apple.security.device.usb`](https://developer.apple.com/documentation/bundleresources/entitlements/com.apple.security.device.usb)
+  is an App Sandbox entitlement ("allow your sandboxed app to interact with USB devices"). Veil and its
+  bundled QEMU are not sandboxed, so it changes nothing and is not added.
+- [`com.apple.vm.device-access`](https://developer.apple.com/documentation/bundleresources/entitlements/com.apple.vm.device-access)
+  is "required to use the IOUSBHost APIs for USB device capture", and it is what libusb checks before
+  detaching a macOS driver. It is not added: Veil has no Apple grant for it. UTM is the reference
+  here: its signed build's [`macOS.entitlements`](https://github.com/utmapp/UTM/blob/main/Platform/macOS/macOS.entitlements)
+  claims `com.apple.vm.device-access` and `com.apple.vm.networking`, while its
+  [`macOS-unsigned.entitlements`](https://github.com/utmapp/UTM/blob/main/Platform/macOS/macOS-unsigned.entitlements)
+  leaves both out. Veil is in the unsigned position until it has that grant.
+- The [Hardened Runtime](https://developer.apple.com/documentation/security/hardened-runtime) the
+  release signature enables has no USB or IOKit resource-access exception; it does not block opening a
+  driverless device as the logged-in user.
 
 Current scaffold status:
 

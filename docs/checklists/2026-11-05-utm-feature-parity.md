@@ -1,7 +1,7 @@
 # UTM 기능 대조 (2026-11-05)
 
 UTM(https://github.com/utmapp/UTM)의 기능을 Veil 코드 기준으로 대조한 표다. 경로는 `apps/mac-host/Sources/` 기준이다.
-`docs/project-brief.md`의 v1 범위(Windows 11 Arm 전용, USB 패스스루 제외)를 넘는 항목은 "범위 결정 필요"로 표시했다.
+`docs/project-brief.md`의 v1 범위(Windows 11 Arm 전용)를 넘는 항목은 "범위 결정 필요"로 표시했다. USB 패스스루는 2026-11-05에 범위에 넣었다.
 
 | # | 기능 | 상태 | 근거 | 할 일 |
 |---|---|---|---|---|
@@ -16,7 +16,7 @@ UTM(https://github.com/utmapp/UTM)의 기능을 Veil 코드 기준으로 대조�
 | 9 | 동적 해상도·HiDPI·전체 화면 | 있음 | `RFBDesktopResize.swift` | — |
 | 10 | 게스트 드라이버 자동 설치 | 있음 | `VirtioWinDriverMedia.swift` | 실측 진행 중 |
 | 11 | 네트워크 모드·포트 포워딩 UI | 일부 | 하드웨어 탭 포트 포워딩(기본 127.0.0.1, 0.0.0.0은 경고, Veil 포트 18444·18445·게스트 445 금지, 다음 시작 때 반영) | vmnet은 entitlement 필요(아래) |
-| 12 | USB 패스스루 | 없음 | `QEMUDevicePassthrough.swift` 진단만 | 범위 결정 필요(v1 제외 항목) |
+| 12 | USB 패스스루 | 있음 | `QEMUUSBPassthrough.swift`, 설정 > USB 장치 | macOS 드라이버가 잡은 장치는 `com.apple.vm.device-access` 필요(실물 장치 실측 전) |
 | 13 | 사운드 입출력(마이크) | 일부 | `hda-duplex`가 입력도 제공, `NSMicrophoneUsageDescription`·QEMU `audio-input` entitlement 추가 | 서명된 앱에서 Windows 녹음 실측 |
 | 14 | TPM·Secure Boot | 있음 | swtpm, 자체 EDK2 | — |
 | 15 | VM 설정 UI(CPU·메모리·장치 편집) | 일부 | 설정 창은 표시만 | CPU·메모리 편집 |
@@ -39,7 +39,8 @@ UTM(https://github.com/utmapp/UTM)의 기능을 Veil 코드 기준으로 대조�
 - [x] 17: Cmd 키 매핑 선택
 - [x] 13: 마이크 권한 키와 QEMU entitlement(실측 전)
 - [ ] 8, 16, 18, 21
-- [ ] 12, 20: 범위 결정 후
+- [x] 12: USB 장치 연결·분리(QMP `device_add usb-host`/`device_del`), 종료·일시 중단 전 자동 분리. 드라이버 없는 장치만 권한 없이 동작
+- [ ] 20: 범위 결정 후
 
 ## 장치·입력 설정 메모 (6, 11, 13, 17, 21)
 

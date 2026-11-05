@@ -36,6 +36,7 @@ enum MachineConfigurationTab: String, CaseIterable, Identifiable {
     case disk
     case installation
     case integration
+    case usb
     case diagnostics
 
     var id: String { rawValue }
@@ -47,6 +48,7 @@ enum MachineConfigurationTab: String, CaseIterable, Identifiable {
         case .disk: "Disk"
         case .installation: "Installation"
         case .integration: "Mac Integration"
+        case .usb: "USB Devices"
         case .diagnostics: "Diagnostics"
         }
     }
@@ -58,6 +60,7 @@ enum MachineConfigurationTab: String, CaseIterable, Identifiable {
         case .disk: "internaldrive"
         case .installation: "opticaldisc"
         case .integration: "macwindow.on.rectangle"
+        case .usb: "cable.connector"
         case .diagnostics: "stethoscope"
         }
     }

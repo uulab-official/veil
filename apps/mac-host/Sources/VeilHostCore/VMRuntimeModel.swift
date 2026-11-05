@@ -36,6 +36,11 @@ public final class VMRuntimeModel {
         service as? any VMDiskManaging
     }
 
+    /// The service behind this model, for panels with their own state such as the USB device menu.
+    public var runtimeService: any VMRuntimeService {
+        service
+    }
+
     public var statusText: String {
         guard let snapshot else {
             return phase == .failed ? (errorMessage ?? "VM runtime unavailable") : "VM runtime not loaded"
