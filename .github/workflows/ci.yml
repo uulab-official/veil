@@ -28,13 +28,16 @@ jobs:
         run: ./script/test_all.sh --skip-app-verify --skip-windows-agent
       - name: Crash reports
         # A test process that dies on a signal leaves only its exit code in the log; macOS writes the
-        # crashing thread's stack to DiagnosticReports.
+        # crashing thread's stack to DiagnosticReports, under a name that depends on the process.
         if: failure()
         run: |
-          for report in "$HOME"/Library/Logs/DiagnosticReports/*PackageTests*.ips; do
-            [ -f "$report" ] || continue
+          # shellcheck disable=SC2012  # report names are macOS-generated; newest first matters here
+          ls -lt "$HOME/Library/Logs/DiagnosticReports" /Library/Logs/DiagnosticReports 2>/dev/null | head -20
+          # shellcheck disable=SC2012
+          for report in $(ls -t "$HOME"/Library/Logs/DiagnosticReports/*.ips /Library/Logs/DiagnosticReports/*.ips 2>/dev/null | head -3); do
             echo "::group::$report"
-            head -c 60000 "$report"
+            head -c 80000 "$report"
+            echo
             echo "::endgroup::"
           done
 
