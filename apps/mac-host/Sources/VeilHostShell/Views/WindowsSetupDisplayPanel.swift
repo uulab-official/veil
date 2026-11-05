@@ -120,7 +120,8 @@ struct WindowsSetupDisplayPanel: View {
                     revisionID: displayScreenshotRevisionID,
                     displayResizeAction: displayResizeAction,
                     pointerTapAction: consolePointerTapAction,
-                    keyAction: consoleKeyAction
+                    keyAction: consoleKeyAction,
+                    commandKeyMapping: snapshot.commandKeyMapping ?? .default
                 )
             } else {
                 machineDisplay
@@ -143,7 +144,8 @@ struct WindowsSetupDisplayPanel: View {
                 revisionID: displayScreenshotRevisionID,
                 displayResizeAction: displayResizeAction,
                 pointerTapAction: consolePointerTapAction,
-                keyAction: consoleKeyAction
+                keyAction: consoleKeyAction,
+                commandKeyMapping: snapshot.commandKeyMapping ?? .default
             )
         } else {
             machineDisplay

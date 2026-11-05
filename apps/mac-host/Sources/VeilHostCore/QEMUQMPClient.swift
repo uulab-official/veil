@@ -18,8 +18,8 @@ public struct QEMUProcessOutcome: Equatable, Sendable {
 /// One QEMU Machine Protocol command.
 ///
 /// Veil deliberately models only the commands the Windows App Runtime needs -- runtime state,
-/// pause/resume, memory-state save, and the HMP bridge used for internal disk snapshots -- instead
-/// of exposing a general QEMU control surface. Adding a case here is a protocol-boundary decision,
+/// pause/resume, memory-state save, removable disc change, and the HMP bridge used for internal disk
+/// snapshots -- instead of exposing a general QEMU control surface. Adding a case here is a protocol-boundary decision,
 /// not a convenience.
 public enum QEMUQMPCommand: Equatable, Sendable {
     /// Required handshake before any other command on a freshly opened QMP connection.
@@ -47,6 +47,10 @@ public enum QEMUQMPCommand: Equatable, Sendable {
     case queryJobs
     /// Removes a concluded job so its id can be reused.
     case jobDismiss(jobID: String)
+    /// Puts a read-only raw disc image in a removable drive, opening a guest-locked tray first.
+    case changeRemovableMedium(deviceID: String, filePath: String)
+    /// Takes the disc out of a removable drive even when the guest has locked the tray.
+    case ejectRemovableMedium(deviceID: String)
     case quit
 
     public var executeName: String {
@@ -75,6 +79,10 @@ public enum QEMUQMPCommand: Equatable, Sendable {
             "query-jobs"
         case .jobDismiss:
             "job-dismiss"
+        case .changeRemovableMedium:
+            "blockdev-change-medium"
+        case .ejectRemovableMedium:
+            "eject"
         case .quit:
             "quit"
         }
@@ -107,6 +115,10 @@ public enum QEMUQMPCommand: Equatable, Sendable {
             "QEMU job progress query"
         case .jobDismiss(let jobID):
             "QEMU job '\(jobID)' dismissal"
+        case .changeRemovableMedium(_, let filePath):
+            "Disc insert of \(filePath)"
+        case .ejectRemovableMedium:
+            "Disc eject"
         case .quit:
             "QEMU process quit"
         }
@@ -126,6 +138,11 @@ public enum QEMUQMPCommand: Equatable, Sendable {
             return ["job-id": jobID, "tag": tag, "devices": [node]]
         case .jobDismiss(let jobID):
             return ["id": jobID]
+        case .changeRemovableMedium(let deviceID, let filePath):
+            // JSON carries the path as is; only a `-drive` command line would need commas doubled.
+            return ["id": deviceID, "filename": filePath, "format": "raw", "read-only-mode": "read-only"]
+        case .ejectRemovableMedium(let deviceID):
+            return ["id": deviceID, "force": true]
         default:
             return nil
         }

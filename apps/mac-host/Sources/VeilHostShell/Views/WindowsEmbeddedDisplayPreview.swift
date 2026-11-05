@@ -13,6 +13,7 @@ struct WindowsEmbeddedDisplayPreview: View {
     var displayResizeAction: ((Int, Int) -> Void)?
     var pointerTapAction: (Double, Double) -> Void
     var keyAction: (String) -> Void
+    var commandKeyMapping: VMCommandKeyMapping = .default
     @State private var rfbDisplayModel = RFBEmbeddedDisplayModel()
     @State private var lastThumbnailAt = Date.distantPast
     @Environment(\.liveDisplayThumbnailSink) private var liveDisplayThumbnailSink
@@ -72,6 +73,7 @@ struct WindowsEmbeddedDisplayPreview: View {
 
             ConsolePreviewInputCaptureView(
                 framebufferSize: renderedFramebufferSize,
+                commandKeyMapping: commandKeyMapping,
                 pointerTapAction: { normalizedX, normalizedY in
                     if surface.kind == .vncLoopback {
                         rfbDisplayModel.sendPointerTap(
@@ -191,12 +193,14 @@ enum WindowsDisplayAspectRatioPolicy {
 
 struct ConsolePreviewInputCaptureView: NSViewRepresentable {
     var framebufferSize: CGSize
+    var commandKeyMapping: VMCommandKeyMapping
     var pointerTapAction: (Double, Double) -> Void
     var keyAction: (String) -> Void
 
     func makeNSView(context: Context) -> ConsolePreviewInputCaptureNSView {
         let view = ConsolePreviewInputCaptureNSView()
         view.framebufferSize = framebufferSize
+        view.keyboardMapper.commandKeyMapping = commandKeyMapping
         view.pointerTapAction = pointerTapAction
         view.keyAction = keyAction
         return view
@@ -204,6 +208,7 @@ struct ConsolePreviewInputCaptureView: NSViewRepresentable {
 
     func updateNSView(_ nsView: ConsolePreviewInputCaptureNSView, context: Context) {
         nsView.framebufferSize = framebufferSize
+        nsView.keyboardMapper.commandKeyMapping = commandKeyMapping
         nsView.pointerTapAction = pointerTapAction
         nsView.keyAction = keyAction
     }
@@ -213,7 +218,7 @@ final class ConsolePreviewInputCaptureNSView: NSView {
     var framebufferSize: CGSize = .zero
     var pointerTapAction: ((Double, Double) -> Void)?
     var keyAction: ((String) -> Void)?
-    private let keyboardMapper = QEMUConsoleKeyboardInputMapper()
+    var keyboardMapper = QEMUConsoleKeyboardInputMapper()
 
     override var acceptsFirstResponder: Bool { true }
 

@@ -270,7 +270,9 @@ private enum RFBKeySymMapper {
         case "shift": return 0xffe1
         case "ctrl", "control": return 0xffe3
         case "alt": return 0xffe9
-        case "meta", "meta_l", "cmd", "win", "windows": return 0xffe7
+        // Super_L, not Meta_L: QEMU's en-us keymap puts Meta_L on Shift-Alt, while Super_L is the
+        // Windows logo key (QKeyCode meta_l).
+        case "meta", "meta_l", "cmd", "win", "windows": return 0xffeb
         case "backslash": return 0x5c
         case "slash": return 0x2f
         case "minus": return 0x2d

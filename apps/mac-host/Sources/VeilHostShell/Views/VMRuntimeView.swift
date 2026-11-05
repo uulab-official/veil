@@ -418,6 +418,16 @@ struct VMRuntimeView: View {
                         await model.updateHardware(cpuCount: cpuCount, memoryMB: memoryMB)
                     }
                 }
+                RemovableMediaPanel(
+                    snapshot: snapshot,
+                    status: model.removableMedia,
+                    refreshAction: { await model.refreshRemovableMedia() },
+                    insertAction: { await model.insertRemovableMedia(path: $0) },
+                    ejectAction: { await model.ejectRemovableMedia() }
+                )
+                PortForwardingPanel(snapshot: snapshot) { rules in
+                    await model.updatePortForwards(rules)
+                }
                 ResourcePlanPanel(snapshot: snapshot)
                 DevicePlanPanel(snapshot: snapshot)
             case .disk:
@@ -470,6 +480,11 @@ struct VMRuntimeView: View {
                     }
                 }
             case .integration:
+                KeyboardMappingPanel(snapshot: snapshot) { mapping in
+                    Task {
+                        await model.updateCommandKeyMapping(mapping)
+                    }
+                }
                 MacIntegrationPanel(snapshot: snapshot)
             case .diagnostics:
                 if snapshot.preflightChecks.isEmpty {

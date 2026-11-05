@@ -11,6 +11,11 @@ public protocol VMRuntimeService: Sendable {
     func updateWindowsAccountName(_ name: String?) async throws -> VMRuntimeSnapshot
     func updateHardware(cpuCount: Int, memoryMB: Int) async throws -> VMRuntimeSnapshot
     func updateStartupBehavior(autoStart: Bool, suspendOnQuit: Bool) async throws -> VMRuntimeSnapshot
+    func updateCommandKeyMapping(_ mapping: VMCommandKeyMapping) async throws -> VMRuntimeSnapshot
+    func updatePortForwards(_ rules: [VMPortForwardRule]) async throws -> VMRuntimeSnapshot
+    func removableMediaStatus() async -> VMRemovableMediaStatus
+    func insertRemovableMedia(path: String) async throws -> VMRemovableMediaStatus
+    func ejectRemovableMedia() async throws -> VMRemovableMediaStatus
     func markGuestAgentConnected(agentVersion: String) async throws -> VMRuntimeSnapshot
     func start() async throws -> VMRuntimeSnapshot
     func stop() async throws -> VMRuntimeSnapshot
@@ -51,6 +56,26 @@ public extension VMRuntimeService {
 
     func updateStartupBehavior(autoStart: Bool, suspendOnQuit: Bool) async throws -> VMRuntimeSnapshot {
         throw VMRuntimeError.bootNotImplemented
+    }
+
+    func updateCommandKeyMapping(_ mapping: VMCommandKeyMapping) async throws -> VMRuntimeSnapshot {
+        throw VMRuntimeError.bootNotImplemented
+    }
+
+    func updatePortForwards(_ rules: [VMPortForwardRule]) async throws -> VMRuntimeSnapshot {
+        throw VMRuntimeError.bootNotImplemented
+    }
+
+    func removableMediaStatus() async -> VMRemovableMediaStatus {
+        .unavailable(.notRunning)
+    }
+
+    func insertRemovableMedia(path: String) async throws -> VMRemovableMediaStatus {
+        throw VMRemovableMediaError.notRunning
+    }
+
+    func ejectRemovableMedia() async throws -> VMRemovableMediaStatus {
+        throw VMRemovableMediaError.notRunning
     }
 }
 

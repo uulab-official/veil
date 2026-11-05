@@ -37,6 +37,10 @@ public struct VMRuntimeSnapshot: Codable, Equatable, Sendable {
     public var autoStart: Bool?
     /// Suspend a running Windows instead of leaving it running when Veil quits.
     public var suspendOnQuit: Bool?
+    /// What Command becomes in the Windows desktop.
+    public var commandKeyMapping: VMCommandKeyMapping?
+    /// User port forwards QEMU adds at the next start.
+    public var portForwards: [VMPortForwardRule]?
     public var detail: String
 
     public init(
@@ -71,6 +75,8 @@ public struct VMRuntimeSnapshot: Codable, Equatable, Sendable {
         windowsAccountName: String? = nil,
         autoStart: Bool? = nil,
         suspendOnQuit: Bool? = nil,
+        commandKeyMapping: VMCommandKeyMapping? = nil,
+        portForwards: [VMPortForwardRule]? = nil,
         detail: String
     ) {
         self.state = state
@@ -104,6 +110,8 @@ public struct VMRuntimeSnapshot: Codable, Equatable, Sendable {
         self.windowsAccountName = windowsAccountName
         self.autoStart = autoStart
         self.suspendOnQuit = suspendOnQuit
+        self.commandKeyMapping = commandKeyMapping
+        self.portForwards = portForwards
         self.detail = detail
     }
 }

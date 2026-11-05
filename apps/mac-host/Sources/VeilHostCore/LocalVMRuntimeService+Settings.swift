@@ -23,3 +23,85 @@ extension LocalVMRuntimeService {
         return try await loadSnapshot()
     }
 }
+
+extension LocalVMRuntimeService {
+    /// What Command becomes in the Windows desktop. Read on every key press, so it applies at once.
+    public func updateCommandKeyMapping(_ mapping: VMCommandKeyMapping) async throws -> VMRuntimeSnapshot {
+        var profile = try await profileStore.load() ?? defaultProfile()
+        profile.commandKeyMapping = mapping
+        try await profileStore.save(profile)
+        return try await loadSnapshot()
+    }
+
+    /// Replaces the user port forwards. QEMU binds them at the next start, so they can be edited while
+    /// Windows runs without touching the running machine.
+    public func updatePortForwards(_ rules: [VMPortForwardRule]) async throws -> VMRuntimeSnapshot {
+        try VMPortForwardRuleValidator.validate(rules)
+        var profile = try await profileStore.load() ?? defaultProfile()
+        profile.portForwards = rules
+        try await profileStore.save(profile)
+        return try await loadSnapshot()
+    }
+
+    public func removableMediaStatus() async -> VMRemovableMediaStatus {
+        do {
+            let socketPath = try await removableDriveQMPSocket()
+            return try await readRemovableMediaStatus(socketPath: socketPath)
+        } catch let error as VMRemovableMediaError {
+            return .unavailable(error)
+        } catch {
+            return VMRemovableMediaStatus(isDriveAvailable: false, unavailableReason: error.localizedDescription)
+        }
+    }
+
+    /// Inserts an ISO into the running Windows' removable CD drive, replacing any disc in it.
+    public func insertRemovableMedia(path: String) async throws -> VMRemovableMediaStatus {
+        let url = URL(fileURLWithPath: path).standardizedFileURL
+        guard url.pathExtension.caseInsensitiveCompare("iso") == .orderedSame else {
+            throw VMRemovableMediaError.unsupportedMedia(url.path)
+        }
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory), !isDirectory.boolValue else {
+            throw VMRemovableMediaError.mediaNotFound(url.path)
+        }
+
+        let socketPath = try await removableDriveQMPSocket()
+        try await qmpController.run(
+            .changeRemovableMedium(deviceID: VMRemovableOpticalDrive.deviceID, filePath: url.path),
+            socketPath: socketPath
+        )
+        return try await readRemovableMediaStatus(socketPath: socketPath)
+    }
+
+    public func ejectRemovableMedia() async throws -> VMRemovableMediaStatus {
+        let socketPath = try await removableDriveQMPSocket()
+        try await qmpController.run(
+            .ejectRemovableMedium(deviceID: VMRemovableOpticalDrive.deviceID),
+            socketPath: socketPath
+        )
+        return try await readRemovableMediaStatus(socketPath: socketPath)
+    }
+
+    private func readRemovableMediaStatus(socketPath: String) async throws -> VMRemovableMediaStatus {
+        let reply = try await qmpController.run(
+            .humanMonitor("info block \(VMRemovableOpticalDrive.driveID)"),
+            socketPath: socketPath
+        )
+        return VMRemovableMediaStatus.parse(infoBlock: reply.textReturn ?? "")
+    }
+
+    /// The QMP socket of the QEMU Veil launched, when that QEMU still runs and has the removable drive.
+    private func removableDriveQMPSocket() async throws -> String {
+        guard let record = try await qemuLaunchRecordStore.loadLatest(),
+              let pid = record.pid,
+              qemuLaunchProcessIsRunning(pid),
+              let socketPath = record.qmpSocketPath?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !socketPath.isEmpty else {
+            throw VMRemovableMediaError.notRunning
+        }
+        guard VMRemovableOpticalDrive.isPresent(in: record.arguments) else {
+            throw VMRemovableMediaError.driveMissing
+        }
+        return socketPath
+    }
+}

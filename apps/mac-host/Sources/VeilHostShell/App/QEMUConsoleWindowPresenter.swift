@@ -48,7 +48,8 @@ final class QEMUConsoleWindowPresenter: NSObject, NSWindowDelegate {
         screenshotPath: String?,
         pointerTapAction: @escaping (Double, Double) -> Void,
         keyAction: @escaping (String) -> Void,
-        displayResizeAction: ((Int, Int) -> Void)? = nil
+        displayResizeAction: ((Int, Int) -> Void)? = nil,
+        commandKeyMapping: VMCommandKeyMapping = .default
     ) -> Bool {
         let screenshot = screenshotPath.flatMap(NSImage.init(contentsOfFile:))
         let rootView = WindowsEmbeddedDisplayPreview(
@@ -59,7 +60,8 @@ final class QEMUConsoleWindowPresenter: NSObject, NSWindowDelegate {
             resizeBus: resizeBus,
             displayResizeAction: displayResizeAction,
             pointerTapAction: pointerTapAction,
-            keyAction: keyAction
+            keyAction: keyAction,
+            commandKeyMapping: commandKeyMapping
         )
         .background(Color.black)
 

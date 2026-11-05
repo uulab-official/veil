@@ -24,6 +24,7 @@ public struct LocalVMRuntimeService: VMRuntimeService {
     /// `nil` when no qemu-img is installed; new disks are then raw, as before qcow2.
     let diskImageTool: QEMUDiskImageTool?
     let snapshotController: QEMUSnapshotController
+    let qmpController: any QEMUQMPControlling
 
     public init(
         profileStore: any VMProfileStore = JSONVMProfileStore(),
@@ -45,7 +46,8 @@ public struct LocalVMRuntimeService: VMRuntimeService {
         firmwareVarsTemplatePaths: [String]? = nil,
         installationDiscarder: @escaping @Sendable (URL) throws -> Void = LocalVMRuntimeService.moveToTrash,
         diskImageTool: QEMUDiskImageTool? = QEMUDiskImageTool.located(),
-        snapshotController: QEMUSnapshotController = QEMUSnapshotController()
+        snapshotController: QEMUSnapshotController = QEMUSnapshotController(),
+        qmpController: any QEMUQMPControlling = QEMUQMPClient()
     ) {
         self.profileStore = profileStore
         self.defaultHomeDirectory = defaultHomeDirectory
@@ -66,6 +68,7 @@ public struct LocalVMRuntimeService: VMRuntimeService {
         self.installationDiscarder = installationDiscarder
         self.diskImageTool = diskImageTool
         self.snapshotController = snapshotController
+        self.qmpController = qmpController
         self.firmwareVarsTemplatePaths = firmwareVarsTemplatePaths
             ?? (
                 LocalQEMUWindowsBootPlanFactory.defaultSecureFirmwareVarsTemplatePaths(homeDirectory: defaultHomeDirectory)
@@ -189,6 +192,8 @@ public struct LocalVMRuntimeService: VMRuntimeService {
                 windowsAccountName: WindowsAccountName.resolve(preferred: profile.windowsAccountName),
                 autoStart: profile.autoStart,
                 suspendOnQuit: profile.suspendOnQuit,
+                commandKeyMapping: profile.commandKeyMapping ?? .default,
+                portForwards: profile.portForwards ?? [],
                 detail: inferredRuntimeState.map(Self.runtimeDetail(for:)) ?? (
                     Self.stoppedDetail(
                         bootPathReadiness: bootPathReadiness,

@@ -14,7 +14,11 @@ public struct QEMUConsoleKeyboardModifier: OptionSet, Sendable {
 }
 
 public struct QEMUConsoleKeyboardInputMapper: Sendable {
-    public init() {}
+    public var commandKeyMapping: VMCommandKeyMapping
+
+    public init(commandKeyMapping: VMCommandKeyMapping = .default) {
+        self.commandKeyMapping = commandKeyMapping
+    }
 
     public func key(
         charactersIgnoringModifiers: String?,
@@ -130,8 +134,12 @@ public struct QEMUConsoleKeyboardInputMapper: Sendable {
     private func qemuModifiers(from modifiers: QEMUConsoleKeyboardModifier) -> [String] {
         var keys: [String] = []
 
-        if modifiers.contains(.command) || modifiers.contains(.control) {
+        let commandIsControl = commandKeyMapping == .control && modifiers.contains(.command)
+        if modifiers.contains(.control) || commandIsControl {
             keys.append("ctrl")
+        }
+        if commandKeyMapping == .windows, modifiers.contains(.command) {
+            keys.append("meta_l")
         }
         if modifiers.contains(.option) {
             keys.append("alt")

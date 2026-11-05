@@ -188,6 +188,8 @@ stage_release_app() {
   <string>$MIN_SYSTEM_VERSION</string>
   <key>NSPrincipalClass</key>
   <string>NSApplication</string>
+  <key>NSMicrophoneUsageDescription</key>
+  <string>Windows apps in Veil can use your microphone, for example in calls or voice recording.</string>
   <key>NSHumanReadableCopyright</key>
   <string>Copyright © UULab. All rights reserved.</string>
 </dict>
