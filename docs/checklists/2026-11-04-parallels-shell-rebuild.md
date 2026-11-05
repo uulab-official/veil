@@ -48,5 +48,6 @@ Date: 2026-11-04
 - [ ] Restart Windows Installation을 실제 앱에서 끝까지 눌러 보기(이번에는 진행 중인 설치를 지우지 않으려고 코어 테스트로만 확인했다).
 - [x] 이전 설치의 부트 항목이 남은 `uefi-vars.fd`로는 설치 프로그램이 부트 로더 화면에서 멈췄다. 템플릿으로 초기화하자 2분 안에 "Windows 11 설치 중"으로 진행했다. Restart Windows Installation이 UEFI 변수도 함께 초기화한다.
 - [x] UTM의 Secure Boot 펌웨어를 쓰는 동안 부팅 화면에 UTM 로고가 나온다. Veil 자체 Secure Boot EDK2 빌드가 이 문제도 해결한다. → 번들 펌웨어는 TianoCore 기본 화면이다. 앱 재빌드 후 다음 부팅부터 적용.
-- [ ] 설치가 끝나지 않은 동안 `prepareDefaultVM`이 매번 `uefi-vars.fd`를 Secure Boot 템플릿으로 교체한다. 설치 중 Stop/Start 시 부팅 항목이 사라진다. 템플릿이 아닌 vars(이미 Secure Boot 키가 등록된 vars)는 유지하도록 좁힌다.
+- [x] 설치가 끝나지 않은 동안 `prepareDefaultVM`이 매번 `uefi-vars.fd`를 Secure Boot 템플릿으로 교체한다. 설치 중 Stop/Start 시 부팅 항목이 사라진다. → 디스크에 64 MiB 이상 기록되면(Windows 설치가 시작되면) vars를 유지한다. 키 등록 여부로는 판단할 수 없다: UTM 템플릿으로 만든 현재 설치의 vars는 PK/KEK/db가 비어 있고(Secure Boot Setup Mode) "Windows Boot Manager" 항목만 있다. 처음부터 다시 시작은 Restart Windows Installation이 디스크와 vars를 함께 버린다.
+- [ ] UTM 템플릿으로 시작한 기존 설치는 Secure Boot Setup Mode라 Secure Boot가 실제로 강제되지 않는다. 설치 완료 후 vars에 Microsoft 키를 등록하는 마이그레이션을 검토한다.
 - [ ] 설치 프로그램이 부팅 미디어를 읽는 몇 분 동안 "Windows hasn't finished starting" 막대와 Capture Boot Diagnostics가 뜬다. 정상적인 느린 부팅과 실제 멈춤을 구분한다.
