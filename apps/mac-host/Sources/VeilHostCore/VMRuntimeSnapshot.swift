@@ -33,6 +33,10 @@ public struct VMRuntimeSnapshot: Codable, Equatable, Sendable {
     public var windowsInstalled: Bool
     /// The local account the next Windows install creates.
     public var windowsAccountName: String?
+    /// Start an installed Windows when Veil opens.
+    public var autoStart: Bool?
+    /// Suspend a running Windows instead of leaving it running when Veil quits.
+    public var suspendOnQuit: Bool?
     public var detail: String
 
     public init(
@@ -65,6 +69,8 @@ public struct VMRuntimeSnapshot: Codable, Equatable, Sendable {
         bootReady: Bool = false,
         windowsInstalled: Bool = false,
         windowsAccountName: String? = nil,
+        autoStart: Bool? = nil,
+        suspendOnQuit: Bool? = nil,
         detail: String
     ) {
         self.state = state
@@ -96,6 +102,8 @@ public struct VMRuntimeSnapshot: Codable, Equatable, Sendable {
         self.bootReady = bootReady
         self.windowsInstalled = windowsInstalled
         self.windowsAccountName = windowsAccountName
+        self.autoStart = autoStart
+        self.suspendOnQuit = suspendOnQuit
         self.detail = detail
     }
 }

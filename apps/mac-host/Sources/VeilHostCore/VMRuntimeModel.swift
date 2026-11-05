@@ -182,6 +182,32 @@ public final class VMRuntimeModel {
         operationInFlight = false
     }
 
+    /// Saves Windows' CPU and memory for its next start.
+    public func updateHardware(cpuCount: Int, memoryMB: Int) async {
+        guard beginOperation() else {
+            return
+        }
+
+        do {
+            snapshot = try await service.updateHardware(cpuCount: cpuCount, memoryMB: memoryMB)
+            phase = .loaded
+        } catch {
+            errorMessage = userMessage(for: error)
+            phase = .failed
+        }
+        operationInFlight = false
+    }
+
+    /// Saves what Veil does with Windows when it opens and quits. Like the account name it runs between
+    /// other operations, so a running Windows can be configured too.
+    public func updateStartupBehavior(autoStart: Bool, suspendOnQuit: Bool) async {
+        do {
+            snapshot = try await service.updateStartupBehavior(autoStart: autoStart, suspendOnQuit: suspendOnQuit)
+        } catch {
+            errorMessage = userMessage(for: error)
+        }
+    }
+
     /// Saves the local Windows account name before the answer file is built. It runs between other
     /// operations' turns, so it never blocks starting the download that follows it.
     public func updateWindowsAccountName(_ name: String?) async {

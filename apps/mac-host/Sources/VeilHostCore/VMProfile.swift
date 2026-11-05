@@ -36,6 +36,42 @@ public enum VMResourcePolicy {
     }
 }
 
+/// The CPU and memory range a user may give Windows on this Mac. Windows 11 needs at least two
+/// cores and 4 GB; the Mac keeps one core and a quarter of its memory (at least 4 GB) for itself.
+public struct VMResourceLimits: Equatable, Sendable {
+    public static let minimumCPUCount = 2
+    public static let minimumMemoryMB = 4_096
+    public static let memoryStepMB = 1_024
+
+    public var maximumCPUCount: Int
+    public var maximumMemoryMB: Int
+
+    public init(processorCount: Int, physicalMemoryBytes: UInt64) {
+        maximumCPUCount = max(Self.minimumCPUCount, processorCount - 1)
+        let physicalMemoryMB = Int(physicalMemoryBytes / 1_024 / 1_024)
+        let reservedMB = max(4_096, physicalMemoryMB / 4)
+        let available = (physicalMemoryMB - reservedMB) / Self.memoryStepMB * Self.memoryStepMB
+        maximumMemoryMB = max(Self.minimumMemoryMB, available)
+    }
+
+    public static func currentHost() -> VMResourceLimits {
+        VMResourceLimits(
+            processorCount: ProcessInfo.processInfo.processorCount,
+            physicalMemoryBytes: ProcessInfo.processInfo.physicalMemory
+        )
+    }
+
+    public func clampedCPUCount(_ count: Int) -> Int {
+        min(max(count, Self.minimumCPUCount), maximumCPUCount)
+    }
+
+    /// Rounds to whole gigabytes so QEMU and Windows see the same size the settings show.
+    public func clampedMemoryMB(_ memoryMB: Int) -> Int {
+        let rounded = Int((Double(memoryMB) / Double(Self.memoryStepMB)).rounded()) * Self.memoryStepMB
+        return min(max(rounded, Self.minimumMemoryMB), maximumMemoryMB)
+    }
+}
+
 public struct VMProfile: Codable, Equatable, Identifiable, Sendable {
     public var id: String
     public var name: String

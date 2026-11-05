@@ -405,8 +405,18 @@ struct VMRuntimeView: View {
             switch tab {
             case .general:
                 MachineSummaryPanel(snapshot: snapshot)
+                StartupBehaviorPanel(snapshot: snapshot) { autoStart, suspendOnQuit in
+                    Task {
+                        await model.updateStartupBehavior(autoStart: autoStart, suspendOnQuit: suspendOnQuit)
+                    }
+                }
                 RuntimeProvidersPanel(snapshot: snapshot)
             case .hardware:
+                HardwareEditorPanel(snapshot: snapshot, canChangeResources: canChangeResources) { cpuCount, memoryMB in
+                    Task {
+                        await model.updateHardware(cpuCount: cpuCount, memoryMB: memoryMB)
+                    }
+                }
                 ResourcePlanPanel(snapshot: snapshot)
                 DevicePlanPanel(snapshot: snapshot)
             case .installation:

@@ -220,6 +220,9 @@ extension VeilHostShellApp {
     }
 
     func configureDockMenuBridge() {
+        appDelegate.terminationHandler = {
+            await suspendWindowsForQuitIfNeeded()
+        }
         appDelegate.reopenHandler = {
             let destination = LauncherReopenPolicy.destination(
                 visibleMirroredWindowCount: windowsAppWindowPresenter.visibleWindowIds.count,

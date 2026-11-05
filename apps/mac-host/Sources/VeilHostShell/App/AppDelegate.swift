@@ -7,6 +7,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private static let launchVerificationMaximumAttempts = 60
     var dockMenuProvider: (() -> NSMenu?)?
     var reopenHandler: (() -> Void)?
+    /// Runs before Veil quits, for example to suspend Windows. A second Quit while it runs exits at once.
+    var terminationHandler: (@MainActor () async -> Void)?
+    private var isRunningTerminationHandler = false
     private let launchVerificationReportURL = LaunchVerificationArguments.reportURL(
         from: ProcessInfo.processInfo.arguments
     )
@@ -25,6 +28,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             MainWindowChrome.showMainWindow()
         }
         scheduleLaunchVerificationReportIfNeeded()
+    }
+
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        guard let terminationHandler, !isRunningTerminationHandler else {
+            return .terminateNow
+        }
+
+        isRunningTerminationHandler = true
+        Task { @MainActor in
+            await terminationHandler()
+            sender.reply(toApplicationShouldTerminate: true)
+        }
+        return .terminateLater
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {

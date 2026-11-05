@@ -11,6 +11,7 @@ public struct LocalVMRuntimeService: VMRuntimeService {
     let suspensionRecordStore: any VMSuspensionRecordStore
     private let providerProbe: VMRuntimeProviderProbe
     let resourcePlan: VMResourcePlan?
+    let resourceLimits: VMResourceLimits?
     let diagnosticDate: @Sendable () -> Date
     let automaticInstallMediaBuilder: any AutomaticInstallMediaBuilding
     let consoleScreenshotRefresher: @Sendable (URL, URL) -> Void
@@ -30,6 +31,7 @@ public struct LocalVMRuntimeService: VMRuntimeService {
         suspensionRecordStore: any VMSuspensionRecordStore = JSONVMSuspensionRecordStore(),
         providerProbe: VMRuntimeProviderProbe = VMRuntimeProviderProbe(),
         resourcePlan: VMResourcePlan? = nil,
+        resourceLimits: VMResourceLimits? = nil,
         diagnosticDate: @escaping @Sendable () -> Date = Date.init,
         automaticInstallMediaBuilder: any AutomaticInstallMediaBuilding = HdiutilAutomaticInstallMediaBuilder(),
         consoleScreenshotRefresher: @escaping @Sendable (URL, URL) -> Void = QEMUVMRuntimeBooter.captureConsoleScreenshot,
@@ -48,6 +50,7 @@ public struct LocalVMRuntimeService: VMRuntimeService {
         self.suspensionRecordStore = suspensionRecordStore
         self.providerProbe = providerProbe
         self.resourcePlan = resourcePlan
+        self.resourceLimits = resourceLimits
         self.diagnosticDate = diagnosticDate
         self.automaticInstallMediaBuilder = automaticInstallMediaBuilder
         self.consoleScreenshotRefresher = consoleScreenshotRefresher
@@ -172,6 +175,8 @@ public struct LocalVMRuntimeService: VMRuntimeService {
                 bootReady: bootPathReadiness.isReady,
                 windowsInstalled: windowsInstalled,
                 windowsAccountName: WindowsAccountName.resolve(preferred: profile.windowsAccountName),
+                autoStart: profile.autoStart,
+                suspendOnQuit: profile.suspendOnQuit,
                 detail: inferredRuntimeState.map(Self.runtimeDetail(for:)) ?? (
                     Self.stoppedDetail(
                         bootPathReadiness: bootPathReadiness,

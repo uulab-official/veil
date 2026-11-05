@@ -9,6 +9,8 @@ public protocol VMRuntimeService: Sendable {
     func markWindowsInstalled() async throws -> VMRuntimeSnapshot
     func restartWindowsInstallation() async throws -> VMRuntimeSnapshot
     func updateWindowsAccountName(_ name: String?) async throws -> VMRuntimeSnapshot
+    func updateHardware(cpuCount: Int, memoryMB: Int) async throws -> VMRuntimeSnapshot
+    func updateStartupBehavior(autoStart: Bool, suspendOnQuit: Bool) async throws -> VMRuntimeSnapshot
     func markGuestAgentConnected(agentVersion: String) async throws -> VMRuntimeSnapshot
     func start() async throws -> VMRuntimeSnapshot
     func stop() async throws -> VMRuntimeSnapshot
@@ -41,6 +43,14 @@ public extension VMRuntimeService {
 
     func updateWindowsAccountName(_ name: String?) async throws -> VMRuntimeSnapshot {
         try await loadSnapshot()
+    }
+
+    func updateHardware(cpuCount: Int, memoryMB: Int) async throws -> VMRuntimeSnapshot {
+        throw VMRuntimeError.bootNotImplemented
+    }
+
+    func updateStartupBehavior(autoStart: Bool, suspendOnQuit: Bool) async throws -> VMRuntimeSnapshot {
+        throw VMRuntimeError.bootNotImplemented
     }
 }
 

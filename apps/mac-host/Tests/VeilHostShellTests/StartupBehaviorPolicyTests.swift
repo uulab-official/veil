@@ -1,0 +1,50 @@
+import Testing
+import VeilHostCore
+
+@testable import VeilHostShell
+
+@Suite("Startup behavior policy")
+struct StartupBehaviorPolicyTests {
+    private func snapshot(
+        state: VMRuntimeState,
+        installed: Bool = true,
+        autoStart: Bool? = true,
+        suspendOnQuit: Bool? = true
+    ) -> VMRuntimeSnapshot {
+        VMRuntimeSnapshot(
+            state: state,
+            virtualizationAvailable: true,
+            architecture: "arm64",
+            minimumOSSupported: true,
+            profileName: "Windows 11 Arm",
+            windowsInstalled: installed,
+            autoStart: autoStart,
+            suspendOnQuit: suspendOnQuit,
+            detail: ""
+        )
+    }
+
+    @Test("an installed, stopped or suspended Windows starts when Veil opens")
+    func autoStartsInstalledWindows() {
+        #expect(StartupBehaviorPolicy.startsWindowsOnLaunch(snapshot: snapshot(state: .stopped), launchArgumentRequested: false, canRunWindows: true))
+        #expect(StartupBehaviorPolicy.startsWindowsOnLaunch(snapshot: snapshot(state: .suspended), launchArgumentRequested: false, canRunWindows: true))
+    }
+
+    @Test("Veil never boots an installer, a running VM, or an engine that cannot run Windows on its own")
+    func skipsAutoStart() {
+        #expect(!StartupBehaviorPolicy.startsWindowsOnLaunch(snapshot: snapshot(state: .stopped, installed: false), launchArgumentRequested: false, canRunWindows: true))
+        #expect(!StartupBehaviorPolicy.startsWindowsOnLaunch(snapshot: snapshot(state: .running), launchArgumentRequested: false, canRunWindows: true))
+        #expect(!StartupBehaviorPolicy.startsWindowsOnLaunch(snapshot: snapshot(state: .stopped, autoStart: false), launchArgumentRequested: false, canRunWindows: true))
+        #expect(!StartupBehaviorPolicy.startsWindowsOnLaunch(snapshot: snapshot(state: .stopped), launchArgumentRequested: false, canRunWindows: false))
+        #expect(StartupBehaviorPolicy.startsWindowsOnLaunch(snapshot: nil, launchArgumentRequested: true, canRunWindows: false))
+    }
+
+    @Test("quitting suspends only a running Windows with the setting on")
+    func suspendsOnQuit() {
+        #expect(StartupBehaviorPolicy.suspendsWindowsOnQuit(snapshot: snapshot(state: .running), canSuspend: true, isBusy: false))
+        #expect(!StartupBehaviorPolicy.suspendsWindowsOnQuit(snapshot: snapshot(state: .running, suspendOnQuit: false), canSuspend: true, isBusy: false))
+        #expect(!StartupBehaviorPolicy.suspendsWindowsOnQuit(snapshot: snapshot(state: .stopped), canSuspend: true, isBusy: false))
+        #expect(!StartupBehaviorPolicy.suspendsWindowsOnQuit(snapshot: snapshot(state: .running), canSuspend: false, isBusy: false))
+        #expect(!StartupBehaviorPolicy.suspendsWindowsOnQuit(snapshot: snapshot(state: .running), canSuspend: true, isBusy: true))
+    }
+}

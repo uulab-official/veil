@@ -117,7 +117,14 @@ struct VeilHostShellApp: App {
                 syncLauncherWindowVisibility()
                 await recordGuestAgentInstallEvidenceIfNeeded()
 
-                if Self.shouldStartVMOnLaunch {
+                if StartupBehaviorPolicy.startsWindowsOnLaunch(
+                    snapshot: vmModel.snapshot,
+                    launchArgumentRequested: Self.shouldStartVMOnLaunch,
+                    canRunWindows: AppWindowEngineStatus.resolve(
+                        bootProvider: vmRuntimeBooter.provider,
+                        providers: vmModel.snapshot?.runtimeProviders ?? []
+                    ).canRunWindows
+                ) {
                     startWindowsAndShowDisplay()
                 }
                 syncDockTileRuntimeStatus()

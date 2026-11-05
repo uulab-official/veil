@@ -98,6 +98,23 @@ extension VeilHostShellApp {
         }
     }
 
+    /// Quit with "Suspend Windows when Veil quits" on saves the session instead of leaving QEMU running.
+    @MainActor
+    func suspendWindowsForQuitIfNeeded() async {
+        guard StartupBehaviorPolicy.suspendsWindowsOnQuit(
+            snapshot: vmModel.snapshot,
+            canSuspend: vmModel.canSuspend,
+            isBusy: vmModel.phase == .loading
+        ) else {
+            return
+        }
+
+        cancelAutomaticQuietRuntime()
+        cancelAutomaticRuntimeConnectionRecovery()
+        displayMessage = "Suspending Windows before Veil quits."
+        await vmModel.suspend()
+    }
+
     func stopWindowsAndCloseDisplay() {
         oneClickAppLaunchGate.cancel()
         Task { @MainActor in
