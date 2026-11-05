@@ -59,6 +59,8 @@ export function createSession(options = {}) {
           await broadcastInputFrame(message, broadcast, nextFrameSequence);
           return [operationAck(message)];
         case MessageType.ClipboardTextSet:
+        case MessageType.ClipboardImageSet:
+        case MessageType.ClipboardFilesSet:
           return [operationAck(message)];
         default:
           return [createError(message.requestId, "unsupported_in_fake_agent", `Fake agent cannot handle ${message.type}`)];
