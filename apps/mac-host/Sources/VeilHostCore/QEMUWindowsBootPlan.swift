@@ -451,7 +451,7 @@ public struct QEMUWindowsBootPlanner: Sendable {
             "-cpu", "host",
             "-smp", "\(cpuCount)",
             "-m", "\(memoryMB)M",
-            "-device", "qemu-xhci,id=usb0",
+            "-device", QEMUWindowsBootPlan.usbControllerArgument,
             "-drive", "if=none,id=system,format=raw,file=\(virtualDiskPath)",
             "-device", "nvme,drive=system,serial=veil-system",
             "-netdev", "user,id=net0,\(userNetworkForwards.joined(separator: ","))",
@@ -472,9 +472,16 @@ public struct QEMUWindowsBootPlanner: Sendable {
         }
 
         if let installerMediaPath, shouldAttachInstallerMedia {
+            // The ISO is attached twice. The Arm UEFI firmware has no SATA driver, so it boots from
+            // the USB copy, which also delivers boot.wim. Windows Setup then applies install.wim from
+            // the AHCI copy: USB mass storage serves one request at a time, and on that path the
+            // image apply took about seven times longer (10.6 GB vs. 1.5 GB written after 4 minutes).
             arguments.append(contentsOf: [
                 "-drive", "driver=raw,file.driver=file,file.locking=off,file.filename=\(installerMediaPath),if=none,id=installer,media=cdrom,readonly=on",
-                "-device", "usb-storage,drive=installer"
+                "-device", "usb-storage,drive=installer",
+                "-device", "ich9-ahci,id=\(QEMUWindowsBootPlan.installerAHCIControllerID)",
+                "-drive", "driver=raw,file.driver=file,file.locking=off,file.filename=\(installerMediaPath),if=none,id=installer-sata,media=cdrom,readonly=on",
+                "-device", "ide-cd,bus=\(QEMUWindowsBootPlan.installerAHCIControllerID).0,drive=installer-sata"
             ])
         }
 
@@ -1694,11 +1701,52 @@ private enum QEMUWindowsBootArgumentRewriter {
     }
 }
 
+extension QEMUWindowsBootPlan {
+    public static let installerAHCIControllerID = "ahci0"
+
+    /// The xHCI controller with eight USB 2 and eight USB 3 ports. QEMU's default has four of each,
+    /// and the network adapter, keyboard, and tablet take three, so the installer and answer media
+    /// landed behind an automatically added 12 Mb/s hub. With free ports they attach directly at
+    /// 5 Gb/s. Measured on Windows 11 Arm Setup this did not shorten the image apply by itself:
+    /// the guest's per-request latency over USB mass storage, not the link speed, bounds it.
+    public static let usbControllerArgument = "qemu-xhci,id=usb0,p2=8,p3=8"
+}
+
 public struct QEMUWindowsBootPromptAutomation: Sendable {
-    /// Seconds of boot-key presses. The installer's "Press any key to boot from CD or DVD" prompt
-    /// waits only a few seconds and can appear well after 12 s on a busy Mac; missing it drops a
-    /// half-installed disk into the UEFI shell. Extra presses after it are harmless.
-    public static let defaultSendCount = 30
+    /// Longest run of boot-key presses, in seconds. The installer's "Press any key to boot from CD
+    /// or DVD" prompt waits only a few seconds, and with 16 GB of RAM, a TPM, and two USB media it
+    /// appeared after more than 30 s; missing it drops the VM into the UEFI shell. Presses stop
+    /// earlier, once the installer media shows Windows Boot Manager loading boot.wim.
+    public static let defaultSendCount = 120
+
+    /// Installer media reads that mean the prompt was answered: the firmware reads about 1 MiB to
+    /// start the CD boot loader, and boot.wim is hundreds of MiB.
+    public static let installerBootStartedReadBytes: Int64 = 32 * 1_024 * 1_024
+    public static let installerDriveID = "installer"
+
+    /// Bytes read so far by one drive, from the HMP `info blockstats` table.
+    public static func readBytes(driveID: String, blockstats: String) -> Int64? {
+        let lines = blockstats
+            .replacingOccurrences(of: "\r\n", with: "\n")
+            .split(separator: "\n", omittingEmptySubsequences: true)
+        guard let header = lines.firstIndex(where: { $0.hasPrefix("\(driveID):") }) else {
+            return nil
+        }
+        for line in lines[lines.index(after: header)...] {
+            if line.contains(": idle_time_ns") {
+                return nil
+            }
+            let fields = line.split(separator: " ", omittingEmptySubsequences: true)
+            if fields.first == "Read:", fields.count > 1 {
+                return Int64(fields[1])
+            }
+        }
+        return nil
+    }
+
+    public static func installerBootHasStarted(blockstats: String) -> Bool {
+        (readBytes(driveID: installerDriveID, blockstats: blockstats) ?? 0) >= installerBootStartedReadBytes
+    }
 
     public var firstSendSecond: Int
     public var maxSendCount: Int

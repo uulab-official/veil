@@ -142,6 +142,11 @@ struct QEMUWindowsBootPlanTests {
         #expect(plan.arguments.containsSequence(["-smp", "8"]))
         #expect(plan.arguments.containsSequence(["-m", "12288M"]))
         #expect(plan.arguments.contains("driver=raw,file.driver=file,file.locking=off,file.filename=/Users/test/Downloads/Win11_25H2_Korean_Arm64_v2.iso,if=none,id=installer,media=cdrom,readonly=on"))
+        // The firmware boots from the USB copy; Setup reads install.wim from the AHCI copy.
+        #expect(plan.arguments.containsSequence(["-device", "usb-storage,drive=installer"]))
+        #expect(plan.arguments.containsSequence(["-device", "ich9-ahci,id=ahci0"]))
+        #expect(plan.arguments.contains("driver=raw,file.driver=file,file.locking=off,file.filename=/Users/test/Downloads/Win11_25H2_Korean_Arm64_v2.iso,if=none,id=installer-sata,media=cdrom,readonly=on"))
+        #expect(plan.arguments.containsSequence(["-device", "ide-cd,bus=ahci0.0,drive=installer-sata"]))
         #expect(plan.automaticInstallMediaPath == "/Users/test/Veil Shared/VeilAutoInstall.iso")
         #expect(plan.arguments.contains("driver=raw,file.driver=file,file.locking=off,file.filename=/Users/test/Veil Shared/VeilAutoInstall.iso,if=none,id=autounattend,media=cdrom,readonly=on"))
         #expect(plan.arguments.contains("if=none,id=system,format=raw,file=/Users/test/Virtual Machines/Veil/Windows 11 Arm.img"))
@@ -161,7 +166,7 @@ struct QEMUWindowsBootPlanTests {
         #expect(!plan.arguments.containsSequence(["-device", "e1000,netdev=net0"]))
         #expect(!plan.arguments.containsSequence(["-device", "virtio-net-pci,netdev=net0"]))
         #expect(plan.arguments.containsSequence(["-display", "cocoa"]))
-        #expect(plan.arguments.containsSequence(["-device", "qemu-xhci,id=usb0"]))
+        #expect(plan.arguments.containsSequence(["-device", "qemu-xhci,id=usb0,p2=8,p3=8"]))
         #expect(plan.arguments.containsSequence(["-device", "usb-storage,drive=autounattend"]))
         #expect(plan.arguments.containsSequence(["-device", "virtio-rng-pci"]))
         #expect(plan.arguments.contains("ramfb"))
@@ -351,7 +356,7 @@ struct QEMUWindowsBootPlanTests {
         #expect(plan.arguments.containsSequence(["-device", "usb-audio,audiodev=veilaudio"]))
         #expect(!plan.arguments.containsSequence(["-device", "intel-hda"]))
         // usb-audio needs the xHCI controller to already exist on the bus.
-        let controllerIndex = try #require(plan.arguments.firstIndex(of: "qemu-xhci,id=usb0"))
+        let controllerIndex = try #require(plan.arguments.firstIndex(of: "qemu-xhci,id=usb0,p2=8,p3=8"))
         let audioIndex = try #require(plan.arguments.firstIndex(of: "usb-audio,audiodev=veilaudio"))
         #expect(controllerIndex < audioIndex)
     }
@@ -1428,7 +1433,35 @@ struct QEMUWindowsBootPlanTests {
 
     @Test("boot prompt automation keeps pressing long enough for a slow installer prompt")
     func bootPromptAutomationCoversSlowPrompt() {
-        #expect(QEMUWindowsBootPromptAutomation().maxSendCount == 30)
+        #expect(QEMUWindowsBootPromptAutomation().maxSendCount == 120)
+    }
+
+    @Test("boot key presses stop once the installer media starts loading boot.wim")
+    func installerBootStartedFromBlockstats() {
+        func blockstats(installerReadBytes: Int64) -> String {
+            """
+            system: idle_time_ns=0\r
+                                      bytes       operations            total_time_ns     merged\r
+            Read:                  90000000              120                  5000000          0\r
+            Write:                        0                0                        0          0\r
+            \r
+            installer: idle_time_ns=10\r
+                                      bytes       operations            total_time_ns     merged\r
+            Read:            \(installerReadBytes)               20                  1000000          0\r
+            Write:                        0                0                        0          0\r
+            Flush:                                         0                        0\r
+            \r
+            autounattend: idle_time_ns=0\r
+                                      bytes       operations            total_time_ns     merged\r
+            Read:                  70000000                5                    10000          0\r
+            """
+        }
+
+        #expect(QEMUWindowsBootPromptAutomation.readBytes(driveID: "installer", blockstats: blockstats(installerReadBytes: 1_048_576)) == 1_048_576)
+        #expect(!QEMUWindowsBootPromptAutomation.installerBootHasStarted(blockstats: blockstats(installerReadBytes: 1_048_576)))
+        #expect(QEMUWindowsBootPromptAutomation.installerBootHasStarted(blockstats: blockstats(installerReadBytes: 660_023_806)))
+        #expect(QEMUWindowsBootPromptAutomation.readBytes(driveID: "missing", blockstats: blockstats(installerReadBytes: 1)) == nil)
+        #expect(!QEMUWindowsBootPromptAutomation.installerBootHasStarted(blockstats: "Error: no QEMU"))
     }
 
     @Test("smoke boot prompt automation sends bounded key attempts")

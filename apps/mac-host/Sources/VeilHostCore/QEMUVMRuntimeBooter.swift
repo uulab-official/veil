@@ -268,7 +268,7 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
             frontmostRunner()
         }
         if shouldSendInstallerBootKey {
-            scheduleWindowsInstallerBootKeySend(monitorSocketURL: monitorSocketURL)
+            scheduleWindowsInstallerBootKeySend(monitorSocketURL: monitorSocketURL, qmpSocketURL: qmpSocketURL)
         }
         scheduleConsoleScreenshotCapture(monitorSocketURL: monitorSocketURL, imageURL: consoleScreenshotURL)
         return .running
@@ -786,11 +786,17 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
         }
     }
 
-    private func scheduleWindowsInstallerBootKeySend(monitorSocketURL: URL) {
+    private func scheduleWindowsInstallerBootKeySend(monitorSocketURL: URL, qmpSocketURL: URL) {
         let bootKeySender = self.bootKeySender
+        let qmpControl = self.qmpControl
         Task.detached {
             for _ in 0..<QEMUWindowsBootPromptAutomation.defaultSendCount {
                 try? await Task.sleep(for: .seconds(1))
+                if let reply = try? await qmpControl.run(.humanMonitor("info blockstats"), socketPath: qmpSocketURL.path, idleTimeoutSeconds: 1),
+                   let blockstats = reply.textReturn,
+                   QEMUWindowsBootPromptAutomation.installerBootHasStarted(blockstats: blockstats) {
+                    return
+                }
                 _ = bootKeySender(monitorSocketURL)
             }
         }

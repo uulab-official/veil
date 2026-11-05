@@ -43,6 +43,13 @@ struct WindowsAccountNameTests {
         #expect(!answerFile.contains("Jamie & Co"))
     }
 
+    @Test("Setup skips Dynamic Update instead of waiting on the VM network")
+    func answerFileDisablesDynamicUpdate() {
+        let answerFile = LocalVMRuntimeService.automaticInstallAnswerFile(accountName: "Jamie")
+
+        #expect(answerFile.contains("<DynamicUpdate>\n        <Enable>false</Enable>\n        <WillShowUI>Never</WillShowUI>\n      </DynamicUpdate>"))
+    }
+
     @Test("a saved name reaches the next install's answer file")
     func savedNameReachesAnswerFile() async throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)

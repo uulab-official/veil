@@ -14,6 +14,10 @@ extension LocalVMRuntimeService {
         try answerFile.write(to: answerFileURL, atomically: true, encoding: .utf8)
     }
 
+    /// Dynamic Update is off so Setup never waits on Windows Update over the VM's user-mode
+    /// network before copying files; Windows Update runs after the first sign-in instead.
+    /// https://learn.microsoft.com/windows-hardware/customize/desktop/unattend/microsoft-windows-setup-dynamicupdate
+    ///
     /// The local account has no password, so Windows signs in to it without a prompt and the
     /// first-logon command installs the Veil agent unattended. The user can add a password in
     /// Windows Settings afterward.
@@ -95,6 +99,10 @@ extension LocalVMRuntimeService {
                   <WillShowUI>Never</WillShowUI>
                 </OSImage>
               </ImageInstall>
+              <DynamicUpdate>
+                <Enable>false</Enable>
+                <WillShowUI>Never</WillShowUI>
+              </DynamicUpdate>
               <UserData>
                 <AcceptEula>true</AcceptEula>
                 <ProductKey>
