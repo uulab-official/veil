@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  mac-host:
+    name: macOS host and harness
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Toolchain
+        run: swift --version
+      - name: Test gate
+        # The signed launch check needs a GUI login session; the Windows agent runs on Windows below.
+        run: ./script/test_all.sh --skip-app-verify --skip-windows-agent
+
+  windows-agent:
+    name: Windows guest agent
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Test
+        run: dotnet test apps/windows-agent/tests/VeilAgent.Tests

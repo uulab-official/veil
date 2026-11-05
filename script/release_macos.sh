@@ -29,9 +29,13 @@ RELEASE_BUILD="${VEIL_RELEASE_BUILD:-$(date -u +%Y%m%d%H%M%S)}"
 
 usage() {
   cat <<'USAGE'
-usage: ./script/release_macos.sh [--preflight|--package|--notarize]
+usage: ./script/release_macos.sh [--preflight|--package|--notarize|--unsigned]
 
-Required environment:
+  --unsigned builds an ad-hoc signed archive without a Developer ID or notarization, for open
+  source builds such as GitHub Actions runs without signing secrets. Gatekeeper blocks it on
+  first launch until the user opens it from the Finder context menu.
+
+Required environment (except --unsigned):
   VEIL_DEVELOPER_ID_APPLICATION   Exact "Developer ID Application: ..." identity.
   VEIL_NOTARY_KEYCHAIN_PROFILE   notarytool keychain profile (required for --preflight/--notarize).
 
@@ -66,6 +70,22 @@ validate_release_inputs() {
     || fail "VEIL_RELEASE_VERSION must contain two or three numeric components such as 0.1.0."
   [[ "$RELEASE_BUILD" =~ ^[0-9]+(\.[0-9]+){0,2}$ ]] \
     || fail "VEIL_RELEASE_BUILD must contain one to three numeric components."
+}
+
+preflight_unsigned() {
+  [[ "$RELEASE_VERSION" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]] \
+    || fail "VEIL_RELEASE_VERSION must contain two or three numeric components such as 0.1.0."
+  [[ "$RELEASE_BUILD" =~ ^[0-9]+(\.[0-9]+){0,2}$ ]] \
+    || fail "VEIL_RELEASE_BUILD must contain one to three numeric components."
+  require_command swift
+  require_command codesign
+  require_command ditto
+  require_command plutil
+  require_command shasum
+  verify_release_entitlements
+  verify_clean_worktree
+  SIGNING_IDENTITY="-"
+  echo "unsigned release preflight passed"
 }
 
 require_signing_identity() {
@@ -187,6 +207,16 @@ sign_release_app() {
   fi
 }
 
+# Ad-hoc signatures carry no identity or timestamp; the hardened runtime and entitlements still
+# apply, so the app and its bundled QEMU behave as in the Developer ID build.
+sign_unsigned_app() {
+  codesign --force --options runtime --sign - \
+    --entitlements "$RELEASE_ENTITLEMENTS" "$APP_BINARY"
+  codesign --force --options runtime --sign - \
+    --entitlements "$RELEASE_ENTITLEMENTS" "$APP_BUNDLE"
+  codesign --verify --deep --strict --verbose=2 "$APP_BUNDLE"
+}
+
 archive_release_app() {
   rm -f "$ARCHIVE_PATH"
   ditto -c -k --sequesterRsrc --keepParent "$APP_BUNDLE" "$ARCHIVE_PATH"
@@ -232,7 +262,7 @@ write_release_report() {
   plutil -insert version -string "$RELEASE_VERSION" "$RELEASE_REPORT"
   plutil -insert build -string "$RELEASE_BUILD" "$RELEASE_REPORT"
   plutil -insert commit -string "$commit_hash" "$RELEASE_REPORT"
-  plutil -insert signingIdentity -string "$SIGNING_IDENTITY" "$RELEASE_REPORT"
+  plutil -insert signingIdentity -string "$([[ "$SIGNING_IDENTITY" == "-" ]] && echo ad-hoc || echo "$SIGNING_IDENTITY")" "$RELEASE_REPORT"
   plutil -insert hardenedRuntime -bool true "$RELEASE_REPORT"
   plutil -insert notarized -bool "$notarized" "$RELEASE_REPORT"
   plutil -insert archiveSHA256 -string "$archive_sha" "$RELEASE_REPORT"
@@ -259,6 +289,14 @@ case "$MODE" in
     write_release_report
     echo "Developer ID-signed rehearsal archive created at $ARCHIVE_PATH"
     echo "Do not distribute it until --notarize completes and Gatekeeper accepts the stapled app."
+    ;;
+  --unsigned|unsigned)
+    preflight_unsigned
+    stage_release_app
+    sign_unsigned_app
+    archive_release_app
+    write_release_report
+    echo "Unsigned (ad-hoc) release archive created at $ARCHIVE_PATH"
     ;;
   --notarize|notarize)
     preflight
