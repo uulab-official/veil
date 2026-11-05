@@ -1,6 +1,6 @@
 import Foundation
 
-/// The Windows engine Veil ships inside its app bundle: QEMU, swtpm, and the Arm Secure Boot
+/// The Windows engine Veil ships inside its app bundle: QEMU, qemu-img, swtpm, and the Arm Secure Boot
 /// firmware, laid out by `script/bundle_qemu_runtime.sh` under `Contents/Resources/Runtime`.
 ///
 /// Every QEMU, TPM, and firmware lookup checks this directory before Homebrew or another
@@ -9,6 +9,8 @@ public enum VeilBundledRuntime {
     public static let directoryName = "Runtime"
     public static let qemuExecutable = "bin/qemu-system-aarch64"
     public static let tpmEmulator = "bin/swtpm"
+    /// Creates, resizes, converts, and snapshots the Windows system disk while QEMU is not using it.
+    public static let qemuImage = "bin/qemu-img"
     public static let secureFirmware = "share/qemu/edk2-aarch64-secure-code.fd"
     public static let secureFirmwareVarsTemplate = "share/qemu/edk2-arm-secure-vars.fd"
 
