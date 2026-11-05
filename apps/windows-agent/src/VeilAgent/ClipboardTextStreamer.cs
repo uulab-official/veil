@@ -113,6 +113,9 @@ public sealed class ClipboardTextStreamer
         // Windows bumps its sequence number when an app re-sets identical content, so the hash, not the
         // sequence number, decides whether this is a new copy.
         var sha256 = ClipboardImageMessage.Sha256Hex(png);
+        // The echo is consumed whenever it is seen, even for a repeat: the host can send back an image this
+        // agent broadcast earlier, and a mark left behind would later swallow a genuine copy of that image.
+        var isHostEcho = desktop.TryConsumeHostClipboardImageEcho(sha256);
         if (sha256 == lastBroadcastImageSha256)
         {
             return;
@@ -120,7 +123,7 @@ public sealed class ClipboardTextStreamer
 
         lastBroadcastText = null;
         lastBroadcastImageSha256 = sha256;
-        if (desktop.TryConsumeHostClipboardImageEcho(sha256))
+        if (isHostEcho)
         {
             return;
         }
