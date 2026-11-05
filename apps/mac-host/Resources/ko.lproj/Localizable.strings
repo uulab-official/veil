@@ -298,3 +298,25 @@
 "Windows is running, but the app connection did not recover after two attempts. Open recovery to repair Veil Agent." = "Windows는 실행 중이지만 두 번 시도해도 앱 연결이 복구되지 않았습니다. 복구를 열어 Veil 에이전트를 고치세요.";
 "Veil is setting up its tools in Windows. Approve the Windows prompt if one appears." = "Veil이 Windows에 도구를 설치하고 있습니다. Windows 확인 창이 뜨면 허용하세요.";
 "Veil tools setup sent. Windows apps appear here once Windows answers." = "Veil 도구 설치를 보냈습니다. Windows가 응답하면 여기에 Windows 앱이 나타납니다.";
+
+/* USB devices */
+"USB Devices" = "USB 장치";
+"Connect a USB device on this Mac to the running Windows." = "이 Mac에 연결된 USB 장치를 실행 중인 Windows에 연결합니다.";
+"Start Windows to connect USB devices." = "USB 장치를 연결하려면 Windows를 시작하세요.";
+"No USB devices are connected to this Mac." = "이 Mac에 연결된 USB 장치가 없습니다.";
+"Devices macOS already has a driver for, such as keyboards, mice, disks, and most audio devices, can only be taken from macOS with Apple's USB device capture entitlement, which this build of Veil does not have. Devices without a macOS driver, such as many development boards and dongles, connect directly." = "키보드, 마우스, 디스크, 대부분의 오디오 장치처럼 macOS 드라이버가 이미 사용 중인 장치는 Apple의 USB 장치 캡처 권한이 있어야 macOS에서 가져올 수 있으며, 이 Veil 빌드에는 그 권한이 없습니다. 많은 개발 보드와 동글처럼 macOS 드라이버가 없는 장치는 바로 연결됩니다.";
+"In use by macOS" = "macOS에서 사용 중";
+"Connected to Windows" = "Windows에 연결됨";
+"On this Mac" = "이 Mac에서 사용 중";
+"Connect to Windows" = "Windows에 연결";
+"Connect to Windows?" = "Windows에 연결하겠습니까?";
+"Connect this input device to Windows?" = "이 입력 장치를 Windows에 연결하겠습니까?";
+"Connect this disk to Windows?" = "이 디스크를 Windows에 연결하겠습니까?";
+"While Windows uses it, this Mac stops receiving its input. Keep another keyboard and mouse connected to the Mac." = "Windows가 사용하는 동안 이 Mac은 이 장치의 입력을 받지 못합니다. Mac에 다른 키보드와 마우스를 연결해 두세요.";
+"Its volumes disappear from this Mac while Windows uses it. Eject the disk in Finder first so no data is lost." = "Windows가 사용하는 동안 이 디스크의 볼륨이 Mac에서 사라집니다. 데이터 손실을 막으려면 먼저 Finder에서 디스크를 추출하세요.";
+"The Mac cannot use this device while Windows has it." = "Windows가 사용하는 동안에는 Mac에서 이 장치를 쓸 수 없습니다.";
+"Start Windows before connecting a USB device." = "USB 장치를 연결하기 전에 Windows를 시작하세요.";
+"The USB device is no longer connected to this Mac." = "USB 장치가 더 이상 이 Mac에 연결되어 있지 않습니다.";
+"macOS is using %@, and Veil cannot take it from macOS without Apple's USB device capture entitlement." = "macOS가 %@ 장치를 사용 중이며, Veil은 Apple의 USB 장치 캡처 권한 없이는 macOS에서 이 장치를 가져올 수 없습니다.";
+"QEMU could not open %@. Unplug it, plug it back in, and try again." = "QEMU가 %@ 장치를 열지 못했습니다. 장치를 뽑았다가 다시 꽂은 후 다시 시도하세요.";
+"QEMU refused the USB device: %@" = "QEMU가 USB 장치를 거부했습니다: %@";

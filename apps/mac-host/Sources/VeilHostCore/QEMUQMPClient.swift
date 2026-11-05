@@ -18,9 +18,9 @@ public struct QEMUProcessOutcome: Equatable, Sendable {
 /// One QEMU Machine Protocol command.
 ///
 /// Veil deliberately models only the commands the Windows App Runtime needs -- runtime state,
-/// pause/resume, memory-state save, and the HMP bridge used for internal disk snapshots -- instead
-/// of exposing a general QEMU control surface. Adding a case here is a protocol-boundary decision,
-/// not a convenience.
+/// pause/resume, memory-state save, the HMP bridge used for internal disk snapshots, and USB device
+/// attach/detach -- instead of exposing a general QEMU control surface. Adding a case here is a
+/// protocol-boundary decision, not a convenience.
 public enum QEMUQMPCommand: Equatable, Sendable {
     /// Required handshake before any other command on a freshly opened QMP connection.
     case capabilities
@@ -37,6 +37,15 @@ public enum QEMUQMPCommand: Equatable, Sendable {
     /// Escape hatch for monitor-only features that have no stable QMP equivalent, notably the
     /// `savevm`/`loadvm`/`delvm`/`info snapshots` internal-snapshot family.
     case humanMonitor(String)
+    /// Hands one Mac USB device to the guest through QEMU's libusb-backed `usb-host`. Bus and address
+    /// pick the exact device; vendor and product are matched too, so a reused address cannot hand a
+    /// different device to Windows.
+    case addUSBHostDevice(id: String, bus: String, hostBus: Int, hostAddress: Int, vendorId: Int, productId: Int)
+    /// Removes a device Veil added at runtime. Only ever sent for ids Veil created.
+    case deleteDevice(id: String)
+    /// Whether a `usb-host` device actually claimed its Mac device. `device_add` succeeds even when it
+    /// did not, so this is the only reliable answer.
+    case queryUSBDeviceAttached(id: String)
     case quit
 
     public var executeName: String {
@@ -55,6 +64,12 @@ public enum QEMUQMPCommand: Equatable, Sendable {
             "query-migrate"
         case .humanMonitor:
             "human-monitor-command"
+        case .addUSBHostDevice:
+            "device_add"
+        case .deleteDevice:
+            "device_del"
+        case .queryUSBDeviceAttached:
+            "qom-get"
         case .quit:
             "quit"
         }
@@ -77,6 +92,12 @@ public enum QEMUQMPCommand: Equatable, Sendable {
             "VM memory state save progress query"
         case .humanMonitor(let command):
             "QEMU monitor command '\(command)'"
+        case .addUSBHostDevice(let id, _, _, _, _, _):
+            "USB device attach \(id)"
+        case .deleteDevice(let id):
+            "device removal \(id)"
+        case .queryUSBDeviceAttached(let id):
+            "USB device attach state query \(id)"
         case .quit:
             "QEMU process quit"
         }
@@ -90,6 +111,20 @@ public enum QEMUQMPCommand: Equatable, Sendable {
             return ["uri": "exec:cat > \(Self.shellSingleQuoted(filePath))"]
         case .humanMonitor(let command):
             return ["command-line": command]
+        case .addUSBHostDevice(let id, let bus, let hostBus, let hostAddress, let vendorId, let productId):
+            return [
+                "driver": "usb-host",
+                "id": id,
+                "bus": bus,
+                "hostbus": hostBus,
+                "hostaddr": hostAddress,
+                "vendorid": vendorId,
+                "productid": productId
+            ]
+        case .deleteDevice(let id):
+            return ["id": id]
+        case .queryUSBDeviceAttached(let id):
+            return ["path": "/machine/peripheral/\(id)", "property": "attached"]
         default:
             return nil
         }
@@ -126,6 +161,8 @@ public struct QEMUQMPReply: Equatable, Sendable {
     public var textReturn: String?
     public var statusReturn: String?
     public var isRunning: Bool?
+    /// A bare boolean return, as `qom-get` gives for a boolean property.
+    public var boolReturn: Bool?
 
     public init(
         id: String?,
@@ -134,7 +171,8 @@ public struct QEMUQMPReply: Equatable, Sendable {
         errorMessage: String? = nil,
         textReturn: String? = nil,
         statusReturn: String? = nil,
-        isRunning: Bool? = nil
+        isRunning: Bool? = nil,
+        boolReturn: Bool? = nil
     ) {
         self.id = id
         self.isSuccess = isSuccess
@@ -143,6 +181,7 @@ public struct QEMUQMPReply: Equatable, Sendable {
         self.textReturn = textReturn
         self.statusReturn = statusReturn
         self.isRunning = isRunning
+        self.boolReturn = boolReturn
     }
 }
 
@@ -306,12 +345,18 @@ public struct QEMUQMPClient: QEMUQMPControlling {
                 }
 
                 let returnObject = returnValue as? [String: Any]
+                // JSONSerialization decodes `true` as an NSNumber, which also bridges numbers to Bool,
+                // so the CF type check keeps a numeric return from reading as a boolean.
+                let boolReturn = (returnValue as? NSNumber).flatMap {
+                    CFGetTypeID($0) == CFBooleanGetTypeID() ? $0.boolValue : nil
+                }
                 return QEMUQMPReply(
                     id: id,
                     isSuccess: true,
                     textReturn: returnValue as? String,
                     statusReturn: returnObject?["status"] as? String,
-                    isRunning: returnObject?["running"] as? Bool
+                    isRunning: returnObject?["running"] as? Bool,
+                    boolReturn: boolReturn
                 )
             }
     }

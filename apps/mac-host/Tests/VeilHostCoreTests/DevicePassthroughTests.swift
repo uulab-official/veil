@@ -10,17 +10,20 @@ import Testing
 /// conflates a missing QEMU build option with a missing privilege, because those need different fixes.
 @Suite("Device passthrough capability")
 struct DevicePassthroughTests {
-    @Test("reports usb-host as a privilege problem only when the device exists")
-    func reportsPrivilegeProblemOnlyWhenDeviceExists() {
+    @Test("reports usb-host as available, with the macOS driver limit spelled out")
+    func reportsUSBHostAvailableWithDriverLimit() {
         let capability = VMDevicePassthroughReportFactory.usbPassthrough(
             qemuDeviceNames: ["usb-host", "usb-tablet"]
         )
 
-        #expect(capability.state == .requiresPrivilegedHelper)
-        #expect(capability.requiresPrivilegedHelper)
-        #expect(capability.isAvailable == false)
-        #expect(capability.prerequisite?.contains("without root") == true)
-        #expect(capability.reference?.hasPrefix("https://") == true)
+        // Driverless devices attach as the logged-in user. Devices a macOS driver owns need Apple's
+        // capture entitlement or root, and the report has to say so instead of promising every device.
+        #expect(capability.state == .available)
+        #expect(capability.isAvailable)
+        #expect(capability.requiresPrivilegedHelper == false)
+        #expect(capability.prerequisite == nil)
+        #expect(capability.detail.contains("com.apple.vm.device-access"))
+        #expect(capability.reference?.hasPrefix("https://developer.apple.com/") == true)
     }
 
     @Test("separates a QEMU built without libusb from a privilege problem")

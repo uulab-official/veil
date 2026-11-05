@@ -20,6 +20,10 @@ public protocol VMRuntimeService: Sendable {
     func sendConsolePointerTap(normalizedX: Double, normalizedY: Double) async throws -> QEMUPointerTapRecord
     func sendConsoleKey(_ key: String) async throws -> QEMUKeySendRecord
     func exportDiagnostics(to directory: URL) async throws -> URL
+    /// The Mac's USB devices and which of them the running Windows has.
+    func usbPassthroughSnapshot() async -> USBPassthroughSnapshot
+    func attachUSBDevice(_ device: MacUSBDevice) async throws -> USBPassthroughSnapshot
+    func detachUSBDevice(id: String) async throws -> USBPassthroughSnapshot
 }
 
 /// Defaults so a runtime service that predates session persistence -- including test doubles -- keeps
@@ -51,6 +55,18 @@ public extension VMRuntimeService {
 
     func updateStartupBehavior(autoStart: Bool, suspendOnQuit: Bool) async throws -> VMRuntimeSnapshot {
         throw VMRuntimeError.bootNotImplemented
+    }
+
+    func usbPassthroughSnapshot() async -> USBPassthroughSnapshot {
+        USBPassthroughSnapshot(isVMRunning: false, macDevices: [])
+    }
+
+    func attachUSBDevice(_ device: MacUSBDevice) async throws -> USBPassthroughSnapshot {
+        throw USBPassthroughError.vmNotRunning
+    }
+
+    func detachUSBDevice(id: String) async throws -> USBPassthroughSnapshot {
+        throw USBPassthroughError.vmNotRunning
     }
 }
 

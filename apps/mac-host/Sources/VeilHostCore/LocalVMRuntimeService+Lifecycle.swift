@@ -157,6 +157,7 @@ extension LocalVMRuntimeService {
             latestLaunchRecord = nil
             launchRecordWasUnreadable = true
         }
+        await detachUSBDevicesBeforeShutdown(launchRecord: latestLaunchRecord)
         _ = try await bootRunner.stop()
         if let profile {
             Self.stopQEMULaunchIfRunning(
@@ -203,6 +204,7 @@ extension LocalVMRuntimeService {
 
         let startedAt = diagnosticDate()
         do {
+            await detachUSBDevicesBeforeShutdown(launchRecord: try? await qemuLaunchRecordStore.loadLatest())
             let resultingState = try await bootRunner.suspend(profile: sessionProfile)
             await saveBootReportLoggingFailure(Self.bootReport(
                 startedAt: startedAt,
