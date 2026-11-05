@@ -832,12 +832,13 @@ Rules:
 - The guest calls `ChangeDisplaySettingsEx` for the active Windows desktop mode. A false response includes
   a short `reason` and does not change the host's current framebuffer geometry.
 - When the active display adapter is the VirtIO GPU DOD driver and the size is not one of its listed modes,
-  the guest first sets the driver's custom mode through the driver's own `D3DKMTEscape` request (the one
-  virtio-win's `viogpures.exe` uses) and then calls `ChangeDisplaySettingsEx`. The driver pads the scanout
-  width up to a multiple of 16, so the host requests 16-aligned widths.
+  the guest sets the driver's custom mode through the driver's own `D3DKMTEscape` request (the one
+  virtio-win's `viogpures.exe` uses) and calls `ChangeDisplaySettingsEx` again, stepping through a listed
+  mode when Windows is already on the custom one. The driver pads the scanout width up to a multiple of 16,
+  so the host requests 16-aligned widths.
 - The RFB display path invokes this fallback after a QEMU `ExtendedDesktopSize` rejection, and after QEMU
-  answers result code 4 ("request forwarded"): QEMU passed the size to `virtio-gpu`, but the VirtIO GPU
-  driver does not apply it on its own. A later successful RFB desktop-size response becomes authoritative
+  answers result code 4 ("request forwarded"): QEMU passed the size to `virtio-gpu`, and the VirtIO GPU
+  driver lists it as a mode but does not switch to it on its own. A later successful RFB desktop-size response becomes authoritative
   and returns the display to normal dynamic mode.
 
 ## Operation Acknowledgements
