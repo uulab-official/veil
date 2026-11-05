@@ -35,7 +35,7 @@ jobs:
           home="$(mktemp -d)"
           toolchain="$(dirname "$(dirname "$(xcrun --find swift)")")"
           helper="$toolchain/libexec/swift/pm/swiftpm-testing-helper"
-          bundle=".build/arm64-apple-macosx/debug/VeilMacHostPackageTests.xctest/Contents/MacOS/VeilMacHostPackageTests"
+          bundle="$PWD/.build/arm64-apple-macosx/debug/VeilMacHostPackageTests.xctest/Contents/MacOS/VeilMacHostPackageTests"
           HOME="$home" CFFIXED_USER_HOME="$home" lldb --batch \
             -o run \
             -k "thread backtrace all -c 40" \
