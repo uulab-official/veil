@@ -2421,6 +2421,48 @@ struct HostDashboardModelTests {
         #expect(report.localRuntime.installEvidence?.detail.contains("0.1.0") == true)
     }
 
+    @Test("a Windows on disk without the agent is not sent to display recovery for a stale preview")
+    @MainActor
+    func localRuntimeWaitsForAgentWhenWindowsBootManagerIsRegistered() {
+        let model = HostDashboardModel(service: FakeDashboardService())
+        let snapshot = VMRuntimeSnapshot(
+            state: .running,
+            virtualizationAvailable: true,
+            architecture: "arm64",
+            minimumOSSupported: true,
+            profileName: "Windows 11 Arm",
+            virtualDiskPath: "/Users/test/Virtual Machines/Windows 11 Arm.img",
+            latestConsoleLaunch: VMConsoleLaunchEvidence(
+                provider: "QEMU/HVF",
+                pid: 94195,
+                processLogPath: "/tmp/qemu.log",
+                monitorSocketPath: "/tmp/qemu.sock",
+                qmpSocketPath: "/tmp/qemu.qmp.sock",
+                vncHost: "127.0.0.1",
+                vncPort: 5900,
+                consoleScreenshotPath: "/tmp/qemu-console.png",
+                consoleVisualState: .unknown,
+                consoleVisualStateAt: Date(timeIntervalSince1970: 1_000),
+                previewStatus: .stale,
+                startedAt: Date(timeIntervalSince1970: 1_000)
+            ),
+            installEvidence: VMInstallEvidenceSummary(
+                kind: .windowsBootManager,
+                isInstalled: true,
+                title: "Windows installed",
+                detail: "Windows Setup registered Windows Boot Manager on this disk."
+            ),
+            bootReady: true,
+            detail: "Windows is running."
+        )
+
+        let status = model.localRuntimeStatus(snapshot: snapshot)
+
+        #expect(status.consolePreviewStatus == .stale)
+        #expect(status.recommendedAction == "wait-for-guest-agent")
+        #expect(status.recommendedRecoveryCommand == nil)
+    }
+
     @Test("local runtime reports display recovery when running console preview is stale")
     @MainActor
     func localRuntimeReportsDisplayRecoveryForStalePreview() {

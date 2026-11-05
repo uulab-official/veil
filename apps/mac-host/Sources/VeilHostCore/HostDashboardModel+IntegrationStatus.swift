@@ -561,9 +561,14 @@ extension HostDashboardModel {
         let recommendedMediaRebuildCommand = requiresGuestToolsMediaRebuild
             ? (automaticInstallMediaStatus.rebuildCommand ?? prepareCommand(for: snapshot))
             : nil
+        // Setup's boot entry means the firmware already handed off to Windows. An old console
+        // screenshot then says nothing about the live display, and the agent is what is missing.
+        let windowsOnDisk = snapshot.installEvidence.kind == .windowsBootManager
         let consolePreviewStatus = snapshot.latestConsoleLaunch?.previewStatus
-        let consoleIsStillBooting = snapshot.latestConsoleLaunch?.isRecentlyBooting(asOf: Date()) == true
-        let consoleBootStalled = snapshot.latestConsoleLaunch?.isBootStalled(asOf: Date()) == true
+        let consoleIsStillBooting = !windowsOnDisk
+            && snapshot.latestConsoleLaunch?.isRecentlyBooting(asOf: Date()) == true
+        let consoleBootStalled = !windowsOnDisk
+            && snapshot.latestConsoleLaunch?.isBootStalled(asOf: Date()) == true
         let recommendedPowerDownCommand = isRunning && (requiresGuestToolsMediaRebuild || consoleBootStalled)
             ? "veil-vmctl app-runtime-action --json --action stop-runtime"
             : nil
@@ -592,8 +597,8 @@ extension HostDashboardModel {
             recommendedRecoveryCommand = "veil-vmctl qemu-capture --json"
             reason = "Windows has been running for more than 180 seconds without a usable embedded console. Capture the current display evidence, stop Windows, and retry the boot before repairing the guest agent."
         } else if isRunning {
-            let displayNeedsRecovery = consolePreviewStatus == .stale
-                || consolePreviewStatus == .unavailable
+            let displayNeedsRecovery = !windowsOnDisk
+                && (consolePreviewStatus == .stale || consolePreviewStatus == .unavailable)
             let liveDisplayValidationCommand = snapshot.latestConsoleLaunch?.displaySurface.isLiveCapable == true
                 ? "veil-vmctl qemu-display-smoke --json"
                 : nil

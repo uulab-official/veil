@@ -388,7 +388,9 @@ struct WindowsSetupDisplayPanel: View {
                         .frame(maxWidth: 420)
                         .foregroundStyle(.primary)
                 } else if effectiveInstallEvidence.isInstalled, isMachineLive {
-                    AppRuntimeProgressStrip(items: appOpenFlowItems)
+                    // The readiness timeline above already shows Windows running, so the app strip
+                    // starts at the app connection instead of repeating it.
+                    AppRuntimeProgressStrip(items: Array(appOpenFlowItems.dropFirst()))
                         .frame(maxWidth: 760)
                 } else if !effectiveInstallEvidence.isInstalled {
                     ProgressView(value: progressFraction)
