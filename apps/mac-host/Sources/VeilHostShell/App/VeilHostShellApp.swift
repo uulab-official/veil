@@ -101,6 +101,7 @@ struct VeilHostShellApp: App {
             )
             .task {
                 configureDockMenuBridge()
+                configureShortcutIntentBridge()
                 configureWindowsAppWindowCloseBridge()
                 startAgentReconnectPollerIfNeeded()
                 startAutomaticFrameStreamMaintenanceLoopIfNeeded()
