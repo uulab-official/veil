@@ -596,9 +596,6 @@ public struct VeilHostClient: HostDashboardService, Sendable {
         transport: any HostTransport,
         encoder: JSONEncoder = .veilProtocol,
         decoder: JSONDecoder = .veilProtocol,
-        // An explicit closure, not `Self.probeHostForward`: with Swift 6.2 (Xcode 26) the test
-        // process crashed on entry to that async static method when called through the method
-        // reference, allocating its async frame (EXC_BAD_ACCESS in the task allocator).
         hostForwardProbe: @escaping @Sendable (String, UInt64) async -> HostForwardProbeResult? = { endpoint, timeout in
             await VeilHostClient.probeHostForward(endpoint: endpoint, timeoutNanoseconds: timeout)
         }
@@ -1188,9 +1185,16 @@ public struct VeilHostClient: HostDashboardService, Sendable {
             )
         }
 
-        return await Task.detached(priority: .utility) {
-            probeTCP(endpoint: endpoint, host: host, port: port, timeoutNanoseconds: timeoutNanoseconds)
-        }.value
+        // The blocking socket probe runs on a utility queue and resumes a continuation. Built with
+        // Swift 6.2 (Xcode 26), the earlier `Task.detached { ... }.value` form crashed the process on
+        // entry to this function, in the task allocator (EXC_BAD_ACCESS), on the macos-26 runner.
+        return await withCheckedContinuation { continuation in
+            DispatchQueue.global(qos: .utility).async {
+                continuation.resume(
+                    returning: probeTCP(endpoint: endpoint, host: host, port: port, timeoutNanoseconds: timeoutNanoseconds)
+                )
+            }
+        }
     }
 
     private static func probeTCP(
