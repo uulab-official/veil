@@ -595,6 +595,8 @@ test("windows agent includes user-logon install and uninstall scripts", async ()
   for (const script of [repair, install]) {
     assert.match(script, /Wait-Process\s+-Timeout/);
     assert.match(script, /function\s+Move-VeilItemWithRetry/);
+    // An app holding the folder as its current directory blocks the rename, not the files.
+    assert.match(script, /Replacing the VeilAgent files in place/);
   }
   // The tools update disc sits beside an older VEIL_AUTO; the bundle next to the script must win.
   assert.match(repair, /\$ScriptRootAgentRoot\s+-ne\s+\$InstallRoot[\s\S]{0,120}app\\VeilAgent\.exe[\s\S]{0,120}CachedSharedAgentRoot\s*=\s*\$ScriptRootAgentRoot/);
