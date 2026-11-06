@@ -223,10 +223,10 @@ function Move-VeilItemWithRetry {
             Move-Item -LiteralPath $LiteralPath -Destination $Destination
             return
         } catch {
-            if ($Attempt -ge 10) {
+            if ($Attempt -ge 5) {
                 throw
             }
-            Write-Host "$LiteralPath is still in use; retrying ($Attempt/10): $($_.Exception.Message)"
+            Write-Host "$LiteralPath is still in use; retrying ($Attempt/5): $($_.Exception.Message)"
             Stop-VeilAgentProcesses
             Start-Sleep -Seconds 1
         }
@@ -300,11 +300,22 @@ function Sync-VeilInstalledAppBundle {
             if (Test-Path -LiteralPath $RepairBackupRoot) {
                 Remove-Item -LiteralPath $RepairBackupRoot -Recurse -Force
             }
-            Move-VeilItemWithRetry -LiteralPath $InstallRootApp -Destination $RepairBackupRoot
-            $RepairRetiredCurrent = $true
+            try {
+                Move-VeilItemWithRetry -LiteralPath $InstallRootApp -Destination $RepairBackupRoot
+                $RepairRetiredCurrent = $true
+            } catch {
+                # An app opened by an older agent can keep this folder as its current directory, which
+                # blocks renaming the folder but not replacing the files in it.
+                Write-Host "Replacing the VeilAgent files in place: $($_.Exception.Message)"
+                Copy-Item -LiteralPath $InstallRootApp -Destination $RepairBackupRoot -Recurse -Force
+                Copy-Item -Path (Join-Path $RepairStagedAppRoot "*") -Destination $InstallRootApp -Recurse -Force
+                $RepairPromoted = $true
+            }
         }
-        Move-Item -LiteralPath $RepairStagedAppRoot -Destination $InstallRootApp
-        $RepairPromoted = $true
+        if (-not $RepairPromoted) {
+            Move-Item -LiteralPath $RepairStagedAppRoot -Destination $InstallRootApp
+            $RepairPromoted = $true
+        }
         Write-Host "Refreshed installed VeilAgent app bundle from $BundledAppRoot. Previous files are retained at $RepairBackupRoot."
         return $true
     } catch {

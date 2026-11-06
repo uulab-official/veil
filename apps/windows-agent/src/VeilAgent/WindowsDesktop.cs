@@ -67,6 +67,18 @@ public sealed class WindowsDesktop : IWindowsDesktop
     public Task<LaunchedWindow> LaunchAppWithFileAsync(WindowsAppDescriptor app, string filePath, CancellationToken cancellationToken) =>
         LaunchAppCoreAsync(app, arguments: $"\"{filePath}\"", cancellationToken);
 
+    /// <summary>
+    /// Starts an app in the user's profile folder. Inheriting the agent's folder pinned it as the
+    /// app's current directory, so an open Paint blocked tools updates from replacing that folder.
+    /// </summary>
+    internal static ProcessStartInfo AppStartInfo(WindowsAppDescriptor app, string? arguments) => new()
+    {
+        FileName = app.Executable,
+        Arguments = arguments ?? string.Empty,
+        UseShellExecute = true,
+        WorkingDirectory = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)
+    };
+
     private async Task<LaunchedWindow> LaunchAppCoreAsync(WindowsAppDescriptor app, string? arguments, CancellationToken cancellationToken)
     {
         if (!OperatingSystem.IsWindows())
@@ -75,12 +87,8 @@ public sealed class WindowsDesktop : IWindowsDesktop
         }
 
         var existingWindowHandles = SnapshotAppWindowHandles(app);
-        using var process = Process.Start(new ProcessStartInfo
-        {
-            FileName = app.Executable,
-            Arguments = arguments ?? string.Empty,
-            UseShellExecute = true
-        }) ?? throw new InvalidOperationException($"Could not start {app.Executable}.");
+        using var process = Process.Start(AppStartInfo(app, arguments))
+            ?? throw new InvalidOperationException($"Could not start {app.Executable}.");
 
         var discoveryAttempts = (int)(app.WindowDiscoveryTimeout.TotalMilliseconds / 100);
         for (var attempt = 0; attempt < discoveryAttempts; attempt += 1)

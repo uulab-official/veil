@@ -54,10 +54,10 @@ function Move-VeilItemWithRetry {
             Move-Item -LiteralPath $LiteralPath -Destination $Destination
             return
         } catch {
-            if ($Attempt -ge 10) {
+            if ($Attempt -ge 5) {
                 throw
             }
-            Write-Host "$LiteralPath is still in use; retrying ($Attempt/10): $($_.Exception.Message)"
+            Write-Host "$LiteralPath is still in use; retrying ($Attempt/5): $($_.Exception.Message)"
             Stop-VeilAgentProcesses
             Start-Sleep -Seconds 1
         }
@@ -162,11 +162,22 @@ try {
         if (Test-Path -LiteralPath $InstallBackupRoot) {
             Remove-Item -LiteralPath $InstallBackupRoot -Recurse -Force
         }
-        Move-VeilItemWithRetry -LiteralPath $PublishRoot -Destination $InstallBackupRoot
-        $installRetiredCurrent = $true
+        try {
+            Move-VeilItemWithRetry -LiteralPath $PublishRoot -Destination $InstallBackupRoot
+            $installRetiredCurrent = $true
+        } catch {
+            # An app opened by an older agent can keep this folder as its current directory, which
+            # blocks renaming the folder but not replacing the files in it.
+            Write-Host "Replacing the VeilAgent files in place: $($_.Exception.Message)"
+            Copy-Item -LiteralPath $PublishRoot -Destination $InstallBackupRoot -Recurse -Force
+            Copy-Item -Path (Join-Path $InstallStagedAppRoot "*") -Destination $PublishRoot -Recurse -Force
+            $installPromoted = $true
+        }
     }
-    Move-Item -LiteralPath $InstallStagedAppRoot -Destination $PublishRoot
-    $installPromoted = $true
+    if (-not $installPromoted) {
+        Move-Item -LiteralPath $InstallStagedAppRoot -Destination $PublishRoot
+        $installPromoted = $true
+    }
     Write-Host "Promoted the complete VeilAgent app bundle to $PublishRoot."
 
     Copy-Item `
