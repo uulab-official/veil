@@ -5,6 +5,7 @@ configuration="Release"
 runtime="win-arm64"
 self_contained="true"
 dotnet_bin="${DOTNET_BIN:-dotnet}"
+build_id=""
 
 usage() {
   cat <<'USAGE'
@@ -18,6 +19,8 @@ Options:
   --runtime <rid>            .NET runtime identifier. Default: win-arm64
   --framework-dependent      Publish without bundling the .NET runtime
   --dotnet <path>            Path to dotnet executable
+  --build-id <id>            Report agentVersion 0.1.0+<id> and record it in
+                             app/veil-agent-version.txt
   -h, --help                 Show this help
 USAGE
 }
@@ -38,6 +41,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --dotnet)
       dotnet_bin="${2:?Missing value for --dotnet}"
+      shift 2
+      ;;
+    --build-id)
+      build_id="${2:?Missing value for --build-id}"
       shift 2
       ;;
     -h|--help)
@@ -108,12 +115,22 @@ printf '%s\n' "$$" > "$lock_root/owner.pid"
 staging_root="$(mktemp -d "$agent_root/.app-publish.XXXXXXXX")"
 mkdir "$staging_root/next"
 
+version_args=()
+if [[ -n "$build_id" ]]; then
+  version_args=("-p:InformationalVersion=0.1.0+$build_id")
+fi
+
 "$dotnet_bin" publish "$project_path" \
   --configuration "$configuration" \
   --runtime "$runtime" \
   --self-contained "$self_contained" \
   -p:EnableWindowsTargeting=true \
+  ${version_args[@]+"${version_args[@]}"} \
   --output "$staging_root/next"
+
+if [[ -n "$build_id" ]]; then
+  printf '%s\n' "0.1.0+$build_id" > "$staging_root/next/veil-agent-version.txt"
+fi
 
 for artifact in VeilAgent.exe VeilAgent.dll VeilAgent.deps.json VeilAgent.runtimeconfig.json; do
   if [[ ! -f "$staging_root/next/$artifact" || ! -s "$staging_root/next/$artifact" || -L "$staging_root/next/$artifact" ]]; then

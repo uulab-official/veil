@@ -901,7 +901,7 @@ public sealed class AgentSession
             ["type"] = MessageTypes.AgentHealthResponse,
             ["requestId"] = requestId,
             ["protocolVersion"] = 1,
-            ["agentVersion"] = "0.1.0",
+            ["agentVersion"] = AgentBuild.Version,
             ["os"] = "windows-arm64",
             ["session"] = new JsonObject
             {

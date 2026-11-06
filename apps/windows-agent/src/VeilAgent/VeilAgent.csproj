@@ -8,6 +8,9 @@
     <AssemblyName>VeilAgent</AssemblyName>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <!-- Agent health reports this; the bundle script appends +<build id> so the host can tell an outdated install. -->
+    <Version>0.1.0</Version>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="System.Drawing.Common" Version="8.0.0" />
