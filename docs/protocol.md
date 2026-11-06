@@ -113,6 +113,12 @@ Response:
 }
 ```
 
+`agentVersion` is the agent's informational version. A bundle built for the Mac app carries a build
+id after `+`, such as `0.1.0+3f9c2a1b7d04`; the same string is written to
+`app\veil-agent-version.txt` in the bundle. The host treats a connected agent whose `agentVersion`
+differs from the bundled one as outdated tools and offers to update them. A version without a build
+id (a local `dotnet build`) is never called outdated.
+
 `capabilities.windowResize` is optional for backwards compatibility. The host only enables the
 mirrored-window resize affordance when it is explicitly `true`; an absent value means the connected
 agent predates `window.resize.request`.
