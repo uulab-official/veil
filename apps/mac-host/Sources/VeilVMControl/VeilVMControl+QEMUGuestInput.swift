@@ -179,6 +179,41 @@ extension VeilVMControl {
         return report
     }
 
+    /// Installs the tools Veil ships into a running Windows from the tools update disc, the same way
+    /// the app's Update Tools button does.
+    static func sendQEMUGuestToolsUpdate(json: Bool, waitSeconds: Int) async throws {
+        let bundledVersion = GuestToolsBundle.bundledVersion
+        let mediaStatus = try await LocalVMRuntimeService().insertGuestToolsUpdateMedia()
+        var report = try await qemuGuestCommandAttemptReport(
+            commandText: QEMUGuestToolsUpdateKeySequence.commandText,
+            openRunSteps: QEMUGuestToolsUpdateKeySequence.openRunSteps,
+            commandTextSteps: QEMUGuestToolsUpdateKeySequence.commandTextSteps,
+            waitSeconds: waitSeconds,
+            isAlreadySatisfied: { $0.diagnostic.health?.agentVersion == bundledVersion },
+            nextActions: { agentWait, waitSeconds, consoleEvidence in
+                guestAgentInstallNextActions(
+                    agentWait: agentWait,
+                    waitSeconds: waitSeconds,
+                    consoleEvidence: consoleEvidence
+                )
+            }
+        )
+        report.kind = "qemuGuestToolsUpdateAttempt"
+
+        if json {
+            let data = try JSONEncoder.veilDiagnostics.encode(report)
+            print(String(decoding: data, as: UTF8.self))
+            return
+        }
+
+        print("Tools update disc: \(mediaStatus.insertedPath ?? "inserted")")
+        print("Bundled tools: \(bundledVersion ?? "unstamped")")
+        print("QEMU guest tools update attempt: \(report.status.rawValue)")
+        print("UAC readiness: \(report.uacReadiness.status.rawValue) (\(report.uacReadiness.attempts) captures)")
+        print("UAC approval keys: \(report.uacApprovalKeySend == nil ? "not sent" : "sent")")
+        print("Agent version: \(report.agentWait.diagnostic.health?.agentVersion ?? "not connected")")
+    }
+
     static func qemuGuestAgentInstallAttemptReport(waitSeconds: Int) async throws -> QEMUGuestAgentInstallAttemptReport {
         try await qemuGuestCommandAttemptReport(
             commandText: QEMUGuestAgentInstallKeySequence.commandText,

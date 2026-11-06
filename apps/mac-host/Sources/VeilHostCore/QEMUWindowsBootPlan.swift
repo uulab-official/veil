@@ -2163,7 +2163,9 @@ public enum QEMUGuestToolsUpdateKeySequence {
     public static let commandText =
         #"cmd.exe /c for %d in (D E F G H I J K L M N O P Q R S T U V W X Y Z) do if exist "%d:\Veil Guest Agent\U.cmd" call "%d:\Veil Guest Agent\U.cmd""#
 
-    public static var stepsAfterRunOpened: [QEMUKeySequenceStep] {
+    public static let openRunSteps = QEMUGuestAgentInstallKeySequence.openRunSteps
+
+    public static var commandTextSteps: [QEMUKeySequenceStep] {
         get throws {
             var textSteps = try QEMUQMPKeyboardCommandBuilder
                 .keySequence(forText: commandText)
@@ -2171,9 +2173,13 @@ public enum QEMUGuestToolsUpdateKeySequence {
             if !textSteps.isEmpty {
                 textSteps[textSteps.count - 1].delayAfterSend = 1.0
             }
-            return QEMUGuestAgentInstallKeySequence.openRunSteps + [
-                QEMUKeySequenceStep(key: "ctrl-a", delayAfterSend: 0.2)
-            ] + textSteps
+            return [QEMUKeySequenceStep(key: "ctrl-a", delayAfterSend: 0.2)] + textSteps
+        }
+    }
+
+    public static var stepsAfterRunOpened: [QEMUKeySequenceStep] {
+        get throws {
+            openRunSteps + (try commandTextSteps)
         }
     }
 

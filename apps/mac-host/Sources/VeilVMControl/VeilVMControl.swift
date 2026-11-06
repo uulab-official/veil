@@ -92,6 +92,8 @@ struct VeilVMControl {
             try await sendQEMUOOBEBypass(json: json)
         case .qemuInstallAgent(let json, let waitSeconds):
             try await sendQEMUGuestAgentInstall(json: json, waitSeconds: waitSeconds)
+        case .qemuUpdateTools(let json, let waitSeconds):
+            try await sendQEMUGuestToolsUpdate(json: json, waitSeconds: waitSeconds)
         case .qemuPrepareSparsePackage(let json, let waitSeconds):
             try await sendQEMUSparsePackagePreparation(json: json, waitSeconds: waitSeconds)
         case .vmSuspend(let json):
