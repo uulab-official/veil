@@ -149,14 +149,43 @@ extension VeilHostShellApp {
             cancelAutomaticRuntimeConnectionRecovery()
             hasObservedLiveAgentConnection = false
             activateMainWindow()
+            displayMessage = String(localized: "Shutting down Windows. Windows may ask to save changes or finish updates first.")
+            let poweredOff = await shutDownWindowsGracefully()
             await vmModel.stop()
             qemuConsoleWindowPresenter.closeConsole()
 
             if vmModel.snapshot?.state == .stopped {
                 windowsAppWindowPresenter.closeAll()
-                displayMessage = "Windows display closed."
+                displayMessage = poweredOff
+                    ? String(localized: "Windows shut down.")
+                    : String(localized: "Windows did not shut down in time, so Veil turned it off.")
             }
         }
+    }
+
+    /// Shuts Windows down the way the Start menu does: through the Veil tools when they can, else
+    /// by pressing the ACPI power button, then waits for the VM to power off. Returns false when
+    /// Windows never did, and the caller turns it off. Killing QEMU first, as Stop used to, lost
+    /// unsaved work and could interrupt updates Windows installs while shutting down.
+    @MainActor
+    func shutDownWindowsGracefully() async -> Bool {
+        guard vmModel.snapshot?.state == .running else {
+            return false
+        }
+        let viaTools = await model.requestSystemShutdown()
+        if !viaTools, !(await vmModel.pressPowerButton()) {
+            return false
+        }
+
+        let deadline = Date().addingTimeInterval(GracefulShutdownPolicy.timeout(viaTools: viaTools))
+        while Date() < deadline {
+            try? await Task.sleep(for: .seconds(2))
+            await vmModel.load()
+            if vmModel.snapshot?.state != .running {
+                return true
+            }
+        }
+        return false
     }
 
     /// The quiet policy resolved against the live VM snapshot.
@@ -194,6 +223,7 @@ extension VeilHostShellApp {
             displayMessage = "Windows could not be suspended, so it is shutting down instead."
         }
 
+        _ = await shutDownWindowsGracefully()
         await vmModel.stop()
         if vmModel.snapshot?.state == .stopped {
             displayMessage = "Windows is quiet. No Windows app windows are open."
@@ -289,5 +319,17 @@ extension VeilHostShellApp {
                 await performFrameStreamMaintenance(automatic: true)
             }
         }
+    }
+}
+
+enum GracefulShutdownPolicy {
+    /// Windows that accepted a tools shutdown may install updates first; waiting is safer than
+    /// cutting power partway through.
+    static let toolsShutdownSeconds: TimeInterval = 600
+    /// Without the tools, Windows may leave the power button unanswered.
+    static let powerButtonSeconds: TimeInterval = 90
+
+    static func timeout(viaTools: Bool) -> TimeInterval {
+        viaTools ? toolsShutdownSeconds : powerButtonSeconds
     }
 }

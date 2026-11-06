@@ -30,6 +30,7 @@ public protocol HostDashboardService: Sendable {
     func closeWindow(windowId: String) async throws -> WindowCloseResponse
     func resizeWindow(windowId: String, width: Int, height: Int) async throws -> WindowResizeResponse
     func resizeDisplay(width: Int, height: Int) async throws -> DisplayResizeResponse
+    func requestSystemShutdown() async throws -> SystemShutdownResponse
     func sendMouseInput(_ input: InputMouseEvent) async throws
     func sendKeyInput(_ input: InputKeyEvent) async throws
     func sendTextInput(_ input: InputTextEvent) async throws
@@ -76,6 +77,14 @@ public extension HostDashboardService {
             requestId: "unsupported_display_resize",
             accepted: false,
             reason: "display_resize_unsupported"
+        )
+    }
+
+    func requestSystemShutdown() async throws -> SystemShutdownResponse {
+        SystemShutdownResponse(
+            requestId: "unsupported_system_shutdown",
+            accepted: false,
+            reason: "system_shutdown_unsupported"
         )
     }
 }

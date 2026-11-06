@@ -107,6 +107,18 @@ extension LocalVMRuntimeService {
     }
 
     /// The QMP socket of the QEMU Veil launched, when that QEMU still runs and has the removable drive.
+    /// Presses the running Windows' ACPI power button, for guests without a tools shutdown.
+    public func pressPowerButton() async throws {
+        guard let record = try await qemuLaunchRecordStore.loadLatest(),
+              let pid = record.pid,
+              qemuLaunchProcessIsRunning(pid),
+              let socketPath = record.qmpSocketPath?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !socketPath.isEmpty else {
+            throw VMRemovableMediaError.notRunning
+        }
+        try await qmpController.run(.systemPowerdown, socketPath: socketPath)
+    }
+
     private func removableDriveQMPSocket() async throws -> String {
         guard let record = try await qemuLaunchRecordStore.loadLatest(),
               let pid = record.pid,

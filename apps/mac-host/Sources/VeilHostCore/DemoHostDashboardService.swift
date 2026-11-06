@@ -69,6 +69,10 @@ public struct FallbackHostDashboardService: HostDashboardService, Sendable {
         try await primary.resizeDisplay(width: width, height: height)
     }
 
+    public func requestSystemShutdown() async throws -> SystemShutdownResponse {
+        try await primary.requestSystemShutdown()
+    }
+
     public func sendMouseInput(_ input: InputMouseEvent) async throws {
         try await primary.sendMouseInput(input)
     }

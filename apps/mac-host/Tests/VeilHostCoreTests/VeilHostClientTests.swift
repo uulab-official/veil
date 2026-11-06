@@ -618,6 +618,23 @@ struct VeilHostClientTests {
         #expect(response.height == 1080)
     }
 
+    @Test("asks the agent to shut Windows down, also through the fallback service")
+    func sendsSystemShutdownRequest() async throws {
+        let transport = RecordingTransport(responses: [
+            #"{"type":"system.shutdown.response","requestId":"req_system_shutdown_1","accepted":true}"#
+        ])
+        let service = FallbackHostDashboardService(
+            primary: VeilHostClient(transport: transport),
+            fallback: DemoHostDashboardService()
+        )
+
+        let response = try await service.requestSystemShutdown()
+
+        #expect(transport.sentTypes == ["system.shutdown.request"])
+        #expect(transport.expectedReplyCounts == [1])
+        #expect(response.accepted)
+    }
+
     @Test("fallback dashboard service forwards window resize to its primary agent")
     func fallbackDashboardServiceForwardsWindowResize() async throws {
         let transport = RecordingTransport(responses: [

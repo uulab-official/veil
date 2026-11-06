@@ -25,6 +25,8 @@ public enum MessageType: String, Codable, Sendable {
     case windowResizeResponse = "window.resize.response"
     case displayResizeRequest = "display.resize.request"
     case displayResizeResponse = "display.resize.response"
+    case systemShutdownRequest = "system.shutdown.request"
+    case systemShutdownResponse = "system.shutdown.response"
     case clipboardTextSet = "clipboard.text.set"
     case clipboardImageSet = "clipboard.image.set"
     case clipboardFilesSet = "clipboard.files.set"
@@ -95,6 +97,9 @@ public struct AgentCapabilities: Codable, Equatable, Sendable {
     /// VM can boot on `virtio-gpu-pci` alone. Optional so an older agent decodes as `nil` and the VM keeps
     /// the `ramfb` display it boots with today.
     public var virtioGpuDisplay: Bool? = nil
+    /// True when the agent accepts `system.shutdown.request`. Optional so an older agent decodes as
+    /// `nil` and the host presses the ACPI power button instead.
+    public var systemShutdown: Bool? = nil
     /// True when the agent can serve window frames as raw binary on a dedicated connection.
     ///
     /// Optional rather than defaulted, so an agent that predates the frame channel decodes as `nil` and
@@ -727,6 +732,36 @@ public struct DisplayResizeResponse: Codable, Equatable, Sendable {
         self.accepted = accepted
         self.width = width
         self.height = height
+        self.reason = reason
+    }
+}
+
+/// Asks the Windows agent to shut Windows down normally. It carries no arguments on purpose.
+public struct SystemShutdownRequest: Codable, Equatable, Sendable {
+    public var type: MessageType
+    public var requestId: String
+
+    public init(type: MessageType = .systemShutdownRequest, requestId: String) {
+        self.type = type
+        self.requestId = requestId
+    }
+}
+
+public struct SystemShutdownResponse: Codable, Equatable, Sendable {
+    public var type: MessageType
+    public var requestId: String
+    public var accepted: Bool
+    public var reason: String?
+
+    public init(
+        type: MessageType = .systemShutdownResponse,
+        requestId: String,
+        accepted: Bool,
+        reason: String? = nil
+    ) {
+        self.type = type
+        self.requestId = requestId
+        self.accepted = accepted
         self.reason = reason
     }
 }

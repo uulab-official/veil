@@ -257,6 +257,17 @@ public final class VMRuntimeModel {
         }
     }
 
+    /// Presses the ACPI power button. Returns whether the press reached the VM.
+    @discardableResult
+    public func pressPowerButton() async -> Bool {
+        do {
+            try await service.pressPowerButton()
+            return true
+        } catch {
+            return false
+        }
+    }
+
     /// Inserts the tools update disc. Returns the refusal for the caller to show.
     @discardableResult
     public func insertGuestToolsUpdateMedia() async -> String? {

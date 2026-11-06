@@ -60,6 +60,8 @@ public enum QEMUQMPCommand: Equatable, Sendable {
     /// Whether a `usb-host` device actually claimed its Mac device. `device_add` succeeds even when it
     /// did not, so this is the only reliable answer.
     case queryUSBDeviceAttached(id: String)
+    /// Presses the VM's ACPI power button. Windows decides whether to shut down.
+    case systemPowerdown
     case quit
 
     public var executeName: String {
@@ -98,6 +100,8 @@ public enum QEMUQMPCommand: Equatable, Sendable {
             "device_del"
         case .queryUSBDeviceAttached:
             "qom-get"
+        case .systemPowerdown:
+            "system_powerdown"
         case .quit:
             "quit"
         }
@@ -140,6 +144,8 @@ public enum QEMUQMPCommand: Equatable, Sendable {
             "device removal \(id)"
         case .queryUSBDeviceAttached(let id):
             "USB device attach state query \(id)"
+        case .systemPowerdown:
+            "VM power button press"
         case .quit:
             "QEMU process quit"
         }

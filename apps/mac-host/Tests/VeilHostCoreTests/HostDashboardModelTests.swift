@@ -27,6 +27,23 @@ struct HostDashboardModelTests {
         #expect(model.canRequestSelectedAppLaunch)
     }
 
+    @Test("shuts Windows down through the agent only when it reports the capability")
+    @MainActor
+    func systemShutdownFollowsCapability() async {
+        let older = FakeDashboardService()
+        let olderModel = HostDashboardModel(service: older)
+        await olderModel.load()
+        #expect(await olderModel.requestSystemShutdown() == false)
+        #expect(older.shutdownRequests == 0)
+
+        let current = FakeDashboardService()
+        current.health.capabilities.systemShutdown = true
+        let currentModel = HostDashboardModel(service: current)
+        await currentModel.load()
+        #expect(await currentModel.requestSystemShutdown())
+        #expect(current.shutdownRequests == 1)
+    }
+
     @Test("loads agent overview into dashboard state")
     @MainActor
     func loadsAgentOverview() async throws {
@@ -3827,6 +3844,7 @@ private final class FakeDashboardService: HostDashboardService {
     var launchDelay: Duration?
     var beforeFrameSubscription: (() async throws -> Void)?
     var beforeFrameUnsubscription: (() async throws -> Void)?
+    private(set) var shutdownRequests = 0
     private(set) var loadCount = 0
     private(set) var launchCount = 0
     private(set) var restoreCount = 0
@@ -3863,6 +3881,11 @@ private final class FakeDashboardService: HostDashboardService {
         self.closeAccepted = closeAccepted
         self.agentWaitReport = agentWaitReport
         self.launchDelay = launchDelay
+    }
+
+    func requestSystemShutdown() async throws -> SystemShutdownResponse {
+        shutdownRequests += 1
+        return SystemShutdownResponse(requestId: "req_system_shutdown_1", accepted: true)
     }
 
     func loadOverview() async throws -> HostOverview {

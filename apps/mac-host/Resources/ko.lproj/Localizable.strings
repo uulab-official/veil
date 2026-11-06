@@ -585,3 +585,6 @@
 "Recovering %lld app screens." = "앱 화면 %lld개를 복구하는 중입니다.";
 "Restarting app screen." = "앱 화면을 다시 시작하는 중입니다.";
 "Restarting %lld app screens." = "앱 화면 %lld개를 다시 시작하는 중입니다.";
+"Shutting down Windows. Windows may ask to save changes or finish updates first." = "Windows를 종료하는 중입니다. Windows가 변경 내용 저장을 묻거나 업데이트를 먼저 마칠 수 있습니다.";
+"Windows shut down." = "Windows를 종료했습니다.";
+"Windows did not shut down in time, so Veil turned it off." = "Windows가 제때 종료되지 않아 Veil이 전원을 껐습니다.";

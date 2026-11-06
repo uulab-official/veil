@@ -260,6 +260,23 @@ public final class HostDashboardModel {
         hasLiveAgentConnection && health?.capabilities.displayResize == true
     }
 
+    public var canRequestSystemShutdown: Bool {
+        hasLiveAgentConnection && health?.capabilities.systemShutdown == true
+    }
+
+    /// Asks Windows to shut down through the agent. Returns whether Windows accepted; the caller then
+    /// waits for the VM to power off, which can take minutes while Windows installs updates.
+    public func requestSystemShutdown() async -> Bool {
+        guard canRequestSystemShutdown else {
+            return false
+        }
+        do {
+            return try await service.requestSystemShutdown().accepted
+        } catch {
+            return false
+        }
+    }
+
     /// Asks the Windows agent to change the active desktop monitor mode. This is the fallback for
     /// guests whose QEMU RFB server rejects ExtendedDesktopSize.
     @discardableResult

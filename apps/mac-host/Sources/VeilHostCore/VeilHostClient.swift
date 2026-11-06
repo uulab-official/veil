@@ -1340,6 +1340,22 @@ public struct VeilHostClient: HostDashboardService, Sendable {
         return try decoder.decode(WindowResizeResponse.self, from: data)
     }
 
+    public func requestSystemShutdown() async throws -> SystemShutdownResponse {
+        let input = SystemShutdownRequest(requestId: "req_system_shutdown_\(requestIdSuffix(for: "shutdown"))")
+        let replies = try await transport.send(encoder.encode(input), expectedReplies: 1)
+        if let error = replies
+            .compactMap({ try? decoder.decode(ErrorResponse.self, from: $0) })
+            .first(where: { $0.type == .error }) {
+            throw VeilHostError.agentError(code: error.code, message: error.message)
+        }
+
+        guard let data = replies.first else {
+            throw VeilHostError.missingReply("system shutdown requires one response")
+        }
+
+        return try decoder.decode(SystemShutdownResponse.self, from: data)
+    }
+
     public func resizeDisplay(width: Int, height: Int) async throws -> DisplayResizeResponse {
         let input = DisplayResizeRequest(
             requestId: "req_display_resize_\(requestIdSuffix(for: "\(width)x\(height)"))",
