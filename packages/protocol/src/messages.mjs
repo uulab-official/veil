@@ -23,6 +23,8 @@ export const MessageType = Object.freeze({
   WindowResizeResponse: "window.resize.response",
   DisplayResizeRequest: "display.resize.request",
   DisplayResizeResponse: "display.resize.response",
+  SystemShutdownRequest: "system.shutdown.request",
+  SystemShutdownResponse: "system.shutdown.response",
   ClipboardTextSet: "clipboard.text.set",
   ClipboardImageSet: "clipboard.image.set",
   ClipboardFilesSet: "clipboard.files.set",
@@ -159,6 +161,12 @@ export function validateAgentHealthResponse(response) {
   if (response.capabilities.virtioGpuDisplay !== undefined
     && typeof response.capabilities.virtioGpuDisplay !== "boolean") {
     throw new TypeError("Agent health response field 'capabilities.virtioGpuDisplay' must be a boolean.");
+  }
+
+  // Optional so a host connected to an older agent falls back to the ACPI power button.
+  if (response.capabilities.systemShutdown !== undefined
+    && typeof response.capabilities.systemShutdown !== "boolean") {
+    throw new TypeError("Agent health response field 'capabilities.systemShutdown' must be a boolean.");
   }
 
   // Optional so a host connected to an agent without acknowledgements keeps the fire-and-forget
@@ -709,6 +717,31 @@ export function validateDisplayResizeResponse(response) {
     requireDisplayResizeDimension(response.height, "height");
   } else if (response.reason !== undefined && response.reason !== null && typeof response.reason !== "string") {
     throw new TypeError("Display resize response field 'reason' must be a string when present.");
+  }
+
+  return response;
+}
+
+export function validateSystemShutdownRequest(request) {
+  if (!request || request.type !== MessageType.SystemShutdownRequest) {
+    throw new TypeError("System shutdown request must use type system.shutdown.request.");
+  }
+
+  requireNonEmptyString(request.requestId, "requestId", "System shutdown request");
+  return request;
+}
+
+export function validateSystemShutdownResponse(response) {
+  if (!response || response.type !== MessageType.SystemShutdownResponse) {
+    throw new TypeError("System shutdown response must use type system.shutdown.response.");
+  }
+
+  requireNonEmptyString(response.requestId, "requestId", "System shutdown response");
+  if (typeof response.accepted !== "boolean") {
+    throw new TypeError("System shutdown response field 'accepted' must be a boolean.");
+  }
+  if (response.reason !== undefined && response.reason !== null && typeof response.reason !== "string") {
+    throw new TypeError("System shutdown response field 'reason' must be a string when present.");
   }
 
   return response;

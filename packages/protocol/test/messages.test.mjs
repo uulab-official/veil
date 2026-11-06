@@ -40,6 +40,8 @@ import {
   validateWindowResizeResponse,
   validateDisplayResizeRequest,
   validateDisplayResizeResponse,
+  validateSystemShutdownRequest,
+  validateSystemShutdownResponse,
   validateWindowUpdated
 } from "../src/messages.mjs";
 
@@ -75,6 +77,8 @@ test("parses every stable fixture", async () => {
     "window.resize.response.json",
     "display.resize.request.json",
     "display.resize.response.json",
+    "system.shutdown.request.json",
+    "system.shutdown.response.json",
     "input.mouse.left-down.json",
     "input.key.copy.json",
     "input.text.json",
@@ -247,6 +251,18 @@ test("rejects an unsafe desktop display resize request", () => {
       height: 900
     }),
     /width.*between 640 and 3840/
+  );
+});
+
+test("validates a guest shutdown request and its reply", async () => {
+  const request = validateSystemShutdownRequest(await readFixture("system.shutdown.request.json"));
+  const response = validateSystemShutdownResponse(await readFixture("system.shutdown.response.json"));
+
+  assert.equal(request.requestId, response.requestId);
+  assert.equal(response.accepted, true);
+  assert.throws(
+    () => validateSystemShutdownResponse({ ...response, accepted: "yes" }),
+    /accepted/
   );
 });
 

@@ -75,6 +75,7 @@ Response:
     "windowResize": true,
     "displayResize": true,
     "virtioGpuDisplay": true,
+    "systemShutdown": true,
     "binaryFrameChannel": true,
     "sharedFolder": true,
     "clipboardImage": true,
@@ -136,6 +137,9 @@ installed, and an absent value means the agent predates the field; both keep the
 The host applies a changed value only at the next cold boot, never to a suspended session, because
 the device list is part of the machine a saved memory state belongs to. See
 [docs/install-flow.md](install-flow.md) for why the two displays cannot stay attached together.
+
+`capabilities.systemShutdown` is optional. `true` means the agent accepts `system.shutdown.request`;
+an absent value means it predates the message, and the host uses the ACPI power button instead.
 
 `capabilities.packageIdentity` is `true` only when the Windows agent is running
 with Windows package identity. The agent reads this from Windows' app model
@@ -847,6 +851,39 @@ Rules:
   answers result code 4 ("request forwarded"): QEMU passed the size to `virtio-gpu`, and the VirtIO GPU
   driver lists it as a mode but does not switch to it on its own. A later successful RFB desktop-size response becomes authoritative
   and returns the display to normal dynamic mode.
+
+## Guest Shutdown
+
+Host request:
+
+```json
+{
+  "type": "system.shutdown.request",
+  "requestId": "req_system_shutdown_1"
+}
+```
+
+Guest response:
+
+```json
+{
+  "type": "system.shutdown.response",
+  "requestId": "req_system_shutdown_1",
+  "accepted": true
+}
+```
+
+Rules:
+
+- The host sends this when the user stops Windows and the agent reports `capabilities.systemShutdown`.
+  Windows can leave the ACPI power button unanswered (observed on November 6, 2026 with a Korean
+  Windows 11 Arm 26300 guest), and killing QEMU instead loses unsaved work and can interrupt updates
+  Windows installs while shutting down.
+- The agent starts `shutdown.exe /s /t 0` in the user's session and answers once it has started; a
+  false response carries a short `reason`. Windows then closes apps and may install updates first, so
+  the host waits for QEMU to exit rather than for a further message.
+- The request carries no arguments, so it cannot run anything but a normal shutdown. The host already
+  controls the VM's power, so the message gives it no new authority over the guest.
 
 ## Operation Acknowledgements
 
