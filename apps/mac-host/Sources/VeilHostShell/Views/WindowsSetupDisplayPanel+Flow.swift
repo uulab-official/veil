@@ -208,6 +208,7 @@ extension WindowsSetupDisplayPanel {
             InstallFlowItem(
                 title: "App Window",
                 detail: activeMirrorSession?.window.title
+                    ?? primaryRouteAppName
                     ?? (pendingLaunch.isQueued ? pendingAppDisplayName : appDisplayName),
                 symbolName: "macwindow",
                 state: appWindowFlowState

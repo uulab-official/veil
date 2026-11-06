@@ -481,3 +481,11 @@
 "Open %@ as a Mac window" = "%@을(를) Mac 창으로 열기";
 "%@ will open when the app connection is ready" = "앱 연결이 준비되면 %@이(가) 열립니다";
 "%@ is queued. Start Windows to continue" = "%@ 실행 대기 중입니다. 계속하려면 Windows를 시작하세요";
+"Notepad" = "메모장";
+"Calculator" = "계산기";
+"Paint" = "그림판";
+"Ready to check" = "확인 준비됨";
+"Full app check ready" = "전체 앱 확인 준비됨";
+"Input check ready" = "입력 확인 준비됨";
+"Window check ready" = "창 확인 준비됨";
+"App check ready" = "앱 확인 준비됨";

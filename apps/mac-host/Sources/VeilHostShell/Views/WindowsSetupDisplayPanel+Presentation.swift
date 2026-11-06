@@ -172,7 +172,7 @@ extension WindowsSetupDisplayPanel {
             }
 
             if let primaryRouteAppName {
-                return String(localized: "Open \(primaryRouteAppName) as a Mac window")
+                return String(localized: "Open \(String(localized: String.LocalizationValue(primaryRouteAppName))) as a Mac window")
             }
 
             if canFulfillPendingLaunch {

@@ -13,7 +13,12 @@ extension HostDashboardModel {
             apps = overview.apps
             connectionMode = overview.connectionMode
             connectionDetail = overview.connectionDetail
+            // The live client answers with health but no diagnostic; leaving the old one (or nil)
+            // made the launcher read a connected Windows as unreachable and call its boot stalled.
             agentDiagnostic = overview.agentDiagnostic
+                ?? (overview.connectionMode == .agent
+                    ? .connected(endpoint: Self.defaultAgentEndpoint, health: overview.health)
+                    : nil)
             selectDefaultAppIfNeeded()
             phase = .connected
         } catch {

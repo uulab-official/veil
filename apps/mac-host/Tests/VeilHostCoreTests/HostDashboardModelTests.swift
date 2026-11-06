@@ -44,6 +44,7 @@ struct HostDashboardModelTests {
         #expect(model.statusText == "Connected to Windows agent 0.1.0")
         #expect(model.connectionMode == .agent)
         #expect(model.hasLiveAgentConnection)
+        #expect(model.agentDiagnostic?.status == .connected)
         #expect(model.guestAgentInstallEvidence?.kind == .guestAgent)
         #expect(model.guestAgentInstallEvidence?.isInstalled == true)
         #expect(model.errorMessage == nil)
@@ -255,7 +256,7 @@ struct HostDashboardModelTests {
 
         #expect(report.status == .connected)
         #expect(model.latestAgentWait == report)
-        #expect(model.agentDiagnostic == nil)
+        #expect(model.agentDiagnostic?.status == .connected)
         #expect(model.hasLiveAgentConnection)
         #expect(service.loadCount == 1)
     }
@@ -2817,7 +2818,7 @@ struct HostDashboardModelTests {
         #expect(model.health?.agentVersion == "0.1.0")
         #expect(model.hasLiveAgentConnection)
         #expect(model.connectionDetail == nil)
-        #expect(model.agentDiagnostic == nil)
+        #expect(model.agentDiagnostic?.status == .connected)
         #expect(primary.loadCount == 2)
     }
 
