@@ -591,6 +591,8 @@ test("windows agent includes user-logon install and uninstall scripts", async ()
   assert.match(repair, /Sync-VeilInstalledAppBundle/);
   assert.match(repair, /function\s+Find-VeilSharedAgentRoot/);
   assert.match(repair, /\$BundledAppRoot\s*=\s*Join-Path\s+\(Find-VeilSharedAgentRoot\)\s+"app"/);
+  // The tools update disc sits beside an older VEIL_AUTO; the bundle next to the script must win.
+  assert.match(repair, /\$ScriptRootAgentRoot\s+-ne\s+\$InstallRoot[\s\S]{0,120}app\\VeilAgent\.exe[\s\S]{0,120}CachedSharedAgentRoot\s*=\s*\$ScriptRootAgentRoot/);
   assert.match(repair, /Resolved bundle source is the installed app folder itself/);
   assert.match(repair, /Resolved support script source is the installed scripts folder itself/);
   assert.match(repair, /Refreshed installed VeilAgent app bundle/);
