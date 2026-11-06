@@ -17,6 +17,8 @@ public protocol VMRuntimeService: Sendable {
     func insertRemovableMedia(path: String) async throws -> VMRemovableMediaStatus
     func ejectRemovableMedia() async throws -> VMRemovableMediaStatus
     func markGuestAgentConnected(agentVersion: String) async throws -> VMRuntimeSnapshot
+    /// Stores the agent's `capabilities.virtioGpuDisplay` report for the next cold start.
+    func recordVirtioGPUDriverInstalled(_ installed: Bool) async throws
     func start() async throws -> VMRuntimeSnapshot
     func stop() async throws -> VMRuntimeSnapshot
     func suspend() async throws -> VMRuntimeSnapshot
@@ -45,6 +47,8 @@ public extension VMRuntimeService {
     func suspendedSession() async -> VMSuspensionRecord? {
         nil
     }
+
+    func recordVirtioGPUDriverInstalled(_ installed: Bool) async throws {}
 
     func restartWindowsInstallation() async throws -> VMRuntimeSnapshot {
         throw VMRuntimeError.bootNotImplemented

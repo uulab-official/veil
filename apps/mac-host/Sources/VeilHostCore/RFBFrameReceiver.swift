@@ -184,6 +184,12 @@ public struct RFBDesktopSizeResponse: Equatable, Sendable {
         resultCode == 0
     }
 
+    /// QEMU's answer when it passed the size to a display device that resizes on the guest's side,
+    /// such as `virtio-gpu`: RFB ExtendedDesktopSize result 4, "request forwarded".
+    public var isForwardedToGuest: Bool {
+        resultCode == 4
+    }
+
     /// A failure only answers a request when the echoed framebuffer size matches it.
     public func matches(_ target: RFBDesktopResizeTarget) -> Bool {
         width == target.widthInPixels && height == target.heightInPixels

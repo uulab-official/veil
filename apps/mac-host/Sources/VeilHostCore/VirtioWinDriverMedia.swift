@@ -24,10 +24,11 @@ public enum VirtioWinDriverMedia {
     /// this prefix, so a later pin needs no answer-file change.
     public static let volumeLabelPrefix = "virtio-win"
 
-    /// The driver folder the answer file installs, from `<folder>\w11\ARM64`. NetKVM is the only
-    /// one Veil needs today: the boot plan pairs this ISO with `virtio-net-pci`. The display stays
-    /// on ramfb plus virtio-gpu without viogpudo, and the system disk on NVMe, which Windows Setup
-    /// drives with inbox drivers (docs/install-flow.md records the virtio-gpu and storage findings).
+    /// The driver folder the answer file installs inline, from `<folder>\w11\ARM64`, because the
+    /// boot plan pairs this ISO with `virtio-net-pci`. The VirtIO GPU display driver (viogpudo) and the
+    /// other folders come from `Install-VeilVirtIODrivers.ps1` on VEIL_AUTO; the system disk stays on
+    /// NVMe, which Windows Setup drives with inbox drivers (docs/install-flow.md records the virtio-gpu
+    /// and storage findings).
     public static let networkDriverFolder = "NetKVM"
 
     public static func allowsDownload(from url: URL?) -> Bool {

@@ -470,9 +470,10 @@ public struct QEMUWindowsBootPlanner: Sendable {
             "-netdev", "user,id=net0,\(userNetworkForwards.joined(separator: ","))",
             "-device", networkAdapter.deviceArgument,
             "-device", "virtio-rng-pci",
-            "-display", "cocoa",
-            "-device", "ramfb",
-            "-device", "virtio-gpu-pci",
+            "-display", "cocoa"
+        ])
+        arguments.append(contentsOf: QEMUWindowsDisplayDevices.deviceArguments(for: profile))
+        arguments.append(contentsOf: [
             "-device", "usb-kbd",
             "-device", "usb-tablet"
         ])

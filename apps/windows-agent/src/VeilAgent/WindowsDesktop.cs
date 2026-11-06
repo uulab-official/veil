@@ -30,6 +30,7 @@ public sealed class WindowsDesktop : IWindowsDesktop
     private const int SW_RESTORE = 9;
     private const uint CDS_FULLSCREEN = 0x00000004;
     private const int DISP_CHANGE_SUCCESSFUL = 0;
+    private const int DISP_CHANGE_BADMODE = -2;
     private const int ENUM_CURRENT_SETTINGS = -1;
     private const uint DM_PELSWIDTH = 0x00080000;
     private const uint DM_PELSHEIGHT = 0x00100000;
@@ -427,12 +428,92 @@ public sealed class WindowsDesktop : IWindowsDesktop
             CDS_FULLSCREEN,
             IntPtr.Zero
         );
+        // The VirtIO GPU driver lists one custom size beside its fixed modes. QEMU normally sets it to
+        // this size first; when it did not, replace it through the driver. Other adapters keep the
+        // first answer.
+        if (result == DISP_CHANGE_BADMODE && VirtioGpuDisplay.TrySetCustomMode(input.Width, input.Height))
+        {
+            result = ChangeDisplaySettingsEx(
+                null,
+                ref mode,
+                IntPtr.Zero,
+                CDS_FULLSCREEN,
+                IntPtr.Zero
+            );
+
+            // Measured on viogpudo 0.1.302: while Windows runs on the custom mode, Windows keeps the
+            // old custom size until another mode is committed, so going from one custom size to the
+            // next needs one listed mode in between. The covering mode keeps windows from being
+            // squeezed onto a smaller desktop during that step.
+            if (result == DISP_CHANGE_BADMODE
+                && TryFindListedModeCovering(input.Width, input.Height, out var listedMode))
+            {
+                ChangeDisplaySettingsEx(null, ref listedMode, IntPtr.Zero, CDS_FULLSCREEN, IntPtr.Zero);
+                result = ChangeDisplaySettingsEx(
+                    null,
+                    ref mode,
+                    IntPtr.Zero,
+                    CDS_FULLSCREEN,
+                    IntPtr.Zero
+                );
+            }
+        }
+
         if (result != DISP_CHANGE_SUCCESSFUL)
         {
             return Task.FromResult<DisplayResizeResult?>(null);
         }
 
         return Task.FromResult<DisplayResizeResult?>(new DisplayResizeResult(input.Width, input.Height));
+    }
+
+    /// <summary>
+    /// The smallest listed mode of the primary display that is at least <paramref name="width"/> x
+    /// <paramref name="height"/>, or the largest listed mode when none covers it. Never the target itself.
+    /// </summary>
+    private static bool TryFindListedModeCovering(int width, int height, out NativeDevMode listedMode)
+    {
+        listedMode = default;
+        NativeDevMode? covering = null;
+        NativeDevMode? largest = null;
+        var candidate = new NativeDevMode
+        {
+            dmSize = (ushort)Marshal.SizeOf<NativeDevMode>(),
+            dmDeviceName = string.Empty,
+            dmFormName = string.Empty
+        };
+        for (var index = 0; EnumDisplaySettings(null, index, ref candidate); index++)
+        {
+            var candidateWidth = (int)candidate.dmPelsWidth;
+            var candidateHeight = (int)candidate.dmPelsHeight;
+            var area = (long)candidateWidth * candidateHeight;
+            if ((candidateWidth != width || candidateHeight != height)
+                && candidateWidth <= 3_840
+                && candidateHeight <= 3_840)
+            {
+                if (candidateWidth >= width
+                    && candidateHeight >= height
+                    && (covering is null || area < (long)covering.Value.dmPelsWidth * covering.Value.dmPelsHeight))
+                {
+                    covering = candidate;
+                }
+
+                if (largest is null || area > (long)largest.Value.dmPelsWidth * largest.Value.dmPelsHeight)
+                {
+                    largest = candidate;
+                }
+            }
+        }
+
+        var chosen = covering ?? largest;
+        if (chosen is null)
+        {
+            return false;
+        }
+
+        listedMode = chosen.Value;
+        listedMode.dmFields = DM_PELSWIDTH | DM_PELSHEIGHT;
+        return true;
     }
 
     public Task<bool> SendMouseInputAsync(WindowMouseInput input, CancellationToken cancellationToken)

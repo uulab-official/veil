@@ -64,6 +64,16 @@ extension LocalVMRuntimeService {
         return try await loadSnapshot()
     }
 
+    public func recordVirtioGPUDriverInstalled(_ installed: Bool) async throws {
+        guard var profile = try await profileStore.load(),
+              profile.virtioGPUDriverInstalled != installed else {
+            return
+        }
+
+        profile.virtioGPUDriverInstalled = installed
+        try await profileStore.save(profile)
+    }
+
     public func markWindowsInstalled() async throws -> VMRuntimeSnapshot {
         guard var profile = try await profileStore.load(),
               profile.virtualDiskPath != nil else {
@@ -81,8 +91,18 @@ extension LocalVMRuntimeService {
             throw VMRuntimeError.bootPrerequisitesMissing
         }
 
-        guard let profile = try await profileStore.load() else {
+        guard var profile = try await profileStore.load() else {
             throw VMRuntimeError.bootPrerequisitesMissing
+        }
+        // The display devices change only on a real cold boot. A start that finds Windows already
+        // running, or a saved session waiting to resume, must keep the device list QEMU has.
+        let isColdBoot = ![.running, .starting, .suspended].contains(snapshot.state)
+        if isColdBoot, await suspendedSession() == nil {
+            let bootsOnVirtioGPU = QEMUWindowsDisplayDevices.bootsOnVirtioGPU(profile)
+            if profile.bootsOnVirtioGPU != bootsOnVirtioGPU {
+                profile.bootsOnVirtioGPU = bootsOnVirtioGPU
+                try await profileStore.save(profile)
+            }
         }
         let securityScopedAccesses = Self.startSecurityScopedAccesses(for: profile)
         defer {

@@ -930,6 +930,9 @@ public sealed class AgentSession
                 // additive window.resize.request message.
                 ["windowResize"] = true,
                 ["displayResize"] = OperatingSystem.IsWindows(),
+                // Lets the host boot the next cold start on virtio-gpu alone. Read-only, like the rest
+                // of health: the driver itself is installed by the setup and repair scripts.
+                ["virtioGpuDisplay"] = VirtioGpuDisplay.IsDriverInstalled(),
                 // Lets the host wait for the operation.ack reply on the fire-and-forget paths
                 // (input, clipboard, frame subscribe). An older host ignores it; an older agent
                 // omits it and the host keeps its fire-and-forget semantics instead of hanging.

@@ -484,6 +484,31 @@ test("windows agent sample launch flow emits Notepad window and first frame", as
   assert.equal(frame.format, "png");
 });
 
+test("windows agent installs VirtIO drivers and keeps one display while ramfb is attached", async () => {
+  const drivers = await readFile(resolve(agentRoot, "scripts/Install-VeilVirtIODrivers.ps1"), "utf8");
+  const repair = await readFile(resolve(agentRoot, "scripts/Repair-VeilAgentConnectivity.ps1"), "utf8");
+  const bootstrap = await readFile(resolve(agentRoot, "scripts/Bootstrap-VeilAgentFromMedia.ps1"), "utf8");
+  const desktop = await readFile(resolve(agentRoot, "src/VeilAgent/WindowsDesktop.cs"), "utf8");
+  const session = await readFile(resolve(agentRoot, "src/VeilAgent/AgentSession.cs"), "utf8");
+
+  for (const folder of ["NetKVM", "viogpudo", "viorng", "Balloon", "vioserial"]) {
+    assert.match(drivers, new RegExp(`"${folder}"`));
+  }
+  assert.match(drivers, /VolumeLabel -like "virtio-win\*"/);
+  assert.match(drivers, /\\w11\\ARM64/);
+  assert.match(drivers, /pnputil \/add-driver/);
+  assert.match(drivers, /SetDisplayConfig/);
+  assert.match(drivers, /\$SdcTopologyExternal = 0x8/);
+  // Setup and repair must never stop on a driver problem.
+  assert.match(drivers, /^exit 0$/m);
+  assert.match(repair, /Install-VeilVirtIODrivers\.ps1/);
+  assert.match(repair, /"viogpudo"[\s\S]+-SingleBootDisplay/);
+  assert.match(bootstrap, /Install-VeilVirtIODrivers\.ps1[\s\S]+-DriverFolders @\(\) -SingleBootDisplay/);
+  assert.match(desktop, /VirtioGpuDisplay\.TrySetCustomMode/);
+  assert.match(desktop, /TryFindListedModeCovering/);
+  assert.match(session, /\["virtioGpuDisplay"\] = VirtioGpuDisplay\.IsDriverInstalled\(\)/);
+});
+
 test("windows agent includes user-logon install and uninstall scripts", async () => {
   const install = await readFile(resolve(agentRoot, "scripts/Install-VeilAgent.ps1"), "utf8");
   const uninstall = await readFile(resolve(agentRoot, "scripts/Uninstall-VeilAgent.ps1"), "utf8");

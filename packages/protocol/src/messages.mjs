@@ -155,6 +155,12 @@ export function validateAgentHealthResponse(response) {
     throw new TypeError("Agent health response field 'capabilities.displayResize' must be a boolean.");
   }
 
+  // Optional so an older agent decodes as unknown and the host keeps the ramfb display it boots today.
+  if (response.capabilities.virtioGpuDisplay !== undefined
+    && typeof response.capabilities.virtioGpuDisplay !== "boolean") {
+    throw new TypeError("Agent health response field 'capabilities.virtioGpuDisplay' must be a boolean.");
+  }
+
   // Optional so a host connected to an agent without acknowledgements keeps the fire-and-forget
   // semantics instead of waiting on a reply that never comes.
   if (response.capabilities.operationAcks !== undefined
