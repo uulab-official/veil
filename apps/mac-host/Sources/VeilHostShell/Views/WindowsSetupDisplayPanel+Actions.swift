@@ -243,19 +243,26 @@ extension WindowsSetupDisplayPanel {
             return primaryTitle
         }
 
+        return primaryRouteAppName.map { "Open \($0)" } ?? route.buttonTitle
+    }
+
+    /// The app the hero button opens, so the subtitle above it never names a different one.
+    var primaryRouteAppName: String? {
+        guard !bootIsStalled, let route = executablePrimaryNextActionRoute else {
+            return nil
+        }
+
         switch route {
         case .launchSelectedApp:
-            return selectedWindowsAppName.map { "Open \($0)" } ?? route.buttonTitle
+            return selectedWindowsAppName
         case .fulfillPendingLaunch:
-            return "Open \(pendingAppDisplayName)"
+            return pendingAppDisplayName
         case .repairAppConnection:
-            return "Open \(pendingWindowsAppName ?? selectedWindowsAppName ?? "Windows App")"
+            return pendingWindowsAppName ?? selectedWindowsAppName ?? "Windows App"
         case .startWindowsForApp:
-            return selectedWindowsAppName.map { "Open \($0)" }
-                ?? pendingWindowsAppName.map { "Open \($0)" }
-                ?? route.buttonTitle
+            return selectedWindowsAppName ?? pendingWindowsAppName
         default:
-            return route.buttonTitle
+            return nil
         }
     }
 

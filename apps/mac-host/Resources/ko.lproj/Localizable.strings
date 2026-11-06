@@ -477,3 +477,7 @@
 "Windows is not installed yet. Open Veil to finish setup." = "Windows가 아직 설치되지 않았습니다. Veil을 열어 설정을 마치십시오.";
 "Opening %@ in Windows." = "Windows에서 %@ 여는 중입니다.";
 "%@ %@" = "%1$@ %2$@";
+"%@ is open as a Mac window" = "%@이(가) Mac 창으로 열려 있습니다";
+"Open %@ as a Mac window" = "%@을(를) Mac 창으로 열기";
+"%@ will open when the app connection is ready" = "앱 연결이 준비되면 %@이(가) 열립니다";
+"%@ is queued. Start Windows to continue" = "%@ 실행 대기 중입니다. 계속하려면 Windows를 시작하세요";

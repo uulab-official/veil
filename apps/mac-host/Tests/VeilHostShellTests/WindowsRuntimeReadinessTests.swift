@@ -162,6 +162,37 @@ struct WindowsRuntimeReadinessTests {
         #expect(steps.first(where: { $0.id == "apps" })?.detail.contains("repair") == false)
     }
 
+    @Test("a connected app link overrides a stale stalled-boot verdict")
+    func connectedAgentClearsStall() {
+        let snapshot = Self.snapshot(
+            state: .running,
+            profileName: "Windows 11",
+            bootReady: true,
+            windowsInstalled: true,
+            latestConsoleLaunch: Self.stalledLaunch
+        )
+
+        let steps = WindowsRuntimeReadiness.resolve(
+            snapshot: snapshot,
+            agentDiagnostic: AgentConnectionDiagnostic(
+                status: .connected,
+                endpoint: "test",
+                nextActions: []
+            ),
+            hasDisplay: true,
+            asOf: Self.now
+        )
+
+        #expect(steps.first(where: { $0.id == "windows" })?.state == .complete)
+        #expect(steps.first(where: { $0.id == "display" })?.state == .complete)
+        #expect(steps.first(where: { $0.id == "apps" })?.state == .complete)
+        #expect(!WindowsRuntimeReadiness.shouldBlockAgentRepair(
+            snapshot: snapshot,
+            agentConnected: true,
+            asOf: Self.now
+        ))
+    }
+
     @Test("a recent blank boot remains a wait state")
     func recentBlankBootWaits() {
         let snapshot = Self.snapshot(

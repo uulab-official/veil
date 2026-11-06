@@ -168,19 +168,23 @@ extension WindowsSetupDisplayPanel {
             }
 
             if let activeMirrorSession {
-                return "\(activeMirrorSession.window.title) is open as a Mac window"
+                return String(localized: "\(activeMirrorSession.window.title) is open as a Mac window")
+            }
+
+            if let primaryRouteAppName {
+                return String(localized: "Open \(primaryRouteAppName) as a Mac window")
             }
 
             if canFulfillPendingLaunch {
-                return "Open \(pendingAppDisplayName) as a Mac window"
+                return String(localized: "Open \(pendingAppDisplayName) as a Mac window")
             }
 
             if pendingLaunch.willLaunchOnAgentReconnect {
                 switch snapshot.state {
                 case .running, .starting:
-                    return "\(pendingAppDisplayName) will open when the app connection is ready"
+                    return String(localized: "\(pendingAppDisplayName) will open when the app connection is ready")
                 default:
-                    return "\(pendingAppDisplayName) is queued. Start Windows to continue"
+                    return String(localized: "\(pendingAppDisplayName) is queued. Start Windows to continue")
                 }
             }
 

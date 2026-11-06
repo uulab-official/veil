@@ -117,7 +117,10 @@ struct VMRuntimeView: View {
                         let installEvidence = validGuestAgentEvidence(for: snapshot) ?? snapshot.installEvidence
                         let windowsReadyForApps = installEvidence.isInstalled
 
-                        if WindowsRuntimeReadiness.shouldBlockAgentRepair(snapshot: snapshot) {
+                        if WindowsRuntimeReadiness.shouldBlockAgentRepair(
+                            snapshot: snapshot,
+                            agentConnected: agentDiagnostic?.status == .connected
+                        ) {
                             if canRecoverRuntimeDisplay(for: snapshot) {
                                 recoverRuntimeDisplayAction()
                             } else {
@@ -329,7 +332,10 @@ struct VMRuntimeView: View {
 
     func canInstallGuestAgent(for snapshot: VMRuntimeSnapshot) -> Bool {
         canShowDisplay(for: snapshot)
-            && !WindowsRuntimeReadiness.shouldBlockAgentRepair(snapshot: snapshot)
+            && !WindowsRuntimeReadiness.shouldBlockAgentRepair(
+            snapshot: snapshot,
+            agentConnected: agentDiagnostic?.status == .connected
+        )
             && (validGuestAgentEvidence(for: snapshot) ?? snapshot.installEvidence).kind != .guestAgent
     }
 
@@ -349,7 +355,10 @@ struct VMRuntimeView: View {
             return false
         }
 
-        if WindowsRuntimeReadiness.shouldBlockAgentRepair(snapshot: snapshot) {
+        if WindowsRuntimeReadiness.shouldBlockAgentRepair(
+            snapshot: snapshot,
+            agentConnected: agentDiagnostic?.status == .connected
+        ) {
             return true
         }
 
