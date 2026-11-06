@@ -137,6 +137,13 @@ function Find-VeilSharedAgentRoot {
     }
 
     $ScriptRootAgentRoot = (Resolve-Path (Join-Path $ScriptRoot "..")).Path
+    # Launched from media (for example the host's tools update disc next to an older VEIL_AUTO), the
+    # bundle beside this script is the one the host meant; scanning drive letters could pick the old one.
+    if ($ScriptRootAgentRoot -ne $InstallRoot -and
+        (Test-Path (Join-Path $ScriptRootAgentRoot "app\VeilAgent.exe"))) {
+        $script:CachedSharedAgentRoot = $ScriptRootAgentRoot
+        return $script:CachedSharedAgentRoot
+    }
 
     $CandidateRoots = @()
     foreach ($Drive in Get-PSDrive -PSProvider FileSystem) {
