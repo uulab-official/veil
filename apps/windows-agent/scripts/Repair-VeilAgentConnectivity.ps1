@@ -66,7 +66,9 @@ function Write-VeilRepairStatus {
 
 function Wait-VeilRepairStatus {
     param(
-        [int]$TimeoutSeconds = 90
+        # Long enough for a user who notices the Windows approval prompt late; the elevated repair
+        # keeps running either way, but this console is what reports whether it finished.
+        [int]$TimeoutSeconds = 300
     )
 
     $Deadline = (Get-Date).AddSeconds($TimeoutSeconds)
