@@ -33,6 +33,7 @@ const path = require('node:path');
 const args = process.argv.slice(2);
 const output = args[args.indexOf('--output') + 1];
 if (args[0] !== 'publish' || !output) process.exit(91);
+if (process.env.VEIL_TEST_ARGS) fs.writeFileSync(process.env.VEIL_TEST_ARGS, JSON.stringify(args));
 fs.mkdirSync(output, { recursive: true });
 const mode = process.env.VEIL_TEST_PUBLISH_MODE;
 const files = ${JSON.stringify(requiredFiles)};
@@ -49,8 +50,8 @@ if (mode === 'gated') {
 }
 `);
   await chmod(dotnet, 0o755);
-  function start(mode = "success", extraEnv = {}) {
-    const child = spawn("/bin/bash", [script, "--dotnet", dotnet], {
+  function start(mode = "success", extraEnv = {}, extraArgs = []) {
+    const child = spawn("/bin/bash", [script, "--dotnet", dotnet, ...extraArgs], {
       env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, VEIL_TEST_PUBLISH_MODE: mode, ...extraEnv },
       stdio: ["ignore", "pipe", "pipe"],
     });
@@ -186,4 +187,20 @@ test("first publish succeeds without inventing a previous bundle", shellOnly, as
   assert.deepEqual((await readdir(join(agent, "app"))).sort(), [...requiredFiles].sort());
   await assert.rejects(readFile(join(agent, "app.previous", "VeilAgent.exe")), { code: "ENOENT" });
   await assertNoScratch(agent);
+});
+
+test("a build id stamps the agent version and records it next to the bundle", shellOnly, async t => {
+  const { root, agent, start } = await fixture(t);
+  const argsPath = join(root, "publish-args.json");
+  const result = await start("success", { VEIL_TEST_ARGS: argsPath }).done;
+  assert.equal(result.code, 0, result.output);
+  await assert.rejects(readFile(join(agent, "app", "veil-agent-version.txt"), "utf8"));
+  assert.ok(!JSON.parse(await readFile(argsPath, "utf8"))
+    .some(arg => arg.startsWith("-p:InformationalVersion=")));
+
+  const stamped = await start("success", { VEIL_TEST_ARGS: argsPath }, ["--build-id", "abc123"]).done;
+  assert.equal(stamped.code, 0, stamped.output);
+  assert.equal(await readFile(join(agent, "app", "veil-agent-version.txt"), "utf8"), "0.1.0+abc123\n");
+  assert.ok(JSON.parse(await readFile(argsPath, "utf8"))
+    .includes("-p:InformationalVersion=0.1.0+abc123"));
 });
