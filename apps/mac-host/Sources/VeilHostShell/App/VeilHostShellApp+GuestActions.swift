@@ -431,6 +431,7 @@ extension VeilHostShellApp {
 
             let appName = pendingLaunchDisplayName()
             displayMessage = String(localized: "Repairing the Windows app connection so \(appName) can open as a Mac window.")
+            shellNavigation.showsWindowsDesktop = true
 
             do {
                 _ = try await vmRuntimeBooter.installCurrentGuestTools(vmModel: vmModel)
@@ -459,6 +460,9 @@ extension VeilHostShellApp {
             }
 
             displayMessage = String(localized: "Updating Windows tools. When Windows asks for approval, choose Yes.")
+            // The approval prompt appears on the Windows desktop; the launcher would hide it, and an
+            // unanswered prompt left the update to fail without the user ever seeing it.
+            shellNavigation.showsWindowsDesktop = true
             if let refusal = await vmModel.insertGuestToolsUpdateMedia() {
                 displayMessage = String(localized: "Windows tools could not be updated: \(refusal)")
                 return
