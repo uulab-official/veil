@@ -33,6 +33,37 @@ $TaskName = "VeilAgent"
 New-Item -ItemType Directory -Force -Path $InstalledScriptsRoot | Out-Null
 New-Item -ItemType Directory -Force -Path $LogRoot | Out-Null
 
+function Stop-VeilAgentProcesses {
+    $RunningAgents = Get-Process -Name "VeilAgent" -ErrorAction SilentlyContinue
+    if ($RunningAgents) {
+        $RunningAgents | Stop-Process -Force -ErrorAction SilentlyContinue
+        # Stop-Process returns before Windows releases the agent's image and DLL handles, so moving
+        # the app folder right away failed with "being used by another process".
+        $RunningAgents | Wait-Process -Timeout 15 -ErrorAction SilentlyContinue
+    }
+}
+
+function Move-VeilItemWithRetry {
+    param(
+        [string]$LiteralPath,
+        [string]$Destination
+    )
+
+    for ($Attempt = 1; ; $Attempt++) {
+        try {
+            Move-Item -LiteralPath $LiteralPath -Destination $Destination
+            return
+        } catch {
+            if ($Attempt -ge 10) {
+                throw
+            }
+            Write-Host "$LiteralPath is still in use; retrying ($Attempt/10): $($_.Exception.Message)"
+            Stop-VeilAgentProcesses
+            Start-Sleep -Seconds 1
+        }
+    }
+}
+
 function Register-VeilSparsePackage {
     param(
         [string]$PackagePath,
@@ -122,18 +153,16 @@ try {
         }
     }
 
-    $RunningAgents = Get-Process -Name "VeilAgent" -ErrorAction SilentlyContinue
-    if ($RunningAgents) {
+    if (Get-Process -Name "VeilAgent" -ErrorAction SilentlyContinue) {
         Write-Host "Stopping existing VeilAgent process before promoting the staged bundle."
-        $RunningAgents | Stop-Process -Force
-        Start-Sleep -Milliseconds 500
+        Stop-VeilAgentProcesses
     }
 
     if (Test-Path -LiteralPath $PublishRoot) {
         if (Test-Path -LiteralPath $InstallBackupRoot) {
             Remove-Item -LiteralPath $InstallBackupRoot -Recurse -Force
         }
-        Move-Item -LiteralPath $PublishRoot -Destination $InstallBackupRoot
+        Move-VeilItemWithRetry -LiteralPath $PublishRoot -Destination $InstallBackupRoot
         $installRetiredCurrent = $true
     }
     Move-Item -LiteralPath $InstallStagedAppRoot -Destination $PublishRoot

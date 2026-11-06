@@ -202,6 +202,37 @@ function Sync-VeilInstalledSupportScripts {
     }
 }
 
+function Stop-VeilAgentProcesses {
+    $RunningAgents = Get-Process -Name "VeilAgent" -ErrorAction SilentlyContinue
+    if ($RunningAgents) {
+        $RunningAgents | Stop-Process -Force -ErrorAction SilentlyContinue
+        # Stop-Process returns before Windows releases the agent's image and DLL handles, so moving
+        # the app folder right away failed with "being used by another process".
+        $RunningAgents | Wait-Process -Timeout 15 -ErrorAction SilentlyContinue
+    }
+}
+
+function Move-VeilItemWithRetry {
+    param(
+        [string]$LiteralPath,
+        [string]$Destination
+    )
+
+    for ($Attempt = 1; ; $Attempt++) {
+        try {
+            Move-Item -LiteralPath $LiteralPath -Destination $Destination
+            return
+        } catch {
+            if ($Attempt -ge 10) {
+                throw
+            }
+            Write-Host "$LiteralPath is still in use; retrying ($Attempt/10): $($_.Exception.Message)"
+            Stop-VeilAgentProcesses
+            Start-Sleep -Seconds 1
+        }
+    }
+}
+
 function Sync-VeilInstalledAppBundle {
     $BundledAppRoot = Join-Path (Find-VeilSharedAgentRoot) "app"
     $BundledAgentExe = Join-Path $BundledAppRoot "VeilAgent.exe"
@@ -260,18 +291,16 @@ function Sync-VeilInstalledAppBundle {
             }
         }
 
-        $RunningAgents = Get-Process -Name "VeilAgent" -ErrorAction SilentlyContinue
-        if ($RunningAgents) {
+        if (Get-Process -Name "VeilAgent" -ErrorAction SilentlyContinue) {
             Write-Host "Stopping existing VeilAgent process before promoting the repaired app bundle."
-            $RunningAgents | Stop-Process -Force
-            Start-Sleep -Milliseconds 500
+            Stop-VeilAgentProcesses
         }
 
         if (Test-Path -LiteralPath $InstallRootApp) {
             if (Test-Path -LiteralPath $RepairBackupRoot) {
                 Remove-Item -LiteralPath $RepairBackupRoot -Recurse -Force
             }
-            Move-Item -LiteralPath $InstallRootApp -Destination $RepairBackupRoot
+            Move-VeilItemWithRetry -LiteralPath $InstallRootApp -Destination $RepairBackupRoot
             $RepairRetiredCurrent = $true
         }
         Move-Item -LiteralPath $RepairStagedAppRoot -Destination $InstallRootApp
