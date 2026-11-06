@@ -448,6 +448,50 @@ extension VeilHostShellApp {
         }
     }
 
+    /// Installs the Windows tools this Veil ships into a running Windows whose agent is older:
+    /// inserts the tools update disc, runs its U.cmd, waits for the new agent, and ejects the disc.
+    func updateGuestTools() {
+        Task { @MainActor in
+            cancelAutomaticQuietRuntime()
+            activateMainWindow()
+            guard vmModel.snapshot?.state == .running else {
+                return
+            }
+
+            displayMessage = String(localized: "Updating Windows tools. When Windows asks for approval, choose Yes.")
+            if let refusal = await vmModel.insertGuestToolsUpdateMedia() {
+                displayMessage = String(localized: "Windows tools could not be updated: \(refusal)")
+                return
+            }
+            do {
+                _ = try await vmRuntimeBooter.updateGuestToolsFromRemovableMedia()
+            } catch {
+                displayMessage = String(localized: "Windows tools could not be updated: \(userMessage(for: error))")
+                await vmModel.ejectRemovableMedia()
+                return
+            }
+
+            // The repair restarts the agent after the approval, so give the user time to answer it.
+            let bundledVersion = ShellGuestTools.bundledVersion
+            try? await Task.sleep(for: .seconds(20))
+            for _ in 0..<36 where model.health?.agentVersion != bundledVersion {
+                await model.load()
+                if model.health?.agentVersion == bundledVersion {
+                    break
+                }
+                try? await Task.sleep(for: .seconds(5))
+            }
+            await vmModel.ejectRemovableMedia()
+            await recordGuestAgentInstallEvidenceIfNeeded()
+
+            if model.health?.agentVersion == bundledVersion {
+                displayMessage = String(localized: "Windows tools updated. Restart Windows once so the screen follows the window size.")
+            } else {
+                displayMessage = String(localized: "Windows tools were not updated. Choose Update Tools again and approve the Windows prompt.")
+            }
+        }
+    }
+
     func markWindowsInstalledFromSetup() {
         Task { @MainActor in
             activateMainWindow()

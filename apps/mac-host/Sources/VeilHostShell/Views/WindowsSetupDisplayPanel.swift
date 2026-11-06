@@ -54,6 +54,8 @@ struct WindowsSetupDisplayPanel: View {
     var runRecommendedProofAction: () -> Void
     var runMultiAppProofAction: () -> Void
     var quietWindowsWhenIdleAction: () -> Void
+    var guestToolsUpdateAvailable = false
+    var updateGuestToolsAction: () -> Void = {}
     var displayResizeAction: ((Int, Int) -> Void)?
     var refreshAction: () -> Void
     var consolePointerTapAction: (Double, Double) -> Void
@@ -304,6 +306,11 @@ struct WindowsSetupDisplayPanel: View {
                         .multilineTextAlignment(.center)
                         .frame(maxWidth: 620)
                         .accessibilityLabel(displayMessage)
+                }
+
+                if guestToolsUpdateAvailable {
+                    GuestToolsUpdateBanner(updateAction: updateGuestToolsAction)
+                        .frame(maxWidth: 620)
                 }
 
                 if let runtimeFailurePresentation {

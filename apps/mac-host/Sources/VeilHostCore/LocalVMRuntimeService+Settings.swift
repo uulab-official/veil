@@ -73,6 +73,22 @@ extension LocalVMRuntimeService {
         return try await readRemovableMediaStatus(socketPath: socketPath)
     }
 
+    /// Stages the tools this Veil ships, builds a disc from them, and inserts it into the running
+    /// Windows, where `QEMUGuestToolsUpdateKeySequence` runs its `U.cmd`.
+    public func insertGuestToolsUpdateMedia() async throws -> VMRemovableMediaStatus {
+        guard let profile = try await profileStore.load() else {
+            throw VMRemovableMediaError.notRunning
+        }
+        try Self.prepareGuestAgentInstallerBundle(for: profile)
+        let mediaURL = URL(fileURLWithPath: profile.sharedFolderPath)
+            .appendingPathComponent(GuestToolsUpdateMedia.fileName)
+        try GuestToolsUpdateMedia.build(
+            agentBundleURL: Self.guestAgentInstallerBundleURL(for: profile),
+            mediaURL: mediaURL
+        )
+        return try await insertRemovableMedia(path: mediaURL.path)
+    }
+
     public func ejectRemovableMedia() async throws -> VMRemovableMediaStatus {
         let socketPath = try await removableDriveQMPSocket()
         try await qmpController.run(

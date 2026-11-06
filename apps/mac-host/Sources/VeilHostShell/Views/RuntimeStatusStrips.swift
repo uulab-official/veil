@@ -533,3 +533,40 @@ struct InstallFlowItem: Identifiable {
     var symbolName: String
     var state: InstallFlowState
 }
+
+/// The bundled tools a release ships, read once; the file never changes while the app runs.
+enum ShellGuestTools {
+    static let bundledVersion = GuestToolsBundle.bundledVersion
+}
+
+/// Offers the Windows tools this Veil ships when the connected agent is older, the way a VM app
+/// offers its guest tools after an update.
+struct GuestToolsUpdateBanner: View {
+    var updateAction: () -> Void
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                Label("Windows tools update available", systemImage: "arrow.down.circle.fill")
+                    .font(.callout.weight(.semibold))
+                    .foregroundStyle(.white)
+                Text("Brings resolution that follows the window and the latest fixes. Windows asks for approval once.")
+                    .font(.caption)
+                    .foregroundStyle(.white.opacity(0.78))
+                    .lineLimit(2)
+            }
+            Spacer(minLength: 8)
+            Button("Update Tools", action: updateAction)
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.blue.opacity(0.18), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .strokeBorder(.blue.opacity(0.32), lineWidth: 1)
+        }
+        .accessibilityElement(children: .contain)
+    }
+}

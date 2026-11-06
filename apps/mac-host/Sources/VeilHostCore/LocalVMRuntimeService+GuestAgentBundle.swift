@@ -6,7 +6,7 @@ extension LocalVMRuntimeService {
         let bundleURL = guestAgentInstallerBundleURL(for: profile)
         try fileManager.createDirectory(at: bundleURL, withIntermediateDirectories: true)
 
-        let sourceURL = windowsAgentSourceURL()
+        let sourceURL = GuestToolsBundle.sourceURL()
         try copyWindowsAgentSubdirectory(
             named: "scripts",
             from: sourceURL,
@@ -148,15 +148,6 @@ extension LocalVMRuntimeService {
                 )
             }
             .sorted { $0.relativePath < $1.relativePath }
-    }
-
-    private static func windowsAgentSourceURL() -> URL {
-        URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("windows-agent", isDirectory: true)
     }
 
     /// The first-logon bootstrap sets VEIL_UNATTENDED, so a failure returns its exit code instead of

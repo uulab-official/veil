@@ -41,6 +41,8 @@ struct VMRuntimeView: View {
     var runRecommendedProofAction: () -> Void
     var runMultiAppProofAction: () -> Void
     var quietWindowsWhenIdleAction: () -> Void
+    var guestToolsUpdateAvailable = false
+    var updateGuestToolsAction: () -> Void = {}
     var displayResizeAction: ((Int, Int) -> Void)?
     var displayMessage: String?
     @Binding var showsFullDesktop: Bool
@@ -188,6 +190,8 @@ struct VMRuntimeView: View {
                     runRecommendedProofAction: runRecommendedProofAction,
                     runMultiAppProofAction: runMultiAppProofAction,
                     quietWindowsWhenIdleAction: quietWindowsWhenIdleAction,
+                    guestToolsUpdateAvailable: guestToolsUpdateAvailable,
+                    updateGuestToolsAction: updateGuestToolsAction,
                     displayResizeAction: displayResizeAction,
                     refreshAction: {
                         Task {

@@ -23,6 +23,7 @@ struct DetailView: View {
     var runRecommendedProofAction: () -> Void
     var runMultiAppProofAction: () -> Void
     var quietWindowsWhenIdleAction: () -> Void
+    var updateGuestToolsAction: () -> Void = {}
     var displayMessage: String?
     @Environment(ShellNavigation.self) private var navigation
 
@@ -64,6 +65,8 @@ struct DetailView: View {
                 runRecommendedProofAction: runRecommendedProofAction,
                 runMultiAppProofAction: runMultiAppProofAction,
                 quietWindowsWhenIdleAction: quietWindowsWhenIdleAction,
+                guestToolsUpdateAvailable: guestToolsUpdateAvailable,
+                updateGuestToolsAction: updateGuestToolsAction,
                 displayResizeAction: { width, height in
                     Task { @MainActor in
                         _ = await model.resizeDisplay(width: width, height: height)
@@ -118,6 +121,14 @@ struct DetailView: View {
             runtimeState: vmModel.snapshot?.state,
             hasDesktopDisplay: hasDesktopDisplay,
             hasLiveAppConnection: model.hasLiveAgentConnection
+        )
+    }
+
+    /// The connected agent is older than the tools this Veil ships.
+    private var guestToolsUpdateAvailable: Bool {
+        model.hasLiveAgentConnection && GuestToolsUpdatePolicy.isOutdated(
+            installedVersion: model.health?.agentVersion,
+            bundledVersion: ShellGuestTools.bundledVersion
         )
     }
 

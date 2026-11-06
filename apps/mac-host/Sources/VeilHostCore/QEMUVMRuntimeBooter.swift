@@ -466,6 +466,15 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
         )
     }
 
+    public func updateGuestToolsFromRemovableMedia() async throws -> QEMUKeySendRecord {
+        try await sendAttachedMediaCommand(
+            startButtonTapNormalizedX: QEMUGuestToolsUpdateKeySequence.startButtonTapNormalizedX,
+            startButtonTapNormalizedY: QEMUGuestToolsUpdateKeySequence.startButtonTapNormalizedY,
+            steps: QEMUGuestToolsUpdateKeySequence.steps,
+            stepsAfterRunOpened: QEMUGuestToolsUpdateKeySequence.stepsAfterRunOpened
+        )
+    }
+
     public func prepareSparsePackageFromAttachedMedia() async throws -> QEMUKeySendRecord {
         try await sendAttachedMediaCommand(
             startButtonTapNormalizedX: QEMUSparsePackagePreparationKeySequence.startButtonTapNormalizedX,

@@ -2154,6 +2154,38 @@ public enum QEMUGuestAgentInstallKeySequence {
     }
 }
 
+/// Opens Run and starts `U.cmd` from the tools update disc; the same Repair script as V.cmd then
+/// installs the bundle beside it.
+public enum QEMUGuestToolsUpdateKeySequence {
+    public static let startButtonTapNormalizedX = QEMUGuestAgentInstallKeySequence.startButtonTapNormalizedX
+    public static let startButtonTapNormalizedY = QEMUGuestAgentInstallKeySequence.startButtonTapNormalizedY
+
+    public static let commandText =
+        #"cmd.exe /c for %d in (D E F G H I J K L M N O P Q R S T U V W X Y Z) do if exist "%d:\Veil Guest Agent\U.cmd" call "%d:\Veil Guest Agent\U.cmd""#
+
+    public static var stepsAfterRunOpened: [QEMUKeySequenceStep] {
+        get throws {
+            var textSteps = try QEMUQMPKeyboardCommandBuilder
+                .keySequence(forText: commandText)
+                .map { QEMUKeySequenceStep(key: $0, delayAfterSend: 0.035) }
+            if !textSteps.isEmpty {
+                textSteps[textSteps.count - 1].delayAfterSend = 1.0
+            }
+            return QEMUGuestAgentInstallKeySequence.openRunSteps + [
+                QEMUKeySequenceStep(key: "ctrl-a", delayAfterSend: 0.2)
+            ] + textSteps
+        }
+    }
+
+    public static var steps: [QEMUKeySequenceStep] {
+        get throws {
+            [QEMUKeySequenceStep(key: "esc", delayAfterSend: 0.3)]
+                + (try stepsAfterRunOpened)
+                + [QEMUKeySequenceStep(key: "ret", delayAfterSend: 1.0)]
+        }
+    }
+}
+
 public enum QEMUSparsePackagePreparationKeySequence {
     public static let startButtonTapNormalizedX = QEMUGuestAgentInstallKeySequence.startButtonTapNormalizedX
     public static let startButtonTapNormalizedY = QEMUGuestAgentInstallKeySequence.startButtonTapNormalizedY

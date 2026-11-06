@@ -91,6 +91,7 @@ struct VeilHostShellApp: App {
             runRecommendedProofAction: runRecommendedProof,
             runMultiAppProofAction: runMultiAppProof,
             quietWindowsWhenIdleAction: quietWindowsWhenIdle,
+            updateGuestToolsAction: updateGuestTools,
             displayMessage: displayMessage
         )
             .frame(

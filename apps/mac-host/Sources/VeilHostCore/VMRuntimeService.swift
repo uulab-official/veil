@@ -16,6 +16,8 @@ public protocol VMRuntimeService: Sendable {
     func removableMediaStatus() async -> VMRemovableMediaStatus
     func insertRemovableMedia(path: String) async throws -> VMRemovableMediaStatus
     func ejectRemovableMedia() async throws -> VMRemovableMediaStatus
+    /// Puts a disc with the tools this Veil ships into the running Windows' removable drive.
+    func insertGuestToolsUpdateMedia() async throws -> VMRemovableMediaStatus
     func markGuestAgentConnected(agentVersion: String) async throws -> VMRuntimeSnapshot
     /// Stores the agent's `capabilities.virtioGpuDisplay` report for the next cold start.
     func recordVirtioGPUDriverInstalled(_ installed: Bool) async throws
@@ -83,6 +85,10 @@ public extension VMRuntimeService {
     }
 
     func ejectRemovableMedia() async throws -> VMRemovableMediaStatus {
+        throw VMRemovableMediaError.notRunning
+    }
+
+    func insertGuestToolsUpdateMedia() async throws -> VMRemovableMediaStatus {
         throw VMRemovableMediaError.notRunning
     }
 

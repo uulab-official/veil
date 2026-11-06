@@ -489,3 +489,10 @@
 "Input check ready" = "입력 확인 준비됨";
 "Window check ready" = "창 확인 준비됨";
 "App check ready" = "앱 확인 준비됨";
+"Windows tools update available" = "Windows 도구 업데이트가 있습니다";
+"Brings resolution that follows the window and the latest fixes. Windows asks for approval once." = "창 크기를 따라가는 해상도와 최신 수정이 들어 있습니다. Windows에서 한 번 승인을 요청합니다.";
+"Update Tools" = "도구 업데이트";
+"Updating Windows tools. When Windows asks for approval, choose Yes." = "Windows 도구를 업데이트하는 중입니다. Windows에서 승인을 요청하면 \"예\"를 누르세요.";
+"Windows tools updated. Restart Windows once so the screen follows the window size." = "Windows 도구를 업데이트했습니다. 화면이 창 크기를 따라가도록 Windows를 한 번 다시 시작하세요.";
+"Windows tools could not be updated: %@" = "Windows 도구를 업데이트하지 못했습니다: %@";
+"Windows tools were not updated. Choose Update Tools again and approve the Windows prompt." = "Windows 도구가 업데이트되지 않았습니다. 도구 업데이트를 다시 누르고 Windows 승인 창에서 \"예\"를 누르세요.";

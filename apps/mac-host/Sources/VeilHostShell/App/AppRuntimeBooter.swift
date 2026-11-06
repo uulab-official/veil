@@ -169,6 +169,13 @@ final class AppRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
         return try await qemuBooter.installGuestAgentFromAttachedMedia()
     }
 
+    func updateGuestToolsFromRemovableMedia() async throws -> QEMUKeySendRecord {
+        guard provider == .qemu else {
+            throw AppRuntimeBooterError.qemuGuestAutomationUnavailable
+        }
+        return try await qemuBooter.updateGuestToolsFromRemovableMedia()
+    }
+
     func prepareSparsePackageFromAttachedMedia() async throws -> QEMUKeySendRecord {
         guard provider == .qemu else {
             throw AppRuntimeBooterError.qemuGuestAutomationUnavailable
