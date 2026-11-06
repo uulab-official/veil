@@ -1,0 +1,5 @@
+{
+  "type": "system.shutdown.response",
+  "requestId": "req_system_shutdown_1",
+  "accepted": true
+}

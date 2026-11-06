@@ -6,6 +6,7 @@ export const MessageType = Object.freeze({
   AppLaunchRequest: "app.launch.request",
   AppLaunchResponse: "app.launch.response",
   FileOpenRequest: "file.open.request",
+  SharedFileOpenRequest: "file.open.shared.request",
   FileOpenResponse: "file.open.response",
   WindowCreated: "window.created",
   WindowUpdated: "window.updated",
@@ -20,7 +21,13 @@ export const MessageType = Object.freeze({
   WindowCloseResponse: "window.close.response",
   WindowResizeRequest: "window.resize.request",
   WindowResizeResponse: "window.resize.response",
+  DisplayResizeRequest: "display.resize.request",
+  DisplayResizeResponse: "display.resize.response",
+  SystemShutdownRequest: "system.shutdown.request",
+  SystemShutdownResponse: "system.shutdown.response",
   ClipboardTextSet: "clipboard.text.set",
+  ClipboardImageSet: "clipboard.image.set",
+  ClipboardFilesSet: "clipboard.files.set",
   NotificationListenerRequest: "notification.listener.request",
   NotificationListenerResponse: "notification.listener.response",
   NotificationReceived: "notification.received",
@@ -29,12 +36,22 @@ export const MessageType = Object.freeze({
   InputMouse: "input.mouse",
   InputKey: "input.key",
   InputText: "input.text",
+  OperationAck: "operation.ack",
   Error: "error"
 });
 
 // One `input.text` message becomes one posted window message per UTF-16 code unit on the guest, so
 // the payload is bounded here rather than letting a single message flood the target HWND.
 export const MAX_INPUT_TEXT_UTF16_LENGTH = 4096;
+
+// Clipboard image bounds. The byte bound keeps one copy from monopolising the control socket; the pixel
+// bound exists because a small PNG can decode to an enormous bitmap.
+export const MAX_CLIPBOARD_IMAGE_BYTES = 8 * 1024 * 1024;
+export const MAX_CLIPBOARD_IMAGE_DIMENSION = 16_384;
+export const MAX_CLIPBOARD_IMAGE_PIXELS = 33_554_432;
+export const MAX_CLIPBOARD_FILE_COUNT = 64;
+export const MAX_CLIPBOARD_FILE_RELATIVE_PATH_LENGTH = 240;
+export const CLIPBOARD_FILES_DIRECTORY = "Veil Clipboard";
 
 const knownTypes = new Set(Object.values(MessageType));
 const mouseEvents = new Set(["leftDown", "leftUp", "rightDown", "rightUp", "move", "scroll"]);
@@ -120,11 +137,43 @@ export function validateAgentHealthResponse(response) {
     throw new TypeError("Agent health response field 'capabilities.sharedFolder' must be a boolean.");
   }
 
+  // Optional so an older agent keeps image and file clipboards on the Mac instead of receiving a message
+  // it cannot route.
+  for (const field of ["clipboardImage", "clipboardFiles"]) {
+    if (response.capabilities[field] !== undefined && typeof response.capabilities[field] !== "boolean") {
+      throw new TypeError(`Agent health response field 'capabilities.${field}' must be a boolean.`);
+    }
+  }
+
   // Optional so a host connected to an older agent can disable the resize affordance instead of
   // sending a message that the agent cannot route.
   if (response.capabilities.windowResize !== undefined
     && typeof response.capabilities.windowResize !== "boolean") {
     throw new TypeError("Agent health response field 'capabilities.windowResize' must be a boolean.");
+  }
+
+  if (response.capabilities.displayResize !== undefined
+    && typeof response.capabilities.displayResize !== "boolean") {
+    throw new TypeError("Agent health response field 'capabilities.displayResize' must be a boolean.");
+  }
+
+  // Optional so an older agent decodes as unknown and the host keeps the ramfb display it boots today.
+  if (response.capabilities.virtioGpuDisplay !== undefined
+    && typeof response.capabilities.virtioGpuDisplay !== "boolean") {
+    throw new TypeError("Agent health response field 'capabilities.virtioGpuDisplay' must be a boolean.");
+  }
+
+  // Optional so a host connected to an older agent falls back to the ACPI power button.
+  if (response.capabilities.systemShutdown !== undefined
+    && typeof response.capabilities.systemShutdown !== "boolean") {
+    throw new TypeError("Agent health response field 'capabilities.systemShutdown' must be a boolean.");
+  }
+
+  // Optional so a host connected to an agent without acknowledgements keeps the fire-and-forget
+  // semantics instead of waiting on a reply that never comes.
+  if (response.capabilities.operationAcks !== undefined
+    && typeof response.capabilities.operationAcks !== "boolean") {
+    throw new TypeError("Agent health response field 'capabilities.operationAcks' must be a boolean.");
   }
 
   if (response.packageIdentityStatus !== undefined) {
@@ -411,6 +460,47 @@ export function validateFileOpenRequest(request) {
   return request;
 }
 
+export function validateSharedFileOpenRequest(request) {
+  if (!request || request.type !== MessageType.SharedFileOpenRequest) {
+    throw new TypeError("Shared file open request must use type file.open.shared.request.");
+  }
+
+  requireNonEmptyString(request.requestId, "requestId", "Shared file open request");
+  requireNonEmptyString(request.appId, "appId", "Shared file open request");
+  requireNonEmptyString(request.fileName, "fileName", "Shared file open request");
+  requireNonEmptyString(request.guestPath, "guestPath", "Shared file open request");
+
+  const fileName = request.fileName.trim();
+  const nameWithoutExtension = fileName.includes(".")
+    ? fileName.slice(0, fileName.lastIndexOf("."))
+    : fileName;
+  if (
+    fileName.length === 0
+    || /[\\/]/.test(fileName)
+    || fileName === "."
+    || fileName === ".."
+    || reservedWindowsDeviceNames.has(nameWithoutExtension.toUpperCase())
+  ) {
+    throw new TypeError(
+      "Shared file open request field 'fileName' must be a bare, non-reserved file name with no path separators."
+    );
+  }
+
+  const guestPath = request.guestPath.trim();
+  if (
+    !/^C:\\VeilShared\\/.test(guestPath)
+    || guestPath.includes("..")
+    || guestPath.endsWith("\\")
+    || guestPath.slice(guestPath.lastIndexOf("\\") + 1) !== fileName
+  ) {
+    throw new TypeError(
+      "Shared file open request field 'guestPath' must stay under C:\\VeilShared and match fileName."
+    );
+  }
+
+  return request;
+}
+
 export function validateFileOpenResponse(response) {
   if (!response || response.type !== MessageType.FileOpenResponse) {
     throw new TypeError("File open response must use type file.open.response.");
@@ -597,9 +687,177 @@ export function validateWindowResizeResponse(response) {
   return response;
 }
 
+export function validateDisplayResizeRequest(request) {
+  if (!request || request.type !== MessageType.DisplayResizeRequest) {
+    throw new TypeError("Display resize request must use type display.resize.request.");
+  }
+
+  requireNonEmptyString(request.requestId, "requestId", "Display resize request");
+  requireDisplayResizeDimension(request.width, "width");
+  requireDisplayResizeDimension(request.height, "height");
+  if (request.width > 8_294_400 / request.height) {
+    throw new TypeError("Display resize request dimensions must contain at most 8294400 pixels.");
+  }
+
+  return request;
+}
+
+export function validateDisplayResizeResponse(response) {
+  if (!response || response.type !== MessageType.DisplayResizeResponse) {
+    throw new TypeError("Display resize response must use type display.resize.response.");
+  }
+
+  requireNonEmptyString(response.requestId, "requestId", "Display resize response");
+  if (typeof response.accepted !== "boolean") {
+    throw new TypeError("Display resize response field 'accepted' must be a boolean.");
+  }
+
+  if (response.accepted) {
+    requireDisplayResizeDimension(response.width, "width");
+    requireDisplayResizeDimension(response.height, "height");
+  } else if (response.reason !== undefined && response.reason !== null && typeof response.reason !== "string") {
+    throw new TypeError("Display resize response field 'reason' must be a string when present.");
+  }
+
+  return response;
+}
+
+export function validateSystemShutdownRequest(request) {
+  if (!request || request.type !== MessageType.SystemShutdownRequest) {
+    throw new TypeError("System shutdown request must use type system.shutdown.request.");
+  }
+
+  requireNonEmptyString(request.requestId, "requestId", "System shutdown request");
+  return request;
+}
+
+export function validateSystemShutdownResponse(response) {
+  if (!response || response.type !== MessageType.SystemShutdownResponse) {
+    throw new TypeError("System shutdown response must use type system.shutdown.response.");
+  }
+
+  requireNonEmptyString(response.requestId, "requestId", "System shutdown response");
+  if (typeof response.accepted !== "boolean") {
+    throw new TypeError("System shutdown response field 'accepted' must be a boolean.");
+  }
+  if (response.reason !== undefined && response.reason !== null && typeof response.reason !== "string") {
+    throw new TypeError("System shutdown response field 'reason' must be a string when present.");
+  }
+
+  return response;
+}
+
+/// The success reply for messages the host used to send fire-and-forget (`input.mouse`,
+/// `input.key`, `input.text`, `clipboard.text.set`, `window.frame.subscribe`,
+/// `window.frame.unsubscribe`). Failures keep using the `error` shape, so one host read of
+/// "one reply frame" covers both. Carries no payload beyond the echoed request id so an
+/// agent that predates acknowledgements stays wire-compatible after a bounded host wait.
+export function validateOperationAck(ack) {
+  if (!ack || ack.type !== MessageType.OperationAck) {
+    throw new TypeError("Operation ack must use type operation.ack.");
+  }
+
+  requireNonEmptyString(ack.requestId, "requestId", "Operation ack");
+  if (typeof ack.accepted !== "boolean") {
+    throw new TypeError("Operation ack field 'accepted' must be a boolean.");
+  }
+
+  return ack;
+}
+
+/// One image clipboard update. See `docs/protocol.md` "Clipboard Image". Validates the envelope only;
+/// receivers still check the decoded bytes against `byteLength`, `sha256`, and the PNG IHDR dimensions.
+export function validateClipboardImageSet(clipboard) {
+  if (!clipboard || clipboard.type !== MessageType.ClipboardImageSet) {
+    throw new TypeError("Clipboard image must use type clipboard.image.set.");
+  }
+
+  requireNonEmptyString(clipboard.requestId, "requestId", "Clipboard image");
+  if (!clipboardOrigins.has(clipboard.origin)) {
+    throw new TypeError(`Clipboard image origin '${clipboard.origin}' is not supported.`);
+  }
+  requirePositiveInteger(clipboard.sequence, "sequence", "Clipboard image");
+  if (clipboard.format !== "png") {
+    throw new TypeError("Clipboard image field 'format' must be 'png'.");
+  }
+  for (const field of ["width", "height"]) {
+    const value = clipboard[field];
+    if (!Number.isInteger(value) || value < 1 || value > MAX_CLIPBOARD_IMAGE_DIMENSION) {
+      throw new TypeError(`Clipboard image field '${field}' must be between 1 and ${MAX_CLIPBOARD_IMAGE_DIMENSION}.`);
+    }
+  }
+  if (clipboard.width * clipboard.height > MAX_CLIPBOARD_IMAGE_PIXELS) {
+    throw new TypeError("Clipboard image exceeds the maximum pixel count.");
+  }
+  if (!Number.isInteger(clipboard.byteLength)
+    || clipboard.byteLength < 1
+    || clipboard.byteLength > MAX_CLIPBOARD_IMAGE_BYTES) {
+    throw new TypeError(`Clipboard image field 'byteLength' must be between 1 and ${MAX_CLIPBOARD_IMAGE_BYTES}.`);
+  }
+  if (typeof clipboard.sha256 !== "string" || !/^[0-9a-f]{64}$/.test(clipboard.sha256)) {
+    throw new TypeError("Clipboard image field 'sha256' must be 64 lowercase hex characters.");
+  }
+  requireNonEmptyString(clipboard.pngBase64, "pngBase64", "Clipboard image");
+
+  return clipboard;
+}
+
+const forbiddenWindowsFileNameCharacters = /[<>:"/|?*\u0000-\u001f]/;
+
+/// Host-to-guest file paste through the shared folder. See `docs/protocol.md` "Clipboard Files".
+export function validateClipboardFilesSet(clipboard) {
+  if (!clipboard || clipboard.type !== MessageType.ClipboardFilesSet) {
+    throw new TypeError("Clipboard files must use type clipboard.files.set.");
+  }
+
+  requireNonEmptyString(clipboard.requestId, "requestId", "Clipboard files");
+  if (clipboard.origin !== "host") {
+    throw new TypeError("Clipboard files only travel from the host.");
+  }
+  requirePositiveInteger(clipboard.sequence, "sequence", "Clipboard files");
+  requireNonEmptyString(clipboard.shareName, "shareName", "Clipboard files");
+  if (!Array.isArray(clipboard.relativePaths)
+    || clipboard.relativePaths.length < 1
+    || clipboard.relativePaths.length > MAX_CLIPBOARD_FILE_COUNT) {
+    throw new TypeError(`Clipboard files field 'relativePaths' must hold 1 to ${MAX_CLIPBOARD_FILE_COUNT} entries.`);
+  }
+  for (const path of clipboard.relativePaths) {
+    requireClipboardFileRelativePath(path);
+  }
+
+  return clipboard;
+}
+
+function requireClipboardFileRelativePath(path) {
+  if (typeof path !== "string"
+    || path.length === 0
+    || path.length > MAX_CLIPBOARD_FILE_RELATIVE_PATH_LENGTH) {
+    throw new TypeError(`Clipboard file path must be 1 to ${MAX_CLIPBOARD_FILE_RELATIVE_PATH_LENGTH} characters.`);
+  }
+
+  const components = path.split("\\");
+  if (components.length < 2 || components[0] !== CLIPBOARD_FILES_DIRECTORY) {
+    throw new TypeError(`Clipboard file path '${path}' must start with '${CLIPBOARD_FILES_DIRECTORY}\\'.`);
+  }
+  for (const component of components) {
+    if (component.length === 0
+      || component === "."
+      || component === ".."
+      || forbiddenWindowsFileNameCharacters.test(component)) {
+      throw new TypeError(`Clipboard file path '${path}' has an unsafe component.`);
+    }
+  }
+}
+
 function requireResizeDimension(value, fieldName) {
   if (!Number.isInteger(value) || value < 320 || value > 8_192) {
     throw new TypeError(`Window resize request field '${fieldName}' must be between 320 and 8192.`);
+  }
+}
+
+function requireDisplayResizeDimension(value, fieldName) {
+  if (!Number.isInteger(value) || value < 640 || value > 3_840) {
+    throw new TypeError(`Display resize request field '${fieldName}' must be between 640 and 3840.`);
   }
 }
 

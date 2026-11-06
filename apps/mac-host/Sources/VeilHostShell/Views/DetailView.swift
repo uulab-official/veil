@@ -23,12 +23,13 @@ struct DetailView: View {
     var runRecommendedProofAction: () -> Void
     var runMultiAppProofAction: () -> Void
     var quietWindowsWhenIdleAction: () -> Void
+    var updateGuestToolsAction: () -> Void = {}
     var displayMessage: String?
-    @State private var showsWindowsDesktop = false
+    @Environment(ShellNavigation.self) private var navigation
 
     var body: some View {
-        ZStack(alignment: .bottom) {
-            VMRuntimeView(
+        @Bindable var navigation = navigation
+        VMRuntimeView(
                 model: vmModel,
                 guestAgentInstallEvidence: model.guestAgentInstallEvidence,
                 agentDiagnostic: model.agentDiagnostic,
@@ -64,24 +65,16 @@ struct DetailView: View {
                 runRecommendedProofAction: runRecommendedProofAction,
                 runMultiAppProofAction: runMultiAppProofAction,
                 quietWindowsWhenIdleAction: quietWindowsWhenIdleAction,
+                guestToolsUpdateAvailable: guestToolsUpdateAvailable,
+                updateGuestToolsAction: updateGuestToolsAction,
+                displayResizeAction: { width, height in
+                    Task { @MainActor in
+                        _ = await model.resizeDisplay(width: width, height: height)
+                    }
+                },
                 displayMessage: displayMessage,
-                showsFullDesktop: $showsWindowsDesktop
+                showsFullDesktop: $navigation.showsWindowsDesktop
             )
-
-            if shouldShowAppDock {
-                WindowsQuickLaunchPanel(
-                    apps: model.apps,
-                    mirrorSessions: model.mirrorSessions,
-                    selectedAppId: $model.selectedAppId,
-                    canFulfillPendingLaunch: model.canFulfillPendingLaunch,
-                    hasLiveAgentConnection: model.hasLiveAgentConnection,
-                    phase: model.phase,
-                    launchWindowsAppAction: launchWindowsAppAction
-                )
-                .padding(.horizontal, 22)
-                .padding(.bottom, 18)
-            }
-        }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onAppear {
             synchronizeWorkspacePresentation()
@@ -89,33 +82,38 @@ struct DetailView: View {
         .onChange(of: vmModel.snapshot?.state) { _, _ in
             synchronizeWorkspacePresentation()
         }
+        .onChange(of: model.hasLiveAgentConnection) { _, isConnected in
+            // Losing the app connection leaves the launcher with nothing it can open, so fall back
+            // to the desktop. Regaining it waits for the first app frame (below) instead of
+            // pulling the user out of the desktop they are using.
+            if !isConnected {
+                synchronizeWorkspacePresentation()
+            }
+        }
         .onChange(of: model.mirrorSessions.contains { $0.latestFrame != nil }) { _, hasFirstAppFrame in
             if RuntimeWorkspacePresentationPolicy.shouldReturnToApps(
                 windowsInstalled: hasInstalledWindows,
                 hasFirstAppFrame: hasFirstAppFrame
             ) {
-                showsWindowsDesktop = false
+                navigation.showsWindowsDesktop = false
             }
         }
     }
 
     private var activeMirrorSession: WindowMirrorSession? {
-        model.mirrorSessions.first { $0.latestFrame != nil }
-            ?? model.mirrorSessions.first
+        Self.activeMirrorSession(in: model.mirrorSessions, runtimeState: vmModel.snapshot?.state)
     }
 
-    /// Demo or stale app catalogs must not make first-run setup look complete. The
-    /// launcher appears only after a local VM profile has real installation evidence.
-    private var shouldShowAppDock: Bool {
-        guard vmModel.snapshot != nil else {
-            return false
+    /// Sessions are kept across a shutdown so their windows can be restored, but a stopped Windows
+    /// has no open app; naming one made the launcher say Paint was open while Windows was off.
+    static func activeMirrorSession(
+        in sessions: [WindowMirrorSession],
+        runtimeState: VMRuntimeState?
+    ) -> WindowMirrorSession? {
+        guard runtimeState == .running else {
+            return nil
         }
-
-        return RuntimeWorkspacePresentationPolicy.showsAppDock(
-            hasApps: !model.apps.isEmpty,
-            hasInstalledWindows: hasInstalledWindows,
-            showsFullDesktop: showsWindowsDesktop
-        )
+        return sessions.first { $0.latestFrame != nil } ?? sessions.first
     }
 
     private var hasInstalledWindows: Bool {
@@ -129,10 +127,19 @@ struct DetailView: View {
 
     private func synchronizeWorkspacePresentation() {
         let hasDesktopDisplay = vmModel.snapshot?.state == .running || vmModel.snapshot?.state == .starting
-        showsWindowsDesktop = RuntimeWorkspacePresentationPolicy.defaultShowsFullDesktop(
+        navigation.showsWindowsDesktop = RuntimeWorkspacePresentationPolicy.defaultShowsFullDesktop(
             windowsInstalled: hasInstalledWindows,
             runtimeState: vmModel.snapshot?.state,
-            hasDesktopDisplay: hasDesktopDisplay
+            hasDesktopDisplay: hasDesktopDisplay,
+            hasLiveAppConnection: model.hasLiveAgentConnection
+        )
+    }
+
+    /// The connected agent is older than the tools this Veil ships.
+    private var guestToolsUpdateAvailable: Bool {
+        model.hasLiveAgentConnection && GuestToolsUpdatePolicy.isOutdated(
+            installedVersion: model.health?.agentVersion,
+            bundledVersion: ShellGuestTools.bundledVersion
         )
     }
 
@@ -158,12 +165,19 @@ struct DetailView: View {
 }
 
 enum RuntimeWorkspacePresentationPolicy {
+    /// Like a Parallels VM window, a running Windows shows its desktop. The app launcher replaces it
+    /// only when Windows apps can actually open as Mac windows, which needs the Veil agent's
+    /// connection; without it the launcher offers buttons that cannot work.
     static func defaultShowsFullDesktop(
         windowsInstalled: Bool,
         runtimeState: VMRuntimeState?,
-        hasDesktopDisplay: Bool
+        hasDesktopDisplay: Bool,
+        hasLiveAppConnection: Bool = false
     ) -> Bool {
-        !windowsInstalled && runtimeState == .running && hasDesktopDisplay
+        guard runtimeState == .running, hasDesktopDisplay else {
+            return false
+        }
+        return !windowsInstalled || !hasLiveAppConnection
     }
 
     static func shouldReturnToApps(

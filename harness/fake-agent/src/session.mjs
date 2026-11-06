@@ -29,37 +29,54 @@ export function createSession(options = {}) {
           return [withRequestId(await readFixture("app.list.response.json"), message.requestId)];
         case MessageType.AppLaunchRequest:
           return handleAppLaunch(message, trackedWindowIds);
+        case MessageType.FileOpenRequest:
+        case MessageType.SharedFileOpenRequest:
+          return handleFileOpen(message, trackedWindowIds);
         case MessageType.WindowFrameSubscribe:
           return handleWindowFrameSubscribe(message, broadcast, trackedWindowIds);
         case MessageType.WindowFrameUnsubscribe:
-          return [];
+          return [operationAck(message)];
         case MessageType.WindowFocusRequest:
           return handleWindowFocus(message, trackedWindowIds);
         case MessageType.WindowCloseRequest:
           return handleWindowClose(message, broadcast, trackedWindowIds);
         case MessageType.WindowResizeRequest:
           return handleWindowResize(message, trackedWindowIds);
+        case MessageType.DisplayResizeRequest:
+          return handleDisplayResize(message);
         case MessageType.InputMouse:
           if (!canTargetTrackedWindow(message, trackedWindowIds)) {
             return [windowNotTrackedError(message)];
           }
           await onInput(message);
           await broadcastInputFrame(message, broadcast, nextFrameSequence);
-          return [];
+          return [operationAck(message)];
         case MessageType.InputKey:
           if (!canTargetTrackedWindow(message, trackedWindowIds)) {
             return [windowNotTrackedError(message)];
           }
           await onInput(message);
           await broadcastInputFrame(message, broadcast, nextFrameSequence);
-          return [];
+          return [operationAck(message)];
         case MessageType.ClipboardTextSet:
-          return [];
+        case MessageType.ClipboardImageSet:
+        case MessageType.ClipboardFilesSet:
+          return [operationAck(message)];
         default:
           return [createError(message.requestId, "unsupported_in_fake_agent", `Fake agent cannot handle ${message.type}`)];
       }
     }
   };
+}
+
+function handleDisplayResize(message) {
+  return [{
+    type: MessageType.DisplayResizeResponse,
+    requestId: message.requestId,
+    accepted: true,
+    width: message.width,
+    height: message.height
+  }];
 }
 
 async function handleAppLaunch(message, trackedWindowIds) {
@@ -84,6 +101,33 @@ async function handleAppLaunch(message, trackedWindowIds) {
       ...windowMetadata,
       appId: app.id,
       title: windowMetadata.title ?? app.name
+    }
+  ];
+}
+
+async function handleFileOpen(message, trackedWindowIds) {
+  const catalog = await readFixture("app.list.response.json");
+  const app = catalog.apps.find((candidate) => candidate.id === message.appId);
+  if (!app) {
+    return [createError(message.requestId, "app_not_found", `No app exists for id ${message.appId}`)];
+  }
+
+  const response = await readFixture("file.open.response.json");
+  const window = await readFixture("window.created.json");
+  const windowMetadata = windowMetadataForApp(app.id);
+  trackedWindowIds.add(windowMetadata.windowId);
+
+  return [
+    {
+      ...response,
+      requestId: message.requestId,
+      processId: windowMetadata.processId
+    },
+    {
+      ...window,
+      ...windowMetadata,
+      appId: app.id,
+      title: `${message.fileName ?? "Untitled"} - ${app.name}`
     }
   ];
 }
@@ -131,7 +175,9 @@ async function handleWindowFrameSubscribe(message, broadcast, trackedWindowIds) 
     frameId: `frame_${String(1).padStart(6, "0")}`,
     sequence: 1
   });
-  return [];
+  // The ack is the direct reply; the frame above is a broadcast, exactly like the real agent
+  // answers a subscribe with one ack followed by a stream the host filters as events.
+  return [operationAck(message)];
 }
 
 async function broadcastInputFrame(message, broadcast, nextFrameSequence) {
@@ -231,6 +277,14 @@ async function handleWindowResize(message, trackedWindowIds) {
 
 function canTargetTrackedWindow(message, trackedWindowIds) {
   return Boolean(message.windowId && trackedWindowIds.has(message.windowId));
+}
+
+function operationAck(message) {
+  return {
+    type: MessageType.OperationAck,
+    requestId: message.requestId,
+    accepted: true
+  };
 }
 
 function windowNotTrackedError(message) {

@@ -23,6 +23,9 @@ struct AppLaunchLifecycleContext: Equatable, Sendable {
     var repairAttemptCount: Int
     var canRecoverStalledRuntime = false
     var hasAttemptedRuntimeRecovery = false
+    /// A recent blank embedded console is evidence that Windows is still leaving the boot manager.
+    /// Keep waiting for the guest agent in that state instead of reinstalling a healthy agent.
+    var isConsoleStillBooting = false
 }
 
 enum AppLaunchLifecycleFailure: Error, Equatable, Sendable {
@@ -32,6 +35,10 @@ enum AppLaunchLifecycleFailure: Error, Equatable, Sendable {
     case guestAgentRecoveryExhausted
     case launchRejected
     case transitionBudgetExceeded
+    case captureUnavailable
+    case firstFrameRecoveryFailed
+    case firstFrameRecoveryExhausted
+    case cancelled
 
     var userMessage: String {
         switch self {
@@ -47,6 +54,14 @@ enum AppLaunchLifecycleFailure: Error, Equatable, Sendable {
             return "Windows connected, but the selected app did not open. Refresh the app list and try once more."
         case .transitionBudgetExceeded:
             return "Veil stopped the app launch because its state did not settle. Refresh Windows status before retrying."
+        case .captureUnavailable:
+            return "Windows opened the app, but app screen sharing is unavailable. Open recovery to check the Windows app connection."
+        case .firstFrameRecoveryFailed:
+            return "Windows opened the app, but Veil could not restart its screen. Use Refresh App Screen and try again."
+        case .firstFrameRecoveryExhausted:
+            return "Windows opened the app, but its screen did not arrive after one recovery attempt. Open recovery for the next safe action."
+        case .cancelled:
+            return "App opening was cancelled. You can open the app again when you are ready."
         }
     }
 }
@@ -74,6 +89,9 @@ struct AppLaunchLifecycleCoordinator {
         switch context.runtimeState {
         case .running, .starting:
             if context.agentWaitTimedOut {
+                if context.isConsoleStillBooting {
+                    return .waitForGuestAgent
+                }
                 if context.canRecoverStalledRuntime && !context.hasAttemptedRuntimeRecovery {
                     return .recoverStalledRuntime
                 }

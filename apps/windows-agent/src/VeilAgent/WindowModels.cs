@@ -77,6 +77,10 @@ public sealed record WindowResizeInput(
     int Height
 );
 
+public sealed record DisplayResizeInput(int Width, int Height);
+
+public sealed record DisplayResizeResult(int Width, int Height);
+
 /// <summary>
 /// Outcome of one capture tick: either a frame to send, or proof that nothing changed.
 /// </summary>

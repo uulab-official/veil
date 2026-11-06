@@ -171,6 +171,12 @@ struct QEMUBootArgumentsFingerprintTests {
         "-m", "8192M"
     ]
 
+    @Test("a session saved before Windows got a local-time clock still resumes")
+    func ignoresClockBase() {
+        let withClock = Self.baseArguments + ["-rtc", "base=localtime"]
+        #expect(QEMUBootArgumentsFingerprint.value(for: withClock) == QEMUBootArgumentsFingerprint.value(for: Self.baseArguments))
+    }
+
     @Test("ignores per-launch plumbing that legitimately changes on every start")
     func ignoresPerLaunchPlumbing() {
         let first = Self.baseArguments + [

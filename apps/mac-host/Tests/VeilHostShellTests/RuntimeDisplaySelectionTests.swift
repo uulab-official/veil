@@ -91,14 +91,34 @@ struct WindowsDisplayAspectRatioPolicyTests {
 }
 
 struct RuntimeWorkspacePresentationPolicyTests {
-    @Test("installed Windows defaults to the app launcher even when a desktop display exists")
+    @Test("installed Windows with a live app connection defaults to the app launcher")
     func installedWindowsDefaultsToLauncher() {
         #expect(
             RuntimeWorkspacePresentationPolicy.defaultShowsFullDesktop(
                 windowsInstalled: true,
                 runtimeState: .running,
-                hasDesktopDisplay: true
+                hasDesktopDisplay: true,
+                hasLiveAppConnection: true
             ) == false
+        )
+    }
+
+    @Test("installed Windows without the app connection shows its desktop, like a Parallels VM window")
+    func installedWindowsWithoutConnectionShowsDesktop() {
+        #expect(
+            RuntimeWorkspacePresentationPolicy.defaultShowsFullDesktop(
+                windowsInstalled: true,
+                runtimeState: .running,
+                hasDesktopDisplay: true,
+                hasLiveAppConnection: false
+            )
+        )
+        #expect(
+            !RuntimeWorkspacePresentationPolicy.defaultShowsFullDesktop(
+                windowsInstalled: true,
+                runtimeState: .stopped,
+                hasDesktopDisplay: false
+            )
         )
     }
 

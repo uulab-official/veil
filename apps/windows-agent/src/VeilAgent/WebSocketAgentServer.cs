@@ -22,7 +22,8 @@ public sealed class WebSocketAgentServer
     /// frames never share a connection with control messages and input.
     /// </summary>
     private readonly ConcurrentDictionary<Guid, WebSocket> frameChannelClients = new();
-    private readonly ConcurrentDictionary<string, CancellationTokenSource> frameStreamsByWindowId = new();
+    private readonly ConcurrentDictionary<string, FrameStream> frameStreamsByWindowId = new();
+    private readonly SemaphoreSlim frameStreamChanges = new(1, 1);
     private CancellationTokenSource? clipboardStreamCancellation;
     private CancellationTokenSource? windowDiscoveryStreamCancellation;
     private CancellationTokenSource? notificationStreamCancellation;
@@ -52,23 +53,29 @@ public sealed class WebSocketAgentServer
         StartWindowDiscoveryStream(cancellationToken);
         StartNotificationStream(cancellationToken);
 
-        while (!cancellationToken.IsCancellationRequested)
+        try
         {
-            TcpClient client;
-            try
+            while (!cancellationToken.IsCancellationRequested)
             {
-                client = await listener.AcceptTcpClientAsync(cancellationToken);
+                TcpClient client;
+                try
+                {
+                    client = await listener.AcceptTcpClientAsync(cancellationToken);
+                }
+                catch (SocketException error) when (IsTransientAcceptSocketError(error.SocketErrorCode))
+                {
+                    // A client reset during accept must not terminate the long-running agent.
+                    Console.Error.WriteLine(
+                        $"WebSocketAgentServer: ignoring transient accept failure {error.SocketErrorCode}."
+                    );
+                    continue;
+                }
+                _ = Task.Run(() => HandleClientAsync(client, cancellationToken), cancellationToken);
             }
-            catch (SocketException error) when (IsTransientAcceptSocketError(error.SocketErrorCode))
-            {
-                // A client can reset the connection while Windows is accepting it. This happens
-                // with short-lived TCP probes and must not terminate the long-running agent.
-                Console.Error.WriteLine(
-                    $"WebSocketAgentServer: ignoring transient accept failure {error.SocketErrorCode}."
-                );
-                continue;
-            }
-            _ = Task.Run(() => HandleClientAsync(client, cancellationToken), cancellationToken);
+        }
+        finally
+        {
+            await StopAllFrameStreamsAsync();
         }
     }
 
@@ -135,6 +142,19 @@ public sealed class WebSocketAgentServer
                         ?? new JsonObject { ["type"] = "invalid" };
                     var replies = await session.HandleAsync(request, cancellationToken);
 
+                    // A success reply confirms the lifecycle mutation. Complete it first, even if
+                    // the request connection disappears before the acknowledgement can be sent.
+                    var startsSubscription = request["type"]?.GetValue<string>() == MessageTypes.WindowFrameSubscribe;
+                    if (startsSubscription && replies.StreamWindow is not null)
+                    {
+                        await StartFrameStreamAsync(replies.StreamWindow, replies.NextFrameSequence, cancellationToken);
+                    }
+
+                    if (replies.StopStreamWindowId is not null)
+                    {
+                        await StopFrameStreamAsync(replies.StopStreamWindowId, cancellationToken);
+                    }
+
                     foreach (var reply in replies.SerializeDirectReplies())
                     {
                         await SendTextAsync(socket, reply, cancellationToken);
@@ -145,14 +165,11 @@ public sealed class WebSocketAgentServer
                         await BroadcastTextAsync(broadcast, cancellationToken);
                     }
 
-                    if (replies.StreamWindow is not null)
+                    // Launch replies establish window metadata before the initial frame and live
+                    // stream. Otherwise a static window's only full frame can precede its host mirror.
+                    if (!startsSubscription && replies.StreamWindow is not null)
                     {
-                        StartFrameStream(replies.StreamWindow, replies.NextFrameSequence, cancellationToken);
-                    }
-
-                    if (replies.StopStreamWindowId is not null)
-                    {
-                        StopFrameStream(replies.StopStreamWindowId);
+                        await StartFrameStreamAsync(replies.StreamWindow, replies.NextFrameSequence, cancellationToken);
                     }
                 }
             }
@@ -513,74 +530,138 @@ public sealed class WebSocketAgentServer
         }
     }
 
-    private void StartFrameStream(LaunchedWindow window, int firstSequence, CancellationToken serverCancellationToken)
+    private async Task StartFrameStreamAsync(LaunchedWindow window, int firstSequence, CancellationToken serverCancellationToken)
     {
-        if (frameStreamsByWindowId.TryRemove(window.WindowId, out var existing))
+        await frameStreamChanges.WaitAsync(serverCancellationToken);
+        try
         {
-            existing.Cancel();
-            existing.Dispose();
+            await StopFrameStreamCoreAsync(window.WindowId);
+            serverCancellationToken.ThrowIfCancellationRequested();
+
+            var stream = new FrameStream(serverCancellationToken);
+            frameStreamsByWindowId[window.WindowId] = stream;
+            // Always run the delegate, including when cancellation wins before scheduling, so its
+            // finally block releases both comparison state and the linked cancellation source.
+            stream.Completion = Task.Run(() => RunFrameStreamAsync(window, firstSequence, stream));
         }
-
-        // A restarted stream must begin with a full frame. Comparing against the previous session's
-        // pixels could suppress the very first frame the host is waiting for.
-        frameStreamer.ForgetWindow(window.WindowId);
-
-        var streamCancellation = CancellationTokenSource.CreateLinkedTokenSource(serverCancellationToken);
-        frameStreamsByWindowId[window.WindowId] = streamCancellation;
-
-        _ = Task.Run(async () =>
+        finally
         {
-            try
-            {
-                await frameStreamer.StreamAsync(
-                    window,
-                    firstSequence,
-                    async (result, token) => await BroadcastFrameAsync(result, token),
-                    streamCancellation.Token,
-                    // Liveness only. Without this the host would read an idle window as broken capture
-                    // and escalate the stream, which is what previously forced a full-window PNG encode
-                    // several times a second for a window nobody was touching.
-                    async (sequence, token) => await BroadcastTextAsync(
-                        AgentReplies.SerializeUnchangedFrame(window.WindowId, sequence),
-                        token
-                    ),
-                    // Skips the full-surface encode entirely in the normal case, where the only subscriber
-                    // is on the binary frame channel.
-                    () => !clients.IsEmpty
-                );
-            }
-            catch (OperationCanceledException)
-            {
-                // Expected when the agent shuts down or the same HWND stream is replaced.
-            }
-            catch (Exception error)
-            {
-                Console.Error.WriteLine(
-                    $"WebSocketAgentServer: frame stream for {window.WindowId} stopped unexpectedly. {error.GetType().Name}: {error.Message}"
-                );
-            }
-            finally
-            {
-                frameStreamsByWindowId.TryRemove(window.WindowId, out _);
-                // Covers every exit path -- unsubscribe, cancellation, and unexpected failure -- so the
-                // retained full-window comparison buffer cannot outlive the stream that created it.
-                frameStreamer.ForgetWindow(window.WindowId);
-                streamCancellation.Dispose();
-            }
-        }, streamCancellation.Token);
+            frameStreamChanges.Release();
+        }
     }
 
-    private void StopFrameStream(string windowId)
+    private async Task RunFrameStreamAsync(LaunchedWindow window, int firstSequence, FrameStream stream)
     {
-        if (frameStreamsByWindowId.TryRemove(windowId, out var existing))
+        try
+        {
+            await frameStreamer.StreamAsync(
+                window,
+                firstSequence,
+                async (result, token) => await BroadcastFrameAsync(result, token),
+                stream.Token,
+                // Liveness only. Without this the host would read an idle window as broken capture
+                // and escalate the stream, forcing repeated full-window PNG encodes for idle content.
+                async (sequence, token) => await BroadcastTextAsync(
+                    AgentReplies.SerializeUnchangedFrame(window.WindowId, sequence),
+                    token
+                ),
+                // Skip the full-surface encode when only binary frame-channel clients are listening.
+                () => !clients.IsEmpty
+            );
+        }
+        catch (OperationCanceledException)
+        {
+            // Expected when the agent shuts down or the same HWND stream is replaced.
+        }
+        catch (Exception error)
+        {
+            Console.Error.WriteLine(
+                $"WebSocketAgentServer: frame stream for {window.WindowId} stopped unexpectedly. {error.GetType().Name}: {error.Message}"
+            );
+        }
+        finally
+        {
+            // Replacement waits for this task. Release pixels before relinquishing ownership,
+            // and only remove this stream's entry, never another subscription for the same HWND.
+            frameStreamer.ForgetWindow(window.WindowId);
+            ((ICollection<KeyValuePair<string, FrameStream>>)frameStreamsByWindowId)
+                .Remove(new(window.WindowId, stream));
+            stream.Dispose();
+        }
+    }
+
+    private async Task StopFrameStreamAsync(string windowId, CancellationToken cancellationToken)
+    {
+        await frameStreamChanges.WaitAsync(cancellationToken);
+        try
+        {
+            await StopFrameStreamCoreAsync(windowId);
+        }
+        finally
+        {
+            frameStreamChanges.Release();
+        }
+    }
+
+    private async Task StopFrameStreamCoreAsync(string windowId)
+    {
+        if (frameStreamsByWindowId.TryGetValue(windowId, out var existing))
         {
             existing.Cancel();
-            existing.Dispose();
+            await existing.Completion;
         }
 
-        // Releases the retained comparison buffer. Without this a closed window's full-size pixel buffer
-        // would be held for the rest of the agent process's lifetime.
+        // A restarted stream always begins without the previous subscription's comparison buffer.
         frameStreamer.ForgetWindow(windowId);
+    }
+
+    private async Task StopAllFrameStreamsAsync()
+    {
+        await frameStreamChanges.WaitAsync();
+        try
+        {
+            var streams = frameStreamsByWindowId.Values.ToArray();
+            foreach (var stream in streams) stream.Cancel();
+            await Task.WhenAll(streams.Select(stream => stream.Completion));
+        }
+        finally
+        {
+            frameStreamChanges.Release();
+        }
+    }
+
+    private sealed class FrameStream : IDisposable
+    {
+        private readonly CancellationTokenSource cancellation;
+        private readonly object gate = new();
+        private bool disposed;
+
+        public FrameStream(CancellationToken serverCancellationToken)
+        {
+            cancellation = CancellationTokenSource.CreateLinkedTokenSource(serverCancellationToken);
+            Token = cancellation.Token;
+        }
+
+        public CancellationToken Token { get; }
+        public Task Completion { get; set; } = Task.CompletedTask;
+
+        public void Cancel()
+        {
+            lock (gate)
+            {
+                if (!disposed) cancellation.Cancel();
+            }
+        }
+
+        public void Dispose()
+        {
+            lock (gate)
+            {
+                if (disposed) return;
+                disposed = true;
+                cancellation.Dispose();
+            }
+        }
     }
 
     private static async Task<string?> ReceiveTextAsync(WebSocket socket, CancellationToken cancellationToken)

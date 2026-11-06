@@ -10,6 +10,19 @@ Signing private keys and notarization credentials must stay in the maintainer's 
 
 Official references: https://developer.apple.com/developer-id/ and https://developer.apple.com/documentation/security/notarizing-macos-software-before-distribution
 
+## Bundled Windows Engine
+
+Veil.app ships an open-source local VM engine under `Contents/Resources/Runtime`, assembled by `script/bundle_qemu_runtime.sh`:
+
+- QEMU (`qemu-system-aarch64` and `qemu-img`, GPL-2.0) and the libraries they link (LGPL/GPL/BSD/MIT; each listed in `Runtime/licenses/NOTICE.md`),
+- swtpm and libtpms (BSD-3-Clause) for the TPM 2.0 device Windows 11 Setup checks,
+- QEMU's own Arm UEFI firmware (EDK2, BSD-2-Clause-Patent).
+- Veil's Secure Boot Arm UEFI firmware, built by `script/build_secure_firmware.sh` from upstream [TianoCore EDK2](https://github.com/tianocore/edk2) at the commit QEMU 11.1 pins, with QEMU's ArmVirtQemu recipe plus `SECURE_BOOT_ENABLE`. Its variable store enrolls Microsoft's published Secure Boot certificates (PK "Windows OEM Devices PK", the 2011 and 2023 KEK and db certificates) with [virt-firmware](https://gitlab.com/kraxel/virt-firmware); no private key is generated or shipped. The bundle carries `edk2-secure-PROVENANCE.md` and the EDK2 license. Debian's `qemu-efi-aarch64` builds were tried and do not boot the Windows 11 Arm installer, so no distribution firmware is used. dbx holds only a placeholder entry, so revocations come from Windows servicing; see Microsoft's [Windows Secure Boot key creation and management guidance](https://learn.microsoft.com/windows-hardware/manufacture/desktop/windows-secure-boot-key-creation-and-management-guidance).
+
+Each bundled binary is a separate executable launched by the host app, not linked into it. The bundle carries the upstream license texts and `NOTICE.md` with the exact versions and source locations. A published release must also satisfy GPL-2.0 section 3 for QEMU and the LGPL terms of its libraries. `script/collect_engine_sources.sh` lists every bundled Homebrew formula with its license, source URL, and formula file (which holds Homebrew's patches) in `SOURCES.md` and downloads the upstream source of each copyleft formula; `.github/workflows/release.yml` attaches both to every GitHub release next to `Veil.zip`. Nothing in the engine is Windows, a Windows image, or a component of another virtualization product; Veil no longer needs Homebrew installed. A build without the bundled Secure Boot firmware still looks for one in `~/Library/Application Support/Veil/Firmware` and then in an installed UTM.
+
+Official references: https://www.qemu.org/license/ and https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+
 ## Windows Distribution
 
 Veil must not bundle:
@@ -37,6 +50,24 @@ Official references:
 
 - Windows 11 Arm ISO overview: https://learn.microsoft.com/en-us/windows/arm/iso
 - Download Windows 11 for Arm-based PCs: https://www.microsoft.com/en-us/software-download/windows11arm64
+
+## VirtIO Driver Media
+
+Windows 11 Arm has no inbox driver for QEMU's `virtio-net-pci` NIC, and it binds QEMU's `usb-net` gadget as a serial port rather than a network adapter, so without a driver the guest never gets an IPv4 address. When the profile has no driver ISO, the app downloads Fedora's virtio-win ISO onto the user's Mac (`~/Library/Application Support/Veil/Downloads`), attaches it read-only, and the generated answer file installs its NetKVM driver.
+
+- Source: the Fedora virtio-win project, which publishes the ISO under https://fedorapeople.org/groups/virt/virtio-win/direct-downloads/ and documents it at https://github.com/virtio-win/virtio-win-pkg-scripts/blob/master/README.md. Veil pins one release, 0.1.302 (`archive-virtio/virtio-win-0.1.302-1/virtio-win-0.1.302.iso`, 877,373,440 bytes), which is where the `stable-virtio` link pointed on November 5, 2026, instead of following that moving link.
+- Integrity: Fedora's release `CHECKSUM` file lists MD5 sums for the RPMs only, not the ISO, so there is no publisher hash to compare against. Veil pins SHA-256 `303f7ae40dad495d6ae474fdc571df58958a4dbc5c37a522d80f9a203867949d`, computed when the release was adopted on November 5, 2026, and deletes any download that does not match. Downloads are accepted only over HTTPS from `fedorapeople.org/groups/virt/virtio-win/`; redirects elsewhere are refused. Moving to a new release means downloading it, recording its SHA-256, and updating `VirtioWinDriverMedia`.
+- License: the ISO's `virtio-win_license.txt` is a BSD 3-clause license (copyright Red Hat, Google, Virtuozzo, IBM). The Windows 11 Arm64 driver catalogs in 0.1.302 (`NetKVM`, `viogpudo`, `vioscsi`, `viostor`) are signed by "Microsoft Windows Hardware Compatibility Publisher", which is why they load with Secure Boot on.
+- Distribution: the ISO is not committed, bundled in Veil.app, mirrored, or proxied. Each Mac fetches it from Fedora. A user can still pick a different driver ISO in Windows Settings, and Veil then downloads nothing.
+- Support wording: Veil uses these drivers; it does not claim Red Hat, Fedora, or Microsoft support for Windows on Veil.
+
+Official references for the answer-file mechanism:
+
+- RunSynchronous (specialize commands run in order as SYSTEM): https://learn.microsoft.com/windows-hardware/customize/desktop/unattend/microsoft-windows-deployment-runsynchronous
+- RunSynchronousCommand `Path` (259-character limit): https://learn.microsoft.com/windows-hardware/customize/desktop/unattend/microsoft-windows-deployment-runsynchronous-runsynchronouscommand-path
+- FirstLogonCommands (now all start at once, so they cannot order a driver before the agent): https://learn.microsoft.com/windows-hardware/customize/desktop/unattend/microsoft-windows-shell-setup-firstlogoncommands
+- PnPUtil `/add-driver ... /install`: https://learn.microsoft.com/windows-hardware/drivers/devtest/pnputil-command-syntax
+- PnpCustomizationsWinPE `DriverPaths` (needs a fixed local or UNC path, which a USB volume's changing drive letter cannot give): https://learn.microsoft.com/windows-hardware/customize/desktop/unattend/microsoft-windows-pnpcustomizationswinpe-driverpaths
 
 ## Unattended Setup Keys
 

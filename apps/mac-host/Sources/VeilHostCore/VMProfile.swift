@@ -36,6 +36,42 @@ public enum VMResourcePolicy {
     }
 }
 
+/// The CPU and memory range a user may give Windows on this Mac. Windows 11 needs at least two
+/// cores and 4 GB; the Mac keeps one core and a quarter of its memory (at least 4 GB) for itself.
+public struct VMResourceLimits: Equatable, Sendable {
+    public static let minimumCPUCount = 2
+    public static let minimumMemoryMB = 4_096
+    public static let memoryStepMB = 1_024
+
+    public var maximumCPUCount: Int
+    public var maximumMemoryMB: Int
+
+    public init(processorCount: Int, physicalMemoryBytes: UInt64) {
+        maximumCPUCount = max(Self.minimumCPUCount, processorCount - 1)
+        let physicalMemoryMB = Int(physicalMemoryBytes / 1_024 / 1_024)
+        let reservedMB = max(4_096, physicalMemoryMB / 4)
+        let available = (physicalMemoryMB - reservedMB) / Self.memoryStepMB * Self.memoryStepMB
+        maximumMemoryMB = max(Self.minimumMemoryMB, available)
+    }
+
+    public static func currentHost() -> VMResourceLimits {
+        VMResourceLimits(
+            processorCount: ProcessInfo.processInfo.processorCount,
+            physicalMemoryBytes: ProcessInfo.processInfo.physicalMemory
+        )
+    }
+
+    public func clampedCPUCount(_ count: Int) -> Int {
+        min(max(count, Self.minimumCPUCount), maximumCPUCount)
+    }
+
+    /// Rounds to whole gigabytes so QEMU and Windows see the same size the settings show.
+    public func clampedMemoryMB(_ memoryMB: Int) -> Int {
+        let rounded = Int((Double(memoryMB) / Double(Self.memoryStepMB)).rounded()) * Self.memoryStepMB
+        return min(max(rounded, Self.minimumMemoryMB), maximumMemoryMB)
+    }
+}
+
 public struct VMProfile: Codable, Equatable, Identifiable, Sendable {
     public var id: String
     public var name: String
@@ -55,6 +91,19 @@ public struct VMProfile: Codable, Equatable, Identifiable, Sendable {
     public var windowsInstalled: Bool?
     public var guestAgentVersion: String?
     public var guestAgentConnectedAt: Date?
+    /// The local Windows account the next install creates; nil follows this Mac's user name.
+    public var windowsAccountName: String?
+    /// What Command becomes in the Windows desktop; nil keeps `VMCommandKeyMapping.default`.
+    public var commandKeyMapping: VMCommandKeyMapping?
+    /// User port forwards on the NAT network, added beside Veil's own at the next start.
+    public var portForwards: [VMPortForwardRule]?
+    /// What the guest agent last reported about the virtio-win VirtIO GPU display driver (`viogpudo`).
+    /// Read at the next cold start only; see `bootsOnVirtioGPU`.
+    public var virtioGPUDriverInstalled: Bool?
+    /// True when the latest cold start attached `virtio-gpu-pci` alone instead of `ramfb` plus
+    /// `virtio-gpu-pci`. Set only when a cold start begins, so a suspended session resumes on the device
+    /// list its memory state was saved with.
+    public var bootsOnVirtioGPU: Bool?
     public var createdAt: Date
 
     public init(
@@ -76,6 +125,11 @@ public struct VMProfile: Codable, Equatable, Identifiable, Sendable {
         windowsInstalled: Bool? = nil,
         guestAgentVersion: String? = nil,
         guestAgentConnectedAt: Date? = nil,
+        windowsAccountName: String? = nil,
+        commandKeyMapping: VMCommandKeyMapping? = nil,
+        portForwards: [VMPortForwardRule]? = nil,
+        virtioGPUDriverInstalled: Bool? = nil,
+        bootsOnVirtioGPU: Bool? = nil,
         createdAt: Date
     ) {
         self.id = id
@@ -96,6 +150,11 @@ public struct VMProfile: Codable, Equatable, Identifiable, Sendable {
         self.windowsInstalled = windowsInstalled
         self.guestAgentVersion = guestAgentVersion
         self.guestAgentConnectedAt = guestAgentConnectedAt
+        self.windowsAccountName = windowsAccountName
+        self.commandKeyMapping = commandKeyMapping
+        self.portForwards = portForwards
+        self.virtioGPUDriverInstalled = virtioGPUDriverInstalled
+        self.bootsOnVirtioGPU = bootsOnVirtioGPU
         self.createdAt = createdAt
     }
 
@@ -131,18 +190,23 @@ public protocol VMProfileStore: Sendable {
     func save(_ profile: VMProfile) async throws
 }
 
+/// Reads and writes one machine's profile. With no arguments it follows the machine selected in
+/// ``VMLibrary``, which is `default-vm-profile.json` until a second machine exists.
 public struct JSONVMProfileStore: VMProfileStore {
-    private let directory: URL
-    private let fileName: String
+    private let fixedURL: URL?
     private let encoder: JSONEncoder
     private let decoder: JSONDecoder
 
     public init(
-        directory: URL = Self.defaultDirectory,
-        fileName: String = "default-vm-profile.json"
+        directory: URL? = nil,
+        fileName: String? = nil
     ) {
-        self.directory = directory
-        self.fileName = fileName
+        if directory == nil, fileName == nil {
+            fixedURL = nil
+        } else {
+            fixedURL = (directory ?? Self.defaultDirectory)
+                .appendingPathComponent(fileName ?? VMLibrary.legacyProfileFileName)
+        }
 
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
@@ -165,23 +229,25 @@ public struct JSONVMProfileStore: VMProfileStore {
     }
 
     public func save(_ profile: VMProfile) async throws {
+        let url = profileURL
         try FileManager.default.createDirectory(
-            at: directory,
+            at: url.deletingLastPathComponent(),
             withIntermediateDirectories: true
         )
         let data = try encoder.encode(profile)
-        try data.write(to: profileURL, options: [.atomic])
+        try data.write(to: url, options: [.atomic])
     }
 
     private var profileURL: URL {
-        directory.appendingPathComponent(fileName)
+        if let fixedURL {
+            return fixedURL
+        }
+        let library = VMLibrary()
+        return library.profileURL(for: library.activeMachineID())
     }
 
     public static var defaultDirectory: URL {
-        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
-            ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support")
-        return base
-            .appendingPathComponent("Veil", isDirectory: true)
+        VeilApplicationSupport.directory
             .appendingPathComponent("Profiles", isDirectory: true)
     }
 }

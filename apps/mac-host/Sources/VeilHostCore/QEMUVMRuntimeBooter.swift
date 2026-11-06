@@ -15,6 +15,11 @@ public struct QEMULaunchRecord: Codable, Equatable, Sendable {
     public var vncPort: Int?
     public var consoleScreenshotPath: String?
     public var consoleScreenshotRefreshedAt: Date?
+    /// The most recent live VNC observation, when `qemu-display-smoke` has validated the running
+    /// console. A screenshot timestamp alone is not enough: a successfully captured all-black frame
+    /// is still a broken console for the purposes of app launch recovery.
+    public var consoleVisualState: QEMUConsoleVisualState?
+    public var consoleVisualStateAt: Date?
     public var startedAt: Date
 
     public init(
@@ -32,6 +37,8 @@ public struct QEMULaunchRecord: Codable, Equatable, Sendable {
         vncPort: Int? = nil,
         consoleScreenshotPath: String? = nil,
         consoleScreenshotRefreshedAt: Date? = nil,
+        consoleVisualState: QEMUConsoleVisualState? = nil,
+        consoleVisualStateAt: Date? = nil,
         startedAt: Date
     ) {
         self.kind = kind
@@ -48,6 +55,8 @@ public struct QEMULaunchRecord: Codable, Equatable, Sendable {
         self.vncPort = vncPort
         self.consoleScreenshotPath = consoleScreenshotPath
         self.consoleScreenshotRefreshedAt = consoleScreenshotRefreshedAt
+        self.consoleVisualState = consoleVisualState
+        self.consoleVisualStateAt = consoleVisualStateAt
         self.startedAt = startedAt
     }
 }
@@ -76,16 +85,21 @@ public struct QEMURunningProcess: Codable, Equatable, Sendable {
 }
 
 public struct JSONQEMULaunchRecordStore: QEMULaunchRecordStore {
-    private let directory: URL
+    private let fixedDirectory: URL?
     private let fileName: String
 
+    /// A nil directory follows the selected library machine's diagnostics folder.
     public init(
-        directory: URL = QEMUVMRuntimeBooter.defaultDiagnosticsDirectory()
-            .appendingPathComponent("QEMU Launch", isDirectory: true),
+        directory: URL? = nil,
         fileName: String = "qemu-launch-latest.json"
     ) {
-        self.directory = directory
+        self.fixedDirectory = directory
         self.fileName = fileName
+    }
+
+    private var directory: URL {
+        fixedDirectory ?? QEMUVMRuntimeBooter.defaultDiagnosticsDirectory()
+            .appendingPathComponent("QEMU Launch", isDirectory: true)
     }
 
     public func loadLatest() async throws -> QEMULaunchRecord? {
@@ -102,7 +116,7 @@ public struct JSONQEMULaunchRecordStore: QEMULaunchRecordStore {
 public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
     public static let shared = QEMUVMRuntimeBooter()
 
-    private let diagnosticsDirectory: URL
+    private let fixedDiagnosticsDirectory: URL?
     private let planBuilder: @Sendable (VMProfile) throws -> QEMUWindowsBootPlan
     private let tpmEmulatorRunner: @Sendable (QEMUWindowsBootPlan) throws -> Void
     private let processRunner: @Sendable (Process) throws -> Void
@@ -119,7 +133,7 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
     private var qmpSocketURL: URL?
 
     public init(
-        diagnosticsDirectory: URL = QEMUVMRuntimeBooter.defaultDiagnosticsDirectory(),
+        diagnosticsDirectory: URL? = nil,
         planBuilder: @escaping @Sendable (VMProfile) throws -> QEMUWindowsBootPlan = QEMUVMRuntimeBooter.makePlan(for:),
         tpmEmulatorRunner: @escaping @Sendable (QEMUWindowsBootPlan) throws -> Void = QEMUVMRuntimeBooter.startTPMEmulatorIfNeeded,
         processRunner: @escaping @Sendable (Process) throws -> Void = { try $0.run() },
@@ -132,7 +146,7 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
         suspensionRecordStore: (any VMSuspensionRecordStore)? = nil,
         qmpControl: any QEMUQMPControlling = QEMUQMPClient()
     ) {
-        self.diagnosticsDirectory = diagnosticsDirectory
+        self.fixedDiagnosticsDirectory = diagnosticsDirectory
         self.planBuilder = planBuilder
         self.tpmEmulatorRunner = tpmEmulatorRunner
         self.processRunner = processRunner
@@ -145,8 +159,15 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
         self.qmpControl = qmpControl
         self.suspensionRecordStore = suspensionRecordStore
             ?? JSONVMSuspensionRecordStore(
-                directory: diagnosticsDirectory.appendingPathComponent("QEMU Suspend", isDirectory: true)
+                directory: diagnosticsDirectory?.appendingPathComponent("QEMU Suspend", isDirectory: true)
             )
+    }
+
+    /// Without an explicit directory, records go to the selected library machine's folder. Veil
+    /// runs one machine at a time and refuses to switch while one runs, so this cannot change
+    /// under a live process.
+    private var diagnosticsDirectory: URL {
+        fixedDiagnosticsDirectory ?? Self.defaultDiagnosticsDirectory()
     }
 
     public var supportsNativeDisplayWindow: Bool {
@@ -259,7 +280,7 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
             frontmostRunner()
         }
         if shouldSendInstallerBootKey {
-            scheduleWindowsInstallerBootKeySend(monitorSocketURL: monitorSocketURL)
+            scheduleWindowsInstallerBootKeySend(monitorSocketURL: monitorSocketURL, qmpSocketURL: qmpSocketURL)
         }
         scheduleConsoleScreenshotCapture(monitorSocketURL: monitorSocketURL, imageURL: consoleScreenshotURL)
         return .running
@@ -445,6 +466,15 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
         )
     }
 
+    public func updateGuestToolsFromRemovableMedia() async throws -> QEMUKeySendRecord {
+        try await sendAttachedMediaCommand(
+            startButtonTapNormalizedX: QEMUGuestToolsUpdateKeySequence.startButtonTapNormalizedX,
+            startButtonTapNormalizedY: QEMUGuestToolsUpdateKeySequence.startButtonTapNormalizedY,
+            steps: QEMUGuestToolsUpdateKeySequence.steps,
+            stepsAfterRunOpened: QEMUGuestToolsUpdateKeySequence.stepsAfterRunOpened
+        )
+    }
+
     public func prepareSparsePackageFromAttachedMedia() async throws -> QEMUKeySendRecord {
         try await sendAttachedMediaCommand(
             startButtonTapNormalizedX: QEMUSparsePackagePreparationKeySequence.startButtonTapNormalizedX,
@@ -471,7 +501,7 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
                 normalizedY: startButtonTapNormalizedY
             )
             try? await Task.sleep(nanoseconds: 800_000_000)
-            commandSteps = try stepsAfterRunOpened()
+            commandSteps = try Self.runDialogCommandSteps(typing: stepsAfterRunOpened())
         } catch {
             commandSteps = try steps()
         }
@@ -480,6 +510,12 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
             launchRecordStore: launchRecordStore
         )
         return try await sender.send(steps: commandSteps)
+    }
+
+    /// `stepsAfterRunOpened` stops at the typed command so `veil-vmctl` can check the screen before it
+    /// clicks OK. Nothing checks it here, so Return runs it; without it the command sat in the Run box.
+    static func runDialogCommandSteps(typing steps: [QEMUKeySequenceStep]) -> [QEMUKeySequenceStep] {
+        steps + [QEMUKeySequenceStep(key: "ret", delayAfterSend: 1.0)]
     }
 
     public static func makePlan(for profile: VMProfile) throws -> QEMUWindowsBootPlan {
@@ -536,16 +572,10 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
             .replacingOccurrences(of: ":", with: "-")
     }
 
+    /// The selected library machine's diagnostics folder: `Diagnostics/` for the original machine.
     public static func defaultDiagnosticsDirectory() -> URL {
-        let applicationSupport = FileManager.default.urls(
-            for: .applicationSupportDirectory,
-            in: .userDomainMask
-        ).first
-            ?? FileManager.default.homeDirectoryForCurrentUser
-                .appendingPathComponent("Library/Application Support", isDirectory: true)
-        return applicationSupport
-            .appendingPathComponent("Veil", isDirectory: true)
-            .appendingPathComponent("Diagnostics", isDirectory: true)
+        let library = VMLibrary()
+        return library.diagnosticsDirectory(for: library.activeMachineID())
     }
 
     public static func bringQEMUToFrontIfAllowed() {
@@ -784,11 +814,17 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
         }
     }
 
-    private func scheduleWindowsInstallerBootKeySend(monitorSocketURL: URL) {
+    private func scheduleWindowsInstallerBootKeySend(monitorSocketURL: URL, qmpSocketURL: URL) {
         let bootKeySender = self.bootKeySender
+        let qmpControl = self.qmpControl
         Task.detached {
-            for _ in 0..<12 {
+            for _ in 0..<QEMUWindowsBootPromptAutomation.defaultSendCount {
                 try? await Task.sleep(for: .seconds(1))
+                if let reply = try? await qmpControl.run(.humanMonitor("info blockstats"), socketPath: qmpSocketURL.path, idleTimeoutSeconds: 1),
+                   let blockstats = reply.textReturn,
+                   QEMUWindowsBootPromptAutomation.installerBootHasStarted(blockstats: blockstats) {
+                    return
+                }
                 _ = bootKeySender(monitorSocketURL)
             }
         }

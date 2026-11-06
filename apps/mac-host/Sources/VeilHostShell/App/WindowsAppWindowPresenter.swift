@@ -8,13 +8,14 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
     private var windowsById: [String: NSWindow] = [:]
     private var windowOrder: [String] = []
     private var suppressedCloseWindowIds: Set<String> = []
+    private var titlebarIdentityAccessories: [String: NSTitlebarAccessoryViewController] = [:]
     private(set) var foregroundWindowId: String?
 
     var onUserWindowClose: ((String) -> Void)?
     var onMouseInput: ((String, String, Int, Int) -> Void)?
     var onKeyInput: ((String, String, String, Int, [String]) -> Void)?
     var onTextInput: ((String, String) -> Void)?
-    var onPasteShortcut: ((String, String, Int, [String], String) -> Void)?
+    var onPasteShortcut: ((String, String, Int, [String], HostPasteboardContent) -> Void)?
     /// `(appId, windowId, fileName, contentBase64)`. Carries the window id so a failure that only Windows
     /// can report can still be shown on the window the file was dropped onto.
     var onFileDrop: ((String, String, String, String) -> Void)?
@@ -24,6 +25,9 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
     /// Reads the composited surface for a window. Supplied by the app, which owns the model that owns the
     /// compositor.
     var compositedImageProvider: ((String) -> CGImage?)?
+    /// Resolves the current app identity for window chrome. The catalog can refresh after reconnects, so
+    /// this is deliberately a provider rather than a snapshot held by the presenter.
+    var appIdentityProvider: ((String) -> WindowsAppWindowIdentity)?
     var onRestartFrameStream: ((String) -> Void)?
     /// `(windowId, isVisible)`. Fires when a mirrored window is minimized or restored, so frame streaming can
     /// stop for a window that cannot show anything.
@@ -82,6 +86,7 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
         }
         windowsById.removeAll()
         windowOrder.removeAll()
+        titlebarIdentityAccessories.removeAll()
         foregroundWindowId = nil
     }
 
@@ -95,6 +100,7 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
         }
         window.close()
         windowsById[windowId] = nil
+        titlebarIdentityAccessories.removeValue(forKey: windowId)
         forgetWindowId(windowId)
     }
 
@@ -119,6 +125,7 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
         }
 
         windowsById[windowId] = nil
+        titlebarIdentityAccessories.removeValue(forKey: windowId)
         forgetWindowId(windowId)
 
         if suppressedCloseWindowIds.remove(windowId) == nil {
@@ -358,7 +365,7 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
     private func hostingView(
         for session: WindowMirrorSession
     ) -> NSHostingView<WindowsAppMirrorView> {
-        NSHostingView(
+        return NSHostingView(
             rootView: WindowsAppMirrorView(
                 session: session,
                 onMouseInput: { [weak self] windowId, event, x, y in
@@ -370,8 +377,8 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
                 onTextInput: { [weak self] windowId, text in
                     self?.onTextInput?(windowId, text)
                 },
-                onPasteShortcut: { [weak self] windowId, key, windowsVirtualKey, modifiers, text in
-                    self?.onPasteShortcut?(windowId, key, windowsVirtualKey, modifiers, text)
+                onPasteShortcut: { [weak self] windowId, key, windowsVirtualKey, modifiers, content in
+                    self?.onPasteShortcut?(windowId, key, windowsVirtualKey, modifiers, content)
                 },
                 onDropProviders: { [weak self] providers in
                     self?.loadDroppedFiles(
@@ -394,17 +401,39 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
     }
 
     private func configure(_ window: NSWindow, for session: WindowMirrorSession) {
+        let identity = appIdentityProvider?(session.window.appId)
+            ?? WindowsAppWindowIdentity.resolve(appId: session.window.appId, apps: [])
         window.title = session.window.title
         applyResizeConstraints(to: window, for: session)
         window.tabbingMode = .disallowed
         window.collectionBehavior = [.managed, .fullScreenPrimary]
         window.backgroundColor = .black
         window.isOpaque = true
-        window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
         window.styleMask.insert(.fullSizeContentView)
         window.isMovableByWindowBackground = true
         window.toolbar = nil
+        window.titleVisibility = .visible
+        configureIdentityTitlebar(for: window, windowId: session.id, identity: identity)
+    }
+
+    private func configureIdentityTitlebar(
+        for window: NSWindow,
+        windowId: String,
+        identity: WindowsAppWindowIdentity
+    ) {
+        if let accessory = titlebarIdentityAccessories[windowId],
+           let view = accessory.view as? WindowsAppIdentityTitlebarView {
+            view.update(identity: identity)
+            return
+        }
+
+        let view = WindowsAppIdentityTitlebarView(identity: identity)
+        let accessory = NSTitlebarAccessoryViewController()
+        accessory.layoutAttribute = .left
+        accessory.view = view
+        window.addTitlebarAccessoryViewController(accessory)
+        titlebarIdentityAccessories[windowId] = accessory
     }
 
     /// Locks a mirrored window to the guest window's shape while the user resizes it.
@@ -457,6 +486,69 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
 }
 
 @MainActor
+private final class WindowsAppIdentityTitlebarView: NSView {
+    private let iconView = NSImageView()
+    private let nameField = NSTextField(labelWithString: "")
+    private var widthConstraint: NSLayoutConstraint!
+
+    init(identity: WindowsAppWindowIdentity) {
+        super.init(frame: NSRect(x: 0, y: 0, width: 120, height: 22))
+
+        translatesAutoresizingMaskIntoConstraints = false
+        iconView.translatesAutoresizingMaskIntoConstraints = false
+        iconView.imageScaling = .scaleProportionallyUpOrDown
+        iconView.setContentHuggingPriority(.required, for: .horizontal)
+        iconView.setContentCompressionResistancePriority(.required, for: .horizontal)
+
+        nameField.translatesAutoresizingMaskIntoConstraints = false
+        nameField.lineBreakMode = .byTruncatingTail
+        nameField.maximumNumberOfLines = 1
+        nameField.font = NSFont.systemFont(ofSize: NSFont.smallSystemFontSize)
+        nameField.textColor = .secondaryLabelColor
+        nameField.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        nameField.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+
+        let stack = NSStackView(views: [iconView, nameField])
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        stack.orientation = .horizontal
+        stack.alignment = .centerY
+        stack.spacing = 5
+
+        addSubview(stack)
+        widthConstraint = widthAnchor.constraint(equalToConstant: 120)
+        NSLayoutConstraint.activate([
+            iconView.widthAnchor.constraint(equalToConstant: 16),
+            iconView.heightAnchor.constraint(equalToConstant: 16),
+            heightAnchor.constraint(equalToConstant: 22),
+            widthConstraint,
+            stack.leadingAnchor.constraint(equalTo: leadingAnchor),
+            stack.trailingAnchor.constraint(equalTo: trailingAnchor),
+            stack.topAnchor.constraint(equalTo: topAnchor),
+            stack.bottomAnchor.constraint(equalTo: bottomAnchor)
+        ])
+
+        update(identity: identity)
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    func update(identity: WindowsAppWindowIdentity) {
+        iconView.image = identity.iconData.flatMap(NSImage.init(data:))
+            ?? NSImage(systemSymbolName: "app.window", accessibilityDescription: identity.appName)
+        nameField.stringValue = identity.appName
+        nameField.toolTip = identity.appName
+        let labelWidth = nameField.intrinsicContentSize.width
+        let desiredWidth = 16 + 5 + max(0, labelWidth)
+        let boundedWidth = min(240, max(64, ceil(desiredWidth)))
+        widthConstraint?.constant = boundedWidth
+        frame.size.width = boundedWidth
+        setAccessibilityLabel(identity.appName)
+    }
+}
+
+@MainActor
 enum MacWindowRestorePolicy {
     static func restoreToFront(_ window: NSWindow) {
         if window.isMiniaturized {
@@ -479,7 +571,7 @@ private struct WindowsAppMirrorView: View {
     var onMouseInput: (String, String, Int, Int) -> Void
     var onKeyInput: (String, String, String, Int, [String]) -> Void
     var onTextInput: (String, String) -> Void
-    var onPasteShortcut: (String, String, Int, [String], String) -> Void
+    var onPasteShortcut: (String, String, Int, [String], HostPasteboardContent) -> Void
     /// Called synchronously on the main actor with the accepted providers. Loading them is the presenter's job.
     var onDropProviders: ([NSItemProvider]) -> Void
     var onDropRefused: (WindowsAppFileDropRefusal) -> Void
@@ -548,7 +640,7 @@ private struct InputCaptureView: NSViewRepresentable {
     var onMouseInput: (String, String, Int, Int) -> Void
     var onKeyInput: (String, String, String, Int, [String]) -> Void
     var onTextInput: (String, String) -> Void
-    var onPasteShortcut: (String, String, Int, [String], String) -> Void
+    var onPasteShortcut: (String, String, Int, [String], HostPasteboardContent) -> Void
 
     func makeNSView(context: Context) -> InputCaptureNSView {
         InputCaptureNSView()
@@ -568,7 +660,7 @@ private final class InputCaptureNSView: NSView {
     var onMouseInput: ((String, String, Int, Int) -> Void)?
     var onKeyInput: ((String, String, String, Int, [String]) -> Void)?
     var onTextInput: ((String, String) -> Void)?
-    var onPasteShortcut: ((String, String, Int, [String], String) -> Void)?
+    var onPasteShortcut: ((String, String, Int, [String], HostPasteboardContent) -> Void)?
     private let keyboardMapper = MacKeyboardInputMapper()
     private let textInputRouter = MacTextInputRouter()
 
@@ -684,7 +776,10 @@ private final class InputCaptureNSView: NSView {
             return super.performKeyEquivalent(with: event)
         }
 
+        // With sharing off the shortcut falls through to a plain Ctrl+V, so Windows pastes its own clipboard
+        // and nothing on the Mac pasteboard is read.
         if isPasteShortcut(event),
+           ClipboardSharingPreferences.isSharingEnabled(),
            let session,
            session.connectionMode == .agent,
            let input = keyboardMapper.input(
@@ -692,8 +787,11 @@ private final class InputCaptureNSView: NSView {
                 keyCode: event.keyCode,
                 modifiers: macKeyboardModifiers(from: event)
            ),
-           let pasteboardText = NSPasteboard.general.string(forType: .string) {
-            onPasteShortcut?(session.id, input.key, input.windowsVirtualKey, input.modifiers, pasteboardText)
+           let content = HostPasteboardContent.read(
+                from: .general,
+                includeFiles: ClipboardSharingPreferences.isFilePasteEnabled()
+           ) {
+            onPasteShortcut?(session.id, input.key, input.windowsVirtualKey, input.modifiers, content)
             return true
         }
 

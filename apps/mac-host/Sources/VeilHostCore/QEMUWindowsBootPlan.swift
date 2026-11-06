@@ -320,7 +320,12 @@ public struct QEMUWindowsBootPlanner: Sendable {
     /// forward instead of leaving it in the command line, because QEMU refuses to start when it cannot
     /// bind a `hostfwd` port and a shared folder is not worth trading a bootable VM for.
     private let isSharedFolderHostPortAvailable: Bool
+    /// User port forwards whose host port was taken when the plan was built; left out for the same
+    /// reason as a busy shared folder port.
+    private let unavailablePortForwardRuleIDs: Set<String>
     private let configurationWarnings: [String]
+    /// Reads the system disk's format from its header, so a qcow2 disk and an older raw one both boot.
+    private let systemDiskFormat: @Sendable (String) -> QEMUDiskImageFormat
 
     public init(
         executablePath: String,
@@ -338,7 +343,9 @@ public struct QEMUWindowsBootPlanner: Sendable {
         audioDevice: QEMUWindowsAudioDevice = .intelHDA,
         sharedFolderTransport: QEMUWindowsSharedFolderTransport = .guestSMB,
         isSharedFolderHostPortAvailable: Bool = true,
-        configurationWarnings: [String] = []
+        unavailablePortForwardRuleIDs: Set<String> = [],
+        configurationWarnings: [String] = [],
+        systemDiskFormat: @escaping @Sendable (String) -> QEMUDiskImageFormat = { QEMUDiskImageFormat.detect(atPath: $0) }
     ) {
         self.executablePath = executablePath
         self.isExecutableAvailable = isExecutableAvailable
@@ -355,7 +362,9 @@ public struct QEMUWindowsBootPlanner: Sendable {
         self.audioDevice = audioDevice
         self.sharedFolderTransport = sharedFolderTransport
         self.isSharedFolderHostPortAvailable = isSharedFolderHostPortAvailable
+        self.unavailablePortForwardRuleIDs = unavailablePortForwardRuleIDs
         self.configurationWarnings = configurationWarnings
+        self.systemDiskFormat = systemDiskFormat
     }
 
     public func makePlan(for profile: VMProfile) throws -> QEMUWindowsBootPlan {
@@ -400,10 +409,12 @@ public struct QEMUWindowsBootPlanner: Sendable {
             )
         }
 
+        // Windows reads the hardware clock as local time; QEMU's default UTC clock put it hours off.
         var arguments = [
             "-name", profile.name,
             "-machine", "virt,highmem=on",
-            "-accel", "hvf"
+            "-accel", "hvf",
+            "-rtc", "base=localtime"
         ]
 
         if let firmwarePath, let firmwareVarsPath {
@@ -419,7 +430,10 @@ public struct QEMUWindowsBootPlanner: Sendable {
             arguments.append(contentsOf: [
                 "-chardev", "socket,id=chrtpm,path=\(tpmStateDirectoryPath)/swtpm.sock",
                 "-tpmdev", "emulator,id=tpm0,chardev=chrtpm",
-                "-device", "tpm-tis-device,tpmdev=tpm0"
+                // The Physical Presence Interface is a 0x400-byte RAM region; Hypervisor.framework
+                // maps guest memory in 16 KiB host pages and aborts QEMU at startup with
+                // HV_BAD_ARGUMENT when the TPM device carries it. Windows 11 only needs the TPM.
+                "-device", "tpm-tis-device,tpmdev=tpm0,ppi=off"
             ])
         }
 
@@ -437,6 +451,8 @@ public struct QEMUWindowsBootPlanner: Sendable {
             userNetworkForwards.append(sharedFolderForward)
         }
 
+        userNetworkForwards.append(contentsOf: userPortForwardClauses(for: profile, warnings: &warnings))
+
         if sharedFolderTransport.hostForwardClause != nil, !isSharedFolderHostPortAvailable {
             warnings.append(
                 "Host port \(QEMUWindowsSharedFolderTransport.guestSMBHostPort) was unavailable when this plan was built, so the shared folder port forward was left out and Windows will boot without a live shared folder. A Veil VM that is already running holds this port, which is the usual reason; otherwise find the listener with `lsof -nP -iTCP:\(QEMUWindowsSharedFolderTransport.guestSMBHostPort) -sTCP:LISTEN`."
@@ -448,15 +464,16 @@ public struct QEMUWindowsBootPlanner: Sendable {
             "-cpu", "host",
             "-smp", "\(cpuCount)",
             "-m", "\(memoryMB)M",
-            "-device", "qemu-xhci,id=usb0",
-            "-drive", "if=none,id=system,format=raw,file=\(virtualDiskPath)",
+            "-device", QEMUWindowsBootPlan.usbControllerArgument,
+            "-drive", QEMUWindowsBootPlan.systemDriveArgument(path: virtualDiskPath, format: systemDiskFormat(virtualDiskPath)),
             "-device", "nvme,drive=system,serial=veil-system",
             "-netdev", "user,id=net0,\(userNetworkForwards.joined(separator: ","))",
             "-device", networkAdapter.deviceArgument,
             "-device", "virtio-rng-pci",
-            "-display", "cocoa",
-            "-device", "ramfb",
-            "-device", "virtio-gpu-pci",
+            "-display", "cocoa"
+        ])
+        arguments.append(contentsOf: QEMUWindowsDisplayDevices.deviceArguments(for: profile))
+        arguments.append(contentsOf: [
             "-device", "usb-kbd",
             "-device", "usb-tablet"
         ])
@@ -469,9 +486,16 @@ public struct QEMUWindowsBootPlanner: Sendable {
         }
 
         if let installerMediaPath, shouldAttachInstallerMedia {
+            // The ISO is attached twice. The Arm UEFI firmware has no SATA driver, so it boots from
+            // the USB copy, which also delivers boot.wim. Windows Setup then applies install.wim from
+            // the AHCI copy: USB mass storage serves one request at a time, and on that path the
+            // image apply took about seven times longer (10.6 GB vs. 1.5 GB written after 4 minutes).
             arguments.append(contentsOf: [
                 "-drive", "driver=raw,file.driver=file,file.locking=off,file.filename=\(installerMediaPath),if=none,id=installer,media=cdrom,readonly=on",
-                "-device", "usb-storage,drive=installer"
+                "-device", "usb-storage,drive=installer",
+                "-device", "ich9-ahci,id=\(QEMUWindowsBootPlan.installerAHCIControllerID)",
+                "-drive", "driver=raw,file.driver=file,file.locking=off,file.filename=\(installerMediaPath),if=none,id=installer-sata,media=cdrom,readonly=on",
+                "-device", "ide-cd,bus=\(QEMUWindowsBootPlan.installerAHCIControllerID).0,drive=installer-sata"
             ])
         }
 
@@ -479,6 +503,8 @@ public struct QEMUWindowsBootPlanner: Sendable {
             "-drive", "driver=raw,file.driver=file,file.locking=off,file.filename=\(automaticInstallMediaPath),if=none,id=autounattend,media=cdrom,readonly=on",
             "-device", "usb-storage,drive=autounattend"
         ])
+        // Starts empty; Configuration > Hardware inserts and ejects ISOs through QMP while Windows runs.
+        arguments.append(contentsOf: VMRemovableOpticalDrive.arguments)
 
         if let driverMediaPath {
             arguments.append(contentsOf: [
@@ -523,6 +549,38 @@ public struct QEMUWindowsBootPlanner: Sendable {
         }
         return path
     }
+
+    /// The profile's port forwards as `hostfwd` clauses. A profile edited by hand is validated again
+    /// here, so a rule that would shadow Veil's own forwards never reaches QEMU.
+    private func userPortForwardClauses(for profile: VMProfile, warnings: inout [String]) -> [String] {
+        let rules = profile.portForwards ?? []
+        guard !rules.isEmpty else {
+            return []
+        }
+        do {
+            try VMPortForwardRuleValidator.validate(rules)
+        } catch {
+            warnings.append("Port forwarding rules were left out: \(error.localizedDescription)")
+            return []
+        }
+
+        var clauses: [String] = []
+        for rule in rules {
+            if unavailablePortForwardRuleIDs.contains(rule.id) {
+                warnings.append(
+                    "Host port \(rule.hostPort) was in use when this plan was built, so its forward to Windows port \(rule.guestPort) was left out."
+                )
+                continue
+            }
+            if rule.hostBinding == .allInterfaces {
+                warnings.append(
+                    "Host port \(rule.hostPort) is forwarded on every network interface, so other devices on the network can reach Windows port \(rule.guestPort)."
+                )
+            }
+            clauses.append(rule.hostForwardClause)
+        }
+        return clauses
+    }
 }
 
 public enum LocalQEMUWindowsBootPlanFactory {
@@ -533,9 +591,10 @@ public enum LocalQEMUWindowsBootPlanFactory {
         "/opt/local/share/qemu/edk2-aarch64-code.fd"
     ]
     public static func defaultSecureFirmwarePaths(
-        homeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser
+        homeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser,
+        bundledRuntimeDirectory: URL? = VeilBundledRuntime.directory()
     ) -> [String] {
-        [
+        [VeilBundledRuntime.path(VeilBundledRuntime.secureFirmware, in: bundledRuntimeDirectory)].compactMap { $0 } + [
             homeDirectory
                 .appendingPathComponent("Library/Application Support/Veil/Firmware", isDirectory: true)
                 .appendingPathComponent("edk2-aarch64-secure-code.fd")
@@ -554,9 +613,10 @@ public enum LocalQEMUWindowsBootPlanFactory {
         "/opt/local/share/qemu/edk2-arm-vars.fd"
     ]
     public static func defaultSecureFirmwareVarsTemplatePaths(
-        homeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser
+        homeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser,
+        bundledRuntimeDirectory: URL? = VeilBundledRuntime.directory()
     ) -> [String] {
-        [
+        [VeilBundledRuntime.path(VeilBundledRuntime.secureFirmwareVarsTemplate, in: bundledRuntimeDirectory)].compactMap { $0 } + [
             homeDirectory
                 .appendingPathComponent("Library/Application Support/Veil/Firmware", isDirectory: true)
                 .appendingPathComponent("edk2-arm-secure-vars.fd")
@@ -573,14 +633,39 @@ public enum LocalQEMUWindowsBootPlanFactory {
     ]
 
     public static func tpmEmulatorPaths(
-        homeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser
+        environment: [String: String] = ProcessInfo.processInfo.environment,
+        homeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser,
+        bundledRuntimeDirectory: URL? = VeilBundledRuntime.directory()
     ) -> [String] {
-        [
+        [VeilBundledRuntime.path(VeilBundledRuntime.tpmEmulator, in: bundledRuntimeDirectory)].compactMap { $0 } + [
             homeDirectory
                 .appendingPathComponent("Library/Application Support/Veil/Runtime/bin", isDirectory: true)
                 .appendingPathComponent("swtpm")
                 .path
         ] + defaultTPMEmulatorPaths
+            + VMRuntimeProviderProbe.userPackagePrefixes(environment: environment, homeDirectory: homeDirectory)
+                .map { URL(fileURLWithPath: $0, isDirectory: true).appendingPathComponent("bin/swtpm").path }
+    }
+
+    /// `<prefix>/share/qemu/<fileName>` for the QEMU at `<prefix>/bin/qemu-system-aarch64`, so a QEMU
+    /// installed under a custom Homebrew prefix still finds the UEFI files it shipped with.
+    static func qemuDataPath(_ fileName: String, besideExecutable executablePath: String) -> String {
+        URL(fileURLWithPath: executablePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("share/qemu", isDirectory: true)
+            .appendingPathComponent(fileName)
+            .path
+    }
+
+    /// Plain (non-secure) UEFI variable templates, including the ones under custom Homebrew prefixes.
+    public static func firmwareVarsTemplatePaths(
+        environment: [String: String] = ProcessInfo.processInfo.environment,
+        homeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser
+    ) -> [String] {
+        defaultFirmwareVarsTemplatePaths
+            + VMRuntimeProviderProbe.userPackagePrefixes(environment: environment, homeDirectory: homeDirectory)
+                .map { URL(fileURLWithPath: $0, isDirectory: true).appendingPathComponent("share/qemu/edk2-arm-vars.fd").path }
     }
 
     /// Whether a loopback TCP port can still be bound.
@@ -639,14 +724,16 @@ public enum LocalQEMUWindowsBootPlanFactory {
             )
             .first { $0.kind == .qemuHypervisor }
         let executablePath = qemuProvider?.executablePath
-            ?? VMRuntimeProviderProbe.qemuExecutablePaths(homeDirectory: homeDirectory)[0]
+            ?? VMRuntimeProviderProbe.qemuExecutablePaths(environment: environment, homeDirectory: homeDirectory)[0]
         let secureFirmwarePath = secureFirmwarePaths.first(where: fileExists)
         let secureFirmwareVarsTemplatePath = secureVarsTemplatePaths.first(where: fileExists)
         let isSecureBootFirmwareAvailable = secureFirmwarePath != nil && secureFirmwareVarsTemplatePath != nil
         let firmwarePath = (secureFirmwareVarsTemplatePath != nil ? secureFirmwarePath : nil)
             ?? defaultFirmwarePaths.first(where: fileExists)
+            ?? [qemuDataPath("edk2-aarch64-code.fd", besideExecutable: executablePath)].first(where: fileExists)
         let firmwareVarsTemplatePath = secureFirmwareVarsTemplatePath
             ?? firmwareVarsTemplatePaths.first(where: fileExists)
+            ?? [qemuDataPath("edk2-arm-vars.fd", besideExecutable: executablePath)].first(where: fileExists)
         let fallbackFirmwareVarsTemplatePath = secureVarsTemplatePaths.first
             ?? firmwareVarsTemplatePaths.first
             ?? defaultFirmwareVarsTemplatePaths[0]
@@ -660,7 +747,7 @@ public enum LocalQEMUWindowsBootPlanFactory {
                 }
                 return path
             }
-            + tpmEmulatorPaths(homeDirectory: homeDirectory)
+            + tpmEmulatorPaths(environment: environment, homeDirectory: homeDirectory)
         let tpmEmulatorPath = tpmEmulatorCandidates.first(where: fileExists)
         let tpmStateDirectoryPath = profile.virtualDiskPath
             .map { URL(fileURLWithPath: $0).deletingLastPathComponent().appendingPathComponent("tpm", isDirectory: true).path }
@@ -729,6 +816,9 @@ public enum LocalQEMUWindowsBootPlanFactory {
             audioDevice: audioSelection.device,
             sharedFolderTransport: sharedFolderSelection.transport,
             isSharedFolderHostPortAvailable: isSharedFolderHostPortAvailable,
+            unavailablePortForwardRuleIDs: Set(
+                (profile.portForwards ?? []).filter { !isHostPortFree($0.hostPort) }.map(\.id)
+            ),
             configurationWarnings: configurationWarnings
         )
         return try planner.makePlan(for: profile)
@@ -1086,7 +1176,7 @@ public struct QEMUWindowsReadinessDoctor: Sendable {
         }
 
         guard plan.arguments.containsSequence(["-tpmdev", "emulator,id=tpm0,chardev=chrtpm"]),
-              plan.arguments.containsSequence(["-device", "tpm-tis-device,tpmdev=tpm0"]) else {
+              plan.arguments.containsSequence(["-device", "tpm-tis-device,tpmdev=tpm0,ppi=off"]) else {
             return QEMUWindowsReadinessCheck(
                 id: "tpm-emulator",
                 title: "TPM 2.0 emulator",
@@ -1646,7 +1736,7 @@ private enum QEMUWindowsBootArgumentRewriter {
 
     static func lockSafeSystemDriveArgument(_ argument: String) -> String {
         guard argument.contains("id=system"),
-              argument.contains("format=raw"),
+              let format = [QEMUDiskImageFormat.raw, .qcow2].first(where: { argument.contains("format=\($0.rawValue),") }),
               let fileRange = argument.range(of: "file=") else {
             return argument
         }
@@ -1658,16 +1748,83 @@ private enum QEMUWindowsBootArgumentRewriter {
             return argument
         }
 
-        return "driver=raw,file.driver=file,file.locking=off,file.filename=\(pathString),if=none,id=system"
+        // Options other than the ones rebuilt here (the qcow2 node name) carry over unchanged.
+        let rebuilt: Set<String> = ["if=none", "id=system", "format=\(format.rawValue)"]
+        let carried = prefix
+            .split(separator: ",", omittingEmptySubsequences: true)
+            .map(String.init)
+            .filter { !rebuilt.contains($0) }
+            .map { "\($0)," }
+            .joined()
+        return "driver=\(format.rawValue),\(carried)file.driver=file,file.locking=off,file.filename=\(pathString),if=none,id=system"
     }
 }
 
+extension QEMUWindowsBootPlan {
+    public static let installerAHCIControllerID = "ahci0"
+
+    /// The block node name of a qcow2 system disk. Snapshot jobs name this node so they leave the
+    /// raw UEFI variable store out; a raw disk cannot hold snapshots and keeps its old argument.
+    public static let systemDiskNodeName = "veil-system"
+
+    static func systemDriveArgument(path: String, format: QEMUDiskImageFormat) -> String {
+        switch format {
+        case .raw:
+            "if=none,id=system,format=raw,file=\(path)"
+        case .qcow2:
+            "if=none,id=system,format=qcow2,node-name=\(systemDiskNodeName),file=\(path)"
+        }
+    }
+
+    /// The xHCI controller with eight USB 2 and eight USB 3 ports. QEMU's default has four of each,
+    /// and the network adapter, keyboard, and tablet take three, so the installer and answer media
+    /// landed behind an automatically added 12 Mb/s hub. With free ports they attach directly at
+    /// 5 Gb/s. Measured on Windows 11 Arm Setup this did not shorten the image apply by itself:
+    /// the guest's per-request latency over USB mass storage, not the link speed, bounds it.
+    public static let usbControllerArgument = "qemu-xhci,id=usb0,p2=8,p3=8"
+}
+
 public struct QEMUWindowsBootPromptAutomation: Sendable {
+    /// Longest run of boot-key presses, in seconds. The installer's "Press any key to boot from CD
+    /// or DVD" prompt waits only a few seconds, and with 16 GB of RAM, a TPM, and two USB media it
+    /// appeared after more than 30 s; missing it drops the VM into the UEFI shell. Presses stop
+    /// earlier, once the installer media shows Windows Boot Manager loading boot.wim.
+    public static let defaultSendCount = 120
+
+    /// Installer media reads that mean the prompt was answered: the firmware reads about 1 MiB to
+    /// start the CD boot loader, and boot.wim is hundreds of MiB.
+    public static let installerBootStartedReadBytes: Int64 = 32 * 1_024 * 1_024
+    public static let installerDriveID = "installer"
+
+    /// Bytes read so far by one drive, from the HMP `info blockstats` table.
+    public static func readBytes(driveID: String, blockstats: String) -> Int64? {
+        let lines = blockstats
+            .replacingOccurrences(of: "\r\n", with: "\n")
+            .split(separator: "\n", omittingEmptySubsequences: true)
+        guard let header = lines.firstIndex(where: { $0.hasPrefix("\(driveID):") }) else {
+            return nil
+        }
+        for line in lines[lines.index(after: header)...] {
+            if line.contains(": idle_time_ns") {
+                return nil
+            }
+            let fields = line.split(separator: " ", omittingEmptySubsequences: true)
+            if fields.first == "Read:", fields.count > 1 {
+                return Int64(fields[1])
+            }
+        }
+        return nil
+    }
+
+    public static func installerBootHasStarted(blockstats: String) -> Bool {
+        (readBytes(driveID: installerDriveID, blockstats: blockstats) ?? 0) >= installerBootStartedReadBytes
+    }
+
     public var firstSendSecond: Int
     public var maxSendCount: Int
     private var sentSeconds: Set<Int>
 
-    public init(firstSendSecond: Int = 1, maxSendCount: Int = 12) {
+    public init(firstSendSecond: Int = 1, maxSendCount: Int = QEMUWindowsBootPromptAutomation.defaultSendCount) {
         self.firstSendSecond = firstSendSecond
         self.maxSendCount = maxSendCount
         self.sentSeconds = []
@@ -1993,6 +2150,44 @@ public enum QEMUGuestAgentInstallKeySequence {
             ] + (try stepsAfterRunOpened) + [
                 QEMUKeySequenceStep(key: "ret", delayAfterSend: 1.0)
             ]
+        }
+    }
+}
+
+/// Opens Run and starts `U.cmd` from the tools update disc; the same Repair script as V.cmd then
+/// installs the bundle beside it.
+public enum QEMUGuestToolsUpdateKeySequence {
+    public static let startButtonTapNormalizedX = QEMUGuestAgentInstallKeySequence.startButtonTapNormalizedX
+    public static let startButtonTapNormalizedY = QEMUGuestAgentInstallKeySequence.startButtonTapNormalizedY
+
+    public static let commandText =
+        #"cmd.exe /c for %d in (D E F G H I J K L M N O P Q R S T U V W X Y Z) do if exist "%d:\Veil Guest Agent\U.cmd" call "%d:\Veil Guest Agent\U.cmd""#
+
+    public static let openRunSteps = QEMUGuestAgentInstallKeySequence.openRunSteps
+
+    public static var commandTextSteps: [QEMUKeySequenceStep] {
+        get throws {
+            var textSteps = try QEMUQMPKeyboardCommandBuilder
+                .keySequence(forText: commandText)
+                .map { QEMUKeySequenceStep(key: $0, delayAfterSend: 0.035) }
+            if !textSteps.isEmpty {
+                textSteps[textSteps.count - 1].delayAfterSend = 1.0
+            }
+            return [QEMUKeySequenceStep(key: "ctrl-a", delayAfterSend: 0.2)] + textSteps
+        }
+    }
+
+    public static var stepsAfterRunOpened: [QEMUKeySequenceStep] {
+        get throws {
+            openRunSteps + (try commandTextSteps)
+        }
+    }
+
+    public static var steps: [QEMUKeySequenceStep] {
+        get throws {
+            [QEMUKeySequenceStep(key: "esc", delayAfterSend: 0.3)]
+                + (try stepsAfterRunOpened)
+                + [QEMUKeySequenceStep(key: "ret", delayAfterSend: 1.0)]
         }
     }
 }

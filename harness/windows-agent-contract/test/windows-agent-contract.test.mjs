@@ -484,6 +484,31 @@ test("windows agent sample launch flow emits Notepad window and first frame", as
   assert.equal(frame.format, "png");
 });
 
+test("windows agent installs VirtIO drivers and keeps one display while ramfb is attached", async () => {
+  const drivers = await readFile(resolve(agentRoot, "scripts/Install-VeilVirtIODrivers.ps1"), "utf8");
+  const repair = await readFile(resolve(agentRoot, "scripts/Repair-VeilAgentConnectivity.ps1"), "utf8");
+  const bootstrap = await readFile(resolve(agentRoot, "scripts/Bootstrap-VeilAgentFromMedia.ps1"), "utf8");
+  const desktop = await readFile(resolve(agentRoot, "src/VeilAgent/WindowsDesktop.cs"), "utf8");
+  const session = await readFile(resolve(agentRoot, "src/VeilAgent/AgentSession.cs"), "utf8");
+
+  for (const folder of ["NetKVM", "viogpudo", "viorng", "Balloon", "vioserial"]) {
+    assert.match(drivers, new RegExp(`"${folder}"`));
+  }
+  assert.match(drivers, /VolumeLabel -like "virtio-win\*"/);
+  assert.match(drivers, /\\w11\\ARM64/);
+  assert.match(drivers, /pnputil \/add-driver/);
+  assert.match(drivers, /SetDisplayConfig/);
+  assert.match(drivers, /\$SdcTopologyExternal = 0x8/);
+  // Setup and repair must never stop on a driver problem.
+  assert.match(drivers, /^exit 0$/m);
+  assert.match(repair, /Install-VeilVirtIODrivers\.ps1/);
+  assert.match(repair, /"viogpudo"[\s\S]+-SingleBootDisplay/);
+  assert.match(bootstrap, /Install-VeilVirtIODrivers\.ps1[\s\S]+-DriverFolders @\(\) -SingleBootDisplay/);
+  assert.match(desktop, /VirtioGpuDisplay\.TrySetCustomMode/);
+  assert.match(desktop, /TryFindListedModeCovering/);
+  assert.match(session, /\["virtioGpuDisplay"\] = VirtioGpuDisplay\.IsDriverInstalled\(\)/);
+});
+
 test("windows agent includes user-logon install and uninstall scripts", async () => {
   const install = await readFile(resolve(agentRoot, "scripts/Install-VeilAgent.ps1"), "utf8");
   const uninstall = await readFile(resolve(agentRoot, "scripts/Uninstall-VeilAgent.ps1"), "utf8");
@@ -531,13 +556,16 @@ test("windows agent includes user-logon install and uninstall scripts", async ()
   assert.match(start, /agent\.health\.request/);
   assert.match(start, /agent\.health\.response/);
   assert.match(start, /\[switch\]\$RequirePackageIdentity/);
+  assert.match(start, /\[switch\]\$RequireGuestAddress/);
+  assert.match(start, /RequireGuestAddress/);
+  assert.match(start, /if \(\$RequireGuestAddress -and \$GuestIPv4Addresses\.Count -gt 0\)/);
   assert.match(start, /capabilities\.packageIdentity/);
   assert.match(start, /package identity is not ready yet/);
   assert.match(start, /package identity was not ready/);
   assert.match(start, /Guest IPv4 addresses visible to Windows/);
   assert.match(start, /Get-Process\s+-Name\s+"VeilAgent"/);
   assert.match(start, /VeilAgent is already running/);
-  assert.match(start, /loopback plus guest IPv4 agent\.health\.response did not both succeed/);
+  assert.match(start, /loopback health/);
   assert.match(start, /RedirectStandardOutput\s+\$StdOutLogPath/);
   assert.match(start, /RedirectStandardError\s+\$StdErrLogPath/);
   assert.match(install, /-RequirePackageIdentity:\$RequirePackageIdentity/);
@@ -563,6 +591,15 @@ test("windows agent includes user-logon install and uninstall scripts", async ()
   assert.match(repair, /Sync-VeilInstalledAppBundle/);
   assert.match(repair, /function\s+Find-VeilSharedAgentRoot/);
   assert.match(repair, /\$BundledAppRoot\s*=\s*Join-Path\s+\(Find-VeilSharedAgentRoot\)\s+"app"/);
+  // Stop-Process returns before the agent's files are released; wait, and retry the folder move.
+  for (const script of [repair, install]) {
+    assert.match(script, /Wait-Process\s+-Timeout/);
+    assert.match(script, /function\s+Move-VeilItemWithRetry/);
+    // An app holding the folder as its current directory blocks the rename, not the files.
+    assert.match(script, /Replacing the VeilAgent files in place/);
+  }
+  // The tools update disc sits beside an older VEIL_AUTO; the bundle next to the script must win.
+  assert.match(repair, /\$ScriptRootAgentRoot\s+-ne\s+\$InstallRoot[\s\S]{0,120}app\\VeilAgent\.exe[\s\S]{0,120}CachedSharedAgentRoot\s*=\s*\$ScriptRootAgentRoot/);
   assert.match(repair, /Resolved bundle source is the installed app folder itself/);
   assert.match(repair, /Resolved support script source is the installed scripts folder itself/);
   assert.match(repair, /Refreshed installed VeilAgent app bundle/);
@@ -577,9 +614,14 @@ test("windows agent includes user-logon install and uninstall scripts", async ()
   assert.match(repair, /standardUserAgentStartRequested/);
   assert.match(repair, /Start-VeilAgentAsStandardUser\s+-StartScriptPath\s+\$StartScript/);
   assert.match(repair, /guestAgentHealthSucceeded/);
+  assert.match(repair, /-RequireGuestAddress/);
   assert.match(bootstrap, /Bootstrap-VeilAgentFromMedia/);
   assert.match(bootstrap, /Install Veil Agent\.cmd/);
   assert.match(bootstrap, /bootstrap\.log/);
+  // Start-Process -Wait waits for the agent the installer leaves running, so first logon would hang.
+  assert.doesNotMatch(bootstrap, /^\s*-Wait\b/m);
+  assert.match(bootstrap, /\$Process\.WaitForExit\(\)/);
+  assert.match(bootstrap, /VEIL_UNATTENDED/);
   assert.match(uninstall, /Unregister-ScheduledTask/);
   assert.match(uninstall, /Get-AppxPackage\s+-Name\s+\$SparsePackageName/);
   assert.match(uninstall, /Remove-AppxPackage/);
@@ -660,4 +702,40 @@ test("windows agent installer starts the installed agent immediately by default"
   assert.match(install, /if\s*\(-not\s+\$NoStart\)\s*{/);
   assert.match(install, /&\s+\$StartScript\s+-InstallRoot\s+\$InstallRoot\s+-Port\s+\$Port/);
   assert.match(install, /Write-Host "VeilAgent started inside Windows on 0\.0\.0\.0:\$Port\. The macOS host connects through QEMU at ws:\/\/127\.0\.0\.1:\$Port\/\."/);
+});
+
+test("PowerShell publish and install preserve the last usable bundle until promotion succeeds", async () => {
+  const publish = await readFile(resolve(agentRoot, "scripts/Publish-VeilAgentBundle.ps1"), "utf8");
+  const install = await readFile(resolve(agentRoot, "scripts/Install-VeilAgent.ps1"), "utf8");
+  const repair = await readFile(resolve(agentRoot, "scripts/Repair-VeilAgentConnectivity.ps1"), "utf8");
+
+  assert.match(publish, /PublishStagingRoot|\.publish-staging/);
+  assert.match(publish, /BundleLockPath/);
+  assert.match(publish, /CreateNew/);
+  assert.match(publish, /VeilAgent\.deps\.json/);
+  assert.match(publish, /VeilAgent\.runtimeconfig\.json/);
+  assert.match(publish, /--output \$PublishNextRoot\s+if \(\$LASTEXITCODE\s*-ne\s*0\)/);
+  assert.match(publish, /Move-Item[\s\S]+BundleRoot/);
+  assert.match(publish, /BundleLockStream\.Dispose/);
+  assert.doesNotMatch(publish, /if \(Test-Path \$BundleRoot\) \{\s*Remove-Item \$BundleRoot/);
+
+  assert.match(install, /InstallStagingRoot|\.install-staging/);
+  assert.match(install, /BundleLockPath/);
+  assert.match(install, /CreateNew/);
+  assert.match(install, /InstallBackupRoot|\.install-backup/);
+  assert.match(install, /VeilAgent\.deps\.json/);
+  assert.match(install, /VeilAgent\.runtimeconfig\.json/);
+  assert.match(install, /--output \$InstallStagedAppRoot\s+if \(\$LASTEXITCODE\s*-ne\s*0\)/);
+  assert.match(install, /Move-Item[\s\S]+PublishRoot/);
+  assert.match(install, /BundleLockStream\.Dispose/);
+  assert.doesNotMatch(install, /Get-ChildItem -Path \$PublishRoot[\s\S]+Remove-Item/);
+
+  assert.match(repair, /RepairStagingRoot|\.repair-staging/);
+  assert.match(repair, /BundleLockPath/);
+  assert.match(repair, /CreateNew/);
+  assert.match(repair, /VeilAgent\.deps\.json/);
+  assert.match(repair, /VeilAgent\.runtimeconfig\.json/);
+  assert.match(repair, /Move-Item[\s\S]+InstallRootApp/);
+  assert.match(repair, /BundleLockStream\.Dispose/);
+  assert.doesNotMatch(repair, /Get-ChildItem -Path \$InstallRootApp[\s\S]+Remove-Item/);
 });

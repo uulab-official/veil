@@ -2,6 +2,7 @@ import AppKit
 import Combine
 import CryptoKit
 import SwiftUI
+import VeilHostCore
 import WebKit
 
 enum WindowsDownloadURLPolicy {
@@ -353,10 +354,104 @@ enum WindowsDownloadPhase: Equatable {
     case failed(String)
 }
 
+/// Bytes received so far and a smoothed transfer rate, for the "3.4 GB of 5.6 GB · About 12
+/// minutes left" line under the progress bar.
+struct WindowsDownloadTransfer: Equatable {
+    var receivedBytes: Int64
+    var totalBytes: Int64
+    var bytesPerSecond: Double?
+
+    /// Weight of the previous rate when a new sample arrives, so the estimate doesn't jump with
+    /// every one-second sample.
+    static let rateSmoothing = 0.75
+
+    var sizeText: String {
+        "\(Self.byteText(receivedBytes)) of \(Self.byteText(totalBytes))"
+    }
+
+    var rateText: String? {
+        guard let bytesPerSecond, bytesPerSecond >= 1 else {
+            return nil
+        }
+        return "\(Self.byteText(Int64(bytesPerSecond)))/s"
+    }
+
+    var remainingText: String? {
+        guard let bytesPerSecond, bytesPerSecond >= 1, totalBytes > receivedBytes else {
+            return nil
+        }
+        return Self.remainingText(seconds: Double(totalBytes - receivedBytes) / bytesPerSecond)
+    }
+
+    func advanced(toReceivedBytes received: Int64, totalBytes: Int64, over elapsed: TimeInterval) -> WindowsDownloadTransfer {
+        guard elapsed > 0 else {
+            return WindowsDownloadTransfer(receivedBytes: received, totalBytes: totalBytes, bytesPerSecond: bytesPerSecond)
+        }
+
+        let sampleRate = Double(max(received - receivedBytes, 0)) / elapsed
+        let rate = bytesPerSecond.map { $0 * Self.rateSmoothing + sampleRate * (1 - Self.rateSmoothing) } ?? sampleRate
+        return WindowsDownloadTransfer(receivedBytes: received, totalBytes: totalBytes, bytesPerSecond: rate)
+    }
+
+    static func remainingText(seconds: Double) -> String {
+        if seconds < 60 {
+            return "Less than a minute left"
+        }
+        if seconds < 3600 {
+            let minutes = Int((seconds / 60).rounded(.up))
+            return minutes == 1 ? "About 1 minute left" : "About \(minutes) minutes left"
+        }
+
+        let hours = Int(seconds / 3600)
+        let minutes = Int((seconds - Double(hours) * 3600) / 60)
+        return minutes == 0 ? "About \(hours) hr left" : "About \(hours) hr \(minutes) min left"
+    }
+
+    private static func byteText(_ bytes: Int64) -> String {
+        ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
+    }
+}
+
+/// The three things that happen after one click, shown as a small tracker on the download page.
+enum WindowsDownloadStage: Int, CaseIterable, Identifiable {
+    case download
+    case verify
+    case prepare
+
+    var id: Int { rawValue }
+
+    var title: String {
+        switch self {
+        case .download: "Download"
+        case .verify: "Verify"
+        case .prepare: "Prepare and start Setup"
+        }
+    }
+
+    /// `nil` when the flow stopped on a failure, so the tracker doesn't claim progress.
+    static func resolve(phase: WindowsDownloadPhase, isPreparingWindows: Bool) -> WindowsDownloadStage? {
+        if isPreparingWindows {
+            return .prepare
+        }
+
+        switch phase {
+        case .loadingPage, .automating, .requestingDownload, .downloading:
+            return .download
+        case .verifying:
+            return .verify
+        case .downloaded:
+            return .prepare
+        case .failed:
+            return nil
+        }
+    }
+}
+
 @MainActor
 final class WindowsDownloadController: NSObject, ObservableObject {
     @Published private(set) var phase: WindowsDownloadPhase = .loadingPage
     @Published private(set) var downloadProgress: Double?
+    @Published private(set) var transfer: WindowsDownloadTransfer?
 
     private(set) lazy var webView: WKWebView = {
         let configuration = WKWebViewConfiguration()
@@ -409,6 +504,7 @@ final class WindowsDownloadController: NSObject, ObservableObject {
         verificationTask?.cancel()
         verificationTask = nil
         downloadProgress = nil
+        transfer = nil
         expectedSHA256 = nil
         let partialDestination = destinationURL
         destinationURL = nil
@@ -434,7 +530,10 @@ final class WindowsDownloadController: NSObject, ObservableObject {
         activeDownload = download
         download.delegate = self
         progressTask?.cancel()
+        transfer = nil
         progressTask = Task { @MainActor [weak self, weak download] in
+            let clock = ContinuousClock()
+            var lastSample = clock.now
             while !Task.isCancelled,
                   let self,
                   let download,
@@ -443,6 +542,28 @@ final class WindowsDownloadController: NSObject, ObservableObject {
                 self.downloadProgress = progress.totalUnitCount > 0
                     ? min(max(progress.fractionCompleted, 0), 1)
                     : nil
+
+                // Bytes and rate move once a second; the bar itself keeps the 250 ms cadence.
+                let now = clock.now
+                if progress.totalUnitCount > 0 {
+                    if let transfer = self.transfer {
+                        let elapsed = now - lastSample
+                        if elapsed >= .seconds(1) {
+                            self.transfer = transfer.advanced(
+                                toReceivedBytes: progress.completedUnitCount,
+                                totalBytes: progress.totalUnitCount,
+                                over: Double(elapsed.components.seconds) + Double(elapsed.components.attoseconds) / 1e18
+                            )
+                            lastSample = now
+                        }
+                    } else {
+                        self.transfer = WindowsDownloadTransfer(
+                            receivedBytes: progress.completedUnitCount,
+                            totalBytes: progress.totalUnitCount
+                        )
+                        lastSample = now
+                    }
+                }
                 try? await Task.sleep(for: .milliseconds(250))
             }
         }
@@ -456,6 +577,7 @@ final class WindowsDownloadController: NSObject, ObservableObject {
         verificationTask?.cancel()
         verificationTask = nil
         downloadProgress = nil
+        transfer = nil
         activeDownload = nil
         if removePartialFile {
             removePartialDestination()
@@ -735,6 +857,7 @@ extension WindowsDownloadController: WKDownloadDelegate {
             progressTask?.cancel()
             progressTask = nil
             downloadProgress = nil
+            transfer = nil
             beginIntegrityVerification(of: destinationURL)
         } catch {
             fail("Veil could not verify the downloaded Windows ISO: \(error.localizedDescription)")
@@ -796,7 +919,16 @@ private struct MicrosoftWindowsDownloadWebView: NSViewRepresentable {
     func updateNSView(_ nsView: WKWebView, context: Context) {}
 }
 
+/// The automatic Microsoft download, presented either as a sheet or embedded in the
+/// Installation Assistant. Both start downloading as soon as they appear and hand the verified ISO
+/// to `prepareDownloadedISO`, which prepares the VM and starts Windows Setup.
 struct WindowsDownloadSheet: View {
+    enum Presentation {
+        case sheet
+        /// Lives inside the assistant: no dismiss, and `cancelAction` returns to the assistant page.
+        case embedded(cancelAction: () -> Void)
+    }
+
     @Environment(\.dismiss) private var dismiss
     @StateObject private var controller = WindowsDownloadController()
     @State private var isPreparingWindows = false
@@ -805,11 +937,17 @@ struct WindowsDownloadSheet: View {
 
     let prepareDownloadedISO: (URL) async -> Bool
     let useExistingISO: () -> Void
+    var presentation: Presentation = .sheet
+    /// Fetches Fedora's VirtIO driver ISO next to the Windows download, so it is usually verified
+    /// by the time Setup starts. False when the profile already has driver media the user chose.
+    var prefetchesDriverMedia = true
 
     var body: some View {
         VStack(spacing: 0) {
-            header
-            Divider()
+            if !isEmbedded {
+                header
+                Divider()
+            }
 
             ZStack {
                 MicrosoftWindowsDownloadWebView(controller: controller)
@@ -820,15 +958,19 @@ struct WindowsDownloadSheet: View {
                     automaticDownloadStage
                 }
             }
-            .frame(minWidth: 760, minHeight: 420)
+            .frame(minWidth: isEmbedded ? 0 : 760, minHeight: isEmbedded ? 0 : 420)
 
             Divider()
+                .opacity(isEmbedded ? 0.5 : 1)
             footer
         }
-        .frame(minWidth: 820, minHeight: 560)
-        .background(Color(nsColor: .windowBackgroundColor))
+        .frame(minWidth: isEmbedded ? 0 : 820, minHeight: isEmbedded ? 0 : 560)
+        .background(isEmbedded ? AnyShapeStyle(.white.opacity(0.04)) : AnyShapeStyle(Color(nsColor: .windowBackgroundColor)))
         .task {
             controller.loadLandingPage()
+            if prefetchesDriverMedia {
+                await VirtioWinDriverMediaProvider.shared.prefetch()
+            }
         }
         .onChange(of: controller.phase) { _, phase in
             guard case .downloaded(let url) = phase else {
@@ -841,7 +983,7 @@ struct WindowsDownloadSheet: View {
                 let isReady = await prepareDownloadedISO(url)
                 isPreparingWindows = false
                 if isReady {
-                    dismiss()
+                    finish()
                 } else {
                     preparationFailure = "The ISO was saved, but Veil could not finish VM preparation. Review Windows Settings and try again."
                 }
@@ -852,6 +994,7 @@ struct WindowsDownloadSheet: View {
         }
     }
 
+    /// Only the standalone sheet needs its own title; embedded, the assistant page names the step.
     private var header: some View {
         HStack(spacing: 12) {
             Image(systemName: "arrow.down.circle.fill")
@@ -867,71 +1010,118 @@ struct WindowsDownloadSheet: View {
             }
 
             Spacer()
-
-            Button(showsMicrosoftPage ? "Hide Microsoft Page" : "Show Microsoft Page") {
-                showsMicrosoftPage.toggle()
-            }
-
-            Button("Use Existing ISO") {
-                controller.cancelDownload()
-                dismiss()
-                useExistingISO()
-            }
-
-            Button("Close") {
-                dismiss()
-            }
-            .keyboardShortcut(.cancelAction)
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 14)
     }
 
+    private var isEmbedded: Bool {
+        if case .embedded = presentation {
+            return true
+        }
+        return false
+    }
+
+    private func finish() {
+        switch presentation {
+        case .sheet:
+            dismiss()
+        case .embedded(let cancelAction):
+            cancelAction()
+        }
+    }
+
     private var automaticDownloadStage: some View {
-        VStack(spacing: 20) {
-            Spacer()
+        VStack(spacing: 22) {
+            Spacer(minLength: 12)
 
             ZStack {
                 RoundedRectangle(cornerRadius: 22, style: .continuous)
                     .fill(Color.blue.gradient)
-                    .frame(width: 92, height: 92)
-                Image(systemName: "square.grid.2x2.fill")
-                    .font(.system(size: 45, weight: .semibold))
+                    .frame(width: 84, height: 84)
+                Image(systemName: stageSymbolName)
+                    .font(.system(size: 38, weight: .semibold))
                     .foregroundStyle(.white)
+                    .contentTransition(.symbolEffect(.replace))
             }
             .shadow(color: .blue.opacity(0.28), radius: 24, y: 12)
 
-            VStack(spacing: 7) {
+            VStack(spacing: 6) {
                 Text(statusTitle)
                     .font(.title2.weight(.semibold))
                 Text(preparationFailure ?? statusDetail)
                     .font(.callout)
                     .foregroundStyle(preparationFailure == nil ? AnyShapeStyle(.secondary) : AnyShapeStyle(.red))
                     .multilineTextAlignment(.center)
-                    .frame(maxWidth: 520)
+                    .lineLimit(3)
+                    .truncationMode(.middle)
+                    .frame(maxWidth: 480)
             }
 
-            if isPreparingWindows || isBusy {
-                if let progress = controller.downloadProgress {
-                    ProgressView(value: progress)
-                        .frame(maxWidth: 420)
-                } else {
-                    ProgressView()
-                        .controlSize(.large)
-                }
+            progressBlock
+                .frame(maxWidth: 440)
+
+            if let stage = WindowsDownloadStage.resolve(phase: controller.phase, isPreparingWindows: isPreparingWindows),
+               preparationFailure == nil {
+                DownloadStageTracker(current: stage)
             }
 
-            Label("Latest Arm64 ISO directly from microsoft.com", systemImage: "lock.shield.fill")
-                .font(.caption.weight(.medium))
+            Spacer(minLength: 12)
+
+            Label("Official Arm64 ISO from microsoft.com, checked against Microsoft's SHA-256", systemImage: "lock.shield.fill")
+                .font(.caption)
                 .foregroundStyle(.secondary)
-
-            Spacer()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding(36)
-        .background(Color(nsColor: .controlBackgroundColor))
+        .padding(.horizontal, 36)
+        .padding(.vertical, 28)
+        .background(isEmbedded ? Color.clear : Color(nsColor: .controlBackgroundColor))
     }
 
+    @ViewBuilder
+    private var progressBlock: some View {
+        if case .downloading = controller.phase, let progress = controller.downloadProgress {
+            VStack(spacing: 8) {
+                ProgressView(value: progress)
+                    .progressViewStyle(.linear)
+                    .tint(.accentColor)
+
+                HStack {
+                    Text(transferSummary)
+                    Spacer(minLength: 12)
+                    Text(controller.transfer?.remainingText ?? "Estimating time left…")
+                }
+                .font(.caption.monospacedDigit())
+                .foregroundStyle(.secondary)
+            }
+        } else if isPreparingWindows || isBusy {
+            ProgressView()
+                .controlSize(.small)
+        }
+    }
+
+    private var transferSummary: String {
+        guard let transfer = controller.transfer else {
+            return controller.downloadProgress.map { "\(Int($0 * 100))%" } ?? ""
+        }
+        return [transfer.sizeText, transfer.rateText].compactMap { $0 }.joined(separator: " · ")
+    }
+
+    private var stageSymbolName: String {
+        if preparationFailure != nil {
+            return "exclamationmark.triangle.fill"
+        }
+
+        switch WindowsDownloadStage.resolve(phase: controller.phase, isPreparingWindows: isPreparingWindows) {
+        case .download: return "arrow.down"
+        case .verify: return "checkmark.shield.fill"
+        case .prepare: return "gearshape.2.fill"
+        case nil: return "exclamationmark.triangle.fill"
+        }
+    }
+
+    /// Actions live in one bar: the ISO fallback on the left, the Microsoft page tucked in a menu
+    /// unless the automation failed, and Cancel on the right like a macOS assistant.
     private var footer: some View {
         HStack(spacing: 12) {
             if showsMicrosoftPage {
@@ -946,26 +1136,66 @@ struct WindowsDownloadSheet: View {
                         .lineLimit(2)
                 }
             } else {
-                Label("Automatic download", systemImage: "sparkles")
-                    .font(.callout.weight(.medium))
-                    .foregroundStyle(.secondary)
+                Button("Use an ISO File I Already Have…") {
+                    controller.cancelDownload()
+                    finish()
+                    useExistingISO()
+                }
+                .buttonStyle(.link)
+                .disabled(isPreparingWindows)
             }
 
             Spacer()
 
-            if case .failed = controller.phase {
-                Button("Reload Microsoft Page") {
+            if isFailed {
+                Button(showsMicrosoftPage ? "Hide Microsoft Page" : "Show Microsoft Page") {
+                    showsMicrosoftPage.toggle()
+                }
+
+                Button("Try Again") {
                     preparationFailure = nil
                     controller.reloadLandingPage()
                 }
+            } else {
+                Menu {
+                    Button(showsMicrosoftPage ? "Hide Microsoft Page" : "Show Microsoft Page") {
+                        showsMicrosoftPage.toggle()
+                    }
+                    if showsMicrosoftPage {
+                        Button("Use an ISO File I Already Have…") {
+                            controller.cancelDownload()
+                            finish()
+                            useExistingISO()
+                        }
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                }
+                .menuStyle(.borderlessButton)
+                .menuIndicator(.hidden)
+                .fixedSize()
+                .help("More download options")
             }
 
-            Label("microsoft.com", systemImage: "lock.fill")
-                .font(.caption.weight(.medium))
-                .foregroundStyle(.secondary)
+            Button(isEmbedded ? "Cancel" : "Close") {
+                controller.cancelDownload()
+                finish()
+            }
+            .keyboardShortcut(.cancelAction)
+            .disabled(isPreparingWindows)
         }
-        .padding(.horizontal, 20)
+        .controlSize(isEmbedded ? .regular : .large)
+        .padding(.horizontal, 18)
         .padding(.vertical, 12)
+    }
+
+    /// Only a failed download offers a retry; a failed VM preparation keeps the verified ISO, so
+    /// reloading Microsoft's page there would throw away a multi-gigabyte download.
+    private var isFailed: Bool {
+        if case .failed = controller.phase {
+            return true
+        }
+        return false
     }
 
     @ViewBuilder
@@ -1014,8 +1244,8 @@ struct WindowsDownloadSheet: View {
             return "Getting the latest Windows 11"
         case .requestingDownload:
             return "Starting the official ISO download"
-        case .downloading(let filename):
-            return "Downloading \(filename)"
+        case .downloading:
+            return "Downloading Windows 11"
         case .verifying:
             return "Verifying Windows ISO"
         case .downloaded:
@@ -1033,17 +1263,56 @@ struct WindowsDownloadSheet: View {
             return step
         case .requestingDownload(let language):
             return "Microsoft issued the latest \(language) ISO link. Download is starting now."
-        case .downloading:
-            if let progress = controller.downloadProgress {
-                return "\(Int(progress * 100))% complete. The ISO is being saved locally in Veil's Application Support folder."
-            }
-            return "The ISO is being saved locally in Veil's Application Support folder. Keep this window open."
+        case .downloading(let filename):
+            return filename
         case .verifying:
-            return "Veil is comparing the completed file with Microsoft's published SHA-256. Keep this window open."
+            return "Veil is comparing the completed file with Microsoft's published SHA-256."
         case .downloaded:
             return "The ISO is complete. Veil is handing it to the local VM setup flow."
         case .failed(let message):
             return message
         }
+    }
+}
+
+/// Download → Verify → Prepare, with the finished stages checked off.
+private struct DownloadStageTracker: View {
+    var current: WindowsDownloadStage
+
+    var body: some View {
+        HStack(spacing: 8) {
+            ForEach(WindowsDownloadStage.allCases) { stage in
+                if stage != .download {
+                    Capsule()
+                        .fill(stage.rawValue <= current.rawValue ? Color.accentColor.opacity(0.7) : .white.opacity(0.14))
+                        .frame(width: 28, height: 2)
+                }
+
+                HStack(spacing: 5) {
+                    Image(systemName: symbolName(for: stage))
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(tint(for: stage))
+                    Text(stage.title)
+                        .font(.caption.weight(stage == current ? .semibold : .regular))
+                        .foregroundStyle(stage.rawValue > current.rawValue ? .secondary : .primary)
+                }
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Step \(current.rawValue + 1) of \(WindowsDownloadStage.allCases.count): \(current.title)")
+    }
+
+    private func symbolName(for stage: WindowsDownloadStage) -> String {
+        if stage.rawValue < current.rawValue {
+            return "checkmark.circle.fill"
+        }
+        return stage == current ? "circle.dotted.circle" : "circle"
+    }
+
+    private func tint(for stage: WindowsDownloadStage) -> Color {
+        if stage.rawValue < current.rawValue {
+            return .green
+        }
+        return stage == current ? .accentColor : .secondary
     }
 }

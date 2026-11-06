@@ -146,6 +146,20 @@ struct ProtocolMessageTests {
         #expect(response.bounds?.height == 900)
     }
 
+    @Test("decodes desktop display resize request and response")
+    func decodesDisplayResizeRequestAndResponse() throws {
+        let request: DisplayResizeRequest = try decodeFixture("display.resize.request")
+        let response: DisplayResizeResponse = try decodeFixture("display.resize.response")
+
+        #expect(request.type == .displayResizeRequest)
+        #expect(request.isPlausible)
+        #expect(response.type == .displayResizeResponse)
+        #expect(response.requestId == request.requestId)
+        #expect(response.accepted)
+        #expect(response.width == request.width)
+        #expect(response.height == request.height)
+    }
+
     @Test("decodes mouse input event")
     func decodesMouseInputEvent() throws {
         let input: InputMouseEvent = try decodeFixture("input.mouse.left-down")

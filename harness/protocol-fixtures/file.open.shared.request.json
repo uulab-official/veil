@@ -1,0 +1,7 @@
+{
+  "type": "file.open.shared.request",
+  "requestId": "req_open_shared_007",
+  "appId": "winapp_notepad",
+  "fileName": "large-report.txt",
+  "guestPath": "C:\\VeilShared\\large-report.txt"
+}

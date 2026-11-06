@@ -8,6 +8,7 @@ public enum MessageType: String, Codable, Sendable {
     case appLaunchRequest = "app.launch.request"
     case appLaunchResponse = "app.launch.response"
     case fileOpenRequest = "file.open.request"
+    case sharedFileOpenRequest = "file.open.shared.request"
     case fileOpenResponse = "file.open.response"
     case windowCreated = "window.created"
     case windowUpdated = "window.updated"
@@ -22,7 +23,13 @@ public enum MessageType: String, Codable, Sendable {
     case windowCloseResponse = "window.close.response"
     case windowResizeRequest = "window.resize.request"
     case windowResizeResponse = "window.resize.response"
+    case displayResizeRequest = "display.resize.request"
+    case displayResizeResponse = "display.resize.response"
+    case systemShutdownRequest = "system.shutdown.request"
+    case systemShutdownResponse = "system.shutdown.response"
     case clipboardTextSet = "clipboard.text.set"
+    case clipboardImageSet = "clipboard.image.set"
+    case clipboardFilesSet = "clipboard.files.set"
     case notificationListenerRequest = "notification.listener.request"
     case notificationListenerResponse = "notification.listener.response"
     case notificationReceived = "notification.received"
@@ -83,6 +90,16 @@ public struct AgentCapabilities: Codable, Equatable, Sendable {
     /// Optional so a host connected to an older agent keeps the resize affordance disabled instead of
     /// sending a message that the agent cannot route.
     public var windowResize: Bool? = nil
+    /// True when the guest agent can ask Windows to change the active desktop display mode.
+    /// Optional so older agents keep the RFB aspect-fit fallback.
+    public var displayResize: Bool? = nil
+    /// True when Windows has the virtio-win VirtIO GPU display driver (`viogpudo`) installed, so the
+    /// VM can boot on `virtio-gpu-pci` alone. Optional so an older agent decodes as `nil` and the VM keeps
+    /// the `ramfb` display it boots with today.
+    public var virtioGpuDisplay: Bool? = nil
+    /// True when the agent accepts `system.shutdown.request`. Optional so an older agent decodes as
+    /// `nil` and the host presses the ACPI power button instead.
+    public var systemShutdown: Bool? = nil
     /// True when the agent can serve window frames as raw binary on a dedicated connection.
     ///
     /// Optional rather than defaulted, so an agent that predates the frame channel decodes as `nil` and
@@ -93,6 +110,20 @@ public struct AgentCapabilities: Codable, Equatable, Sendable {
     /// Optional for the same reason as `binaryFrameChannel`: an older agent decodes as `nil`, and the
     /// host then says the share cannot be confirmed rather than reporting a share that is missing.
     public var sharedFolder: Bool? = nil
+    /// True when the agent acknowledges the fire-and-forget messages (`input.mouse`, `input.key`,
+    /// `input.text`, `clipboard.text.set`, frame subscribe/unsubscribe) with an `operation.ack`
+    /// reply, and reports their failures as `error` frames the host can read.
+    ///
+    /// Optional so an agent that predates acknowledgements decodes as `nil` and the host keeps the
+    /// fire-and-forget semantics it was built on instead of waiting on a reply that never comes.
+    public var operationAcks: Bool? = nil
+    /// True when the agent accepts and broadcasts `clipboard.image.set`.
+    ///
+    /// Optional so an older agent decodes as `nil` and image clipboards stay on the Mac instead of being
+    /// sent as a message the agent would answer with `unknown_message_type`.
+    public var clipboardImage: Bool? = nil
+    /// True when the agent can place shared-folder files on the Windows clipboard (`clipboard.files.set`).
+    public var clipboardFiles: Bool? = nil
 }
 
 public struct PackageIdentityStatus: Codable, Equatable, Sendable {
@@ -312,6 +343,33 @@ public struct FileOpenRequest: Codable, Equatable, Sendable {
         self.appId = appId
         self.fileName = fileName
         self.contentBase64 = contentBase64
+    }
+}
+
+/// Opens a file that already exists in the guest-served shared folder.
+///
+/// Unlike ``FileOpenRequest`` this carries no file bytes. The host copies the file into the mounted
+/// shared folder, then sends the guest path. The guest still validates the path against its fixed
+/// shared-folder root before launching, so a host cannot turn this convenience into arbitrary path
+/// access.
+public struct SharedFileOpenRequest: Codable, Equatable, Sendable {
+    public var type: MessageType
+    public var requestId: String
+    public var appId: String
+    public var fileName: String
+    public var guestPath: String
+
+    public init(
+        requestId: String,
+        appId: String,
+        fileName: String,
+        guestPath: String
+    ) {
+        self.type = .sharedFileOpenRequest
+        self.requestId = requestId
+        self.appId = appId
+        self.fileName = fileName
+        self.guestPath = guestPath
     }
 }
 
@@ -614,6 +672,100 @@ public struct WindowResizeResponse: Codable, Equatable, Sendable {
     }
 }
 
+/// Requests that the Windows agent change the active desktop display mode.
+///
+/// Unlike `WindowResizeRequest`, this targets the guest monitor rather than a tracked HWND. The host
+/// sends this only after QEMU's RFB ExtendedDesktopSize path is explicitly rejected.
+public struct DisplayResizeRequest: Codable, Equatable, Sendable {
+    public static let minimumDimension = 640
+    public static let maximumDimension = 3_840
+    public static let maximumPixelCount = 8_294_400
+
+    public var type: MessageType
+    public var requestId: String
+    public var width: Int
+    public var height: Int
+
+    public init(
+        type: MessageType = .displayResizeRequest,
+        requestId: String,
+        width: Int,
+        height: Int
+    ) {
+        self.type = type
+        self.requestId = requestId
+        self.width = width
+        self.height = height
+    }
+
+    public var isPlausible: Bool {
+        Self.isPlausible(width: width, height: height)
+    }
+
+    public static func isPlausible(width: Int, height: Int) -> Bool {
+        width >= minimumDimension
+            && width <= maximumDimension
+            && height >= minimumDimension
+            && height <= maximumDimension
+            && width <= maximumPixelCount / max(height, 1)
+    }
+}
+
+public struct DisplayResizeResponse: Codable, Equatable, Sendable {
+    public var type: MessageType
+    public var requestId: String
+    public var accepted: Bool
+    public var width: Int?
+    public var height: Int?
+    public var reason: String?
+
+    public init(
+        type: MessageType = .displayResizeResponse,
+        requestId: String,
+        accepted: Bool,
+        width: Int? = nil,
+        height: Int? = nil,
+        reason: String? = nil
+    ) {
+        self.type = type
+        self.requestId = requestId
+        self.accepted = accepted
+        self.width = width
+        self.height = height
+        self.reason = reason
+    }
+}
+
+/// Asks the Windows agent to shut Windows down normally. It carries no arguments on purpose.
+public struct SystemShutdownRequest: Codable, Equatable, Sendable {
+    public var type: MessageType
+    public var requestId: String
+
+    public init(type: MessageType = .systemShutdownRequest, requestId: String) {
+        self.type = type
+        self.requestId = requestId
+    }
+}
+
+public struct SystemShutdownResponse: Codable, Equatable, Sendable {
+    public var type: MessageType
+    public var requestId: String
+    public var accepted: Bool
+    public var reason: String?
+
+    public init(
+        type: MessageType = .systemShutdownResponse,
+        requestId: String,
+        accepted: Bool,
+        reason: String? = nil
+    ) {
+        self.type = type
+        self.requestId = requestId
+        self.accepted = accepted
+        self.reason = reason
+    }
+}
+
 public struct InputMouseEvent: Codable, Equatable, Sendable {
     public var type: MessageType
     public var windowId: String
@@ -725,6 +877,72 @@ public struct ClipboardTextSet: Codable, Equatable, Sendable {
         self.origin = origin
         self.sequence = sequence
         self.text = text
+    }
+}
+
+/// One PNG clipboard image. See `docs/protocol.md` "Clipboard Image"; ``ClipboardImagePayload`` builds and
+/// verifies these, so code outside it should not read `pngBase64` directly.
+public struct ClipboardImageSet: Codable, Equatable, Sendable {
+    public var type: MessageType
+    public var requestId: String
+    public var origin: String
+    public var sequence: Int
+    public var format: String
+    public var width: Int
+    public var height: Int
+    public var byteLength: Int
+    public var sha256: String
+    public var pngBase64: String
+
+    public init(
+        type: MessageType = .clipboardImageSet,
+        requestId: String,
+        origin: String,
+        sequence: Int,
+        format: String = "png",
+        width: Int,
+        height: Int,
+        byteLength: Int,
+        sha256: String,
+        pngBase64: String
+    ) {
+        self.type = type
+        self.requestId = requestId
+        self.origin = origin
+        self.sequence = sequence
+        self.format = format
+        self.width = width
+        self.height = height
+        self.byteLength = byteLength
+        self.sha256 = sha256
+        self.pngBase64 = pngBase64
+    }
+}
+
+/// Host-to-guest file paste. The files are already in the shared folder; this only names them, relative to
+/// the share, so no host path ever crosses the protocol. See `docs/protocol.md` "Clipboard Files".
+public struct ClipboardFilesSet: Codable, Equatable, Sendable {
+    public var type: MessageType
+    public var requestId: String
+    public var origin: String
+    public var sequence: Int
+    public var shareName: String
+    public var relativePaths: [String]
+
+    public init(
+        type: MessageType = .clipboardFilesSet,
+        requestId: String,
+        origin: String = "host",
+        sequence: Int,
+        shareName: String,
+        relativePaths: [String]
+    ) {
+        self.type = type
+        self.requestId = requestId
+        self.origin = origin
+        self.sequence = sequence
+        self.shareName = shareName
+        self.relativePaths = relativePaths
     }
 }
 

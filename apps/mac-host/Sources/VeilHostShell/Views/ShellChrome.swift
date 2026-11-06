@@ -134,10 +134,10 @@ struct ShellPanelHeader: View {
             }
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(title)
+                Text(localized: title)
                     .font(.headline)
                 if let subtitle {
-                    Text(subtitle)
+                    Text(localized: subtitle)
                         .font(.callout)
                         .foregroundStyle(.secondary)
                         .lineLimit(2)
@@ -154,7 +154,7 @@ struct ShellMetricRow: View {
 
     var body: some View {
         GridRow {
-            Text(label)
+            Text(localized: label)
                 .foregroundStyle(.secondary)
                 .frame(minWidth: 118, alignment: .leading)
 
@@ -172,7 +172,7 @@ struct StatusPill: View {
     var tint: Color
 
     var body: some View {
-        Label(title, systemImage: symbolName)
+        Label(LocalizedStringKey(title), systemImage: symbolName)
             .font(.caption.weight(.semibold))
             .labelStyle(.titleAndIcon)
             .padding(.horizontal, 9)
@@ -187,7 +187,7 @@ struct CapabilityPill: View {
     var isEnabled: Bool
 
     var body: some View {
-        Label(title, systemImage: isEnabled ? "checkmark.circle.fill" : "xmark.circle")
+        Label(LocalizedStringKey(title), systemImage: isEnabled ? "checkmark.circle.fill" : "xmark.circle")
             .font(.caption)
             .foregroundStyle(isEnabled ? .green : .secondary)
             .padding(.horizontal, 9)
@@ -215,7 +215,7 @@ struct DashboardStat: View {
                 .background(tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(title)
+                Text(localized: title)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Text(value)
@@ -252,7 +252,7 @@ struct ControlActionTile: View {
                         .background((state == .blocked || state == .planned ? Color.secondary : tint).opacity(0.12), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
 
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(title)
+                        Text(localized: title)
                             .font(.callout.weight(.semibold))
                             .foregroundStyle(.primary)
                         Text(detail)
@@ -292,7 +292,7 @@ struct ResourcePlanRow: View {
                 .background(state.tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(title)
+                Text(localized: title)
                     .font(.callout.weight(.semibold))
                 Text(value)
                     .font(.caption)

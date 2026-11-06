@@ -16,6 +16,27 @@ struct WindowsLauncherMetadataStatus: Equatable {
 }
 
 enum WindowsShellCopy {
+    static func restartInstallationMessage(isRunning: Bool, windowsOnDisk: Bool = false) -> String {
+        let stop = isRunning ? "Veil shuts Windows down, then moves" : "Veil moves"
+        let disk = windowsOnDisk ? "the Windows disk (Windows Setup already finished copying Windows to it)" : "the unfinished Windows disk"
+        return "\(stop) \(disk), its UEFI settings, and its TPM to the Trash and starts Windows Setup again. The installer ISO, shared folder, and hardware settings are kept."
+    }
+
+    /// The guest agent is only expected to answer once Windows is installed and running.
+    /// Before that it is unreachable by definition; treating that as a broken connection
+    /// sends a first-run user into a repair flow for a Windows install that does not exist.
+    static func appConnectionNeedsRepair(
+        hasLiveAppConnection: Bool,
+        agentUnavailable: Bool,
+        windowsInstalled: Bool,
+        runtimeState: VMRuntimeState?
+    ) -> Bool {
+        !hasLiveAppConnection
+            && agentUnavailable
+            && windowsInstalled
+            && runtimeState == .running
+    }
+
     static func headerSubtitle(
         hasLiveAppConnection: Bool,
         runtimeState: VMRuntimeState?,

@@ -49,6 +49,10 @@ public struct FallbackHostDashboardService: HostDashboardService, Sendable {
         try await primary.openFile(appId: appId, fileName: fileName, contentBase64: contentBase64)
     }
 
+    public func openSharedFile(appId: String, fileName: String, guestPath: String) async throws -> WindowsAppLaunchResult {
+        try await primary.openSharedFile(appId: appId, fileName: fileName, guestPath: guestPath)
+    }
+
     public func focusWindow(windowId: String) async throws -> WindowFocusResponse {
         try await primary.focusWindow(windowId: windowId)
     }
@@ -59,6 +63,14 @@ public struct FallbackHostDashboardService: HostDashboardService, Sendable {
 
     public func resizeWindow(windowId: String, width: Int, height: Int) async throws -> WindowResizeResponse {
         try await primary.resizeWindow(windowId: windowId, width: width, height: height)
+    }
+
+    public func resizeDisplay(width: Int, height: Int) async throws -> DisplayResizeResponse {
+        try await primary.resizeDisplay(width: width, height: height)
+    }
+
+    public func requestSystemShutdown() async throws -> SystemShutdownResponse {
+        try await primary.requestSystemShutdown()
     }
 
     public func sendMouseInput(_ input: InputMouseEvent) async throws {
@@ -75,6 +87,14 @@ public struct FallbackHostDashboardService: HostDashboardService, Sendable {
 
     public func sendClipboardText(_ clipboard: ClipboardTextSet) async throws {
         try await primary.sendClipboardText(clipboard)
+    }
+
+    public func sendClipboardImage(_ clipboard: ClipboardImageSet) async throws {
+        try await primary.sendClipboardImage(clipboard)
+    }
+
+    public func sendClipboardFiles(_ clipboard: ClipboardFilesSet) async throws {
+        try await primary.sendClipboardFiles(clipboard)
     }
 
     public func subscribeWindowFrames(windowId: String) async throws {
@@ -155,6 +175,10 @@ public struct DemoHostDashboardService: HostDashboardService, Sendable {
             window: .demo(app: app),
             connectionMode: .demo
         )
+    }
+
+    public func openSharedFile(appId: String, fileName: String, guestPath: String) async throws -> WindowsAppLaunchResult {
+        try await openFile(appId: appId, fileName: fileName, contentBase64: "")
     }
 
     public func focusWindow(windowId: String) async throws -> WindowFocusResponse {

@@ -82,14 +82,14 @@ candidate windows over a mirrored bitmap.
       the proven Coherence proof contract does not change. The routing decision
       lives in `MacTextInputRouter` in `VeilHostCore`, free of AppKit so it is unit
       testable without a window or input context.
-- [ ] Add a `type-unicode` app-runtime action plus validator coverage, leaving the
-      existing `type-text` virtual-key contract untouched. **Deferred**: the
-      user-facing IME path is complete without it, and the app-runtime action report
-      plus its validator have a large required-field surface that is not worth
-      editing blind while the build cannot be run. Tracked below.
+- [x] Add a `type-unicode` app-runtime action plus validator coverage, leaving the
+      existing `type-text` virtual-key contract untouched. The action sends one
+      bounded `input.text` payload and reports it in `textInputs`, so automation can
+      drive Hangul, kana, Han, and other committed Unicode without synthesizing keys.
 - [x] Swift tests for the routing decisions and the model send path.
-- [ ] .NET tests for `SendTextInputAsync`. **Deferred** with the CLI action for the
-      same reason; the contract harness does assert the guest wiring exists.
+- [ ] .NET tests for `SendTextInputAsync`. The host/guest contract harness covers the
+      wiring; platform-specific Win32 posting tests remain deferred to a Windows CI
+      runner.
 
 ## Wider Bug Found While Implementing
 
@@ -160,6 +160,6 @@ cd harness/windows-agent-contract && npm test
       were broken before this change and have no live proof yet.
 - [ ] Check that Enter and Tab still submit and move focus in a mirrored dialog,
       since they were deliberately kept off the committed-text path.
-- [ ] Add the deferred `type-unicode` app-runtime action so automation can drive the
-      Unicode path without a keyboard, and the deferred .NET test for
-      `SendTextInputAsync`.
+- [x] Add the `type-unicode` app-runtime action so automation can drive the
+      Unicode path without a keyboard. The deferred .NET test for
+      `SendTextInputAsync` remains a Windows CI/platform-specific follow-up.

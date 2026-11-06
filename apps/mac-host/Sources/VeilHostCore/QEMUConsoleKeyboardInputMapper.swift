@@ -14,7 +14,11 @@ public struct QEMUConsoleKeyboardModifier: OptionSet, Sendable {
 }
 
 public struct QEMUConsoleKeyboardInputMapper: Sendable {
-    public init() {}
+    public var commandKeyMapping: VMCommandKeyMapping
+
+    public init(commandKeyMapping: VMCommandKeyMapping = .default) {
+        self.commandKeyMapping = commandKeyMapping
+    }
 
     public func key(
         charactersIgnoringModifiers: String?,
@@ -38,17 +42,35 @@ public struct QEMUConsoleKeyboardInputMapper: Sendable {
             return specialKey
         }
 
-        guard let charactersIgnoringModifiers,
-              let scalar = charactersIgnoringModifiers.unicodeScalars.first,
-              scalar.value >= 32,
-              scalar.value <= 126 else {
+        // A Korean, Japanese, or other non-Latin input source on the Mac produces characters such as
+        // "ㅁ" that have no guest key, so the physical key position stands in for them. Windows'
+        // own keyboard layout and IME then decide what the key types.
+        let character: Character
+        if let charactersIgnoringModifiers,
+           let scalar = charactersIgnoringModifiers.unicodeScalars.first,
+           scalar.value >= 32,
+           scalar.value <= 126 {
+            character = Character(scalar)
+        } else if let physicalCharacter = Self.usPhysicalKeys[keyCode] {
+            character = physicalCharacter
+        } else {
             return nil
         }
 
         return try? QEMUQMPKeyboardCommandBuilder
-            .keySequence(forText: String(Character(scalar)), maximumLength: 1)
+            .keySequence(forText: String(character), maximumLength: 1)
             .first
     }
+
+    /// The unshifted US ANSI character printed on each Mac virtual key code.
+    private static let usPhysicalKeys: [UInt16: Character] = [
+        0: "a", 1: "s", 2: "d", 3: "f", 4: "h", 5: "g", 6: "z", 7: "x", 8: "c", 9: "v",
+        11: "b", 12: "q", 13: "w", 14: "e", 15: "r", 16: "y", 17: "t",
+        18: "1", 19: "2", 20: "3", 21: "4", 22: "6", 23: "5", 24: "=", 25: "9", 26: "7",
+        27: "-", 28: "8", 29: "0", 30: "]", 31: "o", 32: "u", 33: "[", 34: "i", 35: "p",
+        37: "l", 38: "j", 39: "'", 40: "k", 41: ";", 42: "\\", 43: ",", 44: "/",
+        45: "n", 46: "m", 47: ".", 50: "`"
+    ]
 
     private func specialKey(for keyCode: UInt16) -> String? {
         switch keyCode {
@@ -112,8 +134,12 @@ public struct QEMUConsoleKeyboardInputMapper: Sendable {
     private func qemuModifiers(from modifiers: QEMUConsoleKeyboardModifier) -> [String] {
         var keys: [String] = []
 
-        if modifiers.contains(.command) || modifiers.contains(.control) {
+        let commandIsControl = commandKeyMapping == .control && modifiers.contains(.command)
+        if modifiers.contains(.control) || commandIsControl {
             keys.append("ctrl")
+        }
+        if commandKeyMapping == .windows, modifiers.contains(.command) {
+            keys.append("meta_l")
         }
         if modifiers.contains(.option) {
             keys.append("alt")

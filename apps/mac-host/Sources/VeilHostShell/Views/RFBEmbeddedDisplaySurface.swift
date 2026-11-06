@@ -12,10 +12,13 @@ final class RFBEmbeddedDisplayModel {
     private(set) var resizePresentation = RFBDesktopResizePresentation.unavailable
     private(set) var activeEndpoint: String?
     private var pendingResizeTarget: (width: Int, height: Int)?
+    private var lastRequestedResizeTarget: (width: Int, height: Int)?
+    private var displayResizeFallback: ((Int, Int) -> Void)?
     @ObservationIgnored private var worker: RFBEmbeddedDisplayWorker?
     @ObservationIgnored private var retryTask: Task<Void, Never>?
     @ObservationIgnored private var connectionGeneration = 0
     @ObservationIgnored private var retryDelaySeconds: Double = 1
+    @ObservationIgnored private var lastDeliveredFrameAt = Date.distantPast
 
     var statusSymbolName: String {
         switch status {
@@ -28,6 +31,13 @@ final class RFBEmbeddedDisplayModel {
         case .failed:
             return "exclamationmark.triangle"
         }
+    }
+
+    var isReceiving: Bool {
+        if case .receiving = status {
+            return true
+        }
+        return false
     }
 
     func statusTitle(for surface: VMConsoleDisplaySurface) -> String {
@@ -88,6 +98,15 @@ final class RFBEmbeddedDisplayModel {
                     return
                 }
 
+                // Raw RFB frames can arrive faster than AppKit can decode and
+                // display them. Drop excess intermediate frames so input handling
+                // never waits behind a backlog of full-frame image conversions.
+                let now = Date()
+                guard now.timeIntervalSince(self.lastDeliveredFrameAt) >= (1.0 / 24.0) else {
+                    return
+                }
+                self.lastDeliveredFrameAt = now
+
                 guard let image = frame.makeNSImage() else {
                     self.handleDisplayFailure(
                         "Display frame unavailable",
@@ -102,6 +121,10 @@ final class RFBEmbeddedDisplayModel {
                 self.retryDelaySeconds = 1
                 self.image = image
                 self.frameSequence = frame.sequence
+                if self.status != .receiving {
+                    // First frame of this session: Windows may have turned its display off.
+                    self.worker?.wakeDisplay()
+                }
                 self.status = .receiving
             },
             onFailure: { [weak self] message in
@@ -119,26 +142,57 @@ final class RFBEmbeddedDisplayModel {
                 }
 
                 self.resizePresentation = presentation
-                if presentation == .available,
+                // A forwarded size reaches Windows only through the agent: the VirtIO GPU driver lists
+                // it as a mode but does not switch to it on its own (docs/install-flow.md).
+                if presentation == .rejected || presentation == .forwardedToGuest,
+                   let target = self.lastRequestedResizeTarget {
+                    self.lastRequestedResizeTarget = nil
+                    self.displayResizeFallback?(target.width, target.height)
+                }
+                if presentation == .recovering || presentation == .available,
                    let pending = self.pendingResizeTarget {
                     self.pendingResizeTarget = nil
+                    self.lastRequestedResizeTarget = pending
                     self.worker?.requestDesktopResize(width: pending.width, height: pending.height)
                 }
             }
         )
     }
 
-    /// Forwards a settled host-window target to the live RFB connection. Targets
-    /// that arrive before the capability probe completes are held and flushed when
-    /// the connection reports available; unsupported connections keep holding them
-    /// so the desktop stays at its stable aspect-fit size.
+    /// Forwards a settled host-window target to the live RFB connection. The first
+    /// target is allowed through while the connection is still probing because the
+    /// probe itself is the SetDesktopSize request on servers that do not advertise
+    /// ExtendedDesktopSize in the initial framebuffer update.
     func requestDesktopResize(width: Int, height: Int) {
-        if resizePresentation == .available, let worker {
-            worker.requestDesktopResize(width: width, height: height)
-            return
-        }
-
+        VeilLog.runtime.debug(
+            "RFB resize target received: \(width)x\(height), presentation=\(String(describing: self.resizePresentation))"
+        )
         pendingResizeTarget = (width, height)
+        if (resizePresentation == .available || resizePresentation == .recovering),
+           let worker,
+           pendingResizeTarget != nil {
+            pendingResizeTarget = nil
+            lastRequestedResizeTarget = (width, height)
+            worker.requestDesktopResize(width: width, height: height)
+        }
+    }
+
+    func setDisplayResizeFallback(_ action: ((Int, Int) -> Void)?) {
+        displayResizeFallback = action
+    }
+
+    func sendPointerTap(normalizedX: Double, normalizedY: Double) {
+        worker?.sendPointerTap(normalizedX: normalizedX, normalizedY: normalizedY)
+    }
+
+    func sendKey(_ key: String) {
+        worker?.sendKey(key)
+    }
+
+    /// Keeps the last transport failure visible until the scheduled retry actually starts. Without
+    /// this state, a timed-out VM looks indistinguishable from a healthy connection still opening.
+    func showConnectionFailure(_ message: String) {
+        status = .failed(message)
     }
 
     private func handleDisplayFailure(
@@ -154,7 +208,7 @@ final class RFBEmbeddedDisplayModel {
         VeilLog.runtime.notice("RFB display connection interrupted; retrying automatically. \(message, privacy: .public)")
         worker?.stop()
         worker = nil
-        status = .connecting
+        showConnectionFailure(message)
 
         let delay = retryDelaySeconds
         retryDelaySeconds = min(retryDelaySeconds * 2, 8)
@@ -177,6 +231,7 @@ final class RFBEmbeddedDisplayModel {
         retryTask?.cancel()
         retryTask = nil
         retryDelaySeconds = 1
+        lastDeliveredFrameAt = .distantPast
         connectionGeneration += 1
         worker?.stop()
         worker = nil
@@ -184,7 +239,64 @@ final class RFBEmbeddedDisplayModel {
         frameSequence = nil
         resizePresentation = .unavailable
         pendingResizeTarget = nil
+        lastRequestedResizeTarget = nil
+        displayResizeFallback = nil
         status = .idle
+    }
+}
+
+private enum RFBKeySymMapper {
+    static func keysyms(for key: String) -> [UInt32] {
+        key.split(separator: "-").compactMap { keysym(for: String($0)) }
+    }
+
+    private static func keysym(for rawKey: String) -> UInt32? {
+        let key = rawKey.lowercased()
+        if key.count == 1, let scalar = key.unicodeScalars.first,
+           scalar.value >= 32, scalar.value <= 126 {
+            return scalar.value
+        }
+
+        switch key {
+        case "ret", "return", "enter": return 0xff0d
+        case "spc", "space": return 0x20
+        case "tab": return 0xff09
+        case "esc", "escape": return 0xff1b
+        case "backspace": return 0xff08
+        case "delete": return 0xffff
+        case "insert": return 0xff63
+        case "home": return 0xff50
+        case "end": return 0xff57
+        case "pgup": return 0xff55
+        case "pgdn": return 0xff56
+        case "left": return 0xff51
+        case "up": return 0xff52
+        case "right": return 0xff53
+        case "down": return 0xff54
+        case "shift": return 0xffe1
+        case "ctrl", "control": return 0xffe3
+        case "alt": return 0xffe9
+        // Super_L, not Meta_L: QEMU's en-us keymap puts Meta_L on Shift-Alt, while Super_L is the
+        // Windows logo key (QKeyCode meta_l).
+        case "meta", "meta_l", "cmd", "win", "windows": return 0xffeb
+        case "backslash": return 0x5c
+        case "slash": return 0x2f
+        case "minus": return 0x2d
+        case "equal": return 0x3d
+        case "dot": return 0x2e
+        case "comma": return 0x2c
+        case "semicolon": return 0x3b
+        case "apostrophe": return 0x27
+        case "grave_accent": return 0x60
+        case "bracket_left": return 0x5b
+        case "bracket_right": return 0x5d
+        default:
+            guard key.hasPrefix("f"),
+                  let number = Int(key.dropFirst()), (1...12).contains(number) else {
+                return nil
+            }
+            return UInt32(0xffbe + number - 1)
+        }
     }
 }
 
@@ -193,6 +305,20 @@ enum RFBEmbeddedDisplayStatus: Equatable {
     case connecting
     case receiving
     case failed(String)
+}
+
+/// The update request that follows an ExtendedDesktopSize response. The response uses up the
+/// outstanding request, and QEMU sends nothing until the next one, so every response is followed
+/// by a request; skipping it froze the picture behind an open socket whenever ramfb refused a resize.
+/// Only a size change asks for a full frame: QEMU can repeat a successful response for a full
+/// update request, and a response -> full update -> response loop starves input.
+enum RFBDesktopSizeFollowUp: Equatable {
+    case fullUpdate
+    case incrementalUpdate
+
+    static func request(responseIsSuccess: Bool, framebufferSizeChanged: Bool) -> RFBDesktopSizeFollowUp {
+        responseIsSuccess && framebufferSizeChanged ? .fullUpdate : .incrementalUpdate
+    }
 }
 
 private struct RFBDisplayEndpoint: Equatable, Sendable {
@@ -253,14 +379,22 @@ private final class RFBEmbeddedDisplayWorker: @unchecked Sendable {
         lock.lock()
         let activeClient = client
         lock.unlock()
-        guard let activeClient else {
+        guard activeClient != nil else {
+            VeilLog.runtime.debug("RFB resize target held because the session client is not ready")
             return
         }
+        guard let activeClient else { return }
 
         let now = Date().timeIntervalSince1970
         let target = RFBDesktopResizeTarget(widthInPixels: width, heightInPixels: height)
         stateLock.lock()
         let shouldSend = resizeMachine.request(target) != nil
+        if shouldSend {
+            // Mark the request before writing. QEMU can answer on the receive
+            // thread immediately; marking after the write would let that response
+            // race and be overwritten by a stale request-pending phase.
+            resizeMachine.markRequestSent(target, now: now)
+        }
         stateLock.unlock()
         guard shouldSend else {
             return
@@ -270,11 +404,85 @@ private final class RFBEmbeddedDisplayWorker: @unchecked Sendable {
             try sendOnClient(activeClient) {
                 try $0.sendSetDesktopSize(width: width, height: height)
             }
-            stateLock.lock()
-            resizeMachine.markRequestSent(target, now: now)
-            stateLock.unlock()
+            VeilLog.runtime.debug("RFB desktop resize request sent: \(width)x\(height)")
         } catch {
             // The run loop observes the same socket failure and starts the retry path.
+        }
+    }
+
+    func sendPointerTap(normalizedX: Double, normalizedY: Double) {
+        lock.lock()
+        let activeClient = client
+        lock.unlock()
+        guard let activeClient,
+              let serverInit = activeClient.serverInit,
+              normalizedX.isFinite,
+              normalizedY.isFinite else {
+            return
+        }
+
+        let x = min(max(Int((normalizedX * Double(max(0, serverInit.width - 1))).rounded()), 0), max(0, serverInit.width - 1))
+        let y = min(max(Int((normalizedY * Double(max(0, serverInit.height - 1))).rounded()), 0), max(0, serverInit.height - 1))
+
+        writeLock.lock()
+        defer { writeLock.unlock() }
+        do {
+            try activeClient.sendPointerEvent(buttonMask: 0, x: x, y: y)
+            try activeClient.sendPointerEvent(buttonMask: 1, x: x, y: y)
+            try activeClient.sendPointerEvent(buttonMask: 0, x: x, y: y)
+        } catch {
+            // The read loop owns reconnect/recovery. A transient input write should
+            // not block the UI while that loop repairs the stream.
+        }
+    }
+
+    /// Two button-less pointer moves: input that wakes a display Windows turned off while idle,
+    /// without clicking anything. Sent once the session is delivering frames, never during the
+    /// handshake, where QEMU closed the connection.
+    func wakeDisplay() {
+        lock.lock()
+        let activeClient = client
+        lock.unlock()
+        guard let activeClient, let serverInit = activeClient.serverInit else {
+            return
+        }
+
+        let x = max(0, serverInit.width / 2)
+        let y = max(0, serverInit.height / 2)
+        writeLock.lock()
+        defer { writeLock.unlock() }
+        do {
+            try activeClient.sendPointerEvent(buttonMask: 0, x: x, y: y)
+            try activeClient.sendPointerEvent(buttonMask: 0, x: min(x + 1, max(0, serverInit.width - 1)), y: y)
+        } catch {
+            // The read loop owns reconnects.
+        }
+    }
+
+    func sendKey(_ key: String) {
+        let keysyms = RFBKeySymMapper.keysyms(for: key)
+        guard !keysyms.isEmpty else {
+            return
+        }
+
+        lock.lock()
+        let activeClient = client
+        lock.unlock()
+        guard let activeClient else {
+            return
+        }
+
+        writeLock.lock()
+        defer { writeLock.unlock() }
+        do {
+            for keysym in keysyms {
+                try activeClient.sendKeyEvent(keysym: keysym, isDown: true)
+            }
+            for keysym in keysyms.reversed() {
+                try activeClient.sendKeyEvent(keysym: keysym, isDown: false)
+            }
+        } catch {
+            // See sendPointerTap: the receive loop handles reconnects.
         }
     }
 
@@ -328,6 +536,18 @@ private final class RFBEmbeddedDisplayWorker: @unchecked Sendable {
                     stateLock.unlock()
                     report(presentation)
 
+                    // QEMU/VNC may send an empty framebuffer update as a heartbeat while the
+                    // Windows compositor is still painting. Rendering that update would turn the
+                    // renderer's zero-filled backing store into a black image and hide the last
+                    // usable screenshot (or make the console look blank before the first frame).
+                    // Keep the stream alive, but only publish updates that contain pixels.
+                    guard update.rectangles.contains(where: { $0.width > 0 && $0.height > 0 }) else {
+                        try sendOnClient(sessionClient) {
+                            try $0.requestFramebufferUpdate(incremental: true)
+                        }
+                        continue
+                    }
+
                     do {
                         let frame = try renderer.apply(update)
                         Task { @MainActor in
@@ -352,6 +572,12 @@ private final class RFBEmbeddedDisplayWorker: @unchecked Sendable {
                     }
 
                 case .desktopSize(let response):
+                    VeilLog.runtime.debug(
+                        "RFB desktop resize response: \(response.width)x\(response.height), reason=\(response.reasonCode), result=\(response.resultCode)"
+                    )
+                    let previousFramebufferSize = sessionClient.serverInit.map {
+                        (width: $0.width, height: $0.height)
+                    }
                     stateLock.lock()
                     resizeMachine.handleDesktopSizeResponse(response)
                     let queued = resizeMachine.takeQueuedTarget()
@@ -359,29 +585,35 @@ private final class RFBEmbeddedDisplayWorker: @unchecked Sendable {
                     stateLock.unlock()
                     report(presentation)
 
-                    if response.isSuccess {
+                    let framebufferSizeChanged = previousFramebufferSize?.width != response.width
+                        || previousFramebufferSize?.height != response.height
+                    let followUp = RFBDesktopSizeFollowUp.request(
+                        responseIsSuccess: response.isSuccess,
+                        framebufferSizeChanged: framebufferSizeChanged
+                    )
+                    if followUp == .fullUpdate {
                         try sessionClient.applyDesktopSize(width: response.width, height: response.height)
                         if let appliedInit = sessionClient.serverInit {
                             renderer = try RFBFramebufferRenderer(serverInit: appliedInit)
                         }
-                        try sendOnClient(sessionClient) {
-                            try $0.requestFramebufferUpdate(incremental: false)
-                        }
+                    }
+                    try sendOnClient(sessionClient) {
+                        try $0.requestFramebufferUpdate(incremental: followUp == .incrementalUpdate)
                     }
 
                     if let queued {
-                        try sendOnClient(sessionClient) {
-                            try $0.sendSetDesktopSize(
-                                width: queued.widthInPixels,
-                                height: queued.heightInPixels
-                            )
-                        }
                         stateLock.lock()
                         resizeMachine.markRequestSent(
                             queued,
                             now: Date().timeIntervalSince1970
                         )
                         stateLock.unlock()
+                        try sendOnClient(sessionClient) {
+                            try $0.sendSetDesktopSize(
+                                width: queued.widthInPixels,
+                                height: queued.heightInPixels
+                            )
+                        }
                     }
                 }
 

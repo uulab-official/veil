@@ -3,6 +3,24 @@ import Darwin
 
 public protocol HostTransport: Sendable {
     func send(_ message: Data, expectedReplies: Int) async throws -> [Data]
+
+    /// Bounded variant. A transport that cannot bound its receive waits may ignore
+    /// `replyTimeout`; the default implementation does exactly that.
+    func send(
+        _ message: Data,
+        expectedReplies: Int,
+        replyTimeout: TimeInterval?
+    ) async throws -> [Data]
+}
+
+public extension HostTransport {
+    func send(
+        _ message: Data,
+        expectedReplies: Int,
+        replyTimeout: TimeInterval?
+    ) async throws -> [Data] {
+        try await send(message, expectedReplies: expectedReplies)
+    }
 }
 
 public protocol HostEventSource: Sendable {
@@ -485,17 +503,103 @@ public enum WindowsNotificationProofError: Error, Equatable, LocalizedError, Sen
     }
 }
 
+/// Reference-backed cache of the `operationAcks` health capability.
+///
+/// `VeilHostClient` is a struct the app holds for its whole lifetime, so a box lets
+/// `loadHealth` teach the fire-and-forget senders whether this agent acknowledges operations
+/// without widening the `HostDashboardService` contract for every conformer and call site.
+/// A client constructed fresh starts disabled, which is the safe legacy behaviour.
+private final class OperationAckCapabilityBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var enabled = false
+
+    var isEnabled: Bool {
+        get {
+            lock.lock()
+            defer { lock.unlock() }
+            return enabled
+        }
+        set {
+            lock.lock()
+            enabled = newValue
+            lock.unlock()
+        }
+    }
+}
+
+/// Serializes host-to-guest operations that use the short-lived control socket.
+///
+/// Each send opens its own WebSocket. Without a gate, a fast key-down/key-up pair can
+/// be handled by two guest connections in the opposite order, which produces stuck or
+/// missing keys even though both operations were individually acknowledged. Lanes are per
+/// window so a slow acknowledgement for one mirrored app cannot stall input to every other app.
+private actor OperationDispatchGate {
+    private struct Lane {
+        var occupied = false
+        var waiters: [CheckedContinuation<Void, Never>] = []
+    }
+
+    private var lanes: [String: Lane] = [:]
+
+    func acquire(key: String) async {
+        var lane = lanes[key] ?? Lane()
+        if !lane.occupied {
+            lane.occupied = true
+            lanes[key] = lane
+            return
+        }
+
+        await withCheckedContinuation { continuation in
+            var waitingLane = lanes[key] ?? Lane()
+            waitingLane.waiters.append(continuation)
+            lanes[key] = waitingLane
+        }
+    }
+
+    func release(key: String) {
+        guard var lane = lanes[key] else { return }
+        if lane.waiters.isEmpty {
+            lanes.removeValue(forKey: key)
+            return
+        }
+
+        // Keep the lane occupied while handing the permit directly to the next waiter.
+        lane.waiters.removeFirst().resume()
+        lanes[key] = lane
+    }
+}
+
+private struct OperationAcknowledgement: Decodable {
+    var type: String
+    var requestId: String
+    var accepted: Bool
+}
+
 public struct VeilHostClient: HostDashboardService, Sendable {
     private let transport: any HostTransport
     private let encoder: JSONEncoder
     private let decoder: JSONDecoder
-    private let hostForwardProbe: @Sendable (String, UInt64) async -> HostForwardProbeResult?
+    /// Blocking: it opens a TCP socket. `diagnoseAgentConnection` runs it on a utility queue.
+    private let hostForwardProbe: @Sendable (String, UInt64) -> HostForwardProbeResult?
+    private let operationAckCapability = OperationAckCapabilityBox()
+    private let operationDispatchGate = OperationDispatchGate()
+
+    /// How long a negotiated sender waits for the guest's `operation.ack` before reporting
+    /// unconfirmed delivery. Comfortably above the guest's 250 ms clipboard retry budget,
+    /// short enough that a stalled guest cannot make typing feel broken.
+    public static let operationAckTimeoutSeconds: TimeInterval = 2
+    /// A clipboard image is up to 11 MB of JSON that the guest decodes and converts to a bitmap before it
+    /// can acknowledge, so it gets longer than a keystroke. Still bounded: a paste that never confirms is
+    /// reported rather than waited on.
+    public static let clipboardImageAckTimeoutSeconds: TimeInterval = 10
 
     public init(
         transport: any HostTransport,
         encoder: JSONEncoder = .veilProtocol,
         decoder: JSONDecoder = .veilProtocol,
-        hostForwardProbe: @escaping @Sendable (String, UInt64) async -> HostForwardProbeResult? = Self.probeHostForward
+        hostForwardProbe: @escaping @Sendable (String, UInt64) -> HostForwardProbeResult? = { endpoint, timeout in
+            VeilHostClient.probeHostForward(endpoint: endpoint, timeoutNanoseconds: timeout)
+        }
     ) {
         self.transport = transport
         self.encoder = encoder
@@ -521,6 +625,7 @@ public struct VeilHostClient: HostDashboardService, Sendable {
             throw VeilHostError.appMissing(appId)
         }
 
+        try Task.checkCancellation()
         let launchReplies = try await transport.send(
             encoder.encode(AppLaunchRequest(
                 requestId: "req_launch_\(requestIdSuffix(for: appId))",
@@ -529,6 +634,7 @@ public struct VeilHostClient: HostDashboardService, Sendable {
             )),
             expectedReplies: 2
         )
+        try Task.checkCancellation()
 
         if let error = launchReplies.compactMap({ try? decoder.decode(ErrorResponse.self, from: $0) })
             .first(where: { $0.type == .error }) {
@@ -610,6 +716,58 @@ public struct VeilHostClient: HostDashboardService, Sendable {
             // (LaunchView.swift, VeilHostClientTests.swift) -- reusing that shape here instead of
             // adding a separate `open`-typed variant avoids a wider result-type split for a
             // launch-shaped response that only differs in how it was triggered.
+            launch: AppLaunchResponse(type: .appLaunchResponse, requestId: open.requestId, accepted: open.accepted, processId: open.processId),
+            window: window
+        )
+    }
+
+    /// Opens a file that the host has already copied into the mounted guest-served shared folder.
+    ///
+    /// The guest receives only the fixed-root path and validates it again before launching. This keeps
+    /// large files off the control channel while preserving the same response/window contract as a
+    /// regular drag-and-drop open.
+    public func openSharedFile(appId: String, fileName: String, guestPath: String) async throws -> WindowsAppLaunchResult {
+        let overview = try await loadOverview()
+
+        guard overview.apps.contains(where: { $0.id == appId }) else {
+            throw VeilHostError.appMissing(appId)
+        }
+
+        let openReplies = try await transport.send(
+            encoder.encode(SharedFileOpenRequest(
+                requestId: "req_open_shared_\(requestIdSuffix(for: appId))",
+                appId: appId,
+                fileName: fileName,
+                guestPath: guestPath
+            )),
+            expectedReplies: 2
+        )
+
+        if let error = openReplies.compactMap({ try? decoder.decode(ErrorResponse.self, from: $0) })
+            .first(where: { $0.type == .error }) {
+            throw VeilHostError.agentError(code: error.code, message: error.message)
+        }
+
+        guard let open = openReplies
+            .compactMap({ try? decoder.decode(FileOpenResponse.self, from: $0) })
+            .first(where: { $0.type == .fileOpenResponse }) else {
+            throw VeilHostError.missingReply("shared file open requires file.open.response")
+        }
+        guard let window = openReplies
+            .compactMap({ try? decoder.decode(WindowCreatedEvent.self, from: $0) })
+            .first(where: { $0.type == .windowCreated }) else {
+            throw VeilHostError.missingReply("shared file open requires window.created")
+        }
+
+        guard open.accepted,
+              open.processId == window.processId,
+              window.appId == appId else {
+            throw VeilHostError.appWindowMismatch(appId)
+        }
+
+        return WindowsAppLaunchResult(
+            health: overview.health,
+            apps: overview.apps,
             launch: AppLaunchResponse(type: .appLaunchResponse, requestId: open.requestId, accepted: open.accepted, processId: open.processId),
             window: window
         )
@@ -862,9 +1020,11 @@ public struct VeilHostClient: HostDashboardService, Sendable {
     }
 
     public func loadHealth() async throws -> AgentHealthResponse {
-        try await request(
+        let health: AgentHealthResponse = try await request(
             AgentHealthRequest(requestId: "req_health")
         )
+        operationAckCapability.isEnabled = health.capabilities.operationAcks == true
+        return health
     }
 
     public func requestWindowsNotificationListenerConsent() async throws -> WindowsNotificationListenerResponse {
@@ -899,7 +1059,7 @@ public struct VeilHostClient: HostDashboardService, Sendable {
             let health = try await loadHealth(timeoutNanoseconds: timeoutNanoseconds)
             return .connected(endpoint: endpoint, health: health)
         } catch {
-            let probe = await hostForwardProbe(endpoint, min(timeoutNanoseconds, 750_000_000))
+            let probe = await Self.runBlocking(hostForwardProbe, endpoint, min(timeoutNanoseconds, 750_000_000))
             return .unavailable(
                 endpoint: endpoint,
                 errorMessage: Self.errorMessage(for: error),
@@ -1012,10 +1172,28 @@ public struct VeilHostClient: HostDashboardService, Sendable {
         }
     }
 
+    /// Runs the blocking probe off the cooperative pool and resumes with its result.
+    ///
+    /// The probe used to be an async function awaiting `Task.detached`. Built with Swift 6.2
+    /// (Xcode 26) on the macos-26 runner, the test process crashed on entry to it with
+    /// EXC_BAD_ACCESS in the task allocator, so the probe is synchronous and only this hop is async.
+    private static func runBlocking(
+        _ probe: @escaping @Sendable (String, UInt64) -> HostForwardProbeResult?,
+        _ endpoint: String,
+        _ timeoutNanoseconds: UInt64
+    ) async -> HostForwardProbeResult? {
+        await withCheckedContinuation { continuation in
+            DispatchQueue.global(qos: .utility).async {
+                continuation.resume(returning: probe(endpoint, timeoutNanoseconds))
+            }
+        }
+    }
+
+    /// Checks whether the host-forwarded TCP port accepts a connection. Blocks for up to the timeout.
     public static func probeHostForward(
         endpoint: String,
         timeoutNanoseconds: UInt64 = 750_000_000
-    ) async -> HostForwardProbeResult? {
+    ) -> HostForwardProbeResult? {
         guard let url = URL(string: endpoint),
               let host = url.host,
               let port = url.port else {
@@ -1026,9 +1204,7 @@ public struct VeilHostClient: HostDashboardService, Sendable {
             )
         }
 
-        return await Task.detached(priority: .utility) {
-            probeTCP(endpoint: endpoint, host: host, port: port, timeoutNanoseconds: timeoutNanoseconds)
-        }.value
+        return probeTCP(endpoint: endpoint, host: host, port: port, timeoutNanoseconds: timeoutNanoseconds)
     }
 
     private static func probeTCP(
@@ -1164,44 +1340,159 @@ public struct VeilHostClient: HostDashboardService, Sendable {
         return try decoder.decode(WindowResizeResponse.self, from: data)
     }
 
+    public func requestSystemShutdown() async throws -> SystemShutdownResponse {
+        let input = SystemShutdownRequest(requestId: "req_system_shutdown_\(requestIdSuffix(for: "shutdown"))")
+        let replies = try await transport.send(encoder.encode(input), expectedReplies: 1)
+        if let error = replies
+            .compactMap({ try? decoder.decode(ErrorResponse.self, from: $0) })
+            .first(where: { $0.type == .error }) {
+            throw VeilHostError.agentError(code: error.code, message: error.message)
+        }
+
+        guard let data = replies.first else {
+            throw VeilHostError.missingReply("system shutdown requires one response")
+        }
+
+        return try decoder.decode(SystemShutdownResponse.self, from: data)
+    }
+
+    public func resizeDisplay(width: Int, height: Int) async throws -> DisplayResizeResponse {
+        let input = DisplayResizeRequest(
+            requestId: "req_display_resize_\(requestIdSuffix(for: "\(width)x\(height)"))",
+            width: width,
+            height: height
+        )
+        guard input.isPlausible else {
+            throw VeilHostError.invalidWindowSize(width: width, height: height)
+        }
+
+        let replies = try await transport.send(encoder.encode(input), expectedReplies: 1)
+        if let error = replies
+            .compactMap({ try? decoder.decode(ErrorResponse.self, from: $0) })
+            .first(where: { $0.type == .error }) {
+            throw VeilHostError.agentError(code: error.code, message: error.message)
+        }
+
+        guard let data = replies.first else {
+            throw VeilHostError.missingReply("display resize requires one response")
+        }
+
+        return try decoder.decode(DisplayResizeResponse.self, from: data)
+    }
+
     public func sendMouseInput(_ input: InputMouseEvent) async throws {
-        _ = try await transport.send(encoder.encode(input), expectedReplies: 0)
+        try await sendAcknowledged(encoder.encode(input))
     }
 
     public func sendKeyInput(_ input: InputKeyEvent) async throws {
-        _ = try await transport.send(encoder.encode(input), expectedReplies: 0)
+        try await sendAcknowledged(encoder.encode(input))
     }
 
     public func sendTextInput(_ input: InputTextEvent) async throws {
-        _ = try await transport.send(encoder.encode(input), expectedReplies: 0)
+        try await sendAcknowledged(encoder.encode(input))
     }
 
     public func sendClipboardText(_ clipboard: ClipboardTextSet) async throws {
-        _ = try await transport.send(encoder.encode(clipboard), expectedReplies: 0)
+        try await sendAcknowledged(encoder.encode(clipboard))
+    }
+
+    public func sendClipboardImage(_ clipboard: ClipboardImageSet) async throws {
+        try await sendAcknowledged(encoder.encode(clipboard), replyTimeout: Self.clipboardImageAckTimeoutSeconds)
+    }
+
+    public func sendClipboardFiles(_ clipboard: ClipboardFilesSet) async throws {
+        try await sendAcknowledged(encoder.encode(clipboard))
     }
 
     public func subscribeWindowFrames(windowId: String) async throws {
-        _ = try await transport.send(
+        try await sendAcknowledged(
             encoder.encode(
                 WindowFrameSubscribeRequest(
                     requestId: "req_frame_subscribe_\(requestIdSuffix(for: windowId))",
                     windowId: windowId
                 )
-            ),
-            expectedReplies: 0
+            )
         )
     }
 
     public func unsubscribeWindowFrames(windowId: String) async throws {
-        _ = try await transport.send(
+        try await sendAcknowledged(
             encoder.encode(
                 WindowFrameUnsubscribeRequest(
                     requestId: "req_frame_unsubscribe_\(requestIdSuffix(for: windowId))",
                     windowId: windowId
                 )
-            ),
-            expectedReplies: 0
+            )
         )
+    }
+
+    /// Sends a message the guest treats as fire-and-forget, but waits for the one reply frame
+    /// when the agent advertises `operationAcks`: an `error` frame fails the call with the guest's
+    /// own code, and a matching positive `operation.ack` confirms it. Only agents that have not
+    /// advertised acknowledgements use legacy delivery. Silence from a negotiated agent is
+    /// unconfirmed delivery, especially for clipboard writes that precede a paste shortcut.
+    private func sendAcknowledged(
+        _ message: Data,
+        replyTimeout: TimeInterval = VeilHostClient.operationAckTimeoutSeconds
+    ) async throws {
+        try Task.checkCancellation()
+        let dispatchKey = operationDispatchKey(for: message)
+        await operationDispatchGate.acquire(key: dispatchKey)
+        do {
+            try Task.checkCancellation()
+            guard operationAckCapability.isEnabled else {
+                _ = try await transport.send(message, expectedReplies: 0)
+                await operationDispatchGate.release(key: dispatchKey)
+                return
+            }
+
+            // Input events have no ID in the legacy protocol. Add one only to the negotiated
+            // wire envelope, preserving the public event models and older-agent delivery.
+            guard var envelope = try JSONSerialization.jsonObject(with: message) as? [String: Any] else {
+                throw VeilHostError.missingReply("Operation must be a protocol message object.")
+            }
+            let existingRequestId = envelope["requestId"] as? String
+            let requestId = existingRequestId.flatMap { $0.isEmpty ? nil : $0 }
+                ?? "req_operation_\(UUID().uuidString)"
+            envelope["requestId"] = requestId
+            let acknowledgedMessage = try JSONSerialization.data(withJSONObject: envelope)
+            let replies = try await transport.send(
+                acknowledgedMessage,
+                expectedReplies: 1,
+                replyTimeout: replyTimeout
+            )
+            try Task.checkCancellation()
+
+            if let error = replies
+                .compactMap({ try? decoder.decode(ErrorResponse.self, from: $0) })
+                .first(where: { $0.type == .error && ($0.requestId == nil || $0.requestId == requestId) }) {
+                throw VeilHostError.agentError(code: error.code, message: error.message)
+            }
+            guard replies.count == 1,
+                  let reply = replies.first,
+                  let acknowledgement = try? decoder.decode(OperationAcknowledgement.self, from: reply),
+                  acknowledgement.type == "operation.ack",
+                  acknowledgement.requestId == requestId,
+                  acknowledgement.accepted else {
+                throw VeilHostError.missingReply("Windows did not confirm the operation. Check the app before trying again.")
+            }
+            await operationDispatchGate.release(key: dispatchKey)
+        } catch {
+            await operationDispatchGate.release(key: dispatchKey)
+            throw error
+        }
+    }
+
+    /// Returns the ordering lane for a short-lived operation. Window-scoped operations can
+    /// progress independently; clipboard and any malformed/internal payload remain on a
+    /// conservative global lane because they do not identify a mirrored app window.
+    private func operationDispatchKey(for message: Data) -> String {
+        guard let object = try? JSONSerialization.jsonObject(with: message) as? [String: Any],
+              let windowId = object["windowId"] as? String,
+              !windowId.isEmpty else {
+            return "global"
+        }
+        return "window:\(windowId)"
     }
 
     public func loadOverview() async throws -> HostOverview {
@@ -1215,7 +1506,9 @@ public struct VeilHostClient: HostDashboardService, Sendable {
     }
 
     private func request<Request: Encodable, Response: Decodable>(_ message: Request) async throws -> Response {
+        try Task.checkCancellation()
         let replies = try await transport.send(encoder.encode(message), expectedReplies: 1)
+        try Task.checkCancellation()
         guard let data = replies.first else {
             throw VeilHostError.missingReply("expected one response")
         }

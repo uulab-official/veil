@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import test from "node:test";
@@ -10,7 +11,11 @@ import {
   validateAgentHealthResponse,
   validateAppLaunchAcceptance,
   validateClipboardTextSet,
+  validateClipboardImageSet,
+  validateClipboardFilesSet,
+  MAX_CLIPBOARD_IMAGE_BYTES,
   validateFileOpenRequest,
+  validateSharedFileOpenRequest,
   validateFileOpenResponse,
   MAX_INPUT_TEXT_UTF16_LENGTH,
   validateInputKey,
@@ -19,6 +24,7 @@ import {
   validateNotificationListenerRequest,
   validateNotificationListenerResponse,
   validateNotificationReceived,
+  validateOperationAck,
   validateSharedFolderRequest,
   validateSharedFolderResponse,
   validateWindowClosed,
@@ -32,6 +38,10 @@ import {
   validateWindowFocusResponse,
   validateWindowResizeRequest,
   validateWindowResizeResponse,
+  validateDisplayResizeRequest,
+  validateDisplayResizeResponse,
+  validateSystemShutdownRequest,
+  validateSystemShutdownResponse,
   validateWindowUpdated
 } from "../src/messages.mjs";
 
@@ -50,6 +60,7 @@ test("parses every stable fixture", async () => {
     "app.launch.request.json",
     "app.launch.response.json",
     "file.open.request.json",
+    "file.open.shared.request.json",
     "file.open.response.json",
     "window.created.json",
     "window.updated.json",
@@ -64,11 +75,20 @@ test("parses every stable fixture", async () => {
     "window.close.response.json",
     "window.resize.request.json",
     "window.resize.response.json",
+    "display.resize.request.json",
+    "display.resize.response.json",
+    "system.shutdown.request.json",
+    "system.shutdown.response.json",
     "input.mouse.left-down.json",
     "input.key.copy.json",
     "input.text.json",
+    "input.text.acknowledged.json",
+    "operation.ack.json",
     "clipboard.text.set.host.json",
     "clipboard.text.set.guest.json",
+    "clipboard.image.set.host.json",
+    "clipboard.image.set.guest.json",
+    "clipboard.files.set.host.json",
     "notification.listener.request.json",
     "notification.listener.response.json",
     "notification.received.json",
@@ -163,6 +183,20 @@ test("rejects a malformed optional window resize capability", async () => {
   );
 });
 
+test("validates the optional VirtIO GPU display capability", async () => {
+  const health = validateAgentHealthResponse(await readFixture("agent.health.response.json"));
+  assert.equal(health.capabilities.virtioGpuDisplay, true);
+
+  delete health.capabilities.virtioGpuDisplay;
+  assert.equal(validateAgentHealthResponse(health).capabilities.virtioGpuDisplay, undefined);
+
+  health.capabilities.virtioGpuDisplay = "true";
+  assert.throws(
+    () => validateAgentHealthResponse(health),
+    /capabilities\.virtioGpuDisplay/
+  );
+});
+
 test("validates notification listener consent request and response", async () => {
   const request = validateNotificationListenerRequest(await readFixture("notification.listener.request.json"));
   const response = validateNotificationListenerResponse(await readFixture("notification.listener.response.json"));
@@ -194,6 +228,41 @@ test("rejects an unsafe window resize request", () => {
       height: 900
     }),
     /width.*between 320 and 8192/
+  );
+});
+
+test("validates a desktop display resize request and applied response", async () => {
+  const request = validateDisplayResizeRequest(await readFixture("display.resize.request.json"));
+  const response = validateDisplayResizeResponse(await readFixture("display.resize.response.json"));
+
+  assert.equal(request.width, 1920);
+  assert.equal(request.height, 1080);
+  assert.equal(response.accepted, true);
+  assert.equal(response.width, 1920);
+  assert.equal(response.height, 1080);
+});
+
+test("rejects an unsafe desktop display resize request", () => {
+  assert.throws(
+    () => validateDisplayResizeRequest({
+      type: MessageType.DisplayResizeRequest,
+      requestId: "req_display_resize_invalid",
+      width: 3_841,
+      height: 900
+    }),
+    /width.*between 640 and 3840/
+  );
+});
+
+test("validates a guest shutdown request and its reply", async () => {
+  const request = validateSystemShutdownRequest(await readFixture("system.shutdown.request.json"));
+  const response = validateSystemShutdownResponse(await readFixture("system.shutdown.response.json"));
+
+  assert.equal(request.requestId, response.requestId);
+  assert.equal(response.accepted, true);
+  assert.throws(
+    () => validateSystemShutdownResponse({ ...response, accepted: "yes" }),
+    /accepted/
   );
 });
 
@@ -499,6 +568,51 @@ test("validates guest clipboard text fixture", async () => {
   assert.equal(clipboard.text, "hello from Windows");
 });
 
+test("validates host and guest clipboard image fixtures against their PNG bytes", async () => {
+  for (const name of ["clipboard.image.set.host.json", "clipboard.image.set.guest.json"]) {
+    const clipboard = validateClipboardImageSet(await readFixture(name));
+    const bytes = Buffer.from(clipboard.pngBase64, "base64");
+
+    assert.equal(bytes.length, clipboard.byteLength);
+    assert.equal(createHash("sha256").update(bytes).digest("hex"), clipboard.sha256);
+    assert.deepEqual([...bytes.subarray(0, 8)], [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    assert.equal(bytes.readUInt32BE(16), clipboard.width);
+    assert.equal(bytes.readUInt32BE(20), clipboard.height);
+  }
+});
+
+test("rejects clipboard images above the byte and pixel bounds", async () => {
+  const clipboard = await readFixture("clipboard.image.set.host.json");
+
+  assert.throws(
+    () => validateClipboardImageSet({ ...clipboard, byteLength: MAX_CLIPBOARD_IMAGE_BYTES + 1 }),
+    /byteLength/
+  );
+  assert.throws(() => validateClipboardImageSet({ ...clipboard, width: 16_384, height: 16_384 }), /pixel/);
+  assert.throws(() => validateClipboardImageSet({ ...clipboard, format: "jpeg" }), /format/);
+  assert.throws(() => validateClipboardImageSet({ ...clipboard, sha256: "ABC" }), /sha256/);
+});
+
+test("validates the clipboard files fixture and rejects paths that escape the batch folder", async () => {
+  const clipboard = validateClipboardFilesSet(await readFixture("clipboard.files.set.host.json"));
+  assert.equal(clipboard.relativePaths.length, 1);
+
+  for (const relativePath of [
+    "Veil Clipboard\\..\\..\\Windows\\win.ini",
+    "C:\\Windows\\win.ini",
+    "Veil Clipboard\\batch\\file.txt:secret",
+    "Other\\file.txt",
+    "Veil Clipboard\\\\file.txt"
+  ]) {
+    assert.throws(
+      () => validateClipboardFilesSet({ ...clipboard, relativePaths: [relativePath] }),
+      /Clipboard file path/,
+      relativePath
+    );
+  }
+  assert.throws(() => validateClipboardFilesSet({ ...clipboard, origin: "guest" }), /only travel from the host/);
+});
+
 test("validates file open request and response fixtures", async () => {
   const request = validateFileOpenRequest(await readFixture("file.open.request.json"));
   assert.equal(request.appId, "winapp_notepad");
@@ -508,6 +622,23 @@ test("validates file open request and response fixtures", async () => {
   const response = validateFileOpenResponse(await readFixture("file.open.response.json"));
   assert.equal(response.accepted, true);
   assert.equal(response.processId, 4931);
+});
+
+test("validates shared-folder file open requests without carrying file bytes", async () => {
+  const request = validateSharedFileOpenRequest(await readFixture("file.open.shared.request.json"));
+  assert.equal(request.appId, "winapp_notepad");
+  assert.equal(request.fileName, "large-report.txt");
+  assert.equal(request.guestPath, "C:\\VeilShared\\large-report.txt");
+});
+
+test("rejects shared-folder file paths that escape the fixed guest root", () => {
+  assert.throws(() => validateSharedFileOpenRequest({
+    type: MessageType.SharedFileOpenRequest,
+    requestId: "req_bad_shared",
+    appId: "winapp_notepad",
+    fileName: "report.txt",
+    guestPath: "C:\\VeilShared\\..\\Windows\\System32\\report.txt"
+  }), TypeError);
 });
 
 test("rejects a file open request whose fileName carries a path", () => {
@@ -640,4 +771,36 @@ test("rejects a non-boolean sharedFolder capability", async () => {
   health.capabilities.sharedFolder = "true";
 
   assert.throws(() => validateAgentHealthResponse(health), /capabilities\.sharedFolder/);
+});
+
+test("validates the operation.ack fixture", async () => {
+  const ack = await readFixture("operation.ack.json");
+
+  assert.equal(validateOperationAck(ack), ack);
+  assert.equal(validateOperationAck(ack).type, MessageType.OperationAck);
+});
+
+test("rejects an operation.ack without a request id or accepted flag", async () => {
+  assert.throws(() => validateOperationAck({ type: "operation.ack", accepted: true }), /requestId/);
+  assert.throws(
+    () => validateOperationAck({ type: "operation.ack", requestId: "req_clipboard_42" }),
+    /accepted/
+  );
+});
+
+test("accepts an optional operationAcks capability on agent health", async () => {
+  const health = await readFixture("agent.health.response.json");
+  assert.equal(health.capabilities.operationAcks, true);
+
+  assert.equal(validateAgentHealthResponse(health), health);
+
+  const legacyHealth = { ...health, capabilities: { ...health.capabilities, operationAcks: undefined } };
+  assert.equal(validateAgentHealthResponse(legacyHealth), legacyHealth);
+});
+
+test("rejects a non-boolean operationAcks capability", async () => {
+  const health = await readFixture("agent.health.response.json");
+  health.capabilities.operationAcks = "true";
+
+  assert.throws(() => validateAgentHealthResponse(health), /capabilities\.operationAcks/);
 });

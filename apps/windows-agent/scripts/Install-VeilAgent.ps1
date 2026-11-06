@@ -20,15 +20,49 @@ $SparsePackagePath = if ($SparsePackagePath) { $SparsePackagePath } else { Join-
 $SparsePackageCertificatePath = if ($SparsePackageCertificatePath) { $SparsePackageCertificatePath } else { Join-Path $SparsePackageRoot "VeilAgent.Identity.cer" }
 $SparsePackageName = "UULab.Veil.Agent"
 $PublishRoot = Join-Path $InstallRoot "app"
+$InstallBackupRoot = Join-Path $InstallRoot "app.previous"
+$BundleLockPath = Join-Path $InstallRoot ".veil-agent-bundle.lock"
+$InstallStagingRoot = Join-Path $InstallRoot ".install-staging-$([Guid]::NewGuid().ToString('N'))"
+$InstallStagedAppRoot = Join-Path $InstallStagingRoot "app"
 $InstalledScriptsRoot = Join-Path $InstallRoot "scripts"
 $LogRoot = Join-Path $InstallRoot "logs"
 $InstallLogPath = Join-Path $LogRoot "install.log"
 $StartScript = Join-Path $InstalledScriptsRoot "Start-VeilAgent.ps1"
 $TaskName = "VeilAgent"
 
-New-Item -ItemType Directory -Force -Path $PublishRoot | Out-Null
 New-Item -ItemType Directory -Force -Path $InstalledScriptsRoot | Out-Null
 New-Item -ItemType Directory -Force -Path $LogRoot | Out-Null
+
+function Stop-VeilAgentProcesses {
+    $RunningAgents = Get-Process -Name "VeilAgent" -ErrorAction SilentlyContinue
+    if ($RunningAgents) {
+        $RunningAgents | Stop-Process -Force -ErrorAction SilentlyContinue
+        # Stop-Process returns before Windows releases the agent's image and DLL handles, so moving
+        # the app folder right away failed with "being used by another process".
+        $RunningAgents | Wait-Process -Timeout 15 -ErrorAction SilentlyContinue
+    }
+}
+
+function Move-VeilItemWithRetry {
+    param(
+        [string]$LiteralPath,
+        [string]$Destination
+    )
+
+    for ($Attempt = 1; ; $Attempt++) {
+        try {
+            Move-Item -LiteralPath $LiteralPath -Destination $Destination
+            return
+        } catch {
+            if ($Attempt -ge 5) {
+                throw
+            }
+            Write-Host "$LiteralPath is still in use; retrying ($Attempt/5): $($_.Exception.Message)"
+            Stop-VeilAgentProcesses
+            Start-Sleep -Seconds 1
+        }
+    }
+}
 
 function Register-VeilSparsePackage {
     param(
@@ -59,36 +93,92 @@ function Register-VeilSparsePackage {
 }
 
 Start-Transcript -Path $InstallLogPath -Append | Out-Null
+$BundleLockStream = $null
+$bundleLockAcquired = $false
+$installRetiredCurrent = $false
+$installPromoted = $false
 try {
     Write-Host "VeilAgent install started at $(Get-Date -Format o)."
     Write-Host "ScriptRoot=$ScriptRoot"
     Write-Host "AgentRoot=$AgentRoot"
     Write-Host "InstallRoot=$InstallRoot"
 
-    $RunningAgents = Get-Process -Name "VeilAgent" -ErrorAction SilentlyContinue
-    if ($RunningAgents) {
-        Write-Host "Stopping existing VeilAgent process before updating installed files."
-        $RunningAgents | Stop-Process -Force
-        Start-Sleep -Milliseconds 500
+    try {
+        $BundleLockStream = [System.IO.File]::Open(
+            $BundleLockPath,
+            [System.IO.FileMode]::CreateNew,
+            [System.IO.FileAccess]::Write,
+            [System.IO.FileShare]::None
+        )
+        $bundleLockAcquired = $true
+        $LockText = "pid=$PID`nstartedAt=$(Get-Date -Format o)"
+        $LockBytes = [System.Text.Encoding]::UTF8.GetBytes($LockText)
+        $BundleLockStream.Write($LockBytes, 0, $LockBytes.Length)
+        $BundleLockStream.Flush()
+    } catch {
+        throw "Another VeilAgent bundle operation is active or needs recovery at $BundleLockPath. Inspect the lock owner before removing it."
     }
 
+    New-Item -ItemType Directory -Force -Path $InstallStagedAppRoot | Out-Null
     if (Test-Path $BundledAgentExe) {
-        Get-ChildItem -Path $PublishRoot -Force | Remove-Item -Recurse -Force
         Copy-Item `
             -Path (Join-Path $BundledAppRoot "*") `
-            -Destination $PublishRoot `
+            -Destination $InstallStagedAppRoot `
             -Recurse `
             -Force
-        Write-Host "Using packaged VeilAgent app bundle from $BundledAppRoot."
+        Write-Host "Using packaged VeilAgent app bundle from $BundledAppRoot; staged before promotion."
     } elseif (Get-Command dotnet -ErrorAction SilentlyContinue) {
         dotnet publish $ProjectPath `
             --configuration $Configuration `
             --runtime win-arm64 `
             --self-contained false `
-            --output $PublishRoot
+            --output $InstallStagedAppRoot
+        if ($LASTEXITCODE -ne 0) {
+            throw "dotnet publish failed with exit code $LASTEXITCODE."
+        }
     } else {
         throw "No packaged VeilAgent.exe was found at $BundledAgentExe, and dotnet is not available. Build a win-arm64 bundle with scripts\Publish-VeilAgentBundle.ps1 before installing."
     }
+
+    $RequiredArtifacts = @(
+        "VeilAgent.exe",
+        "VeilAgent.dll",
+        "VeilAgent.deps.json",
+        "VeilAgent.runtimeconfig.json"
+    )
+    foreach ($Artifact in $RequiredArtifacts) {
+        $ArtifactPath = Join-Path $InstallStagedAppRoot $Artifact
+        if (-not (Test-Path -LiteralPath $ArtifactPath -PathType Leaf) -or (Get-Item -LiteralPath $ArtifactPath).Length -eq 0) {
+            throw "The staged VeilAgent bundle is incomplete: missing or empty $ArtifactPath."
+        }
+    }
+
+    if (Get-Process -Name "VeilAgent" -ErrorAction SilentlyContinue) {
+        Write-Host "Stopping existing VeilAgent process before promoting the staged bundle."
+        Stop-VeilAgentProcesses
+    }
+
+    if (Test-Path -LiteralPath $PublishRoot) {
+        if (Test-Path -LiteralPath $InstallBackupRoot) {
+            Remove-Item -LiteralPath $InstallBackupRoot -Recurse -Force
+        }
+        try {
+            Move-VeilItemWithRetry -LiteralPath $PublishRoot -Destination $InstallBackupRoot
+            $installRetiredCurrent = $true
+        } catch {
+            # An app opened by an older agent can keep this folder as its current directory, which
+            # blocks renaming the folder but not replacing the files in it.
+            Write-Host "Replacing the VeilAgent files in place: $($_.Exception.Message)"
+            Copy-Item -LiteralPath $PublishRoot -Destination $InstallBackupRoot -Recurse -Force
+            Copy-Item -Path (Join-Path $InstallStagedAppRoot "*") -Destination $PublishRoot -Recurse -Force
+            $installPromoted = $true
+        }
+    }
+    if (-not $installPromoted) {
+        Move-Item -LiteralPath $InstallStagedAppRoot -Destination $PublishRoot
+        $installPromoted = $true
+    }
+    Write-Host "Promoted the complete VeilAgent app bundle to $PublishRoot."
 
     Copy-Item `
         -Path (Join-Path $ScriptRoot "Start-VeilAgent.ps1") `
@@ -173,5 +263,28 @@ try {
         Write-Host "Start now with: powershell -NoProfile -ExecutionPolicy Bypass -File `"$StartScript`" -InstallRoot `"$InstallRoot`" -Port $Port"
     }
 } finally {
+    try {
+        if ($installRetiredCurrent -and -not $installPromoted -and -not (Test-Path -LiteralPath $PublishRoot) -and (Test-Path -LiteralPath $InstallBackupRoot)) {
+            try {
+                Move-Item -LiteralPath $InstallBackupRoot -Destination $PublishRoot
+                Write-Warning "Installation failed; the previous VeilAgent app bundle was restored."
+            } catch {
+                Write-Warning "Installation failed and rollback could not complete. Recover the previous bundle from $InstallBackupRoot."
+            }
+        }
+        if (Test-Path -LiteralPath $InstallStagingRoot) {
+            Remove-Item -LiteralPath $InstallStagingRoot -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    } finally {
+        try {
+            if ($BundleLockStream) {
+                $BundleLockStream.Dispose()
+            }
+        } finally {
+            if ($bundleLockAcquired -and (Test-Path -LiteralPath $BundleLockPath)) {
+                Remove-Item -LiteralPath $BundleLockPath -Force -ErrorAction SilentlyContinue
+            }
+        }
+    }
     Stop-Transcript | Out-Null
 }

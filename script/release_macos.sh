@@ -29,9 +29,13 @@ RELEASE_BUILD="${VEIL_RELEASE_BUILD:-$(date -u +%Y%m%d%H%M%S)}"
 
 usage() {
   cat <<'USAGE'
-usage: ./script/release_macos.sh [--preflight|--package|--notarize]
+usage: ./script/release_macos.sh [--preflight|--package|--notarize|--unsigned]
 
-Required environment:
+  --unsigned builds an ad-hoc signed archive without a Developer ID or notarization, for open
+  source builds such as GitHub Actions runs without signing secrets. Gatekeeper blocks it on
+  first launch until the user opens it from the Finder context menu.
+
+Required environment (except --unsigned):
   VEIL_DEVELOPER_ID_APPLICATION   Exact "Developer ID Application: ..." identity.
   VEIL_NOTARY_KEYCHAIN_PROFILE   notarytool keychain profile (required for --preflight/--notarize).
 
@@ -66,6 +70,23 @@ validate_release_inputs() {
     || fail "VEIL_RELEASE_VERSION must contain two or three numeric components such as 0.1.0."
   [[ "$RELEASE_BUILD" =~ ^[0-9]+(\.[0-9]+){0,2}$ ]] \
     || fail "VEIL_RELEASE_BUILD must contain one to three numeric components."
+}
+
+preflight_unsigned() {
+  [[ "$RELEASE_VERSION" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]] \
+    || fail "VEIL_RELEASE_VERSION must contain two or three numeric components such as 0.1.0."
+  [[ "$RELEASE_BUILD" =~ ^[0-9]+(\.[0-9]+){0,2}$ ]] \
+    || fail "VEIL_RELEASE_BUILD must contain one to three numeric components."
+  require_command swift
+  require_command dotnet
+  require_command codesign
+  require_command ditto
+  require_command plutil
+  require_command shasum
+  verify_release_entitlements
+  verify_clean_worktree
+  SIGNING_IDENTITY="-"
+  echo "unsigned release preflight passed"
 }
 
 require_signing_identity() {
@@ -133,6 +154,16 @@ stage_release_app() {
   cp "$build_binary" "$APP_BINARY"
   chmod +x "$APP_BINARY"
   swift "$ROOT_DIR/script/generate_app_icon.swift" "$APP_ICON"
+  cp -R "$PACKAGE_DIR/Resources/"*.lproj "$APP_RESOURCES/"
+  # Without Metadata.appintents a released Veil would carry its App Intents but show none in Shortcuts.
+  "$ROOT_DIR/script/extract_app_intents_metadata.sh" release "$build_binary" "$APP_RESOURCES" \
+    || fail "could not extract App Intents metadata; install Xcode on the release Mac."
+  # The Windows engine is signed with the release identity and hardened runtime like the app.
+  "$ROOT_DIR/script/bundle_qemu_runtime.sh" "$APP_RESOURCES/Runtime" "$SIGNING_IDENTITY" >/dev/null \
+    || fail "could not bundle the Windows engine; install qemu and swtpm on the release Mac."
+  # The Windows guest tools ride inside the app; a release without them could never connect apps.
+  "$ROOT_DIR/script/bundle_windows_agent.sh" "$APP_RESOURCES" >/dev/null \
+    || fail "could not bundle the Windows tools; install the .NET 8 SDK on the release Mac."
 
   cat >"$INFO_PLIST" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -145,6 +176,13 @@ stage_release_app() {
   <string>$BUNDLE_ID</string>
   <key>CFBundleName</key>
   <string>$BUNDLE_NAME</string>
+  <key>CFBundleDevelopmentRegion</key>
+  <string>en</string>
+  <key>CFBundleLocalizations</key>
+  <array>
+    <string>en</string>
+    <string>ko</string>
+  </array>
   <key>CFBundleIconFile</key>
   <string>VeilAppIcon</string>
   <key>CFBundleShortVersionString</key>
@@ -157,6 +195,8 @@ stage_release_app() {
   <string>$MIN_SYSTEM_VERSION</string>
   <key>NSPrincipalClass</key>
   <string>NSApplication</string>
+  <key>NSMicrophoneUsageDescription</key>
+  <string>Windows apps in Veil can use your microphone, for example in calls or voice recording.</string>
   <key>NSHumanReadableCopyright</key>
   <string>Copyright © UULab. All rights reserved.</string>
 </dict>
@@ -182,6 +222,16 @@ sign_release_app() {
   if grep -q '<key>com.apple.security.get-task-allow</key>' <<<"$signed_entitlements"; then
     fail "the signed release unexpectedly contains com.apple.security.get-task-allow."
   fi
+}
+
+# Ad-hoc signatures carry no identity or timestamp; the hardened runtime and entitlements still
+# apply, so the app and its bundled QEMU behave as in the Developer ID build.
+sign_unsigned_app() {
+  codesign --force --options runtime --sign - \
+    --entitlements "$RELEASE_ENTITLEMENTS" "$APP_BINARY"
+  codesign --force --options runtime --sign - \
+    --entitlements "$RELEASE_ENTITLEMENTS" "$APP_BUNDLE"
+  codesign --verify --deep --strict --verbose=2 "$APP_BUNDLE"
 }
 
 archive_release_app() {
@@ -229,7 +279,7 @@ write_release_report() {
   plutil -insert version -string "$RELEASE_VERSION" "$RELEASE_REPORT"
   plutil -insert build -string "$RELEASE_BUILD" "$RELEASE_REPORT"
   plutil -insert commit -string "$commit_hash" "$RELEASE_REPORT"
-  plutil -insert signingIdentity -string "$SIGNING_IDENTITY" "$RELEASE_REPORT"
+  plutil -insert signingIdentity -string "$([[ "$SIGNING_IDENTITY" == "-" ]] && echo ad-hoc || echo "$SIGNING_IDENTITY")" "$RELEASE_REPORT"
   plutil -insert hardenedRuntime -bool true "$RELEASE_REPORT"
   plutil -insert notarized -bool "$notarized" "$RELEASE_REPORT"
   plutil -insert archiveSHA256 -string "$archive_sha" "$RELEASE_REPORT"
@@ -256,6 +306,14 @@ case "$MODE" in
     write_release_report
     echo "Developer ID-signed rehearsal archive created at $ARCHIVE_PATH"
     echo "Do not distribute it until --notarize completes and Gatekeeper accepts the stapled app."
+    ;;
+  --unsigned|unsigned)
+    preflight_unsigned
+    stage_release_app
+    sign_unsigned_app
+    archive_release_app
+    write_release_report
+    echo "Unsigned (ad-hoc) release archive created at $ARCHIVE_PATH"
     ;;
   --notarize|notarize)
     preflight

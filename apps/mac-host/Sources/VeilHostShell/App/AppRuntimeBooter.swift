@@ -169,6 +169,13 @@ final class AppRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
         return try await qemuBooter.installGuestAgentFromAttachedMedia()
     }
 
+    func updateGuestToolsFromRemovableMedia() async throws -> QEMUKeySendRecord {
+        guard provider == .qemu else {
+            throw AppRuntimeBooterError.qemuGuestAutomationUnavailable
+        }
+        return try await qemuBooter.updateGuestToolsFromRemovableMedia()
+    }
+
     func prepareSparsePackageFromAttachedMedia() async throws -> QEMUKeySendRecord {
         guard provider == .qemu else {
             throw AppRuntimeBooterError.qemuGuestAutomationUnavailable
@@ -190,5 +197,24 @@ final class AppRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
     private func closeVirtualizationConsole() {
         virtualizationConsolePresenter?.closeConsole()
         virtualizationConsolePresenter = nil
+    }
+}
+
+extension AppRuntimeBooter {
+    /// Installs or repairs Windows tools with the build this Veil ships. VEIL_AUTO was attached at
+    /// boot and can hold an older agent, so the current bundle goes in on the tools update disc;
+    /// a Windows started without the removable drive falls back to VEIL_AUTO's V.cmd.
+    @MainActor
+    func installCurrentGuestTools(vmModel: VMRuntimeModel) async throws -> QEMUKeySendRecord {
+        guard await vmModel.insertGuestToolsUpdateMedia() == nil else {
+            return try await installGuestAgentFromAttachedMedia()
+        }
+        let record = try await updateGuestToolsFromRemovableMedia()
+        // The repair copies the bundle within a few minutes of the approval; then the disc can go.
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(240))
+            await vmModel.ejectRemovableMedia()
+        }
+        return record
     }
 }

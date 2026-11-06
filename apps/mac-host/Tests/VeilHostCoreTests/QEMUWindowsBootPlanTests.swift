@@ -47,10 +47,13 @@ struct QEMUWindowsBootPlanTests {
 
     @Test("default diagnostics stay in application support")
     func defaultDiagnosticsStayInApplicationSupport() {
+        // Under tests the root is isolated; `VeilApplicationSupportTests` covers the
+        // production root resolving to Application Support/Veil.
         let directory = QEMUVMRuntimeBooter.defaultDiagnosticsDirectory()
         let components = directory.pathComponents
 
-        #expect(components.suffix(3).elementsEqual(["Application Support", "Veil", "Diagnostics"]))
+        #expect(directory.deletingLastPathComponent() == VeilApplicationSupport.directory)
+        #expect(components.suffix(2).elementsEqual(["Veil", "Diagnostics"]))
         #expect(!components.contains("Downloads"))
     }
 
@@ -128,17 +131,23 @@ struct QEMUWindowsBootPlanTests {
         #expect(plan.networkDeviceArgument == "usb-net,netdev=net0")
         #expect(plan.arguments.containsSequence(["-machine", "virt,highmem=on"]))
         #expect(plan.arguments.containsSequence(["-accel", "hvf"]))
+        #expect(plan.arguments.containsSequence(["-rtc", "base=localtime"]))
         #expect(plan.arguments.containsSequence(["-drive", "if=pflash,format=raw,readonly=on,file=/opt/homebrew/share/qemu/edk2-aarch64-code.fd"]))
         #expect(plan.arguments.containsSequence(["-drive", "if=pflash,format=raw,file=/Users/test/Virtual Machines/Veil/uefi-vars.fd"]))
         #expect(!plan.arguments.contains("-bios"))
         #expect(plan.arguments.containsSequence(["-chardev", "socket,id=chrtpm,path=/Users/test/Virtual Machines/Veil/tpm/swtpm.sock"]))
         #expect(plan.arguments.containsSequence(["-tpmdev", "emulator,id=tpm0,chardev=chrtpm"]))
-        #expect(plan.arguments.containsSequence(["-device", "tpm-tis-device,tpmdev=tpm0"]))
+        #expect(plan.arguments.containsSequence(["-device", "tpm-tis-device,tpmdev=tpm0,ppi=off"]))
         #expect(plan.arguments.containsSequence(["-boot", "order=d"]))
         #expect(plan.arguments.containsSequence(["-cpu", "host"]))
         #expect(plan.arguments.containsSequence(["-smp", "8"]))
         #expect(plan.arguments.containsSequence(["-m", "12288M"]))
         #expect(plan.arguments.contains("driver=raw,file.driver=file,file.locking=off,file.filename=/Users/test/Downloads/Win11_25H2_Korean_Arm64_v2.iso,if=none,id=installer,media=cdrom,readonly=on"))
+        // The firmware boots from the USB copy; Setup reads install.wim from the AHCI copy.
+        #expect(plan.arguments.containsSequence(["-device", "usb-storage,drive=installer"]))
+        #expect(plan.arguments.containsSequence(["-device", "ich9-ahci,id=ahci0"]))
+        #expect(plan.arguments.contains("driver=raw,file.driver=file,file.locking=off,file.filename=/Users/test/Downloads/Win11_25H2_Korean_Arm64_v2.iso,if=none,id=installer-sata,media=cdrom,readonly=on"))
+        #expect(plan.arguments.containsSequence(["-device", "ide-cd,bus=ahci0.0,drive=installer-sata"]))
         #expect(plan.automaticInstallMediaPath == "/Users/test/Veil Shared/VeilAutoInstall.iso")
         #expect(plan.arguments.contains("driver=raw,file.driver=file,file.locking=off,file.filename=/Users/test/Veil Shared/VeilAutoInstall.iso,if=none,id=autounattend,media=cdrom,readonly=on"))
         #expect(plan.arguments.contains("if=none,id=system,format=raw,file=/Users/test/Virtual Machines/Veil/Windows 11 Arm.img"))
@@ -158,7 +167,7 @@ struct QEMUWindowsBootPlanTests {
         #expect(!plan.arguments.containsSequence(["-device", "e1000,netdev=net0"]))
         #expect(!plan.arguments.containsSequence(["-device", "virtio-net-pci,netdev=net0"]))
         #expect(plan.arguments.containsSequence(["-display", "cocoa"]))
-        #expect(plan.arguments.containsSequence(["-device", "qemu-xhci,id=usb0"]))
+        #expect(plan.arguments.containsSequence(["-device", "qemu-xhci,id=usb0,p2=8,p3=8"]))
         #expect(plan.arguments.containsSequence(["-device", "usb-storage,drive=autounattend"]))
         #expect(plan.arguments.containsSequence(["-device", "virtio-rng-pci"]))
         #expect(plan.arguments.contains("ramfb"))
@@ -348,7 +357,7 @@ struct QEMUWindowsBootPlanTests {
         #expect(plan.arguments.containsSequence(["-device", "usb-audio,audiodev=veilaudio"]))
         #expect(!plan.arguments.containsSequence(["-device", "intel-hda"]))
         // usb-audio needs the xHCI controller to already exist on the bus.
-        let controllerIndex = try #require(plan.arguments.firstIndex(of: "qemu-xhci,id=usb0"))
+        let controllerIndex = try #require(plan.arguments.firstIndex(of: "qemu-xhci,id=usb0,p2=8,p3=8"))
         let audioIndex = try #require(plan.arguments.firstIndex(of: "usb-audio,audiodev=veilaudio"))
         #expect(controllerIndex < audioIndex)
     }
@@ -440,6 +449,39 @@ struct QEMUWindowsBootPlanTests {
         let plan = try planner.makePlan(for: profile)
 
         #expect(plan.arguments.contains("driver=raw,file.driver=file,file.locking=off,file.filename=/Users/test/Downloads/virtio-win.iso,if=none,id=drivers,media=cdrom,readonly=on"))
+        #expect(plan.arguments.containsSequence(["-device", "usb-storage,drive=drivers"]))
+    }
+
+    @Test("attaches the downloaded virtio-win ISO from Application Support as driver media")
+    func attachesDownloadedVirtioWinMedia() throws {
+        let mediaPath = "/Users/test/Library/Application Support/Veil/Downloads/\(VirtioWinDriverMedia.fileName)"
+        var profile = VMProfile.defaultWindows11Arm(createdAt: Date(timeIntervalSince1970: 1_782_752_400))
+        profile.installerMediaPath = "/Users/test/Library/Application Support/Veil/Downloads/Win11_Arm64.iso"
+        profile.driverMediaPath = mediaPath
+        profile.virtualDiskPath = "/Users/test/Virtual Machines/Veil/Windows 11 Arm.img"
+        profile.sharedFolderPath = "/Users/test/Veil Shared"
+
+        let plan = try LocalQEMUWindowsBootPlanFactory.makePlan(
+            for: profile,
+            architecture: "arm64",
+            minimumOSSupported: true,
+            providerProbe: VMRuntimeProviderProbe(
+                environment: [:],
+                fileExists: { $0 == "/opt/homebrew/bin/qemu-system-aarch64" },
+                executableVersion: { _ in "QEMU emulator version 11.0.2" }
+            ),
+            fileExists: { path in
+                path == "/opt/homebrew/share/qemu/edk2-aarch64-code.fd"
+                    || path == "/opt/homebrew/share/qemu/edk2-arm-vars.fd"
+                    || path == "/Users/test/Virtual Machines/Veil/uefi-vars.fd"
+                    || path == "/opt/homebrew/bin/swtpm"
+            }
+        )
+
+        #expect(plan.networkAdapter == .virtioNetPCI)
+        #expect(plan.arguments.containsSequence(["-device", "virtio-net-pci,netdev=net0"]))
+        #expect(!plan.arguments.containsSequence(["-device", "usb-net,netdev=net0"]))
+        #expect(plan.arguments.contains("driver=raw,file.driver=file,file.locking=off,file.filename=\(mediaPath),if=none,id=drivers,media=cdrom,readonly=on"))
         #expect(plan.arguments.containsSequence(["-device", "usb-storage,drive=drivers"]))
     }
 
@@ -658,7 +700,7 @@ struct QEMUWindowsBootPlanTests {
         #expect(plan.tpmEmulatorPath == "/opt/homebrew/bin/swtpm")
         #expect(plan.isTPMEmulatorAvailable)
         #expect(plan.tpmStateDirectoryPath == "/Users/test/Virtual Machines/Veil/tpm")
-        #expect(plan.arguments.containsSequence(["-device", "tpm-tis-device,tpmdev=tpm0"]))
+        #expect(plan.arguments.containsSequence(["-device", "tpm-tis-device,tpmdev=tpm0,ppi=off"]))
     }
 
     @Test("local QEMU plan factory honors an explicit TPM runtime override")
@@ -689,7 +731,7 @@ struct QEMUWindowsBootPlanTests {
 
         #expect(plan.tpmEmulatorPath == tpmPath)
         #expect(plan.isTPMEmulatorAvailable)
-        #expect(plan.arguments.containsSequence(["-device", "tpm-tis-device,tpmdev=tpm0"]))
+        #expect(plan.arguments.containsSequence(["-device", "tpm-tis-device,tpmdev=tpm0,ppi=off"]))
     }
 
     @Test("local QEMU plan factory accepts network adapter environment override")
@@ -1390,9 +1432,42 @@ struct QEMUWindowsBootPlanTests {
         ))
     }
 
+    @Test("boot prompt automation keeps pressing long enough for a slow installer prompt")
+    func bootPromptAutomationCoversSlowPrompt() {
+        #expect(QEMUWindowsBootPromptAutomation().maxSendCount == 120)
+    }
+
+    @Test("boot key presses stop once the installer media starts loading boot.wim")
+    func installerBootStartedFromBlockstats() {
+        func blockstats(installerReadBytes: Int64) -> String {
+            """
+            system: idle_time_ns=0\r
+                                      bytes       operations            total_time_ns     merged\r
+            Read:                  90000000              120                  5000000          0\r
+            Write:                        0                0                        0          0\r
+            \r
+            installer: idle_time_ns=10\r
+                                      bytes       operations            total_time_ns     merged\r
+            Read:            \(installerReadBytes)               20                  1000000          0\r
+            Write:                        0                0                        0          0\r
+            Flush:                                         0                        0\r
+            \r
+            autounattend: idle_time_ns=0\r
+                                      bytes       operations            total_time_ns     merged\r
+            Read:                  70000000                5                    10000          0\r
+            """
+        }
+
+        #expect(QEMUWindowsBootPromptAutomation.readBytes(driveID: "installer", blockstats: blockstats(installerReadBytes: 1_048_576)) == 1_048_576)
+        #expect(!QEMUWindowsBootPromptAutomation.installerBootHasStarted(blockstats: blockstats(installerReadBytes: 1_048_576)))
+        #expect(QEMUWindowsBootPromptAutomation.installerBootHasStarted(blockstats: blockstats(installerReadBytes: 660_023_806)))
+        #expect(QEMUWindowsBootPromptAutomation.readBytes(driveID: "missing", blockstats: blockstats(installerReadBytes: 1)) == nil)
+        #expect(!QEMUWindowsBootPromptAutomation.installerBootHasStarted(blockstats: "Error: no QEMU"))
+    }
+
     @Test("smoke boot prompt automation sends bounded key attempts")
     func smokeBootPromptAutomationSendsBoundedKeyAttempts() {
-        var automation = QEMUWindowsBootPromptAutomation()
+        var automation = QEMUWindowsBootPromptAutomation(maxSendCount: 12)
         let monitorSocketURL = URL(fileURLWithPath: "/tmp/veil-qemu-smoke.sock")
         var sentPaths: [String] = []
         var sendResults: [Bool] = []
@@ -1606,6 +1681,19 @@ struct QEMUWindowsBootPlanTests {
         #expect(mapper.key(charactersIgnoringModifiers: nil, keyCode: 109) == "f10")
     }
 
+    @Test("a Korean input source still types through the physical key position")
+    func qemuConsoleKeyboardInputMapperUsesPhysicalKeysForNonLatinInput() {
+        let mapper = QEMUConsoleKeyboardInputMapper()
+
+        #expect(mapper.key(charactersIgnoringModifiers: "ㅁ", keyCode: 0) == "a")
+        #expect(mapper.key(charactersIgnoringModifiers: "ㅁ", keyCode: 0, modifiers: [.shift]) == "shift-a")
+        #expect(mapper.key(charactersIgnoringModifiers: "ㅅ", keyCode: 1) == "s")
+        #expect(mapper.key(charactersIgnoringModifiers: "ㅓ", keyCode: 40) == "k")
+        #expect(mapper.key(charactersIgnoringModifiers: "₩", keyCode: 42) == "backslash")
+        #expect(mapper.key(charactersIgnoringModifiers: "", keyCode: 18) == "1")
+        #expect(mapper.key(charactersIgnoringModifiers: "ㅁ", keyCode: 200) == nil)
+    }
+
     @Test("guest agent install sequence opens run dialog and invokes short VEIL_AUTO entrypoint")
     func guestAgentInstallSequenceOpensRunDialogAndInvokesVEILAUTOInstaller() throws {
         let steps = try QEMUGuestAgentInstallKeySequence.steps
@@ -1665,6 +1753,15 @@ struct QEMUWindowsBootPlanTests {
         #expect(keys.last != "ret")
         #expect(steps.last?.delayAfterSend == 1.0)
         #expect(keys.count < fallbackSteps.count)
+    }
+
+    @Test("the app's tools setup presses Return after typing into the Run box")
+    func appToolsSetupRunsTypedCommand() throws {
+        let typed = try QEMUGuestAgentInstallKeySequence.stepsAfterRunOpened
+        let sent = QEMUVMRuntimeBooter.runDialogCommandSteps(typing: typed)
+
+        #expect(Array(sent.dropLast()) == typed)
+        #expect(sent.last?.key == "ret")
     }
 
     @Test("QEMU key sequence sender prefers QMP when launch record has QMP socket")

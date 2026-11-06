@@ -47,6 +47,7 @@ public sealed class AgentSession
     private readonly ISparsePackageStatusProbe sparsePackageStatusProbe;
     private readonly IWindowsNotificationAccessProbe notificationAccessProbe;
     private readonly IWindowsSharedFolderProbe sharedFolderProbe;
+    private readonly IGuestShutdown guestShutdown;
     private readonly Dictionary<string, LaunchedWindow> trackedWindowsById = new();
     private readonly Dictionary<string, WindowsAppDescriptor> appByWindowId = new();
     private readonly ConcurrentDictionary<string, SemaphoreSlim> appLaunchGates = new();
@@ -58,7 +59,8 @@ public sealed class AgentSession
         IPackageIdentityProbe? packageIdentityProbe = null,
         ISparsePackageStatusProbe? sparsePackageStatusProbe = null,
         IWindowsNotificationAccessProbe? notificationAccessProbe = null,
-        IWindowsSharedFolderProbe? sharedFolderProbe = null
+        IWindowsSharedFolderProbe? sharedFolderProbe = null,
+        IGuestShutdown? guestShutdown = null
     )
     {
         this.desktop = desktop;
@@ -67,6 +69,7 @@ public sealed class AgentSession
         this.sparsePackageStatusProbe = sparsePackageStatusProbe ?? new SparsePackageStatusProbe();
         this.notificationAccessProbe = notificationAccessProbe ?? new WindowsNotificationAccessProbe();
         this.sharedFolderProbe = sharedFolderProbe ?? new SharedFolderProbe();
+        this.guestShutdown = guestShutdown ?? new WindowsGuestShutdown();
     }
 
     public async Task<AgentReplies> HandleAsync(JsonObject request, CancellationToken cancellationToken = default)
@@ -82,15 +85,20 @@ public sealed class AgentSession
                 MessageTypes.AppListRequest => AgentReplies.Direct(AppListResponse(requestId)),
                 MessageTypes.AppLaunchRequest => await HandleAppLaunchAsync(request, requestId, cancellationToken),
                 MessageTypes.FileOpenRequest => await HandleFileOpenAsync(request, requestId, cancellationToken),
+                MessageTypes.SharedFileOpenRequest => await HandleSharedFileOpenAsync(request, requestId, cancellationToken),
                 MessageTypes.WindowFrameSubscribe => HandleWindowFrameSubscribeAsync(request, requestId),
                 MessageTypes.WindowFrameUnsubscribe => HandleWindowFrameUnsubscribeAsync(request, requestId),
                 MessageTypes.WindowFocusRequest => await HandleWindowFocusAsync(request, requestId, cancellationToken),
                 MessageTypes.WindowCloseRequest => await HandleWindowCloseAsync(request, requestId, cancellationToken),
                 MessageTypes.WindowResizeRequest => await HandleWindowResizeAsync(request, requestId, cancellationToken),
+                MessageTypes.DisplayResizeRequest => await HandleDisplayResizeAsync(request, requestId, cancellationToken),
+                MessageTypes.SystemShutdownRequest => HandleSystemShutdown(requestId),
                 MessageTypes.InputMouse => await HandleMouseInputAsync(request, requestId, cancellationToken),
                 MessageTypes.InputKey => await HandleKeyInputAsync(request, requestId, cancellationToken),
                 MessageTypes.InputText => await HandleTextInputAsync(request, requestId, cancellationToken),
                 MessageTypes.ClipboardTextSet => await HandleClipboardTextSetAsync(request, requestId, cancellationToken),
+                MessageTypes.ClipboardImageSet => await HandleClipboardImageSetAsync(request, requestId, cancellationToken),
+                MessageTypes.ClipboardFilesSet => await HandleClipboardFilesSetAsync(request, requestId, cancellationToken),
                 MessageTypes.NotificationListenerRequest => await HandleNotificationListenerRequestAsync(requestId, cancellationToken),
                 MessageTypes.SharedFolderRequest => await HandleSharedFolderRequestAsync(request, requestId, cancellationToken),
                 _ => AgentReplies.Direct(ErrorResponse(requestId, "unknown_message_type", $"Unsupported message type {type}"))
@@ -247,6 +255,73 @@ public sealed class AgentSession
         );
     }
 
+    private async Task<AgentReplies> HandleSharedFileOpenAsync(
+        JsonObject request,
+        string? requestId,
+        CancellationToken cancellationToken
+    )
+    {
+        var appId = request["appId"]?.GetValue<string>();
+        var app = AppCatalog.FirstOrDefault(candidate => candidate.Id == appId);
+        if (app is null)
+        {
+            return AgentReplies.Direct(ErrorResponse(requestId, "app_not_found", $"No app exists for id {appId}"));
+        }
+
+        var fileName = request["fileName"]?.GetValue<string>();
+        if (!TryResolveSafeFileName(fileName, out var safeFileName))
+        {
+            return AgentReplies.Direct(ErrorResponse(
+                requestId,
+                "invalid_file_name",
+                "fileName must be a non-empty file name with no path separators or traversal."
+            ));
+        }
+
+        var guestPath = request["guestPath"]?.GetValue<string>();
+        if (!TryResolveSharedFilePath(guestPath, safeFileName, out var resolvedPath))
+        {
+            return AgentReplies.Direct(ErrorResponse(
+                requestId,
+                "invalid_shared_file_path",
+                $"guestPath must point to {SharedFolderProbe.DefaultGuestDirectoryPath} and match fileName."
+            ));
+        }
+
+        if (!File.Exists(resolvedPath))
+        {
+            return AgentReplies.Direct(ErrorResponse(
+                requestId,
+                "shared_file_missing",
+                "The file is not present in the shared folder. Copy it again and retry."
+            ));
+        }
+
+        LaunchedWindow launched;
+        try
+        {
+            launched = await desktop.LaunchAppWithFileAsync(app, resolvedPath, cancellationToken);
+        }
+        catch (Exception error) when (error is not OperationCanceledException)
+        {
+            return AgentReplies.Direct(ErrorResponse(requestId, "file_open_failed", error.Message));
+        }
+
+        TrackWindow(app, launched);
+        var frame = await CaptureInitialFrameOrNilAsync(launched, cancellationToken);
+
+        return new AgentReplies(
+            DirectReplies: new List<JsonObject>
+            {
+                FileOpenResponse(requestId, accepted: true, launched.ProcessId),
+                WindowCreatedEvent(app, launched)
+            },
+            BroadcastEvents: frame is null ? Array.Empty<JsonObject>() : [WindowFrameEvent(frame)],
+            StreamWindow: launched,
+            NextFrameSequence: frame is null ? 1 : 2
+        );
+    }
+
     /// <summary>
     /// Only a bare file name is accepted -- no directory separators, no parent-directory traversal.
     /// The host must never be able to steer where inside the guest filesystem a dropped file ends up
@@ -287,6 +362,37 @@ public sealed class AgentSession
         }
 
         safeFileName = candidate;
+        return true;
+    }
+
+    private static bool TryResolveSharedFilePath(
+        string? guestPath,
+        string safeFileName,
+        out string resolvedPath
+    )
+    {
+        resolvedPath = string.Empty;
+        if (string.IsNullOrWhiteSpace(guestPath)
+            || guestPath.Contains("..", StringComparison.Ordinal)
+            || guestPath.Contains('/', StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        // Keep this comparison in Windows path syntax even when the agent's unit tests run on macOS.
+        // `Path.GetFullPath` follows the host OS rules and would treat `C:\VeilShared\...` as a
+        // relative Unix path, accidentally making a valid guest path fail before the live guest sees it.
+        var root = SharedFolderProbe.DefaultGuestDirectoryPath.TrimEnd('\\') + "\\";
+        var candidate = guestPath.Trim();
+        var lastSeparator = candidate.LastIndexOf('\\');
+        var candidateFileName = lastSeparator >= 0 ? candidate[(lastSeparator + 1)..] : string.Empty;
+        if (!candidate.StartsWith(root, StringComparison.OrdinalIgnoreCase)
+            || !string.Equals(candidateFileName, safeFileName, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        resolvedPath = candidate;
         return true;
     }
 
@@ -359,7 +465,9 @@ public sealed class AgentSession
         }
 
         return new AgentReplies(
-            DirectReplies: Array.Empty<JsonObject>(),
+            // The ack is a direct reply so a host that waits for exactly one frame reads it before
+            // the stream's first frame arrives on the broadcast side.
+            DirectReplies: new[] { OperationAck(requestId) },
             BroadcastEvents: Array.Empty<JsonObject>(),
             StreamWindow: window,
             NextFrameSequence: 1
@@ -375,7 +483,7 @@ public sealed class AgentSession
         }
 
         return new AgentReplies(
-            DirectReplies: Array.Empty<JsonObject>(),
+            DirectReplies: new[] { OperationAck(requestId) },
             BroadcastEvents: Array.Empty<JsonObject>(),
             StopStreamWindowId: windowId
         );
@@ -485,6 +593,58 @@ public sealed class AgentSession
         }
     }
 
+    private AgentReplies HandleSystemShutdown(string? requestId)
+    {
+        var response = new JsonObject
+        {
+            ["type"] = MessageTypes.SystemShutdownResponse,
+            ["requestId"] = requestId
+        };
+        try
+        {
+            guestShutdown.Start();
+            response["accepted"] = true;
+        }
+        catch (Exception error)
+        {
+            response["accepted"] = false;
+            response["reason"] = error.Message;
+        }
+
+        return AgentReplies.Direct(response);
+    }
+
+    private async Task<AgentReplies> HandleDisplayResizeAsync(
+        JsonObject request,
+        string? requestId,
+        CancellationToken cancellationToken
+    )
+    {
+        if (!TryReadInt(request, "width", out var width)
+            || !TryReadInt(request, "height", out var height)
+            || !IsPlausibleDisplayResize(width, height))
+        {
+            return AgentReplies.Direct(ErrorResponse(
+                requestId,
+                "invalid_message",
+                "display.resize.request requires a width and height between 640 and 3840 pixels with at most 8294400 pixels."
+            ));
+        }
+
+        try
+        {
+            var result = await desktop.ResizeDisplayAsync(
+                new DisplayResizeInput(width, height),
+                cancellationToken
+            );
+            return AgentReplies.Direct(DisplayResizeResponse(requestId, result));
+        }
+        catch (Exception error) when (error is not OperationCanceledException)
+        {
+            return AgentReplies.Direct(ErrorResponse(requestId, "display_resize_failed", error.Message));
+        }
+    }
+
     private async Task<AgentReplies> HandleMouseInputAsync(
         JsonObject request,
         string? requestId,
@@ -512,11 +672,20 @@ public sealed class AgentSession
 
         try
         {
-            await desktop.SendMouseInputAsync(
+            var applied = await desktop.SendMouseInputAsync(
                 new WindowMouseInput(windowId, eventName, x, y, modifiers),
                 cancellationToken
             );
-            return AgentReplies.Direct();
+            if (!applied)
+            {
+                return AgentReplies.Direct(ErrorResponse(
+                    requestId,
+                    "input_mouse_failed",
+                    $"Windows did not apply the {eventName} mouse event for window {windowId}."
+                ));
+            }
+
+            return AgentReplies.Direct(OperationAck(requestId));
         }
         catch (Exception error) when (error is not OperationCanceledException)
         {
@@ -552,11 +721,20 @@ public sealed class AgentSession
 
         try
         {
-            await desktop.SendKeyInputAsync(
+            var applied = await desktop.SendKeyInputAsync(
                 new WindowKeyInput(windowId, eventName, key, windowsVirtualKey, modifiers),
                 cancellationToken
             );
-            return AgentReplies.Direct();
+            if (!applied)
+            {
+                return AgentReplies.Direct(ErrorResponse(
+                    requestId,
+                    "input_key_failed",
+                    $"Windows did not apply the {eventName} event for key {key} on window {windowId}."
+                ));
+            }
+
+            return AgentReplies.Direct(OperationAck(requestId));
         }
         catch (Exception error) when (error is not OperationCanceledException)
         {
@@ -596,8 +774,17 @@ public sealed class AgentSession
 
         try
         {
-            await desktop.SendTextInputAsync(new WindowTextInput(windowId, text), cancellationToken);
-            return AgentReplies.Direct();
+            var applied = await desktop.SendTextInputAsync(new WindowTextInput(windowId, text), cancellationToken);
+            if (!applied)
+            {
+                return AgentReplies.Direct(ErrorResponse(
+                    requestId,
+                    "input_text_failed",
+                    $"Windows did not post the committed text to window {windowId}."
+                ));
+            }
+
+            return AgentReplies.Direct(OperationAck(requestId));
         }
         catch (Exception error) when (error is not OperationCanceledException)
         {
@@ -626,11 +813,108 @@ public sealed class AgentSession
         try
         {
             await desktop.SetClipboardTextAsync(text, cancellationToken);
-            return AgentReplies.Direct();
+            // Only the host-origin write acknowledges. An echo of a guest-originated change never
+            // had a request to acknowledge, and answering it would look like a reply to whatever
+            // else the host has in flight.
+            return AgentReplies.Direct(OperationAck(requestId));
         }
         catch (Exception error) when (error is not OperationCanceledException)
         {
             return AgentReplies.Direct(ErrorResponse(requestId, "clipboard_text_failed", error.Message));
+        }
+    }
+
+    private async Task<AgentReplies> HandleClipboardImageSetAsync(
+        JsonObject request,
+        string? requestId,
+        CancellationToken cancellationToken
+    )
+    {
+        var origin = request["origin"]?.GetValue<string>();
+        if (origin == "guest")
+        {
+            // Same rule as text: an echo of a guest-originated image has no request to acknowledge.
+            return AgentReplies.Direct();
+        }
+
+        if (origin != "host")
+        {
+            return AgentReplies.Direct(ErrorResponse(requestId, "invalid_message", "clipboard.image.set requires origin host or guest."));
+        }
+
+        var (image, rejection) = ClipboardImageMessage.Parse(request);
+        if (image is null)
+        {
+            return AgentReplies.Direct(ErrorResponse(
+                requestId,
+                rejection?.Code ?? "invalid_message",
+                rejection?.Message ?? "clipboard.image.set was rejected."
+            ));
+        }
+
+        try
+        {
+            await desktop.SetClipboardImagePngAsync(image.Png, image.Sha256, cancellationToken);
+            return AgentReplies.Direct(OperationAck(requestId));
+        }
+        catch (Exception error) when (error is not OperationCanceledException)
+        {
+            return AgentReplies.Direct(ErrorResponse(requestId, "clipboard_image_failed", error.Message));
+        }
+    }
+
+    /// <summary>
+    /// Places files the host already copied into the shared folder on the clipboard. Every entry is
+    /// checked before any is used, so one bad path rejects the paste instead of pasting part of it.
+    /// </summary>
+    private async Task<AgentReplies> HandleClipboardFilesSetAsync(
+        JsonObject request,
+        string? requestId,
+        CancellationToken cancellationToken
+    )
+    {
+        if (request["origin"]?.GetValue<string>() != "host")
+        {
+            return AgentReplies.Direct(ErrorResponse(requestId, "invalid_message", "clipboard.files.set only travels from the host."));
+        }
+
+        if (request["shareName"]?.GetValue<string>() != SharedFolderProbe.DefaultShareName
+            || request["relativePaths"] is not JsonArray relativePaths
+            || relativePaths.Count < 1
+            || relativePaths.Count > ClipboardFilePaths.MaxFileCount)
+        {
+            return AgentReplies.Direct(ErrorResponse(
+                requestId,
+                "invalid_shared_file_path",
+                $"clipboard.files.set requires shareName {SharedFolderProbe.DefaultShareName} and 1 to {ClipboardFilePaths.MaxFileCount} relativePaths."
+            ));
+        }
+
+        var fullPaths = new List<string>(relativePaths.Count);
+        foreach (var node in relativePaths)
+        {
+            var relativePath = node is JsonValue value && value.TryGetValue<string>(out var text) ? text : null;
+            if (!ClipboardFilePaths.TryResolve(relativePath, SharedFolderProbe.DefaultGuestDirectoryPath, out var fullPath)
+                || !desktop.IsRegularSharedFile(fullPath))
+            {
+                return AgentReplies.Direct(ErrorResponse(
+                    requestId,
+                    "invalid_shared_file_path",
+                    $"Every clipboard file must be a regular file inside {SharedFolderProbe.DefaultGuestDirectoryPath}\\{ClipboardFilePaths.DirectoryName}."
+                ));
+            }
+
+            fullPaths.Add(fullPath);
+        }
+
+        try
+        {
+            await desktop.SetClipboardFilesAsync(fullPaths, cancellationToken);
+            return AgentReplies.Direct(OperationAck(requestId));
+        }
+        catch (Exception error) when (error is not OperationCanceledException)
+        {
+            return AgentReplies.Direct(ErrorResponse(requestId, "clipboard_files_failed", error.Message));
         }
     }
 
@@ -642,7 +926,7 @@ public sealed class AgentSession
             ["type"] = MessageTypes.AgentHealthResponse,
             ["requestId"] = requestId,
             ["protocolVersion"] = 1,
-            ["agentVersion"] = "0.1.0",
+            ["agentVersion"] = AgentBuild.Version,
             ["os"] = "windows-arm64",
             ["session"] = new JsonObject
             {
@@ -657,6 +941,10 @@ public sealed class AgentSession
                 ["windowCapture"] = true,
                 ["input"] = true,
                 ["clipboardText"] = true,
+                // Optional on the wire: an older agent omits them and the host keeps images and files on
+                // the Mac instead of sending messages this agent would reject as unknown.
+                ["clipboardImage"] = true,
+                ["clipboardFiles"] = true,
                 // Advertises the send-only binary frame endpoint. The host only opens it when this is
                 // true, so a host that cannot decode the binary format keeps receiving JSON frames.
                 ["binaryFrameChannel"] = true,
@@ -666,6 +954,16 @@ public sealed class AgentSession
                 // Lets the host enable the resize affordance only when this agent understands the
                 // additive window.resize.request message.
                 ["windowResize"] = true,
+                ["displayResize"] = OperatingSystem.IsWindows(),
+                // Lets the host boot the next cold start on virtio-gpu alone. Read-only, like the rest
+                // of health: the driver itself is installed by the setup and repair scripts.
+                ["virtioGpuDisplay"] = VirtioGpuDisplay.IsDriverInstalled(),
+                // Lets the host shut Windows down through the agent instead of the ACPI power button.
+                ["systemShutdown"] = OperatingSystem.IsWindows(),
+                // Lets the host wait for the operation.ack reply on the fire-and-forget paths
+                // (input, clipboard, frame subscribe). An older host ignores it; an older agent
+                // omits it and the host keeps its fire-and-forget semantics instead of hanging.
+                ["operationAcks"] = true,
                 ["packageIdentity"] = hasPackageIdentity
             },
             ["notificationListener"] = notificationAccessProbe.ReadStatus(hasPackageIdentity),
@@ -840,6 +1138,28 @@ public sealed class AgentSession
         return response;
     }
 
+    private static JsonObject DisplayResizeResponse(string? requestId, DisplayResizeResult? result)
+    {
+        var response = new JsonObject
+        {
+            ["type"] = MessageTypes.DisplayResizeResponse,
+            ["requestId"] = requestId,
+            ["accepted"] = result is not null
+        };
+
+        if (result is not null)
+        {
+            response["width"] = result.Width;
+            response["height"] = result.Height;
+        }
+        else
+        {
+            response["reason"] = "display_mode_not_supported";
+        }
+
+        return response;
+    }
+
     private static JsonObject ErrorResponse(string? requestId, string code, string message) => new()
     {
         ["type"] = MessageTypes.Error,
@@ -848,12 +1168,32 @@ public sealed class AgentSession
         ["message"] = message
     };
 
+    /// <summary>
+    /// The success reply for messages the host used to send fire-and-forget. Failures keep using
+    /// the <see cref="ErrorResponse"/> shape, so one host read of "one reply frame" covers both.
+    /// An agent that predates acknowledgements sends nothing and the host falls back after a
+    /// bounded wait, which is why this reply carries no payload beyond the echoed request id.
+    /// </summary>
+    private static JsonObject OperationAck(string? requestId) => new()
+    {
+        ["type"] = MessageTypes.OperationAck,
+        ["requestId"] = requestId,
+        ["accepted"] = true
+    };
+
     private static bool IsPlausibleResize(int width, int height) =>
         width >= 320
             && width <= 8_192
             && height >= 320
             && height <= 8_192
             && (long)width * height <= 32_000_000;
+
+    private static bool IsPlausibleDisplayResize(int width, int height) =>
+        width >= 640
+            && width <= 3_840
+            && height >= 640
+            && height <= 3_840
+            && (long)width * height <= 8_294_400;
 
     private void TrackWindow(WindowsAppDescriptor app, LaunchedWindow window)
     {

@@ -29,6 +29,7 @@ public protocol HostFrameChannel: Sendable {
 public enum HostFrameChannelError: Error, LocalizedError, Equatable, Sendable {
     case unsupportedEndpoint(String)
     case tooManyMalformedFrames(Int)
+    case bufferOverflow(windowId: String)
 
     public var errorDescription: String? {
         switch self {
@@ -36,6 +37,8 @@ public enum HostFrameChannelError: Error, LocalizedError, Equatable, Sendable {
             "Cannot derive a binary frame channel endpoint from '\(endpoint)'."
         case .tooManyMalformedFrames(let count):
             "The Windows agent sent \(count) consecutive undecodable frames on the binary frame channel."
+        case .bufferOverflow(let windowId):
+            "The binary frame channel could not keep up with updates for \(windowId); the window needs a fresh key frame."
         }
     }
 }
@@ -86,9 +89,34 @@ public struct URLSessionFrameChannel: HostFrameChannel {
     /// PNG payload, and display latency grows with it. No malformed data needed; a merely busy guest does it.
     ///
     /// Bounded generously rather than tightly, because frame tiles are **incremental**: dropping one leaves
-    /// its rectangle stale until the next key frame, so the bound has to be far above any legitimate burst.
-    /// Overflow is a last resort against exhaustion, not a routine throttle.
+    /// its rectangle stale until the next key frame. Overflow is therefore treated as a recoverable stream
+    /// fault rather than a routine throttle: the caller receives `bufferOverflow`, resets that window's
+    /// subscription, and lets the guest establish a new key frame.
     public static let frameBufferMessageCount = 256
+
+    /// Enqueues one decoded message and turns a dropped incremental update into a scoped recovery error.
+    /// Kept separate from the URLSession receive loop so the overflow contract is deterministic to test.
+    static func yieldFrameMessage(
+        _ message: WindowFrameChannelMessage,
+        to continuation: AsyncThrowingStream<WindowFrameChannelMessage, any Error>.Continuation
+    ) -> Bool {
+        switch continuation.yield(message) {
+        case .enqueued:
+            return true
+        case .dropped(let dropped):
+            continuation.finish(
+                throwing: HostFrameChannelError.bufferOverflow(windowId: dropped.tile.windowId)
+            )
+            return false
+        case .terminated:
+            return false
+        @unknown default:
+            continuation.finish(
+                throwing: HostFrameChannelError.bufferOverflow(windowId: message.tile.windowId)
+            )
+            return false
+        }
+    }
 
     public func frames() -> AsyncThrowingStream<WindowFrameChannelMessage, any Error> {
         AsyncThrowingStream(
@@ -115,12 +143,13 @@ public struct URLSessionFrameChannel: HostFrameChannel {
                         }
 
                         do {
-                            continuation.yield(
-                                WindowFrameChannelMessage(
-                                    tile: try VeilFrameChannelCodec.decode(data),
-                                    wireByteCount: data.count
-                                )
+                            let message = WindowFrameChannelMessage(
+                                tile: try VeilFrameChannelCodec.decode(data),
+                                wireByteCount: data.count
                             )
+                            guard Self.yieldFrameMessage(message, to: continuation) else {
+                                return
+                            }
                             consecutiveMalformedFrames = 0
                         } catch {
                             consecutiveMalformedFrames += 1

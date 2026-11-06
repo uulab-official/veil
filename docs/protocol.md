@@ -30,6 +30,16 @@ Rules:
 - Events do not require `requestId`.
 - Unknown message types must return a structured error.
 
+Control-event stream:
+
+- The host keeps a separate long-lived WebSocket for guest lifecycle, clipboard, notification, and JSON
+  frame events. Request/response sockets remain short-lived so a large frame cannot become the reply to an
+  input operation.
+- The host bounds the undelivered control-event queue at 1,024 messages. If that queue overflows, the host
+  ends the event stream with a reconnectable transport error instead of silently dropping a `window.closed`,
+  clipboard, or notification event. Reconnection lets the normal liveness and discovery paths repair the
+  remaining state; the binary frame channel has its own per-HWND overflow recovery.
+
 ## Health
 
 Request:
@@ -63,8 +73,13 @@ Response:
     "input": true,
     "clipboardText": true,
     "windowResize": true,
+    "displayResize": true,
+    "virtioGpuDisplay": true,
+    "systemShutdown": true,
     "binaryFrameChannel": true,
     "sharedFolder": true,
+    "clipboardImage": true,
+    "clipboardFiles": true,
     "packageIdentity": false
   },
   "sharedFolder": {
@@ -99,9 +114,32 @@ Response:
 }
 ```
 
+`agentVersion` is the agent's informational version. A bundle built for the Mac app carries a build
+id after `+`, such as `0.1.0+3f9c2a1b7d04`; the same string is written to
+`app\veil-agent-version.txt` in the bundle. The host treats a connected agent whose `agentVersion`
+differs from the bundled one as outdated tools and offers to update them; an agent from before build
+ids reports plain `0.1.0` and is outdated too. When the app carries no stamped bundle (a development
+build made without the .NET SDK), Veil never calls the tools outdated.
+
 `capabilities.windowResize` is optional for backwards compatibility. The host only enables the
 mirrored-window resize affordance when it is explicitly `true`; an absent value means the connected
 agent predates `window.resize.request`.
+
+`capabilities.displayResize` is also optional. When `true`, the agent can apply a requested Windows
+desktop monitor mode through the Win32 display API. Veil uses it only as a fallback after QEMU's
+RFB `ExtendedDesktopSize` request is rejected or forwarded to the guest (QEMU result code 4); an absent
+or false value keeps the confirmed guest framebuffer aspect-fit without stretching.
+
+`capabilities.virtioGpuDisplay` is optional. `true` means Windows has the virtio-win VirtIO GPU DOD
+display driver (`viogpudo`) installed for the VM's `virtio-gpu-pci` device, so the next cold boot can
+attach `virtio-gpu-pci` alone instead of `ramfb` plus `virtio-gpu-pci`. `false` means it is not
+installed, and an absent value means the agent predates the field; both keep the `ramfb` display.
+The host applies a changed value only at the next cold boot, never to a suspended session, because
+the device list is part of the machine a saved memory state belongs to. See
+[docs/install-flow.md](install-flow.md) for why the two displays cannot stay attached together.
+
+`capabilities.systemShutdown` is optional. `true` means the agent accepts `system.shutdown.request`;
+an absent value means it predates the message, and the host uses the ACPI power button instead.
 
 `capabilities.packageIdentity` is `true` only when the Windows agent is running
 with Windows package identity. The agent reads this from Windows' app model
@@ -304,6 +342,27 @@ Rules:
   name it *displays* with `/` using `:` on disk, so an everyday name like `2026/08/12 report.txt` would
   otherwise be rejected for a reason invisible on the user's own machine.
 
+### Shared-folder file open
+
+`file.open.shared.request` opens a file that the host has already copied into the live guest-served share:
+
+```json
+{
+  "type": "file.open.shared.request",
+  "requestId": "req_open_shared_007",
+  "appId": "winapp_notepad",
+  "fileName": "large-report.txt",
+  "guestPath": "C:\\VeilShared\\large-report.txt"
+}
+```
+
+This is the large-file companion to `file.open.request`. It carries no file bytes on the control channel,
+so the 50 MB drag-and-drop limit does not apply. The guest independently requires an absolute path below
+the fixed `C:\\VeilShared` root and requires its final component to equal `fileName`; traversal, a different
+share, and a mismatched name return `invalid_shared_file_path`. A missing file returns
+`shared_file_missing`. Successful requests use the same `file.open.response` followed by `window.created`
+contract as an ordinary drop.
+
 ## Window Created
 
 Event:
@@ -459,8 +518,27 @@ Rules:
 - A tile that arrives before a key frame, or after a surface size change that has not been re-keyed, must
   be dropped and a key frame awaited. Compositing onto a mismatched or absent surface produces a
   plausible-looking but wrong window, which is much harder to diagnose than a window that visibly waits.
+- A delta must have the next sequence number for that window. If a sequence is skipped or repeated, the
+  host must discard that window's compositor base and wait for a key frame; applying a later delta would
+  preserve the missing pixels as if they were current. Key frames reset the sequence base and may use any
+  monotonically increasing stream sequence. A binary-channel host should restart only that window's
+  subscription immediately, because a guest that keeps producing small dirty regions may never naturally
+  emit the key frame needed to repair a missing delta.
 - A dropped tile is **not** a received frame. Frame timing and the latency budget must not advance for an
   update that did not reach the screen, or a stalled surface would look healthy.
+- Rejecting a decoded tile's image payload invalidates that window's compositor base. Further deltas
+  cannot repair unknown missing pixels; a valid full-surface key frame is required. While awaiting that
+  key frame, unchanged heartbeats do not advance host liveness, allowing stale-stream recovery to run.
+  Other windows retain their independent surfaces and liveness.
+- A valid JSON full-surface image can also restore a rejected binary stream's base. Its payload must
+  decode and match the declared dimensions before clearing the recovery reason or advancing liveness;
+  metadata alone is not recovery evidence.
+- If a host cannot keep up with the binary channel and its bounded receive buffer overflows, it must not
+  silently continue with a missing incremental tile. The host should reset that window's subscription so
+  the guest's next stream begins with a fresh key frame; other mirrored windows remain independent.
+- A host must coalesce concurrent recovery requests for the same window. An unsubscribe/subscribe pair has
+  one owner per HWND; a second recovery request should wait for or yield to that owner rather than allowing
+  an older completion to retire a newer stream.
 - Legacy JSON `window.frame` subscribers always receive a self-contained full-surface frame. Tiles are
   only meaningful to a client that composites them. The guest pays for that extra full-surface encode only
   while a control-channel subscriber actually exists.
@@ -553,8 +631,15 @@ Rules:
 
 - `windowId` must reference a tracked `window.created` event.
 - `format` is `png` for the first stream control implementation.
-- These requests do not require a success response. Invalid requests may still return structured errors.
+- Legacy agents do not require a success response. Agents advertising
+  `operationAcks` return a matching positive acknowledgement after applying the
+  stream-control operation, or a structured error (see Operation Acknowledgements).
 - The macOS host subscribes after launching a capture-capable app window and unsubscribes before closing the mirrored window.
+- Frames travel independently from request replies and may reach the host before
+  it observes the subscription acknowledgement. The host resets frame readiness
+  and discards the previous compositor surface **before** sending a new subscribe.
+  A reply must never clear a newer frame. Binary delivery needs a fresh key frame;
+  it cannot use a previous subscription's retained pixels as the base for a delta.
 - Host-side app-runtime status records frame stream recovery evidence per HWND:
   `frameStreamRequestedAt`, `frameStreamWaitingAgeMilliseconds`,
   `frameStreamRestartCount`, `latestFrameStreamRestartedAt`, and
@@ -727,6 +812,116 @@ Rules:
   During the gesture the mirror remains aspect-correct; after the guest applies the size, its capture buffer
   changes and the next key frame resynchronizes the host compositor.
 
+## Desktop Display Resize Fallback
+
+Host request:
+
+```json
+{
+  "type": "display.resize.request",
+  "requestId": "req_display_resize_1920x1080",
+  "width": 1920,
+  "height": 1080
+}
+```
+
+Guest response:
+
+```json
+{
+  "type": "display.resize.response",
+  "requestId": "req_display_resize_1920x1080",
+  "accepted": true,
+  "width": 1920,
+  "height": 1080
+}
+```
+
+Rules:
+
+- Dimensions are physical desktop pixels, bounded to 640...3840 per axis and 8,294,400 total pixels.
+- The guest calls `ChangeDisplaySettingsEx` for the active Windows desktop mode. A false response includes
+  a short `reason` and does not change the host's current framebuffer geometry.
+- When the active display adapter is the VirtIO GPU DOD driver and the size is not one of its listed modes,
+  the guest sets the driver's custom mode through the driver's own `D3DKMTEscape` request (the one
+  virtio-win's `viogpures.exe` uses) and calls `ChangeDisplaySettingsEx` again, stepping through a listed
+  mode when Windows is already on the custom one. The driver pads the scanout width up to a multiple of 16,
+  so the host requests 16-aligned widths.
+- The RFB display path invokes this fallback after a QEMU `ExtendedDesktopSize` rejection, and after QEMU
+  answers result code 4 ("request forwarded"): QEMU passed the size to `virtio-gpu`, and the VirtIO GPU
+  driver lists it as a mode but does not switch to it on its own. A later successful RFB desktop-size response becomes authoritative
+  and returns the display to normal dynamic mode.
+
+## Guest Shutdown
+
+Host request:
+
+```json
+{
+  "type": "system.shutdown.request",
+  "requestId": "req_system_shutdown_1"
+}
+```
+
+Guest response:
+
+```json
+{
+  "type": "system.shutdown.response",
+  "requestId": "req_system_shutdown_1",
+  "accepted": true
+}
+```
+
+Rules:
+
+- The host sends this when the user stops Windows and the agent reports `capabilities.systemShutdown`.
+  Windows can leave the ACPI power button unanswered (observed on November 6, 2026 with a Korean
+  Windows 11 Arm 26300 guest), and killing QEMU instead loses unsaved work and can interrupt updates
+  Windows installs while shutting down.
+- The agent starts `shutdown.exe /s /t 0` in the user's session and answers once it has started; a
+  false response carries a short `reason`. Windows then closes apps and may install updates first, so
+  the host waits for QEMU to exit rather than for a further message.
+- The request carries no arguments, so it cannot run anything but a normal shutdown. The host already
+  controls the VM's power, so the message gives it no new authority over the guest.
+
+## Operation Acknowledgements
+
+For negotiated input delivery, the host adds a fresh `requestId` to each mouse,
+key, or committed-text envelope. The guest echoes it in the acknowledgement.
+Legacy input events may still omit it; see
+`harness/protocol-fixtures/input.text.acknowledged.json` for the negotiated form.
+
+An agent may advertise `capabilities.operationAcks: true` in its health response.
+After this negotiation, `input.mouse`, `input.key`, `input.text`,
+`clipboard.text.set`, `clipboard.image.set`, `clipboard.files.set`, `window.frame.subscribe`, and
+`window.frame.unsubscribe` receive one success acknowledgement or a structured `error` reply:
+
+```json
+{
+  "type": "operation.ack",
+  "requestId": "req_clipboard_42",
+  "accepted": true
+}
+```
+
+The host must match `requestId`, require `accepted: true`, and bound its reply
+wait. A timeout, malformed reply, unrelated request ID, or negative acknowledgement
+does not prove delivery. In particular, the host must not send a paste shortcut
+after an unconfirmed clipboard write, since that could paste stale guest text.
+It must not automatically retry an uncertain input operation, which could apply
+the operation twice. The host serializes negotiated operations per window on its short-lived
+control sockets so a key-down/key-up pair cannot overtake itself, while a slow acknowledgement
+in one mirrored app does not stall input to another. Clipboard and other operations without a
+window identity use their own global ordering lane. A guest `error` retains its original code
+and message.
+
+Agents that omit the capability or advertise `false` retain the existing
+fire-and-forget path without an acknowledgement wait. This compatibility path
+is selected from health, not inferred from a negotiated agent's silence.
+
+Fixture: `harness/protocol-fixtures/operation.ack.json`.
+
 ## Input Mouse
 
 Event from host to guest:
@@ -847,6 +1042,134 @@ Loop prevention rule:
 
 Implementation note: the host syncs macOS text to the Windows guest before forwarded paste shortcuts. The Windows agent also observes text clipboard changes and broadcasts `clipboard.text.set` with `origin=guest`. The macOS host accepts only increasing guest sequences and writes them to the macOS pasteboard. Host-origin updates are consumed by the agent once so they are not echoed back as guest updates.
 
+## Clipboard Image
+
+Host to guest, and guest to host with `"origin": "guest"`:
+
+```json
+{
+  "type": "clipboard.image.set",
+  "requestId": "req_clipboard_7",
+  "origin": "host",
+  "sequence": 7,
+  "format": "png",
+  "width": 2,
+  "height": 2,
+  "byteLength": 74,
+  "sha256": "d28c139bba718d60154960eaca75535a5cc5b59fe2153e998a29251e8e5f4667",
+  "pngBase64": "iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAEUlEQVR4nGP4z8DwH4QZYAwAR8oH+WdZbrcAAAAASUVORK5CYII="
+}
+```
+
+An agent advertises `capabilities.clipboardImage: true`. The field is optional: an older agent decodes as
+absent and the host keeps image clipboards on the Mac instead of sending a message the agent cannot route.
+
+Rules:
+
+- `format` is always `png`. PNG is the one lossless format both pasteboards carry natively (macOS
+  `public.png`, the Windows registered `PNG` format), so neither side has to guess a colour space or quality.
+  The bytes must start with the PNG signature; anything else is rejected rather than handed to an image decoder.
+- `byteLength` is the decoded PNG size, 1...8,388,608 bytes (8 MiB), and must equal the decoded length of
+  `pngBase64`. Base64 makes the frame about 11.2 MB, so the host raises its WebSocket receive limit to
+  32 MiB; the URLSession default of 1 MiB would otherwise end the event stream on the first large copy.
+- `width` and `height` are 1...16,384 pixels and `width * height` is at most 33,554,432. A small PNG can
+  decode to an enormous bitmap, so the receiver checks the dimensions in the IHDR chunk against these fields
+  and against the bound before decoding.
+- `sha256` is the lowercase hex SHA-256 of the decoded PNG bytes. A mismatch is rejected. The hash is what
+  stops repeats: a receiver that applies a remote image remembers its hash, and its own clipboard watcher
+  treats an image with that hash as already seen instead of echoing it back. The guest also skips a
+  broadcast whose hash equals the last one it sent, because Windows bumps the clipboard sequence number
+  when an app re-sets identical content.
+- Text and image updates share one `sequence` space per origin. They are two kinds of one clipboard, so a
+  receiver that accepted guest image 9 must reject a later guest text 8.
+- When the Windows clipboard holds both text and an image (a spreadsheet range, a rich-text selection), the
+  guest sends only the text. That matches what the user most often means and keeps one copy from replacing
+  the Mac clipboard with a picture of a table. The host instead follows the order the source app listed its
+  pasteboard types in, because macOS apps list their richest representation first: Finder puts file URLs
+  before the names it also writes as text, and a browser's Copy Image puts the bitmap before the address.
+- On the guest, a host image is placed as both `PNG` and `CF_DIB`, so apps that only understand device
+  independent bitmaps (Paint, most Win32 apps) can paste it. The guest reads `PNG` first and converts
+  `CF_DIBV5`/`CF_DIB` to PNG otherwise.
+- Host-origin writes receive `operation.ack` under negotiated acknowledgements, exactly like
+  `clipboard.text.set`, and the host must not send the paste shortcut after an unconfirmed write.
+- Failures are `clipboard_image_failed` (the Windows clipboard could not be taken or written) and
+  `clipboard_image_too_large` (a bound above was exceeded). A malformed field is `invalid_message`.
+
+Fixtures: `harness/protocol-fixtures/clipboard.image.set.host.json`,
+`harness/protocol-fixtures/clipboard.image.set.guest.json`.
+
+## Clipboard Files
+
+Host to guest only:
+
+```json
+{
+  "type": "clipboard.files.set",
+  "requestId": "req_clipboard_8",
+  "origin": "host",
+  "sequence": 8,
+  "shareName": "VeilShared",
+  "relativePaths": [
+    "Veil Clipboard\\20261105-140102-1A2B3C\\report.pdf"
+  ]
+}
+```
+
+An agent advertises `capabilities.clipboardFiles: true`.
+
+### Why files travel through the shared folder
+
+File bytes never ride this message. When the user copies files in Finder and presses ⌘V in a mirrored
+Windows window, the host copies exactly those files into a fresh batch folder inside the guest-served shared
+folder (`/Volumes/VeilShared/Veil Clipboard/<batch>/` on the Mac, `C:\VeilShared\Veil Clipboard\<batch>\` in
+Windows), then names them here. The guest places them on its clipboard as `CF_HDROP` with a copy drop effect
+and the host sends Ctrl+V, so Explorer or the target app copies them out like any local paste.
+
+The alternatives were rejected on trust-boundary grounds:
+
+- **Bytes over the control channel**, like `file.open.request`, would put gigabytes through a JSON socket
+  and the host's 50 MB drop bound exists precisely to avoid that.
+- **Sending host paths** and letting the guest read them needs a Mac folder visible to Windows. The only way
+  to get one is macOS File Sharing, which publishes on every interface (see Shared Folder), and it would
+  expose more than the copied files.
+- **Guest-to-host files** (Explorer copy, Finder paste) are deliberately not synchronised. The guest would
+  choose which paths the Mac pasteboard points at, and a guest-chosen file URL is the one clipboard payload
+  that can make Finder act on host files. A user moves guest files to the Mac through the shared folder,
+  which they can see and choose from.
+
+### Rules
+
+- Only `origin: "host"` exists. A guest-origin `clipboard.files.set` is rejected with `invalid_message`.
+- `shareName` must equal the share the guest publishes. The guest resolves paths against its own
+  `guestDirectoryPath`; the host never sends an absolute guest path.
+- `relativePaths` holds 1...64 entries. Each is at most 240 characters, uses `\` separators, starts
+  with `Veil Clipboard\`, and contains no empty, `.` or `..` component, no drive letter or root, no `:`
+  (alternate data streams), and no characters Windows forbids in file names. After resolution the full path
+  must still be inside `<guestDirectoryPath>\Veil Clipboard\`, must exist, must be a regular file and must
+  not be a reparse point. One bad entry rejects the whole message, so a partial paste never happens.
+- The host copies regular files only: no folders, no symbolic links, at most 64 files and 512 MiB in total.
+  It refuses the paste with a message rather than copying part of the selection. Folder copy is left out of
+  v1 because a recursive copy is where symlinks and package bundles would carry more than the user picked.
+- Each paste gets a new batch folder named `yyyyMMdd-HHmmss-<6 hex>`. The host keeps the three newest batches
+  and deletes older ones it created, and only folders matching that pattern inside `Veil Clipboard`.
+- Requires the shared folder to be mounted on the Mac. Without it the host shows why and sends no paste
+  shortcut, rather than pasting the file names as text.
+- Failures are `clipboard_files_failed` (the clipboard could not be written) and
+  `invalid_shared_file_path` (an entry failed the checks above).
+
+Fixture: `harness/protocol-fixtures/clipboard.files.set.host.json`.
+
+### Host controls
+
+Clipboard sharing is on by default, matching the text behaviour Veil already shipped, and can be turned off
+from the Apps menu (**Share Clipboard with Windows**). Off means no clipboard message is sent or accepted in
+either direction; ⌘V still forwards Ctrl+V, so Windows pastes its own clipboard. **Copy Files into Windows on
+Paste** is a separate switch, also on by default, because it writes into the shared folder.
+
+Guest-to-host updates are applied to the Mac pasteboard only while Veil is the active app. A Windows app
+that sets the clipboard in the background would otherwise replace what the user just copied in a Mac app
+with no warning. A background update is dropped, not queued.
+
 ## Windows Notifications
 
 Host request:
@@ -924,7 +1247,7 @@ Rules:
 ### Codes
 
 Codes documented alongside the message that produces them: `app_not_found`, `invalid_file_name`,
-`file_decode_failed`, `file_too_large`, `file_write_failed`, `file_open_failed`, `window_not_tracked`,
+`invalid_shared_file_path`, `shared_file_missing`, `file_decode_failed`, `file_too_large`, `file_write_failed`, `file_open_failed`, `window_not_tracked`,
 `text_too_long`, `invalid_message`, `input_text_failed`, `window_resize_failed`.
 
 The guest also emits the following. They were undocumented, which meant a host could neither explain them
@@ -937,25 +1260,25 @@ to a user nor pre-empt them:
 | `window_focus_failed` | `window.focus.request` threw. Distinct from an accepted-but-refused focus, which returns `accepted: false` rather than an error. |
 | `window_close_failed` | `window.close.request` threw, same distinction. |
 | `window_resize_failed` | `window.resize.request` threw while applying the size to the tracked HWND. |
-| `input_mouse_failed` | Posting a mouse message threw. |
-| `input_key_failed` | Posting a key message threw. |
+| `input_mouse_failed` | Posting a mouse message threw or Windows declined to apply it. |
+| `input_key_failed` | Posting a key message threw or Windows declined to apply it. |
+| `input_text_failed` | Posting committed text threw or Windows declined to apply it. |
+| `clipboard_image_failed` | The guest could not read, convert, or write an image on the Windows clipboard. |
+| `clipboard_image_too_large` | A `clipboard.image.set` exceeded the byte or pixel bounds in Clipboard Image. |
+| `clipboard_files_failed` | The guest could not place the shared-folder files on the Windows clipboard. |
 | `clipboard_text_failed` | The guest could not take the Windows clipboard. Routine rather than exotic: the guest retries `OpenClipboard` for 250 ms and any clipboard manager or Office instance can hold it longer. |
 
-Two gaps worth knowing about, both tracked in
-`docs/checklists/2026-08-13-host-guest-contract-audit.md`:
-
-- **Most of these cannot currently be observed by the macOS host.** `input.mouse`, `input.key`,
-  `input.text`, `clipboard.text.set`, and frame subscribe/unsubscribe are sent fire-and-forget, and the
-  host's transport closes the socket without reading. The sentence above permitting errors on those
-  requests describes surface no host reads today.
-- **`input_mouse_failed`, `input_key_failed`, and `input_text_failed` are only raised for thrown
-  exceptions.** The guest's desktop layer returns `false` — not an exception — for an unparseable HWND, an
-  unknown event name, and a dead window, and that path produces no reply at all.
+The fire-and-forget observation and silent `false`-return gaps recorded in
+`docs/checklists/2026-08-13-host-guest-contract-audit.md` are addressed for negotiated
+agents: the host reads the acknowledgement/error and the agent converts declined
+input to a structured failure. Legacy agents retain unacknowledged delivery, so
+socket submission alone cannot prove that Windows consumed their input.
 
 ## Shared Folder
 
-A live, writable folder both macOS and Windows can read and write continuously. This replaces
-`file.open.request` for anything that is not literally "open this dropped file", and it has no size cap.
+A live, writable folder both macOS and Windows can read and write continuously. The
+`file.open.shared.request` companion uses this folder for opening large files without copying their
+bytes through the control channel, and the folder itself has no size cap.
 
 Host request:
 

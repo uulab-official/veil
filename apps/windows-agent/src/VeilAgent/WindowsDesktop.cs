@@ -28,6 +28,12 @@ public sealed class WindowsDesktop : IWindowsDesktop
     private const int MK_RBUTTON = 0x0002;
     private const int WHEEL_DELTA = 120;
     private const int SW_RESTORE = 9;
+    private const uint CDS_FULLSCREEN = 0x00000004;
+    private const int DISP_CHANGE_SUCCESSFUL = 0;
+    private const int DISP_CHANGE_BADMODE = -2;
+    private const int ENUM_CURRENT_SETTINGS = -1;
+    private const uint DM_PELSWIDTH = 0x00080000;
+    private const uint DM_PELSHEIGHT = 0x00100000;
     private const uint SWP_NOZORDER = 0x0004;
     private const uint SWP_NOACTIVATE = 0x0010;
     private const uint SWP_NOOWNERZORDER = 0x0200;
@@ -39,6 +45,7 @@ public sealed class WindowsDesktop : IWindowsDesktop
     private readonly object clipboardGate = new();
     private string? lastHostClipboardText;
     private int lastHostClipboardSequence;
+    private string? lastHostClipboardImageSha256;
 
     public Task<LaunchedWindow> LaunchNotepadAsync(CancellationToken cancellationToken)
     {
@@ -60,6 +67,18 @@ public sealed class WindowsDesktop : IWindowsDesktop
     public Task<LaunchedWindow> LaunchAppWithFileAsync(WindowsAppDescriptor app, string filePath, CancellationToken cancellationToken) =>
         LaunchAppCoreAsync(app, arguments: $"\"{filePath}\"", cancellationToken);
 
+    /// <summary>
+    /// Starts an app in the user's profile folder. Inheriting the agent's folder pinned it as the
+    /// app's current directory, so an open Paint blocked tools updates from replacing that folder.
+    /// </summary>
+    internal static ProcessStartInfo AppStartInfo(WindowsAppDescriptor app, string? arguments) => new()
+    {
+        FileName = app.Executable,
+        Arguments = arguments ?? string.Empty,
+        UseShellExecute = true,
+        WorkingDirectory = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)
+    };
+
     private async Task<LaunchedWindow> LaunchAppCoreAsync(WindowsAppDescriptor app, string? arguments, CancellationToken cancellationToken)
     {
         if (!OperatingSystem.IsWindows())
@@ -68,12 +87,8 @@ public sealed class WindowsDesktop : IWindowsDesktop
         }
 
         var existingWindowHandles = SnapshotAppWindowHandles(app);
-        using var process = Process.Start(new ProcessStartInfo
-        {
-            FileName = app.Executable,
-            Arguments = arguments ?? string.Empty,
-            UseShellExecute = true
-        }) ?? throw new InvalidOperationException($"Could not start {app.Executable}.");
+        using var process = Process.Start(AppStartInfo(app, arguments))
+            ?? throw new InvalidOperationException($"Could not start {app.Executable}.");
 
         var discoveryAttempts = (int)(app.WindowDiscoveryTimeout.TotalMilliseconds / 100);
         for (var attempt = 0; attempt < discoveryAttempts; attempt += 1)
@@ -381,6 +396,134 @@ public sealed class WindowsDesktop : IWindowsDesktop
         return Task.FromResult<WindowRect?>(accepted ? GetWindowBounds(hwnd) : null);
     }
 
+    public Task<DisplayResizeResult?> ResizeDisplayAsync(DisplayResizeInput input, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (!OperatingSystem.IsWindows())
+        {
+            throw new PlatformNotSupportedException("The Veil Windows agent must run inside Windows.");
+        }
+
+        if (input.Width < 640
+            || input.Width > 3_840
+            || input.Height < 640
+            || input.Height > 3_840
+            || (long)input.Width * input.Height > 8_294_400)
+        {
+            return Task.FromResult<DisplayResizeResult?>(null);
+        }
+
+        var mode = new NativeDevMode
+        {
+            dmSize = (ushort)Marshal.SizeOf<NativeDevMode>(),
+            dmDeviceName = string.Empty,
+            dmFormName = string.Empty
+        };
+        if (!EnumDisplaySettings(null, ENUM_CURRENT_SETTINGS, ref mode))
+        {
+            return Task.FromResult<DisplayResizeResult?>(null);
+        }
+
+        mode.dmPelsWidth = (uint)input.Width;
+        mode.dmPelsHeight = (uint)input.Height;
+        mode.dmFields = DM_PELSWIDTH | DM_PELSHEIGHT;
+
+        var result = ChangeDisplaySettingsEx(
+            null,
+            ref mode,
+            IntPtr.Zero,
+            CDS_FULLSCREEN,
+            IntPtr.Zero
+        );
+        // The VirtIO GPU driver lists one custom size beside its fixed modes. QEMU normally sets it to
+        // this size first; when it did not, replace it through the driver. Other adapters keep the
+        // first answer.
+        if (result == DISP_CHANGE_BADMODE && VirtioGpuDisplay.TrySetCustomMode(input.Width, input.Height))
+        {
+            result = ChangeDisplaySettingsEx(
+                null,
+                ref mode,
+                IntPtr.Zero,
+                CDS_FULLSCREEN,
+                IntPtr.Zero
+            );
+
+            // Measured on viogpudo 0.1.302: while Windows runs on the custom mode, Windows keeps the
+            // old custom size until another mode is committed, so going from one custom size to the
+            // next needs one listed mode in between. The covering mode keeps windows from being
+            // squeezed onto a smaller desktop during that step.
+            if (result == DISP_CHANGE_BADMODE
+                && TryFindListedModeCovering(input.Width, input.Height, out var listedMode))
+            {
+                ChangeDisplaySettingsEx(null, ref listedMode, IntPtr.Zero, CDS_FULLSCREEN, IntPtr.Zero);
+                result = ChangeDisplaySettingsEx(
+                    null,
+                    ref mode,
+                    IntPtr.Zero,
+                    CDS_FULLSCREEN,
+                    IntPtr.Zero
+                );
+            }
+        }
+
+        if (result != DISP_CHANGE_SUCCESSFUL)
+        {
+            return Task.FromResult<DisplayResizeResult?>(null);
+        }
+
+        return Task.FromResult<DisplayResizeResult?>(new DisplayResizeResult(input.Width, input.Height));
+    }
+
+    /// <summary>
+    /// The smallest listed mode of the primary display that is at least <paramref name="width"/> x
+    /// <paramref name="height"/>, or the largest listed mode when none covers it. Never the target itself.
+    /// </summary>
+    private static bool TryFindListedModeCovering(int width, int height, out NativeDevMode listedMode)
+    {
+        listedMode = default;
+        NativeDevMode? covering = null;
+        NativeDevMode? largest = null;
+        var candidate = new NativeDevMode
+        {
+            dmSize = (ushort)Marshal.SizeOf<NativeDevMode>(),
+            dmDeviceName = string.Empty,
+            dmFormName = string.Empty
+        };
+        for (var index = 0; EnumDisplaySettings(null, index, ref candidate); index++)
+        {
+            var candidateWidth = (int)candidate.dmPelsWidth;
+            var candidateHeight = (int)candidate.dmPelsHeight;
+            var area = (long)candidateWidth * candidateHeight;
+            if ((candidateWidth != width || candidateHeight != height)
+                && candidateWidth <= 3_840
+                && candidateHeight <= 3_840)
+            {
+                if (candidateWidth >= width
+                    && candidateHeight >= height
+                    && (covering is null || area < (long)covering.Value.dmPelsWidth * covering.Value.dmPelsHeight))
+                {
+                    covering = candidate;
+                }
+
+                if (largest is null || area > (long)largest.Value.dmPelsWidth * largest.Value.dmPelsHeight)
+                {
+                    largest = candidate;
+                }
+            }
+        }
+
+        var chosen = covering ?? largest;
+        if (chosen is null)
+        {
+            return false;
+        }
+
+        listedMode = chosen.Value;
+        listedMode.dmFields = DM_PELSWIDTH | DM_PELSHEIGHT;
+        return true;
+    }
+
     public Task<bool> SendMouseInputAsync(WindowMouseInput input, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -526,6 +669,81 @@ public sealed class WindowsDesktop : IWindowsDesktop
             lastHostClipboardText = null;
             return true;
         }
+    }
+
+    public uint GetClipboardSequenceNumber() =>
+        OperatingSystem.IsWindows() ? WindowsClipboardFormats.SequenceNumber() : 0;
+
+    public Task<byte[]?> GetClipboardImagePngAsync(CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (!OperatingSystem.IsWindows())
+        {
+            throw new PlatformNotSupportedException("The Veil Windows agent must run inside Windows.");
+        }
+
+        return Task.Run(WindowsClipboardFormats.ReadImagePng, cancellationToken);
+    }
+
+    public Task SetClipboardImagePngAsync(byte[] png, string sha256, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (!OperatingSystem.IsWindows())
+        {
+            throw new PlatformNotSupportedException("The Veil Windows agent must run inside Windows.");
+        }
+
+        return Task.Run(() =>
+        {
+            // Recorded before the write: the clipboard watcher runs concurrently and could otherwise read the
+            // new image before its hash is known and broadcast it back to the host as a guest copy.
+            lock (clipboardGate)
+            {
+                lastHostClipboardImageSha256 = sha256;
+            }
+
+            try
+            {
+                WindowsClipboardFormats.WriteImage(png);
+            }
+            catch
+            {
+                lock (clipboardGate)
+                {
+                    lastHostClipboardImageSha256 = null;
+                }
+
+                throw;
+            }
+        }, cancellationToken);
+    }
+
+    public bool TryConsumeHostClipboardImageEcho(string sha256)
+    {
+        lock (clipboardGate)
+        {
+            if (lastHostClipboardImageSha256 != sha256)
+            {
+                return false;
+            }
+
+            lastHostClipboardImageSha256 = null;
+            return true;
+        }
+    }
+
+    public Task SetClipboardFilesAsync(IReadOnlyList<string> fullPaths, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (!OperatingSystem.IsWindows())
+        {
+            throw new PlatformNotSupportedException("The Veil Windows agent must run inside Windows.");
+        }
+
+        return Task.Run(() => WindowsClipboardFormats.WriteFileDrop(fullPaths), cancellationToken);
     }
 
     private static bool TryParseWindowId(string windowId, out IntPtr hwnd)
@@ -677,6 +895,59 @@ public sealed class WindowsDesktop : IWindowsDesktop
         int cy,
         uint flags
     );
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern bool EnumDisplaySettings(
+        string? lpszDeviceName,
+        int modeNum,
+        ref NativeDevMode devMode
+    );
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern int ChangeDisplaySettingsEx(
+        string? lpszDeviceName,
+        ref NativeDevMode devMode,
+        IntPtr hwnd,
+        uint dwflags,
+        IntPtr lParam
+    );
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    private struct NativeDevMode
+    {
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)]
+        public string dmDeviceName;
+        public ushort dmSpecVersion;
+        public ushort dmDriverVersion;
+        public ushort dmSize;
+        public ushort dmDriverExtra;
+        public uint dmFields;
+        public int dmPositionX;
+        public int dmPositionY;
+        public uint dmDisplayOrientation;
+        public uint dmDisplayFixedOutput;
+        public short dmColor;
+        public short dmDuplex;
+        public short dmYResolution;
+        public short dmTTOption;
+        public short dmCollate;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)]
+        public string dmFormName;
+        public ushort dmLogPixels;
+        public uint dmBitsPerPel;
+        public uint dmPelsWidth;
+        public uint dmPelsHeight;
+        public uint dmDisplayFlags;
+        public uint dmDisplayFrequency;
+        public uint dmICMMethod;
+        public uint dmICMIntent;
+        public uint dmMediaType;
+        public uint dmDitherType;
+        public uint dmReserved1;
+        public uint dmReserved2;
+        public uint dmPanningWidth;
+        public uint dmPanningHeight;
+    }
 
     private static void SetClipboardUnicodeText(string text)
     {
