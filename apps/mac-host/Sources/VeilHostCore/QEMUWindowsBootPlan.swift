@@ -409,10 +409,12 @@ public struct QEMUWindowsBootPlanner: Sendable {
             )
         }
 
+        // Windows reads the hardware clock as local time; QEMU's default UTC clock put it hours off.
         var arguments = [
             "-name", profile.name,
             "-machine", "virt,highmem=on",
-            "-accel", "hvf"
+            "-accel", "hvf",
+            "-rtc", "base=localtime"
         ]
 
         if let firmwarePath, let firmwareVarsPath {

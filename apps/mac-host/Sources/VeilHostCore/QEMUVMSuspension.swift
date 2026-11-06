@@ -158,7 +158,10 @@ public enum QEMUBootArgumentsFingerprint {
         "-qmp",
         "-vnc",
         "-display",
-        "-incoming"
+        "-incoming",
+        // The clock's starting point, not a device: a session saved before Windows got a local-time
+        // clock still resumes, and the RTC state in the stream carries on from there.
+        "-rtc"
     ]
 
     /// Flags whose value can carry host-side port forwarding clauses.
