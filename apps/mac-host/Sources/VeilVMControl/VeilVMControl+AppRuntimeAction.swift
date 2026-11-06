@@ -324,7 +324,18 @@ extension VeilVMControl {
                 )
             )
             if quietRuntime?.canQuietRuntime == true {
-                runtimeStop = try await LocalVMRuntimeService().stop()
+                let runtimeService = LocalVMRuntimeService()
+                let outcome = await GracefulWindowsShutdown.run(
+                    requestToolsShutdown: { await model.requestSystemShutdown() },
+                    pressPowerButton: {
+                        (try? await runtimeService.pressPowerButton()) != nil
+                    },
+                    isStillRunning: {
+                        (try? await runtimeService.loadSnapshot())?.state == .running
+                    }
+                )
+                FileHandle.standardError.write(Data("Windows shutdown: \(outcome.rawValue)\n".utf8))
+                runtimeStop = try await runtimeService.stop()
                 accepted = runtimeStop?.state == .stopped
             }
         case .suspendRuntime:

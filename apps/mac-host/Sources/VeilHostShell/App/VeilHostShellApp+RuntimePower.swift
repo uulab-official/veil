@@ -163,29 +163,22 @@ extension VeilHostShellApp {
         }
     }
 
-    /// Shuts Windows down the way the Start menu does: through the Veil tools when they can, else
-    /// by pressing the ACPI power button, then waits for the VM to power off. Returns false when
-    /// Windows never did, and the caller turns it off. Killing QEMU first, as Stop used to, lost
-    /// unsaved work and could interrupt updates Windows installs while shutting down.
+    /// Shuts Windows down before the VM is turned off; see `GracefulWindowsShutdown`. Returns
+    /// false when Windows never powered off and the caller has to turn it off.
     @MainActor
     func shutDownWindowsGracefully() async -> Bool {
         guard vmModel.snapshot?.state == .running else {
             return false
         }
-        let viaTools = await model.requestSystemShutdown()
-        if !viaTools, !(await vmModel.pressPowerButton()) {
-            return false
-        }
-
-        let deadline = Date().addingTimeInterval(GracefulShutdownPolicy.timeout(viaTools: viaTools))
-        while Date() < deadline {
-            try? await Task.sleep(for: .seconds(2))
-            await vmModel.load()
-            if vmModel.snapshot?.state != .running {
-                return true
+        let outcome = await GracefulWindowsShutdown.run(
+            requestToolsShutdown: { await model.requestSystemShutdown() },
+            pressPowerButton: { await vmModel.pressPowerButton() },
+            isStillRunning: {
+                await vmModel.load()
+                return vmModel.snapshot?.state == .running
             }
-        }
-        return false
+        )
+        return outcome.poweredOff
     }
 
     /// The quiet policy resolved against the live VM snapshot.
@@ -319,17 +312,5 @@ extension VeilHostShellApp {
                 await performFrameStreamMaintenance(automatic: true)
             }
         }
-    }
-}
-
-enum GracefulShutdownPolicy {
-    /// Windows that accepted a tools shutdown may install updates first; waiting is safer than
-    /// cutting power partway through.
-    static let toolsShutdownSeconds: TimeInterval = 600
-    /// Without the tools, Windows may leave the power button unanswered.
-    static let powerButtonSeconds: TimeInterval = 90
-
-    static func timeout(viaTools: Bool) -> TimeInterval {
-        viaTools ? toolsShutdownSeconds : powerButtonSeconds
     }
 }
