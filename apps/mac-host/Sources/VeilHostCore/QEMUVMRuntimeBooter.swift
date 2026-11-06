@@ -492,7 +492,7 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
                 normalizedY: startButtonTapNormalizedY
             )
             try? await Task.sleep(nanoseconds: 800_000_000)
-            commandSteps = try stepsAfterRunOpened()
+            commandSteps = try Self.runDialogCommandSteps(typing: stepsAfterRunOpened())
         } catch {
             commandSteps = try steps()
         }
@@ -501,6 +501,12 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
             launchRecordStore: launchRecordStore
         )
         return try await sender.send(steps: commandSteps)
+    }
+
+    /// `stepsAfterRunOpened` stops at the typed command so `veil-vmctl` can check the screen before it
+    /// clicks OK. Nothing checks it here, so Return runs it; without it the command sat in the Run box.
+    static func runDialogCommandSteps(typing steps: [QEMUKeySequenceStep]) -> [QEMUKeySequenceStep] {
+        steps + [QEMUKeySequenceStep(key: "ret", delayAfterSend: 1.0)]
     }
 
     public static func makePlan(for profile: VMProfile) throws -> QEMUWindowsBootPlan {

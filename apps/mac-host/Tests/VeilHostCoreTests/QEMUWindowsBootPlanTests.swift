@@ -131,6 +131,7 @@ struct QEMUWindowsBootPlanTests {
         #expect(plan.networkDeviceArgument == "usb-net,netdev=net0")
         #expect(plan.arguments.containsSequence(["-machine", "virt,highmem=on"]))
         #expect(plan.arguments.containsSequence(["-accel", "hvf"]))
+        #expect(plan.arguments.containsSequence(["-rtc", "base=localtime"]))
         #expect(plan.arguments.containsSequence(["-drive", "if=pflash,format=raw,readonly=on,file=/opt/homebrew/share/qemu/edk2-aarch64-code.fd"]))
         #expect(plan.arguments.containsSequence(["-drive", "if=pflash,format=raw,file=/Users/test/Virtual Machines/Veil/uefi-vars.fd"]))
         #expect(!plan.arguments.contains("-bios"))
@@ -1752,6 +1753,15 @@ struct QEMUWindowsBootPlanTests {
         #expect(keys.last != "ret")
         #expect(steps.last?.delayAfterSend == 1.0)
         #expect(keys.count < fallbackSteps.count)
+    }
+
+    @Test("the app's tools setup presses Return after typing into the Run box")
+    func appToolsSetupRunsTypedCommand() throws {
+        let typed = try QEMUGuestAgentInstallKeySequence.stepsAfterRunOpened
+        let sent = QEMUVMRuntimeBooter.runDialogCommandSteps(typing: typed)
+
+        #expect(Array(sent.dropLast()) == typed)
+        #expect(sent.last?.key == "ret")
     }
 
     @Test("QEMU key sequence sender prefers QMP when launch record has QMP socket")
