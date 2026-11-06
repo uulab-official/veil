@@ -78,6 +78,7 @@ preflight_unsigned() {
   [[ "$RELEASE_BUILD" =~ ^[0-9]+(\.[0-9]+){0,2}$ ]] \
     || fail "VEIL_RELEASE_BUILD must contain one to three numeric components."
   require_command swift
+  require_command dotnet
   require_command codesign
   require_command ditto
   require_command plutil
@@ -160,6 +161,9 @@ stage_release_app() {
   # The Windows engine is signed with the release identity and hardened runtime like the app.
   "$ROOT_DIR/script/bundle_qemu_runtime.sh" "$APP_RESOURCES/Runtime" "$SIGNING_IDENTITY" >/dev/null \
     || fail "could not bundle the Windows engine; install qemu and swtpm on the release Mac."
+  # The Windows guest tools ride inside the app; a release without them could never connect apps.
+  "$ROOT_DIR/script/bundle_windows_agent.sh" "$APP_RESOURCES" >/dev/null \
+    || fail "could not bundle the Windows tools; install the .NET 8 SDK on the release Mac."
 
   cat >"$INFO_PLIST" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>

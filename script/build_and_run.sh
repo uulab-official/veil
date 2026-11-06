@@ -60,6 +60,13 @@ if [[ "${VEIL_SKIP_ENGINE_BUNDLE:-0}" != "1" ]]; then
   fi
 fi
 
+# Ship the Windows guest tools so Veil installs and updates them without this repository.
+# Without the .NET 8 SDK the app falls back to the repository's apps/windows-agent folder.
+if [[ "${VEIL_SKIP_WINDOWS_AGENT_BUNDLE:-0}" != "1" ]]; then
+  PATH="$HOME/.dotnet:$PATH" "$ROOT_DIR/script/bundle_windows_agent.sh" "$APP_RESOURCES" >/dev/null \
+    || echo "warning: Veil was built without its Windows tools; install the .NET 8 SDK to bundle them." >&2
+fi
+
 cat >"$INFO_PLIST" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
