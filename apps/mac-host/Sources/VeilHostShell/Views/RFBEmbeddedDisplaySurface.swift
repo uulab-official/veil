@@ -305,6 +305,20 @@ enum RFBEmbeddedDisplayStatus: Equatable {
     case failed(String)
 }
 
+/// The update request that follows an ExtendedDesktopSize response. The response uses up the
+/// outstanding request, and QEMU sends nothing until the next one, so every response is followed
+/// by a request; skipping it froze the picture behind an open socket whenever ramfb refused a resize.
+/// Only a size change asks for a full frame: QEMU can repeat a successful response for a full
+/// update request, and a response -> full update -> response loop starves input.
+enum RFBDesktopSizeFollowUp: Equatable {
+    case fullUpdate
+    case incrementalUpdate
+
+    static func request(responseIsSuccess: Bool, framebufferSizeChanged: Bool) -> RFBDesktopSizeFollowUp {
+        responseIsSuccess && framebufferSizeChanged ? .fullUpdate : .incrementalUpdate
+    }
+}
+
 private struct RFBDisplayEndpoint: Equatable, Sendable {
     var host: String
     var port: Int
@@ -569,21 +583,20 @@ private final class RFBEmbeddedDisplayWorker: @unchecked Sendable {
                     stateLock.unlock()
                     report(presentation)
 
-                    // QEMU can repeat a successful ExtendedDesktopSize rectangle
-                    // when a full update is requested even though the framebuffer
-                    // did not change. Only rebuild the renderer and ask for another
-                    // full frame when the dimensions actually changed; otherwise a
-                    // response -> full update -> response loop starves input.
                     let framebufferSizeChanged = previousFramebufferSize?.width != response.width
                         || previousFramebufferSize?.height != response.height
-                    if response.isSuccess, framebufferSizeChanged {
+                    let followUp = RFBDesktopSizeFollowUp.request(
+                        responseIsSuccess: response.isSuccess,
+                        framebufferSizeChanged: framebufferSizeChanged
+                    )
+                    if followUp == .fullUpdate {
                         try sessionClient.applyDesktopSize(width: response.width, height: response.height)
                         if let appliedInit = sessionClient.serverInit {
                             renderer = try RFBFramebufferRenderer(serverInit: appliedInit)
                         }
-                        try sendOnClient(sessionClient) {
-                            try $0.requestFramebufferUpdate(incremental: false)
-                        }
+                    }
+                    try sendOnClient(sessionClient) {
+                        try $0.requestFramebufferUpdate(incremental: followUp == .incrementalUpdate)
                     }
 
                     if let queued {
