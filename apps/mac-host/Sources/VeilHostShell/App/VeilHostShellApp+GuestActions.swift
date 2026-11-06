@@ -310,7 +310,7 @@ extension VeilHostShellApp {
                 await vmModel.refreshRuntimeEvidence()
                 await recordGuestAgentInstallEvidenceIfNeeded()
             } catch {
-                displayMessage = "App connection install could not start: \(userMessage(for: error))"
+                displayMessage = String(localized: "App connection install could not start: \(userMessage(for: error))")
             }
         }
     }
@@ -341,7 +341,7 @@ extension VeilHostShellApp {
                     displayMessage = "Package identity preparation was sent. Windows has not reconnected yet."
                 }
             } catch {
-                displayMessage = "Package identity preparation could not start: \(userMessage(for: error))"
+                displayMessage = String(localized: "Package identity preparation could not start: \(userMessage(for: error))")
             }
         }
     }
@@ -375,7 +375,7 @@ extension VeilHostShellApp {
                     displayMessage = notificationConsentMessage(for: response.notificationListener)
                 }
             } catch {
-                displayMessage = "Windows notification access could not be requested: \(userMessage(for: error))"
+                displayMessage = String(localized: "Windows notification access could not be requested: \(userMessage(for: error))")
             }
         }
     }
@@ -412,7 +412,7 @@ extension VeilHostShellApp {
                     syncLauncherWindowVisibility()
                 }
             } else if let hostForwardProbe = report.diagnostic.hostForwardProbe {
-                displayMessage = "Windows app connection is not ready yet (\(hostForwardProbe.status.rawValue))."
+                displayMessage = String(localized: "Windows app connection is not ready yet (\(hostForwardProbe.status.rawValue)).")
             } else {
                 displayMessage = "Windows app connection is not ready yet."
             }
@@ -430,11 +430,11 @@ extension VeilHostShellApp {
             }
 
             let appName = pendingLaunchDisplayName()
-            displayMessage = "Repairing the Windows app connection so \(appName) can open as a Mac window."
+            displayMessage = String(localized: "Repairing the Windows app connection so \(appName) can open as a Mac window.")
 
             do {
                 _ = try await vmRuntimeBooter.installCurrentGuestTools(vmModel: vmModel)
-                displayMessage = "App connection repair sent. Veil will open \(appName) when Windows responds."
+                displayMessage = String(localized: "App connection repair sent. Veil will open \(appName) when Windows responds.")
                 await vmModel.refreshRuntimeEvidence()
                 await recordGuestAgentInstallEvidenceIfNeeded()
 
@@ -443,7 +443,7 @@ extension VeilHostShellApp {
                     syncLauncherWindowVisibility()
                 }
             } catch {
-                displayMessage = "App connection repair could not start: \(userMessage(for: error))"
+                displayMessage = String(localized: "App connection repair could not start: \(userMessage(for: error))")
             }
         }
     }
@@ -499,7 +499,7 @@ extension VeilHostShellApp {
             if vmModel.snapshot?.windowsInstalled == true {
                 displayMessage = "Windows is marked installed. Veil will boot from the local disk and leave the installer ISO detached."
             } else if let errorMessage = vmModel.errorMessage {
-                displayMessage = "Windows install state could not be updated: \(errorMessage)"
+                displayMessage = String(localized: "Windows install state could not be updated: \(errorMessage)")
             }
         }
     }
@@ -549,7 +549,7 @@ extension VeilHostShellApp {
             let result = await windowsNotificationPresenter.present(notification)
             switch result {
             case .scheduled:
-                displayMessage = "Windows notification shown on macOS: \(notification.title)"
+                displayMessage = String(localized: "Windows notification shown on macOS: \(notification.title)")
             case .permissionDenied:
                 displayMessage = "Windows notification received, but macOS notifications are not allowed for Veil."
             case .authorizationRequestDeclined:

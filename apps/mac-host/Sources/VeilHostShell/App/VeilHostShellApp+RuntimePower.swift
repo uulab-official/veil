@@ -15,7 +15,7 @@ extension VeilHostShellApp {
                 displayMessage = "Windows is running in this window."
                 scheduleAutomaticGuestAgentRecoveryIfNeeded()
             } else if let errorMessage = vmModel.errorMessage {
-                displayMessage = "Windows display could not start: \(errorMessage)"
+                displayMessage = String(localized: "Windows display could not start: \(errorMessage)")
             }
         }
     }
@@ -70,7 +70,7 @@ extension VeilHostShellApp {
             // Resume keeps the saved state file on failure, so the VM is reported as still suspended and
             // the user can retry. Cold booting here would silently discard the session instead.
             if let errorMessage = vmModel.errorMessage {
-                displayMessage = "Your Windows session could not be resumed: \(errorMessage)"
+                displayMessage = String(localized: "Your Windows session could not be resumed: \(errorMessage)")
             }
             return
         }
@@ -119,7 +119,7 @@ extension VeilHostShellApp {
             if vmModel.snapshot?.state == .suspended {
                 displayMessage = "Windows is suspended. Resume it to continue where you left off."
             } else if let errorMessage = vmModel.errorMessage {
-                displayMessage = "Windows could not be suspended: \(errorMessage)"
+                displayMessage = String(localized: "Windows could not be suspended: \(errorMessage)")
             }
         }
     }
@@ -198,7 +198,7 @@ extension VeilHostShellApp {
         if vmModel.snapshot?.state == .stopped {
             displayMessage = "Windows is quiet. No Windows app windows are open."
         } else if let errorMessage = vmModel.errorMessage {
-            displayMessage = "Windows could not quiet: \(errorMessage)"
+            displayMessage = String(localized: "Windows could not quiet: \(errorMessage)")
         }
     }
 

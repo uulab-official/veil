@@ -265,7 +265,7 @@ struct StandaloneMainWindowRoot: View {
             if vmModel.snapshot?.state == .running || vmModel.snapshot?.state == .starting {
                 displayMessage = "Windows is running in this window."
             } else if let errorMessage = vmModel.errorMessage {
-                displayMessage = "Windows display could not start: \(errorMessage)"
+                displayMessage = String(localized: "Windows display could not start: \(errorMessage)")
             }
         }
     }
@@ -384,7 +384,7 @@ struct StandaloneMainWindowRoot: View {
                 await vmModel.refreshRuntimeEvidence()
                 await recordGuestAgentInstallEvidenceIfNeeded()
             } catch {
-                displayMessage = "App connection install could not start: \(userMessage(for: error))"
+                displayMessage = String(localized: "App connection install could not start: \(userMessage(for: error))")
             }
         }
     }
@@ -412,7 +412,7 @@ struct StandaloneMainWindowRoot: View {
                     displayMessage = "Package identity preparation was sent. Windows has not reconnected yet."
                 }
             } catch {
-                displayMessage = "Package identity preparation could not start: \(userMessage(for: error))"
+                displayMessage = String(localized: "Package identity preparation could not start: \(userMessage(for: error))")
             }
         }
     }
@@ -429,7 +429,7 @@ struct StandaloneMainWindowRoot: View {
             if report.status == .connected {
                 displayMessage = "Windows app connection is ready."
             } else if let hostForwardProbe = report.diagnostic.hostForwardProbe {
-                displayMessage = "Windows app connection is not ready yet (\(hostForwardProbe.status.rawValue))."
+                displayMessage = String(localized: "Windows app connection is not ready yet (\(hostForwardProbe.status.rawValue)).")
             } else {
                 displayMessage = "Windows app connection is not ready yet."
             }
@@ -442,7 +442,7 @@ struct StandaloneMainWindowRoot: View {
             if vmModel.snapshot?.windowsInstalled == true {
                 displayMessage = "Windows is marked installed. Veil will boot from the local disk and leave the installer ISO detached."
             } else if let errorMessage = vmModel.errorMessage {
-                displayMessage = "Windows install state could not be updated: \(errorMessage)"
+                displayMessage = String(localized: "Windows install state could not be updated: \(errorMessage)")
             }
         }
     }

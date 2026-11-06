@@ -227,7 +227,7 @@ extension WindowsSetupDisplayPanel {
             actionId: launchOnboarding.primaryActionId ?? launchOnboarding.currentStepId,
             command: launchOnboarding.primaryCommand,
             runsInApp: launchOnboarding.canContinueInApp
-        ) else {
+        ), route.belongsInLauncherHero else {
             return nil
         }
 

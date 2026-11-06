@@ -187,7 +187,7 @@ extension VeilHostShellApp {
             return
         }
 
-        displayMessage = "\(result.window.title) opened as a macOS window."
+        displayMessage = String(localized: "\(result.window.title) opened as a macOS window.")
         showWindowsAppWindow(for: result)
         syncLauncherWindowVisibility()
     }
@@ -206,25 +206,25 @@ extension VeilHostShellApp {
         switch nextStep {
         case .waitForGuestAgent:
             activateMainWindow()
-            displayMessage = "Windows is running. Veil is preparing the app connection so \(appName) can open as a Mac window."
+            displayMessage = String(localized: "Windows is running. Veil is preparing the app connection so \(appName) can open as a Mac window.")
             scheduleAutomaticGuestAgentRecoveryIfNeeded()
         case .recoverStalledRuntime:
             runOneClickPendingLaunch()
         case .repairGuestAgent:
             activateMainWindow()
-            displayMessage = "Windows is running. Veil is repairing the app connection so \(appName) can open as a Mac window."
+            displayMessage = String(localized: "Windows is running. Veil is repairing the app connection so \(appName) can open as a Mac window.")
             scheduleAutomaticGuestAgentRecoveryIfNeeded()
         case .blockedGuestAgentRecovery:
             activateMainWindow()
             displayMessage = "Windows is running, but the app connection did not recover after two attempts. Open recovery to repair Veil Agent."
         case .startOrResumeWindows:
-            displayMessage = "Starting Windows. Veil will open \(appName) when the app connection is ready."
+            displayMessage = String(localized: "Starting Windows. Veil will open \(appName) when the app connection is ready.")
             startWindowsAndShowDisplay()
         case .blockedGuestAgentEndpoint:
             activateMainWindow()
-            displayMessage = "\(appName) is queued, but this VM provider has no configured Windows app connection. \(agentConnectionPlan.detail)"
+            displayMessage = String(localized: "\(appName) is queued, but this VM provider has no configured Windows app connection. \(agentConnectionPlan.detail)")
         case .blockedRuntimeSetup:
-            displayMessage = "Veil queued \(appName). Finish Windows setup before the app can open."
+            displayMessage = String(localized: "Veil queued \(appName). Finish Windows setup before the app can open.")
         case .fulfillQueuedLaunch:
             fulfillPendingWindowsAppWindow()
         case .requestLaunch:
@@ -257,16 +257,16 @@ extension VeilHostShellApp {
             let isToolsSetup = model.pendingLaunchAppId == nil && needsToolsSetup
             displayMessage = isToolsSetup
                 ? "Veil is setting up its tools in Windows. Approve the Windows prompt if one appears."
-                : "Windows is running. Veil is repairing the app connection for \(pendingLaunchDisplayName())."
+                : String(localized: "Windows is running. Veil is repairing the app connection for \(pendingLaunchDisplayName()).")
 
             do {
                 _ = try await vmRuntimeBooter.installCurrentGuestTools(vmModel: vmModel)
                 displayMessage = isToolsSetup
                     ? "Veil tools setup sent. Windows apps appear here once Windows answers."
-                    : "App connection repair sent. Veil will open \(pendingLaunchDisplayName()) when Windows responds."
+                    : String(localized: "App connection repair sent. Veil will open \(pendingLaunchDisplayName()) when Windows responds.")
                 await vmModel.refreshRuntimeEvidence()
             } catch {
-                displayMessage = "App connection repair could not start: \(userMessage(for: error))"
+                displayMessage = String(localized: "App connection repair could not start: \(userMessage(for: error))")
             }
 
             automaticGuestAgentRecoveryTask = nil

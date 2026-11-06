@@ -15,7 +15,7 @@ extension VeilHostShellApp {
             // genuinely nothing to restore, or because every restore attempt failed -- those look
             // identical to the user (no windows reappear) unless the failure reason is surfaced here.
             if restoredLaunches.isEmpty, let errorMessage = model.errorMessage {
-                displayMessage = "Could not restore previous Windows apps: \(errorMessage)"
+                displayMessage = String(localized: "Could not restore previous Windows apps: \(errorMessage)")
             }
 
             if restoredLaunches.isEmpty,
@@ -55,7 +55,7 @@ extension VeilHostShellApp {
                     displayMessage = "Windows is running. Veil is preparing the app connection to reconnect previous apps."
                     scheduleAutomaticGuestAgentRecoveryIfNeeded()
                 } else if let errorMessage = vmModel.errorMessage {
-                    displayMessage = "Windows could not start for previous apps: \(errorMessage)"
+                    displayMessage = String(localized: "Windows could not start for previous apps: \(errorMessage)")
                 }
             }
         case .waitForRuntimeAvailability:
@@ -202,16 +202,16 @@ extension VeilHostShellApp {
         if automatic && !manualPresentationBlocked {
             if !result.reopenedWindows.isEmpty {
                 displayMessage = result.reopenedWindows.count == 1
-                    ? "Reopening \(result.reopenedWindows[0].launch.window.title)."
-                    : "Reopening \(result.reopenedWindows.count) app windows."
+                    ? String(localized: "Reopening \(result.reopenedWindows[0].launch.window.title).")
+                    : String(localized: "Reopening \(result.reopenedWindows.count) app windows.")
             } else if !result.recoveredFrameWindowIds.isEmpty {
                 displayMessage = result.recoveredFrameWindowIds.count == 1
                     ? "Recovering app screen."
-                    : "Recovering \(result.recoveredFrameWindowIds.count) app screens."
+                    : String(localized: "Recovering \(result.recoveredFrameWindowIds.count) app screens.")
             } else if !automatic {
                 displayMessage = result.restartedFrameWindowIds.count == 1
                     ? "Restarting app screen."
-                    : "Restarting \(result.restartedFrameWindowIds.count) app screens."
+                    : String(localized: "Restarting \(result.restartedFrameWindowIds.count) app screens.")
             }
         }
 
@@ -274,7 +274,7 @@ extension VeilHostShellApp {
         successMessage: String
     ) async -> Bool {
         let appName = model.mirrorSessions.first { $0.id == windowId }?.window.title ?? "Windows app"
-        displayMessage = "Refreshing \(appName) screen."
+        displayMessage = String(localized: "Refreshing \(appName) screen.")
         do {
             let decision = try await WindowsAppWindowPresentationReadiness.wait(
                 timeoutSeconds: OneClickAppLaunchCoordinator.firstFrameWaitSeconds,
@@ -408,7 +408,7 @@ extension VeilHostShellApp {
             return
         }
 
-        displayMessage = "\(title) is frontmost as a macOS window."
+        displayMessage = String(localized: "\(title) is frontmost as a macOS window.")
     }
 
     func syncLauncherWindowVisibility() {

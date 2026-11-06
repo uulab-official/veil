@@ -101,8 +101,19 @@ struct DetailView: View {
     }
 
     private var activeMirrorSession: WindowMirrorSession? {
-        model.mirrorSessions.first { $0.latestFrame != nil }
-            ?? model.mirrorSessions.first
+        Self.activeMirrorSession(in: model.mirrorSessions, runtimeState: vmModel.snapshot?.state)
+    }
+
+    /// Sessions are kept across a shutdown so their windows can be restored, but a stopped Windows
+    /// has no open app; naming one made the launcher say Paint was open while Windows was off.
+    static func activeMirrorSession(
+        in sessions: [WindowMirrorSession],
+        runtimeState: VMRuntimeState?
+    ) -> WindowMirrorSession? {
+        guard runtimeState == .running else {
+            return nil
+        }
+        return sessions.first { $0.latestFrame != nil } ?? sessions.first
     }
 
     private var hasInstalledWindows: Bool {

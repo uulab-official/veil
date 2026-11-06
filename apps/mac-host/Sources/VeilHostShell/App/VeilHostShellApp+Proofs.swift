@@ -18,7 +18,7 @@ extension VeilHostShellApp {
                 await model.load()
             }
 
-            displayMessage = "Running \(appCheckDisplayName(for: proofKind)) app check for \(proofAppName(appId: appId))."
+            displayMessage = String(localized: "Running \(appCheckDisplayName(for: proofKind)) app check for \(proofAppName(appId: appId)).")
 
             do {
                 let url = try await writeRecommendedProof(
@@ -26,10 +26,10 @@ extension VeilHostShellApp {
                     appId: appId,
                     reviewEvidenceFolder: latestReviewEvidenceFolder
                 )
-                displayMessage = "\(appCheckDisplayName(for: proofKind)) app check saved: \(url.path)"
+                displayMessage = String(localized: "\(appCheckDisplayName(for: proofKind)) app check saved: \(url.path)")
                 await model.load()
             } catch {
-                displayMessage = "\(appCheckDisplayName(for: proofKind)) app check could not complete: \(userMessage(for: error))"
+                displayMessage = String(localized: "\(appCheckDisplayName(for: proofKind)) app check could not complete: \(userMessage(for: error))")
             }
         }
     }
@@ -51,10 +51,10 @@ extension VeilHostShellApp {
 
             do {
                 let url = try await writeMultiAppProof()
-                displayMessage = "Daily Use app check saved: \(url.path)"
+                displayMessage = String(localized: "Daily Use app check saved: \(url.path)")
                 await model.load()
             } catch {
-                displayMessage = "Daily Use app check could not complete: \(userMessage(for: error))"
+                displayMessage = String(localized: "Daily Use app check could not complete: \(userMessage(for: error))")
             }
         }
     }
@@ -73,10 +73,10 @@ extension VeilHostShellApp {
 
             do {
                 let url = try await writeNotificationProof()
-                displayMessage = "Windows notification check saved: \(url.path)"
+                displayMessage = String(localized: "Windows notification check saved: \(url.path)")
                 await model.load()
             } catch {
-                displayMessage = "Windows notification check could not complete: \(userMessage(for: error))"
+                displayMessage = String(localized: "Windows notification check could not complete: \(userMessage(for: error))")
             }
         }
     }
@@ -263,9 +263,9 @@ extension VeilHostShellApp {
                 latestReviewEvidenceFolder = folder
                 ReviewEvidenceFolderStore.rememberLatest(folder)
                 NSWorkspace.shared.open(folder.directory)
-                displayMessage = "Review Evidence folder ready: \(folder.directory.path). App checks will save \(folder.appCheckProof.lastPathComponent) there."
+                displayMessage = String(localized: "Review Evidence folder ready: \(folder.directory.path). App checks will save \(folder.appCheckProof.lastPathComponent) there.")
             } catch {
-                displayMessage = "Review Evidence folder could not be prepared: \(userMessage(for: error))"
+                displayMessage = String(localized: "Review Evidence folder could not be prepared: \(userMessage(for: error))")
             }
         }
     }
