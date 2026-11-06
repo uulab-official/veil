@@ -710,7 +710,9 @@ extension VeilVMControl {
             return []
         }
         let request = VNRecognizeTextRequest()
-        request.recognitionLevel = .fast
+        // The fast recognizer only reads Latin script: on a Korean Windows it turned the UAC prompt
+        // into noise plus "Windows PowerShell", so the prompt was never approved and timed out.
+        request.recognitionLevel = .accurate
         request.usesLanguageCorrection = false
         request.recognitionLanguages = ["ko-KR", "en-US"]
         do {
