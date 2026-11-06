@@ -47,6 +47,7 @@ public sealed class AgentSession
     private readonly ISparsePackageStatusProbe sparsePackageStatusProbe;
     private readonly IWindowsNotificationAccessProbe notificationAccessProbe;
     private readonly IWindowsSharedFolderProbe sharedFolderProbe;
+    private readonly IGuestShutdown guestShutdown;
     private readonly Dictionary<string, LaunchedWindow> trackedWindowsById = new();
     private readonly Dictionary<string, WindowsAppDescriptor> appByWindowId = new();
     private readonly ConcurrentDictionary<string, SemaphoreSlim> appLaunchGates = new();
@@ -58,7 +59,8 @@ public sealed class AgentSession
         IPackageIdentityProbe? packageIdentityProbe = null,
         ISparsePackageStatusProbe? sparsePackageStatusProbe = null,
         IWindowsNotificationAccessProbe? notificationAccessProbe = null,
-        IWindowsSharedFolderProbe? sharedFolderProbe = null
+        IWindowsSharedFolderProbe? sharedFolderProbe = null,
+        IGuestShutdown? guestShutdown = null
     )
     {
         this.desktop = desktop;
@@ -67,6 +69,7 @@ public sealed class AgentSession
         this.sparsePackageStatusProbe = sparsePackageStatusProbe ?? new SparsePackageStatusProbe();
         this.notificationAccessProbe = notificationAccessProbe ?? new WindowsNotificationAccessProbe();
         this.sharedFolderProbe = sharedFolderProbe ?? new SharedFolderProbe();
+        this.guestShutdown = guestShutdown ?? new WindowsGuestShutdown();
     }
 
     public async Task<AgentReplies> HandleAsync(JsonObject request, CancellationToken cancellationToken = default)
@@ -89,6 +92,7 @@ public sealed class AgentSession
                 MessageTypes.WindowCloseRequest => await HandleWindowCloseAsync(request, requestId, cancellationToken),
                 MessageTypes.WindowResizeRequest => await HandleWindowResizeAsync(request, requestId, cancellationToken),
                 MessageTypes.DisplayResizeRequest => await HandleDisplayResizeAsync(request, requestId, cancellationToken),
+                MessageTypes.SystemShutdownRequest => HandleSystemShutdown(requestId),
                 MessageTypes.InputMouse => await HandleMouseInputAsync(request, requestId, cancellationToken),
                 MessageTypes.InputKey => await HandleKeyInputAsync(request, requestId, cancellationToken),
                 MessageTypes.InputText => await HandleTextInputAsync(request, requestId, cancellationToken),
@@ -589,6 +593,27 @@ public sealed class AgentSession
         }
     }
 
+    private AgentReplies HandleSystemShutdown(string? requestId)
+    {
+        var response = new JsonObject
+        {
+            ["type"] = MessageTypes.SystemShutdownResponse,
+            ["requestId"] = requestId
+        };
+        try
+        {
+            guestShutdown.Start();
+            response["accepted"] = true;
+        }
+        catch (Exception error)
+        {
+            response["accepted"] = false;
+            response["reason"] = error.Message;
+        }
+
+        return AgentReplies.Direct(response);
+    }
+
     private async Task<AgentReplies> HandleDisplayResizeAsync(
         JsonObject request,
         string? requestId,
@@ -933,6 +958,8 @@ public sealed class AgentSession
                 // Lets the host boot the next cold start on virtio-gpu alone. Read-only, like the rest
                 // of health: the driver itself is installed by the setup and repair scripts.
                 ["virtioGpuDisplay"] = VirtioGpuDisplay.IsDriverInstalled(),
+                // Lets the host shut Windows down through the agent instead of the ACPI power button.
+                ["systemShutdown"] = OperatingSystem.IsWindows(),
                 // Lets the host wait for the operation.ack reply on the fire-and-forget paths
                 // (input, clipboard, frame subscribe). An older host ignores it; an older agent
                 // omits it and the host keeps its fire-and-forget semantics instead of hanging.

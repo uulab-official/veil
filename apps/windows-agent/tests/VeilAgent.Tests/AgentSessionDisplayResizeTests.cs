@@ -50,7 +50,7 @@ public class AgentSessionDisplayResizeTests
         Assert.Null(desktop.LastHeight);
     }
 
-    private sealed class RecordingWindowsDesktop : IWindowsDesktop
+    internal sealed class RecordingWindowsDesktop : IWindowsDesktop
     {
         public int? LastWidth { get; private set; }
         public int? LastHeight { get; private set; }
@@ -90,7 +90,7 @@ public class AgentSessionDisplayResizeTests
         public bool TryConsumeHostClipboardEcho(string text) => false;
     }
 
-    private sealed class NoOpFrameCapture : IWindowFrameCapture
+    internal sealed class NoOpFrameCapture : IWindowFrameCapture
     {
         public Task<WindowFrame> CaptureFrameAsync(LaunchedWindow window, int sequence, CancellationToken cancellationToken) =>
             Task.FromException<WindowFrame>(new NotSupportedException());

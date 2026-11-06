@@ -26,6 +26,8 @@ public static class MessageTypes
     public const string WindowResizeResponse = "window.resize.response";
     public const string DisplayResizeRequest = "display.resize.request";
     public const string DisplayResizeResponse = "display.resize.response";
+    public const string SystemShutdownRequest = "system.shutdown.request";
+    public const string SystemShutdownResponse = "system.shutdown.response";
     public const string InputMouse = "input.mouse";
     public const string InputKey = "input.key";
     public const string InputText = "input.text";
