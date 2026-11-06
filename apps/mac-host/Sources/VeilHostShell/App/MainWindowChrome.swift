@@ -379,7 +379,7 @@ struct StandaloneMainWindowRoot: View {
         Task { @MainActor in
             displayMessage = "Sending the Veil app connection installer to Windows."
             do {
-                _ = try await vmRuntimeBooter.installGuestAgentFromAttachedMedia()
+                _ = try await vmRuntimeBooter.installCurrentGuestTools(vmModel: vmModel)
                 displayMessage = "App connection installer sent. Veil will connect when Windows is ready."
                 await vmModel.refreshRuntimeEvidence()
                 await recordGuestAgentInstallEvidenceIfNeeded()

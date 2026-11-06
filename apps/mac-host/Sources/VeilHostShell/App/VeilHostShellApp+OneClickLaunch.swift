@@ -78,7 +78,7 @@ extension VeilHostShellApp {
                                 }
                             },
                             repairGuestAgent: {
-                                _ = try await self.vmRuntimeBooter.installGuestAgentFromAttachedMedia()
+                                _ = try await self.vmRuntimeBooter.installCurrentGuestTools(vmModel: self.vmModel)
                                 await self.vmModel.refreshRuntimeEvidence()
                             },
                             fulfillLaunch: {
@@ -260,7 +260,7 @@ extension VeilHostShellApp {
                 : "Windows is running. Veil is repairing the app connection for \(pendingLaunchDisplayName())."
 
             do {
-                _ = try await vmRuntimeBooter.installGuestAgentFromAttachedMedia()
+                _ = try await vmRuntimeBooter.installCurrentGuestTools(vmModel: vmModel)
                 displayMessage = isToolsSetup
                     ? "Veil tools setup sent. Windows apps appear here once Windows answers."
                     : "App connection repair sent. Veil will open \(pendingLaunchDisplayName()) when Windows responds."
