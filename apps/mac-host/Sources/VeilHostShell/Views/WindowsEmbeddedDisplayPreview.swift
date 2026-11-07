@@ -16,9 +16,48 @@ struct WindowsEmbeddedDisplayPreview: View {
     var commandKeyMapping: VMCommandKeyMapping = .default
     @State private var rfbDisplayModel = RFBEmbeddedDisplayModel()
     @State private var lastThumbnailAt = Date.distantPast
+    @State private var followResizeTask: Task<Void, Never>?
+    @State private var lastFollowTarget: RFBDesktopResizeTarget?
     @Environment(\.liveDisplayThumbnailSink) private var liveDisplayThumbnailSink
 
     var body: some View {
+        displayContent
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background {
+                GeometryReader { proxy in
+                    Color.clear
+                        .onAppear { followContainerSize(proxy.size) }
+                        .onChange(of: proxy.size) { _, size in followContainerSize(size) }
+                }
+            }
+    }
+
+    /// The separate desktop window has a presenter that measures it; the main window has none, so
+    /// without this Windows kept its resolution however the user sized Veil. A settled container size
+    /// becomes the guest's desktop size, the way a Parallels VM window resizes Windows with it.
+    private func followContainerSize(_ size: CGSize) {
+        guard resizeBus == nil, surface.kind == .vncLoopback else {
+            return
+        }
+        followResizeTask?.cancel()
+        followResizeTask = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(400))
+            guard !Task.isCancelled,
+                  let target = RFBDesktopSizePolicy.target(
+                      contentSizeInPoints: size,
+                      backingScaleFactor: DisplayResolutionPreference.guestPixelsPerPoint(
+                          screenScale: NSScreen.main?.backingScaleFactor
+                      )
+                  ),
+                  RFBDesktopSizePolicy.isSignificantChange(from: lastFollowTarget, to: target) else {
+                return
+            }
+            lastFollowTarget = target
+            rfbDisplayModel.requestDesktopResize(width: target.widthInPixels, height: target.heightInPixels)
+        }
+    }
+
+    private var displayContent: some View {
         ZStack {
             Color.black
 

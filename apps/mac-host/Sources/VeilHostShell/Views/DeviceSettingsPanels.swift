@@ -240,3 +240,31 @@ struct KeyboardMappingPanel: View {
         }
     }
 }
+
+/// Parallels' Graphics > Resolution choice: scaled for normal-size text, or Retina for full pixels.
+struct DisplayResolutionPanel: View {
+    @AppStorage(DisplayResolutionPreference.retinaResolutionKey) private var retinaResolution = false
+
+    var body: some View {
+        ShellPanel(spacing: 12) {
+            ShellPanelHeader(
+                title: "Display",
+                subtitle: "Windows follows the size of its Veil window.",
+                symbolName: "display"
+            )
+
+            Picker("Resolution", selection: $retinaResolution) {
+                Text("Scaled").tag(false)
+                Text("Retina resolution").tag(true)
+            }
+            .pickerStyle(.segmented)
+
+            Text(retinaResolution
+                ? "Sharper on a Retina display. Set Windows Settings > System > Display > Scale to 200% so text is not half size."
+                : "Windows text and controls appear at their normal size. Takes effect the next time the window changes size.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+}

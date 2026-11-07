@@ -431,6 +431,7 @@ struct VMRuntimeView: View {
                         await model.updateHardware(cpuCount: cpuCount, memoryMB: memoryMB)
                     }
                 }
+                DisplayResolutionPanel()
                 RemovableMediaPanel(
                     snapshot: snapshot,
                     status: model.removableMedia,

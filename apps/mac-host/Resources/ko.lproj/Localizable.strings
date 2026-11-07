@@ -588,3 +588,10 @@
 "Shutting down Windows. Windows may ask to save changes or finish updates first." = "Windows를 종료하는 중입니다. Windows가 변경 내용 저장을 묻거나 업데이트를 먼저 마칠 수 있습니다.";
 "Windows shut down." = "Windows를 종료했습니다.";
 "Windows did not shut down in time, so Veil turned it off." = "Windows가 제때 종료되지 않아 Veil이 전원을 껐습니다.";
+"Display" = "디스플레이";
+"Windows follows the size of its Veil window." = "Windows 해상도가 Veil 창 크기를 따라갑니다.";
+"Resolution" = "해상도";
+"Scaled" = "크기 조정";
+"Retina resolution" = "Retina 해상도";
+"Sharper on a Retina display. Set Windows Settings > System > Display > Scale to 200% so text is not half size." = "Retina 디스플레이에서 더 선명합니다. 글자가 절반 크기로 보이지 않도록 Windows 설정 > 시스템 > 디스플레이 > 배율을 200%로 바꾸세요.";
+"Windows text and controls appear at their normal size. Takes effect the next time the window changes size." = "Windows 글자와 버튼이 원래 크기로 보입니다. 다음에 창 크기가 바뀔 때 적용됩니다.";

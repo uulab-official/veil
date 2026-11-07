@@ -174,10 +174,11 @@ final class QEMUConsoleWindowPresenter: NSObject, NSWindowDelegate {
             contentSize = contentView.bounds.size
         }
 
-        let backingScaleFactor = window.screen?.backingScaleFactor ?? 1
         guard let target = RFBDesktopSizePolicy.target(
             contentSizeInPoints: contentSize,
-            backingScaleFactor: backingScaleFactor
+            backingScaleFactor: DisplayResolutionPreference.guestPixelsPerPoint(
+                screenScale: window.screen?.backingScaleFactor
+            )
         ) else {
             return
         }
