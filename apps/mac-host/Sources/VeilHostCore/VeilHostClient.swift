@@ -592,6 +592,12 @@ public struct VeilHostClient: HostDashboardService, Sendable {
     /// can acknowledge, so it gets longer than a keystroke. Still bounded: a paste that never confirms is
     /// reported rather than waited on.
     public static let clipboardImageAckTimeoutSeconds: TimeInterval = 10
+    /// How long a request waits for its one response. The agent answers health, focus, close and
+    /// window resize within milliseconds; without a bound, a guest that accepts the socket but never
+    /// replies (hung agent, paused VM) would hang the caller and everything awaiting it.
+    public static let requestReplyTimeoutSeconds: TimeInterval = 15
+    /// A display resize can step the guest through several display modes before it answers.
+    public static let displayResizeReplyTimeoutSeconds: TimeInterval = 30
 
     public init(
         transport: any HostTransport,
@@ -1326,7 +1332,9 @@ public struct VeilHostClient: HostDashboardService, Sendable {
             throw VeilHostError.invalidWindowSize(width: width, height: height)
         }
 
-        let replies = try await transport.send(encoder.encode(input), expectedReplies: 1)
+        let replies = try await transport.send(encoder.encode(input), expectedReplies: 1,
+            replyTimeout: Self.requestReplyTimeoutSeconds
+        )
         if let error = replies
             .compactMap({ try? decoder.decode(ErrorResponse.self, from: $0) })
             .first(where: { $0.type == .error }) {
@@ -1342,7 +1350,9 @@ public struct VeilHostClient: HostDashboardService, Sendable {
 
     public func requestSystemShutdown() async throws -> SystemShutdownResponse {
         let input = SystemShutdownRequest(requestId: "req_system_shutdown_\(requestIdSuffix(for: "shutdown"))")
-        let replies = try await transport.send(encoder.encode(input), expectedReplies: 1)
+        let replies = try await transport.send(encoder.encode(input), expectedReplies: 1,
+            replyTimeout: Self.requestReplyTimeoutSeconds
+        )
         if let error = replies
             .compactMap({ try? decoder.decode(ErrorResponse.self, from: $0) })
             .first(where: { $0.type == .error }) {
@@ -1366,7 +1376,9 @@ public struct VeilHostClient: HostDashboardService, Sendable {
             throw VeilHostError.invalidWindowSize(width: width, height: height)
         }
 
-        let replies = try await transport.send(encoder.encode(input), expectedReplies: 1)
+        let replies = try await transport.send(encoder.encode(input), expectedReplies: 1,
+            replyTimeout: Self.displayResizeReplyTimeoutSeconds
+        )
         if let error = replies
             .compactMap({ try? decoder.decode(ErrorResponse.self, from: $0) })
             .first(where: { $0.type == .error }) {
@@ -1507,7 +1519,9 @@ public struct VeilHostClient: HostDashboardService, Sendable {
 
     private func request<Request: Encodable, Response: Decodable>(_ message: Request) async throws -> Response {
         try Task.checkCancellation()
-        let replies = try await transport.send(encoder.encode(message), expectedReplies: 1)
+        let replies = try await transport.send(encoder.encode(message), expectedReplies: 1,
+            replyTimeout: Self.requestReplyTimeoutSeconds
+        )
         try Task.checkCancellation()
         guard let data = replies.first else {
             throw VeilHostError.missingReply("expected one response")

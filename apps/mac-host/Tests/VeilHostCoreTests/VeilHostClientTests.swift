@@ -20,6 +20,26 @@ struct VeilHostClientTests {
         #expect(health.os == "windows-arm64")
     }
 
+    @Test("bounds how long single-response requests wait for the agent")
+    func boundsSingleResponseRequests() async throws {
+        let transport = TimeoutRecordingTransport()
+        let client = VeilHostClient(transport: transport)
+
+        _ = try? await client.loadHealth()
+        _ = try? await client.focusWindow(windowId: "hwnd:00000001")
+        _ = try? await client.resizeWindow(windowId: "hwnd:00000001", width: 800, height: 600)
+        _ = try? await client.resizeDisplay(width: 1280, height: 800)
+        _ = try? await client.requestSystemShutdown()
+
+        #expect(transport.replyTimeouts == [
+            VeilHostClient.requestReplyTimeoutSeconds,
+            VeilHostClient.requestReplyTimeoutSeconds,
+            VeilHostClient.requestReplyTimeoutSeconds,
+            VeilHostClient.displayResizeReplyTimeoutSeconds,
+            VeilHostClient.requestReplyTimeoutSeconds
+        ])
+    }
+
     @Test("requests Windows notification listener consent")
     func requestsWindowsNotificationListenerConsent() async throws {
         let transport = RecordingTransport(responses: [
@@ -741,6 +761,19 @@ private final class RecordingTransport: HostTransport, @unchecked Sendable {
         let replyStrings = Array(responses.prefix(expectedReplies))
         responses.removeFirst(replyStrings.count)
         return replyStrings.map { Data($0.utf8) }
+    }
+}
+
+private final class TimeoutRecordingTransport: HostTransport, @unchecked Sendable {
+    private(set) var replyTimeouts: [TimeInterval?] = []
+
+    func send(_ message: Data, expectedReplies: Int) async throws -> [Data] {
+        try await send(message, expectedReplies: expectedReplies, replyTimeout: nil)
+    }
+
+    func send(_ message: Data, expectedReplies: Int, replyTimeout: TimeInterval?) async throws -> [Data] {
+        replyTimeouts.append(replyTimeout)
+        return []
     }
 }
 
