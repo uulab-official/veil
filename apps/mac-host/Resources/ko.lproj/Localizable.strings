@@ -495,7 +495,8 @@
 "Updating Windows tools. When Windows asks for approval, choose Yes." = "Windows 도구를 업데이트하는 중입니다. Windows에서 승인을 요청하면 \"예\"를 누르세요.";
 "Windows tools updated. Restart Windows once so the screen follows the window size." = "Windows 도구를 업데이트했습니다. 화면이 창 크기를 따라가도록 Windows를 한 번 다시 시작하세요.";
 "Windows tools could not be updated: %@" = "Windows 도구를 업데이트하지 못했습니다: %@";
-"Windows tools were not updated. Choose Update Tools again and approve the Windows prompt." = "Windows 도구가 업데이트되지 않았습니다. 도구 업데이트를 다시 누르고 Windows 승인 창에서 \"예\"를 누르세요.";
+"Waiting for Windows approval. Choose Yes in the Windows prompt to finish updating the tools." = "Windows 승인을 기다리는 중입니다. Windows 승인 창에서 \"예\"를 누르면 도구 업데이트가 끝납니다.";
+"Windows tools are not updated yet. If the Windows approval prompt is still open, choose Yes; otherwise choose Update Tools again." = "Windows 도구가 아직 업데이트되지 않았습니다. Windows 승인 창이 열려 있으면 \"예\"를 누르고, 없으면 도구 업데이트를 다시 누르세요.";
 
 /* Launcher next-action buttons */
 "Check Connection" = "연결 확인";

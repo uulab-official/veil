@@ -12,6 +12,20 @@ struct GuestToolsTests {
         #expect(!GuestToolsUpdatePolicy.isOutdated(installedVersion: "0.1.0+abc", bundledVersion: "0.1.0+abc"))
     }
 
+    @Test("the update disc stays inserted until the new agent connects")
+    func updateDiscStaysUntilTheNewAgentConnects() {
+        #expect(!GuestToolsUpdatePolicy.ejectsUpdateMedia(installedVersion: "0.1.0+old", bundledVersion: "0.1.0+abc"))
+        #expect(!GuestToolsUpdatePolicy.ejectsUpdateMedia(installedVersion: nil, bundledVersion: "0.1.0+abc"))
+        #expect(GuestToolsUpdatePolicy.ejectsUpdateMedia(installedVersion: "0.1.0+abc", bundledVersion: "0.1.0+abc"))
+        #expect(GuestToolsUpdatePolicy.ejectsUpdateMedia(installedVersion: "0.1.0", bundledVersion: nil))
+    }
+
+    @Test("an update waits minutes for a late Windows approval")
+    func updateWaitsForLateApproval() {
+        #expect(GuestToolsUpdatePolicy.approvalWaitSeconds >= 600)
+        #expect(GuestToolsUpdatePolicy.approvalReminderSeconds < GuestToolsUpdatePolicy.approvalWaitSeconds)
+    }
+
     @Test("nothing is outdated without a stamped bundle or a connected agent")
     func unknownVersions() {
         #expect(!GuestToolsUpdatePolicy.isOutdated(installedVersion: "0.1.0", bundledVersion: "0.1.0"))

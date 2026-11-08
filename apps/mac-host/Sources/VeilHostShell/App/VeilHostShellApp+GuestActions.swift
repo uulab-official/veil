@@ -478,23 +478,34 @@ extension VeilHostShellApp {
                 return
             }
 
-            // The repair restarts the agent after the approval, so give the user time to answer it.
+            // The repair restarts the agent only after the Windows approval, which the user may answer
+            // minutes later. Ejecting the disc before then made a late approval fail silently.
             let bundledVersion = ShellGuestTools.bundledVersion
-            try? await Task.sleep(for: .seconds(20))
-            for _ in 0..<36 where model.health?.agentVersion != bundledVersion {
-                await model.load()
-                if model.health?.agentVersion == bundledVersion {
+            let started = ContinuousClock.now
+            var remindedAboutApproval = false
+            while model.health?.agentVersion != bundledVersion {
+                let elapsed = started.duration(to: .now) / .seconds(1)
+                if elapsed >= GuestToolsUpdatePolicy.approvalWaitSeconds {
                     break
                 }
+                if !remindedAboutApproval, elapsed >= GuestToolsUpdatePolicy.approvalReminderSeconds {
+                    remindedAboutApproval = true
+                    displayMessage = String(localized: "Waiting for Windows approval. Choose Yes in the Windows prompt to finish updating the tools.")
+                }
                 try? await Task.sleep(for: .seconds(5))
+                await model.load()
             }
-            await vmModel.ejectRemovableMedia()
+
+            let installedVersion = model.health?.agentVersion
+            if GuestToolsUpdatePolicy.ejectsUpdateMedia(installedVersion: installedVersion, bundledVersion: bundledVersion) {
+                await vmModel.ejectRemovableMedia()
+            }
             await recordGuestAgentInstallEvidenceIfNeeded()
 
-            if model.health?.agentVersion == bundledVersion {
+            if installedVersion == bundledVersion {
                 displayMessage = String(localized: "Windows tools updated. Restart Windows once so the screen follows the window size.")
             } else {
-                displayMessage = String(localized: "Windows tools were not updated. Choose Update Tools again and approve the Windows prompt.")
+                displayMessage = String(localized: "Windows tools are not updated yet. If the Windows approval prompt is still open, choose Yes; otherwise choose Update Tools again.")
             }
         }
     }

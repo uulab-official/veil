@@ -210,9 +210,10 @@ extension AppRuntimeBooter {
             return try await installGuestAgentFromAttachedMedia()
         }
         let record = try await updateGuestToolsFromRemovableMedia()
-        // The repair copies the bundle within a few minutes of the approval; then the disc can go.
+        // The repair copies the bundle right after the Windows approval, which can come minutes
+        // later; the disc stays until well after the update wait gives up.
         Task { @MainActor in
-            try? await Task.sleep(for: .seconds(240))
+            try? await Task.sleep(for: .seconds(GuestToolsUpdatePolicy.approvalWaitSeconds + 60))
             await vmModel.ejectRemovableMedia()
         }
         return record

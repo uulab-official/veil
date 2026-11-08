@@ -51,6 +51,24 @@ public enum GuestToolsUpdatePolicy {
         }
         return installedVersion != bundledVersion
     }
+
+    /// How long an update waits for the new agent. The Windows approval prompt stays open until the
+    /// user answers it, and a user away from the Mac can answer minutes later; the copy from the disc
+    /// only starts then.
+    public static let approvalWaitSeconds: TimeInterval = 600
+
+    /// After this long without the new agent, the user is reminded that Windows is waiting for them.
+    public static let approvalReminderSeconds: TimeInterval = 45
+
+    /// Whether the update disc can be ejected once the wait is over. An unanswered approval prompt
+    /// can still be accepted later, and `U.cmd` then copies from the disc, so it stays inserted
+    /// until the new agent has connected.
+    public static func ejectsUpdateMedia(installedVersion: String?, bundledVersion: String?) -> Bool {
+        guard let bundledVersion else {
+            return true
+        }
+        return installedVersion == bundledVersion
+    }
 }
 
 /// A disc that carries the current tools to a Windows that is already running. VEIL_AUTO stays
