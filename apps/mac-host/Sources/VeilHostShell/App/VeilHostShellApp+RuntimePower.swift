@@ -29,7 +29,7 @@ extension VeilHostShellApp {
                 await vmModel.stop()
             }
             guard await vmModel.restartWindowsInstallation() else {
-                displayMessage = vmModel.errorMessage.map { "Veil could not restart the installation: \($0)" }
+                displayMessage = vmModel.errorMessage.map { String(localized: "Veil could not restart the installation: \($0)") }
                 return
             }
 

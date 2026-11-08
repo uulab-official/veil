@@ -634,3 +634,10 @@
 "Waiting for %@ app screen" = "%@ 앱 화면 기다리는 중";
 "%@ Windows app screen, %@, %@" = "%@ Windows 앱 화면, %@, %@";
 "%@ Windows app screen" = "%@ Windows 앱 화면";
+
+/* Runtime and app window messages */
+"Veil could not restart the installation: %@" = "Veil이 설치를 다시 시작하지 못했습니다: %@";
+"Queued Windows app could not open." = "대기 중이던 Windows 앱을 열지 못했습니다.";
+"Veil could not refresh this Windows app screen. Try the recovery action again." = "Veil이 이 Windows 앱 화면을 새로 고치지 못했습니다. 복구를 다시 시도하세요.";
+"All Windows app windows closed. Suspending Windows so your apps come back." = "Windows 앱 창이 모두 닫혔습니다. 다음에 앱이 그대로 돌아오도록 Windows를 일시 중지합니다.";
+"All Windows app windows closed. Quieting Windows." = "Windows 앱 창이 모두 닫혔습니다. Windows를 쉬게 합니다.";
