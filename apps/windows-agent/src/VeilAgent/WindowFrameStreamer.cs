@@ -6,6 +6,7 @@ public sealed class WindowFrameStreamer
     private readonly IWindowFrameCapture capture;
     private readonly TimeSpan? fixedInterval;
     private readonly Func<WindowFrameStreamCadence> cadenceFactory;
+    private readonly DisplayKeepAwake keepAwake;
 
     /// <param name="interval">
     /// When supplied, the stream ticks on this fixed interval and never backs off. Kept for tests and
@@ -14,12 +15,14 @@ public sealed class WindowFrameStreamer
     public WindowFrameStreamer(
         IWindowFrameCapture capture,
         TimeSpan? interval = null,
-        Func<WindowFrameStreamCadence>? cadenceFactory = null
+        Func<WindowFrameStreamCadence>? cadenceFactory = null,
+        DisplayKeepAwake? keepAwake = null
     )
     {
         this.capture = capture;
         this.fixedInterval = interval;
         this.cadenceFactory = cadenceFactory ?? (() => new WindowFrameStreamCadence());
+        this.keepAwake = keepAwake ?? DisplayKeepAwake.None;
     }
 
     /// <param name="onUnchanged">
@@ -41,6 +44,9 @@ public sealed class WindowFrameStreamer
         Func<bool>? needsFullFrame = null
     )
     {
+        // A powered-off display stops apps from redrawing, so a mirrored window would freeze at its
+        // last composed pixels.
+        using var displayHold = keepAwake.Hold();
         var sequence = firstSequence;
         var cadence = cadenceFactory();
         // `PeriodicTimer.Period` is settable on .NET 8, so the adaptive cadence can retune the same timer

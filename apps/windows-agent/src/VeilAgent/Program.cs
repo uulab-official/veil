@@ -12,7 +12,7 @@ if (!instanceGuard.HasOwnership)
 
 var desktop = new WindowsDesktop();
 var capture = new GdiWindowFrameCapture();
-var streamer = new WindowFrameStreamer(capture);
+var streamer = new WindowFrameStreamer(capture, keepAwake: DisplayKeepAwake.CreateForWindows());
 var clipboardStreamer = new ClipboardTextStreamer(desktop);
 var packageIdentityProbe = new WindowsPackageIdentityProbe();
 var session = new AgentSession(desktop, capture, packageIdentityProbe);
