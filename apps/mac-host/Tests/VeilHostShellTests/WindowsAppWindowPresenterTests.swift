@@ -514,6 +514,9 @@ struct WindowsAppWindowPresenterTests {
 
         let window = try #require(mirroredWindow(withId: "hwnd:identity"))
         #expect(window.titleVisibility == .visible)
+        // The traffic lights must not cover the Windows app's own icon and caption.
+        #expect(!window.styleMask.contains(.fullSizeContentView))
+        #expect(!window.titlebarAppearsTransparent)
         #expect(window.titlebarAccessoryViewControllers.count == 1)
         #expect(window.titlebarAccessoryViewControllers.first?.layoutAttribute == .left)
         let accessoryView = try #require(window.titlebarAccessoryViewControllers.first?.view)

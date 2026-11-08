@@ -25,6 +25,10 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
     /// Reads the composited surface for a window. Supplied by the app, which owns the model that owns the
     /// compositor.
     var compositedImageProvider: ((String) -> CGImage?)?
+    /// Reads the model's current session for a window. The hosting view is rebuilt only when a frame or
+    /// window update arrives, so without this the stream badge would judge liveness from that snapshot and
+    /// call an idle window paused even while `window.frame.unchanged` heartbeats keep it fresh.
+    var sessionProvider: ((String) -> WindowMirrorSession?)?
     /// Resolves the current app identity for window chrome. The catalog can refresh after reconnects, so
     /// this is deliberately a provider rather than a snapshot held by the presenter.
     var appIdentityProvider: ((String) -> WindowsAppWindowIdentity)?
@@ -395,6 +399,9 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
                 },
                 compositedImageProvider: { [weak self] windowId in
                     self?.compositedImageProvider?(windowId)
+                },
+                sessionProvider: { [weak self] windowId in
+                    self?.sessionProvider?(windowId)
                 }
             )
         )
@@ -409,8 +416,11 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
         window.collectionBehavior = [.managed, .fullScreenPrimary]
         window.backgroundColor = .black
         window.isOpaque = true
-        window.titlebarAppearsTransparent = true
-        window.styleMask.insert(.fullSizeContentView)
+        // The guest bitmap already starts with the Windows app's own title bar. Drawn under a transparent
+        // macOS titlebar, the traffic lights and the Mac title sat on top of the Windows icon and caption,
+        // so the mirrored surface starts below an ordinary opaque titlebar instead.
+        window.titlebarAppearsTransparent = false
+        window.styleMask.remove(.fullSizeContentView)
         window.isMovableByWindowBackground = true
         window.toolbar = nil
         window.titleVisibility = .visible
@@ -577,6 +587,7 @@ private struct WindowsAppMirrorView: View {
     var onDropRefused: (WindowsAppFileDropRefusal) -> Void
     var onRestartFrameStream: (String) -> Void
     var compositedImageProvider: (String) -> CGImage?
+    var sessionProvider: (String) -> WindowMirrorSession?
     @State private var isTargetedForDrop = false
 
     var body: some View {
@@ -584,7 +595,8 @@ private struct WindowsAppMirrorView: View {
             WindowsAppFrameSurface(
                 session: session,
                 restartFrameStreamAction: onRestartFrameStream,
-                compositedImageProvider: compositedImageProvider
+                compositedImageProvider: compositedImageProvider,
+                sessionProvider: sessionProvider
             )
 
             InputCaptureView(

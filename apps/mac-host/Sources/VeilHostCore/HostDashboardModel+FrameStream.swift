@@ -43,6 +43,17 @@ extension HostDashboardModel {
             receivedFrameCount: (priorTiming?.receivedFrameCount ?? 0) + 1,
             unchangedHeartbeatCount: priorTiming?.unchangedHeartbeatCount ?? 0
         )
+        forgiveFrameStreamRestartsIfRecovered(at: index, receivedAt: receivedAt)
+    }
+
+    /// Clears the restart ladder once a restarted stream has stayed alive long enough to count as recovered.
+    private func forgiveFrameStreamRestartsIfRecovered(at index: Int, receivedAt: Date) {
+        guard mirrorSessions[index].frameStreamRestartCount > 0,
+              let restartedAt = mirrorSessions[index].latestFrameStreamRestartedAt,
+              receivedAt.timeIntervalSince(restartedAt) >= WindowFrameStreamAssessment.restartLadderResetSeconds else {
+            return
+        }
+        mirrorSessions[index].frameStreamRestartCount = 0
     }
 
     /// Composited surface for a mirrored window, or `nil` until a key frame establishes one.
@@ -136,6 +147,7 @@ extension HostDashboardModel {
             receivedFrameCount: priorTiming.receivedFrameCount,
             unchangedHeartbeatCount: priorTiming.unchangedHeartbeatCount + 1
         )
+        forgiveFrameStreamRestartsIfRecovered(at: index, receivedAt: receivedAt)
         framePipelineMetrics?.recordUnchangedHeartbeat(windowId: event.windowId, at: receivedAt)
         return true
     }

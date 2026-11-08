@@ -109,6 +109,9 @@ extension VeilHostShellApp {
         windowsAppWindowPresenter.compositedImageProvider = { windowId in
             model.compositedFrameImage(for: windowId)
         }
+        windowsAppWindowPresenter.sessionProvider = { windowId in
+            model.mirrorSessions.first { $0.id == windowId }
+        }
         windowsAppWindowPresenter.onTextInput = { windowId, text in
             Task { @MainActor in
                 await model.sendTextInput(windowId: windowId, text: text)

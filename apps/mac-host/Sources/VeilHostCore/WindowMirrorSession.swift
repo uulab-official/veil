@@ -60,6 +60,10 @@ public struct WindowFrameStreamAssessment: Equatable, Sendable {
     public static let firstFrameTimeoutThresholdMilliseconds = 8_000
     public static let recoveryEscalationRestartThreshold = 2
     public static let reopenEscalationRestartThreshold = 3
+    /// How long a restarted stream has to keep delivering before its restarts are forgiven. Without this the
+    /// ladder only climbed: two restarts early in a session meant any later pause, even an hour on, skipped
+    /// the plain restart and went straight to focusing the window, and a third closed and relaunched the app.
+    public static let restartLadderResetSeconds: TimeInterval = 60
 
     public var status: WindowFrameStreamStatus
     public var latestFrameAgeMilliseconds: Int?

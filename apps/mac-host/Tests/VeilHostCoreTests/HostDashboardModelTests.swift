@@ -1221,6 +1221,26 @@ struct HostDashboardModelTests {
         #expect(windowStatus.frameStreamRecommendedAction == "none")
     }
 
+    @Test("a restarted stream that stays alive for a minute is forgiven its restarts")
+    @MainActor
+    func recoveredStreamResetsRestartLadder() async throws {
+        let service = FakeDashboardService(health: .captureReady)
+        let model = HostDashboardModel(service: service)
+        let restartedAt = Date(timeIntervalSince1970: 3_000)
+
+        await model.launchNotepad()
+        #expect(await model.restartFrameSubscription(windowId: "hwnd:0003029A", restartedAt: restartedAt))
+        #expect(await model.restartFrameSubscription(windowId: "hwnd:0003029A", restartedAt: restartedAt))
+        model.receiveWindowFrame(.notepadFirstFrame, receivedAt: restartedAt.addingTimeInterval(1))
+        model.receiveWindowFrameUnchanged(.notepadHeartbeat(sequence: 1), receivedAt: restartedAt.addingTimeInterval(30))
+        // Half a minute of health is not yet enough; a stream that keeps failing must still escalate.
+        #expect(model.mirrorSessions.first?.frameStreamRestartCount == 2)
+
+        model.receiveWindowFrameUnchanged(.notepadHeartbeat(sequence: 1), receivedAt: restartedAt.addingTimeInterval(61))
+
+        #expect(model.mirrorSessions.first?.frameStreamRestartCount == 0)
+    }
+
     @Test("ignores an unchanged-frame heartbeat before the first real frame")
     @MainActor
     func ignoresUnchangedFrameHeartbeatBeforeFirstFrame() async throws {
