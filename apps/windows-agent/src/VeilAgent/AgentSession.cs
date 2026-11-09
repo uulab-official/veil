@@ -150,6 +150,7 @@ public sealed class AgentSession
         var reuseExistingWindow = request["reuseExistingWindow"]?.GetValue<bool>() ?? false;
         var launchGate = appLaunchGates.GetOrAdd(app.Id, _ => new SemaphoreSlim(1, 1));
         LaunchedWindow launched;
+        IReadOnlyList<LaunchedWindow> openPopups = [];
         await launchGate.WaitAsync(cancellationToken);
         try
         {
@@ -165,6 +166,11 @@ public sealed class AgentSession
                     // cannot turn old windows into duplicate macOS mirrors after the request.
                     TrackWindows(app, existingWindows);
                     launched = PrimaryWindow(existingWindows);
+                    // Popups already open, such as Paint's text formatting bar, belong on the app window the host
+                    // is about to show; tracked quietly they would never appear until reopened.
+                    openPopups = existingWindows
+                        .Where(window => window.IsPopup && window.WindowId != launched.WindowId)
+                        .ToArray();
                 }
                 else
                 {
@@ -190,7 +196,9 @@ public sealed class AgentSession
                 LaunchResponse(requestId, launched.ProcessId),
                 WindowCreatedEvent(app, launched)
             },
-            BroadcastEvents: frame is null ? Array.Empty<JsonObject>() : [WindowFrameEvent(frame)],
+            BroadcastEvents: (frame is null ? Array.Empty<JsonObject>() : [WindowFrameEvent(frame)])
+                .Concat(openPopups.Select(popup => WindowCreatedEvent(app, popup)))
+                .ToArray(),
             StreamWindow: launched,
             NextFrameSequence: frame is null ? 1 : 2
         );
