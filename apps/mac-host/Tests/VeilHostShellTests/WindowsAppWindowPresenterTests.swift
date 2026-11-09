@@ -493,8 +493,8 @@ struct WindowsAppWindowPresenterTests {
         #expect(callbackWindowIds.isEmpty)
     }
 
-    @Test("adds app identity chrome to the mirrored window titlebar")
-    func addsAppIdentityChromeToMirroredWindowTitlebar() throws {
+    @Test("shows only the Windows caption on a mirrored window")
+    func showsOnlyTheWindowsCaptionOnMirroredWindow() throws {
         _ = NSApplication.shared
         let presenter = WindowsAppWindowPresenter()
         defer {
@@ -513,15 +513,64 @@ struct WindowsAppWindowPresenterTests {
         )
 
         let window = try #require(mirroredWindow(withId: "hwnd:identity"))
-        #expect(window.titleVisibility == .visible)
-        // The traffic lights must not cover the Windows app's own icon and caption.
-        #expect(!window.styleMask.contains(.fullSizeContentView))
-        #expect(!window.titlebarAppearsTransparent)
-        #expect(window.titlebarAccessoryViewControllers.count == 1)
-        #expect(window.titlebarAccessoryViewControllers.first?.layoutAttribute == .left)
-        let accessoryView = try #require(window.titlebarAccessoryViewControllers.first?.view)
-        #expect(accessoryView.frame.width > 0)
-        #expect(accessoryView.frame.width <= 240)
+        // The guest bitmap carries the Windows title bar; a visible macOS titlebar above it doubled the title
+        // and the window buttons.
+        #expect(window.styleMask.contains(.fullSizeContentView))
+        #expect(window.titlebarAppearsTransparent)
+        #expect(window.titleVisibility == .hidden)
+        #expect(window.title == "Notes.txt")
+        #expect(window.titlebarAccessoryViewControllers.isEmpty)
+        #expect(window.standardWindowButton(.closeButton)?.isHidden == true)
+        #expect(window.standardWindowButton(.miniaturizeButton)?.isHidden == true)
+        #expect(window.standardWindowButton(.zoomButton)?.isHidden == true)
+        // Still a titled window, so it keeps its shadow, resizing, and Close/Minimize/Zoom commands.
+        #expect(window.styleMask.isSuperset(of: [.titled, .closable, .miniaturizable, .resizable]))
+    }
+
+    @Test("turns caption button clicks into the matching Mac window actions")
+    func turnsCaptionButtonClicksIntoMacWindowActions() throws {
+        _ = NSApplication.shared
+        let presenter = WindowsAppWindowPresenter()
+        defer {
+            presenter.closeAll()
+        }
+        var forwardedMouseEvents: [String] = []
+        presenter.onMouseInput = { _, event, _, _ in
+            forwardedMouseEvents.append(event)
+        }
+        presenter.showWindow(
+            for: session(windowId: "hwnd:caption", appId: "winapp_paint", title: "Paint")
+        )
+        let window = try #require(mirroredWindow(withId: "hwnd:caption"))
+        let contentView = try #require(window.contentView)
+        contentView.layoutSubtreeIfNeeded()
+        let inputView = try #require(Self.inputCaptureView(in: contentView))
+        let viewFrame = inputView.convert(inputView.bounds, to: nil)
+        // 69 points from the right edge of a 1:1 surface is the Windows maximize button.
+        let point = NSPoint(x: viewFrame.maxX - 69, y: viewFrame.maxY - 10)
+        for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
+            let event = try #require(NSEvent.mouseEvent(
+                with: type, location: point, modifierFlags: [], timestamp: 0,
+                windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1
+            ))
+            if type == .leftMouseDown { inputView.mouseDown(with: event) } else { inputView.mouseUp(with: event) }
+        }
+        // A Mac action, not a click forwarded to Windows.
+        #expect(forwardedMouseEvents.isEmpty)
+        #expect(window.isZoomed)
+        #expect(!window.isMiniaturized)
+    }
+
+    private static func inputCaptureView(in view: NSView) -> NSView? {
+        if String(describing: type(of: view)).contains("InputCaptureNSView") {
+            return view
+        }
+        for subview in view.subviews {
+            if let match = inputCaptureView(in: subview) {
+                return match
+            }
+        }
+        return nil
     }
 
     private func session(

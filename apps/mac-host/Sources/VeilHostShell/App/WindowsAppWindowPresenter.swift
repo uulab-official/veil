@@ -8,7 +8,6 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
     private var windowsById: [String: NSWindow] = [:]
     private var windowOrder: [String] = []
     private var suppressedCloseWindowIds: Set<String> = []
-    private var titlebarIdentityAccessories: [String: NSTitlebarAccessoryViewController] = [:]
     private(set) var foregroundWindowId: String?
 
     var onUserWindowClose: ((String) -> Void)?
@@ -90,7 +89,6 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
         }
         windowsById.removeAll()
         windowOrder.removeAll()
-        titlebarIdentityAccessories.removeAll()
         foregroundWindowId = nil
     }
 
@@ -104,7 +102,6 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
         }
         window.close()
         windowsById[windowId] = nil
-        titlebarIdentityAccessories.removeValue(forKey: windowId)
         forgetWindowId(windowId)
     }
 
@@ -129,7 +126,6 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
         }
 
         windowsById[windowId] = nil
-        titlebarIdentityAccessories.removeValue(forKey: windowId)
         forgetWindowId(windowId)
 
         if suppressedCloseWindowIds.remove(windowId) == nil {
@@ -416,34 +412,19 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
         window.collectionBehavior = [.managed, .fullScreenPrimary]
         window.backgroundColor = .black
         window.isOpaque = true
-        // The guest bitmap already starts with the Windows app's own title bar. Drawn under a transparent
-        // macOS titlebar, the traffic lights and the Mac title sat on top of the Windows icon and caption,
-        // so the mirrored surface starts below an ordinary opaque titlebar instead.
-        window.titlebarAppearsTransparent = false
-        window.styleMask.remove(.fullSizeContentView)
-        window.isMovableByWindowBackground = true
+        // The guest bitmap already starts with the Windows app's own title bar, so that caption is the only
+        // one shown, as in Parallels Coherence. Stacking a macOS titlebar on top doubled the title and the
+        // window buttons. The Mac window stays `.titled` for its shadow, rounded corners, resizing, and the
+        // Window menu; the input view turns presses in the Windows caption into the matching Mac actions.
+        window.styleMask.insert(.fullSizeContentView)
+        window.titlebarAppearsTransparent = true
+        window.titleVisibility = .hidden
+        window.isMovableByWindowBackground = false
         window.toolbar = nil
-        window.titleVisibility = .visible
-        configureIdentityTitlebar(for: window, windowId: session.id, identity: identity)
-    }
-
-    private func configureIdentityTitlebar(
-        for window: NSWindow,
-        windowId: String,
-        identity: WindowsAppWindowIdentity
-    ) {
-        if let accessory = titlebarIdentityAccessories[windowId],
-           let view = accessory.view as? WindowsAppIdentityTitlebarView {
-            view.update(identity: identity)
-            return
+        for button in [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton] {
+            window.standardWindowButton(button)?.isHidden = true
         }
-
-        let view = WindowsAppIdentityTitlebarView(identity: identity)
-        let accessory = NSTitlebarAccessoryViewController()
-        accessory.layoutAttribute = .left
-        accessory.view = view
-        window.addTitlebarAccessoryViewController(accessory)
-        titlebarIdentityAccessories[windowId] = accessory
+        window.miniwindowImage = identity.iconData.flatMap(NSImage.init(data:))
     }
 
     /// Locks a mirrored window to the guest window's shape while the user resizes it.
@@ -492,69 +473,6 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
             width: frame.width,
             height: frame.height
         )
-    }
-}
-
-@MainActor
-private final class WindowsAppIdentityTitlebarView: NSView {
-    private let iconView = NSImageView()
-    private let nameField = NSTextField(labelWithString: "")
-    private var widthConstraint: NSLayoutConstraint!
-
-    init(identity: WindowsAppWindowIdentity) {
-        super.init(frame: NSRect(x: 0, y: 0, width: 120, height: 22))
-
-        translatesAutoresizingMaskIntoConstraints = false
-        iconView.translatesAutoresizingMaskIntoConstraints = false
-        iconView.imageScaling = .scaleProportionallyUpOrDown
-        iconView.setContentHuggingPriority(.required, for: .horizontal)
-        iconView.setContentCompressionResistancePriority(.required, for: .horizontal)
-
-        nameField.translatesAutoresizingMaskIntoConstraints = false
-        nameField.lineBreakMode = .byTruncatingTail
-        nameField.maximumNumberOfLines = 1
-        nameField.font = NSFont.systemFont(ofSize: NSFont.smallSystemFontSize)
-        nameField.textColor = .secondaryLabelColor
-        nameField.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        nameField.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-
-        let stack = NSStackView(views: [iconView, nameField])
-        stack.translatesAutoresizingMaskIntoConstraints = false
-        stack.orientation = .horizontal
-        stack.alignment = .centerY
-        stack.spacing = 5
-
-        addSubview(stack)
-        widthConstraint = widthAnchor.constraint(equalToConstant: 120)
-        NSLayoutConstraint.activate([
-            iconView.widthAnchor.constraint(equalToConstant: 16),
-            iconView.heightAnchor.constraint(equalToConstant: 16),
-            heightAnchor.constraint(equalToConstant: 22),
-            widthConstraint,
-            stack.leadingAnchor.constraint(equalTo: leadingAnchor),
-            stack.trailingAnchor.constraint(equalTo: trailingAnchor),
-            stack.topAnchor.constraint(equalTo: topAnchor),
-            stack.bottomAnchor.constraint(equalTo: bottomAnchor)
-        ])
-
-        update(identity: identity)
-    }
-
-    required init?(coder: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
-    }
-
-    func update(identity: WindowsAppWindowIdentity) {
-        iconView.image = identity.iconData.flatMap(NSImage.init(data:))
-            ?? NSImage(systemSymbolName: "app.window", accessibilityDescription: identity.appName)
-        nameField.stringValue = identity.appName
-        nameField.toolTip = identity.appName
-        let labelWidth = nameField.intrinsicContentSize.width
-        let desiredWidth = 16 + 5 + max(0, labelWidth)
-        let boundedWidth = min(240, max(64, ceil(desiredWidth)))
-        widthConstraint?.constant = boundedWidth
-        frame.size.width = boundedWidth
-        setAccessibilityLabel(identity.appName)
     }
 }
 
@@ -686,7 +604,17 @@ private final class InputCaptureNSView: NSView {
     /// but apps that act on key-up would fire twice for one keystroke.
     private var didCommitTextForCurrentKeyPress = false
 
+    /// A press in the Windows caption that has not yet turned into a window drag or a click.
+    private var captionPress: (region: WindowsCaptionRegion, mouseDown: NSEvent)?
+
+    /// How far a caption press travels before it becomes a window drag, matching a Windows drag threshold.
+    private static let captionDragThreshold: CGFloat = 4
+
     override var acceptsFirstResponder: Bool { true }
+
+    /// The macOS titlebar is hidden over this view, and AppKit would otherwise drag the window for any press
+    /// in that band before the Windows caption buttons under it ever saw the click.
+    override var mouseDownCanMoveWindow: Bool { false }
 
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
@@ -730,11 +658,41 @@ private final class InputCaptureNSView: NSView {
 
     override func mouseDown(with event: NSEvent) {
         window?.makeFirstResponder(self)
-        send("leftDown", event)
+        let region = captionRegion(for: event)
+        guard region != .content else {
+            send("leftDown", event)
+            return
+        }
+
+        if region == .caption, event.clickCount == 2 {
+            performCaptionDoubleClick()
+            return
+        }
+
+        // Held back until the press either moves (a window drag) or is released (a click), since a press on
+        // the caption cannot be both forwarded to Windows and turned into a Mac window drag.
+        captionPress = (region, event)
     }
 
     override func mouseUp(with event: NSEvent) {
-        send("leftUp", event)
+        guard let press = captionPress else {
+            send("leftUp", event)
+            return
+        }
+
+        captionPress = nil
+        switch press.region {
+        case .closeButton:
+            window?.performClose(nil)
+        case .minimizeButton:
+            window?.performMiniaturize(nil)
+        case .maximizeButton:
+            window?.performZoom(nil)
+        case .caption, .content:
+            // Some apps put tabs or a search box in the caption, so a plain click still reaches Windows.
+            send("leftDown", press.mouseDown)
+            send("leftUp", event)
+        }
     }
 
     override func rightMouseDown(with event: NSEvent) {
@@ -747,7 +705,44 @@ private final class InputCaptureNSView: NSView {
     }
 
     override func mouseDragged(with event: NSEvent) {
-        send("move", event)
+        guard let press = captionPress else {
+            send("move", event)
+            return
+        }
+
+        let start = press.mouseDown.locationInWindow
+        let current = event.locationInWindow
+        guard hypot(current.x - start.x, current.y - start.y) >= Self.captionDragThreshold else {
+            return
+        }
+
+        // The window server runs the drag from here until the button is released, with the usual macOS
+        // snapping and Space behavior, and the matching mouse-up never reaches this view.
+        captionPress = nil
+        window?.performDrag(with: event)
+    }
+
+    private func captionRegion(for event: NSEvent) -> WindowsCaptionRegion {
+        guard let session,
+              session.connectionMode == .agent,
+              let guestPoint = guestPoint(for: event, session: session) else {
+            return .content
+        }
+
+        let windowWidth = session.latestFrame?.width ?? session.window.bounds.width
+        return WindowsCaptionRegion.classify(guestX: guestPoint.x, guestY: guestPoint.y, windowWidth: windowWidth)
+    }
+
+    /// Follows the macOS "Double-click a window's title bar to" setting, which a Mac titlebar would.
+    private func performCaptionDoubleClick() {
+        switch UserDefaults.standard.string(forKey: "AppleActionOnDoubleClick") {
+        case "Minimize":
+            window?.performMiniaturize(nil)
+        case "None":
+            break
+        default:
+            window?.performZoom(nil)
+        }
     }
 
     override func keyDown(with event: NSEvent) {
@@ -818,9 +813,17 @@ private final class InputCaptureNSView: NSView {
     private func send(_ inputEvent: String, _ event: NSEvent) {
         guard let session,
               session.connectionMode == .agent,
-              bounds.width > 0,
-              bounds.height > 0 else {
+              let guestPoint = guestPoint(for: event, session: session) else {
             return
+        }
+
+        onMouseInput?(session.id, inputEvent, guestPoint.x, guestPoint.y)
+    }
+
+    private func guestPoint(for event: NSEvent, session: WindowMirrorSession) -> WindowFramePoint? {
+        guard bounds.width > 0,
+              bounds.height > 0 else {
+            return nil
         }
 
         let point = convert(event.locationInWindow, from: nil)
@@ -833,14 +836,10 @@ private final class InputCaptureNSView: NSView {
             sourceHeight: sourceHeight,
             fitsSourceIntoView: session.latestFrame != nil
         )
-        guard let guestPoint = viewport.guestPoint(
+        return viewport.guestPoint(
             forViewX: Double(point.x),
             viewYFromBottom: Double(point.y)
-        ) else {
-            return
-        }
-
-        onMouseInput?(session.id, inputEvent, guestPoint.x, guestPoint.y)
+        )
     }
 
     private func sendKey(_ inputEvent: String, _ event: NSEvent) -> Bool {
