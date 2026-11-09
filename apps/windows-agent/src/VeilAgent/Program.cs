@@ -16,6 +16,7 @@ var streamer = new WindowFrameStreamer(capture, keepAwake: DisplayKeepAwake.Crea
 var clipboardStreamer = new ClipboardTextStreamer(desktop);
 var packageIdentityProbe = new WindowsPackageIdentityProbe();
 var session = new AgentSession(desktop, capture, packageIdentityProbe);
+session.WindowActivity = streamer.Wake;
 var windowDiscoveryStreamer = new WindowDiscoveryStreamer(session, desktop);
 var notificationStreamer = new WindowsNotificationStreamer(WindowsNotificationListenerFactory.Create(packageIdentityProbe));
 var server = new WebSocketAgentServer(endpoint, session, streamer, clipboardStreamer, windowDiscoveryStreamer, notificationStreamer);

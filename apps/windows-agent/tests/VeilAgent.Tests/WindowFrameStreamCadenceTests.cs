@@ -12,6 +12,17 @@ public class WindowFrameStreamCadenceTests
         );
 
     [Fact]
+    public void WakesFromIdleToTheActiveRate()
+    {
+        var cadence = MakeCadence(unchangedTicksBeforeIdle: 1);
+        cadence.Next(changed: false);
+        Assert.True(cadence.IsIdle);
+
+        Assert.Equal(TimeSpan.FromMilliseconds(33), cadence.Wake());
+        Assert.False(cadence.IsIdle);
+    }
+
+    [Fact]
     public void StartsAtTheActiveRate()
     {
         var cadence = MakeCadence();

@@ -49,6 +49,17 @@ public sealed class WindowFrameStreamCadence
     public TimeSpan CurrentInterval => IsIdle ? idleInterval : activeInterval;
 
     /// <summary>
+    /// Returns to the active rate ahead of any visible change, for when the host has just sent input or a
+    /// resize. Waiting for the idle tick to notice the change delayed the first visible response by up to
+    /// the idle interval.
+    /// </summary>
+    public TimeSpan Wake()
+    {
+        consecutiveUnchangedTicks = 0;
+        return CurrentInterval;
+    }
+
+    /// <summary>
     /// Records a tick outcome and returns the interval to wait before the next one.
     /// </summary>
     public TimeSpan Next(bool changed)

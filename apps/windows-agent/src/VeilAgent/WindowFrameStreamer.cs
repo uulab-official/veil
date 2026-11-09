@@ -7,6 +7,7 @@ public sealed class WindowFrameStreamer
     private readonly TimeSpan? fixedInterval;
     private readonly Func<WindowFrameStreamCadence> cadenceFactory;
     private readonly DisplayKeepAwake keepAwake;
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, Action> wakers = new();
 
     /// <param name="interval">
     /// When supplied, the stream ticks on this fixed interval and never backs off. Kept for tests and
@@ -49,9 +50,23 @@ public sealed class WindowFrameStreamer
         using var displayHold = keepAwake.Hold();
         var sequence = firstSequence;
         var cadence = cadenceFactory();
+        var cadenceGate = new object();
         // `PeriodicTimer.Period` is settable on .NET 8, so the adaptive cadence can retune the same timer
-        // instead of allocating a new one per tick.
+        // instead of allocating a new one per tick. Setting it also restarts the wait from now, which is
+        // what lets `Wake` cut an idle wait short.
         using var timer = new PeriodicTimer(fixedInterval ?? cadence.CurrentInterval);
+        Action wake = () =>
+        {
+            lock (cadenceGate)
+            {
+                var interval = cadence.Wake();
+                if (fixedInterval is null && timer.Period != interval)
+                {
+                    timer.Period = interval;
+                }
+            }
+        };
+        using var wakeRegistration = RegisterWaker(window.WindowId, wake);
 
         while (await timer.WaitForNextTickAsync(cancellationToken))
         {
@@ -66,7 +81,7 @@ public sealed class WindowFrameStreamer
                 // Transient capture failure. Treated as "no change" for cadence purposes, but never
                 // reported as a heartbeat: the host must still be able to see a stream that has stopped
                 // producing anything at all.
-                Retune(timer, cadence, changed: false);
+                Retune(timer, cadence, cadenceGate, changed: false);
                 continue;
             }
 
@@ -77,23 +92,53 @@ public sealed class WindowFrameStreamer
                     await onUnchanged(sequence, cancellationToken);
                 }
 
-                Retune(timer, cadence, changed: false);
+                Retune(timer, cadence, cadenceGate, changed: false);
                 continue;
             }
 
             await onFrame(result, cancellationToken);
             sequence += 1;
-            Retune(timer, cadence, changed: true);
+            Retune(timer, cadence, cadenceGate, changed: true);
         }
     }
 
-    private void Retune(PeriodicTimer timer, WindowFrameStreamCadence cadence, bool changed)
+    /// <summary>
+    /// Moves the window's stream to its active cadence; see <see cref="WindowFrameStreamCadence.Wake"/>.
+    /// Does nothing for a window that is not streaming.
+    /// </summary>
+    public void Wake(string windowId)
     {
-        var next = cadence.Next(changed);
-        if (fixedInterval is null)
+        if (wakers.TryGetValue(windowId, out var wake))
         {
-            timer.Period = next;
+            wake();
         }
+    }
+
+    private void Retune(PeriodicTimer timer, WindowFrameStreamCadence cadence, object cadenceGate, bool changed)
+    {
+        lock (cadenceGate)
+        {
+            var next = cadence.Next(changed);
+            if (fixedInterval is null)
+            {
+                timer.Period = next;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Registers a stream's waker, removed when the stream ends unless a newer stream for the same window
+    /// has already replaced it.
+    /// </summary>
+    private IDisposable RegisterWaker(string windowId, Action wake)
+    {
+        wakers[windowId] = wake;
+        return new WakerRegistration(() => wakers.TryRemove(new KeyValuePair<string, Action>(windowId, wake)));
+    }
+
+    private sealed class WakerRegistration(Action unregister) : IDisposable
+    {
+        public void Dispose() => unregister();
     }
 
     /// <summary>

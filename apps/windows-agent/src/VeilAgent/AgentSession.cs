@@ -75,10 +75,31 @@ public sealed class AgentSession
         this.guestShutdown = guestShutdown ?? new WindowsGuestShutdown();
     }
 
+    /// <summary>
+    /// Told the window id of every input, resize, or focus request before it is applied, so that window's
+    /// frame stream can leave its idle cadence and show the result on the next fast tick.
+    /// </summary>
+    public Action<string>? WindowActivity { get; set; }
+
+    private static readonly HashSet<string> WindowActivityMessageTypes =
+    [
+        MessageTypes.InputMouse,
+        MessageTypes.InputKey,
+        MessageTypes.InputText,
+        MessageTypes.WindowResizeRequest,
+        MessageTypes.WindowFocusRequest
+    ];
+
     public async Task<AgentReplies> HandleAsync(JsonObject request, CancellationToken cancellationToken = default)
     {
         var type = request["type"]?.GetValue<string>();
         var requestId = request["requestId"]?.GetValue<string>();
+        if (type is not null
+            && WindowActivityMessageTypes.Contains(type)
+            && request["windowId"]?.GetValue<string>() is { Length: > 0 } activeWindowId)
+        {
+            WindowActivity?.Invoke(activeWindowId);
+        }
 
         try
         {

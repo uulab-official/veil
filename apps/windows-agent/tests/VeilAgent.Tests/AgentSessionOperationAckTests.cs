@@ -58,6 +58,30 @@ public class AgentSessionOperationAckTests
     }
 
     [Fact]
+    public async Task ReportsWindowActivityForInputSoTheFrameStreamWakes()
+    {
+        var desktop = new ConfigurableWindowsDesktop();
+        var session = new AgentSession(desktop, new NoOpFrameCapture());
+        var activity = new List<string>();
+        session.WindowActivity = activity.Add;
+        await LaunchNotepadAsync(session);
+
+        await session.HandleAsync(new JsonObject
+        {
+            ["type"] = MessageTypes.InputMouse,
+            ["requestId"] = "req_mouse_activity",
+            ["windowId"] = "hwnd:00000010",
+            ["event"] = "leftDown",
+            ["x"] = 20,
+            ["y"] = 30,
+            ["modifiers"] = new JsonArray()
+        });
+        await session.HandleAsync(new JsonObject { ["type"] = MessageTypes.AppListRequest, ["requestId"] = "req_apps" });
+
+        Assert.Equal(new[] { "hwnd:00000010" }, activity);
+    }
+
+    [Fact]
     public async Task AcknowledgesASuccessfulKeyInput()
     {
         var desktop = new ConfigurableWindowsDesktop();

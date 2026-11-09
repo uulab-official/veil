@@ -32,6 +32,64 @@ public class WindowFrameStreamerTests
         }
     }
 
+    private sealed class UnchangedCapture : IWindowFrameCapture
+    {
+        private int captures;
+
+        public int Captures => Volatile.Read(ref captures);
+
+        public Task<WindowFrame> CaptureFrameAsync(LaunchedWindow window, int sequence, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+
+        public Task<WindowFrameCaptureResult> CaptureFrameResultAsync(
+            LaunchedWindow window,
+            int sequence,
+            bool includeFullFrame,
+            CancellationToken cancellationToken
+        )
+        {
+            Interlocked.Increment(ref captures);
+            return Task.FromResult(WindowFrameCaptureResult.Unchanged(sequence));
+        }
+    }
+
+    [Fact]
+    public async Task WakingAnIdleStreamCapturesWithoutWaitingOutTheIdleInterval()
+    {
+        var window = new LaunchedWindow("hwnd:00000002", 0, 4242, "Paint", new WindowRect(0, 0, 640, 480), "normal", true);
+        var capture = new UnchangedCapture();
+        // Idle after one unchanged tick, and idle long enough that only a wake can explain a second capture.
+        var streamer = new WindowFrameStreamer(
+            capture,
+            cadenceFactory: () => new WindowFrameStreamCadence(
+                activeInterval: TimeSpan.FromMilliseconds(20),
+                idleInterval: TimeSpan.FromSeconds(30),
+                unchangedTicksBeforeIdle: 1
+            )
+        );
+        using var cancellation = new CancellationTokenSource();
+        var streamTask = streamer.StreamAsync(window, 1, (_, _) => Task.CompletedTask, cancellation.Token);
+
+        var deadline = DateTime.UtcNow.AddSeconds(5);
+        while (capture.Captures < 1 && DateTime.UtcNow < deadline)
+        {
+            await Task.Delay(5);
+        }
+        await Task.Delay(100);
+        var capturesWhileIdle = capture.Captures;
+
+        streamer.Wake(window.WindowId);
+        deadline = DateTime.UtcNow.AddSeconds(5);
+        while (capture.Captures == capturesWhileIdle && DateTime.UtcNow < deadline)
+        {
+            await Task.Delay(5);
+        }
+
+        Assert.True(capture.Captures > capturesWhileIdle, "A wake should trigger a capture well before the 30 s idle tick.");
+        cancellation.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => streamTask);
+    }
+
     [Fact]
     public async Task SkipsFailedCapturesUntilARealFrameIsAvailable()
     {
