@@ -569,7 +569,10 @@ extension VeilHostShellApp {
 
             // The repair restarts the agent only after the Windows approval, which the user may answer
             // minutes later. Ejecting the disc before then made a late approval fail silently.
-            let bundledVersion = ShellGuestTools.bundledVersion
+            // Read from disk rather than the cached copy the views use: the update disc is built from the
+            // tools on disk now, and waiting for an older cached version ended the wait at once and ejected
+            // the disc before Windows could run it.
+            let bundledVersion = GuestToolsBundle.bundledVersion
             let started = ContinuousClock.now
             var remindedAboutApproval = false
             while model.health?.agentVersion != bundledVersion {
