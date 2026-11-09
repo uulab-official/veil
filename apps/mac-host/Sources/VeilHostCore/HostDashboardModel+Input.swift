@@ -24,7 +24,9 @@ extension HostDashboardModel {
         event: String,
         x: Int,
         y: Int,
-        modifiers: [String] = []
+        modifiers: [String] = [],
+        deltaX: Int? = nil,
+        deltaY: Int? = nil
     ) async {
         guard canSendInput(to: windowId) else {
             return
@@ -32,7 +34,15 @@ extension HostDashboardModel {
 
         do {
             if let pointer = try await service.sendMouseInputReportingPointer(
-                InputMouseEvent(windowId: windowId, event: event, x: x, y: y, modifiers: modifiers)
+                InputMouseEvent(
+                    windowId: windowId,
+                    event: event,
+                    x: x,
+                    y: y,
+                    modifiers: modifiers,
+                    deltaX: deltaX,
+                    deltaY: deltaY
+                )
             ) {
                 onGuestPointerMoved?(pointer)
             }

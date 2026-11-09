@@ -801,6 +801,10 @@ public struct InputMouseEvent: Codable, Equatable, Sendable {
     public var x: Int
     public var y: Int
     public var modifiers: [String]
+    /// For `scroll`: wheel units, 120 per notch, positive scrolling right and up as Windows counts them.
+    /// Omitted for every other event.
+    public var deltaX: Int?
+    public var deltaY: Int?
 
     public init(
         type: MessageType = .inputMouse,
@@ -808,7 +812,9 @@ public struct InputMouseEvent: Codable, Equatable, Sendable {
         event: String,
         x: Int,
         y: Int,
-        modifiers: [String] = []
+        modifiers: [String] = [],
+        deltaX: Int? = nil,
+        deltaY: Int? = nil
     ) {
         self.type = type
         self.windowId = windowId
@@ -816,6 +822,8 @@ public struct InputMouseEvent: Codable, Equatable, Sendable {
         self.x = x
         self.y = y
         self.modifiers = modifiers
+        self.deltaX = deltaX
+        self.deltaY = deltaY
     }
 }
 

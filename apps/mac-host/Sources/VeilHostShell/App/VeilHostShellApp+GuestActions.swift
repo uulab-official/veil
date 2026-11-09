@@ -59,6 +59,11 @@ extension VeilHostShellApp {
                 await vmModel.syncGuestTabletPosition(position)
             }
         }
+        windowsAppWindowPresenter.onScrollInput = { windowId, x, y, deltaX, deltaY in
+            Task { @MainActor in
+                await model.sendMouseInput(windowId: windowId, event: "scroll", x: x, y: y, deltaX: deltaX, deltaY: deltaY)
+            }
+        }
         windowsAppWindowPresenter.onMouseInput = { windowId, event, x, y in
             Task { @MainActor in
                 await model.sendMouseInput(windowId: windowId, event: event, x: x, y: y)

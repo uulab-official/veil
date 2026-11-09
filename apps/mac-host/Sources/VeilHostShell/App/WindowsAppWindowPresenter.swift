@@ -29,6 +29,8 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
 
     var onUserWindowClose: ((String) -> Void)?
     var onMouseInput: ((String, String, Int, Int) -> Void)?
+    /// Window id, guest x and y, and scroll amounts in Windows wheel units (x right, y up).
+    var onScrollInput: ((String, Int, Int, Int, Int) -> Void)?
     var onKeyInput: ((String, String, String, Int, [String]) -> Void)?
     var onTextInput: ((String, String) -> Void)?
     var onPasteShortcut: ((String, String, Int, [String], HostPasteboardContent) -> Void)?
@@ -441,6 +443,19 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
                 }
                 Self.postDebugMouseEvent(.leftMouseUp, at: points[points.count - 1], in: window)
             }
+        case "scroll":
+            // Straight to the scroll callback at the window's center, so the user's pointer stays put.
+            guard let session = sessionProvider?(windowId) ?? nil,
+                  let frame = session.latestFrame else {
+                return
+            }
+            let deltaY = Int(height ?? -360)
+            Task { @MainActor in
+                for _ in 0..<12 {
+                    onScrollInput?(windowId, frame.width / 2, frame.height / 2, 0, deltaY / 12)
+                    try? await Task.sleep(for: .milliseconds(16))
+                }
+            }
         case "undo":
             if let event = NSEvent.keyEvent(
                 with: .keyDown,
@@ -811,6 +826,9 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
             onMouseInput: { [weak self] windowId, event, x, y in
                 self?.onMouseInput?(windowId, event, x, y)
             },
+            onScrollInput: { [weak self] windowId, x, y, deltaX, deltaY in
+                self?.onScrollInput?(windowId, x, y, deltaX, deltaY)
+            },
             onKeyInput: { [weak self] windowId, event, key, windowsVirtualKey, modifiers in
                 self?.onKeyInput?(windowId, event, key, windowsVirtualKey, modifiers)
             },
@@ -931,6 +949,7 @@ enum MacWindowRestorePolicy {
 private struct WindowsAppMirrorView: View {
     var session: WindowMirrorSession
     var onMouseInput: (String, String, Int, Int) -> Void
+    var onScrollInput: (String, Int, Int, Int, Int) -> Void
     var onKeyInput: (String, String, String, Int, [String]) -> Void
     var onTextInput: (String, String) -> Void
     var onPasteShortcut: (String, String, Int, [String], HostPasteboardContent) -> Void
@@ -954,6 +973,7 @@ private struct WindowsAppMirrorView: View {
             InputCaptureView(
                 session: session,
                 onMouseInput: onMouseInput,
+                onScrollInput: onScrollInput,
                 onKeyInput: onKeyInput,
                 onTextInput: onTextInput,
                 onPasteShortcut: onPasteShortcut
@@ -1002,6 +1022,7 @@ private struct WindowsAppMirrorView: View {
 private struct InputCaptureView: NSViewRepresentable {
     var session: WindowMirrorSession
     var onMouseInput: (String, String, Int, Int) -> Void
+    var onScrollInput: (String, Int, Int, Int, Int) -> Void
     var onKeyInput: (String, String, String, Int, [String]) -> Void
     var onTextInput: (String, String) -> Void
     var onPasteShortcut: (String, String, Int, [String], HostPasteboardContent) -> Void
@@ -1013,6 +1034,7 @@ private struct InputCaptureView: NSViewRepresentable {
     func updateNSView(_ nsView: InputCaptureNSView, context: Context) {
         nsView.session = session
         nsView.onMouseInput = onMouseInput
+        nsView.onScrollInput = onScrollInput
         nsView.onKeyInput = onKeyInput
         nsView.onTextInput = onTextInput
         nsView.onPasteShortcut = onPasteShortcut
@@ -1022,6 +1044,7 @@ private struct InputCaptureView: NSViewRepresentable {
 private final class InputCaptureNSView: NSView {
     var session: WindowMirrorSession?
     var onMouseInput: ((String, String, Int, Int) -> Void)?
+    var onScrollInput: ((String, Int, Int, Int, Int) -> Void)?
     var onKeyInput: ((String, String, String, Int, [String]) -> Void)?
     var onTextInput: ((String, String) -> Void)?
     var onPasteShortcut: ((String, String, Int, [String], HostPasteboardContent) -> Void)?
@@ -1141,6 +1164,35 @@ private final class InputCaptureNSView: NSView {
 
     override func rightMouseUp(with event: NSEvent) {
         send("rightUp", event)
+    }
+
+    /// Windows wheel units per point of precise (trackpad or Magic Mouse) scrolling. A notch of 120 scrolls
+    /// three lines, about 60 points, so 2 keeps content tracking the fingers.
+    static let wheelUnitsPerPoint = 2.0
+    /// Sub-unit scroll amounts carried to the next event so slow trackpad movement still scrolls.
+    private var scrollRemainder = (x: 0.0, y: 0.0)
+
+    /// Trackpad and wheel scrolling, sent with its amount so Windows scrolls as far and as smoothly as the
+    /// Mac gesture. macOS has already applied the user's natural-scrolling setting to these deltas.
+    override func scrollWheel(with event: NSEvent) {
+        guard let session,
+              session.connectionMode == .agent,
+              let point = guestPoint(for: event, session: session) else {
+            return
+        }
+
+        let unitsPerDelta = event.hasPreciseScrollingDeltas ? Self.wheelUnitsPerPoint : 120
+        let amount = WindowsScrollAmount.accumulate(
+            remainder: scrollRemainder,
+            scrollingDeltaX: Double(event.scrollingDeltaX),
+            scrollingDeltaY: Double(event.scrollingDeltaY),
+            unitsPerDelta: unitsPerDelta
+        )
+        scrollRemainder = amount.remainder
+        guard amount.deltaX != 0 || amount.deltaY != 0 else {
+            return
+        }
+        onScrollInput?(session.id, point.x, point.y, amount.deltaX, amount.deltaY)
     }
 
     override func mouseDragged(with event: NSEvent) {
