@@ -50,6 +50,7 @@ extension VeilHostShellApp {
         windowsAppWindowPresenter.onUserWindowClose = { windowId in
             Task { @MainActor in
                 _ = await model.closeMirrorSession(windowId: windowId)
+                lastAppWindowClosedByUser = true
                 scheduleAutomaticQuietRuntimeIfNeeded()
                 syncLauncherWindowVisibility()
             }

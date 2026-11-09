@@ -245,7 +245,8 @@ extension VeilHostShellApp {
 
     func scheduleAutomaticQuietRuntimeIfNeeded() {
         let quietRuntime = resolvedQuietRuntimeStatus()
-        guard quietRuntime.willQuietAutomatically else {
+        guard quietRuntime.willQuietAutomatically,
+              AutomaticQuietPolicy.allowsQuiet(lastAppWindowClosedByUser: lastAppWindowClosedByUser) else {
             cancelAutomaticQuietRuntime()
             return
         }
@@ -259,6 +260,7 @@ extension VeilHostShellApp {
         automaticQuietRuntimeTask = Task { @MainActor in
             try? await Task.sleep(for: .seconds(quietRuntime.automaticQuietDelaySeconds))
             guard !Task.isCancelled,
+                  lastAppWindowClosedByUser,
                   model.canQuietRuntimeWhenIdle,
                   vmModel.canStop,
                   vmModel.phase != .loading else {
@@ -312,5 +314,14 @@ extension VeilHostShellApp {
                 await performFrameStreamMaintenance(automatic: true)
             }
         }
+    }
+}
+
+/// When Veil may quiet Windows on its own once no app windows are left.
+enum AutomaticQuietPolicy {
+    /// Only after the user closed the last app window. An empty window list is not enough: windows also go
+    /// away when the Windows agent restarts and forgets them, while the apps stay open in Windows.
+    static func allowsQuiet(lastAppWindowClosedByUser: Bool) -> Bool {
+        lastAppWindowClosedByUser
     }
 }
