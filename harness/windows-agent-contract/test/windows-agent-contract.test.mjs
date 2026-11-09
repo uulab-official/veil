@@ -77,7 +77,9 @@ test("windows agent restores existing guest windows without creating duplicate M
   assert.match(session, /reuseExistingWindow/);
   assert.match(session, /DiscoverAdditionalWindows\(app, new HashSet<string>\(\)\)/);
   assert.match(session, /TrackWindows\(app, existingWindows\)/);
-  assert.match(session, /FirstOrDefault\(window => window\.Focused\)/);
+  // The app's own window stands for it, never a popup above it in z-order.
+  assert.match(session, /PrimaryWindow\(existingWindows\)/);
+  assert.match(session, /FirstOrDefault\(window => !window\.IsPopup && window\.Focused\)/);
 });
 
 test("windows agent listens without HttpListener URL ACL requirements", async () => {
@@ -478,7 +480,8 @@ test("windows agent exposes an inbox app catalog for native-style Mac windows", 
   assert.match(desktop, /DoesProcessMatchApp\(windowProcessId,\s*app\)/);
   assert.match(desktop, /\.Append\(app\.Executable\)/);
   assert.match(desktop, /\.Select\(Path\.GetFileNameWithoutExtension\)/);
-  assert.match(desktop, /OrderByDescending\(candidate\s*=>\s*candidate\.IsNewWindow\)/);
+  assert.match(desktop, /OrderBy\(candidate\s*=>\s*candidate\.IsPopup\)/);
+  assert.match(desktop, /ThenByDescending\(candidate\s*=>\s*candidate\.IsNewWindow\)/);
   assert.match(desktop, /TryFindTopLevelWindow\(app,\s*process\.Id,\s*existingWindowHandles,\s*out var launched\)/);
   assert.match(desktop, /EnumWindows/);
   assert.match(desktop, /GetWindowThreadProcessId/);
