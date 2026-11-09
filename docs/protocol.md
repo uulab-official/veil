@@ -506,7 +506,7 @@ frame, so an agent caught mid-upgrade degrades to full frames rather than failin
 ```text
 offset  size  field                                 VFR1  VFR2
 0       4     magic ("VFR1" or "VFR2")                y     y
-4       1     payload format (1 = png)                y     y
+4       1     payload format (1 = png, 2 = bgra-deflate)  y     y
 -       1     flags (bit 0 = key frame)               -     y
 -       2     window id byte count (uint16)           y     y
 -       n     window id, UTF-8                        y     y
@@ -533,6 +533,11 @@ Rules:
   origin must flip.
 - The payload covers exactly the declared rectangle. A payload whose real dimensions disagree must be
   rejected, not scaled to fit, because scaling silently distorts the window.
+- Payload format 1 is a PNG. Format 2, `bgra-deflate`, is the rectangle's pixels as 32-bit BGRA rows, top
+  to bottom with no padding, compressed with raw deflate (RFC 1951); the alpha byte is ignored. It costs
+  the guest a fraction of a PNG encode, which matters at 60 tiles a second, and is sent only for windows a
+  host subscribed to with `"tileFormat": "bgra-deflate"`. A payload that does not inflate to exactly
+  `width * height * 4` bytes is rejected like a mis-sized PNG.
 - A **key frame's rectangle must cover the whole surface.** The host has nothing to composite onto until
   one arrives, so a partial key frame would leave undefined pixels with no way to detect it.
 - The guest sends a key frame on the first capture of a stream, on any surface size change, and when the
@@ -654,6 +659,8 @@ Rules:
 
 - `windowId` must reference a tracked `window.created` event.
 - `format` is `png` for the first stream control implementation.
+- `tileFormat` is optional. `bgra-deflate` asks for format 2 tiles on the binary frame channel for this
+  window; omitted or unknown values keep PNG tiles, and agents that predate it ignore the field.
 - Legacy agents do not require a success response. Agents advertising
   `operationAcks` return a matching positive acknowledgement after applying the
   stream-control operation, or a structured error (see Operation Acknowledgements).
