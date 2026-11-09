@@ -75,7 +75,20 @@ enum MachineConfigurationTab: String, CaseIterable, Identifiable {
 final class ShellNavigation {
     var presentedSheet: VMRuntimeSheetDestination?
     var configurationTab: MachineConfigurationTab = .general
-    var viewMode: MachineViewMode = .apps
+    var viewMode: MachineViewMode = .apps {
+        didSet {
+            isShowingDesktopAutomatically = false
+        }
+    }
+    /// True only while Veil itself chose the desktop, because the app connection was not up yet. Veil
+    /// then returns to apps mode on its own once an app shows; a desktop the user picked stays.
+    private(set) var isShowingDesktopAutomatically = false
+
+    /// Shows the desktop or apps as Veil decided, rather than the user; see `isShowingDesktopAutomatically`.
+    func showDesktopAutomatically(_ showsDesktop: Bool) {
+        showsWindowsDesktop = showsDesktop
+        isShowingDesktopAutomatically = showsDesktop
+    }
     /// Set by the Actions menu, the assistant, and the stalled-boot bar; the main window asks once.
     var showsRestartInstallationConfirmation = false
     /// The latest live Windows frame for the sidebar thumbnail; cleared when Windows stops.

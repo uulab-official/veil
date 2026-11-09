@@ -94,10 +94,11 @@ struct DetailView: View {
             }
         }
         .onChange(of: model.mirrorSessions.contains { $0.latestFrame != nil }) { _, hasFirstAppFrame in
-            if RuntimeWorkspacePresentationPolicy.shouldReturnToApps(
+            if navigation.isShowingDesktopAutomatically,
+               RuntimeWorkspacePresentationPolicy.shouldReturnToApps(
                 windowsInstalled: hasInstalledWindows,
                 hasFirstAppFrame: hasFirstAppFrame
-            ) {
+               ) {
                 navigation.showsWindowsDesktop = false
             }
         }
@@ -130,12 +131,12 @@ struct DetailView: View {
 
     private func synchronizeWorkspacePresentation() {
         let hasDesktopDisplay = vmModel.snapshot?.state == .running || vmModel.snapshot?.state == .starting
-        navigation.showsWindowsDesktop = RuntimeWorkspacePresentationPolicy.defaultShowsFullDesktop(
+        navigation.showDesktopAutomatically(RuntimeWorkspacePresentationPolicy.defaultShowsFullDesktop(
             windowsInstalled: hasInstalledWindows,
             runtimeState: vmModel.snapshot?.state,
             hasDesktopDisplay: hasDesktopDisplay,
             hasLiveAppConnection: model.hasLiveAgentConnection
-        )
+        ))
     }
 
     /// The connected agent is older than the tools this Veil ships.
