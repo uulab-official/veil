@@ -9,7 +9,10 @@ public sealed record WindowsAppDescriptor(
     string Publisher,
     string IconId,
     string[]? AlternateExecutables = null,
-    TimeSpan? WindowDiscoveryTimeoutOverride = null
+    TimeSpan? WindowDiscoveryTimeoutOverride = null,
+    // Packaged inbox apps launch through an execution alias stub whose own icon is a generic window; the
+    // AppUserModelID lets the icon come from the package instead.
+    string? AppUserModelId = null
 )
 {
     /// <summary>

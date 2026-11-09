@@ -5,6 +5,32 @@ namespace VeilAgent.Tests;
 public class WindowsAppIconExtractorTests
 {
     [Fact]
+    public void AddressesPackagedAppsThroughTheAppsFolder()
+    {
+        Assert.Equal(
+            @"shell:AppsFolder\Microsoft.Paint_8wekyb3d8bbwe!App",
+            ShellItemIcon.AppsFolderPath("Microsoft.Paint_8wekyb3d8bbwe!App")
+        );
+    }
+
+    [Fact]
+    public void ExtractsADockSizedIconWithTransparencyForNotepad()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        var png = ShellItemIcon.TryGetPng(@"C:\Windows\System32\notepad.exe");
+
+        Assert.NotNull(png);
+        using var image = System.Drawing.Image.FromStream(new MemoryStream(png!));
+        // ExtractAssociatedIcon gave 32 px, which the Mac Dock showed blurred.
+        Assert.True(image.Width >= 128, $"Expected a Dock-sized icon, got {image.Width} px.");
+        Assert.Equal(System.Drawing.Imaging.PixelFormat.Format32bppArgb, image.PixelFormat);
+    }
+
+    [Fact]
     public void ExtractsANonEmptyPngForNotepad()
     {
         if (!OperatingSystem.IsWindows())

@@ -16,7 +16,8 @@ public sealed class AgentSession
             Name: "Notepad",
             Executable: "notepad.exe",
             Publisher: "Microsoft",
-            IconId: "icon_notepad"
+            IconId: "icon_notepad",
+            AppUserModelId: "Microsoft.WindowsNotepad_8wekyb3d8bbwe!App"
         ),
         new WindowsAppDescriptor(
             Id: "winapp_calculator",
@@ -30,14 +31,16 @@ public sealed class AgentSession
             AlternateExecutables: ["CalculatorApp"],
             // The packaged Calculator app's cold activation can take noticeably longer than the
             // default 5-second discovery budget used by native Win32 apps like Notepad and Paint.
-            WindowDiscoveryTimeoutOverride: TimeSpan.FromSeconds(12)
+            WindowDiscoveryTimeoutOverride: TimeSpan.FromSeconds(12),
+            AppUserModelId: "Microsoft.WindowsCalculator_8wekyb3d8bbwe!App"
         ),
         new WindowsAppDescriptor(
             Id: "winapp_paint",
             Name: "Paint",
             Executable: "mspaint.exe",
             Publisher: "Microsoft",
-            IconId: "icon_paint"
+            IconId: "icon_paint",
+            AppUserModelId: "Microsoft.Paint_8wekyb3d8bbwe!App"
         )
     };
 
@@ -1041,6 +1044,7 @@ public sealed class AgentSession
         ["iconId"] = app.IconId,
         ["iconPngBase64"] = WindowsAppIconExtractor.ExtractIconPngBase64(
             app.Id,
+            app.AppUserModelId,
             new[] { app.Executable }.Concat(app.AlternateExecutables ?? [])
         )
     };

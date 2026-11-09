@@ -17,23 +17,47 @@ public static class WindowsAppIconExtractor
     private static readonly ConcurrentDictionary<string, string?> Cache = new(StringComparer.OrdinalIgnoreCase);
 
     public static string? ExtractIconPngBase64(string cacheKey, IEnumerable<string> executableCandidates) =>
-        Cache.GetOrAdd(cacheKey, _ => TryExtractIconPngBase64(executableCandidates));
+        ExtractIconPngBase64(cacheKey, appUserModelId: null, executableCandidates);
 
-    private static string? TryExtractIconPngBase64(IEnumerable<string> executableCandidates)
+    /// <summary>
+    /// Prefers the shell's large icon: a packaged app's logo from its AppUserModelID, then an executable's
+    /// largest icon. <see cref="Icon.ExtractAssociatedIcon"/> is the last resort; its 32 px image looks
+    /// blurry in the Mac Dock, and for an execution alias stub it is a generic window.
+    /// </summary>
+    public static string? ExtractIconPngBase64(
+        string cacheKey,
+        string? appUserModelId,
+        IEnumerable<string> executableCandidates
+    ) =>
+        Cache.GetOrAdd(cacheKey, _ => TryExtractIconPngBase64(appUserModelId, executableCandidates.ToArray()));
+
+    private static string? TryExtractIconPngBase64(string? appUserModelId, string[] executableCandidates)
     {
         if (!OperatingSystem.IsWindows())
         {
             return null;
         }
 
-        foreach (var executable in executableCandidates)
+        if (appUserModelId is not null
+            && ShellItemIcon.TryGetPng(ShellItemIcon.AppsFolderPath(appUserModelId)) is { } packagedIcon)
         {
-            var resolvedPath = ResolveExecutablePath(executable);
-            if (resolvedPath is null)
-            {
-                continue;
-            }
+            return Convert.ToBase64String(packagedIcon);
+        }
 
+        var resolvedPaths = executableCandidates
+            .Select(ResolveExecutablePath)
+            .OfType<string>()
+            .ToArray();
+        foreach (var resolvedPath in resolvedPaths)
+        {
+            if (ShellItemIcon.TryGetPng(resolvedPath) is { } shellIcon)
+            {
+                return Convert.ToBase64String(shellIcon);
+            }
+        }
+
+        foreach (var resolvedPath in resolvedPaths)
+        {
             try
             {
                 using var icon = Icon.ExtractAssociatedIcon(resolvedPath);
