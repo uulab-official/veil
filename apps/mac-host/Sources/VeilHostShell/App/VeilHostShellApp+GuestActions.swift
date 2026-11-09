@@ -270,6 +270,19 @@ extension VeilHostShellApp {
                 updateGuestTools()
             }
         }
+        DebugViewModeObserver.launchAppToken = DistributedNotificationCenter.default().addObserver(
+            forName: Notification.Name("org.uulab.veil.debug.launchApp"),
+            object: nil,
+            queue: .main
+        ) { notification in
+            let appId = notification.userInfo?["appId"] as? String
+            Task { @MainActor in
+                // The same one-click launch the Dock menu and the app list use.
+                if let appId {
+                    runOneClickAppLaunch(appId: appId)
+                }
+            }
+        }
         DebugViewModeObserver.token = DistributedNotificationCenter.default().addObserver(
             forName: Notification.Name("org.uulab.veil.debug.viewMode"),
             object: nil,
@@ -289,6 +302,7 @@ extension VeilHostShellApp {
     private enum DebugViewModeObserver {
         @MainActor static var token: NSObjectProtocol?
         @MainActor static var updateToolsToken: NSObjectProtocol?
+        @MainActor static var launchAppToken: NSObjectProtocol?
     }
 #endif
 
