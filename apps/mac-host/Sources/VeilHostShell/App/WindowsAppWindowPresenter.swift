@@ -450,9 +450,15 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
         let preservedFrame = window.frame
         let isBeingResized = isBeingResized(window, windowId: session.id)
         configure(window, for: session, appliesResizeConstraints: !isBeingResized)
-        window.contentView = hostingView(
-            for: session
-        )
+        // Every frame tile lands here. Building a new hosting view each time rebuilt the whole SwiftUI tree
+        // and the input view on the main thread, which held mouse events back about 200 ms apiece while an
+        // app was redrawing and could swap the input view out from under a drag. The existing hosting view
+        // only gets the new session.
+        if let existingView = window.contentView as? NSHostingView<WindowsAppMirrorView> {
+            existingView.rootView = mirrorView(for: session)
+        } else {
+            window.contentView = hostingView(for: session)
+        }
         if !isBeingResized, !NSEqualRects(window.frame, preservedFrame) {
             window.setFrame(preservedFrame, display: true, animate: false)
         }
@@ -616,41 +622,43 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
     private func hostingView(
         for session: WindowMirrorSession
     ) -> NSHostingView<WindowsAppMirrorView> {
-        return NSHostingView(
-            rootView: WindowsAppMirrorView(
-                session: session,
-                onMouseInput: { [weak self] windowId, event, x, y in
-                    self?.onMouseInput?(windowId, event, x, y)
-                },
-                onKeyInput: { [weak self] windowId, event, key, windowsVirtualKey, modifiers in
-                    self?.onKeyInput?(windowId, event, key, windowsVirtualKey, modifiers)
-                },
-                onTextInput: { [weak self] windowId, text in
-                    self?.onTextInput?(windowId, text)
-                },
-                onPasteShortcut: { [weak self] windowId, key, windowsVirtualKey, modifiers, content in
-                    self?.onPasteShortcut?(windowId, key, windowsVirtualKey, modifiers, content)
-                },
-                onDropProviders: { [weak self] providers in
-                    self?.loadDroppedFiles(
-                        providers,
-                        windowId: session.id,
-                        appId: session.window.appId
-                    )
-                },
-                onDropRefused: { [weak self] refusal in
-                    self?.presentDropRefusal(refusal, windowId: session.id)
-                },
-                onRestartFrameStream: { [weak self] windowId in
-                    self?.onRestartFrameStream?(windowId)
-                },
-                compositedImageProvider: { [weak self] windowId in
-                    self?.compositedImageProvider?(windowId)
-                },
-                sessionProvider: { [weak self] windowId in
-                    self?.sessionProvider?(windowId)
-                }
-            )
+        NSHostingView(rootView: mirrorView(for: session))
+    }
+
+    private func mirrorView(for session: WindowMirrorSession) -> WindowsAppMirrorView {
+        WindowsAppMirrorView(
+            session: session,
+            onMouseInput: { [weak self] windowId, event, x, y in
+                self?.onMouseInput?(windowId, event, x, y)
+            },
+            onKeyInput: { [weak self] windowId, event, key, windowsVirtualKey, modifiers in
+                self?.onKeyInput?(windowId, event, key, windowsVirtualKey, modifiers)
+            },
+            onTextInput: { [weak self] windowId, text in
+                self?.onTextInput?(windowId, text)
+            },
+            onPasteShortcut: { [weak self] windowId, key, windowsVirtualKey, modifiers, content in
+                self?.onPasteShortcut?(windowId, key, windowsVirtualKey, modifiers, content)
+            },
+            onDropProviders: { [weak self] providers in
+                self?.loadDroppedFiles(
+                    providers,
+                    windowId: session.id,
+                    appId: session.window.appId
+                )
+            },
+            onDropRefused: { [weak self] refusal in
+                self?.presentDropRefusal(refusal, windowId: session.id)
+            },
+            onRestartFrameStream: { [weak self] windowId in
+                self?.onRestartFrameStream?(windowId)
+            },
+            compositedImageProvider: { [weak self] windowId in
+                self?.compositedImageProvider?(windowId)
+            },
+            sessionProvider: { [weak self] windowId in
+                self?.sessionProvider?(windowId)
+            }
         )
     }
 
