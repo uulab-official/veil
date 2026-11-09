@@ -393,7 +393,11 @@ struct HostDashboardModelTests {
         // Readers see the new frame at once; observers are only told once the batch interval passes.
         #expect(model.mirrorSessions.first?.frameTiming?.receivedFrameCount == 2)
         #expect(model.mirrorSessionsRevision == revisionBeforeFrames)
-        try await Task.sleep(for: HostDashboardModel.frameChurnPublishInterval + .milliseconds(200))
+        // Polled rather than slept for a fixed time: on a loaded CI runner the publish task can run late.
+        let deadline = ContinuousClock.now + .seconds(5)
+        while model.mirrorSessionsRevision == revisionBeforeFrames, ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(20))
+        }
         #expect(model.mirrorSessionsRevision == revisionBeforeFrames + 1)
     }
 
