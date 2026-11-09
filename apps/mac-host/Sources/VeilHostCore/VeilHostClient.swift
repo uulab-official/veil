@@ -1427,7 +1427,8 @@ public struct VeilHostClient: HostDashboardService, Sendable {
             encoder.encode(
                 WindowFrameSubscribeRequest(
                     requestId: "req_frame_subscribe_\(requestIdSuffix(for: windowId))",
-                    windowId: windowId
+                    windowId: windowId,
+                    tileFormat: VeilFrameChannelCodec.bgraDeflateFormatName
                 )
             )
         )

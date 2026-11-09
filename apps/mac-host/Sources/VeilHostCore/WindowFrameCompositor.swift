@@ -1,3 +1,4 @@
+import Compression
 import CoreGraphics
 import Foundation
 import ImageIO
@@ -67,7 +68,10 @@ public final class WindowFrameCompositor: @unchecked Sendable {
     /// Applies a tile, creating or replacing the surface when the tile is a key frame.
     @discardableResult
     public func apply(_ tile: WindowFrameTile) -> ApplyResult {
-        guard let image = decodeImage(tile.payload) else {
+        let decoded = tile.payloadFormat == VeilFrameChannelCodec.bgraDeflateFormat
+            ? Self.decodeBGRADeflate(tile.payload, width: tile.rect.width, height: tile.rect.height)
+            : decodeImage(tile.payload)
+        guard let image = decoded else {
             // Later deltas depend on every earlier update. Once one is lost, retaining the old base
             // would let unrelated updates make an incomplete picture appear healthy indefinitely.
             forget(windowId: tile.windowId)
@@ -218,6 +222,53 @@ public final class WindowFrameCompositor: @unchecked Sendable {
             bytesPerRow: 0,
             space: CGColorSpaceCreateDeviceRGB(),
             bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue
+        )
+    }
+
+    /// Inflates a `bgraDeflateFormat` payload into an image of exactly `width` by `height`, or nil when the
+    /// payload does not inflate to that many pixels.
+    public static func decodeBGRADeflate(_ data: Data, width: Int, height: Int) -> CGImage? {
+        guard width > 0, height > 0, !data.isEmpty,
+              width <= VeilFrameChannelCodec.maximumSurfaceDimension,
+              height <= VeilFrameChannelCodec.maximumSurfaceDimension else {
+            return nil
+        }
+
+        let byteCount = width * height * 4
+        var pixels = Data(count: byteCount)
+        let inflated = pixels.withUnsafeMutableBytes { destination in
+            data.withUnsafeBytes { source in
+                compression_decode_buffer(
+                    destination.bindMemory(to: UInt8.self).baseAddress!,
+                    byteCount,
+                    source.bindMemory(to: UInt8.self).baseAddress!,
+                    data.count,
+                    nil,
+                    COMPRESSION_ZLIB
+                )
+            }
+        }
+        guard inflated == byteCount,
+              let provider = CGDataProvider(data: pixels as CFData) else {
+            return nil
+        }
+
+        return CGImage(
+            width: width,
+            height: height,
+            bitsPerComponent: 8,
+            bitsPerPixel: 32,
+            bytesPerRow: width * 4,
+            space: CGColorSpaceCreateDeviceRGB(),
+            // GDI capture leaves the alpha byte unreliable, so it is ignored: a mirrored surface is opaque, and
+            // popup transparency comes from clearing their black backdrop instead.
+            bitmapInfo: CGBitmapInfo(
+                rawValue: CGImageAlphaInfo.noneSkipFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue
+            ),
+            provider: provider,
+            decode: nil,
+            shouldInterpolate: false,
+            intent: .defaultIntent
         )
     }
 

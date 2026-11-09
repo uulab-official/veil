@@ -536,17 +536,22 @@ public struct WindowFrameSubscribeRequest: Codable, Equatable, Sendable {
     public var requestId: String
     public var windowId: String
     public var format: String
+    /// The binary channel tile encoding this host can decode, such as `bgra-deflate`. Agents that do not know
+    /// it, or hosts that omit it, use PNG.
+    public var tileFormat: String?
 
     public init(
         type: MessageType = .windowFrameSubscribe,
         requestId: String,
         windowId: String,
-        format: String = "png"
+        format: String = "png",
+        tileFormat: String? = nil
     ) {
         self.type = type
         self.requestId = requestId
         self.windowId = windowId
         self.format = format
+        self.tileFormat = tileFormat
     }
 }
 
