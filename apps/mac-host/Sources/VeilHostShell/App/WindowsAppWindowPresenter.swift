@@ -696,31 +696,16 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
         }
     }
 
-    /// Locks a mirrored window to the guest window's shape while the user resizes it.
-    ///
-    /// Veil cannot resize the Windows window — the protocol has no host-to-guest resize message — so dragging
-    /// a corner only changes how the guest's bitmap is presented. `WindowsAppFrameSurface` renders with
-    /// `scaledToFit` over black, so before this, any shape other than the guest's produced black letterbox
-    /// bars: the window grew and the app did not follow.
-    ///
-    /// Re-applied whenever guest bounds change, because the guest window really can be resized from inside
-    /// Windows, and the lock has to track it rather than pin the shape it had at launch.
+    /// Keeps a mirrored window at least as large as Windows allows, re-applied whenever guest bounds change.
     private func applyResizeConstraints(to window: NSWindow, for session: WindowMirrorSession) {
         let minimumSize = WindowsAppWindowPlacement.minimumContentSize(for: session.window.bounds)
         window.contentMinSize = NSSize(width: minimumSize.width, height: minimumSize.height)
 
-        guard let ratio = WindowsAppWindowPlacement.contentAspectRatio(for: session.window.bounds) else {
-            // A degenerate guest size would produce a ratio derived from nothing. Leaving the window freely
-            // resizable is better than locking it to a guess.
-            //
-            // `contentResizeIncrements`, not `resizeIncrements`: AppKit pairs content-space aspect ratio with
-            // content-space increments, and frame-space with frame-space. Clearing the wrong pair would leave
-            // a stale ratio from an earlier refresh in place.
-            window.contentResizeIncrements = NSSize(width: 1, height: 1)
-            return
-        }
-
-        window.contentAspectRatio = NSSize(width: ratio.width, height: ratio.height)
+        // Free resizing, like any Mac window. The guest window follows every size the Mac reports, and the
+        // frame surface draws content unscaled from the top-left while it catches up, so there is no stretched
+        // bitmap to protect with an aspect lock. Setting the increments is what clears an aspect ratio:
+        // `contentResizeIncrements` pairs with the content-space ratio a previous version of Veil set.
+        window.contentResizeIncrements = NSSize(width: 1, height: 1)
     }
 
     private func frame(for bounds: WindowBounds, existingWindowCount: Int) -> NSRect {
@@ -1118,7 +1103,11 @@ private final class InputCaptureNSView: NSView {
             viewHeight: Double(bounds.height),
             sourceWidth: sourceWidth,
             sourceHeight: sourceHeight,
-            fitsSourceIntoView: session.latestFrame != nil
+            fitsSourceIntoView: session.latestFrame != nil,
+            // Matches WindowsAppFrameSurface, which draws the frame unscaled from the top-left.
+            anchoredPointsPerPixel: session.latestFrame.map {
+                WindowFrameViewport.pointsPerPixel(forWindowsScale: $0.scale)
+            }
         )
         return viewport.guestPoint(
             forViewX: Double(point.x),

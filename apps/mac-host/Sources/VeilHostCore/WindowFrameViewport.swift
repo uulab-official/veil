@@ -30,22 +30,43 @@ public struct WindowFrameViewport: Equatable, Sendable {
     public var sourceWidth: Int
     public var sourceHeight: Int
     public var fitsSourceIntoView: Bool
+    /// When set, the source is drawn unscaled at this many points per source pixel, pinned to the view's
+    /// top-left corner, the way a Windows window keeps its content in place while its edge is dragged.
+    public var anchoredPointsPerPixel: Double?
 
     public init(
         viewWidth: Double,
         viewHeight: Double,
         sourceWidth: Int,
         sourceHeight: Int,
-        fitsSourceIntoView: Bool = true
+        fitsSourceIntoView: Bool = true,
+        anchoredPointsPerPixel: Double? = nil
     ) {
         self.viewWidth = viewWidth
         self.viewHeight = viewHeight
         self.sourceWidth = sourceWidth
         self.sourceHeight = sourceHeight
         self.fitsSourceIntoView = fitsSourceIntoView
+        self.anchoredPointsPerPixel = anchoredPointsPerPixel
+    }
+
+    /// The points per source pixel for a frame captured at a Windows DPI scale.
+    public static func pointsPerPixel(forWindowsScale scale: Double) -> Double {
+        scale.isFinite && scale > 0 ? 1 / scale : 1
     }
 
     public var visibleFrame: WindowFrameRect {
+        if let anchoredPointsPerPixel,
+           anchoredPointsPerPixel.isFinite,
+           anchoredPointsPerPixel > 0,
+           sourceWidth > 0,
+           sourceHeight > 0 {
+            let width = Double(sourceWidth) * anchoredPointsPerPixel
+            let height = Double(sourceHeight) * anchoredPointsPerPixel
+            // `y` counts from the bottom, so the top-left anchor sits at the view's top edge.
+            return WindowFrameRect(x: 0, y: viewHeight - height, width: width, height: height)
+        }
+
         guard fitsSourceIntoView,
               viewWidth > 0,
               viewHeight > 0,

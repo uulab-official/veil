@@ -42,15 +42,24 @@ struct WindowsAppFrameSurface: View {
             )
 
             ZStack(alignment: .topTrailing) {
-                if let latestFrameImage {
-                    Color.black
-                        .overlay {
+                if let latestFrameImage, let frame = session.latestFrame {
+                    // Unscaled and pinned to the top-left, like a Windows window whose edge is being dragged:
+                    // while the guest redraws at a new size, existing content stays put and the newly exposed
+                    // area takes the app's edge color. Scaling the old bitmap to the new shape made every
+                    // control and line of text swell and shrink during a resize. Input maps the same way;
+                    // see `WindowFrameViewport.anchoredPointsPerPixel`.
+                    let pointsPerPixel = WindowFrameViewport.pointsPerPixel(forWindowsScale: frame.scale)
+                    Self.edgeColor(of: latestFrameImage)
+                        .overlay(alignment: .topLeading) {
                             Image(nsImage: latestFrameImage)
                                 .interpolation(.high)
                                 .resizable()
-                                .scaledToFit()
-                                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                .frame(
+                                    width: CGFloat(frame.width) * pointsPerPixel,
+                                    height: CGFloat(frame.height) * pointsPerPixel
+                                )
                         }
+                        .clipped()
 
                     frameQualityOverlay(assessment)
                         .padding(14)
@@ -108,6 +117,36 @@ struct WindowsAppFrameSurface: View {
     ///
     /// `session.compositedFrameGeneration` is read here purely so SwiftUI re-renders when the compositor's
     /// surface changes. Without that read the view would have no observable dependency on it.
+    /// The color just inside the frame's bottom-right corner, which fills area the guest has not drawn yet.
+    /// One pixel is read, so this stays cheap at frame rate.
+    static func edgeColor(of image: NSImage) -> Color {
+        guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil),
+              cgImage.width > 2,
+              cgImage.height > 2,
+              let pixel = cgImage.cropping(to: CGRect(x: cgImage.width - 3, y: cgImage.height - 3, width: 1, height: 1)),
+              let context = CGContext(
+                data: nil,
+                width: 1,
+                height: 1,
+                bitsPerComponent: 8,
+                bytesPerRow: 4,
+                space: CGColorSpaceCreateDeviceRGB(),
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+              ) else {
+            return Color.black
+        }
+
+        context.draw(pixel, in: CGRect(x: 0, y: 0, width: 1, height: 1))
+        guard let bytes = context.data?.assumingMemoryBound(to: UInt8.self) else {
+            return Color.black
+        }
+        return Color(
+            red: Double(bytes[0]) / 255,
+            green: Double(bytes[1]) / 255,
+            blue: Double(bytes[2]) / 255
+        )
+    }
+
     private var latestFrameImage: NSImage? {
         guard let frame = session.latestFrame else {
             return nil

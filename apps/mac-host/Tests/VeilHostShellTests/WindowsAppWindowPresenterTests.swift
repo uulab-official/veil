@@ -563,6 +563,9 @@ struct WindowsAppWindowPresenterTests {
         #expect(window.standardWindowButton(.closeButton)?.isHidden == true)
         #expect(window.standardWindowButton(.miniaturizeButton)?.isHidden == true)
         #expect(window.standardWindowButton(.zoomButton)?.isHidden == true)
+        // Free to take any shape: the guest window follows the Mac size instead of a stretched bitmap.
+        #expect(window.contentResizeIncrements == NSSize(width: 1, height: 1))
+        #expect(window.contentAspectRatio == .zero)
         // Still a titled window, so it keeps its shadow, resizing, and Close/Minimize/Zoom commands.
         #expect(window.styleMask.isSuperset(of: [.titled, .closable, .miniaturizable, .resizable]))
     }
