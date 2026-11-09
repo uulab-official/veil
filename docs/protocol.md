@@ -922,6 +922,26 @@ is selected from health, not inferred from a negotiated agent's silence.
 
 Fixture: `harness/protocol-fixtures/operation.ack.json`.
 
+An `input.mouse` acknowledgement may also carry `pointer`, where the event left the guest cursor, in
+the 0...32767 absolute range QEMU's USB tablet uses on both axes across the guest's virtual desktop:
+
+```json
+{
+  "type": "operation.ack",
+  "requestId": "req_mouse_42",
+  "accepted": true,
+  "pointer": { "x": 16384, "y": 8192 }
+}
+```
+
+The host moves QEMU's tablet to that position without pressing buttons. The tablet keeps reporting
+the last absolute position QEMU gave it, so without this it snapped the cursor back from wherever
+the agent's injected input put it, and a drag in a mirrored window jumped to the stale position
+between events. `pointer` is optional: older agents omit it, and hosts without a QEMU tablet ignore
+it.
+
+Fixture: `harness/protocol-fixtures/operation.ack.mouse-pointer.json`.
+
 ## Input Mouse
 
 Event from host to guest:

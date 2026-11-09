@@ -181,6 +181,10 @@ test("windows agent accepts host mouse input events", async () => {
   assert.match(injector, /MOUSEEVENTF_LEFTDOWN/);
   assert.match(injector, /MOUSEEVENTF_LEFTUP/);
   assert.match(injector, /MOUSEEVENTF_ABSOLUTE/);
+  // The ack reports where the cursor went so the host can move QEMU's tablet there; otherwise the tablet
+  // snaps the cursor back to its last absolute position between events.
+  assert.match(desktop, /LastInjectedPointer/);
+  assert.match(session, /ack\["pointer"\]/);
   assert.match(session, /MessageTypes\.InputMouse/);
   assert.match(session, /HandleMouseInputAsync/);
   assert.match(session, /window_not_tracked/);
