@@ -250,7 +250,7 @@ internal static class WindowsInputInjector
         var modifierKeys = input.Event.EndsWith("Down", StringComparison.Ordinal)
             ? ModifierVirtualKeys(input.Modifiers).ToArray()
             : [];
-        inputs.AddRange(modifierKeys.Select(key => KeyboardInput((ushort)key, (char)0, keyUp: false)));
+        inputs.AddRange(modifierKeys.Select(key => KeyboardInput((ushort)key, 0, keyUp: false)));
         inputs.Add(new NativeInput
         {
             Type = INPUT_MOUSE,
@@ -265,7 +265,7 @@ internal static class WindowsInputInjector
                 }
             }
         });
-        inputs.AddRange(modifierKeys.Reverse().Select(key => KeyboardInput((ushort)key, (char)0, keyUp: true)));
+        inputs.AddRange(modifierKeys.Reverse().Select(key => KeyboardInput((ushort)key, 0, keyUp: true)));
         return Send(inputs);
     }
 
@@ -273,7 +273,7 @@ internal static class WindowsInputInjector
     {
         var sequence = KeySequence(input.Event, input.WindowsVirtualKey, input.Modifiers);
         return sequence.Count > 0
-            && Send(sequence.Select(step => KeyboardInput((ushort)step.VirtualKey, (char)0, step.KeyUp)).ToList());
+            && Send(sequence.Select(step => KeyboardInput((ushort)step.VirtualKey, 0, step.KeyUp)).ToList());
     }
 
     /// <summary>
@@ -291,7 +291,7 @@ internal static class WindowsInputInjector
         return Send(inputs);
     }
 
-    private static NativeInput KeyboardInput(ushort virtualKey, char scanCode, bool keyUp, bool unicode = false)
+    private static NativeInput KeyboardInput(ushort virtualKey, ushort scanCode, bool keyUp, bool unicode = false)
     {
         var flags = (keyUp ? KEYEVENTF_KEYUP : 0)
             | (unicode ? KEYEVENTF_UNICODE : 0)
@@ -360,11 +360,17 @@ internal static class WindowsInputInjector
         public IntPtr ExtraInfo;
     }
 
+    /// <remarks>
+    /// Every field is blittable on purpose. With a <c>char</c> here the struct needed marshaling, and the
+    /// marshaler copies each overlapping union member in turn, so this all-zero keyboard member was written
+    /// over the mouse member and every mouse event reached Windows as a no-op that SendInput still counted
+    /// as delivered.
+    /// </remarks>
     [StructLayout(LayoutKind.Sequential)]
     internal struct KeyboardInputData
     {
         public ushort VirtualKey;
-        public char ScanCode;
+        public ushort ScanCode;
         public uint Flags;
         public uint Time;
         public IntPtr ExtraInfo;

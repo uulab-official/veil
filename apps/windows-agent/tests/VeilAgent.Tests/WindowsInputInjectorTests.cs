@@ -30,6 +30,31 @@ public class WindowsInputInjectorTests
     }
 
     [Fact]
+    public void KeepsTheInputStructBlittableSoTheUnionIsNotOverwritten()
+    {
+        // A non-blittable union member made the marshaler write the empty keyboard member over the mouse
+        // member, so every injected mouse event was a no-op.
+        var size = System.Runtime.InteropServices.Marshal.SizeOf<WindowsInputInjector.NativeInput>();
+        Assert.Equal(IntPtr.Size == 8 ? 40 : 28, size);
+        Assert.Equal(size, System.Runtime.CompilerServices.Unsafe.SizeOf<WindowsInputInjector.NativeInput>());
+        Assert.True(IsBlittable<WindowsInputInjector.NativeInput>());
+    }
+
+    private static bool IsBlittable<T>() where T : struct
+    {
+        try
+        {
+            var handle = System.Runtime.InteropServices.GCHandle.Alloc(new T[1], System.Runtime.InteropServices.GCHandleType.Pinned);
+            handle.Free();
+            return true;
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
+    }
+
+    [Fact]
     public void WrapsAKeyInItsModifiers()
     {
         var down = WindowsInputInjector.KeySequence("keyDown", 0x5A, ["ctrl"]);
