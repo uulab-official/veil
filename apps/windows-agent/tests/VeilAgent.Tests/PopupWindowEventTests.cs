@@ -34,6 +34,16 @@ public class PopupWindowEventTests
     }
 
     [Fact]
+    public void AttachesToTheAppWindowRatherThanAPopupAboveIt()
+    {
+        var popup = new LaunchedWindow("hwnd:00000020", 0x20, 4912, "팝업 호스트", new WindowRect(40, 120, 942, 84), "normal", true, IsPopup: true, OwnerWindowId: "hwnd:00000010");
+        var main = new LaunchedWindow("hwnd:00000010", 0x10, 4912, "제목 없음 - 그림판", new WindowRect(0, 0, 1182, 709), "normal", true);
+
+        Assert.Equal("hwnd:00000010", AgentSession.PrimaryWindow([popup, main]).WindowId);
+        Assert.Equal("hwnd:00000020", AgentSession.PrimaryWindow([popup]).WindowId);
+    }
+
+    [Fact]
     public void LeavesOrdinaryWindowEventsUnchanged()
     {
         var session = new AgentSession(new NoWindowsDesktop(), new NoFrames());

@@ -164,7 +164,7 @@ public sealed class AgentSession
                     // of opening another instance. Track every matching HWND quietly so discovery
                     // cannot turn old windows into duplicate macOS mirrors after the request.
                     TrackWindows(app, existingWindows);
-                    launched = existingWindows.FirstOrDefault(window => window.Focused) ?? existingWindows[0];
+                    launched = PrimaryWindow(existingWindows);
                 }
                 else
                 {
@@ -195,6 +195,16 @@ public sealed class AgentSession
             NextFrameSequence: frame is null ? 1 : 2
         );
     }
+
+    /// <summary>
+    /// The window that stands for the app when attaching to one already open: never a popup such as Paint's
+    /// text formatting bar, which sits above the app window in z-order. Every discovered window reports
+    /// itself focused, so focus alone picked whichever window was on top.
+    /// </summary>
+    internal static LaunchedWindow PrimaryWindow(IReadOnlyList<LaunchedWindow> windows) =>
+        windows.FirstOrDefault(window => !window.IsPopup && window.Focused)
+            ?? windows.FirstOrDefault(window => !window.IsPopup)
+            ?? windows[0];
 
     private async Task<AgentReplies> HandleFileOpenAsync(
         JsonObject request,

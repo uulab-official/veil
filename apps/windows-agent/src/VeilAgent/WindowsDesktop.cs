@@ -205,15 +205,19 @@ public sealed class WindowsDesktop : IWindowsDesktop
                     IsNewWindow: !existingWindowHandles.Contains(hwnd),
                     MatchesLaunchedProcess: matchesProcess,
                     MatchesExecutable: matchesExecutable,
-                    MatchesTitle: matchesTitle
+                    MatchesTitle: matchesTitle,
+                    IsPopup: IsPopupWindow(hwnd)
                 ));
             }
 
             return true;
         }, IntPtr.Zero);
 
+        // An app's own window before any popup it has open: Paint's text formatting bar sits above its main
+        // window in z-order and was being taken as the app window.
         var candidate = candidates
-            .OrderByDescending(candidate => candidate.IsNewWindow)
+            .OrderBy(candidate => candidate.IsPopup)
+            .ThenByDescending(candidate => candidate.IsNewWindow)
             .ThenByDescending(candidate => candidate.MatchesLaunchedProcess)
             .ThenByDescending(candidate => candidate.MatchesExecutable)
             .ThenByDescending(candidate => candidate.MatchesTitle)
@@ -280,6 +284,9 @@ public sealed class WindowsDesktop : IWindowsDesktop
     /// an unowned window without one is an app's main window drawing its own title bar, like Paint's.
     /// </summary>
     internal static bool IsPopup(long style, bool hasOwner) => hasOwner && (style & WS_CAPTION) != WS_CAPTION;
+
+    private static bool IsPopupWindow(IntPtr hwnd) =>
+        IsPopup(GetWindowLongPtr(hwnd, GWL_STYLE).ToInt64(), hasOwner: GetWindow(hwnd, GW_OWNER) != IntPtr.Zero);
 
     private const int GW_OWNER = 4;
     private const int GWL_STYLE = -16;
@@ -1012,6 +1019,7 @@ public sealed class WindowsDesktop : IWindowsDesktop
         bool IsNewWindow,
         bool MatchesLaunchedProcess,
         bool MatchesExecutable,
-        bool MatchesTitle
+        bool MatchesTitle,
+        bool IsPopup
     );
 }
