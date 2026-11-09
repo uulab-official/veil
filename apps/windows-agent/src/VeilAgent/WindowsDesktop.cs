@@ -9,25 +9,14 @@ namespace Veil.Agent;
 public sealed class WindowsDesktop : IWindowsDesktop
 {
     private const uint WM_CLOSE = 0x0010;
-    private const uint WM_MOUSEMOVE = 0x0200;
-    private const uint WM_LBUTTONDOWN = 0x0201;
-    private const uint WM_LBUTTONUP = 0x0202;
-    private const uint WM_RBUTTONDOWN = 0x0204;
-    private const uint WM_RBUTTONUP = 0x0205;
-    private const uint WM_MOUSEWHEEL = 0x020A;
     private const uint WM_KEYDOWN = 0x0100;
     private const uint WM_KEYUP = 0x0101;
-    private const uint WM_CHAR = 0x0102;
 
     /// <summary>
     /// Matches the host-side bound. One message becomes one posted window message, so an unbounded
     /// payload would flood the target window's queue.
     /// </summary>
     internal const int MaxTextInputUtf16Length = 4096;
-    private const int MK_LBUTTON = 0x0001;
-    private const int MK_RBUTTON = 0x0002;
-    private const int WHEEL_DELTA = 120;
-    private const int SW_RESTORE = 9;
     private const uint CDS_FULLSCREEN = 0x00000004;
     private const int DISP_CHANGE_SUCCESSFUL = 0;
     private const int DISP_CHANGE_BADMODE = -2;
@@ -37,9 +26,6 @@ public sealed class WindowsDesktop : IWindowsDesktop
     private const uint SWP_NOZORDER = 0x0004;
     private const uint SWP_NOACTIVATE = 0x0010;
     private const uint SWP_NOOWNERZORDER = 0x0200;
-    private const int VK_CONTROL = 0x11;
-    private const int VK_SHIFT = 0x10;
-    private const int VK_MENU = 0x12;
     private const uint CF_UNICODETEXT = 13;
     private const uint GMEM_MOVEABLE = 0x0002;
     private readonly object clipboardGate = new();
@@ -534,7 +520,7 @@ public sealed class WindowsDesktop : IWindowsDesktop
         }
 
         if (!TryParseWindowId(input.WindowId, out var hwnd)
-            || !TryResolveMouseMessage(input, out var message, out var wParam, out var lParam))
+            || WindowsInputInjector.MouseButtonFlags(input.Event) is null)
         {
             return Task.FromResult(false);
         }
@@ -544,7 +530,7 @@ public sealed class WindowsDesktop : IWindowsDesktop
             return Task.FromResult(false);
         }
 
-        return Task.FromResult(PostMessage(hwnd, message, wParam, lParam));
+        return Task.FromResult(WindowsInputInjector.SendMouse(hwnd, input));
     }
 
     public Task<bool> SendKeyInputAsync(WindowKeyInput input, CancellationToken cancellationToken)
@@ -567,26 +553,7 @@ public sealed class WindowsDesktop : IWindowsDesktop
             return Task.FromResult(false);
         }
 
-        var accepted = true;
-        if (message == WM_KEYDOWN)
-        {
-            foreach (var modifierVirtualKey in ModifierVirtualKeys(input.Modifiers))
-            {
-                accepted &= PostMessage(hwnd, WM_KEYDOWN, new IntPtr(modifierVirtualKey), IntPtr.Zero);
-            }
-        }
-
-        accepted &= PostMessage(hwnd, message, new IntPtr(input.WindowsVirtualKey), IntPtr.Zero);
-
-        if (message == WM_KEYUP)
-        {
-            foreach (var modifierVirtualKey in ModifierVirtualKeys(input.Modifiers).Reverse())
-            {
-                accepted &= PostMessage(hwnd, WM_KEYUP, new IntPtr(modifierVirtualKey), IntPtr.Zero);
-            }
-        }
-
-        return Task.FromResult(accepted);
+        return Task.FromResult(WindowsInputInjector.SendKey(input));
     }
 
     public Task<bool> SendTextInputAsync(WindowTextInput input, CancellationToken cancellationToken)
@@ -613,16 +580,7 @@ public sealed class WindowsDesktop : IWindowsDesktop
             return Task.FromResult(false);
         }
 
-        var accepted = true;
-        // One WM_CHAR per UTF-16 code unit. Surrogate pairs are posted as two consecutive messages,
-        // which is what Win32 edit controls expect; posting the code point as a single wParam would
-        // truncate anything above U+FFFF.
-        foreach (var codeUnit in input.Text)
-        {
-            accepted &= PostMessage(hwnd, WM_CHAR, new IntPtr(codeUnit), IntPtr.Zero);
-        }
-
-        return Task.FromResult(accepted);
+        return Task.FromResult(WindowsInputInjector.SendText(input.Text));
     }
 
     public Task SetClipboardTextAsync(string text, CancellationToken cancellationToken)
@@ -766,47 +724,7 @@ public sealed class WindowsDesktop : IWindowsDesktop
         return hwnd != IntPtr.Zero;
     }
 
-    private static bool TryResolveMouseMessage(
-        WindowMouseInput input,
-        out uint message,
-        out IntPtr wParam,
-        out IntPtr lParam
-    )
-    {
-        message = input.Event switch
-        {
-            "leftDown" => WM_LBUTTONDOWN,
-            "leftUp" => WM_LBUTTONUP,
-            "rightDown" => WM_RBUTTONDOWN,
-            "rightUp" => WM_RBUTTONUP,
-            "move" => WM_MOUSEMOVE,
-            "scroll" => WM_MOUSEWHEEL,
-            _ => 0
-        };
 
-        if (message == 0)
-        {
-            wParam = IntPtr.Zero;
-            lParam = IntPtr.Zero;
-            return false;
-        }
-
-        wParam = input.Event switch
-        {
-            "leftDown" => new IntPtr(MK_LBUTTON),
-            "rightDown" => new IntPtr(MK_RBUTTON),
-            "scroll" => new IntPtr(WHEEL_DELTA << 16),
-            _ => IntPtr.Zero
-        };
-        lParam = MakeLParam(input.X, input.Y);
-        return true;
-    }
-
-    private static IntPtr MakeLParam(int x, int y)
-    {
-        var packed = (y & 0xFFFF) << 16 | (x & 0xFFFF);
-        return new IntPtr(packed);
-    }
 
     private static bool TryResolveKeyMessage(string eventName, out uint message)
     {
@@ -822,35 +740,9 @@ public sealed class WindowsDesktop : IWindowsDesktop
 
     private static bool EnsureWindowReadyForInput(IntPtr hwnd)
     {
-        if (!IsWindow(hwnd))
-        {
-            return false;
-        }
-
-        ShowWindow(hwnd, SW_RESTORE);
-        SetForegroundWindow(hwnd);
-        SetFocus(hwnd);
-        return true;
+        return WindowsInputInjector.PrepareTarget(hwnd);
     }
 
-    private static IEnumerable<int> ModifierVirtualKeys(IReadOnlyList<string> modifiers)
-    {
-        foreach (var modifier in modifiers)
-        {
-            switch (modifier)
-            {
-                case "ctrl":
-                    yield return VK_CONTROL;
-                    break;
-                case "shift":
-                    yield return VK_SHIFT;
-                    break;
-                case "alt":
-                    yield return VK_MENU;
-                    break;
-            }
-        }
-    }
 
     [DllImport("user32.dll", SetLastError = true)]
     private static extern bool PostMessage(IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam);
@@ -860,15 +752,6 @@ public sealed class WindowsDesktop : IWindowsDesktop
 
     [DllImport("user32.dll", SetLastError = true)]
     private static extern bool IsWindowVisible(IntPtr hWnd);
-
-    [DllImport("user32.dll", SetLastError = true)]
-    private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
-
-    [DllImport("user32.dll", SetLastError = true)]
-    private static extern bool SetForegroundWindow(IntPtr hWnd);
-
-    [DllImport("user32.dll", SetLastError = true)]
-    private static extern IntPtr SetFocus(IntPtr hWnd);
 
     [DllImport("user32.dll")]
     private static extern bool EnumWindows(EnumWindowsProc lpEnumFunc, IntPtr lParam);
