@@ -242,8 +242,14 @@ final class RFBEmbeddedDisplayModel {
         resizePresentation = .unavailable
         pendingResizeTarget = nil
         lastRequestedResizeTarget = nil
-        displayResizeFallback = nil
+        // The fallback is the view's configuration, not connection state. `connectIfNeeded` stops before it
+        // connects, right after the view installs the fallback, so clearing it here meant a size QEMU
+        // forwarded to Windows never reached the agent and the desktop kept bars around a stale resolution.
         status = .idle
+    }
+
+    var hasDisplayResizeFallback: Bool {
+        displayResizeFallback != nil
     }
 }
 
