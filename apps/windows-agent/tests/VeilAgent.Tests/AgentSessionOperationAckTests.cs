@@ -31,6 +31,30 @@ public class AgentSessionOperationAckTests
         Assert.Equal(MessageTypes.OperationAck, ack["type"]!.GetValue<string>());
         Assert.Equal("req_mouse", ack["requestId"]!.GetValue<string>());
         Assert.True(ack["accepted"]!.GetValue<bool>());
+        Assert.Null(ack["pointer"]);
+    }
+
+    [Fact]
+    public async Task ReportsWhereTheCursorWentSoTheHostCanMoveItsTablet()
+    {
+        var desktop = new ConfigurableWindowsDesktop { InjectedPointer = new GuestPointerPosition(16384, 8192) };
+        var session = new AgentSession(desktop, new NoOpFrameCapture());
+        await LaunchNotepadAsync(session);
+
+        var replies = await session.HandleAsync(new JsonObject
+        {
+            ["type"] = MessageTypes.InputMouse,
+            ["requestId"] = "req_mouse_pointer",
+            ["windowId"] = "hwnd:00000010",
+            ["event"] = "move",
+            ["x"] = 20,
+            ["y"] = 30,
+            ["modifiers"] = new JsonArray()
+        });
+
+        var ack = Assert.Single(replies.DirectReplies);
+        Assert.Equal(16384, ack["pointer"]!["x"]!.GetValue<int>());
+        Assert.Equal(8192, ack["pointer"]!["y"]!.GetValue<int>());
     }
 
     [Fact]
@@ -281,6 +305,10 @@ public class AgentSessionOperationAckTests
         public Task<bool> CloseWindowAsync(string windowId, CancellationToken cancellationToken) => Task.FromResult(true);
 
         public Task<bool> SendMouseInputAsync(WindowMouseInput input, CancellationToken cancellationToken) => Task.FromResult(MouseResult);
+
+        public GuestPointerPosition? InjectedPointer { get; init; }
+
+        public GuestPointerPosition? LastInjectedPointer => InjectedPointer;
 
         public Task<bool> SendKeyInputAsync(WindowKeyInput input, CancellationToken cancellationToken) => Task.FromResult(KeyResult);
 

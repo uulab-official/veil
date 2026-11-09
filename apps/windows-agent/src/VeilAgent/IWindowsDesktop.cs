@@ -32,6 +32,12 @@ public interface IWindowsDesktop
 
     Task<bool> SendMouseInputAsync(WindowMouseInput input, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Where the last applied mouse event put the cursor, in the absolute tablet range the host's virtual
+    /// pointer uses. Null for desktops that do not inject real input, including test doubles.
+    /// </summary>
+    GuestPointerPosition? LastInjectedPointer => null;
+
     Task<bool> SendKeyInputAsync(WindowKeyInput input, CancellationToken cancellationToken);
 
     /// <summary>

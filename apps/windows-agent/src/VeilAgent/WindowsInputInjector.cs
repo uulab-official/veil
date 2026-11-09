@@ -73,17 +73,18 @@ internal static class WindowsInputInjector
         int virtualLeft,
         int virtualTop,
         int virtualWidth,
-        int virtualHeight
+        int virtualHeight,
+        int maximum = 65535
     )
     {
-        static int Normalize(int value, int origin, int extent)
+        int Normalize(int value, int origin, int extent)
         {
             if (extent <= 1)
             {
                 return 0;
             }
             var clamped = Math.Clamp(value - origin, 0, extent - 1);
-            return (int)Math.Round(clamped * 65535.0 / (extent - 1), MidpointRounding.AwayFromZero);
+            return (int)Math.Round(clamped * (double)maximum / (extent - 1), MidpointRounding.AwayFromZero);
         }
 
         return (Normalize(screenX, virtualLeft, virtualWidth), Normalize(screenY, virtualTop, virtualHeight));
@@ -227,8 +228,14 @@ internal static class WindowsInputInjector
         }
     }
 
-    public static bool SendMouse(IntPtr hwnd, WindowMouseInput input)
+    /// <param name="pointer">
+    /// Where the cursor went, in the host tablet's absolute range. QEMU's USB tablet keeps reporting the last
+    /// position it was given, which snaps the guest cursor back from wherever SendInput put it; the host
+    /// moves the tablet to this position so the two agree.
+    /// </param>
+    public static bool SendMouse(IntPtr hwnd, WindowMouseInput input, out GuestPointerPosition? pointer)
     {
+        pointer = null;
         if (MouseButtonFlags(input.Event) is not { } buttonFlags
             || !GetWindowRect(hwnd, out var rect))
         {
@@ -237,13 +244,16 @@ internal static class WindowsInputInjector
 
         // Frames are captured from the window rectangle's top-left in physical pixels, and the host maps
         // clicks into that same bitmap, so the window rectangle is the right origin here.
-        var (x, y) = NormalizeToVirtualDesktop(
-            rect.Left + input.X,
-            rect.Top + input.Y,
-            GetSystemMetrics(SM_XVIRTUALSCREEN),
-            GetSystemMetrics(SM_YVIRTUALSCREEN),
-            GetSystemMetrics(SM_CXVIRTUALSCREEN),
-            GetSystemMetrics(SM_CYVIRTUALSCREEN)
+        var screenX = rect.Left + input.X;
+        var screenY = rect.Top + input.Y;
+        var virtualLeft = GetSystemMetrics(SM_XVIRTUALSCREEN);
+        var virtualTop = GetSystemMetrics(SM_YVIRTUALSCREEN);
+        var virtualWidth = GetSystemMetrics(SM_CXVIRTUALSCREEN);
+        var virtualHeight = GetSystemMetrics(SM_CYVIRTUALSCREEN);
+        var (x, y) = NormalizeToVirtualDesktop(screenX, screenY, virtualLeft, virtualTop, virtualWidth, virtualHeight);
+        var (tabletX, tabletY) = NormalizeToVirtualDesktop(
+            screenX, screenY, virtualLeft, virtualTop, virtualWidth, virtualHeight,
+            GuestPointerPosition.MaximumAbsolute
         );
 
         var inputs = new List<NativeInput>();
@@ -266,7 +276,12 @@ internal static class WindowsInputInjector
             }
         });
         inputs.AddRange(modifierKeys.Reverse().Select(key => KeyboardInput((ushort)key, 0, keyUp: true)));
-        return Send(inputs);
+        if (!Send(inputs))
+        {
+            return false;
+        }
+        pointer = new GuestPointerPosition(tabletX, tabletY);
+        return true;
     }
 
     public static bool SendKey(WindowKeyInput input)

@@ -688,7 +688,12 @@ public sealed class AgentSession
                 ));
             }
 
-            return AgentReplies.Direct(OperationAck(requestId));
+            var ack = OperationAck(requestId);
+            if (desktop.LastInjectedPointer is { } pointer)
+            {
+                ack["pointer"] = new JsonObject { ["x"] = pointer.X, ["y"] = pointer.Y };
+            }
+            return AgentReplies.Direct(ack);
         }
         catch (Exception error) when (error is not OperationCanceledException)
         {

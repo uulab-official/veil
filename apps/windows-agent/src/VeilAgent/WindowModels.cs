@@ -53,6 +53,14 @@ public sealed record WindowMouseInput(
     IReadOnlyList<string> Modifiers
 );
 
+/// <summary>
+/// A cursor position in the 0...32767 absolute range QEMU's USB tablet reports on both axes.
+/// </summary>
+public sealed record GuestPointerPosition(int X, int Y)
+{
+    public const int MaximumAbsolute = 32_767;
+}
+
 public sealed record WindowKeyInput(
     string WindowId,
     string Event,

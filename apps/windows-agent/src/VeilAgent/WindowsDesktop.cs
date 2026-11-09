@@ -530,8 +530,15 @@ public sealed class WindowsDesktop : IWindowsDesktop
             return Task.FromResult(false);
         }
 
-        return Task.FromResult(WindowsInputInjector.SendMouse(hwnd, input));
+        var applied = WindowsInputInjector.SendMouse(hwnd, input, out var pointer);
+        if (applied)
+        {
+            LastInjectedPointer = pointer;
+        }
+        return Task.FromResult(applied);
     }
+
+    public GuestPointerPosition? LastInjectedPointer { get; private set; }
 
     public Task<bool> SendKeyInputAsync(WindowKeyInput input, CancellationToken cancellationToken)
     {

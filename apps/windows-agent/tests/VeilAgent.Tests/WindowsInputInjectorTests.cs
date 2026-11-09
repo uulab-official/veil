@@ -55,6 +55,13 @@ public class WindowsInputInjectorTests
     }
 
     [Fact]
+    public void NormalizesToTheTabletRangeForTheHostPointer()
+    {
+        Assert.Equal((32767, 32767), WindowsInputInjector.NormalizeToVirtualDesktop(2047, 1279, 0, 0, 2048, 1280, GuestPointerPosition.MaximumAbsolute));
+        Assert.Equal((0, 0), WindowsInputInjector.NormalizeToVirtualDesktop(0, 0, 0, 0, 2048, 1280, GuestPointerPosition.MaximumAbsolute));
+    }
+
+    [Fact]
     public void WrapsAKeyInItsModifiers()
     {
         var down = WindowsInputInjector.KeySequence("keyDown", 0x5A, ["ctrl"]);
