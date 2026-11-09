@@ -33,10 +33,10 @@ struct WindowsRuntimeWaitPresentation: Equatable {
             max(0, Int(now.timeIntervalSince($0).rounded(.down)))
         }
         let isLongWait = elapsedSeconds.map { $0 >= 90 } ?? false
-        let title = isLongWait ? "Windows is taking longer than usual" : "Starting Windows"
+        let title = isLongWait ? String(localized: "Windows is taking longer than usual") : String(localized: "Starting Windows")
         let detail = isLongWait
-            ? "Windows is still booting. Keep this window open and use Refresh status to inspect the runtime."
-            : "Veil is waiting for Windows and its display to respond."
+            ? String(localized: "Windows is still booting. Keep this window open and use Refresh status to inspect the runtime.")
+            : String(localized: "Veil is waiting for Windows and its display to respond.")
 
         return WindowsRuntimeWaitPresentation(
             elapsedSeconds: elapsedSeconds,

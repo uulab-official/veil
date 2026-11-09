@@ -12,13 +12,13 @@ enum WindowsRuntimeStopConfirmation {
     ) -> String {
         switch (hasMirroredWindowsApp, hasQueuedLaunch) {
         case (true, true):
-            return "Stopping Windows closes mirrored app windows. The queued app launch will remain pending until Windows reconnects."
+            return String(localized: "Stopping Windows closes mirrored app windows. The queued app launch will remain pending until Windows reconnects.")
         case (true, false):
-            return "Stopping Windows closes the mirrored Windows app window."
+            return String(localized: "Stopping Windows closes the mirrored Windows app window.")
         case (false, true):
-            return "The queued app launch will remain pending until Windows reconnects."
+            return String(localized: "The queued app launch will remain pending until Windows reconnects.")
         case (false, false):
-            return "Windows will shut down on this Mac."
+            return String(localized: "Windows will shut down on this Mac.")
         }
     }
 }

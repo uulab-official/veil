@@ -17,9 +17,17 @@ struct WindowsLauncherMetadataStatus: Equatable {
 
 enum WindowsShellCopy {
     static func restartInstallationMessage(isRunning: Bool, windowsOnDisk: Bool = false) -> String {
-        let stop = isRunning ? "Veil shuts Windows down, then moves" : "Veil moves"
-        let disk = windowsOnDisk ? "the Windows disk (Windows Setup already finished copying Windows to it)" : "the unfinished Windows disk"
-        return "\(stop) \(disk), its UEFI settings, and its TPM to the Trash and starts Windows Setup again. The installer ISO, shared folder, and hardware settings are kept."
+        // Whole sentences per case so each one can be translated with its own word order.
+        switch (isRunning, windowsOnDisk) {
+        case (true, true):
+            return String(localized: "Veil shuts Windows down, then moves the Windows disk (Windows Setup already finished copying Windows to it), its UEFI settings, and its TPM to the Trash and starts Windows Setup again. The installer ISO, shared folder, and hardware settings are kept.")
+        case (true, false):
+            return String(localized: "Veil shuts Windows down, then moves the unfinished Windows disk, its UEFI settings, and its TPM to the Trash and starts Windows Setup again. The installer ISO, shared folder, and hardware settings are kept.")
+        case (false, true):
+            return String(localized: "Veil moves the Windows disk (Windows Setup already finished copying Windows to it), its UEFI settings, and its TPM to the Trash and starts Windows Setup again. The installer ISO, shared folder, and hardware settings are kept.")
+        case (false, false):
+            return String(localized: "Veil moves the unfinished Windows disk, its UEFI settings, and its TPM to the Trash and starts Windows Setup again. The installer ISO, shared folder, and hardware settings are kept.")
+        }
     }
 
     /// The guest agent is only expected to answer once Windows is installed and running.
@@ -108,10 +116,10 @@ enum WindowsShellCopy {
     }
 
     static let quietStopWaitingMessage =
-        "Windows app windows are closed. Veil will stop Windows after status refreshes."
+        String(localized: "Windows app windows are closed. Veil will stop Windows after status refreshes.")
 
     static func displayRecoveryStillStaleMessage(statusText: String) -> String {
-        "Display is still \(statusText). Refresh the Windows display before opening an app."
+        String(localized: "Display is still \(statusText). Refresh the Windows display before opening an app.")
     }
 
     static func openWindowsActionTitle(windowsInstalled: Bool) -> String {

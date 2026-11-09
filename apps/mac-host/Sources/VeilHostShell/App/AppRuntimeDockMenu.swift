@@ -166,7 +166,7 @@ enum AppRuntimeDockMenuFactory {
                 menu.addItem(
                     item(
                         WindowsShellCopy.prefixedMenuItemTitle(
-                            prefix: "Focus",
+                            prefix: String(localized: "Focus"),
                             title: session.window.title
                         ),
                         action: #selector(AppRuntimeDockMenuTarget.focusWindowsAppWindow(_:)),
@@ -182,7 +182,7 @@ enum AppRuntimeDockMenuFactory {
                 menu.addItem(
                     item(
                         WindowsShellCopy.prefixedMenuItemTitle(
-                            prefix: "Close",
+                            prefix: String(localized: "Close"),
                             title: session.window.title
                         ),
                         action: #selector(AppRuntimeDockMenuTarget.closeWindowsAppWindow(_:)),
@@ -267,7 +267,7 @@ enum AppRuntimeDockMenuFactory {
                 menu.addItem(
                     item(
                         WindowsShellCopy.prefixedMenuItemTitle(
-                            prefix: "Open",
+                            prefix: String(localized: "Open"),
                             title: app.name
                         ),
                         action: #selector(AppRuntimeDockMenuTarget.launchWindowsApp(_:)),
@@ -345,7 +345,7 @@ enum AppRuntimeDockMenuFactory {
         image: NSImage? = nil,
         isEnabled: Bool = true
     ) -> NSMenuItem {
-        let item = NSMenuItem(title: title, action: action, keyEquivalent: "")
+        let item = NSMenuItem(title: String(localized: String.LocalizationValue(title)), action: action, keyEquivalent: "")
         item.target = target
         item.representedObject = representedObject
         item.image = image
@@ -530,7 +530,7 @@ struct AppQueuedLaunchMenuState: Equatable {
 
         if canRecoverRuntimeDisplay {
             return AppQueuedLaunchMenuState(
-                title: "Refresh Display",
+                title: String(localized: "Refresh Display"),
                 kind: .recoverRuntimeDisplay,
                 isEnabled: true
             )
@@ -552,6 +552,6 @@ struct AppQueuedLaunchMenuState: Equatable {
     }
 
     private static func title(prefix: String, appName: String) -> String {
-        WindowsShellCopy.prefixedMenuItemTitle(prefix: prefix, title: appName)
+        WindowsShellCopy.prefixedMenuItemTitle(prefix: String(localized: String.LocalizationValue(prefix)), title: appName)
     }
 }

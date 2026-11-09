@@ -19,13 +19,13 @@ struct WindowsRuntimeFailurePresentation: Equatable {
         let message = [errorMessage, snapshotDetail]
             .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
             .first { !$0.isEmpty }
-            ?? "The last Windows start attempt failed. Open settings for diagnostics."
+            ?? String(localized: "The last Windows start attempt failed. Open settings for diagnostics.")
 
         return WindowsRuntimeFailurePresentation(
-            title: "Windows needs attention",
+            title: String(localized: "Windows needs attention"),
             message: message,
-            refreshTitle: "Refresh status",
-            detailsTitle: "Open settings"
+            refreshTitle: String(localized: "Refresh status"),
+            detailsTitle: String(localized: "Open settings")
         )
     }
 }

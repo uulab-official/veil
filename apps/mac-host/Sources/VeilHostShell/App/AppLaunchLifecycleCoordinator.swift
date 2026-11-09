@@ -43,25 +43,25 @@ enum AppLaunchLifecycleFailure: Error, Equatable, Sendable {
     var userMessage: String {
         switch self {
         case .guestAgentEndpointUnavailable:
-            return "This Windows runtime has no available app connection. Open Windows Settings to choose the supported QEMU/HVF runtime."
+            return String(localized: "This Windows runtime has no available app connection. Open Windows Settings to choose the supported QEMU/HVF runtime.")
         case .runtimeSetupIncomplete:
-            return "Finish Windows setup before opening this app."
+            return String(localized: "Finish Windows setup before opening this app.")
         case .runtimeStartFailed:
-            return "Windows could not start or resume. Open the recovery display for the exact boot error."
+            return String(localized: "Windows could not start or resume. Open the recovery display for the exact boot error.")
         case .guestAgentRecoveryExhausted:
-            return "Windows is running, but the app connection did not recover after two attempts. Open recovery to repair Veil Agent."
+            return String(localized: "Windows is running, but the app connection did not recover after two attempts. Open recovery to repair Veil Agent.")
         case .launchRejected:
-            return "Windows connected, but the selected app did not open. Refresh the app list and try once more."
+            return String(localized: "Windows connected, but the selected app did not open. Refresh the app list and try once more.")
         case .transitionBudgetExceeded:
-            return "Veil stopped the app launch because its state did not settle. Refresh Windows status before retrying."
+            return String(localized: "Veil stopped the app launch because its state did not settle. Refresh Windows status before retrying.")
         case .captureUnavailable:
-            return "Windows opened the app, but app screen sharing is unavailable. Open recovery to check the Windows app connection."
+            return String(localized: "Windows opened the app, but app screen sharing is unavailable. Open recovery to check the Windows app connection.")
         case .firstFrameRecoveryFailed:
-            return "Windows opened the app, but Veil could not restart its screen. Use Refresh App Screen and try again."
+            return String(localized: "Windows opened the app, but Veil could not restart its screen. Use Refresh App Screen and try again.")
         case .firstFrameRecoveryExhausted:
-            return "Windows opened the app, but its screen did not arrive after one recovery attempt. Open recovery for the next safe action."
+            return String(localized: "Windows opened the app, but its screen did not arrive after one recovery attempt. Open recovery for the next safe action.")
         case .cancelled:
-            return "App opening was cancelled. You can open the app again when you are ready."
+            return String(localized: "App opening was cancelled. You can open the app again when you are ready.")
         }
     }
 }

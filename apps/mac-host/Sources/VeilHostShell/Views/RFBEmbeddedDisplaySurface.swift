@@ -664,7 +664,7 @@ private final class RFBEmbeddedDisplayWorker: @unchecked Sendable {
             return description
         }
 
-        return "Display stream unavailable"
+        return String(localized: "Display stream unavailable")
     }
 }
 
