@@ -179,6 +179,29 @@ Reading `sharedFolder` from health is deliberately side-effect free. Health is
 polled, so it must never create a folder or publish a share; `shared.folder.request`
 is the message that prepares anything. See [Shared Folder](#shared-folder).
 
+`frameCapture` is optional and diagnostic. It reports how long each step of a mirrored frame capture
+took in the guest, so the host can see where frame time goes without reading guest logs:
+
+```json
+"frameCapture": {
+  "strategy": "auto",
+  "phases": {
+    "capture": { "meanMilliseconds": 4.1, "maxMilliseconds": 31.0, "count": 812 },
+    "copy": { "meanMilliseconds": 1.2, "maxMilliseconds": 6.4, "count": 812 },
+    "diff": { "meanMilliseconds": 0.9, "maxMilliseconds": 3.3, "count": 812 },
+    "encode": { "meanMilliseconds": 2.0, "maxMilliseconds": 9.8, "count": 344 },
+    "changedTotal": { "meanMilliseconds": 8.3, "maxMilliseconds": 40.2, "count": 344 },
+    "unchangedTotal": { "meanMilliseconds": 6.2, "maxMilliseconds": 35.1, "count": 468 }
+  },
+  "methods": { "screen": 790, "printWindow": 22 }
+}
+```
+
+Means are exponentially weighted (factor 0.1), so they follow the current workload. `methods` counts
+captures by method: `screen` copies the already composed screen, `printWindow` asks the app to render
+itself. `strategy` is the method in force; see [Frame Capture Strategy](#frame-capture-strategy).
+Hosts must not depend on the phase names, which may change with the capture code.
+
 ## App List
 
 Request:
@@ -914,6 +937,31 @@ Rules:
   the host waits for QEMU to exit rather than for a further message.
 - The request carries no arguments, so it cannot run anything but a normal shutdown. The host already
   controls the VM's power, so the message gives it no new authority over the guest.
+
+## Frame Capture Strategy
+
+Diagnostic host request:
+
+```json
+{
+  "type": "frame.capture.strategy.set",
+  "requestId": "req_capture_strategy_1",
+  "strategy": "screen"
+}
+```
+
+`strategy` is `auto` (the default: copy the screen when the window is fully visible and on top,
+otherwise `PrintWindow`), `screen`, or `printWindow`. The agent answers with an `operation.ack`, or an
+`error` with code `invalid_message` for any other value, and clears the `frameCapture` times in health so
+they describe only the new method.
+
+Rules:
+
+- This exists to compare capture methods on a running guest. Normal hosts never send it, and the
+  setting lasts only until the agent restarts.
+- Forcing `screen` mirrors whatever covers the window on the guest screen, which is why `auto` uses it
+  only for a fully visible window. Nothing beyond the guest's own screen is read, so it does not widen
+  what the host can see.
 
 ## Operation Acknowledgements
 
