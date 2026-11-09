@@ -337,6 +337,104 @@ struct WindowsAppWindowPresenterTests {
         #expect(NSEqualRects(window.frame, zoomedFrame))
     }
 
+    @Test("desktop mode takes every mirrored window off screen and pauses its frames")
+    func desktopModeHidesMirroredWindowsAndPausesFrames() {
+        _ = NSApplication.shared
+        let presenter = WindowsAppWindowPresenter()
+        var visibilityChanges: [String] = []
+        presenter.onWindowVisibilityChange = { windowId, isVisible in
+            visibilityChanges.append("\(windowId):\(isVisible)")
+        }
+        defer {
+            presenter.closeAll()
+        }
+
+        presenter.showWindow(for: session(windowId: "hwnd:0001", appId: "winapp_notepad", title: "Notepad"))
+        presenter.showWindow(for: session(windowId: "hwnd:0002", appId: "winapp_calculator", title: "Calculator"))
+
+        presenter.hideAllForDesktop()
+
+        #expect(presenter.isHiddenForDesktop)
+        #expect(!presenter.isWindowOnScreen(windowId: "hwnd:0001"))
+        #expect(!presenter.isWindowOnScreen(windowId: "hwnd:0002"))
+        // Sessions stay open in the guest; the windows are only hidden.
+        #expect(presenter.visibleWindowIds == ["hwnd:0001", "hwnd:0002"])
+        #expect(visibilityChanges == ["hwnd:0001:false", "hwnd:0002:false"])
+
+        // Entering the mode again must not pause twice.
+        presenter.hideAllForDesktop()
+        #expect(visibilityChanges.count == 2)
+    }
+
+    @Test("apps mode brings back the windows the desktop hid and resumes their frames")
+    func appsModeRestoresHiddenWindowsAndResumesFrames() {
+        _ = NSApplication.shared
+        let presenter = WindowsAppWindowPresenter()
+        var visibilityChanges: [String] = []
+        presenter.onWindowVisibilityChange = { windowId, isVisible in
+            visibilityChanges.append("\(windowId):\(isVisible)")
+        }
+        defer {
+            presenter.closeAll()
+        }
+
+        presenter.showWindow(for: session(windowId: "hwnd:0001", appId: "winapp_notepad", title: "Notepad"))
+        presenter.showWindow(for: session(windowId: "hwnd:0002", appId: "winapp_calculator", title: "Calculator"))
+        presenter.hideAllForDesktop()
+        visibilityChanges.removeAll()
+
+        presenter.showAllAfterDesktop()
+
+        #expect(!presenter.isHiddenForDesktop)
+        #expect(presenter.isWindowOnScreen(windowId: "hwnd:0001"))
+        #expect(presenter.isWindowOnScreen(windowId: "hwnd:0002"))
+        #expect(visibilityChanges == ["hwnd:0001:true", "hwnd:0002:true"])
+        // The window that was frontmost before the desktop took over is frontmost again.
+        #expect(presenter.foregroundWindowId == "hwnd:0002")
+
+        // Leaving a mode that is not active does nothing.
+        presenter.showAllAfterDesktop()
+        #expect(visibilityChanges.count == 2)
+    }
+
+    @Test("a window that opens or asks to come forward while the desktop shows stays hidden and paused")
+    func windowsStayHiddenWhileDesktopShows() {
+        _ = NSApplication.shared
+        let presenter = WindowsAppWindowPresenter()
+        var visibilityChanges: [String] = []
+        presenter.onWindowVisibilityChange = { windowId, isVisible in
+            visibilityChanges.append("\(windowId):\(isVisible)")
+        }
+        defer {
+            presenter.closeAll()
+        }
+
+        presenter.showWindow(for: session(windowId: "hwnd:0001", appId: "winapp_notepad", title: "Notepad"))
+        presenter.hideAllForDesktop()
+        visibilityChanges.removeAll()
+
+        presenter.showWindow(
+            for: session(windowId: "hwnd:0001", appId: "winapp_notepad", title: "Notepad"),
+            bringToFront: true
+        )
+        presenter.showWindow(
+            for: session(windowId: "hwnd:0002", appId: "winapp_calculator", title: "Calculator"),
+            bringToFront: true
+        )
+        presenter.bringAllToFront()
+
+        #expect(!presenter.isWindowOnScreen(windowId: "hwnd:0001"))
+        #expect(!presenter.isWindowOnScreen(windowId: "hwnd:0002"))
+        #expect(presenter.visibleWindowIds == ["hwnd:0001", "hwnd:0002"])
+        #expect(visibilityChanges == ["hwnd:0002:false"])
+
+        presenter.showAllAfterDesktop()
+
+        #expect(presenter.isWindowOnScreen(windowId: "hwnd:0001"))
+        #expect(presenter.isWindowOnScreen(windowId: "hwnd:0002"))
+        #expect(visibilityChanges == ["hwnd:0002:false", "hwnd:0001:true", "hwnd:0002:true"])
+    }
+
     @Test("restore policy deminiaturizes minimized Windows app windows")
     func restorePolicyDeminiaturizesMinimizedWindowsAppWindows() {
         let window = RestorePolicyTestWindow(isMiniaturizedForTest: true)

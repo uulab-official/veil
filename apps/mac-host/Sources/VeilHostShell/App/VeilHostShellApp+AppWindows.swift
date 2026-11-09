@@ -4,6 +4,7 @@ import VeilHostCore
 
 extension VeilHostShellApp {
     func restoreWindowsAppWindows() {
+        shellNavigation.viewMode = .apps
         Task { @MainActor in
             cancelAutomaticQuietRuntime()
             let restoredLaunches = await model.restoreMirroredWindowsAfterReconnect()
@@ -64,6 +65,7 @@ extension VeilHostShellApp {
     }
 
     func focusWindowsAppWindow(windowId: String) {
+        shellNavigation.viewMode = .apps
         Task { @MainActor in
             let response = await model.focusMirrorSession(windowId: windowId)
             guard response?.accepted == true else {
@@ -85,6 +87,7 @@ extension VeilHostShellApp {
     }
 
     func bringAllWindowsAppWindowsToFront() {
+        shellNavigation.viewMode = .apps
         let knownWindowIds = Set(windowsAppWindowPresenter.visibleWindowIds)
         let sessions = model.mirrorSessions.filter { knownWindowIds.contains($0.id) }
         for session in sessions {
@@ -229,6 +232,11 @@ extension VeilHostShellApp {
                 modelRequestsHideLauncher: model.runtimeStatusReport().launcherVisibility.shouldHideMainWindow
             )
 
+            // Clicking the Dock icon while the desktop shows returns to it rather than leaving the mode.
+            guard shellNavigation.viewMode == .apps else {
+                activateMainWindow()
+                return
+            }
             switch destination {
             case .windowsAppWindows:
                 bringAllWindowsAppWindowsToFront()
@@ -411,8 +419,26 @@ extension VeilHostShellApp {
         displayMessage = String(localized: "\(title) is frontmost as a macOS window.")
     }
 
+    /// Makes the two viewing modes exclusive, the way Parallels switches between Window mode and Coherence:
+    /// the full desktop takes every mirrored window off screen and pauses its frames, and apps mode puts
+    /// them back and closes the separate desktop window. Nothing in the guest is closed either way.
+    func applyViewMode(_ mode: MachineViewMode) {
+        switch mode {
+        case .desktop:
+            windowsAppWindowPresenter.hideAllForDesktop()
+            MainWindowChrome.showMainWindow()
+        case .apps:
+            qemuConsoleWindowPresenter.closeConsole()
+            windowsAppWindowPresenter.showAllAfterDesktop()
+            syncLauncherWindowVisibility()
+        }
+    }
+
     func syncLauncherWindowVisibility() {
-        if shouldHideLauncherWindowForCoherence() {
+        // The main window is where the desktop shows, so it stays up however many apps are mirrored.
+        if shellNavigation.viewMode == .desktop {
+            MainWindowChrome.showMainWindow()
+        } else if shouldHideLauncherWindowForCoherence() {
             MainWindowChrome.hideMainWindow()
         } else {
             MainWindowChrome.showMainWindow()

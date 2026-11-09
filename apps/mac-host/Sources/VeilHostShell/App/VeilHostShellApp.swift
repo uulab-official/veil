@@ -147,6 +147,9 @@ struct VeilHostShellApp: App {
             .onChange(of: vmModel.phase) {
                 scheduleAutomaticQuietRuntimeIfNeeded()
             }
+            .onChange(of: shellNavigation.viewMode) { _, mode in
+                applyViewMode(mode)
+            }
             .environment(\.appRuntimeProvider, vmRuntimeBooter.provider)
             .environment(shellNavigation)
     }

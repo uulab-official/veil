@@ -20,6 +20,10 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
     /// How often a window being dragged to a new size tells Windows to follow.
     private static let liveResizeReportInterval: TimeInterval = 0.12
     private(set) var foregroundWindowId: String?
+    /// Whether the full Windows desktop is showing instead, which keeps every mirrored window off screen.
+    private(set) var isHiddenForDesktop = false
+    /// Windows that were in the Dock when the desktop took over, so returning puts them back there.
+    private var minimizedBeforeDesktop: Set<String> = []
 
     var onUserWindowClose: ((String) -> Void)?
     var onMouseInput: ((String, String, Int, Int) -> Void)?
@@ -65,7 +69,8 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
     ///   Newly created windows are always raised, since an app the user just opened has to appear.
     func showWindow(for session: WindowMirrorSession, bringToFront: Bool = false) {
         if let window = windowsById[session.id] {
-            updateExistingWindow(window, for: session, bringToFront: bringToFront)
+            // The desktop shows this app already; raising its Mac window would put it on screen twice.
+            updateExistingWindow(window, for: session, bringToFront: bringToFront && !isHiddenForDesktop)
             return
         }
 
@@ -91,7 +96,70 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
             for: session
         )
         windowsById[session.id] = window
+        guard !isHiddenForDesktop else {
+            // Opened while the desktop shows Windows: kept off screen and quiet until apps mode returns.
+            rememberWindowId(session.id)
+            onWindowVisibilityChange?(session.id, false)
+            return
+        }
         present(window, windowId: session.id)
+    }
+
+    /// Takes every mirrored window off screen while the full Windows desktop is shown, the way Parallels
+    /// leaves Coherence. Windows stay open in the guest; only their frame streams pause, through the same
+    /// path minimizing uses. Minimized windows leave the Dock too, so one cannot be restored behind the
+    /// desktop's back, and they are remembered so `showAllAfterDesktop()` puts them back there.
+    func hideAllForDesktop() {
+        guard !isHiddenForDesktop else {
+            return
+        }
+        isHiddenForDesktop = true
+
+        for windowId in visibleWindowIds {
+            guard let window = windowsById[windowId] else {
+                continue
+            }
+            if window.isMiniaturized {
+                // Already paused when it was minimized.
+                minimizedBeforeDesktop.insert(windowId)
+            } else {
+                onWindowVisibilityChange?(windowId, false)
+            }
+            window.orderOut(nil)
+        }
+    }
+
+    /// Brings back the windows `hideAllForDesktop()` took off screen, in their previous stacking order, and
+    /// resumes their frame streams. Windows that were minimized go back to the Dock still paused.
+    func showAllAfterDesktop() {
+        guard isHiddenForDesktop else {
+            return
+        }
+        isHiddenForDesktop = false
+        let minimized = minimizedBeforeDesktop
+        minimizedBeforeDesktop.removeAll()
+
+        for windowId in visibleWindowIds {
+            guard let window = windowsById[windowId] else {
+                continue
+            }
+            if minimized.contains(windowId) {
+                window.miniaturize(nil)
+            } else {
+                window.orderFront(nil)
+                onWindowVisibilityChange?(windowId, true)
+            }
+        }
+        if let front = visibleWindowIds.last(where: { !minimized.contains($0) }),
+           let window = windowsById[front] {
+            window.makeKeyAndOrderFront(nil)
+            foregroundWindowId = front
+        }
+    }
+
+    /// Whether a mirrored window is actually on screen, as opposed to tracked but hidden or minimized.
+    func isWindowOnScreen(windowId: String) -> Bool {
+        windowsById[windowId]?.isVisible == true
     }
 
     func closeAll() {
@@ -103,6 +171,7 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
         windowOrder.removeAll()
         identitiesById.removeAll()
         foregroundWindowId = nil
+        minimizedBeforeDesktop.removeAll()
         WindowsAppDockIcon.showInDock(nil)
     }
 
@@ -120,7 +189,7 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
     }
 
     func bringAllToFront() {
-        guard !windowsById.isEmpty else {
+        guard !windowsById.isEmpty, !isHiddenForDesktop else {
             return
         }
 
@@ -479,6 +548,7 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
 
     private func forgetWindowId(_ windowId: String) {
         windowOrder.removeAll { $0 == windowId }
+        minimizedBeforeDesktop.remove(windowId)
         identitiesById[windowId] = nil
         if windowsById.isEmpty {
             WindowsAppDockIcon.showInDock(nil)

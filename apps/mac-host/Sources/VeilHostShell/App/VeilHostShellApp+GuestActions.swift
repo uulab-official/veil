@@ -42,6 +42,7 @@ extension VeilHostShellApp {
     func configureWindowsAppWindowCloseBridge() {
 #if DEBUG
         windowsAppWindowPresenter.installDebugCommandObserver()
+        installDebugViewModeObserver()
 #endif
         windowsAppWindowPresenter.appIdentityProvider = { appId in
             WindowsAppWindowIdentity.resolve(appId: appId, apps: model.apps)
@@ -245,7 +246,38 @@ extension VeilHostShellApp {
         HostPasteboardContent.writeImage(image, to: .general)
     }
 
+#if DEBUG
+    /// Development builds only: switches the view mode from a script, the same as View > ⌘1 / ⌘2, so the
+    /// exclusive mode switch can be checked against a live guest without touching the user's keyboard.
+    /// Post `org.uulab.veil.debug.viewMode` with `mode` set to `apps` or `desktop`.
+    private func installDebugViewModeObserver() {
+        guard DebugViewModeObserver.token == nil else {
+            return
+        }
+        DebugViewModeObserver.token = DistributedNotificationCenter.default().addObserver(
+            forName: Notification.Name("org.uulab.veil.debug.viewMode"),
+            object: nil,
+            queue: .main
+        ) { notification in
+            let mode = (notification.userInfo?["mode"] as? String).flatMap(MachineViewMode.init(rawValue:))
+            Task { @MainActor in
+                guard let mode else {
+                    return
+                }
+                VeilLog.window.notice("Debug view mode \(mode.rawValue, privacy: .public)")
+                shellNavigation.viewMode = mode
+            }
+        }
+    }
+
+    private enum DebugViewModeObserver {
+        @MainActor static var token: NSObjectProtocol?
+    }
+#endif
+
     func showWindowsDisplay() {
+        // A separate desktop window is the desktop mode too; mirrored app windows step aside for it.
+        shellNavigation.viewMode = .desktop
         Task { @MainActor in
             let didShow = await presentWindowsDesktopWhenReady()
             if didShow {
