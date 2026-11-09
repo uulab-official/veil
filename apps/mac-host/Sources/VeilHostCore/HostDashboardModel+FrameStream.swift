@@ -70,6 +70,7 @@ extension HostDashboardModel {
             }
             self.frameChurnPublishPending = false
             self.mirrorSessionsRevision &+= 1
+            self.activeWindowsRevision &+= 1
         }
     }
 

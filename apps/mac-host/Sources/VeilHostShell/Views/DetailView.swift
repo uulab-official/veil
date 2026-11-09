@@ -29,6 +29,9 @@ struct DetailView: View {
 
     var body: some View {
         @Bindable var navigation = navigation
+        // Built once per render. Each read of the computed property rebuilt the whole report, six times a
+        // render, which was most of the main thread's time while a mirrored app was drawing.
+        let report = runtimeStatusReport
         VMRuntimeView(
                 model: vmModel,
                 guestAgentInstallEvidence: model.guestAgentInstallEvidence,
@@ -40,12 +43,12 @@ struct DetailView: View {
                 canFulfillPendingLaunch: model.canFulfillPendingLaunch,
                 pendingWindowsAppName: pendingWindowsAppName,
                 activeMirrorSession: activeMirrorSession,
-                launchPlan: runtimeStatusReport.launchPlan,
-                primaryNextAction: runtimeStatusReport.primaryNextAction,
-                oneScreenUX: runtimeStatusReport.oneScreenUX,
-                launchOnboarding: runtimeStatusReport.launchOnboarding,
-                recommendedProofKind: proofPlan.recommendedProofKind,
-                recommendedProofCommand: proofPlan.recommendedProofCommand,
+                launchPlan: report.launchPlan,
+                primaryNextAction: report.primaryNextAction,
+                oneScreenUX: report.oneScreenUX,
+                launchOnboarding: report.launchOnboarding,
+                recommendedProofKind: report.proofPlan.recommendedProofKind,
+                recommendedProofCommand: report.proofPlan.recommendedProofCommand,
                 startVMAction: startVMAction,
                 stopVMAction: stopVMAction,
                 markWindowsInstalledAction: markWindowsInstalledAction,
@@ -149,10 +152,6 @@ struct DetailView: View {
         }
 
         return model.apps.first { $0.id == pendingAppId }?.name
-    }
-
-    private var proofPlan: WindowsAppRuntimeProofPlanStatus {
-        runtimeStatusReport.proofPlan
     }
 
     private var runtimeStatusReport: WindowsAppRuntimeStatusReport {

@@ -35,12 +35,21 @@ struct VeilMenuBarMenu: View {
     var supportsNativeDisplayWindow: Bool
 
     var body: some View {
-        Button(menuBarPrimaryActionTitle, systemImage: menuBarPrimaryActionSymbolName) {
+        // Built once per render; every computed read used to rebuild the whole runtime report.
+        let report = appRuntimeStatusReport
+        let primaryAction = report.menuBarIntegration
+        Button(
+            primaryAction.primaryActionTitle,
+            systemImage: MenuBarPrimaryActionPresentation.symbolName(
+                for: primaryAction.primaryActionId,
+                fallbackSymbolName: primaryAction.symbolName
+            )
+        ) {
             runMenuBarPrimaryAction()
         }
-        .disabled(!menuBarPrimaryAction.primaryActionAvailable)
+        .disabled(!primaryAction.primaryActionAvailable)
 
-        if menuBarPrimaryAction.primaryActionId != "dock.openMainWindow" {
+        if primaryAction.primaryActionId != "dock.openMainWindow" {
             Button("Open Veil", systemImage: "macwindow") {
                 openMainWindow()
             }
@@ -48,7 +57,7 @@ struct VeilMenuBarMenu: View {
 
         Divider()
 
-        Label(runtimeStatusTitle, systemImage: runtimeStatusSymbolName)
+        Label(primaryAction.statusTitle, systemImage: primaryAction.symbolName)
 
         if !model.mirrorSessions.isEmpty {
             Label(runningAppsTitle, systemImage: "rectangle.3.group")
@@ -140,13 +149,13 @@ struct VeilMenuBarMenu: View {
             openMainWindow()
             runRecommendedProofAction()
         }
-        .disabled(model.runtimeStatusReport().proofPlan.recommendedProofCommand == nil)
+        .disabled(report.proofPlan.recommendedProofCommand == nil)
 
         Button("Check Daily Use Apps", systemImage: "checkmark.seal.fill") {
             openMainWindow()
             runMultiAppProofAction()
         }
-        .disabled(model.runtimeStatusReport().proofPlan.recommendedMultiAppProofCommand == nil)
+        .disabled(report.proofPlan.recommendedMultiAppProofCommand == nil)
 
         Button("Prepare Review Evidence", systemImage: "folder.badge.plus") {
             openMainWindow()
@@ -289,27 +298,8 @@ struct VeilMenuBarMenu: View {
         )
     }
 
-    private var runtimeStatusTitle: String {
-        appRuntimeStatusReport.menuBarIntegration.statusTitle
-    }
-
-    private var runtimeStatusSymbolName: String {
-        appRuntimeStatusReport.menuBarIntegration.symbolName
-    }
-
     private var menuBarPrimaryAction: WindowsAppRuntimeMenuBarIntegrationStatus {
         appRuntimeStatusReport.menuBarIntegration
-    }
-
-    private var menuBarPrimaryActionTitle: String {
-        menuBarPrimaryAction.primaryActionTitle
-    }
-
-    private var menuBarPrimaryActionSymbolName: String {
-        MenuBarPrimaryActionPresentation.symbolName(
-            for: menuBarPrimaryAction.primaryActionId,
-            fallbackSymbolName: runtimeStatusSymbolName
-        )
     }
 
     private var runningAppsTitle: String {

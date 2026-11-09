@@ -266,6 +266,10 @@ extension HostDashboardModel {
             return false
         }
 
+        if updateWindowBoundsQuietly(window) {
+            return true
+        }
+
         storeActiveWindow(window)
 
         guard let index = mirrorSessions.firstIndex(where: { $0.id == window.windowId }) else {
@@ -273,6 +277,27 @@ extension HostDashboardModel {
         }
 
         mirrorSessions[index].window = window
+        return true
+    }
+
+    /// Applies an update that only moved or resized a window without notifying observers at once; see
+    /// `activeWindows`. Returns false when anything else changed, so titles, focus, and state still
+    /// reach the launcher and menus immediately.
+    private func updateWindowBoundsQuietly(_ window: WindowCreatedEvent) -> Bool {
+        guard let activeIndex = activeWindowStorage.firstIndex(where: { $0.windowId == window.windowId }) else {
+            return false
+        }
+        var boundsOnly = activeWindowStorage[activeIndex]
+        boundsOnly.bounds = window.bounds
+        guard boundsOnly == window else {
+            return false
+        }
+
+        activeWindowStorage[activeIndex] = window
+        if let index = mirrorSessionStorage.firstIndex(where: { $0.id == window.windowId }) {
+            mirrorSessionStorage[index].window = window
+        }
+        publishFrameChurnSoon()
         return true
     }
 

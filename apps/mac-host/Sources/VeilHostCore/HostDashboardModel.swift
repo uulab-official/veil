@@ -13,7 +13,21 @@ public final class HostDashboardModel {
     public internal(set) var health: AgentHealthResponse?
     public internal(set) var apps: [WindowsApp] = []
     public internal(set) var lastLaunch: NotepadLaunchResult?
-    public internal(set) var activeWindows: [WindowCreatedEvent] = []
+    /// Tracked guest windows. Like `mirrorSessions`, a change that only moves or resizes a window is
+    /// published with the batched frame bookkeeping instead of at once: a live resize reports new bounds
+    /// several times a second, and each report re-rendered the launcher and the menu bar menu.
+    public internal(set) var activeWindows: [WindowCreatedEvent] {
+        get {
+            _ = activeWindowsRevision
+            return activeWindowStorage
+        }
+        set {
+            activeWindowStorage = newValue
+            activeWindowsRevision &+= 1
+        }
+    }
+    @ObservationIgnored var activeWindowStorage: [WindowCreatedEvent] = []
+    var activeWindowsRevision = 0
     /// Mirrored windows. Structural changes notify observers at once; per-frame bookkeeping is written to
     /// `mirrorSessionStorage` directly and published at most every `frameChurnPublishInterval`.
     ///
