@@ -389,6 +389,11 @@ public struct WindowCreatedEvent: Codable, Equatable, Sendable {
     public var bounds: WindowBounds
     public var state: String
     public var focused: Bool
+    /// A window without a title bar that Windows says another window owns, such as Paint's text formatting
+    /// bar or a menu. Shown as a borderless overlay on its owner. Absent for ordinary windows.
+    public var popup: Bool?
+    /// The window that owns this one, when the guest reports it.
+    public var ownerWindowId: String?
 
     public init(
         type: MessageType = .windowCreated,
@@ -398,7 +403,9 @@ public struct WindowCreatedEvent: Codable, Equatable, Sendable {
         title: String,
         bounds: WindowBounds,
         state: String,
-        focused: Bool
+        focused: Bool,
+        popup: Bool? = nil,
+        ownerWindowId: String? = nil
     ) {
         self.type = type
         self.windowId = windowId
@@ -408,7 +415,11 @@ public struct WindowCreatedEvent: Codable, Equatable, Sendable {
         self.bounds = bounds
         self.state = state
         self.focused = focused
+        self.popup = popup
+        self.ownerWindowId = ownerWindowId
     }
+
+    public var isPopup: Bool { popup == true }
 
     public init(updated event: WindowUpdatedEvent) {
         self.init(

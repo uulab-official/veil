@@ -435,6 +435,47 @@ struct WindowsAppWindowPresenterTests {
         #expect(visibilityChanges == ["hwnd:0002:false", "hwnd:0001:true", "hwnd:0002:true"])
     }
 
+    @Test("shows a Windows popup as a borderless transparent overlay attached to its owner")
+    func showsPopupAsOverlayOnOwner() throws {
+        _ = NSApplication.shared
+        let presenter = WindowsAppWindowPresenter()
+        defer {
+            presenter.closeAll()
+        }
+        let owner = session(
+            windowId: "hwnd:popup-owner",
+            appId: "winapp_paint",
+            title: "Paint",
+            bounds: WindowBounds(x: 100, y: 50, width: 800, height: 500)
+        )
+        var popup = session(
+            windowId: "hwnd:popup",
+            appId: "winapp_paint",
+            title: "Popup Host",
+            bounds: WindowBounds(x: 140, y: 120, width: 400, height: 40)
+        )
+        popup.window.popup = true
+        popup.window.ownerWindowId = owner.id
+        let sessions = [owner.id: owner, popup.id: popup]
+        presenter.sessionProvider = { sessions[$0] }
+
+        presenter.showWindow(for: owner)
+        presenter.showWindow(for: popup)
+
+        let ownerWindow = try #require(mirroredWindow(withId: owner.id))
+        let popupWindow = try #require(mirroredWindow(withId: popup.id))
+        #expect(popupWindow is NSPanel)
+        #expect(popupWindow.styleMask.contains(.borderless))
+        #expect(!popupWindow.styleMask.contains(.titled))
+        #expect(!popupWindow.isOpaque)
+        #expect(popupWindow.backgroundColor == .clear)
+        #expect(popupWindow.parent === ownerWindow)
+        // 40 points right of and 70 points below the owner's top-left, as in Windows.
+        #expect(popupWindow.frame.minX == ownerWindow.frame.minX + 40)
+        #expect(popupWindow.frame.maxY == ownerWindow.frame.maxY - 70)
+        #expect(popupWindow.frame.size == NSSize(width: 400, height: 40))
+    }
+
     @Test("restore policy deminiaturizes minimized Windows app windows")
     func restorePolicyDeminiaturizesMinimizedWindowsAppWindows() {
         let window = RestorePolicyTestWindow(isMiniaturizedForTest: true)

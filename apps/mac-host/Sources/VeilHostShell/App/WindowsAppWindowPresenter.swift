@@ -82,6 +82,11 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
         //
         // Placement below cascades off `windowsById.count`, so window two does not land exactly on
         // top of window one.
+        if session.window.isPopup {
+            showPopup(for: session)
+            return
+        }
+
         let window = NSWindow(
             contentRect: frame(for: session.window.bounds, existingWindowCount: windowsById.count),
             styleMask: [.titled, .closable, .miniaturizable, .resizable],
@@ -103,6 +108,84 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
             return
         }
         present(window, windowId: session.id)
+    }
+
+    /// Shows a Windows popup, such as Paint's text formatting bar or a menu, the way it looks in Windows: a
+    /// borderless, transparent overlay at its place on the owning app window, moving with that window, and
+    /// never taking key focus from it. As an ordinary Mac window it had a shadow, rounded corners, and a black
+    /// slab wherever the popup's own window is transparent.
+    private func showPopup(for session: WindowMirrorSession) {
+        let owner = popupOwner(for: session)
+        let panel = NSPanel(
+            contentRect: popupFrame(for: session, owner: owner),
+            styleMask: [.borderless, .nonactivatingPanel],
+            backing: .buffered,
+            defer: false
+        )
+        panel.identifier = NSUserInterfaceItemIdentifier(session.id)
+        panel.delegate = self
+        panel.isReleasedWhenClosed = false
+        panel.hidesOnDeactivate = false
+        panel.becomesKeyOnlyIfNeeded = true
+        configurePopup(panel, for: session)
+        panel.contentView = hostingView(for: session)
+        windowsById[session.id] = panel
+        rememberWindowId(session.id)
+        guard !isHiddenForDesktop else {
+            onWindowVisibilityChange?(session.id, false)
+            return
+        }
+
+        if let owner {
+            owner.addChildWindow(panel, ordered: .above)
+        }
+        panel.orderFront(nil)
+    }
+
+    private func configurePopup(_ panel: NSWindow, for session: WindowMirrorSession) {
+        panel.title = session.window.title
+        panel.isOpaque = false
+        panel.backgroundColor = .clear
+        panel.hasShadow = false
+        panel.collectionBehavior = [.managed, .fullScreenAuxiliary]
+    }
+
+    /// The window a popup belongs to: the one Windows names as its owner, or else the front window of the same
+    /// app, since some popups are owned by a hidden helper window rather than the app window the user sees.
+    private func popupOwner(for session: WindowMirrorSession) -> NSWindow? {
+        if let ownerWindowId = session.window.ownerWindowId,
+           let owner = windowsById[ownerWindowId],
+           !(owner is NSPanel) {
+            return owner
+        }
+
+        return visibleWindowIds.reversed().lazy.compactMap { windowId -> NSWindow? in
+            guard windowId != session.id,
+                  let window = self.windowsById[windowId],
+                  !(window is NSPanel),
+                  self.sessionProvider?(windowId)?.window.appId == session.window.appId else {
+                return nil
+            }
+            return window
+        }.first
+    }
+
+    /// Places the popup at the same offset from its owner's top-left as in Windows. Mirrored windows draw the
+    /// guest bitmap unscaled from their top-left, so guest logical units and Mac points line up.
+    private func popupFrame(for session: WindowMirrorSession, owner: NSWindow?) -> NSRect {
+        let bounds = session.window.bounds
+        let size = NSSize(width: max(1, bounds.width), height: max(1, bounds.height))
+        guard let owner,
+              let ownerId = owner.identifier?.rawValue,
+              let ownerBounds = sessionProvider?(ownerId)?.window.bounds else {
+            let fallback = frame(for: bounds, existingWindowCount: windowsById.count)
+            return NSRect(origin: fallback.origin, size: size)
+        }
+
+        let ownerFrame = owner.frame
+        let left = ownerFrame.minX + CGFloat(bounds.x - ownerBounds.x)
+        let top = ownerFrame.maxY - CGFloat(bounds.y - ownerBounds.y)
+        return NSRect(x: left, y: top - size.height, width: size.width, height: size.height)
     }
 
     /// Takes every mirrored window off screen while the full Windows desktop is shown, the way Parallels
@@ -516,6 +599,19 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
         for session: WindowMirrorSession,
         bringToFront: Bool
     ) {
+        if session.window.isPopup {
+            configurePopup(window, for: session)
+            if let existingView = window.contentView as? NSHostingView<WindowsAppMirrorView> {
+                existingView.rootView = mirrorView(for: session)
+            }
+            let owner = window.parent ?? popupOwner(for: session)
+            let target = popupFrame(for: session, owner: owner)
+            if !NSEqualRects(window.frame, target) {
+                window.setFrame(target, display: true, animate: false)
+            }
+            return
+        }
+
         let preservedFrame = window.frame
         let isBeingResized = isBeingResized(window, windowId: session.id)
         configure(window, for: session, appliesResizeConstraints: !isBeingResized)
@@ -857,7 +953,7 @@ private struct WindowsAppMirrorView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color.black)
+        .background(session.window.isPopup ? Color.clear : Color.black)
         .ignoresSafeArea()
         .onDrop(of: [.fileURL], isTargeted: $isTargetedForDrop, perform: handleDrop)
     }
@@ -935,6 +1031,10 @@ private final class InputCaptureNSView: NSView {
     private static let captionDragThreshold: CGFloat = 4
 
     override var acceptsFirstResponder: Bool { true }
+
+    /// A click on a mirrored window or popup that is not key still reaches Windows, as it would there. Without
+    /// this the first click on a popup or a background app window only activated it and was lost.
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
     /// The macOS titlebar is hidden over this view, and AppKit would otherwise drag the window for any press
     /// in that band before the Windows caption buttons under it ever saw the click.
@@ -1050,6 +1150,7 @@ private final class InputCaptureNSView: NSView {
 
     private func captionRegion(for event: NSEvent) -> WindowsCaptionRegion {
         guard let session,
+              !session.window.isPopup,
               session.connectionMode == .agent,
               let guestPoint = guestPoint(for: event, session: session) else {
             return .content

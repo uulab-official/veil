@@ -42,7 +42,25 @@ struct WindowsAppFrameSurface: View {
             )
 
             ZStack(alignment: .topTrailing) {
-                if let latestFrameImage, let frame = session.latestFrame {
+                if presentedSession.window.isPopup {
+                    // A popup is an overlay: no backdrop, no status badges, and its transparent surroundings,
+                    // captured as black, cleared so only the popup itself shows over its owner.
+                    if let popupImage = latestFrameImage.flatMap(Self.popupImage(from:)), let frame = session.latestFrame {
+                        let pointsPerPixel = WindowFrameViewport.pointsPerPixel(forWindowsScale: frame.scale)
+                        Color.clear
+                            .overlay(alignment: .topLeading) {
+                                Image(nsImage: popupImage)
+                                    .interpolation(.high)
+                                    .resizable()
+                                    .frame(
+                                        width: CGFloat(frame.width) * pointsPerPixel,
+                                        height: CGFloat(frame.height) * pointsPerPixel
+                                    )
+                            }
+                    } else {
+                        Color.clear
+                    }
+                } else if let latestFrameImage, let frame = session.latestFrame {
                     // Unscaled and pinned to the top-left, like a Windows window whose edge is being dragged:
                     // while the guest redraws at a new size, existing content stays put and the newly exposed
                     // area takes the app's edge color. Scaling the old bitmap to the new shape made every
@@ -117,6 +135,14 @@ struct WindowsAppFrameSurface: View {
     ///
     /// `session.compositedFrameGeneration` is read here purely so SwiftUI re-renders when the compositor's
     /// surface changes. Without that read the view would have no observable dependency on it.
+    static func popupImage(from image: NSImage) -> NSImage? {
+        guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil),
+              let cleared = PopupFrameTransparency.clearingBackdrop(of: cgImage) else {
+            return nil
+        }
+        return NSImage(cgImage: cleared, size: .zero)
+    }
+
     /// The color just inside the frame's bottom-right corner, which fills area the guest has not drawn yet.
     /// One pixel is read, so this stays cheap at frame rate.
     static func edgeColor(of image: NSImage) -> Color {
