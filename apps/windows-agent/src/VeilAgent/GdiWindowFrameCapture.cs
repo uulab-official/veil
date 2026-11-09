@@ -165,6 +165,16 @@ public sealed class GdiWindowFrameCapture : IWindowFrameCapture
         var bitmap = new Bitmap(bounds.Width, bounds.Height, PixelFormat.Format32bppArgb);
         using var graphics = Graphics.FromImage(bitmap);
 
+        // PrintWindow makes the app render a fresh copy of itself, which took 50 to 150 ms a frame in the
+        // guest and held mirrored drawing to about ten frames a second. A window that is fully on screen and
+        // on top is already composed there, so copying those pixels gives the same image in a few
+        // milliseconds. The window being used is almost always that one, since input brings it forward.
+        if (IsFullyVisibleOnScreen(window.Hwnd, bounds))
+        {
+            graphics.CopyFromScreen(bounds.X, bounds.Y, 0, 0, new Size(bounds.Width, bounds.Height));
+            return bitmap;
+        }
+
         var deviceContext = graphics.GetHdc();
         try
         {
@@ -283,6 +293,75 @@ public sealed class GdiWindowFrameCapture : IWindowFrameCapture
             return 1.0;
         }
     }
+
+    /// <summary>
+    /// Whether the screen shows exactly this window across its whole rectangle: inside the virtual desktop,
+    /// and on top at every sample point. Popups and other windows over it send capture back to PrintWindow,
+    /// which draws the window alone.
+    /// </summary>
+    private static bool IsFullyVisibleOnScreen(nint hwnd, WindowRect bounds)
+    {
+        if (!IsWindowVisible(hwnd) || IsIconic(hwnd))
+        {
+            return false;
+        }
+
+        var desktop = new WindowRect(
+            GetSystemMetrics(SM_XVIRTUALSCREEN),
+            GetSystemMetrics(SM_YVIRTUALSCREEN),
+            GetSystemMetrics(SM_CXVIRTUALSCREEN),
+            GetSystemMetrics(SM_CYVIRTUALSCREEN)
+        );
+        return ScreenCopySamplePoints(bounds, desktop) is { } points
+            && points.All(point => GetAncestor(WindowFromPoint(point), GA_ROOT) == hwnd);
+    }
+
+    /// <summary>
+    /// Points to test for occlusion, or null when the window reaches outside the desktop and a screen copy
+    /// would miss part of it. Inset from the edges, where Windows 11 keeps invisible resize borders that
+    /// belong to whatever is behind.
+    /// </summary>
+    internal static IReadOnlyList<NativePoint>? ScreenCopySamplePoints(WindowRect window, WindowRect desktop)
+    {
+        if (window.Width <= 32
+            || window.Height <= 32
+            || window.X < desktop.X
+            || window.Y < desktop.Y
+            || window.X + window.Width > desktop.X + desktop.Width
+            || window.Y + window.Height > desktop.Y + desktop.Height)
+        {
+            return null;
+        }
+
+        const int inset = 12;
+        var xs = new[] { window.X + inset, window.X + window.Width / 2, window.X + window.Width - 1 - inset };
+        var ys = new[] { window.Y + inset, window.Y + window.Height / 2, window.Y + window.Height - 1 - inset };
+        return xs.SelectMany(x => ys.Select(y => new NativePoint(x, y))).ToArray();
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    internal readonly record struct NativePoint(int X, int Y);
+
+    private const uint GA_ROOT = 2;
+    private const int SM_XVIRTUALSCREEN = 76;
+    private const int SM_YVIRTUALSCREEN = 77;
+    private const int SM_CXVIRTUALSCREEN = 78;
+    private const int SM_CYVIRTUALSCREEN = 79;
+
+    [DllImport("user32.dll")]
+    private static extern nint WindowFromPoint(NativePoint point);
+
+    [DllImport("user32.dll")]
+    private static extern nint GetAncestor(nint hwnd, uint flags);
+
+    [DllImport("user32.dll")]
+    private static extern bool IsWindowVisible(nint hwnd);
+
+    [DllImport("user32.dll")]
+    private static extern bool IsIconic(nint hwnd);
+
+    [DllImport("user32.dll")]
+    private static extern int GetSystemMetrics(int index);
 
     [DllImport("user32.dll", SetLastError = true)]
     private static extern bool GetWindowRect(nint hWnd, out NativeRect rect);
