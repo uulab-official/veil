@@ -18,6 +18,7 @@ struct WindowsEmbeddedDisplayPreview: View {
     @State private var lastThumbnailAt = Date.distantPast
     @State private var followResizeTask: Task<Void, Never>?
     @State private var lastFollowTarget: RFBDesktopResizeTarget?
+    @State private var containerSize: CGSize = .zero
     @Environment(\.liveDisplayThumbnailSink) private var liveDisplayThumbnailSink
 
     var body: some View {
@@ -30,12 +31,19 @@ struct WindowsEmbeddedDisplayPreview: View {
                         .onChange(of: proxy.size) { _, size in followContainerSize(size) }
                 }
             }
+            // Something else can change the guest resolution under an unchanged window: mirrored app
+            // windows grow it to the Mac screen. Re-checking whenever the framebuffer size changes keeps
+            // the desktop filling this window instead of sitting in it with bars.
+            .onChange(of: framebufferPixelSize) { _, _ in
+                followContainerSize(containerSize)
+            }
     }
 
     /// The separate desktop window has a presenter that measures it; the main window has none, so
     /// without this Windows kept its resolution however the user sized Veil. A settled container size
     /// becomes the guest's desktop size, the way a Parallels VM window resizes Windows with it.
     private func followContainerSize(_ size: CGSize) {
+        containerSize = size
         guard resizeBus == nil, surface.kind == .vncLoopback else {
             return
         }
@@ -49,7 +57,8 @@ struct WindowsEmbeddedDisplayPreview: View {
                           screenScale: NSScreen.main?.backingScaleFactor
                       )
                   ),
-                  RFBDesktopSizePolicy.isSignificantChange(from: lastFollowTarget, to: target) else {
+                  RFBDesktopSizePolicy.isSignificantChange(from: lastFollowTarget, to: target)
+                    || RFBDesktopSizePolicy.isSignificantChange(from: framebufferPixelSize, to: target) else {
                 return
             }
             lastFollowTarget = target
@@ -169,6 +178,19 @@ struct WindowsEmbeddedDisplayPreview: View {
             rfbDisplayModel.setDisplayResizeFallback(nil)
             rfbDisplayModel.stop()
         }
+    }
+
+    /// The guest framebuffer as last received, which is what the desktop actually shows.
+    private var framebufferPixelSize: RFBDesktopResizeTarget? {
+        guard let representation = rfbDisplayModel.image?.representations.first,
+              representation.pixelsWide > 0,
+              representation.pixelsHigh > 0 else {
+            return nil
+        }
+        return RFBDesktopResizeTarget(
+            widthInPixels: representation.pixelsWide,
+            heightInPixels: representation.pixelsHigh
+        )
     }
 
     private var renderedImage: NSImage? {

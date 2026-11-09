@@ -53,7 +53,9 @@ final class RFBEmbeddedDisplayModel {
 
             return "Live Windows display #\(frameSequence)"
         case .failed(let message):
-            return message
+            // With a picture already up, a dropped connection is reconnected automatically; the raw socket
+            // error is in the log and meant nothing to the user sitting over their desktop.
+            return image == nil ? message : String(localized: "Reconnecting the Windows display…")
         }
     }
 

@@ -322,6 +322,12 @@ public final class HostDashboardModel {
     /// Asks the Windows agent to change the active desktop monitor mode. This is the fallback for
     /// guests whose QEMU RFB server rejects ExtendedDesktopSize.
     @discardableResult
+    /// Forgets the guest display size Veil last set, when something else may have changed it, such as the
+    /// full desktop view resizing Windows to its window. The next mirrored resize then settles it again.
+    public func forgetGuestDisplaySize() {
+        guestDisplaySize = nil
+    }
+
     public func resizeDisplay(width: Int, height: Int) async -> DisplayResizeResponse? {
         guard canResizeDisplay,
               DisplayResizeRequest.isPlausible(width: width, height: height) else {

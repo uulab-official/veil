@@ -428,6 +428,8 @@ extension VeilHostShellApp {
             windowsAppWindowPresenter.hideAllForDesktop()
             MainWindowChrome.showMainWindow()
         case .apps:
+            // The desktop view resizes Windows to its window, so the size mirrored windows last set is stale.
+            model.forgetGuestDisplaySize()
             qemuConsoleWindowPresenter.closeConsole()
             windowsAppWindowPresenter.showAllAfterDesktop()
             syncLauncherWindowVisibility()
