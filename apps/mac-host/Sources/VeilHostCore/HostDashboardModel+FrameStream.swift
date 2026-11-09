@@ -19,21 +19,21 @@ extension HostDashboardModel {
             return
         }
 
-        if mirrorSessions[index].awaitingKeyFrameReason != nil, !frame.isCompositedSurface {
+        if mirrorSessionStorage[index].awaitingKeyFrameReason != nil, !frame.isCompositedSurface {
             // JSON and binary delivery can coexist. A real JSON full image can restore the missing
             // base, but merely plausible metadata (or another broken PNG) cannot prove recovery.
             guard let tile = frame.asKeyFrameTile(),
                   case .composited(let generation) = frameCompositor.apply(tile) else {
                 return
             }
-            mirrorSessions[index].compositedFrameGeneration = generation
-            mirrorSessions[index].awaitingKeyFrameReason = nil
+            mirrorSessionStorage[index].compositedFrameGeneration = generation
+            mirrorSessionStorage[index].awaitingKeyFrameReason = nil
         }
 
-        let priorTiming = mirrorSessions[index].frameTiming
-        mirrorSessions[index].latestFrame = frame
-        mirrorSessions[index].captureState = .streaming
-        mirrorSessions[index].frameTiming = WindowFrameTiming(
+        let priorTiming = mirrorSessionStorage[index].frameTiming
+        mirrorSessionStorage[index].latestFrame = frame
+        mirrorSessionStorage[index].captureState = .streaming
+        mirrorSessionStorage[index].frameTiming = WindowFrameTiming(
             firstFrameReceivedAt: priorTiming?.firstFrameReceivedAt ?? receivedAt,
             latestFrameReceivedAt: receivedAt,
             latestActivityAt: receivedAt,
@@ -44,16 +44,33 @@ extension HostDashboardModel {
             unchangedHeartbeatCount: priorTiming?.unchangedHeartbeatCount ?? 0
         )
         forgiveFrameStreamRestartsIfRecovered(at: index, receivedAt: receivedAt)
+        publishFrameChurnSoon()
     }
 
     /// Clears the restart ladder once a restarted stream has stayed alive long enough to count as recovered.
     private func forgiveFrameStreamRestartsIfRecovered(at index: Int, receivedAt: Date) {
-        guard mirrorSessions[index].frameStreamRestartCount > 0,
-              let restartedAt = mirrorSessions[index].latestFrameStreamRestartedAt,
+        guard mirrorSessionStorage[index].frameStreamRestartCount > 0,
+              let restartedAt = mirrorSessionStorage[index].latestFrameStreamRestartedAt,
               receivedAt.timeIntervalSince(restartedAt) >= WindowFrameStreamAssessment.restartLadderResetSeconds else {
             return
         }
-        mirrorSessions[index].frameStreamRestartCount = 0
+        mirrorSessionStorage[index].frameStreamRestartCount = 0
+    }
+
+    /// Lets status views see frame bookkeeping without recomputing for every frame; see `mirrorSessions`.
+    func publishFrameChurnSoon() {
+        guard !frameChurnPublishPending else {
+            return
+        }
+        frameChurnPublishPending = true
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: Self.frameChurnPublishInterval)
+            guard let self else {
+                return
+            }
+            self.frameChurnPublishPending = false
+            self.mirrorSessionsRevision &+= 1
+        }
     }
 
     /// Composited surface for a mirrored window, or `nil` until a key frame establishes one.
@@ -94,8 +111,8 @@ extension HostDashboardModel {
 
         switch outcome {
         case .composited(let generation):
-            mirrorSessions[index].compositedFrameGeneration = generation
-            mirrorSessions[index].awaitingKeyFrameReason = nil
+            mirrorSessionStorage[index].compositedFrameGeneration = generation
+            mirrorSessionStorage[index].awaitingKeyFrameReason = nil
             receiveWindowFrame(tile.surfaceMetadataFrameEvent(), receivedAt: receivedAt)
             framePipelineMetrics?.recordApplied(
                 tile: tile,
@@ -108,7 +125,8 @@ extension HostDashboardModel {
             )
             return true
         case .needsKeyFrame(let reason):
-            mirrorSessions[index].awaitingKeyFrameReason = reason.rawValue
+            mirrorSessionStorage[index].awaitingKeyFrameReason = reason.rawValue
+            publishFrameChurnSoon()
             framePipelineMetrics?.recordDropped(windowId: tile.windowId, reason: reason, at: receivedAt)
             VeilLog.agent.notice(
                 "Dropped a frame tile for \(tile.windowId, privacy: .public); waiting for a key frame because \(reason.rawValue, privacy: .public)."
@@ -134,12 +152,12 @@ extension HostDashboardModel {
         guard let index = mirrorSessions.firstIndex(where: { $0.id == event.windowId }),
               // A heartbeat proves the guest is alive, not that the host has every changed pixel.
               // Keep the last successful frame's clock so ordinary stale-stream recovery can run.
-              mirrorSessions[index].awaitingKeyFrameReason == nil,
-              let priorTiming = mirrorSessions[index].frameTiming else {
+              mirrorSessionStorage[index].awaitingKeyFrameReason == nil,
+              let priorTiming = mirrorSessionStorage[index].frameTiming else {
             return false
         }
 
-        mirrorSessions[index].frameTiming = WindowFrameTiming(
+        mirrorSessionStorage[index].frameTiming = WindowFrameTiming(
             firstFrameReceivedAt: priorTiming.firstFrameReceivedAt,
             latestFrameReceivedAt: priorTiming.latestFrameReceivedAt,
             latestActivityAt: receivedAt,
@@ -148,6 +166,7 @@ extension HostDashboardModel {
             unchangedHeartbeatCount: priorTiming.unchangedHeartbeatCount + 1
         )
         forgiveFrameStreamRestartsIfRecovered(at: index, receivedAt: receivedAt)
+        publishFrameChurnSoon()
         framePipelineMetrics?.recordUnchangedHeartbeat(windowId: event.windowId, at: receivedAt)
         return true
     }

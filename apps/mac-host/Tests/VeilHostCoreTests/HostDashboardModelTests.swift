@@ -379,6 +379,24 @@ struct HostDashboardModelTests {
         #expect(service.resizedWindowRequests.map { $0.width } == [1963, 1182])
     }
 
+    @Test("publishes per-frame bookkeeping to observers in batches, not per frame")
+    @MainActor
+    func batchesFrameChurnNotifications() async throws {
+        let service = FakeDashboardService(health: .captureReady)
+        let model = HostDashboardModel(service: service)
+        await model.launchNotepad()
+        let revisionBeforeFrames = model.mirrorSessionsRevision
+
+        model.receiveWindowFrame(.notepadFirstFrame)
+        model.receiveWindowFrame(.notepadFirstFrame)
+
+        // Readers see the new frame at once; observers are only told once the batch interval passes.
+        #expect(model.mirrorSessions.first?.frameTiming?.receivedFrameCount == 2)
+        #expect(model.mirrorSessionsRevision == revisionBeforeFrames)
+        try await Task.sleep(for: HostDashboardModel.frameChurnPublishInterval + .milliseconds(200))
+        #expect(model.mirrorSessionsRevision == revisionBeforeFrames + 1)
+    }
+
     @Test("stores the latest frame on the matching mirror session")
     @MainActor
     func storesLatestFrameOnMatchingMirrorSession() async throws {

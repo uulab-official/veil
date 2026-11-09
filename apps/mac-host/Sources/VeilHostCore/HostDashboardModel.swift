@@ -14,7 +14,27 @@ public final class HostDashboardModel {
     public internal(set) var apps: [WindowsApp] = []
     public internal(set) var lastLaunch: NotepadLaunchResult?
     public internal(set) var activeWindows: [WindowCreatedEvent] = []
-    public internal(set) var mirrorSessions: [WindowMirrorSession] = []
+    /// Mirrored windows. Structural changes notify observers at once; per-frame bookkeeping is written to
+    /// `mirrorSessionStorage` directly and published at most every `frameChurnPublishInterval`.
+    ///
+    /// Every frame used to invalidate every view that read this array. The launcher's status report and the
+    /// menu bar menu then recomputed on the main thread for each frame, about 200 ms apiece while an app was
+    /// redrawing, and mouse input to the mirrored app queued behind them. The mirrored window itself is
+    /// redrawn per frame by its presenter and does not need the notification.
+    public internal(set) var mirrorSessions: [WindowMirrorSession] {
+        get {
+            _ = mirrorSessionsRevision
+            return mirrorSessionStorage
+        }
+        set {
+            mirrorSessionStorage = newValue
+            mirrorSessionsRevision &+= 1
+        }
+    }
+    @ObservationIgnored var mirrorSessionStorage: [WindowMirrorSession] = []
+    var mirrorSessionsRevision = 0
+    @ObservationIgnored var frameChurnPublishPending = false
+    static let frameChurnPublishInterval: Duration = .milliseconds(500)
     public internal(set) var errorMessage: String?
     /// The guest display size from the last accepted display resize. Nil until one succeeds, since the agent
     /// does not report the size it booted with.
