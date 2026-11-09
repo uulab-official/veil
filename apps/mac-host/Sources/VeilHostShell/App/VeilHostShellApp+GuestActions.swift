@@ -259,6 +259,16 @@ extension VeilHostShellApp {
         guard DebugViewModeObserver.token == nil else {
             return
         }
+        DebugViewModeObserver.updateToolsToken = DistributedNotificationCenter.default().addObserver(
+            forName: Notification.Name("org.uulab.veil.debug.updateTools"),
+            object: nil,
+            queue: .main
+        ) { _ in
+            Task { @MainActor in
+                // Starts the same flow as the Update Tools button; Windows still asks the user to approve.
+                updateGuestTools()
+            }
+        }
         DebugViewModeObserver.token = DistributedNotificationCenter.default().addObserver(
             forName: Notification.Name("org.uulab.veil.debug.viewMode"),
             object: nil,
@@ -277,6 +287,7 @@ extension VeilHostShellApp {
 
     private enum DebugViewModeObserver {
         @MainActor static var token: NSObjectProtocol?
+        @MainActor static var updateToolsToken: NSObjectProtocol?
     }
 #endif
 
@@ -513,21 +524,29 @@ extension VeilHostShellApp {
         Task { @MainActor in
             cancelAutomaticQuietRuntime()
             activateMainWindow()
+            // Refreshed first: after Veil is relaunched next to a QEMU that kept running, the cached snapshot
+            // can still say stopped, and this used to return without a word.
+            await vmModel.refreshRuntimeEvidence()
             guard vmModel.snapshot?.state == .running else {
+                VeilLog.runtime.notice("Tools update skipped: Windows is not running (\(String(describing: vmModel.snapshot?.state), privacy: .public)).")
+                displayMessage = String(localized: "Start Windows before updating the Windows tools.")
                 return
             }
 
+            VeilLog.runtime.notice("Tools update started.")
             displayMessage = String(localized: "Updating Windows tools. When Windows asks for approval, choose Yes.")
             // The approval prompt appears on the Windows desktop; the launcher would hide it, and an
             // unanswered prompt left the update to fail without the user ever seeing it.
             shellNavigation.showsWindowsDesktop = true
             if let refusal = await vmModel.insertGuestToolsUpdateMedia() {
+                VeilLog.runtime.notice("Tools update media refused: \(refusal, privacy: .public)")
                 displayMessage = String(localized: "Windows tools could not be updated: \(refusal)")
                 return
             }
             do {
                 _ = try await vmRuntimeBooter.updateGuestToolsFromRemovableMedia()
             } catch {
+                VeilLog.runtime.notice("Tools update command failed: \(String(describing: error), privacy: .public)")
                 displayMessage = String(localized: "Windows tools could not be updated: \(userMessage(for: error))")
                 await vmModel.ejectRemovableMedia()
                 return

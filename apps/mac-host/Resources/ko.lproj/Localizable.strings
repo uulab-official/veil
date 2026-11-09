@@ -682,3 +682,4 @@
 "Display is still %@. Refresh the Windows display before opening an app." = "화면이 아직 %@ 상태입니다. 앱을 열기 전에 Windows 화면을 새로 고치세요.";
 "Display stream unavailable" = "화면 스트림을 사용할 수 없음";
 "Reconnecting the Windows display…" = "Windows 화면 다시 연결 중…";
+"Start Windows before updating the Windows tools." = "Windows 도구를 업데이트하기 전에 Windows를 시작하세요.";
