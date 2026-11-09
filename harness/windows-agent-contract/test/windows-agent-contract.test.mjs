@@ -109,6 +109,17 @@ test("windows agent supports host controlled frame stream subscribe and unsubscr
   assert.match(server, /StopStreamWindowId/);
 });
 
+test("windows agent marks popups and their owners on window.created", async () => {
+  const desktop = await readFile(resolve(agentRoot, "src/VeilAgent/WindowsDesktop.cs"), "utf8");
+  const session = await readFile(resolve(agentRoot, "src/VeilAgent/AgentSession.cs"), "utf8");
+
+  // Owned and without a title bar: the host shows these as overlays on their owner.
+  assert.match(desktop, /GW_OWNER/);
+  assert.match(desktop, /WS_CAPTION/);
+  assert.match(session, /message\["popup"\] = true/);
+  assert.match(session, /message\["ownerWindowId"\]/);
+});
+
 test("windows agent accepts host window close requests", async () => {
   const messageTypes = await readFile(resolve(agentRoot, "src/VeilAgent/MessageTypes.cs"), "utf8");
   const desktopInterface = await readFile(resolve(agentRoot, "src/VeilAgent/IWindowsDesktop.cs"), "utf8");

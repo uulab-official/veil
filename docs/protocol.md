@@ -395,6 +395,29 @@ Rules:
 - An adopted window must have a non-empty title and non-zero bounds; an untitled or zero-sized top-level window is far more likely a tooltip, splash, or transient shell window than a document. The number of windows adopted per app is bounded, which limits guest-driven creation the host does not control rather than expressing a preference about how many windows a user may have.
 - The host tracks explicit-launch HWNDs, persists its restore targets per app, and subscribes to frame capture when the connected agent advertises `windowCapture`. Restore issues one launch per app rather than replaying a window count, because a launch for an app that already owns a window reuses that HWND.
 
+Popups carry two optional fields:
+
+```json
+{
+  "type": "window.created",
+  "windowId": "hwnd:000F0300",
+  "processId": 4912,
+  "appId": "winapp_paint",
+  "title": "Popup Host",
+  "bounds": { "x": 140, "y": 120, "width": 942, "height": 84 },
+  "state": "normal",
+  "focused": false,
+  "popup": true,
+  "ownerWindowId": "hwnd:000F0254"
+}
+```
+
+- `popup: true` marks a window that another window owns and that has no title bar, such as Paint's text formatting bar, a menu, or a tooltip. Owned windows with a title bar, like a Save As dialog, and unowned windows that draw their own title bar, like Paint's main window, are not popups. Ordinary windows omit both fields.
+- `ownerWindowId` names the owning window when Windows reports one.
+- The host shows a popup as a borderless, transparent overlay at the same offset from its owner's top-left as in Windows, attached so it moves with the owner and never taking key focus from it. Popup windows are often larger than what they draw, and capture records the transparent part as black, so the host clears black that reaches the frame's edge and keeps black content enclosed by the popup.
+
+Fixture: `harness/protocol-fixtures/window.created.popup.json`.
+
 ## Window Updated
 
 Event:
