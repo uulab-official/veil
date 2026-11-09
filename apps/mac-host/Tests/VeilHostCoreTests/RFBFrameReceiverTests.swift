@@ -36,8 +36,9 @@ struct RFBFrameReceiverTests {
             4, 1, 0, 0,
             0, 0, 0xff, 0x0d
         ]))
+        // RFC 6143 7.5.5: six bytes, with no padding between the button mask and the coordinates.
         #expect(RFBClientMessageBuilder.pointerEvent(buttonMask: 1, x: 640, y: 480) == Data([
-            5, 1, 0, 0,
+            5, 1,
             2, 128,
             1, 224
         ]))

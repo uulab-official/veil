@@ -294,8 +294,11 @@ public enum RFBClientMessageBuilder {
     }
 
     /// RFB pointer event using the guest framebuffer's absolute pixel coordinates.
+    /// RFC 6143 section 7.5.5: type, button mask, x, y; six bytes. Two padding bytes after the mask used to
+    /// shift x and y, and QEMU dropped the connection on the malformed stream, so the desktop view reconnected
+    /// every second or so and every click in it was lost.
     public static func pointerEvent(buttonMask: UInt8, x: UInt16, y: UInt16) -> Data {
-        var data = Data([5, buttonMask, 0, 0])
+        var data = Data([5, buttonMask])
         data.appendBigEndian(x)
         data.appendBigEndian(y)
         return data
