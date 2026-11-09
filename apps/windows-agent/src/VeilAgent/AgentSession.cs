@@ -1091,7 +1091,22 @@ public sealed class AgentSession
         ["processId"] = processId
     };
 
-    private static JsonObject WindowCreatedEvent(WindowsAppDescriptor app, LaunchedWindow window) => new()
+    private static JsonObject WindowCreatedEvent(WindowsAppDescriptor app, LaunchedWindow window)
+    {
+        var message = WindowCreatedEventFields(app, window);
+        // Only sent for popups so ordinary window events, and their fixtures, stay as they were.
+        if (window.IsPopup)
+        {
+            message["popup"] = true;
+            if (window.OwnerWindowId is { } ownerWindowId)
+            {
+                message["ownerWindowId"] = ownerWindowId;
+            }
+        }
+        return message;
+    }
+
+    private static JsonObject WindowCreatedEventFields(WindowsAppDescriptor app, LaunchedWindow window) => new()
     {
         ["type"] = MessageTypes.WindowCreated,
         ["windowId"] = window.WindowId,

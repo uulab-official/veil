@@ -31,7 +31,12 @@ public sealed record LaunchedWindow(
     string Title,
     WindowRect Bounds,
     string State,
-    bool Focused
+    bool Focused,
+    // A window without a title bar, such as Paint's text formatting bar, a menu, or a tooltip. The host
+    // shows it as a borderless overlay on its owner instead of as a Mac window of its own.
+    bool IsPopup = false,
+    // The window Windows says owns this one, when there is one.
+    string? OwnerWindowId = null
 );
 
 public sealed record WindowFrame(

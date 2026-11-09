@@ -261,6 +261,7 @@ public sealed class WindowsDesktop : IWindowsDesktop
             ? fallbackTitle
             : title;
 
+        var owner = GetWindow(hwnd, GW_OWNER);
         return new LaunchedWindow(
             WindowId: FormatWindowId(hwnd),
             Hwnd: hwnd,
@@ -268,9 +269,27 @@ public sealed class WindowsDesktop : IWindowsDesktop
             Title: resolvedTitle,
             Bounds: GetWindowBounds(hwnd),
             State: "normal",
-            Focused: true
+            Focused: true,
+            IsPopup: IsPopup(GetWindowLongPtr(hwnd, GWL_STYLE).ToInt64(), hasOwner: owner != IntPtr.Zero),
+            OwnerWindowId: owner == IntPtr.Zero ? null : FormatWindowId(owner)
         );
     }
+
+    /// <summary>
+    /// An owned window with no title bar. Dialogs such as Save As keep theirs and stay ordinary windows, and
+    /// an unowned window without one is an app's main window drawing its own title bar, like Paint's.
+    /// </summary>
+    internal static bool IsPopup(long style, bool hasOwner) => hasOwner && (style & WS_CAPTION) != WS_CAPTION;
+
+    private const int GW_OWNER = 4;
+    private const int GWL_STYLE = -16;
+    private const long WS_CAPTION = 0x00C00000;
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr GetWindow(IntPtr hWnd, int command);
+
+    [DllImport("user32.dll", EntryPoint = "GetWindowLongPtrW")]
+    private static extern IntPtr GetWindowLongPtr(IntPtr hWnd, int index);
 
     private static string GetWindowTitle(IntPtr hwnd)
     {
