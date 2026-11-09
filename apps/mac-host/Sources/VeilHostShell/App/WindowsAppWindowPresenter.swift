@@ -9,6 +9,8 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
     private var windowOrder: [String] = []
     private var suppressedCloseWindowIds: Set<String> = []
     private var identitiesById: [String: WindowsAppWindowIdentity] = [:]
+    /// Windows that have shown at least one frame. Only these are paused while the desktop hides them.
+    private var windowsWithFirstFrame: Set<String> = []
     private var otherWindowKeyObserver: NSObjectProtocol?
 #if DEBUG
     private var debugCommandObserver: NSObjectProtocol?
@@ -68,6 +70,9 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
     ///   deliberate launch, restore, or focus action should raise a window that already exists.
     ///   Newly created windows are always raised, since an app the user just opened has to appear.
     func showWindow(for session: WindowMirrorSession, bringToFront: Bool = false) {
+        if session.latestFrame != nil {
+            windowsWithFirstFrame.insert(session.id)
+        }
         if let window = windowsById[session.id] {
             // The desktop shows this app already; raising its Mac window would put it on screen twice.
             updateExistingWindow(window, for: session, bringToFront: bringToFront && !isHiddenForDesktop)
@@ -102,9 +107,13 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
         )
         windowsById[session.id] = window
         guard !isHiddenForDesktop else {
-            // Opened while the desktop shows Windows: kept off screen and quiet until apps mode returns.
+            // Opened while the desktop shows Windows: kept off screen until apps mode returns. Its stream keeps
+            // running until the first frame arrives: Veil opens on the desktop while the app connection comes
+            // up and returns to apps mode on that first frame, so pausing here left every window hidden.
             rememberWindowId(session.id)
-            onWindowVisibilityChange?(session.id, false)
+            if session.latestFrame != nil {
+                onWindowVisibilityChange?(session.id, false)
+            }
             return
         }
         present(window, windowId: session.id)
@@ -132,7 +141,9 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
         windowsById[session.id] = panel
         rememberWindowId(session.id)
         guard !isHiddenForDesktop else {
-            onWindowVisibilityChange?(session.id, false)
+            if session.latestFrame != nil {
+                onWindowVisibilityChange?(session.id, false)
+            }
             return
         }
 
@@ -205,7 +216,8 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
             if window.isMiniaturized {
                 // Already paused when it was minimized.
                 minimizedBeforeDesktop.insert(windowId)
-            } else {
+            } else if windowsWithFirstFrame.contains(windowId) {
+                // A window still waiting for its first frame keeps streaming; see `showWindow`.
                 onWindowVisibilityChange?(windowId, false)
             }
             window.orderOut(nil)
@@ -253,6 +265,7 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
         windowsById.removeAll()
         windowOrder.removeAll()
         identitiesById.removeAll()
+        windowsWithFirstFrame.removeAll()
         foregroundWindowId = nil
         minimizedBeforeDesktop.removeAll()
         WindowsAppDockIcon.showInDock(nil)
@@ -645,6 +658,7 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
     private func forgetWindowId(_ windowId: String) {
         windowOrder.removeAll { $0 == windowId }
         minimizedBeforeDesktop.remove(windowId)
+        windowsWithFirstFrame.remove(windowId)
         identitiesById[windowId] = nil
         if windowsById.isEmpty {
             WindowsAppDockIcon.showInDock(nil)

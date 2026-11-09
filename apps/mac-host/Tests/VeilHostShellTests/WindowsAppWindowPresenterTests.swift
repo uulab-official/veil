@@ -349,8 +349,8 @@ struct WindowsAppWindowPresenterTests {
             presenter.closeAll()
         }
 
-        presenter.showWindow(for: session(windowId: "hwnd:0001", appId: "winapp_notepad", title: "Notepad"))
-        presenter.showWindow(for: session(windowId: "hwnd:0002", appId: "winapp_calculator", title: "Calculator"))
+        presenter.showWindow(for: session(windowId: "hwnd:0001", appId: "winapp_notepad", title: "Notepad", hasFirstFrame: true))
+        presenter.showWindow(for: session(windowId: "hwnd:0002", appId: "winapp_calculator", title: "Calculator", hasFirstFrame: true))
 
         presenter.hideAllForDesktop()
 
@@ -378,8 +378,8 @@ struct WindowsAppWindowPresenterTests {
             presenter.closeAll()
         }
 
-        presenter.showWindow(for: session(windowId: "hwnd:0001", appId: "winapp_notepad", title: "Notepad"))
-        presenter.showWindow(for: session(windowId: "hwnd:0002", appId: "winapp_calculator", title: "Calculator"))
+        presenter.showWindow(for: session(windowId: "hwnd:0001", appId: "winapp_notepad", title: "Notepad", hasFirstFrame: true))
+        presenter.showWindow(for: session(windowId: "hwnd:0002", appId: "winapp_calculator", title: "Calculator", hasFirstFrame: true))
         presenter.hideAllForDesktop()
         visibilityChanges.removeAll()
 
@@ -409,16 +409,16 @@ struct WindowsAppWindowPresenterTests {
             presenter.closeAll()
         }
 
-        presenter.showWindow(for: session(windowId: "hwnd:0001", appId: "winapp_notepad", title: "Notepad"))
+        presenter.showWindow(for: session(windowId: "hwnd:0001", appId: "winapp_notepad", title: "Notepad", hasFirstFrame: true))
         presenter.hideAllForDesktop()
         visibilityChanges.removeAll()
 
         presenter.showWindow(
-            for: session(windowId: "hwnd:0001", appId: "winapp_notepad", title: "Notepad"),
+            for: session(windowId: "hwnd:0001", appId: "winapp_notepad", title: "Notepad", hasFirstFrame: true),
             bringToFront: true
         )
         presenter.showWindow(
-            for: session(windowId: "hwnd:0002", appId: "winapp_calculator", title: "Calculator"),
+            for: session(windowId: "hwnd:0002", appId: "winapp_calculator", title: "Calculator", hasFirstFrame: true),
             bringToFront: true
         )
         presenter.bringAllToFront()
@@ -433,6 +433,28 @@ struct WindowsAppWindowPresenterTests {
         #expect(presenter.isWindowOnScreen(windowId: "hwnd:0001"))
         #expect(presenter.isWindowOnScreen(windowId: "hwnd:0002"))
         #expect(visibilityChanges == ["hwnd:0002:false", "hwnd:0001:true", "hwnd:0002:true"])
+    }
+
+    @Test("a window still waiting for its first frame keeps streaming while the desktop hides it")
+    func firstFrameStreamsWhileHiddenForDesktop() {
+        _ = NSApplication.shared
+        let presenter = WindowsAppWindowPresenter()
+        var visibilityChanges: [String] = []
+        presenter.onWindowVisibilityChange = { windowId, isVisible in
+            visibilityChanges.append("\(windowId):\(isVisible)")
+        }
+        defer {
+            presenter.closeAll()
+        }
+
+        // Veil opens on the desktop while the app connection comes up and returns to apps mode on the first
+        // app frame. Pausing a window that has none yet meant that frame never came and every window stayed
+        // hidden.
+        presenter.hideAllForDesktop()
+        presenter.showWindow(for: session(windowId: "hwnd:0003", appId: "winapp_paint", title: "Paint"))
+
+        #expect(!presenter.isWindowOnScreen(windowId: "hwnd:0003"))
+        #expect(visibilityChanges.isEmpty)
     }
 
     @Test("shows a Windows popup as a borderless transparent overlay attached to its owner")
@@ -759,9 +781,10 @@ struct WindowsAppWindowPresenterTests {
         windowId: String,
         appId: String,
         title: String,
-        bounds: WindowBounds = WindowBounds(x: 80, y: 80, width: 960, height: 640)
+        bounds: WindowBounds = WindowBounds(x: 80, y: 80, width: 960, height: 640),
+        hasFirstFrame: Bool = false
     ) -> WindowMirrorSession {
-        WindowMirrorSession(
+        var session = WindowMirrorSession(
             window: WindowCreatedEvent(
                 windowId: windowId,
                 processId: 4912,
@@ -774,6 +797,13 @@ struct WindowsAppWindowPresenterTests {
             connectionMode: .agent,
             captureState: .pending
         )
+        if hasFirstFrame {
+            session.latestFrame = try? JSONDecoder().decode(WindowFrameEvent.self, from: Data("""
+            {"type":"window.frame","windowId":"\(windowId)","frameId":"frame_1","sequence":1,"format":"png",
+             "width":\(bounds.width),"height":\(bounds.height),"scale":1,"encodedData":""}
+            """.utf8))
+        }
+        return session
     }
 
     private func mirroredWindow(withId windowId: String) -> NSWindow? {
