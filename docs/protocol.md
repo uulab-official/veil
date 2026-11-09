@@ -996,6 +996,10 @@ Allowed mouse events:
 - `move`
 - `scroll`
 
+A `scroll` event may carry `deltaX` and `deltaY`, wheel units with 120 per notch, positive scrolling
+right and up as Windows counts them. Hosts send trackpad gestures as many small amounts, which Windows
+scrolls smoothly; an event with neither field is one notch up. Other events omit both.
+
 Implementation note: `x` and `y` are pixels in the window's frame bitmap, measured from the window rectangle's top-left. The Windows agent brings the window to the foreground, moves it fully onto its monitor's work area when it fits, and delivers each event as real input with `SendInput` at the matching absolute screen position. Posting window messages to the HWND did not reach XAML and DirectComposition content such as Paint's canvas, and posted moves carried no button state, so drags could not work.
 
 Rules:
