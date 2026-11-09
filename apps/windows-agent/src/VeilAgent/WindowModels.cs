@@ -55,7 +55,11 @@ public sealed record WindowMouseInput(
     string Event,
     int X,
     int Y,
-    IReadOnlyList<string> Modifiers
+    IReadOnlyList<string> Modifiers,
+    // Scroll amounts in wheel units, 120 per notch, positive up and right as Windows counts them. A scroll
+    // with neither set is one notch up, the original behavior.
+    int DeltaX = 0,
+    int DeltaY = 0
 );
 
 /// <summary>

@@ -723,7 +723,15 @@ public sealed class AgentSession
         try
         {
             var applied = await desktop.SendMouseInputAsync(
-                new WindowMouseInput(windowId, eventName, x, y, modifiers),
+                new WindowMouseInput(
+                    windowId,
+                    eventName,
+                    x,
+                    y,
+                    modifiers,
+                    DeltaX: TryReadInt(request, "deltaX", out var deltaX) ? deltaX : 0,
+                    DeltaY: TryReadInt(request, "deltaY", out var deltaY) ? deltaY : 0
+                ),
                 cancellationToken
             );
             if (!applied)

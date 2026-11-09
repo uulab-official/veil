@@ -25,6 +25,7 @@ internal static class WindowsInputInjector
     internal const uint MOUSEEVENTF_RIGHTDOWN = 0x0008;
     internal const uint MOUSEEVENTF_RIGHTUP = 0x0010;
     internal const uint MOUSEEVENTF_WHEEL = 0x0800;
+    internal const uint MOUSEEVENTF_HWHEEL = 0x01000;
     internal const uint MOUSEEVENTF_VIRTUALDESK = 0x4000;
     internal const uint MOUSEEVENTF_ABSOLUTE = 0x8000;
 
@@ -261,20 +262,21 @@ internal static class WindowsInputInjector
             ? ModifierVirtualKeys(input.Modifiers).ToArray()
             : [];
         inputs.AddRange(modifierKeys.Select(key => KeyboardInput((ushort)key, 0, keyUp: false)));
-        inputs.Add(new NativeInput
+        if (input.Event == "scroll")
         {
-            Type = INPUT_MOUSE,
-            Union = new InputUnion
+            // Trackpads send many small deltas; Windows accepts wheel amounts below one notch and scrolls
+            // smoothly by them. A vertical and a horizontal component go as separate wheel events.
+            var steps = ScrollSteps(input.DeltaX, input.DeltaY);
+            for (var index = 0; index < steps.Count; index++)
             {
-                Mouse = new MouseInput
-                {
-                    X = x,
-                    Y = y,
-                    MouseData = input.Event == "scroll" ? unchecked((uint)WheelDelta) : 0,
-                    Flags = MOUSEEVENTF_MOVE | MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_VIRTUALDESK | buttonFlags
-                }
+                var (flags, amount) = steps[index];
+                inputs.Add(MouseEvent(x, y, (index == 0 ? MOUSEEVENTF_MOVE | MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_VIRTUALDESK : 0) | flags, amount));
             }
-        });
+        }
+        else
+        {
+            inputs.Add(MouseEvent(x, y, MOUSEEVENTF_MOVE | MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_VIRTUALDESK | buttonFlags, 0));
+        }
         inputs.AddRange(modifierKeys.Reverse().Select(key => KeyboardInput((ushort)key, 0, keyUp: true)));
         if (!Send(inputs))
         {
@@ -283,6 +285,44 @@ internal static class WindowsInputInjector
         pointer = new GuestPointerPosition(tabletX, tabletY);
         return true;
     }
+
+    /// <summary>
+    /// The wheel events for a scroll: vertical then horizontal, each only when non-zero, and one notch up when
+    /// the host sent no amounts at all.
+    /// </summary>
+    internal static IReadOnlyList<(uint Flags, int Amount)> ScrollSteps(int deltaX, int deltaY)
+    {
+        if (deltaX == 0 && deltaY == 0)
+        {
+            return [(MOUSEEVENTF_WHEEL, WheelDelta)];
+        }
+
+        var steps = new List<(uint, int)>(2);
+        if (deltaY != 0)
+        {
+            steps.Add((MOUSEEVENTF_WHEEL, deltaY));
+        }
+        if (deltaX != 0)
+        {
+            steps.Add((MOUSEEVENTF_HWHEEL, deltaX));
+        }
+        return steps;
+    }
+
+    private static NativeInput MouseEvent(int x, int y, uint flags, int wheelAmount) => new()
+    {
+        Type = INPUT_MOUSE,
+        Union = new InputUnion
+        {
+            Mouse = new MouseInput
+            {
+                X = x,
+                Y = y,
+                MouseData = unchecked((uint)wheelAmount),
+                Flags = flags
+            }
+        }
+    };
 
     public static bool SendKey(WindowKeyInput input)
     {

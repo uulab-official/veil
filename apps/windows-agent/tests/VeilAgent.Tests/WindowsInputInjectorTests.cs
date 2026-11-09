@@ -62,6 +62,24 @@ public class WindowsInputInjectorTests
     }
 
     [Fact]
+    public void ScrollsByTheTrackpadAmountsOnBothAxes()
+    {
+        Assert.Equal(
+            new[] { (WindowsInputInjector.MOUSEEVENTF_WHEEL, -36), (WindowsInputInjector.MOUSEEVENTF_HWHEEL, 12) },
+            WindowsInputInjector.ScrollSteps(deltaX: 12, deltaY: -36)
+        );
+        Assert.Equal(
+            new[] { (WindowsInputInjector.MOUSEEVENTF_HWHEEL, -240) },
+            WindowsInputInjector.ScrollSteps(deltaX: -240, deltaY: 0)
+        );
+        // A host that predates scroll amounts still scrolls one notch up.
+        Assert.Equal(
+            new[] { (WindowsInputInjector.MOUSEEVENTF_WHEEL, 120) },
+            WindowsInputInjector.ScrollSteps(deltaX: 0, deltaY: 0)
+        );
+    }
+
+    [Fact]
     public void WrapsAKeyInItsModifiers()
     {
         var down = WindowsInputInjector.KeySequence("keyDown", 0x5A, ["ctrl"]);
