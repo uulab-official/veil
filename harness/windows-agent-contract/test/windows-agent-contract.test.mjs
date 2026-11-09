@@ -173,10 +173,14 @@ test("windows agent accepts host mouse input events", async () => {
   assert.match(messageTypes, /InputMouse\s*=\s*"input\.mouse"/);
   assert.match(models, /WindowMouseInput/);
   assert.match(desktopInterface, /SendMouseInputAsync\(WindowMouseInput input,\s*CancellationToken cancellationToken\)/);
-  assert.match(desktop, /WM_LBUTTONDOWN/);
-  assert.match(desktop, /WM_LBUTTONUP/);
-  assert.match(desktop, /WM_MOUSEMOVE/);
-  assert.match(desktop, /PostMessage/);
+  const injector = await readFile(resolve(agentRoot, "src/VeilAgent/WindowsInputInjector.cs"), "utf8");
+  // Real input, not posted window messages: XAML apps such as Paint ignore posted mouse messages, and a
+  // posted WM_MOUSEMOVE carries no button state, so drags could never work.
+  assert.match(desktop, /WindowsInputInjector\.SendMouse/);
+  assert.match(injector, /SendInput/);
+  assert.match(injector, /MOUSEEVENTF_LEFTDOWN/);
+  assert.match(injector, /MOUSEEVENTF_LEFTUP/);
+  assert.match(injector, /MOUSEEVENTF_ABSOLUTE/);
   assert.match(session, /MessageTypes\.InputMouse/);
   assert.match(session, /HandleMouseInputAsync/);
   assert.match(session, /window_not_tracked/);
@@ -193,10 +197,11 @@ test("windows agent accepts host key input events", async () => {
   assert.match(messageTypes, /InputKey\s*=\s*"input\.key"/);
   assert.match(models, /WindowKeyInput/);
   assert.match(desktopInterface, /SendKeyInputAsync\(WindowKeyInput input,\s*CancellationToken cancellationToken\)/);
-  assert.match(desktop, /WM_KEYDOWN/);
-  assert.match(desktop, /WM_KEYUP/);
-  assert.match(desktop, /VK_CONTROL/);
-  assert.match(desktop, /PostMessage/);
+  const injector = await readFile(resolve(agentRoot, "src/VeilAgent/WindowsInputInjector.cs"), "utf8");
+  assert.match(desktop, /WindowsInputInjector\.SendKey/);
+  assert.match(injector, /SendInput/);
+  assert.match(injector, /KEYEVENTF_KEYUP/);
+  assert.match(injector, /VK_CONTROL/);
   assert.match(session, /MessageTypes\.InputKey/);
   assert.match(session, /HandleKeyInputAsync/);
   assert.match(session, /window_not_tracked/);
@@ -294,9 +299,11 @@ test("windows agent accepts committed Unicode text input", async () => {
   assert.match(models, /WindowTextInput/);
   assert.match(desktopInterface, /SendTextInputAsync\(WindowTextInput input,\s*CancellationToken cancellationToken\)/);
 
-  // WM_CHAR is what makes non-virtual-key characters possible at all; WM_KEYDOWN cannot express a
-  // Hangul syllable.
-  assert.match(desktop, /WM_CHAR/);
+  // Unicode key events are what make non-virtual-key characters possible at all; a virtual key cannot
+  // express a Hangul syllable.
+  const injector = await readFile(resolve(agentRoot, "src/VeilAgent/WindowsInputInjector.cs"), "utf8");
+  assert.match(desktop, /WindowsInputInjector\.SendText/);
+  assert.match(injector, /KEYEVENTF_UNICODE/);
   assert.match(desktop, /MaxTextInputUtf16Length/);
   assert.match(session, /MessageTypes\.InputText/);
   assert.match(session, /HandleTextInputAsync/);
@@ -307,10 +314,15 @@ test("windows agent accepts committed Unicode text input", async () => {
 test("windows agent foregrounds the HWND before forwarding host input", async () => {
   const desktop = await readFile(resolve(agentRoot, "src/VeilAgent/WindowsDesktop.cs"), "utf8");
 
+  const injector = await readFile(resolve(agentRoot, "src/VeilAgent/WindowsInputInjector.cs"), "utf8");
+
   assert.match(desktop, /EnsureWindowReadyForInput\(hwnd\)/);
-  assert.match(desktop, /SetForegroundWindow/);
-  assert.match(desktop, /SetFocus/);
-  assert.match(desktop, /ShowWindow/);
+  assert.match(desktop, /WindowsInputInjector\.PrepareTarget\(hwnd\)/);
+  assert.match(injector, /SetForegroundWindow/);
+  // Windows only lets the process that received the last input take the foreground.
+  assert.match(injector, /AttachThreadInput/);
+  // Restoring unconditionally used to un-maximize a maximized window on every click.
+  assert.match(injector, /IsIconic\(hwnd\)/);
 });
 
 test("windows agent accepts host clipboard text updates", async () => {

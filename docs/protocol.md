@@ -946,7 +946,7 @@ Allowed mouse events:
 - `move`
 - `scroll`
 
-Implementation note: the first Windows agent implementation maps these host events to HWND `PostMessage` calls with client-area coordinates.
+Implementation note: `x` and `y` are pixels in the window's frame bitmap, measured from the window rectangle's top-left. The Windows agent brings the window to the foreground, moves it fully onto its monitor's work area when it fits, and delivers each event as real input with `SendInput` at the matching absolute screen position. Posting window messages to the HWND did not reach XAML and DirectComposition content such as Paint's canvas, and posted moves carried no button state, so drags could not work.
 
 Rules:
 
@@ -1005,15 +1005,15 @@ Rules:
 
 - `windowId` must match the HWND-shaped id from a tracked `window.created` event. An untracked HWND is
   rejected with `window_not_tracked` and no messages are posted, exactly like `input.key`.
-- `text` must be non-empty and at most 4096 UTF-16 code units. One message becomes one posted window
-  message per code unit on the guest, so an unbounded payload would flood the target window's queue.
+- `text` must be non-empty and at most 4096 UTF-16 code units. One message becomes a key-down and key-up
+  pair per code unit on the guest, so an unbounded payload would flood the guest's input queue.
   Oversized payloads are rejected with `text_too_long`.
 - `text` must not contain newlines, carriage returns, or tabs. Enter and Tab have guest semantics that
   a character cannot reproduce (Enter submits, Tab moves focus), so they stay on the `input.key` path
   and are rejected here with `invalid_message`.
-- The guest posts `WM_CHAR` once per UTF-16 code unit. Surrogate pairs arrive as two consecutive
-  messages, which is what Win32 edit controls expect; posting a code point above U+FFFF as a single
-  `wParam` would truncate it.
+- The guest types each UTF-16 code unit as a `KEYEVENTF_UNICODE` key event through `SendInput`.
+  Surrogate pairs arrive as two consecutive code units, which is what Windows expects; sending a code
+  point above U+FFFF as a single unit would truncate it.
 - Arrow keys, function keys, Escape, Backspace, and Command/Control chords never travel here. They
   keep the `input.key` path, and while an IME composition is open they are consumed by the macOS input
   method instead of being sent at all.
