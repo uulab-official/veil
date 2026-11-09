@@ -15,4 +15,5 @@ public enum VeilLog {
 
     public static let runtime = Logger(subsystem: subsystem, category: "runtime")
     public static let agent = Logger(subsystem: subsystem, category: "agent")
+    public static let window = Logger(subsystem: subsystem, category: "window")
 }

@@ -49,6 +49,63 @@ extension HostDashboardModel {
     /// drag the mirror remains responsive and aspect-correct; one bounded request at gesture end avoids
     /// flooding the guest agent with a network message for every intermediate pixel.
     @discardableResult
+    /// Resizes a mirrored window after first growing the guest display when the window would not fit on it.
+    ///
+    /// See `MirroredWindowDisplayFit`: without this, zooming on a Mac screen larger than the guest display
+    /// only stretched the guest's bitmap.
+    ///
+    /// Requests for one window are coalesced: while one is in flight, newer sizes replace each other and only
+    /// the latest is sent next. A live resize reports many sizes, and sending each one in turn would leave
+    /// Windows replaying stale sizes after the user had already let go.
+    public func resizeMirrorSession(
+        windowId: String,
+        width: Int,
+        height: Int,
+        macScreenWidth: Int,
+        macScreenHeight: Int
+    ) async -> WindowResizeResponse? {
+        pendingMirrorResizes[windowId] = PendingMirrorResize(
+            width: width,
+            height: height,
+            macScreenWidth: macScreenWidth,
+            macScreenHeight: macScreenHeight
+        )
+        guard !mirrorResizesInFlight.contains(windowId) else {
+            return nil
+        }
+
+        mirrorResizesInFlight.insert(windowId)
+        defer {
+            mirrorResizesInFlight.remove(windowId)
+        }
+
+        var response: WindowResizeResponse?
+        while let next = pendingMirrorResizes.removeValue(forKey: windowId) {
+            await growGuestDisplayIfNeeded(windowId: windowId, for: next)
+            response = await resizeMirrorSession(windowId: windowId, width: next.width, height: next.height)
+        }
+        return response
+    }
+
+    private func growGuestDisplayIfNeeded(windowId: String, for request: PendingMirrorResize) async {
+        guard canResizeMirrorSession(windowId: windowId),
+              canResizeDisplay,
+              let displaySize = MirroredWindowDisplayFit.displaySize(
+                windowWidth: request.width,
+                windowHeight: request.height,
+                currentDisplay: guestDisplaySize,
+                macScreenWidth: request.macScreenWidth,
+                macScreenHeight: request.macScreenHeight
+              ) else {
+            return
+        }
+
+        let response = await resizeDisplay(width: displaySize.width, height: displaySize.height)
+        VeilLog.window.notice(
+            "Guest display \(displaySize.width)x\(displaySize.height) for window \(request.width)x\(request.height): accepted=\(response?.accepted ?? false, privacy: .public)"
+        )
+    }
+
     public func resizeMirrorSession(windowId: String, width: Int, height: Int) async -> WindowResizeResponse? {
         guard canResizeMirrorSession(windowId: windowId),
               WindowResizeRequest.isPlausible(width: width, height: height) else {

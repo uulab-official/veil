@@ -16,6 +16,11 @@ public final class HostDashboardModel {
     public internal(set) var activeWindows: [WindowCreatedEvent] = []
     public internal(set) var mirrorSessions: [WindowMirrorSession] = []
     public internal(set) var errorMessage: String?
+    /// The guest display size from the last accepted display resize. Nil until one succeeds, since the agent
+    /// does not report the size it booted with.
+    public internal(set) var guestDisplaySize: GuestDisplaySize?
+    @ObservationIgnored var pendingMirrorResizes: [String: PendingMirrorResize] = [:]
+    @ObservationIgnored var mirrorResizesInFlight: Set<String> = []
     /// The most recent refused drag-and-drop, so a surface can react to the kind of refusal without
     /// matching on the prose in ``errorMessage``.
     public internal(set) var lastFileDropRefusal: WindowsAppFileDropRefusal?
@@ -287,7 +292,14 @@ public final class HostDashboardModel {
         }
 
         do {
-            return try await service.resizeDisplay(width: width, height: height)
+            let response = try await service.resizeDisplay(width: width, height: height)
+            if response.accepted {
+                guestDisplaySize = GuestDisplaySize(
+                    width: response.width ?? width,
+                    height: response.height ?? height
+                )
+            }
+            return response
         } catch {
             // Display fallback is best effort. The RFB surface already has a truthful aspect-fit
             // fallback, so a guest API refusal must not tear down the host dashboard connection.

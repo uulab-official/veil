@@ -348,6 +348,37 @@ struct HostDashboardModelTests {
         #expect(service.resizedWindowRequests.map { $0.height } == [900])
     }
 
+    @Test("grows the guest display before a mirrored window outgrows it")
+    @MainActor
+    func growsGuestDisplayBeforeMirroredWindowOutgrowsIt() async throws {
+        var health = AgentHealthResponse.captureReady
+        health.capabilities.windowResize = true
+        health.capabilities.displayResize = true
+        let service = FakeDashboardService(health: health)
+        let model = HostDashboardModel(service: service)
+        await model.launchNotepad()
+
+        _ = await model.resizeMirrorSession(
+            windowId: "hwnd:0003029A",
+            width: 1963,
+            height: 1177,
+            macScreenWidth: 2048,
+            macScreenHeight: 1280
+        )
+        _ = await model.resizeMirrorSession(
+            windowId: "hwnd:0003029A",
+            width: 1182,
+            height: 708,
+            macScreenWidth: 2048,
+            macScreenHeight: 1280
+        )
+
+        #expect(service.resizedDisplayRequests.map { $0.width } == [2048])
+        #expect(service.resizedDisplayRequests.map { $0.height } == [1280])
+        #expect(model.guestDisplaySize == GuestDisplaySize(width: 2048, height: 1280))
+        #expect(service.resizedWindowRequests.map { $0.width } == [1963, 1182])
+    }
+
     @Test("stores the latest frame on the matching mirror session")
     @MainActor
     func storesLatestFrameOnMatchingMirrorSession() async throws {
@@ -3874,6 +3905,7 @@ private final class FakeDashboardService: HostDashboardService {
     private(set) var focusedWindowIds: [String] = []
     private(set) var closedWindowIds: [String] = []
     private(set) var resizedWindowRequests: [(windowId: String, width: Int, height: Int)] = []
+    private(set) var resizedDisplayRequests: [(width: Int, height: Int)] = []
     private(set) var mouseInputs: [InputMouseEvent] = []
     private(set) var keyInputs: [InputKeyEvent] = []
     private(set) var textInputs: [InputTextEvent] = []
@@ -4013,6 +4045,11 @@ private final class FakeDashboardService: HostDashboardService {
             windowId: windowId,
             accepted: closeAccepted
         )
+    }
+
+    func resizeDisplay(width: Int, height: Int) async throws -> DisplayResizeResponse {
+        resizedDisplayRequests.append((width, height))
+        return DisplayResizeResponse(requestId: "req_resize_display", accepted: true, width: width, height: height)
     }
 
     func resizeWindow(windowId: String, width: Int, height: Int) async throws -> WindowResizeResponse {

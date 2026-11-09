@@ -8,6 +8,12 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
     private var windowsById: [String: NSWindow] = [:]
     private var windowOrder: [String] = []
     private var suppressedCloseWindowIds: Set<String> = []
+    /// When each zooming window's animation ends. Guest updates arriving before then must not touch the frame.
+    private var zoomEndsAt: [String: Date] = [:]
+    /// When each window last reported a size during a live resize, so the guest follows without being flooded.
+    private var lastLiveResizeReportAt: [String: Date] = [:]
+    /// How often a window being dragged to a new size tells Windows to follow.
+    private static let liveResizeReportInterval: TimeInterval = 0.12
     private(set) var foregroundWindowId: String?
 
     var onUserWindowClose: ((String) -> Void)?
@@ -37,7 +43,8 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
     var onWindowVisibilityChange: ((String, Bool) -> Void)?
     /// `(windowId, contentWidth, contentHeight)`. Fires once after the user finishes resizing a mirrored
     /// window so the real Windows HWND can follow without sending one request per drag event.
-    var onWindowResize: ((String, Int, Int) -> Void)?
+    /// Window id, content width and height in points, and the size of the Mac screen the window is on.
+    var onWindowResize: ((String, Int, Int, CGSize?) -> Void)?
 
     var visibleWindowIds: [String] {
         windowOrder.filter { windowsById[$0] != nil }
@@ -178,17 +185,70 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
             return
         }
 
-        // AppKit reports content dimensions in points. They intentionally map to the logical dimensions
-        // used by window.created/window.updated; the Windows agent applies its own per-monitor DPI when
-        // converting the request to physical pixels.
-        let size = contentView.bounds.size
+        lastLiveResizeReportAt[windowId] = nil
+        reportContentSize(contentView.bounds.size, windowId: windowId, screen: window.screen)
+    }
+
+    /// Keeps the Windows app resizing along with the Mac window while its edge is dragged, instead of
+    /// stretching the old bitmap until the drag ends, which is how Parallels Coherence windows behave.
+    func windowDidResize(_ notification: Notification) {
+        guard let window = notification.object as? NSWindow,
+              window.inLiveResize,
+              let windowId = window.identifier?.rawValue,
+              windowsById[windowId] != nil,
+              let contentView = window.contentView else {
+            return
+        }
+
+        let now = Date()
+        if let last = lastLiveResizeReportAt[windowId],
+           now.timeIntervalSince(last) < Self.liveResizeReportInterval {
+            return
+        }
+        lastLiveResizeReportAt[windowId] = now
+        reportContentSize(contentView.bounds.size, windowId: windowId, screen: window.screen)
+    }
+
+    /// Zooming, from the Windows maximize button or a caption double-click, is not a live resize. The target
+    /// size is sent as the animation starts, so Windows redraws at the new size while the Mac window grows.
+    func windowShouldZoom(_ window: NSWindow, toFrame newFrame: NSRect) -> Bool {
+        guard let windowId = window.identifier?.rawValue,
+              windowsById[windowId] != nil else {
+            return true
+        }
+
+        zoomEndsAt[windowId] = Date().addingTimeInterval(window.animationResizeTime(newFrame) + 0.3)
+        reportContentSize(window.contentRect(forFrameRect: newFrame).size, windowId: windowId, screen: window.screen)
+        return true
+    }
+
+    /// AppKit reports content dimensions in points. They intentionally map to the logical dimensions used by
+    /// window.created/window.updated; the Windows agent applies its own per-monitor DPI when converting the
+    /// request to physical pixels.
+    private func reportContentSize(_ size: NSSize, windowId: String, screen: NSScreen?) {
         let width = Int(size.width.rounded())
         let height = Int(size.height.rounded())
         guard width > 0, height > 0 else {
             return
         }
 
-        onWindowResize?(windowId, width, height)
+        onWindowResize?(windowId, width, height, screen?.frame.size)
+    }
+
+    /// Whether the user is resizing the window right now. Guest updates then leave its frame and shape alone:
+    /// pinning the frame from mid-animation snapped a zoomed window back to its old size.
+    private func isBeingResized(_ window: NSWindow, windowId: String) -> Bool {
+        if window.inLiveResize {
+            return true
+        }
+        guard let end = zoomEndsAt[windowId] else {
+            return false
+        }
+        if end > Date() {
+            return true
+        }
+        zoomEndsAt[windowId] = nil
+        return false
     }
 
     private func present(_ window: NSWindow, windowId: String) {
@@ -204,11 +264,12 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
         bringToFront: Bool
     ) {
         let preservedFrame = window.frame
-        configure(window, for: session)
+        let isBeingResized = isBeingResized(window, windowId: session.id)
+        configure(window, for: session, appliesResizeConstraints: !isBeingResized)
         window.contentView = hostingView(
             for: session
         )
-        if !NSEqualRects(window.frame, preservedFrame) {
+        if !isBeingResized, !NSEqualRects(window.frame, preservedFrame) {
             window.setFrame(preservedFrame, display: true, animate: false)
         }
 
@@ -228,6 +289,8 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
 
     private func forgetWindowId(_ windowId: String) {
         windowOrder.removeAll { $0 == windowId }
+        zoomEndsAt[windowId] = nil
+        lastLiveResizeReportAt[windowId] = nil
         if foregroundWindowId == windowId {
             foregroundWindowId = visibleWindowIds.last
         }
@@ -403,11 +466,17 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
         )
     }
 
-    private func configure(_ window: NSWindow, for session: WindowMirrorSession) {
+    private func configure(
+        _ window: NSWindow,
+        for session: WindowMirrorSession,
+        appliesResizeConstraints: Bool = true
+    ) {
         let identity = appIdentityProvider?(session.window.appId)
             ?? WindowsAppWindowIdentity.resolve(appId: session.window.appId, apps: [])
         window.title = session.window.title
-        applyResizeConstraints(to: window, for: session)
+        if appliesResizeConstraints {
+            applyResizeConstraints(to: window, for: session)
+        }
         window.tabbingMode = .disallowed
         window.collectionBehavior = [.managed, .fullScreenPrimary]
         window.backgroundColor = .black
@@ -681,6 +750,7 @@ private final class InputCaptureNSView: NSView {
         }
 
         captionPress = nil
+        VeilLog.window.notice("Caption click \(String(describing: press.region), privacy: .public)")
         switch press.region {
         case .closeButton:
             window?.performClose(nil)
@@ -719,6 +789,7 @@ private final class InputCaptureNSView: NSView {
         // The window server runs the drag from here until the button is released, with the usual macOS
         // snapping and Space behavior, and the matching mouse-up never reaches this view.
         captionPress = nil
+        VeilLog.window.notice("Caption drag from \(String(describing: press.region), privacy: .public)")
         window?.performDrag(with: event)
     }
 
@@ -730,7 +801,20 @@ private final class InputCaptureNSView: NSView {
         }
 
         let windowWidth = session.latestFrame?.width ?? session.window.bounds.width
-        return WindowsCaptionRegion.classify(guestX: guestPoint.x, guestY: guestPoint.y, windowWidth: windowWidth)
+        let region = WindowsCaptionRegion.classify(guestX: guestPoint.x, guestY: guestPoint.y, windowWidth: windowWidth)
+        if region != .content {
+            let point = convert(event.locationInWindow, from: nil)
+            VeilLog.window.notice(
+                """
+                Caption press \(String(describing: region), privacy: .public) clicks=\(event.clickCount) \
+                view=\(Int(point.x)),\(Int(point.y)) in \(Int(self.bounds.width))x\(Int(self.bounds.height)) \
+                guest=\(guestPoint.x),\(guestPoint.y) source=\(session.latestFrame?.width ?? -1)x\(session.latestFrame?.height ?? -1) \
+                bounds=\(session.window.bounds.width)x\(session.window.bounds.height) \
+                window=\(Int(self.window?.frame.width ?? 0))x\(Int(self.window?.frame.height ?? 0))
+                """
+            )
+        }
+        return region
     }
 
     /// Follows the macOS "Double-click a window's title bar to" setting, which a Mac titlebar would.

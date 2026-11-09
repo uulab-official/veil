@@ -267,7 +267,7 @@ struct WindowsAppWindowPresenterTests {
         }
 
         var resizeEvents: [(String, Int, Int)] = []
-        presenter.onWindowResize = { windowId, width, height in
+        presenter.onWindowResize = { windowId, width, height, _ in
             resizeEvents.append((windowId, width, height))
         }
 
@@ -295,6 +295,43 @@ struct WindowsAppWindowPresenterTests {
         #expect(resizeEvents.first?.1 == Int(finalSize.width))
         #expect(resizeEvents.first?.2 == Int(finalSize.height))
         #expect(finalSize.width < 960)
+    }
+
+    @Test("sends the zoom target size as the zoom starts and keeps the frame during the zoom")
+    func sendsZoomTargetSizeAsZoomStarts() throws {
+        _ = NSApplication.shared
+        let presenter = WindowsAppWindowPresenter()
+        defer {
+            presenter.closeAll()
+        }
+
+        var resizeEvents: [(String, Int, Int)] = []
+        presenter.onWindowResize = { windowId, width, height, _ in
+            resizeEvents.append((windowId, width, height))
+        }
+        let windowId = "hwnd:zoom"
+        let original = session(
+            windowId: windowId,
+            appId: "winapp_paint",
+            title: "Paint",
+            bounds: WindowBounds(x: 80, y: 80, width: 960, height: 640)
+        )
+        presenter.showWindow(for: original)
+        let window = try #require(mirroredWindow(withId: windowId))
+        let target = NSRect(x: 0, y: 0, width: 1200, height: 800)
+
+        #expect(presenter.windowShouldZoom(window, toFrame: target))
+        let targetContent = window.contentRect(forFrameRect: target).size
+        #expect(resizeEvents.count == 1)
+        #expect(resizeEvents.first?.1 == Int(targetContent.width.rounded()))
+        #expect(resizeEvents.first?.2 == Int(targetContent.height.rounded()))
+
+        // A guest update that lands mid-zoom must not pin the window back to its pre-zoom frame.
+        window.setFrame(target, display: false)
+        var updated = original
+        updated.window.bounds = WindowBounds(x: 80, y: 80, width: 1000, height: 640)
+        presenter.showWindow(for: updated)
+        #expect(NSEqualRects(window.frame, target))
     }
 
     @Test("restore policy deminiaturizes minimized Windows app windows")

@@ -75,9 +75,19 @@ extension VeilHostShellApp {
                 }
             }
         }
-        windowsAppWindowPresenter.onWindowResize = { windowId, width, height in
+        windowsAppWindowPresenter.onWindowResize = { windowId, width, height, screenSize in
             Task { @MainActor in
-                _ = await model.resizeMirrorSession(windowId: windowId, width: width, height: height)
+                guard let screenSize else {
+                    _ = await model.resizeMirrorSession(windowId: windowId, width: width, height: height)
+                    return
+                }
+                _ = await model.resizeMirrorSession(
+                    windowId: windowId,
+                    width: width,
+                    height: height,
+                    macScreenWidth: Int(screenSize.width),
+                    macScreenHeight: Int(screenSize.height)
+                )
             }
         }
         windowsAppWindowPresenter.onDropRefused = { refusal in
