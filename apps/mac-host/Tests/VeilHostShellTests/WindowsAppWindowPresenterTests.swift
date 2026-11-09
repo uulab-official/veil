@@ -327,11 +327,14 @@ struct WindowsAppWindowPresenterTests {
         #expect(resizeEvents.first?.2 == Int(targetContent.height.rounded()))
 
         // A guest update that lands mid-zoom must not pin the window back to its pre-zoom frame.
+        // AppKit fits the frame to the screen and the aspect lock, and CI's virtual display is small, so the
+        // check is against the frame the zoom actually reached rather than the requested one.
         window.setFrame(target, display: false)
+        let zoomedFrame = window.frame
         var updated = original
         updated.window.bounds = WindowBounds(x: 80, y: 80, width: 1000, height: 640)
         presenter.showWindow(for: updated)
-        #expect(NSEqualRects(window.frame, target))
+        #expect(NSEqualRects(window.frame, zoomedFrame))
     }
 
     @Test("restore policy deminiaturizes minimized Windows app windows")
