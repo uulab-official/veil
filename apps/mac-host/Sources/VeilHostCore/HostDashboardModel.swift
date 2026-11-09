@@ -19,6 +19,9 @@ public final class HostDashboardModel {
     /// The guest display size from the last accepted display resize. Nil until one succeeds, since the agent
     /// does not report the size it booted with.
     public internal(set) var guestDisplaySize: GuestDisplaySize?
+    /// Called with where each applied mirrored-window mouse event put the guest cursor, so the app can move
+    /// QEMU's tablet there; see `QEMUTabletPositionSync`.
+    @ObservationIgnored public var onGuestPointerMoved: (@MainActor (GuestPointerPosition) -> Void)?
     @ObservationIgnored var pendingMirrorResizes: [String: PendingMirrorResize] = [:]
     @ObservationIgnored var mirrorResizesInFlight: Set<String> = []
     /// The most recent refused drag-and-drop, so a surface can react to the kind of refusal without

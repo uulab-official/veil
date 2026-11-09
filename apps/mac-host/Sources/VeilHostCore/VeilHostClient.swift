@@ -573,6 +573,8 @@ private struct OperationAcknowledgement: Decodable {
     var type: String
     var requestId: String
     var accepted: Bool
+    /// Only on `input.mouse` acknowledgements from agents that inject real input.
+    var pointer: GuestPointerPosition?
 }
 
 public struct VeilHostClient: HostDashboardService, Sendable {
@@ -1396,6 +1398,10 @@ public struct VeilHostClient: HostDashboardService, Sendable {
         try await sendAcknowledged(encoder.encode(input))
     }
 
+    public func sendMouseInputReportingPointer(_ input: InputMouseEvent) async throws -> GuestPointerPosition? {
+        try await sendAcknowledged(encoder.encode(input))?.pointer
+    }
+
     public func sendKeyInput(_ input: InputKeyEvent) async throws {
         try await sendAcknowledged(encoder.encode(input))
     }
@@ -1443,10 +1449,11 @@ public struct VeilHostClient: HostDashboardService, Sendable {
     /// own code, and a matching positive `operation.ack` confirms it. Only agents that have not
     /// advertised acknowledgements use legacy delivery. Silence from a negotiated agent is
     /// unconfirmed delivery, especially for clipboard writes that precede a paste shortcut.
+    @discardableResult
     private func sendAcknowledged(
         _ message: Data,
         replyTimeout: TimeInterval = VeilHostClient.operationAckTimeoutSeconds
-    ) async throws {
+    ) async throws -> OperationAcknowledgement? {
         try Task.checkCancellation()
         let dispatchKey = operationDispatchKey(for: message)
         await operationDispatchGate.acquire(key: dispatchKey)
@@ -1455,7 +1462,7 @@ public struct VeilHostClient: HostDashboardService, Sendable {
             guard operationAckCapability.isEnabled else {
                 _ = try await transport.send(message, expectedReplies: 0)
                 await operationDispatchGate.release(key: dispatchKey)
-                return
+                return nil
             }
 
             // Input events have no ID in the legacy protocol. Add one only to the negotiated
@@ -1489,6 +1496,7 @@ public struct VeilHostClient: HostDashboardService, Sendable {
                 throw VeilHostError.missingReply("Windows did not confirm the operation. Check the app before trying again.")
             }
             await operationDispatchGate.release(key: dispatchKey)
+            return acknowledgement
         } catch {
             await operationDispatchGate.release(key: dispatchKey)
             throw error

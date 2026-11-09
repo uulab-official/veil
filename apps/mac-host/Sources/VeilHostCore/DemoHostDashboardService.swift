@@ -77,6 +77,10 @@ public struct FallbackHostDashboardService: HostDashboardService, Sendable {
         try await primary.sendMouseInput(input)
     }
 
+    public func sendMouseInputReportingPointer(_ input: InputMouseEvent) async throws -> GuestPointerPosition? {
+        try await primary.sendMouseInputReportingPointer(input)
+    }
+
     public func sendKeyInput(_ input: InputKeyEvent) async throws {
         try await primary.sendKeyInput(input)
     }

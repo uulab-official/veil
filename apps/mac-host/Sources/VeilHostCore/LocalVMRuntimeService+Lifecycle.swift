@@ -302,6 +302,10 @@ extension LocalVMRuntimeService {
         return try await sender.sendTap(normalizedX: normalizedX, normalizedY: normalizedY)
     }
 
+    public func syncGuestTabletPosition(_ position: GuestPointerPosition) async {
+        await tabletPositionSync.move(to: position)
+    }
+
     public func sendConsoleKey(_ key: String) async throws -> QEMUKeySendRecord {
         let sender = keySequenceSender ?? QEMUKeySequenceSender(launchRecordStore: qemuLaunchRecordStore)
         return try await sender.send(steps: [

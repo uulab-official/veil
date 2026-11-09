@@ -32,6 +32,8 @@ public protocol HostDashboardService: Sendable {
     func resizeDisplay(width: Int, height: Int) async throws -> DisplayResizeResponse
     func requestSystemShutdown() async throws -> SystemShutdownResponse
     func sendMouseInput(_ input: InputMouseEvent) async throws
+    /// Sends a mouse event and returns where the guest cursor ended up, when the agent reports it.
+    func sendMouseInputReportingPointer(_ input: InputMouseEvent) async throws -> GuestPointerPosition?
     func sendKeyInput(_ input: InputKeyEvent) async throws
     func sendTextInput(_ input: InputTextEvent) async throws
     func sendClipboardText(_ clipboard: ClipboardTextSet) async throws
@@ -62,6 +64,11 @@ public extension HostDashboardService {
 
     func restoreApp(appId: String) async throws -> WindowsAppLaunchResult {
         try await launchApp(appId: appId)
+    }
+
+    func sendMouseInputReportingPointer(_ input: InputMouseEvent) async throws -> GuestPointerPosition? {
+        try await sendMouseInput(input)
+        return nil
     }
 
     func resizeWindow(windowId: String, width: Int, height: Int) async throws -> WindowResizeResponse {

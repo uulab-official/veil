@@ -53,6 +53,11 @@ extension VeilHostShellApp {
                 syncLauncherWindowVisibility()
             }
         }
+        model.onGuestPointerMoved = { position in
+            Task { @MainActor in
+                await vmModel.syncGuestTabletPosition(position)
+            }
+        }
         windowsAppWindowPresenter.onMouseInput = { windowId, event, x, y in
             Task { @MainActor in
                 await model.sendMouseInput(windowId: windowId, event: event, x: x, y: y)

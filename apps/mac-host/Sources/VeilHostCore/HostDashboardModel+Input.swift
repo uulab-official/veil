@@ -31,9 +31,11 @@ extension HostDashboardModel {
         }
 
         do {
-            try await service.sendMouseInput(
+            if let pointer = try await service.sendMouseInputReportingPointer(
                 InputMouseEvent(windowId: windowId, event: event, x: x, y: y, modifiers: modifiers)
-            )
+            ) {
+                onGuestPointerMoved?(pointer)
+            }
         } catch {
             if await dropMirrorSessionIfUntracked(windowId: windowId, error: error) {
                 return

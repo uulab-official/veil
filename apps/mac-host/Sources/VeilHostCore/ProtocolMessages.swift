@@ -766,6 +766,18 @@ public struct SystemShutdownResponse: Codable, Equatable, Sendable {
     }
 }
 
+/// Where the Windows agent put the guest cursor for a mouse event, in the 0...32767 absolute range QEMU's USB
+/// tablet uses on both axes. Carried on the `operation.ack` for `input.mouse`.
+public struct GuestPointerPosition: Codable, Equatable, Sendable {
+    public var x: Int
+    public var y: Int
+
+    public init(x: Int, y: Int) {
+        self.x = x
+        self.y = y
+    }
+}
+
 public struct InputMouseEvent: Codable, Equatable, Sendable {
     public var type: MessageType
     public var windowId: String

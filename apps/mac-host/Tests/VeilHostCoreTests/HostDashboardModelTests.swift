@@ -1178,6 +1178,21 @@ struct HostDashboardModelTests {
         #expect(model.phase == .connected)
     }
 
+    @Test("hands the agent-reported cursor position to the tablet sync")
+    @MainActor
+    func handsReportedCursorPositionToTabletSync() async throws {
+        let service = FakeDashboardService(health: .inputReady)
+        service.reportedPointer = GuestPointerPosition(x: 16384, y: 8192)
+        let model = HostDashboardModel(service: service)
+        var moved: [GuestPointerPosition] = []
+        model.onGuestPointerMoved = { moved.append($0) }
+
+        await model.launchNotepad()
+        await model.sendMouseInput(windowId: "hwnd:0003029A", event: "move", x: 240, y: 130)
+
+        #expect(moved == [GuestPointerPosition(x: 16384, y: 8192)])
+    }
+
     @Test("ignores mouse input for windows without a mirror session")
     @MainActor
     func ignoresMouseInputForUnknownWindows() async throws {
@@ -3907,6 +3922,7 @@ private final class FakeDashboardService: HostDashboardService {
     private(set) var resizedWindowRequests: [(windowId: String, width: Int, height: Int)] = []
     private(set) var resizedDisplayRequests: [(width: Int, height: Int)] = []
     private(set) var mouseInputs: [InputMouseEvent] = []
+    var reportedPointer: GuestPointerPosition?
     private(set) var keyInputs: [InputKeyEvent] = []
     private(set) var textInputs: [InputTextEvent] = []
     private(set) var clipboardTexts: [ClipboardTextSet] = []
@@ -4075,6 +4091,11 @@ private final class FakeDashboardService: HostDashboardService {
         }
 
         mouseInputs.append(input)
+    }
+
+    func sendMouseInputReportingPointer(_ input: InputMouseEvent) async throws -> GuestPointerPosition? {
+        try await sendMouseInput(input)
+        return reportedPointer
     }
 
     func sendKeyInput(_ input: InputKeyEvent) async throws {

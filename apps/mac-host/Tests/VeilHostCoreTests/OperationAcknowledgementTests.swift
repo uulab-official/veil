@@ -62,6 +62,30 @@ struct OperationAcknowledgementTests {
         #expect(await transport.operationReplyCount == 1)
     }
 
+    @Test("reads where the guest cursor went from a mouse acknowledgement")
+    func readsReportedPointer() async throws {
+        let client = VeilHostClient(transport: AckTransport(reply: "echo-pointer"))
+        _ = try await client.loadHealth()
+
+        let pointer = try await client.sendMouseInputReportingPointer(
+            InputMouseEvent(windowId: "hwnd:1", event: "move", x: 4, y: 8)
+        )
+
+        #expect(pointer == GuestPointerPosition(x: 16384, y: 8192))
+    }
+
+    @Test("an acknowledgement without a pointer reports none")
+    func reportsNoPointerFromOlderAgents() async throws {
+        let client = VeilHostClient(transport: AckTransport(reply: "echo"))
+        _ = try await client.loadHealth()
+
+        let pointer = try await client.sendMouseInputReportingPointer(
+            InputMouseEvent(windowId: "hwnd:1", event: "move", x: 4, y: 8)
+        )
+
+        #expect(pointer == nil)
+    }
+
     @Test("serializes negotiated input operations so key order cannot overtake")
     func serializesInputOperations() async throws {
         let transport = AckTransport(reply: "echo", operationDelayNanoseconds: 50_000_000)
@@ -175,6 +199,12 @@ private actor AckTransport: HostTransport {
             if reply == "echo" {
                 return [try JSONSerialization.data(withJSONObject: [
                     "type": "operation.ack", "requestId": requestId, "accepted": true
+                ])]
+            }
+            if reply == "echo-pointer" {
+                return [try JSONSerialization.data(withJSONObject: [
+                    "type": "operation.ack", "requestId": requestId, "accepted": true,
+                    "pointer": ["x": 16384, "y": 8192]
                 ])]
             }
         }

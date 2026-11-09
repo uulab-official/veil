@@ -30,6 +30,8 @@ public protocol VMRuntimeService: Sendable {
     func suspendedSession() async -> VMSuspensionRecord?
     func sendConsolePointerTap(normalizedX: Double, normalizedY: Double) async throws -> QEMUPointerTapRecord
     func sendConsoleKey(_ key: String) async throws -> QEMUKeySendRecord
+    /// Moves QEMU's USB tablet without pressing buttons; see `QEMUTabletPositionSync`.
+    func syncGuestTabletPosition(_ position: GuestPointerPosition) async
     func exportDiagnostics(to directory: URL) async throws -> URL
     /// The Mac's USB devices and which of them the running Windows has.
     func usbPassthroughSnapshot() async -> USBPassthroughSnapshot
@@ -53,6 +55,8 @@ public extension VMRuntimeService {
     }
 
     func recordVirtioGPUDriverInstalled(_ installed: Bool) async throws {}
+
+    func syncGuestTabletPosition(_ position: GuestPointerPosition) async {}
 
     func restartWindowsInstallation() async throws -> VMRuntimeSnapshot {
         throw VMRuntimeError.bootNotImplemented

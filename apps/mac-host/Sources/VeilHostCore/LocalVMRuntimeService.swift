@@ -25,6 +25,7 @@ public struct LocalVMRuntimeService: VMRuntimeService {
     let diskImageTool: QEMUDiskImageTool?
     let snapshotController: QEMUSnapshotController
     let qmpController: any QEMUQMPControlling
+    let tabletPositionSync: QEMUTabletPositionSync
 
     public init(
         profileStore: any VMProfileStore = JSONVMProfileStore(),
@@ -54,6 +55,7 @@ public struct LocalVMRuntimeService: VMRuntimeService {
         self.bootRunner = bootRunner
         self.bootReportStore = bootReportStore
         self.qemuLaunchRecordStore = qemuLaunchRecordStore
+        self.tabletPositionSync = QEMUTabletPositionSync(launchRecordStore: qemuLaunchRecordStore)
         self.suspensionRecordStore = suspensionRecordStore
         self.providerProbe = providerProbe
         self.resourcePlan = resourcePlan

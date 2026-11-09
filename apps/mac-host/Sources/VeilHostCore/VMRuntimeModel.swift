@@ -524,6 +524,11 @@ public final class VMRuntimeModel {
         }
     }
 
+    /// Best effort and silent: a missed move only lets the tablet snap the guest cursor once more.
+    public func syncGuestTabletPosition(_ position: GuestPointerPosition) async {
+        await service.syncGuestTabletPosition(position)
+    }
+
     public func sendConsoleKey(_ key: String) async {
         do {
             _ = try await service.sendConsoleKey(key)
